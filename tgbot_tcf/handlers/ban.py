@@ -1,4 +1,7 @@
-"""Community ban (/cban) with proof collection, and unban (/cunban)."""
+# © Copyright 2024 - 2026 Transsion Core
+# © Copyright 2024 - 2026 Dizzy
+# © Copyright 2026 Aveum Apps
+"""Transsion Core ban with proof collection and unban."""
 import asyncio
 import logging
 from datetime import datetime
@@ -22,10 +25,10 @@ from ..config import (
     PROOF_TOPIC,
     PROOF_WAIT_SECONDS,
 )
-from ..utils.format import chat_id_to_link_id
 from ..db import bans
-from ..utils.auth import is_authorized
+from ..utils.auth import is_authorized, is_tc_admin, is_tc_owner
 from ..utils.format import (
+    chat_id_to_link_id,
     fmt_dt,
     fmt_now,
     safe_first_name,
@@ -40,21 +43,21 @@ logger = logging.getLogger(__name__)
 
 
 def _session_key(chat_id: int, user_id: int) -> str:
-    return f"cban:{chat_id}:{user_id}"
+    return f"tcban:{chat_id}:{user_id}"
 
 
 def _get_sessions(context: ContextTypes.DEFAULT_TYPE) -> dict:
-    return context.application.bot_data.setdefault("cban_sessions", {})
+    return context.application.bot_data.setdefault("tcban_sessions", {})
 
 
 async def _timeout_session(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Called by JobQueue when proof window expires."""
     job = context.job
     key = job.data["key"]
     sessions = _get_sessions(context)
-    sess = sessions.get(key)
+    sess = sessions.pop(key, None)
     if sess is None:
         return
-    sessions.pop(key, None)
     try:
         await context.bot.edit_message_text(
             chat_id=sess["chat_id"],
@@ -66,6 +69,7 @@ async def _timeout_session(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def cmd_cban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Start a Transsion Core ban with proof collection."""
     msg = update.effective_message
     user = update.effective_user
     if msg is None or user is None:
@@ -77,19 +81,27 @@ async def cmd_cban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     target = await resolve_target(update, context)
     if target is None:
-        await msg.reply_text("Cannot resolve user.")
+        if not (context.args or (msg.reply_to_message and msg.reply_to_message.from_user)):
+            await msg.reply_text("Usage: /tcban <target> <reason>")
+        else:
+            await msg.reply_text("Cannot resolve user.")
         return
 
     if target.id == user.id:
         await msg.reply_text("You cannot ban yourself.")
         return
+
     if target.id == context.bot.id:
         await msg.reply_text("I cannot ban myself.")
         return
 
+    if await is_tc_owner(target.id) or await is_tc_admin(target.id):
+        await msg.reply_text("Cannot ban a Transsion Core Admin or Owner.")
+        return
+
     reason = get_reason(context, update)
-    if not reason:
-        await msg.reply_text("Usage: /cban <target> <reason>")
+    if not reason or not reason.strip():
+        await msg.reply_text("Please provide a reason.")
         return
 
     keyboard = InlineKeyboardMarkup(
@@ -109,14 +121,14 @@ async def cmd_cban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             if j:
                 try:
                     j.schedule_removal()
-                except Exception:  # noqa: BLE001
+                except Exception:
                     pass
 
     timeout_job = context.application.job_queue.run_once(
         _timeout_session,
         when=PROOF_WAIT_SECONDS,
         data={"key": key},
-        name=f"cban_timeout_{key}",
+        name=f"tcban_timeout_{key}",
     )
 
     sessions[key] = {
@@ -127,7 +139,7 @@ async def cmd_cban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "target_id": target.id,
         "target_first_name": target.first_name,
         "reason": reason,
-        "media": [],  # list of dicts: {kind, file_id, media_group_id}
+        "media": [],
         "media_group_id": None,
         "timeout_job": timeout_job,
         "album_job": None,
@@ -137,6 +149,7 @@ async def cmd_cban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def on_cancel_proof(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Cancel an active proof submission session."""
     cq = update.callback_query
     if cq is None or cq.message is None or cq.from_user is None:
         return
@@ -156,7 +169,7 @@ async def on_cancel_proof(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if j:
             try:
                 j.schedule_removal()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
     await cq.answer()
     try:
@@ -166,6 +179,7 @@ async def on_cancel_proof(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def on_proof_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Accept proof media during an active ban session."""
     msg = update.effective_message
     user = update.effective_user
     if msg is None or user is None:
@@ -186,19 +200,11 @@ async def on_proof_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             pass
         return
 
-    if has_photo:
-        kind = "photo"
-        file_id = msg.photo[-1].file_id
-    else:
-        kind = "video"
-        file_id = msg.video.file_id
+    kind = "photo" if has_photo else "video"
+    file_id = msg.photo[-1].file_id if has_photo else msg.video.file_id
 
     sess["media"].append(
-        {
-            "kind": kind,
-            "file_id": file_id,
-            "media_group_id": msg.media_group_id,
-        }
+        {"kind": kind, "file_id": file_id, "media_group_id": msg.media_group_id}
     )
 
     if msg.media_group_id:
@@ -206,13 +212,13 @@ async def on_proof_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         if sess.get("album_job"):
             try:
                 sess["album_job"].schedule_removal()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
         sess["album_job"] = context.application.job_queue.run_once(
             _finalize_job,
             when=ALBUM_DEBOUNCE_SECONDS,
             data={"key": key},
-            name=f"cban_album_{key}",
+            name=f"tcban_album_{key}",
         )
     else:
         await _finalize(context, key)
@@ -240,11 +246,12 @@ async def _finalize(context: ContextTypes.DEFAULT_TYPE, key: str) -> None:
             if j:
                 try:
                     j.schedule_removal()
-                except Exception:  # noqa: BLE001
+                except Exception:
                     pass
 
 
 async def _do_finalize(context: ContextTypes.DEFAULT_TYPE, sess: dict) -> None:
+    """Finalize the ban: upload proof, create log, save to DB."""
     target_id = sess["target_id"]
     target_first_name = sess["target_first_name"]
     admin_id = sess["user_id"]
@@ -267,8 +274,8 @@ async def _do_finalize(context: ContextTypes.DEFAULT_TYPE, sess: dict) -> None:
         previous_proof_link = topic_link(MAIN_GROUP, prev_proof_id, PROOF_TOPIC)
         caption = (
             f"ID: {target_id}\n"
-            f"Fed Admin: {user_link(admin_id, admin_first_name)}\n"
-            f"Fed Admin ID: {admin_id}\n"
+            f"Admin: {user_link(admin_id, admin_first_name)}\n"
+            f"Admin ID: {admin_id}\n"
             f'Previous: <a href="{previous_proof_link}">Click Here</a>\n\n'
             f"Commit at: {fmt_dt(original_dt)}\n"
             f"Update at: {fmt_dt(now_dt)}"
@@ -279,8 +286,8 @@ async def _do_finalize(context: ContextTypes.DEFAULT_TYPE, sess: dict) -> None:
         original_dt = now_dt
         caption = (
             f"ID: {target_id}\n"
-            f"Fed Admin: {user_link(admin_id, admin_first_name)}\n"
-            f"Fed Admin ID: {admin_id}\n\n"
+            f"Admin: {user_link(admin_id, admin_first_name)}\n"
+            f"Admin ID: {admin_id}\n\n"
             f"Commit at: {fmt_dt(now_dt)}"
         )
 
@@ -298,38 +305,40 @@ async def _do_finalize(context: ContextTypes.DEFAULT_TYPE, sess: dict) -> None:
 
     proof_link = topic_link(MAIN_GROUP, proof_message_id, PROOF_TOPIC)
 
+    me = await context.bot.get_me()
+    bot_username = me.username or ""
+
     if is_update:
-        previous_log_link = (
-            f"https://t.me/c/{chat_id_to_link_id(LOG_CHANNEL)}/{prev_log_id}"
-            if prev_log_id
-            else ""
-        )
+        previous_proof_link = topic_link(MAIN_GROUP, prev_proof_id, PROOF_TOPIC)
         old_admin_id = existing["admin_user_id"]
         log_text = (
-            "<b>New Community Ban (Update)</b>\n"
+            "<b>New Transsion Core Ban (Update)</b>\n"
             f"{BRANDING}\n"
             f"Admin: {user_link(admin_id, admin_first_name)}\n"
             f"Previous Admin: {user_link(old_admin_id, str(old_admin_id))}\n"
             f"User: {user_link(target_id, target_first_name)}\n"
             f"User ID: {target_id}\n"
-            f"Reason: {reason}\n"
-            f'Previous: <a href="{previous_log_link}">Click Here</a>\n\n'
+            f"Reason: {reason}\n\n"
             f"Commit at: {fmt_dt(original_dt)}\n"
             f"Update at: {fmt_dt(now_dt)}"
         )
+        # Use the existing ban_id for the appeal link
+        active_ban_id = existing["ban_id"]
+        appeal_url = f"https://t.me/{bot_username}?start=appeal_{active_ban_id}"
         keyboard = InlineKeyboardMarkup(
             [
-                [InlineKeyboardButton(f"Proof {target_id}", url=proof_link)],
                 [
+                    InlineKeyboardButton(f"Proof {target_id}", url=proof_link),
                     InlineKeyboardButton(
                         f"Previous Proof {target_id}", url=previous_proof_link
-                    )
+                    ),
                 ],
+                [InlineKeyboardButton("Submit Appeal", url=appeal_url)],
             ]
         )
     else:
         log_text = (
-            "<b>New Community Ban</b>\n"
+            "<b>New Transsion Core Ban</b>\n"
             f"{BRANDING}\n"
             f"Admin: {user_link(admin_id, admin_first_name)}\n"
             f"User: {user_link(target_id, target_first_name)}\n"
@@ -337,15 +346,20 @@ async def _do_finalize(context: ContextTypes.DEFAULT_TYPE, sess: dict) -> None:
             f"Reason: {reason}\n\n"
             f"Commit at: {fmt_dt(now_dt)}"
         )
+        appeal_url = f"https://t.me/{bot_username}?start=appeal_{ban_id}"
         keyboard = InlineKeyboardMarkup(
-            [[InlineKeyboardButton(f"Proof {target_id}", url=proof_link)]]
+            [
+                [InlineKeyboardButton(f"Proof {target_id}", url=proof_link)],
+                [InlineKeyboardButton("Submit Appeal", url=appeal_url)],
+            ]
         )
 
     log_message_id = await log_to_channel(context, log_text, reply_markup=keyboard)
 
     if is_update:
+        active_ban_id = existing["ban_id"]
         await bans.update_one(
-            {"ban_id": existing["ban_id"]},
+            {"ban_id": active_ban_id},
             {
                 "$set": {
                     "previous_proof_message_id": prev_proof_id,
@@ -374,6 +388,8 @@ async def _do_finalize(context: ContextTypes.DEFAULT_TYPE, sess: dict) -> None:
                 "updated_timestamp": None,
                 "is_active": True,
                 "update_count": 0,
+                "review_message_id": None,
+                "review_timestamp": None,
             }
         )
 
@@ -381,7 +397,10 @@ async def _do_finalize(context: ContextTypes.DEFAULT_TYPE, sess: dict) -> None:
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=prompt_msg_id,
-            text=f"User {target_id} has been banned from the federation. Reason: {reason}",
+            text=(
+                f"User {target_id} has been banned from the Transsion Core. "
+                f"Reason: {reason}"
+            ),
         )
     except TelegramError:
         pass
@@ -392,6 +411,7 @@ async def _post_proof(
     media: list[dict],
     caption: str,
 ) -> int | None:
+    """Upload proof media to the PROOF_TOPIC and return the first message ID."""
     try:
         if len(media) == 1:
             item = media[0]
@@ -440,10 +460,12 @@ async def _post_proof(
 
 
 async def cmd_cunban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Unban a user from Transsion Core."""
     msg = update.effective_message
     user = update.effective_user
     if msg is None or user is None:
         return
+
     if not await is_authorized(user.id):
         await msg.reply_text("You are not authorized.")
         return
@@ -453,19 +475,48 @@ async def cmd_cunban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await msg.reply_text("Cannot resolve user.")
         return
 
+    if target.id == user.id:
+        await msg.reply_text("You are not banned, or you cannot unban yourself.")
+        return
+
     record = await bans.find_one({"banned_user_id": target.id, "is_active": True})
     if not record:
         await msg.reply_text("User is not banned.")
         return
 
+    # Extract optional unban reason (args after the target, if given by reply)
+    args = context.args or []
+    if msg.reply_to_message and msg.reply_to_message.from_user:
+        unban_reason = " ".join(args).strip()
+    else:
+        unban_reason = " ".join(args[1:]).strip()
+
     await bans.update_one({"ban_id": record["ban_id"]}, {"$set": {"is_active": False}})
-    await msg.reply_text(f"User {target.id} has been unbanned from the federation.")
+
+    # Close any pending appeal review for this ban.
+    review_msg_id = record.get("review_message_id")
+    if review_msg_id:
+        try:
+            from ..config import MAIN_GROUP as _MAIN_GROUP, APPEAL_DISCUSSION_TOPIC as _ADT
+            await context.bot.edit_message_text(
+                chat_id=_MAIN_GROUP,
+                message_id=review_msg_id,
+                message_thread_id=_ADT,
+                text="Appeal resolved (user already unbanned).",
+            )
+        except TelegramError:
+            pass
+
+    reason_line = f"\nUnban Reason: {unban_reason}" if unban_reason else ""
     await log_to_channel(
         context,
-        "<b>Community Unban</b>\n"
+        "<b>Transsion Core Unban</b>\n"
         f"{BRANDING}\n"
         f"Admin: {user_link(user.id, safe_first_name(user))}\n"
         f"User: {user_link(target.id, target.first_name)}\n"
-        f"User ID: {target.id}\n"
+        f"User ID: {target.id}{reason_line}\n"
         f"Date: {fmt_now()}",
+    )
+    await msg.reply_text(
+        f"User {target.id} has been unbanned from the Transsion Core."
     )

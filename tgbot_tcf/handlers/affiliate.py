@@ -1,4 +1,7 @@
-"""Group affiliation, disaffiliation, joinfed, my_chat_member events."""
+# © Copyright 2024 - 2026 Transsion Core
+# © Copyright 2024 - 2026 Dizzy
+# © Copyright 2026 Aveum Apps
+"""Group affiliation, disaffiliation, and chat member event handling."""
 import logging
 
 from telegram import (
@@ -12,13 +15,12 @@ from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
 from ..config import BRANDING, INITIAL_OWNER_ID
-from ..db import fed_owners, federated_groups
+from ..db import federated_groups, tc_owners
 from ..utils.auth import is_authorized
 from ..utils.format import fmt_now, safe_first_name, user_link, utcnow
 from ..utils.logger import log_to_channel
 
 logger = logging.getLogger(__name__)
-
 
 REQUIRED_PERMS = ("can_delete_messages", "can_restrict_members", "can_invite_users")
 PERM_HINT = (
@@ -27,11 +29,14 @@ PERM_HINT = (
 )
 
 
-async def _bot_has_required_perms(context: ContextTypes.DEFAULT_TYPE, chat_id: int) -> bool:
+async def _bot_has_required_perms(
+    context: ContextTypes.DEFAULT_TYPE, chat_id: int
+) -> bool:
+    """Check that the bot has the three required admin permissions."""
     try:
         me = await context.bot.get_chat_member(chat_id, context.bot.id)
     except TelegramError as exc:
-        logger.warning("perm check failed in %s: %s", chat_id, exc)
+        logger.warning("Permission check failed in %s: %s", chat_id, exc)
         return False
     if me.status not in ("administrator", "creator"):
         return False
@@ -42,26 +47,30 @@ async def _bot_has_required_perms(context: ContextTypes.DEFAULT_TYPE, chat_id: i
 
 
 async def _ensure_first_owner() -> None:
-    existing = await fed_owners.find_one({})
-    if existing is None:
-        await fed_owners.insert_one({"user_id": INITIAL_OWNER_ID})
+    """Seed the initial owner if the tc_owners collection is empty."""
+    if await tc_owners.find_one({}) is None:
+        await tc_owners.insert_one({"user_id": INITIAL_OWNER_ID})
 
 
-async def on_new_chat_members(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_new_chat_members(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """Send affiliation prompt when the bot is added to a group."""
     msg = update.effective_message
     if msg is None or msg.chat.type not in (ChatType.GROUP, ChatType.SUPERGROUP):
         return
-    bot_id = context.bot.id
     if not msg.new_chat_members:
         return
-    if not any(m.id == bot_id for m in msg.new_chat_members):
+    if not any(m.id == context.bot.id for m in msg.new_chat_members):
         return
 
     keyboard = InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("Join Federation", callback_data="fed_join"),
-                InlineKeyboardButton("Cancel", callback_data="fed_cancel"),
+                InlineKeyboardButton(
+                    "Join Transsion Core", callback_data="tc_join"
+                ),
+                InlineKeyboardButton("Cancel", callback_data="tc_cancel"),
             ]
         ]
     )
@@ -74,12 +83,16 @@ async def on_new_chat_members(update: Update, context: ContextTypes.DEFAULT_TYPE
         logger.warning("Could not send affiliation prompt: %s", exc)
 
 
-async def on_affiliation_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_affiliation_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """Handle tc_join / tc_cancel inline button presses."""
     cq = update.callback_query
     if cq is None or cq.message is None:
         return
     chat = cq.message.chat
     user = cq.from_user
+
     try:
         member = await context.bot.get_chat_member(chat.id, user.id)
     except TelegramError as exc:
@@ -91,7 +104,7 @@ async def on_affiliation_callback(update: Update, context: ContextTypes.DEFAULT_
         await cq.answer("Only the group owner can decide.", show_alert=True)
         return
 
-    if cq.data == "fed_join":
+    if cq.data == "tc_join":
         await cq.answer()
         if not await _bot_has_required_perms(context, chat.id):
             try:
@@ -125,8 +138,8 @@ async def on_affiliation_callback(update: Update, context: ContextTypes.DEFAULT_
 
         try:
             await cq.edit_message_text(
-                "This community is now affiliated with TCF. "
-                "Federation commands can now be used here by authorized federation admins."
+                "This community is now affiliated with TCF. Federation commands "
+                "can now be used here by authorized Transsion Core admins."
             )
         except TelegramError:
             pass
@@ -135,14 +148,14 @@ async def on_affiliation_callback(update: Update, context: ContextTypes.DEFAULT_
             context,
             "<b>New Affiliated Group</b>\n"
             f"{BRANDING}\n"
-            f'Group: <a href="tg://user?id={chat.id}">{(chat.title or str(chat.id))}</a> '
+            f'Group: <a href="tg://user?id={chat.id}">{chat.title or str(chat.id)}</a> '
             f"(ID: {chat.id})\n"
             f"Added by Owner: {user_link(user.id, safe_first_name(user))} (ID: {user.id})\n"
             f"Date: {fmt_now()}",
         )
         return
 
-    if cq.data == "fed_cancel":
+    if cq.data == "tc_cancel":
         await cq.answer()
         try:
             await cq.edit_message_text("Affiliation cancelled. Leaving the group.")
@@ -162,7 +175,10 @@ async def on_affiliation_callback(update: Update, context: ContextTypes.DEFAULT_
             pass
 
 
-async def cmd_joinfed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_joinfed(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """Explicitly affiliate the current group with TCF."""
     msg = update.effective_message
     if msg is None:
         return
@@ -173,16 +189,15 @@ async def cmd_joinfed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if user is None:
         return
 
-    try:
-        member = await context.bot.get_chat_member(msg.chat.id, user.id)
-    except TelegramError as exc:
-        logger.warning("get_chat_member failed: %s", exc)
-        await msg.reply_text("Cannot verify your role in this group.")
-        return
-
-    if member.status != ChatMember.OWNER and not await is_authorized(user.id):
-        await msg.reply_text("Only the group owner can request affiliation.")
-        return
+    if not await is_authorized(user.id):
+        try:
+            member = await context.bot.get_chat_member(msg.chat.id, user.id)
+            is_group_owner = member.status == ChatMember.OWNER
+        except TelegramError:
+            is_group_owner = False
+        if not is_group_owner:
+            await msg.reply_text("Only the group owner can request affiliation.")
+            return
 
     if not await _bot_has_required_perms(context, msg.chat.id):
         await msg.reply_text(PERM_HINT)
@@ -212,7 +227,7 @@ async def cmd_joinfed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         context,
         "<b>New Affiliated Group</b>\n"
         f"{BRANDING}\n"
-        f'Group: <a href="tg://user?id={msg.chat.id}">{(msg.chat.title or str(msg.chat.id))}</a> '
+        f'Group: <a href="tg://user?id={msg.chat.id}">{msg.chat.title or str(msg.chat.id)}</a> '
         f"(ID: {msg.chat.id})\n"
         f"Added by Owner: {user_link(user.id, safe_first_name(user))} (ID: {user.id})\n"
         f"Date: {fmt_now()}",
@@ -220,6 +235,7 @@ async def cmd_joinfed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 async def cmd_defed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Disaffiliate the current group from TCF."""
     msg = update.effective_message
     if msg is None:
         return
@@ -230,6 +246,13 @@ async def cmd_defed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if user is None:
         return
 
+    record = await federated_groups.find_one(
+        {"chat_id": msg.chat.id, "is_active": True}
+    )
+    if not record:
+        await msg.reply_text("This group is not affiliated with TCF.")
+        return
+
     try:
         member = await context.bot.get_chat_member(msg.chat.id, user.id)
         is_group_owner = member.status == ChatMember.OWNER
@@ -237,16 +260,17 @@ async def cmd_defed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         is_group_owner = False
 
     if not is_group_owner and not await is_authorized(user.id):
-        await msg.reply_text("Only the group owner or federation admins can disaffiliate this group.")
+        await msg.reply_text(
+            "Only the group owner or Transsion Core admins can disaffiliate this group."
+        )
         return
 
-    record = await federated_groups.find_one({"chat_id": msg.chat.id, "is_active": True})
-    if not record:
-        await msg.reply_text("This group is not affiliated with TCF.")
-        return
-
-    await federated_groups.update_one({"chat_id": msg.chat.id}, {"$set": {"is_active": False}})
-    await msg.reply_text("This group has been removed from the TCF federation.")
+    await federated_groups.update_one(
+        {"chat_id": msg.chat.id}, {"$set": {"is_active": False}}
+    )
+    await msg.reply_text(
+        "This group has been removed from the Transsion Core Federation."
+    )
     await log_to_channel(
         context,
         "<b>Group Disaffiliated</b>\n"
@@ -262,6 +286,7 @@ async def cmd_defed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def cmd_rmfed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Remove a federated group by ID. TC owner/admins only."""
     msg = update.effective_message
     user = update.effective_user
     if msg is None or user is None:
@@ -273,21 +298,28 @@ async def cmd_rmfed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     args = context.args or []
     if not args or not args[0].lstrip("-").isdigit():
-        await msg.reply_text("Usage: /rmfed <group_id>")
+        await msg.reply_text("Usage: /rmtc <group_id>")
         return
+
     target_id = int(args[0])
-    record = await federated_groups.find_one({"chat_id": target_id, "is_active": True})
+    record = await federated_groups.find_one(
+        {"chat_id": target_id, "is_active": True}
+    )
     if not record:
         await msg.reply_text("Group not found or already removed.")
         return
 
-    await federated_groups.update_one({"chat_id": target_id}, {"$set": {"is_active": False}})
+    await federated_groups.update_one(
+        {"chat_id": target_id}, {"$set": {"is_active": False}}
+    )
     title = record.get("title") or str(target_id)
     try:
         await context.bot.leave_chat(target_id)
     except TelegramError:
         pass
-    await msg.reply_text(f"Group {target_id} has been removed from the federation.")
+    await msg.reply_text(
+        f"Group {target_id} has been removed from the federation."
+    )
     await log_to_channel(
         context,
         "<b>Group Disaffiliated</b>\n"
@@ -298,7 +330,10 @@ async def cmd_rmfed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-async def on_my_chat_member(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_my_chat_member(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """Handle bot being removed from a group."""
     upd = update.my_chat_member
     if upd is None:
         return
@@ -306,10 +341,14 @@ async def on_my_chat_member(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if new_status not in ("kicked", "left"):
         return
     chat = upd.chat
-    record = await federated_groups.find_one({"chat_id": chat.id, "is_active": True})
+    record = await federated_groups.find_one(
+        {"chat_id": chat.id, "is_active": True}
+    )
     if not record:
         return
-    await federated_groups.update_one({"chat_id": chat.id}, {"$set": {"is_active": False}})
+    await federated_groups.update_one(
+        {"chat_id": chat.id}, {"$set": {"is_active": False}}
+    )
     await log_to_channel(
         context,
         "<b>Group Removed Bot</b>\n"

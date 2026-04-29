@@ -1,17 +1,22 @@
+# © Copyright 2024 - 2026 Transsion Core
+# © Copyright 2024 - 2026 Dizzy
+# © Copyright 2026 Aveum Apps
 from .mongo import (
     db,
     federated_groups,
-    fed_owners,
-    fed_admins,
+    tc_owners,
+    tc_admins,
     bans,
+    promotion_requests,
     init_db,
 )
 
 __all__ = [
     "db",
     "federated_groups",
-    "fed_owners",
-    "fed_admins",
+    "tc_owners",
+    "tc_admins",
     "bans",
+    "promotion_requests",
     "init_db",
 ]

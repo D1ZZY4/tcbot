@@ -1,4 +1,7 @@
-"""Broadcast a message to all federated groups."""
+# © Copyright 2024 - 2026 Transsion Core
+# © Copyright 2024 - 2026 Dizzy
+# © Copyright 2026 Aveum Apps
+"""Broadcast a message to all active federated groups."""
 import logging
 
 from telegram import Update
@@ -15,10 +18,12 @@ logger = logging.getLogger(__name__)
 
 
 async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send a plain text message to all active federated groups."""
     msg = update.effective_message
     user = update.effective_user
     if msg is None or user is None:
         return
+
     if not await is_authorized(user.id):
         await msg.reply_text("You are not authorized.")
         return
@@ -44,7 +49,9 @@ async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 {"chat_id": grp["chat_id"]}, {"$set": {"is_active": False}}
             )
 
-    await msg.reply_text(f"Broadcast sent to {success} groups. Failed: {failure} groups.")
+    await msg.reply_text(
+        f"Broadcast sent to {success} groups. Failed: {failure} groups."
+    )
     await log_to_channel(
         context,
         "<b>Broadcast Sent</b>\n"

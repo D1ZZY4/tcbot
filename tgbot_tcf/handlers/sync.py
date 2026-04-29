@@ -1,4 +1,7 @@
-"""Force-sync a federation ban across all federated groups."""
+# © Copyright 2024 - 2026 Transsion Core
+# © Copyright 2024 - 2026 Dizzy
+# © Copyright 2026 Aveum Apps
+"""Force-sync a Transsion Core ban across all federated groups."""
 import logging
 
 from telegram import Update
@@ -16,10 +19,12 @@ logger = logging.getLogger(__name__)
 
 
 async def cmd_syncban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Enforce an active ban across all federated groups."""
     msg = update.effective_message
     user = update.effective_user
     if msg is None or user is None:
         return
+
     if not await is_authorized(user.id):
         await msg.reply_text("You are not authorized.")
         return
@@ -31,7 +36,7 @@ async def cmd_syncban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     record = await bans.find_one({"banned_user_id": target.id, "is_active": True})
     if not record:
-        await msg.reply_text("User is not banned in the federation.")
+        await msg.reply_text("User is not banned in the Transsion Core.")
         return
 
     success = 0
@@ -50,7 +55,9 @@ async def cmd_syncban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             failure += 1
             logger.warning("Sync ban in %s failed: %s", chat_id, exc)
 
-    await msg.reply_text(f"Ban enforced across {success} groups. Failed: {failure} groups.")
+    await msg.reply_text(
+        f"Ban enforced across {success} groups. Failed: {failure} groups."
+    )
     await log_to_channel(
         context,
         "<b>Ban Synced Across Groups</b>\n"

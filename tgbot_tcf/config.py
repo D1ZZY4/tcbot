@@ -1,38 +1,41 @@
+# © Copyright 2024 - 2026 Transsion Core
+# © Copyright 2024 - 2026 Dizzy
+# © Copyright 2026 Aveum Apps
 import os
 
-BOT_TOKEN = os.environ["BOT_TOKEN"]
-MONGODB_URI = os.environ["MONGODB_URI"]
-DB_NAME = "tcf_bot"
+BOT_TOKEN: str = os.environ["BOT_TOKEN"]
+MONGODB_URI: str = os.environ["MONGODB_URI"]
+DB_NAME: str = "tcf_bot"
 
-LOG_CHANNEL = -1003941141635
-MAIN_GROUP = -1003872207988
-PROOF_TOPIC = 67
-APPEAL_TOPIC = 12
-APPEAL_DISCUSSION_TOPIC = 11
-MAIN_CHANNEL = -1003852970764
-EXEC_GROUP = -1002333013065
-INITIAL_OWNER_ID = 7146954165
+LOG_CHANNEL: int = -1003941141635
+MAIN_GROUP: int = -1003872207988
+PROOF_TOPIC: int = 67
+APPEAL_TOPIC: int = 12
+APPEAL_DISCUSSION_TOPIC: int = 11
+MAIN_CHANNEL: int = -1003852970764
+EXEC_GROUP: int = -1002333013065
+INITIAL_OWNER_ID: int = 7146954165
 
-BRANDING = "𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯"
+BRANDING: str = "\U0001d54f\U0001d43e\U0001d439 - \U0001d4e3\U0001d4fb\U0001d4ea\U0001d4f7\U0001d4fc\U0001d4fc\U0001d4f2\U0001d4f8\U0001d4f7 \U0001d436\U0001d4f8\U0001d4fb\U0001d4ee \U0001d439\U0001d4ee\U0001d4ed\U0001d4ee\U0001d4fb\U0001d4ea\U0001d4fd\U0001d4f2\U0001d4f8\U0001d4f7"
 
-PROOF_WAIT_SECONDS = 60
-ALBUM_DEBOUNCE_SECONDS = 2
-APPEAL_WAIT_SECONDS = 600
+PROOF_WAIT_SECONDS: int = 60
+ALBUM_DEBOUNCE_SECONDS: int = 2
+APPEAL_WAIT_SECONDS: int = 600
 
-ABOUT_TEXT = (
-    "What's is TCF?\n"
+ABOUT_TEXT: str = (
+    "<b>What is TCF?</b>\n"
     "Transsion Core Federation (TCF) is a community-driven federation for "
     "Infinix, Tecno, and Itel groups. Our main focus is maintaining group "
-    "security and a conducive environment so members can discuss comfortably.\n\n"
-    "TCF is not an official part of Transsion Holdings. This is strictly an "
-    "independent community.\n\n"
-    "History\n"
+    "security and a conducive environment so members can discuss comfortably.\n"
+    "<i>TCF is not an official part of Transsion Holdings. This is strictly an "
+    "independent community.</i>\n\n"
+    "<b>History</b>\n"
     "Established in 2024. Originally named TFI, but it was disbanded due to "
     "internal issues. Shortly after, TCF was formed to continue managing the "
     "community with better stability."
 )
 
-APPEAL_INSTRUCTION_TEMPLATE = (
+APPEAL_INSTRUCTION_TEMPLATE: str = (
     "Transsion Core [Group]: Appeal Submission\n\n"
     "To submit an appeal for your federation ban, send a single message in this "
     "private chat that starts with #appeal and contains the following fields, "

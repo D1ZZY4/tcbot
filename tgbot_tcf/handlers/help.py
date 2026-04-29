@@ -1,14 +1,18 @@
-"""/start, /help, /commands handlers.
+# © Copyright 2024 - 2026 Transsion Core
+# © Copyright 2024 - 2026 Dizzy
+# © Copyright 2026 Aveum Apps
+"""/start, /help, and /commands handlers.
 
-- /start <appeal_xxx> - opens the appeal flow (Feature 8 entry).
-- /start about        - sends the static About TCF text (Feature 17).
-- /start (no args)    - opens the interactive start menu (Feature 24).
-- /help, /commands    - opens the interactive help system (Feature 19).
+- /start appeal_<ban_id>  opens the appeal flow.
+- /start about            shows the About TCF text.
+- /start (no args, PM)    opens the interactive start menu.
+- /start (no args, group) points the user to PM.
+- /help, /commands        opens the interactive help module list.
 """
 import logging
 
 from telegram import Update
-from telegram.constants import ChatType
+from telegram.constants import ChatType, ParseMode
 from telegram.ext import ContextTypes
 
 from ..config import ABOUT_TEXT
@@ -19,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Entry point for /start with optional deep-link arguments."""
     msg = update.effective_message
     if msg is None:
         return
@@ -30,14 +35,17 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await start_appeal(update, context, first[len("appeal_"):])
             return
         if first == "about":
-            await msg.reply_text(ABOUT_TEXT, disable_web_page_preview=True)
+            await msg.reply_text(
+                ABOUT_TEXT,
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
             return
 
     if msg.chat.type == ChatType.PRIVATE:
         await send_start_menu(update, context)
         return
 
-    # In a group, just point users to PM for the menu.
     me = await context.bot.get_me()
     await msg.reply_text(
         "Open a private chat with me and send /start to see the menu, "
@@ -47,4 +55,5 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the interactive help module list."""
     await send_help_command(update, context)

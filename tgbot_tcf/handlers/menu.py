@@ -1,17 +1,7 @@
-"""Start menu (Feature 24) and interactive help system (Features 19 & 25).
-
-Two entry points share the same module pages:
-- "menu" mode: opened from /start in PM. The module list shows a "Back"
-  button that returns to the start menu (callback_data="menu_back_start").
-- "cmd" mode: opened from /help or /commands. The module list has no
-  "Back to start" button.
-
-In both modes, detail pages have a "Back" button (callback_data="menu_help_main")
-that returns to the module list, and the bot remembers the entry mode for that
-specific (chat_id, message_id) so navigation stays consistent.
-
-Only the user who opened the menu may use its buttons.
-"""
+# © Copyright 2024 - 2026 Transsion Core
+# © Copyright 2024 - 2026 Dizzy
+# © Copyright 2026 Aveum Apps
+"""Start menu, interactive help system, and all menu callback routing."""
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -21,28 +11,162 @@ from telegram.ext import ContextTypes
 
 from ..config import ABOUT_TEXT
 from .links import get_links_view
-from .lists import build_fedgroups_text, build_fedstats_text
+from .lists import build_admins_text, build_fedgroups_text, build_fedstats_text
 
 logger = logging.getLogger(__name__)
 
-
 WELCOME_TEXT = (
-    "<b>Welcome to the Transsion Core Federation (TCF) Bot</b>\n\n"
-    "TCF is a community-driven federation for Infinix, Tecno, and Itel groups. "
-    "I help manage federation membership, bans, appeals, and broadcasts.\n\n"
-    "Use the buttons below to explore."
+    "<b>Welcome to the Transsion Core Federation (TCF) Bot!</b>\n"
+    "I'm here to help you manage Transsion Core groups, bans, appeals, and more. "
+    "Use the buttons below to navigate."
 )
 
 HELP_INTRO_TEXT = (
-    "<b>TCF Federation Bot Help</b>\n"
-    "I am a federation management bot for Transsion Core Federation (TCF). "
-    "Below are the available modules. Select one to learn more."
+    "<b>TCF Bot Help</b>\n"
+    "I'm your assistant for managing the Transsion Core Federation. "
+    "Select a topic below to learn more about what I can do."
 )
 
+PRIVACY_MAIN_TEXT = (
+    "<b>Privacy Information</b>\n"
+    "Select one of the below options for more information about how the bot "
+    "handles your privacy."
+)
 
-# ---------------------------------------------------------------------------
-# Per-message state: who opened it and how (so we know which Back to show).
-# ---------------------------------------------------------------------------
+PRIVACY_POLICY_TEXT = (
+    "The Transsion Core Federation bot only collects data necessary for federation "
+    "moderation: user IDs, group IDs, and message IDs related to bans and proofs. "
+    "No personal messages, phone numbers, or media are stored beyond what you "
+    "explicitly provide as proof. Your data is never shared with third parties and "
+    "is only used to maintain a secure environment. All ban records are accessible "
+    "only to Transsion Core admins."
+)
+
+HELP_DETAILS: dict[str, str] = {
+    "help_ban": (
+        "<b>Ban Module</b>\n"
+        "Commands: /tcban, /ban, /tcfban\n"
+        "Usage: /tcban &lt;target&gt; &lt;reason&gt; (target can be reply, user ID, or @username)\n"
+        "Who can use: Transsion Core Owner and Admins.\n"
+        "Where: Any affiliated group, the main forum, exec group, or PM.\n"
+        "Note: A proof is required. After issuing the command, you'll be asked "
+        "to upload photo/video evidence."
+    ),
+    "help_unban": (
+        "<b>Unban Module</b>\n"
+        "Commands: /tcunban, /unban, /tcfunban\n"
+        "Usage: /tcunban &lt;target&gt; [optional reason]\n"
+        "Who can use: Transsion Core Owner and Admins.\n"
+        "Where: Any affiliated group, main forum, exec group, or PM.\n"
+        "If an appeal was pending, it will be automatically closed."
+    ),
+    "help_check": (
+        "<b>Check Ban Module</b>\n"
+        "Commands: /checkme, /myban, /amibanned\n"
+        "Usage: Simply type /checkme anywhere.\n"
+        "Who can use: Everyone.\n"
+        "If banned, you'll see details and a button to submit an appeal."
+    ),
+    "help_baninfo": (
+        "<b>Ban Info Module</b>\n"
+        "Commands: /baninfo, /checkban, /banstatus\n"
+        "Usage: /baninfo &lt;target&gt;\n"
+        "Who can use: Everyone.\n"
+        "Shows detailed information about a user's ban status."
+    ),
+    "help_admin": (
+        "<b>Promote/Demote Module</b>\n"
+        "Commands: /tcpromote, /promote, /tcfpromote  (promote)\n"
+        "/tcdemote, /demote, /tcfdemote  (demote)\n"
+        "Usage: /tcpromote &lt;target&gt; (promote); /tcdemote &lt;target&gt; (demote)\n"
+        "Who can use: Promote - Transsion Core Admins (creates request) or Owner "
+        "(immediate). Demote - Owner only.\n"
+        "Note: Self-demote produces a special message about the bot's role."
+    ),
+    "help_transfer": (
+        "<b>Transfer Owner Module</b>\n"
+        "Commands: /tctransfer, /transfer, /tcowner\n"
+        "Usage: /tctransfer &lt;target&gt;\n"
+        "Who can use: Transsion Core Owner only.\n"
+        "Transfers ownership to another user. The old owner becomes a regular admin."
+    ),
+    "help_broadcast": (
+        "<b>Broadcast Module</b>\n"
+        "Commands: /tcbroadcast, /broadcast, /tcannounce\n"
+        "Usage: /tcbroadcast &lt;message&gt;\n"
+        "Who can use: Transsion Core Owner and Admins.\n"
+        "Sends the message to all affiliated groups."
+    ),
+    "help_syncban": (
+        "<b>Sync Ban Module</b>\n"
+        "Commands: /tcsync, /syncban, /tcfbanall\n"
+        "Usage: /tcsync &lt;target&gt;\n"
+        "Who can use: Transsion Core Owner and Admins.\n"
+        "Enforces an existing active ban across all affiliated groups."
+    ),
+    "help_affiliation": (
+        "<b>Group Affiliation Module</b>\n"
+        "Commands: /jointc, /requestjoin, /applytc (explicit join)\n"
+        "/detc, /leavetc, /untc (disaffiliate current group)\n"
+        "/rmtc, /removetc, /deletetc &lt;group_id&gt; (remove by ID)\n"
+        "Who can use: Join - group owner; disaffiliate - group owner or TC admin; "
+        "remove - TC admins.\n"
+        "Note: Bot added automatically asks to join."
+    ),
+    "help_defed": (
+        "<b>Disaffiliate Module</b>\n"
+        "Inside a group: /detc, /leavetc, /untc - the group owner or any TC "
+        "owner/admin can remove the group from TCF.\n"
+        "By group ID (any chat): /rmtc, /removetc, /deletetc &lt;group_id&gt; - "
+        "TC owner or admin only."
+    ),
+    "help_appeal": (
+        "<b>Appeal Module</b>\n"
+        "If you are banned, you can submit an appeal by clicking 'Submit Appeal' "
+        "on the ban log message in @TranssionCoreFederationLogs, or by using "
+        "/start appeal_&lt;ban_id&gt; in my private chat.\n"
+        "The bot will then guide you through the process. You need to reply with "
+        "a message starting with #appeal, containing:\n"
+        "- Log link: (from the log channel)\n"
+        "- Clarification: (your honest explanation)\n"
+        "- Agreement: (your commitment not to repeat the violation)\n\n"
+        "Your appeal will be reviewed by Transsion Core admins. The banning admin "
+        "has 12 hours to decide; after that, any admin can approve or reject it. "
+        "If approved, the ban is lifted; if rejected, the ban remains. "
+        "You'll be notified of the decision."
+    ),
+    "help_join": (
+        "<b>Join/Leave Module</b>\n"
+        "Commands: /jointc, /requestjoin, /applytc (join)\n"
+        "/detc, /leavetc, /untc (leave Transsion Core)\n"
+        "Who can use: Join - group owner; leave - group owner or TC admin."
+    ),
+    "help_stats": (
+        "<b>Statistics Module</b>\n"
+        "Commands: /tcstats, /stats, /tcinfo\n"
+        "Usage: /tcstats\n"
+        "Who can use: Everyone.\n"
+        "Displays current Transsion Core stats: owner, admin count, affiliated groups, active bans."
+    ),
+    "help_cleanup": (
+        "<b>Cleanup Module</b>\n"
+        "Commands: /cleanup, /purge, /tcclean\n"
+        "Usage: /cleanup\n"
+        "Who can use: Transsion Core Owner and Admins.\n"
+        "Checks all affiliated groups and removes those where the bot is no longer present."
+    ),
+}
+
+HELP_MODULE_ROWS: list[list[tuple[str, str]]] = [
+    [("Ban", "help_ban"), ("Unban", "help_unban")],
+    [("Check Ban", "help_check"), ("Ban Info", "help_baninfo")],
+    [("Promote/Demote", "help_admin"), ("Transfer Owner", "help_transfer")],
+    [("Broadcast", "help_broadcast"), ("Sync Ban", "help_syncban")],
+    [("Group Affiliation", "help_affiliation"), ("Disaffiliate", "help_defed")],
+    [("Appeal", "help_appeal"), ("Join/Leave", "help_join")],
+    [("Statistics", "help_stats"), ("Cleanup", "help_cleanup")],
+]
+
 
 def _state(context: ContextTypes.DEFAULT_TYPE) -> dict:
     return context.application.bot_data.setdefault("menu_state", {})
@@ -62,40 +186,37 @@ def _remember(
     _state(context)[_key(chat_id, message_id)] = {"user_id": user_id, "mode": mode}
 
 
-def _get(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int) -> dict | None:
+def _get_entry(
+    context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int
+) -> dict | None:
     return _state(context).get(_key(chat_id, message_id))
 
 
 def _is_owner(
     context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, user_id: int
 ) -> bool:
-    s = _get(context, chat_id, message_id)
+    s = _get_entry(context, chat_id, message_id)
     return s is None or s["user_id"] == user_id
 
 
 def _mode(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int) -> str:
-    s = _get(context, chat_id, message_id)
+    s = _get_entry(context, chat_id, message_id)
     return s["mode"] if s else "menu"
 
-
-# ---------------------------------------------------------------------------
-# Keyboards
-# ---------------------------------------------------------------------------
 
 def _start_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("About TCF", callback_data="menu_about"),
+                InlineKeyboardButton("About", callback_data="menu_about"),
                 InlineKeyboardButton("Help", callback_data="menu_help"),
             ],
             [
-                InlineKeyboardButton("Statistics", callback_data="menu_stats"),
-                InlineKeyboardButton("Federation Groups", callback_data="menu_groups"),
+                InlineKeyboardButton("Groups", callback_data="menu_groups"),
+                InlineKeyboardButton("Additional", callback_data="menu_additional"),
             ],
-            [
-                InlineKeyboardButton("Federation Links", callback_data="menu_fedlinks"),
-            ],
+            [InlineKeyboardButton("Information", callback_data="menu_information")],
+            [InlineKeyboardButton("Privacy", callback_data="menu_privacy")],
         ]
     )
 
@@ -104,18 +225,6 @@ def _back_to_start_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [[InlineKeyboardButton("Back", callback_data="menu_back_start")]]
     )
-
-
-# Help module list per Feature 19 spec, exact pairings.
-HELP_MODULE_ROWS: list[list[tuple[str, str]]] = [
-    [("Ban", "help_ban"), ("Unban", "help_unban")],
-    [("Check Ban", "help_check"), ("Ban Info", "help_baninfo")],
-    [("Promote/Demote", "help_admin"), ("Transfer Owner", "help_transfer")],
-    [("Broadcast", "help_broadcast"), ("Sync Ban", "help_syncban")],
-    [("Group Affiliation", "help_affiliation"), ("Disaffiliate", "help_defed")],
-    [("Appeal", "help_appeal"), ("Join/Leave", "help_join")],
-    [("Statistics", "help_stats"), ("Cleanup", "help_cleanup")],
-]
 
 
 def _help_modules_kb(with_back_to_start: bool) -> InlineKeyboardMarkup:
@@ -131,133 +240,32 @@ def _help_modules_kb(with_back_to_start: bool) -> InlineKeyboardMarkup:
 def _help_detail_kb(mode: str) -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton("Back", callback_data="menu_help_main")]]
     if mode == "menu":
-        rows.append([InlineKeyboardButton("Main Menu", callback_data="menu_back_start")])
+        rows.append(
+            [InlineKeyboardButton("Main Menu", callback_data="menu_back_start")]
+        )
     return InlineKeyboardMarkup(rows)
 
 
-# ---------------------------------------------------------------------------
-# Help detail texts (one per HELP_MODULE_ROWS entry)
-# ---------------------------------------------------------------------------
-
-HELP_DETAILS: dict[str, str] = {
-    "help_ban": (
-        "<b>Ban Module</b>\n\n"
-        "Federation owners and admins can ban a user across the entire "
-        "federation. The bot will then prompt for proof (photo or video, "
-        "albums supported) before the ban is committed.\n\n"
-        "Commands: /cban, /comban, /fban (also .cban, !cban)\n"
-        "Usage: reply to a user with /cban &lt;reason&gt;, or "
-        "/cban &lt;user_id|@username&gt; &lt;reason&gt;\n"
-        "Who: federation owners and admins.\n"
-        "Where: any affiliated group, the main group or its topics, the exec "
-        "group, or the bot PM."
-    ),
-    "help_unban": (
-        "<b>Unban Module</b>\n\n"
-        "Lift an active federation ban.\n\n"
-        "Commands: /cunban, /comunban, /funban (also .cunban, !cunban)\n"
-        "Usage: reply to a user with /cunban, or "
-        "/cunban &lt;user_id|@username&gt;\n"
-        "Who: federation owners and admins.\n"
-        "Where: same as Ban."
-    ),
-    "help_check": (
-        "<b>Check Ban Module</b>\n\n"
-        "Find out whether you are banned in TCF.\n\n"
-        "Commands: /checkme, /myban, /amibanned\n"
-        "Who: anyone.\n"
-        "Where: any chat. If you are banned the bot replies with the reason "
-        "and a Submit Appeal button."
-    ),
-    "help_baninfo": (
-        "<b>Ban Info Module</b>\n\n"
-        "Look up the ban details for any user.\n\n"
-        "Commands: /baninfo, /checkban, /banstatus &lt;user_id|@username|reply&gt;\n"
-        "Who: anyone.\n"
-        "Where: any chat."
-    ),
-    "help_admin": (
-        "<b>Promote / Demote Module</b>\n\n"
-        "Manage Federation Admins.\n\n"
-        "Promote: /cpromote, /compromote, /fpromote &lt;target&gt;\n"
-        "Demote: /cdemote, /comdemote, /fdemote &lt;target&gt;\n"
-        "Who: federation owner only."
-    ),
-    "help_transfer": (
-        "<b>Transfer Ownership Module</b>\n\n"
-        "Transfer Federation Ownership to another user. The previous owner "
-        "becomes a regular Federation Admin.\n\n"
-        "Commands: /transferowner, /tfowner, /fedowner &lt;target&gt;\n"
-        "Who: federation owner only."
-    ),
-    "help_broadcast": (
-        "<b>Broadcast Module</b>\n\n"
-        "Send a plain-text announcement to every active affiliated group.\n\n"
-        "Commands: /broadcast, /announce, /fcast &lt;message&gt;\n"
-        "Who: federation owners and admins.\n"
-        "Note: groups that fail to receive the message are marked inactive."
-    ),
-    "help_syncban": (
-        "<b>Sync Ban Module</b>\n\n"
-        "Re-enforce an existing federation ban across every active "
-        "affiliated group where the bot has restrict-members rights.\n\n"
-        "Commands: /syncban, /forcesync, /fbanall &lt;target&gt;\n"
-        "Who: federation owners and admins."
-    ),
-    "help_affiliation": (
-        "<b>Group Affiliation Module</b>\n\n"
-        "When the bot is added to a group, the group owner sees Join / Cancel "
-        "buttons. After making the bot an admin (delete messages, ban users, "
-        "invite users), the group owner can also affiliate later via:\n\n"
-        "Commands: /joinfed, /requestjoin, /applyfed\n"
-        "Who: the group owner."
-    ),
-    "help_defed": (
-        "<b>Disaffiliate Module</b>\n\n"
-        "Inside a group: /defed, /leavefed, /unfed - the group owner or any "
-        "federation owner / admin can remove the group from TCF.\n"
-        "By group ID (any chat): /rmfed, /removefed, /deletefed &lt;group_id&gt; "
-        "- federation owner or admin only."
-    ),
-    "help_appeal": (
-        "<b>Appeal Module</b>\n\n"
-        "If you are banned, run /checkme and tap Submit Appeal. Then in the "
-        "bot PM send a single message starting with #appeal containing the "
-        "log link, your clarification, and your agreement to follow the rules.\n\n"
-        "Within the first 12 hours after submission, only the original "
-        "banning admin may approve or reject. After that, any federation "
-        "admin or owner can decide."
-    ),
-    "help_join": (
-        "<b>Join / Leave Module</b>\n\n"
-        "/joinfed, /requestjoin, /applyfed - group owner asks the bot to "
-        "affiliate a group with TCF.\n"
-        "/leaveall, /exitall, /fedleave - federation owner makes the bot "
-        "leave every active affiliated group."
-    ),
-    "help_stats": (
-        "<b>Statistics Module</b>\n\n"
-        "Federation statistics and listings.\n\n"
-        "Commands:\n"
-        "/fedgroups, /groups, /listfed - list active affiliated groups.\n"
-        "/fedstats, /stats, /fedinfo - federation statistics.\n"
-        "/fedlinks, /links, /fedconfig - official TCF links.\n"
-        "Who: anyone."
-    ),
-    "help_cleanup": (
-        "<b>Cleanup Module</b>\n\n"
-        "Mark inactive any affiliated group the bot can no longer reach.\n\n"
-        "Commands: /cleanup, /purge, /fedclean\n"
-        "Who: federation owners and admins."
-    ),
-}
+def _info_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("Admins", callback_data="info_admins"),
+                InlineKeyboardButton("Connected Chats", callback_data="info_chats"),
+            ],
+            [InlineKeyboardButton("Back", callback_data="menu_back_start")],
+        ]
+    )
 
 
-# ---------------------------------------------------------------------------
-# Public entry points
-# ---------------------------------------------------------------------------
+def _info_back_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton("Back", callback_data="menu_information")]]
+    )
+
 
 async def send_start_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send the interactive start menu."""
     msg = update.effective_message
     user = update.effective_user
     if msg is None or user is None:
@@ -271,7 +279,10 @@ async def send_start_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     _remember(context, sent.chat.id, sent.message_id, user.id, "menu")
 
 
-async def send_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def send_help_command(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """Send the help module list (no start-menu Back button)."""
     msg = update.effective_message
     user = update.effective_user
     if msg is None or user is None:
@@ -285,11 +296,10 @@ async def send_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     _remember(context, sent.chat.id, sent.message_id, user.id, "cmd")
 
 
-# ---------------------------------------------------------------------------
-# Callback router
-# ---------------------------------------------------------------------------
-
-async def on_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_menu_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """Route all start menu, help, information, and privacy callbacks."""
     cq = update.callback_query
     if cq is None or cq.message is None or cq.from_user is None or cq.data is None:
         return
@@ -310,33 +320,70 @@ async def on_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if data == "menu_back_start":
         await _edit(cq, WELCOME_TEXT, _start_keyboard())
         return
+
     if data == "menu_about":
-        await _edit(cq, ABOUT_TEXT, _back_to_start_kb(), parse_mode=None)
+        await _edit(cq, ABOUT_TEXT, _back_to_start_kb())
         return
+
     if data == "menu_help":
-        # Entered help via the start menu: list shows Back-to-start.
         await _edit(cq, HELP_INTRO_TEXT, _help_modules_kb(with_back_to_start=True))
         return
+
     if data == "menu_help_main":
-        # Back from a detail page to the module list.
         await _edit(
             cq,
             HELP_INTRO_TEXT,
             _help_modules_kb(with_back_to_start=(mode == "menu")),
         )
         return
-    if data == "menu_stats":
-        await _edit(cq, await build_fedstats_text(context), _back_to_start_kb())
-        return
+
     if data == "menu_groups":
-        await _edit(cq, await build_fedgroups_text(), _back_to_start_kb())
+        groups_text = await build_fedgroups_text()
+        kb = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("Back", callback_data="menu_back_start")]]
+        )
+        await _edit(cq, groups_text, kb)
         return
-    if data == "menu_fedlinks":
+
+    if data == "menu_additional":
         text, links_kb = get_links_view()
         rows = list(links_kb.inline_keyboard) + [
             [InlineKeyboardButton("Back", callback_data="menu_back_start")]
         ]
         await _edit(cq, text, InlineKeyboardMarkup(rows))
+        return
+
+    if data == "menu_information":
+        info_text = await build_fedstats_text(context)
+        info_text = info_text.replace("<b>TCF Statistics</b>", "<b>Transsion Core Information</b>")
+        await _edit(cq, info_text, _info_kb())
+        return
+
+    if data == "info_admins":
+        admins_text = await build_admins_text(context)
+        await _edit(cq, admins_text, _info_back_kb())
+        return
+
+    if data == "info_chats":
+        chats_text = await build_fedgroups_text()
+        await _edit(cq, chats_text, _info_back_kb())
+        return
+
+    if data == "menu_privacy":
+        kb = InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("Privacy Policy", callback_data="menu_privacy_policy")],
+                [InlineKeyboardButton("Back", callback_data="menu_back_start")],
+            ]
+        )
+        await _edit(cq, PRIVACY_MAIN_TEXT, kb)
+        return
+
+    if data == "menu_privacy_policy":
+        kb = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("Back", callback_data="menu_privacy")]]
+        )
+        await _edit(cq, PRIVACY_POLICY_TEXT, kb, parse_mode=None)
         return
 
     if data in HELP_DETAILS:
@@ -350,6 +397,7 @@ async def _edit(
     kb: InlineKeyboardMarkup,
     parse_mode=ParseMode.HTML,
 ) -> None:
+    """Edit the menu message; silently ignore 'not modified' errors."""
     try:
         await cq.edit_message_text(
             text,
@@ -358,4 +406,4 @@ async def _edit(
             disable_web_page_preview=True,
         )
     except TelegramError as exc:
-        logger.debug("menu edit ignored: %s", exc)
+        logger.debug("Menu edit ignored: %s", exc)
