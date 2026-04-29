@@ -2,10 +2,12 @@
 import logging
 
 from telegram import Update
+from telegram.constants import ChatType
 from telegram.ext import ContextTypes
 
 from ..config import ABOUT_TEXT
 from .appeal import start_appeal
+from .menu import send_start_menu
 
 logger = logging.getLogger(__name__)
 
@@ -53,9 +55,15 @@ async def cmd_about(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    msg = update.effective_message
     args = context.args or []
     if args and args[0].startswith("appeal_"):
         ban_id = args[0][len("appeal_"):]
         await start_appeal(update, context, ban_id)
+        return
+    # In private chat, show the interactive start menu (Feature 24).
+    # Outside PM, fall back to the static help text.
+    if msg is not None and msg.chat.type == ChatType.PRIVATE:
+        await send_start_menu(update, context)
         return
     await cmd_help(update, context)

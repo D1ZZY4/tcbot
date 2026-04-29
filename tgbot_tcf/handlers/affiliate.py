@@ -11,7 +11,7 @@ from telegram.constants import ChatType
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
-from ..config import BRANDING
+from ..config import BRANDING, INITIAL_OWNER_ID
 from ..db import fed_owners, federated_groups
 from ..utils.auth import is_authorized
 from ..utils.format import fmt_now, safe_first_name, user_link, utcnow
@@ -41,10 +41,10 @@ async def _bot_has_required_perms(context: ContextTypes.DEFAULT_TYPE, chat_id: i
     return True
 
 
-async def _ensure_first_owner(owner_id: int) -> None:
+async def _ensure_first_owner() -> None:
     existing = await fed_owners.find_one({})
     if existing is None:
-        await fed_owners.insert_one({"user_id": owner_id})
+        await fed_owners.insert_one({"user_id": INITIAL_OWNER_ID})
 
 
 async def on_new_chat_members(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -121,7 +121,7 @@ async def on_affiliation_callback(update: Update, context: ContextTypes.DEFAULT_
             },
             upsert=True,
         )
-        await _ensure_first_owner(user.id)
+        await _ensure_first_owner()
 
         try:
             await cq.edit_message_text(
@@ -206,7 +206,7 @@ async def cmd_joinfed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         },
         upsert=True,
     )
-    await _ensure_first_owner(user.id)
+    await _ensure_first_owner()
     await msg.reply_text("This community is now affiliated with TCF.")
     await log_to_channel(
         context,

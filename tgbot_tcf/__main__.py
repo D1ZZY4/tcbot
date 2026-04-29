@@ -25,6 +25,7 @@ from .handlers import checks
 from .handlers import help as help_h
 from .handlers import lists
 from .handlers import maintenance
+from .handlers import menu
 from .handlers import sync
 from .keepalive import start_keepalive
 
@@ -100,6 +101,14 @@ def build_app() -> Application:
         CallbackQueryHandler(affiliate.on_affiliation_callback, pattern=r"^fed_(join|cancel)$")
     )
     app.add_handler(ChatMemberHandler(affiliate.on_my_chat_member, ChatMemberHandler.MY_CHAT_MEMBER))
+
+    # Start menu / interactive help (Features 24 & 25)
+    app.add_handler(
+        CallbackQueryHandler(
+            menu.on_menu_callback,
+            pattern=r"^(menu_(about|help|stats|groups|fedinfo|back_start)|help_[a-z]+)$",
+        )
+    )
 
     # Ban proof flow
     app.add_handler(CallbackQueryHandler(ban.on_cancel_proof, pattern=r"^cancel_proof$"))
