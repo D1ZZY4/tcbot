@@ -102,7 +102,10 @@ async def on_appeal_message(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return
 
     log_message_id = sess["log_message_id"]
-    if str(log_message_id) not in text:
+    # Require the log link to contain the stored log_message_id as a
+    # standalone path segment (so e.g. id 123 does not match 1234567).
+    import re as _re
+    if not _re.search(rf"/{log_message_id}(?:[^0-9]|$)", text):
         await msg.reply_text("Invalid log link. Please check and try again.")
         return
 

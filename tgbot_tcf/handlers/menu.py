@@ -1,32 +1,27 @@
-"""Interactive start menu (Feature 24) and interactive help system (Feature 25).
+"""Start menu (Feature 24) and interactive help system (Features 19 & 25).
 
-The same menu surface is reachable from two entry points:
-- /start in private chat (no deep-link argument): renders the start menu.
-- /help, /commands: renders a static, plain command list (Feature 19).
-- The "Help" button inside the start menu opens the interactive help with
-  Back buttons that navigate inside the menu tree.
+Two entry points share the same module pages:
+- "menu" mode: opened from /start in PM. The module list shows a "Back"
+  button that returns to the start menu (callback_data="menu_back_start").
+- "cmd" mode: opened from /help or /commands. The module list has no
+  "Back to start" button.
 
-Only the user who issued /start may interact with the inline buttons.
-All transitions edit the original message in-place.
+In both modes, detail pages have a "Back" button (callback_data="menu_help_main")
+that returns to the module list, and the bot remembers the entry mode for that
+specific (chat_id, message_id) so navigation stays consistent.
+
+Only the user who opened the menu may use its buttons.
 """
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.constants import ChatType, ParseMode
+from telegram.constants import ParseMode
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
-from ..config import (
-    ABOUT_TEXT,
-    APPEAL_TOPIC,
-    EXEC_GROUP,
-    LOG_CHANNEL,
-    MAIN_CHANNEL,
-    MAIN_GROUP,
-    PROOF_TOPIC,
-)
-from ..db import bans, fed_admins, federated_groups, fed_owners
-from ..utils.format import user_link
+from ..config import ABOUT_TEXT
+from .links import get_links_view
+from .lists import build_fedgroups_text, build_fedstats_text
 
 logger = logging.getLogger(__name__)
 
@@ -34,33 +29,53 @@ logger = logging.getLogger(__name__)
 WELCOME_TEXT = (
     "<b>Welcome to the Transsion Core Federation (TCF) Bot</b>\n\n"
     "TCF is a community-driven federation for Infinix, Tecno, and Itel groups. "
-    "This bot manages affiliation, federation-wide bans, appeals, and broadcasts.\n\n"
+    "I help manage federation membership, bans, appeals, and broadcasts.\n\n"
     "Use the buttons below to explore."
+)
+
+HELP_INTRO_TEXT = (
+    "<b>TCF Federation Bot Help</b>\n"
+    "I am a federation management bot for Transsion Core Federation (TCF). "
+    "Below are the available modules. Select one to learn more."
 )
 
 
 # ---------------------------------------------------------------------------
-# Per-user owner tracking so only the original /start user may navigate.
+# Per-message state: who opened it and how (so we know which Back to show).
 # ---------------------------------------------------------------------------
 
-def _menu_owners(context: ContextTypes.DEFAULT_TYPE) -> dict:
-    return context.application.bot_data.setdefault("menu_owners", {})
+def _state(context: ContextTypes.DEFAULT_TYPE) -> dict:
+    return context.application.bot_data.setdefault("menu_state", {})
 
 
-def _menu_key(chat_id: int, message_id: int) -> str:
+def _key(chat_id: int, message_id: int) -> str:
     return f"{chat_id}:{message_id}"
 
 
-def _remember_owner(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, user_id: int) -> None:
-    owners = _menu_owners(context)
-    owners[_menu_key(chat_id, message_id)] = user_id
+def _remember(
+    context: ContextTypes.DEFAULT_TYPE,
+    chat_id: int,
+    message_id: int,
+    user_id: int,
+    mode: str,
+) -> None:
+    _state(context)[_key(chat_id, message_id)] = {"user_id": user_id, "mode": mode}
 
 
-def _is_owner(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, user_id: int) -> bool:
-    owners = _menu_owners(context)
-    expected = owners.get(_menu_key(chat_id, message_id))
-    # If unknown (bot restart), allow interaction.
-    return expected is None or expected == user_id
+def _get(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int) -> dict | None:
+    return _state(context).get(_key(chat_id, message_id))
+
+
+def _is_owner(
+    context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, user_id: int
+) -> bool:
+    s = _get(context, chat_id, message_id)
+    return s is None or s["user_id"] == user_id
+
+
+def _mode(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int) -> str:
+    s = _get(context, chat_id, message_id)
+    return s["mode"] if s else "menu"
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +94,7 @@ def _start_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton("Federation Groups", callback_data="menu_groups"),
             ],
             [
-                InlineKeyboardButton("Federation Info", callback_data="menu_fedinfo"),
+                InlineKeyboardButton("Federation Links", callback_data="menu_fedlinks"),
             ],
         ]
     )
@@ -91,131 +106,155 @@ def _back_to_start_kb() -> InlineKeyboardMarkup:
     )
 
 
-# Module list for interactive help.
-HELP_MODULES: list[tuple[str, str]] = [
-    ("Ban /cban", "help_ban"),
-    ("Unban /cunban", "help_unban"),
-    ("Check Ban", "help_check"),
-    ("Promote / Demote", "help_admin"),
-    ("Transfer Owner", "help_transfer"),
-    ("Broadcast", "help_broadcast"),
-    ("Sync Ban", "help_syncban"),
-    ("Disaffiliate", "help_defed"),
-    ("Affiliate Group", "help_join"),
-    ("Appeal", "help_appeal"),
-    ("Listings & Stats", "help_lists"),
-    ("Maintenance", "help_maint"),
+# Help module list per Feature 19 spec, exact pairings.
+HELP_MODULE_ROWS: list[list[tuple[str, str]]] = [
+    [("Ban", "help_ban"), ("Unban", "help_unban")],
+    [("Check Ban", "help_check"), ("Ban Info", "help_baninfo")],
+    [("Promote/Demote", "help_admin"), ("Transfer Owner", "help_transfer")],
+    [("Broadcast", "help_broadcast"), ("Sync Ban", "help_syncban")],
+    [("Group Affiliation", "help_affiliation"), ("Disaffiliate", "help_defed")],
+    [("Appeal", "help_appeal"), ("Join/Leave", "help_join")],
+    [("Statistics", "help_stats"), ("Cleanup", "help_cleanup")],
 ]
 
 
-def _help_modules_kb(with_back: bool) -> InlineKeyboardMarkup:
-    rows: list[list[InlineKeyboardButton]] = []
-    pairs = [HELP_MODULES[i:i + 2] for i in range(0, len(HELP_MODULES), 2)]
-    for pair in pairs:
-        rows.append([InlineKeyboardButton(label, callback_data=cb) for label, cb in pair])
-    if with_back:
+def _help_modules_kb(with_back_to_start: bool) -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(label, callback_data=cb) for label, cb in row]
+        for row in HELP_MODULE_ROWS
+    ]
+    if with_back_to_start:
         rows.append([InlineKeyboardButton("Back", callback_data="menu_back_start")])
     return InlineKeyboardMarkup(rows)
 
 
-def _help_detail_kb(with_back_to_start: bool) -> InlineKeyboardMarkup:
-    rows = [[InlineKeyboardButton("Back", callback_data="menu_help")]]
-    if with_back_to_start:
-        # When inside the start-menu flow, allow jumping back to the start menu too.
+def _help_detail_kb(mode: str) -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton("Back", callback_data="menu_help_main")]]
+    if mode == "menu":
         rows.append([InlineKeyboardButton("Main Menu", callback_data="menu_back_start")])
     return InlineKeyboardMarkup(rows)
 
 
 # ---------------------------------------------------------------------------
-# Help detail texts
+# Help detail texts (one per HELP_MODULE_ROWS entry)
 # ---------------------------------------------------------------------------
 
 HELP_DETAILS: dict[str, str] = {
     "help_ban": (
-        "<b>Ban a user (Federation owner / admin)</b>\n\n"
-        "Aliases: /cban, /comban, /fban\n"
+        "<b>Ban Module</b>\n\n"
+        "Federation owners and admins can ban a user across the entire "
+        "federation. The bot will then prompt for proof (photo or video, "
+        "albums supported) before the ban is committed.\n\n"
+        "Commands: /cban, /comban, /fban (also .cban, !cban)\n"
         "Usage: reply to a user with /cban &lt;reason&gt;, or "
         "/cban &lt;user_id|@username&gt; &lt;reason&gt;\n"
-        "Where: any affiliated group, the main group or its topics, or the bot PM. "
-        "You do not need to be an admin of that chat.\n"
-        "After issuing the command the bot prompts for proof (photo or video, "
-        "albums supported) within 60 seconds. A Cancel button is shown."
+        "Who: federation owners and admins.\n"
+        "Where: any affiliated group, the main group or its topics, the exec "
+        "group, or the bot PM."
     ),
     "help_unban": (
-        "<b>Unban a user (Federation owner / admin)</b>\n\n"
-        "Aliases: /cunban, /comunban, /funban\n"
+        "<b>Unban Module</b>\n\n"
+        "Lift an active federation ban.\n\n"
+        "Commands: /cunban, /comunban, /funban (also .cunban, !cunban)\n"
         "Usage: reply to a user with /cunban, or "
         "/cunban &lt;user_id|@username&gt;\n"
-        "Where: any affiliated group, the main group or its topics, or the bot PM."
+        "Who: federation owners and admins.\n"
+        "Where: same as Ban."
     ),
     "help_check": (
-        "<b>Check ban status</b>\n\n"
-        "/checkme, /myban, /amibanned - check whether you are banned in the federation.\n"
-        "/baninfo, /checkban, /banstatus &lt;user_id|@username|reply&gt; - "
-        "look up ban details for any user. Available to everyone."
+        "<b>Check Ban Module</b>\n\n"
+        "Find out whether you are banned in TCF.\n\n"
+        "Commands: /checkme, /myban, /amibanned\n"
+        "Who: anyone.\n"
+        "Where: any chat. If you are banned the bot replies with the reason "
+        "and a Submit Appeal button."
+    ),
+    "help_baninfo": (
+        "<b>Ban Info Module</b>\n\n"
+        "Look up the ban details for any user.\n\n"
+        "Commands: /baninfo, /checkban, /banstatus &lt;user_id|@username|reply&gt;\n"
+        "Who: anyone.\n"
+        "Where: any chat."
     ),
     "help_admin": (
-        "<b>Promote and Demote (Federation owner only)</b>\n\n"
+        "<b>Promote / Demote Module</b>\n\n"
+        "Manage Federation Admins.\n\n"
         "Promote: /cpromote, /compromote, /fpromote &lt;target&gt;\n"
         "Demote: /cdemote, /comdemote, /fdemote &lt;target&gt;\n"
-        "Target may be a reply, user ID, or @username."
+        "Who: federation owner only."
     ),
     "help_transfer": (
-        "<b>Transfer Federation Ownership (Federation owner only)</b>\n\n"
-        "Aliases: /transferowner, /tfowner, /fedowner &lt;target&gt;\n"
-        "The previous owner becomes a regular Federation Admin."
+        "<b>Transfer Ownership Module</b>\n\n"
+        "Transfer Federation Ownership to another user. The previous owner "
+        "becomes a regular Federation Admin.\n\n"
+        "Commands: /transferowner, /tfowner, /fedowner &lt;target&gt;\n"
+        "Who: federation owner only."
     ),
     "help_broadcast": (
-        "<b>Broadcast to all groups (Federation owner / admin)</b>\n\n"
-        "Aliases: /broadcast, /announce, /fcast &lt;message&gt;\n"
-        "Sends the message to every active affiliated group. Groups that fail "
-        "to receive the message are marked inactive."
+        "<b>Broadcast Module</b>\n\n"
+        "Send a plain-text announcement to every active affiliated group.\n\n"
+        "Commands: /broadcast, /announce, /fcast &lt;message&gt;\n"
+        "Who: federation owners and admins.\n"
+        "Note: groups that fail to receive the message are marked inactive."
     ),
     "help_syncban": (
-        "<b>Sync ban across all groups (Federation owner / admin)</b>\n\n"
-        "Aliases: /syncban, /forcesync, /fbanall &lt;target&gt;\n"
-        "Re-applies an existing federation ban to every active affiliated group "
-        "where the bot has restrict-members rights."
+        "<b>Sync Ban Module</b>\n\n"
+        "Re-enforce an existing federation ban across every active "
+        "affiliated group where the bot has restrict-members rights.\n\n"
+        "Commands: /syncban, /forcesync, /fbanall &lt;target&gt;\n"
+        "Who: federation owners and admins."
+    ),
+    "help_affiliation": (
+        "<b>Group Affiliation Module</b>\n\n"
+        "When the bot is added to a group, the group owner sees Join / Cancel "
+        "buttons. After making the bot an admin (delete messages, ban users, "
+        "invite users), the group owner can also affiliate later via:\n\n"
+        "Commands: /joinfed, /requestjoin, /applyfed\n"
+        "Who: the group owner."
     ),
     "help_defed": (
-        "<b>Disaffiliate from the federation</b>\n\n"
+        "<b>Disaffiliate Module</b>\n\n"
         "Inside a group: /defed, /leavefed, /unfed - the group owner or any "
-        "Federation owner / admin can remove the group from TCF.\n"
-        "By group ID: /rmfed, /removefed, /deletefed &lt;group_id&gt; - "
-        "Federation owner / admin only."
-    ),
-    "help_join": (
-        "<b>Affiliate a group with TCF</b>\n\n"
-        "When the bot is added to a group, the group owner sees Join / Cancel "
-        "buttons. After adding the bot as an admin (delete messages, ban users, "
-        "invite users), the owner can also use /joinfed, /requestjoin, /applyfed."
+        "federation owner / admin can remove the group from TCF.\n"
+        "By group ID (any chat): /rmfed, /removefed, /deletefed &lt;group_id&gt; "
+        "- federation owner or admin only."
     ),
     "help_appeal": (
-        "<b>Appeal a federation ban</b>\n\n"
-        "If you are banned, run /checkme and tap Submit Appeal. Follow the "
-        "instructions in the bot PM. Send a single message starting with "
-        "#appeal containing the log link, your clarification, and your "
-        "agreement to follow the rules."
+        "<b>Appeal Module</b>\n\n"
+        "If you are banned, run /checkme and tap Submit Appeal. Then in the "
+        "bot PM send a single message starting with #appeal containing the "
+        "log link, your clarification, and your agreement to follow the rules.\n\n"
+        "Within the first 12 hours after submission, only the original "
+        "banning admin may approve or reject. After that, any federation "
+        "admin or owner can decide."
     ),
-    "help_lists": (
-        "<b>Listings and statistics</b>\n\n"
-        "/fedgroups, /groups, /listfed - list all affiliated groups.\n"
-        "/fedstats, /stats, /fedinfo - federation statistics.\n"
-        "/fedchannels, /channels, /fedconfig - configured channel and topic IDs.\n"
-        "/about, /tcfabout, /fedabout - about TCF."
-    ),
-    "help_maint": (
-        "<b>Maintenance (Federation owner / admin)</b>\n\n"
-        "/cleanup, /purge, /fedclean - mark inactive any affiliated group the "
-        "bot can no longer reach.\n"
-        "/leaveall, /exitall, /fedleave - the Federation owner makes the bot "
+    "help_join": (
+        "<b>Join / Leave Module</b>\n\n"
+        "/joinfed, /requestjoin, /applyfed - group owner asks the bot to "
+        "affiliate a group with TCF.\n"
+        "/leaveall, /exitall, /fedleave - federation owner makes the bot "
         "leave every active affiliated group."
+    ),
+    "help_stats": (
+        "<b>Statistics Module</b>\n\n"
+        "Federation statistics and listings.\n\n"
+        "Commands:\n"
+        "/fedgroups, /groups, /listfed - list active affiliated groups.\n"
+        "/fedstats, /stats, /fedinfo - federation statistics.\n"
+        "/fedlinks, /links, /fedconfig - official TCF links.\n"
+        "Who: anyone."
+    ),
+    "help_cleanup": (
+        "<b>Cleanup Module</b>\n\n"
+        "Mark inactive any affiliated group the bot can no longer reach.\n\n"
+        "Commands: /cleanup, /purge, /fedclean\n"
+        "Who: federation owners and admins."
     ),
 }
 
 
 # ---------------------------------------------------------------------------
-# /start handler (no deep link, private chat)
+# Public entry points
 # ---------------------------------------------------------------------------
 
 async def send_start_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -229,7 +268,21 @@ async def send_start_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
     )
-    _remember_owner(context, sent.chat.id, sent.message_id, user.id)
+    _remember(context, sent.chat.id, sent.message_id, user.id, "menu")
+
+
+async def send_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    msg = update.effective_message
+    user = update.effective_user
+    if msg is None or user is None:
+        return
+    sent = await msg.reply_text(
+        HELP_INTRO_TEXT,
+        reply_markup=_help_modules_kb(with_back_to_start=False),
+        parse_mode=ParseMode.HTML,
+        disable_web_page_preview=True,
+    )
+    _remember(context, sent.chat.id, sent.message_id, user.id, "cmd")
 
 
 # ---------------------------------------------------------------------------
@@ -244,11 +297,15 @@ async def on_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     message_id = cq.message.message_id
 
     if not _is_owner(context, chat_id, message_id, cq.from_user.id):
-        await cq.answer("Only the user who opened this menu can use these buttons.", show_alert=True)
+        await cq.answer(
+            "Only the user who opened this menu can use these buttons.",
+            show_alert=True,
+        )
         return
 
     await cq.answer()
     data = cq.data
+    mode = _mode(context, chat_id, message_id)
 
     if data == "menu_back_start":
         await _edit(cq, WELCOME_TEXT, _start_keyboard())
@@ -257,26 +314,42 @@ async def on_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await _edit(cq, ABOUT_TEXT, _back_to_start_kb(), parse_mode=None)
         return
     if data == "menu_help":
-        await _edit(cq, _help_intro_text(), _help_modules_kb(with_back=True))
+        # Entered help via the start menu: list shows Back-to-start.
+        await _edit(cq, HELP_INTRO_TEXT, _help_modules_kb(with_back_to_start=True))
+        return
+    if data == "menu_help_main":
+        # Back from a detail page to the module list.
+        await _edit(
+            cq,
+            HELP_INTRO_TEXT,
+            _help_modules_kb(with_back_to_start=(mode == "menu")),
+        )
         return
     if data == "menu_stats":
-        text = await _stats_text(context)
-        await _edit(cq, text, _back_to_start_kb())
+        await _edit(cq, await build_fedstats_text(context), _back_to_start_kb())
         return
     if data == "menu_groups":
-        text = await _groups_text()
-        await _edit(cq, text, _back_to_start_kb())
+        await _edit(cq, await build_fedgroups_text(), _back_to_start_kb())
         return
-    if data == "menu_fedinfo":
-        await _edit(cq, _channels_text(), _back_to_start_kb(), parse_mode=None)
+    if data == "menu_fedlinks":
+        text, links_kb = get_links_view()
+        rows = list(links_kb.inline_keyboard) + [
+            [InlineKeyboardButton("Back", callback_data="menu_back_start")]
+        ]
+        await _edit(cq, text, InlineKeyboardMarkup(rows))
         return
 
     if data in HELP_DETAILS:
-        await _edit(cq, HELP_DETAILS[data], _help_detail_kb(with_back_to_start=True))
+        await _edit(cq, HELP_DETAILS[data], _help_detail_kb(mode))
         return
 
 
-async def _edit(cq, text: str, kb: InlineKeyboardMarkup, parse_mode=ParseMode.HTML) -> None:
+async def _edit(
+    cq,
+    text: str,
+    kb: InlineKeyboardMarkup,
+    parse_mode=ParseMode.HTML,
+) -> None:
     try:
         await cq.edit_message_text(
             text,
@@ -285,65 +358,4 @@ async def _edit(cq, text: str, kb: InlineKeyboardMarkup, parse_mode=ParseMode.HT
             disable_web_page_preview=True,
         )
     except TelegramError as exc:
-        # Ignore "Message is not modified" and similar transient errors.
         logger.debug("menu edit ignored: %s", exc)
-
-
-# ---------------------------------------------------------------------------
-# Dynamic content helpers (mirror the read-only command output)
-# ---------------------------------------------------------------------------
-
-def _help_intro_text() -> str:
-    return (
-        "<b>Help</b>\n\n"
-        "Pick a topic to see its details. Use Back to return to the main menu."
-    )
-
-
-async def _stats_text(context: ContextTypes.DEFAULT_TYPE) -> str:
-    owner = await fed_owners.find_one({})
-    admins_count = await fed_admins.count_documents({})
-    groups_count = await federated_groups.count_documents({"is_active": True})
-    bans_count = await bans.count_documents({"is_active": True})
-    if owner:
-        owner_id = owner["user_id"]
-        try:
-            chat = await context.bot.get_chat(owner_id)
-            owner_name = chat.first_name or str(owner_id)
-        except TelegramError:
-            owner_name = str(owner_id)
-        owner_line = user_link(owner_id, owner_name)
-    else:
-        owner_line = "Not set"
-    return (
-        "<b>TCF Federation Statistics</b>\n"
-        f"Owner: {owner_line}\n"
-        f"Federation Admins: {admins_count}\n"
-        f"Affiliated Groups: {groups_count}\n"
-        f"Active Bans: {bans_count}"
-    )
-
-
-async def _groups_text() -> str:
-    cursor = federated_groups.find({"is_active": True})
-    groups = [g async for g in cursor]
-    if not groups:
-        return "No groups are currently affiliated with TCF."
-    lines = ["<b>Affiliated TCF Groups</b>"]
-    for g in groups[:50]:
-        title = g.get("title") or str(g["chat_id"])
-        lines.append(f"{title} (ID: {g['chat_id']})")
-    if len(groups) > 50:
-        lines.append(f"... and {len(groups) - 50} more groups.")
-    return "\n".join(lines)
-
-
-def _channels_text() -> str:
-    return (
-        "Log Channel: " + str(LOG_CHANNEL) + "\n"
-        "Main Group: " + str(MAIN_GROUP) + "\n"
-        "Proof Topic: " + str(PROOF_TOPIC) + "\n"
-        "Appeal Topic: " + str(APPEAL_TOPIC) + "\n"
-        "Main Channel: " + str(MAIN_CHANNEL) + "\n"
-        "Exec Group: " + str(EXEC_GROUP)
-    )

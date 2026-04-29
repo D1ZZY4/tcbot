@@ -1,3 +1,5 @@
+"""Tiny Flask keep-alive server. Required to prevent the bot from sleeping
+on hosting platforms that idle long-running processes."""
 import logging
 import os
 import threading
@@ -14,7 +16,7 @@ def index() -> str:
     return "OK"
 
 
-_PORT = int(os.environ.get("KEEPALIVE_PORT", "8000"))
+_PORT = int(os.environ.get("KEEPALIVE_PORT", "8080"))
 
 
 def _run() -> None:

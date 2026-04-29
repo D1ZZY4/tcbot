@@ -1,6 +1,6 @@
 """Entry point: python -m tgbot_tcf"""
-import asyncio
 import logging
+import re
 import traceback
 
 from telegram import Update
@@ -14,20 +14,25 @@ from telegram.ext import (
     filters,
 )
 
-from .config import BOT_TOKEN
-from .db import init_db
-from .handlers import admins
-from .handlers import affiliate
-from .handlers import appeal
-from .handlers import ban
-from .handlers import broadcast
-from .handlers import checks
-from .handlers import help as help_h
-from .handlers import lists
-from .handlers import maintenance
-from .handlers import menu
-from .handlers import sync
+from .config import BOT_TOKEN, INITIAL_OWNER_ID
+from .db import fed_owners, init_db
+from .handlers import (
+    admins,
+    affiliate,
+    appeal,
+    ban,
+    broadcast,
+    checks,
+    help as help_h,
+    links,
+    lists,
+    maintenance,
+    menu,
+    sync,
+    welcome,
+)
 from .keepalive import start_keepalive
+from .utils.prefix import dispatch_alt_prefix, register_command
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -45,11 +50,19 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 def _add(app: Application, aliases: list[str], cb) -> None:
+    """Register a command callback for `/`, `.`, and `!` prefixes."""
     app.add_handler(CommandHandler(aliases, cb))
+    for name in aliases:
+        register_command(name, cb)
 
 
 async def post_init(app: Application) -> None:
     await init_db()
+    # Ensure the initial federation owner exists so commands are usable
+    # even before the first group affiliation (Feature 1's intent).
+    if await fed_owners.find_one({}) is None:
+        await fed_owners.insert_one({"user_id": INITIAL_OWNER_ID})
+        logger.info("Seeded initial Federation Owner (id=%s)", INITIAL_OWNER_ID)
     me = await app.bot.get_me()
     logger.info("Bot @%s started (id=%s)", me.username, me.id)
 
@@ -57,15 +70,16 @@ async def post_init(app: Application) -> None:
 def build_app() -> Application:
     app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
 
-    # Help / start / about
+    # ----- Slash commands (also wired for `.` and `!` via _add) -----
+
+    # Help / start
     _add(app, ["help", "commands"], help_h.cmd_help)
     _add(app, ["start"], help_h.cmd_start)
-    _add(app, ["about", "tcfabout", "fedabout"], help_h.cmd_about)
 
     # Listings
     _add(app, ["fedgroups", "groups", "listfed"], lists.cmd_fedgroups)
     _add(app, ["fedstats", "stats", "fedinfo"], lists.cmd_fedstats)
-    _add(app, ["fedchannels", "channels", "fedconfig"], lists.cmd_fedchannels)
+    _add(app, ["fedlinks", "links", "fedconfig"], links.cmd_fedlinks)
 
     # Status
     _add(app, ["checkme", "myban", "amibanned"], checks.cmd_checkme)
@@ -76,7 +90,7 @@ def build_app() -> Application:
     _add(app, ["defed", "leavefed", "unfed"], affiliate.cmd_defed)
     _add(app, ["rmfed", "removefed", "deletefed"], affiliate.cmd_rmfed)
 
-    # Admin management (owner)
+    # Owner-only admin management
     _add(app, ["cpromote", "compromote", "fpromote"], admins.cmd_promote)
     _add(app, ["cdemote", "comdemote", "fdemote"], admins.cmd_demote)
     _add(app, ["transferowner", "tfowner", "fedowner"], admins.cmd_transfer_owner)
@@ -93,25 +107,58 @@ def build_app() -> Application:
     _add(app, ["leaveall", "exitall", "fedleave"], maintenance.cmd_leaveall)
     _add(app, ["cleanup", "purge", "fedclean"], maintenance.cmd_cleanup)
 
-    # Group affiliation events
+    # ----- Alt-prefix dispatcher (for messages starting with `.` or `!`) -----
     app.add_handler(
-        MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, affiliate.on_new_chat_members)
-    )
-    app.add_handler(
-        CallbackQueryHandler(affiliate.on_affiliation_callback, pattern=r"^fed_(join|cancel)$")
-    )
-    app.add_handler(ChatMemberHandler(affiliate.on_my_chat_member, ChatMemberHandler.MY_CHAT_MEMBER))
-
-    # Start menu / interactive help (Features 24 & 25)
-    app.add_handler(
-        CallbackQueryHandler(
-            menu.on_menu_callback,
-            pattern=r"^(menu_(about|help|stats|groups|fedinfo|back_start)|help_[a-z]+)$",
+        MessageHandler(
+            filters.TEXT & filters.Regex(re.compile(r"^[.!]")),
+            dispatch_alt_prefix,
         )
     )
 
-    # Ban proof flow
-    app.add_handler(CallbackQueryHandler(ban.on_cancel_proof, pattern=r"^cancel_proof$"))
+    # ----- Group affiliation (bot-add prompt + my_chat_member tracking) -----
+    app.add_handler(
+        MessageHandler(
+            filters.StatusUpdate.NEW_CHAT_MEMBERS, affiliate.on_new_chat_members
+        )
+    )
+    app.add_handler(
+        CallbackQueryHandler(
+            affiliate.on_affiliation_callback, pattern=r"^fed_(join|cancel)$"
+        )
+    )
+    app.add_handler(
+        ChatMemberHandler(
+            affiliate.on_my_chat_member, ChatMemberHandler.MY_CHAT_MEMBER
+        )
+    )
+
+    # ----- Welcome / Goodbye in MAIN_GROUP and EXEC_GROUP (Feature 27) -----
+    # Run in a separate handler group so they don't collide with affiliation.
+    app.add_handler(
+        MessageHandler(
+            filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome.on_member_join
+        ),
+        group=1,
+    )
+    app.add_handler(
+        MessageHandler(
+            filters.StatusUpdate.LEFT_CHAT_MEMBER, welcome.on_member_left
+        ),
+        group=1,
+    )
+
+    # ----- Start menu / interactive help callbacks (Features 19, 24, 25) ----
+    app.add_handler(
+        CallbackQueryHandler(
+            menu.on_menu_callback,
+            pattern=r"^(menu_(about|help|help_main|stats|groups|fedlinks|back_start)|help_[a-z]+)$",
+        )
+    )
+
+    # ----- Ban proof flow -----
+    app.add_handler(
+        CallbackQueryHandler(ban.on_cancel_proof, pattern=r"^cancel_proof$")
+    )
     app.add_handler(
         MessageHandler(
             filters.ATTACHMENT & ~filters.COMMAND & ~filters.StatusUpdate.ALL,
@@ -119,10 +166,14 @@ def build_app() -> Application:
         )
     )
 
-    # Appeal flow
-    app.add_handler(CallbackQueryHandler(appeal.on_cancel_appeal, pattern=r"^cancel_appeal$"))
+    # ----- Appeal flow -----
     app.add_handler(
-        CallbackQueryHandler(appeal.on_appeal_review, pattern=r"^appeal_(approve|reject)_")
+        CallbackQueryHandler(appeal.on_cancel_appeal, pattern=r"^cancel_appeal$")
+    )
+    app.add_handler(
+        CallbackQueryHandler(
+            appeal.on_appeal_review, pattern=r"^appeal_(approve|reject)_"
+        )
     )
     app.add_handler(
         MessageHandler(
