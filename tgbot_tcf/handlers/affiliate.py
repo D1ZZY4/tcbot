@@ -14,8 +14,8 @@ from telegram.constants import ChatType
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
-from ..config import BRANDING, INITIAL_OWNER_ID
-from ..db import federated_groups, tc_owners
+from .. import BRANDING, INITIAL_OWNER_ID
+from ..database import federated_groups, tc_owners
 from ..utils.auth import is_authorized
 from ..utils.format import fmt_now, safe_first_name, user_link, utcnow
 from ..utils.logger import log_to_channel

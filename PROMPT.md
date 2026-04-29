@@ -1,4 +1,4 @@
-Build a production-ready Telegram bot for the Transsion Core Federation (TCF) according to the following exhaustive specification. The bot manages Transsion Core membership, centralized ban/unban with proof uploads, admin hierarchy with promotion requests, appeal system, broadcast, sync, extensive logging, a start menu with privacy information, a help system, deep-link About, and welcome/goodbye messages in main/exec groups. All code must be written in Python 3.11+ using the python-telegram-bot library version 22.5 (asynchronous, Application.builder()). Use MongoDB as the database with the motor async driver. The bot must be runnable via python -m tgbot_tcf and include a Flask keep-alive server on port 8080. No emoji is allowed in any message, caption, or button. All formatted text must use HTML parse mode.
+Build a production-ready Telegram bot for the Transsion Core Federation (TCF) according to the following exhaustive specification. The bot manages Transsion Core membership, fully automatic ban/unban with proof uploads and immediate cross‑group enforcement, admin hierarchy with promotion requests, appeal system with automatic unban on approval, broadcast, real‑time member tracking, extensive logging, a start menu with privacy information, a help system, deep‑link About, and welcome/goodbye messages in main/exec groups. All code must be written in Python 3.11+ using the python-telegram-bot library version 22.5 (asynchronous, Application.builder()). Use MongoDB as the database with the motor async driver. The bot must be runnable via python -m tgbot_tcf and include a Flask keep-alive server on port 8080. No emoji is allowed in any message, caption, or button. All formatted text must use HTML parse mode.
 
 CREDENTIALS (provided as environment variables; values given here for reference):
 - BOT_TOKEN = 8704305954:AAGN9Dd1fTpzQnjvDPMGZa86p0jkXCSykjc
@@ -24,6 +24,8 @@ DATABASE SCHEMA (MongoDB collections)
 - tc_admins: { user_id: int, promoted_by: int, promoted_date: datetime }
 - bans: { ban_id: str (unique), banned_user_id: int, reason: str, admin_user_id: int, proof_message_id: int, log_message_id: int, previous_proof_message_id: int | null, previous_log_message_id: int | null, timestamp: datetime, updated_timestamp: datetime | null, is_active: bool, update_count: int, review_message_id: int | null, review_timestamp: datetime | null }
 - promotion_requests: { request_id: str (unique), target_id: int, promoted_by: int, status: str (pending/approved/rejected), requested_date: datetime, resolved_date: datetime | null, resolved_by: int | null }
+- pending_joins: { chat_id: int, title: str, owner_id: int, message_id: int, added_date: datetime }
+- member_cache: { user_id: int, username: str | null, first_name: str, last_name: str | null, last_updated: datetime }
 
 TARGET RESOLUTION (used by every command that takes a target)
 1. If the command is a reply, target = replied-to user.
@@ -37,7 +39,7 @@ Example: /tcban, .tcban, !tcban all trigger the same ban command.
 Register handlers to accept messages starting with any of these prefixes for all commands and their aliases.
 
 AUTHORIZATION
-Commands /tcban, /tcunban, /tcpromote, /tcdemote, /tctransfer, /tcbroadcast, /rmtc, /tcsync, /jointc, /leaveall, /cleanup require the sender to be in tc_owners or tc_admins. Otherwise reply "You are not authorized."
+Commands /tcban, /tcunban, /tcpromote, /tcdemote, /tctransfer, /tcbroadcast, /rmtc, /jointc, /leaveall, /cleanup require the sender to be in tc_owners or tc_admins. Otherwise reply "You are not authorized."
 For /tcban and /tcunban, authorization is checked purely against the tc_owners/tc_admins collections. The TC admin/owner **does not need to be an admin of the chat** where the command is executed. These commands work in any affiliated group, in the MAIN_GROUP (or its topics), in the EXEC_GROUP, or in bot PM.
 For /tcpromote: TC admins can initiate the command, but it only creates a promotion request. The owner must approve or reject it.
 
@@ -61,21 +63,29 @@ COMMON RESPONSES
 - "This group is not affiliated with TCF." – when running /detc in non‑federated group.
 - "Only the group owner or Transsion Core admins can disaffiliate this group." – /detc unauthorized.
 
-WORKFLOW OVERVIEW (Ban / Appeal / Unban / Promotion interactions)
-- A ban is created via /tcban, stored as active. The ban can be updated with new proof (keeping history).
-- Unban via /tcunban sets the ban inactive immediately. If there was a pending appeal, the bot edits that review message to "Appeal resolved (user already unbanned)." and removes the keyboard.
-- Appeals can only be submitted for active bans. During the appeal review, if someone manually unbans the user, the appeal is automatically closed when an admin tries to act on it.
-- The appeal review message is tied to the ban_id and stored in the ban record (review_message_id, review_timestamp) for persistence across bot restarts.
-- The approving/rejecting logic respects a 12-hour window where only the original banning admin can decide.
+WORKFLOW OVERVIEW (Ban / Appeal / Unban / Promotion interactions / Member Tracking)
+- A ban is created via /tcban, stored as active. The bot **immediately** iterates over all active federated_groups and bans the target user wherever it has can_restrict_members permission. No manual sync command exists; enforcement is fully automatic.
+- Unban via /tcunban sets the ban inactive immediately and also immediately unbans the user across all groups.
+- When an appeal is approved, the ban is automatically lifted (unban) and the same cross‑group unban enforcement is executed.
+- The appeal review message is persisted in the ban record (review_message_id, review_timestamp).
+- All state changes are logged to LOG_CHANNEL.
+- TC admins can promote other users via /tcpromote, but it creates a promotion request; the owner must approve.
+- **Member Tracking**: When the bot joins a new affiliated group, it fetches all current members and stores their user_id, username, first_name, last_name in `member_cache`. On every message received in any affiliated group, the sender's data is updated in `member_cache`. Additionally, on `chat_member` updates (when a user changes their info), the bot updates the cache accordingly. This ensures the bot always has the latest username/nickname for identification in logs.
+
+WORKFLOW OVERVIEW (Ban / Appeal / Unban / Promotion / Member Tracking)
+- A ban is created via /tcban, stored as active. The bot **immediately** iterates over all active federated_groups and bans the target user wherever it has can_restrict_members permission. No manual sync command exists; enforcement is fully automatic.
+- Unban via /tcunban sets the ban inactive immediately and also immediately unbans the user across all groups.
+- When an appeal is approved, the ban is automatically lifted (unban) and the same cross‑group unban enforcement is executed.
+- The appeal review message is persisted in the ban record (review_message_id, review_timestamp).
 - All state changes (ban/unban/appeal decision/promotion request) are logged to LOG_CHANNEL.
-- TC admins can promote other users via /tcpromote, but instead of immediate addition, a promotion request is created. The owner receives a notification with Approve/Reject buttons. Upon approval, the user becomes a TC admin.
-- **Data Collection**: The bot only collects and stores Telegram user IDs, group IDs, and message IDs necessary for federation operations. No personal messages, names, or phone numbers are stored beyond what is visible in logs. All data is used strictly for moderation purposes and is never shared with third parties.
+- TC admins can promote other users via /tcpromote, but it creates a promotion request; the owner must approve.
+- **Member Tracking**: When the bot joins a new affiliated group, it fetches all current members and stores their user_id, username, first_name, last_name in `member_cache`. On every message received in any affiliated group, the sender's data is updated in `member_cache`. Additionally, on `chat_member` updates (when a user changes their info), the bot updates the cache accordingly. This ensures the bot always has the latest username/nickname for identification in logs.
 
 BRANDING CONSTANT
 Every log message posted to LOG_CHANNEL must contain the exact line:
-Transsion Core Federation
+𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯
 
-(the unique formatted text 𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯 is used as the branding line in all logs)
+(This string must be sent as-is, without any HTML escaping, as a separate line in every log message.)
 
 DATE/TIME FORMAT
 All timestamps displayed or logged must be in UTC and formatted as DD-MM-YYYY | HH:MM (24-hour).
@@ -87,7 +97,6 @@ Promote: /tcpromote, /promote, /tcfpromote
 Demote: /tcdemote, /demote, /tcfdemote
 Transfer Owner: /tctransfer, /transfer, /tcowner
 Broadcast: /tcbroadcast, /broadcast, /tcannounce
-Sync Ban: /tcsync, /syncban, /tcfbanall
 Remove Federated Group (by ID): /rmtc, /removetc, /deletetc
 Disaffiliate Current Group: /detc, /leavetc, /untc
 Check Me: /checkme, /myban, /amibanned
@@ -103,8 +112,8 @@ Promotion Requests (owner only): /tcpromoterequests, /promoreqs, /tcreqs
 (No command alias for About; it is accessed via deep link /start about.)
 (Privacy policy is accessed via start menu button)
 
-FEATURE 1: GROUP AFFILIATION ON BOT ADD
-1. When the bot is added to a group (new_chat_members includes bot, chat.type is group/supergroup), send:
+FEATURE 1: GROUP AFFILIATION ON BOT ADD (with real‑time admin right monitoring)
+1. When the bot is added to a group (new_chat_members includes bot, chat.type is group/supergroup), send immediately:
    "Do you want this community to join the Transsion Core Federation?"
    with inline buttons in one row:
    - "Join Transsion Core" | "Cancel"
@@ -118,33 +127,57 @@ FEATURE 1: GROUP AFFILIATION ON BOT ADD
       - can_delete_messages = True
       - can_restrict_members = True
       - can_invite_users = True
-   b. If any missing, edit original message to:
-      "Please make the bot an admin with the necessary permissions (delete messages, ban users, invite users) and try again." Remove keyboard. Stop.
+   b. If any missing:
+      - Edit original message to: "Please make the bot an admin with the necessary permissions (delete messages, ban users, invite users) and try again."
+      - Remove the inline keyboard.
+      - Store this chat in `pending_joins` with { chat_id, title, owner_id, message_id: the sent message's id, added_date: now }.
+      - Start monitoring `my_chat_member` updates for this chat. When the bot's permissions become sufficient, the join will be completed automatically (see step 5).
+      - Stop here.
    c. If permissions are sufficient:
       - If chat already in federated_groups with is_active=true, edit message to "Already affiliated." Remove keyboard. Stop.
       - Otherwise, upsert federated_groups with { chat_id, title, added_by: owner_id, added_date: utcnow(), is_active: true }.
-      - If tc_owners is empty, insert { user_id: INITIAL_OWNER_ID } as the first Transsion Core Owner (ignore the group owner for this initial setup).
+      - If tc_owners is empty, insert { user_id: INITIAL_OWNER_ID } as the first Transsion Core Owner.
       - Edit message to "This community is now affiliated with TCF. Federation commands can now be used here by authorized Transsion Core admins." Remove keyboard.
       - Log to LOG_CHANNEL (HTML, no buttons):
-
-        Log Message:
+        ```
         New Affiliated Group
-        Transsion Core Federation
-        Group: <a href="tg://user?id=<chat_id>"><chat_title></a> (ID: <chat_id>)
-        Added by Owner: <a href="tg://user?id=<owner_id>">Owner First Name</a> (ID: <owner_id>)
+        𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯
+
+        Group: <group_display>
+        ID: <chat_id>
+
+        Added by Owner: <a href="tg://user?id=<owner_id>">Owner First Name</a>
+        ID: <owner_id>
+
         Date: <DD-MM-YYYY> | <HH:MM>
+        ```
+        where <group_display> is:
+        - If chat has a public username: <a href="https://t.me/username">chat_title</a>
+        - Otherwise: just chat_title
+      - Remove any pending_joins record for this chat.
+      - Trigger full member cache initialisation for this group (see Feature 33).
 
 4. Owner clicks "Cancel":
    a. Edit message to "Affiliation cancelled. Leaving the group." Remove keyboard.
    b. Leave the group using context.bot.leave_chat(chat_id). Handle exceptions silently.
    c. Log to LOG_CHANNEL:
-
-      Log Message:
+      ```
       Affiliation Rejected & Left
-      Transsion Core Federation
+
+      𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯
+
       Group: <chat_title> (ID: <chat_id>)
+
       Rejected by Owner: <a href="tg://user?id=<owner_id>">Owner First Name</a> (ID: <owner_id>)
+
       Date: <DD-MM-YYYY> | <HH:MM>
+      ```
+      Remove any pending_joins record for this chat.
+
+5. Real‑time monitoring of bot admin rights for pending joins:
+   - Listen to `my_chat_member` updates. When the bot's new status is administrator and the chat is in `pending_joins`, check if the required permissions (can_delete_messages, can_restrict_members, can_invite_users) are now all True.
+   - If yes, perform the full join as in step 3.c, but edit the stored message_id to the success message instead of sending a new one.
+   - Remove the pending_joins record.
 
 FEATURE 2: EXPLICIT JOIN TRANSSION CORE LATER (/jointc, /requestjoin, /applytc)
 - If a group previously rejected or did not join when the bot was added, the group owner can later use /jointc in the group where the bot is already an admin.
@@ -164,9 +197,14 @@ FEATURE 3: DISAFFILIATE A GROUP (multiple aliases)
 
       Log Message:
       Group Disaffiliated
-      Transsion Core Federation
-      Group: <chat_title> (ID: <chat_id>)
-      Removed by: <a href="tg://user?id=<user_id>">User First Name</a> (ID: <user_id>)
+      𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯
+
+      Group: <chat_title>
+      ID: <chat_id>
+
+      Removed by: <a href="tg://user?id=<user_id>">User First Name</a>
+      ID: <user_id>
+
       Date: <DD-MM-YYYY> | <HH:MM>
 
   - Otherwise reply "Only the group owner or Transsion Core admins can disaffiliate this group."
@@ -200,12 +238,17 @@ FEATURE 4: TRANSSION CORE OWNER AND ADMIN MANAGEMENT (with Promotion Request)
   - Remove from tc_admins. Reply "User demoted from Transsion Core Admin." or "Not a Transsion Core Admin."
   - Log:
 
-    Log Message:
-    Transsion Core Admin Demoted
-    Transsion Core Federation
-    Admin: <a href="tg://user?id=<target_id>">Target First Name</a> (ID: <target_id>)
-    Demoted by Owner: <a href="tg://user?id=<owner_id>">Owner First Name</a> (ID: <owner_id>)
-    Date: <DD-MM-YYYY> | <HH:MM>
+        Log Message:
+        Transsion Core Admin Demoted
+        𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯
+
+        Admin: <a href="tg://user?id=<target_id>">Target First Name</a>
+        ID: <target_id>
+
+        Demoted by Owner: <a href="tg://user?id=<owner_id>">Owner First Name</a>
+        ID: <owner_id>
+
+        Date: <DD-MM-YYYY> | <HH:MM>
 
 - /tctransfer, /transfer, /tcowner <target> (Owner only):
   - If no target, reply "Reply to a user, provide a user ID, or provide a username to transfer ownership to."
@@ -216,20 +259,23 @@ FEATURE 4: TRANSSION CORE OWNER AND ADMIN MANAGEMENT (with Promotion Request)
 
     Log Message:
     Transsion Core Ownership Transferred
-    Transsion Core Federation
-    New Owner: <a href="tg://user?id=<target_id>">Target First Name</a> (ID: <target_id>)
-    Previous Owner: <a href="tg://user?id=<old_owner_id>">Old Owner First Name</a> (ID: <old_owner_id>)
+    𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯
+
+    New Owner: <a href="tg://user?id=<target_id>">Target First Name</a>
+    ID: <target_id>
+
+    Previous Owner: <a href="tg://user?id=<old_owner_id>">Old Owner First Name</a>
+    ID: <old_owner_id>
+
     Date: <DD-MM-YYYY> | <HH:MM>
 
-FEATURE 5: TRANSSION CORE BAN (/tcban, /ban, /tcfban) WITH PROOF (with Cancel button)
-Only TC owner/admins. Usage: /tcban <target> <reason> (reason required). Works in any affiliated group, in the MAIN_GROUP (forum), in the EXEC_GROUP, or in bot PM. The executor does not need to be an admin of the chat, and the target can be any user, even an admin of the group – the ban will be recorded Transsion Core‑wide.
+FEATURE 5: TRANSSION CORE BAN (/tcban, /ban, /tcfban) WITH PROOF AND IMMEDIATE CROSS‑GROUP ENFORCEMENT
+Only TC owner/admins. Usage: /tcban <target> <reason> (reason required). Works in any affiliated group, in the MAIN_GROUP (forum), in the EXEC_GROUP, or in bot PM.
 Implement with ConversationHandler (60-second timeout per step).
 
-**Behind-the-scenes logic for /tcban**:
-- When a user is banned, the bot stores their user ID as the banned entity. The ban applies to the entire federation.
-- If the banned user is currently an admin in any affiliated group, the bot does **not** automatically remove their admin rights (to avoid potential abuse or unintended escalation). However, the ban still prevents them from participating normally in those groups (if the bot has ban rights).
-- The /tcsync command can later be used by a TC admin to enforce the ban across all groups, which will also attempt to remove the user from those groups if the bot has sufficient permissions.
-- The bot never collects or stores any personal messages from the user; only their user ID, reason, and proof media are stored in the ban record.
+**Automatic ban enforcement logic**:
+- After the ban record is saved, the bot **immediately** iterates over all active federated_groups. In each group where the bot has can_restrict_members permission (checked via get_chat_member for the bot), call bot.ban_chat_member(chat_id, target_id). Catch and ignore exceptions (e.g., if the target is an admin in that group and cannot be banned by the bot). This makes the ban effective across the entire federation without any manual sync command.
+- The ban record is stored in the bans collection.
 
 1. Entry: Bot replies to command with a message containing:
    - Text: "Please provide proof for this ban. Send a photo or video (multiple media allowed). You have 60 seconds."
@@ -254,6 +300,7 @@ Implement with ConversationHandler (60-second timeout per step).
    - Capture first message_id as proof_message_id. Construct proof link: https://t.me/c/3872207988/<proof_message_id>?thread=67
    - Send log message to LOG_CHANNEL (no thread) with HTML and inline keyboard (see templates). Capture log_message_id.
    - Save/update ban record in bans collection.
+   - **Enforce ban across all groups**: For each active federated group, if bot has can_restrict_members, ban_chat_member(chat_id, target_id). Catch and ignore exceptions silently.
    - Edit the initial prompt message to: "User <banned_user_id> has been banned from the Transsion Core. Reason: <reason>" and remove the Cancel button.
    - End conversation.
 
@@ -261,6 +308,7 @@ Templates for NEW BAN (in MAIN_GROUP proof topic):
 
 Caption Message (Proof Topic):
 ID: <banned_user_id>
+
 Admin: <a href="tg://user?id=<admin_id>">Admin's First Name</a>
 Admin ID: <admin_id>
 
@@ -268,8 +316,10 @@ Commit at: <DD-MM-YYYY> | <HH:MM>
 
 Log Message (LOG_CHANNEL):
 New Transsion Core Ban
-Transsion Core Federation
+𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯
+
 Admin: <a href="tg://user?id=<admin_id>">Admin First Name</a>
+
 User: <a href="tg://user?id=<banned_user_id>">User First Name</a>
 User ID: <banned_user_id>
 Reason: <reason>
@@ -284,8 +334,10 @@ Templates for UPDATE BAN (when user already banned):
 
 Caption Message (Proof Topic):
 ID: <banned_user_id>
+
 Admin: <a href="tg://user?id=<admin_id>">Admin's First Name</a>
 Admin ID: <admin_id>
+
 Previous: <a href="<previous_proof_link>">Click Here</a>
 
 Commit at: <original ban date> | <original time>
@@ -293,9 +345,11 @@ Update at: <DD-MM-YYYY> | <HH:MM>
 
 Log Message (LOG_CHANNEL):
 New Transsion Core Ban (Update)
-Transsion Core Federation
+𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯
+
 Admin: <a href="tg://user?id=<new_admin_id>">New Admin</a>
 Previous Admin: <a href="tg://user?id=<old_admin_id>">Old Admin</a>
+
 User: <a href="tg://user?id=<banned_user_id>">User</a>
 User ID: <banned_user_id>
 Reason: <new_reason>
@@ -318,17 +372,21 @@ FEATURE 6: TRANSSION CORE UNBAN (/tcunban, /unban, /tcfunban)
 - Find active ban by banned_user_id. If none, reply "User is not banned."
 - Unban also occurs automatically when an appeal is approved (see Feature 8).
 - Set is_active = false.
+- **Immediately unban across all groups**: For each active federated group where bot has can_restrict_members, call unban_chat_member(chat_id, target_id). Catch and ignore exceptions.
 - If an optional reason was given, include it in the log (append after the Admin/User lines: "Unban Reason: <reason>").
 - If a pending appeal exists for this ban (review_message_id is not null), the bot edits that review message to "Appeal resolved (user already unbanned)." and removes the keyboard.
 - Log to LOG_CHANNEL:
 
   Log Message:
   Transsion Core Unban
-  Transsion Core Federation
+  𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯
+
   Admin: <a href="tg://user?id=<admin_id>">Admin First Name</a>
   User: <a href="tg://user?id=<target_id>">User First Name</a>
   User ID: <target_id>
+
   [Unban Reason: <reason>] (if provided)
+
   Date: <DD-MM-YYYY> | <HH:MM>
 
 - Reply to issuer: "User <target_id> has been unbanned from the Transsion Core."
@@ -374,10 +432,14 @@ FEATURE 8: APPEAL SYSTEM (with Cancel button, Admin Review, and detailed Help)
 
         Log Message:
         New Appeal Submitted
-        Transsion Core Federation
-        User: <a href="tg://user?id=<user_id>">User First Name</a> (ID: <user_id>)
+        𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯
+        
+        User: <a href="tg://user?id=<user_id>">User First Name</a>
+        ID: <user_id>
+        
         Ban ID: <ban_id>
         Appeal: <appeal_link>
+        
         Date: <DD-MM-YYYY> | <HH:MM>
 
      f. End conversation.
@@ -392,14 +454,19 @@ FEATURE 8: APPEAL SYSTEM (with Cancel button, Admin Review, and detailed Help)
      - Process decision:
        * If "Approve":
          - Set ban.is_active = false (unban) and update the ban record.
+         - **Enforce unban across all groups**: For each active federated group where bot has can_restrict_members, call unban_chat_member(chat_id, ban.banned_user_id). Catch and ignore exceptions.
          - Edit the review message to "Appeal approved by <a href="tg://user?id=<admin_id>">Admin First Name</a>. User has been unbanned." and remove keyboard.
          - Log to LOG_CHANNEL:
            Log Message:
            Appeal Approved
-           Transsion Core Federation
-           User: <a href="tg://user?id=<user_id>">User First Name</a> (ID: <user_id>)
+           𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯
+           
+           User: <a href="tg://user?id=<user_id>">User First Name</a>
+           ID: <user_id>
+           
            Ban ID: <ban_id>
            Approved by: <a href="tg://user?id=<admin_id>">Admin First Name</a>
+           
            Date: <DD-MM-YYYY> | <HH:MM>
          - Optionally notify the user in PM that their appeal was approved and they are now unbanned.
        * If "Reject":
@@ -407,10 +474,15 @@ FEATURE 8: APPEAL SYSTEM (with Cancel button, Admin Review, and detailed Help)
          - Log to LOG_CHANNEL:
            Log Message:
            Appeal Rejected
-           Transsion Core Federation
-           User: <a href="tg://user?id=<user_id>">User First Name</a> (ID: <user_id>)
+           𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯
+           
+           User: <a href="tg://user?id=<user_id>">User First Name</a>
+           ID: <user_id>
+
            Ban ID: <ban_id>
+
            Rejected by: <a href="tg://user?id=<admin_id>">Admin First Name</a>
+
            Date: <DD-MM-YYYY> | <HH:MM>
          - Optionally notify the user in PM that their appeal was rejected.
    - Answer all callback queries appropriately. If the ban becomes inactive before review (e.g., manually unbanned), the review message should be edited to "Appeal resolved (user already unbanned)." and keyboard removed. This check should be done on each callback as well.
@@ -454,27 +526,14 @@ FEATURE 12: BROADCAST (/tcbroadcast, /broadcast, /tcannounce)
 
   Log Message:
   Broadcast Sent
-  Transsion Core Federation
+  𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯
+  
   Admin: <a href="tg://user?id=<admin_id>">Admin First Name</a>
   Message: <first 100 chars>
+  
   Groups reached: <success>
   Failed groups: <failure>
-  Date: <DD-MM-YYYY> | <HH:MM>
-
-FEATURE 13: FORCE BAN SYNC (/tcsync, /syncban, /tcfbanall)
-- /tcsync <target> – TC owner/admins.
-- Find active ban. If not, reply "User is not banned in the Transsion Core."
-- For each active federated group where bot has can_restrict_members, attempt ban_chat_member(chat_id, target_id). Count successes and failures (catch exceptions).
-- Reply: "Ban enforced across <success> groups. Failed: <failure> groups."
-- Log:
-
-  Log Message:
-  Ban Synced Across Groups
-  Transsion Core Federation
-  Admin: <a href="tg://user?id=<admin_id>">Admin First Name</a>
-  User: <a href="tg://user?id=<target_id>">Target First Name</a> (ID: <target_id>)
-  Groups enforced: <success>
-  Failures: <failure>
+  
   Date: <DD-MM-YYYY> | <HH:MM>
 
 FEATURE 14: BOT REMOVED FROM GROUP
@@ -482,8 +541,11 @@ FEATURE 14: BOT REMOVED FROM GROUP
 
   Log Message:
   Group Removed Bot
-  Transsion Core Federation
-  Group: <chat_title> (ID: <chat_id>)
+  𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯
+  
+  Group: <chat_title>
+  ID: <chat_id>
+  
   Date: <DD-MM-YYYY> | <HH:MM>
 
 FEATURE 15: LEAVE ALL GROUPS (/leaveall, /exitall, /tcleave)
@@ -523,10 +585,10 @@ FEATURE 19: HELP COMMAND (/help, /commands, /start without deep link)
   Row 1: "Ban" | "Unban"
   Row 2: "Check Ban" | "Ban Info"
   Row 3: "Promote/Demote" | "Transfer Owner"
-  Row 4: "Broadcast" | "Sync Ban"
+  Row 4: "Broadcast" | "Appeal"
   Row 5: "Group Affiliation" | "Disaffiliate"
-  Row 6: "Appeal" | "Join/Leave"
-  Row 7: "Statistics" | "Cleanup"
+  Row 6: "Cleanup" | "Join/Leave"
+  Row 7: "Statistics"
 - Detail pages for each module, with clear syntax, aliases, who can use, and where it works. "Back" button to module list.
 - For the "Appeal" module, the detail page must explain:
   * If you are banned, you can submit an appeal by clicking "Submit Appeal" on the ban log message in @TranssionCoreFederationLogs, or by using the deep link /start appeal_<ban_id>.
@@ -691,13 +753,6 @@ Usage: /tcbroadcast <message>
 Who can use: Transsion Core Owner and Admins.
 Sends the message to all affiliated groups."
 
-Help Module – Sync Ban:
-"<b>Sync Ban Module</b>
-Commands: /tcsync, /syncban, /tcfbanall
-Usage: /tcsync <target>
-Who can use: Transsion Core Owner and Admins.
-Enforces an existing active ban across all affiliated groups."
-
 Help Module – Group Affiliation:
 "<b>Group Affiliation Module</b>
 Commands: /jointc, /requestjoin, /applytc (explicit join)
@@ -827,5 +882,11 @@ FEATURE 32: PRIVACY POLICY AND CONTROLS
   Below the text, a "Back" button returns to the privacy sub-menu.
 - This feature ensures compliance with Telegram's privacy standards and builds trust.
 
+FEATURE 33: MEMBER CACHE INITIALISATION
+- When a new group becomes affiliated (Feature 1 step 3.c), the bot fetches all current members using get_chat_members_count and iterating with get_chat_member to obtain user_id, username, first_name, last_name. Store each in `member_cache` with last_updated = now.
+- On every message received in any affiliated group, update the sender's entry in `member_cache` (upsert).
+- On any `chat_member` update (new_chat_member or left_chat_member), update the cache accordingly.
+- This keeps the bot's member data accurate for display in logs and information menus.
+
 DELIVERABLE
-Produce the full source code implementing all features exactly as described, including all alias commands (minimum 3 per command) and the exact Caption/Log message templates specified. Support `/` `.` `!` prefixes for all commands. The code must be production-ready and require only setting environment variables. No emoji anywhere. All log messages must include the exact Transsion Core Federation branding line: Transsion Core Federation
+Produce the full source code implementing all features exactly as described, including all alias commands (minimum 3 per command) and the exact Caption/Log message templates specified. Support `/` `.` `!` prefixes for all commands. The code must be production-ready and require only setting environment variables. No emoji anywhere. All log messages must include the exact branding line: 𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯

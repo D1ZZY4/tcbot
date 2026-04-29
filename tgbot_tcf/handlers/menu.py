@@ -8,8 +8,9 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
+from typing import Any, Dict, Optional
 
-from ..config import ABOUT_TEXT
+from .. import ABOUT_TEXT
 from .links import get_links_view
 from .lists import build_admins_text, build_fedgroups_text, build_fedstats_text
 
@@ -168,7 +169,7 @@ HELP_MODULE_ROWS: list[list[tuple[str, str]]] = [
 ]
 
 
-def _state(context: ContextTypes.DEFAULT_TYPE) -> dict:
+def _state(context: ContextTypes.DEFAULT_TYPE) -> Dict[str, Any]:
     return context.application.bot_data.setdefault("menu_state", {})
 
 
@@ -188,7 +189,7 @@ def _remember(
 
 def _get_entry(
     context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int
-) -> dict | None:
+) -> Optional[Dict[str, Any]]:
     return _state(context).get(_key(chat_id, message_id))
 
 
@@ -301,7 +302,12 @@ async def on_menu_callback(
 ) -> None:
     """Route all start menu, help, information, and privacy callbacks."""
     cq = update.callback_query
-    if cq is None or cq.message is None or cq.from_user is None or cq.data is None:
+    if (
+        cq is None
+        or cq.message is None
+        or getattr(cq, "from_user", None) is None
+        or getattr(cq, "data", None) is None
+    ):
         return
     chat_id = cq.message.chat.id
     message_id = cq.message.message_id
@@ -392,10 +398,10 @@ async def on_menu_callback(
 
 
 async def _edit(
-    cq,
+    cq: Any,
     text: str,
     kb: InlineKeyboardMarkup,
-    parse_mode=ParseMode.HTML,
+    parse_mode: ParseMode | None = ParseMode.HTML,
 ) -> None:
     """Edit the menu message; silently ignore 'not modified' errors."""
     try:

@@ -4,20 +4,21 @@
 """Appeal flow: deep link entry, instructions, submission, and admin review."""
 import logging
 import re
+from typing import Any, Dict, Optional
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatType, ParseMode
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
-from ..config import (
+from .. import (
     APPEAL_DISCUSSION_TOPIC,
     APPEAL_INSTRUCTION_TEMPLATE,
     APPEAL_TOPIC,
     BRANDING,
     MAIN_GROUP,
 )
-from ..db import bans
+from ..database import bans
 from ..utils.auth import is_authorized
 from ..utils.format import fmt_dt, fmt_now, safe_first_name, topic_link, user_link, utcnow
 from ..utils.logger import log_to_channel
@@ -25,7 +26,7 @@ from ..utils.logger import log_to_channel
 logger = logging.getLogger(__name__)
 
 
-def _get_sessions(context: ContextTypes.DEFAULT_TYPE) -> dict:
+def _get_sessions(context: ContextTypes.DEFAULT_TYPE) -> Dict[Any, Any]:
     """In-memory map of user_id -> appeal session data."""
     return context.application.bot_data.setdefault("appeal_sessions", {})
 
@@ -73,10 +74,12 @@ async def on_cancel_appeal(
 ) -> None:
     """Cancel an active appeal session."""
     cq = update.callback_query
-    if cq is None or cq.message is None or cq.from_user is None:
+    if cq is None or cq.message is None or getattr(cq, "from_user", None) is None:
         return
-    sessions = _get_sessions(context)
-    sessions.pop(cq.from_user.id, None)
+    sessions: Dict[Any, Any] = _get_sessions(context)
+    from_user = getattr(cq, "from_user", None)
+    if from_user is not None:
+        sessions.pop(from_user.id, None)
     await cq.answer()
     try:
         await cq.edit_message_text("Appeal cancelled.")
@@ -95,8 +98,8 @@ async def on_appeal_message(
     if msg.chat.type != ChatType.PRIVATE:
         return
 
-    sessions = _get_sessions(context)
-    sess = sessions.get(user.id)
+    sessions: Dict[Any, Any] = _get_sessions(context)
+    sess: Optional[Dict[str, Any]] = sessions.get(user.id)
     if sess is None:
         return
 
@@ -204,10 +207,18 @@ async def on_appeal_review(
 ) -> None:
     """Handle Approve / Reject button presses on appeal review messages."""
     cq = update.callback_query
-    if cq is None or cq.message is None or cq.from_user is None or cq.data is None:
+    if (
+        cq is None
+        or cq.message is None
+        or getattr(cq, "from_user", None) is None
+        or getattr(cq, "data", None) is None
+    ):
         return
 
-    data = cq.data
+    data = getattr(cq, "data", None)
+    if data is None:
+        return
+    data = str(data)
     if data.startswith("appeal_approve_"):
         decision = "approve"
         ban_id = data[len("appeal_approve_"):]

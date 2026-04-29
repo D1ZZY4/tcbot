@@ -8,6 +8,8 @@ from .mongo import (
     tc_admins,
     bans,
     promotion_requests,
+    pending_joins,
+    member_cache,
     init_db,
 )
 
@@ -18,5 +20,7 @@ __all__ = [
     "tc_admins",
     "bans",
     "promotion_requests",
+    "pending_joins",
+    "member_cache",
     "init_db",
 ]

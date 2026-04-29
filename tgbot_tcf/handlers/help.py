@@ -15,7 +15,7 @@ from telegram import Update
 from telegram.constants import ChatType, ParseMode
 from telegram.ext import ContextTypes
 
-from ..config import ABOUT_TEXT
+from .. import ABOUT_TEXT
 from .appeal import start_appeal
 from .menu import send_help_command, send_start_menu
 

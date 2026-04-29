@@ -10,9 +10,9 @@ from telegram.constants import ParseMode
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
-from ..config import BRANDING
-from ..db import promotion_requests, tc_admins, tc_owners
-from ..utils.auth import get_owner_id, is_authorized, is_tc_admin, is_tc_owner
+from .. import BRANDING
+from ..database import promotion_requests, tc_admins, tc_owners
+from ..utils.auth import get_owner_id, is_authorized, is_tc_owner
 from ..utils.format import fmt_now, safe_first_name, user_link, utcnow
 from ..utils.logger import log_to_channel
 from ..utils.targets import resolve_target
@@ -150,16 +150,19 @@ async def on_promote_callback(
 ) -> None:
     """Handle approve/reject callbacks for promotion requests."""
     cq = update.callback_query
-    if cq is None or cq.from_user is None or cq.data is None:
+    if cq is None or getattr(cq, "from_user", None) is None or getattr(cq, "data", None) is None:
         return
 
-    data = cq.data
-    if data.startswith("approve_promote_"):
+    data = getattr(cq, "data", None)
+    if data is None:
+        return
+    data_str = str(data)
+    if data_str.startswith("approve_promote_"):
         decision = "approve"
-        request_id = data[len("approve_promote_"):]
-    elif data.startswith("reject_promote_"):
+        request_id = data_str[len("approve_promote_"):]
+    elif data_str.startswith("reject_promote_"):
         decision = "reject"
-        request_id = data[len("reject_promote_"):]
+        request_id = data_str[len("reject_promote_"):]
     else:
         return
 

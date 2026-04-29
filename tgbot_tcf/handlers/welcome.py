@@ -10,7 +10,7 @@ from telegram.constants import ParseMode
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
-from ..config import EXEC_GROUP, MAIN_GROUP
+from .. import EXEC_GROUP, MAIN_GROUP
 from ..utils.format import safe_first_name, user_link
 
 logger = logging.getLogger(__name__)

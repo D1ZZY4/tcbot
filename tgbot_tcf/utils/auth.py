@@ -2,7 +2,9 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 """Authorization helpers for Transsion Core role checks."""
-from ..db import tc_admins, tc_owners
+from typing import Any, Dict, Optional
+
+from ..database import tc_admins, tc_owners
 
 
 async def is_tc_owner(user_id: int) -> bool:
@@ -24,5 +26,5 @@ async def is_authorized(user_id: int) -> bool:
 
 async def get_owner_id() -> int | None:
     """Return the current Transsion Core Owner user_id, or None."""
-    doc = await tc_owners.find_one({})
+    doc: Optional[Dict[str, Any]] = await tc_owners.find_one({})
     return doc["user_id"] if doc else None

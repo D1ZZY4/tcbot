@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from html import escape
+from typing import Any
 
 
 def utcnow() -> datetime:
@@ -30,7 +31,7 @@ def topic_link(chat_id: int, message_id: int, thread_id: int) -> str:
     return f"https://t.me/c/{chat_id_to_link_id(chat_id)}/{message_id}?thread={thread_id}"
 
 
-def safe_first_name(obj) -> str:
+def safe_first_name(obj: Any) -> str:
     name = getattr(obj, "first_name", None) or getattr(obj, "title", None)
     if not name:
         name = str(getattr(obj, "id", "Unknown"))

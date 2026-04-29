@@ -16,19 +16,18 @@ from telegram import (
 from telegram.constants import ParseMode
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
+from typing import Any, Dict, Optional
 
-from ..config import (
+from .. import (
     ALBUM_DEBOUNCE_SECONDS,
     BRANDING,
-    LOG_CHANNEL,
     MAIN_GROUP,
     PROOF_TOPIC,
     PROOF_WAIT_SECONDS,
 )
-from ..db import bans
+from ..database import bans
 from ..utils.auth import is_authorized, is_tc_admin, is_tc_owner
 from ..utils.format import (
-    chat_id_to_link_id,
     fmt_dt,
     fmt_now,
     safe_first_name,
@@ -46,16 +45,22 @@ def _session_key(chat_id: int, user_id: int) -> str:
     return f"tcban:{chat_id}:{user_id}"
 
 
-def _get_sessions(context: ContextTypes.DEFAULT_TYPE) -> dict:
-    return context.application.bot_data.setdefault("tcban_sessions", {})
+def _get_sessions(context: ContextTypes.DEFAULT_TYPE) -> Dict[str, Any]:
+    app: Any = getattr(context, "application", None)
+    if app is None:
+        return {}
+    return app.bot_data.setdefault("tcban_sessions", {})
 
 
 async def _timeout_session(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Called by JobQueue when proof window expires."""
-    job = context.job
-    key = job.data["key"]
-    sessions = _get_sessions(context)
-    sess = sessions.pop(key, None)
+    job: Any = context.job
+    data: Any = getattr(job, "data", None)
+    if not data:
+        return
+    key: str = data["key"]
+    sessions: Dict[str, Any] = _get_sessions(context)
+    sess: Optional[Dict[str, Any]] = sessions.pop(key, None)
     if sess is None:
         return
     try:
@@ -124,12 +129,16 @@ async def cmd_cban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 except Exception:
                     pass
 
-    timeout_job = context.application.job_queue.run_once(
-        _timeout_session,
-        when=PROOF_WAIT_SECONDS,
-        data={"key": key},
-        name=f"tcban_timeout_{key}",
-    )
+    app: Any = getattr(context, "application", None)
+    job_queue = getattr(app, "job_queue", None) if app is not None else None
+    timeout_job = None
+    if job_queue is not None:
+        timeout_job = job_queue.run_once(
+            _timeout_session,
+            when=PROOF_WAIT_SECONDS,
+            data={"key": key},
+            name=f"tcban_timeout_{key}",
+        )
 
     sessions[key] = {
         "chat_id": msg.chat.id,
@@ -151,12 +160,15 @@ async def cmd_cban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_cancel_proof(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Cancel an active proof submission session."""
     cq = update.callback_query
-    if cq is None or cq.message is None or cq.from_user is None:
+    if cq is None or cq.message is None or getattr(cq, "from_user", None) is None:
         return
     chat_id = cq.message.chat.id
-    sessions = _get_sessions(context)
-    key = _session_key(chat_id, cq.from_user.id)
-    sess = sessions.get(key)
+    sessions: Dict[str, Any] = _get_sessions(context)
+    from_user = getattr(cq, "from_user", None)
+    if from_user is None:
+        return
+    key = _session_key(chat_id, from_user.id)
+    sess: Optional[Dict[str, Any]] = sessions.get(key)
     if sess is None:
         await cq.answer("No active proof session.", show_alert=False)
         return
@@ -185,9 +197,9 @@ async def on_proof_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if msg is None or user is None:
         return
 
-    sessions = _get_sessions(context)
+    sessions: Dict[str, Any] = _get_sessions(context)
     key = _session_key(msg.chat.id, user.id)
-    sess = sessions.get(key)
+    sess: Optional[Dict[str, Any]] = sessions.get(key)
     if sess is None:
         return
 
@@ -200,8 +212,14 @@ async def on_proof_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             pass
         return
 
-    kind = "photo" if has_photo else "video"
-    file_id = msg.photo[-1].file_id if has_photo else msg.video.file_id
+    if has_photo:
+        kind = "photo"
+        file_id = msg.photo[-1].file_id
+    elif msg.video is not None:
+        kind = "video"
+        file_id = msg.video.file_id
+    else:
+        return
 
     sess["media"].append(
         {"kind": kind, "file_id": file_id, "media_group_id": msg.media_group_id}
@@ -214,24 +232,31 @@ async def on_proof_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 sess["album_job"].schedule_removal()
             except Exception:
                 pass
-        sess["album_job"] = context.application.job_queue.run_once(
-            _finalize_job,
-            when=ALBUM_DEBOUNCE_SECONDS,
-            data={"key": key},
-            name=f"tcban_album_{key}",
-        )
+        app: Any = getattr(context, "application", None)
+        job_queue = getattr(app, "job_queue", None) if app is not None else None
+        if job_queue is not None:
+            sess["album_job"] = job_queue.run_once(
+                _finalize_job,
+                when=ALBUM_DEBOUNCE_SECONDS,
+                data={"key": key},
+                name=f"tcban_album_{key}",
+            )
     else:
         await _finalize(context, key)
 
 
 async def _finalize_job(context: ContextTypes.DEFAULT_TYPE) -> None:
-    key = context.job.data["key"]
+    job: Any = context.job
+    data: Any = getattr(job, "data", None)
+    if not data:
+        return
+    key: str = data["key"]
     await _finalize(context, key)
 
 
 async def _finalize(context: ContextTypes.DEFAULT_TYPE, key: str) -> None:
-    sessions = _get_sessions(context)
-    sess = sessions.get(key)
+    sessions: Dict[str, Any] = _get_sessions(context)
+    sess: Optional[Dict[str, Any]] = sessions.get(key)
     if sess is None:
         return
     async with sess["lock"]:
@@ -250,7 +275,7 @@ async def _finalize(context: ContextTypes.DEFAULT_TYPE, key: str) -> None:
                     pass
 
 
-async def _do_finalize(context: ContextTypes.DEFAULT_TYPE, sess: dict) -> None:
+async def _do_finalize(context: ContextTypes.DEFAULT_TYPE, sess: Dict[str, Any]) -> None:
     """Finalize the ban: upload proof, create log, save to DB."""
     target_id = sess["target_id"]
     target_first_name = sess["target_first_name"]
@@ -271,7 +296,11 @@ async def _do_finalize(context: ContextTypes.DEFAULT_TYPE, sess: dict) -> None:
         prev_proof_id = existing["proof_message_id"]
         prev_log_id = existing["log_message_id"]
         original_dt: datetime = existing["timestamp"]
-        previous_proof_link = topic_link(MAIN_GROUP, prev_proof_id, PROOF_TOPIC)
+        previous_proof_link = (
+            topic_link(MAIN_GROUP, int(prev_proof_id), PROOF_TOPIC)
+            if prev_proof_id is not None
+            else ""
+        )
         caption = (
             f"ID: {target_id}\n"
             f"Admin: {user_link(admin_id, admin_first_name)}\n"
@@ -309,7 +338,11 @@ async def _do_finalize(context: ContextTypes.DEFAULT_TYPE, sess: dict) -> None:
     bot_username = me.username or ""
 
     if is_update:
-        previous_proof_link = topic_link(MAIN_GROUP, prev_proof_id, PROOF_TOPIC)
+        previous_proof_link = (
+            topic_link(MAIN_GROUP, int(prev_proof_id), PROOF_TOPIC)
+            if prev_proof_id is not None
+            else ""
+        )
         old_admin_id = existing["admin_user_id"]
         log_text = (
             "<b>New Transsion Core Ban (Update)</b>\n"
@@ -408,7 +441,7 @@ async def _do_finalize(context: ContextTypes.DEFAULT_TYPE, sess: dict) -> None:
 
 async def _post_proof(
     context: ContextTypes.DEFAULT_TYPE,
-    media: list[dict],
+    media: list[Dict[str, Any]],
     caption: str,
 ) -> int | None:
     """Upload proof media to the PROOF_TOPIC and return the first message ID."""
@@ -433,7 +466,7 @@ async def _post_proof(
                 )
             return m.message_id
 
-        items = []
+        items: list[Any] = []
         for idx, it in enumerate(media):
             cap = caption if idx == 0 else None
             if it["kind"] == "photo":
@@ -497,11 +530,10 @@ async def cmd_cunban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     review_msg_id = record.get("review_message_id")
     if review_msg_id:
         try:
-            from ..config import MAIN_GROUP as _MAIN_GROUP, APPEAL_DISCUSSION_TOPIC as _ADT
+            from .. import MAIN_GROUP as _MAIN_GROUP
             await context.bot.edit_message_text(
                 chat_id=_MAIN_GROUP,
                 message_id=review_msg_id,
-                message_thread_id=_ADT,
                 text="Appeal resolved (user already unbanned).",
             )
         except TelegramError:

@@ -9,10 +9,10 @@ from telegram.constants import ParseMode
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
-from ..db import bans
+from ..database import bans
 from ..utils.format import fmt_dt, topic_link, user_link
 from ..utils.targets import resolve_target
-from ..config import MAIN_GROUP, PROOF_TOPIC
+from .. import MAIN_GROUP, PROOF_TOPIC
 
 logger = logging.getLogger(__name__)
 

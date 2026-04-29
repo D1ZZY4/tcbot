@@ -8,7 +8,7 @@ from telegram import Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
-from ..db import bans, federated_groups, tc_admins, tc_owners
+from ..database import bans, federated_groups, tc_admins, tc_owners
 from ..utils.format import user_link
 
 logger = logging.getLogger(__name__)

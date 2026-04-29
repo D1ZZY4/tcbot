@@ -8,8 +8,8 @@ from telegram import Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
-from ..config import BRANDING
-from ..db import federated_groups
+from .. import BRANDING
+from ..database import federated_groups
 from ..utils.auth import is_authorized, is_tc_owner
 from ..utils.format import fmt_now, safe_first_name, user_link
 from ..utils.logger import log_to_channel

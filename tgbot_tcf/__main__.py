@@ -16,9 +16,14 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from typing import Any, cast
 
-from .config import BOT_TOKEN, INITIAL_OWNER_ID
-from .db import init_db, tc_owners
+
+# Application is a heavily-parametrized generic; use a convenient alias for typing
+AppT = Application[Any, Any, Any, Any, Any, Any]
+
+from . import BOT_TOKEN, INITIAL_OWNER_ID
+from .database import init_db, tc_owners
 from .handlers import (
     admins,
     affiliate,
@@ -56,14 +61,14 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error("Update %s caused error: %s\n%s", update, err, tb)
 
 
-def _add(app: Application, aliases: list[str], cb) -> None:
+def _add(app: AppT, aliases: list[str], cb: Any) -> None:
     """Register a command callback for `/`, `.`, and `!` prefixes."""
     app.add_handler(CommandHandler(aliases, cb))
     for name in aliases:
         register_command(name, cb)
 
 
-async def post_init(app: Application) -> None:
+async def post_init(app: Any) -> None:
     await init_db()
     if await tc_owners.find_one({}) is None:
         await tc_owners.insert_one({"user_id": INITIAL_OWNER_ID})
@@ -72,8 +77,8 @@ async def post_init(app: Application) -> None:
     logger.info("Bot @%s started (id=%s)", me.username, me.id)
 
 
-def build_app() -> Application:
-    app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
+def build_app() -> AppT:
+    app = Application.builder().token(BOT_TOKEN).post_init(cast(Any, post_init)).build()
 
     # ----- Help / start -----
     _add(app, ["start"], help_h.cmd_start)

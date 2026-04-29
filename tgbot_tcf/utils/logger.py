@@ -5,7 +5,7 @@ from telegram.constants import ParseMode
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
-from ..config import LOG_CHANNEL
+from .. import LOG_CHANNEL
 
 logger = logging.getLogger(__name__)
 
