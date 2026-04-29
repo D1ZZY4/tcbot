@@ -1,15 +1,20 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Read-only listing commands: /tcfgroups and /tcstats."""
+"""Read-only listing handlers: /tcfgroups and /tcstats.
+
+The text builders here are reused by :mod:`tgbot_tcf.handlers.menu` so
+the same content powers both the slash commands and the inline menu views.
+"""
 import logging
 
 from telegram import Update
-from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
-from ..database import bans, federated_groups, tc_admins, tc_owners
+from ..database import admins_repo, bans_repo, groups_repo
+from ..modules.messages import M
 from ..utils.format import user_link
+from .helper import messaging
 
 logger = logging.getLogger(__name__)
 
@@ -33,11 +38,10 @@ async def cmd_fedstats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def build_fedgroups_text(page: int = 0, page_size: int = 10) -> str:
-    """Build paginated affiliated groups text."""
-    cursor = federated_groups.find({"is_active": True})
-    groups = [g async for g in cursor]
+    """Build the paginated affiliated-groups text used by command and menu."""
+    groups = await groups_repo.list_active()
     if not groups:
-        return "No groups are currently affiliated with TCF."
+        return M.NO_AFFILIATED_GROUPS
     start = page * page_size
     end = start + page_size
     page_groups = groups[start:end]
@@ -50,18 +54,13 @@ async def build_fedgroups_text(page: int = 0, page_size: int = 10) -> str:
 
 async def build_fedstats_text(context: ContextTypes.DEFAULT_TYPE) -> str:
     """Build the TCF statistics text."""
-    owner = await tc_owners.find_one({})
-    admins_count = await tc_admins.count_documents({})
-    groups_count = await federated_groups.count_documents({"is_active": True})
-    bans_count = await bans.count_documents({"is_active": True})
+    owner_id = await admins_repo.get_owner_id()
+    admins_count = await admins_repo.count_admins()
+    groups_count = await groups_repo.count_active()
+    bans_count = await bans_repo.count_active()
 
-    if owner:
-        owner_id = owner["user_id"]
-        try:
-            chat = await context.bot.get_chat(owner_id)
-            owner_name = chat.first_name or str(owner_id)
-        except TelegramError:
-            owner_name = str(owner_id)
+    if owner_id is not None:
+        owner_name = await messaging.fetch_display_name(context, owner_id)
         owner_line = user_link(owner_id, owner_name)
     else:
         owner_line = "Not set"
@@ -75,22 +74,19 @@ async def build_fedstats_text(context: ContextTypes.DEFAULT_TYPE) -> str:
     )
 
 
-async def build_admins_text(context: ContextTypes.DEFAULT_TYPE, page: int = 0, page_size: int = 10) -> str:
+async def build_admins_text(
+    context: ContextTypes.DEFAULT_TYPE, page: int = 0, page_size: int = 10
+) -> str:
     """Build a paginated list of TC admins."""
-    cursor = tc_admins.find({})
-    admins = [a async for a in cursor]
+    admins = [a async for a in admins_repo.iter_admins()]
     if not admins:
-        return "There are no Transsion Core Admins at this time."
+        return M.NO_TC_ADMINS
     start = page * page_size
     end = start + page_size
     page_admins = admins[start:end]
     lines = [f"<b>Transsion Core Admins</b> (Page {page + 1})"]
     for a in page_admins:
         uid = a["user_id"]
-        try:
-            chat = await context.bot.get_chat(uid)
-            name = chat.first_name or str(uid)
-        except TelegramError:
-            name = str(uid)
+        name = await messaging.fetch_display_name(context, uid)
         lines.append(f"{name} (ID: {uid})")
     return "\n".join(lines)

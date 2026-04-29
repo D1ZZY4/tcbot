@@ -3,11 +3,11 @@
 # © Copyright 2026 Aveum Apps
 """/start, /help, and /commands handlers.
 
-- /start appeal_<ban_id>  opens the appeal flow.
-- /start about            shows the About TCF text.
-- /start (no args, PM)    opens the interactive start menu.
-- /start (no args, group) points the user to PM.
-- /help, /commands        opens the interactive help module list.
+* ``/start appeal_<ban_id>`` opens the appeal flow.
+* ``/start about`` shows the About TCF text.
+* ``/start`` (no args, PM) opens the interactive start menu.
+* ``/start`` (no args, group) points the user to PM.
+* ``/help`` and ``/commands`` open the interactive help module list.
 """
 import logging
 
@@ -16,6 +16,7 @@ from telegram.constants import ChatType, ParseMode
 from telegram.ext import ContextTypes
 
 from .. import ABOUT_TEXT
+from ..modules.messages import M
 from .appeal import start_appeal
 from .menu import send_help_command, send_start_menu
 
@@ -23,7 +24,6 @@ logger = logging.getLogger(__name__)
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Entry point for /start with optional deep-link arguments."""
     msg = update.effective_message
     if msg is None:
         return
@@ -48,8 +48,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     me = await context.bot.get_me()
     await msg.reply_text(
-        "Open a private chat with me and send /start to see the menu, "
-        f"or use /help here.\nBot: @{me.username}",
+        M.START_GROUP_HINT.format(username=me.username),
         disable_web_page_preview=True,
     )
 

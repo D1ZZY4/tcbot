@@ -1,378 +1,309 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Transsion Core owner and admin management with promotion request workflow."""
-import logging
-import uuid
+"""Owner / admin role-management handlers (PROMPT Features 9, 10, 11, 14).
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+Thin Telegram entry points: validate the update, route the work to
+:mod:`tgbot_tcf.modules.admins_mod`, then reply / log using the centralised
+templates in :mod:`tgbot_tcf.modules.messages` and
+:mod:`tgbot_tcf.modules.log_templates`.
+"""
+import logging
+
+from telegram import Update
 from telegram.constants import ParseMode
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
-from .. import BRANDING
-from ..database import promotion_requests, tc_admins, tc_owners
-from ..utils.auth import get_owner_id, is_authorized, is_tc_owner
-from ..utils.format import fmt_now, safe_first_name, user_link, utcnow
+from ..database import admins_repo
+from ..modules import admins_mod, keyboards, log_templates
+from ..modules.messages import M
+from ..utils.format import fmt_dt, safe_first_name, user_link
 from ..utils.logger import log_to_channel
-from ..utils.targets import resolve_target
+from .helper import auth, messaging, targets
 
 logger = logging.getLogger(__name__)
 
 
+# -------------------------------------------------------------- /tcpromote
+
 async def cmd_promote(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Promote a user: owner promotes immediately; admin creates a request."""
+    """Owner promotes immediately; admin creates a request for owner approval."""
     msg = update.effective_message
     user = update.effective_user
     if msg is None or user is None:
         return
 
-    if not await is_authorized(user.id):
-        await msg.reply_text("You are not authorized.")
+    if not await auth.require_authorized(msg, user.id):
         return
 
-    if not (context.args or (msg.reply_to_message and msg.reply_to_message.from_user)):
-        await msg.reply_text(
-            "Reply to a user, provide a user ID, or provide a username to promote."
-        )
+    if not (
+        context.args
+        or (msg.reply_to_message and msg.reply_to_message.from_user)
+    ):
+        await msg.reply_text(M.PROMOTE_NEEDS_TARGET)
         return
 
-    target = await resolve_target(update, context)
+    target = await targets.resolve_or_complain(update, context, msg)
     if target is None:
-        await msg.reply_text("Cannot resolve user.")
         return
 
     if target.id == user.id:
-        await msg.reply_text("You cannot promote yourself.")
+        await msg.reply_text(M.PROMOTE_SELF_BLOCKED)
         return
 
-    if await tc_owners.find_one({"user_id": target.id}):
-        await msg.reply_text("Already a Transsion Core Admin.")
+    if await admins_repo.is_owner(target.id) or await admins_repo.is_admin(target.id):
+        await msg.reply_text(M.ALREADY_TC_ADMIN)
         return
 
-    if await tc_admins.find_one({"user_id": target.id}):
-        await msg.reply_text("Already a Transsion Core Admin.")
-        return
-
-    sender_is_owner = await is_tc_owner(user.id)
-
-    if sender_is_owner:
-        await tc_admins.insert_one(
-            {"user_id": target.id, "promoted_by": user.id, "promoted_date": utcnow()}
-        )
-        await msg.reply_text(f"User {target.id} is now a Transsion Core Admin.")
+    if await auth.is_owner(user.id):
+        await admins_mod.promote_immediately(target_id=target.id, by_owner_id=user.id)
+        await msg.reply_text(M.PROMOTE_OWNER_DONE.format(target_id=target.id))
         await log_to_channel(
             context,
-            "<b>New Transsion Core Admin Promoted</b>\n"
-            f"{BRANDING}\n"
-            f"Admin: {user_link(target.id, target.first_name)} (ID: {target.id})\n"
-            f"Promoted by Owner: {user_link(user.id, safe_first_name(user))} (ID: {user.id})\n"
-            f"Date: {fmt_now()}",
+            log_templates.admin_promoted(
+                target_id=target.id,
+                target_name=target.first_name,
+                promoted_by_id=user.id,
+                promoted_by_name=safe_first_name(user),
+            ),
         )
         return
 
-    # Sender is a TC admin: create a promotion request for owner approval.
-    request_id = str(uuid.uuid4())
-    await promotion_requests.insert_one(
-        {
-            "request_id": request_id,
-            "target_id": target.id,
-            "promoted_by": user.id,
-            "status": "pending",
-            "requested_date": utcnow(),
-            "resolved_date": None,
-            "resolved_by": None,
-        }
+    # TC admin: create a request and notify the owner.
+    request_id = await admins_mod.create_promotion_request(
+        target_id=target.id, requested_by=user.id
     )
-    await msg.reply_text(
-        f"Promotion request for {target.id} has been sent to the "
-        "Transsion Core Owner for approval."
-    )
+    await msg.reply_text(M.PROMOTION_REQUEST_SENT.format(target_id=target.id))
 
-    owner_id = await get_owner_id()
-    notification_text = (
-        "<b>New Promotion Request</b>\n"
-        f"{BRANDING}\n"
-        f"Requested by: {user_link(user.id, safe_first_name(user))} (ID: {user.id})\n"
-        f"Target: {user_link(target.id, target.first_name)} (ID: {target.id})\n"
-        f"Request ID: {request_id}\n"
-        f"Date: {fmt_now()}"
+    notification = log_templates.promotion_request_notification(
+        request_id=request_id,
+        requested_by_id=user.id,
+        requested_by_name=safe_first_name(user),
+        target_id=target.id,
+        target_name=target.first_name,
     )
-    kb = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(
-                    "Approve", callback_data=f"approve_promote_{request_id}"
-                ),
-                InlineKeyboardButton(
-                    "Reject", callback_data=f"reject_promote_{request_id}"
-                ),
-            ]
-        ]
-    )
+    review_kb = keyboards.promotion_request(request_id)
 
-    sent_to_owner = False
-    if owner_id:
+    owner_id = await admins_repo.get_owner_id()
+    delivered = False
+    if owner_id is not None:
         try:
             await context.bot.send_message(
                 chat_id=owner_id,
-                text=notification_text,
+                text=notification,
                 parse_mode=ParseMode.HTML,
-                reply_markup=kb,
+                reply_markup=review_kb,
                 disable_web_page_preview=True,
             )
-            sent_to_owner = True
+            delivered = True
         except TelegramError:
             pass
 
-    if not sent_to_owner:
+    if not delivered:
         owner_mention = (
             user_link(owner_id, str(owner_id)) if owner_id else "Owner"
         )
         await log_to_channel(
             context,
-            notification_text + f"\n\nNote: Could not reach owner {owner_mention} via PM.",
-            reply_markup=kb,
+            notification + f"\n\nNote: Could not reach owner {owner_mention} via PM.",
+            reply_markup=review_kb,
         )
 
     await log_to_channel(
         context,
-        "<b>Promotion Request Sent</b>\n"
-        f"{BRANDING}\n"
-        f"Requested by: {user_link(user.id, safe_first_name(user))} (ID: {user.id})\n"
-        f"Target: {user_link(target.id, target.first_name)} (ID: {target.id})\n"
-        f"Date: {fmt_now()}",
+        log_templates.promotion_request_sent(
+            requested_by_id=user.id,
+            requested_by_name=safe_first_name(user),
+            target_id=target.id,
+            target_name=target.first_name,
+        ),
     )
 
+
+# ----------------------------------------------------- promotion-request review
 
 async def on_promote_callback(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    """Handle approve/reject callbacks for promotion requests."""
+    """Approve / Reject button on a promotion-request notification."""
     cq = update.callback_query
-    if cq is None or getattr(cq, "from_user", None) is None or getattr(cq, "data", None) is None:
+    if (
+        cq is None
+        or getattr(cq, "from_user", None) is None
+        or getattr(cq, "data", None) is None
+    ):
         return
 
-    data = getattr(cq, "data", None)
-    if data is None:
-        return
-    data_str = str(data)
-    if data_str.startswith("approve_promote_"):
+    data = str(cq.data)
+    if data.startswith("approve_promote_"):
         decision = "approve"
-        request_id = data_str[len("approve_promote_"):]
-    elif data_str.startswith("reject_promote_"):
+        request_id = data[len("approve_promote_"):]
+    elif data.startswith("reject_promote_"):
         decision = "reject"
-        request_id = data_str[len("reject_promote_"):]
+        request_id = data[len("reject_promote_"):]
     else:
         return
 
     reviewer = cq.from_user
-    if not await is_tc_owner(reviewer.id):
-        await cq.answer("Only the Transsion Core Owner can act on this.", show_alert=True)
+    if not await auth.is_owner(reviewer.id):
+        await cq.answer(M.PROMOTION_OWNER_ONLY_ALERT, show_alert=True)
         return
 
-    record = await promotion_requests.find_one({"request_id": request_id})
-    if not record:
-        await cq.answer("Promotion request not found.", show_alert=True)
+    record = await admins_mod.fetch_request(request_id)
+    if record is None:
+        await cq.answer(M.PROMOTION_REQUEST_NOT_FOUND_ALERT, show_alert=True)
         return
-
     if record.get("status") != "pending":
-        await cq.answer("This request has already been resolved.", show_alert=True)
+        await cq.answer(M.PROMOTION_REQUEST_RESOLVED_ALERT, show_alert=True)
         return
 
     await cq.answer()
-    now = utcnow()
 
     if decision == "approve":
-        target_id = record["target_id"]
-        if not await tc_admins.find_one({"user_id": target_id}):
-            await tc_admins.insert_one(
-                {
-                    "user_id": target_id,
-                    "promoted_by": reviewer.id,
-                    "promoted_date": now,
-                }
-            )
-        await promotion_requests.update_one(
-            {"request_id": request_id},
-            {
-                "$set": {
-                    "status": "approved",
-                    "resolved_date": now,
-                    "resolved_by": reviewer.id,
-                }
-            },
+        record = await admins_mod.approve_request(
+            request_id=request_id, by_owner_id=reviewer.id
         )
-        try:
-            target_chat = await context.bot.get_chat(target_id)
-            target_name = target_chat.first_name or str(target_id)
-        except TelegramError:
-            target_name = str(target_id)
-
-        try:
-            await cq.edit_message_text(
-                f"Promotion request approved. {target_name} is now a Transsion Core Admin.",
-                parse_mode=ParseMode.HTML,
-            )
-        except TelegramError:
-            pass
-
+        if record is None:
+            return
+        target_id = record["target_id"]
+        target_name = await messaging.fetch_display_name(context, target_id)
+        await messaging.safe_edit_callback(
+            cq,
+            M.PROMOTION_REQUEST_APPROVED.format(target_name=target_name),
+        )
         await log_to_channel(
             context,
-            "<b>New Transsion Core Admin Promoted</b>\n"
-            f"{BRANDING}\n"
-            f"Admin: {user_link(target_id, target_name)} (ID: {target_id})\n"
-            f"Promoted by Owner: {user_link(reviewer.id, safe_first_name(reviewer))} (ID: {reviewer.id})\n"
-            f"Date: {fmt_now()}",
+            log_templates.admin_promoted(
+                target_id=target_id,
+                target_name=target_name,
+                promoted_by_id=reviewer.id,
+                promoted_by_name=safe_first_name(reviewer),
+            ),
         )
     else:
-        await promotion_requests.update_one(
-            {"request_id": request_id},
-            {
-                "$set": {
-                    "status": "rejected",
-                    "resolved_date": now,
-                    "resolved_by": reviewer.id,
-                }
-            },
+        await admins_mod.reject_request(
+            request_id=request_id, by_owner_id=reviewer.id
         )
-        try:
-            await cq.edit_message_text("Promotion request rejected.")
-        except TelegramError:
-            pass
-
+        await messaging.safe_edit_callback(cq, M.PROMOTION_REQUEST_REJECTED)
         await log_to_channel(
             context,
-            "<b>Promotion Request Rejected</b>\n"
-            f"{BRANDING}\n"
-            f"Rejected by Owner: {user_link(reviewer.id, safe_first_name(reviewer))} (ID: {reviewer.id})\n"
-            f"Request ID: {request_id}\n"
-            f"Date: {fmt_now()}",
+            log_templates.promotion_request_rejected_log(
+                request_id=request_id,
+                reviewer_id=reviewer.id,
+                reviewer_name=safe_first_name(reviewer),
+            ),
         )
 
 
+# --------------------------------------------------------------- /tcdemote
+
 async def cmd_demote(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Demote a TC admin. Owner only."""
+    """Owner-only demotion of a TC admin."""
     msg = update.effective_message
     user = update.effective_user
     if msg is None or user is None:
         return
 
-    if not await is_tc_owner(user.id):
-        await msg.reply_text("You are not authorized.")
+    if not await auth.require_owner(msg, user.id):
         return
 
-    if not (context.args or (msg.reply_to_message and msg.reply_to_message.from_user)):
-        await msg.reply_text(
-            "Reply to a user, provide a user ID, or provide a username to demote."
-        )
+    if not (
+        context.args
+        or (msg.reply_to_message and msg.reply_to_message.from_user)
+    ):
+        await msg.reply_text(M.DEMOTE_NEEDS_TARGET)
         return
 
-    target = await resolve_target(update, context)
+    target = await targets.resolve_or_complain(update, context, msg)
     if target is None:
-        await msg.reply_text("Cannot resolve user.")
         return
 
     if target.id == user.id:
-        await msg.reply_text(
-            "I cannot demote myself. I hold a crucial position in this "
-            "Transsion Core. Please ask the owner to do it."
-        )
+        await msg.reply_text(M.DEMOTE_SELF_BLOCKED)
         return
 
-    if await tc_owners.find_one({"user_id": target.id}):
-        await msg.reply_text("Cannot demote the Transsion Core Owner.")
+    if await admins_repo.is_owner(target.id):
+        await msg.reply_text(M.DEMOTE_OWNER_BLOCKED)
         return
 
-    res = await tc_admins.delete_one({"user_id": target.id})
-    if res.deleted_count == 0:
-        await msg.reply_text("Not a Transsion Core Admin.")
+    if not await admins_mod.demote_user(target.id):
+        await msg.reply_text(M.NOT_TC_ADMIN)
         return
 
-    await msg.reply_text("User demoted from Transsion Core Admin.")
+    await msg.reply_text(M.DEMOTE_DONE)
     await log_to_channel(
         context,
-        "<b>Transsion Core Admin Demoted</b>\n"
-        f"{BRANDING}\n"
-        f"Admin: {user_link(target.id, target.first_name)} (ID: {target.id})\n"
-        f"Demoted by Owner: {user_link(user.id, safe_first_name(user))} (ID: {user.id})\n"
-        f"Date: {fmt_now()}",
+        log_templates.admin_demoted(
+            target_id=target.id,
+            target_name=target.first_name,
+            demoted_by_id=user.id,
+            demoted_by_name=safe_first_name(user),
+        ),
     )
 
+
+# --------------------------------------------------------- /tctransfer
 
 async def cmd_transfer_owner(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    """Transfer TC ownership to another user. Owner only."""
+    """Transfer Transsion Core ownership. Owner only."""
     msg = update.effective_message
     user = update.effective_user
     if msg is None or user is None:
         return
 
-    if not await is_tc_owner(user.id):
-        await msg.reply_text("Only the owner can use this command.")
+    if not await auth.require_owner_for_transfer(msg, user.id):
         return
 
-    if not (context.args or (msg.reply_to_message and msg.reply_to_message.from_user)):
-        await msg.reply_text(
-            "Reply to a user, provide a user ID, or provide a username "
-            "to transfer ownership to."
-        )
+    if not (
+        context.args
+        or (msg.reply_to_message and msg.reply_to_message.from_user)
+    ):
+        await msg.reply_text(M.TRANSFER_NEEDS_TARGET)
         return
 
-    target = await resolve_target(update, context)
+    target = await targets.resolve_or_complain(update, context, msg)
     if target is None:
-        await msg.reply_text("Cannot resolve user.")
         return
 
     if target.id == user.id:
-        await msg.reply_text("You are already the owner.")
+        await msg.reply_text(M.TRANSFER_SELF_OWNER)
         return
 
-    await tc_owners.delete_many({})
-    await tc_owners.insert_one({"user_id": target.id})
-    await tc_admins.delete_one({"user_id": target.id})
-    await tc_admins.update_one(
-        {"user_id": user.id},
-        {
-            "$setOnInsert": {
-                "user_id": user.id,
-                "promoted_by": user.id,
-                "promoted_date": utcnow(),
-            }
-        },
-        upsert=True,
+    await admins_mod.transfer_ownership(
+        new_owner_id=target.id, old_owner_id=user.id
     )
-
-    await msg.reply_text(f"Ownership transferred to {target.id}.")
+    await msg.reply_text(M.TRANSFER_DONE.format(target_id=target.id))
     await log_to_channel(
         context,
-        "<b>Transsion Core Ownership Transferred</b>\n"
-        f"{BRANDING}\n"
-        f"New Owner: {user_link(target.id, target.first_name)} (ID: {target.id})\n"
-        f"Previous Owner: {user_link(user.id, safe_first_name(user))} (ID: {user.id})\n"
-        f"Date: {fmt_now()}",
+        log_templates.ownership_transferred(
+            new_owner_id=target.id,
+            new_owner_name=target.first_name,
+            old_owner_id=user.id,
+            old_owner_name=safe_first_name(user),
+        ),
     )
 
+
+# ----------------------------------------------------- /tcpromoterequests
 
 async def cmd_promo_requests(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    """List all pending promotion requests. Owner only."""
+    """Owner-only listing of every pending promotion request."""
     msg = update.effective_message
     user = update.effective_user
     if msg is None or user is None:
         return
 
-    if not await is_tc_owner(user.id):
-        await msg.reply_text("You are not authorized.")
+    if not await auth.require_owner(msg, user.id):
         return
 
-    cursor = promotion_requests.find({"status": "pending"})
-    pending = [r async for r in cursor]
-
+    pending = await admins_mod.list_pending_requests()
     if not pending:
-        await msg.reply_text("No pending promotion requests.")
+        await msg.reply_text(M.NO_PENDING_PROMO_REQUESTS)
         return
 
     for req in pending:
@@ -381,20 +312,10 @@ async def cmd_promo_requests(
         promoted_by = req["promoted_by"]
         requested_date = req.get("requested_date")
 
-        try:
-            target_chat = await context.bot.get_chat(target_id)
-            target_name = target_chat.first_name or str(target_id)
-        except TelegramError:
-            target_name = str(target_id)
-
-        try:
-            req_by_chat = await context.bot.get_chat(promoted_by)
-            req_by_name = req_by_chat.first_name or str(promoted_by)
-        except TelegramError:
-            req_by_name = str(promoted_by)
-
-        from ..utils.format import fmt_dt
+        target_name = await messaging.fetch_display_name(context, target_id)
+        req_by_name = await messaging.fetch_display_name(context, promoted_by)
         date_str = fmt_dt(requested_date) if requested_date else "Unknown"
+
         text = (
             "<b>Pending Promotion Request</b>\n"
             f"Target: {user_link(target_id, target_name)} (ID: {target_id})\n"
@@ -402,21 +323,9 @@ async def cmd_promo_requests(
             f"Date: {date_str}\n"
             f"Request ID: {request_id}"
         )
-        kb = InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(
-                        "Approve", callback_data=f"approve_promote_{request_id}"
-                    ),
-                    InlineKeyboardButton(
-                        "Reject", callback_data=f"reject_promote_{request_id}"
-                    ),
-                ]
-            ]
-        )
         await msg.reply_text(
             text,
             parse_mode=ParseMode.HTML,
-            reply_markup=kb,
+            reply_markup=keyboards.promotion_request(request_id),
             disable_web_page_preview=True,
         )

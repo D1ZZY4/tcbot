@@ -1,33 +1,23 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Feature 27: Welcome and goodbye messages in MAIN_GROUP and EXEC_GROUP only."""
+"""Welcome / goodbye messages in MAIN_GROUP and EXEC_GROUP (Feature 27)."""
 import logging
 from html import escape
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Update
 from telegram.constants import ParseMode
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
 from .. import EXEC_GROUP, MAIN_GROUP
+from ..modules import keyboards
+from ..modules.messages import M
 from ..utils.format import safe_first_name, user_link
 
 logger = logging.getLogger(__name__)
 
 WELCOME_GROUPS = {MAIN_GROUP, EXEC_GROUP}
-
-
-def _welcome_text(group_title: str, user_id: int, first_name: str) -> str:
-    return (
-        f"<b>Welcome to <i>{escape(group_title)}</i>, "
-        f"{user_link(user_id, first_name)}!</b>\n"
-        "We're glad to have you here. This is an official group of the Transsion "
-        "Core Federation. Please take a moment to review the group rules and feel "
-        "free to introduce yourself.\n\n"
-        "If you have any questions or need assistance, don't hesitate to ask our admins.\n\n"
-        "Enjoy your stay!"
-    )
 
 
 async def on_member_join(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -47,14 +37,14 @@ async def on_member_join(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     for member in members:
         if member.id == bot_id:
             continue
-        kb = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("What is TCF?", url=about_url)]]
-        )
+        link = user_link(member.id, safe_first_name(member))
         try:
             await msg.reply_text(
-                _welcome_text(title, member.id, safe_first_name(member)),
+                M.WELCOME_GROUP.format(
+                    group_title=escape(title), user_link=link
+                ),
                 parse_mode=ParseMode.HTML,
-                reply_markup=kb,
+                reply_markup=keyboards.what_is_tcf(about_url),
                 disable_web_page_preview=True,
             )
         except TelegramError as exc:
@@ -71,10 +61,10 @@ async def on_member_left(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     left = msg.left_chat_member
     if left is None or left.id == context.bot.id:
         return
+    link = user_link(left.id, safe_first_name(left))
     try:
         await msg.reply_text(
-            f"{user_link(left.id, safe_first_name(left))} has left the group. "
-            "We're sad to see you go! If you ever wish to rejoin, you're always welcome back.",
+            M.GOODBYE_GROUP.format(user_link=link),
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
         )
