@@ -261,6 +261,7 @@ class Messages:
     # Listings
     NO_AFFILIATED_GROUPS: Final[str] = "No groups are currently affiliated with TCF."
     NO_TC_ADMINS: Final[str] = "There are no Transsion Core Admins at this time."
+    ADMINS_LIST_HEADER: Final[str] = "<b>There is Admin in</b>"
 
     # /start fallbacks
     START_GROUP_HINT: Final[str] = (

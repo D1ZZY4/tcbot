@@ -42,7 +42,7 @@ async def cmd_fedstats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def cmd_tcadmins(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """List every Transsion Core Admin (page 1)."""
+    """Show the Transsion Core Owner and every TC Admin in one view."""
     msg = update.effective_message
     if msg is None:
         return
@@ -89,20 +89,49 @@ async def build_fedstats_text(context: ContextTypes.DEFAULT_TYPE) -> str:
     )
 
 
-async def build_admins_text(
-    context: ContextTypes.DEFAULT_TYPE, page: int = 0, page_size: int = 10
-) -> str:
-    """Build a paginated list of TC admins."""
-    admins = [a async for a in admins_repo.iter_admins()]
-    if not admins:
+async def build_admins_text(context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Render the Owner + TC Admins overview in the spec-locked format.
+
+    Layout::
+
+        There is Admin in
+        <branding>
+
+        Owner: <Nickname> [<user_id>]
+        Admins:
+        - <nickname> [@username] | <user_id>
+        - <nickname> | <user_id>          (when the admin has no @username)
+
+    When neither an Owner nor any Admin exists, ``NO_TC_ADMINS`` is
+    returned so the caller can simply send the result.
+    """
+    owner_id = await admins_repo.get_owner_id()
+    admins = [
+        a async for a in admins_repo.iter_admins() if a["user_id"] != owner_id
+    ]
+
+    if owner_id is None and not admins:
         return M.NO_TC_ADMINS
-    start = page * page_size
-    end = start + page_size
-    page_admins = admins[start:end]
-    lines = [f"<b>Transsion Core Admins</b> (Page {page + 1})"]
-    identities = await asyncio.gather(
-        *(resolve_identity(context, a["user_id"]) for a in page_admins)
-    )
-    for a, ident in zip(page_admins, identities, strict=True):
-        lines.append(f"{ident.display_name} (ID: {a['user_id']})")
+
+    lines: list[str] = [M.ADMINS_LIST_HEADER, M.BRANDING_LINE, ""]
+
+    if owner_id is not None:
+        owner_ident = await resolve_identity(context, owner_id)
+        lines.append(
+            f"Owner: {user_link(owner_id, owner_ident.display_name)} [{owner_id}]"
+        )
+
+    if admins:
+        lines.append("Admins:")
+        identities = await asyncio.gather(
+            *(resolve_identity(context, a["user_id"]) for a in admins)
+        )
+        for a, ident in zip(admins, identities, strict=True):
+            uid = a["user_id"]
+            link = user_link(uid, ident.display_name)
+            if ident.username:
+                lines.append(f"- {link} [@{ident.username}] | {uid}")
+            else:
+                lines.append(f"- {link} | {uid}")
+
     return "\n".join(lines)

@@ -16,12 +16,20 @@ Resolution order is:
 The :class:`ResolvedTarget` exposes ``from_args`` so callers can correctly
 compute where the optional reason text begins (``args[1:]`` for explicit
 arguments, ``args[:]`` for reply targets).
+
+Whenever the explicit-argument path resolves through ``bot.get_chat`` the
+identity is also cached via :func:`tgbot_tcf.utils.users.cache_identity` so
+subsequent log composition (``resolve_identity``) can avoid a second API
+round-trip and so the user's last-known display name stays fresh in the
+member cache even when they are not present in the operator's group.
 """
 from __future__ import annotations
 
 from telegram import Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
+
+from .users import schedule_cache_identity
 
 
 class ResolvedTarget:
@@ -38,7 +46,9 @@ class ResolvedTarget:
         from_args: bool = False,
     ):
         self.id = user_id
-        self.first_name = first_name or str(user_id)
+        self.first_name = first_name or (
+            f"@{username}" if username else str(user_id)
+        )
         self.username = username
         self.raw = raw
         self.from_args = from_args
@@ -60,6 +70,7 @@ async def resolve_target(
         return None
 
     args = context.args or []
+    chat_id = msg.chat.id if msg.chat else None
 
     if args:
         raw = args[0].lstrip("@")
@@ -76,16 +87,29 @@ async def resolve_target(
                 getattr(resolved, "first_name", None)
                 or getattr(resolved, "title", None)
             )
+            username = getattr(resolved, "username", None)
+            schedule_cache_identity(
+                resolved.id,
+                first_name=first_name,
+                username=username,
+                chat_id=chat_id,
+            )
             return ResolvedTarget(
                 resolved.id,
                 first_name,
-                getattr(resolved, "username", None),
+                username,
                 raw=resolved,
                 from_args=True,
             )
 
     if msg.reply_to_message and msg.reply_to_message.from_user:
         u = msg.reply_to_message.from_user
+        schedule_cache_identity(
+            u.id,
+            first_name=u.first_name,
+            username=u.username,
+            chat_id=chat_id,
+        )
         return ResolvedTarget(
             u.id, u.first_name, u.username, raw=u, from_args=False
         )

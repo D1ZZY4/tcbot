@@ -25,13 +25,6 @@ from ..utils.format import safe_first_name
 logger = logging.getLogger(__name__)
 
 
-async def seed_member_cache(
-    context: ContextTypes.DEFAULT_TYPE, chat_id: int
-) -> int:
-    """Backwards-compatible re-export so callers can keep importing here."""
-    return await cache_repo.seed_from_admin_list(context, chat_id)
-
-
 async def on_message_in_group(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:

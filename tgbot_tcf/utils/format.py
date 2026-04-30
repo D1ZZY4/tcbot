@@ -38,7 +38,18 @@ def topic_link(chat_id: int, message_id: int, thread_id: int) -> str:
 
 
 def safe_first_name(obj: Any) -> str:
+    """Best-effort display name for a Telegram ``User`` / ``Chat``-like object.
+
+    Order: ``first_name`` -> ``title`` -> ``@username`` -> numeric ``id``
+    -> ``"Unknown"``. The ``@username`` step keeps log lines and replies
+    readable for users who only set a username (no ``first_name``) instead
+    of falling straight through to a bare numeric id.
+    """
     name = getattr(obj, "first_name", None) or getattr(obj, "title", None)
-    if not name:
-        name = str(getattr(obj, "id", "Unknown"))
-    return name
+    if name:
+        return name
+    username = getattr(obj, "username", None)
+    if username:
+        return f"@{username}"
+    obj_id = getattr(obj, "id", None)
+    return str(obj_id) if obj_id is not None else "Unknown"

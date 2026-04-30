@@ -16,7 +16,6 @@ from telegram.ext import ContextTypes
 
 from ..database import groups_repo, joins_repo
 from ..modules import affiliations, keyboards, log_templates
-from ..modules.affiliations import REQUIRED_PERMS  # re-export for backward compat
 from ..modules.messages import M
 from ..utils.format import safe_first_name
 from ..utils.logger import log_to_channel

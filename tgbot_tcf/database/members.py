@@ -45,11 +45,6 @@ async def upsert(
     )
 
 
-async def count_for_chat(chat_id: int) -> int:
-    """Number of distinct members the bot has tracked in ``chat_id``."""
-    return await member_cache.count_documents({"chat_id": chat_id})
-
-
 async def find_latest_for_user(user_id: int) -> dict[str, Any] | None:
     """Return the most-recently-seen cache entry for ``user_id`` across all chats.
 
