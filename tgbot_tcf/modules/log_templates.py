@@ -1,8 +1,9 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Builders for messages posted to the federation log channel.
 
+"""
+Builders for messages posted to the federation log channel.
 Every log entry must:
 
 * Begin with a bold title line that names the event.

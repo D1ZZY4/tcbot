@@ -49,7 +49,7 @@ class Messages:
     )
     PROMOTE_SELF_BLOCKED: Final[str] = "You cannot promote yourself."
     DEMOTE_SELF_BLOCKED: Final[str] = (
-        "I cannot demote myself. I hold a crucial position in this Transsion Core. "
+        "I cannot demote myself. I hold a crucial position in this Transsion Core.\n"
         "Please ask the owner to do it."
     )
     DEMOTE_OWNER_BLOCKED: Final[str] = "Cannot demote the Transsion Core Owner."

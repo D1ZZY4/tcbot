@@ -1,7 +1,9 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Owner / admin role management business logic.
+
+"""
+Owner / admin role management business logic.
 
 PROMPT Feature 9 (promote), 10 (demote), 11 (transfer owner) and 14
 (promotion-request review) all live here. The Telegram handler in
