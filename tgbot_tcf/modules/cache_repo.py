@@ -10,8 +10,8 @@ member-cache write rules in a single, easy-to-audit place.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import Optional
 
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
@@ -31,9 +31,9 @@ async def upsert_member(
     *,
     chat_id: int,
     user_id: int,
-    first_name: Optional[str] = None,
-    username: Optional[str] = None,
-    status: Optional[str] = None,
+    first_name: str | None = None,
+    username: str | None = None,
+    status: str | None = None,
 ) -> None:
     """Single entry point for all member-cache writes."""
     await members_repo.upsert(
@@ -60,15 +60,18 @@ async def seed_from_admin_list(
     except TelegramError as exc:
         logger.warning("Could not seed member cache for %s: %s", chat_id, exc)
         return 0
-    seeded = 0
-    for cm in admins:
-        u = cm.user
-        await upsert_member(
-            chat_id=chat_id,
-            user_id=u.id,
-            first_name=safe_first_name(u),
-            username=u.username,
-            status=cm.status,
+    if not admins:
+        return 0
+    await asyncio.gather(
+        *(
+            upsert_member(
+                chat_id=chat_id,
+                user_id=cm.user.id,
+                first_name=safe_first_name(cm.user),
+                username=cm.user.username,
+                status=cm.status,
+            )
+            for cm in admins
         )
-        seeded += 1
-    return seeded
+    )
+    return len(admins)

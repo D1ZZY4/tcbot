@@ -6,6 +6,9 @@
 The text builders here are reused by :mod:`tgbot_tcf.handlers.menu` so
 the same content powers both the slash commands and the inline menu views.
 """
+from __future__ import annotations
+
+import asyncio
 import logging
 
 from telegram import Update
@@ -85,8 +88,9 @@ async def build_admins_text(
     end = start + page_size
     page_admins = admins[start:end]
     lines = [f"<b>Transsion Core Admins</b> (Page {page + 1})"]
-    for a in page_admins:
-        uid = a["user_id"]
-        name = (await resolve_identity(context, uid)).display_name
-        lines.append(f"{name} (ID: {uid})")
+    identities = await asyncio.gather(
+        *(resolve_identity(context, a["user_id"]) for a in page_admins)
+    )
+    for a, ident in zip(page_admins, identities, strict=True):
+        lines.append(f"{ident.display_name} (ID: {a['user_id']})")
     return "\n".join(lines)

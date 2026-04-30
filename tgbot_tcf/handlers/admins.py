@@ -8,6 +8,9 @@ Thin Telegram entry points: validate the update, route the work to
 templates in :mod:`tgbot_tcf.modules.messages` and
 :mod:`tgbot_tcf.modules.log_templates`.
 """
+from __future__ import annotations
+
+import asyncio
 import logging
 
 from telegram import Update
@@ -307,14 +310,23 @@ async def cmd_promo_requests(
         await msg.reply_text(M.NO_PENDING_PROMO_REQUESTS)
         return
 
-    for req in pending:
+    identities = await asyncio.gather(
+        *(
+            asyncio.gather(
+                resolve_identity(context, req["target_id"]),
+                resolve_identity(context, req["promoted_by"]),
+            )
+            for req in pending
+        )
+    )
+    for req, (target_ident, req_by_ident) in zip(pending, identities, strict=True):
         request_id = req["request_id"]
         target_id = req["target_id"]
         promoted_by = req["promoted_by"]
         requested_date = req.get("requested_date")
 
-        target_name = (await resolve_identity(context, target_id)).display_name
-        req_by_name = (await resolve_identity(context, promoted_by)).display_name
+        target_name = target_ident.display_name
+        req_by_name = req_by_ident.display_name
         date_str = fmt_dt(requested_date) if requested_date else "Unknown"
 
         text = (

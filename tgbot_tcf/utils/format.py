@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 """Time formatting, HTML link builders, and topic-link helpers."""
+from __future__ import annotations
+
 from datetime import datetime, timezone
 from html import escape
 from typing import Any

@@ -19,7 +19,6 @@ trivial to audit every message that the bot sends to the channel.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from ..utils.format import fmt_dt, fmt_now, user_link
 from .messages import M
@@ -128,7 +127,7 @@ def unban(
     admin_name: str,
     target_id: int,
     target_name: str,
-    reason: Optional[str] = None,
+    reason: str | None = None,
 ) -> str:
     reason_line = f"\nUnban Reason: {reason}" if reason else ""
     return (

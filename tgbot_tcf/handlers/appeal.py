@@ -7,8 +7,10 @@ Telegram update plumbing only — the parsing rules, the 12-hour reviewer
 rule, all DB writes, and the two channel postings live in
 :mod:`tgbot_tcf.modules.appeals`.
 """
+from __future__ import annotations
+
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from telegram import Update
 from telegram.constants import ChatType
@@ -25,7 +27,7 @@ from .helper import auth, enforce_unban_across_groups, messaging
 logger = logging.getLogger(__name__)
 
 
-def _get_sessions(context: ContextTypes.DEFAULT_TYPE) -> Dict[Any, Any]:
+def _get_sessions(context: ContextTypes.DEFAULT_TYPE) -> dict[int, dict[str, Any]]:
     """In-memory map of ``user_id`` to the appeal session metadata."""
     return context.application.bot_data.setdefault("appeal_sessions", {})
 
@@ -71,7 +73,7 @@ async def on_cancel_appeal(
     cq = update.callback_query
     if cq is None or cq.message is None or getattr(cq, "from_user", None) is None:
         return
-    sessions: Dict[Any, Any] = _get_sessions(context)
+    sessions = _get_sessions(context)
     sessions.pop(cq.from_user.id, None)
     await cq.answer()
     await messaging.safe_edit_callback(cq, M.APPEAL_CANCELLED, parse_mode=None)
@@ -89,8 +91,8 @@ async def on_appeal_message(
     if msg.chat.type != ChatType.PRIVATE:
         return
 
-    sessions: Dict[Any, Any] = _get_sessions(context)
-    sess: Optional[Dict[str, Any]] = sessions.get(user.id)
+    sessions = _get_sessions(context)
+    sess: dict[str, Any] | None = sessions.get(user.id)
     if sess is None:
         return
 

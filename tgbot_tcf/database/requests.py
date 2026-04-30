@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .mongo import promotion_requests
 
@@ -27,11 +27,11 @@ async def create(
     )
 
 
-async def find_by_id(request_id: str) -> Optional[Dict[str, Any]]:
+async def find_by_id(request_id: str) -> dict[str, Any] | None:
     return await promotion_requests.find_one({"request_id": request_id})
 
 
-async def list_pending() -> List[Dict[str, Any]]:
+async def list_pending() -> list[dict[str, Any]]:
     cursor = promotion_requests.find({"status": "pending"})
     return [r async for r in cursor]
 

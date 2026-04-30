@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .mongo import pending_joins
 
@@ -16,7 +16,7 @@ async def upsert(
     title: str,
     requested_by: int,
     requested_at: datetime,
-    notice_message_id: Optional[int],
+    notice_message_id: int | None,
 ) -> None:
     """Park an affiliation request that is waiting for admin permissions."""
     await pending_joins.update_one(
@@ -34,7 +34,7 @@ async def upsert(
     )
 
 
-async def get(chat_id: int) -> Optional[Dict[str, Any]]:
+async def get(chat_id: int) -> dict[str, Any] | None:
     return await pending_joins.find_one({"chat_id": chat_id})
 
 

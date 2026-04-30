@@ -2,9 +2,12 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 """Entry point: python -m tgbot_tcf"""
+from __future__ import annotations
+
 import logging
 import re
 import traceback
+from typing import Any, cast
 
 from telegram import Update
 from telegram.ext import (
@@ -16,8 +19,6 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-from typing import Any, cast
-
 
 # Application is a heavily-parametrized generic; use a convenient alias for typing
 AppT = Application[Any, Any, Any, Any, Any, Any]

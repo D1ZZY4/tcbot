@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .mongo import member_cache
 
@@ -15,16 +15,16 @@ async def upsert(
     chat_id: int,
     user_id: int,
     when: datetime,
-    first_name: Optional[str] = None,
-    username: Optional[str] = None,
-    status: Optional[str] = None,
+    first_name: str | None = None,
+    username: str | None = None,
+    status: str | None = None,
 ) -> None:
     """Update ``last_seen`` and any provided identity / status fields.
 
     Only fields with a non-``None`` argument are written, so a status-only
     update from ``chat_member`` events does not clobber a known username.
     """
-    payload: Dict[str, Any] = {"last_seen": when}
+    payload: dict[str, Any] = {"last_seen": when}
     if first_name is not None:
         payload["first_name"] = first_name
     if username is not None:
@@ -50,7 +50,7 @@ async def count_for_chat(chat_id: int) -> int:
     return await member_cache.count_documents({"chat_id": chat_id})
 
 
-async def find_latest_for_user(user_id: int) -> Optional[Dict[str, Any]]:
+async def find_latest_for_user(user_id: int) -> dict[str, Any] | None:
     """Return the most-recently-seen cache entry for ``user_id`` across all chats.
 
     Used by the cross-group identity resolver so logs can show a name/username

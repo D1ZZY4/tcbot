@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
@@ -31,11 +30,11 @@ from ..database import members_repo
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class UserIdentity:
     user_id: int
     display_name: str
-    username: Optional[str] = None
+    username: str | None = None
 
     @property
     def name_with_username(self) -> str:

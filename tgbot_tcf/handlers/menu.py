@@ -9,8 +9,10 @@ help modules and copy lives in :mod:`tgbot_tcf.modules.help_text`,
 keyboards in :mod:`tgbot_tcf.modules.keyboards`, and copy in
 :mod:`tgbot_tcf.modules.messages`.
 """
+from __future__ import annotations
+
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
@@ -28,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------- ownership tracking
 
-def _state(context: ContextTypes.DEFAULT_TYPE) -> Dict[str, Any]:
+def _state(context: ContextTypes.DEFAULT_TYPE) -> dict[str, Any]:
     return context.application.bot_data.setdefault("menu_state", {})
 
 
@@ -51,7 +53,7 @@ def _remember(
 
 def _get_entry(
     context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     return _state(context).get(_key(chat_id, message_id))
 
 

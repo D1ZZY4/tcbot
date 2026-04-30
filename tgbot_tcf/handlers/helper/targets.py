@@ -4,7 +4,7 @@
 """Resolve-target helpers that reply with the spec-locked failure copy."""
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -16,7 +16,7 @@ from ...utils.targets import resolve_target as _resolve_target
 
 async def resolve_or_complain(
     update: Update, context: ContextTypes.DEFAULT_TYPE, msg: Any
-) -> Optional[ResolvedTarget]:
+) -> ResolvedTarget | None:
     """Return the resolved target or reply ``"Cannot resolve user."`` and ``None``."""
     target = await _resolve_target(update, context)
     if target is None:

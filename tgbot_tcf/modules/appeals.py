@@ -16,7 +16,6 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime
-from typing import Optional, Tuple
 
 from telegram.constants import ParseMode
 from telegram.error import TelegramError
@@ -48,8 +47,8 @@ def text_references_log_message(text: str, log_message_id: int) -> bool:
 
 def reviewer_locked_out(
     *,
-    review_timestamp: Optional[datetime],
-    ban_admin_id: Optional[int],
+    review_timestamp: datetime | None,
+    ban_admin_id: int | None,
     reviewer_id: int,
     window_seconds: int = 12 * 3600,
 ) -> bool:
@@ -64,7 +63,7 @@ def reviewer_locked_out(
 
 async def post_appeal_text(
     context: ContextTypes.DEFAULT_TYPE, text: str
-) -> Optional[Tuple[int, str]]:
+) -> tuple[int, str] | None:
     """Send the appeal body to the appeal topic. Returns (msg_id, link)."""
     try:
         appeal_msg = await context.bot.send_message(
@@ -88,7 +87,7 @@ async def post_review_message(
     ban_id: str,
     appeal_link: str,
     submitted_at: datetime,
-) -> Optional[int]:
+) -> int | None:
     """Send the Approve / Reject review message to the discussion topic."""
     try:
         msg = await context.bot.send_message(

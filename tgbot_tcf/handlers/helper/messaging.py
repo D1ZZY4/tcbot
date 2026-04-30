@@ -10,7 +10,7 @@ arises when the original message is gone so handler code stays clean.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from telegram import InlineKeyboardMarkup
 from telegram.constants import ParseMode
@@ -28,7 +28,7 @@ async def safe_edit_text(
     chat_id: int,
     message_id: int,
     text: str,
-    reply_markup: Optional[InlineKeyboardMarkup] = None,
+    reply_markup: InlineKeyboardMarkup | None = None,
     parse_mode: Any = ParseMode.HTML,
     disable_web_page_preview: bool = True,
 ) -> bool:
@@ -51,7 +51,7 @@ async def safe_edit_text(
 async def safe_edit_callback(
     cq: Any,
     text: str,
-    reply_markup: Optional[InlineKeyboardMarkup] = None,
+    reply_markup: InlineKeyboardMarkup | None = None,
     parse_mode: Any = ParseMode.HTML,
 ) -> bool:
     """Edit a callback-query message; swallow Telegram errors."""

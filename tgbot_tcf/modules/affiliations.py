@@ -12,7 +12,7 @@ lives here.
 from __future__ import annotations
 
 import logging
-from typing import Final, Optional, Tuple
+from typing import Any, Final
 
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
@@ -25,7 +25,7 @@ from . import cache_repo, log_templates
 
 logger = logging.getLogger(__name__)
 
-REQUIRED_PERMS: Final[Tuple[str, str, str]] = (
+REQUIRED_PERMS: Final[tuple[str, str, str]] = (
     "can_delete_messages",
     "can_restrict_members",
     "can_invite_users",
@@ -33,7 +33,7 @@ REQUIRED_PERMS: Final[Tuple[str, str, str]] = (
 """Admin permissions the bot must hold inside an affiliated group."""
 
 
-def has_required_perms(member_obj) -> bool:
+def has_required_perms(member_obj: Any) -> bool:
     """Return ``True`` if a ``ChatMember`` object holds all required perms."""
     if member_obj.status not in ("administrator", "creator"):
         return False
@@ -58,7 +58,7 @@ async def is_active(chat_id: int) -> bool:
 
 
 async def record_pending(
-    *, chat_id: int, title: str, requested_by: int, notice_message_id: Optional[int]
+    *, chat_id: int, title: str, requested_by: int, notice_message_id: int | None
 ) -> None:
     """Park an affiliation request waiting for permissions to be granted."""
     await joins_repo.upsert(
@@ -70,7 +70,7 @@ async def record_pending(
     )
 
 
-async def pop_pending(chat_id: int) -> Optional[dict]:
+async def pop_pending(chat_id: int) -> dict[str, Any] | None:
     """Return-and-clear a pending request for ``chat_id`` (or ``None``)."""
     pending = await joins_repo.get(chat_id)
     if pending:

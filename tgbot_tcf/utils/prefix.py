@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
 
 from telegram import Update
 from telegram.ext import ContextTypes

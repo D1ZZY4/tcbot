@@ -13,7 +13,7 @@ asks the question; this module decides what to do with the answer.
 from __future__ import annotations
 
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ..database import admins_repo, requests_repo
 from ..utils.format import utcnow
@@ -44,17 +44,17 @@ async def create_promotion_request(*, target_id: int, requested_by: int) -> str:
 
 # ------------------------------------------------------------ request review
 
-async def fetch_request(request_id: str) -> Optional[Dict[str, Any]]:
+async def fetch_request(request_id: str) -> dict[str, Any] | None:
     return await requests_repo.find_by_id(request_id)
 
 
-async def list_pending_requests() -> list[Dict[str, Any]]:
+async def list_pending_requests() -> list[dict[str, Any]]:
     return await requests_repo.list_pending()
 
 
 async def approve_request(
     *, request_id: str, by_owner_id: int
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Promote the target if not already a TC admin, then resolve the request."""
     record = await requests_repo.find_by_id(request_id)
     if not record or record.get("status") != "pending":
@@ -76,7 +76,7 @@ async def approve_request(
 
 async def reject_request(
     *, request_id: str, by_owner_id: int
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     record = await requests_repo.find_by_id(request_id)
     if not record or record.get("status") != "pending":
         return None

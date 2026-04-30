@@ -10,15 +10,16 @@ stay declarative.
 """
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import Any, AsyncIterator, Dict, Optional
+from typing import Any
 
 from .mongo import tc_admins, tc_owners
 
 
 # ----------------------------------------------------------------- owners
 
-async def get_owner_id() -> Optional[int]:
+async def get_owner_id() -> int | None:
     """Return the current Transsion Core Owner ``user_id``, or ``None``."""
     doc = await tc_owners.find_one({})
     return doc["user_id"] if doc else None
@@ -86,5 +87,5 @@ async def count_admins() -> int:
     return await tc_admins.count_documents({})
 
 
-def iter_admins() -> AsyncIterator[Dict[str, Any]]:
+def iter_admins() -> AsyncIterator[dict[str, Any]]:
     return tc_admins.find({})

@@ -4,18 +4,19 @@
 """Repository functions for the ``federated_groups`` collection."""
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any
 
 from .mongo import federated_groups
 
 
-async def find_by_id(chat_id: int) -> Optional[Dict[str, Any]]:
+async def find_by_id(chat_id: int) -> dict[str, Any] | None:
     """Return the federated-group record (active or not) for ``chat_id``."""
     return await federated_groups.find_one({"chat_id": chat_id})
 
 
-async def find_active(chat_id: int) -> Optional[Dict[str, Any]]:
+async def find_active(chat_id: int) -> dict[str, Any] | None:
     """Return the federated-group record for ``chat_id`` only when active."""
     return await federated_groups.find_one({"chat_id": chat_id, "is_active": True})
 
@@ -51,11 +52,11 @@ async def count_active() -> int:
     return await federated_groups.count_documents({"is_active": True})
 
 
-def iter_active() -> AsyncIterator[Dict[str, Any]]:
+def iter_active() -> AsyncIterator[dict[str, Any]]:
     """Async iterator over every active federated group."""
     return federated_groups.find({"is_active": True})
 
 
-async def list_active() -> List[Dict[str, Any]]:
+async def list_active() -> list[dict[str, Any]]:
     """Return all active federated groups as a list (for paginated views)."""
     return [g async for g in iter_active()]

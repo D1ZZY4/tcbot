@@ -7,10 +7,12 @@ This handler owns the proof-collection session: timers, album debouncing,
 and the in-memory ``bot_data`` map. The actual DB writes, proof uploads
 and log-text construction are delegated to :mod:`tgbot_tcf.modules.bans`.
 """
+from __future__ import annotations
+
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 from telegram import Update
 from telegram.error import TelegramError
@@ -33,14 +35,14 @@ def _session_key(chat_id: int, user_id: int) -> str:
     return f"tcban:{chat_id}:{user_id}"
 
 
-def _get_sessions(context: ContextTypes.DEFAULT_TYPE) -> Dict[str, Any]:
+def _get_sessions(context: ContextTypes.DEFAULT_TYPE) -> dict[str, Any]:
     app: Any = getattr(context, "application", None)
     if app is None:
         return {}
     return app.bot_data.setdefault("tcban_sessions", {})
 
 
-def _drop_jobs(sess: Dict[str, Any]) -> None:
+def _drop_jobs(sess: dict[str, Any]) -> None:
     for job_key in ("timeout_job", "album_job"):
         job = sess.get(job_key)
         if job is None:
@@ -58,8 +60,8 @@ async def _timeout_session(context: ContextTypes.DEFAULT_TYPE) -> None:
     if not data:
         return
     key: str = data["key"]
-    sessions: Dict[str, Any] = _get_sessions(context)
-    sess: Optional[Dict[str, Any]] = sessions.pop(key, None)
+    sessions = _get_sessions(context)
+    sess: dict[str, Any] | None = sessions.pop(key, None)
     if sess is None:
         return
     await messaging.safe_edit_text(
@@ -155,12 +157,12 @@ async def on_cancel_proof(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if cq is None or cq.message is None or getattr(cq, "from_user", None) is None:
         return
     chat_id = cq.message.chat.id
-    sessions: Dict[str, Any] = _get_sessions(context)
+    sessions = _get_sessions(context)
     from_user = getattr(cq, "from_user", None)
     if from_user is None:
         return
     key = _session_key(chat_id, from_user.id)
-    sess: Optional[Dict[str, Any]] = sessions.get(key)
+    sess: dict[str, Any] | None = sessions.get(key)
     if sess is None:
         await cq.answer(M.BAN_NO_ACTIVE_SESSION, show_alert=False)
         return
@@ -181,9 +183,9 @@ async def on_proof_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if msg is None or user is None:
         return
 
-    sessions: Dict[str, Any] = _get_sessions(context)
+    sessions = _get_sessions(context)
     key = _session_key(msg.chat.id, user.id)
-    sess: Optional[Dict[str, Any]] = sessions.get(key)
+    sess: dict[str, Any] | None = sessions.get(key)
     if sess is None:
         return
 
@@ -239,8 +241,8 @@ async def _finalize_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def _finalize(context: ContextTypes.DEFAULT_TYPE, key: str) -> None:
-    sessions: Dict[str, Any] = _get_sessions(context)
-    sess: Optional[Dict[str, Any]] = sessions.get(key)
+    sessions = _get_sessions(context)
+    sess: dict[str, Any] | None = sessions.get(key)
     if sess is None:
         return
     async with sess["lock"]:
@@ -256,7 +258,7 @@ async def _finalize(context: ContextTypes.DEFAULT_TYPE, key: str) -> None:
 
 # ----------------------------------------------------------- finalisation
 
-async def _do_finalize(context: ContextTypes.DEFAULT_TYPE, sess: Dict[str, Any]) -> None:
+async def _do_finalize(context: ContextTypes.DEFAULT_TYPE, sess: dict[str, Any]) -> None:
     """Upload proof, write the log entry, persist the ban, ack the admin."""
     target_id = sess["target_id"]
     target_first_name = sess["target_first_name"]

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from telegram import InputMediaPhoto, InputMediaVideo
 from telegram.constants import ParseMode
@@ -31,12 +31,12 @@ logger = logging.getLogger(__name__)
 
 # --------------------------------------------------------------- DB lookups
 
-async def find_active_for_user(user_id: int) -> Optional[Dict[str, Any]]:
+async def find_active_for_user(user_id: int) -> dict[str, Any] | None:
     """Convenience re-export so handlers do not import the repo directly."""
     return await bans_repo.find_active_for_user(user_id)
 
 
-async def find_by_ban_id(ban_id: str) -> Optional[Dict[str, Any]]:
+async def find_by_ban_id(ban_id: str) -> dict[str, Any] | None:
     return await bans_repo.find_by_ban_id(ban_id)
 
 
@@ -44,9 +44,9 @@ async def find_by_ban_id(ban_id: str) -> Optional[Dict[str, Any]]:
 
 async def post_proof_to_topic(
     context: ContextTypes.DEFAULT_TYPE,
-    media: List[Dict[str, Any]],
+    media: list[dict[str, Any]],
     caption: str,
-) -> Optional[int]:
+) -> int | None:
     """Upload one or more media items to the proof topic.
 
     Returns the message ID of the first media (used for ``proof_link``)
@@ -142,7 +142,7 @@ async def persist_new_ban(
     admin_id: int,
     reason: str,
     proof_message_id: int,
-    log_message_id: Optional[int],
+    log_message_id: int | None,
     when: datetime,
 ) -> str:
     """Insert a new ban document and return its generated ``ban_id``."""
@@ -161,9 +161,9 @@ async def persist_new_ban(
 
 async def persist_ban_update(
     *,
-    existing: Dict[str, Any],
+    existing: dict[str, Any],
     proof_message_id: int,
-    log_message_id: Optional[int],
+    log_message_id: int | None,
     admin_id: int,
     reason: str,
     update_when: datetime,

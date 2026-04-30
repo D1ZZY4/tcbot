@@ -2,7 +2,9 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 """MongoDB connection and collection references."""
-from typing import Any, Dict
+from __future__ import annotations
+
+from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 
@@ -12,13 +14,13 @@ _client = AsyncIOMotorClient(MONGODB_URI)
 db = _client[DB_NAME]
 
 # Typed collection handles to help static analysis (documents are dicts)
-federated_groups: AsyncIOMotorCollection[Dict[str, Any]] = db["federated_groups"]
-tc_owners: AsyncIOMotorCollection[Dict[str, Any]] = db["tc_owners"]
-tc_admins: AsyncIOMotorCollection[Dict[str, Any]] = db["tc_admins"]
-bans: AsyncIOMotorCollection[Dict[str, Any]] = db["bans"]
-promotion_requests: AsyncIOMotorCollection[Dict[str, Any]] = db["promotion_requests"]
-pending_joins: AsyncIOMotorCollection[Dict[str, Any]] = db["pending_joins"]
-member_cache: AsyncIOMotorCollection[Dict[str, Any]] = db["member_cache"]
+federated_groups: AsyncIOMotorCollection[dict[str, Any]] = db["federated_groups"]
+tc_owners: AsyncIOMotorCollection[dict[str, Any]] = db["tc_owners"]
+tc_admins: AsyncIOMotorCollection[dict[str, Any]] = db["tc_admins"]
+bans: AsyncIOMotorCollection[dict[str, Any]] = db["bans"]
+promotion_requests: AsyncIOMotorCollection[dict[str, Any]] = db["promotion_requests"]
+pending_joins: AsyncIOMotorCollection[dict[str, Any]] = db["pending_joins"]
+member_cache: AsyncIOMotorCollection[dict[str, Any]] = db["member_cache"]
 
 
 async def init_db() -> None:

@@ -10,17 +10,17 @@ place. The schema is defined in PROMPT (see DATABASE SCHEMA section).
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .mongo import bans
 
 
-async def find_active_for_user(user_id: int) -> Optional[Dict[str, Any]]:
+async def find_active_for_user(user_id: int) -> dict[str, Any] | None:
     """Return the currently active ban for ``user_id`` (or ``None``)."""
     return await bans.find_one({"banned_user_id": user_id, "is_active": True})
 
 
-async def find_by_ban_id(ban_id: str) -> Optional[Dict[str, Any]]:
+async def find_by_ban_id(ban_id: str) -> dict[str, Any] | None:
     """Return the ban with ``ban_id`` regardless of its active state."""
     return await bans.find_one({"ban_id": ban_id})
 
@@ -32,7 +32,7 @@ async def insert_new(
     reason: str,
     admin_user_id: int,
     proof_message_id: int,
-    log_message_id: Optional[int],
+    log_message_id: int | None,
     timestamp: datetime,
 ) -> None:
     """Insert a brand-new ban document with the canonical schema."""
@@ -59,10 +59,10 @@ async def insert_new(
 async def update_existing(
     *,
     ban_id: str,
-    previous_proof_message_id: Optional[int],
-    previous_log_message_id: Optional[int],
+    previous_proof_message_id: int | None,
+    previous_log_message_id: int | None,
     proof_message_id: int,
-    log_message_id: Optional[int],
+    log_message_id: int | None,
     admin_user_id: int,
     reason: str,
     update_timestamp: datetime,
