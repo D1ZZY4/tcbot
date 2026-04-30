@@ -10,7 +10,7 @@ place. The schema is defined in PROMPT (see DATABASE SCHEMA section).
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, AsyncIterator, Dict, Optional
+from typing import Any, Dict, Optional
 
 from .mongo import bans
 
@@ -122,8 +122,3 @@ async def attach_appeal_log_message(
 async def count_active() -> int:
     """Number of currently active bans."""
     return await bans.count_documents({"is_active": True})
-
-
-def iter_active() -> AsyncIterator[Dict[str, Any]]:
-    """Async iterator over every active ban (for maintenance tasks)."""
-    return bans.find({"is_active": True})

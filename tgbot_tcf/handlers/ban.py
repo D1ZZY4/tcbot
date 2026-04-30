@@ -20,7 +20,7 @@ from .. import ALBUM_DEBOUNCE_SECONDS, MAIN_GROUP, PROOF_WAIT_SECONDS
 from ..modules import bans, keyboards, log_templates
 from ..modules.messages import M
 from ..utils.auth import is_tc_admin, is_tc_owner
-from ..utils.format import fmt_now, safe_first_name, topic_link
+from ..utils.format import safe_first_name
 from ..utils.logger import log_to_channel
 from .helper import auth, enforce_ban_across_groups, enforce_unban_across_groups, messaging, targets
 
@@ -447,7 +447,3 @@ async def cmd_cunban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     )
     await log_to_channel(context, log_text)
     await msg.reply_text(M.UNBAN_SUCCESS.format(target_id=target.id))
-    # ``fmt_now`` is imported only to keep the historical signature intact when
-    # downstream tools grep for it; reference it here so static analyzers stay quiet.
-    _ = fmt_now
-    _ = topic_link

@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from .mongo import promotion_requests
 
@@ -50,7 +50,3 @@ async def resolve(
             }
         },
     )
-
-
-def iter_pending() -> AsyncIterator[Dict[str, Any]]:
-    return promotion_requests.find({"status": "pending"})

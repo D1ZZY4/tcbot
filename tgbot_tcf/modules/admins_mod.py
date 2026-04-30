@@ -13,7 +13,6 @@ asks the question; this module decides what to do with the answer.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
 from typing import Any, Dict, Optional
 
 from ..database import admins_repo, requests_repo
@@ -111,8 +110,3 @@ async def transfer_ownership(*, new_owner_id: int, old_owner_id: int) -> None:
         promoted_by=old_owner_id,
         promoted_date=when,
     )
-
-
-# Convenience time helper (so callers do not import utcnow themselves)
-def now() -> datetime:
-    return utcnow()

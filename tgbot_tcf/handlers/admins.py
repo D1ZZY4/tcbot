@@ -20,6 +20,7 @@ from ..modules import admins_mod, keyboards, log_templates
 from ..modules.messages import M
 from ..utils.format import fmt_dt, safe_first_name, user_link
 from ..utils.logger import log_to_channel
+from ..utils.users import resolve_identity
 from .helper import auth, messaging, targets
 
 logger = logging.getLogger(__name__)
@@ -167,7 +168,7 @@ async def on_promote_callback(
         if record is None:
             return
         target_id = record["target_id"]
-        target_name = await messaging.fetch_display_name(context, target_id)
+        target_name = (await resolve_identity(context, target_id)).display_name
         await messaging.safe_edit_callback(
             cq,
             M.PROMOTION_REQUEST_APPROVED.format(target_name=target_name),
@@ -312,8 +313,8 @@ async def cmd_promo_requests(
         promoted_by = req["promoted_by"]
         requested_date = req.get("requested_date")
 
-        target_name = await messaging.fetch_display_name(context, target_id)
-        req_by_name = await messaging.fetch_display_name(context, promoted_by)
+        target_name = (await resolve_identity(context, target_id)).display_name
+        req_by_name = (await resolve_identity(context, promoted_by)).display_name
         date_str = fmt_dt(requested_date) if requested_date else "Unknown"
 
         text = (

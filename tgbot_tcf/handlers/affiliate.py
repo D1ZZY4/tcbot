@@ -20,6 +20,7 @@ from ..modules.affiliations import REQUIRED_PERMS  # re-export for backward comp
 from ..modules.messages import M
 from ..utils.format import safe_first_name
 from ..utils.logger import log_to_channel
+from ..utils.users import resolve_identity
 from .helper import auth, messaging
 
 logger = logging.getLogger(__name__)
@@ -285,7 +286,7 @@ async def on_my_chat_member(
         return
 
     requested_by = pending.get("requested_by", 0)
-    requested_by_name = await messaging.fetch_display_name(context, requested_by)
+    requested_by_name = (await resolve_identity(context, requested_by)).display_name
     title = chat.title or pending.get("title") or str(chat.id)
 
     await affiliations.finalize_affiliation(

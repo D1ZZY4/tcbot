@@ -11,7 +11,8 @@ from telegram.ext import ContextTypes
 from ..modules import bans, keyboards
 from ..modules.messages import M
 from ..utils.format import fmt_dt, user_link
-from .helper import messaging, targets
+from ..utils.users import resolve_identity
+from .helper import targets
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,9 @@ async def cmd_checkme(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await msg.reply_text(M.NOT_BANNED_SELF)
         return
 
-    admin_name = await messaging.fetch_display_name(context, record["admin_user_id"])
+    admin_name = (
+        await resolve_identity(context, record["admin_user_id"])
+    ).display_name
     me = await context.bot.get_me()
     appeal_url = f"https://t.me/{me.username}?start=appeal_{record['ban_id']}"
 
@@ -54,7 +57,7 @@ async def cmd_baninfo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     admin_id = record["admin_user_id"]
-    admin_name = await messaging.fetch_display_name(context, admin_id)
+    admin_name = (await resolve_identity(context, admin_id)).display_name
 
     text = (
         f"{M.BANINFO_HEADER}\n"

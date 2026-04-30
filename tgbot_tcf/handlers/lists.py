@@ -14,7 +14,7 @@ from telegram.ext import ContextTypes
 from ..database import admins_repo, bans_repo, groups_repo
 from ..modules.messages import M
 from ..utils.format import user_link
-from .helper import messaging
+from ..utils.users import resolve_identity
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ async def build_fedstats_text(context: ContextTypes.DEFAULT_TYPE) -> str:
     bans_count = await bans_repo.count_active()
 
     if owner_id is not None:
-        owner_name = await messaging.fetch_display_name(context, owner_id)
+        owner_name = (await resolve_identity(context, owner_id)).display_name
         owner_line = user_link(owner_id, owner_name)
     else:
         owner_line = "Not set"
@@ -87,6 +87,6 @@ async def build_admins_text(
     lines = [f"<b>Transsion Core Admins</b> (Page {page + 1})"]
     for a in page_admins:
         uid = a["user_id"]
-        name = await messaging.fetch_display_name(context, uid)
+        name = (await resolve_identity(context, uid)).display_name
         lines.append(f"{name} (ID: {uid})")
     return "\n".join(lines)

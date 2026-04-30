@@ -106,7 +106,7 @@ async def on_appeal_message(
     if posted is None:
         await msg.reply_text(M.APPEAL_SUBMIT_FAILED)
         return
-    appeal_msg_id, appeal_link = posted
+    _, appeal_link = posted
 
     ban_id = sess["ban_id"]
     submitted_at = appeals.now()
@@ -152,8 +152,6 @@ async def on_appeal_message(
             ban_id=ban_id,
             appeal_log_message_id=appeal_log_msg_id,
         )
-    # appeal_msg_id is currently informational; reference to silence linters
-    _ = appeal_msg_id
 
 
 # ----------------------------------------------------------- review buttons

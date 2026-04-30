@@ -19,6 +19,8 @@ from telegram.ext import ContextTypes
 
 logger = logging.getLogger(__name__)
 
+__all__ = ["safe_edit_text", "safe_edit_callback", "safe_send_dm"]
+
 
 async def safe_edit_text(
     context: ContextTypes.DEFAULT_TYPE,
@@ -82,14 +84,3 @@ async def safe_send_dm(
     except TelegramError as exc:
         logger.debug("safe_send_dm suppressed: %s", exc)
         return False
-
-
-async def fetch_display_name(
-    context: ContextTypes.DEFAULT_TYPE, user_id: int
-) -> str:
-    """Look up ``user_id`` and return a sensible display name."""
-    try:
-        chat = await context.bot.get_chat(user_id)
-        return chat.first_name or chat.title or str(user_id)
-    except TelegramError:
-        return str(user_id)
