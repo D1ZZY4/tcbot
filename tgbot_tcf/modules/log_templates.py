@@ -75,6 +75,18 @@ def group_removed_bot(*, title: str, chat_id: int) -> str:
     )
 
 
+def group_perms_lost(*, title: str, chat_id: int) -> str:
+    """Logged when the bot lost required admin permissions in an active group."""
+    return (
+        "<b>Group Permissions Lost</b>\n"
+        f"{M.BRANDING_LINE}\n\n"
+        f"Group: {title} (ID: {chat_id})\n"
+        "The bot no longer holds the required admin permissions "
+        "(delete messages, ban users, invite users).\n\n"
+        f"Date: {fmt_now()}"
+    )
+
+
 # ---------------------------------------------------------------------- bans
 
 def new_ban(
@@ -102,6 +114,7 @@ def updated_ban(
     admin_id: int,
     admin_name: str,
     previous_admin_id: int,
+    previous_admin_name: str,
     target_id: int,
     target_name: str,
     reason: str,
@@ -112,7 +125,7 @@ def updated_ban(
         "<b>New Transsion Core Ban (Update)</b>\n"
         f"{M.BRANDING_LINE}\n\n"
         f"Admin: {user_link(admin_id, admin_name)}\n"
-        f"Previous Admin: {user_link(previous_admin_id, str(previous_admin_id))}\n\n"
+        f"Previous Admin: {user_link(previous_admin_id, previous_admin_name)}\n\n"
         f"User: {user_link(target_id, target_name)}\n"
         f"User ID: {target_id}\n"
         f"Reason: {reason}\n\n"

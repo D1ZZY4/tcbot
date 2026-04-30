@@ -25,7 +25,13 @@ async def resolve_or_complain(
 
 
 def reason_from_args(
-    context: ContextTypes.DEFAULT_TYPE, update: Update
+    context: ContextTypes.DEFAULT_TYPE,
+    update: Update,
+    target: ResolvedTarget | None = None,
 ) -> str:
-    """Re-export :func:`tgbot_tcf.utils.targets.get_reason` for handler use."""
-    return get_reason(context, update)
+    """Re-export :func:`tgbot_tcf.utils.targets.get_reason` for handler use.
+
+    ``target`` should be the previously-resolved target so the helper can
+    correctly skip ``args[0]`` when it was consumed as the explicit target.
+    """
+    return get_reason(context, update, target)

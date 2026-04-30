@@ -31,13 +31,37 @@ logger = logging.getLogger(__name__)
 async def on_new_chat_members(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    """Send the affiliation prompt the first time the bot is added."""
+    """React to the bot being added to a chat.
+
+    * Channels are not supported and the bot leaves immediately.
+    * Already-affiliated groups receive a brief acknowledgement instead of
+      the join prompt — no need to re-affiliate an existing federated group.
+    * Brand-new groups receive the affiliation prompt as before.
+    """
     msg = update.effective_message
-    if msg is None or msg.chat.type not in (ChatType.GROUP, ChatType.SUPERGROUP):
+    if msg is None:
         return
     members = msg.new_chat_members or []
     if not any(m.id == context.bot.id for m in members):
         return
+
+    if msg.chat.type == ChatType.CHANNEL:
+        try:
+            await context.bot.leave_chat(msg.chat.id)
+        except TelegramError:
+            pass
+        return
+
+    if msg.chat.type not in (ChatType.GROUP, ChatType.SUPERGROUP):
+        return
+
+    if await affiliations.is_active(msg.chat.id):
+        try:
+            await msg.reply_text(M.AFFILIATION_REJOIN_NOTICE)
+        except TelegramError as exc:
+            logger.warning("Could not send rejoin notice: %s", exc)
+        return
+
     try:
         await msg.reply_text(
             M.AFFILIATION_PROMPT,
@@ -258,13 +282,34 @@ async def cmd_rmfed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_my_chat_member(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    """Handle bot status changes: removal and promotion-to-admin."""
+    """Handle every bot status change inside a chat.
+
+    Covered transitions:
+
+    * Channels: the bot is not designed for channels and leaves immediately.
+    * Removed (``kicked`` / ``left``): the federated record is deactivated
+      and any pending join state is cleaned up.
+    * Permissions lost in an active group: a notice is posted in the group
+      and a warning entry is added to the log channel so the operators can
+      restore the perms quickly.
+    * Permissions granted while a join is pending: the affiliation is
+      finalised automatically and the original prompt is updated.
+    """
     upd = update.my_chat_member
     if upd is None:
         return
     chat = upd.chat
+    old = upd.old_chat_member
     new = upd.new_chat_member
     new_status = new.status
+
+    # Channels: leave and stop. Affiliation logic is supergroup/group only.
+    if chat.type == ChatType.CHANNEL:
+        try:
+            await context.bot.leave_chat(chat.id)
+        except TelegramError:
+            pass
+        return
 
     if new_status in ("kicked", "left"):
         if await affiliations.is_active(chat.id):
@@ -278,7 +323,30 @@ async def on_my_chat_member(
         await joins_repo.delete(chat.id)
         return
 
-    if not affiliations.has_required_perms(new):
+    # Bot is still present. If we lost the required perms in an active
+    # federated group, raise a one-shot warning so the operators notice.
+    had_perms_before = affiliations.has_required_perms(old)
+    has_perms_now = affiliations.has_required_perms(new)
+    if (
+        had_perms_before
+        and not has_perms_now
+        and await affiliations.is_active(chat.id)
+    ):
+        try:
+            await context.bot.send_message(
+                chat_id=chat.id, text=M.AFFILIATION_PERMS_LOST
+            )
+        except TelegramError:
+            pass
+        await log_to_channel(
+            context,
+            log_templates.group_perms_lost(
+                title=chat.title or str(chat.id), chat_id=chat.id
+            ),
+        )
+        return
+
+    if not has_perms_now:
         return
 
     pending = await joins_repo.get(chat.id)

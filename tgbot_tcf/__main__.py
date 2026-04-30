@@ -88,6 +88,7 @@ def build_app() -> AppT:
     # ----- Listings / stats / links -----
     _add(app, ["tcfgroups", "groups", "listtc"], lists.cmd_fedgroups)
     _add(app, ["tcstats", "stats", "tcinfo"], lists.cmd_fedstats)
+    _add(app, ["tcadmins", "tcadmin", "admins", "listadmins"], lists.cmd_tcadmins)
     _add(app, ["tclinks", "links", "tcconfig"], links.cmd_fedlinks)
 
     # ----- Ban status queries -----

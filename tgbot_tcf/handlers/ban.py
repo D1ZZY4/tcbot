@@ -24,6 +24,7 @@ from ..modules.messages import M
 from ..utils.auth import is_tc_admin, is_tc_owner
 from ..utils.format import safe_first_name
 from ..utils.logger import log_to_channel
+from ..utils.users import resolve_identity
 from .helper import auth, enforce_ban_across_groups, enforce_unban_across_groups, messaging, targets
 
 logger = logging.getLogger(__name__)
@@ -108,7 +109,7 @@ async def cmd_cban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await msg.reply_text(M.BAN_TC_ROLE_BLOCKED)
         return
 
-    reason = targets.reason_from_args(context, update)
+    reason = targets.reason_from_args(context, update, target)
     if not reason or not reason.strip():
         await msg.reply_text(M.PROVIDE_BAN_REASON)
         return
@@ -321,10 +322,15 @@ async def _do_finalize(context: ContextTypes.DEFAULT_TYPE, sess: dict[str, Any])
         )
         active_ban_id = existing["ban_id"]
         appeal_url = f"https://t.me/{bot_username}?start=appeal_{active_ban_id}"
+        previous_admin_id = existing["admin_user_id"]
+        previous_admin_name = (
+            await resolve_identity(context, previous_admin_id)
+        ).display_name
         log_text = log_templates.updated_ban(
             admin_id=admin_id,
             admin_name=admin_first_name,
-            previous_admin_id=existing["admin_user_id"],
+            previous_admin_id=previous_admin_id,
+            previous_admin_name=previous_admin_name,
             target_id=target_id,
             target_name=target_first_name,
             reason=reason,
@@ -385,7 +391,11 @@ async def _do_finalize(context: ContextTypes.DEFAULT_TYPE, sess: dict[str, Any])
         context,
         chat_id=chat_id,
         message_id=prompt_msg_id,
-        text=M.BAN_SUCCESS.format(target_id=target_id, reason=reason),
+        text=M.BAN_SUCCESS.format(
+            target_name=target_first_name,
+            target_id=target_id,
+            reason=reason,
+        ),
         parse_mode=None,
     )
 
@@ -415,11 +425,7 @@ async def cmd_cunban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await msg.reply_text(M.USER_NOT_BANNED)
         return
 
-    args = context.args or []
-    if msg.reply_to_message and msg.reply_to_message.from_user:
-        unban_reason = " ".join(args).strip()
-    else:
-        unban_reason = " ".join(args[1:]).strip()
+    unban_reason = targets.reason_from_args(context, update, target)
 
     await bans.deactivate_ban(record["ban_id"])
 
@@ -448,4 +454,8 @@ async def cmd_cunban(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         success=enforce_success, failure=enforce_failure, action="Unbanned"
     )
     await log_to_channel(context, log_text)
-    await msg.reply_text(M.UNBAN_SUCCESS.format(target_id=target.id))
+    await msg.reply_text(
+        M.UNBAN_SUCCESS.format(
+            target_name=target.first_name, target_id=target.id
+        )
+    )

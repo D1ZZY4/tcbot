@@ -85,6 +85,19 @@ class Messages:
         "Permissions granted. This community is now affiliated with TCF."
     )
     AFFILIATION_CANCELLED: Final[str] = "Affiliation cancelled. Leaving the group."
+    AFFILIATION_REJOIN_NOTICE: Final[str] = (
+        "I have rejoined this community. This group is already affiliated "
+        "with the Transsion Core Federation, so federation commands remain "
+        "available to authorized Transsion Core admins."
+    )
+    AFFILIATION_PERMS_LOST: Final[str] = (
+        "My required admin permissions in this community have been removed "
+        "(delete messages, ban users, invite users). Federation enforcement "
+        "will be limited until the permissions are restored."
+    )
+    AFFILIATION_CHANNEL_UNSUPPORTED: Final[str] = (
+        "Channels are not supported. Leaving the channel."
+    )
     AFFILIATION_OWNER_ONLY_ALERT: Final[str] = "Only the group owner can decide."
     AFFILIATION_VERIFY_ROLE_FAIL: Final[str] = (
         "I am unable to verify your role in this group at the moment. "
@@ -136,11 +149,12 @@ class Messages:
         "I am unable to act on myself in this manner."
     )
     BAN_SUCCESS: Final[str] = (
-        "User {target_id} has been banned from the Transsion Core. "
-        "Reason: {reason}"
+        "User {target_name} (ID: {target_id}) has been banned from the "
+        "Transsion Core.\nReason: {reason}"
     )
     UNBAN_SUCCESS: Final[str] = (
-        "User {target_id} has been unbanned from the Transsion Core."
+        "User {target_name} (ID: {target_id}) has been unbanned from the "
+        "Transsion Core."
     )
 
     # Promote / demote / transfer
@@ -155,13 +169,18 @@ class Messages:
         "to transfer ownership to."
     )
     PROMOTE_OWNER_DONE: Final[str] = (
-        "User {target_id} is now a Transsion Core Admin."
+        "User {target_name} (ID: {target_id}) is now a Transsion Core Admin."
     )
-    DEMOTE_DONE: Final[str] = "User demoted from Transsion Core Admin."
-    TRANSFER_DONE: Final[str] = "Ownership transferred to {target_id}."
+    DEMOTE_DONE: Final[str] = (
+        "User {target_name} (ID: {target_id}) has been demoted from "
+        "Transsion Core Admin."
+    )
+    TRANSFER_DONE: Final[str] = (
+        "Ownership transferred to {target_name} (ID: {target_id})."
+    )
     PROMOTION_REQUEST_SENT: Final[str] = (
-        "Promotion request for {target_id} has been sent to the "
-        "Transsion Core Owner for approval."
+        "Promotion request for {target_name} (ID: {target_id}) has been "
+        "sent to the Transsion Core Owner for approval."
     )
     PROMOTION_REQUEST_APPROVED: Final[str] = (
         "Promotion request approved. {target_name} is now a Transsion Core Admin."

@@ -62,7 +62,11 @@ async def cmd_promote(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     if await auth.is_owner(user.id):
         await admins_mod.promote_immediately(target_id=target.id, by_owner_id=user.id)
-        await msg.reply_text(M.PROMOTE_OWNER_DONE.format(target_id=target.id))
+        await msg.reply_text(
+            M.PROMOTE_OWNER_DONE.format(
+                target_name=target.first_name, target_id=target.id
+            )
+        )
         await log_to_channel(
             context,
             log_templates.admin_promoted(
@@ -78,7 +82,11 @@ async def cmd_promote(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     request_id = await admins_mod.create_promotion_request(
         target_id=target.id, requested_by=user.id
     )
-    await msg.reply_text(M.PROMOTION_REQUEST_SENT.format(target_id=target.id))
+    await msg.reply_text(
+        M.PROMOTION_REQUEST_SENT.format(
+            target_name=target.first_name, target_id=target.id
+        )
+    )
 
     notification = log_templates.promotion_request_notification(
         request_id=request_id,
@@ -235,7 +243,9 @@ async def cmd_demote(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await msg.reply_text(M.NOT_TC_ADMIN)
         return
 
-    await msg.reply_text(M.DEMOTE_DONE)
+    await msg.reply_text(
+        M.DEMOTE_DONE.format(target_name=target.first_name, target_id=target.id)
+    )
     await log_to_channel(
         context,
         log_templates.admin_demoted(
@@ -279,7 +289,9 @@ async def cmd_transfer_owner(
     await admins_mod.transfer_ownership(
         new_owner_id=target.id, old_owner_id=user.id
     )
-    await msg.reply_text(M.TRANSFER_DONE.format(target_id=target.id))
+    await msg.reply_text(
+        M.TRANSFER_DONE.format(target_name=target.first_name, target_id=target.id)
+    )
     await log_to_channel(
         context,
         log_templates.ownership_transferred(

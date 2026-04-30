@@ -41,6 +41,17 @@ async def cmd_fedstats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await msg.reply_text(text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
 
+async def cmd_tcadmins(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """List every Transsion Core Admin (page 1)."""
+    msg = update.effective_message
+    if msg is None:
+        return
+    text = await build_admins_text(context)
+    await msg.reply_text(
+        text, parse_mode=ParseMode.HTML, disable_web_page_preview=True
+    )
+
+
 async def build_fedgroups_text(page: int = 0, page_size: int = 10) -> str:
     """Build the paginated affiliated-groups text used by command and menu."""
     groups = await groups_repo.list_active()
