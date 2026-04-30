@@ -19,6 +19,7 @@ from ..modules import appeals, bans, keyboards, log_templates
 from ..modules.messages import M
 from ..utils.format import safe_first_name, user_link
 from ..utils.logger import edit_log_message, log_to_channel
+from ..utils.users import resolve_identity
 from .helper import auth, enforce_unban_across_groups, messaging
 
 logger = logging.getLogger(__name__)
@@ -201,23 +202,26 @@ async def on_appeal_review(
     await cq.answer()
 
     appellant_id = record["banned_user_id"]
-    appellant_name = await messaging.fetch_display_name(context, appellant_id)
+    appellant = await resolve_identity(context, appellant_id)
     reviewer_link = user_link(reviewer.id, safe_first_name(reviewer))
 
     appeal_log_msg_id = record.get("appeal_log_message_id")
 
     if decision == "approve":
-        await appeals.mark_resolved_inactive(ban_id)
+        # 1. Cross-group unban first — this is the action the user is paying for.
         enforce_success, enforce_failure = await enforce_unban_across_groups(
             context, appellant_id
         )
+        # 2. Mark the ban inactive so further appeals / commands see it resolved.
+        await appeals.mark_resolved_inactive(ban_id)
+        # 3. Update the in-group review message so admins see who approved.
         await messaging.safe_edit_callback(
             cq, M.APPEAL_DECISION_APPROVED.format(reviewer_link=reviewer_link)
         )
-
+        # 4. Edit the original "New Appeal Submitted" log post in place.
         approved_log_text = log_templates.appeal_approved(
             user_id=appellant_id,
-            user_name=appellant_name,
+            user_name=appellant.display_name,
             ban_id=ban_id,
             reviewer_id=reviewer.id,
             reviewer_name=safe_first_name(reviewer),
@@ -228,13 +232,17 @@ async def on_appeal_review(
                 context, appeal_log_msg_id, approved_log_text
             )
         if not edited:
+            logger.warning(
+                "Could not edit appeal log %s; posting as new message",
+                appeal_log_msg_id,
+            )
             await log_to_channel(context, approved_log_text)
-
+        # 5. Send the standalone unban log entry with cross-group summary.
         unban_log_text = log_templates.unban(
             admin_id=reviewer.id,
             admin_name=safe_first_name(reviewer),
             target_id=appellant_id,
-            target_name=appellant_name,
+            target_name=appellant.display_name,
             reason="Appeal Approved",
         )
         unban_log_text += log_templates.enforcement_summary(
@@ -243,18 +251,21 @@ async def on_appeal_review(
             action="Unbanned",
         )
         await log_to_channel(context, unban_log_text)
-
+        # 6. Notify the appellant.
         await messaging.safe_send_dm(
             context, user_id=appellant_id, text=M.APPEAL_NOTIFY_USER_APPROVED
         )
     else:
+        # 1. Mark the ban inactive (rejection still resolves the appeal).
+        await appeals.mark_resolved_inactive(ban_id)
+        # 2. Update the in-group review message.
         await messaging.safe_edit_callback(
             cq, M.APPEAL_DECISION_REJECTED.format(reviewer_link=reviewer_link)
         )
-
+        # 3. Edit the original log post in place — no separate message.
         rejected_log_text = log_templates.appeal_rejected(
             user_id=appellant_id,
-            user_name=appellant_name,
+            user_name=appellant.display_name,
             ban_id=ban_id,
             reviewer_id=reviewer.id,
             reviewer_name=safe_first_name(reviewer),
@@ -265,8 +276,12 @@ async def on_appeal_review(
                 context, appeal_log_msg_id, rejected_log_text
             )
         if not edited:
+            logger.warning(
+                "Could not edit appeal log %s; posting as new message",
+                appeal_log_msg_id,
+            )
             await log_to_channel(context, rejected_log_text)
-
+        # 4. Notify the appellant.
         await messaging.safe_send_dm(
             context, user_id=appellant_id, text=M.APPEAL_NOTIFY_USER_REJECTED
         )

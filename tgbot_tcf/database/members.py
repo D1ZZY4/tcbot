@@ -48,3 +48,16 @@ async def upsert(
 async def count_for_chat(chat_id: int) -> int:
     """Number of distinct members the bot has tracked in ``chat_id``."""
     return await member_cache.count_documents({"chat_id": chat_id})
+
+
+async def find_latest_for_user(user_id: int) -> Optional[Dict[str, Any]]:
+    """Return the most-recently-seen cache entry for ``user_id`` across all chats.
+
+    Used by the cross-group identity resolver so logs can show a name/username
+    even when Telegram's ``get_chat`` cannot reach the user (e.g. they have
+    blocked the bot or never DM'd it).
+    """
+    cursor = member_cache.find({"user_id": user_id}).sort("last_seen", -1).limit(1)
+    async for doc in cursor:
+        return doc
+    return None
