@@ -28,6 +28,7 @@ outputType = "console"
 
 [nix]
 channel = "stable-25_05"
+packages = ["openssl", "postgresql"]
 
 [[ports]]
 localPort = 8080
@@ -35,3 +36,8 @@ externalPort = 80
 
 [agent]
 expertMode = true
+stack = "FLASK_VANILLA_JS"
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["gunicorn", "--bind", "0.0.0.0:5000", "main:app"]
