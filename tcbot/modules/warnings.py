@@ -8,11 +8,11 @@ from telegram import Update
 from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot.modules.helper import decorators, extraction
+from tcbot.modules.helper.workflows.warn_conv import warn_conversation
 from tcbot.modules.helper.workflows.warning_flow import (
     WARN_LIMIT,
     execute_resetwarns,
     execute_unwarn,
-    execute_warn,
     execute_warnlist,
 )
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
@@ -43,32 +43,16 @@ __help_text__ = (
     "<b>How to specify the target</b>\n"
     "Reply to a message, or provide a user ID / @username.\n\n"
 
+    "<b>Flow (/tcwarn)</b>\n"
+    "The bot will ask for a reason (required) and proof (optional) before issuing the warning.\n\n"
+
     "<b>Examples</b>\n"
     "<code>/tcwarn @username spamming</code>\n"
-    "<code>/tcw 123456789 off-topic flood</code>\n"
+    "<code>/tcw 123456789</code>\n"
     "<code>/tcunwarn @username</code>\n"
     "<code>/warns @username</code>\n"
     "<code>/resetwarns @username</code>"
 )
-
-
-@decorators.staff_only
-async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    msg = update.effective_message
-    args = parse_cmd_args(msg.text)
-    if msg.reply_to_message:
-        target_id, target_name = await extraction.extract_target(update, [], ctx.bot)
-        reason = " ".join(args).strip()
-    else:
-        target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
-        reason = " ".join(args[1:]).strip()
-    if not target_id:
-        await msg.reply_text("Specify a target — reply to a message or provide a user ID.")
-        return
-    if not reason:
-        await msg.reply_text("A reason is required. Usage: /tcwarn <target> <reason>")
-        return
-    await execute_warn(update, ctx, target_id, target_name or str(target_id), reason)
 
 
 @decorators.staff_only
@@ -106,14 +90,13 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await execute_resetwarns(update, ctx, target_id, target_name or str(target_id))
 
 
-_WARN_FILTER    = build_prefixed_filters("tcwarn")  | build_prefixed_filters("tcw")
-_UNWARN_FILTER  = build_prefixed_filters("tcunwarn") | build_prefixed_filters("tcunw")
-_WARNLIST_FILTER = build_prefixed_filters("warns")  | build_prefixed_filters("warnlist")
-_RESET_FILTER   = build_prefixed_filters("resetwarns") | build_prefixed_filters("clearwarns")
+_UNWARN_FILTER   = build_prefixed_filters("tcunwarn") | build_prefixed_filters("tcunw")
+_WARNLIST_FILTER = build_prefixed_filters("warns")    | build_prefixed_filters("warnlist")
+_RESET_FILTER    = build_prefixed_filters("resetwarns") | build_prefixed_filters("clearwarns")
 
 __handlers__ = [
-    MessageHandler(_WARN_FILTER,    cmd_warn),
-    MessageHandler(_UNWARN_FILTER,  cmd_unwarn),
+    warn_conversation(),
+    MessageHandler(_UNWARN_FILTER,   cmd_unwarn),
     MessageHandler(_WARNLIST_FILTER, cmd_warnlist),
-    MessageHandler(_RESET_FILTER,   cmd_resetwarns),
+    MessageHandler(_RESET_FILTER,    cmd_resetwarns),
 ]

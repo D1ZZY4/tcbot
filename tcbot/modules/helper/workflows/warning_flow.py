@@ -23,12 +23,14 @@ async def execute_warn(
     target_id: int,
     target_name: str,
     reason: str,
+    proof_desc: str | None = None,
 ) -> None:
     msg = update.effective_message
     chat_id = update.effective_chat.id
     admin_id = update.effective_user.id
 
     count = await db.warns_db.add_warn(target_id, reason, admin_id, chat_id)
+    proof_line = f"\nProof: {proof_desc}" if proof_desc else ""
 
     if count >= WARN_LIMIT:
         await db.warns_db.clear_warns(target_id, chat_id)
@@ -36,20 +38,20 @@ async def execute_warn(
             await ctx.bot.ban_chat_member(chat_id, target_id)
             await msg.reply_text(
                 f"{mention(target_id, target_name)} reached {WARN_LIMIT} warnings "
-                f"and has been banned from this group.",
+                f"and has been banned from this group.{proof_line}",
                 parse_mode="HTML",
             )
         except Exception as exc:
             log.error("Auto-ban on warn limit failed: %s", exc)
             await msg.reply_text(
                 f"{mention(target_id, target_name)} reached {WARN_LIMIT} warnings "
-                f"but auto-ban failed. Please ban manually.",
+                f"but auto-ban failed. Please ban manually.{proof_line}",
                 parse_mode="HTML",
             )
     else:
         await msg.reply_text(
             f"{mention(target_id, target_name)} has been warned "
-            f"({count}/{WARN_LIMIT}): {reason}",
+            f"({count}/{WARN_LIMIT}): {reason}{proof_line}",
             parse_mode="HTML",
         )
 

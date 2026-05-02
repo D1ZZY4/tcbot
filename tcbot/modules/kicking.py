@@ -4,12 +4,7 @@
 """Group kick command."""
 from __future__ import annotations
 
-from telegram import Update
-from telegram.ext import ContextTypes, MessageHandler
-
-from tcbot.modules.helper import decorators, extraction
-from tcbot.modules.helper.workflows.kick_flow import execute_kick
-from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
+from tcbot.modules.helper.workflows.kick_conv import kick_conversation
 
 __module_name__ = "Kick"
 __help_text__ = (
@@ -28,38 +23,15 @@ __help_text__ = (
     "The kick is logged to the database for record keeping.\n\n"
 
     "<b>How to specify the target</b>\n"
-    "Reply to a message, or provide a user ID / @username. "
-    "A reason is optional but recommended.\n\n"
+    "Reply to a message, or provide a user ID / @username.\n\n"
+
+    "<b>Flow</b>\n"
+    "The bot will ask for a reason (optional) and proof (optional) before executing.\n\n"
 
     "<b>Examples</b>\n"
     "<code>/tckick @username being disruptive</code>\n"
-    "<code>/tck 123456789 repeated rule violations</code>\n"
-    "Or reply to a message and run <code>/tck reason here</code>."
+    "<code>/tck 123456789</code>\n"
+    "Or reply to a message and run <code>/tck</code>."
 )
 
-
-@decorators.staff_only
-async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    msg = update.effective_message
-    args = parse_cmd_args(msg.text)
-
-    if msg.reply_to_message:
-        target_id, target_name = await extraction.extract_target(update, [], ctx.bot)
-        reason = " ".join(args).strip() or "No reason provided"
-    else:
-        target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
-        reason = " ".join(args[1:]).strip() or "No reason provided"
-
-    if not target_id:
-        await msg.reply_text("Specify a target — reply to a message or provide a user ID.")
-        return
-
-    await execute_kick(update, ctx, target_id, target_name or str(target_id), reason)
-
-
-_KICK_FILTER = (
-    build_prefixed_filters("tckick")
-    | build_prefixed_filters("tck")
-)
-
-__handlers__ = [MessageHandler(_KICK_FILTER, cmd_kick)]
+__handlers__ = [kick_conversation()]

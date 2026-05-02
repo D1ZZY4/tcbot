@@ -12,7 +12,7 @@ from tcbot import database as db
 from tcbot import cfg
 from tcbot.modules.helper import extraction, keyboards
 from tcbot.modules.helper.ban_info import build_ban_detail
-from tcbot.modules.helper.formatter import esc
+from tcbot.modules.helper.formatter import esc, mention
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -81,16 +81,42 @@ async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await update.effective_message.reply_text("Cannot resolve user.")
         return
 
+    msg = update.effective_message
+    fname = target_fname or str(target_id)
+
+    owner_id = await db.admins_db.get_owner_id()
+    if target_id == owner_id:
+        owner_fname = await db.users_db.get_first_name(owner_id, "the Founder")
+        await msg.reply_text(
+            f"Bro... that's {mention(owner_id, owner_fname)}, our Founder 😭\n\n"
+            "They built this whole federation — banning them would be like locking "
+            "the landlord out of their own building. Not happening.\n"
+            "Definitely clean, obviously. Anything else?",
+            parse_mode="HTML",
+        )
+        return
+
+    if await db.admins_db.is_admin(target_id):
+        await msg.reply_text(
+            f"Hold up — {mention(target_id, fname)} is part of our staff team! 😄\n\n"
+            "They're more likely to be the ones issuing bans, not receiving them. "
+            "No active ban on record — they're all good.",
+            parse_mode="HTML",
+        )
+        return
+
     ban = await db.bans_db.get_active_ban(target_id)
     if not ban:
-        await update.effective_message.reply_text(
-            "User is not banned in the Transsion Core."
+        await msg.reply_text(
+            f"All clear! {mention(target_id, fname)} has no active ban in TCF. "
+            "They're free to go — clean as a whistle. ✅",
+            parse_mode="HTML",
         )
         return
 
     text, proof_link = await build_ban_detail(ban, target_fname)
     kb = keyboards.baninfo_proof_kb(proof_link) if proof_link else None
-    await update.effective_message.reply_text(text, parse_mode="HTML", reply_markup=kb)
+    await msg.reply_text(text, parse_mode="HTML", reply_markup=kb)
 
 
 _CHECKME_FILTER = build_prefixed_filters("checkme") | build_prefixed_filters("cme")
