@@ -95,15 +95,15 @@ async def cmd_kick_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     if target_id == ctx.bot.id:
-        await msg.reply_text("That's me — kicking a bot doesn't quite work like that. 😄")
+        await msg.reply_text("That's me — can't exactly kick the bot out. 😄")
         return ConversationHandler.END
 
     if await db.admins_db.is_owner(target_id):
-        await msg.reply_text("The owner cannot be kicked.")
+        await msg.reply_text("That's the owner — kicking them isn't an option.")
         return ConversationHandler.END
 
     if await db.admins_db.is_admin(target_id):
-        await msg.reply_text("Staff members cannot be kicked.")
+        await msg.reply_text("That's a staff member — can't kick them out.")
         return ConversationHandler.END
 
     ctx.user_data.update({

@@ -57,12 +57,10 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     if target_id == ctx.bot.id:
-        await update.effective_message.reply_text(
-            "That's me — I'm not muted. Muting doesn't apply to a bot."
-        )
+        await update.effective_message.reply_text("That's me — not muted. Bots don't get muted.")
         return
     if await db.admins_db.is_owner(target_id):
-        await update.effective_message.reply_text("The owner cannot be unmuted — they were never muted.")
+        await update.effective_message.reply_text("That's the owner — never been muted, nothing to undo.")
         return
     await execute_unmute(update, ctx, target_id, target_name or str(target_id))
 

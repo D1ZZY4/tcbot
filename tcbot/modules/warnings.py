@@ -66,10 +66,10 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     if target_id == ctx.bot.id:
-        await update.effective_message.reply_text("That's me — no warnings to remove.")
+        await update.effective_message.reply_text("That's me — zero warnings. Nothing to remove.")
         return
     if await db.admins_db.is_owner(target_id):
-        await update.effective_message.reply_text("The owner cannot be unwarned — they were never warned.")
+        await update.effective_message.reply_text("That's the owner — no warnings on record.")
         return
     await execute_unwarn(update, ctx, target_id, target_name or str(target_id))
 
@@ -95,10 +95,10 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         )
         return
     if target_id == ctx.bot.id:
-        await update.effective_message.reply_text("That's me — no warnings to clear.")
+        await update.effective_message.reply_text("That's me — already at zero. Nothing to clear.")
         return
     if await db.admins_db.is_owner(target_id):
-        await update.effective_message.reply_text("The owner cannot have their warnings cleared — they were never warned.")
+        await update.effective_message.reply_text("That's the owner — no warnings to clear.")
         return
     await execute_resetwarns(update, ctx, target_id, target_name or str(target_id))
 

@@ -64,19 +64,19 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     if target_id == ctx.bot.id:
-        await msg.reply_text("That's me — I run the bans around here, not receive them.")
+        await msg.reply_text("Hey, that's me — I run the bans around here, not receive them. 😄")
         return ConversationHandler.END
 
     if target_id == admin.id:
-        await msg.reply_text("You cannot ban yourself.")
+        await msg.reply_text("Hey, you can't ban yourself. 😅")
         return ConversationHandler.END
 
     if await db.admins_db.is_owner(target_id):
-        await msg.reply_text("The owner cannot be banned.")
+        await msg.reply_text("Hey, that's the owner — no banning them. 🙅")
         return ConversationHandler.END
 
     if await db.admins_db.is_admin(target_id):
-        await msg.reply_text("Staff members cannot be banned.")
+        await msg.reply_text("That's a staff member — they can't be banned.")
         return ConversationHandler.END
 
     ctx.user_data["ban_target_id"] = target_id

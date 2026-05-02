@@ -48,12 +48,10 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     if target_id == ctx.bot.id:
-        await update.effective_message.reply_text(
-            "That's me — I'm not federation-banned to begin with."
-        )
+        await update.effective_message.reply_text("That's me — not banned anywhere. Nothing to undo.")
         return
     if await db.admins_db.is_owner(target_id):
-        await update.effective_message.reply_text("The owner cannot be unbanned — they were never banned.")
+        await update.effective_message.reply_text("That's the owner — never been banned, nothing to undo.")
         return
     await execute_unban(update, ctx, target_id, target_fname)
 

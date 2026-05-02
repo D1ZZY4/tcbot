@@ -76,19 +76,19 @@ async def cmd_mute_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     if target_id == ctx.bot.id:
-        await msg.reply_text("That's me — you can't mute a bot. 😄")
+        await msg.reply_text("That's me — muting a bot doesn't quite work. 😄")
         return ConversationHandler.END
 
     if target_id == admin.id:
-        await msg.reply_text("You cannot mute yourself.")
+        await msg.reply_text("Hey, you can't mute yourself. 😅")
         return ConversationHandler.END
 
     if await db.admins_db.is_owner(target_id):
-        await msg.reply_text("The owner cannot be muted.")
+        await msg.reply_text("That's the owner — muting them isn't happening.")
         return ConversationHandler.END
 
     if await db.admins_db.is_admin(target_id):
-        await msg.reply_text("Staff members cannot be muted.")
+        await msg.reply_text("That's a staff member — muting them isn't allowed.")
         return ConversationHandler.END
 
     duration = None

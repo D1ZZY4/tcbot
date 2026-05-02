@@ -94,15 +94,15 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     if target_id == ctx.bot.id:
-        await msg.reply_text("That's me — warnings don't apply here, I'm the one issuing them. 😄")
+        await msg.reply_text("That's me — bit hard to warn the one issuing them. 😄")
         return ConversationHandler.END
 
     if await db.admins_db.is_owner(target_id):
-        await msg.reply_text("The owner cannot be warned.")
+        await msg.reply_text("That's the owner — warnings don't apply to them.")
         return ConversationHandler.END
 
     if await db.admins_db.is_admin(target_id):
-        await msg.reply_text("Staff members cannot be warned.")
+        await msg.reply_text("That's a staff member — warnings don't apply to fellow staff.")
         return ConversationHandler.END
 
     ctx.user_data.update({

@@ -178,9 +178,9 @@ async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if target_id == ctx.bot.id:
         bot_info = await ctx.bot.get_me()
         await msg.reply_text(
-            f"That's {mention(ctx.bot.id, bot_info.first_name or 'me')}... which is me. 😄\n\n"
-            "I'm the one running bans around here, not exactly on the receiving end. "
-            "No active ban, obviously.",
+            f"Hey, that's {mention(ctx.bot.id, bot_info.first_name or 'me')} — that's me. 😄\n\n"
+            "I run things around here, so I'm definitely not on the receiving end of a ban. "
+            "All clear.",
             parse_mode="HTML",
         )
         return
