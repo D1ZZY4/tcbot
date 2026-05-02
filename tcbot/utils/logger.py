@@ -36,8 +36,16 @@ class BotLogFormatter(logging.Formatter):
         message = record.getMessage()
         return f"[{time_str}] [{date_str}] | {self.project_name} | {level} - {module}:{lineno} - {message}"
 
-    def blabla
-        logging.getLogger("httpx").setLevel(logging.WARNING)
+
+def setup(level: int = logging.INFO) -> None:
+    from tcbot.config import cfg
+    formatter = BotLogFormatter(cfg.community_name)
+    handler = logging.StreamHandler()
+    handler.setFormatter(formatter)
+    root = logging.getLogger()
+    root.setLevel(level)
+    root.addHandler(handler)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("telegram").setLevel(logging.WARNING)
     logging.getLogger("motor").setLevel(logging.WARNING)
     logging.getLogger("pymongo").setLevel(logging.WARNING)

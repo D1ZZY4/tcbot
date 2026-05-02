@@ -19,9 +19,9 @@ from tcbot.utils.logger import setup as setup_logging
 
 log = logging.getLogger(__name__)
 
-""""
+
 def _discover_handlers() -> list[Any]:
-    ## Auto-discover and collect all handlers from tcbot.modules.
+    """Auto-discover and collect all handlers from tcbot.modules."""
     handlers: list[Any] = []
     pkg_path = str(Path(_mods_pkg.__file__).parent)
 
@@ -52,7 +52,7 @@ def _discover_handlers() -> list[Any]:
             log.debug("Loaded %d handler(s) from %s", len(mod_handlers), mod_name)
 
     return handlers
-""""
+
 
 async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Cache sender's info on every message sent in any affiliated group."""

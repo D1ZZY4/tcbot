@@ -8,7 +8,7 @@ import threading
 
 from flask import Flask
 
-from . import configs
+from tcbot.config import cfg
 
 logger = logging.getLogger(__name__)
 
@@ -17,27 +17,26 @@ _app = Flask(__name__)
 
 @_app.route("/")
 def index() -> str:
-    """Health‑check endpoint."""
+    """Health-check endpoint."""
     return "OK"
 
 
 def _run() -> None:
     """Start Flask on the configured port."""
-    port = configs.port_int
     _app.run(
         host="0.0.0.0",
-        port=port,
+        port=cfg.port,
         debug=False,
         use_reloader=False,
     )
 
 
 def start_keepalive() -> None:
-    """Launch the keep‑alive server in a daemon thread."""
+    """Launch the keep-alive server in a daemon thread."""
     t = threading.Thread(
         target=_run,
         name="keepalive",
         daemon=True,
     )
     t.start()
-    logger.info("Keep‑alive server started on 0.0.0.0:%d", configs.port_int)
+    logger.info("Keep-alive server started on 0.0.0.0:%d", cfg.port)

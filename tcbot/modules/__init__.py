@@ -21,7 +21,6 @@ def _discover_modules() -> list[str]:
         if p.is_file() and p.name != "__init__.py"
     ]
 
-if bla bla in the file found __module_name__ and __help_text__
 
 def _filter_modules(modules: list[str]) -> list[str]:
     """
