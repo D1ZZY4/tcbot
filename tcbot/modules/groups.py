@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Federation groups listing with pagination."""
+"""Federation groups listing."""
 from __future__ import annotations
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -23,38 +23,33 @@ __help_text__ = (
     "Anywhere — bot PM, exec group, or any connected group.\n\n"
 
     "<b>What it does</b>\n"
-    "Shows a paginated list of all groups currently connected to the Transsion Core Federation. "
-    "Each entry shows the group name and its chat ID. "
-    "Results are shown 10 per page with Prev/Next navigation.\n\n"
+    "Shows all groups currently connected to TCF. "
+    "Default view shows group names only. "
+    "Tap <b>Details</b> to also see each group's chat ID.\n\n"
 
     "<b>Example</b>\n"
-    "<code>/tcfgroups</code>\n"
-    "<code>/tcg</code>"
+    "<code>/tcfgroups</code> — <code>/tcg</code>"
 )
 
-_PAGE_SIZE = 10
+
+def _render(groups: list[dict], detailed: bool) -> str:
+    lines = [f"<b>Connected Groups</b>\n\nCount: {len(groups)}\n"]
+    for g in groups:
+        if detailed:
+            lines.append(f"- {esc(g['title'])} — {code(str(g['chat_id']))}")
+        else:
+            lines.append(f"- {esc(g['title'])}")
+    return "\n".join(lines)
 
 
-def _groups_page(groups: list[dict], page: int) -> tuple[str, InlineKeyboardMarkup | None]:
-    total = len(groups)
-    total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
-    start = page * _PAGE_SIZE
-    chunk = groups[start: start + _PAGE_SIZE]
-
-    lines = [f"<b>Connected Groups ({total})</b>  Page {page + 1}/{total_pages}\n"]
-    for grp in chunk:
-        lines.append(f"- {esc(grp['title'])} {code(str(grp['chat_id']))}")
-
-    rows = []
-    nav = []
-    if page > 0:
-        nav.append(InlineKeyboardButton("Prev", callback_data=f"groups_page:{page - 1}"))
-    if page < total_pages - 1:
-        nav.append(InlineKeyboardButton("Next", callback_data=f"groups_page:{page + 1}"))
-    if nav:
-        rows.append(nav)
-    kb = InlineKeyboardMarkup(rows) if rows else None
-    return "\n".join(lines), kb
+def _kb(detailed: bool) -> InlineKeyboardMarkup:
+    if detailed:
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton("Simple", callback_data="groups_simple"),
+        ]])
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("Details", callback_data="groups_details"),
+    ]])
 
 
 async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -62,21 +57,26 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not groups:
         await update.effective_message.reply_text("No groups are currently connected to TCF.")
         return
-    text, kb = _groups_page(groups, 0)
-    ctx.user_data["groups_list"] = groups
-    await update.effective_message.reply_text(text, parse_mode="HTML", reply_markup=kb)
+    ctx.user_data["groups_cache"] = groups
+    await update.effective_message.reply_text(
+        _render(groups, False), parse_mode="HTML", reply_markup=_kb(False)
+    )
 
 
-async def on_groups_page(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def _toggle(update: Update, ctx: ContextTypes.DEFAULT_TYPE, detailed: bool) -> None:
     q = update.callback_query
     await q.answer()
-    page = int(q.data.split(":")[1])
-    groups = ctx.user_data.get("groups_list")
-    if not groups:
-        groups = await db.groups_db.active_groups()
-        ctx.user_data["groups_list"] = groups
-    text, kb = _groups_page(groups, page)
-    await q.edit_message_text(text, parse_mode="HTML", reply_markup=kb)
+    groups = ctx.user_data.get("groups_cache") or await db.groups_db.active_groups()
+    ctx.user_data["groups_cache"] = groups
+    await q.edit_message_text(_render(groups, detailed), parse_mode="HTML", reply_markup=_kb(detailed))
+
+
+async def on_groups_details(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    await _toggle(update, ctx, True)
+
+
+async def on_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    await _toggle(update, ctx, False)
 
 
 _GROUPS_FILTER = (
@@ -86,5 +86,6 @@ _GROUPS_FILTER = (
 
 __handlers__ = [
     MessageHandler(_GROUPS_FILTER, cmd_tcfgroups),
-    CallbackQueryHandler(on_groups_page, pattern=r"^groups_page:\d+$"),
+    CallbackQueryHandler(on_groups_details, pattern=r"^groups_details$"),
+    CallbackQueryHandler(on_groups_simple,  pattern=r"^groups_simple$"),
 ]
