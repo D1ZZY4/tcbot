@@ -223,32 +223,6 @@ def back_to_help_kb() -> InlineKeyboardMarkup:
     )
 
 
-def info_sub_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("Admins/Staff",    callback_data="info_admins:0")],
-            [InlineKeyboardButton("Connected Chats", callback_data="info_chats:0")],
-            [InlineKeyboardButton("Back",            callback_data="menu_back_start")],
-        ]
-    )
-
-
-def info_list_nav_kb(
-    page: int,
-    total_pages: int,
-    prefix: str,
-    back_cb: str,
-) -> InlineKeyboardMarkup:
-    nav = []
-    if page > 0:
-        nav.append(InlineKeyboardButton("Prev", callback_data=f"{prefix}:{page - 1}"))
-    if page < total_pages - 1:
-        nav.append(InlineKeyboardButton("Next", callback_data=f"{prefix}:{page + 1}"))
-    rows = []
-    if nav:
-        rows.append(nav)
-    rows.append([InlineKeyboardButton("Back", callback_data=back_cb)])
-    return InlineKeyboardMarkup(rows)
 
 
 def privacy_kb() -> InlineKeyboardMarkup:

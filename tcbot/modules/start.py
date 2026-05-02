@@ -159,74 +159,6 @@ async def on_menu_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) 
     )
 
 
-async def on_menu_information(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    q: CallbackQuery = update.callback_query
-    await q.answer()
-
-    owner_id = await db.admins_db.get_owner_id()
-    owner_fname = await db.users_db.get_first_name(owner_id, "Owner") if owner_id else "Unknown"
-    admins = await db.admins_db.admin_count()
-    bans = await db.bans_db.active_ban_count()
-    groups = await db.groups_db.active_group_count()
-
-    owner_mention = mention(owner_id, owner_fname) if owner_id else "Unknown"
-
-    text = (
-        f"<b>Stats {esc(cfg.community_name)}</b>\n\n"
-        f"Founder: {owner_mention}\n"
-        f"Number of admins: {admins}\n"
-        f"Number of bans: {bans}\n"
-        f"Number of connected chats: {groups}"
-    )
-    await q.edit_message_text(
-        text,
-        parse_mode="HTML",
-        reply_markup=keyboards.info_sub_kb(),
-    )
-
-
-async def on_info_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    q: CallbackQuery = update.callback_query
-    await q.answer()
-    page = int(q.data.split(":")[1]) if ":" in q.data else 0
-
-    admins = await db.admins_db.all_admins()
-    total = len(admins)
-    total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
-    chunk = admins[page * _PAGE_SIZE: (page + 1) * _PAGE_SIZE]
-
-    lines = [f"<b>TCF Admins ({total})</b>  Page {page + 1}/{total_pages}\n"]
-    for adm in chunk:
-        fname = await db.users_db.get_first_name(adm["user_id"], str(adm["user_id"]))
-        lines.append(f"- {fname} {code(str(adm['user_id']))}")
-
-    await q.edit_message_text(
-        "\n".join(lines),
-        parse_mode="HTML",
-        reply_markup=keyboards.info_list_nav_kb(page, total_pages, "info_admins", "menu_information"),
-    )
-
-
-async def on_info_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    q: CallbackQuery = update.callback_query
-    await q.answer()
-    page = int(q.data.split(":")[1]) if ":" in q.data else 0
-
-    groups = await db.groups_db.active_groups()
-    total = len(groups)
-    total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
-    chunk = groups[page * _PAGE_SIZE: (page + 1) * _PAGE_SIZE]
-
-    lines = [f"<b>Connected Chats ({total})</b>  Page {page + 1}/{total_pages}\n"]
-    for grp in chunk:
-        lines.append(f"- {esc(grp['title'])} {code(str(grp['chat_id']))}")
-
-    await q.edit_message_text(
-        "\n".join(lines),
-        parse_mode="HTML",
-        reply_markup=keyboards.info_list_nav_kb(page, total_pages, "info_chats", "menu_information"),
-    )
-
 
 async def on_menu_privacy(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q: CallbackQuery = update.callback_query
@@ -267,9 +199,7 @@ __handlers__ = [
     CallbackQueryHandler(on_menu_groups,         pattern=r"^menu_groups$"),
     CallbackQueryHandler(on_menu_groups_details, pattern=r"^menu_groups_details$"),
     CallbackQueryHandler(on_menu_groups_simple,  pattern=r"^menu_groups_simple$"),
-    CallbackQueryHandler(on_menu_information, pattern=r"^menu_information$"),
-    CallbackQueryHandler(on_info_admins, pattern=r"^info_admins:\d+$"),
-    CallbackQueryHandler(on_info_chats, pattern=r"^info_chats:\d+$"),
+
     CallbackQueryHandler(on_menu_privacy, pattern=r"^menu_privacy$"),
     CallbackQueryHandler(on_menu_privacy_policy, pattern=r"^menu_privacy_policy$"),
 ]
