@@ -160,7 +160,7 @@ def main_menu_kb() -> InlineKeyboardMarkup:
                 InlineKeyboardButton("Help", callback_data="menu_help"),
             ],
             [
-                InlineKeyboardButton("Groups", callback_data="menu_groups:0"),
+                InlineKeyboardButton("Connected", callback_data="menu_groups"),
                 InlineKeyboardButton("Additional", callback_data="menu_additional"),
             ],
             [InlineKeyboardButton("Information", callback_data="menu_information")],
