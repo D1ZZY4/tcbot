@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Kick flow helpers – group-level user removal."""
+"""Kick executor — group-level user removal (ban + immediate unban)."""
 from __future__ import annotations
 
 import logging
@@ -24,8 +24,8 @@ async def execute_kick(
     proof_desc: str | None = None,
 ) -> None:
     """Kick (ban then immediately unban) a user from the current group."""
-    msg = update.effective_message
-    chat_id = update.effective_chat.id
+    msg      = update.effective_message
+    chat_id  = update.effective_chat.id
     admin_id = update.effective_user.id
 
     try:

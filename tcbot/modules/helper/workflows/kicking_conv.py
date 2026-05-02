@@ -34,7 +34,7 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot.modules.helper import decorators, extraction
 from tcbot.modules.helper.formatter import mention
-from tcbot.modules.helper.workflows.kick_flow import execute_kick
+from tcbot.modules.helper.workflows.kicking_flow import execute_kick
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
@@ -43,12 +43,12 @@ WAITING_REASON = 0
 WAITING_PROOF  = 1
 
 _KB_REASON = InlineKeyboardMarkup([[
-    InlineKeyboardButton("Skip", callback_data="kick_skip_reason"),
+    InlineKeyboardButton("Skip",   callback_data="kick_skip_reason"),
     InlineKeyboardButton("Cancel", callback_data="kick_cancel"),
 ]])
 
 _KB_PROOF = InlineKeyboardMarkup([[
-    InlineKeyboardButton("Skip", callback_data="kick_skip_proof"),
+    InlineKeyboardButton("Skip",   callback_data="kick_skip_proof"),
     InlineKeyboardButton("Cancel", callback_data="kick_cancel"),
 ]])
 
@@ -90,7 +90,7 @@ async def cmd_kick_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     if not target_id:
         await msg.reply_text(
-            "Hmm, can't find that user — reply to their message or give me an ID."
+            "Can't find that user — reply to their message or give me an ID."
         )
         return ConversationHandler.END
 
@@ -105,7 +105,7 @@ async def cmd_kick_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if inline_reason:
         ctx.user_data["kick_reason"] = inline_reason
         await msg.reply_text(
-            f"Alright, kicking {target_mention}.\n"
+            f"Kicking {target_mention}.\n"
             f"Reason: <b>{inline_reason}</b>\n\n"
             "Got any proof? Send a photo or video, or tap <b>Skip</b> to proceed.",
             parse_mode="HTML",
@@ -114,7 +114,7 @@ async def cmd_kick_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return WAITING_PROOF
 
     await msg.reply_text(
-        f"Okay, you're about to kick {target_mention}.\n"
+        f"About to kick {target_mention}.\n"
         "What's the reason? Type it below, or tap <b>Skip</b>.",
         parse_mode="HTML",
         reply_markup=_KB_REASON,
@@ -129,7 +129,7 @@ async def cmd_kick_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 async def on_kick_reason(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ctx.user_data["kick_reason"] = update.effective_message.text.strip()
     await update.effective_message.reply_text(
-        "Reason noted! Now, send proof (photo or video) if you have any, "
+        "Reason noted. Send proof (photo or video) if you have any, "
         "or tap <b>Skip</b> to proceed.",
         parse_mode="HTML",
         reply_markup=_KB_PROOF,
@@ -142,7 +142,7 @@ async def on_kick_skip_reason(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     await q.answer()
     ctx.user_data["kick_reason"] = "No reason provided"
     await q.edit_message_text(
-        "No reason — fair enough! Send proof (photo or video) if any, "
+        "No reason — send proof (photo or video) if any, "
         "or tap <b>Skip</b> to proceed.",
         parse_mode="HTML",
         reply_markup=_KB_PROOF,
@@ -172,7 +172,7 @@ async def on_kick_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     q = update.callback_query
     await q.answer()
     _clear(ctx)
-    await q.edit_message_text("Kick cancelled. Maybe next time 🙂")
+    await q.edit_message_text("Kick cancelled. No action taken.")
     return ConversationHandler.END
 
 

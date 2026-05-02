@@ -8,7 +8,8 @@ from telegram import Update
 from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot.modules.helper import decorators, extraction
-from tcbot.modules.helper.workflows.muting_flow import build_handler, execute_unmute
+from tcbot.modules.helper.workflows.muting_conv import build_handler
+from tcbot.modules.helper.workflows.muting_flow import execute_unmute
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 __module_name__ = "Mute"

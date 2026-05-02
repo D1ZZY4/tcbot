@@ -47,7 +47,7 @@ _KB_REASON = InlineKeyboardMarkup([[
 ]])
 
 _KB_PROOF = InlineKeyboardMarkup([[
-    InlineKeyboardButton("Skip", callback_data="warn_skip_proof"),
+    InlineKeyboardButton("Skip",   callback_data="warn_skip_proof"),
     InlineKeyboardButton("Cancel", callback_data="warn_cancel"),
 ]])
 
@@ -128,7 +128,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 async def on_warn_reason(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ctx.user_data["warn_reason"] = update.effective_message.text.strip()
     await update.effective_message.reply_text(
-        "Reason noted! Send proof (photo or video) if you have any, "
+        "Reason noted. Send proof (photo or video) if you have any, "
         "or tap <b>Skip</b> to issue the warning now.",
         parse_mode="HTML",
         reply_markup=_KB_PROOF,

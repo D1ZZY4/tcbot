@@ -8,7 +8,7 @@ from telegram import Update
 from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot.modules.helper import decorators, extraction
-from tcbot.modules.helper.workflows.warn_conv import warn_conversation
+from tcbot.modules.helper.workflows.warning_conv import warn_conversation
 from tcbot.modules.helper.workflows.warning_flow import (
     WARN_LIMIT,
     execute_resetwarns,

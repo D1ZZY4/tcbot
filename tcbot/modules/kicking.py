@@ -4,7 +4,7 @@
 """Group kick command."""
 from __future__ import annotations
 
-from tcbot.modules.helper.workflows.kick_conv import kick_conversation
+from tcbot.modules.helper.workflows.kicking_conv import kick_conversation
 
 __module_name__ = "Kick"
 __help_text__ = (
