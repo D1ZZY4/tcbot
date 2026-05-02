@@ -19,15 +19,21 @@ async def upsert_user(
     first_name: str,
     last_name: str | None = None,
 ) -> None:
+    now = datetime.now(timezone.utc)
     await _users().update_one(
         {"user_id": user_id},
-        {"$set": {
-            "user_id": user_id,
-            "username": username,
-            "first_name": first_name,
-            "last_name": last_name,
-            "last_updated": datetime.now(timezone.utc),
-        }},
+        {
+            "$set": {
+                "user_id": user_id,
+                "username": username,
+                "first_name": first_name,
+                "last_name": last_name,
+                "last_updated": now,
+            },
+            "$setOnInsert": {
+                "commit_date": now,
+            },
+        },
         upsert=True,
     )
 
