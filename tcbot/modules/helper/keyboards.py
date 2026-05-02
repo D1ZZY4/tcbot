@@ -139,22 +139,12 @@ def main_menu_kb() -> InlineKeyboardMarkup:
     ])
 
 
-def help_topics_kb() -> InlineKeyboardMarkup:
-    topics = [
-        ("Ban", "help_ban"),
-        ("Unban", "help_unban"),
-        ("Check Ban", "help_check"),
-        ("Ban Info", "help_baninfo"),
-        ("Promote/Demote", "help_admins"),
-        ("Transfer Owner", "help_transfer"),
-        ("Broadcast", "help_broadcast"),
-        ("Appeal", "help_appeal"),
-        ("Group Affiliation", "help_connect"),
-        ("Disaffiliate", "help_disconnect"),
-        ("Cleanup", "help_cleanup"),
-        ("Join/Leave", "help_joinleave"),
-        ("Statistics", "help_stats"),
-    ]
+def help_topics_kb(topics: list[tuple[str, str]]) -> InlineKeyboardMarkup:
+    """
+    Build the help topics keyboard dynamically.
+    topics: list of (label, callback_data) collected from each module's
+            __module_name__ and __help_text__.
+    """
     rows: list[list] = []
     it = iter(topics)
     for a, b in zip(it, it):
@@ -162,9 +152,7 @@ def help_topics_kb() -> InlineKeyboardMarkup:
             InlineKeyboardButton(a[0], callback_data=a[1]),
             InlineKeyboardButton(b[0], callback_data=b[1]),
         ])
-    ## Odd item (Statistics)
-    remainder = list(it)
-    for item in remainder:
+    for item in list(it):
         rows.append([InlineKeyboardButton(item[0], callback_data=item[1])])
     rows.append([InlineKeyboardButton("Back", callback_data="menu_back_start")])
     return InlineKeyboardMarkup(rows)
