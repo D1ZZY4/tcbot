@@ -61,7 +61,7 @@ async def _ban_summary(ban: dict, user_id: int, user_fname: str) -> tuple[str, s
     date_str = fmt_dt(ts) if ts else "Unknown"
 
     text = (
-        "You are currently banned from Transsion Core Federation.\n\n"
+        "You are currently banned from Transsion Core.\n\n"
         f"User: {mention(user_id, user_fname)}\n"
         f"User ID: {code(str(user_id))}\n"
         f"Reason: {esc(ban.get('reason', 'No reason provided'))}\n\n"
@@ -86,7 +86,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await msg.reply_text(
             f"Bro, {mention(user.id, fname)}... seriously? 😭\n\n"
             "You're the Founder. You literally built this place from scratch. "
-            "There is no ban for you — you ARE the federation.\n"
+            "There is no ban for you, you ARE the federation.\n"
             "Go touch grass, you're perfectly fine. 😊",
             parse_mode="HTML",
         )
@@ -95,7 +95,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if await db.admins_db.is_admin(user.id):
         await msg.reply_text(
             f"Hey {mention(user.id, fname)}, checking yourself? 😄\n\n"
-            "You're part of the staff team — the ones who handle bans, not receive them. "
+            "You're part of the staff team, the ones who handle bans, not receive them. "
             "No active ban on your end. You're good, now go back to work! 😊",
             parse_mode="HTML",
         )
@@ -175,12 +175,22 @@ async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg   = update.effective_message
     fname = target_fname or str(target_id)
 
+    if target_id == ctx.bot.id:
+        bot_info = await ctx.bot.get_me()
+        await msg.reply_text(
+            f"That's {mention(ctx.bot.id, bot_info.first_name or 'me')}... which is me. 😄\n\n"
+            "I'm the one running bans around here — not exactly on the receiving end. "
+            "No active ban, obviously.",
+            parse_mode="HTML",
+        )
+        return
+
     owner_id = await db.admins_db.get_owner_id()
     if target_id == owner_id:
         owner_fname = await db.users_db.get_first_name(owner_id, "the Founder")
         await msg.reply_text(
             f"Bro... that's {mention(owner_id, owner_fname)}, our Founder 😭\n\n"
-            "They built this whole federation — banning them would be like locking "
+            "They built this whole federation, banning them would be like locking "
             "the landlord out of their own building. Not happening.\n"
             "Definitely clean, obviously. Anything else?",
             parse_mode="HTML",
@@ -191,7 +201,7 @@ async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await msg.reply_text(
             f"Hold up — {mention(target_id, fname)} is part of our staff team! 😄\n\n"
             "They're more likely to be the ones issuing bans, not receiving them. "
-            "No active ban on record — they're all good.",
+            "No active ban on record, they're all good.",
             parse_mode="HTML",
         )
         return
@@ -199,8 +209,8 @@ async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ban = await db.bans_db.get_active_ban(target_id)
     if not ban:
         await msg.reply_text(
-            f"All clear! {mention(target_id, fname)} has no active ban in TCF. "
-            "They're free to go — clean as a whistle. 😊",
+            f"All clear! {mention(target_id, fname)} has no active ban in Transsion Core. "
+            "They're free to go, clean as a whistle. 😊",
             parse_mode="HTML",
         )
         return
