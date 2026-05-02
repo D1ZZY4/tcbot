@@ -1,9 +1,11 @@
 modules = ["python-3.11"]
 [agent]
 expertMode = true
+stack = "FLASK_VANILLA_JS"
 
 [nix]
 channel = "stable-25_05"
+packages = ["openssl", "postgresql"]
 
 [workflows]
 runButton = "Project"
@@ -21,13 +23,37 @@ args = "Start application"
 name = "Start application"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "webview"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python -m tcbot"
-
-[workflows.workflow.metadata]
-outputType = "console"
+waitForPort = 5000
 
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["gunicorn", "--bind", "0.0.0.0:5000", "main:app"]
+
+[userenv]
+
+[userenv.shared]
+BOT_TOKEN = "8704305954:AAGN9Dd1fTpzQnjvDPMGZa86p0jkXCSykjc"
+MONGODB_URI = "mongodb+srv://TCF:TCF@clusterfed.c7vnwkg.mongodb.net/?appName=ClusterFed"
+DB_NAME = "tcbot"
+OWNER_ID = "7146954165"
+COMMUNITY_NAME = "𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯"
+MAIN_GROUP = "-1003872207988"
+MAIN_CHANNEL = "-1003852970764"
+PROOFS = "-1003872207988/67"
+LOGS = "-1003941141635"
+LOGS_ERRORS = "-1003872207988/279"
+APPEALS = "-1003872207988/12"
+PROOF_TIMEOUT_SECONDS = "100"
+APPEAL_TIMEOUT_SECONDS = "600"
+ALBUM_DEBOUNCE_SECONDS = "2"
+PORT = "5000"
