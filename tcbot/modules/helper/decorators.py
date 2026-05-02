@@ -21,7 +21,8 @@ def owner_only(func):
         uid = update.effective_user.id if update.effective_user else None
         if uid and await db.admins_db.is_owner(uid):
             return await func(update, ctx)
-        await update.effective_message.reply_text("This command is for the owner only.")
+        if update.effective_message:
+            await update.effective_message.reply_text("This command is for the owner only.")
     return wrapper
 
 
@@ -31,5 +32,6 @@ def staff_only(func):
         uid = update.effective_user.id if update.effective_user else None
         if uid and await db.admins_db.is_staff(uid):
             return await func(update, ctx)
-        await update.effective_message.reply_text("You don't have permission to use this.")
+        if update.effective_message:
+            await update.effective_message.reply_text("You don't have permission to use this command.")
     return wrapper

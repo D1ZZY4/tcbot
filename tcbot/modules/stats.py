@@ -8,36 +8,41 @@ from telegram import Update
 from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot import database as db
-from tcbot.config import cfg
-from tcbot.modules.helper import decorators
-from tcbot.modules.helper.formatter import bold, code
+from tcbot.modules.helper.formatter import mention
 from tcbot.utils.prefixes import build_prefixed_filters
 
 __module_name__ = "Stats"
 __help_text__ = (
-    "<code>/tcstats</code> – show federation stats (staff only)."
+    "<code>/tcstats</code> – show federation statistics (anyone).\n"
+    "Aliases: <code>/stats</code>, <code>/tcinfo</code>"
 )
 
 
-@decorators.staff_only
 async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    bans = await db.bans_db.active_ban_count()
-    groups = await db.groups_db.active_group_count()
+    owner_id = await db.admins_db.get_owner_id()
+    owner_fname = await db.users_db.get_first_name(owner_id, "Owner") if owner_id else "Unknown"
+
     admins = await db.admins_db.admin_count()
-    users = await db.users_db.total_users()
-    pending = await db.queues_db.pending_count()
+    groups = await db.groups_db.active_group_count()
+    bans = await db.bans_db.active_ban_count()
+
+    owner_mention = mention(owner_id, owner_fname) if owner_id else "Unknown"
 
     lines = [
-        f"📊 {bold(cfg.community_name)} Stats\n",
-        f"⛔ Active bans: {code(str(bans))}",
-        f"🏘 Affiliated groups: {code(str(groups))}",
-        f"🛡️ Admins: {code(str(admins))}",
-        f"👥 Cached users: {code(str(users))}",
-        f"📋 Pending requests: {code(str(pending))}",
+        "<b>TCF Statistics</b>",
+        f"Owner: {owner_mention}",
+        f"Admin Count: {admins}",
+        f"Affiliated Groups: {groups}",
+        f"Active Bans: {bans}",
     ]
     await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
-__handlers__ = [
-    MessageHandler(build_prefixed_filters("tcstats"), cmd_stats),
-]
+## Spec aliases: /tcstats, /stats, /tcinfo
+_STATS_FILTER = (
+    build_prefixed_filters("tcstats")
+    | build_prefixed_filters("stats")
+    | build_prefixed_filters("tcinfo")
+)
+
+__handlers__ = [MessageHandler(_STATS_FILTER, cmd_stats)]

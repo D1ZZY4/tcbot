@@ -35,8 +35,11 @@ async def create_ban(
     admin_id: int,
     proof_msg_id: int,
     log_msg_id: int,
+    ban_id: str | None = None,
 ) -> dict:
-    ban_id = make_ban_id(target_id)
+    """Create a new ban record. Pass ban_id to use a pre-generated ID (e.g. for inline keyboards)."""
+    if ban_id is None:
+        ban_id = make_ban_id(target_id)
     doc = {
         "ban_id": ban_id,
         "banned_user_id": target_id,
@@ -62,22 +65,33 @@ async def update_ban(
     reason: str,
     admin_id: int,
     new_proof_id: int,
-    new_log_id: int,
-    old_proof_id: int,
-    old_log_id: int,
+    new_log_id: int = 0,
+    old_proof_id: int = 0,
+    old_log_id: int = 0,
 ) -> dict | None:
     return await _bans().find_one_and_update(
         {"ban_id": ban_id},
-        {"$set": {
-            "reason": reason,
-            "admin_user_id": admin_id,
-            "proof_message_id": new_proof_id,
-            "log_message_id": new_log_id,
-            "previous_proof_message_id": old_proof_id,
-            "previous_log_message_id": old_log_id,
-            "updated_timestamp": _now(),
-        }, "$inc": {"update_count": 1}},
+        {
+            "$set": {
+                "reason": reason,
+                "admin_user_id": admin_id,
+                "proof_message_id": new_proof_id,
+                "log_message_id": new_log_id,
+                "previous_proof_message_id": old_proof_id,
+                "previous_log_message_id": old_log_id,
+                "updated_timestamp": _now(),
+            },
+            "$inc": {"update_count": 1},
+        },
         return_document=True,
+    )
+
+
+async def set_log_message_id(ban_id: str, log_msg_id: int) -> None:
+    """Set or update the log_message_id on an existing ban record."""
+    await _bans().update_one(
+        {"ban_id": ban_id},
+        {"$set": {"log_message_id": log_msg_id}},
     )
 
 

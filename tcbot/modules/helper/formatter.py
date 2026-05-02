@@ -1,13 +1,14 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""HTML formatting utilities and brand constants."""
+"""HTML formatting helpers and shared brand constant."""
 from __future__ import annotations
 
 import html
 
 from tcbot.config import cfg
 
+## The exact branding line required in every log message
 BRAND = cfg.community_name
 
 
@@ -28,7 +29,8 @@ def link(text: str, url: str) -> str:
 
 
 def mention(user_id: int, name: str) -> str:
-    return f'<a href="tg://user?id={user_id}">{html.escape(name)}</a>'
+    """Create a tg:// user mention hyperlink."""
+    return f'<a href="tg://user?id={user_id}">{html.escape(str(name))}</a>'
 
 
 def esc(text: str) -> str:

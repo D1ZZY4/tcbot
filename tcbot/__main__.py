@@ -10,7 +10,8 @@ import pkgutil
 from pathlib import Path
 from typing import Any
 
-from telegram.ext import Application, ApplicationBuilder
+from telegram import Update
+from telegram.ext import Application, ApplicationBuilder, ContextTypes, MessageHandler, filters
 
 import tcbot.modules as _mods_pkg
 from tcbot.config import cfg
@@ -24,8 +25,9 @@ def _discover_handlers() -> list[Any]:
     handlers: list[Any] = []
     pkg_path = str(Path(_mods_pkg.__file__).parent)
 
-    ## Load modules in a sensible order – start/greeting last to avoid filter conflicts
-    PRIORITY_FIRST = ["connecting", "admins", "banning", "appealing"]
+    ## ConversationHandlers and affiliation must be registered first
+    PRIORITY_FIRST = ["connecting", "admins", "appealing", "banning"]
+    ## Greeting and start last to avoid filter shadowing
     PRIORITY_LAST = ["start", "greeting"]
 
     mods_found: dict[str, Any] = {}
@@ -34,7 +36,7 @@ def _discover_handlers() -> list[Any]:
             mod = importlib.import_module(f"tcbot.modules.{mod_name}")
             mods_found[mod_name] = mod
         except Exception as exc:
-            log.error("Failed to import module tcbot.modules.%s: %s", mod_name, exc)
+            log.error("Failed to import tcbot.modules.%s: %s", mod_name, exc)
 
     ordered = (
         [n for n in PRIORITY_FIRST if n in mods_found]
@@ -50,6 +52,30 @@ def _discover_handlers() -> list[Any]:
             log.debug("Loaded %d handler(s) from %s", len(mod_handlers), mod_name)
 
     return handlers
+
+
+async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Cache sender's info on every message sent in any affiliated group."""
+    chat = update.effective_chat
+    user = update.effective_user
+
+    if not user or user.is_bot:
+        return
+    if not chat or chat.type not in ("group", "supergroup"):
+        return
+
+    from tcbot import database as db
+    if not await db.groups_db.is_affiliated(chat.id):
+        return
+
+    try:
+        await db.users_db.upsert_user(user.id, user.username, user.first_name, user.last_name)
+    except Exception as exc:
+        log.debug("Member cache update failed for %d: %s", user.id, exc)
+
+
+async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    log.error("Unhandled exception for update %s: %s", update, ctx.error, exc_info=ctx.error)
 
 
 async def _post_init(app: Application) -> None:
@@ -75,11 +101,24 @@ def main() -> None:
         .build()
     )
 
+    ## Register all module handlers
     for handler in _discover_handlers():
         app.add_handler(handler)
 
+    ## Low-priority handler: update member cache on every group message
+    app.add_handler(
+        MessageHandler(
+            filters.ChatType.GROUPS & filters.TEXT & ~filters.COMMAND,
+            _update_member_cache,
+        ),
+        group=10,
+    )
+
+    ## Global error handler
+    app.add_error_handler(_error_handler)
+
     log.info("Handlers registered. Starting polling...")
-    app.run_polling(drop_pending_updates=True)
+    app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":

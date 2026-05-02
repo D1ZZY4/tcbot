@@ -8,9 +8,9 @@ from tcbot.modules.helper.workflows.ban_flow import build_handler
 
 __module_name__ = "Ban"
 __help_text__ = (
-    "<code>/tcban</code> <i>[reply or user_id]</i> – ban a user federation-wide.\n"
-    "Reply or provide a user ID, then send proof (photo/video/album) with the reason in the caption.\n"
-    "Alias: <code>/fban</code>"
+    "<code>/tcban</code> <i>&lt;target&gt; &lt;reason&gt;</i> – ban a user federation-wide.\n"
+    "Reply to a message or provide a user ID / @username as the target.\n"
+    "Aliases: <code>/fban</code>, <code>/ban</code>, <code>/tcfban</code>"
 )
 
 __handlers__ = [build_handler()]
