@@ -32,7 +32,7 @@ __help_text__ = (
     "<code>/rmtc</code> — anywhere (exec group, bot PM).\n\n"
 
     "<b>What it does</b>\n"
-    "<code>/tcdisconnect</code> — removes the current group from TCF. "
+    f"<code>/tcdisconnect</code> — removes the current group from {cfg.community_name}. "
     "The bot will leave the group after disconnecting and post a log entry.\n\n"
     "<code>/rmtc</code> — force-removes a group by chat ID. Useful for groups the bot was kicked from "
     "or groups that need to be removed remotely.\n\n"
@@ -53,7 +53,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
     if not await db.groups_db.is_affiliated(chat.id):
         await update.effective_message.reply_text(
-            "This group is not connected to TCF."
+            f"This group is not connected to {cfg.community_name}."
         )
         return
 
@@ -83,7 +83,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         pass
 
     await update.effective_message.reply_text(
-        "This group has been disconnected from the Transsion Core Federation."
+        f"This group has been disconnected from {cfg.community_name}."
     )
     try:
         await ctx.bot.leave_chat(chat.id)
@@ -120,7 +120,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         except Exception:
             pass
         await update.effective_message.reply_text(
-            f"Group {code(str(chat_id))} has been disconnected from TCF.",
+            f"Group {code(str(chat_id))} has been disconnected from {cfg.community_name}.",
             parse_mode="HTML",
         )
     else:

@@ -7,10 +7,12 @@ from __future__ import annotations
 from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackQueryHandler, ContextTypes
 
+from tcbot import cfg
+
 __module_name__ = None
 
 __additional_msg__ = (
-    "<b>Transsion Core Federation — Official Links</b>\n"
+    f"<b>{cfg.community_name} — Official Links</b>\n"
     "Use the buttons below to access our channels and groups. "
     "For developers interested in contributing to Transsion device development, "
     "join TRAVEL — an independent community for collaboration and networking."

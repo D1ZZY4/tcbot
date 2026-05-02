@@ -58,7 +58,7 @@ HELP_TOPICS: list[tuple[str, str]] = [
 
 _HELP_INDEX_TEXT = (
     "<b>{bot_name} Help</b>\n"
-    "This bot manages Transsion Core groups, bans, appeals, and more. "
+    "This bot manages {community} groups, bans, appeals, and more. "
     "Select a topic below."
 )
 
@@ -66,7 +66,7 @@ _HELP_INDEX_TEXT = (
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     bot_name = ctx.bot.first_name or "TC Bot"
     await update.effective_message.reply_text(
-        _HELP_INDEX_TEXT.format(bot_name=bot_name),
+        _HELP_INDEX_TEXT.format(bot_name=bot_name, community=cfg.community_name),
         parse_mode="HTML",
         reply_markup=keyboards.help_topics_kb(HELP_TOPICS),
     )
@@ -77,7 +77,7 @@ async def on_menu_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await q.answer()
     bot_name = ctx.bot.first_name or "TC Bot"
     await q.edit_message_text(
-        _HELP_INDEX_TEXT.format(bot_name=bot_name),
+        _HELP_INDEX_TEXT.format(bot_name=bot_name, community=cfg.community_name),
         parse_mode="HTML",
         reply_markup=keyboards.help_topics_kb(HELP_TOPICS),
     )

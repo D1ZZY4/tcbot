@@ -83,7 +83,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if await db.admins_db.is_admin(target_id):
-        await update.effective_message.reply_text("That user is already a Transsion Core Admin.")
+        await update.effective_message.reply_text(f"That user is already a {cfg.community_name} Admin.")
         return
 
     lc, lt = cfg.logs
@@ -97,7 +97,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         except Exception as exc:
             log.error("Promote log failed: %s", exc)
         await update.effective_message.reply_text(
-            f"Done. {mention(target_id, target_fname)} is now a Transsion Core Admin.",
+            f"Done. {mention(target_id, target_fname)} is now a {cfg.community_name} Admin.",
             parse_mode="HTML",
         )
     else:
@@ -156,11 +156,11 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await update.effective_message.reply_text("You cannot demote yourself.")
         return
     if await db.admins_db.is_owner(target_id):
-        await update.effective_message.reply_text("Cannot demote the Transsion Core Owner.")
+        await update.effective_message.reply_text(f"Cannot demote the {cfg.community_name} Owner.")
         return
     removed = await db.admins_db.remove_admin(target_id)
     if not removed:
-        await update.effective_message.reply_text("That user is not a Transsion Core Admin.")
+        await update.effective_message.reply_text(f"That user is not a {cfg.community_name} Admin.")
         return
     lc, lt = cfg.logs
     log_text = parse_logmsg.admin_demoted(target_id, target_fname, admin.id, admin.first_name)
@@ -294,7 +294,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         try:
             await ctx.bot.send_message(
                 target_id,
-                "Your promotion request has been approved — you are now a Transsion Core Admin.",
+                f"Your promotion request has been approved — you are now a {cfg.community_name} Admin.",
             )
         except Exception:
             pass

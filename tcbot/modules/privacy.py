@@ -7,6 +7,7 @@ from __future__ import annotations
 from telegram import CallbackQuery, Update
 from telegram.ext import CallbackQueryHandler, ContextTypes
 
+from tcbot import cfg
 from tcbot.modules.helper import keyboards
 
 __module_name__ = None
@@ -19,7 +20,7 @@ _PRIVACY_MSG = (
     "- <b>Warn & mute records</b> — logged per group for moderation tracking.\n"
     "- <b>Kick logs</b> — recorded for staff reference.\n"
     "- <b>Appeal submissions</b> — your messages and any attachments you send through the appeal system.\n\n"
-    "All data is stored securely and is only accessible to TCF staff. "
+    "All data is stored securely and is only accessible to {community} staff. "
     "We don't share anything with third parties — ever.\n\n"
     "Tap <b>Privacy Policy</b> below for the full policy."
 )
@@ -33,11 +34,11 @@ _PRIVACY_POLICY_MSG = (
     "mute records, and kick logs.\n\n"
 
     "<b>2. Why we collect it</b>\n"
-    "Everything we store is used solely for federation moderation — keeping TCF groups safe "
+    "Everything we store is used solely for federation moderation — keeping {community} groups safe "
     "and well-managed. Nothing more.\n\n"
 
     "<b>3. Who can access it</b>\n"
-    "Only TCF staff (admins and the owner) have access to stored data. "
+    "Only {community} staff (admins and the owner) have access to stored data. "
     "No data is shared with third parties under any circumstances.\n\n"
 
     "<b>4. How long we keep it</b>\n"
@@ -46,11 +47,11 @@ _PRIVACY_POLICY_MSG = (
     "Appeal records are kept for reference.\n\n"
 
     "<b>5. Your rights</b>\n"
-    "You can request a review or deletion of your data by reaching out to a TCF admin directly. "
+    "You can request a review or deletion of your data by reaching out to a {community} admin directly. "
     "We'll handle it as soon as we can.\n\n"
 
     "<b>6. Contact</b>\n"
-    "Reach TCF staff through the main TCF group or via this bot's appeal system."
+    "Reach {community} staff through the main {community} group or via this bot's appeal system."
 )
 
 
@@ -59,7 +60,7 @@ async def on_menu_privacy(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     await q.answer()
     bot_name = ctx.bot.first_name or "This bot"
     await q.edit_message_text(
-        _PRIVACY_MSG.format(bot_name=bot_name), parse_mode="HTML",
+        _PRIVACY_MSG.format(bot_name=bot_name, community=cfg.community_name), parse_mode="HTML",
         reply_markup=keyboards.privacy_kb(),
     )
 
@@ -69,7 +70,7 @@ async def on_menu_privacy_policy(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
     await q.answer()
     bot_name = ctx.bot.first_name or "This bot"
     await q.edit_message_text(
-        _PRIVACY_POLICY_MSG.format(bot_name=bot_name), parse_mode="HTML",
+        _PRIVACY_POLICY_MSG.format(bot_name=bot_name, community=cfg.community_name), parse_mode="HTML",
         reply_markup=keyboards.back_to_privacy_kb(),
     )
 

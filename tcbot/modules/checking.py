@@ -61,7 +61,7 @@ async def _ban_summary(ban: dict, user_id: int, user_fname: str) -> tuple[str, s
     date_str = fmt_dt(ts) if ts else "Unknown"
 
     text = (
-        "You are currently banned from Transsion Core.\n\n"
+        f"You are currently banned from {cfg.community_name}.\n\n"
         f"User: {mention(user_id, user_fname)}\n"
         f"User ID: {code(str(user_id))}\n"
         f"Reason: {esc(ban.get('reason', 'No reason provided'))}\n\n"
@@ -103,7 +103,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     ban = await db.bans_db.get_active_ban(user.id)
     if not ban:
-        await msg.reply_text("You are not banned in the Transsion Core.")
+        await msg.reply_text(f"You are not banned in {cfg.community_name}.")
         return
 
     bot_info       = await ctx.bot.get_me()
@@ -209,7 +209,7 @@ async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ban = await db.bans_db.get_active_ban(target_id)
     if not ban:
         await msg.reply_text(
-            f"All clear! {mention(target_id, fname)} has no active ban in Transsion Core. "
+            f"All clear! {mention(target_id, fname)} has no active ban in {cfg.community_name}. "
             "They're free to go, clean as a whistle. 😊",
             parse_mode="HTML",
         )

@@ -7,7 +7,7 @@ from __future__ import annotations
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
-from tcbot import database as db
+from tcbot import cfg, database as db
 from tcbot.modules.helper.formatter import code, esc
 from tcbot.utils.prefixes import build_prefixed_filters
 
@@ -23,7 +23,7 @@ __help_text__ = (
     "Anywhere — bot PM, exec group, or any connected group.\n\n"
 
     "<b>What it does</b>\n"
-    "Shows all groups currently connected to TCF. "
+    f"Shows all groups currently connected to {cfg.community_name}. "
     "Default view shows group names only. "
     "Tap <b>Details</b> to also see each group's chat ID.\n\n"
 
@@ -55,7 +55,7 @@ def _kb(detailed: bool) -> InlineKeyboardMarkup:
 async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     groups = await db.groups_db.active_groups()
     if not groups:
-        await update.effective_message.reply_text("No groups are currently connected to TCF.")
+        await update.effective_message.reply_text(f"No groups are currently connected to {cfg.community_name}.")
         return
     ctx.user_data["groups_cache"] = groups
     await update.effective_message.reply_text(

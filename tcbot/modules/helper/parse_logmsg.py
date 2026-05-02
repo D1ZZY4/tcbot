@@ -4,6 +4,7 @@
 """Compose all log messages – exact PROMPT.md format, no emojis."""
 from __future__ import annotations
 
+from tcbot import cfg
 from tcbot.modules.helper.formatter import BRAND, link, mention
 from tcbot.utils.timedate_format import fmt_dt, utc_now
 
@@ -26,7 +27,7 @@ def ban_log(
     dt = fmt_dt(ts)
     proof_part = f'\n<a href="{proof_lnk}">View Proof</a>' if proof_lnk else ""
     return (
-        f"New Transsion Core Ban\n"
+        f"New {cfg.community_name} Ban\n"
         f"{BRAND}\n\n"
         f"Admin: {mention(admin_id, admin_fname)}\n\n"
         f"User: {mention(target_id, target_fname)}\n"
@@ -56,7 +57,7 @@ def ban_update_log(
     prev_part = f'\nPrevious Proof: <a href="{prev_proof_lnk}">Click Here</a>' if prev_proof_lnk else ""
     proof_part = f'\n<a href="{proof_lnk}">View Proof</a>' if proof_lnk else ""
     return (
-        f"New Transsion Core Ban (Update)\n"
+        f"New {cfg.community_name} Ban (Update)\n"
         f"{BRAND}\n\n"
         f"Admin: {mention(new_admin_id, new_admin_fname)}\n"
         f"Previous Admin: {mention(old_admin_id, old_admin_fname)}\n\n"
@@ -124,7 +125,7 @@ def unban_log(
     dt = fmt_dt(utc_now())
     reason_part = f"\nUnban Reason: {reason}" if reason else ""
     return (
-        f"Transsion Core Unban\n"
+        f"{cfg.community_name} Unban\n"
         f"{BRAND}\n\n"
         f"Admin: {mention(admin_id, admin_fname)}\n"
         f"User: {mention(target_id, target_fname)}\n"
@@ -237,7 +238,7 @@ def admin_promoted(
 ) -> str:
     dt = fmt_dt(utc_now())
     return (
-        f"New Transsion Core Admin Promoted\n"
+        f"New {cfg.community_name} Admin Promoted\n"
         f"{BRAND}\n\n"
         f"Admin: {mention(target_id, target_fname)}\n"
         f"ID: {target_id}\n\n"
@@ -255,7 +256,7 @@ def admin_demoted(
 ) -> str:
     dt = fmt_dt(utc_now())
     return (
-        f"Transsion Core Admin Demoted\n"
+        f"{cfg.community_name} Admin Demoted\n"
         f"{BRAND}\n\n"
         f"Admin: {mention(target_id, target_fname)}\n"
         f"ID: {target_id}\n\n"
@@ -273,7 +274,7 @@ def ownership_transferred(
 ) -> str:
     dt = fmt_dt(utc_now())
     return (
-        f"Transsion Core Ownership Transferred\n"
+        f"{cfg.community_name} Ownership Transferred\n"
         f"{BRAND}\n\n"
         f"New Owner: {mention(new_owner_id, new_owner_fname)}\n"
         f"ID: {new_owner_id}\n\n"
@@ -311,7 +312,7 @@ def promo_approved_log(
 ) -> str:
     dt = fmt_dt(utc_now())
     return (
-        f"New Transsion Core Admin Promoted\n"
+        f"New {cfg.community_name} Admin Promoted\n"
         f"{BRAND}\n\n"
         f"Admin: {mention(target_id, target_fname)}\n"
         f"ID: {target_id}\n\n"

@@ -31,7 +31,7 @@ APPEAL_DISCUSSION_TOPIC = 11
 _ID_RE = re.compile(r"^/start\s+appeal([a-z0-9]{10})$")
 
 _INSTRUCTION_TEXT = (
-    "Transsion Core [Group] Ban Appeal\n\n"
+    f"{cfg.community_name} Ban Appeal\n\n"
     "To submit your appeal, reply with a message starting with <code>#appeal</code>, containing:\n"
     "- <b>Log link:</b> (the link to your ban log from the log channel)\n"
     "- <b>Clarification:</b> (your honest explanation of what happened)\n"
@@ -226,7 +226,7 @@ async def on_appeal_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         try:
             await ctx.bot.send_message(
                 target_id,
-                f"Your appeal for ban <code>{ban_id}</code> has been approved — you're now unbanned from Transsion Core. Welcome back.",
+                f"Your appeal for ban <code>{ban_id}</code> has been approved — you're now unbanned from {cfg.community_name}. Welcome back.",
                 parse_mode="HTML",
             )
         except Exception:

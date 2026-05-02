@@ -15,7 +15,7 @@ from telegram.ext import (
     MessageHandler,
 )
 
-from tcbot import database as db
+from tcbot import cfg, database as db
 from tcbot.modules.helper import keyboards, parse_logmsg
 from tcbot.modules.helper.workflows.connected_flow import on_bot_added, on_join_decision
 from tcbot.utils.prefixes import build_prefixed_filters
@@ -31,10 +31,10 @@ __help_text__ = (
     "Group admins and creators only (checked per-group).\n\n"
 
     "<b>Where to use it</b>\n"
-    "Inside the group you want to connect to TCF.\n\n"
+    f"Inside the group you want to connect to {cfg.community_name}.\n\n"
 
     "<b>What it does</b>\n"
-    "Connects your group to the Transsion Core Federation. Once connected, the bot will "
+    f"Connects your group to {cfg.community_name}. Once connected, the bot will "
     "automatically enforce federation bans in your group — banned users won't be able to stay.\n\n"
     "Before connecting, make sure the bot is an admin in the group with these permissions: "
     "<b>delete messages</b>, <b>ban users</b>, and <b>invite users</b>.\n\n"
@@ -62,7 +62,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if await db.groups_db.is_affiliated(chat.id):
-        await update.effective_message.reply_text("This group is already connected to TCF.")
+        await update.effective_message.reply_text(f"This group is already connected to {cfg.community_name}.")
         return
 
     if await db.groups_db.get_pending(chat.id):
@@ -92,7 +92,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     from tcbot.modules.helper.workflows.connected_flow import _complete_join
     await _complete_join(chat.id, chat.title or "", user.id, user.first_name, ctx.bot)
     await update.effective_message.reply_text(
-        "This group is now connected to TCF."
+        f"This group is now connected to {cfg.community_name}."
     )
 
 

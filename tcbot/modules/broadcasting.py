@@ -30,7 +30,7 @@ __help_text__ = (
     "Exec group or bot PM.\n\n"
 
     "<b>What it does</b>\n"
-    "Sends a message to every group currently connected to TCF. "
+    f"Sends a message to every group currently connected to {cfg.community_name}. "
     "You can either type the message directly after the command, or reply to an existing message to forward it. "
     "The bot will show a progress summary when done and post a log entry to the logs channel.\n\n"
 

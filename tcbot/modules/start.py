@@ -21,7 +21,7 @@ __module_name__ = None
 
 _MENU_TEXT = (
     "<b>Hey there! I'm {bot_name}.</b>\n"
-    "I help manage Transsion Core groups, bans, and appeals. "
+    "I help manage {community} groups, bans, and appeals. "
     "Use the buttons below to learn more or view important links."
 )
 
@@ -46,7 +46,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     ## appeal<ban_id> deep links are handled by the ConversationHandler in appealing.py
     await msg.reply_text(
-        _MENU_TEXT.format(bot_name=bot_name), parse_mode="HTML",
+        _MENU_TEXT.format(bot_name=bot_name, community=cfg.community_name), parse_mode="HTML",
         reply_markup=keyboards.main_menu_kb(),
     )
 
@@ -60,7 +60,7 @@ async def on_menu_back_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     await q.answer()
     bot_name = ctx.bot.first_name or "TC Bot"
     await q.edit_message_text(
-        _MENU_TEXT.format(bot_name=bot_name), parse_mode="HTML",
+        _MENU_TEXT.format(bot_name=bot_name, community=cfg.community_name), parse_mode="HTML",
         reply_markup=keyboards.main_menu_kb(),
     )
 
@@ -80,7 +80,7 @@ async def on_menu_groups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     groups = await db.groups_db.active_groups()
     if not groups:
         await q.edit_message_text(
-            "No groups are currently connected to TCF.",
+            f"No groups are currently connected to {cfg.community_name}.",
             reply_markup=keyboards.back_to_start_kb(),
         )
         return
