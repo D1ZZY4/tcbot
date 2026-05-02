@@ -105,7 +105,7 @@ async def on_bot_added(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 try:
                     await ctx.bot.edit_message_text(
                         "This community is now affiliated with TCF. "
-                        "Federation commands can now be used here by authorized Transsion Core admins.",
+                        "Authorized TC admins can use federation commands here.",
                         chat_id=chat.id,
                         message_id=pending["message_id"],
                         reply_markup=None,
@@ -123,7 +123,7 @@ async def on_bot_added(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         try:
             prompt = await ctx.bot.send_message(
                 chat.id,
-                "Do you want this community to join the Transsion Core Federation?",
+                "Want to affiliate this community with Transsion Core Federation?",
                 reply_markup=join_group_kb(),
             )
             await db.groups_db.add_pending(
@@ -171,26 +171,26 @@ async def on_join_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
                 chat.id, chat.title or "", user.id, q.message.message_id,
             )
             await q.edit_message_text(
-                "Please make the bot an admin with the necessary permissions "
-                "(delete messages, ban users, invite users) and try again.",
+                "I need admin permissions first — delete messages, ban users, and invite users. "
+                "Grant those and try again.",
                 reply_markup=None,
             )
             return
 
         if await db.groups_db.is_affiliated(chat.id):
-            await q.edit_message_text("Already affiliated.", reply_markup=None)
+            await q.edit_message_text("This group is already affiliated with TCF.", reply_markup=None)
             return
 
         await _complete_join(chat.id, chat.title or "", user.id, user.first_name, ctx.bot)
         await q.edit_message_text(
             "This community is now affiliated with TCF. "
-            "Federation commands can now be used here by authorized Transsion Core admins.",
+            "Authorized TC admins can use federation commands here.",
             reply_markup=None,
         )
 
     elif action == "tc_cancel":
         await db.groups_db.remove_pending(chat.id)
-        await q.edit_message_text("Affiliation cancelled. Leaving the group.", reply_markup=None)
+        await q.edit_message_text("Affiliation declined. I'll leave the group now.", reply_markup=None)
 
         try:
             await ctx.bot.send_message(

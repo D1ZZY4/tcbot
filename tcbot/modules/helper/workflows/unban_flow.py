@@ -55,7 +55,7 @@ async def execute_unban(
         log.error("Unban log failed: %s", exc)
 
     await msg.reply_text(
-        f"{mention(target_id, target_fname)} {code(str(target_id))} has been unbanned.\n"
-        f"Removed from {len(groups) - failed}/{len(groups)} groups.",
+        f"{mention(target_id, target_fname)} {code(str(target_id))} has been unbanned — "
+        f"removed from {len(groups) - failed}/{len(groups)} groups.",
         parse_mode="HTML",
     )

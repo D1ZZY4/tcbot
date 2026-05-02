@@ -57,7 +57,7 @@ async def cmd_mute_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     admin = update.effective_user
 
     if not await db.admins_db.is_staff(admin.id):
-        await msg.reply_text("You are not authorized to use this command.")
+        await msg.reply_text("You're not authorized to use this command.")
         return ConversationHandler.END
 
     raw_args = parse_cmd_args(msg.text)
@@ -203,7 +203,7 @@ async def on_skip_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 async def on_mute_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     q = update.callback_query
     await q.answer()
-    await q.edit_message_text("Mute cancelled.")
+    await q.edit_message_text("Got it, mute cancelled. No action was taken.")
     return ConversationHandler.END
 
 

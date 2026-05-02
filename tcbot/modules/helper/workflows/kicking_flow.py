@@ -35,12 +35,13 @@ async def execute_kick(
         proof_line = f"\nProof: {proof_desc}" if proof_desc else ""
         await msg.reply_text(
             f"{mention(target_id, target_name)} {code(str(target_id))} has been kicked.\n"
-            f"Reason: {reason}{proof_line}",
+            f"Reason: {reason}{proof_line}\n"
+            "They can rejoin via invite link.",
             parse_mode="HTML",
         )
     except Exception as exc:
         log.error("Kick failed for %s in %s: %s", target_id, chat_id, exc)
         await msg.reply_text(
-            f"Failed to kick {mention(target_id, target_name)}: {exc}",
+            f"Couldn't kick {mention(target_id, target_name)}: {exc}",
             parse_mode="HTML",
         )

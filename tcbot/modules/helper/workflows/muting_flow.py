@@ -93,7 +93,7 @@ async def _execute_mute(bot, update: Update, meta: dict) -> None:
         log.error("Mute failed for %s in %s: %s", target_id, chat_id, exc)
         try:
             await bot.edit_message_text(
-                f"Failed to mute {mention(target_id, target_fname)}: {exc}",
+                f"Couldn't mute {mention(target_id, target_fname)}: {exc}",
                 chat_id=prompt_chat, message_id=prompt_id, parse_mode="HTML",
             )
         except Exception:
@@ -152,6 +152,6 @@ async def execute_unmute(
     except Exception as exc:
         log.error("Unmute failed for %s in %s: %s", target_id, chat_id, exc)
         await msg.reply_text(
-            f"Failed to unmute {mention(target_id, target_name)}: {exc}",
+            f"Couldn't unmute {mention(target_id, target_name)}: {exc}",
             parse_mode="HTML",
         )

@@ -90,7 +90,7 @@ async def cmd_start_appeal_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
 async def on_appeal_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     q = update.callback_query
     await q.answer()
-    await q.edit_message_text("Appeal cancelled.")
+    await q.edit_message_text("Appeal cancelled. Nothing was submitted.")
     for key in ("appeal_ban_id", "appeal_log_msg_id", "appeal_instruction_msg_id"):
         ctx.user_data.pop(key, None)
     return ConversationHandler.END
@@ -159,7 +159,7 @@ async def on_appeal_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
     if instr_mid:
         try:
             await ctx.bot.edit_message_text(
-                "Your appeal has been submitted. TC admins will review it shortly.",
+                "Your appeal has been submitted. The team will review it shortly — we'll get back to you.",
                 chat_id=update.effective_chat.id,
                 message_id=instr_mid,
             )
@@ -226,7 +226,7 @@ async def on_appeal_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         try:
             await ctx.bot.send_message(
                 target_id,
-                f"Your appeal for ban <code>{ban_id}</code> has been approved. You are now unbanned.",
+                f"Your appeal for ban <code>{ban_id}</code> has been approved — you're now unbanned from Transsion Core. Welcome back.",
                 parse_mode="HTML",
             )
         except Exception:
@@ -255,7 +255,7 @@ async def on_appeal_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         try:
             await ctx.bot.send_message(
                 target_id,
-                f"Your appeal for ban <code>{ban_id}</code> has been rejected.",
+                f"Your appeal for ban <code>{ban_id}</code> has been reviewed and not approved. The ban remains in place.",
                 parse_mode="HTML",
             )
         except Exception:

@@ -60,7 +60,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     if not reason:
-        await msg.reply_text("A reason is required. Usage: /tcban <target> <reason>")
+        await msg.reply_text("A reason is required — /tcban <target> <reason>.")
         return ConversationHandler.END
 
     if target_id == admin.id:
@@ -78,7 +78,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ctx.user_data["ban_admin_fname"] = admin.first_name
 
     prompt = await msg.reply_text(
-        "Please provide proof for this ban. Send a photo or video (multiple media allowed). "
+        "Proof required. Send a photo or video — multiple files allowed. "
         f"You have {cfg.proof_timeout} seconds.",
         reply_markup=keyboards.cancel_proof_kb(),
     )
@@ -129,7 +129,7 @@ async def _flush_album(mgid: str, bot: Bot) -> None:
 async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     q = update.callback_query
     await q.answer()
-    await q.edit_message_text("Operation cancelled.")
+    await q.edit_message_text("Cancelled. No ban was issued.")
     return ConversationHandler.END
 
 
@@ -303,7 +303,9 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict) -> None:
 
 async def on_ban_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if update.effective_message:
-        await update.effective_message.reply_text("Proof submission timed out.")
+        await update.effective_message.reply_text(
+            "Timed out waiting for proof. No ban was issued."
+        )
     return ConversationHandler.END
 
 

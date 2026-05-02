@@ -89,7 +89,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     if not target_id:
         await msg.reply_text(
-            "Can't find that user — reply to their message or give me an ID."
+            "Can't find that user — reply to their message or send me a user ID."
         )
         return ConversationHandler.END
 
@@ -158,7 +158,7 @@ async def on_warn_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     q = update.callback_query
     await q.answer()
     _clear(ctx)
-    await q.edit_message_text("Warning cancelled. No action taken.")
+    await q.edit_message_text("Got it, warning cancelled. No action was taken.")
     return ConversationHandler.END
 
 

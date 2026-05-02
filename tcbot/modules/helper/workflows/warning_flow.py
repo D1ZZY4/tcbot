@@ -37,21 +37,21 @@ async def execute_warn(
         try:
             await ctx.bot.ban_chat_member(chat_id, target_id)
             await msg.reply_text(
-                f"{mention(target_id, target_name)} reached {WARN_LIMIT} warnings "
+                f"{mention(target_id, target_name)} hit {WARN_LIMIT} warnings "
                 f"and has been banned from this group.{proof_line}",
                 parse_mode="HTML",
             )
         except Exception as exc:
             log.error("Auto-ban on warn limit failed: %s", exc)
             await msg.reply_text(
-                f"{mention(target_id, target_name)} reached {WARN_LIMIT} warnings "
-                f"but auto-ban failed. Please ban manually.{proof_line}",
+                f"{mention(target_id, target_name)} hit {WARN_LIMIT} warnings "
+                f"but auto-ban failed — please ban them manually.{proof_line}",
                 parse_mode="HTML",
             )
     else:
         await msg.reply_text(
             f"{mention(target_id, target_name)} has been warned "
-            f"({count}/{WARN_LIMIT}): {reason}{proof_line}",
+            f"({count}/{WARN_LIMIT}) — {reason}{proof_line}",
             parse_mode="HTML",
         )
 
@@ -76,8 +76,8 @@ async def execute_unwarn(
     await db.warns_db.remove_last_warn(target_id, chat_id)
     new_count = max(count - 1, 0)
     await msg.reply_text(
-        f"Removed one warning from {mention(target_id, target_name)}. "
-        f"They now have {new_count}/{WARN_LIMIT} warnings.",
+        f"One warning removed from {mention(target_id, target_name)}. "
+        f"They're now at {new_count}/{WARN_LIMIT}.",
         parse_mode="HTML",
     )
 
@@ -123,12 +123,12 @@ async def execute_resetwarns(
     removed = await db.warns_db.clear_warns(target_id, chat_id)
     if removed == 0:
         await msg.reply_text(
-            f"{mention(target_id, target_name)} {code(str(target_id))} had no warnings to clear.",
+            f"{mention(target_id, target_name)} {code(str(target_id))} has no warnings to clear.",
             parse_mode="HTML",
         )
         return
 
     await msg.reply_text(
-        f"Cleared all {removed} warning(s) for {mention(target_id, target_name)}.",
+        f"All {removed} warning(s) cleared for {mention(target_id, target_name)}. Clean slate.",
         parse_mode="HTML",
     )
