@@ -11,7 +11,7 @@ from tcbot.modules.helper import keyboards
 
 __module_name__ = None
 
-ABOUT_TEXT = (
+__about_msg__ = (
     "<b>What is TCF?</b>\n"
     "Transsion Core Federation (TCF) is a community-driven federation for Infinix, Tecno, and Itel groups. "
     "Our main focus is maintaining group security and a conducive environment so members can discuss comfortably.\n"
@@ -26,7 +26,7 @@ async def on_menu_about(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q: CallbackQuery = update.callback_query
     await q.answer()
     await q.edit_message_text(
-        ABOUT_TEXT, parse_mode="HTML",
+        __about_msg__, parse_mode="HTML",
         reply_markup=keyboards.back_to_start_kb(),
     )
 

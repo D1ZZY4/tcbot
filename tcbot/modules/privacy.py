@@ -11,7 +11,7 @@ from tcbot.modules.helper import keyboards
 
 __module_name__ = None
 
-_PRIVACY_TEXT = (
+__privacy_msg__ = (
     "<b>Privacy Information</b>\n\n"
     "The TCF Bot collects and stores the following data:\n"
     "- Your Telegram user ID and first name (cached when you interact with the bot)\n"
@@ -21,7 +21,7 @@ _PRIVACY_TEXT = (
     "No data is shared with third parties."
 )
 
-_PRIVACY_POLICY_TEXT = (
+__privacy_policy_msg__ = (
     "<b>TCF Privacy Policy</b>\n\n"
     "1. <b>Data collection:</b> We collect Telegram user IDs, first names, and usernames "
     "only when you interact with a TCF-connected group or this bot.\n\n"
@@ -37,7 +37,7 @@ async def on_menu_privacy(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     q: CallbackQuery = update.callback_query
     await q.answer()
     await q.edit_message_text(
-        _PRIVACY_TEXT, parse_mode="HTML",
+        __privacy_msg__, parse_mode="HTML",
         reply_markup=keyboards.privacy_kb(),
     )
 
@@ -46,7 +46,7 @@ async def on_menu_privacy_policy(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
     q: CallbackQuery = update.callback_query
     await q.answer()
     await q.edit_message_text(
-        _PRIVACY_POLICY_TEXT, parse_mode="HTML",
+        __privacy_policy_msg__, parse_mode="HTML",
         reply_markup=keyboards.back_to_privacy_kb(),
     )
 

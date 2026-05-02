@@ -10,7 +10,7 @@ from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, 
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
 from tcbot import database as db
-from tcbot.modules.about import ABOUT_TEXT
+from tcbot.modules.about import __about_msg__
 from tcbot.modules.helper import keyboards
 from tcbot.modules.helper.formatter import code, esc
 from tcbot.utils.prefixes import build_prefixed_filters
@@ -38,7 +38,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     if arg == "about":
         await msg.reply_text(
-            ABOUT_TEXT, parse_mode="HTML",
+            __about_msg__, parse_mode="HTML",
             reply_markup=keyboards.back_to_start_kb(),
         )
         return
