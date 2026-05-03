@@ -1,12 +1,12 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Tests for :mod:`tgbot_tcf.utils.targets`."""
+"""Tests for :mod:`tcbot.modules.helper.extraction` – target resolution helpers."""
 from __future__ import annotations
 
 from types import SimpleNamespace
 
-from tcbot.utils.targets import ResolvedTarget, get_reason
+from tcbot.modules.helper.extraction import ResolvedTarget, get_reason
 
 
 def test_resolved_target_falls_back_to_string_id_when_no_first_name() -> None:
