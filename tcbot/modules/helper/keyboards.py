@@ -151,7 +151,7 @@ def checkme_ban_kb(
     proof_link: str | None = None,
 ) -> InlineKeyboardMarkup:
     """Summary view keyboard — Details | Proof (row 1), Appeal (row 2)."""
-    appeal_url = f"https://t.me/{bot_username}?start=appeal{ban_id}"
+    appeal_url = f"https://t.me/{bot_username}?start=appeal_{ban_id}"
     row1 = [InlineKeyboardButton("Details", callback_data=f"checkme_detail:{ban_id}")]
     if proof_link:
         row1.append(InlineKeyboardButton("Proof", url=proof_link))

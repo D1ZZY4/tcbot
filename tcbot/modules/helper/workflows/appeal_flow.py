@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 
 WAITING_APPEAL = 0
 
-_ID_RE = re.compile(r"^/start\s+appeal([a-z0-9]{10})$")
+_ID_RE = re.compile(r"^/start\s+appeal_([a-z0-9]{10})$")
 
 _INSTRUCTION_TEXT = (
     f"{cfg.community_name} Ban Appeal\n\n"
@@ -353,7 +353,7 @@ def build_handler() -> ConversationHandler:
     return ConversationHandler(
         entry_points=[
             MessageHandler(
-                filters.ChatType.PRIVATE & filters.Regex(r"^/start\s+appeal[a-z0-9]{10}$"),
+                filters.ChatType.PRIVATE & filters.Regex(r"^/start\s+appeal_[a-z0-9]{10}$"),
                 cmd_start_appeal_entry,
             ),
         ],

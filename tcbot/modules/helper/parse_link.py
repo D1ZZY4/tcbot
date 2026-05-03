@@ -48,7 +48,7 @@ def topic_link(chat_id: int, message_id: int, thread_id: int) -> str:
 
 
 def appeal_deep_link(bot_username: str, ban_id: str) -> str:
-    return f"https://t.me/{bot_username}?start=appeal{ban_id}"
+    return f"https://t.me/{bot_username}?start=appeal_{ban_id}"
 
 
 ## ---------------------------------------------------------------------------
