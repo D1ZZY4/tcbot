@@ -11,7 +11,7 @@ A Telegram bot for the Transsion Core Federation (TCF) community. Manages federa
 - **Database:** MongoDB (via motor, async)
 - **Web server:** Flask (keep-alive / health-check on port 5000)
 - **Entry point:** `python3 -m tcbot`
-- **Dependency management:** `uv` (lock file: `uv.lock`; `requirements.txt` is legacy and git-ignored)
+- **Dependency management:** `pip` / `requirements.txt`
 
 ## Key Modules
 
@@ -43,12 +43,12 @@ Secrets are stored in Replit Secrets (environment variables). Non-sensitive conf
 
 - `BOT_TOKEN` — Telegram bot token (**Replit Secret**)
 - `MONGODB_URI` — MongoDB connection string (**Replit Secret**)
-- `OWNER_ID` — Initial owner Telegram user ID (env var)
-- `DB_NAME` — MongoDB database name (env var, default: "tcbot")
-- `MAIN_GROUP` — Main Telegram group/forum chat ID (env var)
-- `PORT` — Web server port, set to 5000 for Replit (env var)
+- `OWNER_ID` — Initial owner Telegram user ID (env var, shared)
+- `DB_NAME` — MongoDB database name (env var, shared, default: "tcbot")
+- `MAIN_GROUP` — Main Telegram group/forum chat ID (env var, shared)
+- `PORT` — Web server port, set to 5000 for Replit (env var, shared)
 
-The `config.env` file is kept as a local fallback only and is excluded from version control via `.gitignore`.
+The `config.env` file is kept as a local reference template only — secrets must never be stored there. All runtime config is read from environment variables.
 
 ## Role System
 
@@ -81,8 +81,8 @@ Auto-demote: when a user with any role is **banned or kicked**, their role is au
 
 Run with: `python3 -m pytest`
 
-61 tests across 8 files — all pass offline (no real bot token or MongoDB needed).
-Test dependencies: `pip install pytest pytest-asyncio` (Replit) or `uv sync --extra test` (local).
+95 tests across 8 files — all pass.
+Test dependencies: `pytest`, `pytest-asyncio` (installed via pip).
 
 | File | What it tests |
 |---|---|
@@ -95,20 +95,16 @@ Test dependencies: `pip install pytest pytest-asyncio` (Replit) or `uv sync --ex
 | `tests/test_appeals_pure.py` | Pure appeal logic functions |
 | `tests/test_admins_mod.py` | `admins_ext` service layer with mocked DB |
 
-## Docker
+## Workflows
 
-```
-docker-compose up --build
-```
-
-- `Dockerfile` — uses `uv` (`COPY --from=ghcr.io/astral-sh/uv:latest`) with `uv sync --frozen --no-dev`
-- `docker-compose.yml` — `bot` + `mongo:7` services; bot waits for MongoDB health-check
+- **Start application** — `python3 -m tcbot` (port 5000, webview)
+- **Run Tests (TDD)** — `python3 -m pytest tests/ -v` (console)
 
 ## Deployment
 
-- Workflow: `python3 -m tcbot`
+- Deployment target: **autoscale**
+- Run command: `python3 -m tcbot`
 - Port 5000 exposed as the health-check / keep-alive endpoint
-- Deployment target: **autoscale**, run command: `python3 -m tcbot`
 
 Copyright (c) 2024–2026 Transsion Core
 Copyright (c) 2024–2026 Dizzy
