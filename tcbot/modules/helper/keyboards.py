@@ -174,7 +174,7 @@ def main_menu_kb() -> InlineKeyboardMarkup:
         [
             [
                 InlineKeyboardButton("About", callback_data="menu_about"),
-                InlineKeyboardButton("Help", callback_data="menu_help"),
+                InlineKeyboardButton("Help",  callback_data="menu_help"),
             ],
             [InlineKeyboardButton("Additional", callback_data="menu_additional")],
             [InlineKeyboardButton("Privacy",    callback_data="menu_privacy")],
@@ -182,7 +182,19 @@ def main_menu_kb() -> InlineKeyboardMarkup:
     )
 
 
-def help_topics_kb(topics: list[tuple[str, str]]) -> InlineKeyboardMarkup:
+def group_start_kb(bot_username: str) -> InlineKeyboardMarkup:
+    """Keyboard for /start sent inside a group — sends user to PM."""
+    pm_url = f"https://t.me/{bot_username}?start=menu"
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("Open in PM ↗", url=pm_url)],
+            [InlineKeyboardButton("Help",          callback_data="menu_help_group")],
+        ]
+    )
+
+
+def help_topics_menu_kb(topics: list[tuple[str, str]]) -> InlineKeyboardMarkup:
+    """Help index when reached via the start menu — includes « Back to start."""
     rows: list[list] = []
     it = iter(topics)
     for a, b in zip(it, it):
@@ -195,6 +207,22 @@ def help_topics_kb(topics: list[tuple[str, str]]) -> InlineKeyboardMarkup:
     for item in list(it):
         rows.append([InlineKeyboardButton(item[0], callback_data=item[1])])
     rows.append([InlineKeyboardButton("« Back", callback_data="menu_back_start")])
+    return InlineKeyboardMarkup(rows)
+
+
+def help_topics_kb(topics: list[tuple[str, str]]) -> InlineKeyboardMarkup:
+    """Help index when reached via /help command (PM or group) — no back to start."""
+    rows: list[list] = []
+    it = iter(topics)
+    for a, b in zip(it, it):
+        rows.append(
+            [
+                InlineKeyboardButton(a[0], callback_data=a[1]),
+                InlineKeyboardButton(b[0], callback_data=b[1]),
+            ]
+        )
+    for item in list(it):
+        rows.append([InlineKeyboardButton(item[0], callback_data=item[1])])
     return InlineKeyboardMarkup(rows)
 
 
@@ -231,10 +259,22 @@ def back_to_start_kb() -> InlineKeyboardMarkup:
 
 
 def back_to_help_kb() -> InlineKeyboardMarkup:
+    """Back to help index — used from menu-path topics (goes to menu_help)."""
     return InlineKeyboardMarkup(
         [
             [
                 InlineKeyboardButton("« Back", callback_data="menu_help"),
+            ]
+        ]
+    )
+
+
+def back_to_help_cmd_kb() -> InlineKeyboardMarkup:
+    """Back to help index — used from command-path topics (goes to helpcmd_idx)."""
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("« Back", callback_data="helpcmd_idx"),
             ]
         ]
     )

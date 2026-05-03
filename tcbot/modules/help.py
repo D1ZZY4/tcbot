@@ -46,14 +46,19 @@ def _build_help_content() -> dict[str, tuple[str, str]]:
 
 HELP_CONTENT = _build_help_content()
 
-## Pre-built list of (label, callback_data) for the keyboard
-HELP_TOPICS: list[tuple[str, str]] = [
+## Menu-path topics  — callback keys stay as "help_<mod>"
+HELP_TOPICS_MENU: list[tuple[str, str]] = [
     (name, key) for key, (name, _) in HELP_CONTENT.items()
+]
+
+## Command-path topics — callback keys become "helpc_<mod>"
+HELP_TOPICS_CMD: list[tuple[str, str]] = [
+    (name, "helpc_" + key[5:]) for key, (name, _) in HELP_CONTENT.items()
 ]
 
 
 ## ---------------------------------------------------------------------------
-## Handlers
+## Shared text
 ## ---------------------------------------------------------------------------
 
 
@@ -64,13 +69,23 @@ _HELP_INDEX_TEXT = (
 )
 
 
+## ---------------------------------------------------------------------------
+## /help command handler  (PM or group — no back-to-start)
+## ---------------------------------------------------------------------------
+
+
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     bot_name = ctx.bot.first_name or "TC Bot"
     await update.effective_message.reply_text(
         _HELP_INDEX_TEXT.format(bot_name=bot_name, community=cfg.community_name),
         parse_mode="HTML",
-        reply_markup=keyboards.help_topics_kb(HELP_TOPICS),
+        reply_markup=keyboards.help_topics_kb(HELP_TOPICS_CMD),
     )
+
+
+## ---------------------------------------------------------------------------
+## Callback: Help button from start menu  (PM only — has back-to-start)
+## ---------------------------------------------------------------------------
 
 
 async def on_menu_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -80,8 +95,44 @@ async def on_menu_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await q.edit_message_text(
         _HELP_INDEX_TEXT.format(bot_name=bot_name, community=cfg.community_name),
         parse_mode="HTML",
-        reply_markup=keyboards.help_topics_kb(HELP_TOPICS),
+        reply_markup=keyboards.help_topics_menu_kb(HELP_TOPICS_MENU),
     )
+
+
+## ---------------------------------------------------------------------------
+## Callback: Help button pressed inside a group (/start group inline button)
+## ---------------------------------------------------------------------------
+
+
+async def on_menu_help_group(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Help tapped from group /start inline — answer with alert, no edit."""
+    q: CallbackQuery = update.callback_query
+    bot_name = ctx.bot.first_name or "TC Bot"
+    await q.answer(
+        f"Use /help in this group to browse all commands.",
+        show_alert=True,
+    )
+
+
+## ---------------------------------------------------------------------------
+## Callback: "helpcmd_idx" — back to help index (command path, no back-to-start)
+## ---------------------------------------------------------------------------
+
+
+async def on_helpcmd_idx(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q: CallbackQuery = update.callback_query
+    await q.answer()
+    bot_name = ctx.bot.first_name or "TC Bot"
+    await q.edit_message_text(
+        _HELP_INDEX_TEXT.format(bot_name=bot_name, community=cfg.community_name),
+        parse_mode="HTML",
+        reply_markup=keyboards.help_topics_kb(HELP_TOPICS_CMD),
+    )
+
+
+## ---------------------------------------------------------------------------
+## Callback: topic selected from menu path  ("help_<mod>")
+## ---------------------------------------------------------------------------
 
 
 async def on_help_topic(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -99,10 +150,39 @@ async def on_help_topic(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+## ---------------------------------------------------------------------------
+## Callback: topic selected from command path  ("helpc_<mod>")
+## ---------------------------------------------------------------------------
+
+
+async def on_help_topic_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q: CallbackQuery = update.callback_query
+    await q.answer()
+    ## "helpc_banning" → "help_banning"
+    menu_key = "help_" + q.data[6:]
+    if menu_key not in HELP_CONTENT:
+        await q.edit_message_text("Topic not found.", reply_markup=keyboards.back_to_help_cmd_kb())
+        return
+    name, text = HELP_CONTENT[menu_key]
+    await q.edit_message_text(
+        f"<b>Help for {name}</b>\n\n{text}",
+        parse_mode="HTML",
+        reply_markup=keyboards.back_to_help_cmd_kb(),
+    )
+
+
+## ---------------------------------------------------------------------------
+## Handler list
+## ---------------------------------------------------------------------------
+
+
 _HELP_FILTER = build_prefixed_filters("help") | build_prefixed_filters("commands")
 
 __handlers__ = [
     MessageHandler(_HELP_FILTER, cmd_help),
-    CallbackQueryHandler(on_menu_help, pattern=r"^menu_help$"),
-    CallbackQueryHandler(on_help_topic, pattern=r"^help_\w+$"),
+    CallbackQueryHandler(on_menu_help,        pattern=r"^menu_help$"),
+    CallbackQueryHandler(on_menu_help_group,  pattern=r"^menu_help_group$"),
+    CallbackQueryHandler(on_helpcmd_idx,      pattern=r"^helpcmd_idx$"),
+    CallbackQueryHandler(on_help_topic,       pattern=r"^help_\w+$"),
+    CallbackQueryHandler(on_help_topic_cmd,   pattern=r"^helpc_\w+$"),
 ]

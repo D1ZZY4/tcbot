@@ -25,18 +25,36 @@ _MENU_TEXT = (
     "Use the buttons below to learn more or view important links."
 )
 
+_GROUP_START_TEXT = (
+    "<b>Hey! I'm {bot_name}.</b>\n"
+    "I manage {community} groups, federation bans, and appeals.\n\n"
+    "Use /help to browse all available commands, or open me in PM for the full menu."
+)
+
 
 ## ---------------------------------------------------------------------------
 ## /start command
 ## ---------------------------------------------------------------------------
 
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    msg   = update.effective_message
-    text  = (msg.text or "").strip()
-    parts = text.split(None, 1)
-    arg   = parts[1].strip() if len(parts) > 1 else ""
+    msg      = update.effective_message
+    chat     = update.effective_chat
+    text     = (msg.text or "").strip()
+    parts    = text.split(None, 1)
+    arg      = parts[1].strip() if len(parts) > 1 else ""
     bot_name = ctx.bot.first_name or "TC Bot"
 
+    ## Group / supergroup context — send a minimal message with PM link
+    if chat.type in ("group", "supergroup"):
+        bot_username = ctx.bot.username or ""
+        await msg.reply_text(
+            _GROUP_START_TEXT.format(bot_name=bot_name, community=cfg.community_name),
+            parse_mode="HTML",
+            reply_markup=keyboards.group_start_kb(bot_username),
+        )
+        return
+
+    ## PM context below
     if arg == "about":
         await msg.reply_text(
             __about_msg__, parse_mode="HTML",
@@ -46,7 +64,8 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     ## appeal<ban_id> deep links are handled by the ConversationHandler in appealing.py
     await msg.reply_text(
-        _MENU_TEXT.format(bot_name=bot_name, community=cfg.community_name), parse_mode="HTML",
+        _MENU_TEXT.format(bot_name=bot_name, community=cfg.community_name),
+        parse_mode="HTML",
         reply_markup=keyboards.main_menu_kb(),
     )
 
@@ -60,7 +79,8 @@ async def on_menu_back_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     await q.answer()
     bot_name = ctx.bot.first_name or "TC Bot"
     await q.edit_message_text(
-        _MENU_TEXT.format(bot_name=bot_name, community=cfg.community_name), parse_mode="HTML",
+        _MENU_TEXT.format(bot_name=bot_name, community=cfg.community_name),
+        parse_mode="HTML",
         reply_markup=keyboards.main_menu_kb(),
     )
 
@@ -70,7 +90,7 @@ def _groups_menu_kb(detailed: bool) -> InlineKeyboardMarkup:
         "Simple" if detailed else "Details",
         callback_data="menu_groups_simple" if detailed else "menu_groups_details",
     )
-    back = InlineKeyboardButton("Back", callback_data="menu_back_start")
+    back = InlineKeyboardButton("« Back", callback_data="menu_back_start")
     return InlineKeyboardMarkup([[toggle], [back]])
 
 
@@ -117,6 +137,7 @@ async def on_menu_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) 
 _START_FILTER = (
     filters.Regex(r"^/start$")
     | filters.Regex(r"^/start\s+about$")
+    | filters.Regex(r"^/start\s+menu$")
 )
 _START_PREFIXED = build_prefixed_filters("start")
 
