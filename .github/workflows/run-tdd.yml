@@ -1,0 +1,262 @@
+name: TDD — Multi-Python Matrix
+
+on:
+  push:
+    branches: [main, "feat/**", "fix/**", "refactor/**"]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * 1"    # every Monday 03:00 UTC — full latest-package sweep
+  workflow_dispatch:
+
+concurrency:
+  group: tdd-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Matrix: run tests across all supported Python versions with latest packages
+  # ---------------------------------------------------------------------------
+  pytest:
+    name: pytest / Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    services:
+      mongodb:
+        image: mongo:8.0
+        ports:
+          - 27017:27017
+
+    outputs:
+      any_failure: ${{ steps.result.outputs.any_failure }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+
+      - name: Upgrade all packages to latest
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          # Always fetch latest compatible versions — this is the point of the matrix
+          pip install --upgrade \
+            "python-telegram-bot[job-queue]" \
+            motor \
+            flask \
+            python-dotenv \
+            pytest \
+            pytest-asyncio
+          # Install project in editable mode so tcbot/ is importable
+          pip install -e . --no-deps 2>/dev/null || true
+
+      - name: Run test suite
+        id: run_tests
+        env:
+          BOT_TOKEN:      "test:token"
+          MONGODB_URI:    "mongodb://localhost:27017"
+          DB_NAME:        "tcbot_test"
+          COMMUNITY_NAME: "TCF"
+          OWNER_ID:       "123456"
+          LOGS:           "-1001000000001"
+          PROOFS:         "-1001000000002"
+          APPEALS:        "-1001000000003"
+        run: |
+          mkdir -p results
+          python -m pytest tests/ \
+            --tb=short \
+            --junit-xml=results/junit-py${{ matrix.python-version }}.xml \
+            -q 2>&1 | tee results/pytest-py${{ matrix.python-version }}.log
+          echo "EXIT=${PIPESTATUS[0]}" >> "$GITHUB_ENV"
+        continue-on-error: true
+
+      - id: result
+        run: |
+          if [[ "$EXIT" != "0" ]]; then
+            echo "any_failure=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "any_failure=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdd-results-py${{ matrix.python-version }}
+          path: results/
+          retention-days: 14
+
+      - name: Fail if tests failed
+        if: env.EXIT != '0'
+        run: exit 1
+
+  # ---------------------------------------------------------------------------
+  # AI step: fix failures + generate new tests for Python 3.12/3.13 features.
+  # Runs when: any matrix job failed  OR  weekly schedule sweep.
+  # Uses GitHub Models — free, no external API key.
+  # ---------------------------------------------------------------------------
+  ai-patch:
+    name: AI — fix failures & generate new tests
+    needs: pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      models: read
+    if: >
+      always() &&
+      (needs.pytest.result == 'failure' || github.event_name == 'schedule')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Download all test artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: AI reads project → fixes failures + writes new tests
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python - << 'PYEOF'
+          import json, os, pathlib, sys, textwrap, urllib.request
+
+          SKIP = {".git", "__pycache__", ".pythonlibs", ".local", ".pytest_cache", "artifacts"}
+
+          def read_project(roots: list[str], exts=(".py", ".md", ".toml")) -> dict[str, str]:
+              out: dict[str, str] = {}
+              for root in roots:
+                  for p in pathlib.Path(root).rglob("*"):
+                      if not p.is_file() or p.suffix not in exts:
+                          continue
+                      if any(s in p.parts for s in SKIP):
+                          continue
+                      try:
+                          out[str(p)] = p.read_text(errors="replace")
+                      except OSError:
+                          pass
+              return out
+
+          def read_artifacts() -> str:
+              parts = [
+                  f"=== {p.name} ===\n{p.read_text(errors='replace')}"
+                  for p in sorted(pathlib.Path("artifacts").rglob("*.log"))
+              ]
+              return "\n\n".join(parts) if parts else "(no failure logs — weekly sweep)"
+
+          def ask_ai(system: str, user: str) -> str:
+              token = os.environ["GITHUB_TOKEN"]
+              payload = json.dumps({
+                  "model": "gpt-4o-mini",
+                  "messages": [
+                      {"role": "system", "content": system},
+                      {"role": "user",   "content": user},
+                  ],
+                  "max_tokens": 8192,
+                  "temperature": 0.1,
+              }).encode()
+              req = urllib.request.Request(
+                  "https://models.inference.ai.azure.com/chat/completions",
+                  data=payload,
+                  headers={
+                      "Content-Type": "application/json",
+                      "Authorization": f"Bearer {token}",
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=120) as resp:
+                  return json.loads(resp.read())["choices"][0]["message"]["content"]
+
+          project  = read_project(["agents", "tcbot", "tests", "pyproject.toml"])
+          ctx      = "\n\n".join(f"--- {k} ---\n{v}" for k, v in sorted(project.items()))
+          failures = read_artifacts()
+
+          SYSTEM = textwrap.dedent("""
+              You are a senior Python engineer embedded in a CI pipeline for TCF Bot.
+              Stack: Python 3.11+, python-telegram-bot 22.5 (async), Motor (MongoDB), Flask.
+              Main package: tcbot/. Architecture and strict coding rules: agents/.
+              Tests live in tests/. All test files start with the copyright header in agents/STYLE-COMMENTS.md.
+
+              Your tasks:
+              1. Read and fully understand the project — every rule in agents/ is authoritative.
+              2. Fix any failing tests shown in the logs. If the bug is in source code (not the test),
+                 fix the source — follow agents/STYLE-CODE.md exactly.
+              3. Add NEW test functions (or new files) that cover Python 3.12 and 3.13 specific
+                 behaviour that is relevant to this codebase:
+                 - PEP 695 type aliases (type X = ...)
+                 - Improved match-case patterns
+                 - New asyncio APIs (asyncio.timeout, TaskGroup, etc.)
+                 - tomllib (stdlib in 3.11+)
+                 - Other stdlib additions that tcbot/ could use or already uses
+              4. Every new/fixed file must strictly follow agents/STYLE-CODE.md and
+                 agents/STYLE-COMMENTS.md — copyright header, no emojis, max 600 lines, etc.
+
+              Return ONLY valid JSON — no prose, no markdown fences:
+              {
+                "summary": "one-sentence summary of what you changed",
+                "fixes": {
+                  "tests/test_foo.py": "full corrected/new file content",
+                  "tcbot/some_module.py": "corrected source only if bug is in source"
+                }
+              }
+              Safety rules:
+              - Only write to tests/ and tcbot/
+              - Do not delete existing test functions
+              - Do not touch Dockerfile, docker-compose*, .github/workflows/*, c.env
+          """).strip()
+
+          USER = (
+              "Read the full project first — agents/ docs are your rules. "
+              "Then fix failures and add Python 3.12/3.13 test coverage.\n\n"
+              f"=== PROJECT FILES ===\n{ctx}\n\n"
+              f"=== PYTEST FAILURE LOGS ===\n{failures}"
+          )
+
+          raw = ask_ai(SYSTEM, USER)
+          if raw.startswith("```"):
+              raw = "\n".join(raw.split("\n")[1:]).rsplit("```", 1)[0].strip()
+
+          try:
+              data = json.loads(raw)
+          except json.JSONDecodeError as exc:
+              print(f"AI returned invalid JSON ({exc}).", file=sys.stderr)
+              print(raw[:300], file=sys.stderr)
+              sys.exit(1)
+
+          print(f"AI summary: {data.get('summary', '(none)')}")
+          written = 0
+          for path_str, content in data.get("fixes", {}).items():
+              p = pathlib.Path(path_str)
+              if not (str(p).startswith("tests/") or str(p).startswith("tcbot/")):
+                  print(f"Skipped (outside allowed dirs): {p}", file=sys.stderr)
+                  continue
+              p.parent.mkdir(parents=True, exist_ok=True)
+              p.write_text(content)
+              print(f"Written: {p}")
+              written += 1
+
+          print(f"AI patch complete — {written} file(s) written.")
+          PYEOF
+
+      - name: Commit AI patches
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add tests/ tcbot/
+          git diff --cached --quiet \
+            || git commit -m "chore(tdd): AI patch — fix failures & add 3.12/3.13 coverage [skip ci]"
+          git push 2>/dev/null || true
