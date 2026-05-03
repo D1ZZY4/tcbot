@@ -109,8 +109,3 @@ docker-compose up --build
 - Workflow: `python3 -m tcbot`
 - Port 5000 exposed as the health-check / keep-alive endpoint
 - Deployment target: **autoscale**, run command: `python3 -m tcbot`
-
-Copyright (c) 2024–2026 Transsion Core
-Copyright (c) 2024–2026 Dizzy
-Copyright (c) 2026 Aveum Apps
-Copyright (c) 2026 Replit

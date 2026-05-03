@@ -1,3 +1,5 @@
+## Copyright (c) 2026 Replit
+
 modules = ["python-3.11"]
 [agent]
 expertMode = true
