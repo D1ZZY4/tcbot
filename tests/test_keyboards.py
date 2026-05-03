@@ -1,11 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Tests for the inline keyboard factories in :mod:`tcbot.modules.helper.keyboards`.
-
-PROMPT Feature 26 requires the layouts below; these tests guard the row
-shape and callback-data naming.
-"""
+"""Tests for the inline keyboard factories in :mod:`tcbot.modules.helper.keyboards`."""
 from __future__ import annotations
 
 from telegram import InlineKeyboardMarkup
@@ -27,31 +23,30 @@ def _rows(markup: InlineKeyboardMarkup) -> list[list[dict[str, str | None]]]:
     ]
 
 
-def test_start_menu_layout() -> None:
-    rows = _rows(keyboards.start_menu())
-    assert len(rows) == 4
+def test_main_menu_kb_layout() -> None:
+    rows = _rows(keyboards.main_menu_kb())
+    assert len(rows) == 3
     assert [b["text"] for b in rows[0]] == ["About", "Help"]
     assert rows[0][0]["callback_data"] == "menu_about"
-    assert rows[1][1]["callback_data"] == "menu_additional"
-    assert rows[2][0]["callback_data"] == "menu_information"
-    assert rows[3][0]["callback_data"] == "menu_privacy"
+    assert rows[1][0]["callback_data"] == "menu_additional"
+    assert rows[2][0]["callback_data"] == "menu_privacy"
 
 
-def test_back_to_start_is_single_back_button() -> None:
-    rows = _rows(keyboards.back_to_start())
+def test_back_to_start_kb_is_single_back_button() -> None:
+    rows = _rows(keyboards.back_to_start_kb())
     assert rows == [[{"text": "« Back", "callback_data": "menu_back_start", "url": None}]]
 
 
-def test_appeal_review_callback_data_includes_ban_id() -> None:
-    rows = _rows(keyboards.appeal_review("ban_42_1714"))
+def test_appeal_review_kb_callback_data_includes_ban_id() -> None:
+    rows = _rows(keyboards.appeal_review_kb("ban_42_1714"))
     assert rows[0][0]["callback_data"] == "appeal_approve_ban_42_1714"
     assert rows[0][1]["callback_data"] == "appeal_reject_ban_42_1714"
 
 
-def test_promotion_request_callback_data_includes_request_id() -> None:
-    rows = _rows(keyboards.promotion_request("req-uuid"))
-    assert rows[0][0]["callback_data"] == "approve_promote_req-uuid"
-    assert rows[0][1]["callback_data"] == "reject_promote_req-uuid"
+def test_promo_decision_kb_callback_data_includes_request_id() -> None:
+    rows = _rows(keyboards.promo_decision_kb("req-uuid"))
+    assert rows[0][0]["callback_data"] == "promo_approve:req-uuid"
+    assert rows[0][1]["callback_data"] == "promo_reject:req-uuid"
 
 
 def test_ban_log_new_has_two_rows_with_proof_and_appeal() -> None:

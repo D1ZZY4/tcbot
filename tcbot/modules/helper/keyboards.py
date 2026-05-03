@@ -23,46 +23,12 @@ def cancel_proof_kb() -> InlineKeyboardMarkup:
     )
 
 
-def ban_log_kb(
-    target_id: int,
-    proof_lnk: str,
-    bot_username: str,
-    ban_id: str,
-) -> InlineKeyboardMarkup:
-    appeal_url = f"https://t.me/{bot_username}?start=appeal{ban_id}"
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton(f"Proof {target_id}", url=proof_lnk)],
-            [InlineKeyboardButton("Submit Appeal", url=appeal_url)],
-        ]
-    )
-
-
-def ban_log_update_kb(
-    target_id: int,
-    proof_lnk: str,
-    prev_proof_lnk: str,
-    bot_username: str,
-    ban_id: str,
-) -> InlineKeyboardMarkup:
-    appeal_url = f"https://t.me/{bot_username}?start=appeal{ban_id}"
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(f"Proof {target_id}", url=proof_lnk),
-                InlineKeyboardButton(f"Previous Proof {target_id}", url=prev_proof_lnk),
-            ],
-            [InlineKeyboardButton("Submit Appeal", url=appeal_url)],
-        ]
-    )
-
-
 def ban_log_new(
     target_id: int,
     proof_link: str,
     appeal_url: str,
 ) -> InlineKeyboardMarkup:
-    """Ban-log keyboard with explicit appeal URL (no bot_username needed)."""
+    """Ban-log keyboard with explicit appeal URL."""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(f"Proof {target_id}", url=proof_link)],
         [InlineKeyboardButton("Submit Appeal",       url=appeal_url)],
@@ -75,7 +41,7 @@ def ban_log_update(
     previous_proof_link: str,
     appeal_url: str,
 ) -> InlineKeyboardMarkup:
-    """Updated ban-log keyboard with explicit appeal URL and previous-proof button."""
+    """Updated ban-log keyboard with previous-proof button and explicit appeal URL."""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(f"Proof {target_id}",          url=proof_link),
@@ -113,11 +79,6 @@ def appeal_review_kb(ban_id: str) -> InlineKeyboardMarkup:
     )
 
 
-def appeal_review(ban_id: str) -> InlineKeyboardMarkup:
-    """Alias for appeal_review_kb with the public API naming convention."""
-    return appeal_review_kb(ban_id)
-
-
 ## ---------------------------------------------------------------------------
 ## Admin promotion
 ## ---------------------------------------------------------------------------
@@ -136,14 +97,6 @@ def promo_decision_kb(request_id: str) -> InlineKeyboardMarkup:
             ]
         ]
     )
-
-
-def promotion_request(request_id: str) -> InlineKeyboardMarkup:
-    """Approve/Reject keyboard for a promotion request (public API naming)."""
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton("Approve", callback_data=f"approve_promote_{request_id}"),
-        InlineKeyboardButton("Reject",  callback_data=f"reject_promote_{request_id}"),
-    ]])
 
 
 ## ---------------------------------------------------------------------------
@@ -208,34 +161,6 @@ def baninfo_proof_kb(proof_lnk: str) -> InlineKeyboardMarkup:
 ## ---------------------------------------------------------------------------
 ## Start / Help menus
 ## ---------------------------------------------------------------------------
-
-
-def start_menu() -> InlineKeyboardMarkup:
-    """Main /start menu – four rows of navigation buttons."""
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("About",      callback_data="menu_about"),
-            InlineKeyboardButton("Help",       callback_data="menu_help"),
-        ],
-        [
-            InlineKeyboardButton("Stats",      callback_data="menu_stats"),
-            InlineKeyboardButton("Additional", callback_data="menu_additional"),
-        ],
-        [
-            InlineKeyboardButton("Information", callback_data="menu_information"),
-            InlineKeyboardButton("Groups",      callback_data="menu_groups"),
-        ],
-        [
-            InlineKeyboardButton("Privacy", callback_data="menu_privacy"),
-        ],
-    ])
-
-
-def back_to_start() -> InlineKeyboardMarkup:
-    """Single Back button that returns the user to the start menu."""
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton("« Back", callback_data="menu_back_start"),
-    ]])
 
 
 def main_menu_kb() -> InlineKeyboardMarkup:

@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Link builders, HTML formatters, and datetime helpers for the TCF bot."""
+"""Link builders and HTML formatters for the TCF bot."""
 from __future__ import annotations
 
 import html
@@ -16,16 +16,6 @@ from datetime import datetime, timezone
 def utcnow() -> datetime:
     """Return the current UTC time as a naive datetime (tzinfo=None)."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
-
-
-def fmt_dt(dt: datetime) -> str:
-    """Format a datetime as DD-MM-YYYY | HH:MM."""
-    return dt.strftime("%d-%m-%Y | %H:%M")
-
-
-def fmt_now() -> str:
-    """Format the current UTC time as DD-MM-YYYY | HH:MM."""
-    return fmt_dt(utcnow())
 
 
 ## ---------------------------------------------------------------------------

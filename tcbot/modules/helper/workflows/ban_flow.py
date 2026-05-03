@@ -21,7 +21,7 @@ from tcbot import database as db
 from tcbot import cfg
 from tcbot.modules.helper import extraction, keyboards, parse_logmsg
 from tcbot.modules.helper.formatter import mention
-from tcbot.modules.helper.parse_link import message_link
+from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.timedate_format import utc_now
 
@@ -235,11 +235,11 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict) -> None:
             existing.get("timestamp", now),
             proof_link, prev_proof_link,
         )
-        kb = keyboards.ban_log_update_kb(
-            target_id, proof_link or "#", prev_proof_link or "#",
-            bot_username, ban_id,
+        _appeal_url = appeal_deep_link(bot_username, ban_id)
+        kb = keyboards.ban_log_update(
+            target_id, proof_link, prev_proof_link, _appeal_url,
         ) if proof_link and prev_proof_link else (
-            keyboards.ban_log_kb(target_id, proof_link or "#", bot_username, ban_id)
+            keyboards.ban_log_new(target_id, proof_link, _appeal_url)
             if proof_link else None
         )
         ## Update DB record
@@ -256,8 +256,8 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict) -> None:
             target_id, target_fname, admin_id, admin_fname,
             reason, ban_id, proof_link, now,
         )
-        kb = keyboards.ban_log_kb(
-            target_id, proof_link or "#", bot_username, ban_id,
+        kb = keyboards.ban_log_new(
+            target_id, proof_link, appeal_deep_link(bot_username, ban_id),
         ) if proof_link else None
         await db.bans_db.create_ban(target_id, reason, admin_id, proof_msg_id or 0, 0, ban_id)
 

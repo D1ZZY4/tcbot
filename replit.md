@@ -25,15 +25,15 @@ A Telegram bot for the Transsion Core Federation (TCF) community. Manages federa
 | `tcbot/database/bans_db.py` | Federation bans collection |
 | `tcbot/database/queues_db.py` | Promotion-request queue collection |
 | `tcbot/database/users_db.py` | Member-cache collection |
-| `tcbot/modules/helper/parse_link.py` | Link builders, HTML helpers (`user_link`, `safe_first_name`), datetime (`utcnow`, `fmt_dt`) |
-| `tcbot/modules/helper/keyboards.py` | All inline-keyboard factory functions |
 | `tcbot/modules/messages.py` | Central `M` namespace for all user-facing strings |
 | `tcbot/modules/appeals.py` | Pure functions for appeal business logic |
 | `tcbot/modules/admins_ext.py` | Admin service layer (promote, demote, transfer ownership) |
-| `tcbot/utils/targets.py` | `ResolvedTarget` dataclass and `get_reason()` |
-| `tcbot/utils/users.py` | `UserIdentity`, `resolve_identity()`, `members_repo` |
+| `tcbot/modules/helper/parse_link.py` | Link builders, HTML helpers (`user_link`, `safe_first_name`), `utcnow()` |
+| `tcbot/modules/helper/keyboards.py` | All inline-keyboard factory functions |
+| `tcbot/modules/helper/extraction.py` | `extract_target()`, `ResolvedTarget`, `resolve_identity()` |
 | `tcbot/utils/prefixes.py` | Prefix filter builder + alt-prefix dispatcher (`_REGISTRY`) |
 | `tcbot/utils/logger.py` | `BotLogFormatter` and `setup()` |
+| `tcbot/utils/timedate_format.py` | `fmt_dt()` (tz-safe), `utc_now()` |
 
 ## Configuration
 

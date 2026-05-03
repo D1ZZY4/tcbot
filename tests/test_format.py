@@ -9,13 +9,12 @@ from types import SimpleNamespace
 
 from tcbot.modules.helper.parse_link import (
     chat_id_to_link_id,
-    fmt_dt,
-    fmt_now,
     safe_first_name,
     topic_link,
     user_link,
     utcnow,
 )
+from tcbot.utils.timedate_format import fmt_dt, utc_now_str as fmt_now
 
 
 def test_utcnow_is_naive_utc() -> None:
