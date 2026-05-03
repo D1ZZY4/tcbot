@@ -14,13 +14,13 @@ from tcbot.utils.prefixes import build_prefixed_filters
 __module_name__ = "Groups"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
-    "<code>/tcfgroups</code> — alias: <code>/tcg</code>\n\n"
+    "<code>/tcfgroups</code> (alias: <code>/tcg</code>)\n\n"
 
     "<b>Who can use it</b>\n"
-    "Anyone — no special permissions needed.\n\n"
+    "Anyone, no special permissions needed.\n\n"
 
     "<b>Where to use it</b>\n"
-    "Anywhere — bot PM, exec group, or any connected group.\n\n"
+    "Bot PM, exec group, or any connected group.\n\n"
 
     "<b>What it does</b>\n"
     f"Shows all groups currently connected to {cfg.community_name}. "
@@ -28,7 +28,7 @@ __help_text__ = (
     "Tap <b>Details</b> to also see each group's chat ID.\n\n"
 
     "<b>Example</b>\n"
-    "<code>/tcfgroups</code> — <code>/tcg</code>"
+    "<code>/tcfgroups</code> or <code>/tcg</code>"
 )
 
 

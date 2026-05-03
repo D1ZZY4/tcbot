@@ -28,9 +28,9 @@ def _bans_list_kb(page: int, total: int, n_items: int) -> InlineKeyboardMarkup:
 
     nav = []
     if page > 0:
-        nav.append(InlineKeyboardButton("Prev", callback_data=f"stats_bans:{page - 1}"))
+        nav.append(InlineKeyboardButton("« Prev", callback_data=f"stats_bans:{page - 1}"))
     if page < total_pages - 1:
-        nav.append(InlineKeyboardButton("Next", callback_data=f"stats_bans:{page + 1}"))
+        nav.append(InlineKeyboardButton("Next »", callback_data=f"stats_bans:{page + 1}"))
     if nav:
         rows.append(nav)
 

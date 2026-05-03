@@ -12,10 +12,10 @@ from tcbot import cfg
 __module_name__ = None
 
 __additional_msg__ = (
-    f"<b>{cfg.community_name} — Official Links</b>\n"
+    f"<b>{cfg.community_name} | Official Links</b>\n"
     "Use the buttons below to access our channels and groups. "
     "For developers interested in contributing to Transsion device development, "
-    "join TRAVEL — an independent community for collaboration and networking."
+    "join TRAVEL, an independent community for collaboration and networking."
 )
 
 
@@ -32,7 +32,7 @@ def _additional_kb() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton("TRAVEL (Dev Community)", url="http://t.me/+S2C_ppFvHlAwMzNl"),
         ],
-        [InlineKeyboardButton("Back", callback_data="menu_back_start")],
+        [InlineKeyboardButton("« Back", callback_data="menu_back_start")],
     ])
 
 

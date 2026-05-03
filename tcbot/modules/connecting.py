@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 __module_name__ = "Connect"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
-    "<code>/tcconnect</code> — alias: <code>/tccon</code>\n\n"
+    "<code>/tcconnect</code> (alias: <code>/tccon</code>)\n\n"
 
     "<b>Who can use it</b>\n"
     "Group admins and creators only (checked per-group).\n\n"

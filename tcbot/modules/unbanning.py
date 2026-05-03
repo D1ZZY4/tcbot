@@ -15,7 +15,7 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 __module_name__ = "Unban"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
-    "<code>/tcunban</code> — alias: <code>/tcunb</code>\n\n"
+    "<code>/tcunban</code> (alias: <code>/tcunb</code>)\n\n"
 
     "<b>Who can use it</b>\n"
     "TC Staff (admins & owner) only.\n\n"

@@ -20,26 +20,26 @@ log = logging.getLogger(__name__)
 __module_name__ = "Disconnect"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
-    "<code>/tcdisconnect</code> — alias: <code>/tcdiscon</code>\n"
-    "<code>/rmtc</code> — staff-only force removal\n\n"
+    "<code>/tcdisconnect</code> (alias: <code>/tcdiscon</code>)\n"
+    "<code>/rmtc</code>: staff-only force removal\n\n"
 
     "<b>Who can use it</b>\n"
-    "<code>/tcdisconnect</code> — group owner or TC Staff.\n"
-    "<code>/rmtc</code> — TC Staff only.\n\n"
+    "<code>/tcdisconnect</code>: group owner or TC Staff.\n"
+    "<code>/rmtc</code>: TC Staff only.\n\n"
 
     "<b>Where to use it</b>\n"
-    "<code>/tcdisconnect</code> — inside the group you want to disconnect.\n"
-    "<code>/rmtc</code> — anywhere (exec group, bot PM).\n\n"
+    "<code>/tcdisconnect</code>: inside the group you want to disconnect.\n"
+    "<code>/rmtc</code>: anywhere (exec group, bot PM).\n\n"
 
     "<b>What it does</b>\n"
-    f"<code>/tcdisconnect</code> — removes the current group from {cfg.community_name}. "
+    f"<code>/tcdisconnect</code>: removes the current group from {cfg.community_name}. "
     "The bot will leave the group after disconnecting and post a log entry.\n\n"
-    "<code>/rmtc</code> — force-removes a group by chat ID. Useful for groups the bot was kicked from "
+    "<code>/rmtc</code>: force-removes a group by chat ID. Useful for groups the bot was kicked from "
     "or groups that need to be removed remotely.\n\n"
 
     "<b>Examples</b>\n"
     "Run <code>/tcdisconnect</code> inside the group.\n"
-    "<code>/rmtc -1001234567890</code> — force remove by chat ID."
+    "<code>/rmtc -1001234567890</code>: force remove by chat ID."
 )
 
 

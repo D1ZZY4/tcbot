@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 __module_name__ = "Broadcast"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
-    "<code>/tcbroadcast</code> — alias: <code>/bc</code>\n\n"
+    "<code>/tcbroadcast</code> (alias: <code>/bc</code>)\n\n"
 
     "<b>Who can use it</b>\n"
     "TC Staff (admins & owner) only.\n\n"

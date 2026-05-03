@@ -9,7 +9,7 @@ from tcbot.modules.helper.workflows.kicking_conv import kick_conversation
 __module_name__ = "Kick"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
-    "<code>/tckick</code> — alias: <code>/tck</code>\n\n"
+    "<code>/tckick</code> (alias: <code>/tck</code>)\n\n"
 
     "<b>Who can use it</b>\n"
     "TC Staff (admins & owner) only.\n\n"

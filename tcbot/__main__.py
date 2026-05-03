@@ -73,12 +73,6 @@ def main() -> None:
     for handler in get_handlers():
         app.add_handler(handler)
 
-    ## Temporary debug: log every received text message
-    app.add_handler(
-        MessageHandler(filters.TEXT, _debug_all_text),
-        group=99,
-    )
-
     ## Low-priority handler: update member cache on every group message
     app.add_handler(
         MessageHandler(

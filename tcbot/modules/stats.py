@@ -18,10 +18,10 @@ __help_text__ = (
     "<code>/tcstats</code>\n\n"
 
     "<b>Who can use it</b>\n"
-    "Anyone — no special permissions needed.\n\n"
+    "Anyone, no special permissions needed.\n\n"
 
     "<b>Where to use it</b>\n"
-    "Anywhere — bot PM, exec group, or any connected group.\n\n"
+    "Bot PM, exec group, or any connected group.\n\n"
 
     "<b>What it does</b>\n"
     "Shows a quick overview of the federation: who the founder is, "

@@ -16,8 +16,8 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 __module_name__ = "Mute"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
-    "<code>/tcmute</code> — alias: <code>/tcm</code>\n"
-    "<code>/tcunmute</code> — alias: <code>/tcunm</code>\n\n"
+    "<code>/tcmute</code> (alias: <code>/tcm</code>)\n"
+    "<code>/tcunmute</code> (alias: <code>/tcunm</code>)\n\n"
 
     "<b>Who can use it</b>\n"
     "TC Staff (admins & owner) only.\n\n"
@@ -26,12 +26,12 @@ __help_text__ = (
     "Inside any connected group.\n\n"
 
     "<b>What it does</b>\n"
-    "<code>/tcmute</code> — restricts a user from sending messages in the current group. "
+    "<code>/tcmute</code>: restricts a user from sending messages in the current group. "
     "After the command, the bot will ask for a reason and optionally a proof (photo/video). "
     "You can also skip both steps. If the user is already muted, this resets the duration.\n\n"
-    "<code>/tcunmute</code> — restores the user's full send permissions.\n\n"
+    "<code>/tcunmute</code>: restores the user's full send permissions.\n\n"
 
-    "<b>Duration tokens</b> (optional — place before the reason):\n"
+    "<b>Duration tokens</b> (optional, place before the reason):\n"
     "<code>3s</code> seconds · <code>5m</code> minutes · <code>2h</code> hours\n"
     "<code>7d</code> days · <code>1w</code> weeks · <code>3mo</code> months · <code>2ye</code> years\n"
     "Omit duration to mute permanently.\n\n"
@@ -40,10 +40,10 @@ __help_text__ = (
     "Reply to a message, or provide a user ID / @username.\n\n"
 
     "<b>Examples</b>\n"
-    "<code>/tcmute @username 3d spamming</code> — mute for 3 days with reason inline\n"
-    "<code>/tcm @username 1w</code> — mute for 1 week, bot will ask for reason\n"
-    "<code>/tcm @username</code> — permanent mute, bot walks you through it\n"
-    "<code>/tcunmute @username</code> — unmute immediately"
+    "<code>/tcmute @username 3d spamming</code>: mute for 3 days, reason inline\n"
+    "<code>/tcm @username 1w</code>: mute for 1 week, bot will ask for reason\n"
+    "<code>/tcm @username</code>: permanent mute, bot walks you through it\n"
+    "<code>/tcunmute @username</code>: unmute immediately"
 )
 
 

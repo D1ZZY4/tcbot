@@ -9,13 +9,13 @@ from tcbot.modules.helper.workflows.ban_flow import build_handler
 __module_name__ = "Ban"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
-    "<code>/tcban</code> — alias: <code>/tcb</code>\n\n"
+    "<code>/tcban</code> (alias: <code>/tcb</code>)\n\n"
 
     "<b>Who can use it</b>\n"
     "TC Staff (admins & owner) only.\n\n"
 
     "<b>Where to use it</b>\n"
-    "Exec group, connected groups, or bot PM — anywhere the bot is present.\n\n"
+    "Exec group, connected groups, or bot PM.\n\n"
 
     "<b>What it does</b>\n"
     "Issues a <b>federation-wide ban</b> on the target. After the command, the bot will ask "

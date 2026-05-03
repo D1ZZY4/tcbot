@@ -150,7 +150,7 @@ def checkme_detail_back_kb(
     rows = []
     if proof_link:
         rows.append([InlineKeyboardButton("Proof", url=proof_link)])
-    rows.append([InlineKeyboardButton("Back", callback_data=f"checkme_back:{ban_id}")])
+    rows.append([InlineKeyboardButton("« Back", callback_data=f"checkme_back:{ban_id}")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -194,7 +194,7 @@ def help_topics_kb(topics: list[tuple[str, str]]) -> InlineKeyboardMarkup:
         )
     for item in list(it):
         rows.append([InlineKeyboardButton(item[0], callback_data=item[1])])
-    rows.append([InlineKeyboardButton("Back", callback_data="menu_back_start")])
+    rows.append([InlineKeyboardButton("« Back", callback_data="menu_back_start")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -224,7 +224,7 @@ def back_to_start_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("Back", callback_data="menu_back_start"),
+                InlineKeyboardButton("« Back", callback_data="menu_back_start"),
             ]
         ]
     )
@@ -234,12 +234,10 @@ def back_to_help_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("Back", callback_data="menu_help"),
+                InlineKeyboardButton("« Back", callback_data="menu_help"),
             ]
         ]
     )
-
-
 
 
 def privacy_kb() -> InlineKeyboardMarkup:
@@ -250,7 +248,7 @@ def privacy_kb() -> InlineKeyboardMarkup:
                     "Privacy Policy", callback_data="menu_privacy_policy"
                 )
             ],
-            [InlineKeyboardButton("Back", callback_data="menu_back_start")],
+            [InlineKeyboardButton("« Back", callback_data="menu_back_start")],
         ]
     )
 
@@ -259,9 +257,7 @@ def back_to_privacy_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("Back", callback_data="menu_privacy"),
+                InlineKeyboardButton("« Back", callback_data="menu_privacy"),
             ]
         ]
     )
-
-

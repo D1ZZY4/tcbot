@@ -34,7 +34,7 @@ __help_text__ = (
 
     "<b>What happens next</b>\n"
     "Your appeal is forwarded to TC admins for review. The admin who issued the ban has "
-    "<b>12 hours</b> to respond — after that, any admin can approve or reject it.\n"
+    "<b>12 hours</b> to respond. After that, any admin can approve or reject it.\n"
     "If approved → ban is lifted immediately.\n"
     "If rejected → ban stays. You'll be notified either way."
 )

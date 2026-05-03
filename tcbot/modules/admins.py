@@ -20,30 +20,30 @@ log = logging.getLogger(__name__)
 __module_name__ = "Admins"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
-    "<code>/tcpromote</code> — alias: <code>/tcp</code>\n"
-    "<code>/tcdemote</code> — alias: <code>/tcd</code>\n"
-    "<code>/transferowner</code> — alias: <code>/tfowner</code>\n"
-    "<code>/tcpromoterequests</code> — alias: <code>/tcreqs</code>\n"
+    "<code>/tcpromote</code> (alias: <code>/tcp</code>)\n"
+    "<code>/tcdemote</code> (alias: <code>/tcd</code>)\n"
+    "<code>/transferowner</code> (alias: <code>/tfowner</code>)\n"
+    "<code>/tcpromoterequests</code> (alias: <code>/tcreqs</code>)\n"
     "<code>/tcpromotelist</code>\n\n"
 
     "<b>Who can use it</b>\n"
-    "<code>/tcpromote</code> — TC Staff can submit a request; owner approves instantly.\n"
-    "<code>/tcdemote</code>, <code>/transferowner</code> — Owner only.\n"
-    "<code>/tcpromoterequests</code> — Anyone can submit a request.\n"
-    "<code>/tcpromotelist</code> — TC Staff only.\n\n"
+    "<code>/tcpromote</code>: TC Staff can submit a request; owner approves instantly.\n"
+    "<code>/tcdemote</code>, <code>/transferowner</code>: Owner only.\n"
+    "<code>/tcpromoterequests</code>: Anyone can submit a request.\n"
+    "<code>/tcpromotelist</code>: TC Staff only.\n\n"
 
     "<b>Where to use it</b>\n"
     "Exec group or bot PM.\n\n"
 
     "<b>What it does</b>\n"
-    "<code>/tcpromote</code> — promotes a user to TC Admin. If the owner runs it, "
+    "<code>/tcpromote</code>: promotes a user to TC Admin. If the owner runs it, "
     "promotion is immediate. If a staff member runs it, a request is sent to the owner for approval.\n\n"
-    "<code>/tcdemote</code> — removes TC Admin status from a user (owner only).\n\n"
-    "<code>/transferowner</code> — transfers federation ownership to another user. "
+    "<code>/tcdemote</code>: removes TC Admin status from a user (owner only).\n\n"
+    "<code>/transferowner</code>: transfers federation ownership to another user. "
     "The current owner becomes a regular admin.\n\n"
-    "<code>/tcpromoterequests</code> — lets any user submit a request to become a TC Admin. "
+    "<code>/tcpromoterequests</code>: lets any user submit a request to become a TC Admin. "
     "The owner will be notified and can approve or reject.\n\n"
-    "<code>/tcpromotelist</code> — lists all pending promotion requests.\n\n"
+    "<code>/tcpromotelist</code>: lists all pending promotion requests.\n\n"
 
     "<b>How to specify the target</b>\n"
     "Reply to a message, or provide a user ID / @username.\n\n"
@@ -52,7 +52,7 @@ __help_text__ = (
     "<code>/tcpromote @username</code>\n"
     "<code>/tcdemote 123456789</code>\n"
     "<code>/transferowner @newowner</code>\n"
-    "<code>/tcpromoterequests</code> — submits your own request"
+    "<code>/tcpromoterequests</code>: submits your own request"
 )
 
 
