@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Pure-function tests for :mod:`tgbot_tcf.modules.appeals`."""
+"""Pure-function tests for tcbot.modules.appeals."""
 from __future__ import annotations
 
 from datetime import timedelta
@@ -11,67 +11,79 @@ from tcbot.modules import appeals
 from tcbot.modules.helper.parse_link import utcnow
 
 
-def test_starts_with_appeal_tag_accepts_uppercase_and_whitespace() -> None:
+def test_starts_with_appeal_tag_lowercase() -> None:
     assert appeals.starts_with_appeal_tag("#appeal\nLog link: ...")
-    assert appeals.starts_with_appeal_tag("   #APPEAL body")
-    assert appeals.starts_with_appeal_tag("#Appeal stuff")
 
 
-def test_starts_with_appeal_tag_rejects_other_text() -> None:
+def test_starts_with_appeal_tag_uppercase() -> None:
+    assert appeals.starts_with_appeal_tag("#APPEAL body")
+
+
+def test_starts_with_appeal_tag_mixed_case() -> None:
+    assert appeals.starts_with_appeal_tag("   #Appeal stuff")
+
+
+def test_starts_with_appeal_tag_rejects_no_hash() -> None:
     assert not appeals.starts_with_appeal_tag("Hello, I want to appeal")
+
+
+def test_starts_with_appeal_tag_rejects_empty() -> None:
     assert not appeals.starts_with_appeal_tag("")
+
+
+def test_starts_with_appeal_tag_rejects_hash_after_text() -> None:
     assert not appeals.starts_with_appeal_tag("appeal #123")
 
 
-def test_text_references_log_message_matches_url_path() -> None:
+def test_text_references_log_message_matches_standalone_id() -> None:
     text = "Log link: https://t.me/c/12345/67?thread=10"
     assert appeals.text_references_log_message(text, 67)
+
+
+def test_text_references_log_message_rejects_partial_match() -> None:
+    text = "Log link: https://t.me/c/12345/67?thread=10"
     assert not appeals.text_references_log_message(text, 670)
     assert not appeals.text_references_log_message(text, 6)
 
 
-def test_text_references_log_message_handles_trailing_punctuation() -> None:
-    text = "see /67."
-    assert appeals.text_references_log_message(text, 67)
+def test_text_references_log_message_matches_bare_number() -> None:
+    assert appeals.text_references_log_message("see /67.", 67)
 
 
-def test_reviewer_locked_out_blocks_other_admin_in_window() -> None:
-    review_ts = utcnow() - timedelta(hours=1)
+def test_reviewer_locked_out_blocks_other_admin_within_window() -> None:
+    ts = utcnow() - timedelta(hours=1)
     assert appeals.reviewer_locked_out(
-        review_timestamp=review_ts,
-        ban_admin_id=10,
-        reviewer_id=20,
+        review_timestamp=ts, ban_admin_id=10, reviewer_id=20,
     )
 
 
-def test_reviewer_locked_out_allows_original_admin() -> None:
-    review_ts = utcnow() - timedelta(hours=1)
+def test_reviewer_locked_out_allows_banning_admin() -> None:
+    ts = utcnow() - timedelta(hours=1)
     assert not appeals.reviewer_locked_out(
-        review_timestamp=review_ts,
-        ban_admin_id=10,
-        reviewer_id=10,
+        review_timestamp=ts, ban_admin_id=10, reviewer_id=10,
     )
 
 
-def test_reviewer_locked_out_allows_anyone_after_window() -> None:
-    review_ts = utcnow() - timedelta(hours=13)
+def test_reviewer_locked_out_allows_anyone_after_12h() -> None:
+    ts = utcnow() - timedelta(hours=13)
     assert not appeals.reviewer_locked_out(
-        review_timestamp=review_ts,
-        ban_admin_id=10,
-        reviewer_id=20,
+        review_timestamp=ts, ban_admin_id=10, reviewer_id=20,
     )
 
 
-def test_reviewer_locked_out_handles_missing_metadata() -> None:
+def test_reviewer_locked_out_returns_false_when_timestamp_none() -> None:
     assert not appeals.reviewer_locked_out(
-        review_timestamp=None, ban_admin_id=10, reviewer_id=20
+        review_timestamp=None, ban_admin_id=10, reviewer_id=20,
     )
+
+
+def test_reviewer_locked_out_returns_false_when_ban_admin_none() -> None:
     assert not appeals.reviewer_locked_out(
-        review_timestamp=utcnow(), ban_admin_id=None, reviewer_id=20
+        review_timestamp=utcnow(), ban_admin_id=None, reviewer_id=20,
     )
 
 
-def test_now_returns_current_utc() -> None:
+def test_now_delegates_to_utcnow() -> None:
     sentinel = utcnow()
     with patch("tcbot.modules.appeals.utcnow", return_value=sentinel):
         assert appeals.now() is sentinel
