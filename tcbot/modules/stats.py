@@ -10,7 +10,8 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg, database as db
-from tcbot.modules.helper.formatter import code, esc, mention
+from tcbot.modules.helper.formatter import esc, mention
+from tcbot.modules.helper.workflows.stats_chats_flow import handlers as _chats_handlers
 from tcbot.modules.helper.workflows.stats_flow import handlers as _ban_handlers
 from tcbot.utils.prefixes import build_prefixed_filters
 
@@ -39,7 +40,7 @@ __help_text__ = (
 def _stats_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("Staff Roster",    callback_data="stats_admins")],
-        [InlineKeyboardButton("Connected Chats", callback_data="stats_chats")],
+        [InlineKeyboardButton("Connected Chats", callback_data="stats_chats:0")],
         [InlineKeyboardButton("User Bans",       callback_data="stats_bans:0")],
     ])
 
@@ -138,25 +139,10 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     )
 
 
-async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    q = update.callback_query
-    await q.answer()
-
-    groups = await db.groups_db.active_groups()
-    lines  = [f"<b>Connected Chats ({len(groups)})</b>\n"]
-    for grp in groups:
-        lines.append(f"— {esc(grp['title'])} {code(str(grp['chat_id']))}")
-
-    await q.edit_message_text(
-        "\n".join(lines), parse_mode="HTML",
-        reply_markup=_simple_back_kb(),
-    )
-
-
 __handlers__ = [
     MessageHandler(build_prefixed_filters("tcstats"), cmd_stats),
     CallbackQueryHandler(on_stats_main,   pattern=r"^stats_main$"),
     CallbackQueryHandler(on_stats_admins, pattern=r"^stats_admins$"),
-    CallbackQueryHandler(on_stats_chats,  pattern=r"^stats_chats$"),
+    *_chats_handlers,
     *_ban_handlers,
 ]
