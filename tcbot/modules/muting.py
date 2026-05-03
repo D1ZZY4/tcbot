@@ -7,8 +7,10 @@ from __future__ import annotations
 from telegram import Update
 from telegram.ext import ContextTypes, MessageHandler
 
-from tcbot import database as db
+from tcbot import cfg, database as db
+from tcbot.database.roles_db import ROLE_LABEL, get_effective_role
 from tcbot.modules.helper import decorators, extraction
+from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.workflows.muting_conv import build_handler
 from tcbot.modules.helper.workflows.muting_flow import execute_unmute
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
@@ -49,19 +51,42 @@ __help_text__ = (
 
 @decorators.basic_mod_only
 async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    args = parse_cmd_args(update.effective_message.text)
+    msg  = update.effective_message
+    args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        await update.effective_message.reply_text(
+        await msg.reply_text(
             "Specify a target — reply to a message or provide a user ID."
         )
         return
+
     if target_id == ctx.bot.id:
-        await update.effective_message.reply_text("That's me — not muted. Bots don't get muted.")
+        bot_info = await ctx.bot.get_me()
+        await msg.reply_text(
+            f"That's {mention(ctx.bot.id, bot_info.first_name or 'me')} — "
+            "bots don't get muted. Nothing to undo. 😄",
+            parse_mode="HTML",
+        )
         return
-    if await db.admins_db.is_owner(target_id):
-        await update.effective_message.reply_text("That's the owner — never been muted, nothing to undo.")
+
+    target_role = await get_effective_role(target_id)
+    if target_role == "founder":
+        fname = await db.users_db.get_first_name(target_id, "the Founder")
+        await msg.reply_text(
+            f"That's {mention(target_id, fname)}, the Founder — "
+            "not muted, nothing to undo.",
+            parse_mode="HTML",
+        )
         return
+    if target_role in ("admin", "developer", "tester"):
+        role_label = ROLE_LABEL.get(target_role, target_role)
+        fname      = await db.users_db.get_first_name(target_id, str(target_id))
+        await msg.reply_text(
+            f"Just so you know, {mention(target_id, fname)} is a {cfg.community_name} {role_label}. "
+            "Proceeding with unmute anyway.",
+            parse_mode="HTML",
+        )
+
     await execute_unmute(update, ctx, target_id, target_name or str(target_id))
 
 

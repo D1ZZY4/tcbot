@@ -13,21 +13,23 @@ The bot itself uses long polling — no webhook, no extra port needed.
 
 ## Environment Variables
 
-All secrets live in `config.env` (gitignored). Never hardcode values.
+Secrets are stored in **Replit Secrets** (environment variables), not in `config.env`.
+Non-sensitive config is in `.replit` `[userenv.shared]`.
+`config.env` is gitignored and kept only as a local fallback — never commit it.
 See `config.env.example` for the full list of required keys.
 
 Key variables:
-| Variable | Description |
-|---|---|
-| `BOT_TOKEN` | Telegram bot token |
-| `OWNER_ID` | Telegram user ID of the federation owner |
-| `MONGODB_URI` | MongoDB connection string |
-| `DB_NAME` | MongoDB database name (default: `tcbot`) |
-| `LOGS` | Log channel chat ID (optionally `chat_id/thread_id`) |
-| `PROOFS` | Proof channel chat ID |
-| `APPEALS` | Appeal channel chat ID |
-| `PROOF_TIMEOUT_SECONDS` | ConversationHandler timeout for ban proof step |
-| `APPEAL_TIMEOUT_SECONDS` | ConversationHandler timeout for appeal flow |
+| Variable | Storage | Description |
+|---|---|---|
+| `BOT_TOKEN` | Replit Secret | Telegram bot token |
+| `MONGODB_URI` | Replit Secret | MongoDB connection string |
+| `OWNER_ID` | Replit env var | Telegram user ID of the federation owner |
+| `DB_NAME` | Replit env var | MongoDB database name (default: `tcbot`) |
+| `LOGS` | Replit env var | Log channel chat ID (optionally `chat_id/thread_id`) |
+| `PROOFS` | Replit env var | Proof channel chat ID |
+| `APPEALS` | Replit env var | Appeal channel chat ID |
+| `PROOF_TIMEOUT_SECONDS` | Replit env var | ConversationHandler timeout for ban proof step |
+| `APPEAL_TIMEOUT_SECONDS` | Replit env var | ConversationHandler timeout for appeal flow |
 
 ## Dependencies
 

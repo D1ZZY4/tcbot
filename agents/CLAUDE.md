@@ -118,6 +118,49 @@ Canonical function names — use these, do not invent new ones:
 | `ban_log_update(target_id, proof_link, prev_proof_link, appeal_url)` | Updated ban log keyboard |
 | `help_modules(rows, *, with_back_to_start)` | Generic help menu builder |
 
+## Bot Persona — Role-Aware Responses
+
+All command handlers must recognize the full role hierarchy (bot itself, Founder, Admin,
+Developer, Tester) and respond with a consistent **friendly + formal** tone.
+
+Reference implementation: `tcbot/modules/checking.py` (`cmd_baninfo`, `cmd_checkme`).
+
+**Required pattern for every command that targets a user:**
+
+```python
+# 1. Bot self-check
+if target_id == ctx.bot.id:
+    bot_info = await ctx.bot.get_me()
+    await msg.reply_text(
+        f"That's {mention(ctx.bot.id, bot_info.first_name or 'me')} — [context]. 😄",
+        parse_mode="HTML",
+    )
+    return
+
+# 2. Full role check via get_effective_role (NEVER chain is_owner/is_admin/get_role)
+target_role = await get_effective_role(target_id)
+if target_role == "founder":
+    fname = await db.users_db.get_first_name(target_id, "the Founder")
+    await msg.reply_text(
+        f"That's {mention(target_id, fname)}, the Founder — [context].",
+        parse_mode="HTML",
+    )
+    return
+if target_role in ("admin", "developer", "tester"):
+    role_label = ROLE_LABEL.get(target_role, target_role)
+    fname      = await db.users_db.get_first_name(target_id, str(target_id))
+    await msg.reply_text(
+        f"[Context about {role_label}]",
+        parse_mode="HTML",
+    )
+    return  # or proceed, depending on the action
+```
+
+**Tone guidelines:**
+- Friendly but not over-the-top. Mix of casual and professional.
+- Emojis only where the module already uses them (checking.py, ban_flow.py use them — keep it there).
+- No filler phrases. Keep messages short and direct.
+
 ## What NOT To Do
 
 - Do not add `from typing import List, Optional, Tuple` — use built-in `list`, `int | None`, `tuple`
