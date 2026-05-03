@@ -1,0 +1,200 @@
+name: TDD — Verification Report
+
+on:
+  workflow_run:
+    workflows: ["TDD — Multi-Python Matrix"]
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  report:
+    name: Parse results & report
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      actions: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install junitparser
+        run: pip install junitparser
+
+      # Download artifacts from the triggering workflow run (or current run)
+      - name: Download test artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p artifacts
+          # Try to get artifacts from the triggering workflow_run
+          RUN_ID="${{ github.event.workflow_run.id }}"
+          if [[ -z "$RUN_ID" ]]; then
+            RUN_ID="${{ github.run_id }}"
+          fi
+          gh run download "$RUN_ID" --dir artifacts/ 2>/dev/null || true
+          echo "Artifacts downloaded:"
+          find artifacts/ -type f | sort || echo "(none found)"
+
+      - name: Parse results and write GitHub summary
+        id: parse
+        run: |
+          python - << 'PYEOF'
+          import os, pathlib, sys
+          from junitparser import JUnitXml
+
+          artifact_dir = pathlib.Path("artifacts")
+          xml_files    = sorted(artifact_dir.rglob("*.xml"))
+
+          if not xml_files:
+              msg = (
+                  "## TCF Bot — TDD Verification\n\n"
+                  "> No test result artifacts found. "
+                  "Run the TDD workflow first, or trigger manually.\n"
+              )
+              pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"]).write_text(msg)
+              with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                  f.write("any_failure=false\n")
+                  f.write("total_passed=0\n")
+                  f.write("total_failed=0\n")
+              print("No artifacts — writing empty summary.")
+              sys.exit(0)
+
+          rows:         list[str] = []
+          total_passed  = 0
+          total_failed  = 0
+          total_skipped = 0
+          any_failure   = False
+
+          for xml_path in xml_files:
+              try:
+                  suites = JUnitXml.fromfile(str(xml_path))
+              except Exception as exc:
+                  rows.append(f"| `{xml_path.stem}` | ERROR | — | — | — |")
+                  any_failure = True
+                  continue
+
+              for s in suites:
+                  passed  = max(0, s.tests - s.failures - s.errors - s.skipped)
+                  failed  = s.failures + s.errors
+                  skipped = s.skipped
+                  status  = "PASS" if failed == 0 else "FAIL"
+                  icon    = "" if status == "PASS" else ""
+                  label   = xml_path.parent.name.replace("tdd-results-", "")
+                  rows.append(
+                      f"| `{label}` | {icon} {status} | {passed} | {failed} | {skipped} |"
+                  )
+                  total_passed  += passed
+                  total_failed  += failed
+                  total_skipped += skipped
+                  if failed:
+                      any_failure = True
+
+          verdict = (
+              "**All checks passed.**"
+              if not any_failure
+              else "**Some checks FAILED.** The AI patch job may have already committed a fix."
+          )
+
+          summary = "\n".join([
+              "## TCF Bot — TDD Verification",
+              "",
+              f"| Metric | Value |",
+              f"|--------|-------|",
+              f"| Total passed  | **{total_passed}** |",
+              f"| Total failed  | **{total_failed}** |",
+              f"| Total skipped | {total_skipped} |",
+              "",
+              "| Version | Status | Passed | Failed | Skipped |",
+              "|---------|--------|--------|--------|---------|",
+              *rows,
+              "",
+              verdict,
+          ])
+
+          pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"]).write_text(summary)
+          print(summary)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"any_failure={'true' if any_failure else 'false'}\n")
+              f.write(f"total_passed={total_passed}\n")
+              f.write(f"total_failed={total_failed}\n")
+          PYEOF
+
+      # -----------------------------------------------------------------------
+      # Open a GitHub Issue when tests fail (idempotent — one issue per run)
+      # -----------------------------------------------------------------------
+      - name: Open GitHub issue on failure
+        if: steps.parse.outputs.any_failure == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          SHORT="${SHA:0:7}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          gh issue create \
+            --title "TDD failure on ${SHORT}" \
+            --body "$(printf 'Test suite failed on \`%s\`.\n\nFailed: **${{ steps.parse.outputs.total_failed }}** | Passed: **${{ steps.parse.outputs.total_passed }}**\n\n[View run](%s)\n\nThe AI patch job in \`run-tdd.yml\` may have already committed a fix — check the latest commits.' \
+              "$SHORT" "$RUN_URL")" \
+            --label "bug" \
+          2>/dev/null || echo "Issue creation skipped (no label or permission issue — check repo settings)"
+
+      # -----------------------------------------------------------------------
+      # Telegram notification — uses the existing bot token, no extra cost
+      # -----------------------------------------------------------------------
+      - name: Telegram notification
+        if: always() && secrets.BOT_TOKEN != ''
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          OWNER_ID:  ${{ secrets.OWNER_ID }}
+        run: |
+          python - << 'PYEOF'
+          import json, os, sys, urllib.request
+
+          token    = os.getenv("BOT_TOKEN", "")
+          owner_id = os.getenv("OWNER_ID", "")
+
+          if not token or not owner_id or token.startswith("test:"):
+              print("Telegram notification skipped — no real token configured.")
+              sys.exit(0)
+
+          passed   = "${{ steps.parse.outputs.total_passed }}"
+          failed   = "${{ steps.parse.outputs.total_failed }}"
+          run_url  = (
+              "${{ github.server_url }}/${{ github.repository }}"
+              "/actions/runs/${{ github.run_id }}"
+          )
+          sha      = "${{ github.event.workflow_run.head_sha || github.sha }}"[:7]
+          status   = "PASS" if failed == "0" else "FAIL"
+
+          text = (
+              f"<b>TCF Bot TDD — {status}</b>\n"
+              f"Commit: <code>{sha}</code>\n"
+              f"Passed: {passed}  |  Failed: {failed}\n"
+              f'<a href="{run_url}">View run</a>'
+          )
+
+          payload = json.dumps({
+              "chat_id":                  owner_id,
+              "text":                     text,
+              "parse_mode":              "HTML",
+              "disable_web_page_preview": True,
+          }).encode()
+
+          req = urllib.request.Request(
+              f"https://api.telegram.org/bot{token}/sendMessage",
+              data=payload,
+              headers={"Content-Type": "application/json"},
+          )
+          try:
+              urllib.request.urlopen(req, timeout=15)
+              print("Telegram notification sent.")
+          except Exception as exc:
+              print(f"Telegram notification failed: {exc}", file=sys.stderr)
+          PYEOF
