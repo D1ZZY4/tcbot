@@ -478,11 +478,10 @@ def role_assigned(
     dt         = fmt_dt(utc_now())
     role_label = _ROLE_LABELS.get(role, role.capitalize())
     return (
-        f"{cfg.community_name} Role Assigned\n"
+        f"New {cfg.community_name} {role_label} Assigned\n"
         f"{BRAND}\n\n"
-        f"User: {mention(target_id, target_fname)}\n"
-        f"ID: {target_id}\n"
-        f"Role: {role_label}\n\n"
+        f"{role_label}: {mention(target_id, target_fname)}\n"
+        f"ID: {target_id}\n\n"
         f"Assigned by: {mention(admin_id, admin_fname)}\n"
         f"ID: {admin_id}\n\n"
         f"Date: {dt}"

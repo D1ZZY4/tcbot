@@ -183,7 +183,7 @@ async def _execute_promote(
         )
     except Exception:
         pass
-    return True, f"Done. {mention(target_id, target_fname)} is now a {role_label}."
+    return True, f"Done. {mention(target_id, target_fname)} is now a {cfg.community_name} {role_label}."
 
 
 ## ---------------------------------------------------------------------------

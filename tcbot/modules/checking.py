@@ -9,6 +9,7 @@ from telegram import Update
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg, database as db
+from tcbot.database.roles_db import ROLE_LABEL, get_effective_role
 from tcbot.modules.helper import extraction, keyboards
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.formatter import code, esc, mention
@@ -91,11 +92,21 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    if await db.admins_db.is_admin(user.id):
+    user_role = await get_effective_role(user.id)
+    if user_role == "admin":
         await msg.reply_text(
             f"Hey {mention(user.id, fname)}, checking yourself? 😄\n\n"
             "You're part of the staff team, the ones who handle bans, not receive them. "
             "No active ban on your end. You're good, now go back to work! 😊",
+            parse_mode="HTML",
+        )
+        return
+    if user_role in ("developer", "tester"):
+        role_label = ROLE_LABEL.get(user_role, user_role)
+        await msg.reply_text(
+            f"Hey {mention(user.id, fname)}, all good! 😄\n\n"
+            f"You're a {cfg.community_name} {role_label} — you're on the team, not on the ban list. "
+            "Nothing to worry about here. 😊",
             parse_mode="HTML",
         )
         return
@@ -196,11 +207,20 @@ async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    if await db.admins_db.is_admin(target_id):
+    target_role = await get_effective_role(target_id)
+    if target_role == "admin":
         await msg.reply_text(
             f"Hold up — {mention(target_id, fname)} is part of our staff team! 😄\n\n"
             "They're more likely to be the ones issuing bans, not receiving them. "
             "No active ban on record, they're all good.",
+            parse_mode="HTML",
+        )
+        return
+    if target_role in ("developer", "tester"):
+        role_label = ROLE_LABEL.get(target_role, target_role)
+        await msg.reply_text(
+            f"Chill — {mention(target_id, fname)} is our {cfg.community_name} {role_label}! 😄\n\n"
+            f"They're part of the team behind the scenes. No active ban on record, all good.",
             parse_mode="HTML",
         )
         return
