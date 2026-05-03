@@ -38,7 +38,7 @@ __help_text__ = (
 )
 
 
-@decorators.staff_only
+@decorators.mod_only
 async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(update.effective_message.text)
     target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
@@ -51,7 +51,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await update.effective_message.reply_text("That's me — not banned anywhere. Nothing to undo.")
         return
     if await db.admins_db.is_owner(target_id):
-        await update.effective_message.reply_text("That's the owner — never been banned, nothing to undo.")
+        await update.effective_message.reply_text("That's the Founder — never been banned, nothing to undo.")
         return
     await execute_unban(update, ctx, target_id, target_fname)
 

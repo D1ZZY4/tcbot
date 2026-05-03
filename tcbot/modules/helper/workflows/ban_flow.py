@@ -19,9 +19,11 @@ from telegram.ext import (
 
 from tcbot import database as db
 from tcbot import cfg
+from tcbot.database.roles_db import get_effective_role, role_rank, ROLE_LABEL
 from tcbot.modules.helper import extraction, keyboards, parse_logmsg
 from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
+from tcbot.modules.helper.role_guard import auto_demote
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.timedate_format import utc_now
 
@@ -42,8 +44,9 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     msg = update.effective_message
     admin = update.effective_user
 
-    if not await db.admins_db.is_staff(admin.id):
-        await msg.reply_text("You are not authorized to use this command.")
+    executor_role = await get_effective_role(admin.id)
+    if role_rank(executor_role) < role_rank("developer"):
+        await msg.reply_text("You're not authorized to issue bans.")
         return ConversationHandler.END
 
     raw_args = parse_cmd_args(msg.text)
@@ -71,13 +74,17 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         await msg.reply_text("Hey, you can't ban yourself. 😅")
         return ConversationHandler.END
 
-    if await db.admins_db.is_owner(target_id):
-        await msg.reply_text("Hey, that's the owner — no banning them. 🙅")
-        return ConversationHandler.END
-
-    if await db.admins_db.is_admin(target_id):
-        await msg.reply_text("That's a staff member — they can't be banned.")
-        return ConversationHandler.END
+    target_role = await get_effective_role(target_id)
+    if target_role:
+        if role_rank(executor_role) <= role_rank(target_role):
+            label = ROLE_LABEL.get(target_role, target_role.capitalize())
+            await msg.reply_text(f"That user is a {label} — you can't ban them.")
+            return ConversationHandler.END
+        await auto_demote(
+            ctx.bot,
+            target_id, target_fname or str(target_id), target_role,
+            admin.id, admin.first_name, "ban",
+        )
 
     ctx.user_data["ban_target_id"] = target_id
     ctx.user_data["ban_target_fname"] = target_fname or str(target_id)
@@ -104,7 +111,7 @@ async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
     msg = update.effective_message
     uid = update.effective_user.id
 
-    if not await db.admins_db.is_staff(uid):
+    if role_rank(await get_effective_role(uid)) < role_rank("developer"):
         return WAITING_PROOF
 
     if msg.media_group_id:

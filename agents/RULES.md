@@ -45,5 +45,14 @@
 
 1. Staff-only commands must use the `@decorators.staff_only` decorator or an explicit `is_staff()` check.
 2. Owner-only commands must use `@decorators.owner_only` or an explicit `is_owner()` check.
-3. Never expose internal user IDs in public group messages beyond what is necessary.
-4. Appeal links are single-use and tied to a specific `ban_id`. Validate `banned_user_id == update.effective_user.id` before proceeding.
+3. Moderation commands (ban/unban) must use `@decorators.mod_only` (Founder/Admin/Developer) or an explicit rank check.
+4. Basic moderation commands (kick/mute/warn) must use `@decorators.basic_mod_only` (all roles) or an explicit rank check.
+5. Never expose internal user IDs in public group messages beyond what is necessary.
+6. Appeal links are single-use and tied to a specific `ban_id`. Validate `banned_user_id == update.effective_user.id` before proceeding.
+
+## Roles
+
+1. The canonical role resolver is `roles_db.get_effective_role(user_id)` — always use this, never chain individual `is_owner` / `is_admin` / `get_role` calls.
+2. `can_act_on(executor_id, target_id)` is the canonical check for whether one user may take action against another. Never compare ranks inline.
+3. Auto-demote (`role_guard.auto_demote`) must be called whenever a ban or kick is executed against a user who holds any role.
+4. Developer and Tester roles live in the `tc_roles` MongoDB collection. Admin promotion to Developer/Tester is direct; Admin promotion to Admin goes through the request queue.

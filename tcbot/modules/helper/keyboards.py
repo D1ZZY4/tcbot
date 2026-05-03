@@ -83,6 +83,35 @@ def appeal_review_kb(ban_id: str) -> InlineKeyboardMarkup:
 ## Admin promotion
 ## ---------------------------------------------------------------------------
 
+_ROLE_LABELS: dict[str, str] = {
+    "admin":     "Admin",
+    "developer": "Developer",
+    "tester":    "Tester",
+}
+
+
+def promote_role_kb(target_id: int, available_roles: list[str]) -> InlineKeyboardMarkup:
+    """Role selection keyboard shown when /tcpromote is used without a role argument."""
+    buttons = [
+        InlineKeyboardButton(_ROLE_LABELS[r], callback_data=f"promo_role:{r}:{target_id}")
+        for r in available_roles
+        if r in _ROLE_LABELS
+    ]
+    rows: list[list[InlineKeyboardButton]] = [
+        buttons[i : i + 2] for i in range(0, len(buttons), 2)
+    ]
+    rows.append([InlineKeyboardButton("Cancel", callback_data=f"promo_role_cancel:{target_id}")])
+    return InlineKeyboardMarkup(rows)
+
+
+def demote_confirm_kb(target_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("Confirm", callback_data=f"demote_confirm:{target_id}"),
+            InlineKeyboardButton("Cancel",  callback_data=f"demote_cancel:{target_id}"),
+        ]
+    ])
+
 
 def promo_decision_kb(request_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(

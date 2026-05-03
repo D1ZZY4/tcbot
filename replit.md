@@ -24,12 +24,14 @@ A Telegram bot for the Transsion Core Federation (TCF) community. Manages federa
 | `tcbot/database/admins_db.py` | Owners and TC admins collection |
 | `tcbot/database/bans_db.py` | Federation bans collection |
 | `tcbot/database/queues_db.py` | Promotion-request queue collection |
+| `tcbot/database/roles_db.py` | Developer/Tester roles collection (`tc_roles`); also exports `get_effective_role`, `role_rank`, `can_act_on` |
 | `tcbot/database/users_db.py` | Member-cache collection |
 | `tcbot/modules/messages.py` | Central `M` namespace for all user-facing strings |
 | `tcbot/modules/appeals.py` | Pure functions for appeal business logic |
 | `tcbot/modules/admins_ext.py` | Admin service layer (promote, demote, transfer ownership) |
 | `tcbot/modules/helper/parse_link.py` | Link builders, HTML helpers (`user_link`, `safe_first_name`), `utcnow()` |
-| `tcbot/modules/helper/keyboards.py` | All inline-keyboard factory functions |
+| `tcbot/modules/helper/keyboards.py` | All inline-keyboard factory functions (includes `promote_role_kb`, `demote_confirm_kb`) |
+| `tcbot/modules/helper/role_guard.py` | `resolve_and_check()` + `auto_demote()` — shared role-permission helpers for moderation flows |
 | `tcbot/modules/helper/extraction.py` | `extract_target()`, `ResolvedTarget`, `resolve_identity()` |
 | `tcbot/utils/prefixes.py` | Prefix filter builder + alt-prefix dispatcher (`_REGISTRY`) |
 | `tcbot/utils/logger.py` | `BotLogFormatter` and `setup()` |
@@ -47,6 +49,33 @@ Secrets are stored in Replit Secrets (environment variables). Non-sensitive conf
 - `PORT` — Web server port, set to 5000 for Replit (env var)
 
 The `config.env` file is kept as a local fallback only and is excluded from version control via `.gitignore`.
+
+## Role System
+
+Four-level hierarchy: **Founder → Admin → Developer → Tester**
+
+| Role | Rank | Stored in |
+|---|---|---|
+| Founder | 4 | `tc_owners` (single document) |
+| Admin | 3 | `tc_admins` collection |
+| Developer | 2 | `tc_roles` collection |
+| Tester | 1 | `tc_roles` collection |
+
+Permission matrix:
+
+| Action | Min role needed |
+|---|---|
+| Ban / Unban | Developer (rank ≥ 2) |
+| Kick / Mute / Warn | Tester (rank ≥ 1) |
+| Promote to Developer/Tester | Admin |
+| Promote to Admin | Admin (request) / Founder (direct) |
+| Demote Developer/Tester | Admin |
+| Demote Admin | Founder only |
+
+Auto-demote: when a user with any role is **banned or kicked**, their role is automatically removed and they are notified by DM. A log entry is posted to the log channel.
+
+`/tcpromote @user [role]` — omit the role to see an inline button menu.
+`/tcdemote @user` — shows a confirmation button before removing the role.
 
 ## Test Suite
 

@@ -23,6 +23,8 @@ tcbot/
 │   ├── admins_db.py     — Owner/admin CRUD
 │   ├── bans_db.py       — Federation ban CRUD (active_bans, create_ban, etc.)
 │   ├── groups_db.py     — Affiliated group CRUD + pending join queue
+│   ├── roles_db.py      — Developer/Tester roles (tc_roles); get_effective_role,
+│   │                      role_rank, can_act_on, ROLE_RANK, ROLE_LABEL
 │   ├── users_db.py      — Member cache (upsert_user, get_first_name)
 │   ├── warns_db.py      — Per-group warning tracking
 │   ├── kicks_db.py      — Kick log
@@ -37,8 +39,11 @@ tcbot/
 │   │   ├── formatter.py    — HTML helpers: esc(), code(), mention(), bold()
 │   │   ├── extraction.py   — extract_target(), ResolvedTarget, resolve_identity()
 │   │   ├── keyboards.py    — All InlineKeyboardMarkup builders
-│   │   ├── decorators.py   — staff_only, owner_only
+│   │   │                     promote_role_kb(target_id, roles), demote_confirm_kb(target_id)
+│   │   ├── decorators.py   — owner_only, staff_only, mod_only, basic_mod_only
+│   │   ├── role_guard.py   — resolve_and_check(), auto_demote() — shared moderation helpers
 │   │   ├── parse_logmsg.py — Log message text builders
+│   │   │                     role_assigned, role_removed, role_auto_demoted
 │   │   ├── parse_editmsg.py — safe_edit() – swallows stale-message errors
 │   │   ├── ban_info.py     — build_ban_detail() shared between checking/stats
 │   │   ├── parse_link.py   — message_link(), appeal_deep_link(), utcnow(),
@@ -71,6 +76,32 @@ Two canonical sources — use the right one per context:
 | `fmt_dt(dt)` | `tcbot.utils.timedate_format` | `str` | Formatting any datetime for display (handles tz-naive) |
 | `utcnow()` | `tcbot.modules.helper.parse_link` | naive `datetime` | Comparing against naive MongoDB timestamps |
 
+## Role System
+
+Four-level hierarchy stored across two collections:
+
+| Role | Rank | Collection |
+|---|---|---|
+| founder | 4 | `tc_owners` |
+| admin | 3 | `tc_admins` |
+| developer | 2 | `tc_roles` |
+| tester | 1 | `tc_roles` |
+
+Key helpers in `tcbot.database.roles_db`:
+- `get_effective_role(user_id)` → `"founder" | "admin" | "developer" | "tester" | None`
+- `role_rank(role)` → int (0 for None)
+- `can_act_on(executor_id, target_id)` → bool (executor rank > target rank)
+
+Key helpers in `tcbot.modules.helper.role_guard`:
+- `resolve_and_check(msg, executor_id, target_id, *, min_role)` → `(executor_role, target_role)` or `(None, None)` after replying with error
+- `auto_demote(bot, target_id, target_fname, target_role, executor_id, executor_fname, action)` → removes role, logs, notifies DM
+
+Decorator notes:
+- `@decorators.mod_only` — Founder/Admin/Developer (ban/unban)
+- `@decorators.basic_mod_only` — Founder/Admin/Developer/Tester (kick/mute/warn)
+
+Auto-demote: fires on ban AND kick when target holds any role.
+
 ## Keyboard Builders (`tcbot.modules.helper.keyboards`)
 
 Canonical function names — use these, do not invent new ones:
@@ -81,6 +112,8 @@ Canonical function names — use these, do not invent new ones:
 | `back_to_start_kb()` | Single « Back → start menu |
 | `appeal_review_kb(ban_id)` | Approve/Reject for appeal review |
 | `promo_decision_kb(request_id)` | Approve/Reject for promotion request |
+| `promote_role_kb(target_id, available_roles)` | Role selection buttons for /tcpromote |
+| `demote_confirm_kb(target_id)` | Confirm/Cancel for /tcdemote |
 | `ban_log_new(target_id, proof_link, appeal_url)` | New ban log keyboard |
 | `ban_log_update(target_id, proof_link, prev_proof_link, appeal_url)` | Updated ban log keyboard |
 | `help_modules(rows, *, with_back_to_start)` | Generic help menu builder |

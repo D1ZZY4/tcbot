@@ -32,7 +32,8 @@ from telegram.ext import (
 )
 
 from tcbot import cfg, database as db
-from tcbot.modules.helper import keyboards
+from tcbot.database.roles_db import get_effective_role, role_rank, ROLE_LABEL
+from tcbot.modules.helper import extraction, keyboards
 from tcbot.modules.helper.formatter import code, mention
 from tcbot.modules.helper.workflows.muting_flow import (
     _DURATION_RE,
@@ -56,18 +57,17 @@ async def cmd_mute_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     msg   = update.effective_message
     admin = update.effective_user
 
-    if not await db.admins_db.is_staff(admin.id):
+    executor_role = await get_effective_role(admin.id)
+    if role_rank(executor_role) < role_rank("tester"):
         await msg.reply_text("You're not authorized to use this command.")
         return ConversationHandler.END
 
     raw_args = parse_cmd_args(msg.text)
 
     if msg.reply_to_message:
-        from tcbot.modules.helper import extraction
         target_id, target_fname = await extraction.extract_target(update, [], ctx.bot)
         remaining_args = list(raw_args)
     else:
-        from tcbot.modules.helper import extraction
         target_id, target_fname = await extraction.extract_target(update, raw_args, ctx.bot)
         remaining_args = list(raw_args[1:]) if raw_args else []
 
@@ -83,13 +83,12 @@ async def cmd_mute_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         await msg.reply_text("Hey, you can't mute yourself. 😅")
         return ConversationHandler.END
 
-    if await db.admins_db.is_owner(target_id):
-        await msg.reply_text("That's the owner — muting them isn't happening.")
-        return ConversationHandler.END
-
-    if await db.admins_db.is_admin(target_id):
-        await msg.reply_text("That's a staff member — muting them isn't allowed.")
-        return ConversationHandler.END
+    target_role = await get_effective_role(target_id)
+    if target_role:
+        if role_rank(executor_role) <= role_rank(target_role):
+            label = ROLE_LABEL.get(target_role, target_role.capitalize())
+            await msg.reply_text(f"That user is a {label} — you can't mute them.")
+            return ConversationHandler.END
 
     duration = None
     if remaining_args and _DURATION_RE.match(remaining_args[0]):

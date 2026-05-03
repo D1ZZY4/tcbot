@@ -1,16 +1,16 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Admin management – promote, demote, transfer ownership, and promotion requests."""
+"""Admin management — promote, demote, transfer ownership, and promotion requests."""
 from __future__ import annotations
 
 import logging
 
-from telegram import Update
+from telegram import Bot, Update
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
-from tcbot import database as db
-from tcbot import cfg
+from tcbot import cfg, database as db
+from tcbot.database.roles_db import ROLE_LABEL, get_effective_role, role_rank
 from tcbot.modules.helper import decorators, extraction, keyboards, parse_logmsg
 from tcbot.modules.helper.formatter import code, mention
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
@@ -26,95 +26,119 @@ __help_text__ = (
     "<code>/tcpromoterequests</code> (alias: <code>/tcreqs</code>)\n"
     "<code>/tcpromotelist</code>\n\n"
 
-    "<b>Who can use it</b>\n"
-    "<code>/tcpromote</code>: TC Staff can submit a request; owner approves instantly.\n"
-    "<code>/tcdemote</code>, <code>/transferowner</code>: Owner only.\n"
-    "<code>/tcpromoterequests</code>: Anyone can submit a request.\n"
-    "<code>/tcpromotelist</code>: TC Staff only.\n\n"
+    "<b>Role Hierarchy</b>\n"
+    "Founder › Admin › Developer › Tester\n\n"
 
-    "<b>Where to use it</b>\n"
-    "Exec group or bot PM.\n\n"
+    "<b>/tcpromote</b>\n"
+    "Assign a role to a user.\n"
+    "Usage: <code>/tcpromote @user [admin|developer|tester]</code>\n"
+    "Omit the role to get an inline selection menu.\n"
+    "— Founder can promote to any role directly.\n"
+    "— Admin can promote to Developer or Tester directly; promoting to Admin "
+    "sends a request to the Founder for approval.\n\n"
 
-    "<b>What it does</b>\n"
-    "<code>/tcpromote</code>: promotes a user to TC Admin. If the owner runs it, "
-    "promotion is immediate. If a staff member runs it, a request is sent to the owner for approval.\n\n"
-    "<code>/tcdemote</code>: removes TC Admin status from a user (owner only).\n\n"
-    "<code>/transferowner</code>: transfers federation ownership to another user. "
-    "The current owner becomes a regular admin.\n\n"
-    "<code>/tcpromoterequests</code>: lets any user submit a request to become a TC Admin. "
-    "The owner will be notified and can approve or reject.\n\n"
-    "<code>/tcpromotelist</code>: lists all pending promotion requests.\n\n"
+    "<b>/tcdemote</b>\n"
+    "Remove a user's role (shows a confirmation button).\n"
+    "— Founder can demote any role.\n"
+    "— Admin can demote Developer or Tester only.\n\n"
+
+    "<b>/transferowner</b>\n"
+    "Transfer federation ownership to another user. The current Founder becomes "
+    "an Admin. Founder only.\n\n"
+
+    "<b>/tcpromoterequests</b>\n"
+    "Submit a request to become an Admin. The Founder will be notified and can "
+    "approve or reject.\n\n"
+
+    "<b>/tcpromotelist</b>\n"
+    "List all pending Admin promotion requests. Admin and above only.\n\n"
 
     "<b>How to specify the target</b>\n"
     "Reply to a message, or provide a user ID / @username.\n\n"
 
     "<b>Examples</b>\n"
-    "<code>/tcpromote @username</code>\n"
+    "<code>/tcpromote @username developer</code>\n"
     "<code>/tcdemote 123456789</code>\n"
-    "<code>/transferowner @newowner</code>\n"
-    "<code>/tcpromoterequests</code>: submits your own request"
+    "<code>/transferowner @newowner</code>"
 )
 
+_ROLE_ALIASES: dict[str, str] = {
+    "admin":     "admin",
+    "developer": "developer",
+    "dev":       "developer",
+    "tester":    "tester",
+    "test":      "tester",
+}
+
+
+def _available_roles_for(executor_role: str) -> list[str]:
+    if executor_role == "founder":
+        return ["admin", "developer", "tester"]
+    if executor_role == "admin":
+        return ["developer", "tester"]
+    return []
+
 
 ## ---------------------------------------------------------------------------
-## Promote
+## Shared promote executor
 ## ---------------------------------------------------------------------------
 
-async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    admin = update.effective_user
-    is_owner = await db.admins_db.is_owner(admin.id)
-    is_staff = await db.admins_db.is_staff(admin.id)
+async def _execute_promote(
+    bot: Bot,
+    admin_id: int,
+    admin_fname: str,
+    executor_role: str,
+    target_id: int,
+    target_fname: str,
+    current_role: str | None,
+    role: str,
+) -> tuple[bool, str]:
+    """Execute a role assignment and return (success, reply_text)."""
+    if current_role == "founder":
+        return False, "That's the Founder — can't assign a role over them."
 
-    if not is_staff:
-        await update.effective_message.reply_text("Not authorized.")
-        return
-
-    args = parse_cmd_args(update.effective_message.text)
-    target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
-
-    if not target_id:
-        await update.effective_message.reply_text(
-            "Specify a target — reply to a message, or provide a user ID or @username."
-        )
-        return
-
-    if target_id == admin.id:
-        await update.effective_message.reply_text("You cannot promote yourself.")
-        return
-
-    if await db.admins_db.is_admin(target_id):
-        await update.effective_message.reply_text(f"That user is already a {cfg.community_name} Admin.")
-        return
+    if role_rank(current_role) >= role_rank(role):
+        label = ROLE_LABEL.get(current_role, current_role)
+        return False, f"That user already holds the {label} role or higher."
 
     lc, lt = cfg.logs
 
-    if is_owner:
-        await db.admins_db.add_admin(target_id, admin.id)
-        await db.users_db.upsert_user(target_id, None, target_fname)
-        log_text = parse_logmsg.admin_promoted(target_id, target_fname, admin.id, admin.first_name)
-        try:
-            await ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt)
-        except Exception as exc:
-            log.error("Promote log failed: %s", exc)
-        await update.effective_message.reply_text(
-            f"Done. {mention(target_id, target_fname)} is now a {cfg.community_name} Admin.",
-            parse_mode="HTML",
-        )
-    else:
+    if role == "admin":
+        if executor_role == "founder":
+            await db.admins_db.add_admin(target_id, admin_id)
+            if current_role in ("developer", "tester"):
+                await db.roles_db.remove_role(target_id)
+            await db.users_db.upsert_user(target_id, None, target_fname)
+            log_text = parse_logmsg.admin_promoted(target_id, target_fname, admin_id, admin_fname)
+            try:
+                await bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt)
+            except Exception as exc:
+                log.error("Promote log failed: %s", exc)
+            try:
+                await bot.send_message(
+                    target_id,
+                    f"You've been promoted to Admin in {cfg.community_name}. Welcome to the team.",
+                )
+            except Exception:
+                pass
+            return True, (
+                f"Done. {mention(target_id, target_fname)} is now a {cfg.community_name} Admin."
+            )
+
+        ## executor is admin → send request to owner for approval
         existing = await db.queues_db.get_request(target_id)
         if existing:
-            await update.effective_message.reply_text(
-                f"There is already a pending promotion request for {mention(target_id, target_fname)}.",
-                parse_mode="HTML",
+            return False, (
+                f"There's already a pending promotion request for "
+                f"{mention(target_id, target_fname)}."
             )
-            return
-        request_id = await db.queues_db.enqueue(target_id, None, target_fname, admin.id)
-        req_text = parse_logmsg.promo_request_log(target_id, target_fname, None, request_id)
-        owner_id = await db.admins_db.get_owner_id()
-        notified = False
+        request_id = await db.queues_db.enqueue(target_id, None, target_fname, admin_id)
+        req_text   = parse_logmsg.promo_request_log(target_id, target_fname, None, request_id)
+        owner_id   = await db.admins_db.get_owner_id()
+        notified   = False
         if owner_id:
             try:
-                await ctx.bot.send_message(
+                await bot.send_message(
                     owner_id, req_text, parse_mode="HTML",
                     reply_markup=keyboards.promo_decision_kb(request_id),
                 )
@@ -122,56 +146,259 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             except Exception:
                 pass
         if not notified:
-            owner_mention = mention(owner_id, "Owner") if owner_id else "Owner"
             try:
-                await ctx.bot.send_message(
-                    lc,
-                    req_text + f"\n\n{owner_mention} please review.",
-                    parse_mode="HTML",
+                await bot.send_message(
+                    lc, req_text, parse_mode="HTML",
                     message_thread_id=lt,
                     reply_markup=keyboards.promo_decision_kb(request_id),
                 )
             except Exception as exc:
                 log.error("Promo request notify failed: %s", exc)
-        await update.effective_message.reply_text(
-            "Request submitted. The owner has been notified and will review it shortly.",
+        return True, "Request submitted — the Founder has been notified and will review it shortly."
+
+    ## role in ("developer", "tester")
+    if executor_role not in ("founder", "admin"):
+        return False, "You don't have permission to assign this role."
+
+    if current_role == "admin":
+        label = ROLE_LABEL.get(role, role)
+        return False, f"That user is already an Admin. Demote them first before assigning {label}."
+
+    if current_role in ("developer", "tester"):
+        await db.roles_db.remove_role(target_id)
+
+    await db.roles_db.set_role(target_id, role, admin_id)
+    await db.users_db.upsert_user(target_id, None, target_fname)
+
+    role_label = ROLE_LABEL.get(role, role)
+    log_text   = parse_logmsg.role_assigned(target_id, target_fname, role, admin_id, admin_fname)
+    try:
+        await bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt)
+    except Exception as exc:
+        log.error("Role assign log failed: %s", exc)
+    try:
+        await bot.send_message(
+            target_id,
+            f"You've been assigned the {role_label} role in {cfg.community_name}.",
         )
+    except Exception:
+        pass
+    return True, f"Done. {mention(target_id, target_fname)} is now a {role_label}."
 
 
 ## ---------------------------------------------------------------------------
-## Demote
+## Promote command
 ## ---------------------------------------------------------------------------
 
-@decorators.owner_only
-async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    admin = update.effective_user
-    args = parse_cmd_args(update.effective_message.text)
-    target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
+async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    admin         = update.effective_user
+    msg           = update.effective_message
+    executor_role = await get_effective_role(admin.id)
+
+    if executor_role not in ("founder", "admin"):
+        await msg.reply_text("You don't have permission to promote users.")
+        return
+
+    args = parse_cmd_args(msg.text)
+
+    if msg.reply_to_message:
+        target_id, target_fname = await extraction.extract_target(update, [], ctx.bot)
+        role_arg = args[0].lower() if args else ""
+    else:
+        target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
+        role_arg = args[1].lower() if len(args) > 1 else ""
+
     if not target_id:
-        await update.effective_message.reply_text(
-            "Specify a target — reply to a message, or provide a user ID or @username."
+        await msg.reply_text(
+            "Specify a target — reply to a message, or provide a user ID / @username."
         )
         return
+
     if target_id == admin.id:
-        await update.effective_message.reply_text("You cannot demote yourself.")
+        await msg.reply_text("You can't promote yourself.")
         return
-    if await db.admins_db.is_owner(target_id):
-        await update.effective_message.reply_text(f"Cannot demote the {cfg.community_name} Owner.")
+
+    if target_id == ctx.bot.id:
+        await msg.reply_text("That's me.")
         return
-    removed = await db.admins_db.remove_admin(target_id)
+
+    role         = _ROLE_ALIASES.get(role_arg)
+    current_role = await get_effective_role(target_id)
+
+    if role:
+        ok, text = await _execute_promote(
+            ctx.bot, admin.id, admin.first_name, executor_role,
+            target_id, target_fname or str(target_id), current_role, role,
+        )
+        await msg.reply_text(text, parse_mode="HTML")
+        return
+
+    ## No role arg — show selection buttons
+    available = _available_roles_for(executor_role)
+    if not available:
+        await msg.reply_text("You don't have permission to assign any roles.")
+        return
+    await msg.reply_text(
+        f"Choose a role to assign to {mention(target_id, target_fname or str(target_id))}:",
+        parse_mode="HTML",
+        reply_markup=keyboards.promote_role_kb(target_id, available),
+    )
+
+
+async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q             = update.callback_query
+    await q.answer()
+    admin         = update.effective_user
+    executor_role = await get_effective_role(admin.id)
+
+    if executor_role not in ("founder", "admin"):
+        await q.answer("You no longer have permission to do this.", show_alert=True)
+        try:
+            await q.edit_message_reply_markup(None)
+        except Exception:
+            pass
+        return
+
+    parts = q.data.split(":", 2)
+    if len(parts) != 3:
+        return
+    _, role, target_id_str = parts
+    target_id = int(target_id_str)
+
+    if role not in ("admin", "developer", "tester"):
+        await q.edit_message_text("Unknown role.", reply_markup=None)
+        return
+
+    target_fname = await db.users_db.get_first_name(target_id, str(target_id))
+    current_role = await get_effective_role(target_id)
+
+    ok, text = await _execute_promote(
+        ctx.bot, admin.id, admin.first_name, executor_role,
+        target_id, target_fname, current_role, role,
+    )
+    await q.edit_message_text(text, parse_mode="HTML", reply_markup=None)
+
+
+async def on_promote_role_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    await q.answer()
+    await q.edit_message_text("Promotion cancelled. No changes were made.", reply_markup=None)
+
+
+## ---------------------------------------------------------------------------
+## Demote command
+## ---------------------------------------------------------------------------
+
+async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    admin         = update.effective_user
+    msg           = update.effective_message
+    executor_role = await get_effective_role(admin.id)
+
+    if executor_role not in ("founder", "admin"):
+        await msg.reply_text("You don't have permission to demote users.")
+        return
+
+    args = parse_cmd_args(msg.text)
+    target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
+
+    if not target_id:
+        await msg.reply_text(
+            "Specify a target — reply to a message, or provide a user ID / @username."
+        )
+        return
+
+    if target_id == admin.id:
+        await msg.reply_text("You can't demote yourself.")
+        return
+
+    target_role = await get_effective_role(target_id)
+
+    if not target_role or target_role == "founder":
+        await msg.reply_text("That user doesn't hold a role that can be removed.")
+        return
+
+    if target_role == "admin" and executor_role != "founder":
+        await msg.reply_text("Only the Founder can demote an Admin.")
+        return
+
+    role_label = ROLE_LABEL.get(target_role, target_role)
+    await msg.reply_text(
+        f"{mention(target_id, target_fname or str(target_id))} is currently a "
+        f"<b>{role_label}</b>.\nConfirm to remove their role.",
+        parse_mode="HTML",
+        reply_markup=keyboards.demote_confirm_kb(target_id),
+    )
+
+
+async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q             = update.callback_query
+    await q.answer()
+    admin         = update.effective_user
+    executor_role = await get_effective_role(admin.id)
+    target_id     = int(q.data.split(":", 1)[1])
+
+    if executor_role not in ("founder", "admin"):
+        await q.answer("You no longer have permission to do this.", show_alert=True)
+        try:
+            await q.edit_message_reply_markup(None)
+        except Exception:
+            pass
+        return
+
+    target_role = await get_effective_role(target_id)
+    if not target_role or target_role == "founder":
+        await q.edit_message_text(
+            "That user no longer holds a removable role.", reply_markup=None
+        )
+        return
+
+    if target_role == "admin" and executor_role != "founder":
+        await q.edit_message_text(
+            "Only the Founder can demote an Admin.", reply_markup=None
+        )
+        return
+
+    target_fname = await db.users_db.get_first_name(target_id, str(target_id))
+
+    if target_role == "admin":
+        removed = await db.admins_db.remove_admin(target_id)
+    else:
+        removed = await db.roles_db.remove_role(target_id)
+
     if not removed:
-        await update.effective_message.reply_text(f"That user is not a {cfg.community_name} Admin.")
+        await q.edit_message_text(
+            "Couldn't remove the role — it may have already been cleared.", reply_markup=None
+        )
         return
-    lc, lt = cfg.logs
-    log_text = parse_logmsg.admin_demoted(target_id, target_fname, admin.id, admin.first_name)
+
+    lc, lt    = cfg.logs
+    role_label = ROLE_LABEL.get(target_role, target_role)
+    log_text   = parse_logmsg.role_removed(
+        target_id, target_fname, target_role, admin.id, admin.first_name,
+    )
     try:
         await ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt)
     except Exception as exc:
         log.error("Demote log failed: %s", exc)
-    await update.effective_message.reply_text(
-        f"Done. {mention(target_id, target_fname)} has been removed from the admin team.",
+    try:
+        await ctx.bot.send_message(
+            target_id,
+            f"Your {role_label} role in {cfg.community_name} has been removed by "
+            f"{admin.first_name}.",
+        )
+    except Exception:
+        pass
+    await q.edit_message_text(
+        f"Done. {mention(target_id, target_fname)} has been removed from {role_label}.",
         parse_mode="HTML",
+        reply_markup=None,
     )
+
+
+async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    await q.answer()
+    await q.edit_message_text("Cancelled. No changes were made.", reply_markup=None)
 
 
 ## ---------------------------------------------------------------------------
@@ -185,7 +412,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
         await update.effective_message.reply_text(
-            "Specify the new owner — reply to a message, or provide a user ID or @username."
+            "Specify the new owner — reply to a message, or provide a user ID / @username."
         )
         return
     if target_id == current_owner.id:
@@ -193,7 +420,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     await db.admins_db.add_admin(current_owner.id, current_owner.id)
     await db.admins_db.set_owner(target_id)
-    lc, lt = cfg.logs
+    lc, lt   = cfg.logs
     log_text = parse_logmsg.ownership_transferred(
         target_id, target_fname, current_owner.id, current_owner.first_name,
     )
@@ -212,7 +439,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 ## ---------------------------------------------------------------------------
 
 async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
+    user     = update.effective_user
     existing = await db.queues_db.get_request(user.id)
     if existing:
         await update.effective_message.reply_text(
@@ -221,10 +448,10 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         )
         return
     request_id = await db.queues_db.enqueue(user.id, user.username, user.first_name, user.id)
-    req_text = parse_logmsg.promo_request_log(user.id, user.first_name, user.username, request_id)
-    owner_id = await db.admins_db.get_owner_id()
-    lc, lt = cfg.logs
-    notified = False
+    req_text   = parse_logmsg.promo_request_log(user.id, user.first_name, user.username, request_id)
+    owner_id   = await db.admins_db.get_owner_id()
+    lc, lt     = cfg.logs
+    notified   = False
     if owner_id:
         try:
             await ctx.bot.send_message(
@@ -250,7 +477,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
 
 
 ## ---------------------------------------------------------------------------
-## Promotion list (staff only)
+## Promotion list (Admin and above)
 ## ---------------------------------------------------------------------------
 
 @decorators.staff_only
@@ -270,31 +497,33 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
 
 ## ---------------------------------------------------------------------------
-## Promotion decision callback (owner only)
+## Promotion decision callback (Founder only)
 ## ---------------------------------------------------------------------------
 
 async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    q = update.callback_query
+    q     = update.callback_query
     await q.answer()
     admin = update.effective_user
     if not await db.admins_db.is_owner(admin.id):
-        await q.answer("Owner only.", show_alert=True)
+        await q.answer("Founder only.", show_alert=True)
         return
     action, request_id = q.data.split(":", 1)
     req = await db.queues_db.get_request_by_id(request_id)
     if not req:
         await q.edit_message_text("Request not found or already resolved.")
         return
-    target_id = req["target_id"]
+    target_id    = req["target_id"]
     target_fname = req.get("first_name", str(target_id))
-    lc, lt = cfg.logs
+    lc, lt       = cfg.logs
+
     if action == "promo_approve":
         await db.admins_db.add_admin(target_id, admin.id)
         await db.queues_db.resolve(request_id, "approved", admin.id)
         try:
             await ctx.bot.send_message(
                 target_id,
-                f"Your promotion request has been approved — you are now a {cfg.community_name} Admin.",
+                f"Your promotion request has been approved — you are now a "
+                f"{cfg.community_name} Admin.",
             )
         except Exception:
             pass
@@ -312,6 +541,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             )
         except Exception:
             pass
+
     elif action == "promo_reject":
         await db.queues_db.resolve(request_id, "rejected", admin.id)
         try:
@@ -341,28 +571,20 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 ## Handler list
 ## ---------------------------------------------------------------------------
 
-_PROMOTE_FILTER = (
-    build_prefixed_filters("tcpromote")
-    | build_prefixed_filters("tcp")
-)
-_DEMOTE_FILTER = (
-    build_prefixed_filters("tcdemote")
-    | build_prefixed_filters("tcd")
-)
-_TRANSFER_FILTER = (
-    build_prefixed_filters("transferowner")
-    | build_prefixed_filters("tfowner")
-)
-_PROMOREQ_FILTER = (
-    build_prefixed_filters("tcpromoterequests")
-    | build_prefixed_filters("tcreqs")
-)
+_PROMOTE_FILTER  = build_prefixed_filters("tcpromote") | build_prefixed_filters("tcp")
+_DEMOTE_FILTER   = build_prefixed_filters("tcdemote")  | build_prefixed_filters("tcd")
+_TRANSFER_FILTER = build_prefixed_filters("transferowner") | build_prefixed_filters("tfowner")
+_PROMOREQ_FILTER = build_prefixed_filters("tcpromoterequests") | build_prefixed_filters("tcreqs")
 
 __handlers__ = [
-    MessageHandler(_PROMOTE_FILTER, cmd_promote),
-    MessageHandler(_DEMOTE_FILTER, cmd_demote),
+    MessageHandler(_PROMOTE_FILTER,  cmd_promote),
+    MessageHandler(_DEMOTE_FILTER,   cmd_demote),
     MessageHandler(_TRANSFER_FILTER, cmd_transfer),
     MessageHandler(_PROMOREQ_FILTER, cmd_promote_request),
     MessageHandler(build_prefixed_filters("tcpromotelist"), cmd_promote_list),
-    CallbackQueryHandler(on_promo_decision, pattern=r"^(promo_approve|promo_reject):"),
+    CallbackQueryHandler(on_promo_decision,     pattern=r"^(promo_approve|promo_reject):"),
+    CallbackQueryHandler(on_promote_role_btn,   pattern=r"^promo_role:[a-z]+:\d+$"),
+    CallbackQueryHandler(on_promote_role_cancel, pattern=r"^promo_role_cancel:\d+$"),
+    CallbackQueryHandler(on_demote_confirm,     pattern=r"^demote_confirm:\d+$"),
+    CallbackQueryHandler(on_demote_cancel,      pattern=r"^demote_cancel:\d+$"),
 ]

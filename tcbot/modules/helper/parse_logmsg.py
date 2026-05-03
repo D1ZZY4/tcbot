@@ -456,6 +456,85 @@ def broadcast_log(
     )
 
 
+## ---------------------------------------------------------------------------
+## Role management logs
+## ---------------------------------------------------------------------------
+
+_ROLE_LABELS: dict[str, str] = {
+    "founder":   "Founder",
+    "admin":     "Admin",
+    "developer": "Developer",
+    "tester":    "Tester",
+}
+
+
+def role_assigned(
+    target_id: int,
+    target_fname: str,
+    role: str,
+    admin_id: int,
+    admin_fname: str,
+) -> str:
+    dt         = fmt_dt(utc_now())
+    role_label = _ROLE_LABELS.get(role, role.capitalize())
+    return (
+        f"{cfg.community_name} Role Assigned\n"
+        f"{BRAND}\n\n"
+        f"User: {mention(target_id, target_fname)}\n"
+        f"ID: {target_id}\n"
+        f"Role: {role_label}\n\n"
+        f"Assigned by: {mention(admin_id, admin_fname)}\n"
+        f"ID: {admin_id}\n\n"
+        f"Date: {dt}"
+    )
+
+
+def role_removed(
+    target_id: int,
+    target_fname: str,
+    role: str,
+    admin_id: int,
+    admin_fname: str,
+) -> str:
+    dt         = fmt_dt(utc_now())
+    role_label = _ROLE_LABELS.get(role, role.capitalize())
+    return (
+        f"{cfg.community_name} Role Removed\n"
+        f"{BRAND}\n\n"
+        f"User: {mention(target_id, target_fname)}\n"
+        f"ID: {target_id}\n"
+        f"Role removed: {role_label}\n\n"
+        f"Removed by: {mention(admin_id, admin_fname)}\n"
+        f"ID: {admin_id}\n\n"
+        f"Date: {dt}"
+    )
+
+
+def role_auto_demoted(
+    target_id: int,
+    target_fname: str,
+    role: str,
+    admin_id: int,
+    admin_fname: str,
+    action: str,
+) -> str:
+    dt           = fmt_dt(utc_now())
+    role_label   = _ROLE_LABELS.get(role, role.capitalize())
+    action_label = "Banned" if action == "ban" else "Kicked"
+    return (
+        f"{cfg.community_name} Auto-Demote\n"
+        f"{BRAND}\n\n"
+        f"User: {mention(target_id, target_fname)}\n"
+        f"ID: {target_id}\n"
+        f"Role removed: {role_label}\n"
+        f"Trigger: {action_label}\n\n"
+        f"By: {mention(admin_id, admin_fname)}\n"
+        f"ID: {admin_id}\n\n"
+        f"Date: {dt}"
+    )
+
+
+## ---------------------------------------------------------------------------
 ## Legacy alias still used in connected_flow / connecting.py
 def join_request_log(
     chat_id: int,
