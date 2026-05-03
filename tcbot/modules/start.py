@@ -33,6 +33,7 @@ _MENU_TEXT = (
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg   = update.effective_message
     text  = (msg.text or "").strip()
+    log.info("cmd_start CALLED | chat=%s user=%s text=%r", update.effective_chat.id, update.effective_user.id, text)
     parts = text.split(None, 1)
     arg   = parts[1].strip() if len(parts) > 1 else ""
     bot_name = ctx.bot.first_name or "TC Bot"

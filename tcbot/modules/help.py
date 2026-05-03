@@ -65,6 +65,7 @@ _HELP_INDEX_TEXT = (
 
 
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    log.info("cmd_help CALLED | chat=%s user=%s text=%r", update.effective_chat.id, update.effective_user.id, (update.effective_message.text or ""))
     bot_name = ctx.bot.first_name or "TC Bot"
     await update.effective_message.reply_text(
         _HELP_INDEX_TEXT.format(bot_name=bot_name, community=cfg.community_name),
