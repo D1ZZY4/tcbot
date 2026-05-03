@@ -18,7 +18,7 @@ __help_text__ = (
     "<code>/tcunban</code> (alias: <code>/tcunb</code>)\n\n"
 
     "<b>Who can use it</b>\n"
-    "TC Staff (admins & owner) only.\n\n"
+    "Developer and above (Founder / Admin / Developer).\n\n"
 
     "<b>Where to use it</b>\n"
     "Exec group, connected groups, or bot PM.\n\n"

@@ -27,7 +27,7 @@ __help_text__ = (
     "<code>/resetwarns</code> (alias: <code>/clearwarns</code>)\n\n"
 
     "<b>Who can use it</b>\n"
-    f"<code>/tcwarn</code>, <code>/tcunwarn</code>, <code>/resetwarns</code>: TC Staff only.\n"
+    f"<code>/tcwarn</code>, <code>/tcunwarn</code>, <code>/resetwarns</code>: Tester and above.\n"
     "<code>/warns</code>: anyone.\n\n"
 
     "<b>Where to use it</b>\n"
@@ -56,7 +56,7 @@ __help_text__ = (
 )
 
 
-@decorators.staff_only
+@decorators.basic_mod_only
 async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(update.effective_message.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
@@ -85,7 +85,7 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await execute_warnlist(update, ctx, target_id, target_name or str(target_id))
 
 
-@decorators.staff_only
+@decorators.basic_mod_only
 async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(update.effective_message.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)

@@ -12,7 +12,7 @@ __help_text__ = (
     "<code>/tckick</code> (alias: <code>/tck</code>)\n\n"
 
     "<b>Who can use it</b>\n"
-    "TC Staff (admins & owner) only.\n\n"
+    "Tester and above (Founder / Admin / Developer / Tester).\n\n"
 
     "<b>Where to use it</b>\n"
     "Inside any connected group.\n\n"

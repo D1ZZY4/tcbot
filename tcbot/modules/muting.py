@@ -20,7 +20,7 @@ __help_text__ = (
     "<code>/tcunmute</code> (alias: <code>/tcunm</code>)\n\n"
 
     "<b>Who can use it</b>\n"
-    "TC Staff (admins & owner) only.\n\n"
+    "Tester and above (Founder / Admin / Developer / Tester).\n\n"
 
     "<b>Where to use it</b>\n"
     "Inside any connected group.\n\n"
@@ -47,7 +47,7 @@ __help_text__ = (
 )
 
 
-@decorators.staff_only
+@decorators.basic_mod_only
 async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(update.effective_message.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
