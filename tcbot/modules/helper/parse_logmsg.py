@@ -246,38 +246,6 @@ def appeal_unban_log(
     )
 
 
-## Legacy aliases (kept for backward compatibility)
-def appeal_submitted(
-    target_id: int,
-    target_fname: str,
-    ban_id: str,
-    reason: str = "",
-    log_link: str | None = None,
-) -> str:
-    return appeal_submitted_log(target_id, target_fname, ban_id, log_link or "")
-
-
-def appeal_accepted(
-    target_id: int,
-    target_fname: str,
-    admin_id: int,
-    admin_fname: str,
-    ban_id: str,
-) -> str:
-    return appeal_approved_edit(target_id, target_fname, admin_id, admin_fname, ban_id)
-
-
-def appeal_rejected(
-    target_id: int,
-    target_fname: str,
-    admin_id: int,
-    admin_fname: str,
-    ban_id: str,
-    response: str | None = None,
-) -> str:
-    return appeal_rejected_edit(target_id, target_fname, admin_id, admin_fname, ban_id)
-
-
 ## ---------------------------------------------------------------------------
 ## Admin management logs
 ## ---------------------------------------------------------------------------

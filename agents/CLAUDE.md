@@ -31,14 +31,15 @@ tcbot/
 ├── modules/
 │   ├── __init__.py      — Module discovery, filtering, handler ordering
 │   ├── helper/
-│   │   ├── formatter.py — HTML helpers: esc(), code(), mention(), bold()
-│   │   ├── extraction.py — extract_target() from reply/ID/@username
-│   │   ├── keyboards.py — All InlineKeyboardMarkup builders
-│   │   ├── decorators.py — staff_only, owner_only
+│   │   ├── formatter.py    — HTML helpers: esc(), code(), mention(), bold()
+│   │   ├── extraction.py   — extract_target() from reply/ID/@username
+│   │   ├── keyboards.py    — All InlineKeyboardMarkup builders
+│   │   ├── decorators.py   — staff_only, owner_only
 │   │   ├── parse_logmsg.py — Log message text builders
-│   │   ├── ban_info.py  — build_ban_detail() shared between checking/stats
-│   │   ├── parse_link.py — message_link(), appeal_deep_link()
-│   │   └── workflows/   — ConversationHandler flows and executors
+│   │   ├── parse_editmsg.py — safe_edit() – swallows stale-message errors
+│   │   ├── ban_info.py     — build_ban_detail() shared between checking/stats
+│   │   ├── parse_link.py   — message_link(), appeal_deep_link()
+│   │   └── workflows/      — ConversationHandler flows and executors
 │   └── *.py             — Individual command modules
 └── utils/
     ├── logger.py        — BotLogFormatter, setup()

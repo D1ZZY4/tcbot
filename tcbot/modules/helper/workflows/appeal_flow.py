@@ -273,7 +273,11 @@ async def on_appeal_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
             try:
                 await ctx.bot.send_message(
                     lc,
-                    parse_logmsg.appeal_accepted(target_id, target_fname, admin.id, admin.first_name, ban_id),
+                    parse_logmsg.appeal_approved_edit(
+                        target_id, target_fname,
+                        admin.id, admin.first_name,
+                        ban_id, appeal_link, appeal_submitted_at,
+                    ),
                     parse_mode="HTML",
                     message_thread_id=lt,
                 )
@@ -334,7 +338,11 @@ async def on_appeal_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
             try:
                 await ctx.bot.send_message(
                     lc,
-                    parse_logmsg.appeal_rejected(target_id, target_fname, admin.id, admin.first_name, ban_id),
+                    parse_logmsg.appeal_rejected_edit(
+                        target_id, target_fname,
+                        admin.id, admin.first_name,
+                        ban_id, appeal_link, appeal_submitted_at,
+                    ),
                     parse_mode="HTML",
                     message_thread_id=lt,
                 )

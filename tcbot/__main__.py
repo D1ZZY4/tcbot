@@ -10,16 +10,11 @@ from telegram import Update
 from telegram.ext import Application, ApplicationBuilder, ContextTypes, MessageHandler, filters
 
 from tcbot import cfg
+from tcbot import database as db
 from tcbot.modules import get_handlers
 from tcbot.utils.logger import setup as setup_logging
 
 log = logging.getLogger(__name__)
-
-
-async def _debug_all_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    msg = update.effective_message
-    if msg and msg.text:
-        log.info("DBG RCV | chat=%s type=%s text=%r", update.effective_chat.id, update.effective_chat.type, msg.text[:40])
 
 
 async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -32,7 +27,6 @@ async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     if not chat or chat.type not in ("group", "supergroup"):
         return
 
-    from tcbot import database as db
     if not await db.groups_db.is_affiliated(chat.id):
         return
 

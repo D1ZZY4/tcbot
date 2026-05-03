@@ -41,8 +41,8 @@ def _bans_list_kb(page: int, total: int, n_items: int) -> InlineKeyboardMarkup:
     for i in range(0, len(num_btns), 3):
         rows.append(num_btns[i: i + 3])
 
-    rows.append([InlineKeyboardButton("Search", callback_data="stats_bans_search")])
-    rows.append([InlineKeyboardButton("Back",   callback_data="stats_main")])
+    rows.append([InlineKeyboardButton("Search",  callback_data="stats_bans_search")])
+    rows.append([InlineKeyboardButton("« Back", callback_data="stats_main")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -77,7 +77,7 @@ def _ban_detail_kb(page: int, proof_link: str | None = None) -> InlineKeyboardMa
     rows = []
     if proof_link:
         rows.append([InlineKeyboardButton("View Proof", url=proof_link)])
-    rows.append([InlineKeyboardButton("Back", callback_data=f"stats_bans:{page}")])
+    rows.append([InlineKeyboardButton("« Back", callback_data=f"stats_bans:{page}")])
     return InlineKeyboardMarkup(rows)
 
 
