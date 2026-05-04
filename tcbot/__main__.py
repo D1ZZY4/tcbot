@@ -153,7 +153,7 @@ def main() -> None:
         app.add_handler(handler)
 
     ## Low-priority handler: update member cache on every group message.
-    ## ~ANY_CMD_FILTER excludes /, !, and . prefixed commands — not just /commands.
+    ## ~ANY_CMD_FILTER excludes custom-prefix commands (!, .) — /commands pass through.
     app.add_handler(
         MessageHandler(
             filters.ChatType.GROUPS & filters.TEXT & ~ANY_CMD_FILTER,

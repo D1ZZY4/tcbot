@@ -76,6 +76,11 @@ def _get_prefixes() -> list[str]:
     return list(raw)
 
 
+def _get_custom_prefixes() -> list[str]:
+    """Return configured prefixes excluding the native Telegram slash (/)."""
+    return [p for p in _get_prefixes() if p != "/"]
+
+
 def build_prefixed_filters(command: str) -> filters.BaseFilter:
     """Return a filter matching <prefix><command> for all configured prefixes."""
     prefixes = _get_prefixes()
@@ -84,11 +89,12 @@ def build_prefixed_filters(command: str) -> filters.BaseFilter:
     return filters.Regex(re.compile(pattern, re.IGNORECASE))
 
 
-## Pre-computed filter: any text starting with a configured prefix followed by a letter.
+## Pre-computed filter: any text starting with a CUSTOM (non-slash) prefix followed by a letter.
+## Matches !, . etc. — does NOT match Telegram-native /commands.
 ## Use in ConversationHandler fallbacks and as ~COMMAND guard in text-input states.
 ANY_CMD_FILTER: filters.BaseFilter = filters.Regex(
     re.compile(
-        rf"^[{re.escape(''.join(set(_get_prefixes())))}][a-zA-Z]",
+        rf"^[{re.escape(''.join(set(_get_custom_prefixes())))}][a-zA-Z]",
         re.IGNORECASE,
     )
 )
