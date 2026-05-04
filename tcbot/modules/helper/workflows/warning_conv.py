@@ -83,7 +83,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     executor_role = await get_effective_role(admin.id)
     if role_rank(executor_role) < role_rank("tester"):
-        await msg.reply_text("You're not authorized to use this command.")
+        await msg.reply_text("You need at least a Tester role to warn users — not your call. 🚫")
         return ConversationHandler.END
 
     args = parse_cmd_args(msg.text)
@@ -102,14 +102,23 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     if target_id == ctx.bot.id:
-        await msg.reply_text("That's me — bit hard to warn the one issuing them.")
+        await msg.reply_text("Warn me? 😄 I'm the one who manages warnings around here.")
         return ConversationHandler.END
 
     target_role = await get_effective_role(target_id)
     if target_role:
         if role_rank(executor_role) <= role_rank(target_role):
-            label = ROLE_LABEL.get(target_role, target_role.capitalize())
-            await msg.reply_text(f"That user is a {label} — you can't warn them.")
+            if target_role == "founder":
+                await msg.reply_text(
+                    f"That's {mention(target_id, target_name or 'the Founder')}, our Founder — "
+                    "warning them? That's a hard no. 👑",
+                    parse_mode="HTML",
+                )
+            else:
+                label = ROLE_LABEL.get(target_role, target_role.capitalize())
+                await msg.reply_text(
+                    f"That's a {cfg.community_name} {label} — they outrank you here, can't warn them."
+                )
             return ConversationHandler.END
 
     ctx.user_data.update({

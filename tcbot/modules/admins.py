@@ -96,7 +96,7 @@ async def _execute_promote(
 ) -> tuple[bool, str]:
     """Execute a role assignment and return (success, reply_text)."""
     if current_role == "founder":
-        return False, "That's the Founder — can't assign a role over them."
+        return False, "That's the Founder — can't assign a role over them. 👑"
 
     if role_rank(current_role) >= role_rank(role):
         label = ROLE_LABEL.get(current_role, current_role)
@@ -124,7 +124,7 @@ async def _execute_promote(
                 bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
                 bot.send_message(
                     target_id,
-                    f"You've been promoted to Admin in {cfg.community_name}. Welcome to the team.",
+                    f"You've been promoted to Admin in {cfg.community_name} — welcome to the staff team! 🎉",
                 ),
                 return_exceptions=True,
             )
@@ -164,7 +164,7 @@ async def _execute_promote(
                 )
             except Exception as exc:
                 log.error("Promo request notify failed: %s", exc)
-        return True, "Request submitted — the Founder has been notified and will review it shortly."
+        return True, "Submitted — the Founder has been notified and will review it shortly. ✅"
 
     ## role in ("developer", "tester")
     if executor_role not in ("founder", "admin"):
@@ -190,7 +190,7 @@ async def _execute_promote(
         bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
         bot.send_message(
             target_id,
-            f"You've been assigned the {role_label} role in {cfg.community_name}.",
+            f"You've been assigned the {role_label} role in {cfg.community_name} — welcome to the team! 🎉",
         ),
         return_exceptions=True,
     )
@@ -207,7 +207,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     executor_role = await get_effective_role(admin.id)
 
     if executor_role not in ("founder", "admin"):
-        await msg.reply_text("You don't have permission to promote users.")
+        await msg.reply_text("Only Founder and Admin can promote users — not your call. 🚫")
         return
 
     args = parse_cmd_args(msg.text)
@@ -226,11 +226,11 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if target_id == admin.id:
-        await msg.reply_text("You can't promote yourself.")
+        await msg.reply_text("Can't promote yourself — the hierarchy doesn't work that way. 🙃")
         return
 
     if target_id == ctx.bot.id:
-        await msg.reply_text("That's me.")
+        await msg.reply_text("That's me — promoting a bot doesn't quite work. 😄")
         return
 
     role         = _ROLE_ALIASES.get(role_arg)
@@ -310,7 +310,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     executor_role = await get_effective_role(admin.id)
 
     if executor_role not in ("founder", "admin"):
-        await msg.reply_text("You don't have permission to demote users.")
+        await msg.reply_text("Only Founder and Admin can demote users — not your call. 🚫")
         return
 
     args = parse_cmd_args(msg.text)
@@ -323,7 +323,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if target_id == admin.id:
-        await msg.reply_text("You can't demote yourself.")
+        await msg.reply_text("Can't demote yourself — ask a higher-up if needed. 🙃")
         return
 
     target_role = await get_effective_role(target_id)
@@ -430,7 +430,9 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     if target_id == current_owner.id:
-        await update.effective_message.reply_text("You are already the owner.")
+        await update.effective_message.reply_text(
+            "You're already the Founder — can't transfer ownership to yourself. 😅"
+        )
         return
     ## add_admin must complete before set_owner (set_owner does delete_many + insert)
     await db.admins_db.add_admin(current_owner.id, current_owner.id)
@@ -548,8 +550,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         await asyncio.gather(
             ctx.bot.send_message(
                 target_id,
-                f"Your promotion request has been approved — you are now a "
-                f"{cfg.community_name} Admin.",
+                f"Your promotion request has been approved — welcome to the {cfg.community_name} staff team, Admin! 🎉",
             ),
             ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             q.edit_message_text(
@@ -568,7 +569,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             db.queues_db.resolve(request_id, "rejected", admin.id),
             ctx.bot.send_message(
                 target_id,
-                "Your promotion request has been reviewed and was not approved at this time.",
+                "Your request was reviewed but wasn't approved this time. You're free to apply again later.",
             ),
             ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             q.edit_message_text(

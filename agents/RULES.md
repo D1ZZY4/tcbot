@@ -5,7 +5,7 @@
 1. This is a production federation bot. Every change must be backward-compatible with existing MongoDB data.
 2. Never delete or rename MongoDB collection fields without a migration plan.
 3. Bot responses must be in English. Log messages may use short technical English.
-4. All user-facing text must be clear and direct. No filler, no padding.
+4. User-facing responses use a friendly-formal tone — clear and direct, but warm. Use 1–3 emojis per message where it feels natural. No filler, no padding.
 
 ## Code Quality
 

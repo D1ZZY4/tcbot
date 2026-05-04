@@ -46,7 +46,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     executor_role = await get_effective_role(admin.id)
     if role_rank(executor_role) < role_rank("developer"):
-        await msg.reply_text("You're not authorized to issue bans.")
+        await msg.reply_text("You need Developer rank or above to issue bans. Not your call. 🚫")
         return ConversationHandler.END
 
     raw_args = parse_cmd_args(msg.text)
@@ -67,18 +67,31 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     if target_id == ctx.bot.id:
-        await msg.reply_text("That's me — I run the bans around here, not receive them.")
+        await msg.reply_text(
+            "That's me you're trying to ban 😐 — I keep this federation running. Nice try."
+        )
         return ConversationHandler.END
 
     if target_id == admin.id:
-        await msg.reply_text("You can't ban yourself.")
+        await msg.reply_text(
+            "Can't ban yourself — that's not how moderation works. 🙃"
+        )
         return ConversationHandler.END
 
     target_role = await get_effective_role(target_id)
     if target_role:
         if role_rank(executor_role) <= role_rank(target_role):
-            label = ROLE_LABEL.get(target_role, target_role.capitalize())
-            await msg.reply_text(f"That user is a {label} — you can't ban them.")
+            if target_role == "founder":
+                await msg.reply_text(
+                    f"That's {mention(target_id, target_fname or 'the Founder')}, our Founder — "
+                    "banning them is simply not on the table. 👑",
+                    parse_mode="HTML",
+                )
+            else:
+                label = ROLE_LABEL.get(target_role, target_role.capitalize())
+                await msg.reply_text(
+                    f"That's a {cfg.community_name} {label} — they outrank you here, can't ban them."
+                )
             return ConversationHandler.END
         await auto_demote(
             ctx.bot,

@@ -101,7 +101,9 @@ def owner_only(func):
         if uid and await db.admins_db.is_owner(uid):
             return await func(update, ctx)
         if update.effective_message:
-            await update.effective_message.reply_text("This command is for the owner only.")
+            await update.effective_message.reply_text(
+                "This command is reserved for the Founder — you're not authorized. 🔒"
+            )
     return wrapper
 
 
@@ -113,7 +115,9 @@ def staff_only(func):
         if uid and await db.admins_db.is_staff(uid):
             return await func(update, ctx)
         if update.effective_message:
-            await update.effective_message.reply_text("You don't have permission to use this command.")
+            await update.effective_message.reply_text(
+                "Staff and Founder only for this one — you don't have the rank. 🚫"
+            )
     return wrapper
 
 
@@ -125,7 +129,9 @@ def mod_only(func):
         if uid and role_rank(await get_effective_role(uid)) >= role_rank("developer"):
             return await func(update, ctx)
         if update.effective_message:
-            await update.effective_message.reply_text("You're not authorized to use this command.")
+            await update.effective_message.reply_text(
+                "You need Developer rank or above for this — not your call. 🚫"
+            )
     return wrapper
 
 
@@ -137,5 +143,7 @@ def basic_mod_only(func):
         if uid and role_rank(await get_effective_role(uid)) >= role_rank("tester"):
             return await func(update, ctx)
         if update.effective_message:
-            await update.effective_message.reply_text("You're not authorized to use this command.")
+            await update.effective_message.reply_text(
+                "You need at least a Tester role for this — not your call. 🚫"
+            )
     return wrapper

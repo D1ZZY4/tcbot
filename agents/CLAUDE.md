@@ -51,6 +51,7 @@ tcbot/
 │   │   └── workflows/      — ConversationHandler flows and executors
 │   └── *.py             — Individual command modules
 └── utils/
+    ├── dispatch.py      — fan_out(): semaphore-bounded multi-group dispatcher (max 10 concurrent)
     ├── logger.py        — BotLogFormatter, setup()
     ├── prefixes.py      — build_prefixed_filters(), parse_cmd_args()
     └── timedate_format.py — fmt_dt() (tz-safe), utc_now(), utc_now_str()
@@ -157,15 +158,15 @@ if target_role in ("admin", "developer", "tester"):
 ```
 
 **Tone guidelines:**
-- Friendly but not over-the-top. Mix of casual and professional.
-- Emojis only where the module already uses them (checking.py, ban_flow.py use them — keep it there).
-- No filler phrases. Keep messages short and direct.
+- Friendly but not over-the-top. Mix of casual and professional — think "capable team member", not "cold system".
+- Use 1–3 emojis per message where it feels natural. Don't force them — just enough warmth.
+- Keep messages short and direct. No filler phrases.
 
 ## What NOT To Do
 
 - Do not add `from typing import List, Optional, Tuple` — use built-in `list`, `int | None`, `tuple`
 - Do not use `datetime.utcnow()` — use `datetime.now(timezone.utc)`
-- Do not add emoji to command responses unless the existing module already uses them
+- Do not use more than 3 emojis per message — keep it tasteful, not spammy
 - Do not add dead `## comment` sections that explain obvious code
 - Do not create duplicate render/keyboard functions across modules — extract shared logic
 - Do not inline imports inside function bodies — keep all imports at the top of the file

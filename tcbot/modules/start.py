@@ -21,15 +21,15 @@ log = logging.getLogger(__name__)
 __module_name__ = None
 
 _MENU_TEXT = (
-    "<b>Hey there! I'm {bot_name}.</b>\n"
-    "I help manage {community} groups, bans, and appeals. "
-    "Use the buttons below to learn more or view important links."
+    "<b>Hey! I'm {bot_name}. 👋</b>\n"
+    "I manage {community} groups, federation bans, and appeals. "
+    "Use the buttons below to explore."
 )
 
 _GROUP_START_TEXT = (
-    "<b>Hey! I'm {bot_name}.</b>\n"
+    "<b>Hey! I'm {bot_name}. 👋</b>\n"
     "I manage {community} groups, federation bans, and appeals.\n\n"
-    "Use /help to browse all available commands, or open me in PM for the full menu."
+    "Use /help for all available commands, or open me in PM for the full menu."
 )
 
 

@@ -52,9 +52,9 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             continue
 
         await msg.reply_text(
-            f"Welcome, {mention(member.id, member.first_name)}. "
+            f"Welcome, {mention(member.id, member.first_name)}! 👋 "
             f"This is an official {cfg.community_name} group. "
-            "Please review the group rules before participating.",
+            "Please go through the group rules before participating.",
             parse_mode="HTML",
         )
 

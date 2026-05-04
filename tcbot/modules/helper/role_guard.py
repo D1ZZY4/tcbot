@@ -36,14 +36,14 @@ async def resolve_and_check(
         get_effective_role(target_id),
     )
     if role_rank(executor_role) < role_rank(min_role):
-        await msg.reply_text("You're not authorized to use this command.")
+        await msg.reply_text("You don't have the rank for this one. 🚫")
         return None, None
 
     if target_role:
         if role_rank(executor_role) <= role_rank(target_role):
             label = ROLE_LABEL.get(target_role, target_role.capitalize())
             await msg.reply_text(
-                f"That user is a {label} — you can't take action on them."
+                f"That's a {label} — they outrank you here, can't take action on them."
             )
             return None, None
 

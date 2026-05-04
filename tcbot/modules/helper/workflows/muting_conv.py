@@ -60,7 +60,7 @@ async def cmd_mute_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     executor_role = await get_effective_role(admin.id)
     if role_rank(executor_role) < role_rank("tester"):
-        await msg.reply_text("You're not authorized to use this command.")
+        await msg.reply_text("You need at least a Tester role to mute — not your call. 🚫")
         return ConversationHandler.END
 
     raw_args = parse_cmd_args(msg.text)
@@ -77,18 +77,29 @@ async def cmd_mute_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     if target_id == ctx.bot.id:
-        await msg.reply_text("That's me — muting a bot doesn't quite work.")
+        await msg.reply_text(
+            "Muting me won't do much — I don't send messages on my own anyway. 😄"
+        )
         return ConversationHandler.END
 
     if target_id == admin.id:
-        await msg.reply_text("You can't mute yourself.")
+        await msg.reply_text("Can't mute yourself — that's not how this works. 🙃")
         return ConversationHandler.END
 
     target_role = await get_effective_role(target_id)
     if target_role:
         if role_rank(executor_role) <= role_rank(target_role):
-            label = ROLE_LABEL.get(target_role, target_role.capitalize())
-            await msg.reply_text(f"That user is a {label} — you can't mute them.")
+            if target_role == "founder":
+                await msg.reply_text(
+                    f"That's {mention(target_id, target_fname or 'the Founder')}, our Founder — "
+                    "muting them is not happening. 👑",
+                    parse_mode="HTML",
+                )
+            else:
+                label = ROLE_LABEL.get(target_role, target_role.capitalize())
+                await msg.reply_text(
+                    f"That's a {cfg.community_name} {label} — they outrank you here, can't mute them."
+                )
             return ConversationHandler.END
 
     duration = None

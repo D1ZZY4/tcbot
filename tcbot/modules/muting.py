@@ -64,7 +64,7 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         bot_info = await ctx.bot.get_me()
         await msg.reply_text(
             f"That's {mention(ctx.bot.id, bot_info.first_name or 'me')} — "
-            "bots don't get muted. Nothing to undo.",
+            "can't mute a bot anyway, so nothing to undo here. 😄",
             parse_mode="HTML",
         )
         return
@@ -74,7 +74,7 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         fname = await db.users_db.get_first_name(target_id, "the Founder")
         await msg.reply_text(
             f"That's {mention(target_id, fname)}, the Founder — "
-            "not muted, nothing to undo.",
+            "definitely not muted. Nothing to undo. 👑",
             parse_mode="HTML",
         )
         return
