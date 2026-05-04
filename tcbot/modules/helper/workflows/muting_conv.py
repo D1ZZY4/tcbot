@@ -199,8 +199,7 @@ async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
 
 async def on_skip_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     q = update.callback_query
-    await q.answer()
-    await _execute_mute(ctx.bot, update, ctx.user_data)
+    await asyncio.gather(q.answer(), _execute_mute(ctx.bot, update, ctx.user_data))
     return ConversationHandler.END
 
 

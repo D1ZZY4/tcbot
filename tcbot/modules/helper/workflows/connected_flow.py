@@ -4,6 +4,7 @@
 """Group affiliation flow – in-group join prompt, permission check, pending monitoring."""
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from telegram import Update
@@ -152,12 +153,14 @@ async def on_join_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         await q.answer("Only the group owner can decide.", show_alert=True)
         return
 
-    await q.answer()
-    action = q.data
+    action = q.data  ## sync read before any await
 
     if action == "tc_join":
         try:
-            bot_member = await ctx.bot.get_chat_member(chat.id, ctx.bot.id)
+            _, bot_member = await asyncio.gather(
+                q.answer(),
+                ctx.bot.get_chat_member(chat.id, ctx.bot.id),
+            )
         except Exception:
             await q.edit_message_text(
                 "Could not verify my own permissions. Please promote me as admin and try again.",
@@ -180,30 +183,31 @@ async def on_join_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             await q.edit_message_text(f"This group is already affiliated with {cfg.community_name}.", reply_markup=None)
             return
 
-        await _complete_join(chat.id, chat.title or "", user.id, user.first_name, ctx.bot)
-        await q.edit_message_text(
-            f"This community is now affiliated with {cfg.community_name}. "
-            "Authorized staff can use federation commands here.",
-            reply_markup=None,
+        await asyncio.gather(
+            _complete_join(chat.id, chat.title or "", user.id, user.first_name, ctx.bot),
+            q.edit_message_text(
+                f"This community is now affiliated with {cfg.community_name}. "
+                "Authorized staff can use federation commands here.",
+                reply_markup=None,
+            ),
         )
 
     elif action == "tc_cancel":
-        await db.groups_db.remove_pending(chat.id)
-        await q.edit_message_text("Affiliation declined. I'll leave the group now.", reply_markup=None)
+        await asyncio.gather(
+            q.answer(),
+            db.groups_db.remove_pending(chat.id),
+            q.edit_message_text("Affiliation declined. I'll leave the group now.", reply_markup=None),
+        )
 
-        try:
-            await ctx.bot.send_message(
+        await asyncio.gather(
+            ctx.bot.send_message(
                 lc,
                 parse_logmsg.group_affiliation_rejected_log(
                     chat.id, chat.title or "Unknown", user.id, user.first_name,
                 ),
                 parse_mode="HTML",
                 message_thread_id=lt,
-            )
-        except Exception:
-            pass
-
-        try:
-            await ctx.bot.leave_chat(chat.id)
-        except Exception:
-            pass
+            ),
+            ctx.bot.leave_chat(chat.id),
+            return_exceptions=True,
+        )

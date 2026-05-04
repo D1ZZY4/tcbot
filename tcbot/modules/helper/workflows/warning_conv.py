@@ -169,8 +169,8 @@ async def on_warn_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def on_warn_skip_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.callback_query.answer()
-    return await _do_warn(update, ctx)
+    await asyncio.gather(update.callback_query.answer(), _do_warn(update, ctx))
+    return ConversationHandler.END
 
 
 async def on_warn_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:

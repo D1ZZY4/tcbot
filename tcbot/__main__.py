@@ -7,11 +7,12 @@ from __future__ import annotations
 import logging
 
 from telegram import Update
-from telegram.ext import Application, ApplicationBuilder, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, ApplicationBuilder, ContextTypes, MessageHandler, TypeHandler, filters
 
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules import get_handlers
+from tcbot.modules.helper.decorators import global_rate_limit_handler
 from tcbot.utils.logger import setup as setup_logging
 
 log = logging.getLogger(__name__)
@@ -62,6 +63,9 @@ def main() -> None:
         .post_init(_post_init)
         .build()
     )
+
+    ## Global per-user rate limiter — runs before every handler (group -1)
+    app.add_handler(TypeHandler(Update, global_rate_limit_handler), group=-1)
 
     ## Register all module handlers via tcbot.modules
     for handler in get_handlers():

@@ -199,9 +199,7 @@ async def on_appeal_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         await q.answer()
         return
 
-    await q.answer()
-
-    ban = await db.bans_db.get_ban(ban_id)
+    _, ban = await asyncio.gather(q.answer(), db.bans_db.get_ban(ban_id))
     if not ban:
         await q.edit_message_text("Ban record not found.", reply_markup=None)
         return

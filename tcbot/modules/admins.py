@@ -248,9 +248,8 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q             = update.callback_query
-    await q.answer()
     admin         = update.effective_user
-    executor_role = await get_effective_role(admin.id)
+    _, executor_role = await asyncio.gather(q.answer(), get_effective_role(admin.id))
 
     if executor_role not in ("founder", "admin"):
         await q.answer("You no longer have permission to do this.", show_alert=True)
@@ -335,9 +334,8 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q             = update.callback_query
-    await q.answer()
     admin         = update.effective_user
-    executor_role = await get_effective_role(admin.id)
+    _, executor_role = await asyncio.gather(q.answer(), get_effective_role(admin.id))
     target_id     = int(q.data.split(":", 1)[1])
 
     if executor_role not in ("founder", "admin"):
@@ -507,9 +505,9 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
 async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q     = update.callback_query
-    await q.answer()
     admin = update.effective_user
-    if not await db.admins_db.is_owner(admin.id):
+    _, is_owner = await asyncio.gather(q.answer(), db.admins_db.is_owner(admin.id))
+    if not is_owner:
         await q.answer("Founder only.", show_alert=True)
         return
     action, request_id = q.data.split(":", 1)
