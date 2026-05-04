@@ -99,8 +99,8 @@ async def global_rate_limit_handler(update: Update, ctx: ContextTypes.DEFAULT_TY
         if wait:
             try:
                 await update.callback_query.answer(
-                    f"⏳ Pelan-pelan, tunggu {wait:.0f} detik.",
-                    show_alert=False,
+                    f"⏳ Upss, slow down.. try again in {wait:.0f} seconds.",
+                    show_alert=True,
                 )
             except Exception:
                 pass
@@ -121,7 +121,7 @@ async def global_rate_limit_handler(update: Update, ctx: ContextTypes.DEFAULT_TY
         if msg:
             try:
                 await msg.reply_text(
-                    f"⏳ Pelan-pelan! Coba lagi dalam {wait:.0f} detik."
+                    f"⏳ Slow down! try again in {wait:.0f} seconds."
                 )
             except Exception:
                 pass
