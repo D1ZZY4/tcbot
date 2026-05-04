@@ -50,9 +50,8 @@ This applies to multi-line variable blocks, not single assignments.
 Use `## ---` style comments to separate logical sections within a long file:
 
 ```python
-## ---------------------------------------------------------------------------
-## Section title
-## ---------------------------------------------------------------------------
+## ── Section title ────────────────────────────────────────────────────────────
+## Short escription
 ```
 
 Do not add comments that explain what the next line obviously does:

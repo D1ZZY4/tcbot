@@ -8,7 +8,10 @@ Every file starts with the copyright header, then a one-line module docstring:
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Short description of what this module does."""
+
+## Short description of what this module does.
+
+
 from __future__ import annotations
 ```
 
@@ -22,7 +25,8 @@ Keep them concise — one sentence or a short paragraph. No `:param:` / `:return
 
 ```python
 async def sweep_group(self, chat_id: int) -> tuple[int, int]:
-    """Ban all currently-present federation-banned members in `chat_id`.
+    """
+    Ban all currently-present federation-banned members in `chat_id`.
 
     Returns (banned_count, error_count). Individual errors do not abort
     the sweep.
@@ -70,9 +74,8 @@ for grp in groups:
 
 Use dashed dividers to separate major logical blocks in longer files:
 ```python
-## ---------------------------------------------------------------------------
-## Entry point
-## ---------------------------------------------------------------------------
+## ── Section title ────────────────────────────────────────────────────────────
+## Short description
 ```
 
 Keep dividers consistent in length (75 dashes). Do not use them for every 5-line block —
