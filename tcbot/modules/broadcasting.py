@@ -14,6 +14,7 @@ from tcbot import database as db
 from tcbot import cfg
 from tcbot.modules.helper import decorators, parse_logmsg
 from tcbot.modules.helper.formatter import code
+from tcbot.utils.dispatch import fan_out
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
@@ -61,8 +62,6 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     status = await msg.reply_text(f"Broadcasting to {len(groups)} group(s)...")
 
     ## Build per-group send coroutines, then fan out with semaphore limiting
-    from tcbot.utils.dispatch import fan_out
-
     async def _send_one(grp: dict) -> None:
         if has_reply and msg.reply_to_message:
             await msg.reply_to_message.forward(grp["chat_id"])

@@ -24,6 +24,7 @@ from tcbot.modules.helper import extraction, keyboards, parse_logmsg
 from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
 from tcbot.modules.helper.role_guard import auto_demote
+from tcbot.utils.dispatch import fan_out
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.timedate_format import utc_now
 
@@ -325,7 +326,6 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict) -> None:
         groups = await db.groups_db.active_groups()
 
     ## Enforce across all affiliated groups — semaphore-bounded for rate safety
-    from tcbot.utils.dispatch import fan_out
     results = await fan_out(
         [bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
     )

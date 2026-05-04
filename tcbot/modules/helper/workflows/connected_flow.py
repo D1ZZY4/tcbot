@@ -15,6 +15,7 @@ from tcbot import database as db
 from tcbot import cfg
 from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.keyboards import join_group_kb
+from tcbot.utils.dispatch import fan_out
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +39,6 @@ async def _complete_join(chat_id: int, chat_title: str, owner_id: int, owner_fna
     await db.groups_db.remove_pending(chat_id)
 
     ## Apply all existing federation bans concurrently — semaphore-bounded
-    from tcbot.utils.dispatch import fan_out
     bans    = await db.bans_db.active_bans()
     results = await fan_out(
         [bot.ban_chat_member(chat_id, ban["banned_user_id"]) for ban in bans]

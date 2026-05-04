@@ -12,6 +12,7 @@ from collections import defaultdict, deque
 from telegram import Update
 from telegram.ext import ApplicationHandlerStop, ContextTypes
 
+from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.roles_db import get_effective_role, role_rank
 
@@ -75,8 +76,7 @@ async def global_rate_limit_handler(update: Update, ctx: ContextTypes.DEFAULT_TY
     if not text:
         return
 
-    from tcbot import cfg as _cfg
-    if not any(text.startswith(p) for p in _cfg.prefixes):
+    if not any(text.startswith(p) for p in cfg.prefixes):
         return  ## plain message — do not rate limit
 
     if not _allow(uid, "cmd", _CMD_MAX, _CMD_WIN):

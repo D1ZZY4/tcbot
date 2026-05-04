@@ -14,6 +14,7 @@ from tcbot import database as db
 from tcbot import cfg
 from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.formatter import code, mention
+from tcbot.utils.dispatch import fan_out
 
 log = logging.getLogger(__name__)
 
@@ -44,7 +45,6 @@ async def execute_unban(
     )
 
     ## unban from all groups — semaphore-bounded for rate safety
-    from tcbot.utils.dispatch import fan_out
     results = await fan_out(
         [ctx.bot.unban_chat_member(grp["chat_id"], target_id, only_if_banned=True)
          for grp in groups]

@@ -528,7 +528,7 @@ def role_auto_demoted(
 
 
 ## ---------------------------------------------------------------------------
-## Legacy alias still used in connected_flow / connecting.py
+## Alias — join_request_log → group_connected_log
 def join_request_log(
     chat_id: int,
     chat_title: str,

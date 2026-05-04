@@ -1,6 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
+from __future__ import annotations
 
 import importlib
 import logging
@@ -9,7 +10,7 @@ from typing import Any
 
 from .. import configs
 
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 
 ## ---------------------------------------------------------------------------
@@ -38,21 +39,21 @@ def _filter_modules(modules: list[str]) -> list[str]:
     if to_load:
         invalid = [m for m in to_load if m not in modules]
         if invalid:
-            logger.error(
+            log.error(
                 "MODULES_LOAD contains invalid names: %s. Exiting.", invalid
             )
             raise SystemExit(1)
         modules = [m for m in to_load if m in modules]
 
     if no_load:
-        logger.info("Not loading modules: %s", no_load)
+        log.info("Not loading modules: %s", no_load)
         modules = [m for m in modules if m not in no_load]
 
     return modules
 
 
 ALL_MODULES = _filter_modules(_discover_modules())
-logger.info("Modules to load: %s", ALL_MODULES)
+log.info("Modules to load: %s", ALL_MODULES)
 
 __all__ = ALL_MODULES + ["ALL_MODULES"]
 
@@ -80,7 +81,7 @@ def get_handlers() -> list[Any]:
             mod = importlib.import_module(f"tcbot.modules.{mod_name}")
             mods_found[mod_name] = mod
         except Exception as exc:
-            logger.error("Failed to import tcbot.modules.%s: %s", mod_name, exc)
+            log.error("Failed to import tcbot.modules.%s: %s", mod_name, exc)
 
     ordered = (
         [n for n in _PRIORITY_FIRST if n in mods_found]
@@ -93,6 +94,6 @@ def get_handlers() -> list[Any]:
         mod_handlers = getattr(mod, "__handlers__", [])
         if mod_handlers:
             handlers.extend(mod_handlers)
-            logger.debug("Loaded %d handler(s) from %s", len(mod_handlers), mod_name)
+            log.debug("Loaded %d handler(s) from %s", len(mod_handlers), mod_name)
 
     return handlers

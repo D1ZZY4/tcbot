@@ -23,6 +23,7 @@ from tcbot import cfg
 from tcbot.modules.helper import keyboards, parse_logmsg
 from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.parse_link import message_link
+from tcbot.utils.dispatch import fan_out
 
 log = logging.getLogger(__name__)
 
@@ -236,7 +237,6 @@ async def on_appeal_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         )
 
         ## Unban from all groups — semaphore-bounded for rate safety
-        from tcbot.utils.dispatch import fan_out
         await fan_out(
             [ctx.bot.unban_chat_member(grp["chat_id"], target_id, only_if_banned=True)
              for grp in groups]
