@@ -109,3 +109,5 @@ docker-compose up --build
 - Workflow: `python3 -m tcbot`
 - Port 5000 exposed as the health-check / keep-alive endpoint
 - Deployment target: **autoscale**, run command: `python3 -m tcbot`
+- DO NOT CHANGE CONFIG.ENV OR ANYTHING, AND RUN THIS PROJECT THROUGH CONFIG.ENV ONLY. DO NOT USE REPLIT SECRET. DO NOT CHANGE ANYTHING!!!
+- DO NOT ADD ANY PACKAGES IN REQUIREMENTS!!
