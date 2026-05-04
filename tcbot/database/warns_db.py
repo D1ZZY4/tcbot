@@ -14,14 +14,15 @@ def _warns():
 
 
 async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> int:
-    await _warns().insert_one({
+    c = _warns()
+    await c.insert_one({
         "user_id": user_id,
         "reason": reason,
         "admin_id": admin_id,
         "chat_id": chat_id,
         "timestamp": datetime.now(timezone.utc),
     })
-    return await _warns().count_documents({"user_id": user_id, "chat_id": chat_id})
+    return await c.count_documents({"user_id": user_id, "chat_id": chat_id})
 
 
 async def warn_count(user_id: int, chat_id: int) -> int:

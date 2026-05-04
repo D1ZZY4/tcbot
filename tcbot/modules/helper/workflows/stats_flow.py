@@ -21,9 +21,9 @@ _MSG_KEY      = "stats_search_msg_id"
 _CHAT_KEY     = "stats_search_chat_id"
 
 
-# ---------------------------------------------------------------------------
-# Keyboards
-# ---------------------------------------------------------------------------
+## ---------------------------------------------------------------------------
+## Keyboards
+## ---------------------------------------------------------------------------
 
 def _bans_list_kb(page: int, total: int, n_items: int) -> InlineKeyboardMarkup:
     total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
@@ -84,9 +84,9 @@ def _ban_detail_kb(page: int, proof_link: str | None = None) -> InlineKeyboardMa
     return InlineKeyboardMarkup(rows)
 
 
-# ---------------------------------------------------------------------------
-# Bans list handlers
-# ---------------------------------------------------------------------------
+## ---------------------------------------------------------------------------
+## Bans list handlers
+## ---------------------------------------------------------------------------
 
 async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q    = update.callback_query
@@ -125,9 +125,9 @@ async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     await q.edit_message_text(text, parse_mode="HTML", reply_markup=_ban_detail_kb(page, proof_link))
 
 
-# ---------------------------------------------------------------------------
-# Search flow handlers
-# ---------------------------------------------------------------------------
+## ---------------------------------------------------------------------------
+## Search flow handlers
+## ---------------------------------------------------------------------------
 
 def _clear_search(ctx: ContextTypes.DEFAULT_TYPE) -> None:
     for key in (_SEARCH_KEY, _RESULTS_KEY, _MSG_KEY, _CHAT_KEY):
@@ -155,11 +155,13 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     ctx.user_data.pop(_SEARCH_KEY, None)
 
     query = update.effective_message.text.strip()
-    bans  = await db.bans_db.active_bans()
 
     if query.isdigit():
-        results = [ban for ban in bans if str(ban["banned_user_id"]) == query]
+        ## Targeted lookup — skip full scan for numeric queries
+        ban     = await db.bans_db.get_active_ban(int(query))
+        results = [ban] if ban else []
     else:
+        bans   = await db.bans_db.active_bans()
         ## Fetch all names in parallel, then filter by query
         uids   = [ban["banned_user_id"] for ban in bans]
         fnames = await asyncio.gather(*[db.users_db.get_first_name(uid, "") for uid in uids])
@@ -276,7 +278,7 @@ async def on_stats_search_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
     )
 
 
-# ---------------------------------------------------------------------------
+## ---------------------------------------------------------------------------
 
 handlers = [
     CallbackQueryHandler(on_stats_bans,          pattern=r"^stats_bans:\d+$"),

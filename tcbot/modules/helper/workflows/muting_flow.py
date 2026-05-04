@@ -4,6 +4,7 @@
 """Mute/unmute executor helpers — duration parsing and direct restrict/unrestrict calls."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from datetime import datetime, timedelta, timezone
@@ -88,7 +89,6 @@ async def _execute_mute(bot, update: Update, meta: dict) -> None:
             permissions=ChatPermissions(can_send_messages=False),
             until_date=until,
         )
-        await db.mutes_db.log_mute(target_id, chat_id, reason, admin_id)
     except Exception as exc:
         log.error("Mute failed for %s in %s: %s", target_id, chat_id, exc)
         try:
@@ -108,13 +108,17 @@ async def _execute_mute(bot, update: Update, meta: dict) -> None:
         f"{proof_line}"
     )
 
-    try:
-        await bot.edit_message_text(
+    ## Log and edit summary in parallel — mute already succeeded
+    results = await asyncio.gather(
+        db.mutes_db.log_mute(target_id, chat_id, reason, admin_id),
+        bot.edit_message_text(
             summary,
             chat_id=prompt_chat, message_id=prompt_id,
             parse_mode="HTML", reply_markup=None,
-        )
-    except Exception:
+        ),
+        return_exceptions=True,
+    )
+    if isinstance(results[1], Exception):
         msg = update.effective_message
         if msg:
             await msg.reply_text(summary, parse_mode="HTML")

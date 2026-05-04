@@ -48,10 +48,20 @@ __help_text__ = (
 ## Helpers
 ## ---------------------------------------------------------------------------
 
-async def _ban_summary(ban: dict, user_id: int, user_fname: str) -> tuple[str, str | None]:
-    """Build the /checkme summary text and proof link."""
-    aid         = ban.get("admin_user_id", 0)
-    admin_fname = await db.users_db.get_first_name(aid, "Admin")
+async def _ban_summary(
+    ban: dict,
+    user_id: int,
+    user_fname: str,
+    admin_fname: str | None = None,
+) -> tuple[str, str | None]:
+    """Build the /checkme summary text and proof link.
+
+    Pass ``admin_fname`` to skip the DB lookup when it has already been fetched
+    as part of a larger parallel gather.
+    """
+    aid = ban.get("admin_user_id", 0)
+    if admin_fname is None:
+        admin_fname = await db.users_db.get_first_name(aid, "Admin")
 
     proof_chat, proof_thread = cfg.proofs
     proof_link = (
@@ -171,14 +181,16 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     uid = ban["banned_user_id"]
-    _, (fname, bot_info) = await asyncio.gather(
+    aid = ban.get("admin_user_id", 0)
+    _, (fname, bot_info, admin_fname) = await asyncio.gather(
         q.answer(),
         asyncio.gather(
             db.users_db.get_first_name(uid, str(uid)),
             ctx.bot.get_me(),
+            db.users_db.get_first_name(aid, "Admin"),
         ),
     )
-    text, proof_link = await _ban_summary(ban, uid, fname)
+    text, proof_link = await _ban_summary(ban, uid, fname, admin_fname)
 
     await q.edit_message_text(
         text,

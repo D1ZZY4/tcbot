@@ -30,6 +30,27 @@ log = logging.getLogger(__name__)
 
 WAITING_APPEAL = 0
 
+
+async def _update_or_send_appeal_log(
+    bot,
+    lc: int,
+    lt: int | None,
+    msg_id: int | None,
+    text: str,
+) -> None:
+    """Edit the existing appeal log message in the log channel, or send a new one as fallback."""
+    if msg_id:
+        try:
+            await bot.edit_message_text(text, chat_id=lc, message_id=msg_id, parse_mode="HTML")
+            return
+        except Exception as exc:
+            log.warning("Could not edit appeal submitted log: %s", exc)
+    try:
+        await bot.send_message(lc, text, parse_mode="HTML", message_thread_id=lt)
+    except Exception:
+        pass
+
+
 _ID_RE = re.compile(r"^/start\s+appeal_([a-z0-9]{10})$")
 
 _INSTRUCTION_TEXT = (
@@ -114,7 +135,7 @@ async def on_appeal_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
         await msg.reply_text("Session expired — please start the appeal again.")
         return ConversationHandler.END
 
-    if log_msg_id and str(log_msg_id) not in text:
+    if log_msg_id and not re.search(rf"\b{log_msg_id}\b", text):
         await msg.reply_text("Invalid log link. Please check and try again.")
         return WAITING_APPEAL
 
@@ -260,39 +281,17 @@ async def on_appeal_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         )
 
         ## Edit the submitted appeal log message in LOG_CHANNEL
-        appeal_log_msg_id  = ban.get("appeal_log_msg_id")
+        appeal_log_msg_id   = ban.get("appeal_log_msg_id")
         appeal_submitted_at = ban.get("appeal_submitted_at")
-        appeal_link        = ban.get("appeal_link", "")
-        edited = False
-        if appeal_log_msg_id:
-            try:
-                await ctx.bot.edit_message_text(
-                    parse_logmsg.appeal_approved_edit(
-                        target_id, target_fname,
-                        admin.id, admin.first_name,
-                        ban_id, appeal_link, appeal_submitted_at,
-                    ),
-                    chat_id=lc,
-                    message_id=appeal_log_msg_id,
-                    parse_mode="HTML",
-                )
-                edited = True
-            except Exception as exc:
-                log.warning("Could not edit appeal submitted log: %s", exc)
-        if not edited:
-            try:
-                await ctx.bot.send_message(
-                    lc,
-                    parse_logmsg.appeal_approved_edit(
-                        target_id, target_fname,
-                        admin.id, admin.first_name,
-                        ban_id, appeal_link, appeal_submitted_at,
-                    ),
-                    parse_mode="HTML",
-                    message_thread_id=lt,
-                )
-            except Exception:
-                pass
+        appeal_link         = ban.get("appeal_link", "")
+        await _update_or_send_appeal_log(
+            ctx.bot, lc, lt, appeal_log_msg_id,
+            parse_logmsg.appeal_approved_edit(
+                target_id, target_fname,
+                admin.id, admin.first_name,
+                ban_id, appeal_link, appeal_submitted_at,
+            ),
+        )
 
         ## Send separate unban log
         try:
@@ -325,39 +324,17 @@ async def on_appeal_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         )
 
         ## Edit the submitted appeal log message in LOG_CHANNEL
-        appeal_log_msg_id  = ban.get("appeal_log_msg_id")
+        appeal_log_msg_id   = ban.get("appeal_log_msg_id")
         appeal_submitted_at = ban.get("appeal_submitted_at")
-        appeal_link        = ban.get("appeal_link", "")
-        edited = False
-        if appeal_log_msg_id:
-            try:
-                await ctx.bot.edit_message_text(
-                    parse_logmsg.appeal_rejected_edit(
-                        target_id, target_fname,
-                        admin.id, admin.first_name,
-                        ban_id, appeal_link, appeal_submitted_at,
-                    ),
-                    chat_id=lc,
-                    message_id=appeal_log_msg_id,
-                    parse_mode="HTML",
-                )
-                edited = True
-            except Exception as exc:
-                log.warning("Could not edit appeal submitted log: %s", exc)
-        if not edited:
-            try:
-                await ctx.bot.send_message(
-                    lc,
-                    parse_logmsg.appeal_rejected_edit(
-                        target_id, target_fname,
-                        admin.id, admin.first_name,
-                        ban_id, appeal_link, appeal_submitted_at,
-                    ),
-                    parse_mode="HTML",
-                    message_thread_id=lt,
-                )
-            except Exception:
-                pass
+        appeal_link         = ban.get("appeal_link", "")
+        await _update_or_send_appeal_log(
+            ctx.bot, lc, lt, appeal_log_msg_id,
+            parse_logmsg.appeal_rejected_edit(
+                target_id, target_fname,
+                admin.id, admin.first_name,
+                ban_id, appeal_link, appeal_submitted_at,
+            ),
+        )
 
 
 def build_handler() -> ConversationHandler:

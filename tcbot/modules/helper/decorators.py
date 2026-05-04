@@ -62,7 +62,7 @@ async def global_rate_limit_handler(update: Update, ctx: ContextTypes.DEFAULT_TY
     """Universal per-user rate limiter — registered at group -1 so it runs before every handler.
 
     * CallbackQuery  → 20 per 10 s   (button navigation)
-    * Command text   → 5  per 30 s   (mod commands)
+    * Command text   → 8  per 30 s   (mod commands)
     * Other messages → always pass   (member cache, conversation text, etc.)
 
     When rate-limited: silently acknowledges callback queries and raises
