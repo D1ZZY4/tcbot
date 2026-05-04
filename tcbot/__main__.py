@@ -16,6 +16,7 @@ from tcbot import database as db
 from tcbot.modules import get_handlers
 from tcbot.modules.helper.decorators import global_rate_limit_handler
 from tcbot.utils import error_reporter
+from tcbot.utils.prefixes import ANY_CMD_FILTER
 from tcbot.utils.logger import setup as setup_logging
 
 log = logging.getLogger(__name__)
@@ -151,10 +152,11 @@ def main() -> None:
     for handler in get_handlers():
         app.add_handler(handler)
 
-    ## Low-priority handler: update member cache on every group message
+    ## Low-priority handler: update member cache on every group message.
+    ## ~ANY_CMD_FILTER excludes /, !, and . prefixed commands — not just /commands.
     app.add_handler(
         MessageHandler(
-            filters.ChatType.GROUPS & filters.TEXT & ~filters.COMMAND,
+            filters.ChatType.GROUPS & filters.TEXT & ~ANY_CMD_FILTER,
             _update_member_cache,
         ),
         group=10,

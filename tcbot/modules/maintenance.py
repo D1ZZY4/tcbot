@@ -44,6 +44,30 @@ __help_text__ = (
 )
 
 
+async def _leave_one(
+    bot,
+    grp: dict,
+    lc: int,
+    lt: int | None,
+    admin_id: int,
+    admin_name: str,
+) -> list:
+    """Leave one group, deactivate it in DB, and post a disconnection log — all in parallel."""
+    return await asyncio.gather(
+        bot.leave_chat(grp["chat_id"]),
+        db.groups_db.deactivate_group(grp["chat_id"]),
+        bot.send_message(
+            lc,
+            parse_logmsg.group_disconnected_log(
+                grp["chat_id"], grp["title"], admin_id, admin_name,
+            ),
+            parse_mode="HTML",
+            message_thread_id=lt,
+        ),
+        return_exceptions=True,
+    )
+
+
 @decorators.owner_only
 async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin  = update.effective_user
@@ -53,29 +77,19 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     status = await update.effective_message.reply_text(f"Leaving {len(groups)} groups...")
-    left, failed = 0, 0
     lc, lt = cfg.logs
 
-    for grp in groups:
-        ## leave, deactivate, and log all run in parallel per group
-        results = await asyncio.gather(
-            ctx.bot.leave_chat(grp["chat_id"]),
-            db.groups_db.deactivate_group(grp["chat_id"]),
-            ctx.bot.send_message(
-                lc,
-                parse_logmsg.group_disconnected_log(
-                    grp["chat_id"], grp["title"], admin.id, admin.first_name,
-                ),
-                parse_mode="HTML",
-                message_thread_id=lt,
-            ),
-            return_exceptions=True,
-        )
-        if isinstance(results[0], BaseException):
-            failed += 1
-        else:
-            left += 1
-        await asyncio.sleep(0.05)
+    ## All groups processed concurrently — no sequential sleep between them
+    all_results = await asyncio.gather(
+        *(_leave_one(ctx.bot, g, lc, lt, admin.id, admin.first_name) for g in groups),
+        return_exceptions=True,
+    )
+
+    left = sum(
+        1 for r in all_results
+        if not isinstance(r, BaseException) and not isinstance(r[0], BaseException)
+    )
+    failed = len(groups) - left
 
     try:
         await status.edit_text(
@@ -86,23 +100,34 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         pass
 
 
+async def _should_remove(bot, grp: dict) -> bool:
+    """Return True if the bot has left or been kicked from the group."""
+    try:
+        member = await bot.get_chat_member(grp["chat_id"], bot.id)
+        return member.status in ("left", "kicked")
+    except Exception:
+        return True
+
+
 @decorators.staff_only
 async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    groups  = await db.groups_db.active_groups()
-    removed = 0
+    groups = await db.groups_db.active_groups()
 
-    for grp in groups:
-        try:
-            bot_member = await ctx.bot.get_chat_member(grp["chat_id"], ctx.bot.id)
-            if bot_member.status in ("left", "kicked"):
-                await db.groups_db.deactivate_group(grp["chat_id"])
-                removed += 1
-        except Exception:
-            await db.groups_db.deactivate_group(grp["chat_id"])
-            removed += 1
+    ## Check all groups concurrently — one network round-trip per group, all in parallel
+    checks = await asyncio.gather(
+        *(_should_remove(ctx.bot, g) for g in groups),
+        return_exceptions=True,
+    )
+
+    to_remove = [g for g, remove in zip(groups, checks) if remove is True]
+
+    if to_remove:
+        await asyncio.gather(
+            *(db.groups_db.deactivate_group(g["chat_id"]) for g in to_remove),
+        )
 
     await update.effective_message.reply_text(
-        f"Cleaned up {code(str(removed))} inaccessible group(s).",
+        f"Cleaned up {code(str(len(to_remove)))} inaccessible group(s).",
         parse_mode="HTML",
     )
 

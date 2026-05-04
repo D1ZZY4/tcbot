@@ -31,10 +31,6 @@ def chat_id_to_link_id(chat_id: int) -> str:
     return s.lstrip("-")
 
 
-## Keep the private alias so existing callers inside this package still work.
-_strip_chat_id = chat_id_to_link_id
-
-
 def message_link(chat_id: int, message_id: int, thread_id: int | None = None) -> str:
     cid = chat_id_to_link_id(chat_id)
     if thread_id:

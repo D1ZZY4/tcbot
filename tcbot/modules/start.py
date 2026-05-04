@@ -8,7 +8,7 @@ import asyncio
 import logging
 
 from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg, database as db
 from tcbot.modules.about import __about_msg__

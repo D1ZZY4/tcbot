@@ -7,7 +7,7 @@ from __future__ import annotations
 import functools
 import logging
 import time
-from collections import defaultdict, deque
+from collections import deque
 
 from telegram import Update
 from telegram.ext import ApplicationHandlerStop, ContextTypes
@@ -22,24 +22,36 @@ log = logging.getLogger(__name__)
 ## Per-user sliding-window rate limiter
 ## ---------------------------------------------------------------------------
 
-_BUCKETS: dict[tuple[int, str], deque[float]] = defaultdict(deque)
+_BUCKETS: dict[tuple[int, str], deque[float]] = {}
 
 ## Callback query: 20 presses per 10 seconds (≈ 2 / s) — fast navigation allowed
 _CBQ_MAX  = 20
 _CBQ_WIN  = 10.0
 
-## Commands: 5 per 30 seconds — generous for normal moderation work
-_CMD_MAX  = 5
+## Commands: 8 per 30 seconds — generous for normal moderation work
+_CMD_MAX  = 8
 _CMD_WIN  = 30.0
 
 
 def _allow(uid: int, bucket: str, max_calls: int, window: float) -> bool:
-    """Return True if the call is within the rate limit, False if it should be dropped."""
+    """Return True if the call is within the rate limit, False if it should be dropped.
+
+    Keys are pruned from _BUCKETS whenever all their timestamps expire, keeping
+    memory proportional to currently-active users rather than all-time unique users.
+    """
     key = (uid, bucket)
     now = time.monotonic()
-    dq  = _BUCKETS[key]
+    dq  = _BUCKETS.get(key)
+    if dq is None:
+        _BUCKETS[key] = deque([now])
+        return True
     while dq and now - dq[0] >= window:
         dq.popleft()
+    if not dq:
+        ## All timestamps expired — clean up stale key and allow fresh start
+        del _BUCKETS[key]
+        _BUCKETS[key] = deque([now])
+        return True
     if len(dq) >= max_calls:
         return False
     dq.append(now)

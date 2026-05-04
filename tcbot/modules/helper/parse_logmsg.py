@@ -527,12 +527,3 @@ def role_auto_demoted(
     )
 
 
-## ---------------------------------------------------------------------------
-## Alias — join_request_log → group_connected_log
-def join_request_log(
-    chat_id: int,
-    chat_title: str,
-    added_by_id: int,
-    added_by_name: str,
-) -> str:
-    return group_connected_log(chat_id, chat_title, added_by_id, added_by_name)
