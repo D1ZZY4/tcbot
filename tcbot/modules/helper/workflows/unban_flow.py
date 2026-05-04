@@ -4,6 +4,7 @@
 """Unban flow – invoked directly by the unban command."""
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from telegram import Update
@@ -23,7 +24,7 @@ async def execute_unban(
     target_id: int,
     target_fname: str,
 ) -> None:
-    msg = update.effective_message
+    msg   = update.effective_message
     admin = update.effective_user
 
     ban = await db.bans_db.get_active_ban(target_id)
@@ -35,27 +36,32 @@ async def execute_unban(
         return
 
     ban_id = ban["ban_id"]
-    await db.bans_db.deactivate_ban(ban_id)
 
-    groups = await db.groups_db.active_groups()
-    failed = 0
-    for grp in groups:
-        try:
-            await ctx.bot.unban_chat_member(grp["chat_id"], target_id, only_if_banned=True)
-        except Exception:
-            failed += 1
+    ## deactivate ban and fetch active groups in parallel
+    _, groups = await asyncio.gather(
+        db.bans_db.deactivate_ban(ban_id),
+        db.groups_db.active_groups(),
+    )
 
-    lc, lt = cfg.logs
+    ## unban from all groups simultaneously
+    results = await asyncio.gather(
+        *[ctx.bot.unban_chat_member(grp["chat_id"], target_id, only_if_banned=True) for grp in groups],
+        return_exceptions=True,
+    )
+    failed = sum(1 for r in results if isinstance(r, BaseException))
+
+    lc, lt   = cfg.logs
     log_text = parse_logmsg.unban_log(
         target_id, target_fname, admin.id, admin.first_name, ban_id,
     )
-    try:
-        await ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt)
-    except Exception as exc:
-        log.error("Unban log failed: %s", exc)
 
-    await msg.reply_text(
-        f"{mention(target_id, target_fname)} {code(str(target_id))} has been unbanned — "
-        f"removed from {len(groups) - failed}/{len(groups)} groups.",
-        parse_mode="HTML",
+    ## send log and reply in parallel
+    await asyncio.gather(
+        ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+        msg.reply_text(
+            f"{mention(target_id, target_fname)} {code(str(target_id))} has been unbanned — "
+            f"removed from {len(groups) - failed}/{len(groups)} groups.",
+            parse_mode="HTML",
+        ),
+        return_exceptions=True,
     )

@@ -83,7 +83,13 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg   = update.effective_message
     fname = user.first_name or str(user.id)
 
-    owner_id = await db.admins_db.get_owner_id()
+    ## Fetch owner ID, user role, and active ban all in parallel
+    owner_id, user_role, ban = await asyncio.gather(
+        db.admins_db.get_owner_id(),
+        get_effective_role(user.id),
+        db.bans_db.get_active_ban(user.id),
+    )
+
     if user.id == owner_id:
         await msg.reply_text(
             f"Bro, {mention(user.id, fname)}... seriously? 😭\n\n"
@@ -94,7 +100,6 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    user_role = await get_effective_role(user.id)
     if user_role == "admin":
         await msg.reply_text(
             f"Hey {mention(user.id, fname)}, checking yourself? 😄\n\n"
@@ -113,14 +118,17 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    ban = await db.bans_db.get_active_ban(user.id)
     if not ban:
         await msg.reply_text(f"You are not banned in {cfg.community_name}.")
         return
 
-    bot_info       = await ctx.bot.get_me()
-    ban_id         = ban["ban_id"]
-    text, proof_link = await _ban_summary(ban, user.id, fname)
+    ban_id = ban["ban_id"]
+
+    ## bot info + ban summary fetched in parallel
+    bot_info, (text, proof_link) = await asyncio.gather(
+        ctx.bot.get_me(),
+        _ban_summary(ban, user.id, fname),
+    )
 
     await msg.reply_text(
         text,
@@ -203,7 +211,13 @@ async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    owner_id = await db.admins_db.get_owner_id()
+    ## Fetch owner ID, target role, and active ban all in parallel
+    owner_id, target_role, ban = await asyncio.gather(
+        db.admins_db.get_owner_id(),
+        get_effective_role(target_id),
+        db.bans_db.get_active_ban(target_id),
+    )
+
     if target_id == owner_id:
         owner_fname = await db.users_db.get_first_name(owner_id, "the Founder")
         await msg.reply_text(
@@ -215,7 +229,6 @@ async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    target_role = await get_effective_role(target_id)
     if target_role == "admin":
         await msg.reply_text(
             f"Hold up — {mention(target_id, fname)} is part of our staff team! 😄\n\n"
@@ -233,7 +246,6 @@ async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    ban = await db.bans_db.get_active_ban(target_id)
     if not ban:
         await msg.reply_text(
             f"All clear! {mention(target_id, fname)} has no active ban in {cfg.community_name}. "

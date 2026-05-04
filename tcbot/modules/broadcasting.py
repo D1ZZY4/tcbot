@@ -42,7 +42,7 @@ __help_text__ = (
 
 @decorators.staff_only
 async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    msg = update.effective_message
+    msg   = update.effective_message
     admin = update.effective_user
 
     args = parse_cmd_args(msg.text)
@@ -74,24 +74,22 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await asyncio.sleep(0.05)
 
     preview = broadcast_text or (msg.reply_to_message.text or "media") if msg.reply_to_message else ""
-    lc, lt = cfg.logs
-    try:
-        await ctx.bot.send_message(
+    lc, lt  = cfg.logs
+
+    ## send log and update status message in parallel
+    await asyncio.gather(
+        ctx.bot.send_message(
             lc,
             parse_logmsg.broadcast_log(admin.id, admin.first_name, preview, success, failed),
             parse_mode="HTML",
             message_thread_id=lt,
-        )
-    except Exception as exc:
-        log.error("Broadcast log failed: %s", exc)
-
-    try:
-        await status.edit_text(
+        ),
+        status.edit_text(
             f"Broadcast sent to {code(str(success))} groups. Failed: {code(str(failed))}.",
             parse_mode="HTML",
-        )
-    except Exception:
-        pass
+        ),
+        return_exceptions=True,
+    )
 
 
 _BROADCAST_FILTER = (

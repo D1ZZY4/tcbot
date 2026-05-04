@@ -4,6 +4,7 @@
 """Welcome / goodbye messages – only in MAIN_GROUP and EXEC_GROUP."""
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from telegram import Update
@@ -17,7 +18,7 @@ log = logging.getLogger(__name__)
 
 
 async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    msg = update.effective_message
+    msg  = update.effective_message
     chat = update.effective_chat
 
     ## Only fire in MAIN_GROUP and EXEC_GROUP
@@ -28,19 +29,23 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if member.is_bot:
             continue
 
-        ## Cache member
-        await db.users_db.upsert_user(
-            member.id, member.username, member.first_name, member.last_name,
+        ## Cache member and check for active ban in parallel
+        _, ban = await asyncio.gather(
+            db.users_db.upsert_user(
+                member.id, member.username, member.first_name, member.last_name,
+            ),
+            db.bans_db.get_active_ban(member.id),
         )
 
-        ## Auto-enforce federation ban
-        ban = await db.bans_db.get_active_ban(member.id)
         if ban:
             try:
-                await ctx.bot.ban_chat_member(chat.id, member.id)
-                await msg.reply_text(
-                    f"{mention(member.id, member.first_name)} is federation-banned and was removed.",
-                    parse_mode="HTML",
+                ## ban and reply in parallel
+                await asyncio.gather(
+                    ctx.bot.ban_chat_member(chat.id, member.id),
+                    msg.reply_text(
+                        f"{mention(member.id, member.first_name)} is federation-banned and was removed.",
+                        parse_mode="HTML",
+                    ),
                 )
             except Exception as exc:
                 log.error("Auto-ban on join failed: %s", exc)
@@ -55,7 +60,7 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    msg = update.effective_message
+    msg  = update.effective_message
     chat = update.effective_chat
 
     if chat.id not in (cfg.main_group, cfg.exec_group):

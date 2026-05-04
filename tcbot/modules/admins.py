@@ -106,22 +106,28 @@ async def _execute_promote(
 
     if role == "admin":
         if executor_role == "founder":
-            await db.admins_db.add_admin(target_id, admin_id)
+            ## DB writes in parallel
             if current_role in ("developer", "tester"):
-                await db.roles_db.remove_role(target_id)
-            await db.users_db.upsert_user(target_id, None, target_fname)
+                await asyncio.gather(
+                    db.admins_db.add_admin(target_id, admin_id),
+                    db.roles_db.remove_role(target_id),
+                    db.users_db.upsert_user(target_id, None, target_fname),
+                )
+            else:
+                await asyncio.gather(
+                    db.admins_db.add_admin(target_id, admin_id),
+                    db.users_db.upsert_user(target_id, None, target_fname),
+                )
             log_text = parse_logmsg.admin_promoted(target_id, target_fname, admin_id, admin_fname)
-            try:
-                await bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt)
-            except Exception as exc:
-                log.error("Promote log failed: %s", exc)
-            try:
-                await bot.send_message(
+            ## log and notify in parallel
+            await asyncio.gather(
+                bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+                bot.send_message(
                     target_id,
                     f"You've been promoted to Admin in {cfg.community_name}. Welcome to the team.",
-                )
-            except Exception:
-                pass
+                ),
+                return_exceptions=True,
+            )
             return True, (
                 f"Done. {mention(target_id, target_fname)} is now a {cfg.community_name} Admin."
             )
@@ -133,9 +139,12 @@ async def _execute_promote(
                 f"There's already a pending promotion request for "
                 f"{mention(target_id, target_fname)}."
             )
-        request_id = await db.queues_db.enqueue(target_id, None, target_fname, admin_id)
-        req_text   = parse_logmsg.promo_request_log(target_id, target_fname, None, request_id)
-        owner_id   = await db.admins_db.get_owner_id()
+        ## enqueue + get_owner_id in parallel
+        request_id, owner_id = await asyncio.gather(
+            db.queues_db.enqueue(target_id, None, target_fname, admin_id),
+            db.admins_db.get_owner_id(),
+        )
+        req_text = parse_logmsg.promo_request_log(target_id, target_fname, None, request_id)
         notified   = False
         if owner_id:
             try:
@@ -168,22 +177,23 @@ async def _execute_promote(
     if current_role in ("developer", "tester"):
         await db.roles_db.remove_role(target_id)
 
-    await db.roles_db.set_role(target_id, role, admin_id)
-    await db.users_db.upsert_user(target_id, None, target_fname)
+    ## set_role + upsert_user in parallel
+    await asyncio.gather(
+        db.roles_db.set_role(target_id, role, admin_id),
+        db.users_db.upsert_user(target_id, None, target_fname),
+    )
 
     role_label = ROLE_LABEL.get(role, role)
     log_text   = parse_logmsg.role_assigned(target_id, target_fname, role, admin_id, admin_fname)
-    try:
-        await bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt)
-    except Exception as exc:
-        log.error("Role assign log failed: %s", exc)
-    try:
-        await bot.send_message(
+    ## log and notify in parallel
+    await asyncio.gather(
+        bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+        bot.send_message(
             target_id,
             f"You've been assigned the {role_label} role in {cfg.community_name}.",
-        )
-    except Exception:
-        pass
+        ),
+        return_exceptions=True,
+    )
     return True, f"Done. {mention(target_id, target_fname)} is now a {cfg.community_name} {role_label}."
 
 
@@ -269,8 +279,11 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         await q.edit_message_text("Unknown role.", reply_markup=None)
         return
 
-    target_fname = await db.users_db.get_first_name(target_id, str(target_id))
-    current_role = await get_effective_role(target_id)
+    ## fetch name + current role in parallel
+    target_fname, current_role = await asyncio.gather(
+        db.users_db.get_first_name(target_id, str(target_id)),
+        get_effective_role(target_id),
+    )
 
     ok, text = await _execute_promote(
         ctx.bot, admin.id, admin.first_name, executor_role,
@@ -372,27 +385,25 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         )
         return
 
-    lc, lt    = cfg.logs
+    lc, lt     = cfg.logs
     role_label = ROLE_LABEL.get(target_role, target_role)
     log_text   = parse_logmsg.role_removed(
         target_id, target_fname, target_role, admin.id, admin.first_name,
     )
-    try:
-        await ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt)
-    except Exception as exc:
-        log.error("Demote log failed: %s", exc)
-    try:
-        await ctx.bot.send_message(
+    ## log, notify, and edit review message all in parallel
+    await asyncio.gather(
+        ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+        ctx.bot.send_message(
             target_id,
             f"Your {role_label} role in {cfg.community_name} has been removed by "
             f"{admin.first_name}.",
-        )
-    except Exception:
-        pass
-    await q.edit_message_text(
-        f"Done. {mention(target_id, target_fname)} has been removed from {role_label}.",
-        parse_mode="HTML",
-        reply_markup=None,
+        ),
+        q.edit_message_text(
+            f"Done. {mention(target_id, target_fname)} has been removed from {role_label}.",
+            parse_mode="HTML",
+            reply_markup=None,
+        ),
+        return_exceptions=True,
     )
 
 
@@ -421,19 +432,21 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if target_id == current_owner.id:
         await update.effective_message.reply_text("You are already the owner.")
         return
+    ## add_admin must complete before set_owner (set_owner does delete_many + insert)
     await db.admins_db.add_admin(current_owner.id, current_owner.id)
     await db.admins_db.set_owner(target_id)
     lc, lt   = cfg.logs
     log_text = parse_logmsg.ownership_transferred(
         target_id, target_fname, current_owner.id, current_owner.first_name,
     )
-    try:
-        await ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt)
-    except Exception as exc:
-        log.error("Transfer log failed: %s", exc)
-    await update.effective_message.reply_text(
-        f"Done. Ownership has been transferred to {mention(target_id, target_fname)}.",
-        parse_mode="HTML",
+    ## log and reply in parallel
+    await asyncio.gather(
+        ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+        update.effective_message.reply_text(
+            f"Done. Ownership has been transferred to {mention(target_id, target_fname)}.",
+            parse_mode="HTML",
+        ),
+        return_exceptions=True,
     )
 
 
@@ -450,10 +463,13 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
             parse_mode="HTML",
         )
         return
-    request_id = await db.queues_db.enqueue(user.id, user.username, user.first_name, user.id)
-    req_text   = parse_logmsg.promo_request_log(user.id, user.first_name, user.username, request_id)
-    owner_id   = await db.admins_db.get_owner_id()
-    lc, lt     = cfg.logs
+    ## enqueue + get_owner_id in parallel
+    request_id, owner_id = await asyncio.gather(
+        db.queues_db.enqueue(user.id, user.username, user.first_name, user.id),
+        db.admins_db.get_owner_id(),
+    )
+    req_text = parse_logmsg.promo_request_log(user.id, user.first_name, user.username, request_id)
+    lc, lt   = cfg.logs
     notified   = False
     if owner_id:
         try:
@@ -520,54 +536,47 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     lc, lt       = cfg.logs
 
     if action == "promo_approve":
-        await db.admins_db.add_admin(target_id, admin.id)
-        await db.queues_db.resolve(request_id, "approved", admin.id)
-        try:
-            await ctx.bot.send_message(
-                target_id,
-                f"Your promotion request has been approved — you are now a "
-                f"{cfg.community_name} Admin.",
-            )
-        except Exception:
-            pass
+        ## DB writes in parallel
+        await asyncio.gather(
+            db.admins_db.add_admin(target_id, admin.id),
+            db.queues_db.resolve(request_id, "approved", admin.id),
+        )
         log_text = parse_logmsg.promo_approved_log(
             target_id, target_fname, admin.id, admin.first_name, request_id,
         )
-        try:
-            await ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt)
-        except Exception:
-            pass
-        try:
-            await q.edit_message_text(
+        ## notify target, send log, and edit review message all in parallel
+        await asyncio.gather(
+            ctx.bot.send_message(
+                target_id,
+                f"Your promotion request has been approved — you are now a "
+                f"{cfg.community_name} Admin.",
+            ),
+            ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+            q.edit_message_text(
                 (q.message.text or "") + f"\n\n— Approved by {admin.first_name}",
                 reply_markup=None,
-            )
-        except Exception:
-            pass
+            ),
+            return_exceptions=True,
+        )
 
     elif action == "promo_reject":
-        await db.queues_db.resolve(request_id, "rejected", admin.id)
-        try:
-            await ctx.bot.send_message(
-                target_id,
-                "Your promotion request has been reviewed and was not approved at this time.",
-            )
-        except Exception:
-            pass
         log_text = parse_logmsg.promo_rejected_log(
             target_id, target_fname, admin.id, admin.first_name, request_id,
         )
-        try:
-            await ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt)
-        except Exception:
-            pass
-        try:
-            await q.edit_message_text(
+        ## resolve DB + notify + send log + edit review message all in parallel
+        await asyncio.gather(
+            db.queues_db.resolve(request_id, "rejected", admin.id),
+            ctx.bot.send_message(
+                target_id,
+                "Your promotion request has been reviewed and was not approved at this time.",
+            ),
+            ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+            q.edit_message_text(
                 (q.message.text or "") + f"\n\n— Rejected by {admin.first_name}",
                 reply_markup=None,
-            )
-        except Exception:
-            pass
+            ),
+            return_exceptions=True,
+        )
 
 
 ## ---------------------------------------------------------------------------

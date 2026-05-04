@@ -156,15 +156,16 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     query = update.effective_message.text.strip()
     bans  = await db.bans_db.active_bans()
 
-    results = []
-    for ban in bans:
-        uid = ban["banned_user_id"]
-        if query.isdigit() and str(uid) == query:
-            results.append(ban)
-        elif not query.isdigit():
-            fname = await db.users_db.get_first_name(uid, "")
-            if query.lower() in fname.lower():
-                results.append(ban)
+    if query.isdigit():
+        results = [ban for ban in bans if str(ban["banned_user_id"]) == query]
+    else:
+        ## Fetch all names in parallel, then filter by query
+        uids   = [ban["banned_user_id"] for ban in bans]
+        fnames = await asyncio.gather(*[db.users_db.get_first_name(uid, "") for uid in uids])
+        results = [
+            ban for ban, fname in zip(bans, fnames)
+            if query.lower() in fname.lower()
+        ]
 
     ctx.user_data[_RESULTS_KEY] = results
 
@@ -185,10 +186,14 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         )
         return
 
+    ## Fetch display names for results in parallel
+    result_uids   = [ban["banned_user_id"] for ban in results]
+    result_fnames = await asyncio.gather(
+        *[db.users_db.get_first_name(uid, str(uid)) for uid in result_uids]
+    )
     lines = [f"<b>Search: \"{esc(query)}\" ({len(results)} found)</b>\n"]
-    for i, ban in enumerate(results, 1):
-        uid   = ban["banned_user_id"]
-        fname = await db.users_db.get_first_name(uid, str(uid))
+    for i, (ban, fname) in enumerate(zip(results, result_fnames), 1):
+        uid = ban["banned_user_id"]
         lines.append(f"{i}. {esc(fname)} — {code(str(uid))}")
 
     await ctx.bot.edit_message_text(

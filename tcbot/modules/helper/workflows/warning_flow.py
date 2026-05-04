@@ -4,6 +4,7 @@
 """Warning flow helpers – per-group warning tracking."""
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from telegram import Update
@@ -33,16 +34,21 @@ async def execute_warn(
     proof_line = f"\nProof: {proof_desc}" if proof_desc else ""
 
     if count >= WARN_LIMIT:
-        await db.warns_db.clear_warns(target_id, chat_id)
-        try:
-            await ctx.bot.ban_chat_member(chat_id, target_id)
+        ## clear warns + ban run in parallel
+        results = await asyncio.gather(
+            db.warns_db.clear_warns(target_id, chat_id),
+            ctx.bot.ban_chat_member(chat_id, target_id),
+            return_exceptions=True,
+        )
+        ban_result = results[1]
+        if not isinstance(ban_result, BaseException):
             await msg.reply_text(
                 f"{mention(target_id, target_name)} hit {WARN_LIMIT} warnings "
                 f"and has been banned from this group.{proof_line}",
                 parse_mode="HTML",
             )
-        except Exception as exc:
-            log.error("Auto-ban on warn limit failed: %s", exc)
+        else:
+            log.error("Auto-ban on warn limit failed: %s", ban_result)
             await msg.reply_text(
                 f"{mention(target_id, target_name)} hit {WARN_LIMIT} warnings "
                 f"but auto-ban failed — please ban them manually.{proof_line}",
@@ -73,12 +79,15 @@ async def execute_unwarn(
         )
         return
 
-    await db.warns_db.remove_last_warn(target_id, chat_id)
     new_count = max(count - 1, 0)
-    await msg.reply_text(
-        f"One warning removed from {mention(target_id, target_name)}. "
-        f"They're now at {new_count}/{WARN_LIMIT}.",
-        parse_mode="HTML",
+    ## remove warn and send reply in parallel
+    await asyncio.gather(
+        db.warns_db.remove_last_warn(target_id, chat_id),
+        msg.reply_text(
+            f"One warning removed from {mention(target_id, target_name)}. "
+            f"They're now at {new_count}/{WARN_LIMIT}.",
+            parse_mode="HTML",
+        ),
     )
 
 

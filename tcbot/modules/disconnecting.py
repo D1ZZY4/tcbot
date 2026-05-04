@@ -4,6 +4,7 @@
 """Group disconnect commands."""
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from telegram import Update
@@ -57,8 +58,11 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    is_tc_staff = await db.admins_db.is_staff(user.id)
-    member = await ctx.bot.get_chat_member(chat.id, user.id)
+    ## staff check and group membership check run in parallel
+    is_tc_staff, member = await asyncio.gather(
+        db.admins_db.is_staff(user.id),
+        ctx.bot.get_chat_member(chat.id, user.id),
+    )
     is_group_owner = member.status == "creator"
 
     if not is_tc_staff and not is_group_owner:
@@ -67,28 +71,24 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    await db.groups_db.deactivate_group(chat.id)
-
     lc, lt = cfg.logs
-    try:
-        await ctx.bot.send_message(
+    ## deactivate, log, reply, and leave all run in parallel
+    await asyncio.gather(
+        db.groups_db.deactivate_group(chat.id),
+        ctx.bot.send_message(
             lc,
             parse_logmsg.group_disconnected_log(
                 chat.id, chat.title or "Unknown", user.id, user.first_name
             ),
             parse_mode="HTML",
             message_thread_id=lt,
-        )
-    except Exception:
-        pass
-
-    await update.effective_message.reply_text(
-        f"This group has been disconnected from {cfg.community_name}."
+        ),
+        update.effective_message.reply_text(
+            f"This group has been disconnected from {cfg.community_name}."
+        ),
+        ctx.bot.leave_chat(chat.id),
+        return_exceptions=True,
     )
-    try:
-        await ctx.bot.leave_chat(chat.id)
-    except Exception:
-        pass
 
 
 @decorators.staff_only
@@ -102,8 +102,9 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     removed = await db.groups_db.deactivate_group(chat_id)
     if removed:
         lc, lt = cfg.logs
-        try:
-            await ctx.bot.send_message(
+        ## log, leave, and reply all run in parallel
+        await asyncio.gather(
+            ctx.bot.send_message(
                 lc,
                 parse_logmsg.group_disconnected_log(
                     chat_id, str(chat_id),
@@ -112,16 +113,13 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 ),
                 parse_mode="HTML",
                 message_thread_id=lt,
-            )
-        except Exception:
-            pass
-        try:
-            await ctx.bot.leave_chat(chat_id)
-        except Exception:
-            pass
-        await update.effective_message.reply_text(
-            f"Group {code(str(chat_id))} has been disconnected from {cfg.community_name}.",
-            parse_mode="HTML",
+            ),
+            ctx.bot.leave_chat(chat_id),
+            update.effective_message.reply_text(
+                f"Group {code(str(chat_id))} has been disconnected from {cfg.community_name}.",
+                parse_mode="HTML",
+            ),
+            return_exceptions=True,
         )
     else:
         await update.effective_message.reply_text("Group not found or already removed.")

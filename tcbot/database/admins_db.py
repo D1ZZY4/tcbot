@@ -4,6 +4,7 @@
 """Owners and admins collection helpers."""
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 
 from tcbot.database.mongos import col
@@ -31,8 +32,9 @@ async def is_admin(user_id: int) -> bool:
 
 
 async def is_staff(user_id: int) -> bool:
-    """True if owner or admin."""
-    return await is_owner(user_id) or await is_admin(user_id)
+    """True if owner or admin — both checks run in parallel."""
+    owner, admin = await asyncio.gather(is_owner(user_id), is_admin(user_id))
+    return owner or admin
 
 
 async def ensure_initial_owner(initial_id: int) -> None:

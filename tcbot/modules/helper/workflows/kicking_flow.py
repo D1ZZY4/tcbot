@@ -4,6 +4,7 @@
 """Kick executor — group-level user removal (ban + immediate unban)."""
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from telegram import Update
@@ -30,14 +31,17 @@ async def execute_kick(
 
     try:
         await ctx.bot.ban_chat_member(chat_id, target_id)
-        await ctx.bot.unban_chat_member(chat_id, target_id, only_if_banned=True)
-        await db.kicks_db.log_kick(target_id, chat_id, reason, admin_id)
         proof_line = f"\nProof: {proof_desc}" if proof_desc else ""
-        await msg.reply_text(
-            f"{mention(target_id, target_name)} {code(str(target_id))} has been kicked.\n"
-            f"Reason: {reason}{proof_line}\n"
-            "They can rejoin via invite link.",
-            parse_mode="HTML",
+        ## unban + log_kick + reply all run in parallel once ban completes
+        await asyncio.gather(
+            ctx.bot.unban_chat_member(chat_id, target_id, only_if_banned=True),
+            db.kicks_db.log_kick(target_id, chat_id, reason, admin_id),
+            msg.reply_text(
+                f"{mention(target_id, target_name)} {code(str(target_id))} has been kicked.\n"
+                f"Reason: {reason}{proof_line}\n"
+                "They can rejoin via invite link.",
+                parse_mode="HTML",
+            ),
         )
     except Exception as exc:
         log.error("Kick failed for %s in %s: %s", target_id, chat_id, exc)

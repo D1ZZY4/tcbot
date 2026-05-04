@@ -46,7 +46,7 @@ __help_text__ = (
 
 @decorators.owner_only
 async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    admin = update.effective_user
+    admin  = update.effective_user
     groups = await db.groups_db.active_groups()
     if not groups:
         await update.effective_message.reply_text("No connected groups.")
@@ -57,23 +57,24 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     lc, lt = cfg.logs
 
     for grp in groups:
-        try:
-            await ctx.bot.leave_chat(grp["chat_id"])
-            await db.groups_db.deactivate_group(grp["chat_id"])
-            left += 1
-            try:
-                await ctx.bot.send_message(
-                    lc,
-                    parse_logmsg.group_disconnected_log(
-                        grp["chat_id"], grp["title"], admin.id, admin.first_name,
-                    ),
-                    parse_mode="HTML",
-                    message_thread_id=lt,
-                )
-            except Exception:
-                pass
-        except Exception:
+        ## leave, deactivate, and log all run in parallel per group
+        results = await asyncio.gather(
+            ctx.bot.leave_chat(grp["chat_id"]),
+            db.groups_db.deactivate_group(grp["chat_id"]),
+            ctx.bot.send_message(
+                lc,
+                parse_logmsg.group_disconnected_log(
+                    grp["chat_id"], grp["title"], admin.id, admin.first_name,
+                ),
+                parse_mode="HTML",
+                message_thread_id=lt,
+            ),
+            return_exceptions=True,
+        )
+        if isinstance(results[0], BaseException):
             failed += 1
+        else:
+            left += 1
         await asyncio.sleep(0.05)
 
     try:
@@ -87,7 +88,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 @decorators.staff_only
 async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    groups = await db.groups_db.active_groups()
+    groups  = await db.groups_db.active_groups()
     removed = 0
 
     for grp in groups:

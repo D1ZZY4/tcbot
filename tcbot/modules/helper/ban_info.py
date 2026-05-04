@@ -4,6 +4,8 @@
 """Shared ban detail builder — used by checking.py and stats_flow.py."""
 from __future__ import annotations
 
+import asyncio
+
 from tcbot import cfg, database as db
 from tcbot.modules.helper.formatter import code, esc, mention
 from tcbot.modules.helper.parse_link import message_link
@@ -16,8 +18,12 @@ async def build_ban_detail(ban: dict, target_fname: str | None = None) -> tuple[
     aid = ban.get("admin_user_id", 0)
 
     if target_fname is None:
-        target_fname = await db.users_db.get_first_name(uid, str(uid))
-    admin_fname = await db.users_db.get_first_name(aid, str(aid))
+        target_fname, admin_fname = await asyncio.gather(
+            db.users_db.get_first_name(uid, str(uid)),
+            db.users_db.get_first_name(aid, str(aid)),
+        )
+    else:
+        admin_fname = await db.users_db.get_first_name(aid, str(aid))
 
     proof_chat, proof_thread = cfg.proofs
     proof_link = (

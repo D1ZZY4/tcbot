@@ -4,6 +4,7 @@
 """Role management — developer and tester roles stored in tc_roles collection."""
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 
 from tcbot.database.admins_db import is_admin, is_owner
@@ -75,9 +76,17 @@ async def all_roles() -> list[dict]:
 ## ---------------------------------------------------------------------------
 
 async def get_effective_role(user_id: int) -> str | None:
-    """Resolve a user's effective role: founder › admin › developer › tester › None."""
-    if await is_owner(user_id):
+    """Resolve a user's effective role: founder › admin › developer › tester › None.
+
+    All three DB checks run in parallel for minimum latency.
+    """
+    owner, admin, role = await asyncio.gather(
+        is_owner(user_id),
+        is_admin(user_id),
+        get_role(user_id),
+    )
+    if owner:
         return "founder"
-    if await is_admin(user_id):
+    if admin:
         return "admin"
-    return await get_role(user_id)
+    return role

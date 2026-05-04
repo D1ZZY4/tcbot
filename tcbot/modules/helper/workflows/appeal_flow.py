@@ -66,7 +66,7 @@ async def start_appeal(update: Update, ctx: ContextTypes.DEFAULT_TYPE, ban_id: s
         await msg.reply_text("You already have a pending appeal under review.")
         return ConversationHandler.END
 
-    ctx.user_data["appeal_ban_id"] = ban_id
+    ctx.user_data["appeal_ban_id"]     = ban_id
     ctx.user_data["appeal_log_msg_id"] = ban.get("log_message_id", 0)
 
     instr = await msg.reply_text(
@@ -81,7 +81,7 @@ async def start_appeal(update: Update, ctx: ContextTypes.DEFAULT_TYPE, ban_id: s
 
 async def cmd_start_appeal_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     text = (update.effective_message.text or "").strip()
-    m = _ID_RE.match(text)
+    m    = _ID_RE.match(text)
     if not m:
         return ConversationHandler.END
     return await start_appeal(update, ctx, m.group(1))
@@ -99,13 +99,13 @@ async def on_appeal_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
 
 
 async def on_appeal_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-    msg = update.effective_message
+    msg  = update.effective_message
     text = (msg.text or "").strip()
 
     if not text.startswith("#appeal"):
         return WAITING_APPEAL
 
-    ban_id = ctx.user_data.get("appeal_ban_id")
+    ban_id     = ctx.user_data.get("appeal_ban_id")
     log_msg_id = ctx.user_data.get("appeal_log_msg_id", 0)
 
     if not ban_id:
@@ -116,72 +116,78 @@ async def on_appeal_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
         await msg.reply_text("Invalid log link. Please check and try again.")
         return WAITING_APPEAL
 
-    uid = update.effective_user.id
+    uid  = update.effective_user.id
     user = update.effective_user
 
     appeal_chat, appeal_thread = cfg.appeals
     appeal_msg_id: int | None = None
     try:
-        fwd = await msg.forward(appeal_chat, message_thread_id=appeal_thread)
+        fwd           = await msg.forward(appeal_chat, message_thread_id=appeal_thread)
         appeal_msg_id = fwd.message_id
     except Exception as exc:
         log.error("Appeal forward failed: %s", exc)
 
-    appeal_link = message_link(appeal_chat, appeal_msg_id, appeal_thread) if appeal_msg_id else ""
+    appeal_link  = message_link(appeal_chat, appeal_msg_id, appeal_thread) if appeal_msg_id else ""
+    review_text  = parse_logmsg.appeal_received_log(uid, user.first_name, ban_id, appeal_link)
+    lc, lt       = cfg.logs
 
-    review_text = parse_logmsg.appeal_received_log(uid, user.first_name, ban_id, appeal_link)
-    review_msg_id: int | None = None
-    try:
-        rv = await ctx.bot.send_message(
+    ## Send review post + log message in parallel
+    rv, sent_log = await asyncio.gather(
+        ctx.bot.send_message(
             cfg.main_group,
             review_text,
             parse_mode="HTML",
             message_thread_id=cfg.appeal_discussion_topic or None,
             reply_markup=keyboards.appeal_review_kb(ban_id),
-        )
-        review_msg_id = rv.message_id
-    except Exception as exc:
-        log.error("Appeal review post failed: %s", exc)
-
-    if review_msg_id:
-        await db.bans_db.set_review(ban_id, review_msg_id)
-
-    lc, lt = cfg.logs
-    appeal_log_sent_id: int | None = None
-    try:
-        sent_log = await ctx.bot.send_message(
+        ),
+        ctx.bot.send_message(
             lc,
             parse_logmsg.appeal_submitted_log(uid, user.first_name, ban_id, appeal_link),
             parse_mode="HTML",
             message_thread_id=lt,
-        )
-        appeal_log_sent_id = sent_log.message_id
-    except Exception as exc:
-        log.error("Appeal log failed: %s", exc)
+        ),
+        return_exceptions=True,
+    )
 
+    review_msg_id: int | None = rv.message_id if not isinstance(rv, BaseException) else None
+    if isinstance(rv, BaseException):
+        log.error("Appeal review post failed: %s", rv)
+
+    appeal_log_sent_id: int | None = sent_log.message_id if not isinstance(sent_log, BaseException) else None
+    if isinstance(sent_log, BaseException):
+        log.error("Appeal log failed: %s", sent_log)
+
+    ## Store review + log msg IDs in DB in parallel
+    db_tasks = []
+    if review_msg_id:
+        db_tasks.append(db.bans_db.set_review(ban_id, review_msg_id))
     if appeal_log_sent_id and ban_id:
-        try:
-            await db.bans_db.set_appeal_log_msg(ban_id, appeal_log_sent_id, appeal_link=appeal_link)
-        except Exception as exc:
-            log.error("Failed to store appeal log msg id: %s", exc)
+        db_tasks.append(db.bans_db.set_appeal_log_msg(ban_id, appeal_log_sent_id, appeal_link=appeal_link))
+    if db_tasks:
+        await asyncio.gather(*db_tasks, return_exceptions=True)
 
+    ## Edit instruction message + cache user in parallel
     instr_mid = ctx.user_data.get("appeal_instruction_msg_id")
-    if instr_mid:
-        try:
-            await ctx.bot.edit_message_text(
-                "Your appeal has been submitted. The team will review it shortly — we'll get back to you.",
-                chat_id=update.effective_chat.id,
-                message_id=instr_mid,
-            )
-        except Exception:
-            pass
+    edit_coro = (
+        ctx.bot.edit_message_text(
+            "Your appeal has been submitted. The team will review it shortly — we'll get back to you.",
+            chat_id=update.effective_chat.id,
+            message_id=instr_mid,
+        )
+        if instr_mid else None
+    )
+    upsert_coro = db.users_db.upsert_user(uid, user.username, user.first_name, user.last_name)
 
-    await db.users_db.upsert_user(uid, user.username, user.first_name, user.last_name)
+    if edit_coro:
+        await asyncio.gather(edit_coro, upsert_coro, return_exceptions=True)
+    else:
+        await upsert_coro
+
     return ConversationHandler.END
 
 
 async def on_appeal_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    q = update.callback_query
+    q     = update.callback_query
     admin = update.effective_user
 
     if not await db.admins_db.is_staff(admin.id):
@@ -218,41 +224,44 @@ async def on_appeal_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
             )
             return
 
-    target_id = ban["banned_user_id"]
+    target_id    = ban["banned_user_id"]
     target_fname = await db.users_db.get_first_name(target_id, str(target_id))
-    lc, lt = cfg.logs
+    lc, lt       = cfg.logs
 
     if action == "approve":
-        await db.bans_db.deactivate_ban(ban_id)
+        ## Deactivate ban + fetch active groups in parallel
+        _, groups = await asyncio.gather(
+            db.bans_db.deactivate_ban(ban_id),
+            db.groups_db.active_groups(),
+        )
 
-        for grp in await db.groups_db.active_groups():
-            try:
-                await ctx.bot.unban_chat_member(grp["chat_id"], target_id, only_if_banned=True)
-            except Exception:
-                pass
+        ## Unban from all groups simultaneously
+        await asyncio.gather(
+            *[ctx.bot.unban_chat_member(grp["chat_id"], target_id, only_if_banned=True)
+              for grp in groups],
+            return_exceptions=True,
+        )
 
-        try:
-            await ctx.bot.send_message(
+        ## Notify user + edit review message in parallel
+        await asyncio.gather(
+            ctx.bot.send_message(
                 target_id,
-                f"Your appeal for ban <code>{ban_id}</code> has been approved — you're now unbanned from {cfg.community_name}. Welcome back.",
+                f"Your appeal for ban <code>{ban_id}</code> has been approved — "
+                f"you're now unbanned from {cfg.community_name}. Welcome back.",
                 parse_mode="HTML",
-            )
-        except Exception:
-            pass
-
-        try:
-            await q.edit_message_text(
+            ),
+            q.edit_message_text(
                 f"Appeal approved by {mention(admin.id, admin.first_name)}. User unbanned.",
                 parse_mode="HTML",
                 reply_markup=None,
-            )
-        except Exception:
-            pass
+            ),
+            return_exceptions=True,
+        )
 
         ## Edit the submitted appeal log message in LOG_CHANNEL
-        appeal_log_msg_id = ban.get("appeal_log_msg_id")
+        appeal_log_msg_id  = ban.get("appeal_log_msg_id")
         appeal_submitted_at = ban.get("appeal_submitted_at")
-        appeal_link = ban.get("appeal_link", "")
+        appeal_link        = ban.get("appeal_link", "")
         edited = False
         if appeal_log_msg_id:
             try:
@@ -288,7 +297,9 @@ async def on_appeal_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         try:
             await ctx.bot.send_message(
                 lc,
-                parse_logmsg.appeal_unban_log(target_id, target_fname, admin.id, admin.first_name, ban_id),
+                parse_logmsg.appeal_unban_log(
+                    target_id, target_fname, admin.id, admin.first_name, ban_id,
+                ),
                 parse_mode="HTML",
                 message_thread_id=lt,
             )
@@ -296,28 +307,26 @@ async def on_appeal_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
             log.error("Appeal unban log failed: %s", exc)
 
     elif action == "reject":
-        try:
-            await ctx.bot.send_message(
+        ## Notify user + edit review message in parallel
+        await asyncio.gather(
+            ctx.bot.send_message(
                 target_id,
-                f"Your appeal for ban <code>{ban_id}</code> has been reviewed and not approved. The ban remains in place.",
+                f"Your appeal for ban <code>{ban_id}</code> has been reviewed and not approved. "
+                "The ban remains in place.",
                 parse_mode="HTML",
-            )
-        except Exception:
-            pass
-
-        try:
-            await q.edit_message_text(
+            ),
+            q.edit_message_text(
                 f"Appeal rejected by {mention(admin.id, admin.first_name)}.",
                 parse_mode="HTML",
                 reply_markup=None,
-            )
-        except Exception:
-            pass
+            ),
+            return_exceptions=True,
+        )
 
         ## Edit the submitted appeal log message in LOG_CHANNEL
-        appeal_log_msg_id = ban.get("appeal_log_msg_id")
+        appeal_log_msg_id  = ban.get("appeal_log_msg_id")
         appeal_submitted_at = ban.get("appeal_submitted_at")
-        appeal_link = ban.get("appeal_link", "")
+        appeal_link        = ban.get("appeal_link", "")
         edited = False
         if appeal_log_msg_id:
             try:

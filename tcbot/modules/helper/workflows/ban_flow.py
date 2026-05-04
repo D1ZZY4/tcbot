@@ -41,7 +41,7 @@ _album_meta: dict[str, dict[str, Any]] = {}
 ## ---------------------------------------------------------------------------
 
 async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-    msg = update.effective_message
+    msg   = update.effective_message
     admin = update.effective_user
 
     executor_role = await get_effective_role(admin.id)
@@ -86,18 +86,18 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             admin.id, admin.first_name, "ban",
         )
 
-    ctx.user_data["ban_target_id"] = target_id
+    ctx.user_data["ban_target_id"]    = target_id
     ctx.user_data["ban_target_fname"] = target_fname or str(target_id)
-    ctx.user_data["ban_reason"] = reason
-    ctx.user_data["ban_admin_id"] = admin.id
-    ctx.user_data["ban_admin_fname"] = admin.first_name
+    ctx.user_data["ban_reason"]       = reason
+    ctx.user_data["ban_admin_id"]     = admin.id
+    ctx.user_data["ban_admin_fname"]  = admin.first_name
 
     prompt = await msg.reply_text(
         "Proof required. Send a photo or video — multiple files allowed. "
         f"You have {cfg.proof_timeout} seconds.",
         reply_markup=keyboards.cancel_proof_kb(),
     )
-    ctx.user_data["ban_prompt_msg_id"] = prompt.message_id
+    ctx.user_data["ban_prompt_msg_id"]  = prompt.message_id
     ctx.user_data["ban_prompt_chat_id"] = msg.chat.id
 
     return WAITING_PROOF
@@ -155,25 +155,25 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
 ## ---------------------------------------------------------------------------
 
 async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict) -> None:
-    target_id: int = meta.get("ban_target_id")
+    target_id: int    = meta.get("ban_target_id")
     target_fname: str = meta.get("ban_target_fname", str(target_id))
-    reason: str = meta.get("ban_reason", "No reason provided")
-    admin_id: int = meta.get("ban_admin_id")
-    admin_fname: str = meta.get("ban_admin_fname", "Admin")
-    prompt_msg_id: int = meta.get("ban_prompt_msg_id", 0)
+    reason: str       = meta.get("ban_reason", "No reason provided")
+    admin_id: int     = meta.get("ban_admin_id")
+    admin_fname: str  = meta.get("ban_admin_fname", "Admin")
+    prompt_msg_id: int  = meta.get("ban_prompt_msg_id", 0)
     prompt_chat_id: int = meta.get("ban_prompt_chat_id", 0)
 
     now = utc_now()
     proof_chat, proof_thread = cfg.proofs
 
     ## Determine new vs update
-    existing = await db.bans_db.get_active_ban(target_id)
+    existing  = await db.bans_db.get_active_ban(target_id)
     is_update = existing is not None
 
     ## Build proof caption
     if is_update:
         prev_proof_msg_id = existing.get("proof_message_id")
-        prev_proof_link = (
+        prev_proof_link   = (
             message_link(proof_chat, prev_proof_msg_id, proof_thread)
             if prev_proof_msg_id else None
         )
@@ -223,19 +223,19 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict) -> None:
         message_link(proof_chat, proof_msg_id, proof_thread) if proof_msg_id else None
     )
 
-    ## Get bot username for appeal deep link
-    try:
-        bot_info = await bot.get_me()
-        bot_username = bot_info.username
-    except Exception:
-        bot_username = "TCFBot"
-
     logs_chat, logs_thread = cfg.logs
 
     if is_update:
-        ban_id = existing["ban_id"]
-        old_admin_id = existing.get("admin_user_id", admin_id)
-        old_admin_fname = await db.users_db.get_first_name(old_admin_id, "Admin")
+        ban_id        = existing["ban_id"]
+        old_admin_id  = existing.get("admin_user_id", admin_id)
+
+        ## bot username + old admin name fetched in parallel
+        bot_info, old_admin_fname = await asyncio.gather(
+            bot.get_me(),
+            db.users_db.get_first_name(old_admin_id, "Admin"),
+        )
+        bot_username = bot_info.username
+
         log_text = parse_logmsg.ban_update_log(
             target_id, target_fname,
             admin_id, admin_fname,
@@ -251,16 +251,32 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict) -> None:
             keyboards.ban_log_new(target_id, proof_link, _appeal_url)
             if proof_link else None
         )
-        ## Update DB record
-        await db.bans_db.update_ban(
-            ban_id, reason, admin_id,
-            proof_msg_id or 0, 0,
-            existing.get("proof_message_id", 0),
-            existing.get("log_message_id", 0),
+
+        ## Update DB record and send log in parallel
+        send_kwargs: dict = {"parse_mode": "HTML", "message_thread_id": logs_thread}
+        if kb:
+            send_kwargs["reply_markup"] = kb
+        _, log_result = await asyncio.gather(
+            db.bans_db.update_ban(
+                ban_id, reason, admin_id,
+                proof_msg_id or 0, 0,
+                existing.get("proof_message_id", 0),
+                existing.get("log_message_id", 0),
+            ),
+            bot.send_message(logs_chat, log_text, **send_kwargs),
+            return_exceptions=True,
         )
     else:
         ## Pre-generate ban_id so we can use it in the log keyboard
         ban_id = db.bans_db.make_ban_id()
+
+        ## bot username fetched (solo — no companion task here)
+        try:
+            bot_info     = await bot.get_me()
+            bot_username = bot_info.username
+        except Exception:
+            bot_username = "TCFBot"
+
         log_text = parse_logmsg.ban_log(
             target_id, target_fname, admin_id, admin_fname,
             reason, ban_id, proof_link, now,
@@ -268,50 +284,60 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict) -> None:
         kb = keyboards.ban_log_new(
             target_id, proof_link, appeal_deep_link(bot_username, ban_id),
         ) if proof_link else None
-        await db.bans_db.create_ban(target_id, reason, admin_id, proof_msg_id or 0, 0, ban_id)
 
-    ## Send log message to LOG_CHANNEL
-    log_msg_id: int = 0
-    try:
-        send_kwargs: dict = {"parse_mode": "HTML", "message_thread_id": logs_thread}
+        ## Create DB record and send log in parallel
+        send_kwargs = {"parse_mode": "HTML", "message_thread_id": logs_thread}
         if kb:
             send_kwargs["reply_markup"] = kb
-        log_msg = await bot.send_message(logs_chat, log_text, **send_kwargs)
-        log_msg_id = log_msg.message_id
-    except Exception as exc:
-        log.error("Ban log send failed: %s", exc)
+        _, log_result = await asyncio.gather(
+            db.bans_db.create_ban(target_id, reason, admin_id, proof_msg_id or 0, 0, ban_id),
+            bot.send_message(logs_chat, log_text, **send_kwargs),
+            return_exceptions=True,
+        )
 
+    ## Extract log_msg_id from parallel result
+    log_msg_id: int = 0
+    if not isinstance(log_result, BaseException):
+        log_msg_id = log_result.message_id
+    else:
+        log.error("Ban log send failed: %s", log_result)
+
+    ## set_log_message_id and active_groups fetched in parallel
     if log_msg_id:
-        await db.bans_db.set_log_message_id(ban_id, log_msg_id)
+        _, groups = await asyncio.gather(
+            db.bans_db.set_log_message_id(ban_id, log_msg_id),
+            db.groups_db.active_groups(),
+        )
+    else:
+        groups = await db.groups_db.active_groups()
 
-    ## Enforce across all affiliated groups
-    groups = await db.groups_db.active_groups()
-    failed = 0
-    for grp in groups:
-        try:
-            await bot.ban_chat_member(grp["chat_id"], target_id)
-        except Exception:
-            failed += 1
+    ## Enforce across all affiliated groups simultaneously
+    results = await asyncio.gather(
+        *[bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups],
+        return_exceptions=True,
+    )
+    failed = sum(1 for r in results if isinstance(r, BaseException))
 
-    ## Edit the original prompt to a summary
+    ## Edit the original prompt to a summary + cache user in parallel
     summary = (
         f"{mention(target_id, target_fname)} (<code>{target_id}</code>) has been banned.\n"
         f"Reason: {reason}\n"
         f"Applied to {len(groups) - failed}/{len(groups)} groups."
     )
     if prompt_msg_id and prompt_chat_id:
-        try:
-            await bot.edit_message_text(
-                summary, chat_id=prompt_chat_id,
+        await asyncio.gather(
+            bot.edit_message_text(
+                summary,
+                chat_id=prompt_chat_id,
                 message_id=prompt_msg_id,
                 parse_mode="HTML",
                 reply_markup=None,
-            )
-        except Exception:
-            pass
-
-    ## Cache target in member_cache
-    await db.users_db.upsert_user(target_id, None, target_fname)
+            ),
+            db.users_db.upsert_user(target_id, None, target_fname),
+            return_exceptions=True,
+        )
+    else:
+        await db.users_db.upsert_user(target_id, None, target_fname)
 
 
 ## ---------------------------------------------------------------------------
