@@ -18,84 +18,110 @@ from tcbot.database.roles_db import get_effective_role, role_rank
 
 log = logging.getLogger(__name__)
 
+
 ## ---------------------------------------------------------------------------
 ## Per-user sliding-window rate limiter
 ## ---------------------------------------------------------------------------
 
-_BUCKETS: dict[tuple[int, str], deque[float]] = {}
+class _RateLimiter:
+    """Sliding-window per-user rate limiter.
 
-## Callback query: 20 presses per 10 seconds (≈ 2 / s) — fast navigation allowed
-_CBQ_MAX  = 20
-_CBQ_WIN  = 10.0
+    ``check(uid)`` records the call and returns ``0.0`` when allowed.
+    Returns the remaining seconds in the window (> 0) when the limit is hit
+    *without* recording the blocked call.
 
-## Commands: 8 per 30 seconds — generous for normal moderation work
-_CMD_MAX  = 8
-_CMD_WIN  = 30.0
-
-
-def _allow(uid: int, bucket: str, max_calls: int, window: float) -> bool:
-    """Return True if the call is within the rate limit, False if it should be dropped.
-
-    Keys are pruned from _BUCKETS whenever all their timestamps expire, keeping
-    memory proportional to currently-active users rather than all-time unique users.
+    Memory is proportional to currently-active users — stale buckets are
+    pruned eagerly so the dict never accumulates all-time unique users.
     """
-    key = (uid, bucket)
-    now = time.monotonic()
-    dq  = _BUCKETS.get(key)
-    if dq is None:
-        _BUCKETS[key] = deque([now])
-        return True
-    while dq and now - dq[0] >= window:
-        dq.popleft()
-    if not dq:
-        ## All timestamps expired — clean up stale key and allow fresh start
-        del _BUCKETS[key]
-        _BUCKETS[key] = deque([now])
-        return True
-    if len(dq) >= max_calls:
-        return False
-    dq.append(now)
-    return True
+
+    __slots__ = ("max_calls", "window", "_buckets")
+
+    def __init__(self, max_calls: int, window: float) -> None:
+        self.max_calls = max_calls
+        self.window    = window
+        self._buckets: dict[int, deque[float]] = {}
+
+    def check(self, uid: int) -> float:
+        """Return ``0.0`` if allowed (call recorded), or seconds to wait if denied."""
+        now = time.monotonic()
+        dq  = self._buckets.get(uid)
+
+        if dq is None:
+            self._buckets[uid] = deque([now])
+            return 0.0
+
+        ## drop timestamps outside the current window
+        while dq and now - dq[0] >= self.window:
+            dq.popleft()
+
+        if not dq:
+            ## bucket fully cleared — recycle slot and allow
+            self._buckets[uid] = deque([now])
+            return 0.0
+
+        if len(dq) >= self.max_calls:
+            ## blocked — tell caller how long until the oldest slot expires
+            return round(self.window - (now - dq[0]), 1)
+
+        dq.append(now)
+        return 0.0
+
+
+## Commands : 8 calls per 30 s — comfortable for regular moderation
+_cmd_limiter = _RateLimiter(max_calls=8, window=30.0)
+
+## Buttons  : 20 presses per 10 s — allows snappy navigation
+_cbq_limiter = _RateLimiter(max_calls=20, window=10.0)
 
 
 async def global_rate_limit_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Universal per-user rate limiter — registered at group -1 so it runs before every handler.
+    """Universal per-user rate limiter — registered at group -1.
 
-    * CallbackQuery  → 20 per 10 s   (button navigation)
-    * Command text   → 8  per 30 s   (mod commands)
-    * Other messages → always pass   (member cache, conversation text, etc.)
+    Runs before every handler group so the check is always first.
 
-    When rate-limited: silently acknowledges callback queries and raises
-    ApplicationHandlerStop to cancel ALL subsequent handler groups.
+    * **CallbackQuery** — 20 per 10 s.
+      Denied presses get a brief *toast* (``show_alert=False``) so the UI
+      never freezes with a blocking popup.
+
+    * **Command text** — 8 per 30 s.
+      Denied commands get a reply showing exactly how many seconds to wait,
+      then ``ApplicationHandlerStop`` drops the update from all other groups.
+
+    * **Everything else** — always passes (member cache, conversation text, …).
     """
     uid = update.effective_user.id if update.effective_user else None
     if not uid:
         return
 
+    ## ── button press ─────────────────────────────────────────────────────────
     if update.callback_query:
-        if not _allow(uid, "cbq", _CBQ_MAX, _CBQ_WIN):
+        wait = _cbq_limiter.check(uid)
+        if wait:
             try:
                 await update.callback_query.answer(
-                    "Upss, slow down.", show_alert=True
+                    f"⏳ Pelan-pelan, tunggu {wait:.0f} detik.",
+                    show_alert=False,
                 )
             except Exception:
                 pass
             raise ApplicationHandlerStop
         return
 
+    ## ── command message ──────────────────────────────────────────────────────
     msg  = update.effective_message
     text = (msg.text or "") if msg else ""
     if not text:
         return
 
     if not any(text.startswith(p) for p in cfg.prefixes):
-        return  ## plain message — do not rate limit
+        return  ## plain chat message — never rate-limit
 
-    if not _allow(uid, "cmd", _CMD_MAX, _CMD_WIN):
+    wait = _cmd_limiter.check(uid)
+    if wait:
         if msg:
             try:
                 await msg.reply_text(
-                    "Slow down — please wait a moment before running another command."
+                    f"⏳ Pelan-pelan! Coba lagi dalam {wait:.0f} detik."
                 )
             except Exception:
                 pass
