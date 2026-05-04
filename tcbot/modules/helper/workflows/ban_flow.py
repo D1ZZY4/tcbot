@@ -25,7 +25,7 @@ from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
 from tcbot.modules.helper.role_guard import auto_demote
 from tcbot.utils.dispatch import fan_out
-from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
+from tcbot.utils.prefixes import ANY_CMD_FILTER, build_prefixed_filters, parse_cmd_args
 from tcbot.utils.timedate_format import utc_now
 
 log = logging.getLogger(__name__)
@@ -382,7 +382,7 @@ def build_handler() -> ConversationHandler:
                 MessageHandler(filters.PHOTO | filters.VIDEO, on_proof_received),
             ],
         },
-        fallbacks=[MessageHandler(filters.COMMAND, on_ban_timeout)],
+        fallbacks=[MessageHandler(ANY_CMD_FILTER, on_ban_timeout)],
         conversation_timeout=cfg.proof_timeout,
         per_chat=True,
         per_user=True,

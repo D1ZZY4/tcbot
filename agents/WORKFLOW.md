@@ -54,7 +54,7 @@ chore: modernize typing hints to Python 3.11 built-ins
 ## Environment
 
 Never commit `config.env`. Use `config.env.example` as the template.
-All secrets go through Replit Secrets or the local `config.env` file.
+All secrets and configuration go through `config.env` exclusively. Never use Replit Secrets for this project.
 
 ## Deployment Checklist
 

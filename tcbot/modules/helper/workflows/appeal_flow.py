@@ -24,6 +24,7 @@ from tcbot.modules.helper import keyboards, parse_logmsg
 from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.utils.dispatch import fan_out
+from tcbot.utils.prefixes import ANY_CMD_FILTER
 
 log = logging.getLogger(__name__)
 
@@ -374,7 +375,7 @@ def build_handler() -> ConversationHandler:
             ],
         },
         fallbacks=[
-            MessageHandler(filters.COMMAND, lambda u, c: ConversationHandler.END),
+            MessageHandler(ANY_CMD_FILTER, lambda u, c: ConversationHandler.END),
         ],
         conversation_timeout=cfg.appeal_timeout,
         per_chat=False,

@@ -37,7 +37,7 @@ from tcbot.database.roles_db import get_effective_role, role_rank, ROLE_LABEL
 from tcbot.modules.helper import extraction
 from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.workflows.warning_flow import execute_warn
-from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
+from tcbot.utils.prefixes import ANY_CMD_FILTER, build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
 
@@ -204,7 +204,7 @@ def warn_conversation() -> ConversationHandler:
         entry_points=[MessageHandler(_WARN_FILTER, cmd_warn_entry)],
         states={
             WAITING_REASON: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, on_warn_reason),
+                MessageHandler(filters.TEXT & ~ANY_CMD_FILTER, on_warn_reason),
                 CallbackQueryHandler(on_warn_cancel, pattern=r"^warn_cancel$"),
             ],
             WAITING_PROOF: [

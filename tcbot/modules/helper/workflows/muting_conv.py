@@ -42,7 +42,7 @@ from tcbot.modules.helper.workflows.muting_flow import (
     fmt_duration,
     parse_duration,
 )
-from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
+from tcbot.utils.prefixes import ANY_CMD_FILTER, build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
 
@@ -242,7 +242,7 @@ def build_handler() -> ConversationHandler:
             WAITING_REASON: [
                 CallbackQueryHandler(on_skip_reason, pattern=r"^mute_skip_reason$"),
                 CallbackQueryHandler(on_mute_cancel, pattern=r"^mute_cancel$"),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, on_reason_text),
+                MessageHandler(filters.TEXT & ~ANY_CMD_FILTER, on_reason_text),
             ],
             WAITING_PROOF: [
                 CallbackQueryHandler(on_skip_proof,  pattern=r"^mute_skip_proof$"),
@@ -250,7 +250,7 @@ def build_handler() -> ConversationHandler:
                 MessageHandler(filters.PHOTO | filters.VIDEO, on_proof_received),
             ],
         },
-        fallbacks=[MessageHandler(filters.COMMAND, on_mute_cancel)],
+        fallbacks=[MessageHandler(ANY_CMD_FILTER, on_mute_cancel)],
         conversation_timeout=cfg.proof_timeout,
         per_chat=True,
         per_user=True,

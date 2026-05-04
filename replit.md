@@ -39,16 +39,16 @@ A Telegram bot for the Transsion Core Federation (TCF) community. Manages federa
 
 ## Configuration
 
-Secrets are stored in Replit Secrets (environment variables). Non-sensitive config is in `.replit` env vars:
+**All configuration and secrets are stored exclusively in `config.env`.** Do NOT use Replit Secrets for this project. `config.env` is gitignored and must never be committed.
 
-- `BOT_TOKEN` — Telegram bot token (**Replit Secret**)
-- `MONGODB_URI` — MongoDB connection string (**Replit Secret**)
-- `OWNER_ID` — Initial owner Telegram user ID (env var)
-- `DB_NAME` — MongoDB database name (env var, default: "tcbot")
-- `MAIN_GROUP` — Main Telegram group/forum chat ID (env var)
-- `PORT` — Web server port, set to 5000 for Replit (env var)
+- `BOT_TOKEN` — Telegram bot token
+- `MONGODB_URI` — MongoDB connection string
+- `OWNER_ID` — Initial owner Telegram user ID
+- `DB_NAME` — MongoDB database name (default: "tcbot")
+- `MAIN_GROUP` — Main Telegram group/forum chat ID
+- `PORT` — Web server port (5000)
 
-The `config.env` file is kept as a local fallback only and is excluded from version control via `.gitignore`.
+See `config.env.example` for the full list of required keys.
 
 ## Role System
 
@@ -103,6 +103,16 @@ docker-compose up --build
 
 - `Dockerfile` — uses `uv` (`COPY --from=ghcr.io/astral-sh/uv:latest`) with `uv sync --frozen --no-dev`
 - `docker-compose.yml` — `bot` + `mongo:7` services; bot waits for MongoDB health-check
+
+## Agent Instructions
+
+Before making any changes, **read all documentation files in the `agents/` directory** — specifically:
+- `agents/RULES.md` — coding conventions, what is forbidden
+- `agents/STYLE-CODE.md` — code style, typing, and formatting rules
+- `agents/STYLE-COMMENTS.md` — comment and docstring style
+- `agents/WORKFLOW.md` — branching, commit conventions, and deployment checklist
+- `agents/CLAUDE.md` — project-specific guidance and gotchas
+- `agents/REPLIT.md` — Replit environment, config, and secrets guidance
 
 ## Deployment
 

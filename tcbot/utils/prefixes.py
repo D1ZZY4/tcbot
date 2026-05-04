@@ -84,6 +84,16 @@ def build_prefixed_filters(command: str) -> filters.BaseFilter:
     return filters.Regex(re.compile(pattern, re.IGNORECASE))
 
 
+## Pre-computed filter: any text starting with a configured prefix followed by a letter.
+## Use in ConversationHandler fallbacks and as ~COMMAND guard in text-input states.
+ANY_CMD_FILTER: filters.BaseFilter = filters.Regex(
+    re.compile(
+        rf"^[{re.escape(''.join(set(_get_prefixes())))}][a-zA-Z]",
+        re.IGNORECASE,
+    )
+)
+
+
 def parse_cmd_args(text: str | None) -> list[str]:
     """Extract arguments from a prefixed command message text."""
     if not text:

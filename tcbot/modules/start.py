@@ -134,15 +134,10 @@ async def on_menu_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) 
 ## Handler list
 ## ---------------------------------------------------------------------------
 
-_START_FILTER = (
-    filters.Regex(r"^/start$")
-    | filters.Regex(r"^/start\s+about$")
-    | filters.Regex(r"^/start\s+menu$")
-)
-_START_PREFIXED = build_prefixed_filters("start")
+_START_FILTER = build_prefixed_filters("start")
 
 __handlers__ = [
-    MessageHandler(_START_FILTER | _START_PREFIXED, cmd_start),
+    MessageHandler(_START_FILTER, cmd_start),
     CallbackQueryHandler(on_menu_back_start,     pattern=r"^menu_back_start$"),
     CallbackQueryHandler(on_menu_groups,         pattern=r"^menu_groups$"),
     CallbackQueryHandler(on_menu_groups_details, pattern=r"^menu_groups_details$"),

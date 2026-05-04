@@ -12,6 +12,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, fil
 from tcbot import database as db
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.formatter import code, esc
+from tcbot.utils.prefixes import ANY_CMD_FILTER
 
 _PAGE_SIZE    = 6
 _SEARCH_KEY   = "stats_search_active"
@@ -284,5 +285,5 @@ handlers = [
     CallbackQueryHandler(on_stats_search_item,    pattern=r"^stats_search_item:\d+$"),
     CallbackQueryHandler(on_stats_search_back,    pattern=r"^stats_search_back$"),
     CallbackQueryHandler(on_stats_search_cancel,  pattern=r"^stats_search_cancel$"),
-    MessageHandler(filters.TEXT & ~filters.COMMAND, on_bans_search_input),
+    MessageHandler(filters.TEXT & ~ANY_CMD_FILTER, on_bans_search_input),
 ]
