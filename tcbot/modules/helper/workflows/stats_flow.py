@@ -12,7 +12,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, fil
 from tcbot import database as db
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.formatter import code, esc
-from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, ANY_CMD_FILTER
+from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 
 _PAGE_SIZE    = 6
 _SEARCH_KEY   = "stats_search_active"
@@ -21,9 +21,7 @@ _MSG_KEY      = "stats_search_msg_id"
 _CHAT_KEY     = "stats_search_chat_id"
 
 
-## ---------------------------------------------------------------------------
-## Keyboards
-## ---------------------------------------------------------------------------
+## ── Keyboards ────────────────────────────────────────────────────────────────
 
 def _bans_list_kb(page: int, total: int, n_items: int) -> InlineKeyboardMarkup:
     total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
@@ -84,9 +82,7 @@ def _ban_detail_kb(page: int, proof_link: str | None = None) -> InlineKeyboardMa
     return InlineKeyboardMarkup(rows)
 
 
-## ---------------------------------------------------------------------------
-## Bans list handlers
-## ---------------------------------------------------------------------------
+## ── Bans list handlers ───────────────────────────────────────────────────────
 
 async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q    = update.callback_query
@@ -125,9 +121,7 @@ async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     await q.edit_message_text(text, parse_mode="HTML", reply_markup=_ban_detail_kb(page, proof_link))
 
 
-## ---------------------------------------------------------------------------
-## Search flow handlers
-## ---------------------------------------------------------------------------
+## ── Search flow handlers ─────────────────────────────────────────────────────
 
 def _clear_search(ctx: ContextTypes.DEFAULT_TYPE) -> None:
     for key in (_SEARCH_KEY, _RESULTS_KEY, _MSG_KEY, _CHAT_KEY):
@@ -277,8 +271,6 @@ async def on_stats_search_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
         reply_markup=_bans_list_kb(0, total, len(chunk)),
     )
 
-
-## ---------------------------------------------------------------------------
 
 handlers = [
     CallbackQueryHandler(on_stats_bans,          pattern=r"^stats_bans:\d+$"),

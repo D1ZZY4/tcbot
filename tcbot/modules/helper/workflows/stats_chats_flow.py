@@ -16,9 +16,7 @@ from tcbot.utils.timedate_format import fmt_dt
 _PAGE_SIZE = 6
 
 
-## ---------------------------------------------------------------------------
-## Detail builder
-## ---------------------------------------------------------------------------
+## ── Detail builder ───────────────────────────────────────────────────────────
 
 async def build_chat_detail(grp: dict) -> str:
     """Return a formatted detail card for a connected group document."""
@@ -39,9 +37,7 @@ async def build_chat_detail(grp: dict) -> str:
     )
 
 
-## ---------------------------------------------------------------------------
-## Keyboards
-## ---------------------------------------------------------------------------
+## ── Keyboards ────────────────────────────────────────────────────────────────
 
 def _chats_list_kb(page: int, total: int, n_items: int) -> InlineKeyboardMarkup:
     total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
@@ -72,9 +68,7 @@ def _chat_detail_kb(page: int) -> InlineKeyboardMarkup:
     ])
 
 
-## ---------------------------------------------------------------------------
-## Handlers
-## ---------------------------------------------------------------------------
+## ── Handlers ─────────────────────────────────────────────────────────────────
 
 async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q    = update.callback_query
@@ -112,8 +106,6 @@ async def on_stats_chat_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         reply_markup=_chat_detail_kb(page),
     )
 
-
-## ---------------------------------------------------------------------------
 
 handlers = [
     CallbackQueryHandler(on_stats_chats,     pattern=r"^stats_chats:\d+$"),

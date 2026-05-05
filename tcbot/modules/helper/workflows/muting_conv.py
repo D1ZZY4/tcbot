@@ -41,7 +41,7 @@ from tcbot.modules.helper.workflows.muting_flow import (
     fmt_duration,
     parse_duration,
 )
-from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, ANY_CMD_FILTER, build_prefixed_filters, parse_cmd_args
+from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
 
@@ -49,9 +49,7 @@ WAITING_REASON = 0
 WAITING_PROOF  = 1
 
 
-## ---------------------------------------------------------------------------
-## Entry point
-## ---------------------------------------------------------------------------
+## ── Entry point ──────────────────────────────────────────────────────────────
 
 async def cmd_mute_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     msg   = update.effective_message
@@ -144,9 +142,7 @@ async def cmd_mute_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return WAITING_REASON
 
 
-## ---------------------------------------------------------------------------
-## WAITING_REASON handlers
-## ---------------------------------------------------------------------------
+## ── WAITING_REASON handlers ──────────────────────────────────────────────────
 
 async def on_reason_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ctx.user_data["mute_reason"] = update.effective_message.text.strip()
@@ -191,9 +187,7 @@ async def on_skip_reason(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return WAITING_PROOF
 
 
-## ---------------------------------------------------------------------------
-## WAITING_PROOF handlers
-## ---------------------------------------------------------------------------
+## ── WAITING_PROOF handlers ───────────────────────────────────────────────────
 
 async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     msg = update.effective_message
@@ -212,9 +206,7 @@ async def on_skip_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
-## ---------------------------------------------------------------------------
-## Cancel
-## ---------------------------------------------------------------------------
+## ── Cancel ───────────────────────────────────────────────────────────────────
 
 async def on_mute_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     q = update.callback_query
@@ -223,9 +215,7 @@ async def on_mute_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
-## ---------------------------------------------------------------------------
-## ConversationHandler factory
-## ---------------------------------------------------------------------------
+## ── ConversationHandler factory ──────────────────────────────────────────────
 
 def build_handler() -> ConversationHandler:
     _entry = (

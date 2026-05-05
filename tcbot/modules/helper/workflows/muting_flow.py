@@ -20,9 +20,7 @@ log = logging.getLogger(__name__)
 _DURATION_RE = re.compile(r"^(\d+)(ye|mo|[smhdw])$", re.IGNORECASE)
 
 
-## ---------------------------------------------------------------------------
-## Duration helpers
-## ---------------------------------------------------------------------------
+## ── Duration helpers ─────────────────────────────────────────────────────────
 
 def parse_duration(raw: str) -> timedelta | None:
     """Parse a single duration token like '3d', '1mo', '2ye'. Returns None if invalid."""
@@ -64,9 +62,7 @@ def fmt_duration(td: timedelta | None) -> str:
     return f"{days // 365}ye"
 
 
-## ---------------------------------------------------------------------------
-## Core execution
-## ---------------------------------------------------------------------------
+## ── Core execution ───────────────────────────────────────────────────────────
 
 async def _execute_mute(bot, update: Update, meta: dict) -> None:
     """Apply the mute and edit the conversation prompt to a summary."""
@@ -124,9 +120,7 @@ async def _execute_mute(bot, update: Update, meta: dict) -> None:
             await msg.reply_text(summary, parse_mode="HTML")
 
 
-## ---------------------------------------------------------------------------
-## Unmute execution
-## ---------------------------------------------------------------------------
+## ── Unmute execution ─────────────────────────────────────────────────────────
 
 async def execute_unmute(
     update: Update,

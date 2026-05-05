@@ -44,9 +44,7 @@ __help_text__ = (
 )
 
 
-## ---------------------------------------------------------------------------
-## Helpers
-## ---------------------------------------------------------------------------
+## ── Helpers ──────────────────────────────────────────────────────────────────
 
 async def _ban_summary(
     ban: dict,
@@ -84,9 +82,7 @@ async def _ban_summary(
     return text, proof_link
 
 
-## ---------------------------------------------------------------------------
-## /checkme
-## ---------------------------------------------------------------------------
+## ── /checkme ─────────────────────────────────────────────────────────────────
 
 async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     user  = update.effective_user
@@ -147,9 +143,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-## ---------------------------------------------------------------------------
-## /checkme inline callbacks
-## ---------------------------------------------------------------------------
+## ── /checkme inline callbacks ────────────────────────────────────────────────
 
 async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q      = update.callback_query
@@ -199,9 +193,7 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     )
 
 
-## ---------------------------------------------------------------------------
-## /checkban
-## ---------------------------------------------------------------------------
+## ── /checkban ────────────────────────────────────────────────────────────────
 
 async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(update.effective_message.text)
@@ -273,9 +265,7 @@ async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await msg.reply_text(text, parse_mode="HTML", reply_markup=kb)
 
 
-## ---------------------------------------------------------------------------
-## Handler registration
-## ---------------------------------------------------------------------------
+## ── Handler registration ─────────────────────────────────────────────────────
 
 _CHECKME_FILTER = build_prefixed_filters("checkme") | build_prefixed_filters("cme")
 _BANINFO_FILTER = build_prefixed_filters("checkban") | build_prefixed_filters("cban")

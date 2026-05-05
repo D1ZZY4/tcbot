@@ -57,9 +57,7 @@ async def _complete_join(chat_id: int, chat_title: str, owner_id: int, owner_fna
     log.info("Group %d ('%s') affiliated. %d bans applied.", chat_id, chat_title, applied)
 
 
-## ---------------------------------------------------------------------------
-## my_chat_member handler
-## ---------------------------------------------------------------------------
+## ── my_chat_member handler ───────────────────────────────────────────────────
 
 async def on_bot_added(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Fired on every change to the bot's own member status in any chat."""
@@ -132,9 +130,7 @@ async def on_bot_added(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.error("Join prompt send failed for %d: %s", chat.id, exc)
 
 
-## ---------------------------------------------------------------------------
-## Inline button callbacks (tc_join / tc_cancel)
-## ---------------------------------------------------------------------------
+## ── Inline button callbacks (tc_join / tc_cancel) ───────────────────────────
 
 async def on_join_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q    = update.callback_query

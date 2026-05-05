@@ -80,9 +80,7 @@ def _available_roles_for(executor_role: str) -> list[str]:
     return []
 
 
-## ---------------------------------------------------------------------------
-## Shared promote executor
-## ---------------------------------------------------------------------------
+## ── Shared promote executor ──────────────────────────────────────────────────
 
 async def _execute_promote(
     bot: Bot,
@@ -197,9 +195,7 @@ async def _execute_promote(
     return True, f"Done. {mention(target_id, target_fname)} is now a {cfg.community_name} {role_label}."
 
 
-## ---------------------------------------------------------------------------
-## Promote command
-## ---------------------------------------------------------------------------
+## ── Promote command ──────────────────────────────────────────────────────────
 
 async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
@@ -302,9 +298,7 @@ async def on_promote_role_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
     await q.edit_message_text("Promotion cancelled. No changes were made.", reply_markup=None)
 
 
-## ---------------------------------------------------------------------------
-## Demote command
-## ---------------------------------------------------------------------------
+## ── Demote command ───────────────────────────────────────────────────────────
 
 async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
@@ -421,9 +415,7 @@ async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     await q.edit_message_text("Cancelled. No changes were made.", reply_markup=None)
 
 
-## ---------------------------------------------------------------------------
-## Transfer ownership
-## ---------------------------------------------------------------------------
+## ── Transfer ownership ───────────────────────────────────────────────────────
 
 @decorators.owner_only
 async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -458,9 +450,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-## ---------------------------------------------------------------------------
-## Promotion request (any user)
-## ---------------------------------------------------------------------------
+## ── Promotion request (any user) ─────────────────────────────────────────────
 
 async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     user     = update.effective_user
@@ -503,9 +493,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     )
 
 
-## ---------------------------------------------------------------------------
-## Promotion list (Admin and above)
-## ---------------------------------------------------------------------------
+## ── Promotion list (Admin and above) ─────────────────────────────────────────
 
 @decorators.staff_only
 async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -523,9 +511,7 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
-## ---------------------------------------------------------------------------
-## Promotion decision callback (Founder only)
-## ---------------------------------------------------------------------------
+## ── Promotion decision callback (Founder only) ───────────────────────────────
 
 async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q        = update.callback_query
@@ -587,9 +573,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         )
 
 
-## ---------------------------------------------------------------------------
-## Handler list
-## ---------------------------------------------------------------------------
+## ── Handler list ─────────────────────────────────────────────────────────────
 
 _PROMOTE_FILTER  = build_prefixed_filters("tcpromote") | build_prefixed_filters("tcp")
 _DEMOTE_FILTER   = build_prefixed_filters("tcdemote")  | build_prefixed_filters("tcd")

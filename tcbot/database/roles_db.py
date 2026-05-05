@@ -36,9 +36,7 @@ def _col():
     return col("tc_roles")
 
 
-## ---------------------------------------------------------------------------
-## CRUD
-## ---------------------------------------------------------------------------
+## ── CRUD ───────────────────────────────────────────────────────────────────
 
 async def set_role(user_id: int, role: str, assigned_by: int) -> None:
     await _col().update_one(
@@ -71,9 +69,16 @@ async def all_roles() -> list[dict]:
     return await _col().find({}).to_list(None)
 
 
-## ---------------------------------------------------------------------------
-## Role resolution helpers
-## ---------------------------------------------------------------------------
+## ── Role resolution helpers ──────────────────────────────────────────────────
+
+async def can_act_on(executor_id: int, target_id: int) -> bool:
+    """Return True if the executor outranks the target and may act against them."""
+    executor_role, target_role = await asyncio.gather(
+        get_effective_role(executor_id),
+        get_effective_role(target_id),
+    )
+    return role_rank(executor_role) > role_rank(target_role)
+
 
 async def get_effective_role(user_id: int) -> str | None:
     """Resolve a user's effective role: founder › admin › developer › tester › None.

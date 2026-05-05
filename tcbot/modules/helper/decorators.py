@@ -20,9 +20,7 @@ from tcbot.database.roles_db import get_effective_role, role_rank
 log = logging.getLogger(__name__)
 
 
-## ---------------------------------------------------------------------------
-## Per-user sliding-window rate limiter
-## ---------------------------------------------------------------------------
+## ── Per-user sliding-window rate limiter ─────────────────────────────────────
 
 class _RateLimiter:
     """Sliding-window per-user rate limiter.
@@ -129,9 +127,7 @@ async def global_rate_limit_handler(update: Update, ctx: ContextTypes.DEFAULT_TY
         raise ApplicationHandlerStop
 
 
-## ---------------------------------------------------------------------------
-## Auth decorators
-## ---------------------------------------------------------------------------
+## ── Auth decorators ──────────────────────────────────────────────────────────
 
 def owner_only(func: Callable) -> Callable:
     @functools.wraps(func)

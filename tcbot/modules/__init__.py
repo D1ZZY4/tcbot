@@ -13,9 +13,7 @@ from .. import configs
 log = logging.getLogger(__name__)
 
 
-## ---------------------------------------------------------------------------
-## Module discovery and filtering
-## ---------------------------------------------------------------------------
+## ── Module discovery and filtering ─────────────────────────────────────────
 
 def _discover_modules() -> list[str]:
     """Return all .py module names in this directory, excluding __init__.py."""
@@ -58,9 +56,7 @@ log.info("Modules to load: %s", ALL_MODULES)
 __all__ = ALL_MODULES + ["ALL_MODULES"]
 
 
-## ---------------------------------------------------------------------------
-## Handler discovery
-## ---------------------------------------------------------------------------
+## ── Handler discovery ────────────────────────────────────────────────────────
 
 ## ConversationHandlers and affiliation must be registered first
 _PRIORITY_FIRST = ["connecting", "admins", "appeals", "banning", "muting", "kicking", "warnings"]
