@@ -1,13 +1,14 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Auth decorators and global per-user rate limiter for all handlers."""
+## Auth decorators and global per-user rate limiter for all handlers
 from __future__ import annotations
 
 import functools
 import logging
 import time
 from collections import deque
+from collections.abc import Callable
 
 from telegram import Update
 from telegram.ext import ApplicationHandlerStop, ContextTypes
@@ -132,9 +133,9 @@ async def global_rate_limit_handler(update: Update, ctx: ContextTypes.DEFAULT_TY
 ## Auth decorators
 ## ---------------------------------------------------------------------------
 
-def owner_only(func):
+def owner_only(func: Callable) -> Callable:
     @functools.wraps(func)
-    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         uid = update.effective_user.id if update.effective_user else None
         if uid and await db.admins_db.is_owner(uid):
             return await func(update, ctx)
@@ -145,10 +146,10 @@ def owner_only(func):
     return wrapper
 
 
-def staff_only(func):
+def staff_only(func: Callable) -> Callable:
     """Founder and Admin."""
     @functools.wraps(func)
-    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         uid = update.effective_user.id if update.effective_user else None
         if uid and await db.admins_db.is_staff(uid):
             return await func(update, ctx)
@@ -159,10 +160,10 @@ def staff_only(func):
     return wrapper
 
 
-def mod_only(func):
+def mod_only(func: Callable) -> Callable:
     """Founder, Admin, Developer — for ban/unban."""
     @functools.wraps(func)
-    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         uid = update.effective_user.id if update.effective_user else None
         if uid and role_rank(await get_effective_role(uid)) >= role_rank("developer"):
             return await func(update, ctx)
@@ -173,10 +174,10 @@ def mod_only(func):
     return wrapper
 
 
-def basic_mod_only(func):
+def basic_mod_only(func: Callable) -> Callable:
     """Founder, Admin, Developer, Tester — for kick/mute/warn."""
     @functools.wraps(func)
-    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         uid = update.effective_user.id if update.effective_user else None
         if uid and role_rank(await get_effective_role(uid)) >= role_rank("tester"):
             return await func(update, ctx)

@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Role management — developer and tester roles stored in tc_roles collection."""
+## Role management — developer and tester roles stored in tc_roles collection
 from __future__ import annotations
 
 import asyncio

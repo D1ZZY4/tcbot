@@ -1,13 +1,12 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Centralized error reporter — classifies, formats, and ships errors to LOG_ERRORS.
-
-Three automatic coverage layers (no per-file changes needed):
-  1. TelegramErrorHandler on the root logger  → catches every log.error() / log.critical()
-  2. PTB application.add_error_handler()      → catches all unhandled handler exceptions
-  3. asyncio loop.set_exception_handler()     → catches background-task / create_task() failures
-"""
+## Centralized error reporter — classifies, formats, and ships errors to LOG_ERRORS
+##
+## Three automatic coverage layers (no per-file changes needed):
+##   1. TelegramErrorHandler on the root logger  → catches every log.error() / log.critical()
+##   2. PTB application.add_error_handler()      → catches all unhandled handler exceptions
+##   3. asyncio loop.set_exception_handler()     → catches background-task / create_task() failures
 from __future__ import annotations
 
 import asyncio
@@ -17,6 +16,8 @@ import sys
 import traceback
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
+
+import telegram.error as _te
 
 if TYPE_CHECKING:
     from telegram import Bot, Update
@@ -48,18 +49,14 @@ def _classify(exc: BaseException | None) -> tuple[str, str]:
 
     mod = type(exc).__module__ or ""
 
-    try:
-        import telegram.error as _te
-        if isinstance(exc, _te.RetryAfter):
-            return "[~] Rate Limit — Flood Wait", "rate_limit"
-        if isinstance(exc, _te.TimedOut):
-            return "[~] Rate Limit — Timed Out", "rate_limit"
-        if isinstance(exc, _te.NetworkError):
-            return "[~] Telegram Network Error", "network"
-        if isinstance(exc, _te.TelegramError):
-            return "[!] Telegram API Error", "telegram_api"
-    except ImportError:
-        pass
+    if isinstance(exc, _te.RetryAfter):
+        return "[~] Rate Limit — Flood Wait", "rate_limit"
+    if isinstance(exc, _te.TimedOut):
+        return "[~] Rate Limit — Timed Out", "rate_limit"
+    if isinstance(exc, _te.NetworkError):
+        return "[~] Telegram Network Error", "network"
+    if isinstance(exc, _te.TelegramError):
+        return "[!] Telegram API Error", "telegram_api"
 
     if any(x in mod for x in ("motor", "pymongo", "mongo")):
         return "[DB] Database Error", "database"

@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Kick log helpers."""
+## Kick log helpers
 from __future__ import annotations
 
 from datetime import datetime, timezone

@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Member cache collection – stores first_name, last_name, username per spec."""
+## Member cache collection – stores first_name, last_name, username per spec
 from __future__ import annotations
 
 from datetime import datetime, timezone

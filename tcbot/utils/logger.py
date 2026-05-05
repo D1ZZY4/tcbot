@@ -1,13 +1,12 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Logging setup for the TCF bot.
-
-Provides:
-  - BotLogFormatter  — human-readable console format
-  - TelegramErrorHandler — ships every ERROR/CRITICAL log record to LOG_ERRORS
-    automatically via the running asyncio event loop (no extra code needed anywhere)
-"""
+## Logging setup for the TCF bot
+##
+## Provides:
+##   - BotLogFormatter     — human-readable console format
+##   - TelegramErrorHandler — ships every ERROR/CRITICAL log record to LOG_ERRORS
+##     automatically via the running asyncio event loop (no extra code needed anywhere)
 from __future__ import annotations
 
 import asyncio

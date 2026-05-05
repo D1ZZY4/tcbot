@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Welcome / goodbye messages – only in MAIN_GROUP and EXEC_GROUP."""
+## Welcome / goodbye messages – only in MAIN_GROUP and EXEC_GROUP
 from __future__ import annotations
 
 import asyncio

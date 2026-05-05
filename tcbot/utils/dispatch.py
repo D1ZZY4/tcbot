@@ -1,20 +1,19 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Throttled multi-group dispatcher.
-
-fan_out(coros) — run many coroutines concurrently, bounded by a semaphore so
-the bot never fires more than MAX_CONCURRENT Telegram API calls simultaneously.
-
-Telegram's documented hard limits (per bot):
-  • 30 messages / second across all chats combined
-  • 1 message  / second per individual chat
-
-Capping at 10 concurrent calls keeps us well inside those ceilings even on
-large federations, while being orders of magnitude faster than a sequential
-loop.  All exceptions are captured in-place — a single failed group never
-blocks the rest.
-"""
+## Throttled multi-group dispatcher
+##
+## fan_out(coros) — run many coroutines concurrently, bounded by a semaphore so
+## the bot never fires more than MAX_CONCURRENT Telegram API calls simultaneously.
+##
+## Telegram's documented hard limits (per bot):
+##   • 30 messages / second across all chats combined
+##   • 1 message  / second per individual chat
+##
+## Capping at 10 concurrent calls keeps us well inside those ceilings even on
+## large federations, while being orders of magnitude faster than a sequential
+## loop. All exceptions are captured in-place — a single failed group never
+## blocks the rest.
 from __future__ import annotations
 
 import asyncio

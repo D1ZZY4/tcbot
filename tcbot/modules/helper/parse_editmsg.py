@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Safe message editing – silently swallows already-deleted / unchanged message errors."""
+## Safe message editing – silently swallows already-deleted / unchanged message errors
 from __future__ import annotations
 
 import logging

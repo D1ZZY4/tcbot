@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Entry point – initialise DB, register all module handlers, start polling."""
+## Entry point – initialise DB, register all module handlers, start polling
 from __future__ import annotations
 
 import asyncio
@@ -13,6 +13,9 @@ from telegram.ext import Application, ApplicationBuilder, ContextTypes, MessageH
 
 from tcbot import cfg
 from tcbot import database as db
+from tcbot.alive import start_keepalive
+from tcbot.database.admins_db import ensure_initial_owner
+from tcbot.database.mongos import connect
 from tcbot.modules import get_handlers
 from tcbot.modules.helper.decorators import global_rate_limit_handler
 from tcbot.utils import error_reporter
@@ -105,9 +108,6 @@ def _make_asyncio_exc_handler(loop: asyncio.AbstractEventLoop):
 ## ── post-init ────────────────────────────────────────────────────────────────
 
 async def _post_init(app: Application) -> None:
-    from tcbot.database.mongos import connect
-    from tcbot.database.admins_db import ensure_initial_owner
-
     await connect()
     await ensure_initial_owner(cfg.initial_owner_id)
 
@@ -128,7 +128,6 @@ def main() -> None:
     setup_logging(level=cfg.log_level)
     log.info("Starting %s bot...", cfg.community_name)
 
-    from tcbot.alive import start_keepalive
     start_keepalive()
 
     app: Application = (

@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""MongoDB connection manager – single client shared across the app."""
+## MongoDB connection manager – single client shared across the app
 from __future__ import annotations
 
 import logging
@@ -9,7 +9,7 @@ import os
 import secrets
 import string
 
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection, AsyncIOMotorDatabase
 
 from tcbot import cfg
 
@@ -55,5 +55,5 @@ async def connect() -> None:
     log.info("MongoDB connected → %s", cfg.db_name)
 
 
-def col(name: str):
+def col(name: str) -> AsyncIOMotorCollection:
     return db()[name]

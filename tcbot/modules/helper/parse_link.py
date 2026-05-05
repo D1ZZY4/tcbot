@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Link builders and HTML formatters for the TCF bot."""
+## Link builders and HTML formatters for the TCF bot
 from __future__ import annotations
 
 import html

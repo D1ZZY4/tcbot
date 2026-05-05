@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Federated groups and pending joins collection helpers."""
+## Federated groups and pending joins collection helpers
 from __future__ import annotations
 
 from datetime import datetime, timezone

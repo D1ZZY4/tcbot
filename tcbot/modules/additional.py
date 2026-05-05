@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Additional menu callback – official TCF links panel."""
+## Additional menu callback – official TCF links panel
 from __future__ import annotations
 
 import asyncio

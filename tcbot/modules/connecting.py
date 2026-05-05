@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Group connect – bot join/leave events and manual connect command."""
+## Group connect – bot join/leave events and manual connect command
 from __future__ import annotations
 
 import logging

@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Promotion request queue – collection: promotion_requests."""
+## Promotion request queue – collection: promotion_requests
 from __future__ import annotations
 
 from datetime import datetime, timezone

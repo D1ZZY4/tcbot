@@ -1,8 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Help command – content is collected dynamically from each module's
-__module_name__ and __help_text__ attributes."""
+## Help command – content is collected dynamically from each module's __module_name__ and __help_text__ attributes
 
 from __future__ import annotations
 

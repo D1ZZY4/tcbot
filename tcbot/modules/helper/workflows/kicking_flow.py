@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Kick executor — group-level user removal (ban + immediate unban)."""
+## Kick executor — group-level user removal (ban + immediate unban)
 from __future__ import annotations
 
 import asyncio

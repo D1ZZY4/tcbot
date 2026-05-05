@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Group kick command."""
+## Group kick command
 from __future__ import annotations
 
 from tcbot.modules.helper.workflows.kicking_conv import kick_conversation

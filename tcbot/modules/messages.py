@@ -1,11 +1,10 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Central message string namespace for the TCF bot.
-
-All user-facing strings are defined here so tests can snapshot them
-and accidental edits are caught immediately.
-"""
+## Central message string namespace for the TCF bot
+##
+## All user-facing strings are defined here so tests can snapshot them
+## and accidental edits are caught immediately.
 from __future__ import annotations
 
 

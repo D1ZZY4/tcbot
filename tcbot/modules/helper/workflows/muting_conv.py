@@ -1,23 +1,22 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Mute conversation workflow — reason + optional proof.
-
-Flow
-────
-1. /tcmute <target> [duration] [reason]
-   – target   : reply / user-id / @username
-   – duration : optional token matching  3s 5m 2h 7d 1w 3mo 2ye
-   – reason   : everything else in the message
-
-2. If reason was NOT given inline → WAITING_REASON
-     • user sends plain text  → stored as reason, continue
-     • Skip button pressed    → reason = "No reason provided", continue
-
-3. WAITING_PROOF (always reached)
-     • user sends photo/video → proof note stored, execute mute
-     • Skip button pressed    → execute mute without proof
-"""
+## Mute conversation workflow — reason + optional proof
+##
+## Flow
+## ────
+## 1. /tcmute <target> [duration] [reason]
+##    – target   : reply / user-id / @username
+##    – duration : optional token matching  3s 5m 2h 7d 1w 3mo 2ye
+##    – reason   : everything else in the message
+##
+## 2. If reason was NOT given inline → WAITING_REASON
+##      • user sends plain text  → stored as reason, continue
+##      • Skip button pressed    → reason = "No reason provided", continue
+##
+## 3. WAITING_PROOF (always reached)
+##      • user sends photo/video → proof note stored, execute mute
+##      • Skip button pressed    → execute mute without proof
 from __future__ import annotations
 
 import asyncio
