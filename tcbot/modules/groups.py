@@ -4,13 +4,12 @@
 ## Federation groups listing
 from __future__ import annotations
 
-import asyncio
-
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg, database as db
 from tcbot.modules.helper.formatter import code, esc
+from tcbot.modules.helper.parse_editmsg import safe_edit
 from tcbot.utils.prefixes import build_prefixed_filters
 
 __module_name__ = "Groups"
@@ -67,16 +66,12 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def _toggle(update: Update, ctx: ContextTypes.DEFAULT_TYPE, detailed: bool) -> None:
     q = update.callback_query
+    await q.answer()
     groups = ctx.user_data.get("groups_cache")
-    if groups:
-        await asyncio.gather(
-            q.answer(),
-            q.edit_message_text(_render(groups, detailed), parse_mode="HTML", reply_markup=_kb(detailed)),
-        )
-    else:
-        _, groups = await asyncio.gather(q.answer(), db.groups_db.active_groups())
+    if not groups:
+        groups = await db.groups_db.active_groups()
         ctx.user_data["groups_cache"] = groups
-        await q.edit_message_text(_render(groups, detailed), parse_mode="HTML", reply_markup=_kb(detailed))
+    await safe_edit(q.message, _render(groups, detailed), reply_markup=_kb(detailed))
 
 
 async def on_groups_details(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

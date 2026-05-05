@@ -64,12 +64,11 @@ async def cmd_mute_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     raw_args = parse_cmd_args(msg.text)
 
-    if msg.reply_to_message:
-        target_id, target_fname = await extraction.extract_target(update, [], ctx.bot)
-        remaining_args = list(raw_args)
-    else:
-        target_id, target_fname = await extraction.extract_target(update, raw_args, ctx.bot)
-        remaining_args = list(raw_args[1:]) if raw_args else []
+    has_explicit_target = bool(raw_args) and (
+        raw_args[0].lstrip("-").isdigit() or raw_args[0].startswith("@")
+    )
+    target_id, target_fname = await extraction.extract_target(update, raw_args, ctx.bot)
+    remaining_args = list(raw_args[1:] if has_explicit_target else raw_args)
 
     if not target_id:
         await msg.reply_text("Cannot resolve target. Reply to a message or provide a user ID.")

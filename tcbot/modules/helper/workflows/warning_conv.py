@@ -87,12 +87,11 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     args = parse_cmd_args(msg.text)
 
-    if msg.reply_to_message:
-        target_id, target_name = await extraction.extract_target(update, [], ctx.bot)
-        inline_reason = " ".join(args).strip()
-    else:
-        target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
-        inline_reason = " ".join(args[1:]).strip()
+    has_explicit_target = bool(args) and (
+        args[0].lstrip("-").isdigit() or args[0].startswith("@")
+    )
+    target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
+    inline_reason = " ".join(args[1:] if has_explicit_target else args).strip()
 
     if not target_id:
         await msg.reply_text(

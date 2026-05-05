@@ -56,17 +56,18 @@ async def extract_target(
     args: list[str],
     bot: Bot | None = None,
 ) -> tuple[int, str] | tuple[None, None]:
-    """Return (user_id, first_name) resolved from reply, entity, or args.
+    """Return (user_id, first_name) resolved from args, reply, entity, or mention.
 
-    Passes args[0] to bot.get_chat() if bot is provided (handles numeric IDs
-    and usernames). Returns (None, None) if no valid target can be resolved.
+    Resolution order (explicit args always win over reply):
+    1. Numeric ID or @username in args[0] — highest priority.
+    2. Reply-to-message sender — only when no explicit arg was given.
+    3. text_mention entity in the message.
+    4. @mention entity resolved via bot.get_chat().
+    Returns (None, None) if no valid target can be resolved.
     """
     msg: Message = update.effective_message
 
-    if msg.reply_to_message and msg.reply_to_message.from_user:
-        u: User = msg.reply_to_message.from_user
-        return u.id, u.first_name
-
+    ## Explicit numeric ID or @username always takes priority over reply
     if args:
         arg = args[0].lstrip("@")
         if arg.lstrip("-").isdigit():
@@ -84,6 +85,11 @@ async def extract_target(
                 return chat.id, chat.first_name or arg
             except Exception as exc:
                 log.debug("Username lookup failed for @%s: %s", arg, exc)
+
+    ## Fall back to reply target only when no explicit arg resolved above
+    if msg.reply_to_message and msg.reply_to_message.from_user:
+        u: User = msg.reply_to_message.from_user
+        return u.id, u.first_name
 
     for ent in msg.entities or []:
         if ent.type == "text_mention" and ent.user:

@@ -212,12 +212,12 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     args = parse_cmd_args(msg.text)
 
-    if msg.reply_to_message:
-        target_id, target_fname = await extraction.extract_target(update, [], ctx.bot)
-        role_arg = args[0].lower() if args else ""
-    else:
-        target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
-        role_arg = args[1].lower() if len(args) > 1 else ""
+    has_explicit_target = bool(args) and (
+        args[0].lstrip("-").isdigit() or args[0].startswith("@")
+    )
+    target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
+    remaining_args = args[1:] if has_explicit_target else args
+    role_arg = remaining_args[0].lower() if remaining_args else ""
 
     if not target_id:
         await msg.reply_text(
