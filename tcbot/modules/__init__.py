@@ -58,7 +58,7 @@ __all__ = ALL_MODULES + ["ALL_MODULES"]
 
 ## ── Handler discovery ──────────────────────────────────────────────────────
 
-## ConversationHandlers and affiliation must be registered first
+## ConversationHandlers and connection handlers must be registered first
 _PRIORITY_FIRST = ["connecting", "admins", "appeals", "banning", "muting", "kicking", "warnings"]
 ## Greeting and start last to avoid filter shadowing
 _PRIORITY_LAST = ["about", "privacy", "start", "greeting"]

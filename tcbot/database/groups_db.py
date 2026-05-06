@@ -10,7 +10,7 @@ from tcbot.database.cache import (
     CACHE_MISS,
     _ALL_GROUPS_KEY,
     active_groups_cache,
-    affiliated_cache,
+    connected_cache,
 )
 from tcbot.database.mongos import col
 
@@ -27,15 +27,15 @@ async def get_group(chat_id: int) -> dict | None:
     return await _groups().find_one({"chat_id": chat_id})
 
 
-async def is_affiliated(chat_id: int) -> bool:
-    cached = affiliated_cache.get(chat_id)
+async def is_connected(chat_id: int) -> bool:
+    cached = connected_cache.get(chat_id)
     if cached is not CACHE_MISS:
         return cached  # type: ignore[return-value]
     result = (
         await _groups().find_one({"chat_id": chat_id, "is_active": True}, {"_id": 1})
         is not None
     )
-    affiliated_cache.put(chat_id, result)
+    connected_cache.put(chat_id, result)
     return result
 
 
@@ -51,13 +51,13 @@ async def add_group(chat_id: int, title: str, added_by: int) -> None:
         }},
         upsert=True,
     )
-    affiliated_cache.put(chat_id, True)
+    connected_cache.put(chat_id, True)
     active_groups_cache.clear()
 
 
 async def deactivate_group(chat_id: int) -> bool:
     r = await _groups().update_one({"chat_id": chat_id}, {"$set": {"is_active": False}})
-    affiliated_cache.put(chat_id, False)
+    connected_cache.put(chat_id, False)
     active_groups_cache.clear()
     return r.matched_count > 0
 

@@ -28,7 +28,7 @@ log = logging.getLogger(__name__)
 ## ── member cache ───────────────────────────────────────────────────────────
 
 async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Cache sender's info on every message sent in any affiliated group."""
+    """Cache sender's info on every message sent in any connected group."""
     chat = update.effective_chat
     user = update.effective_user
 
@@ -37,7 +37,7 @@ async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     if not chat or chat.type not in ("group", "supergroup"):
         return
 
-    if not await db.groups_db.is_affiliated(chat.id):
+    if not await db.groups_db.is_connected(chat.id):
         return
 
     try:

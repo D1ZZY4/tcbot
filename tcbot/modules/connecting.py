@@ -65,7 +65,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    if await db.groups_db.is_affiliated(chat.id):
+    if await db.groups_db.is_connected(chat.id):
         await update.effective_message.reply_text(f"This group is already connected to {cfg.community_name}.")
         return
 

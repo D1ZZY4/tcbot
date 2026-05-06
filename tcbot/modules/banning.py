@@ -42,7 +42,7 @@ __help_text__ = (
     "Reply to a message, or provide a user ID / @username.\n\n"
 
     "<b>Examples</b>\n"
-    "<code>/tcban @username spamming affiliate links</code>\n"
+    "<code>/tcban @username spamming in connected groups</code>\n"
     "<code>/tcban 123456789 scamming members</code>\n"
     "Or reply to a message, then: <code>/tcb reason here</code>"
 )

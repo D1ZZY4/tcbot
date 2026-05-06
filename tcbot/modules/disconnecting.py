@@ -52,7 +52,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         await update.effective_message.reply_text("Use this command in a group.")
         return
 
-    if not await db.groups_db.is_affiliated(chat.id):
+    if not await db.groups_db.is_connected(chat.id):
         await update.effective_message.reply_text(
             f"This group is not connected to {cfg.community_name}."
         )

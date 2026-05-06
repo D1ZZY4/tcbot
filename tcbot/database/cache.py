@@ -73,9 +73,9 @@ class TTLCache:
 ## Populated by roles_db.get_effective_role; invalidated on every role write.
 effective_role_cache: TTLCache = TTLCache(ttl=60.0)
 
-## 120-second per-chat affiliation cache (bool per chat_id).
-## Populated by groups_db.is_affiliated; invalidated on add/deactivate.
-affiliated_cache: TTLCache = TTLCache(ttl=120.0)
+## 120-second per-chat connection cache (bool per chat_id).
+## Populated by groups_db.is_connected; invalidated on add/deactivate.
+connected_cache: TTLCache = TTLCache(ttl=120.0)
 
 ## 30-second whole-list active-groups cache (list[dict], single entry).
 ## Populated by groups_db.active_groups; invalidated on add/deactivate.
