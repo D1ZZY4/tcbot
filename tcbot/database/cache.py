@@ -82,3 +82,9 @@ connected_cache: TTLCache = TTLCache(ttl=120.0)
 active_groups_cache: TTLCache = TTLCache(ttl=30.0)
 
 _ALL_GROUPS_KEY: str = "__all__"
+
+## 300-second owner-ID cache (single int entry — ownership transfers are very rare).
+## Populated by admins_db.get_owner_id; invalidated on set_owner / ensure_initial_owner.
+owner_id_cache: TTLCache = TTLCache(ttl=300.0)
+
+_OWNER_KEY: str = "__owner__"

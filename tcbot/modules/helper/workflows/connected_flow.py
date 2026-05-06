@@ -28,21 +28,23 @@ def _check_bot_perms(member) -> bool:
 
 async def _complete_join(chat_id: int, chat_title: str, owner_id: int, owner_fname: str, bot) -> None:
     """Connect the group, apply all active bans, and notify LOG_CHANNEL."""
-    chat_username: str | None = None
-    try:
-        chat_info = await bot.get_chat(chat_id)
-        chat_username = chat_info.username
-    except Exception:
-        pass
-
-    await db.groups_db.add_group(chat_id, chat_title, owner_id)
-    await db.groups_db.remove_pending(chat_id)
+    ## Fetch chat info + active ban IDs + register group + clear pending — all in parallel
+    chat_result, ban_uids, *_ = await asyncio.gather(
+        bot.get_chat(chat_id),
+        db.bans_db.active_ban_user_ids(),
+        db.groups_db.add_group(chat_id, chat_title, owner_id),
+        db.groups_db.remove_pending(chat_id),
+        return_exceptions=True,
+    )
+    chat_username: str | None = (
+        getattr(chat_result, "username", None)
+        if not isinstance(chat_result, BaseException) else None
+    )
+    if isinstance(ban_uids, BaseException):
+        ban_uids = []
 
     ## Apply all existing federation bans concurrently — semaphore-bounded
-    bans    = await db.bans_db.active_bans()
-    results = await fan_out(
-        [bot.ban_chat_member(chat_id, ban["banned_user_id"]) for ban in bans]
-    )
+    results = await fan_out([bot.ban_chat_member(chat_id, uid) for uid in ban_uids])
     applied = sum(1 for r in results if not isinstance(r, BaseException))
 
     lc, lt = cfg.logs

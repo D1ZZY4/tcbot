@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
 
-from tcbot.database.cache import effective_role_cache
+from tcbot.database.cache import CACHE_MISS, _OWNER_KEY, effective_role_cache, owner_id_cache
 from tcbot.database.mongos import col
 
 
@@ -20,8 +20,13 @@ def _admins():
 
 
 async def get_owner_id() -> int | None:
-    doc = await _owners().find_one({})
-    return doc["user_id"] if doc else None
+    cached = owner_id_cache.get(_OWNER_KEY)
+    if cached is not CACHE_MISS:
+        return cached  # type: ignore[return-value]
+    doc = await _owners().find_one({}, {"_id": 0, "user_id": 1})
+    result = doc["user_id"] if doc else None
+    owner_id_cache.put(_OWNER_KEY, result)
+    return result
 
 
 async def is_owner(user_id: int) -> bool:
@@ -41,11 +46,13 @@ async def is_staff(user_id: int) -> bool:
 async def ensure_initial_owner(initial_id: int) -> None:
     if await _owners().count_documents({}) == 0:
         await _owners().insert_one({"user_id": initial_id})
+        owner_id_cache.put(_OWNER_KEY, initial_id)
 
 
 async def set_owner(user_id: int) -> None:
     await _owners().delete_many({})
     await _owners().insert_one({"user_id": user_id})
+    owner_id_cache.put(_OWNER_KEY, user_id)
     ## Clear the entire role cache — we don't know the old owner's user_id
     effective_role_cache.clear()
 
@@ -70,7 +77,7 @@ async def remove_admin(user_id: int) -> bool:
 
 
 async def all_admins() -> list[dict]:
-    return await _admins().find({}).to_list(None)
+    return await _admins().find({}, {"_id": 0, "user_id": 1}).to_list(None)
 
 
 async def admin_count() -> int:

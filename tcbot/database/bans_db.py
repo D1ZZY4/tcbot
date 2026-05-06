@@ -127,3 +127,11 @@ async def active_ban_count() -> int:
 
 async def active_bans() -> list[dict]:
     return await _bans().find({"is_active": True}).to_list(None)
+
+
+async def active_ban_user_ids() -> list[int]:
+    """Return only the user IDs of all active bans (projection-only, fastest path)."""
+    docs = await _bans().find(
+        {"is_active": True}, {"_id": 0, "banned_user_id": 1}
+    ).to_list(None)
+    return [doc["banned_user_id"] for doc in docs]

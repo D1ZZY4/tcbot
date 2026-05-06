@@ -65,7 +65,7 @@ async def get_role(user_id: int) -> str | None:
 
 
 async def all_by_role(role: str) -> list[dict]:
-    return await _col().find({"role": role}).to_list(None)
+    return await _col().find({"role": role}, {"_id": 0, "user_id": 1}).to_list(None)
 
 
 async def all_roles() -> list[dict]:
