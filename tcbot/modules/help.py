@@ -58,6 +58,14 @@ HELP_TOPICS_CMD: list[tuple[str, str]] = [
 ]
 
 
+## ── Prefix note ────────────────────────────────────────────────────────────
+
+def _prefix_note() -> str:
+    """Return an HTML footer listing every configured command prefix."""
+    codes = " ".join(f"<code>{p}</code>" for p in cfg.prefixes)
+    return f"ℹ️ <b>Prefixes:</b> All commands also work with {codes}"
+
+
 ## ── Shared text ────────────────────────────────────────────────────────────
 
 _HELP_INDEX_TEXT = (
@@ -138,7 +146,7 @@ async def on_help_topic(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(
-            f"<b>Help for {name}</b>\n\n{text}",
+            f"<b>Help for {name}</b>\n\n{text}\n{_prefix_note()}",
             parse_mode="HTML",
             reply_markup=keyboards.back_to_help_kb(),
         ),
@@ -161,7 +169,7 @@ async def on_help_topic_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(
-            f"<b>Help for {name}</b>\n\n{text}",
+            f"<b>Help for {name}</b>\n\n{text}\n{_prefix_note()}",
             parse_mode="HTML",
             reply_markup=keyboards.back_to_help_cmd_kb(),
         ),
