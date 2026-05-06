@@ -48,7 +48,7 @@ __help_text__ = (
 )
 
 
-## ── Entry point ──────────────────────────────────────────────────────────────
+## ── Entry point ────────────────────────────────────────────────────────────
 
 async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     msg      = update.effective_message

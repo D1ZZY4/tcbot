@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-## ── module-level state (set once in _post_init via attach()) ─────────────────
+## ── module-level state (set once in _post_init via attach()) ───────────────
 
 _bot:       "Bot | None" = None
 _chat_id:   int          = 0
@@ -40,7 +40,7 @@ def attach(bot: "Bot", chat_id: int, thread_id: int | None) -> None:
     _thread_id = thread_id
 
 
-## ── error classification ─────────────────────────────────────────────────────
+## ── error classification ───────────────────────────────────────────────────
 
 def _classify(exc: BaseException | None) -> tuple[str, str]:
     """Return (display_label, slug) describing the error source."""
@@ -76,7 +76,7 @@ def _classify(exc: BaseException | None) -> tuple[str, str]:
     return "[!] Code Bug", "code_bug"
 
 
-## ── message formatter ────────────────────────────────────────────────────────
+## ── message formatter ──────────────────────────────────────────────────────
 
 _MAX_TB   = 3000
 _MAX_MSG  = 500
@@ -167,7 +167,7 @@ def build_error_message(
     )
 
 
-## ── low-level send ───────────────────────────────────────────────────────────
+## ── low-level send ─────────────────────────────────────────────────────────
 
 async def send_to_log_errors(text: str) -> None:
     """Fire-and-forget send to the LOG_ERRORS channel. Never raises."""
@@ -185,7 +185,7 @@ async def send_to_log_errors(text: str) -> None:
         print(f"[error_reporter] Failed to ship error to Telegram: {exc}", file=sys.stderr)
 
 
-## ── convenience wrappers ─────────────────────────────────────────────────────
+## ── convenience wrappers ───────────────────────────────────────────────────
 
 async def report_exc(
     exc:     BaseException,

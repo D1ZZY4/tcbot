@@ -20,8 +20,7 @@ from tcbot.utils.prefixes import build_prefixed_filters
 log = logging.getLogger(__name__)
 
 
-## ── Build help content ───────────────────────────────────────────────────────
-
+## ── Build help content ─────────────────────────────────────────────────────
 
 def _build_help_content() -> dict[str, tuple[str, str]]:
     """
@@ -59,8 +58,7 @@ HELP_TOPICS_CMD: list[tuple[str, str]] = [
 ]
 
 
-## ── Shared text ──────────────────────────────────────────────────────────────
-
+## ── Shared text ────────────────────────────────────────────────────────────
 
 _HELP_INDEX_TEXT = (
     "<b>{bot_name} Help</b>\n"
@@ -69,8 +67,7 @@ _HELP_INDEX_TEXT = (
 )
 
 
-## ── Shared rendering helper ──────────────────────────────────────────────────
-
+## ── Shared rendering helper ────────────────────────────────────────────────
 
 async def _render_help_index(
     update: Update,
@@ -92,8 +89,7 @@ async def _render_help_index(
     )
 
 
-## ── /help command ────────────────────────────────────────────────────────────
-
+## ── /help command ──────────────────────────────────────────────────────────
 
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     bot_name = ctx.bot.first_name or "TC Bot"
@@ -104,15 +100,13 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-## ── Help from menu ───────────────────────────────────────────────────────────
-
+## ── Help from menu ─────────────────────────────────────────────────────────
 
 async def on_menu_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _render_help_index(update, ctx, with_back_to_start=True)
 
 
-## ── Help in group ────────────────────────────────────────────────────────────
-
+## ── Help in group ──────────────────────────────────────────────────────────
 
 async def on_menu_help_group(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Help tapped from group /start inline — answer with alert, no edit."""
@@ -123,15 +117,13 @@ async def on_menu_help_group(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     )
 
 
-## ── Help index callback ──────────────────────────────────────────────────────
-
+## ── Help index callback ────────────────────────────────────────────────────
 
 async def on_helpcmd_idx(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _render_help_index(update, ctx, with_back_to_start=False)
 
 
-## ── Help topic — menu path ───────────────────────────────────────────────────
-
+## ── Help topic — menu path ─────────────────────────────────────────────────
 
 async def on_help_topic(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q: CallbackQuery = update.callback_query
@@ -153,8 +145,7 @@ async def on_help_topic(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-## ── Help topic — command path ────────────────────────────────────────────────
-
+## ── Help topic — command path ──────────────────────────────────────────────
 
 async def on_help_topic_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q: CallbackQuery = update.callback_query
@@ -177,8 +168,7 @@ async def on_help_topic_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     )
 
 
-## ── Handler list ─────────────────────────────────────────────────────────────
-
+## ── Handler list ───────────────────────────────────────────────────────────
 
 _HELP_FILTER = build_prefixed_filters("help") | build_prefixed_filters("commands")
 

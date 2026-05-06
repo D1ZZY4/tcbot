@@ -10,7 +10,7 @@ from tcbot.modules.helper.formatter import BRAND, link, mention
 from tcbot.utils.timedate_format import fmt_dt, utc_now
 
 
-## ── Ban logs ─────────────────────────────────────────────────────────────────
+## ── Ban logs ───────────────────────────────────────────────────────────────
 
 def ban_log(
     target_id: int,
@@ -70,7 +70,7 @@ def ban_update_log(
     )
 
 
-## ── Proof captions ───────────────────────────────────────────────────────────
+## ── Proof captions ─────────────────────────────────────────────────────────
 
 def proof_caption_new(
     target_id: int,
@@ -107,7 +107,7 @@ def proof_caption_update(
     )
 
 
-## ── Unban log ────────────────────────────────────────────────────────────────
+## ── Unban log ──────────────────────────────────────────────────────────────
 
 def unban_log(
     target_id: int,
@@ -130,7 +130,7 @@ def unban_log(
     )
 
 
-## ── Appeal logs ──────────────────────────────────────────────────────────────
+## ── Appeal logs ────────────────────────────────────────────────────────────
 
 def appeal_received_log(
     target_id: int,
@@ -239,7 +239,7 @@ def appeal_unban_log(
     )
 
 
-## ── Admin management logs ────────────────────────────────────────────────────
+## ── Admin management logs ──────────────────────────────────────────────────
 
 def admin_promoted(
     target_id: int,
@@ -352,7 +352,7 @@ def promo_rejected_log(
     )
 
 
-## ── Group affiliation logs ───────────────────────────────────────────────────
+## ── Group affiliation logs ─────────────────────────────────────────────────
 
 def group_connected_log(
     chat_id: int,
@@ -445,8 +445,7 @@ def broadcast_log(
     )
 
 
-## ── Role management logs ─────────────────────────────────────────────────────
-
+## ── Role management logs ───────────────────────────────────────────────────
 
 def role_assigned(
     target_id: int,

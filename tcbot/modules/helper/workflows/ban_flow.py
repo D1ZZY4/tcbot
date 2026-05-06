@@ -36,7 +36,7 @@ _albums: dict[str, list[Message]] = {}
 _album_meta: dict[str, dict[str, Any]] = {}
 
 
-## ── Proof received ───────────────────────────────────────────────────────────
+## ── Proof received ─────────────────────────────────────────────────────────
 
 async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     msg = update.effective_message
@@ -68,7 +68,7 @@ async def _flush_album(mgid: str, bot: Bot) -> None:
     await _execute_ban(bot, msgs, meta)
 
 
-## ── Cancel callback ──────────────────────────────────────────────────────────
+## ── Cancel callback ────────────────────────────────────────────────────────
 
 async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     q = update.callback_query
@@ -77,7 +77,7 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
     return ConversationHandler.END
 
 
-## ── Core ban execution ───────────────────────────────────────────────────────
+## ── Core ban execution ─────────────────────────────────────────────────────
 
 async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict) -> None:
     target_id: int    = meta.get("ban_target_id")
@@ -264,7 +264,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict) -> None:
         await db.users_db.upsert_user(target_id, None, target_fname)
 
 
-## ── Timeout fallback ─────────────────────────────────────────────────────────
+## ── Timeout fallback ───────────────────────────────────────────────────────
 
 async def on_ban_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if update.effective_message:
@@ -274,7 +274,7 @@ async def on_ban_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
-## ── Handler factory ──────────────────────────────────────────────────────────
+## ── Handler factory ────────────────────────────────────────────────────────
 
 def build_handler(entry_fn) -> ConversationHandler:
     entry = (

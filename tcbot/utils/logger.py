@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from tcbot import cfg
 
 
-## ── console formatter ────────────────────────────────────────────────────────
+## ── console formatter ──────────────────────────────────────────────────────
 
 class BotLogFormatter(logging.Formatter):
     """
@@ -49,7 +49,7 @@ class BotLogFormatter(logging.Formatter):
         )
 
 
-## ── Telegram error handler ───────────────────────────────────────────────────
+## ── Telegram error handler ─────────────────────────────────────────────────
 
 ## Logger names whose ERROR records we intentionally suppress from Telegram
 ## (they are usually network noise, not actionable bugs).
@@ -86,7 +86,7 @@ class TelegramErrorHandler(logging.Handler):
         loop.create_task(error_reporter.report_record(record))
 
 
-## ── setup ────────────────────────────────────────────────────────────────────
+## ── setup ──────────────────────────────────────────────────────────────────
 
 def setup(level: int = logging.INFO) -> None:
     formatter    = BotLogFormatter(cfg.community_name)

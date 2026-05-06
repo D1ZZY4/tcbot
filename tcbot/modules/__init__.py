@@ -56,7 +56,7 @@ log.info("Modules to load: %s", ALL_MODULES)
 __all__ = ALL_MODULES + ["ALL_MODULES"]
 
 
-## ── Handler discovery ────────────────────────────────────────────────────────
+## ── Handler discovery ──────────────────────────────────────────────────────
 
 ## ConversationHandlers and affiliation must be registered first
 _PRIORITY_FIRST = ["connecting", "admins", "appeals", "banning", "muting", "kicking", "warnings"]

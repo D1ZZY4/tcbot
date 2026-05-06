@@ -25,7 +25,7 @@ from tcbot.utils.logger import setup as setup_logging
 log = logging.getLogger(__name__)
 
 
-## ── member cache ─────────────────────────────────────────────────────────────
+## ── member cache ───────────────────────────────────────────────────────────
 
 async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Cache sender's info on every message sent in any affiliated group."""
@@ -46,7 +46,7 @@ async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         log.debug("Member cache update failed for %d: %s", user.id, exc)
 
 
-## ── PTB error handler (Layer 2) ──────────────────────────────────────────────
+## ── PTB error handler (Layer 2) ────────────────────────────────────────────
 
 async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Catch every unhandled exception from any PTB handler and ship it to LOG_ERRORS."""
@@ -81,7 +81,7 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await error_reporter.report_exc(exc, context=context_str)
 
 
-## ── asyncio exception handler (Layer 3) ─────────────────────────────────────
+## ── asyncio exception handler (Layer 3) ────────────────────────────────────
 
 def _make_asyncio_exc_handler(loop: asyncio.AbstractEventLoop):
     """Return a synchronous asyncio exception handler that schedules a Telegram report."""
@@ -105,7 +105,7 @@ def _make_asyncio_exc_handler(loop: asyncio.AbstractEventLoop):
     return handler
 
 
-## ── post-init ────────────────────────────────────────────────────────────────
+## ── post-init ──────────────────────────────────────────────────────────────
 
 async def _post_init(app: Application) -> None:
     await connect()
@@ -122,7 +122,7 @@ async def _post_init(app: Application) -> None:
     log.info("Bot initialised. Owner: %d | LOG_ERRORS: %d", cfg.initial_owner_id, lec)
 
 
-## ── entry point ──────────────────────────────────────────────────────────────
+## ── entry point ────────────────────────────────────────────────────────────
 
 def main() -> None:
     setup_logging(level=cfg.log_level)

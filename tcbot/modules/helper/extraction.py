@@ -15,8 +15,7 @@ from tcbot.database import users_db
 log = logging.getLogger(__name__)
 
 
-## ── Target resolution ────────────────────────────────────────────────────────
-
+## ── Target resolution ──────────────────────────────────────────────────────
 
 @dataclass
 class ResolvedTarget:
@@ -107,8 +106,7 @@ async def extract_target(
     return None, None
 
 
-## ── Identity resolution ──────────────────────────────────────────────────────
-
+## ── Identity resolution ────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class UserIdentity:

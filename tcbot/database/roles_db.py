@@ -69,7 +69,7 @@ async def all_roles() -> list[dict]:
     return await _col().find({}).to_list(None)
 
 
-## ── Role resolution helpers ──────────────────────────────────────────────────
+## ── Role resolution helpers ────────────────────────────────────────────────
 
 async def can_act_on(executor_id: int, target_id: int) -> bool:
     """Return True if the executor outranks the target and may act against them."""

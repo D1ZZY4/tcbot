@@ -55,7 +55,7 @@ _KB_PROOF = InlineKeyboardMarkup([[
 ]])
 
 
-## ── Helpers ──────────────────────────────────────────────────────────────────
+## ── Helpers ────────────────────────────────────────────────────────────────
 
 def _clear(ctx: ContextTypes.DEFAULT_TYPE) -> None:
     for k in ("kick_target_id", "kick_target_name", "kick_reason", "kick_proof_desc"):
@@ -72,7 +72,7 @@ async def _do_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
-## ── Entry point ──────────────────────────────────────────────────────────────
+## ── Entry point ────────────────────────────────────────────────────────────
 
 async def cmd_kick_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     msg   = update.effective_message
@@ -151,7 +151,7 @@ async def cmd_kick_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return WAITING_REASON
 
 
-## ── WAITING_REASON handlers ──────────────────────────────────────────────────
+## ── WAITING_REASON handlers ────────────────────────────────────────────────
 
 async def on_kick_reason(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ctx.user_data["kick_reason"] = update.effective_message.text.strip()
@@ -177,7 +177,7 @@ async def on_kick_skip_reason(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     return WAITING_PROOF
 
 
-## ── WAITING_PROOF handlers ───────────────────────────────────────────────────
+## ── WAITING_PROOF handlers ─────────────────────────────────────────────────
 
 async def on_kick_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     msg = update.effective_message
@@ -201,7 +201,7 @@ async def on_kick_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
-## ── ConversationHandler factory ──────────────────────────────────────────────
+## ── ConversationHandler factory ────────────────────────────────────────────
 
 _KICK_FILTER = build_prefixed_filters("tckick") | build_prefixed_filters("tck")
 

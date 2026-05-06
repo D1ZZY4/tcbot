@@ -33,7 +33,7 @@ _GROUP_START_TEXT = (
 )
 
 
-## ── /start command ──────────────────────────────────────────────────────────
+## ── /start command ─────────────────────────────────────────────────────────
 
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg      = update.effective_message
@@ -69,7 +69,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-## ── Menu callbacks ───────────────────────────────────────────────────────────
+## ── Menu callbacks ─────────────────────────────────────────────────────────
 
 async def on_menu_back_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q: CallbackQuery = update.callback_query
@@ -126,7 +126,7 @@ async def on_menu_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) 
     )
 
 
-## ── Handler list ─────────────────────────────────────────────────────────────
+## ── Handler list ───────────────────────────────────────────────────────────
 
 _START_FILTER = build_prefixed_filters("start")
 

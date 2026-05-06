@@ -53,7 +53,7 @@ _KB_PROOF = InlineKeyboardMarkup([[
 ]])
 
 
-## ── Helpers ──────────────────────────────────────────────────────────────────
+## ── Helpers ────────────────────────────────────────────────────────────────
 
 def _clear(ctx: ContextTypes.DEFAULT_TYPE) -> None:
     for k in ("warn_target_id", "warn_target_name", "warn_reason", "warn_proof_desc"):
@@ -70,7 +70,7 @@ async def _do_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
-## ── Entry point ──────────────────────────────────────────────────────────────
+## ── Entry point ────────────────────────────────────────────────────────────
 
 async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     msg   = update.effective_message
@@ -144,7 +144,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return WAITING_REASON
 
 
-## ── WAITING_REASON handlers ──────────────────────────────────────────────────
+## ── WAITING_REASON handlers ────────────────────────────────────────────────
 
 async def on_warn_reason(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ctx.user_data["warn_reason"] = update.effective_message.text.strip()
@@ -157,7 +157,7 @@ async def on_warn_reason(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return WAITING_PROOF
 
 
-## ── WAITING_PROOF handlers ───────────────────────────────────────────────────
+## ── WAITING_PROOF handlers ─────────────────────────────────────────────────
 
 async def on_warn_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     msg = update.effective_message
@@ -182,7 +182,7 @@ async def on_warn_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
-## ── ConversationHandler factory ──────────────────────────────────────────────
+## ── ConversationHandler factory ────────────────────────────────────────────
 
 _WARN_FILTER = build_prefixed_filters("tcwarn") | build_prefixed_filters("tcw")
 

@@ -19,8 +19,7 @@ from tcbot.modules.helper.workflows.appeal_flow import build_handler, on_appeal_
 _LOCK_WINDOW = timedelta(hours=12)
 
 
-## ── Pure guard functions ─────────────────────────────────────────────────────
-
+## ── Pure guard functions ───────────────────────────────────────────────────
 
 def starts_with_appeal_tag(text: str) -> bool:
     """Return True when text (stripped) starts with #appeal (case-insensitive)."""
@@ -59,7 +58,7 @@ def now() -> datetime:
     return utcnow()
 
 
-## ── PTB module registration ──────────────────────────────────────────────────
+## ── PTB module registration ────────────────────────────────────────────────
 
 __module_name__ = "Appeal"
 
