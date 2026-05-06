@@ -82,13 +82,10 @@ def _ban_detail_kb(page: int, proof_link: str | None = None) -> InlineKeyboardMa
     return InlineKeyboardMarkup(rows)
 
 
-## ── Bans list handlers ─────────────────────────────────────────────────────
+## ── Shared bans-page renderer ──────────────────────────────────────────────
 
-async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    q    = update.callback_query
-    _clear_search(ctx)
-    page = int(q.data.split(":")[1])
-
+async def _render_bans_page(q, page: int) -> None:
+    """Fetch active bans and render the numbered page — answers q in parallel."""
     _, bans = await asyncio.gather(q.answer(), db.bans_db.active_bans())
     total       = len(bans)
     total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
@@ -96,17 +93,26 @@ async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     chunk       = bans[page * _PAGE_SIZE: (page + 1) * _PAGE_SIZE]
 
     uids   = [ban["banned_user_id"] for ban in chunk]
-    fnames = await asyncio.gather(*[db.users_db.get_first_name(uid, str(uid)) for uid in uids])
+    fnames = list(
+        await asyncio.gather(*[db.users_db.get_first_name(uid, str(uid)) for uid in uids])
+    ) if uids else []
 
     lines = [f"<b>User Bans ({total})</b>\n"]
     for i, (ban, fname) in enumerate(zip(chunk, fnames), start=1):
-        uid = ban["banned_user_id"]
-        lines.append(f"{page * _PAGE_SIZE + i}. {esc(fname)} — {code(str(uid))}")
+        lines.append(f"{page * _PAGE_SIZE + i}. {esc(fname)} — {code(str(ban['banned_user_id']))}")
 
     await q.edit_message_text(
         "\n".join(lines), parse_mode="HTML",
         reply_markup=_bans_list_kb(page, total, len(chunk)),
     )
+
+
+## ── Bans list handlers ─────────────────────────────────────────────────────
+
+async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    _clear_search(ctx)
+    await _render_bans_page(q, int(q.data.split(":")[1]))
 
 
 async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -253,23 +259,7 @@ async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
 async def on_stats_search_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     _clear_search(ctx)
-
-    _, bans = await asyncio.gather(q.answer(), db.bans_db.active_bans())
-    total  = len(bans)
-    chunk  = bans[:_PAGE_SIZE]
-
-    uids   = [ban["banned_user_id"] for ban in chunk]
-    fnames = await asyncio.gather(*[db.users_db.get_first_name(uid, str(uid)) for uid in uids])
-
-    lines = [f"<b>User Bans ({total})</b>\n"]
-    for i, (ban, fname) in enumerate(zip(chunk, fnames), start=1):
-        uid = ban["banned_user_id"]
-        lines.append(f"{i}. {esc(fname)} — {code(str(uid))}")
-
-    await q.edit_message_text(
-        "\n".join(lines), parse_mode="HTML",
-        reply_markup=_bans_list_kb(0, total, len(chunk)),
-    )
+    await _render_bans_page(q, 0)
 
 
 handlers = [

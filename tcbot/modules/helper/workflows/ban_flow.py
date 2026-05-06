@@ -72,8 +72,10 @@ async def _flush_album(mgid: str, bot: Bot) -> None:
 
 async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     q = update.callback_query
-    await q.answer()
-    await q.edit_message_text("Cancelled. No ban was issued.")
+    await asyncio.gather(
+        q.answer(),
+        q.edit_message_text("Cancelled. No ban was issued."),
+    )
     return ConversationHandler.END
 
 

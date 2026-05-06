@@ -203,8 +203,10 @@ async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
 
 async def on_skip_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     q = update.callback_query
-    await q.answer()
-    await _execute_mute(ctx.bot, update, ctx.user_data)
+    await asyncio.gather(
+        q.answer(),
+        _execute_mute(ctx.bot, update, ctx.user_data),
+    )
     return ConversationHandler.END
 
 
@@ -240,7 +242,7 @@ def build_handler() -> ConversationHandler:
                 MessageHandler(filters.PHOTO | filters.VIDEO, on_proof_received),
             ],
         },
-        fallbacks=[MessageHandler(ALL_PREFIXES_CMD_FILTER, on_mute_cancel)],
+        fallbacks=[MessageHandler(ALL_PREFIXES_CMD_FILTER, lambda u, c: ConversationHandler.END)],
         conversation_timeout=cfg.proof_timeout,
         per_chat=True,
         per_user=True,
