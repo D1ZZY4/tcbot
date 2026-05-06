@@ -211,17 +211,17 @@ async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    ## Fetch owner ID, target role, and active ban all in parallel
-    owner_id, target_role, ban = await asyncio.gather(
+    ## Fetch owner ID, target role, active ban, and target name — all in parallel
+    owner_id, target_role, ban, cached_fname = await asyncio.gather(
         db.admins_db.get_owner_id(),
         get_effective_role(target_id),
         db.bans_db.get_active_ban(target_id),
+        db.users_db.get_first_name(target_id, str(target_id)),
     )
 
     if target_id == owner_id:
-        owner_fname = await db.users_db.get_first_name(owner_id, "the Founder")
         await msg.reply_text(
-            f"That's {mention(owner_id, owner_fname)}, our Founder. 👑\n\n"
+            f"That's {mention(owner_id, cached_fname)}, our Founder. 👑\n\n"
             "They built this whole federation — banning the Founder would be like "
             "locking the landlord out of their own building. Not happening. "
             "Definitely clean.",

@@ -247,15 +247,15 @@ async def on_appeal_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
             )
             return
 
-    target_id    = ban["banned_user_id"]
-    target_fname = await db.users_db.get_first_name(target_id, str(target_id))
-    lc, lt       = cfg.logs
+    target_id = ban["banned_user_id"]
+    lc, lt    = cfg.logs
 
     if action == "approve":
-        ## Deactivate ban + fetch active groups in parallel
-        _, groups = await asyncio.gather(
+        ## Deactivate ban + fetch active groups + fetch target name — all in parallel
+        _, groups, target_fname = await asyncio.gather(
             db.bans_db.deactivate_ban(ban_id),
             db.groups_db.active_groups(),
+            db.users_db.get_first_name(target_id, str(target_id)),
         )
 
         ## Unban from all groups — semaphore-bounded for rate safety
@@ -307,8 +307,9 @@ async def on_appeal_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
             log.error("Appeal unban log failed: %s", exc)
 
     elif action == "reject":
-        ## Notify user + edit review message in parallel
-        await asyncio.gather(
+        ## Fetch target name + notify user + edit review message — all in parallel
+        target_fname_result, *_ = await asyncio.gather(
+            db.users_db.get_first_name(target_id, str(target_id)),
             ctx.bot.send_message(
                 target_id,
                 f"Your appeal for ban <code>{ban_id}</code> has been reviewed and not approved. "
@@ -321,6 +322,11 @@ async def on_appeal_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
                 reply_markup=None,
             ),
             return_exceptions=True,
+        )
+        target_fname = (
+            target_fname_result
+            if not isinstance(target_fname_result, BaseException)
+            else str(target_id)
         )
 
         ## Edit the submitted appeal log message in LOG_CHANNEL

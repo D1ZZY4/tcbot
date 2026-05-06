@@ -97,6 +97,13 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict) -> None:
     existing  = await db.bans_db.get_active_ban(target_id)
     is_update = existing is not None
 
+    ## Start old-admin name fetch immediately — runs during proof upload I/O below
+    _old_admin_fname_task = (
+        asyncio.create_task(
+            db.users_db.get_first_name(existing.get("admin_user_id", admin_id), "Admin")
+        ) if is_update else None
+    )
+
     ## Build proof caption
     if is_update:
         prev_proof_msg_id = existing.get("proof_message_id")
@@ -155,10 +162,9 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict) -> None:
     if is_update:
         ban_id        = existing["ban_id"]
         old_admin_id  = existing.get("admin_user_id", admin_id)
-
-        ## old admin name fetched while bot.username is a free property access
         bot_username    = bot.username
-        old_admin_fname = await db.users_db.get_first_name(old_admin_id, "Admin")
+        ## Name fetch already running since before proof upload — just await the result
+        old_admin_fname = await _old_admin_fname_task
 
         log_text = parse_logmsg.ban_update_log(
             target_id, target_fname,

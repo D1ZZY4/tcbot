@@ -155,16 +155,31 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     ctx.user_data.pop(_SEARCH_KEY, None)
 
     query = update.effective_message.text.strip()
+    msg   = update.effective_message
 
     if query.isdigit():
-        ## Targeted lookup — skip full scan for numeric queries
-        ban     = await db.bans_db.get_active_ban(int(query))
-        results = [ban] if ban else []
+        ## Targeted lookup + message delete in parallel
+        ban_result, *_ = await asyncio.gather(
+            db.bans_db.get_active_ban(int(query)),
+            msg.delete(),
+            return_exceptions=True,
+        )
+        results = (
+            [ban_result] if ban_result and not isinstance(ban_result, BaseException) else []
+        )
     else:
-        bans   = await db.bans_db.active_bans()
+        ## Full name scan + message delete in parallel
+        bans_result, *_ = await asyncio.gather(
+            db.bans_db.active_bans(),
+            msg.delete(),
+            return_exceptions=True,
+        )
+        bans = bans_result if not isinstance(bans_result, BaseException) else []
         ## Fetch all names in parallel, then filter by query
         uids   = [ban["banned_user_id"] for ban in bans]
-        fnames = await asyncio.gather(*[db.users_db.get_first_name(uid, "") for uid in uids])
+        fnames = list(
+            await asyncio.gather(*[db.users_db.get_first_name(uid, "") for uid in uids])
+        ) if uids else []
         results = [
             ban for ban, fname in zip(bans, fnames)
             if query.lower() in fname.lower()
@@ -174,11 +189,6 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
 
     chat_id = ctx.user_data.get(_CHAT_KEY)
     msg_id  = ctx.user_data.get(_MSG_KEY)
-
-    try:
-        await update.effective_message.delete()
-    except Exception:
-        pass
 
     if not results:
         await ctx.bot.edit_message_text(
