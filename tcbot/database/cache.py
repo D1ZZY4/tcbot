@@ -1,0 +1,84 @@
+# © Copyright 2024 - 2026 Transsion Core
+# © Copyright 2024 - 2026 Dizzy
+# © Copyright 2026 Aveum Apps
+## In-process TTL cache — shared singletons for hot-path DB call elimination
+from __future__ import annotations
+
+import time
+from collections.abc import Awaitable, Callable
+from typing import Any
+
+## Public sentinel — use ``val is CACHE_MISS`` to detect a cache miss.
+## Distinct from None because None is a valid cache value (e.g. user has no role).
+CACHE_MISS: object = object()
+
+
+class TTLCache:
+    """Single-process in-memory TTL cache for asyncio-based code.
+
+    All operations are synchronous — no locks are needed because asyncio is
+    cooperative and only one coroutine runs at a time on the event loop.
+
+    ``get_or_fetch`` is the primary interface; ``get`` / ``put`` /
+    ``invalidate`` are exposed for callers that need finer control (e.g.
+    to write the result of two combined DB calls at once).
+    """
+
+    __slots__ = ("_ttl", "_store")
+
+    def __init__(self, ttl: float) -> None:
+        self._ttl: float = ttl
+        self._store: dict[Any, tuple[Any, float]] = {}
+
+    def get(self, key: Any) -> Any:
+        """Return the cached value, or ``CACHE_MISS`` if absent or expired."""
+        entry = self._store.get(key, CACHE_MISS)
+        if entry is CACHE_MISS:
+            return CACHE_MISS
+        val, exp = entry
+        if time.monotonic() > exp:
+            del self._store[key]
+            return CACHE_MISS
+        return val
+
+    def put(self, key: Any, val: Any) -> None:
+        """Store *val* under *key* for ``ttl`` seconds."""
+        self._store[key] = (val, time.monotonic() + self._ttl)
+
+    def invalidate(self, key: Any) -> None:
+        """Remove *key* from the cache (no-op if absent or already expired)."""
+        self._store.pop(key, None)
+
+    def clear(self) -> None:
+        """Remove all entries immediately."""
+        self._store.clear()
+
+    async def get_or_fetch(
+        self,
+        key: Any,
+        fetch: Callable[[], Awaitable[Any]],
+    ) -> Any:
+        """Return cached value, or call *fetch()*, cache the result, and return it."""
+        val = self.get(key)
+        if val is not CACHE_MISS:
+            return val
+        val = await fetch()
+        self.put(key, val)
+        return val
+
+
+## ── Shared singletons ────────────────────────────────────────────────────────
+
+## 60-second per-user effective-role cache (str | None per user_id).
+## Populated by roles_db.get_effective_role; invalidated on every role write.
+effective_role_cache: TTLCache = TTLCache(ttl=60.0)
+
+## 120-second per-chat affiliation cache (bool per chat_id).
+## Populated by groups_db.is_affiliated; invalidated on add/deactivate.
+affiliated_cache: TTLCache = TTLCache(ttl=120.0)
+
+## 30-second whole-list active-groups cache (list[dict], single entry).
+## Populated by groups_db.active_groups; invalidated on add/deactivate.
+active_groups_cache: TTLCache = TTLCache(ttl=30.0)
+
+_ALL_GROUPS_KEY: str = "__all__"

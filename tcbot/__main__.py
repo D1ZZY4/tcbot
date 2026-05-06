@@ -15,7 +15,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.alive import start_keepalive
 from tcbot.database.admins_db import ensure_initial_owner
-from tcbot.database.mongos import connect
+from tcbot.database.mongos import connect, ensure_indexes
 from tcbot.modules import get_handlers
 from tcbot.modules.helper.decorators import global_rate_limit_handler
 from tcbot.utils import error_reporter
@@ -109,6 +109,7 @@ def _make_asyncio_exc_handler(loop: asyncio.AbstractEventLoop):
 
 async def _post_init(app: Application) -> None:
     await connect()
+    await ensure_indexes()
     await ensure_initial_owner(cfg.initial_owner_id)
 
     ## Attach live bot to the error reporter (enables Layers 1 + 3)

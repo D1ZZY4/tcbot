@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
 
+from tcbot.database.cache import effective_role_cache
 from tcbot.database.mongos import col
 
 
@@ -24,11 +25,11 @@ async def get_owner_id() -> int | None:
 
 
 async def is_owner(user_id: int) -> bool:
-    return await _owners().find_one({"user_id": user_id}) is not None
+    return await _owners().find_one({"user_id": user_id}, {"_id": 1}) is not None
 
 
 async def is_admin(user_id: int) -> bool:
-    return await _admins().find_one({"user_id": user_id}) is not None
+    return await _admins().find_one({"user_id": user_id}, {"_id": 1}) is not None
 
 
 async def is_staff(user_id: int) -> bool:
@@ -45,22 +46,26 @@ async def ensure_initial_owner(initial_id: int) -> None:
 async def set_owner(user_id: int) -> None:
     await _owners().delete_many({})
     await _owners().insert_one({"user_id": user_id})
+    ## Clear the entire role cache — we don't know the old owner's user_id
+    effective_role_cache.clear()
 
 
 async def add_admin(user_id: int, promoted_by: int) -> None:
     await _admins().update_one(
         {"user_id": user_id},
         {"$setOnInsert": {
-            "user_id": user_id,
-            "promoted_by": promoted_by,
+            "user_id":       user_id,
+            "promoted_by":   promoted_by,
             "promoted_date": datetime.now(timezone.utc),
         }},
         upsert=True,
     )
+    effective_role_cache.invalidate(user_id)
 
 
 async def remove_admin(user_id: int) -> bool:
     r = await _admins().delete_one({"user_id": user_id})
+    effective_role_cache.invalidate(user_id)
     return r.deleted_count > 0
 
 

@@ -81,9 +81,8 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if target_id == ctx.bot.id:
-        bot_info = await ctx.bot.get_me()
         await msg.reply_text(
-            f"That's {mention(ctx.bot.id, bot_info.first_name or 'me')} — "
+            f"That's {mention(ctx.bot.id, ctx.bot.first_name or 'me')} — "
             "zero warnings here, ever. Nothing to remove. 😄",
             parse_mode="HTML",
         )
@@ -131,9 +130,8 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         return
 
     if target_id == ctx.bot.id:
-        bot_info = await ctx.bot.get_me()
         await msg.reply_text(
-            f"That's {mention(ctx.bot.id, bot_info.first_name or 'me')} — "
+            f"That's {mention(ctx.bot.id, ctx.bot.first_name or 'me')} — "
             "already at zero, always. Nothing to clear. 😄",
             parse_mode="HTML",
         )

@@ -130,16 +130,12 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     ban_id = ban["ban_id"]
 
-    ## bot info + ban summary fetched in parallel
-    bot_info, (text, proof_link) = await asyncio.gather(
-        ctx.bot.get_me(),
-        _ban_summary(ban, user.id, fname),
-    )
+    text, proof_link = await _ban_summary(ban, user.id, fname)
 
     await msg.reply_text(
         text,
         parse_mode="HTML",
-        reply_markup=keyboards.checkme_ban_kb(bot_info.username, ban_id, proof_link),
+        reply_markup=keyboards.checkme_ban_kb(ctx.bot.username, ban_id, proof_link),
     )
 
 
@@ -176,11 +172,10 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
     uid = ban["banned_user_id"]
     aid = ban.get("admin_user_id", 0)
-    _, (fname, bot_info, admin_fname) = await asyncio.gather(
+    _, (fname, admin_fname) = await asyncio.gather(
         q.answer(),
         asyncio.gather(
             db.users_db.get_first_name(uid, str(uid)),
-            ctx.bot.get_me(),
             db.users_db.get_first_name(aid, "Admin"),
         ),
     )
@@ -189,7 +184,7 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     await q.edit_message_text(
         text,
         parse_mode="HTML",
-        reply_markup=keyboards.checkme_ban_kb(bot_info.username, ban_id, proof_link),
+        reply_markup=keyboards.checkme_ban_kb(ctx.bot.username, ban_id, proof_link),
     )
 
 
@@ -208,9 +203,8 @@ async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     fname = target_fname or str(target_id)
 
     if target_id == ctx.bot.id:
-        bot_info = await ctx.bot.get_me()
         await msg.reply_text(
-            f"That's {mention(ctx.bot.id, bot_info.first_name or 'me')} — that's me. 😄\n\n"
+            f"That's {mention(ctx.bot.id, ctx.bot.first_name or 'me')} — that's me. 😄\n\n"
             "I keep this federation running, so I'm definitely not on the ban list. "
             "All clear.",
             parse_mode="HTML",
