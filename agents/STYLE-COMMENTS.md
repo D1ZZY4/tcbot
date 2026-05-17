@@ -18,7 +18,7 @@ Every file starts with the copyright header, then a one-line module docstring:
 # © Copyright 2026 Aveum Apps
 
 """
-Short description of what this module does.
+Short/Long description of what this module does.
 """
 
 from __future__ import annotations
