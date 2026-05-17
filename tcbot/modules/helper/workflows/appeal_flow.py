@@ -124,6 +124,9 @@ async def on_appeal_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
     )
     return ConversationHandler.END
 
+async def _end_conversation(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    return ConversationHandler.END
+
 
 async def on_appeal_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     msg  = update.effective_message
@@ -362,7 +365,7 @@ def build_handler() -> ConversationHandler:
             ],
         },
         fallbacks=[
-            MessageHandler(ALL_PREFIXES_CMD_FILTER, lambda u, c: ConversationHandler.END),
+            MessageHandler(ALL_PREFIXES_CMD_FILTER, _end_conversation),
         ],
         conversation_timeout=cfg.appeal_timeout,
         per_chat=True,

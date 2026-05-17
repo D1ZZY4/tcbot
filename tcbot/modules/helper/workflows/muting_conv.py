@@ -51,6 +51,10 @@ WAITING_REASON = 0
 WAITING_PROOF  = 1
 
 
+async def _end_conversation(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    return ConversationHandler.END
+
+
 ## ── Entry point ────────────────────────────────────────────────────────────
 
 async def cmd_mute_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -244,7 +248,7 @@ def build_handler() -> ConversationHandler:
                 MessageHandler(filters.PHOTO | filters.VIDEO, on_proof_received),
             ],
         },
-        fallbacks=[MessageHandler(ALL_PREFIXES_CMD_FILTER, lambda u, c: ConversationHandler.END)],
+        fallbacks=[MessageHandler(ALL_PREFIXES_CMD_FILTER, _end_conversation)],
         conversation_timeout=cfg.proof_timeout,
         per_chat=True,
         per_user=True,

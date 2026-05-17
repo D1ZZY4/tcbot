@@ -65,6 +65,10 @@ def _clear(ctx: ContextTypes.DEFAULT_TYPE) -> None:
         ctx.user_data.pop(k, None)
 
 
+async def _end_conversation(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    return ConversationHandler.END
+
+
 async def _do_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     target_id   = ctx.user_data["kick_target_id"]
     target_name = ctx.user_data["kick_target_name"]
@@ -230,7 +234,7 @@ def kick_conversation() -> ConversationHandler:
         },
         fallbacks=[
             CallbackQueryHandler(on_kick_cancel, pattern=r"^kick_cancel$"),
-            MessageHandler(ALL_PREFIXES_CMD_FILTER, lambda u, c: ConversationHandler.END),
+                MessageHandler(ALL_PREFIXES_CMD_FILTER, _end_conversation),
         ],
         per_user=True,
         per_chat=True,
