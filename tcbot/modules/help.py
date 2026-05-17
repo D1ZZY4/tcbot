@@ -62,7 +62,7 @@ HELP_TOPICS_CMD: list[tuple[str, str]] = [
 def _prefix_note() -> str:
     """Return an HTML footer listing every configured command prefix."""
     codes = " ".join(f"<code>{p}</code>" for p in cfg.prefixes)
-    return f"ℹ️ <b>Prefixes:</b> All commands also work with {codes}"
+    return f"\n<b>INFO!! Prefixes:</b> All commands also work with {codes}"
 
 
 ## ── Shared text ────────────────────────────────────────────────────────────
