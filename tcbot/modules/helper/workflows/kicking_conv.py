@@ -1,22 +1,25 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-## Kick conversation workflow — reason + optional proof
-##
-## Flow
-## ────
-## 1. /tckick <target> [reason]
-##    – target  : reply / user-id / @username
-##    – reason  : optional, everything else in the message
-##
-## 2. If reason was NOT given inline → WAITING_REASON
-##      • user sends plain text       → stored as reason, continue
-##      • Skip button pressed         → reason = "No reason provided", continue
-##
-## 3. WAITING_PROOF (always reached)
-##      • user sends photo/video      → proof description noted, execute kick
-##      • Skip button pressed         → execute kick without proof
-##      • Cancel button pressed       → cancel flow
+"""
+Kick conversation workflow — reason + optional proof
+
+Flow
+────
+1. /tckick <target> [reason]
+    → target  : reply / user-id / @username
+    → reason  : optional, everything else in the message
+
+2. If reason was NOT given inline → WAITING_REASON
+    • user sends plain text       → stored as reason, continue
+    • Skip button pressed         → reason = "No reason provided", continue
+
+3. WAITING_PROOF (always reached)
+    • user sends photo/video      → proof description noted, execute kick
+    • Skip button pressed         → execute kick without proof
+    • Cancel button pressed       → cancel flow
+"""
+
 from __future__ import annotations
 
 import asyncio

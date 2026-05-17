@@ -1,22 +1,26 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-## Warn conversation workflow — reason + optional proof
-##
-## Flow
-## ────
-## 1. /tcwarn <target> [reason]
-##    – target  : reply / user-id / @username
-##    – reason  : optional inline, but required to proceed
-##
-## 2. If reason was NOT given inline → WAITING_REASON
-##      • user sends plain text       → stored as reason, continue
-##      • (no skip — a reason is required for a warning)
-##
-## 3. WAITING_PROOF (always reached)
-##      • user sends photo/video      → proof description noted, execute warn
-##      • Skip button pressed         → execute warn without proof
-##      • Cancel button pressed       → cancel flow
+
+"""
+Warn conversation workflow - reason + optional proof
+
+Flow
+────
+1. /tcwarn <target> [reason]
+    → target  : reply / user-id / @username
+    → reason  : optional inline, but required to proceed
+
+2. If reason was NOT given inline → WAITING_REASON
+    • user sends plain text       → stored as reason, continue
+    • (no skip — a reason is required for a warning)
+
+3. WAITING_PROOF (always reached)
+    • user sends photo/video      → proof description noted, execute warn
+    • Skip button pressed         → execute warn without proof
+    • Cancel button pressed       → cancel flow
+"""
+
 from __future__ import annotations
 
 import asyncio

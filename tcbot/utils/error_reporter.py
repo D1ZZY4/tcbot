@@ -2,12 +2,14 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-## Centralized error reporter — classifies, formats, and ships errors to LOG_ERRORS
-##
-## Three automatic coverage layers (no per-file changes needed):
-##   1. TelegramErrorHandler on the root logger  → catches every log.error() / log.critical()
-##   2. PTB application.add_error_handler()      → catches all unhandled handler exceptions
-##   3. asyncio loop.set_exception_handler()     → catches background-task / create_task() failures
+"""
+Centralized error reporter — classifies, formats, and ships errors to LOG_ERRORS
+
+Three automatic coverage layers (no per-file changes needed):
+    1. TelegramErrorHandler on the root logger  → catches every log.error() / log.critical()
+    2. PTB application.add_error_handler()      → catches all unhandled handler exceptions
+    3. asyncio loop.set_exception_handler()     → catches background-task / create_task() failures
+"""
 
 from __future__ import annotations
 
@@ -29,7 +31,7 @@ log = logging.getLogger(__name__)
 
 ## ── module-level state (set once in _post_init via attach()) ───────────────
 
-_bot:       "Bot | None" = None
+_bot:      "Bot | None"  = None
 _chat_id:   int          = 0
 _thread_id: int | None   = None
 

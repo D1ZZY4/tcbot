@@ -1,7 +1,11 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Pure-function tests for tcbot.modules.appeals."""
+
+"""
+Pure-function tests for tcbot.modules.appeals.
+"""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -10,6 +14,7 @@ from unittest.mock import patch
 from tcbot.modules import appeals
 from tcbot.modules.helper.parse_link import utcnow
 
+## ── Imports and test setup ─────────────────────────────────────────────────
 
 def test_starts_with_appeal_tag_lowercase() -> None:
     assert appeals.starts_with_appeal_tag("#appeal\nLog link: ...")

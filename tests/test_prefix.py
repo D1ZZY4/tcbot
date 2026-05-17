@@ -1,11 +1,13 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""Tests for tcbot.utils.prefixes dispatcher and regex."""
+"""
+Tests for tcbot.utils.prefixes dispatcher and regex.
+"""
+
 from __future__ import annotations
 
 from types import SimpleNamespace
-
 import pytest
 
 from tcbot.utils import prefixes
@@ -18,10 +20,7 @@ def _clear_registry():
     prefixes._REGISTRY.clear()
 
 
-## ---------------------------------------------------------------------------
-## _ALT_RE
-## ---------------------------------------------------------------------------
-
+## ── _ALT_RE ────────────────────────────────────────────────────────────────
 
 def test_alt_re_accepts_dot_prefix() -> None:
     assert prefixes._ALT_RE.match(".cban target")
@@ -43,10 +42,7 @@ def test_alt_re_rejects_digit_first_char() -> None:
     assert prefixes._ALT_RE.match(".1bad") is None
 
 
-## ---------------------------------------------------------------------------
-## parse_cmd_args
-## ---------------------------------------------------------------------------
-
+## ── parse_cmd_args ─────────────────────────────────────────────────────────
 
 def test_parse_cmd_args_returns_args_after_command() -> None:
     assert prefixes.parse_cmd_args(".cban 42 spam links") == ["42", "spam", "links"]
@@ -60,10 +56,7 @@ def test_parse_cmd_args_returns_empty_for_none() -> None:
     assert prefixes.parse_cmd_args(None) == []
 
 
-## ---------------------------------------------------------------------------
-## dispatch_alt_prefix
-## ---------------------------------------------------------------------------
-
+## ── dispatch_alt_prefix ────────────────────────────────────────────────────
 
 async def test_dispatch_routes_to_registered_callback() -> None:
     seen: dict = {}

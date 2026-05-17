@@ -1,7 +1,11 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-## Ban list flow for /tcstats — numbered list, detail view, full search flow
+
+"""
+Connected chats list flow for /tcstats - numbered list, detail view, full search flow
+"""
+
 from __future__ import annotations
 
 import asyncio

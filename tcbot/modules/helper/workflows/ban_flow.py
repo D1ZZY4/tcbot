@@ -1,7 +1,11 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-## Ban conversation workflow – no confirm step, proof only, immediate execution
+
+"""
+Ban conversation workflow – no confirm step, proof only, immediate execution
+"""
+
 from __future__ import annotations
 
 import asyncio

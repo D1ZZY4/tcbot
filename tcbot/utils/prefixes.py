@@ -2,8 +2,10 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-## Build command filters that match all configured prefixes (/, !, .) and
-## provide a lightweight dispatcher for alternative-prefix commands
+"""
+Build command filters that match all configured prefixes (/, !, .) and
+provide a lightweight dispatcher for alternative-prefix commands.
+"""
 
 from __future__ import annotations
 
@@ -29,7 +31,8 @@ def register_command(name: str, callback: Callable[..., Coroutine[Any, Any, None
 
 
 async def dispatch_alt_prefix(update: object, context: object) -> None:
-    """Dispatch an update to a registered alt-prefix command handler.
+    """
+    Dispatch an update to a registered alt-prefix command handler.
 
     Parses the ``effective_message.text`` against :data:`_ALT_RE`, looks up
     the command in :data:`_REGISTRY`, injects ``context.args``, and calls the
@@ -62,7 +65,9 @@ async def dispatch_alt_prefix(update: object, context: object) -> None:
 
 
 def _get_prefixes() -> list[str]:
-    """Parse PREFIXES env var – handles both list format and plain string."""
+    """
+    Parse PREFIXES env var – handles both list format and plain string.
+    """
     raw = os.getenv("PREFIXES", "").strip()
     if not raw:
         return ["/", "!", "."]

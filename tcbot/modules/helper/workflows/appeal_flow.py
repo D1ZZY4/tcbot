@@ -1,7 +1,11 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-## Appeal conversation – entry via /start appeal<ban_id> deep link, DM only
+
+"""
+Appeal conversation – entry via /start appeal<ban_id> deep link, DM only
+"""
+
 from __future__ import annotations
 
 import asyncio

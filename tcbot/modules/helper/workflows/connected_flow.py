@@ -1,7 +1,11 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-## Group connection flow – in-group join prompt, permission check, pending monitoring
+
+"""
+Group connection flow – in-group join prompt, permission check, pending monitoring
+"""
+
 from __future__ import annotations
 
 import asyncio

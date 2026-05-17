@@ -1,7 +1,11 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-## Warning flow helpers – per-group warning tracking
+
+"""
+Warning conversation flow helpers - per-group warning tracking
+"""
+
 from __future__ import annotations
 
 import asyncio

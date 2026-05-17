@@ -1,24 +1,25 @@
-"""Unit tests for the _RateLimiter sliding-window implementation in decorators.py."""
+# © Copyright 2024 - 2026 Transsion Core
+# © Copyright 2024 - 2026 Dizzy
+# © Copyright 2026 Aveum Apps
+
+"""
+Tests for the _RateLimiter sliding-window implementation in decorators.py.
+"""
+
 from __future__ import annotations
 
 import time
 
-import pytest
-
 from tcbot.modules.helper.decorators import _RateLimiter
 
 
-## ---------------------------------------------------------------------------
-## Helpers
-## ---------------------------------------------------------------------------
+## ── Helpers ────────────────────────────────────────────────────────────────
 
 def make_rl(max_calls: int = 3, window: float = 10.0) -> _RateLimiter:
     return _RateLimiter(max_calls=max_calls, window=window)
 
 
-## ---------------------------------------------------------------------------
-## Basic allow / deny
-## ---------------------------------------------------------------------------
+## ── Basic allow / deny ─────────────────────────────────────────────────────
 
 class TestAllowDeny:
     def test_first_call_always_allowed(self):
@@ -54,9 +55,7 @@ class TestAllowDeny:
         assert wait > 0.0        ## still throttled, not suddenly freed
 
 
-## ---------------------------------------------------------------------------
-## Per-user isolation
-## ---------------------------------------------------------------------------
+## ── Per-user isolation ─────────────────────────────────────────────────────
 
 class TestPerUserIsolation:
     def test_different_users_are_independent(self):
@@ -76,9 +75,7 @@ class TestPerUserIsolation:
             assert rl.check(uid) == 0.0, f"uid {uid} was incorrectly throttled"
 
 
-## ---------------------------------------------------------------------------
-## Window expiry
-## ---------------------------------------------------------------------------
+## ── Window expiry ──────────────────────────────────────────────────────────
 
 class TestWindowExpiry:
     def test_expired_window_resets_allow(self, monkeypatch):
@@ -108,9 +105,7 @@ class TestWindowExpiry:
         assert rl.check(1) == 0.0
 
 
-## ---------------------------------------------------------------------------
-## Memory hygiene
-## ---------------------------------------------------------------------------
+## ── Memory hygiene ─────────────────────────────────────────────────────────
 
 class TestMemoryHygiene:
     def test_stale_bucket_pruned_after_window(self, monkeypatch):
@@ -132,9 +127,7 @@ class TestMemoryHygiene:
         assert 999 not in rl._buckets
 
 
-## ---------------------------------------------------------------------------
-## Edge cases
-## ---------------------------------------------------------------------------
+## ── Edge cases ─────────────────────────────────────────────────────────────
 
 class TestEdgeCases:
     def test_max_calls_one(self):

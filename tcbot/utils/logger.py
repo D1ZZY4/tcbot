@@ -2,12 +2,14 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-## Logging setup for the TCF bot
-##
-## Provides:
-##   - BotLogFormatter     — human-readable console format
-##   - TelegramErrorHandler — ships every ERROR/CRITICAL log record to LOG_ERRORS
-##     automatically via the running asyncio event loop (no extra code needed anywhere)
+"""
+Logging setup for the TCF bot.
+
+Provides:
+    - BotLogFormatter     — human-readable console format
+    - TelegramErrorHandler — ships every ERROR/CRITICAL log record to LOG_ERRORS
+automatically via the running asyncio event loop (no extra code needed anywhere)
+"""
 
 from __future__ import annotations
 
@@ -23,10 +25,8 @@ from tcbot import cfg
 class BotLogFormatter(logging.Formatter):
     """
     [HH:MM] [DD-MM-YYYY] | <project> | <L> - <module>:<line> - <message>
-
     Level indicators: I=INFO, W=WARNING, E=ERROR, C=CRITICAL, D=DEBUG.
     """
-
     LEVEL_MAP = {
         logging.DEBUG:    "D",
         logging.INFO:     "I",
@@ -53,8 +53,10 @@ class BotLogFormatter(logging.Formatter):
 
 ## ── Telegram error handler ─────────────────────────────────────────────────
 
-## Logger names whose ERROR records we intentionally suppress from Telegram
-## (they are usually network noise, not actionable bugs).
+"""
+Logger names whose ERROR records we intentionally suppress from Telegram
+(they are usually network noise, not actionable bugs).
+"""
 _SUPPRESS_PREFIXES = (
     "tcbot.utils.error_reporter",   # avoid infinite loop
     "httpcore",
