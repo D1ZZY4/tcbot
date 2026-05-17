@@ -197,6 +197,18 @@ async def on_warn_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 _WARN_FILTER = build_prefixed_filters("tcwarn") | build_prefixed_filters("tcw")
 
 
+## Commands that must NOT be swallowed by the fallback so they can reach
+## their own MessageHandlers registered after warn_conversation() in __handlers__.
+_WARN_CONV_ESCAPE = (
+    build_prefixed_filters("tcunwarn")
+    | build_prefixed_filters("tcunw")
+    | build_prefixed_filters("warns")
+    | build_prefixed_filters("warnlist")
+    | build_prefixed_filters("resetwarns")
+    | build_prefixed_filters("clearwarns")
+)
+
+
 def warn_conversation() -> ConversationHandler:
     return ConversationHandler(
         entry_points=[MessageHandler(_WARN_FILTER, cmd_warn_entry)],
@@ -213,7 +225,7 @@ def warn_conversation() -> ConversationHandler:
         },
         fallbacks=[
             CallbackQueryHandler(on_warn_cancel, pattern=r"^warn_cancel$"),
-                MessageHandler(ALL_PREFIXES_CMD_FILTER, _end_conversation),
+            MessageHandler(ALL_PREFIXES_CMD_FILTER & ~_WARN_CONV_ESCAPE, _end_conversation),
         ],
         per_user=True,
         per_chat=True,

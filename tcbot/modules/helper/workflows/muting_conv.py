@@ -229,6 +229,15 @@ async def on_mute_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
 ## ── ConversationHandler factory ────────────────────────────────────────────
 
+## Unmute commands must NOT be caught by the fallback - if they are, the
+## ConversationHandler consumes the update and cmd_unmute never runs.
+## Excluding them here lets PTB fall through to the MessageHandler below.
+_UNMUTE_ESCAPE = (
+    build_prefixed_filters("tcunmute")
+    | build_prefixed_filters("tcunm")
+)
+
+
 def build_handler() -> ConversationHandler:
     _entry = (
         build_prefixed_filters("tcmute")
@@ -248,7 +257,7 @@ def build_handler() -> ConversationHandler:
                 MessageHandler(filters.PHOTO | filters.VIDEO, on_proof_received),
             ],
         },
-        fallbacks=[MessageHandler(ALL_PREFIXES_CMD_FILTER, _end_conversation)],
+        fallbacks=[MessageHandler(ALL_PREFIXES_CMD_FILTER & ~_UNMUTE_ESCAPE, _end_conversation)],
         conversation_timeout=cfg.proof_timeout,
         per_chat=True,
         per_user=True,
