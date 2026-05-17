@@ -125,6 +125,7 @@ async def on_appeal_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
     return ConversationHandler.END
 
 async def _end_conversation(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.effective_message.reply_text("Appeal session ended.")
     return ConversationHandler.END
 
 

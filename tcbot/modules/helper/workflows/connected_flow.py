@@ -80,9 +80,12 @@ async def on_bot_added(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     lc, lt     = cfg.logs
 
     if new_status in (ChatMemberStatus.LEFT, ChatMemberStatus.BANNED):
-        was_connected = await db.groups_db.is_connected(chat.id)
-        await db.groups_db.deactivate_group(chat.id)
-        await db.groups_db.remove_pending(chat.id)
+        ## is_connected, deactivate, and remove_pending all run in parallel
+        was_connected, *_ = await asyncio.gather(
+            db.groups_db.is_connected(chat.id),
+            db.groups_db.deactivate_group(chat.id),
+            db.groups_db.remove_pending(chat.id),
+        )
         if was_connected:
             try:
                 await ctx.bot.send_message(

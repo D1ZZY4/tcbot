@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from telegram import Update
@@ -70,11 +71,16 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    if await db.groups_db.is_connected(chat.id):
+    ## Both DB reads are independent - run them in parallel
+    is_connected, pending = await asyncio.gather(
+        db.groups_db.is_connected(chat.id),
+        db.groups_db.get_pending(chat.id),
+    )
+    if is_connected:
         await update.effective_message.reply_text(f"This group is already connected to {cfg.community_name}.")
         return
 
-    if await db.groups_db.get_pending(chat.id):
+    if pending:
         await update.effective_message.reply_text(
             "A connect request for this group is already pending."
         )

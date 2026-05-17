@@ -52,6 +52,7 @@ WAITING_PROOF  = 1
 
 
 async def _end_conversation(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.effective_message.reply_text("Mute operation cancelled.")
     return ConversationHandler.END
 
 

@@ -65,6 +65,7 @@ def _clear(ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def _end_conversation(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.effective_message.reply_text("Warn operation cancelled.")
     return ConversationHandler.END
 
 
