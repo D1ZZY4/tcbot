@@ -69,7 +69,7 @@ def _prefix_note() -> str:
 
 _HELP_INDEX_TEXT = (
     "<b>{bot_name} Help</b>\n\n"
-    "I manages groups connected on {community}. "
+    f"I manages groups connected on {cfg.community_name}. "
     "Select a topic below."
 )
 
@@ -91,7 +91,7 @@ async def _render_help_index(
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(
-            _HELP_INDEX_TEXT.format(bot_name=bot_name, community=cfg.community_name),
+            _HELP_INDEX_TEXT.format(bot_name=bot_name),
             parse_mode="HTML",
             reply_markup=kb,
         ),
@@ -103,7 +103,7 @@ async def _render_help_index(
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     bot_name = ctx.bot.first_name
     await update.effective_message.reply_text(
-        _HELP_INDEX_TEXT.format(bot_name=bot_name, community=cfg.community_name),
+        _HELP_INDEX_TEXT.format(bot_name=bot_name),
         parse_mode="HTML",
         reply_markup=keyboards.help_topics_kb(HELP_TOPICS_CMD),
     )

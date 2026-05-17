@@ -8,8 +8,6 @@ import html
 
 from tcbot import cfg
 
-community = cfg.community_name
-
 
 def bold(text: str) -> str:
     return f"<b>{html.escape(str(text))}</b>"

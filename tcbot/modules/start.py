@@ -20,16 +20,16 @@ log = logging.getLogger(__name__)
 
 __module_name__ = None
 
-_MENU_TEXT = (
-    "<b>Hey! I'm {bot_name}. 👋</b>\n"
-    "I manage {community} groups, federation bans, and appeals. "
+_PRIVATE_START_TEXT = (
+    f"<b>Hey! I'm {cfg.community_name}. 👋</b>\n\n"
+    f"I am an assistant of {cfg.community_name} to manage the groups connected to me centrally\n"
     "Use the buttons below to explore."
 )
 
 _GROUP_START_TEXT = (
-    "<b>Hey! I'm {bot_name}. 👋</b>\n"
-    "I manage {community} groups, federation bans, and appeals.\n\n"
-    "Use /help for all available commands, or open me in PM for the full menu."
+    f"<b>Hey! I'm {cfg.community_name}. 👋</b>\n\n"
+    f"I am an assistant of {cfg.community_name} to manage the groups connected to me centrally\n"
+    "Use /help for all help menu, or open me in PM for the full menu."
 )
 
 
@@ -47,7 +47,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if chat.type in ("group", "supergroup"):
         bot_username = ctx.bot.username or ""
         await msg.reply_text(
-            _GROUP_START_TEXT.format(bot_name=bot_name, community=cfg.community_name),
+            _GROUP_START_TEXT.format(bot_name=bot_name),
             parse_mode="HTML",
             reply_markup=keyboards.group_start_kb(bot_username),
         )
@@ -63,7 +63,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     ## appeal<ban_id> deep links are handled by the ConversationHandler in appeals.py
     await msg.reply_text(
-        _MENU_TEXT.format(bot_name=bot_name, community=cfg.community_name),
+        _PRIVATE_START_TEXT.format(bot_name=bot_name),
         parse_mode="HTML",
         reply_markup=keyboards.main_menu_kb(),
     )
@@ -77,7 +77,7 @@ async def on_menu_back_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(
-            _MENU_TEXT.format(bot_name=bot_name, community=cfg.community_name),
+            _PRIVATE_START_TEXT.format(bot_name=bot_name),
             parse_mode="HTML",
             reply_markup=keyboards.main_menu_kb(),
         ),
