@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-## Start command and main interactive menu callbacks
+
 from __future__ import annotations
 
 import asyncio
@@ -41,7 +41,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     text     = (msg.text or "").strip()
     parts    = text.split(None, 1)
     arg      = parts[1].strip() if len(parts) > 1 else ""
-    bot_name = ctx.bot.first_name or "TC Bot"
+    bot_name = ctx.bot.first_name
 
     ## Group / supergroup context — send a minimal message with PM link
     if chat.type in ("group", "supergroup"):
@@ -73,7 +73,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def on_menu_back_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q: CallbackQuery = update.callback_query
-    bot_name = ctx.bot.first_name or "TC Bot"
+    bot_name = ctx.bot.first_name
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(

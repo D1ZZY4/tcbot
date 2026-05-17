@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-## About menu callback
+
 from __future__ import annotations
 
 import asyncio
@@ -17,11 +17,11 @@ __module_name__ = None
 __about_msg__ = (
     f"<b>What is {cfg.community_name}?</b>\n"
     f"{cfg.community_name} is a community-driven federation for Infinix, Tecno, and Itel groups. "
-    "Our main focus is maintaining group security and a conducive environment so members can discuss comfortably.\n"
-    f"<i>{cfg.community_name} is not an official part of Transsion Holdings. This is strictly an independent community.</i>\n\n"
+    "Our main focus is maintaining group security and a conducive environment so members can discuss comfortably.\n\n"
     "<b>History</b>\n"
     "Established in 2024. Originally named TFI, but it was disbanded due to internal issues. "
-    f"Shortly after, {cfg.community_name} was formed to continue managing the community with better stability."
+    f"Shortly after, {cfg.community_name} was formed to continue managing the community with better stability.\n\n"
+    f"{cfg.community_name} <i>is not an official part of Transsion Holdings. This is strictly an independent community.</i>"
 )
 
 

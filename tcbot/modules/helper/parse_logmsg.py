@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-## Compose all log messages – exact PROMPT.md format, no emojis
+
 from __future__ import annotations
 
 from tcbot import cfg

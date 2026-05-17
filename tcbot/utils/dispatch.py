@@ -1,6 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
+
 ## Throttled multi-group dispatcher
 ##
 ## fan_out(coros) — run many coroutines concurrently, bounded by a semaphore so
@@ -14,6 +15,7 @@
 ## large federations, while being orders of magnitude faster than a sequential
 ## loop. All exceptions are captured in-place — a single failed group never
 ## blocks the rest.
+
 from __future__ import annotations
 
 import asyncio

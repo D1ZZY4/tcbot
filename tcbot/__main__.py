@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-## Entry point – initialise DB, register all module handlers, start polling
+
 from __future__ import annotations
 
 import asyncio

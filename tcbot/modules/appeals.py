@@ -1,11 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-## Appeal system — pure guard functions and PTB module registration
-##
-## Pure functions (no Telegram I/O) live at the top so they remain fully
-## unit-testable. Module metadata (__module_name__, __help_text__, __handlers__)
-## follows at the bottom, wiring everything into the bot.
+
 from __future__ import annotations
 
 import re

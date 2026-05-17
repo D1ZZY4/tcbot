@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-## Admin management — promote, demote, transfer ownership, and promotion requests
+
 from __future__ import annotations
 
 import asyncio

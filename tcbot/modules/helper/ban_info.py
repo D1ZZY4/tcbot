@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-## Shared ban detail builder — used by checking.py and stats_flow.py
+
 from __future__ import annotations
 
 import asyncio

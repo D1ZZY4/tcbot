@@ -1,12 +1,14 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
+
 ## Centralized error reporter — classifies, formats, and ships errors to LOG_ERRORS
 ##
 ## Three automatic coverage layers (no per-file changes needed):
 ##   1. TelegramErrorHandler on the root logger  → catches every log.error() / log.critical()
 ##   2. PTB application.add_error_handler()      → catches all unhandled handler exceptions
 ##   3. asyncio loop.set_exception_handler()     → catches background-task / create_task() failures
+
 from __future__ import annotations
 
 import asyncio

@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-## Auth decorators and global per-user rate limiter for all handlers
+
 from __future__ import annotations
 
 import functools

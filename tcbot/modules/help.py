@@ -1,7 +1,6 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-## Help command – content is collected dynamically from each module's __module_name__ and __help_text__ attributes
 
 from __future__ import annotations
 
@@ -85,7 +84,7 @@ async def _render_help_index(
 ) -> None:
     """Edit (or send) the help index message on the appropriate callback query."""
     q: CallbackQuery = update.callback_query
-    bot_name = ctx.bot.first_name or "TC Bot"
+    bot_name = ctx.bot.first_name
     kb = keyboards.help_topics_menu_kb(HELP_TOPICS_MENU) if with_back_to_start else keyboards.help_topics_kb(HELP_TOPICS_CMD)
     await asyncio.gather(
         q.answer(),
@@ -100,7 +99,7 @@ async def _render_help_index(
 ## ── /help command ──────────────────────────────────────────────────────────
 
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    bot_name = ctx.bot.first_name or "TC Bot"
+    bot_name = ctx.bot.first_name
     await update.effective_message.reply_text(
         _HELP_INDEX_TEXT.format(bot_name=bot_name, community=cfg.community_name),
         parse_mode="HTML",
