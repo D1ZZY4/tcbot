@@ -11,8 +11,8 @@ from __future__ import annotations
 from tcbot.modules.messages import M
 
 
-def test_branding_line_exact_bytes() -> None:
-    assert M.BRANDING_LINE == "𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯"
+def test_community_exact_bytes() -> None:
+    assert M.COMMUNITY == "TCF - 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯"
 
 
 def test_spec_locked_auth_strings() -> None:

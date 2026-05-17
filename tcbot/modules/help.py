@@ -68,8 +68,8 @@ def _prefix_note() -> str:
 ## ── Shared text ────────────────────────────────────────────────────────────
 
 _HELP_INDEX_TEXT = (
-    "<b>{bot_name} Help</b>\n"
-    "This bot manages {community} groups, bans, appeals, and more. "
+    "<b>{bot_name} Help</b>\n\n"
+    "I manages groups connected on {community}. "
     "Select a topic below."
 )
 
@@ -82,7 +82,9 @@ async def _render_help_index(
     *,
     with_back_to_start: bool,
 ) -> None:
-    """Edit (or send) the help index message on the appropriate callback query."""
+    """
+    Edit (or send) the help index message on the appropriate callback query.
+    """
     q: CallbackQuery = update.callback_query
     bot_name = ctx.bot.first_name
     kb = keyboards.help_topics_menu_kb(HELP_TOPICS_MENU) if with_back_to_start else keyboards.help_topics_kb(HELP_TOPICS_CMD)
@@ -116,7 +118,9 @@ async def on_menu_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 ## ── Help in group ──────────────────────────────────────────────────────────
 
 async def on_menu_help_group(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Help tapped from group /start inline — answer with alert, no edit."""
+    """
+    Help tapped from group /start inline — answer with alert, no edit.
+    """
     q: CallbackQuery = update.callback_query
     await q.answer(
         "Use /help in this group to browse all commands.",

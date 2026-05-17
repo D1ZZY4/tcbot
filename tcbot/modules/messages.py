@@ -6,8 +6,8 @@ from __future__ import annotations
 
 
 class M:
-    ## Branding
-    BRANDING_LINE: str = "𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯"
+    ## Community name
+    COMMUNITY: str = "𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯"
 
     ## Generic errors
     NOT_AUTHORIZED: str = "You are not authorized."

@@ -3,7 +3,7 @@
 # © Copyright 2026 Aveum Apps
 """Tests for tcbot.modules.helper.parse_logmsg.
 
-All log builders must embed BRAND (cfg.community_name) and the key fields
+All log builders must embed community (cfg.community_name) and the key fields
 documented in PROMPT.md.  cfg.community_name is "TCF" in the test env
 (set in conftest.py via COMMUNITY_NAME env var before any import).
 """
@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from tcbot.modules.helper import parse_logmsg
-from tcbot.modules.helper.formatter import BRAND
+from tcbot.modules.helper.formatter import community
 
 
 ## ---------------------------------------------------------------------------
@@ -21,8 +21,8 @@ from tcbot.modules.helper.formatter import BRAND
 ## ---------------------------------------------------------------------------
 
 
-def _brand_present(text: str) -> bool:
-    return BRAND in text
+def _community_present(text: str) -> bool:
+    return community in text
 
 
 ## ---------------------------------------------------------------------------
@@ -30,7 +30,7 @@ def _brand_present(text: str) -> bool:
 ## ---------------------------------------------------------------------------
 
 
-def test_ban_log_contains_brand_and_key_fields() -> None:
+def test_ban_log_contains_community_and_key_fields() -> None:
     ts = datetime(2026, 4, 30, 12, 0, tzinfo=timezone.utc)
     out = parse_logmsg.ban_log(
         target_id=2,
@@ -41,7 +41,7 @@ def test_ban_log_contains_brand_and_key_fields() -> None:
         ban_id="ban_2_1",
         timestamp=ts,
     )
-    assert _brand_present(out)
+    assert _community_present(out)
     assert "Citra" in out
     assert "Spamming links" in out
     assert "Commit at: 30-04-2026 | 12:00" in out
@@ -76,7 +76,7 @@ def test_unban_log_without_reason_has_no_reason_line() -> None:
         admin_id=1, admin_fname="Andi",
         ban_id="b",
     )
-    assert _brand_present(out)
+    assert _community_present(out)
     assert "Unban Reason:" not in out
 
 
@@ -109,21 +109,21 @@ def test_proof_caption_new_includes_admin_and_timestamp() -> None:
 ## ---------------------------------------------------------------------------
 
 
-def test_admin_promoted_contains_brand_and_both_ids() -> None:
+def test_admin_promoted_contains_community_and_both_ids() -> None:
     out = parse_logmsg.admin_promoted(
         target_id=2, target_fname="Citra",
         admin_id=1, admin_fname="Andi",
     )
-    assert _brand_present(out)
+    assert _community_present(out)
     assert "ID: 2" in out and "ID: 1" in out
 
 
-def test_admin_demoted_contains_brand() -> None:
+def test_admin_demoted_contains_community() -> None:
     out = parse_logmsg.admin_demoted(
         target_id=2, target_fname="Citra",
         admin_id=1, admin_fname="Andi",
     )
-    assert _brand_present(out)
+    assert _community_present(out)
     assert "Citra" in out and "Andi" in out
 
 
@@ -132,7 +132,7 @@ def test_ownership_transferred_shows_new_and_previous_owner() -> None:
         new_owner_id=2, new_owner_fname="Citra",
         old_owner_id=1, old_owner_fname="Andi",
     )
-    assert _brand_present(out)
+    assert _community_present(out)
     assert "New Owner" in out and "Previous Owner" in out
 
 
@@ -141,13 +141,13 @@ def test_ownership_transferred_shows_new_and_previous_owner() -> None:
 ## ---------------------------------------------------------------------------
 
 
-def test_appeal_submitted_log_includes_ban_id_and_brand() -> None:
+def test_appeal_submitted_log_contains_ban_id_and_community() -> None:
     out = parse_logmsg.appeal_submitted_log(
         target_id=2, target_fname="Citra",
         ban_id="ban_2_1714",
         appeal_link="https://t.me/c/1234/56?thread=12",
     )
-    assert _brand_present(out)
+    assert _community_present(out)
     assert "ban_2_1714" in out
     assert "https://t.me/c/1234/56?thread=12" in out
 
@@ -173,7 +173,7 @@ def test_broadcast_log_truncates_preview_at_100_chars() -> None:
         admin_id=1, admin_fname="Andi",
         message_preview=long_text, success=10, failed=1,
     )
-    assert _brand_present(out)
+    assert _community_present(out)
     assert "x" * 100 in out
     assert "x" * 101 not in out
 
@@ -183,7 +183,7 @@ def test_broadcast_log_truncates_preview_at_100_chars() -> None:
 ## ---------------------------------------------------------------------------
 
 
-def test_kick_log_contains_brand_and_key_fields() -> None:
+def test_kick_log_contains_community_and_key_fields() -> None:
     out = parse_logmsg.kick_log(
         target_id=2,
         target_fname="Citra",
@@ -193,7 +193,7 @@ def test_kick_log_contains_brand_and_key_fields() -> None:
         chat_id=-1001234567890,
         chat_title="Infinix Indonesia",
     )
-    assert _brand_present(out)
+    assert _community_present(out)
     assert "Citra" in out
     assert "Andi" in out
     assert "Raid participant" in out
@@ -219,7 +219,7 @@ def test_kick_log_shows_user_id() -> None:
 ## ---------------------------------------------------------------------------
 
 
-def test_warn_log_contains_brand_and_count() -> None:
+def test_warn_log_contains_community_and_count() -> None:
     out = parse_logmsg.warn_log(
         target_id=2,
         target_fname="Citra",
@@ -231,7 +231,7 @@ def test_warn_log_contains_brand_and_count() -> None:
         chat_id=-1001234567890,
         chat_title="Infinix Indonesia",
     )
-    assert _brand_present(out)
+    assert _community_present(out)
     assert "Citra" in out
     assert "Off-topic" in out
     assert "2/3" in out
@@ -258,7 +258,7 @@ def test_warn_log_at_limit_shows_correct_count() -> None:
 ## ---------------------------------------------------------------------------
 
 
-def test_unwarn_log_contains_brand_and_new_count() -> None:
+def test_unwarn_log_contains_community_and_new_count() -> None:
     out = parse_logmsg.unwarn_log(
         target_id=2,
         target_fname="Citra",
@@ -269,7 +269,7 @@ def test_unwarn_log_contains_brand_and_new_count() -> None:
         chat_id=-1001234567890,
         chat_title="Infinix Indonesia",
     )
-    assert _brand_present(out)
+    assert _community_present(out)
     assert "Citra" in out
     assert "Andi" in out
     assert "1/3" in out
@@ -296,7 +296,7 @@ def test_unwarn_log_at_zero_shows_zero_count() -> None:
 ## ---------------------------------------------------------------------------
 
 
-def test_mute_log_contains_brand_and_key_fields() -> None:
+def test_mute_log_contains_community_and_key_fields() -> None:
     out = parse_logmsg.mute_log(
         target_id=2,
         target_fname="Citra",
@@ -305,7 +305,7 @@ def test_mute_log_contains_brand_and_key_fields() -> None:
         reason="Spamming stickers",
         duration_str="3d",
     )
-    assert _brand_present(out)
+    assert _community_present(out)
     assert "Citra" in out
     assert "Andi" in out
     assert "Spamming stickers" in out
@@ -325,14 +325,14 @@ def test_mute_log_permanent_duration() -> None:
     assert "permanently" in out
 
 
-def test_unmute_log_contains_brand_and_both_users() -> None:
+def test_unmute_log_contains_community_and_both_users() -> None:
     out = parse_logmsg.unmute_log(
         target_id=2,
         target_fname="Citra",
         admin_id=1,
         admin_fname="Andi",
     )
-    assert _brand_present(out)
+    assert _community_present(out)
     assert "Citra" in out
     assert "Andi" in out
     assert "User ID: 2" in out
@@ -343,11 +343,11 @@ def test_unmute_log_contains_brand_and_both_users() -> None:
 ## ---------------------------------------------------------------------------
 
 
-def test_group_connected_log_includes_title_and_id() -> None:
+def test_group_connected_log_contains_community_title_and_id() -> None:
     out = parse_logmsg.group_connected_log(
         chat_id=-1001234567890, chat_title="Infinix Indonesia",
         owner_id=1, owner_fname="Andi",
     )
-    assert _brand_present(out)
+    assert _community_present(out)
     assert "Infinix Indonesia" in out
     assert "-1001234567890" in out

@@ -8,8 +8,7 @@ import html
 
 from tcbot import cfg
 
-## The exact branding line required in every log message
-BRAND = cfg.community_name
+community = cfg.community_name
 
 
 def bold(text: str) -> str:

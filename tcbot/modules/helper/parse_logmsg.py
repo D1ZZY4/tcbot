@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from tcbot import cfg
 from tcbot.database.roles_db import ROLE_LABEL as _ROLE_LABELS
-from tcbot.modules.helper.formatter import BRAND, link, mention
+from tcbot.modules.helper.formatter import community, link, mention
 from tcbot.utils.timedate_format import fmt_dt, utc_now
 
 
@@ -27,7 +27,7 @@ def ban_log(
     proof_part = f'\n<a href="{proof_lnk}">View Proof</a>' if proof_lnk else ""
     return (
         f"New {cfg.community_name} Ban\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"Admin: {mention(admin_id, admin_fname)}\n\n"
         f"User: {mention(target_id, target_fname)}\n"
         f"User ID: {target_id}\n"
@@ -57,7 +57,7 @@ def ban_update_log(
     proof_part = f'\n<a href="{proof_lnk}">View Proof</a>' if proof_lnk else ""
     return (
         f"New {cfg.community_name} Ban (Update)\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"Admin: {mention(new_admin_id, new_admin_fname)}\n"
         f"Previous Admin: {mention(old_admin_id, old_admin_fname)}\n\n"
         f"User: {mention(target_id, target_fname)}\n"
@@ -120,7 +120,7 @@ def mute_log(
     dt = fmt_dt(utc_now())
     return (
         f"{cfg.community_name} Federation Mute\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"Admin: {mention(admin_id, admin_fname)}\n\n"
         f"User: {mention(target_id, target_fname)}\n"
         f"User ID: {target_id}\n"
@@ -139,7 +139,7 @@ def unmute_log(
     dt = fmt_dt(utc_now())
     return (
         f"{cfg.community_name} Federation Unmute\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"Admin: {mention(admin_id, admin_fname)}\n\n"
         f"User: {mention(target_id, target_fname)}\n"
         f"User ID: {target_id}\n\n"
@@ -161,7 +161,7 @@ def kick_log(
     dt = fmt_dt(utc_now())
     return (
         f"{cfg.community_name} Kick\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"Admin: {mention(admin_id, admin_fname)}\n\n"
         f"User: {mention(target_id, target_fname)}\n"
         f"User ID: {target_id}\n"
@@ -187,7 +187,7 @@ def warn_log(
     dt = fmt_dt(utc_now())
     return (
         f"{cfg.community_name} Warn\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"Admin: {mention(admin_id, admin_fname)}\n\n"
         f"User: {mention(target_id, target_fname)}\n"
         f"User ID: {target_id}\n"
@@ -213,7 +213,7 @@ def unwarn_log(
     dt = fmt_dt(utc_now())
     return (
         f"{cfg.community_name} Unwarn\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"Admin: {mention(admin_id, admin_fname)}\n\n"
         f"User: {mention(target_id, target_fname)}\n"
         f"User ID: {target_id}\n"
@@ -237,7 +237,7 @@ def unban_log(
     reason_part = f"\nUnban Reason: {reason}" if reason else ""
     return (
         f"{cfg.community_name} Unban\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"Admin: {mention(admin_id, admin_fname)}\n"
         f"User: {mention(target_id, target_fname)}\n"
         f"User ID: {target_id}"
@@ -276,7 +276,7 @@ def appeal_submitted_log(
     dt = fmt_dt(utc_now())
     return (
         f"New Appeal Submitted\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"User: {mention(target_id, target_fname)}\n"
         f"ID: {target_id}\n\n"
         f"Ban ID: {ban_id}\n"
@@ -299,7 +299,7 @@ def appeal_approved_edit(
     approved_str = fmt_dt(utc_now())
     return (
         f"Appeal Approved\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"User: {mention(target_id, target_fname)}\n"
         f"ID: {target_id}\n\n"
         f"Ban ID: {ban_id}\n"
@@ -324,7 +324,7 @@ def appeal_rejected_edit(
     rejected_str = fmt_dt(utc_now())
     return (
         f"Appeal Rejected\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"User: {mention(target_id, target_fname)}\n"
         f"ID: {target_id}\n\n"
         f"Ban ID: {ban_id}\n"
@@ -346,7 +346,7 @@ def appeal_unban_log(
     dt = fmt_dt(utc_now())
     return (
         f"{cfg.community_name} Unban (via Appeal)\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"Admin: {mention(admin_id, admin_fname)}\n"
         f"User: {mention(target_id, target_fname)}\n"
         f"User ID: {target_id}\n"
@@ -366,7 +366,7 @@ def admin_promoted(
     dt = fmt_dt(utc_now())
     return (
         f"New {cfg.community_name} Admin Promoted\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"Admin: {mention(target_id, target_fname)}\n"
         f"ID: {target_id}\n\n"
         f"Promoted by Owner: {mention(admin_id, admin_fname)}\n"
@@ -384,7 +384,7 @@ def admin_demoted(
     dt = fmt_dt(utc_now())
     return (
         f"{cfg.community_name} Admin Demoted\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"Admin: {mention(target_id, target_fname)}\n"
         f"ID: {target_id}\n\n"
         f"Demoted by Owner: {mention(admin_id, admin_fname)}\n"
@@ -402,7 +402,7 @@ def ownership_transferred(
     dt = fmt_dt(utc_now())
     return (
         f"{cfg.community_name} Ownership Transferred\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"New Owner: {mention(new_owner_id, new_owner_fname)}\n"
         f"ID: {new_owner_id}\n\n"
         f"Previous Owner: {mention(old_owner_id, old_owner_fname)}\n"
@@ -421,7 +421,7 @@ def promo_request_log(
     uname_part = f"@{username}" if username else "no username"
     return (
         f"Promotion Request\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"User: {mention(user_id, user_fname)}\n"
         f"ID: {user_id}\n"
         f"Username: {uname_part}\n"
@@ -440,7 +440,7 @@ def promo_approved_log(
     dt = fmt_dt(utc_now())
     return (
         f"New {cfg.community_name} Admin Promoted\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"Admin: {mention(target_id, target_fname)}\n"
         f"ID: {target_id}\n\n"
         f"Promoted by Owner: {mention(admin_id, admin_fname)}\n"
@@ -459,7 +459,7 @@ def promo_rejected_log(
     dt = fmt_dt(utc_now())
     return (
         f"Promotion Request Rejected\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"User: {mention(target_id, target_fname)}\n"
         f"ID: {target_id}\n\n"
         f"Rejected by: {mention(admin_id, admin_fname)}\n"
@@ -484,7 +484,7 @@ def group_connected_log(
         group_display = chat_title
     return (
         f"New Connected Group\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"Group: {group_display}\n"
         f"ID: {chat_id}\n\n"
         f"Added by Owner: {mention(owner_id, owner_fname)}\n"
@@ -502,7 +502,7 @@ def group_connection_rejected_log(
     dt = fmt_dt(utc_now())
     return (
         f"Connection Rejected &amp; Left\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"Group: {chat_title} (ID: {chat_id})\n\n"
         f"Rejected by Owner: {mention(owner_id, owner_fname)} (ID: {owner_id})\n\n"
         f"Date: {dt}"
@@ -518,7 +518,7 @@ def group_disconnected_log(
     dt = fmt_dt(utc_now())
     return (
         f"Group Disconnected\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"Group: {chat_title}\n"
         f"ID: {chat_id}\n\n"
         f"Removed by: {mention(actor_id, actor_fname)}\n"
@@ -534,7 +534,7 @@ def group_bot_removed_log(
     dt = fmt_dt(utc_now())
     return (
         f"Group Removed Bot\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"Group: {chat_title}\n"
         f"ID: {chat_id}\n\n"
         f"Date: {dt}"
@@ -552,7 +552,7 @@ def broadcast_log(
     preview = message_preview[:100]
     return (
         f"Broadcast Sent\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"Admin: {mention(admin_id, admin_fname)}\n"
         f"Message: {preview}\n\n"
         f"Groups reached: {success}\n"
@@ -574,7 +574,7 @@ def role_assigned(
     role_label = _ROLE_LABELS.get(role, role.capitalize())
     return (
         f"New {cfg.community_name} {role_label} Assigned\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"{role_label}: {mention(target_id, target_fname)}\n"
         f"ID: {target_id}\n\n"
         f"Assigned by: {mention(admin_id, admin_fname)}\n"
@@ -594,7 +594,7 @@ def role_removed(
     role_label = _ROLE_LABELS.get(role, role.capitalize())
     return (
         f"{cfg.community_name} Role Removed\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"User: {mention(target_id, target_fname)}\n"
         f"ID: {target_id}\n"
         f"Role removed: {role_label}\n\n"
@@ -617,7 +617,7 @@ def role_auto_demoted(
     action_label = "Banned" if action == "ban" else "Kicked"
     return (
         f"{cfg.community_name} Auto-Demote\n"
-        f"{BRAND}\n\n"
+        f"{community}\n\n"
         f"User: {mention(target_id, target_fname)}\n"
         f"ID: {target_id}\n"
         f"Role removed: {role_label}\n"
