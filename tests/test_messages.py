@@ -1,29 +1,26 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-
-"""
-Snapshot tests for tcbot.modules.messages.M.
+"""Snapshot tests for tcbot.modules.messages.M.
 
 These tests pin every string in the class so accidental edits are caught
 immediately. They do NOT test all user-facing copy (most is inline in modules).
 """
-
 from __future__ import annotations
 
 from tcbot.modules.messages import M
 
 
 def test_community_exact_bytes() -> None:
-    assert M.COMMUNITY == "TCF - 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯"
+    assert M.COMMUNITY_NAME == "TCF - 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯"
 
 
 def test_spec_locked_auth_strings() -> None:
-    assert M.NOT_AUTHORIZED         == "You are not authorized."
-    assert M.CANNOT_RESOLVE_USER    == "Cannot resolve user."
-    assert M.USER_NOT_BANNED        == "User is not banned."
-    assert M.ALREADY_TC_ADMIN       == "Already a Transsion Core Admin."
-    assert M.NOT_TC_ADMIN           == "Not a Transsion Core Admin."
+    assert M.NOT_AUTHORIZED        == "You are not authorized."
+    assert M.CANNOT_RESOLVE_USER   == "Cannot resolve user."
+    assert M.USER_NOT_BANNED       == "User is not banned."
+    assert M.ALREADY_TC_ADMIN      == "Already a Transsion Core Admin."
+    assert M.NOT_TC_ADMIN          == "Not a Transsion Core Admin."
     assert M.INVALID_OR_EXPIRED_BAN == "Invalid or expired ban."
 
 
