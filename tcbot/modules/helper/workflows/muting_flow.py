@@ -170,14 +170,22 @@ async def execute_unmute(
     )
 
     ## Send log to channel and reply - in parallel
-    results2 = await asyncio.gather(
-        ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
-        msg.reply_text(
+    if lc:
+        results2 = await asyncio.gather(
+            ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+            msg.reply_text(
+                f"{mention(target_id, target_name)} {code(str(target_id))} has been unmuted - "
+                f"restored in {len(groups) - failed}/{len(groups)} groups.",
+                parse_mode="HTML",
+            ),
+            return_exceptions=True,
+        )
+        if isinstance(results2[0], BaseException):
+            log.error("Unmute log send failed: %s", results2[0])
+    else:
+        # No log channel configured; reply locally so the admin sees the summary.
+        await msg.reply_text(
             f"{mention(target_id, target_name)} {code(str(target_id))} has been unmuted - "
             f"restored in {len(groups) - failed}/{len(groups)} groups.",
             parse_mode="HTML",
-        ),
-        return_exceptions=True,
-    )
-    if isinstance(results2[0], BaseException):
-        log.error("Unmute log send failed: %s", results2[0])
+        )
