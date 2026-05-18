@@ -11,7 +11,7 @@ Before making any changes, **read all documentation files in the `agents/` direc
 ## Project Overview
 
 TCF (Transsion Core Federation) is a Telegram federation bot built with:
-- Python 3.11
+- Python 3.13
 - python-telegram-bot 22.5 (async, PTB v22)
 - Motor (async MongoDB via motor.motor_asyncio)
 - Flask keepalive on port 5000

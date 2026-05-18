@@ -10,7 +10,7 @@ Before making any changes, **read all documentation files in the `agents/` direc
 
 ## Language and Runtime
 
-- Python 3.11+
+- Python 3.13+
 - Use built-in generic types: `list[str]`, `dict[str, int]`, `tuple[int, int | None]`
 - Use `X | Y` union syntax, not `Optional[X]` or `Union[X, Y]`
 - Always add `from __future__ import annotations` as the first non-comment line

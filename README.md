@@ -25,7 +25,7 @@ Telegram federation bot for the Transsion Core Federation (TCF) community.
 
 | Component | Version |
 |---|---|
-| Python | 3.11 |
+| Python | 3.13 |
 | python-telegram-bot | 22.5 |
 | Motor (async MongoDB) | latest |
 | Flask | latest |

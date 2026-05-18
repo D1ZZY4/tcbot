@@ -19,7 +19,7 @@ def make_rl(max_calls: int = 3, window: float = 10.0) -> _RateLimiter:
     return _RateLimiter(max_calls=max_calls, window=window)
 
 
-## ── Basic allow / deny ─────────────────────────────────────────────────────
+## ── Complex Allow / Deny ─────────────────────────────────────────────────────
 
 class TestAllowDeny:
     def test_first_call_always_allowed(self):

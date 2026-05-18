@@ -11,6 +11,9 @@ from __future__ import annotations
 import os
 import pytest
 
+
+## ── Environment ───────────────────────────────────────────────────────────
+
 os.environ.setdefault("BOT_TOKEN",       "test:token")
 os.environ.setdefault("MONGODB_URI",     "mongodb://localhost:27017")
 os.environ.setdefault("DB_NAME",         "tcbot_test")
@@ -20,5 +23,7 @@ os.environ.setdefault("LOGS",            "-1001000000001")
 os.environ.setdefault("PROOFS",          "-1001000000002")
 os.environ.setdefault("APPEALS",         "-1001000000003")
 
+
+## ── Pytest ────────────────────────────────────────────────────────────────
 
 pytestmark = pytest.mark.asyncio

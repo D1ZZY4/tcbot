@@ -25,7 +25,7 @@ from tcbot.utils.logger import setup as setup_logging
 log = logging.getLogger(__name__)
 
 
-## ── member cache ───────────────────────────────────────────────────────────
+## ── Member Cache ───────────────────────────────────────────────────────────
 
 async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Cache sender's info on every message sent in any connected group."""
