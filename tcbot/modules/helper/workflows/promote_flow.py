@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-## Shared promote executor and role-alias helpers for admins.py
+## Promote execution flow - role assignment logic shared by admins.py
 from __future__ import annotations
 
 import asyncio

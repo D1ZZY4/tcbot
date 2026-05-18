@@ -14,7 +14,7 @@ from tcbot import cfg, database as db
 from tcbot.database.roles_db import ROLE_LABEL, get_effective_role
 from tcbot.modules.helper import decorators, extraction, keyboards, parse_logmsg
 from tcbot.modules.helper.formatter import code, mention
-from tcbot.modules.helper.promote_exec import (
+from tcbot.modules.helper.workflows.promote_flow import (
     _ROLE_ALIASES,
     _available_roles_for,
     _execute_promote,
