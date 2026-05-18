@@ -23,6 +23,9 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
 
+
+## ── Module & Help ─────────────────────────────────────────────────────────
+
 __module_name__ = "Admins"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
@@ -30,7 +33,7 @@ __help_text__ = (
     "<code>/tcdemote</code> (alias: <code>/tcd</code>)\n"
     "<code>/transferowner</code> (alias: <code>/tfowner</code>)\n"
     "<code>/tcpromoterequests</code> (alias: <code>/tcreqs</code>)\n"
-    "<code>/tcpromotelist</code>\n\n"
+    "<code>/tcpromotelist</code> (alias: <code>/tcplist</code>\n\n"
 
     "<b>Role Hierarchy</b>\n"
     "Founder (rank 4) › Admin (rank 3) › Developer (rank 2) › Tester (rank 1)\n\n"
@@ -74,7 +77,7 @@ __help_text__ = (
 )
 
 
-## ── Promote command ────────────────────────────────────────────────────────
+## ── Promote Command ────────────────────────────────────────────────────────
 
 @decorators.log_execution
 async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -183,7 +186,7 @@ async def on_promote_role_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
     )
 
 
-## ── Demote command ─────────────────────────────────────────────────────────
+## ── Demote Command ─────────────────────────────────────────────────────────
 
 @decorators.log_execution
 async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -306,7 +309,7 @@ async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 
-## ── Transfer ownership ─────────────────────────────────────────────────────
+## ── Transfer Ownership ─────────────────────────────────────────────────────
 
 @decorators.owner_only
 @decorators.log_execution
@@ -386,7 +389,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     )
 
 
-## ── Promotion list (Admin and above) ───────────────────────────────────────
+## ── Promotion List (Admin and above) ───────────────────────────────────────
 
 @decorators.staff_only
 @decorators.log_execution
@@ -471,22 +474,23 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         )
 
 
-## ── Handler list ───────────────────────────────────────────────────────────
+## ── Handlers ───────────────────────────────────────────────────────────
 
-_PROMOTE_FILTER  = build_prefixed_filters("tcpromote")         | build_prefixed_filters("tcp")
-_DEMOTE_FILTER   = build_prefixed_filters("tcdemote")          | build_prefixed_filters("tcd")
-_TRANSFER_FILTER = build_prefixed_filters("transferowner")     | build_prefixed_filters("tfowner")
-_PROMOREQ_FILTER = build_prefixed_filters("tcpromoterequests") | build_prefixed_filters("tcreqs")
+_PMT_CMDS        = build_prefixed_filters("tcpromote")         | build_prefixed_filters("tcp")
+_DMT_CMDS        = build_prefixed_filters("tcdemote")          | build_prefixed_filters("tcd")
+_TF_CMDS         = build_prefixed_filters("transferowner")     | build_prefixed_filters("tfowner")
+_PMTREQ_CMDS     = build_prefixed_filters("tcpromoterequests") | build_prefixed_filters("tcreqs")
+_PMTLIST_CMDS    = build_prefixed_filters("tcpromotelist")     | build_prefixed_filters("tcplist")
 
 __handlers__ = [
-    MessageHandler(_PROMOTE_FILTER,  cmd_promote),
-    MessageHandler(_DEMOTE_FILTER,   cmd_demote),
-    MessageHandler(_TRANSFER_FILTER, cmd_transfer),
-    MessageHandler(_PROMOREQ_FILTER, cmd_promote_request),
-    MessageHandler(build_prefixed_filters("tcpromotelist"), cmd_promote_list),
-    CallbackQueryHandler(on_promo_decision,     pattern=r"^(promo_approve|promo_reject):"),
-    CallbackQueryHandler(on_promote_role_btn,   pattern=r"^promo_role:[a-z]+:\d+$"),
-    CallbackQueryHandler(on_promote_role_cancel,pattern=r"^promo_role_cancel:\d+$"),
-    CallbackQueryHandler(on_demote_confirm,     pattern=r"^demote_confirm:\d+$"),
-    CallbackQueryHandler(on_demote_cancel,      pattern=r"^demote_cancel:\d+$"),
+    MessageHandler(_PMT_CMDS,     cmd_promote),
+    MessageHandler(_DMT_CMDS,     cmd_demote),
+    MessageHandler(_TF_CMDS,      cmd_transfer),
+    MessageHandler(_PMTREQ_CMDS,  cmd_promote_request),
+    MessageHandler(_PMTLIST_CMDS, cmd_promote_list),
+    CallbackQueryHandler(on_promo_decision,      pattern=r"^(promo_approve|promo_reject):"),
+    CallbackQueryHandler(on_promote_role_btn,    pattern=r"^promo_role:[a-z]+:\d+$"),
+    CallbackQueryHandler(on_promote_role_cancel, pattern=r"^promo_role_cancel:\d+$"),
+    CallbackQueryHandler(on_demote_confirm,      pattern=r"^demote_confirm:\d+$"),
+    CallbackQueryHandler(on_demote_cancel,       pattern=r"^demote_cancel:\d+$"),
 ]

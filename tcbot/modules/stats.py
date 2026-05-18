@@ -187,10 +187,8 @@ __handlers__ = [
     MessageHandler(_STATS_FILTER,                      cmd_stats),
     CallbackQueryHandler(on_stats_main,                pattern=r"^stats_main$"),
     CallbackQueryHandler(on_stats_admins,              pattern=r"^stats_admins$"),
-    ## ── Connected Chats drill-down ─────────────────────────────────────────
     CallbackQueryHandler(on_stats_chats,               pattern=r"^stats_chats:\d+$"),
     CallbackQueryHandler(on_stats_chat_item,           pattern=r"^stats_chat_item:\d+:\d+$"),
-    ## ── User Bans drill-down ───────────────────────────────────────────────
     CallbackQueryHandler(on_stats_bans,                pattern=r"^stats_bans:\d+$"),
     CallbackQueryHandler(on_stats_ban_item,            pattern=r"^stats_ban_item:\d+:\d+$"),
     CallbackQueryHandler(on_stats_bans_search,         pattern=r"^stats_bans_search$"),

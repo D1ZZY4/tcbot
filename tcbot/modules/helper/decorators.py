@@ -23,7 +23,8 @@ log = logging.getLogger(__name__)
 ## ── Per-user sliding-window rate limiter ───────────────────────────────────
 
 class _RateLimiter:
-    """Sliding-window per-user rate limiter.
+    """
+    Sliding-window per-user rate limiter.
 
     ``check(uid)`` records the call and returns ``0.0`` when allowed.
     Returns the remaining seconds in the window (> 0) when the limit is hit
