@@ -35,6 +35,7 @@ _GROUP_START_TEXT = (
 
 ## ── /start command ─────────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg      = update.effective_message
@@ -72,6 +73,8 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 ## ── Menu callbacks ─────────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
 async def on_back_to_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q: CallbackQuery = update.callback_query
     botname = ctx.bot.first_name
@@ -109,25 +112,31 @@ async def _show_groups(q: CallbackQuery, detailed: bool) -> None:
     )
 
 
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
 async def on_menu_groups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _show_groups(update.callback_query, False)
 
 
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
 async def on_menu_groups_details(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _show_groups(update.callback_query, True)
 
 
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
 async def on_menu_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _show_groups(update.callback_query, False)
 
 
-## ── Handler list ───────────────────────────────────────────────────────────
+## ── Handlers ───────────────────────────────────────────────────────────────
 
 _START_FILTER = build_prefixed_filters("start")
 
 __handlers__ = [
     MessageHandler(_START_FILTER, cmd_start),
-    CallbackQueryHandler(on_back_to_start,     pattern=r"^back_to_start$"),
+    CallbackQueryHandler(on_back_to_start,       pattern=r"^back_to_start$"),
     CallbackQueryHandler(on_menu_groups,         pattern=r"^menu_groups$"),
     CallbackQueryHandler(on_menu_groups_details, pattern=r"^menu_groups_details$"),
     CallbackQueryHandler(on_menu_groups_simple,  pattern=r"^menu_groups_simple$"),

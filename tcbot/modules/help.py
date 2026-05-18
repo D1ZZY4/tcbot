@@ -14,23 +14,25 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot.modules import ALL_MODULES
 from tcbot.modules.helper import decorators, keyboards
-from tcbot.utils.prefixes import build_prefixed_filters
+from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
+
+__module_name__ = None
 
 
 ## ── Build help content ─────────────────────────────────────────────────────
 
 def _build_help_content() -> dict[str, tuple[str, str]]:
-    """
-    Iterate over ALL_MODULES and collect modules that expose both
-    __module_name__ (not None) and __help_text__.
-    Key format: "help_<mod_filename>"  e.g. "help_banning", "help_admins"
+    """Collect modules that expose ``__module_name__`` and ``__help_text__``.
+
+    Returns:
+        Mapping of ``"help_<mod_filename>"`` → ``(display_name, help_text)``.
     """
     content: dict[str, tuple[str, str]] = {}
     for mod_name in ALL_MODULES:
         try:
-            mod = importlib.import_module(f"tcbot.modules.{mod_name}")
+            mod  = importlib.import_module(f"tcbot.modules.{mod_name}")
             name = getattr(mod, "__module_name__", None)
             text = getattr(mod, "__help_text__", None)
             if name and text:
@@ -42,7 +44,7 @@ def _build_help_content() -> dict[str, tuple[str, str]]:
 
 HELP_CONTENT = _build_help_content()
 
-## Sorted automatically by display name
+## Sorted by display name (case-insensitive)
 _TOPICS_SORTED: list[tuple[str, str]] = sorted(
     ((name, key) for key, (name, _) in HELP_CONTENT.items()),
     key=lambda t: t[0].lower(),
@@ -55,6 +57,14 @@ HELP_TOPICS_MENU: list[tuple[str, str]] = _TOPICS_SORTED
 HELP_TOPICS_CMD: list[tuple[str, str]] = [
     (name, "helpc_" + key[5:]) for name, key in _TOPICS_SORTED
 ]
+
+## Module name → help key mapping for /help <module> lookup
+_MODULE_NAME_MAP: dict[str, str] = {}
+for _key, (_dname, _) in HELP_CONTENT.items():
+    ## "help_banning" → key "banning"; display name "Ban" → normalized "ban"
+    _module_slug = _key[5:]                     ## "banning"
+    _MODULE_NAME_MAP[_module_slug.lower()] = _key
+    _MODULE_NAME_MAP[_dname.lower()]       = _key
 
 
 ## ── Prefix note ────────────────────────────────────────────────────────────
@@ -70,7 +80,7 @@ def _prefix_note() -> str:
 _HELP_INDEX_TEXT = (
     "<b>{botname} Help</b>\n\n"
     f"I manages groups connected on {cfg.community_name}. "
-    "Select a topic below."
+    "Select a topic below, or use <code>/help &lt;module&gt;</code> for direct access."
 )
 
 
@@ -82,12 +92,14 @@ async def _render_help_index(
     *,
     with_back_to_start: bool,
 ) -> None:
-    """
-    Edit (or send) the help index message on the appropriate callback query.
-    """
+    """Edit the help index message on the appropriate callback query."""
     q: CallbackQuery = update.callback_query
     botname = ctx.bot.first_name
-    kb = keyboards.help_topics_menu_kb(HELP_TOPICS_MENU) if with_back_to_start else keyboards.help_topics_kb(HELP_TOPICS_CMD)
+    kb = (
+        keyboards.help_topics_menu_kb(HELP_TOPICS_MENU)
+        if with_back_to_start
+        else keyboards.help_topics_kb(HELP_TOPICS_CMD)
+    )
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(
@@ -100,9 +112,50 @@ async def _render_help_index(
 
 ## ── /help command ──────────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the help index, or a specific module's help if an arg is given.
+
+    Usage::
+
+        /help            → shows help topic index
+        /help ban        → shows Ban module help directly
+        /help banning    → same (module filename also accepted)
+        /help admins     → shows Admins module help
+    """
     botname = ctx.bot.first_name
+    args    = parse_cmd_args(update.effective_message.text)
+
+    if args:
+        ## Attempt to resolve argument to a module
+        query   = " ".join(args).strip().lower()
+        help_key = _MODULE_NAME_MAP.get(query)
+
+        if help_key and help_key in HELP_CONTENT:
+            name, text = HELP_CONTENT[help_key]
+            await update.effective_message.reply_text(
+                f"<b>Help for {name}</b>\n\n{text}\n{_prefix_note()}",
+                parse_mode="HTML",
+                reply_markup=keyboards.back_to_help_cmd_kb(),
+            )
+            return
+
+        ## Module not found - show closest matches from known names
+        candidates = sorted(
+            _MODULE_NAME_MAP,
+            key=lambda k: (query not in k, abs(len(k) - len(query))),
+        )[:3]
+        suggestion = ", ".join(f"<code>/help {c}</code>" for c in candidates if c)
+        hint = f"\n\nDid you mean: {suggestion}?" if suggestion else ""
+        await update.effective_message.reply_text(
+            f"Module <b>{query}</b> not found.{hint}",
+            parse_mode="HTML",
+            reply_markup=keyboards.help_topics_kb(HELP_TOPICS_CMD),
+        )
+        return
+
+    ## No args - show full index
     await update.effective_message.reply_text(
         _HELP_INDEX_TEXT.format(botname=botname),
         parse_mode="HTML",
@@ -112,16 +165,18 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 ## ── Help from menu ─────────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
 async def on_help_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _render_help_index(update, ctx, with_back_to_start=True)
 
 
 ## ── Help in group ──────────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
 async def on_help_menu_group(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Help tapped from group /start inline - answer with alert, no edit.
-    """
+    """Help tapped from group /start inline - answer with alert, no edit."""
     q: CallbackQuery = update.callback_query
     await q.answer(
         "Use /help in this group to browse all commands.",
@@ -131,6 +186,8 @@ async def on_help_menu_group(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
 
 ## ── Help index callback ────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
 async def on_helpc_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _render_help_index(update, ctx, with_back_to_start=False)
 
@@ -158,6 +215,8 @@ async def _show_topic(q: CallbackQuery, menu_key: str, back_kb) -> None:
 
 ## ── Help topic - unified handler (menu path + command path) ────────────────
 
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
 async def on_help_topic_any(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle both ``help_<mod>`` (menu path) and ``helpc_<mod>`` (command path).
 
@@ -172,7 +231,7 @@ async def on_help_topic_any(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         await _show_topic(q, q.data, keyboards.back_to_help_kb())
 
 
-## ── Handler list ───────────────────────────────────────────────────────────
+## ── Handlers ───────────────────────────────────────────────────────────────
 
 _HELP_FILTER = build_prefixed_filters("help") | build_prefixed_filters("commands")
 
@@ -181,7 +240,7 @@ __handlers__ = [
     CallbackQueryHandler(on_help_menu,       pattern=r"^help_menu$"),
     CallbackQueryHandler(on_help_menu_group, pattern=r"^help_menu_group$"),
     CallbackQueryHandler(on_helpc_main,      pattern=r"^helpc_main$"),
-    ## Unified topic handler: catches both help_<mod> and helpc_<mod>
-    ## Registered after the specific patterns above so they take priority.
+    ## Unified topic handler - catches both help_<mod> and helpc_<mod>
+    ## Registered after specific patterns above so they take priority
     CallbackQueryHandler(on_help_topic_any,  pattern=r"^(help|helpc)_\w+$"),
 ]

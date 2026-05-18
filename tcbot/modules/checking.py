@@ -18,6 +18,9 @@ from tcbot.modules.helper.parse_link import message_link
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.timedate_format import fmt_dt
 
+
+## ── Module & Help ─────────────────────────────────────────────────────────
+
 __module_name__ = "Checking"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
@@ -92,6 +95,7 @@ async def _ban_summary(
 
 ## ── /checkme ───────────────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
 async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     user  = update.effective_user
@@ -150,6 +154,8 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 ## ── /checkme inline callbacks ──────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
 async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q      = update.callback_query
     ban_id = q.data.split(":")[1]
@@ -170,6 +176,8 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     )
 
 
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
 async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q      = update.callback_query
     ban_id = q.data.split(":")[1]
@@ -199,6 +207,7 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
 ## ── /checkban ──────────────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
 async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(update.effective_message.text)
@@ -269,7 +278,7 @@ async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await msg.reply_text(text, parse_mode="HTML", reply_markup=kb)
 
 
-## ── Handler registration ───────────────────────────────────────────────────
+## ── Handlers ───────────────────────────────────────────────────────────────
 
 _CHECKME_FILTER = build_prefixed_filters("checkme") | build_prefixed_filters("cme")
 _BANINFO_FILTER = build_prefixed_filters("checkban") | build_prefixed_filters("cban")

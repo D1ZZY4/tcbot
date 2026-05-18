@@ -128,6 +128,62 @@ async def global_rate_limit_handler(update: Update, ctx: ContextTypes.DEFAULT_TY
         raise ApplicationHandlerStop
 
 
+## ── Per-handler rate limiter factory ───────────────────────────────────────
+
+def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
+    """Per-handler sliding-window rate limiter factory.
+
+    Returns a decorator that applies a per-user rate limit to a specific
+    handler. Complements the global rate limiter (group -1) with fine-grained
+    per-command control.
+
+    The limiter is non-blocking: allowed requests pass through with zero
+    added latency. Denied requests receive an immediate reply and return
+    without executing the handler body.
+
+    Args:
+        limit:  Maximum number of calls allowed within ``period`` seconds.
+        period: Sliding window duration in seconds.
+
+    Usage::
+
+        @decorators.ratelimiter(limit=3, period=60)
+        @decorators.staff_only
+        @decorators.log_execution
+        async def cmd_broadcast(update, ctx):
+            ...
+    """
+    _limiter = _RateLimiter(max_calls=limit, window=period)
+
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+            uid = update.effective_user.id if update.effective_user else None
+            if uid:
+                wait = _limiter.check(uid)
+                if wait:
+                    if update.callback_query:
+                        try:
+                            await update.callback_query.answer(
+                                f"⏳ Slow down - try again in {wait:.0f}s.",
+                                show_alert=False,
+                            )
+                        except Exception:
+                            pass
+                        return
+                    if update.effective_message:
+                        try:
+                            await update.effective_message.reply_text(
+                                f"⏳ Slow down! Try again in {wait:.0f} seconds."
+                            )
+                        except Exception:
+                            pass
+                        return
+            return await func(update, ctx)
+        return wrapper
+    return decorator
+
+
 ## ── Execution tracer ───────────────────────────────────────────────────────
 
 def log_execution(func: Callable) -> Callable:
@@ -160,6 +216,7 @@ def log_execution(func: Callable) -> Callable:
 ## ── Auth decorators ────────────────────────────────────────────────────────
 
 def owner_only(func: Callable) -> Callable:
+    """Restrict handler to the Founder only."""
     @functools.wraps(func)
     async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         uid = update.effective_user.id if update.effective_user else None
@@ -173,7 +230,7 @@ def owner_only(func: Callable) -> Callable:
 
 
 def staff_only(func: Callable) -> Callable:
-    """Founder and Admin."""
+    """Restrict handler to Founder and Admin."""
     @functools.wraps(func)
     async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         uid = update.effective_user.id if update.effective_user else None
@@ -187,7 +244,7 @@ def staff_only(func: Callable) -> Callable:
 
 
 def mod_only(func: Callable) -> Callable:
-    """Founder, Admin, Developer - for ban/unban."""
+    """Restrict handler to Founder, Admin, Developer (ban/unban level)."""
     @functools.wraps(func)
     async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         uid = update.effective_user.id if update.effective_user else None
@@ -201,7 +258,7 @@ def mod_only(func: Callable) -> Callable:
 
 
 def basic_mod_only(func: Callable) -> Callable:
-    """Founder, Admin, Developer, Tester - for kick/mute/warn."""
+    """Restrict handler to Founder, Admin, Developer, Tester (kick/mute/warn level)."""
     @functools.wraps(func)
     async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         uid = update.effective_user.id if update.effective_user else None

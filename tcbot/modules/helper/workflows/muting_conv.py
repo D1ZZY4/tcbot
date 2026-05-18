@@ -35,7 +35,7 @@ from telegram.ext import (
 
 from tcbot import cfg
 from tcbot.database.roles_db import get_effective_role, role_rank, ROLE_LABEL
-from tcbot.modules.helper import extraction, keyboards
+from tcbot.modules.helper import decorators, extraction, keyboards
 from tcbot.modules.helper.formatter import code, mention
 from tcbot.modules.helper.workflows.muting_flow import (
     _DURATION_RE,
@@ -58,6 +58,8 @@ async def _end_conversation(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
 
 ## ── Entry point ────────────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=5, period=60)
+@decorators.log_execution
 async def cmd_mute_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     msg   = update.effective_message
     admin = update.effective_user

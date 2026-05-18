@@ -79,6 +79,7 @@ __help_text__ = (
 
 ## ── Promote Command ────────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=5, period=60)
 @decorators.log_execution
 async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
@@ -139,6 +140,8 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 ## ── Promote role selection callback ────────────────────────────────────────
 
+@decorators.ratelimiter(limit=10, period=30)
+@decorators.log_execution
 async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q             = update.callback_query
     admin         = update.effective_user
@@ -178,6 +181,8 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
 
 ## ── Promote role cancel callback ────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=10, period=30)
+@decorators.log_execution
 async def on_promote_role_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     await asyncio.gather(
@@ -188,6 +193,7 @@ async def on_promote_role_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
 
 ## ── Demote Command ─────────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=5, period=60)
 @decorators.log_execution
 async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
@@ -234,6 +240,8 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 ## ── Demote confirm callback ─────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=10, period=30)
+@decorators.log_execution
 async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q             = update.callback_query
     admin         = update.effective_user
@@ -301,6 +309,8 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
 ## ── Demote cancel callback ──────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=10, period=30)
+@decorators.log_execution
 async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     await asyncio.gather(
@@ -311,6 +321,7 @@ async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
 ## ── Transfer Ownership ─────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=3, period=300)
 @decorators.owner_only
 @decorators.log_execution
 async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -347,6 +358,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 ## ── Promotion request (any user) ───────────────────────────────────────────
 
+@decorators.ratelimiter(limit=3, period=300)
 @decorators.log_execution
 async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     user     = update.effective_user
@@ -391,6 +403,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
 
 ## ── Promotion List (Admin and above) ───────────────────────────────────────
 
+@decorators.ratelimiter(limit=5, period=60)
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -410,6 +423,7 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
 ## ── Promotion decision callback (Founder only) ─────────────────────────────
 
+@decorators.ratelimiter(limit=10, period=30)
 @decorators.log_execution
 async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q        = update.callback_query
@@ -474,13 +488,13 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         )
 
 
-## ── Handlers ───────────────────────────────────────────────────────────
+## ── Handlers ───────────────────────────────────────────────────────────────
 
-_PMT_CMDS        = build_prefixed_filters("tcpromote")         | build_prefixed_filters("tcp")
-_DMT_CMDS        = build_prefixed_filters("tcdemote")          | build_prefixed_filters("tcd")
-_TF_CMDS         = build_prefixed_filters("transferowner")     | build_prefixed_filters("tfowner")
-_PMTREQ_CMDS     = build_prefixed_filters("tcpromoterequests") | build_prefixed_filters("tcreqs")
-_PMTLIST_CMDS    = build_prefixed_filters("tcpromotelist")     | build_prefixed_filters("tcplist")
+_PMT_CMDS     = build_prefixed_filters("tcpromote")         | build_prefixed_filters("tcp")
+_DMT_CMDS     = build_prefixed_filters("tcdemote")          | build_prefixed_filters("tcd")
+_TF_CMDS      = build_prefixed_filters("transferowner")     | build_prefixed_filters("tfowner")
+_PMTREQ_CMDS  = build_prefixed_filters("tcpromoterequests") | build_prefixed_filters("tcreqs")
+_PMTLIST_CMDS = build_prefixed_filters("tcpromotelist")     | build_prefixed_filters("tcplist")
 
 __handlers__ = [
     MessageHandler(_PMT_CMDS,     cmd_promote),

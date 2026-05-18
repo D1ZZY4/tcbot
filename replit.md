@@ -29,10 +29,12 @@ A Telegram bot for the Transsion Core Federation (TCF) community. Manages federa
 | `tcbot/modules/appeals.py` | Pure functions for appeal business logic |
 | `tcbot/modules/helper/parse_link.py` | Link builders, HTML helpers (`user_link`, `safe_first_name`), `utcnow()` |
 | `tcbot/modules/helper/keyboards.py` | All inline-keyboard factory functions (includes `promote_role_kb`, `demote_confirm_kb`) |
-| `tcbot/modules/helper/decorators.py` | Auth decorators (`owner_only`, `staff_only`, `mod_only`, `basic_mod_only`) + `log_execution` tracer |
+| `tcbot/modules/helper/decorators.py` | Auth decorators (`owner_only`, `staff_only`, `mod_only`, `basic_mod_only`) + `log_execution` tracer + `ratelimiter(limit, period)` per-user throttle |
 | `tcbot/modules/helper/role_guard.py` | `resolve_and_check()` + `auto_demote()` - shared role-permission helpers for moderation flows |
 | `tcbot/modules/helper/extraction.py` | `extract_target()`, `ResolvedTarget`, `resolve_identity()` |
 | `tcbot/modules/helper/workflows/promote_flow.py` | `_execute_promote()`, `_ROLE_ALIASES`, `_available_roles_for()` — promote execution logic shared by admins.py |
+| `tcbot/modules/helper/workflows/kicking_conv.py` | Kick ConversationHandler factory `build_handler(entry_point)` — reason + proof states |
+| `tcbot/modules/helper/workflows/reason_flow.py` | Shared stateless reason helpers: `parse_inline_reason()`, `reason_prompt()`, `reason_noted_prompt()` |
 | `tcbot/utils/dispatch.py` | `fan_out()` — semaphore-bounded multi-group dispatcher (max 10 concurrent) |
 | `tcbot/utils/prefixes.py` | Prefix filter builder + alt-prefix dispatcher (`_REGISTRY`) |
 | `tcbot/utils/logger.py` | `BotLogFormatter` and `setup()` |

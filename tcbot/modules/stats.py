@@ -1,7 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-## Federation statistics command
+
 from __future__ import annotations
 
 import asyncio
@@ -27,6 +27,9 @@ from tcbot.modules.helper.workflows.stats_flow import (
     on_stats_search_item,
 )
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
+
+
+## ── Module & Help ─────────────────────────────────────────────────────────
 
 __module_name__ = "Stats"
 __help_text__ = (
@@ -54,6 +57,8 @@ __help_text__ = (
     "<code>/tcstats</code>"
 )
 
+
+## ── Helpers ────────────────────────────────────────────────────────────────
 
 def _stats_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
@@ -93,6 +98,7 @@ async def _stats_text() -> str:
 
 ## ── /tcstats command ───────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
 async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     text = await _stats_text()
@@ -101,6 +107,7 @@ async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 ## ── stats_main callback ─────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_stats_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
@@ -114,6 +121,7 @@ async def on_stats_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 ## ── stats_admins callback ───────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
@@ -180,6 +188,8 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         reply_markup=_simple_back_kb(),
     )
 
+
+## ── Handlers ───────────────────────────────────────────────────────────────
 
 _STATS_FILTER = build_prefixed_filters("tcstats")
 

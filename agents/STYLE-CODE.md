@@ -106,22 +106,40 @@ class SweepResult:
 
 ## Decorator Order
 
-When stacking auth and tracing decorators on a handler, place `@log_execution` closest to the function definition and the auth guard outermost:
+Three layers in fixed order — **outermost to innermost**:
+
+1. `@decorators.ratelimiter(limit, period)` — outermost; throttles per-user call rate
+2. `@decorators.owner_only` / `@decorators.staff_only` / `@decorators.mod_only` / `@decorators.basic_mod_only` — auth guard
+3. `@decorators.log_execution` — innermost; logs entry, exit, and elapsed ms after auth passes
 
 ```python
-@decorators.owner_only          # outermost – checked first
-@decorators.log_execution       # innermost – logs after auth passes
+@decorators.ratelimiter(limit=5, period=60)   # outermost – rate checked first
+@decorators.owner_only                         # auth guard – checked second
+@decorators.log_execution                      # innermost – logs after auth passes
 async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ...
 ```
 
-For handlers with no auth guard, `@log_execution` is the sole decorator:
+When there is no auth guard, ratelimiter and log_execution are used directly:
 
 ```python
+@decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
 async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ...
 ```
+
+For ConversationHandler entry points decorated inside the conversation (e.g. `cmd_kick_entry`), apply the stack the same way — the ConversationHandler wraps the already-decorated function.
+
+**Standard rate limits:**
+
+| Category | limit | period |
+|---|---|---|
+| Destructive commands (ban, kick, unban, broadcast) | 3–5 | 60 |
+| Moderation commands (mute, warn, cleanup) | 3–5 | 60 |
+| Read commands (stats, groups, checkme, help) | 8 | 30 |
+| Inline callbacks (button presses) | 15 | 30 |
+| Emergency-only (leaveall) | 1 | 300 |
 
 ## Related documentation
 

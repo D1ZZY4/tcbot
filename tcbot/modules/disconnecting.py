@@ -18,6 +18,9 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
 
+
+## ── Module & Help ─────────────────────────────────────────────────────────
+
 __module_name__ = "Disconnect"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
@@ -45,6 +48,9 @@ __help_text__ = (
 )
 
 
+## ── /tcdisconnect command ──────────────────────────────────────────────────
+
+@decorators.ratelimiter(limit=3, period=60)
 @decorators.log_execution
 async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
@@ -93,6 +99,9 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 
+## ── /rmtc command ──────────────────────────────────────────────────────────
+
+@decorators.ratelimiter(limit=5, period=60)
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -127,6 +136,8 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         await update.effective_message.reply_text("Group not found or already removed.")
 
+
+## ── Handlers ───────────────────────────────────────────────────────────────
 
 _DISCONNECT_FILTER = (
     build_prefixed_filters("tcdisconnect")

@@ -43,6 +43,8 @@ When adding a new file under `tcbot/modules/`:
 - Build `__handlers__` at the bottom of the file
 - Add the module to `MODULES_LOAD` only when the file is ready for review
 
+Every command handler and inline-keyboard callback in the module **must** carry `@decorators.ratelimiter(limit, period)` as the outermost decorator. See `agents/STYLE-CODE.md` for the full decorator stack order and the standard rate-limit table. Message-event handlers (e.g. `on_new_member` in `greeting.py`) are exempt.
+
 If ordering matters, adjust `_PRIORITY_FIRST` or `_PRIORITY_LAST` in `tcbot/modules/__init__.py`.
 
 ## Adding a database collection

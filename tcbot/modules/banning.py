@@ -13,7 +13,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.roles_db import ROLE_LABEL, get_effective_role, role_rank
-from tcbot.modules.helper import extraction, keyboards
+from tcbot.modules.helper import decorators, extraction, keyboards
 from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.role_guard import auto_demote
 from tcbot.modules.helper.workflows.ban_conv import build_handler
@@ -21,6 +21,9 @@ from tcbot.modules.helper.workflows.proof_conv import WAITING_PROOF
 from tcbot.utils.prefixes import parse_cmd_args
 
 log = logging.getLogger(__name__)
+
+
+## ── Module & Help ─────────────────────────────────────────────────────────
 
 __module_name__ = "Ban"
 __help_text__ = (
@@ -56,6 +59,8 @@ __help_text__ = (
 
 ## ── Entry point ────────────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=3, period=60)
+@decorators.log_execution
 async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     msg      = update.effective_message
     admin    = update.effective_user
@@ -132,5 +137,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     return WAITING_PROOF
 
+
+## ── Handlers ───────────────────────────────────────────────────────────────
 
 __handlers__ = [build_handler(cmd_ban_start)]

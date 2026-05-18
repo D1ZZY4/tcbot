@@ -21,7 +21,9 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 ## ── /tcunban command ────────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=5, period=60)
 @decorators.mod_only
+@decorators.log_execution
 async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg  = update.effective_message
     args = parse_cmd_args(msg.text)
@@ -62,6 +64,8 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await execute_unban(update, ctx, target_id, target_fname)
 
 
+## ── Handler factory ────────────────────────────────────────────────────────
+
 _FILTER = (
     build_prefixed_filters("tcunban")
     | build_prefixed_filters("tcunb")
@@ -69,4 +73,5 @@ _FILTER = (
 
 
 def build_handler() -> MessageHandler:
+    """Return the /tcunban MessageHandler."""
     return MessageHandler(_FILTER, cmd_unban)

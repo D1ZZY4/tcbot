@@ -18,6 +18,9 @@ from tcbot.utils.prefixes import build_prefixed_filters
 
 log = logging.getLogger(__name__)
 
+
+## ── Module & Help ─────────────────────────────────────────────────────────
+
 __module_name__ = "Cleanup"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
@@ -47,6 +50,8 @@ __help_text__ = (
 )
 
 
+## ── Helpers ────────────────────────────────────────────────────────────────
+
 async def _leave_one(
     bot,
     grp: dict,
@@ -71,6 +76,18 @@ async def _leave_one(
     )
 
 
+async def _should_remove(bot, grp: dict) -> bool:
+    """Return True if the bot has left or been kicked from the group."""
+    try:
+        member = await bot.get_chat_member(grp["chat_id"], bot.id)
+        return member.status in ("left", "kicked")
+    except Exception:
+        return True
+
+
+## ── /leaveall command ──────────────────────────────────────────────────────
+
+@decorators.ratelimiter(limit=1, period=300)
 @decorators.owner_only
 @decorators.log_execution
 async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -104,15 +121,9 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.error("Leaveall status edit failed: %s", exc)
 
 
-async def _should_remove(bot, grp: dict) -> bool:
-    """Return True if the bot has left or been kicked from the group."""
-    try:
-        member = await bot.get_chat_member(grp["chat_id"], bot.id)
-        return member.status in ("left", "kicked")
-    except Exception:
-        return True
+## ── /cleanup command ───────────────────────────────────────────────────────
 
-
+@decorators.ratelimiter(limit=3, period=60)
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -137,6 +148,8 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+## ── Handlers ───────────────────────────────────────────────────────────────
+
 _LEAVEALL_FILTER = (
     build_prefixed_filters("leaveall")
     | build_prefixed_filters("exitall")
@@ -150,5 +163,5 @@ _CLEANUP_FILTER = (
 
 __handlers__ = [
     MessageHandler(_LEAVEALL_FILTER, cmd_leaveall),
-    MessageHandler(_CLEANUP_FILTER, cmd_cleanup),
+    MessageHandler(_CLEANUP_FILTER,  cmd_cleanup),
 ]

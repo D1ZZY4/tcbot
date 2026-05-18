@@ -19,6 +19,9 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
 
+
+## ── Module & Help ─────────────────────────────────────────────────────────
+
 __module_name__ = "Broadcast"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
@@ -45,6 +48,9 @@ __help_text__ = (
 )
 
 
+## ── /tcbroadcast command ───────────────────────────────────────────────────
+
+@decorators.ratelimiter(limit=3, period=60)
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -77,7 +83,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     success = sum(1 for r in results if not isinstance(r, BaseException))
     failed  = len(results) - success
 
-    for i, (grp, r) in enumerate(zip(groups, results)):
+    for grp, r in zip(groups, results):
         if isinstance(r, BaseException):
             log.warning("Broadcast failed for %d: %s", grp["chat_id"], r)
 
@@ -99,6 +105,8 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return_exceptions=True,
     )
 
+
+## ── Handlers ───────────────────────────────────────────────────────────────
 
 _BROADCAST_FILTER = (
     build_prefixed_filters("tcbroadcast")

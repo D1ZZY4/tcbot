@@ -63,7 +63,7 @@ This package is the place for:
 
 - keyboard builders (`keyboards.py`)
 - formatting helpers (`formatter.py`, `parse_logmsg.py`, `parse_link.py`)
-- safety and filtering helpers (`decorators.py` — auth guards `owner_only` / `staff_only` / `mod_only` / `basic_mod_only` and the opt-in `log_execution` tracer; `parse_editmsg.py` — safe message edit with content-unchanged guard)
+- safety and filtering helpers (`decorators.py` — auth guards `owner_only` / `staff_only` / `mod_only` / `basic_mod_only`, the opt-in `log_execution` tracer, and `ratelimiter(limit, period)` per-user sliding-window rate limiter; `parse_editmsg.py` — safe message edit with content-unchanged guard)
 - role and authorization helpers (`role_guard.py`)
 - ban presentation helpers (`ban_info.py`)
 - target extraction helpers (`extraction.py`)
@@ -84,11 +84,13 @@ Example pairs:
 - `proof_flow.py` / `proof_conv.py`
 - `muting_flow.py` / `muting_conv.py`
 - `unban_flow.py` / `unban_conv.py`
-- `kicking_flow.py` / `kicking_conv.py`
+- `kicking_flow.py` / `kicking_conv.py` (ConversationHandler factory; entry point passed in from `kicking.py`)
 - `warning_flow.py` / `warning_conv.py`
 - `appeal_flow.py` (no conv pairing — external deep-link flow)
 
 Standalone executors (no ConversationHandler): `connected_flow.py`, `stats_flow.py`, `stats_chats_flow.py`, `promote_flow.py`.
+
+Shared reason utilities: `reason_flow.py` — `parse_inline_reason()`, `reason_prompt()`, `reason_noted_prompt()` reused by kick, mute, and warn entry points.
 
 `promote_flow.py` contains the shared `_execute_promote` executor used by `admins.py` and its callbacks. It lives in `workflows/` alongside the other execution flows.
 

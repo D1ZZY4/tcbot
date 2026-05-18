@@ -27,6 +27,9 @@ from tcbot.utils.prefixes import build_prefixed_filters
 
 log = logging.getLogger(__name__)
 
+
+## ── Module & Help ─────────────────────────────────────────────────────────
+
 __module_name__ = "Connect"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
@@ -56,6 +59,9 @@ __help_text__ = (
 )
 
 
+## ── /tcconnect command ─────────────────────────────────────────────────────
+
+@decorators.ratelimiter(limit=3, period=60)
 @decorators.log_execution
 async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
@@ -108,6 +114,8 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         ),
     )
 
+
+## ── Handlers ───────────────────────────────────────────────────────────────
 
 _CONNECT_FILTER = (
     build_prefixed_filters("tcconnect")

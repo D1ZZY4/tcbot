@@ -29,6 +29,7 @@ __about_msg__ = (
 
 ## ── Callback handler ────────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_about_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q: CallbackQuery = update.callback_query
@@ -40,6 +41,8 @@ async def on_about_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         ),
     )
 
+
+## ── Handlers ───────────────────────────────────────────────────────────────
 
 __handlers__ = [
     CallbackQueryHandler(on_about_menu, pattern=r"^about_menu$"),

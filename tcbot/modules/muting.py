@@ -15,6 +15,9 @@ from tcbot.modules.helper.workflows.muting_conv import build_handler
 from tcbot.modules.helper.workflows.muting_flow import execute_unmute
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
+
+## ── Module & Help ─────────────────────────────────────────────────────────
+
 __module_name__ = "Mute"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
@@ -53,6 +56,9 @@ __help_text__ = (
 )
 
 
+## ── /tcunmute command ──────────────────────────────────────────────────────
+
+@decorators.ratelimiter(limit=5, period=60)
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -93,6 +99,8 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     await execute_unmute(update, ctx, target_id, target_name or str(target_id))
 
+
+## ── Handlers ───────────────────────────────────────────────────────────────
 
 _UNMUTE_FILTER = (
     build_prefixed_filters("tcunmute")

@@ -15,6 +15,9 @@ from tcbot.modules.helper.formatter import code, esc
 from tcbot.modules.helper.parse_editmsg import safe_edit
 from tcbot.utils.prefixes import build_prefixed_filters
 
+
+## ── Module & Help ─────────────────────────────────────────────────────────
+
 __module_name__ = "Groups"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
@@ -36,6 +39,8 @@ __help_text__ = (
     "<code>/tcfgroups</code> or <code>/tcg</code>"
 )
 
+
+## ── Helpers ────────────────────────────────────────────────────────────────
 
 def _render(groups: list[dict], detailed: bool) -> str:
     lines = [f"<b>Connected Groups</b>\n\nCount: {len(groups)}\n"]
@@ -59,6 +64,7 @@ def _kb(detailed: bool) -> InlineKeyboardMarkup:
 
 ## ── /tcfgroups command ──────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
 async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     groups = await db.groups_db.active_groups()
@@ -85,15 +91,19 @@ async def _toggle(update: Update, ctx: ContextTypes.DEFAULT_TYPE, detailed: bool
     await safe_edit(q.message, _render(groups, detailed), reply_markup=_kb(detailed))
 
 
+@decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_groups_details(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _toggle(update, ctx, True)
 
 
+@decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _toggle(update, ctx, False)
 
+
+## ── Handlers ───────────────────────────────────────────────────────────────
 
 _GROUPS_FILTER = (
     build_prefixed_filters("tcfgroups")

@@ -47,7 +47,8 @@ tcbot/
 │   │   ├── keyboards.py    - All InlineKeyboardMarkup builders
 │   │   │                     promote_role_kb(target_id, roles), demote_confirm_kb(target_id)
 │   │   ├── decorators.py   - owner_only, staff_only, mod_only, basic_mod_only,
-│   │   │                     log_execution (opt-in execution tracer)
+│   │   │                     log_execution (opt-in execution tracer),
+│   │   │                     ratelimiter(limit, period) (per-user sliding-window throttle)
 │   │   ├── role_guard.py   - resolve_and_check(), auto_demote() - shared moderation helpers
 │   │   ├── parse_logmsg.py - Log message text builders
 │   │   │                     role_assigned, role_removed, role_auto_demoted
@@ -114,10 +115,19 @@ Key helpers in `tcbot.modules.helper.role_guard`:
 - `auto_demote(bot, target_id, target_fname, target_role, executor_id, executor_fname, action)` → removes role, logs, notifies DM
 
 Decorator notes:
+- `@decorators.ratelimiter(limit, period)` - per-user sliding-window throttle; must be the **outermost** decorator on every command and callback handler
 - `@decorators.mod_only` - Founder/Admin/Developer (ban/unban)
 - `@decorators.basic_mod_only` - Founder/Admin/Developer/Tester (kick/mute/warn)
 - `@decorators.log_execution` - opt-in tracer; logs entry, exit, and exceptions with elapsed ms
   Place innermost (closest to `async def`) after any auth decorators.
+
+Full stack order (outermost → innermost):
+```python
+@decorators.ratelimiter(limit=5, period=60)  # outermost
+@decorators.owner_only                        # auth guard
+@decorators.log_execution                     # innermost
+async def cmd_example(...): ...
+```
 
 Auto-demote: fires on ban AND kick when target holds any role.
 

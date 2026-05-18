@@ -60,6 +60,7 @@ _PRIVACY_POLICY_MSG = (
 
 ## ── Callback handlers ───────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_privacy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q: CallbackQuery = update.callback_query
@@ -75,6 +76,7 @@ async def on_privacy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
 ## ── Privacy policy callback ─────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_privacy_policy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q: CallbackQuery = update.callback_query

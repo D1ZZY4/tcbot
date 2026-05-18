@@ -41,6 +41,7 @@ def _additional_kb() -> InlineKeyboardMarkup:
 
 ## ── Callback handler ────────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_additional_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q: CallbackQuery = update.callback_query
@@ -53,6 +54,8 @@ async def on_additional_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         ),
     )
 
+
+## ── Handlers ───────────────────────────────────────────────────────────────
 
 __handlers__ = [
     CallbackQueryHandler(on_additional_menu, pattern=r"^additional_menu$"),

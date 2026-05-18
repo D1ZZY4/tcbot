@@ -57,6 +57,7 @@ Before making any changes, **read all documentation files in the `agents/` direc
 4. Basic moderation commands (kick/mute/warn) must use `@decorators.basic_mod_only` (all roles) or an explicit rank check.
 5. Never expose internal user IDs in public group messages beyond what is necessary.
 6. Appeal links are single-use and tied to a specific `ban_id`. Validate `banned_user_id == update.effective_user.id` before proceeding.
+7. Every command handler and callback handler **must** apply `@decorators.ratelimiter(limit, period)` as the outermost decorator. See `agents/STYLE-CODE.md` for the canonical rate-limit table. Message-event handlers (e.g. `on_new_member`) are exempt.
 
 ## Roles
 

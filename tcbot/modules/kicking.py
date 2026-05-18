@@ -7,24 +7,31 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import (
-    CallbackQueryHandler,
-    ContextTypes,
-    ConversationHandler,
-    MessageHandler,
-    filters,
-)
+from telegram import Update
+from telegram.ext import ContextTypes, ConversationHandler
 
 from tcbot import cfg
 from tcbot.database.roles_db import ROLE_LABEL, get_effective_role, role_rank
-from tcbot.modules.helper import extraction
+from tcbot.modules.helper import decorators, extraction
 from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.role_guard import auto_demote
-from tcbot.modules.helper.workflows.kicking_flow import execute_kick
-from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters, parse_cmd_args
+from tcbot.modules.helper.workflows.kicking_conv import (
+    WAITING_PROOF,
+    _KB_PROOF,
+    _KB_REASON,
+    build_handler,
+)
+from tcbot.modules.helper.workflows.reason_flow import (
+    parse_inline_reason,
+    reason_noted_prompt,
+    reason_prompt,
+)
+from tcbot.utils.prefixes import parse_cmd_args
 
 log = logging.getLogger(__name__)
+
+
+## ── Module & Help ─────────────────────────────────────────────────────────
 
 __module_name__ = "Kick"
 __help_text__ = (
@@ -58,45 +65,11 @@ __help_text__ = (
     "Or reply to a message and run <code>/tck</code>."
 )
 
-WAITING_REASON = 0
-WAITING_PROOF  = 1
-
-_KB_REASON = InlineKeyboardMarkup([[
-    InlineKeyboardButton("Skip",   callback_data="kick_skip_reason"),
-    InlineKeyboardButton("Cancel", callback_data="kick_cancel"),
-]])
-
-_KB_PROOF = InlineKeyboardMarkup([[
-    InlineKeyboardButton("Skip",   callback_data="kick_skip_proof"),
-    InlineKeyboardButton("Cancel", callback_data="kick_cancel"),
-]])
-
-
-## ── Helpers ────────────────────────────────────────────────────────────────
-
-def _clear(ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    for k in ("kick_target_id", "kick_target_name", "kick_reason", "kick_proof_desc"):
-        ctx.user_data.pop(k, None)
-
-
-async def _end_conversation(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-    _clear(ctx)
-    await update.effective_message.reply_text("Kick operation cancelled.")
-    return ConversationHandler.END
-
-
-async def _do_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-    target_id   = ctx.user_data["kick_target_id"]
-    target_name = ctx.user_data["kick_target_name"]
-    reason      = ctx.user_data.get("kick_reason", "No reason provided")
-    proof_desc  = ctx.user_data.get("kick_proof_desc")
-    _clear(ctx)
-    await execute_kick(update, ctx, target_id, target_name, reason, proof_desc=proof_desc)
-    return ConversationHandler.END
-
 
 ## ── Entry point ────────────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=5, period=60)
+@decorators.log_execution
 async def cmd_kick_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     msg   = update.effective_message
     admin = update.effective_user
@@ -113,7 +86,8 @@ async def cmd_kick_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if role_rank(executor_role) < role_rank("tester"):
         await msg.reply_text("You need at least a Tester role to kick - not your call. 🚫")
         return ConversationHandler.END
-    inline_reason = " ".join(args[1:] if has_explicit_target else args).strip()
+
+    inline_reason = parse_inline_reason(args, has_explicit_target)
 
     if not target_id:
         await msg.reply_text(
@@ -157,105 +131,20 @@ async def cmd_kick_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if inline_reason:
         ctx.user_data["kick_reason"] = inline_reason
         await msg.reply_text(
-            f"Kicking {target_mention}.\n"
-            f"Reason: <b>{inline_reason}</b>\n\n"
-            "Got any proof? Send a photo or video, or tap <b>Skip</b> to proceed.",
+            reason_noted_prompt("kick", inline_reason, target_mention),
             parse_mode="HTML",
             reply_markup=_KB_PROOF,
         )
         return WAITING_PROOF
 
     await msg.reply_text(
-        f"About to kick {target_mention}.\n"
-        "What's the reason? Type it below, or tap <b>Skip</b>.",
+        reason_prompt(target_mention, "kick"),
         parse_mode="HTML",
         reply_markup=_KB_REASON,
     )
-    return WAITING_REASON
+    return 0  ## WAITING_REASON
 
 
-## ── WAITING_REASON handlers ────────────────────────────────────────────────
+## ── Handlers ───────────────────────────────────────────────────────────────
 
-async def on_kick_reason(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-    ctx.user_data["kick_reason"] = update.effective_message.text.strip()
-    await update.effective_message.reply_text(
-        "Reason noted. Send proof (photo or video) if you have any, "
-        "or tap <b>Skip</b> to proceed.",
-        parse_mode="HTML",
-        reply_markup=_KB_PROOF,
-    )
-    return WAITING_PROOF
-
-
-async def on_kick_skip_reason(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-    q = update.callback_query
-    ctx.user_data["kick_reason"] = "No reason provided"
-    await asyncio.gather(
-        q.answer(),
-        q.edit_message_text(
-            "No reason - send proof (photo or video) if any, "
-            "or tap <b>Skip</b> to proceed.",
-            parse_mode="HTML",
-            reply_markup=_KB_PROOF,
-        ),
-    )
-    return WAITING_PROOF
-
-
-## ── WAITING_PROOF handlers ─────────────────────────────────────────────────
-
-async def on_kick_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-    msg = update.effective_message
-    if msg.photo:
-        ctx.user_data["kick_proof_desc"] = f"Photo (msg {msg.message_id})"
-    elif msg.video:
-        ctx.user_data["kick_proof_desc"] = f"Video (msg {msg.message_id})"
-    return await _do_kick(update, ctx)
-
-
-async def on_kick_skip_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.callback_query.answer()
-    return await _do_kick(update, ctx)
-
-
-async def on_kick_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-    q = update.callback_query
-    _clear(ctx)
-    await asyncio.gather(
-        q.answer(),
-        q.edit_message_text("Got it, kick cancelled. No action was taken."),
-    )
-    return ConversationHandler.END
-
-
-## ── Filter and ConversationHandler ─────────────────────────────────────────
-
-_KICK_FILTER = build_prefixed_filters("tckick") | build_prefixed_filters("tck")
-
-
-def _kick_conversation() -> ConversationHandler:
-    return ConversationHandler(
-        entry_points=[MessageHandler(_KICK_FILTER, cmd_kick_entry)],
-        states={
-            WAITING_REASON: [
-                MessageHandler(filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, on_kick_reason),
-                CallbackQueryHandler(on_kick_skip_reason, pattern=r"^kick_skip_reason$"),
-                CallbackQueryHandler(on_kick_cancel,      pattern=r"^kick_cancel$"),
-            ],
-            WAITING_PROOF: [
-                MessageHandler(filters.PHOTO | filters.VIDEO, on_kick_proof),
-                CallbackQueryHandler(on_kick_skip_proof, pattern=r"^kick_skip_proof$"),
-                CallbackQueryHandler(on_kick_cancel,     pattern=r"^kick_cancel$"),
-            ],
-        },
-        fallbacks=[
-            CallbackQueryHandler(on_kick_cancel, pattern=r"^kick_cancel$"),
-            MessageHandler(ALL_PREFIXES_CMD_FILTER, _end_conversation),
-        ],
-        per_user=True,
-        per_chat=True,
-        conversation_timeout=cfg.proof_timeout,
-    )
-
-
-__handlers__ = [_kick_conversation()]
+__handlers__ = [build_handler(cmd_kick_entry)]

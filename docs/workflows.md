@@ -29,7 +29,8 @@ Use this pairing pattern:
 - `muting_flow.py` and `muting_conv.py`
 - `unban_flow.py` and `unban_conv.py`
 - `kicking_flow.py` and `kicking_conv.py`
-- `appeal_flow.py` and `warning_conv.py`
+- `warning_flow.py` and `warning_conv.py`
+- `appeal_flow.py` (no conv pairing)
 - `stats_flow.py` and `stats_chats_flow.py`
 
 The `*_conv.py` file is responsible for building the PTB handler and the conversation state graph.
@@ -54,6 +55,16 @@ Import chain (no circularity): `ban_conv` → `proof_conv` → `ban_flow` → `p
 |---|---|
 | `unban_flow.py` | `execute_unban` - DB deactivation, group unban, log dispatch |
 | `unban_conv.py` | `cmd_unban` handler, `_FILTER`, `build_handler()` |
+
+## Kick workflow
+
+| File | Responsibility |
+|---|---|
+| `kicking_flow.py` | `execute_kick` - DB log, group kick, log dispatch |
+| `kicking_conv.py` | `build_handler(entry_point)` - ConversationHandler factory; reason + proof states |
+| `reason_flow.py` | Shared stateless helpers: `parse_inline_reason()`, `reason_prompt()`, `reason_noted_prompt()` |
+
+The `build_handler` factory accepts the entry-point function (`cmd_kick_entry`) from `kicking.py` to avoid circular imports. The same reason helpers are reused by the mute and warn entry points.
 
 ## Timeouts
 

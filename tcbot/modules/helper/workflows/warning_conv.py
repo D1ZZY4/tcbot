@@ -37,7 +37,7 @@ from telegram.ext import (
 
 from tcbot import cfg
 from tcbot.database.roles_db import get_effective_role, role_rank, ROLE_LABEL
-from tcbot.modules.helper import extraction
+from tcbot.modules.helper import decorators, extraction
 from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.workflows.warning_flow import execute_warn
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters, parse_cmd_args
@@ -81,6 +81,8 @@ async def _do_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
 ## ── Entry point ────────────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=5, period=60)
+@decorators.log_execution
 async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     msg   = update.effective_message
     admin = update.effective_user

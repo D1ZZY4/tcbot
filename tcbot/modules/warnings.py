@@ -20,6 +20,9 @@ from tcbot.modules.helper.workflows.warning_flow import (
 )
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
+
+## ── Module & Help ─────────────────────────────────────────────────────────
+
 __module_name__ = "Warnings"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
@@ -63,6 +66,8 @@ __help_text__ = (
 )
 
 
+## ── Helpers ────────────────────────────────────────────────────────────────
+
 async def _role_note(
     target_id: int,
     target_name: str | None,
@@ -76,6 +81,7 @@ async def _role_note(
 
 ## ── /tcunwarn ───────────────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=5, period=60)
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -117,6 +123,7 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 ## ── /warns ──────────────────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
 async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(update.effective_message.text)
@@ -131,6 +138,7 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 ## ── /resetwarns ─────────────────────────────────────────────────────────────
 
+@decorators.ratelimiter(limit=5, period=60)
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -169,6 +177,8 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
     await execute_resetwarns(update, ctx, target_id, target_name or str(target_id))
 
+
+## ── Handlers ───────────────────────────────────────────────────────────────
 
 _UNWARN_FILTER   = build_prefixed_filters("tcunwarn") | build_prefixed_filters("tcunw")
 _WARNLIST_FILTER = build_prefixed_filters("warns")    | build_prefixed_filters("warnlist")
