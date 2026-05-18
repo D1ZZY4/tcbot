@@ -100,9 +100,12 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    await _complete_join(chat.id, chat.title or "", user.id, user.first_name, ctx.bot)
-    await update.effective_message.reply_text(
-        f"This group is now connected to {cfg.community_name}."
+    ## _complete_join returns None - reply can be sent in parallel
+    await asyncio.gather(
+        _complete_join(chat.id, chat.title or "", user.id, user.first_name, ctx.bot),
+        update.effective_message.reply_text(
+            f"This group is now connected to {cfg.community_name}."
+        ),
     )
 
 
