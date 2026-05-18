@@ -473,9 +473,9 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
 ## ── Handler list ───────────────────────────────────────────────────────────
 
-_PROMOTE_FILTER  = build_prefixed_filters("tcpromote") | build_prefixed_filters("tcp")
-_DEMOTE_FILTER   = build_prefixed_filters("tcdemote")  | build_prefixed_filters("tcd")
-_TRANSFER_FILTER = build_prefixed_filters("transferowner") | build_prefixed_filters("tfowner")
+_PROMOTE_FILTER  = build_prefixed_filters("tcpromote")         | build_prefixed_filters("tcp")
+_DEMOTE_FILTER   = build_prefixed_filters("tcdemote")          | build_prefixed_filters("tcd")
+_TRANSFER_FILTER = build_prefixed_filters("transferowner")     | build_prefixed_filters("tfowner")
 _PROMOREQ_FILTER = build_prefixed_filters("tcpromoterequests") | build_prefixed_filters("tcreqs")
 
 __handlers__ = [
@@ -486,7 +486,7 @@ __handlers__ = [
     MessageHandler(build_prefixed_filters("tcpromotelist"), cmd_promote_list),
     CallbackQueryHandler(on_promo_decision,     pattern=r"^(promo_approve|promo_reject):"),
     CallbackQueryHandler(on_promote_role_btn,   pattern=r"^promo_role:[a-z]+:\d+$"),
-    CallbackQueryHandler(on_promote_role_cancel, pattern=r"^promo_role_cancel:\d+$"),
+    CallbackQueryHandler(on_promote_role_cancel,pattern=r"^promo_role_cancel:\d+$"),
     CallbackQueryHandler(on_demote_confirm,     pattern=r"^demote_confirm:\d+$"),
     CallbackQueryHandler(on_demote_cancel,      pattern=r"^demote_cancel:\d+$"),
 ]
