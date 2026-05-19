@@ -80,7 +80,7 @@ async def global_rate_limit_handler(update: Update, ctx: ContextTypes.DEFAULT_TY
     Runs before every handler group so the check is always first.
 
     * **CallbackQuery** - 20 per 10 s.
-      Denied presses get a brief *toast* (``show_alert=False``) so the UI
+      Denied presses get a brief *toast* (``show_alert=True``) so the UI
       never freezes with a blocking popup.
 
     * **Command text** - 8 per 30 s.
@@ -100,7 +100,7 @@ async def global_rate_limit_handler(update: Update, ctx: ContextTypes.DEFAULT_TY
             try:
                 await update.callback_query.answer(
                     f"⏳ Upss, slow down.. try again in {wait:.0f} seconds.",
-                    show_alert=False,
+                    show_alert=True,
                 )
             except Exception as exc:
                 log.debug("CBQ rate-limit answer failed: %s", exc)
@@ -166,7 +166,7 @@ def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
                         try:
                             await update.callback_query.answer(
                                 f"⏳ Slow down - try again in {wait:.0f}s.",
-                                show_alert=False,
+                                show_alert=True,
                             )
                         except Exception:
                             pass
