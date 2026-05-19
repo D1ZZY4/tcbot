@@ -25,10 +25,17 @@ from tcbot.utils.logger import setup as setup_logging
 log = logging.getLogger(__name__)
 
 
-## ── Member Cache ───────────────────────────────────────────────────────────
+# ────────────────── Member Cache Update (layer 1) ───────────────── #
+# * Updates user profile cache for every message in connected groups
+# * Runs in low-priority group to avoid interfering with command handlers
 
 async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Cache sender's info on every message sent in any connected group."""
+    """
+    Update member cache with sender's profile info for every message
+    * Only runs in connected groups and skips bots
+    * Catches exceptions to prevent cache updates from breaking the bot
+    * Low-priority handler that runs after all command handlers
+    """
     chat = update.effective_chat
     user = update.effective_user
 
@@ -46,15 +53,22 @@ async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         log.debug("Member cache update failed for %d: %s", user.id, exc)
 
 
-## ── PTB error handler (Layer 2) ────────────────────────────────────────────
+# ─────────────────── PTB Error Handler (Layer 2) ────────────────── #
+# * Catches all unhandled exceptions from Telegram Bot API handlers
+# * Layer 2 of 3 error handling system - reports to logs_errors channel
 
 async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Catch every unhandled exception from any PTB handler and ship it to LOG_ERRORS."""
+    """
+    Global PTB error handler that catches all unhandled exceptions
+    * Builds context string with user, chat, and message info
+    * Logs to console and reports to the configured logs_errors chat
+    * Layer 2 in the 3-layer error handling system
+    """
     exc = ctx.error
     if exc is None:
         return
 
-    ## Build context string from the update for extra detail
+    # * Build context string from the update for extra detail
     context_parts: list[str] = []
     if isinstance(update, Update):
         if update.effective_user:
@@ -70,31 +84,38 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
     context_str = " | ".join(context_parts) if context_parts else None
 
-    ## Log to console as well (existing behaviour)
+    # * Log to console as well (existing behaviour)
     log.error(
         "Unhandled exception for update %s",
         update,
         exc_info=exc,
     )
 
-    ## Ship to LOG_ERRORS (non-blocking)
+    # * Ship to LOG_ERRORS (non-blocking)
     await error_reporter.report_exc(exc, context=context_str)
 
 
-## ── asyncio exception handler (Layer 3) ────────────────────────────────────
+# ─────────────── Asyncio Exception Handler (Layer3) ─────────────── #
+# * Catches unhandled asyncio exceptions from background tasks
+# * Layer 3 of 3 error handling system - last line of defense for errors
 
 def _make_asyncio_exc_handler(loop: asyncio.AbstractEventLoop):
-    """Return a synchronous asyncio exception handler that schedules a Telegram report."""
+    """
+    Create asyncio exception handler for unhandled background task errors
+    * Returns a synchronous handler that can be set with loop.set_exception_handler()
+    * Mirrors all errors to stderr and reports them to the error reporter
+    * Layer 3 - last line of defense for asyncio-related errors
+    """
     def handler(lp: asyncio.AbstractEventLoop, context: dict) -> None:
         exc     = context.get("exception")
         msg     = context.get("message", "Unhandled asyncio exception")
         future  = context.get("future") or context.get("task")
         detail  = f"{msg} | Task: {future!r}" if future else msg
 
-        ## Always mirror to stderr so nothing is silently swallowed
+        # * Always mirror to stderr so nothing is silently swallowed
         print(f"[asyncio] {detail}" + (f" - {exc}" if exc else ""), file=sys.stderr)
 
-        ## Schedule async report on the running loop
+        # * Schedule async report on the running loop
         try:
             lp.create_task(
                 error_reporter.report_exc(exc or RuntimeError(detail), context=detail)
@@ -105,27 +126,45 @@ def _make_asyncio_exc_handler(loop: asyncio.AbstractEventLoop):
     return handler
 
 
-## ── post-init ──────────────────────────────────────────────────────────────
+# ───────────────────────── Post-Init Setup ──────────────────────── #
+# * Runs after PTB Application is built but before polling starts
+# * Initializes database connections and all core bot systems
 
 async def _post_init(app: Application) -> None:
+    """
+    Run post-initialization setup for the bot
+    * Establishes MongoDB connection and creates required indexes
+    * Ensures initial owner is created in the database
+    * Attaches bot to error reporter and sets up asyncio exception handler
+    * Logs successful initialization to the console
+    """
     await connect()
     await ensure_indexes()
     await ensure_initial_owner(cfg.initial_owner_id)
 
-    ## Attach live bot to the error reporter (enables Layers 1 + 3)
+    # * Attach live bot to the error reporter (enables Layers 1 + 3)
     lec, let = cfg.logs_errors
     error_reporter.attach(app.bot, lec, let)
 
-    ## Register asyncio-level exception handler (Layer 3)
+    # * Register asyncio-level exception handler (Layer 3)
     loop = asyncio.get_running_loop()
     loop.set_exception_handler(_make_asyncio_exc_handler(loop))
 
     log.info("Bot initialised. Owner: %d | LOG_ERRORS: %d", cfg.initial_owner_id, lec)
 
 
-## ── entry point ────────────────────────────────────────────────────────────
+# ──────────────────────── Main Entry Point ──────────────────────── #
+# * The main function that starts the entire bot application
+# * Configures PTB Application and registers all handlers
 
 def main() -> None:
+    """
+    Main entry point for the entire bot application
+    * Sets up logging and starts the keep-alive server
+    * Builds PTB Application with optimized connection and timeout settings
+    * Registers all handlers including rate limiter, module handlers, and error handler
+    * Starts long-polling to receive updates from Telegram
+    """
     setup_logging(level=cfg.log_level)
     log.info("Starting %s bot...", cfg.community_name)
 
@@ -135,12 +174,12 @@ def main() -> None:
         ApplicationBuilder()
         .token(cfg.bot_token)
         .post_init(_post_init)
-        ## Process independent updates in parallel (big latency win)
+        # * Process independent updates in parallel (big latency win)
         .concurrent_updates(True)
-        ## Connection pools - 8 for API calls, 4 dedicated for getUpdates polling
+        # * Connection pools - 8 for API calls, 4 dedicated for getUpdates polling
         .connection_pool_size(8)
         .get_updates_connection_pool_size(4)
-        ## HTTP timeouts - generous but bounded so hangs never block the loop
+        # * HTTP timeouts - generous but bounded so hangs never block the loop
         .read_timeout(15)
         .write_timeout(15)
         .connect_timeout(10)
@@ -148,15 +187,15 @@ def main() -> None:
         .build()
     )
 
-    ## Layer 1: Global per-user rate limiter - runs before every handler (group -1)
+    # * Layer 1: Global per-user rate limiter - runs before every handler (group -1)
     app.add_handler(TypeHandler(Update, global_rate_limit_handler), group=-1)
 
-    ## Register all module handlers via tcbot.modules
+    # * Register all module handlers via tcbot.modules
     for handler in get_handlers():
         app.add_handler(handler)
 
-    ## Low-priority handler: update member cache on every group message.
-    ## ~ANY_CMD_FILTER excludes custom-prefix commands (!, .) - /commands pass through.
+    # * Low-priority handler: update member cache on every group message.
+    # * ~ANY_CMD_FILTER excludes custom-prefix commands (!, .) - /commands pass through.
     app.add_handler(
         MessageHandler(
             filters.ChatType.GROUPS & filters.TEXT & ~ANY_CMD_FILTER,
@@ -165,7 +204,7 @@ def main() -> None:
         group=10,
     )
 
-    ## Layer 2: PTB global error handler - catches all unhandled handler exceptions
+    # * Layer 2: PTB global error handler - catches all unhandled handler exceptions
     app.add_error_handler(_error_handler)
 
     log.info("Handlers registered. Starting polling...")

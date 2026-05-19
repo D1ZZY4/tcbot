@@ -23,31 +23,43 @@ from typing import TYPE_CHECKING
 
 import telegram.error as _te
 
+
 if TYPE_CHECKING:
     from telegram import Bot, Update
     from telegram.ext import ContextTypes
 
 log = logging.getLogger(__name__)
 
-## ── module-level state (set once in _post_init via attach()) ───────────────
 
+# ──── Module-Level State (set once in _post_init via attach()) ──── #
+# * Stores global bot instance and log channel IDs, initialized once
 _bot:      "Bot | None"  = None
 _chat_id:   int          = 0
 _thread_id: int | None   = None
 
 
 def attach(bot: "Bot", chat_id: int, thread_id: int | None) -> None:
-    """Inject the live bot and LOG_ERRORS destination. Called from post_init."""
+    """
+    Inject live bot instance and log channel configuration
+    * Called exactly once during bot post-init to initialize global state
+    * Required before any error reporting can be sent to Telegram
+    * Prevents circular imports by injecting bot instead of importing it
+    """
     global _bot, _chat_id, _thread_id
     _bot       = bot
     _chat_id   = chat_id
     _thread_id = thread_id
 
 
-## ── error classification ───────────────────────────────────────────────────
-
+# ────────────────────── Error Classification ────────────────────── #
+# * Categorizes exceptions into readable labels for error reports
 def _classify(exc: BaseException | None) -> tuple[str, str]:
-    """Return (display_label, slug) describing the error source."""
+    """
+    Categorize exceptions into human-readable labels and slugs
+    * Maps exception types to friendly names for error reports
+    * Returns (display_label, slug) tuple for formatting and analytics
+    * Covers all common exception types from Telegram, database, and network
+    """
     if exc is None:
         return "[?] Unknown", "unknown"
 
@@ -80,13 +92,14 @@ def _classify(exc: BaseException | None) -> tuple[str, str]:
     return "[!] Code Bug", "code_bug"
 
 
-## ── message formatter ──────────────────────────────────────────────────────
-
+# ──────────────────────── Message Formatter ─────────────────────── #
+# * Builds and trims error messages for Telegram, escapes HTML
 _MAX_TB   = 3000
 _MAX_MSG  = 500
 
 
 def _esc(s: str) -> str:
+    """Escape HTML special characters to prevent Telegram parse errors"""
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
@@ -103,18 +116,25 @@ def build_error_message(
     record:  logging.LogRecord | None  = None,
     context: str | None                = None,
 ) -> str:
-    """Return a formatted HTML error message ready to send to Telegram."""
+    """
+    Build complete HTML-formatted error message for Telegram
+    * Accepts either an exception or a logging record
+    * Extracts source file/line number automatically from traceback
+    * Trims long tracebacks to fit Telegram's message limits
+    * Escapes all HTML to prevent parsing errors in Telegram
+    * Adds system info (Python version, host) for debugging
+    """
     now      = datetime.now(timezone.utc)
     time_str = now.strftime("%H:%M:%S UTC")
     date_str = now.strftime("%d-%m-%Y")
 
-    ## ── resolve exc from record if not provided explicitly ───────────────────
+    # * resolve exc from record if not provided explicitly
     if record and record.exc_info and record.exc_info[1]:
         exc = exc or record.exc_info[1]
 
-    ## ── source location ──────────────────────────────────────────────────────
+    # * source location extraction
     if record:
-        ## direct log.error() call - record has exact location
+        # direct log.error() call - record has exact location
         raw_path    = record.pathname.replace("\\", "/")
         module_path = raw_path.split("tcbot/")[-1] if "tcbot/" in raw_path else record.name
         func_name   = record.funcName
@@ -141,14 +161,14 @@ def build_error_message(
 
     label, _ = _classify(exc)
 
-    ## ── traceback block ───────────────────────────────────────────────────────
+    # * traceback block construction
     tb_block = ""
     if exc and exc.__traceback__:
         tb_block = f"\n\n<b>Traceback:</b>\n<pre>{_esc(_trim_tb(traceback.format_exc()))}</pre>"
     elif record and record.exc_info and record.exc_info[0]:
         tb_block = f"\n\n<b>Traceback:</b>\n<pre>{_esc(_trim_tb(''.join(traceback.format_exception(*record.exc_info))))}</pre>"
 
-    ## ── optional update / context block ──────────────────────────────────────
+    # * optional context block
     ctx_block = ""
     if context:
         ctx_block = f"\n\n<b>Context:</b>\n<code>{_esc(str(context)[:400])}</code>"
@@ -172,10 +192,16 @@ def build_error_message(
     )
 
 
-## ── low-level send ─────────────────────────────────────────────────────────
-
+# ───────────────────────── low-level Send ───────────────────────── #
+# * Fire-and-forget error shipping that never raises
 async def send_to_log_errors(text: str) -> None:
-    """Fire-and-forget send to the LOG_ERRORS channel. Never raises."""
+    """
+    Fire-and-forget send error message to LOG_ERRORS channel
+    * Never raises exceptions to avoid infinite error loops
+    * Uses print() for failures instead of logging to prevent recursion
+    * Respects thread_id if set for forum-style log channels
+    * Returns early if bot/chat_id not initialized yet
+    """
     if not _bot or not _chat_id:
         return
     try:
@@ -186,22 +212,32 @@ async def send_to_log_errors(text: str) -> None:
             message_thread_id=_thread_id,
         )
     except Exception as exc:
-        ## Use print so we don't risk recursive logging
+        # Use print so we don't risk recursive logging
         print(f"[error_reporter] Failed to ship error to Telegram: {exc}", file=sys.stderr)
 
 
-## ── convenience wrappers ───────────────────────────────────────────────────
-
+# ────────────────────── Convenience Wrappers ────────────────────── #
+# * Simple wrappers to report exceptions or log records
 async def report_exc(
     exc:     BaseException,
     context: str | None = None,
 ) -> None:
-    """Build and ship an exception report. Called by the PTB and asyncio handlers."""
+    """
+    Report an exception with optional context
+    * Called by PTB's error handler and asyncio's exception handler
+    * Builds full error message and sends to log channel
+    * Context can include additional debug info (chat_id, user_id, etc.)
+    """
     text = build_error_message(exc=exc, context=context)
     await send_to_log_errors(text)
 
 
 async def report_record(record: logging.LogRecord) -> None:
-    """Build and ship a logging.LogRecord report. Called by TelegramErrorHandler."""
+    """
+    Report a logging.LogRecord (from log.error()/log.critical())
+    * Called by TelegramErrorHandler attached to root logger
+    * Converts log record into full error message
+    * Catches all manual log.error() calls automatically
+    """
     text = build_error_message(record=record)
     await send_to_log_errors(text)
