@@ -111,7 +111,7 @@ Module files follow the `admins.py` pattern — define the entry point, call the
 expose `__handlers__` directly. No intermediate files.
 
 ```python
-# Example: kicking.py
+# * Example: kicking.py
 __handlers__ = [kick_conversation(cmd_kick_entry)]
 ```
 
@@ -154,9 +154,9 @@ Decorator notes:
 
 Full stack order (outermost → innermost):
 ```python
-@decorators.ratelimiter(limit=5, period=60)  # outermost
-@decorators.owner_only                        # auth guard
-@decorators.log_execution                     # innermost
+@decorators.ratelimiter(limit=5, period=60)   # * outermost
+@decorators.owner_only                        # * auth guard
+@decorators.log_execution                     # * innermost
 async def cmd_example(...): ...
 ```
 
@@ -189,7 +189,7 @@ Reference implementation: `tcbot/modules/checking.py` (`cmd_baninfo`, `cmd_check
 **Required pattern for every command that targets a user:**
 
 ```python
-# 1. Bot self-check
+# * 1. Bot self-check
 if target_id == ctx.bot.id:
     await msg.reply_text(
         f"That's {mention(ctx.bot.id, ctx.bot.first_name or 'me')} - [context]. 😄",
@@ -197,7 +197,7 @@ if target_id == ctx.bot.id:
     )
     return
 
-# 2. Full role check via get_effective_role (NEVER chain is_owner/is_admin/get_role)
+# * 2. Full role check via get_effective_role (NEVER chain is_owner/is_admin/get_role)
 target_role = await get_effective_role(target_id)
 if target_role == "founder":
     fname = await db.users_db.get_first_name(target_id, "the Founder")
@@ -213,7 +213,7 @@ if target_role in ("admin", "developer", "tester"):
         f"[Context about {role_label}]",
         parse_mode="HTML",
     )
-    return  # or proceed, depending on the action
+    return  # * or proceed, depending on the action
 ```
 
 **Tone guidelines:**

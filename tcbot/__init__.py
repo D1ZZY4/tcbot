@@ -15,8 +15,13 @@ from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv("config.env"))
 
 
+# ───────────────────────── Config Parsing ───────────────────────── #
+
 def parse_list(raw: str) -> list[str]:
-    """Convert a string like '["/", "!"]' or '/, !' into a list of strings."""
+    """
+    * NOTE: Safely evaluates stringified lists from env. 
+    * Fallback handles raw comma-separated strings.
+    """
     if not raw.strip():
         return []
     try:
@@ -30,7 +35,10 @@ def parse_list(raw: str) -> list[str]:
 
 
 def parse_port(port_str: str) -> int:
-    """Resolve port string to int. Falls back to 5000 on invalid input."""
+    """
+    * INFO: Resolve port string to int. 
+    * 'auto' or empty ports are automatically redirected to default port 5000.
+    """
     if not port_str or port_str.lower() == "auto":
         return 5000
     try:
@@ -41,7 +49,10 @@ def parse_port(port_str: str) -> int:
 
 
 def parse_chat_id(raw: str) -> tuple[int, int | None]:
-    """Extract (chat_id, thread_id) from a string like '-1001234/12' or '-1001234'."""
+    """
+    ! WARNING: DO NOT CHANGE THE PARSING LOGIC HERE. 
+    ! INCORRECT MODIFICATIONS WILL BREAK ALL TELEGRAM CHAT AND THREAD ROUTINGS SYSTEMWIDE.
+    """
     if not raw:
         return 0, None
     if "/" in raw:
@@ -51,6 +62,10 @@ def parse_chat_id(raw: str) -> tuple[int, int | None]:
 
 
 def _int_from_env(key: str, default: int) -> int:
+    """
+    ! CRITICAL: DO NOT TOUCH OR MODIFY THIS FUNCTION IF YOU DON'T KNOW WHAT YOU ARE DOING.
+    ! ANY CHANGES HERE WILL AFFECT ALL INTEGER CONFIGS AND MAY CAUSE THE BOT TO CRASH ON BOOT.
+    """
     try:
         return int(os.getenv(key, str(default)))
     except ValueError:
@@ -66,7 +81,9 @@ def _env_list(key: str) -> list[str]:
 
 
 def _parse_log_level(raw: str) -> int:
-    """Resolve a log-level string like 'DEBUG' or 'INFO' to a logging int."""
+    """
+    * INFO: Dynamically fetches the logging level int from the standard logging module.
+    """
     level = getattr(logging, raw.strip().upper(), None)
     if isinstance(level, int):
         return level
@@ -74,9 +91,14 @@ def _parse_log_level(raw: str) -> int:
     return logging.INFO
 
 
+# ─────────────────── Immutable Config Dataclass ─────────────────── #
+
 @dataclass(frozen=True)
 class Configs:
-    """Immutable container for all bot configuration values."""
+    """
+    ! WARNING: THIS DATACLASS IS FROZEN. DO NOT TEMPER WITH THE SCHEMA OR ATTRIBUTE NAMES.
+    ! ANY SCHEMA CHANGES HERE MUST BE SYNCHRONIZED DIRECTLY WITH THE ADAPTER CLASS BELOW.
+    """
 
     bot_token: str
     owner_id: int
@@ -100,6 +122,7 @@ class Configs:
     modules_load: list[str]
     modules_no_load: list[str]
 
+    # * NOTE: Properties below handle lazy type casting and formatting from raw env data.
     @property
     def port_int(self) -> int:
         return parse_port(self.port)
@@ -136,6 +159,8 @@ class Configs:
     def load(env_file: str = "config.env") -> "Configs":
         load_dotenv(find_dotenv(env_file))
 
+        # ! ALERT: BOT_TOKEN IS STRICTLY REQUIRED! DO NOT MODIFY THIS TERMINATION LOGIC.
+        # ! IF THE BOT FAILS TO LOAD THE TOKEN FROM CONFIG.ENV, IT WILL TERMINATE IMMEDIATELY.
         token = os.getenv("BOT_TOKEN", "").strip()
         if not token:
             raise RuntimeError("BOT_TOKEN is required but not set.")
@@ -148,6 +173,8 @@ class Configs:
         raw_prefixes = os.getenv("PREFIXES", '["/", "!", "."]')
         prefixes = parse_list(raw_prefixes) or ["/"]
 
+        # ! WARNING: ENSURE ALL ENVIRONMENT KEYS EXACTLY MATCH THE HARDCODED STRINGS BELOW.
+        # ! MISMATCHED STRINGS WILL CAUSE THE VALUES TO RESOLVE TO DEFAULT OR EMPTY EMITTED DATA.
         return Configs(
             bot_token=token,
             owner_id=owner_id,
@@ -177,7 +204,10 @@ configs = Configs.load()
 
 
 class _CfgAdapter:
-    """Thin adapter so modules can write `cfg.logs`, `cfg.main_group`, etc."""
+    """
+    * INFO: Thin adapter so modules can write `cfg.logs`, `cfg.main_group`, etc.
+    ! WARNING: Changing properties here will break code synchronization across external modules.
+    """
 
     def __init__(self, c: Configs) -> None:
         self._c = c
@@ -267,4 +297,6 @@ class _CfgAdapter:
         return self._c.modules_no_load
 
 
+# * NOTE: This adapter instance 'cfg' is globally shared across all modules.
+# ! ALERT: DO NOT CHANGE THE INSTANTIATION VARIABLE NAME TO PREVENT BREAKING INTEGRATIONS.
 cfg = _CfgAdapter(configs)

@@ -55,20 +55,38 @@ This applies to multi-line variable blocks, not single assignments.
 
 ## Section Dividers
 
-Use `## ---` style comments to separate logical sections within a long file:
+Use the following style to separate logical sections. The title line must be exactly **70 characters** wide with the text centered and flanked by `#` and `─` characters.
+The Section Title should be concise but descriptive of the content below. Use this style for major sections within a handler or function, but not for every minor block.
 
 ```python
-## ── Section title ────────────────────────────────────────────────────────────
-## Short escription
+# ────────────────────────── Section Title ───────────────────────── #
+# ! WARNING: Short or Long Warning Description
+# ! CRITICAL: Short or Long Critical Description
+# TODO: Short or Long Description
+# NOTE: Short or Long Note Description
+# ? Short or Long Question Description
+# * Short or Long Highlight or Information or General Description
+```
+or use a docstring for longer descriptions:
+```python
+# ────────────────────────── Section Title ───────────────────────── #
+"""
+! WARNING: Short or Long Warning Description
+! CRITICAL: Short or Long Critical Description
+! TODO: Short or Long Description
+! NOTE: Short or Long Note Description
+! ? Short or Long Question Description
+! * Short or Long Highlight or Information or General Description
+"""
 ```
 
 Do not add comments that explain what the next line obviously does:
 ```python
-# Bad
-# Get the user ID
+# ! Bad
+# * Get the user ID
 uid = update.effective_user.id
 
-# Good - no comment needed, the code is self-evident
+# * Good - no comment needed, the code is self-evident
 uid = update.effective_user.id
 ```
 
@@ -113,9 +131,9 @@ Three layers in fixed order — **outermost to innermost**:
 3. `@decorators.log_execution` — innermost; logs entry, exit, and elapsed ms after auth passes
 
 ```python
-@decorators.ratelimiter(limit=5, period=60)   # outermost – rate checked first
-@decorators.owner_only                         # auth guard – checked second
-@decorators.log_execution                      # innermost – logs after auth passes
+@decorators.ratelimiter(limit=5, period=60)    # * outermost  – rate checked first
+@decorators.owner_only                         # * auth guard – checked second
+@decorators.log_execution                      # * innermost  – logs after auth passes
 async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ...
 ```

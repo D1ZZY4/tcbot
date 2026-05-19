@@ -1,4 +1,4 @@
-# Replit Environment - TCF Bot
+# Replit Agent Instructions and Environment Configuration - TCF Bot
 
 ## Workflow
 
