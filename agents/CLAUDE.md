@@ -11,7 +11,7 @@ Before making any changes, **read all documentation files in the `agents/` direc
 ## Project Overview
 
 TCF (Transsion Core Federation) is a Telegram federation bot built with:
-- Python 3.13
+- Python 3.11
 - python-telegram-bot 22.5 (async, PTB v22)
 - Motor (async MongoDB via motor.motor_asyncio)
 - Flask keepalive on port 5000
@@ -52,25 +52,38 @@ tcbot/
 │   │   ├── role_guard.py   - resolve_and_check(), auto_demote() - shared moderation helpers
 │   │   ├── parse_logmsg.py - Log message text builders
 │   │   │                     role_assigned, role_removed, role_auto_demoted
-│   │   ├── parse_editmsg.py - safe_edit() – swallows stale-message errors
+│   │   ├── parse_editmsg.py - safe_edit() - swallows stale-message errors
 │   │   ├── ban_info.py     - build_ban_detail() shared between checking/stats
 │   │   ├── parse_link.py   - message_link(), appeal_deep_link(), utcnow(),
 │   │   │                     user_link(), safe_first_name(), chat_id_to_link_id()
-│   │   ├── promote_exec.py - _execute_promote(), _ROLE_ALIASES, _available_roles_for()
-│   │   │                     extracted from admins.py to keep it under 500 lines
-│   │   └── workflows/      - ConversationHandler flows and executors
-│   │       ├── proof_flow.py   - upload_proof() - media upload to proof channel
-│   │       ├── proof_conv.py   - WAITING_PROOF, album accumulators, on_proof_received,
-│   │       │                     _flush_album, on_cancel_proof, on_ban_timeout
-│   │       ├── ban_flow.py     - _execute_ban() - DB write, log dispatch, group enforcement
-│   │       ├── ban_conv.py     - build_handler(entry_fn) - ban ConversationHandler factory
-│   │       ├── unban_flow.py   - execute_unban() - DB deactivation, group unban, log
-│   │       └── unban_conv.py   - cmd_unban, _FILTER, build_handler()
+│   │   └── workflows/      - ConversationHandler flows and executors (NO *_conv.py files)
+│   │       ├── reason_flow.py      - WAITING_REASON/PROOF state constants +
+│   │       │                         build_modaction_conv() — central ConversationHandler
+│   │       │                         factory for kick/mute/warn; also exports keyboard
+│   │       │                         builders, prompt helpers, parse_inline_reason(),
+│   │       │                         record_proof()
+│   │       ├── proof_flow.py       - upload_proof() - media upload to proof channel
+│   │       ├── ban_flow.py         - _execute_ban(), album proof handlers,
+│   │       │                         ban_conversation(entry_fn)
+│   │       ├── kicking_flow.py     - execute_kick(), _exec_kick() adapter,
+│   │       │                         kick_conversation(entry_fn)
+│   │       ├── muting_flow.py      - parse_duration(), fmt_duration(), _execute_mute(),
+│   │       │                         execute_unmute(), _exec_mute() adapter,
+│   │       │                         mute_conversation(entry_fn)
+│   │       ├── warning_flow.py     - execute_warn/unwarn/warnlist/resetwarns(),
+│   │       │                         _exec_warn() adapter, warn_conversation(entry_fn)
+│   │       ├── unban_flow.py       - execute_unban() - DB deactivation, group unban, log
+│   │       ├── appeal_flow.py      - standalone appeal ConversationHandler (deep-link entry)
+│   │       ├── connected_flow.py   - group connection flows
+│   │       ├── promote_flow.py     - _execute_promote(), _ROLE_ALIASES,
+│   │       │                         _available_roles_for() — shared by admins.py
+│   │       ├── stats_flow.py       - stats executors
+│   │       └── stats_chats_flow.py - chat stats executors
 │   └── *.py             - Individual command modules
 └── utils/
     ├── dispatch.py      - fan_out(): semaphore-bounded multi-group dispatcher (max 10 concurrent)
     ├── logger.py        - BotLogFormatter, setup()
-    ├── prefixes.py      - build_prefixed_filters(), parse_cmd_args()
+    ├── prefixes.py      - build_prefixed_filters(), parse_cmd_args(), ALL_PREFIXES_CMD_FILTER
     └── timedate_format.py - fmt_dt() (tz-safe), utc_now(), utc_now_str()
 ```
 
@@ -83,6 +96,24 @@ tcbot/
 - `__module_name__ = None` hides a module from /help
 - Handler priority order defined in `modules/__init__.py` (`_PRIORITY_FIRST`, `_PRIORITY_LAST`)
 - ConversationHandler timeout always uses `cfg.proof_timeout` or `cfg.appeal_timeout`
+
+## Conversation Flow Pattern
+
+**There are no `*_conv.py` files.** All ConversationHandlers live in `*_flow.py` files.
+
+For kick, mute, and warn: `reason_flow.build_modaction_conv()` is the sole factory.
+Each flow file only defines the executor adapter (`_exec_*`) and calls it.
+
+For ban: `ban_flow.py` builds its own ConversationHandler (album-aware, proof-only).
+For appeals: `appeal_flow.py` is a standalone handler with its own state graph.
+
+Module files follow the `admins.py` pattern — define the entry point, call the factory,
+expose `__handlers__` directly. No intermediate files.
+
+```python
+# Example: kicking.py
+__handlers__ = [kick_conversation(cmd_kick_entry)]
+```
 
 ## Datetime Helpers
 
@@ -146,6 +177,7 @@ Canonical function names - use these, do not invent new ones:
 | `ban_log_new(target_id, proof_link, appeal_url)` | New ban log keyboard |
 | `ban_log_update(target_id, proof_link, prev_proof_link, appeal_url)` | Updated ban log keyboard |
 | `help_modules(rows, *, with_back_to_start)` | Generic help menu builder |
+| `cancel_proof_kb()` | Cancel button for ban proof prompt |
 
 ## Bot Persona - Role-Aware Responses
 
@@ -159,9 +191,8 @@ Reference implementation: `tcbot/modules/checking.py` (`cmd_baninfo`, `cmd_check
 ```python
 # 1. Bot self-check
 if target_id == ctx.bot.id:
-    bot_info = await ctx.bot.get_me()
     await msg.reply_text(
-        f"That's {mention(ctx.bot.id, bot_info.first_name or 'me')} - [context]. 😄",
+        f"That's {mention(ctx.bot.id, ctx.bot.first_name or 'me')} - [context]. 😄",
         parse_mode="HTML",
     )
     return
@@ -200,6 +231,8 @@ if target_role in ("admin", "developer", "tester"):
 - Do not inline imports inside function bodies - keep all imports at the top of the file
 - Do not use `mention(x) + code(x)` pattern - pick one per context
 - Do not use `q._bot` (private PTB attribute) - use `ctx.bot` instead
+- Do not create `*_conv.py` files - ConversationHandlers belong in their `*_flow.py` file
+- Do not duplicate reason/proof state handlers - use `reason_flow.build_modaction_conv()`
 
 ## Testing
 

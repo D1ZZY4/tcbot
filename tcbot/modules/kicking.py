@@ -18,6 +18,7 @@ from tcbot.modules.helper.role_guard import auto_demote
 from tcbot.modules.helper.workflows.kicking_flow import kick_conversation
 from tcbot.modules.helper.workflows.reason_flow import (
     WAITING_PROOF,
+    WAITING_REASON,
     parse_inline_reason,
     proof_kb,
     reason_kb,
@@ -140,7 +141,7 @@ async def cmd_kick_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         parse_mode="HTML",
         reply_markup=reason_kb("kick"),
     )
-    return 0  ## WAITING_REASON
+    return WAITING_REASON
 
 
 ## ── Handlers ───────────────────────────────────────────────────────────────

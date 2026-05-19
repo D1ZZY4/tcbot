@@ -33,8 +33,8 @@ A Telegram bot for the Transsion Core Federation (TCF) community. Manages federa
 | `tcbot/modules/helper/role_guard.py` | `resolve_and_check()` + `auto_demote()` - shared role-permission helpers for moderation flows |
 | `tcbot/modules/helper/extraction.py` | `extract_target()`, `ResolvedTarget`, `resolve_identity()` |
 | `tcbot/modules/helper/workflows/promote_flow.py` | `_execute_promote()`, `_ROLE_ALIASES`, `_available_roles_for()` — promote execution logic shared by admins.py |
-| `tcbot/modules/helper/workflows/kicking_conv.py` | Kick ConversationHandler factory `build_handler(entry_point)` — reason + proof states |
-| `tcbot/modules/helper/workflows/reason_flow.py` | Shared stateless reason helpers: `parse_inline_reason()`, `reason_prompt()`, `reason_noted_prompt()` |
+| `tcbot/modules/helper/workflows/reason_flow.py` | Central factory: `WAITING_REASON`, `WAITING_PROOF`, `build_modaction_conv()` — builds the generic reason + proof `ConversationHandler` for kick, mute, and warn; also exports keyboard builders, prompt helpers, `parse_inline_reason()`, `record_proof()` |
+| `tcbot/modules/helper/workflows/ban_flow.py` | Ban executor, album proof state handlers, `ban_conversation(entry_fn)` |
 | `tcbot/utils/dispatch.py` | `fan_out()` — semaphore-bounded multi-group dispatcher (max 10 concurrent) |
 | `tcbot/utils/prefixes.py` | Prefix filter builder + alt-prefix dispatcher (`_REGISTRY`) |
 | `tcbot/utils/logger.py` | `BotLogFormatter` and `setup()` |

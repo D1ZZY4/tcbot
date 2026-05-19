@@ -39,7 +39,10 @@ Do not treat `.github/` as the primary source for bot architecture. `.github/` c
 - `tcbot.__main__` is the startup entry point.
 - `cfg` is the central config accessor.
 - The database layer is asynchronous and is intended to isolate MongoDB collection access.
-- Conversation flows are intentionally split between `*_flow.py` and `*_conv.py`.
+- Conversation flows live entirely in `*_flow.py` files. There are **no** `*_conv.py` files.
+  `reason_flow.build_modaction_conv()` is the central `ConversationHandler` factory for kick,
+  mute, and warn. Ban uses its own album-aware proof flow in `ban_flow.py`.
+  `appeal_flow.py` is a standalone handler independent of `reason_flow`.
 
 ## Project-specific constraints
 
@@ -48,6 +51,8 @@ Do not treat `.github/` as the primary source for bot architecture. `.github/` c
 - All database helpers must be async and typed.
 - Handlers should not use raw MongoDB collection access outside database modules.
 - Command modules should expose `__handlers__`, `__module_name__`, and `__help_text__` when visible.
+- Every command handler must carry `@decorators.ratelimiter(limit, period)` as the outermost decorator.
+  Message-event handlers (e.g. `on_new_member`) are exempt.
 
 ## Helpful links
 

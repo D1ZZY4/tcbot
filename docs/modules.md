@@ -43,6 +43,7 @@ Examples include:
 - `muting.py`
 - `kicking.py`
 - `warnings.py`
+- `unbanning.py`
 - `appeals.py`
 - `connecting.py`
 - `disconnecting.py`
@@ -56,43 +57,61 @@ Examples include:
 
 These modules implement Telegram commands and message handlers. Shared business logic is delegated to helper modules whenever possible.
 
+Each command module follows this pattern:
+1. Defines its entry-point function with auth and rate-limit decorators
+2. Calls the relevant flow factory with its entry function
+3. Exposes `__handlers__` directly at module level
+
 ## Helper subpackage
 
 Shared helper behavior lives in `tcbot/modules/helper/`.
 This package is the place for:
 
 - keyboard builders (`keyboards.py`)
-- formatting helpers (`formatter.py`, `parse_logmsg.py`, `parse_link.py`)
-- safety and filtering helpers (`decorators.py` — auth guards `owner_only` / `staff_only` / `mod_only` / `basic_mod_only`, the opt-in `log_execution` tracer, and `ratelimiter(limit, period)` per-user sliding-window rate limiter; `parse_editmsg.py` — safe message edit with content-unchanged guard)
-- role and authorization helpers (`role_guard.py`)
-- ban presentation helpers (`ban_info.py`)
-- target extraction helpers (`extraction.py`)
+- HTML formatting helpers (`formatter.py` — `esc()`, `code()`, `mention()`, `bold()`)
+- link and log message builders (`parse_link.py`, `parse_logmsg.py`)
+- safe message edit helper (`parse_editmsg.py` — `safe_edit()` swallows stale-message errors)
+- safety and filtering helpers (`decorators.py` — auth guards `owner_only` / `staff_only` / `mod_only` / `basic_mod_only`, the opt-in `log_execution` tracer, and `ratelimiter(limit, period)` per-user sliding-window rate limiter)
+- role and authorization helpers (`role_guard.py` — `resolve_and_check()`, `auto_demote()`)
+- ban presentation helpers (`ban_info.py` — `build_ban_detail()` shared between checking/stats)
+- target extraction helpers (`extraction.py` — `extract_target()`, `resolve_identity()`)
 
 The helper package also contains the `workflows/` subpackage.
 
 ## Workflow subpackage
 
 Conversation and approval flows are organized under `tcbot/modules/helper/workflows/`.
-Each workflow is split into two concerns:
+**There are no `*_conv.py` files.** Every `ConversationHandler` is built inside a `*_flow.py`
+file and exposed via a factory function.
 
-- `*_flow.py` - execution logic for the feature
-- `*_conv.py` - Telegram `ConversationHandler` builder and state definitions
+### Central infrastructure
 
-Example pairs:
+| File | Responsibility |
+|---|---|
+| `reason_flow.py` | `WAITING_REASON = 0`, `WAITING_PROOF = 1`, `build_modaction_conv()` — the single `ConversationHandler` factory for kick, mute, and warn; also exports keyboard builders, prompt helpers, `parse_inline_reason()`, and `record_proof()` |
+| `proof_flow.py` | `upload_proof()` — media upload helper for the ban proof channel |
 
-- `ban_flow.py` / `ban_conv.py`
-- `proof_flow.py` / `proof_conv.py`
-- `muting_flow.py` / `muting_conv.py`
-- `unban_flow.py` / `unban_conv.py`
-- `kicking_flow.py` / `kicking_conv.py` (ConversationHandler factory; entry point passed in from `kicking.py`)
-- `warning_flow.py` / `warning_conv.py`
-- `appeal_flow.py` (no conv pairing — external deep-link flow)
+### Moderation flows
 
-Standalone executors (no ConversationHandler): `connected_flow.py`, `stats_flow.py`, `stats_chats_flow.py`, `promote_flow.py`.
+Each flow file owns executor logic, optional state handlers, and its factory function.
 
-Shared reason utilities: `reason_flow.py` — `parse_inline_reason()`, `reason_prompt()`, `reason_noted_prompt()` reused by kick, mute, and warn entry points.
+| File | Responsibility |
+|---|---|
+| `ban_flow.py` | `_execute_ban()`, album proof accumulators, `on_proof_received()`, `_flush_album()`, `on_cancel_proof()`, `ban_conversation(entry_fn)` |
+| `kicking_flow.py` | `execute_kick()`, `_exec_kick()` adapter, `kick_conversation(entry_fn)` via `build_modaction_conv` |
+| `muting_flow.py` | `parse_duration()`, `fmt_duration()`, `_execute_mute()`, `execute_unmute()`, `_exec_mute()` adapter, `mute_conversation(entry_fn)` via `build_modaction_conv` |
+| `warning_flow.py` | `execute_warn/unwarn/warnlist/resetwarns()`, `_exec_warn()` adapter, `warn_conversation(entry_fn)` via `build_modaction_conv` |
+| `unban_flow.py` | `execute_unban()` — DB deactivation, group unban, log dispatch (no `ConversationHandler` needed) |
+| `appeal_flow.py` | Standalone appeal `ConversationHandler` with deep-link entry — independent of `reason_flow` |
 
-`promote_flow.py` contains the shared `_execute_promote` executor used by `admins.py` and its callbacks. It lives in `workflows/` alongside the other execution flows.
+### Standalone executors (no ConversationHandler)
+
+| File | Responsibility |
+|---|---|
+| `connected_flow.py` | Group connection and disconnection flows |
+| `promote_flow.py` | `_execute_promote()`, `_ROLE_ALIASES`, `_available_roles_for()` — shared by `admins.py` |
+| `stats_flow.py` | Statistics executors |
+| `stats_chats_flow.py` | Chat statistics executors |
 
 See [Conversation flows and workflows](workflows.md) for more detail.
 
@@ -121,7 +140,7 @@ Utility modules support common concerns without owning bot actions:
 
 - `tcbot/utils/logger.py`
 - `tcbot/utils/prefixes.py`
-- `tcbot/utils/dispatch.py` - `fan_out()` semaphore-bounded multi-group dispatcher
+- `tcbot/utils/dispatch.py` - `fan_out()` semaphore-bounded multi-group dispatcher (max 10 concurrent)
 - `tcbot/utils/timedate_format.py`
 - `tcbot/utils/error_reporter.py`
 

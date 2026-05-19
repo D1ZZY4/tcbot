@@ -42,10 +42,20 @@ When creating a new `tcbot/modules/*.py` file:
 
 ## ConversationHandler Flows
 
-All ConversationHandler flows live in `tcbot/modules/helper/workflows/`.
+All `ConversationHandler` flows live in `tcbot/modules/helper/workflows/`.
+
+**There are no `*_conv.py` files.** Every `ConversationHandler` is built inside a `*_flow.py`
+file and exposed via a factory function.
+
 Structure:
-- `*_flow.py` - executor functions (`execute_ban`, `execute_mute`, etc.)
-- `*_conv.py` - ConversationHandler builder (`build_handler()`)
+- `*_flow.py` — executor functions, state handlers (when needed), and `ConversationHandler` factory
+
+Central factory: `reason_flow.build_modaction_conv(action, entry_fn, executor, entry_filter, ...)`
+builds the complete reason + proof `ConversationHandler` for kick, mute, and warn.
+Individual flow files only define the executor adapter (`_exec_*`) and call this factory.
+
+Ban uses its own album-aware proof flow in `ban_flow.py` (different state graph, no reason step).
+`appeal_flow.py` is a standalone handler independent of `reason_flow`.
 
 Timeout always comes from `cfg.proof_timeout` (proof flows) or `cfg.appeal_timeout` (appeal flow).
 

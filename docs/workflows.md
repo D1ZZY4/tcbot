@@ -14,67 +14,133 @@ It covers the code in `tcbot/modules/helper/workflows/` and the conventions for 
 
 ## Workflow structure
 
-The `workflows/` directory contains two kinds of files:
+The `workflows/` directory contains `*_flow.py` files only.
+**There are no `*_conv.py` files.** Every `ConversationHandler` is built inside a `*_flow.py` file and
+exposed via a factory function (e.g. `kick_conversation(entry_fn)`, `ban_conversation(entry_fn)`).
 
-- `*_flow.py` - business logic, state transition helpers, and execution functions
-- `*_conv.py` - `ConversationHandler` builders and state definitions
+Each `*_flow.py` file owns three concerns:
+1. Executor logic (the actual moderation action)
+2. State handlers (if applicable — only `ban_flow.py` and `appeal_flow.py` define their own)
+3. `ConversationHandler` factory function
 
-This split keeps UI flow definitions separate from the underlying action logic.
+## Central reason + proof factory (`reason_flow.py`)
 
-## Naming conventions
+`reason_flow.py` is the single source of truth for **all** moderation conversations that require
+a reason and optional proof step.
 
-Use this pairing pattern:
+It exports:
 
-- `ban_flow.py` and `ban_conv.py` / `proof_conv.py`
-- `muting_flow.py` and `muting_conv.py`
-- `unban_flow.py` and `unban_conv.py`
-- `kicking_flow.py` and `kicking_conv.py`
-- `warning_flow.py` and `warning_conv.py`
-- `appeal_flow.py` (no conv pairing)
-- `stats_flow.py` and `stats_chats_flow.py`
+| Export | Purpose |
+|---|---|
+| `WAITING_REASON = 0` | State constant — waiting for moderator to type a reason |
+| `WAITING_PROOF = 1` | State constant — waiting for proof media or Skip/Cancel |
+| `build_modaction_conv(...)` | Generic `ConversationHandler` factory for kick, mute, warn |
+| `reason_kb(action)` | Skip + Cancel keyboard for the reason step |
+| `reason_only_kb(action)` | Cancel-only keyboard (used by warn, where reason is mandatory) |
+| `proof_kb(action)` | Skip + Cancel keyboard for the proof step |
+| `reason_prompt(...)` | Prompt text asking for a reason |
+| `reason_noted_prompt(...)` | Proof-step prompt when reason was given inline |
+| `proof_step_prompt(...)` | Proof-step prompt after reason was typed in-conversation |
+| `parse_inline_reason(args, has_explicit_target)` | Extract inline reason from command args |
+| `record_proof(msg)` | Extract proof description from a photo/video message |
 
-The `*_conv.py` file is responsible for building the PTB handler and the conversation state graph.
-The `*_flow.py` file is responsible for executing the feature once required information is collected.
+`build_modaction_conv(action, entry_fn, executor, entry_filter, reason_required, escape_filter)`
+builds the complete `ConversationHandler` with all closures already wired in. Individual flow
+files only supply the executor adapter and call this factory — no state handler code lives
+outside `reason_flow.py`.
 
-## Ban workflow split
+`ctx.user_data` keys used by the generic handlers (all prefixed by `{action}_`):
 
-The ban workflow is split across four files for clarity:
+| Key | Set by | Used by |
+|---|---|---|
+| `{action}_target_name` or `{action}_target_fname` | Entry point | `_on_reason_text`, executor |
+| `{action}_reason` | Generic `_on_reason_text` / `_on_skip_reason` | Executor |
+| `{action}_proof_desc` | Generic `_on_proof` | Executor |
+| `{action}_extra_info` | Entry point (optional) | `_on_reason_text`, `_on_skip_reason` |
+| `{action}_prompt_chat` + `{action}_prompt_id` | Entry point (mute only) | `_on_reason_text` (edits instead of replying) |
+
+## Ban workflow
+
+The ban flow is self-contained in two files:
 
 | File | Responsibility |
 |---|---|
-| `proof_flow.py` | Uploads proof media to the proof channel; returns `proof_message_id` |
-| `proof_conv.py` | Album accumulators, `on_proof_received`, `_flush_album`, `on_cancel_proof`, `on_ban_timeout`, `WAITING_PROOF` constant |
-| `ban_flow.py` | `_execute_ban` - DB write, log dispatch, group enforcement |
-| `ban_conv.py` | `build_handler(entry_fn)` - ConversationHandler factory for the ban flow |
+| `proof_flow.py` | `upload_proof()` — uploads proof media (single or album) to the proof channel; returns `proof_message_id` |
+| `ban_flow.py` | `_execute_ban()`, `WAITING_PROOF`, album accumulators, `on_proof_received()`, `_flush_album()`, `on_cancel_proof()`, `on_proof_timeout()`, `ban_conversation(entry_fn)` |
 
-Import chain (no circularity): `ban_conv` → `proof_conv` → `ban_flow` → `proof_flow`
+Ban uses a separate album-aware proof mechanism and does **not** use `build_modaction_conv`.
+Reason is mandatory inline (`/tcban <target> <reason>`); the conversation covers only the proof step.
+
+Import chain (no circularity): `banning.py` → `ban_flow.py` → `proof_flow.py`
+
+## Kick / Mute / Warn workflows
+
+All three use `reason_flow.build_modaction_conv()` as their sole `ConversationHandler` factory.
+
+| File | Responsibility |
+|---|---|
+| `kicking_flow.py` | `execute_kick()`, `_exec_kick()` adapter, `kick_conversation(entry_fn)` |
+| `muting_flow.py` | `parse_duration()`, `fmt_duration()`, `_execute_mute()`, `execute_unmute()`, `_exec_mute()` adapter, `mute_conversation(entry_fn)` |
+| `warning_flow.py` | `execute_warn/unwarn/warnlist/resetwarns()`, `_exec_warn()` adapter, `warn_conversation(entry_fn)` |
+
+The `_exec_*` adapter reads all data from `ctx.user_data`, pops its own keys, and calls the real executor.
+
+### Mute-specific note
+
+`muting_flow._exec_mute` passes a copy of all `mute_*` keys to `_execute_mute()`, which then
+edits the original prompt message via `mute_prompt_chat` / `mute_prompt_id`. The entry point
+(`cmd_mute_start`) stores `mute_extra_info` (user ID + formatted duration) so the generic
+`_on_reason_text` handler can display the duration in the proof-step prompt automatically.
+
+### Warn-specific note
+
+`build_modaction_conv` is called with `reason_required=True` for warn, which omits the Skip button
+on the reason step (reason is mandatory for warnings). The `escape_filter` parameter prevents
+the conversation fallback from swallowing `/tcunwarn`, `/warns`, and `/resetwarns` commands.
+
+## Module pattern
+
+Command module files (`kicking.py`, `muting.py`, `warnings.py`, `banning.py`) follow the
+`admins.py` pattern:
+
+1. Define the entry-point function (decorated with `@ratelimiter`, `@log_execution`, etc.)
+2. Store action data in `ctx.user_data` with `{action}_*` keys
+3. Call the flow's factory with the entry function
+4. Expose `__handlers__` directly
+
+```python
+__handlers__ = [kick_conversation(cmd_kick_entry)]
+```
+
+No intermediate builder file. No state handler code in the module file.
 
 ## Unban workflow
 
-| File | Responsibility |
+`unban_flow.py` exports `execute_unban()` only. No `ConversationHandler` is needed.
+`unbanning.py` registers a plain `MessageHandler` and calls `execute_unban()` directly.
+
+## Appeal workflow
+
+`appeal_flow.py` is a standalone `ConversationHandler` with its own deep-link entry point
+and multi-step approval flow. It does not use `reason_flow.build_modaction_conv` as its
+state graph is fundamentally different (reviewer approval, not moderator reason/proof collection).
+
+## Standalone executors (no ConversationHandler)
+
+| File | Purpose |
 |---|---|
-| `unban_flow.py` | `execute_unban` - DB deactivation, group unban, log dispatch |
-| `unban_conv.py` | `cmd_unban` handler, `_FILTER`, `build_handler()` |
-
-## Kick workflow
-
-| File | Responsibility |
-|---|---|
-| `kicking_flow.py` | `execute_kick` - DB log, group kick, log dispatch |
-| `kicking_conv.py` | `build_handler(entry_point)` - ConversationHandler factory; reason + proof states |
-| `reason_flow.py` | Shared stateless helpers: `parse_inline_reason()`, `reason_prompt()`, `reason_noted_prompt()` |
-
-The `build_handler` factory accepts the entry-point function (`cmd_kick_entry`) from `kicking.py` to avoid circular imports. The same reason helpers are reused by the mute and warn entry points.
+| `connected_flow.py` | Group connection and disconnection logic |
+| `promote_flow.py` | `_execute_promote()`, `_ROLE_ALIASES`, `_available_roles_for()` — shared by `admins.py` |
+| `stats_flow.py` | Statistics executor |
+| `stats_chats_flow.py` | Chat statistics executor |
 
 ## Timeouts
 
-Conversation timeouts come from configuration values.
-The code uses:
+Conversation timeouts come from configuration values:
+- `cfg.proof_timeout` — ban, kick, mute, warn proof flows
+- `cfg.appeal_timeout` — appeal flow
 
-- `cfg.proof_timeout` for proof-related flows
-- `cfg.appeal_timeout` for appeal-related flows
-
-Keep these values in `config.env` and do not hardcode timeouts inside the conversation builder.
+Keep these values in `config.env`. Do not hardcode timeouts inside conversation builders.
 
 ## Common patterns
 
@@ -82,27 +148,31 @@ Keep these values in `config.env` and do not hardcode timeouts inside the conver
 - Use role helpers from `tcbot.modules.helper.role_guard`
 - Keep step handlers small and delegate business logic to flow helpers
 - Use `parse_editmsg.safe_edit()` to update ephemeral messages without raising stale edit errors
+- Executor cleans up its own `ctx.user_data` keys before returning
+- Use `asyncio.gather(..., return_exceptions=True)` for multi-group fan-out operations
 
-## Example flow files
+## Current workflow files
 
-- `tcbot/modules/helper/workflows/proof_flow.py`
-- `tcbot/modules/helper/workflows/proof_conv.py`
-- `tcbot/modules/helper/workflows/ban_flow.py`
-- `tcbot/modules/helper/workflows/ban_conv.py`
-- `tcbot/modules/helper/workflows/unban_flow.py`
-- `tcbot/modules/helper/workflows/unban_conv.py`
-- `tcbot/modules/helper/workflows/connected_flow.py`
-- `tcbot/modules/helper/workflows/kicking_flow.py`
-- `tcbot/modules/helper/workflows/kicking_conv.py`
-- `tcbot/modules/helper/workflows/muting_flow.py`
-- `tcbot/modules/helper/workflows/muting_conv.py`
-- `tcbot/modules/helper/workflows/appeal_flow.py`
-- `tcbot/modules/helper/workflows/warning_conv.py`
+```
+tcbot/modules/helper/workflows/
+├── reason_flow.py        — WAITING_REASON/PROOF constants + build_modaction_conv() central factory
+├── proof_flow.py         — upload_proof() helper
+├── ban_flow.py           — ban executor + album proof conv + ban_conversation()
+├── kicking_flow.py       — kick executor + kick_conversation()
+├── muting_flow.py        — mute/unmute executors + mute_conversation()
+├── warning_flow.py       — warn/unwarn/warnlist/reset executors + warn_conversation()
+├── unban_flow.py         — execute_unban()
+├── appeal_flow.py        — standalone appeal ConversationHandler
+├── connected_flow.py     — group connection flows
+├── promote_flow.py       — _execute_promote() shared by admins.py
+├── stats_flow.py         — stats executors
+└── stats_chats_flow.py   — chat stats executors
+```
 
 ## Relationship to modules
 
-Conversation handlers are built by modules in `tcbot/modules/` and reused as the interaction model for user-facing commands.
-For example, a module may import a builder from `workflows/` and add it to `__handlers__`.
+`__handlers__` in each module file contains the `ConversationHandler` (or plain `MessageHandler`)
+built by calling the flow's factory function with the entry-point function as argument.
 
 ## Related documentation
 
