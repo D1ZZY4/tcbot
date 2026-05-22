@@ -30,12 +30,11 @@ name = "Start application"
 author = "agent"
 
 [workflows.workflow.metadata]
-outputType = "webview"
+outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python3 -m tcbot"
-waitForPort = 5000
 
 [[workflows.workflow]]
 name = "Run Tests (TDD)"
@@ -51,6 +50,10 @@ args = "python3 -m pytest tests/ -v"
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
 
 [deployment]
 deploymentTarget = "autoscale"
