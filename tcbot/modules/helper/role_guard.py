@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Shared role-permission helpers – ``resolve_and_check()`` and ``auto_demote()`` for moderation flows."""
+
 from __future__ import annotations
 
 import asyncio

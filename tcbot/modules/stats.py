@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Federation statistics command and drill-down callback handlers (staff roster, chats, bans)."""
+
 from __future__ import annotations
 
 import asyncio

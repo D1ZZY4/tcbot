@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""tcfgroups command – lists all connected groups with a toggle between simple and detail views."""
+
 from __future__ import annotations
 
 import asyncio

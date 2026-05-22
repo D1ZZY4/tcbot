@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""About menu callback – renders the community description card."""
+
 from __future__ import annotations
 
 import asyncio

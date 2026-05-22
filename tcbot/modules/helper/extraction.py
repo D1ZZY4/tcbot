@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Target extraction helpers – ``extract_target()``, ``ResolvedTarget``, and ``resolve_identity()``."""
+
 from __future__ import annotations
 
 import logging

@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""All inline-keyboard factory functions used across moderation, appeal, and admin flows."""
+
 from __future__ import annotations
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup

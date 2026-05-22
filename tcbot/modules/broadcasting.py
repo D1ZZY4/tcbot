@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Federation broadcast command – forwards a message to all connected groups."""
+
 from __future__ import annotations
 
 import asyncio
@@ -10,8 +12,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes, MessageHandler
 
-from tcbot import database as db
-from tcbot import cfg
+from tcbot import cfg, database as db
 from tcbot.modules.helper import decorators, parse_logmsg
 from tcbot.modules.helper.formatter import code
 from tcbot.utils.dispatch import fan_out

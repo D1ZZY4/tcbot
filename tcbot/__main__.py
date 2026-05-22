@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Bot entry point – initialises the PTB application and starts long-polling."""
+
 from __future__ import annotations
 
 import asyncio
@@ -30,12 +32,7 @@ log = logging.getLogger(__name__)
 # * Runs in low-priority group to avoid interfering with command handlers
 
 async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Update member cache with sender's profile info for every message
-    * Only runs in connected groups and skips bots
-    * Catches exceptions to prevent cache updates from breaking the bot
-    * Low-priority handler that runs after all command handlers
-    """
+    """Update the member cache with the sender's profile info for every group message."""
     chat = update.effective_chat
     user = update.effective_user
 
@@ -58,12 +55,7 @@ async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
 # * Layer 2 of 3 error handling system - reports to logs_errors channel
 
 async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Global PTB error handler that catches all unhandled exceptions
-    * Builds context string with user, chat, and message info
-    * Logs to console and reports to the configured logs_errors chat
-    * Layer 2 in the 3-layer error handling system
-    """
+    """Catch all unhandled PTB handler exceptions and report them to the logs-errors channel."""
     exc = ctx.error
     if exc is None:
         return
@@ -95,22 +87,17 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await error_reporter.report_exc(exc, context=context_str)
 
 
-# ─────────────── Asyncio Exception Handler (Layer3) ─────────────── #
+# ─────────────────── Asyncio Exception Handler (Layer3) ─────────── #
 # * Catches unhandled asyncio exceptions from background tasks
 # * Layer 3 of 3 error handling system - last line of defense for errors
 
 def _make_asyncio_exc_handler(loop: asyncio.AbstractEventLoop):
-    """
-    Create asyncio exception handler for unhandled background task errors
-    * Returns a synchronous handler that can be set with loop.set_exception_handler()
-    * Mirrors all errors to stderr and reports them to the error reporter
-    * Layer 3 - last line of defense for asyncio-related errors
-    """
+    """Return a synchronous asyncio exception handler that mirrors errors to the error reporter."""
     def handler(lp: asyncio.AbstractEventLoop, context: dict) -> None:
-        exc     = context.get("exception")
-        msg     = context.get("message", "Unhandled asyncio exception")
-        future  = context.get("future") or context.get("task")
-        detail  = f"{msg} | Task: {future!r}" if future else msg
+        exc    = context.get("exception")
+        msg    = context.get("message", "Unhandled asyncio exception")
+        future = context.get("future") or context.get("task")
+        detail = f"{msg} | Task: {future!r}" if future else msg
 
         # * Always mirror to stderr so nothing is silently swallowed
         print(f"[asyncio] {detail}" + (f" - {exc}" if exc else ""), file=sys.stderr)
@@ -131,13 +118,7 @@ def _make_asyncio_exc_handler(loop: asyncio.AbstractEventLoop):
 # * Initializes database connections and all core bot systems
 
 async def _post_init(app: Application) -> None:
-    """
-    Run post-initialization setup for the bot
-    * Establishes MongoDB connection and creates required indexes
-    * Ensures initial owner is created in the database
-    * Attaches bot to error reporter and sets up asyncio exception handler
-    * Logs successful initialization to the console
-    """
+    """Connect to MongoDB, ensure indexes, seed owner, and attach the error reporter."""
     await connect()
     await ensure_indexes()
     await ensure_initial_owner(cfg.initial_owner_id)
@@ -158,13 +139,7 @@ async def _post_init(app: Application) -> None:
 # * Configures PTB Application and registers all handlers
 
 def main() -> None:
-    """
-    Main entry point for the entire bot application
-    * Sets up logging and starts the keep-alive server
-    * Builds PTB Application with optimized connection and timeout settings
-    * Registers all handlers including rate limiter, module handlers, and error handler
-    * Starts long-polling to receive updates from Telegram
-    """
+    """Configure and start the PTB application with long-polling."""
     setup_logging(level=cfg.log_level)
     log.info("Starting %s bot...", cfg.community_name)
 

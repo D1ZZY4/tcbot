@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""checkme and checkban commands for querying federation ban status."""
+
 from __future__ import annotations
 
 import asyncio

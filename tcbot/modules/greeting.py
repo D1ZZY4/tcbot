@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""New-member welcome handler with federation-ban auto-kick for connected groups."""
+
 from __future__ import annotations
 
 import asyncio

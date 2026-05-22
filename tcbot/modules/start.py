@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Start command handler and main-menu callback handlers."""
+
 from __future__ import annotations
 
 import asyncio

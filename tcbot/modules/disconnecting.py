@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Group disconnection and force-remove (rmtc) commands for leaving the federation."""
+
 from __future__ import annotations
 
 import asyncio

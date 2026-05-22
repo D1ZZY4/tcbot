@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Warn, unwarn, warnlist, and resetwarns command handlers for per-group warning tracking."""
+
 from __future__ import annotations
 
 import asyncio

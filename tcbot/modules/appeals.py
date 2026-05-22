@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Appeal flow registration and pure guard functions for the federation ban appeal system."""
+
 from __future__ import annotations
 
 import re

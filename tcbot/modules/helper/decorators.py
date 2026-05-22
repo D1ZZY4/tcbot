@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Auth decorators, execution tracer, and per-user rate limiter for all command handlers."""
+
 from __future__ import annotations
 
 import functools

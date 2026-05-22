@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Link builders, HTML helpers, appeal deep-link factory, and ``utcnow()`` for naive comparisons."""
+
 from __future__ import annotations
 
 import html

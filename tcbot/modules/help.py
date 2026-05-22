@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Help command – index page and per-module topic viewer with menu and command paths."""
+
 from __future__ import annotations
 
 import asyncio

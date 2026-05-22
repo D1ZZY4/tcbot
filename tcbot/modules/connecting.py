@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Group connection command and bot-added event handler for joining the federation."""
+
 from __future__ import annotations
 
 import asyncio

@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Additional links menu callback – official channels and community group buttons."""
+
 from __future__ import annotations
 
 import asyncio

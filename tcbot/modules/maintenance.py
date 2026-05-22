@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""leaveall and cleanup maintenance commands for managing the connected-group list."""
+
 from __future__ import annotations
 
 import asyncio

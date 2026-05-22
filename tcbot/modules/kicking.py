@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Group kick command entry point – validates permissions and delegates to kicking_flow."""
+
 from __future__ import annotations
 
 import asyncio

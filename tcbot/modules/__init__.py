@@ -1,6 +1,9 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
+
+"""Module discovery, filtering, and handler collection for the TCF bot."""
+
 from __future__ import annotations
 
 import importlib
@@ -75,7 +78,9 @@ def get_handlers() -> list[Any]:
 
 
     for mod_name in ALL_MODULES:
-        mod = mods_found[mod_name]
+        mod = mods_found.get(mod_name)
+        if mod is None:
+            continue
         mod_handlers = getattr(mod, "__handlers__", [])
         if mod_handlers:
             handlers.extend(mod_handlers)

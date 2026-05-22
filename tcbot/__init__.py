@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Configuration singleton – loads env vars into a frozen dataclass and exposes a thin ``cfg`` adapter."""
+
 from __future__ import annotations
 
 import ast
@@ -18,10 +20,7 @@ load_dotenv(find_dotenv("config.env"))
 # ───────────────────────── Config Parsing ───────────────────────── #
 
 def parse_list(raw: str) -> list[str]:
-    """
-    * NOTE: Safely evaluates stringified lists from env. 
-    * Fallback handles raw comma-separated strings.
-    """
+    """Safely evaluate a stringified list from env; fall back to raw comma-separated strings."""
     if not raw.strip():
         return []
     try:
@@ -35,10 +34,7 @@ def parse_list(raw: str) -> list[str]:
 
 
 def parse_port(port_str: str) -> int:
-    """
-    * INFO: Resolve port string to int. 
-    * 'auto' or empty ports are automatically redirected to default port 5000.
-    """
+    """Resolve a port string to an integer; ``'auto'`` or empty strings default to 5000."""
     if not port_str or port_str.lower() == "auto":
         return 5000
     try:
@@ -49,10 +45,7 @@ def parse_port(port_str: str) -> int:
 
 
 def parse_chat_id(raw: str) -> tuple[int, int | None]:
-    """
-    ! WARNING: DO NOT CHANGE THE PARSING LOGIC HERE. 
-    ! INCORRECT MODIFICATIONS WILL BREAK ALL TELEGRAM CHAT AND THREAD ROUTINGS SYSTEMWIDE.
-    """
+    """Parse a ``CHAT_ID`` or ``CHAT_ID/THREAD_ID`` env string into ``(chat_id, thread_id | None)``."""
     if not raw:
         return 0, None
     if "/" in raw:
@@ -62,10 +55,7 @@ def parse_chat_id(raw: str) -> tuple[int, int | None]:
 
 
 def _int_from_env(key: str, default: int) -> int:
-    """
-    ! CRITICAL: DO NOT TOUCH OR MODIFY THIS FUNCTION IF YOU DON'T KNOW WHAT YOU ARE DOING.
-    ! ANY CHANGES HERE WILL AFFECT ALL INTEGER CONFIGS AND MAY CAUSE THE BOT TO CRASH ON BOOT.
-    """
+    """Read an integer env var, returning ``default`` on parse error."""
     try:
         return int(os.getenv(key, str(default)))
     except ValueError:
@@ -81,9 +71,7 @@ def _env_list(key: str) -> list[str]:
 
 
 def _parse_log_level(raw: str) -> int:
-    """
-    * INFO: Dynamically fetches the logging level int from the standard logging module.
-    """
+    """Resolve a log-level name to its integer constant; unknown names fall back to INFO."""
     level = getattr(logging, raw.strip().upper(), None)
     if isinstance(level, int):
         return level
@@ -95,10 +83,7 @@ def _parse_log_level(raw: str) -> int:
 
 @dataclass(frozen=True)
 class Configs:
-    """
-    ! WARNING: THIS DATACLASS IS FROZEN. DO NOT TEMPER WITH THE SCHEMA OR ATTRIBUTE NAMES.
-    ! ANY SCHEMA CHANGES HERE MUST BE SYNCHRONIZED DIRECTLY WITH THE ADAPTER CLASS BELOW.
-    """
+    """Immutable configuration dataclass – all fields are loaded from environment variables."""
 
     bot_token: str
     owner_id: int
@@ -122,7 +107,7 @@ class Configs:
     modules_load: list[str]
     modules_no_load: list[str]
 
-    # * NOTE: Properties below handle lazy type casting and formatting from raw env data.
+    # * Properties below handle lazy type-casting from raw env strings.
     @property
     def port_int(self) -> int:
         return parse_port(self.port)
@@ -157,10 +142,10 @@ class Configs:
 
     @staticmethod
     def load(env_file: str = "config.env") -> "Configs":
+        """Load all configuration from environment variables and return a ``Configs`` instance."""
         load_dotenv(find_dotenv(env_file))
 
-        # ! ALERT: BOT_TOKEN IS STRICTLY REQUIRED! DO NOT MODIFY THIS TERMINATION LOGIC.
-        # ! IF THE BOT FAILS TO LOAD THE TOKEN FROM CONFIG.ENV, IT WILL TERMINATE IMMEDIATELY.
+        # ! BOT_TOKEN is strictly required; the bot cannot start without it.
         token = os.getenv("BOT_TOKEN", "").strip()
         if not token:
             raise RuntimeError("BOT_TOKEN is required but not set.")
@@ -173,8 +158,6 @@ class Configs:
         raw_prefixes = os.getenv("PREFIXES", '["/", "!", "."]')
         prefixes = parse_list(raw_prefixes) or ["/"]
 
-        # ! WARNING: ENSURE ALL ENVIRONMENT KEYS EXACTLY MATCH THE HARDCODED STRINGS BELOW.
-        # ! MISMATCHED STRINGS WILL CAUSE THE VALUES TO RESOLVE TO DEFAULT OR EMPTY EMITTED DATA.
         return Configs(
             bot_token=token,
             owner_id=owner_id,
@@ -203,11 +186,9 @@ class Configs:
 configs = Configs.load()
 
 
+# ! Property names in _CfgAdapter are imported by every module — rename with caution.
 class _CfgAdapter:
-    """
-    * INFO: Thin adapter so modules can write `cfg.logs`, `cfg.main_group`, etc.
-    ! WARNING: Changing properties here will break code synchronization across external modules.
-    """
+    """Thin adapter that exposes ``Configs`` fields with the short canonical names used by all modules."""
 
     def __init__(self, c: Configs) -> None:
         self._c = c
@@ -297,6 +278,5 @@ class _CfgAdapter:
         return self._c.modules_no_load
 
 
-# * NOTE: This adapter instance 'cfg' is globally shared across all modules.
-# ! ALERT: DO NOT CHANGE THE INSTANTIATION VARIABLE NAME TO PREVENT BREAKING INTEGRATIONS.
+# * This adapter instance is the single global 'cfg' used by every module.
 cfg = _CfgAdapter(configs)
