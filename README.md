@@ -22,7 +22,7 @@ Before changing any code or documentation, read the agent guidance in `agents/` 
 
 | Component | Version |
 |---|---|
-| Python | 3.13 |
+| Python | 3.12 |
 | python-telegram-bot | 22.5 |
 | Motor (async MongoDB) | 3.7+ |
 | Flask | 3.1+ |

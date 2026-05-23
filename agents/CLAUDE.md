@@ -11,7 +11,7 @@ Compatible with: Replit AI, Claude, Gemini, Qwen, GitHub Copilot, and any AI cod
 
 TCF Bot is a **production Telegram federation management bot** for the Transsion Core Federation community. It handles federation-wide bans, user appeals, staff role management, multi-group moderation, and full audit logging.
 
-- **Language:** Python 3.13
+- **Language:** Python 3.12
 - **Framework:** python-telegram-bot 22.5 (PTB v22, async, long polling — no webhook)
 - **Database:** MongoDB via Motor (async)
 - **Keepalive:** Flask thread on port 8080

@@ -8,7 +8,7 @@ For agent and coding conventions, see [agents/CLAUDE.md](../agents/CLAUDE.md).
 
 ## Prerequisites
 
-- Python 3.13
+- Python 3.12
 - `uv` package manager (`pip install uv` or https://docs.astral.sh/uv)
 - A MongoDB instance (local, Docker, or Atlas)
 - A Telegram bot token (from @BotFather)

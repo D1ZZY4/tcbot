@@ -150,7 +150,7 @@ Use conventional commits:
 feat: add /tcsweep command with SweepAgent
 fix: remove dead bans variable in connected_flow
 refactor: deduplicate _render() between start.py and groups.py
-chore: modernize typing hints to Python 3.13 built-ins
+chore: modernize typing hints to Python 3.12 built-ins
 docs: rewrite agents/CLAUDE.md with full architecture detail
 test: add rate-limiter edge cases for concurrent callers
 ```
