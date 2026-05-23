@@ -1,6 +1,6 @@
 ## Copyright (c) 2026 Replit
 
-modules = ["python-3.13"]
+modules = ["python-3.12"]
 [agent]
 expertMode = true
 stack = "FLASK_VANILLA_JS"
@@ -29,23 +29,32 @@ args = "Run Tests (TDD)"
 name = "Start application"
 author = "agent"
 
-[workflows.workflow.metadata]
-outputType = "console"
-
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python3 -m tcbot"
+args = "python -m tcbot"
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [[workflows.workflow]]
 name = "Run Tests (TDD)"
 author = "agent"
 
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python -m pytest tests/ -v"
+
 [workflows.workflow.metadata]
 outputType = "console"
 
+[[workflows.workflow]]
+name = "Bash (Don't Delete This)"
+mode = "sequential"
+author = 57967288
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python3 -m pytest tests/ -v"
+args = "bash"
 
 [[ports]]
 localPort = 5000
