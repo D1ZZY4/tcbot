@@ -30,7 +30,6 @@ from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.formatter import code, mention
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
-from tcbot.utils.prefixes import build_prefixed_filters
 
 log = logging.getLogger(__name__)
 
@@ -208,23 +207,9 @@ async def _exec_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 ## ── ConversationHandler factory ─────────────────────────────────────────────
 
-_WARN_FILTER = build_prefixed_filters("tcwarn") | build_prefixed_filters("tcw")
-
-## Commands that must NOT be swallowed by the fallback so they reach their own
-## MessageHandlers registered after warn_conversation() in __handlers__.
-_WARN_ESCAPE = (
-    build_prefixed_filters("tcunwarn")
-    | build_prefixed_filters("tcunw")
-    | build_prefixed_filters("warns")
-    | build_prefixed_filters("warnlist")
-    | build_prefixed_filters("resetwarns")
-    | build_prefixed_filters("clearwarns")
-)
-
-
-def warn_conversation(entry_fn) -> object:
+def warn_conversation(entry_fn, entry_filter, *, escape_filter=None) -> object:
     """Return the warn ConversationHandler via the central reason_flow factory."""
     return build_modaction_conv(
-        reason, proof, entry_fn, _exec_warn, _WARN_FILTER,
-        escape_filter=_WARN_ESCAPE,
+        reason, proof, entry_fn, _exec_warn, entry_filter,
+        escape_filter=escape_filter,
     )

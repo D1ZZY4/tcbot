@@ -101,4 +101,4 @@ Compatible with: Replit AI, Claude, Gemini, Qwen, GitHub Copilot, and any AI cod
 3. Section dividers use the exact 70-character format specified in the style guides.
 4. `from __future__ import annotations` must appear as the first non-comment line in every module file.
 5. Built-in generic types only: `list[str]`, `dict[str, int]`, `tuple[int, ...]`, `int | None`. Never `typing.List`, `typing.Optional`, etc.
-6. Never use `datetime.utcnow()` — use `datetime.now(timezone.utc)` or the canonical helpers.
+6. Never use `datetime.utcnow()` or inline `datetime.now(timezone.utc)` — import from `tcbot.utils.timedate_format` only.

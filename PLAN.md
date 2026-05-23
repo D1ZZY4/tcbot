@@ -164,7 +164,7 @@ All three layers route to `error_reporter.report_exc()` which ships a formatted 
 | Warn | `reason_flow.build_modaction_conv(...)` | `WAITING_REASON`, `WAITING_PROOF` | `/tcwarn` |
 | Appeal | `appeal_flow.build_handler()` | `WAITING_APPEAL`, `WAITING_CONFIRM` | `/start appeal_<ban_id>` |
 
-**Rule:** There are no `*_conv.py` files. Every `ConversationHandler` is built inside a `*_flow.py` file via a factory function. The module file only defines the entry point and exposes `__handlers__ = [factory(entry_fn)]`.
+**Rule:** There are no `*_conv.py` files. Every `ConversationHandler` is built inside a `*_flow.py` file via a factory function. The module file defines `*_CMDS` filters, the entry point, and `__handlers__ = [factory(entry_fn, *_CMDS)]` (see `admins.py`).
 
 ---
 
@@ -189,7 +189,7 @@ All three layers route to `error_reporter.report_exc()` which ships a formatted 
 
 | # | File | Issue | Fix |
 |---|---|---|---|
-| 6 | `appeal_flow.py:252` | `datetime.now(timezone.utc)` compared to naive `review_ts.replace(tzinfo=timezone.utc)` — inconsistent timezone handling | Standardize via `utcnow()` throughout |
+| 6 | `appeal_flow.py` appeal lock check | Duplicate datetime logic vs `appeals.reviewer_locked_out` | Resolved — shared guard + `timedate_format` |
 | 7 | Multiple modules | Bare `except: pass` or `except Exception: pass` with no log line — silent production failures | Replace with at minimum `log.debug(...)` |
 
 ### P3 — Low
@@ -215,7 +215,7 @@ All three layers route to `error_reporter.report_exc()` which ships a formatted 
 
 - Do not add new packages to `requirements.txt`
 - Do not use `typing.Optional`, `typing.List`, `typing.Tuple` — use built-in generics
-- Do not use `datetime.utcnow()` — use `datetime.now(timezone.utc)` or `utc_now()`
+- Do not use `datetime.utcnow()` or inline `datetime.now(timezone.utc)` — use `tcbot.utils.timedate_format` (`utc_now()`, `to_utc()`, etc.)
 - Do not create `*_conv.py` files — all `ConversationHandler`s live in `*_flow.py`
 - Do not call `col()` directly from module handlers
 - Do not use `q._bot` — use `ctx.bot`

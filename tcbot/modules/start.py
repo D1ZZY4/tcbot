@@ -134,10 +134,10 @@ async def on_menu_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) 
 
 ## ── Handlers ───────────────────────────────────────────────────────────────
 
-_START_FILTER = build_prefixed_filters("start")
+_START_CMDS = build_prefixed_filters("start")
 
 __handlers__ = [
-    MessageHandler(_START_FILTER, cmd_start),
+    MessageHandler(_START_CMDS, cmd_start),
     CallbackQueryHandler(on_back_to_start,       pattern=r"^back_to_start$"),
     CallbackQueryHandler(on_menu_groups,         pattern=r"^menu_groups$"),
     CallbackQueryHandler(on_menu_groups_details, pattern=r"^menu_groups_details$"),

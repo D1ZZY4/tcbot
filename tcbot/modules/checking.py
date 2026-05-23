@@ -282,12 +282,12 @@ async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 ## ── Handlers ───────────────────────────────────────────────────────────────
 
-_CHECKME_FILTER = build_prefixed_filters("checkme") | build_prefixed_filters("cme")
-_BANINFO_FILTER = build_prefixed_filters("checkban") | build_prefixed_filters("cban")
+_CHECKME_CMDS = build_prefixed_filters("checkme") | build_prefixed_filters("cme")
+_BANINFO_CMDS = build_prefixed_filters("checkban") | build_prefixed_filters("cban")
 
 __handlers__ = [
-    MessageHandler(_CHECKME_FILTER, cmd_checkme),
-    MessageHandler(_BANINFO_FILTER, cmd_baninfo),
+    MessageHandler(_CHECKME_CMDS, cmd_checkme),
+    MessageHandler(_BANINFO_CMDS, cmd_baninfo),
     CallbackQueryHandler(on_checkme_detail, pattern=r"^checkme_detail:"),
     CallbackQueryHandler(on_checkme_back,   pattern=r"^checkme_back:"),
 ]

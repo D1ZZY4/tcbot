@@ -17,9 +17,8 @@ from tcbot.modules.helper.parse_link import (
     safe_first_name,
     topic_link,
     user_link,
-    utcnow,
 )
-from tcbot.utils.timedate_format import fmt_dt, utc_now, utc_now_str
+from tcbot.utils.timedate_format import fmt_dt, to_utc, utc_now, utc_now_str, utcnow
 
 
 ## ── utcnow / utc_now ──────────────────────────────────────────────────
@@ -31,13 +30,20 @@ def test_utcnow_returns_naive_datetime() -> None:
 
 def test_utcnow_is_close_to_real_time() -> None:
     now = utcnow()
-    wall = datetime.now(timezone.utc).replace(tzinfo=None)
+    wall = utc_now().replace(tzinfo=None)
     assert abs((wall - now).total_seconds()) < 5
 
 
 def test_utc_now_returns_aware_datetime() -> None:
     now = utc_now()
     assert now.tzinfo is not None
+
+
+def test_to_utc_handles_naive_and_aware() -> None:
+    naive = datetime(2026, 1, 1, 12, 0)
+    aware = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+    assert to_utc(naive).tzinfo is not None
+    assert to_utc(aware).tzinfo is not None
 
 
 ## ── fmt_dt ────────────────────────────────────────────────────────────

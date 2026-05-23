@@ -10,9 +10,8 @@ Member cache collection - stores user profile information
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from tcbot.database.mongos import col
+from tcbot.utils.timedate_format import utc_now
 
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
@@ -40,7 +39,7 @@ async def upsert_user(
     * Sets last_updated every time to track freshness
     * commit_date is only set once when the record is first created
     """
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     await _users().update_one(
         {"user_id": user_id},
         {

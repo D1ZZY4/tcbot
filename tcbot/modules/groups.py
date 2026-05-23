@@ -107,13 +107,13 @@ async def on_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
 ## ── Handlers ───────────────────────────────────────────────────────────────
 
-_GROUPS_FILTER = (
+_GROUPS_CMDS = (
     build_prefixed_filters("tcfgroups")
     | build_prefixed_filters("tcg")
 )
 
 __handlers__ = [
-    MessageHandler(_GROUPS_FILTER, cmd_tcfgroups),
+    MessageHandler(_GROUPS_CMDS, cmd_tcfgroups),
     CallbackQueryHandler(on_groups_details, pattern=r"^groups_details$"),
     CallbackQueryHandler(on_groups_simple,  pattern=r"^groups_simple$"),
 ]

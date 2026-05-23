@@ -26,7 +26,6 @@ from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.formatter import code, mention
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
-from tcbot.utils.prefixes import build_prefixed_filters
 
 log = logging.getLogger(__name__)
 
@@ -96,9 +95,6 @@ async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 ## ── ConversationHandler factory ─────────────────────────────────────────────
 
-_KICK_FILTER = build_prefixed_filters("tckick") | build_prefixed_filters("tck")
-
-
-def kick_conversation(entry_fn) -> object:
+def kick_conversation(entry_fn, entry_filter) -> object:
     """Return the kick ConversationHandler via the central reason_flow factory."""
-    return build_modaction_conv(reason, proof, entry_fn, _exec_kick, _KICK_FILTER)
+    return build_modaction_conv(reason, proof, entry_fn, _exec_kick, entry_filter)

@@ -2,22 +2,11 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Link builders, HTML helpers, appeal deep-link factory, and ``utcnow()`` for naive comparisons."""
+"""Link builders and HTML helpers for Telegram deep links and mentions."""
 
 from __future__ import annotations
 
 import html
-from datetime import datetime, timezone
-
-
-## ── Datetime ───────────────────────────────────────────────────────────────
-
-def utcnow() -> datetime:
-    """Return the current UTC time as a naive datetime (tzinfo=None)."""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
-
-
-## ── Chat / message links ───────────────────────────────────────────────────
 
 def chat_id_to_link_id(chat_id: int) -> str:
     """Strip the -100 supergroup prefix for use in t.me/c/ URLs."""

@@ -9,10 +9,9 @@ Pure-function tests for tcbot.modules.appeals.
 from __future__ import annotations
 
 from datetime import timedelta
-from unittest.mock import patch
 
 from tcbot.modules import appeals
-from tcbot.modules.helper.parse_link import utcnow
+from tcbot.utils.timedate_format import utcnow
 
 ## ── Imports and test setup ─────────────────────────────────────────────────
 
@@ -87,8 +86,3 @@ def test_reviewer_locked_out_returns_false_when_ban_admin_none() -> None:
         review_timestamp=utcnow(), ban_admin_id=None, reviewer_id=20,
     )
 
-
-def test_now_delegates_to_utcnow() -> None:
-    sentinel = utcnow()
-    with patch("tcbot.modules.appeals.utcnow", return_value=sentinel):
-        assert appeals.now() is sentinel

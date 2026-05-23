@@ -237,7 +237,7 @@ __handlers__ = [...]
 ## What NOT To Do
 
 - Do not add `from typing import List, Optional, Tuple` — use `list`, `int | None`, `tuple`
-- Do not use `datetime.utcnow()` — use `datetime.now(timezone.utc)` or `utc_now()`
+- Do not use `datetime.utcnow()` or inline `datetime.now(timezone.utc)` — use `tcbot.utils.timedate_format` only
 - Do not use more than 3 emojis per message
 - Do not add comments explaining what the next line obviously does
 - Do not create duplicate render/keyboard functions across modules

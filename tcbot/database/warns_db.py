@@ -10,9 +10,8 @@ Warnings collection helpers - manages user warning records in groups
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from tcbot.database.mongos import col
+from tcbot.utils.timedate_format import utc_now
 
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
@@ -41,7 +40,7 @@ async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> in
         "reason": reason,
         "admin_id": admin_id,
         "chat_id": chat_id,
-        "timestamp": datetime.now(timezone.utc),
+        "timestamp": utc_now(),
     })
     return await c.count_documents({"user_id": user_id, "chat_id": chat_id})
 

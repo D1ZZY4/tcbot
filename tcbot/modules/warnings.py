@@ -264,13 +264,17 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
 ## ── Handlers ───────────────────────────────────────────────────────────────
 
-_UNWARN_FILTER   = build_prefixed_filters("tcunwarn") | build_prefixed_filters("tcunw")
-_WARNLIST_FILTER = build_prefixed_filters("warns")    | build_prefixed_filters("warnlist")
-_RESET_FILTER    = build_prefixed_filters("resetwarns") | build_prefixed_filters("clearwarns")
+_WARN_CMDS = build_prefixed_filters("tcwarn") | build_prefixed_filters("tcw")
+_UNWARN_CMDS = build_prefixed_filters("tcunwarn") | build_prefixed_filters("tcunw")
+_WARNLIST_CMDS = build_prefixed_filters("warns") | build_prefixed_filters("warnlist")
+_RESET_CMDS = build_prefixed_filters("resetwarns") | build_prefixed_filters("clearwarns")
+
+## Commands that must NOT be swallowed by the warn conversation fallback.
+_WARN_ESCAPE_CMDS = _UNWARN_CMDS | _WARNLIST_CMDS | _RESET_CMDS
 
 __handlers__ = [
-    warn_conversation(cmd_warn_entry),
-    MessageHandler(_UNWARN_FILTER,   cmd_unwarn),
-    MessageHandler(_WARNLIST_FILTER, cmd_warnlist),
-    MessageHandler(_RESET_FILTER,    cmd_resetwarns),
+    warn_conversation(cmd_warn_entry, _WARN_CMDS, escape_filter=_WARN_ESCAPE_CMDS),
+    MessageHandler(_UNWARN_CMDS,   cmd_unwarn),
+    MessageHandler(_WARNLIST_CMDS, cmd_warnlist),
+    MessageHandler(_RESET_CMDS,    cmd_resetwarns),
 ]

@@ -193,10 +193,10 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
 ## ── Handlers ───────────────────────────────────────────────────────────────
 
-_STATS_FILTER = build_prefixed_filters("tcstats")
+_STATS_CMDS = build_prefixed_filters("tcstats")
 
 __handlers__ = [
-    MessageHandler(_STATS_FILTER,                      cmd_stats),
+    MessageHandler(_STATS_CMDS,                        cmd_stats),
     CallbackQueryHandler(on_stats_main,                pattern=r"^stats_main$"),
     CallbackQueryHandler(on_stats_admins,              pattern=r"^stats_admins$"),
     CallbackQueryHandler(on_stats_chats,               pattern=r"^stats_chats:\d+$"),

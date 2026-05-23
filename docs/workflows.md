@@ -8,13 +8,16 @@ For per-module details, see [docs/modules.md](modules.md).
 
 ## Key Rule: No `*_conv.py` Files
 
-Every `ConversationHandler` is built inside a `*_flow.py` file via a factory function. Module files only define the entry point and call the factory:
+Every `ConversationHandler` is built inside a `*_flow.py` file via a factory function. Module files define the entry point, command filters (`*_CMDS`), and `__handlers__` — following the same pattern as `admins.py`:
 
 ```python
 # kicking.py
 from tcbot.modules.helper.workflows.kicking_flow import kick_conversation
+from tcbot.utils.prefixes import build_prefixed_filters
 
-__handlers__ = [kick_conversation(cmd_kick_entry)]
+_KICK_CMDS = build_prefixed_filters("tckick") | build_prefixed_filters("tck")
+
+__handlers__ = [kick_conversation(cmd_kick_entry, _KICK_CMDS)]
 ```
 
 Never create `*_conv.py` files. Never duplicate state handlers across modules.

@@ -11,8 +11,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from datetime import datetime, timedelta, timezone
-
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     CallbackQueryHandler,
@@ -303,8 +301,11 @@ class BuildAppeal:
 
         review_ts = ban.get("review_timestamp")
         if review_ts:
-            elapsed = datetime.now(timezone.utc) - review_ts.replace(tzinfo=timezone.utc)
-            if elapsed < timedelta(hours=12) and admin.id != ban.get("admin_user_id"):
+            from tcbot.modules import appeals
+
+            if appeals.reviewer_locked_out(
+                review_ts, ban.get("admin_user_id"), admin.id,
+            ):
                 await q.answer(
                     "Only the admin who issued this ban can review it within the first 12 hours.",
                     show_alert=True,
@@ -408,15 +409,10 @@ class BuildAppeal:
 
     # ── ConversationHandler factory ────────────────────────────────────────
 
-    def build_handler(self) -> ConversationHandler:
+    def build_handler(self, entry_filter) -> ConversationHandler:
         """Assemble and return the appeal ConversationHandler."""
         return ConversationHandler(
-            entry_points=[
-                MessageHandler(
-                    filters.ChatType.PRIVATE & filters.Regex(r"^/start\s+appeal_[a-z0-9]{10}$"),
-                    self._on_entry,
-                ),
-            ],
+            entry_points=[MessageHandler(entry_filter, self._on_entry)],
             states={
                 WAITING_APPEAL: [
                     CallbackQueryHandler(

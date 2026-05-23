@@ -23,6 +23,23 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def utcnow() -> datetime:
+    """Return current UTC as a naive datetime (tzinfo=None).
+
+    Use for constructing test timestamps or comparing against legacy naive
+    values. Prefer ``utc_now()`` for new DB writes and ``to_utc()`` before
+    subtracting mixed naive/aware datetimes.
+    """
+    return utc_now().replace(tzinfo=None)
+
+
+def to_utc(dt: datetime) -> datetime:
+    """Normalize *dt* to UTC with tzinfo set (handles naive as UTC)."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 def fmt_dt(dt: datetime) -> str:
     """
     Format a datetime as DD-MM-YYYY | HH:MM (always UTC)

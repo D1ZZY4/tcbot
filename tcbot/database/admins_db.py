@@ -12,10 +12,10 @@ Owners and admins collection helpers - manages bot staff permissions
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
 
 from tcbot.database.cache import CACHE_MISS, _OWNER_KEY, effective_role_cache, owner_id_cache
 from tcbot.database.mongos import col
+from tcbot.utils.timedate_format import utc_now
 
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
@@ -118,7 +118,7 @@ async def add_admin(user_id: int, promoted_by: int) -> None:
         {"$setOnInsert": {
             "user_id":       user_id,
             "promoted_by":   promoted_by,
-            "promoted_date": datetime.now(timezone.utc),
+            "promoted_date": utc_now(),
         }},
         upsert=True,
     )

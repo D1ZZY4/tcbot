@@ -109,14 +109,14 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 ## ── Handlers ───────────────────────────────────────────────────────────────
 
-_CONNECT_FILTER = (
+_CONNECT_CMDS = (
     build_prefixed_filters("tcconnect")
     | build_prefixed_filters("tccon")
 )
 
 __handlers__ = [
     ChatMemberHandler(connection.on_bot_added, ChatMemberHandler.MY_CHAT_MEMBER),
-    MessageHandler(_CONNECT_FILTER, cmd_tcconnect),
+    MessageHandler(_CONNECT_CMDS, cmd_tcconnect),
     CallbackQueryHandler(
         connection.on_join_decision,
         pattern=rf"^({connection.join_callback}|{connection.cancel_callback})$",

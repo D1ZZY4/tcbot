@@ -32,7 +32,6 @@ from tcbot.modules.helper.formatter import code, mention
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
 from tcbot.utils.dispatch import fan_out
-from tcbot.utils.prefixes import build_prefixed_filters
 from tcbot.utils.timedate_format import utc_now
 
 log = logging.getLogger(__name__)
@@ -215,17 +214,14 @@ async def _exec_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 ## ── ConversationHandler factory ─────────────────────────────────────────────
 
-_UNMUTE_ESCAPE = (
-    build_prefixed_filters("tcunmute")
-    | build_prefixed_filters("tcunm")
-    | build_prefixed_filters("tcum")
-)
-
-
-def mute_conversation(entry_fn) -> object:
+def mute_conversation(
+    entry_fn,
+    entry_filter,
+    *,
+    escape_filter=None,
+) -> object:
     """Return the mute ConversationHandler via the central reason_flow factory."""
-    _entry = build_prefixed_filters("tcmute") | build_prefixed_filters("tcm")
     return build_modaction_conv(
-        reason, proof, entry_fn, _exec_mute, _entry,
-        escape_filter=_UNMUTE_ESCAPE,
+        reason, proof, entry_fn, _exec_mute, entry_filter,
+        escape_filter=escape_filter,
     )

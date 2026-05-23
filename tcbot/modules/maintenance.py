@@ -152,18 +152,18 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 ## ── Handlers ───────────────────────────────────────────────────────────────
 
-_LEAVEALL_FILTER = (
+_LEAVEALL_CMDS = (
     build_prefixed_filters("leaveall")
     | build_prefixed_filters("exitall")
     | build_prefixed_filters("tcleave")
 )
-_CLEANUP_FILTER = (
+_CLEANUP_CMDS = (
     build_prefixed_filters("cleanup")
     | build_prefixed_filters("tcclean")
     | build_prefixed_filters("tcc")
 )
 
 __handlers__ = [
-    MessageHandler(_LEAVEALL_FILTER, cmd_leaveall),
-    MessageHandler(_CLEANUP_FILTER,  cmd_cleanup),
+    MessageHandler(_LEAVEALL_CMDS, cmd_leaveall),
+    MessageHandler(_CLEANUP_CMDS,  cmd_cleanup),
 ]

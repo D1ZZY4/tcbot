@@ -10,9 +10,8 @@ Mute log helpers - tracks all mute events in groups
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from tcbot.database.mongos import col
+from tcbot.utils.timedate_format import utc_now
 
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
@@ -39,5 +38,5 @@ async def log_mute(user_id: int, chat_id: int, reason: str, admin_id: int) -> No
         "chat_id": chat_id,
         "reason": reason,
         "admin_id": admin_id,
-        "timestamp": datetime.now(timezone.utc),
+        "timestamp": utc_now(),
     })

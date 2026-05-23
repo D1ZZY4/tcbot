@@ -23,7 +23,7 @@ from tcbot.modules.helper.workflows.reason_flow import (
     WAITING_REASON,
     parse_inline_reason,
 )
-from tcbot.utils.prefixes import parse_cmd_args
+from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
 
@@ -144,4 +144,6 @@ async def cmd_kick_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
 ## ── Handlers ───────────────────────────────────────────────────────────────
 
-__handlers__ = [kick_conversation(cmd_kick_entry)]
+_KICK_CMDS = build_prefixed_filters("tckick") | build_prefixed_filters("tck")
+
+__handlers__ = [kick_conversation(cmd_kick_entry, _KICK_CMDS)]

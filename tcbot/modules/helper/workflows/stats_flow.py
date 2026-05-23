@@ -16,7 +16,6 @@ from telegram.ext import ContextTypes
 from tcbot import database as db
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.formatter import code, esc
-from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 
 _PAGE_SIZE    = 6
 _SEARCH_KEY   = "stats_search_active"

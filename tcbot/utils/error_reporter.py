@@ -18,10 +18,11 @@ import logging
 import platform
 import sys
 import traceback
-from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 import telegram.error as _te
+
+from tcbot.utils.timedate_format import utc_now
 
 
 if TYPE_CHECKING:
@@ -124,7 +125,7 @@ def build_error_message(
     * Escapes all HTML to prevent parsing errors in Telegram
     * Adds system info (Python version, host) for debugging
     """
-    now      = datetime.now(timezone.utc)
+    now      = utc_now()
     time_str = now.strftime("%H:%M:%S UTC")
     date_str = now.strftime("%d-%m-%Y")
 

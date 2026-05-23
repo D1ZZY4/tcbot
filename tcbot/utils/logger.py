@@ -15,9 +15,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
 
 from tcbot import cfg
+from tcbot.utils.timedate_format import utc_now
 
 
 # ────────────────────── Console Log Formatter ───────────────────── #
@@ -60,7 +60,7 @@ class BotLogFormatter(logging.Formatter):
         return f"{self._BR}[{self._R}{color}{text}{self._R}{self._BR}]{self._R}"
 
     def format(self, record: logging.LogRecord) -> str:
-        now             = datetime.now(timezone.utc)
+        now             = utc_now()
         level_color, level_label = self._LEVELS.get(record.levelno, ("\033[0m", "???"))
         module          = record.name.split(".")[-1]
         msg_color       = level_color if record.levelno in self._COLORED_MSG else self._MS

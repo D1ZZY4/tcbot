@@ -149,11 +149,13 @@ async def cmd_mycommand(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ...
 ```
 
-3. Export `__handlers__` at the bottom:
+3. Define command filters and export `__handlers__` at the bottom (use `*_CMDS` naming, as in `admins.py`):
 
 ```python
+_MYCOMMAND_CMDS = build_prefixed_filters("mycommand")
+
 __handlers__ = [
-    MessageHandler(build_prefixed_filters("mycommand"), cmd_mycommand),
+    MessageHandler(_MYCOMMAND_CMDS, cmd_mycommand),
 ]
 ```
 
@@ -231,12 +233,9 @@ async def execute_<name>(
 async def _exec_<name>(update, ctx, **kw) -> None:
     await execute_<name>(update, ctx, **kw)
 
-def <name>_conversation(entry_fn):
+def <name>_conversation(entry_fn, entry_filter):
     return build_modaction_conv(
-        action="<name>",
-        entry_fn=entry_fn,
-        executor=_exec_<name>,
-        entry_filter=build_prefixed_filters("tc<name>"),
+        reason, proof, entry_fn, _exec_<name>, entry_filter,
     )
 ```
 
@@ -244,6 +243,7 @@ Then in your module file:
 
 ```python
 from tcbot.modules.helper.workflows.<name>_flow import <name>_conversation
+from tcbot.utils.prefixes import build_prefixed_filters
 
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.basic_mod_only
@@ -252,7 +252,9 @@ async def cmd_<name>_start(update, ctx):
     ...
     return WAITING_REASON   # or WAITING_PROOF or ConversationHandler.END
 
-__handlers__ = [<name>_conversation(cmd_<name>_start)]
+_<NAME>_CMDS = build_prefixed_filters("tc<name>")
+
+__handlers__ = [<name>_conversation(cmd_<name>_start, _<NAME>_CMDS)]
 ```
 
 **For ban style (proof only, album support):** model after `banning.py` + `ban_flow.py`.

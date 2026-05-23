@@ -19,7 +19,7 @@ from tcbot.modules.helper import decorators, extraction
 from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.role_guard import auto_demote
 from tcbot.modules.helper.workflows.ban_flow import WAITING_PROOF, ban_conversation, proof
-from tcbot.utils.prefixes import parse_cmd_args
+from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
 
@@ -140,4 +140,6 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
 ## ── Handlers ───────────────────────────────────────────────────────────────
 
-__handlers__ = [ban_conversation(cmd_ban_start)]
+_BAN_CMDS = build_prefixed_filters("tcban") | build_prefixed_filters("tcb")
+
+__handlers__ = [ban_conversation(cmd_ban_start, _BAN_CMDS)]

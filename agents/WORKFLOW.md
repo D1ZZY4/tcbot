@@ -92,7 +92,9 @@ async def cmd_example(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 # ─────────────────────────── Handlers ───────────────────────────── #
 
-__handlers__ = [MessageHandler(build_prefixed_filters("mycommand"), cmd_example)]
+_MYCOMMAND_CMDS = build_prefixed_filters("mycommand")
+
+__handlers__ = [MessageHandler(_MYCOMMAND_CMDS, cmd_example)]
 ```
 
 ---

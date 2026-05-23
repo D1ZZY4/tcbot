@@ -98,9 +98,9 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 ## ── Handlers ───────────────────────────────────────────────────────────────
 
-_FILTER = (
+_UNBAN_CMDS = (
     build_prefixed_filters("tcunban")
     | build_prefixed_filters("tcunb")
 )
 
-__handlers__ = [MessageHandler(_FILTER, cmd_unban)]
+__handlers__ = [MessageHandler(_UNBAN_CMDS, cmd_unban)]

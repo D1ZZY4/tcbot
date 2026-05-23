@@ -2,8 +2,6 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Promote, demote, transfer-ownership, and promotion-queue command handlers."""
-
 from __future__ import annotations
 
 import asyncio
@@ -26,7 +24,7 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 log = logging.getLogger(__name__)
 
 
-## ── Module & Help ─────────────────────────────────────────────────────────
+# ───────────────────── Module and Help Message ──────────────────── #
 
 __module_name__ = "Admins"
 __help_text__ = (

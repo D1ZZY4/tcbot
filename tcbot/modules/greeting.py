@@ -92,6 +92,8 @@ async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         )
 
 
+# ──────────────────────────── Handlers ──────────────────────────── #
+
 __handlers__ = [
     MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, on_new_member),
     MessageHandler(filters.StatusUpdate.LEFT_CHAT_MEMBER, on_left_member),

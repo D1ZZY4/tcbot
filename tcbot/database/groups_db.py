@@ -11,8 +11,6 @@ Federated groups and pending joins collection helpers
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from tcbot.database.cache import (
     CACHE_MISS,
     _ALL_GROUPS_KEY,
@@ -20,6 +18,7 @@ from tcbot.database.cache import (
     connected_cache,
 )
 from tcbot.database.mongos import col
+from tcbot.utils.timedate_format import utc_now
 
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
@@ -79,7 +78,7 @@ async def add_group(chat_id: int, title: str, added_by: int) -> None:
             "chat_id":    chat_id,
             "title":      title,
             "added_by":   added_by,
-            "added_date": datetime.now(timezone.utc),
+            "added_date": utc_now(),
             "is_active":  True,
         }},
         upsert=True,
@@ -139,7 +138,7 @@ async def add_pending(chat_id: int, title: str, owner_id: int, message_id: int) 
             "title":      title,
             "owner_id":   owner_id,
             "message_id": message_id,
-            "added_date": datetime.now(timezone.utc),
+            "added_date": utc_now(),
         }},
         upsert=True,
     )

@@ -235,10 +235,10 @@ async def on_help_topic_any(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
 ## ── Handlers ───────────────────────────────────────────────────────────────
 
-_HELP_FILTER = build_prefixed_filters("help") | build_prefixed_filters("commands")
+_HELP_CMDS = build_prefixed_filters("help") | build_prefixed_filters("commands")
 
 __handlers__ = [
-    MessageHandler(_HELP_FILTER, cmd_help),
+    MessageHandler(_HELP_CMDS, cmd_help),
     CallbackQueryHandler(on_help_menu,       pattern=r"^help_menu$"),
     CallbackQueryHandler(on_help_menu_group, pattern=r"^help_menu_group$"),
     CallbackQueryHandler(on_helpc_main,      pattern=r"^helpc_main$"),

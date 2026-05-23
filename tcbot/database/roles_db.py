@@ -12,11 +12,11 @@ Role management system - handles custom staff roles like developer and tester
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
 
 from tcbot.database.admins_db import is_admin, is_owner
 from tcbot.database.cache import CACHE_MISS, effective_role_cache
 from tcbot.database.mongos import col
+from tcbot.utils.timedate_format import utc_now
 
 VALID_ROLES: frozenset[str] = frozenset({"developer", "tester"})
 
@@ -66,7 +66,7 @@ async def set_role(user_id: int, role: str, assigned_by: int) -> None:
             "user_id":     user_id,
             "role":        role,
             "assigned_by": assigned_by,
-            "assigned_at": datetime.now(timezone.utc),
+            "assigned_at": utc_now(),
         }},
         upsert=True,
     )

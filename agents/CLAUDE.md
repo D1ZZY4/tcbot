@@ -51,7 +51,7 @@ tcbot/
 │   │   ├── keyboards.py     All InlineKeyboardMarkup factory functions
 │   │   ├── role_guard.py    resolve_and_check(), auto_demote()
 │   │   ├── ban_info.py      build_ban_detail() — shared ban renderer
-│   │   ├── parse_link.py    message_link(), appeal_deep_link(), utcnow()
+│   │   ├── parse_link.py    message_link(), appeal_deep_link(), user_link()
 │   │   ├── parse_logmsg.py  Log message text builders
 │   │   ├── parse_editmsg.py safe_edit() — swallows stale-message errors
 │   │   └── workflows/
@@ -73,7 +73,7 @@ tcbot/
     ├── error_reporter.py 3-layer error classification and Telegram reporting
     ├── logger.py        BotLogFormatter, setup()
     ├── prefixes.py      build_prefixed_filters(), parse_cmd_args(), filter constants
-    └── timedate_format.py utc_now(), fmt_dt()
+    └── timedate_format.py utc_now(), utcnow(), to_utc(), fmt_dt(), utc_now_str()
 ```
 
 ---
@@ -191,13 +191,16 @@ Message-event handlers (e.g. `on_new_member` in `greeting.py`) are **exempt** fr
 
 ## Conversation Flow Pattern
 
-**There are NO `*_conv.py` files in this project.** Every `ConversationHandler` is built inside a `*_flow.py` file via a factory function. Module files only define the entry point and call the factory:
+**There are NO `*_conv.py` files in this project.** Every `ConversationHandler` is built inside a `*_flow.py` file via a factory function. Module files define `*_CMDS` filters, the entry point, and `__handlers__` (same pattern as `admins.py`):
 
 ```python
 # kicking.py — canonical pattern
 from tcbot.modules.helper.workflows.kicking_flow import kick_conversation
+from tcbot.utils.prefixes import build_prefixed_filters
 
-__handlers__ = [kick_conversation(cmd_kick_entry)]
+_KICK_CMDS = build_prefixed_filters("tckick") | build_prefixed_filters("tck")
+
+__handlers__ = [kick_conversation(cmd_kick_entry, _KICK_CMDS)]
 ```
 
 ### Kick / Mute / Warn — use `reason_flow.build_modaction_conv()`
@@ -298,11 +301,13 @@ Use the correct function for each context:
 
 | Function | Location | Returns | Use when |
 |---|---|---|---|
-| `utc_now()` | `tcbot.utils.timedate_format` | tz-aware `datetime` | Storing timestamps in DB |
+| `utc_now()` | `tcbot.utils.timedate_format` | tz-aware `datetime` | Storing timestamps in DB, elapsed-time checks |
+| `utcnow()` | `tcbot.utils.timedate_format` | naive UTC `datetime` | Test fixtures, legacy naive timestamps |
+| `to_utc(dt)` | `tcbot.utils.timedate_format` | tz-aware `datetime` | Normalizing before subtracting datetimes |
 | `fmt_dt(dt)` | `tcbot.utils.timedate_format` | `str` | Displaying any datetime to users |
-| `utcnow()` | `tcbot.modules.helper.parse_link` | naive `datetime` | Comparing against naive MongoDB timestamps |
+| `utc_now_str()` | `tcbot.utils.timedate_format` | `str` | One-line formatted current time |
 
-Never use `datetime.utcnow()` (deprecated). Never use `datetime.now()` without `timezone.utc`.
+Import all datetime helpers from `tcbot.utils.timedate_format` only. Never use `datetime.utcnow()` or `datetime.now(timezone.utc)` outside that module.
 
 ---
 
@@ -388,7 +393,7 @@ When creating or editing `tcbot/modules/*.py`:
 ## What NOT To Do
 
 - Do not use `from typing import List, Optional, Tuple` — use `list`, `int | None`, `tuple`
-- Do not use `datetime.utcnow()` — use `datetime.now(timezone.utc)` or the canonical helpers
+- Do not use `datetime.utcnow()` or inline `datetime.now(timezone.utc)` — use `tcbot.utils.timedate_format` only
 - Do not use `q._bot` (private PTB attribute) — use `ctx.bot`
 - Do not create `*_conv.py` files — ConversationHandlers belong in `*_flow.py`
 - Do not duplicate reason/proof state handlers — use `reason_flow.build_modaction_conv()`

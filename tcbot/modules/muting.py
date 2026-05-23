@@ -214,13 +214,14 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 ## ── Handlers ───────────────────────────────────────────────────────────────
 
-_UNMUTE_FILTER = (
+_MUTE_CMDS = build_prefixed_filters("tcmute") | build_prefixed_filters("tcm")
+_UNMUTE_CMDS = (
     build_prefixed_filters("tcunmute")
     | build_prefixed_filters("tcunm")
     | build_prefixed_filters("tcum")
 )
 
 __handlers__ = [
-    mute_conversation(cmd_mute_start),
-    MessageHandler(_UNMUTE_FILTER, cmd_unmute),
+    mute_conversation(cmd_mute_start, _MUTE_CMDS, escape_filter=_UNMUTE_CMDS),
+    MessageHandler(_UNMUTE_CMDS, cmd_unmute),
 ]

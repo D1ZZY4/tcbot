@@ -157,12 +157,16 @@ The `__handlers__` list should have a brief comment only if the pattern is not s
 
 ```python
 # * Example: straightforward, no comment needed
-__handlers__ = [kick_conversation(cmd_kick_entry)]
+_KICK_CMDS = build_prefixed_filters("tckick") | build_prefixed_filters("tck")
+__handlers__ = [kick_conversation(cmd_kick_entry, _KICK_CMDS)]
 
 # * Example: multiple handlers benefit from labels
+_MUTE_CMDS   = build_prefixed_filters("tcmute") | build_prefixed_filters("tcm")
+_UNMUTE_CMDS  = build_prefixed_filters("tcunmute") | build_prefixed_filters("tcunm")
+
 __handlers__ = [
-    mute_conversation(cmd_mute_start),
-    MessageHandler(_UNMUTE_FILTER, cmd_unmute),
+    mute_conversation(cmd_mute_start, _MUTE_CMDS, escape_filter=_UNMUTE_CMDS),
+    MessageHandler(_UNMUTE_CMDS, cmd_unmute),
 ]
 ```
 

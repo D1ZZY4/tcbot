@@ -33,7 +33,7 @@ Federation ban entry point.
 - Checks if target holds a role → calls `auto_demote()` before the ban
 - Writes target ID, reason, admin, and proof destination to `ctx.user_data`
 - Returns `WAITING_PROOF` to start the ban proof ConversationHandler
-- **Exposes:** `cmd_ban_start` + `ban_conversation(cmd_ban_start)` in `__handlers__`
+- **Exposes:** `_BAN_CMDS`, `cmd_ban_start`, and `ban_conversation(cmd_ban_start, _BAN_CMDS)` in `__handlers__`
 - **Delegates all proof collection to:** `ban_flow.ban_conversation()`
 
 ### `muting.py`
@@ -42,14 +42,14 @@ Mute and unmute commands.
 
 - `cmd_mute_start` — validates rank (requires tester+), parses optional duration token, dispatches to `mute_conversation()`
 - `cmd_unmute` — resolves target, applies unmute across all connected groups, logs result
-- **Exposes:** `mute_conversation(cmd_mute_start)` + `MessageHandler` for unmute in `__handlers__`
+- **Exposes:** `_MUTE_CMDS`, `_UNMUTE_CMDS`, `mute_conversation(cmd_mute_start, _MUTE_CMDS, escape_filter=_UNMUTE_CMDS)` + `MessageHandler` for unmute in `__handlers__`
 
 ### `kicking.py`
 
 Kick command.
 
 - `cmd_kick_start` — validates rank (tester+), calls `auto_demote()` if needed, delegates to `kick_conversation()`
-- **Exposes:** `kick_conversation(cmd_kick_entry)` in `__handlers__`
+- **Exposes:** `_KICK_CMDS` and `kick_conversation(cmd_kick_entry, _KICK_CMDS)` in `__handlers__`
 
 ### `warnings.py`
 
@@ -57,7 +57,7 @@ Warn, unwarn, warnlist, and resetwarns commands.
 
 - `cmd_warn_start` — validates rank (tester+), delegates to `warn_conversation()`
 - `cmd_unwarn` / `cmd_warnlist` / `cmd_resetwarns` — direct command handlers
-- **Exposes:** `warn_conversation(cmd_warn_entry)` + `MessageHandler`s in `__handlers__`
+- **Exposes:** `_WARN_CMDS`, `_WARN_ESCAPE_CMDS`, `warn_conversation(cmd_warn_entry, _WARN_CMDS, escape_filter=_WARN_ESCAPE_CMDS)` + `MessageHandler`s in `__handlers__`
 
 ### `appeals.py`
 
@@ -65,9 +65,8 @@ Appeal flow registration and pure guard functions.
 
 - `starts_with_appeal_tag(text)` — pure: checks if text starts with `#appeal`
 - `text_references_log_message(text, msg_id)` — pure: checks for log message ID in text
-- `reviewer_locked_out(review_timestamp, ban_admin_id, reviewer_id)` — pure: 12-hour priority window logic
-- `now()` — patchable wrapper around `utcnow()` for test isolation
-- **Exposes:** `appeal_flow.build_handler()` + `CallbackQueryHandler(on_appeal_decision)` in `__handlers__`
+- `reviewer_locked_out(review_timestamp, ban_admin_id, reviewer_id)` — pure: 12-hour priority window logic (via `utc_now()` / `to_utc()`)
+- **Exposes:** `_APPEAL_START_CMDS`, `appeal.build_handler(_APPEAL_START_CMDS)` + `CallbackQueryHandler(appeal.on_decision)` in `__handlers__`
 
 ### `unbanning.py`
 
@@ -212,7 +211,6 @@ Link builders and legacy datetime helper.
 | `chat_id_to_link_id(chat_id)` | Converts `-100XXXXXXXXX` to `XXXXXXXXX` for link use |
 | `user_link(uid, fname)` | HTML `<a>` mention (alias for `formatter.mention`) |
 | `safe_first_name(fname)` | Escapes and truncates first name for safe HTML use |
-| `utcnow()` | Returns naive UTC datetime — for comparing against naive MongoDB timestamps |
 
 ### `parse_logmsg.py`
 
@@ -233,7 +231,7 @@ Edits a message and swallows `BadRequest: Message is not modified` errors. Used 
 
 ## Workflow Package (`tcbot/modules/helper/workflows/`)
 
-These files contain `ConversationHandler` factories and executors. They do not expose PTB handlers directly — the handlers are assembled and returned by factory functions that module files call.
+These files contain `ConversationHandler` factories and executors. They do not define `__handlers__` or module-level command filters (`*_CMDS`) — those belong in the matching `tcbot/modules/*.py` file, following `admins.py`.
 
 **Rule: there are no `*_conv.py` files.** All ConversationHandlers live in `*_flow.py`.
 
@@ -260,7 +258,7 @@ Album-aware ban proof ConversationHandler.
 - Buffers multiple photos/videos from a media album (album debounce window from `cfg.album_debounce`)
 - On proof received: calls `_execute_ban()`, applies to all connected groups via `fan_out()`
 - On `Cancel`: aborts the flow, edits the prompt
-- **Factory:** `ban_conversation(entry_fn)` → `ConversationHandler`
+- **Factory:** `ban_conversation(entry_fn, entry_filter)` → `ConversationHandler`
 - **Executor:** `_execute_ban(bot, msgs, meta)` — creates or updates the ban record, uploads proof, posts log
 
 ### `kicking_flow.py`
@@ -270,7 +268,7 @@ Kick executor and ConversationHandler.
 - **Module-level instances:** `reason = BuildReason("kick")`, `proof = BuildProof("kick")` — imported by `kicking.py`
 - `execute_kick(update, ctx, target_id, target_name, reason_text, proof_desc)` — ban + immediate unban in the current group
 - `_exec_kick(update, ctx)` — adapter that pops `kick_*` keys from `user_data` and calls `execute_kick`
-- **Factory:** `kick_conversation(entry_fn)` → delegates to `reason_flow.build_modaction_conv(reason, proof, ...)`
+- **Factory:** `kick_conversation(entry_fn, entry_filter)` → delegates to `reason_flow.build_modaction_conv(reason, proof, ...)`
 
 ### `muting_flow.py`
 
@@ -282,7 +280,7 @@ Mute/unmute executors and ConversationHandler.
 - `_execute_mute(bot, update, meta)` — applies restriction to all groups via `fan_out()`, edits the prompt to a summary
 - `execute_unmute(update, ctx, target_id, fname)` — removes restriction from all groups
 - `_exec_mute(update, ctx)` — adapter that copies `mute_*` keys from `user_data` and calls `_execute_mute`
-- **Factory:** `mute_conversation(entry_fn)` → delegates to `reason_flow.build_modaction_conv(reason, proof, ...)`
+- **Factory:** `mute_conversation(entry_fn, entry_filter, *, escape_filter=None)` → delegates to `reason_flow.build_modaction_conv(reason, proof, ...)`
 
 ### `warning_flow.py`
 
@@ -294,7 +292,7 @@ Warn executors and ConversationHandler.
 - `execute_warnlist(update, ctx, target_id, target_name)` — formats and sends a user's warning history
 - `execute_resetwarns(update, ctx, target_id, target_name)` — clears all warnings for a user in the chat
 - `_exec_warn(update, ctx)` — adapter that pops `warn_*` keys from `user_data` and calls `execute_warn`
-- **Factory:** `warn_conversation(entry_fn)` → delegates to `reason_flow.build_modaction_conv(reason, proof, ...)`
+- **Factory:** `warn_conversation(entry_fn, entry_filter, *, escape_filter=None)` → delegates to `reason_flow.build_modaction_conv(reason, proof, ...)`
 
 ### `unban_flow.py`
 
@@ -311,7 +309,7 @@ Standalone appeal ConversationHandler. Entry via `/start appeal_<ban_id>` deep l
   - `.instruction_text()` → `str` — multi-line HTML prompt shown when the user opens an appeal
   - `.cancel_keyboard()` → `InlineKeyboardMarkup` — single Cancel button for the instruction prompt
   - `.review_keyboard(ban_id)` → `InlineKeyboardMarkup` — Approve / Reject buttons for the staff review card
-  - `.build_handler()` → `ConversationHandler` — assembles the full appeal conversation
+  - `.build_handler(entry_filter)` → `ConversationHandler` — assembles the full appeal conversation
   - `.on_decision(update, ctx)` — approve/reject callback registered outside the `ConversationHandler`
 - State: `WAITING_APPEAL`
 - Validates DM context, active ban ownership, and absence of a pending review
@@ -414,8 +412,14 @@ Strips the command prefix and returns the remaining tokens.
 
 ### `timedate_format.py`
 
-**`utc_now()`** → `datetime` — tz-aware UTC datetime. Use for storing timestamps in MongoDB.
+Single source of truth for all datetime usage in the project.
 
-**`fmt_dt(dt)`** → `str` — formats any datetime (tz-aware or naive) as `DD MMM YYYY HH:MM UTC`. Use for displaying dates to users.
+| Function | Returns | Use when |
+|---|---|---|
+| `utc_now()` | tz-aware `datetime` | Storing timestamps in MongoDB, elapsed-time comparisons |
+| `utcnow()` | naive UTC `datetime` | Building test fixtures or legacy naive timestamps |
+| `to_utc(dt)` | tz-aware `datetime` | Normalizing naive or aware values before subtraction |
+| `fmt_dt(dt)` | `str` | Displaying any datetime to users (`DD-MM-YYYY \| HH:MM`) |
+| `utc_now_str()` | `str` | One-line formatted current time (`fmt_dt(utc_now())`) |
 
-**`utc_now_str()`** → `str` — equivalent to `fmt_dt(utc_now())`.
+Never call `datetime.now(timezone.utc)` or `datetime.utcnow()` outside this module.

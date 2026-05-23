@@ -2,8 +2,6 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Additional links menu callback – official channels and community group buttons."""
-
 from __future__ import annotations
 
 import asyncio
@@ -15,6 +13,9 @@ from tcbot import cfg
 from tcbot.modules.helper import decorators
 
 __module_name__ = None
+
+
+# ─────────────────────── Additional Message ─────────────────────── #
 
 __additional_msg__ = (
     f"{cfg.community_name} <b>Official Links</b>\n\n"
@@ -41,7 +42,7 @@ def _additional_kb() -> InlineKeyboardMarkup:
     ])
 
 
-## ── Callback handler ────────────────────────────────────────────────────────
+# ──────────────────────── Callback Handler ──────────────────────── #
 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
@@ -57,7 +58,7 @@ async def on_additional_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     )
 
 
-## ── Handlers ───────────────────────────────────────────────────────────────
+# ──────────────────────────── Handlers ──────────────────────────── #
 
 __handlers__ = [
     CallbackQueryHandler(on_additional_menu, pattern=r"^additional_menu$"),

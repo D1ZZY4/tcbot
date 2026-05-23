@@ -2,8 +2,6 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""About menu callback – renders the community description card."""
-
 from __future__ import annotations
 
 import asyncio
@@ -16,7 +14,8 @@ from tcbot.modules.helper import decorators, keyboards
 
 __module_name__ = None
 
-## ── About text ─────────────────────────────────────────────────────────────
+
+# ────────────────────────── About Message ───────────────────────── #
 
 __about_msg__ = (
     f"<b>What is</b> {cfg.community_name}?\n"
@@ -29,7 +28,7 @@ __about_msg__ = (
 )
 
 
-## ── Callback handler ────────────────────────────────────────────────────────
+# ──────────────────────── Callback Handler ──────────────────────── #
 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
@@ -44,7 +43,7 @@ async def on_about_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-## ── Handlers ───────────────────────────────────────────────────────────────
+# ──────────────────────────── Handlers ──────────────────────────── #
 
 __handlers__ = [
     CallbackQueryHandler(on_about_menu, pattern=r"^about_menu$"),

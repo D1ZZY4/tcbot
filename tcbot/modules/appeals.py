@@ -2,22 +2,20 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Appeal flow registration and pure guard functions for the federation ban appeal system."""
-
 from __future__ import annotations
 
 import re
 from datetime import datetime, timedelta
 
-from telegram.ext import CallbackQueryHandler
+from telegram.ext import CallbackQueryHandler, filters
 
-from tcbot.modules.helper.parse_link import utcnow
 from tcbot.modules.helper.workflows.appeal_flow import appeal
+from tcbot.utils.timedate_format import to_utc, utc_now
 
 _LOCK_WINDOW = timedelta(hours=12)
 
 
-# ───────────────────────── Module and Help ──────────────────────── #
+# ───────────────────── Module and Help Message ──────────────────── #
 
 __module_name__ = "Appeal"
 
@@ -80,16 +78,17 @@ def reviewer_locked_out(
         return False
     if reviewer_id == ban_admin_id:
         return False
-    ts = review_timestamp
-    if hasattr(ts, "tzinfo") and ts.tzinfo is not None:
-        ts = ts.replace(tzinfo=None)
-    elapsed = utcnow() - ts
+    elapsed = utc_now() - to_utc(review_timestamp)
     return elapsed < _LOCK_WINDOW
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #
 
+_APPEAL_START_CMDS = (
+    filters.ChatType.PRIVATE & filters.Regex(r"^/start\s+appeal_[a-z0-9]{10}$")
+)
+
 __handlers__ = [
-    appeal.build_handler(),
+    appeal.build_handler(_APPEAL_START_CMDS),
     CallbackQueryHandler(appeal.on_decision, pattern=r"^appeal_(approve|reject)_\S+$"),
 ]

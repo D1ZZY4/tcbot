@@ -141,12 +141,12 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 ## ── Handlers ───────────────────────────────────────────────────────────────
 
-_DISCONNECT_FILTER = (
+_DISCONNECT_CMDS = (
     build_prefixed_filters("tcdisconnect")
     | build_prefixed_filters("tcdiscon")
 )
 
 __handlers__ = [
-    MessageHandler(_DISCONNECT_FILTER, cmd_tcdisconnect),
+    MessageHandler(_DISCONNECT_CMDS, cmd_tcdisconnect),
     MessageHandler(build_prefixed_filters("rmtc"), cmd_rmtc),
 ]

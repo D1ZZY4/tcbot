@@ -36,7 +36,7 @@ from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
 from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
 from tcbot.utils.dispatch import fan_out
-from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
+from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 from tcbot.utils.timedate_format import utc_now
 
 log = logging.getLogger(__name__)
@@ -249,13 +249,10 @@ async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
 
 ## ── ConversationHandler factory ─────────────────────────────────────────────
 
-_BAN_FILTER = build_prefixed_filters("tcban") | build_prefixed_filters("tcb")
-
-
-def ban_conversation(entry_fn) -> ConversationHandler:
+def ban_conversation(entry_fn, entry_filter) -> ConversationHandler:
     """Return the ban ConversationHandler with the given entry-point function."""
     return ConversationHandler(
-        entry_points=[MessageHandler(_BAN_FILTER, entry_fn)],
+        entry_points=[MessageHandler(entry_filter, entry_fn)],
         states={
             WAITING_PROOF: [
                 CallbackQueryHandler(on_cancel_proof, pattern=rf"^{proof.action}_cancel$"),

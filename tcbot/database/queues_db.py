@@ -10,9 +10,8 @@ Promotion request queue - manages promotion request queue for staff applications
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from tcbot.database.mongos import col, make_short_id
+from tcbot.utils.timedate_format import utc_now
 
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
@@ -52,7 +51,7 @@ async def enqueue(
         "first_name": first_name,
         "promoted_by": promoted_by,
         "status": "pending",
-        "requested_date": datetime.now(timezone.utc),
+        "requested_date": utc_now(),
         "resolved_date": None,
         "resolved_by": None,
     })
@@ -97,7 +96,7 @@ async def resolve(request_id: str, status: str, resolved_by: int) -> None:
         {"request_id": request_id},
         {"$set": {
             "status": status,
-            "resolved_date": datetime.now(timezone.utc),
+            "resolved_date": utc_now(),
             "resolved_by": resolved_by,
         }},
     )

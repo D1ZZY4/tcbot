@@ -109,9 +109,9 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 ## ── Handlers ───────────────────────────────────────────────────────────────
 
-_BROADCAST_FILTER = (
+_BROADCAST_CMDS = (
     build_prefixed_filters("tcbroadcast")
     | build_prefixed_filters("bc")
 )
 
-__handlers__ = [MessageHandler(_BROADCAST_FILTER, cmd_broadcast)]
+__handlers__ = [MessageHandler(_BROADCAST_CMDS, cmd_broadcast)]
