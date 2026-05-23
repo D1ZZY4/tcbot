@@ -38,7 +38,6 @@ def role_rank(role: str | None) -> int:
 
 
 def _col():
-    """Get the tc_roles collection reference from MongoDB"""
     return col("tc_roles")
 
 

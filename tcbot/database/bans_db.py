@@ -18,12 +18,11 @@ from tcbot.utils.timedate_format import utc_now
 
 
 def _bans():
-    """Get the bans collection reference from MongoDB"""
     return col("bans")
 
 
 def make_ban_id() -> str:
-    """Generate a unique short ID for new ban records"""
+    """Generate a unique short ID for a new ban record."""
     return make_short_id()
 
 

@@ -17,12 +17,10 @@ from tcbot.utils.timedate_format import utc_now
 
 
 def _warns():
-    """Get the warns collection reference from MongoDB"""
     return col("warns")
 
 
 def _warn_counts():
-    """Get the warn counter collection reference from MongoDB"""
     return col("warn_counts")
 
 

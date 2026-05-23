@@ -292,6 +292,28 @@ Corrections applied:
 No source code changes required — zero Ruff violations, zero logic/style issues found.
 All 134 tests pass.
 
+### Session 6 — Style Consistency Pass ✅
+
+Deep audit of entire `tcbot/database/` tree against `agents/STYLE-COMMENTS.md` and `agents/STYLE-CODE.md`.
+
+**Ruff result:** `uv tool run ruff check . --select E4,E7,E9,F,I` → **All checks passed — 0 issues found.**
+**Tests:** 134/134 pass.
+
+Corrections applied:
+
+- [x] `tcbot/database/mongos.py` — added missing blank line between copyright block and module docstring (file header rule: copyright → blank → `"""docstring."""`)
+- [x] `tcbot/database/mongos.py` — fixed malformed `_patch_dns_if_needed` docstring that ended with `,."""` (truncated/corrupted sentence); replaced with a complete, well-formed sentence
+- [x] `tcbot/database/bans_db.py` — removed docstring from `_bans()` (private obvious one-liner; style rule: obvious helpers need no docstring); fixed `make_ban_id()` docstring: added terminal period
+- [x] `tcbot/database/groups_db.py` — removed docstrings from `_groups()` and `_pending()` (private obvious one-liners)
+- [x] `tcbot/database/roles_db.py` — removed docstring from `_col()` (private obvious one-liner)
+- [x] `tcbot/database/warns_db.py` — removed docstrings from `_warns()` and `_warn_counts()` (private obvious one-liners)
+- [x] `tcbot/database/kicks_db.py` — removed docstring from `_kicks()` (private obvious one-liner)
+- [x] `tcbot/database/mutes_db.py` — removed docstring from `_mutes()` (private obvious one-liner)
+- [x] `tcbot/database/queues_db.py` — removed docstrings from `_requests()` and `_new_request_id()` (private obvious one-liners)
+- [x] `tcbot/database/users_db.py` — removed docstring from `_users()` (private obvious one-liner)
+- [x] `tcbot/database/types.py` — removed Sphinx double-backticks from `BanId` docstring (`` ``make_short_id()`` `` → `make_short_id()`)
+- [x] `tcbot/database/cache.py` — removed Sphinx double-backticks from inline comment (`# * Public sentinel — compare using is CACHE_MISS…`)
+
 ---
 
 ## Code Quality Checklist (Task File — Session 5)

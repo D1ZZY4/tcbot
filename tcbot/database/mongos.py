@@ -1,6 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
+
 """MongoDB connection manager - single client shared across the entire application."""
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ _RESOLV_CONF = "/etc/resolv.conf"
 
 
 def _patch_dns_if_needed() -> None:
-    """On platforms without /etc/resolv.conf (e.g. Termux/Android),."""
+    """Write a fallback nameserver config when /etc/resolv.conf is absent."""
     if not os.path.exists(_RESOLV_CONF):
         try:
             import dns.resolver

@@ -15,12 +15,10 @@ from tcbot.utils.timedate_format import utc_now
 
 
 def _requests():
-    """Get the promotion_requests collection reference from MongoDB"""
     return col("promotion_requests")
 
 
 def _new_request_id() -> str:
-    """Generate a unique short ID for new promotion requests"""
     return make_short_id()
 
 

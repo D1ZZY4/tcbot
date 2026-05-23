@@ -15,7 +15,6 @@ from tcbot.utils.timedate_format import utc_now
 
 
 def _users():
-    """Get the member_cache collection reference from MongoDB"""
     return col("member_cache")
 
 

@@ -14,7 +14,6 @@ from tcbot.utils.timedate_format import utc_now
 
 
 def _mutes():
-    """Get the mutes collection reference from MongoDB"""
     return col("mutes")
 
 

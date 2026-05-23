@@ -14,7 +14,6 @@ from tcbot.utils.timedate_format import utc_now
 
 
 def _kicks():
-    """Get the kicks collection reference from MongoDB"""
     return col("kicks")
 
 

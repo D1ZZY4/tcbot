@@ -23,12 +23,10 @@ from tcbot.utils.timedate_format import utc_now
 
 
 def _groups():
-    """Get the federated_groups collection reference from MongoDB"""
     return col("federated_groups")
 
 
 def _pending():
-    """Get the pending_joins collection reference from MongoDB"""
     return col("pending_joins")
 
 
