@@ -148,7 +148,8 @@ async def ensure_indexes() -> None:
         col("federated_groups").create_index([("chat_id", 1), ("is_active", 1)]),
         col("federated_groups").create_index([("chat_id", 1)], unique=True),
         col("member_cache").create_index([("user_id", 1)], unique=True),
-        col("warns").create_index([("user_id", 1), ("chat_id", 1)]),
+        col("warns").create_index([("user_id", 1), ("chat_id", 1), ("timestamp", -1)]),
+        col("warn_counts").create_index([("user_id", 1), ("chat_id", 1)], unique=True),
         col("promotion_requests").create_index([("request_id", 1)], unique=True),
         col("promotion_requests").create_index([("target_id", 1), ("status", 1)]),
     )

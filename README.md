@@ -74,7 +74,7 @@ The compose file starts the bot and a local MongoDB instance. The bot waits for 
 | Variable | Required | Description |
 |---|---|---|
 | `BOT_TOKEN` | Yes | Telegram bot token from @BotFather |
-| `OWNER_ID` | Yes | Telegram user ID of the federation founder |
+| `OWNER_ID` | Yes | Positive Telegram user ID of the federation founder |
 | `MONGODB_URI` | Yes | MongoDB connection string |
 | `DB_NAME` | No | Database name (default: `tcbot`) |
 | `COMMUNITY_NAME` | No | Display name used in bot messages |
@@ -84,6 +84,7 @@ The compose file starts the bot and a local MongoDB instance. The bot waits for 
 | `LOGS_ERRORS` | No | Error log destination (same format as LOGS) |
 | `PROOFS` | Yes | Ban proof channel: `chat_id` or `chat_id/thread_id` |
 | `APPEALS` | Yes | Appeal record channel: `chat_id` or `chat_id/thread_id` |
+| `APPEAL_LOG_HANDLE` | No | Public `@handle` shown in appeal instructions (default: `@TranssionCoreFederationLogs`) |
 | `APPEAL_DISCUSSION_TOPIC` | Yes | Thread ID inside MAIN_GROUP for appeal review cards |
 | `PROOF_TIMEOUT_SECONDS` | No | Ban proof conversation timeout (default: 100) |
 | `APPEAL_TIMEOUT_SECONDS` | No | Appeal conversation timeout (default: 600) |

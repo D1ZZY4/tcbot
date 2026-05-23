@@ -10,7 +10,9 @@ Warnings collection helpers - manages user warning records in groups
 
 from __future__ import annotations
 
-from tcbot.database.documents import WarnDoc
+from pymongo import ReturnDocument
+
+from tcbot.database.documents import WarnCountDoc, WarnDoc
 from tcbot.database.mongos import col
 from tcbot.utils.timedate_format import utc_now
 
@@ -21,6 +23,64 @@ from tcbot.utils.timedate_format import utc_now
 def _warns():
     """Get the warns collection reference from MongoDB"""
     return col("warns")
+
+
+def _warn_counts():
+    """Get the warn counter collection reference from MongoDB"""
+    return col("warn_counts")
+
+
+def _warn_key(user_id: int, chat_id: int) -> dict[str, int]:
+    return {"user_id": user_id, "chat_id": chat_id}
+
+
+async def _sync_warn_count(user_id: int, chat_id: int) -> int:
+    """Read the counter doc, or backfill it from warn history when missing."""
+    doc: WarnCountDoc | None = await _warn_counts().find_one(
+        _warn_key(user_id, chat_id),
+        {"_id": 0, "count": 1},
+    )
+    if doc is not None:
+        return int(doc.get("count", 0))
+
+    count = await _warns().count_documents(_warn_key(user_id, chat_id))
+    if count > 0:
+        await _warn_counts().update_one(
+            _warn_key(user_id, chat_id),
+            {
+                "$set": {
+                    "count": count,
+                    "updated_at": utc_now(),
+                },
+                "$setOnInsert": {
+                    "user_id": user_id,
+                    "chat_id": chat_id,
+                },
+            },
+            upsert=True,
+        )
+    return count
+
+
+async def _store_warn_count(user_id: int, chat_id: int, count: int) -> None:
+    """Persist the counter doc for a user/chat pair."""
+    if count <= 0:
+        await _warn_counts().delete_one(_warn_key(user_id, chat_id))
+        return
+    await _warn_counts().update_one(
+        _warn_key(user_id, chat_id),
+        {
+            "$set": {
+                "count": count,
+                "updated_at": utc_now(),
+            },
+            "$setOnInsert": {
+                "user_id": user_id,
+                "chat_id": chat_id,
+            },
+        },
+        upsert=True,
+    )
 
 
 # ──────────────────────────── Mutations ─────────────────────────── #
@@ -37,7 +97,7 @@ async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> in
     * Timestamps are stored in UTC for consistency
     """
     c = _warns()
-    await c.insert_one(
+    inserted = await c.insert_one(
         {
             "user_id": user_id,
             "reason": reason,
@@ -46,7 +106,28 @@ async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> in
             "timestamp": utc_now(),
         }
     )
-    return await c.count_documents({"user_id": user_id, "chat_id": chat_id})
+    try:
+        counter = await _warn_counts().find_one_and_update(
+            _warn_key(user_id, chat_id),
+            {
+                "$inc": {"count": 1},
+                "$set": {"updated_at": utc_now()},
+                "$setOnInsert": {
+                    "user_id": user_id,
+                    "chat_id": chat_id,
+                    "count": 0,
+                },
+            },
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+            projection={"_id": 0, "count": 1},
+        )
+    except Exception:
+        await c.delete_one({"_id": inserted.inserted_id})
+        raise
+    if counter is None:
+        return await _sync_warn_count(user_id, chat_id)
+    return int(counter.get("count", 0))
 
 
 # ─────────────────────── Queries & Retrieval ────────────────────── #
@@ -59,7 +140,7 @@ async def warn_count(user_id: int, chat_id: int) -> int:
     Get the current number of warnings for a user in a specific chat
     * Uses efficient count_documents to get the total quickly
     """
-    return await _warns().count_documents({"user_id": user_id, "chat_id": chat_id})
+    return await _sync_warn_count(user_id, chat_id)
 
 
 async def clear_warns(user_id: int, chat_id: int) -> int:
@@ -68,7 +149,8 @@ async def clear_warns(user_id: int, chat_id: int) -> int:
     * Returns the number of warning documents that were deleted
     * Use this to reset a user's warning count completely
     """
-    r = await _warns().delete_many({"user_id": user_id, "chat_id": chat_id})
+    r = await _warns().delete_many(_warn_key(user_id, chat_id))
+    await _warn_counts().delete_one(_warn_key(user_id, chat_id))
     return r.deleted_count
 
 
@@ -92,10 +174,25 @@ async def remove_last_warn(user_id: int, chat_id: int) -> bool:
     * Only removes a single warning - use clear_warns() to remove all
     """
     doc = await _warns().find_one(
-        {"user_id": user_id, "chat_id": chat_id},
-        sort=[("timestamp", -1)],
+        _warn_key(user_id, chat_id),
+        sort=[("timestamp", -1), ("_id", -1)],
     )
     if not doc:
         return False
     await _warns().delete_one({"_id": doc["_id"]})
+    counter = await _warn_counts().find_one_and_update(
+        {
+            **_warn_key(user_id, chat_id),
+            "count": {"$gt": 0},
+        },
+        {"$inc": {"count": -1}, "$set": {"updated_at": utc_now()}},
+        return_document=ReturnDocument.AFTER,
+        projection={"_id": 0, "count": 1},
+    )
+    if counter is None:
+        await _store_warn_count(
+            user_id,
+            chat_id,
+            await _warns().count_documents(_warn_key(user_id, chat_id)),
+        )
     return True

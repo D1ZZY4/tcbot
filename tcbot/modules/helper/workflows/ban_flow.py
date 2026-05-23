@@ -110,8 +110,11 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     if is_update:
         ban_id = existing["ban_id"]
         old_admin_id = existing.get("admin_user_id", admin_id)
-        bot_username = bot.username
+        bot_username = bot.username or "TCFBot"
         old_admin_fname = await _old_admin_fname_task
+        old_proof_msg_id = existing.get("proof_message_id", 0)
+        old_log_msg_id = existing.get("log_message_id", 0)
+        new_proof_msg_id = proof_msg_id or old_proof_msg_id
 
         log_text = parse_logmsg.ban_update_log(
             target_id,
@@ -150,10 +153,10 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
                 ban_id,
                 reason,
                 admin_id,
-                proof_msg_id or 0,
-                0,
-                existing.get("proof_message_id", 0),
-                existing.get("log_message_id", 0),
+                new_proof_msg_id,
+                old_log_msg_id,
+                old_proof_msg_id,
+                old_log_msg_id,
             ),
             bot.send_message(logs_chat, log_text, **send_kwargs),
             return_exceptions=True,

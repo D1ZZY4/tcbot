@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from tcbot import cfg
 from tcbot.modules import appeals
 from tcbot.utils.timedate_format import utc_now
 
@@ -96,3 +97,7 @@ def test_reviewer_locked_out_returns_false_when_ban_admin_none() -> None:
         ban_admin_id=None,
         reviewer_id=20,
     )
+
+
+def test_module_level_appeal_uses_configured_log_handle() -> None:
+    assert appeals.appeal.log_channel == cfg.appeal_log_handle

@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from datetime import datetime, timedelta
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
@@ -28,10 +29,12 @@ from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.utils.dispatch import fan_out
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
+from tcbot.utils.timedate_format import to_utc, utc_now
 
 log = logging.getLogger(__name__)
 
 WAITING_APPEAL = 0
+_LOCK_WINDOW = timedelta(hours=12)
 
 _ID_RE = re.compile(r"^/start\s+appeal_([a-z0-9]{10})$")
 
@@ -339,13 +342,7 @@ class BuildAppeal:
 
         review_ts = ban.get("review_timestamp")
         if review_ts:
-            from tcbot.modules import appeals
-
-            if appeals.reviewer_locked_out(
-                review_ts,
-                ban.get("admin_user_id"),
-                admin.id,
-            ):
+            if reviewer_locked_out(review_ts, ban.get("admin_user_id"), admin.id):
                 await q.answer(
                     "Only the admin who issued this ban can review it within the first 12 hours.",
                     show_alert=True,
@@ -492,6 +489,24 @@ class BuildAppeal:
 
 # ── Module-level instance ─────────────────────────────────────────────────
 
-_LOG_CHANNEL_HANDLE = "@TranssionCoreFederationLogs"
+appeal = BuildAppeal(cfg.community_name, cfg.appeal_log_handle)
 
-appeal = BuildAppeal(cfg.community_name, _LOG_CHANNEL_HANDLE)
+
+def reviewer_locked_out(
+    review_timestamp: datetime | None,
+    ban_admin_id: int | None,
+    reviewer_id: int,
+) -> bool:
+    """
+    Check whether reviewer_id is blocked from reviewing within the lock window.
+
+    Returns False when metadata is absent or reviewer is the original banning
+    admin — they may always review their own bans. Returns True only if
+    elapsed < _LOCK_WINDOW and reviewer is a different admin.
+    """
+    if review_timestamp is None or ban_admin_id is None:
+        return False
+    if reviewer_id == ban_admin_id:
+        return False
+    elapsed = utc_now() - to_utc(review_timestamp)
+    return elapsed < _LOCK_WINDOW

@@ -57,6 +57,22 @@ def parse_chat_id(raw: str) -> tuple[int, int | None]:
     return int(raw), None
 
 
+def _owner_id_from_env() -> int:
+    """Read OWNER_ID and require a positive integer."""
+    raw = os.getenv("OWNER_ID")
+    if raw is None or not raw.strip():
+        raise RuntimeError("OWNER_ID is required and must be a positive integer.")
+    try:
+        owner_id = int(raw.strip())
+    except ValueError as exc:
+        raise RuntimeError(
+            "OWNER_ID is required and must be a positive integer."
+        ) from exc
+    if owner_id <= 0:
+        raise RuntimeError("OWNER_ID is required and must be a positive integer.")
+    return owner_id
+
+
 def _int_from_env(key: str, default: int) -> int:
     """Read an integer env var, returning ``default`` on parse error."""
     try:
@@ -102,6 +118,7 @@ class Configs:
     logs: str
     logs_errors: str
     appeals: str
+    appeal_log_handle: str
     proof_timeout_seconds: int
     appeal_timeout_seconds: int
     appeal_discussion_topic: int
@@ -154,10 +171,7 @@ class Configs:
         if not token:
             raise RuntimeError("BOT_TOKEN is required but not set.")
 
-        try:
-            owner_id = int(os.getenv("OWNER_ID", "0").strip())
-        except ValueError:
-            owner_id = 0
+        owner_id = _owner_id_from_env()
 
         raw_prefixes = os.getenv("PREFIXES", '["/", "!", "."]')
         prefixes = parse_list(raw_prefixes) or ["/"]
@@ -176,6 +190,10 @@ class Configs:
             logs=os.getenv("LOGS", "").strip(),
             logs_errors=os.getenv("LOGS_ERRORS", "").strip(),
             appeals=os.getenv("APPEALS", "").strip(),
+            appeal_log_handle=os.getenv(
+                "APPEAL_LOG_HANDLE", "@TranssionCoreFederationLogs"
+            ).strip()
+            or "@TranssionCoreFederationLogs",
             proof_timeout_seconds=_int_from_env("PROOF_TIMEOUT_SECONDS", 100),
             appeal_timeout_seconds=_int_from_env("APPEAL_TIMEOUT_SECONDS", 600),
             appeal_discussion_topic=_int_from_env("APPEAL_DISCUSSION_TOPIC", 0),
@@ -252,6 +270,10 @@ class _CfgAdapter:
     @property
     def appeals(self) -> tuple[int, int | None]:
         return self._c.appeals_id
+
+    @property
+    def appeal_log_handle(self) -> str:
+        return self._c.appeal_log_handle
 
     @property
     def proof_timeout(self) -> int:

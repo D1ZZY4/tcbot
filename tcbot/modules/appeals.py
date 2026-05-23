@@ -5,15 +5,17 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
 
 from telegram.ext import CallbackQueryHandler, filters
 
-from tcbot.modules.helper.workflows.appeal_flow import appeal
-from tcbot.utils.timedate_format import to_utc, utc_now
+from tcbot.modules.helper.workflows.appeal_flow import (
+    appeal,
+)
+from tcbot.modules.helper.workflows.appeal_flow import (
+    reviewer_locked_out as _reviewer_locked_out,
+)
 
-# * 12-hour priority window before any admin can act on an appeal
-_LOCK_WINDOW = timedelta(hours=12)
+reviewer_locked_out = _reviewer_locked_out
 
 
 # ────────────────────── Module & Help Message ───────────────────── #
@@ -59,26 +61,6 @@ def starts_with_appeal_tag(text: str) -> bool:
 def text_references_log_message(text: str, msg_id: int) -> bool:
     """Return True when text contains msg_id as a standalone integer token."""
     return bool(re.search(rf"\b{msg_id}\b", text))
-
-
-def reviewer_locked_out(
-    review_timestamp: datetime | None,
-    ban_admin_id: int | None,
-    reviewer_id: int,
-) -> bool:
-    """
-    Check whether reviewer_id is blocked from reviewing within the lock window.
-
-    Returns False when metadata is absent or reviewer is the original banning
-    admin — they may always review their own bans. Returns True only if
-    elapsed < _LOCK_WINDOW and reviewer is a different admin.
-    """
-    if review_timestamp is None or ban_admin_id is None:
-        return False
-    if reviewer_id == ban_admin_id:
-        return False
-    elapsed = utc_now() - to_utc(review_timestamp)
-    return elapsed < _LOCK_WINDOW
 
 
 # ───────────────────────── Handlers ─────────────────────────────── #

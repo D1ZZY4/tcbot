@@ -42,7 +42,10 @@ async def get_active_ban(user_id: int) -> BanDoc | None:
     * Returns None if the user has no active bans
     * Queries only bans marked with 'is_active': True
     """
-    return await _bans().find_one({"banned_user_id": user_id, "is_active": True})
+    return await _bans().find_one(
+        {"banned_user_id": user_id, "is_active": True},
+        sort=[("timestamp", -1), ("ban_id", -1)],
+    )
 
 
 async def get_ban(ban_id: str) -> BanDoc | None:
@@ -203,7 +206,11 @@ async def active_bans() -> list[BanDoc]:
     Get all active ban records in the database
     * Returns full documents for all currently banned users
     """
-    return await _bans().find({"is_active": True}).to_list(None)
+    return (
+        await _bans()
+        .find({"is_active": True}, sort=[("timestamp", -1), ("ban_id", -1)])
+        .to_list(None)
+    )
 
 
 async def active_ban_user_ids() -> list[int]:
@@ -214,7 +221,11 @@ async def active_ban_user_ids() -> list[int]:
     """
     docs = (
         await _bans()
-        .find({"is_active": True}, {"_id": 0, "banned_user_id": 1})
+        .find(
+            {"is_active": True},
+            {"_id": 0, "banned_user_id": 1},
+            sort=[("timestamp", -1), ("ban_id", -1)],
+        )
         .to_list(None)
     )
     return [doc["banned_user_id"] for doc in docs]

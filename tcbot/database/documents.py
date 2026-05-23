@@ -75,6 +75,13 @@ class WarnDoc(TypedDict, total=False):
     timestamp: datetime
 
 
+class WarnCountDoc(TypedDict, total=False):
+    user_id: int
+    chat_id: int
+    count: int
+    updated_at: datetime
+
+
 class PromotionRequestDoc(TypedDict, total=False):
     request_id: str
     target_id: int
