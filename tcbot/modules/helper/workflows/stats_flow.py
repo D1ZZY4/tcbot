@@ -2,9 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Connected chats list flow for /tcstats - numbered list, detail view, full search flow
-"""
+"""Connected chats list flow for /tcstats - numbered list, detail view, full search flow."""
 
 from __future__ import annotations
 
@@ -24,7 +22,7 @@ _MSG_KEY = "stats_search_msg_id"
 _CHAT_KEY = "stats_search_chat_id"
 
 
-# ── Keyboards ──────────────────────────────────────────────────────────────
+# ──────────────────────────── Keyboards ─────────────────────────── #
 
 
 def _bans_list_kb(page: int, total: int, n_items: int) -> InlineKeyboardMarkup:
@@ -94,7 +92,7 @@ def _ban_detail_kb(page: int, proof_link: str | None = None) -> InlineKeyboardMa
     return InlineKeyboardMarkup(rows)
 
 
-# ── Shared bans-page renderer ──────────────────────────────────────────────
+# ──────────────────── Shared bans-page renderer ─────────────────── #
 
 
 async def _render_bans_page(q, page: int) -> None:
@@ -129,7 +127,7 @@ async def _render_bans_page(q, page: int) -> None:
     )
 
 
-# ── Bans list handlers ─────────────────────────────────────────────────────
+# ─────────────────────── Bans list handlers ─────────────────────── #
 
 
 async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -152,7 +150,7 @@ async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     )
 
 
-# ── Search flow handlers ───────────────────────────────────────────────────
+# ────────────────────── Search flow handlers ────────────────────── #
 
 
 def _clear_search(ctx: ContextTypes.DEFAULT_TYPE) -> None:

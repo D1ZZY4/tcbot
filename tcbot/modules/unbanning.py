@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Federation unban command entry point – validates permissions and delegates to unban_flow."""
+
 from __future__ import annotations
 
 import logging
@@ -45,7 +47,7 @@ __help_text__ = (
 )
 
 
-# ──────────────── Command Unban </tcunban> ───────────────────────── #
+# ──────────────────── Command Unban </tcunban> ──────────────────── #
 
 
 @decorators.ratelimiter(limit=5, period=60)

@@ -11,7 +11,7 @@ Compatible with: Replit AI, Claude, Gemini, Qwen, GitHub Copilot, and any AI cod
 1. Read the full content of the file you are about to edit.
 2. Check for duplicate logic across modules before adding a new function.
 3. If you are changing a database schema (adding or removing fields), update all read paths too.
-4. Run `python3 -m pytest tests/ -v` — all 121 tests must pass before you start.
+4. Run `python3 -m pytest tests/ -v` — all 134 tests must pass before you start.
 
 ---
 
@@ -161,14 +161,14 @@ test: add rate-limiter edge cases for concurrent callers
 
 Before any merge to `main`:
 
-- [ ] All 121 tests pass: `python3 -m pytest tests/ -v`
+- [ ] All 134 tests pass: `python3 -m pytest tests/ -v`
 - [ ] Bot starts without any `ERROR` in startup logs
 - [ ] MongoDB connection confirmed in logs: `MongoDB connected → <db_name>`
-- [ ] Keep-alive Flask confirmed in logs: `Flask keepalive started on port 8080`
+- [ ] Keep-alive Flask confirmed in logs: `Flask keepalive started on port 5000`
 - [ ] `/start` shows the main menu in bot PM
 - [ ] `/help` lists all expected modules
 - [ ] At least one moderation command tested end-to-end in a connected group
-- [ ] `config.env` does not contain any real secrets (secrets are in Replit Secrets)
+- [ ] `config.env` is gitignored and not committed to version control
 
 ---
 

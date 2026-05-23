@@ -2,9 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Database module - exposes all database collection helpers and queries under tcbot.database.*
-"""
+"""Database module - exposes all database collection helpers and queries under tcbot.database.*."""
 
 from __future__ import annotations
 

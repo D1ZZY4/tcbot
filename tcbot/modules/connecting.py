@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Group connect command handler – manages federation group onboarding."""
+
 from __future__ import annotations
 
 import asyncio

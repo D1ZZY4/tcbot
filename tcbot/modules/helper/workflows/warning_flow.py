@@ -2,20 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Warning executor + conversation factory
-
-Exports
-───────
-reason              — BuildReason instance for the warn action (skip_allowed=False)
-proof               — BuildProof instance for the warn action
-WARN_LIMIT          — auto-ban threshold (3)
-execute_warn()      — per-group warn (auto-ban at WARN_LIMIT)
-execute_unwarn()    — remove latest warning in group
-execute_warnlist()  — show warning count + reasons
-execute_resetwarns() — clear all warnings for a user in a group
-warn_conversation() — ConversationHandler factory (delegates to reason_flow)
-"""
+"""Warning executor + conversation factory."""
 
 from __future__ import annotations
 
@@ -42,7 +29,7 @@ reason = BuildReason("warn", skip_allowed=False)
 proof = BuildProof("warn")
 
 
-# ── Executors ───────────────────────────────────────────────────────────────
+# ──────────────────────────── Executors ─────────────────────────── #
 
 
 async def execute_warn(
@@ -208,7 +195,7 @@ async def execute_resetwarns(
     )
 
 
-# ── Executor adapter ────────────────────────────────────────────────────────
+# ──────────────────────── Executor adapter ──────────────────────── #
 
 
 async def _exec_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -223,7 +210,7 @@ async def _exec_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-# ── ConversationHandler factory ─────────────────────────────────────────────
+# ─────────────────── ConversationHandler factory ────────────────── #
 
 
 def warn_conversation(entry_fn, entry_filter, *, escape_filter=None) -> object:

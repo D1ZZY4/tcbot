@@ -2,14 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Logging setup for the TCF bot.
-
-Provides:
-    - BotLogFormatter      - human-readable console format with ANSI colors
-    - TelegramErrorHandler - ships every ERROR/CRITICAL log record to LOG_ERRORS
-                             automatically via the running asyncio event loop
-"""
+"""Logging setup for the TCF bot."""
 
 from __future__ import annotations
 
@@ -26,13 +19,7 @@ from tcbot.utils.timedate_format import utc_now
 
 
 class BotLogFormatter(logging.Formatter):
-    """
-    Custom log formatter for console output with ANSI bracket format
-    * Output: [HH:MM] [DD/MM/YY] [LEVEL] [module:line] → message
-    * Level text is color-coded: INFO=green, WARN=yellow, ERROR=red, CRIT=purple, DEBUG=gray
-    * WARN and ERROR messages inherit their level color for instant visibility
-    * Timestamps in UTC
-    """
+    """Custom log formatter for console output with ANSI bracket format."""
 
     _R = "\033[0m"
     _BR = "\033[38;5;236m"  # bracket color — dark gray
@@ -88,13 +75,7 @@ _SUPPRESS_PREFIXES: tuple[str, ...] = (
 
 
 class TelegramErrorHandler(logging.Handler):
-    """
-    Async logging handler that ships errors to Telegram
-    * Intercepts every ERROR/CRITICAL log record across the entire codebase
-    * Schedules coroutine on running event loop — zero blocking, zero extra code
-    * Skips known noise sources to prevent spam in the logs channel
-    * Avoids infinite loops by suppressing its own logger's errors
-    """
+    """Async logging handler that ships errors to Telegram."""
 
     def __init__(self) -> None:
         super().__init__(logging.ERROR)
@@ -116,13 +97,7 @@ class TelegramErrorHandler(logging.Handler):
 
 
 def setup(level: int = logging.INFO) -> None:
-    """
-    Initialize and configure the bot's logging system
-    * Attaches BotLogFormatter to console handler
-    * Attaches TelegramErrorHandler for ERROR/CRITICAL shipping
-    * Suppresses third-party library noise on console
-    * Must be called once before any logging occurs
-    """
+    """Initialize and configure the bot's logging system."""
     con_handler = logging.StreamHandler()
     con_handler.setFormatter(BotLogFormatter())
 

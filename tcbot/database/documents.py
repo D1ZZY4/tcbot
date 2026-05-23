@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""TypedDict document schemas for MongoDB collections."""
+
 from __future__ import annotations
 
 from datetime import datetime

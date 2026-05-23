@@ -8,7 +8,7 @@ Compatible with: Replit AI, Claude, Gemini, Qwen, GitHub Copilot, and any AI cod
 
 ## Language and Runtime
 
-- Python 3.12
+- Python 3.13
 - Built-in generic types: `list[str]`, `dict[str, int]`, `tuple[int, int | None]`
 - Union syntax: `X | Y` — never `Optional[X]` or `Union[X, Y]`
 - Always add `from __future__ import annotations` as the first non-comment line in every module file

@@ -14,7 +14,7 @@ from tcbot.modules.helper.formatter import code, esc, mention
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.utils.timedate_format import fmt_dt
 
-# ── Ban detail builder ──────────────────────────────────────────────────────
+# ─────────────────────── Ban detail builder ─────────────────────── #
 
 
 async def build_ban_detail(

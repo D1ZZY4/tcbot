@@ -2,9 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Regression tests for the warnings database helpers.
-"""
+"""Regression tests for the warnings database helpers."""
 
 from __future__ import annotations
 

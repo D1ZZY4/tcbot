@@ -2,9 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Tests for config parsing helpers in tcbot.__init__.
-"""
+"""Tests for config parsing helpers in tcbot.__init__."""
 
 from __future__ import annotations
 

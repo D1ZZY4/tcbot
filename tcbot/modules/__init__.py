@@ -16,7 +16,7 @@ from .. import configs
 log = logging.getLogger(__name__)
 
 
-# ─────────────────────── Module Discovery ───────────────────────── #
+# ──────────────────────── Module Discovery ──────────────────────── #
 
 
 def _discover_modules() -> list[str]:
@@ -28,12 +28,7 @@ def _discover_modules() -> list[str]:
 
 
 def _filter_modules(modules: list[str]) -> list[str]:
-    """
-    Apply load / no-load filters from the central configuration.
-
-    * If configs.modules_load is not empty, keep only those and validate.
-    * If configs.modules_no_load is not empty, remove those.
-    """
+    """Apply load / no-load filters from the central configuration."""
     to_load = configs.modules_load
     no_load = configs.modules_no_load
 
@@ -51,7 +46,7 @@ def _filter_modules(modules: list[str]) -> list[str]:
     return modules
 
 
-# ──────────────────────── Module Registry ───────────────────────── #
+# ───────────────────────── Module Registry ──────────────────────── #
 
 ALL_MODULES = _filter_modules(_discover_modules())
 log.info("Modules to load: %s", ALL_MODULES)
@@ -63,12 +58,7 @@ __all__ = ALL_MODULES + ["ALL_MODULES"]
 
 
 def get_handlers() -> list[Any]:
-    """
-    Import all active modules and collect their __handlers__ lists.
-
-    * Import phase runs first across all modules before handler collection
-    * Failed imports are logged and skipped without aborting the bot
-    """
+    """Import all active modules and collect their __handlers__ lists."""
     handlers: list[Any] = []
     mods_found: dict[str, Any] = {}
 

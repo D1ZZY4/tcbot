@@ -2,9 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Group connection flow – in-group join prompt, permission check, pending monitoring
-"""
+"""Group connection flow – in-group join prompt, permission check, pending monitoring."""
 
 from __future__ import annotations
 
@@ -30,20 +28,7 @@ _REQUIRED_PERMS: tuple[str, ...] = (
 
 
 class BuildConnection:
-    """Configurable group-connection flow builder.
-
-    All user-visible strings, button labels, callback identifiers, and
-    required-permission tuples are injected at construction time — the class
-    contains no community-specific hardcoded values.  Each constructor
-    parameter changes a distinct aspect of the connection flow:
-
-    - ``community_name``  — substituted into every user-facing prompt
-    - ``required_perms``  — tuple of ChatMember attribute names the bot must hold
-    - ``join_label``      — label on the "Connect" button
-    - ``cancel_label``    — label on the "Cancel" button
-    - ``join_callback``   — ``callback_data`` for the join button
-    - ``cancel_callback`` — ``callback_data`` for the cancel button
-    """
+    """Configurable group-connection flow builder."""
 
     def __init__(
         self,
@@ -110,7 +95,7 @@ class BuildConnection:
     # ── Permission check ───────────────────────────────────────────────────
 
     def check_perms(self, member) -> bool:
-        """Return True when ``member`` holds every permission in ``required_perms``."""
+        """Return True when member holds every permission in required_perms."""
         return all(getattr(member, p, False) for p in self.required_perms)
 
     # ── Connection executor ────────────────────────────────────────────────
@@ -333,6 +318,6 @@ class BuildConnection:
             )
 
 
-# ── Module-level instance ─────────────────────────────────────────────────
+# ────────────────────── Module-level instance ───────────────────── #
 
 connection = BuildConnection(cfg.community_name)

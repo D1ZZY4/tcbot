@@ -2,9 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Regression tests for deterministic active-ban reads.
-"""
+"""Regression tests for deterministic active-ban reads."""
 
 from __future__ import annotations
 

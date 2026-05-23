@@ -2,9 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Unit tests for parse_link helpers and timedate_format.
-"""
+"""Unit tests for parse_link helpers and timedate_format."""
 
 from __future__ import annotations
 
@@ -20,7 +18,7 @@ from tcbot.modules.helper.parse_link import (
 )
 from tcbot.utils.timedate_format import fmt_dt, to_utc, utc_now, utc_now_str
 
-# ── utc_now ───────────────────────────────────────────────────────────
+# ───────────────────────────── utc_now ──────────────────────────── #
 
 
 def test_utc_now_returns_aware_datetime() -> None:
@@ -35,7 +33,7 @@ def test_to_utc_handles_naive_and_aware() -> None:
     assert to_utc(aware).tzinfo is not None
 
 
-# ── fmt_dt ────────────────────────────────────────────────────────────
+# ───────────────────────────── fmt_dt ───────────────────────────── #
 
 
 def test_fmt_dt_formats_as_dd_mm_yyyy_pipe_hhmm() -> None:
@@ -54,7 +52,7 @@ def test_utc_now_str_matches_pattern() -> None:
     assert out[2] == "-" and out[5] == "-" and out[10:13] == " | "
 
 
-# ── chat_id_to_link_id ─────────────────────────────────────────────────
+# ─────────────────────── chat_id_to_link_id ─────────────────────── #
 
 
 def test_chat_id_to_link_id_strips_supergroup_prefix() -> None:
@@ -70,7 +68,7 @@ def test_chat_id_to_link_id_with_plain_channel() -> None:
     assert chat_id_to_link_id(-1009999999999) == "9999999999"
 
 
-# ── message_link / topic_link ───────────────────────────────────────────
+# ──────────────────── message_link / topic_link ─────────────────── #
 
 
 def test_message_link_without_thread() -> None:
@@ -87,7 +85,7 @@ def test_topic_link_delegates_to_message_link() -> None:
     assert topic_link(-1001111111111, 42, 7) == "https://t.me/c/1111111111/42?thread=7"
 
 
-# ── user_link ───────────────────────────────────────────────────────────
+# ──────────────────────────── user_link ─────────────────────────── #
 
 
 def test_user_link_escapes_html_in_name() -> None:
@@ -101,7 +99,7 @@ def test_user_link_falls_back_to_id_when_name_blank() -> None:
     assert "456" in user_link(456, "")
 
 
-# ── safe_first_name ──────────────────────────────────────────────────────
+# ───────────────────────── safe_first_name ──────────────────────── #
 
 
 def test_safe_first_name_prefers_first_name() -> None:

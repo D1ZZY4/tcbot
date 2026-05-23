@@ -22,7 +22,7 @@ python3 -m tcbot
         │     Caps noisy third-party loggers (httpx, telegram, motor, pymongo) at WARNING.
         │
         ├── start_keepalive()
-        │     Starts Flask in a daemon thread on 0.0.0.0:8080.
+        │     Starts Flask in a daemon thread on 0.0.0.0:5000.
         │     GET / returns "OK" for health checks.
         │
         ├── ApplicationBuilder()

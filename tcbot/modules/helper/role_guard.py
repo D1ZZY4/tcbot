@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Shared role-permission helpers – ``resolve_and_check()`` and ``auto_demote()`` for moderation flows."""
+"""Shared role-permission helpers – resolve_and_check() and auto_demote() for moderation flows."""
 
 from __future__ import annotations
 
@@ -26,14 +26,7 @@ async def resolve_and_check(
     *,
     min_role: str,
 ) -> tuple[str | None, str | None]:
-    """Validate executor permission and target eligibility.
-
-    Returns (executor_role, target_role) on success, or (None, None) after
-    replying with an error message.  Both DB checks run in parallel.
-
-    min_role: minimum role needed - "developer" for ban/unban, "tester" for
-    kick/mute/warn.
-    """
+    """Validate executor permission and target eligibility."""
     executor_role, target_role = await asyncio.gather(
         get_effective_role(executor_id),
         get_effective_role(target_id),

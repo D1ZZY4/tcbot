@@ -2,12 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Owners and admins collection helpers - manages bot staff permissions
-* Handles owner and admin user management in the database
-* Includes cache integration to minimize database queries
-* Supports permission checks for staff-only commands
-"""
+"""Owners and admins collection helpers – manages bot staff permissions."""
 
 from __future__ import annotations
 
@@ -25,7 +20,6 @@ from tcbot.database.mongos import col
 from tcbot.utils.timedate_format import utc_now
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
-# * Internal collection accessors for owners and admins collections
 
 
 def _owners():
@@ -37,17 +31,10 @@ def _admins():
 
 
 # ────────────────────────── Owner Queries ───────────────────────── #
-# * Retrieve owner status and owner ID from database
-# * All functions are async to prevent blocking on I/O operations
 
 
 async def get_owner_id() -> int | None:
-    """
-    Get the current bot owner's user ID from cache or database
-
-    * First checks cache for existing value to avoid DB roundtrip
-    * Falls back to database query if cache miss occurs
-    """
+    """Return the current owner's user ID (cached)."""
     cached = owner_id_cache.get(_OWNER_KEY)
     if cached is not CACHE_MISS:
         return cast(int | None, cached)
@@ -58,72 +45,52 @@ async def get_owner_id() -> int | None:
 
 
 async def is_owner(user_id: int) -> bool:
-    """
-    Check if given user ID is in the owners collection
-    """
+    """Return True if user_id belongs to the bot owner."""
     return await _owners().find_one({"user_id": user_id}, {"_id": 1}) is not None
 
 
 async def is_admin(user_id: int) -> bool:
-    """
-    Check if given user ID is in the admins collection
-    """
+    """Return True if user_id is a registered admin."""
     return await _admins().find_one({"user_id": user_id}, {"_id": 1}) is not None
 
 
 # ──────────────────────── Combined Helpers ──────────────────────── #
-# * Combined permission checks that run multiple DB queries in parallel
-# * Uses asyncio.gather() to optimize latency of parallel checks
+# * Both checks run in parallel via asyncio.gather
 
 
 async def is_staff(user_id: int) -> bool:
-    """
-    True if user is owner or admin - both checks run in parallel.
-    """
+    """Return True if user_id is owner or admin."""
     owner, admin = await asyncio.gather(is_owner(user_id), is_admin(user_id))
     return owner or admin
 
 
 # ───────────────────────── Owner Mutations ──────────────────────── #
-# * Modify owner collection (only used for initial setup and ownership transfer)
 # ! CRITICAL: These functions clear cache entries that depend on ownership
 
 
 async def ensure_initial_owner(initial_id: int) -> None:
-    """
-    Create first owner entry if no owners exist in database
-    * Used during bot initialization for first-time setup
-    """
+    """Create the first owner entry if the owners collection is empty."""
     if await _owners().count_documents({}) == 0:
         await _owners().insert_one({"user_id": initial_id})
         owner_id_cache.put(_OWNER_KEY, initial_id)
 
 
 async def set_owner(user_id: int) -> None:
-    """
-    Replace current owner with new user ID
-    ! WARNING: Deletes all existing owner entries before inserting new one
-    * Clears entire effective role cache since ownership changed
-    """
+    """Replace the current owner with user_id; clears the role cache."""
     await _owners().delete_many({})
     await _owners().insert_one({"user_id": user_id})
     owner_id_cache.put(_OWNER_KEY, user_id)
-    # Clear the entire role cache - we don't know the old owner's user_id
+    # * Clear the full role cache – the old owner's ID is unknown
     effective_role_cache.clear()
 
 
-# ─────────────────────── Admin Mutations ──────────────────────── #
-# * Add, remove, and manage admin users in the database
-# * Automatically invalidates cache for affected users after changes
+# ───────────────────────── Admin Mutations ──────────────────────── #
+# * Cache is invalidated for affected users after every write
 
 
 async def add_admin(user_id: int, promoted_by: int) -> None:
-    """
-    Add a new admin to the database if not already present
-    * Uses $setOnInsert to avoid overwriting existing admin entries
-    * Records promotion metadata (who promoted, when)
-    TODO: Consider adding admin permissions level for granular access control
-    """
+    """Add a new admin via upsert; no-op if already present."""
+    # TODO: Consider adding a permissions-level field for granular access control
     await _admins().update_one(
         {"user_id": user_id},
         {
@@ -139,30 +106,20 @@ async def add_admin(user_id: int, promoted_by: int) -> None:
 
 
 async def remove_admin(user_id: int) -> bool:
-    """
-    Remove an admin from the database
-    * Returns True if admin was successfully removed
-    * Invalidates cache for the removed admin user
-    """
+    """Remove an admin; return True if the entry was deleted."""
     r = await _admins().delete_one({"user_id": user_id})
     effective_role_cache.invalidate(user_id)
     return r.deleted_count > 0
 
 
 # ────────────────────────── Admin Queries ───────────────────────── #
-# * Retrieve list of all admins and admin count from database
-# * Used for staff management and audit logging
 
 
 async def all_admins() -> list[AdminDoc]:
-    """
-    Get list of all admins with their user IDs
-    """
+    """Return all admin documents."""
     return await _admins().find({}, {"_id": 0, "user_id": 1}).to_list(None)
 
 
 async def admin_count() -> int:
-    """
-    Get total number of admins in the database
-    """
+    """Return the total count of registered admins."""
     return await _admins().count_documents({})

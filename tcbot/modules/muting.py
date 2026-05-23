@@ -75,7 +75,7 @@ __help_text__ = (
 )
 
 
-# ──────────────────── Command Mute </tcmute> ────────────────────── #
+# ───────────────────── Command Mute </tcmute> ───────────────────── #
 
 
 @decorators.ratelimiter(limit=5, period=60)
@@ -177,7 +177,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return WAITING_REASON
 
 
-# ────────────────── Command Unmute </tcunmute> ───────────────────── #
+# ─────────────────── Command Unmute </tcunmute> ─────────────────── #
 
 
 @decorators.ratelimiter(limit=5, period=60)

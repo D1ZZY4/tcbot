@@ -2,9 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Pure-function tests for tcbot.modules.appeals.
-"""
+"""Pure-function tests for tcbot.modules.appeals."""
 
 from __future__ import annotations
 
@@ -14,7 +12,7 @@ from tcbot import cfg
 from tcbot.modules import appeals
 from tcbot.utils.timedate_format import utc_now
 
-# ── Imports and test setup ─────────────────────────────────────────────────
+# ───────────────────── Imports and test setup ───────────────────── #
 
 
 def test_starts_with_appeal_tag_lowercase() -> None:

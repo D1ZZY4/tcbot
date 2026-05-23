@@ -98,7 +98,7 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await error_reporter.report_exc(exc, context=context_str)
 
 
-# ─────────────────── Asyncio Exception Handler (Layer3) ─────────── #
+# ─────────────── Asyncio Exception Handler (Layer3) ─────────────── #
 # * Catches unhandled asyncio exceptions from background tasks
 # * Layer 3 of 3 error handling system - last line of defense for errors
 

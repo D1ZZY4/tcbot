@@ -2,9 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Connected chats list flow for /tcstats - paginated list with per-group detail view
-"""
+"""Connected chats list flow for /tcstats - paginated list with per-group detail view."""
 
 from __future__ import annotations
 
@@ -20,7 +18,7 @@ from tcbot.utils.timedate_format import fmt_dt
 _PAGE_SIZE = 6
 
 
-# ── Detail builder ─────────────────────────────────────────────────────────
+# ───────────────────────── Detail builder ───────────────────────── #
 
 
 async def build_chat_detail(grp: dict) -> str:
@@ -42,7 +40,7 @@ async def build_chat_detail(grp: dict) -> str:
     )
 
 
-# ── Keyboards ──────────────────────────────────────────────────────────────
+# ──────────────────────────── Keyboards ─────────────────────────── #
 
 
 def _chats_list_kb(page: int, total: int, n_items: int) -> InlineKeyboardMarkup:
@@ -80,7 +78,7 @@ def _chat_detail_kb(page: int) -> InlineKeyboardMarkup:
     )
 
 
-# ── Handlers ───────────────────────────────────────────────────────────────
+# ──────────────────────────── Handlers ──────────────────────────── #
 
 
 async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

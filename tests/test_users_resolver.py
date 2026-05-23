@@ -2,9 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Tests for tcbot.modules.helper.extraction - UserIdentity and resolve_identity.
-"""
+"""Tests for tcbot.modules.helper.extraction - UserIdentity and resolve_identity."""
 
 from __future__ import annotations
 
@@ -22,7 +20,7 @@ def _ctx(get_chat: AsyncMock) -> SimpleNamespace:
     return SimpleNamespace(bot=SimpleNamespace(get_chat=get_chat))
 
 
-# ── UserIdentity ───────────────────────────────────────────────────────────
+# ────────────────────────── UserIdentity ────────────────────────── #
 
 
 def test_user_identity_name_with_username_combines() -> None:
@@ -43,7 +41,7 @@ def test_user_identity_is_frozen_dataclass() -> None:
         setattr(ident, "display_name", "Changed")
 
 
-# ── resolve_identity - live path ───────────────────────────────────────────
+# ────────────────── resolve_identity - live path ────────────────── #
 
 
 async def test_resolve_identity_uses_get_chat_first_name() -> None:
@@ -58,7 +56,7 @@ async def test_resolve_identity_uses_title_when_no_first_name() -> None:
     assert ident.display_name == "My Group"
 
 
-# ── resolve_identity - cache fallback ──────────────────────────────────────
+# ──────────────── resolve_identity - cache fallback ─────────────── #
 
 
 async def test_resolve_identity_falls_back_to_cache_on_telegram_error(
@@ -88,7 +86,7 @@ async def test_resolve_identity_uses_username_from_cache_when_no_first_name(
     assert ident.display_name == "@fromcache"
 
 
-# ── resolve_identity - ultimate fallback ───────────────────────────────────
+# ────────────── resolve_identity - ultimate fallback ────────────── #
 
 
 async def test_resolve_identity_ultimate_fallback_uses_str_id(

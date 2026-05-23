@@ -2,9 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Tests for the _RateLimiter sliding-window implementation in decorators.py.
-"""
+"""Tests for the _RateLimiter sliding-window implementation in decorators.py."""
 
 from __future__ import annotations
 
@@ -12,14 +10,14 @@ import time
 
 from tcbot.modules.helper.decorators import _RateLimiter
 
-# ── Helpers ────────────────────────────────────────────────────────────────
+# ───────────────────────────── Helpers ──────────────────────────── #
 
 
 def make_rl(max_calls: int = 3, window: float = 10.0) -> _RateLimiter:
     return _RateLimiter(max_calls=max_calls, window=window)
 
 
-# ── Complex Allow / Deny ─────────────────────────────────────────────────────
+# ────────────────────── Complex Allow / Deny ────────────────────── #
 
 
 class TestAllowDeny:
@@ -56,7 +54,7 @@ class TestAllowDeny:
         assert wait > 0.0  # * still throttled, not suddenly freed
 
 
-# ── Per-user isolation ─────────────────────────────────────────────────────
+# ─────────────────────── Per-user isolation ─────────────────────── #
 
 
 class TestPerUserIsolation:
@@ -77,7 +75,7 @@ class TestPerUserIsolation:
             assert rl.check(uid) == 0.0, f"uid {uid} was incorrectly throttled"
 
 
-# ── Window expiry ──────────────────────────────────────────────────────────
+# ────────────────────────── Window expiry ───────────────────────── #
 
 
 class TestWindowExpiry:
@@ -95,8 +93,7 @@ class TestWindowExpiry:
         assert rl.check(1) == 0.0  # * t=base+2 slot 2 again - still allowed
 
     def test_partial_expiry_keeps_remaining_slots(self, monkeypatch):
-        """Two calls at t=0, one at t=0.  At t=5 only the two t=0 calls expired
-        (window=5) - the t=0 third call is still fresh, so one slot is used."""
+        """Two calls at t=0, one at t=0.  At t=5 only the two t=0 calls expired."""
         rl = make_rl(max_calls=3, window=5.0)
         base = time.monotonic()
         # t=0: three calls fill the bucket
@@ -112,7 +109,7 @@ class TestWindowExpiry:
         assert rl.check(1) == 0.0
 
 
-# ── Memory hygiene ─────────────────────────────────────────────────────────
+# ───────────────────────── Memory hygiene ───────────────────────── #
 
 
 class TestMemoryHygiene:
@@ -137,7 +134,7 @@ class TestMemoryHygiene:
         assert 999 not in rl._buckets
 
 
-# ── Edge cases ─────────────────────────────────────────────────────────────
+# ─────────────────────────── Edge cases ─────────────────────────── #
 
 
 class TestEdgeCases:

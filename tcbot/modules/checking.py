@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""checkme and checkban handlers – queries federation ban status for a user."""
+
 from __future__ import annotations
 
 import asyncio
@@ -58,11 +60,7 @@ async def _ban_summary(
     user_fname: str,
     admin_fname: str | None = None,
 ) -> tuple[str, str | None]:
-    """Build the /checkme summary text and proof link.
-
-    Pass ``admin_fname`` to skip the DB lookup when it has already been fetched
-    as part of a larger parallel gather.
-    """
+    """Build the /checkme summary text and proof link."""
     aid = ban.get("admin_user_id", 0)
     if admin_fname is None:
         admin_fname = await db.users_db.get_first_name(aid, "Admin")

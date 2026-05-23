@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""safe_edit helper – edits a message in place, suppressing benign Telegram errors."""
+
 from __future__ import annotations
 
 import logging
@@ -18,7 +20,7 @@ _IGNORED = {
 }
 
 
-# ── safe_edit helper ────────────────────────────────────────────────────────
+# ──────────────────────── safe_edit helper ──────────────────────── #
 
 
 async def safe_edit(msg: Message, text: str, **kwargs) -> None:

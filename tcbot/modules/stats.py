@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""tcstats command and callback handlers – federation stats overview and drill-downs."""
+
 from __future__ import annotations
 
 import asyncio

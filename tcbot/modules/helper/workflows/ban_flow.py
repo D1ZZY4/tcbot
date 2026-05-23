@@ -2,18 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Ban executor + proof collection conversation
-
-Sections
-────────
-proof             — BuildProof instance for the ban action (skip_allowed=False)
-_execute_ban()    — federation-wide ban, DB write, log dispatch, group enforcement
-on_proof_received() — WAITING_PROOF handler — single or album proof
-on_cancel_proof() — cancel callback
-on_proof_timeout() — timeout / fallback handler
-ban_conversation() — ConversationHandler factory
-"""
+"""Ban executor + proof collection conversation."""
 
 from __future__ import annotations
 
@@ -53,7 +42,7 @@ _albums: dict[str, list[Message]] = {}
 _album_meta: dict[str, dict[str, Any]] = {}
 
 
-# ── Ban executor ────────────────────────────────────────────────────────────
+# ────────────────────────── Ban executor ────────────────────────── #
 
 
 async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> None:
@@ -247,7 +236,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         await db.users_db.upsert_user(target_id, None, target_fname)
 
 
-# ── Proof collection state handlers ─────────────────────────────────────────
+# ───────────────── Proof collection state handlers ──────────────── #
 
 
 async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -294,7 +283,7 @@ async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
     return ConversationHandler.END
 
 
-# ── ConversationHandler factory ─────────────────────────────────────────────
+# ─────────────────── ConversationHandler factory ────────────────── #
 
 
 def ban_conversation(entry_fn, entry_filter) -> ConversationHandler:

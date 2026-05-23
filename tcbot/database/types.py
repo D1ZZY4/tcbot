@@ -2,18 +2,13 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Domain primitive NewTypes for the TCF Bot database layer.
-* Provides nominal typing for bare ints and strs used as IDs
-* All types are structurally identical to their base type at runtime
-* Adopt gradually: annotate new code; existing code stays correct
-"""
+"""Domain primitive NewTypes for the TCF Bot database layer."""
 
 from __future__ import annotations
 
 from typing import NewType
 
-# ───────────────────────── ID Primitives ────────────────────────── #
+# ────────────────────────── ID Primitives ───────────────────────── #
 # * Distinct names prevent accidentally swapping e.g. chat_id for user_id
 # * All are backed by int or str at runtime — zero overhead
 

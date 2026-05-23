@@ -11,13 +11,13 @@ Compatible with: Replit AI, Claude, Gemini, Qwen, GitHub Copilot, and any AI cod
 
 TCF Bot is a **production Telegram federation management bot** for the Transsion Core Federation community. It handles federation-wide bans, user appeals, staff role management, multi-group moderation, and full audit logging.
 
-- **Language:** Python 3.12
+- **Language:** Python 3.13
 - **Framework:** python-telegram-bot 22.5 (PTB v22, async, long polling — no webhook)
 - **Database:** MongoDB via Motor (async)
-- **Keepalive:** Flask thread on port 8080
+- **Keepalive:** Flask thread on port 5000
 - **Entry point:** `python3 -m tcbot`
-- **Config:** Replit Secrets (`BOT_TOKEN`, `MONGODB_URI`) + Replit shared env vars (all other config)
-- **Tests:** `python3 -m pytest tests/ -v` — 121 tests, all offline
+- **Config:** `config.env` (gitignored) — never Replit Secrets
+- **Tests:** `python3 -m pytest tests/ -v` — 134 tests, all offline
 
 ---
 
@@ -413,10 +413,10 @@ When creating or editing `tcbot/modules/*.py`:
 python3 -m pytest tests/ -v
 ```
 
-All 121 tests run offline — no bot token or MongoDB connection required.
+All 134 tests run offline — no bot token or MongoDB connection required.
 
 After any code change:
-1. Run all tests — all 121 must pass
+1. Run all tests — all 134 must pass
 2. Restart the `Start application` workflow
 3. Verify startup logs: no import errors, MongoDB connected, handlers registered
 

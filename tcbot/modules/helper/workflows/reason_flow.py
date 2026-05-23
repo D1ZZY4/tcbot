@@ -2,29 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Central reason-step infrastructure.
-
-Every moderation action that requires a reason/proof conversation (kick, mute,
-warn) uses this module exclusively.  ``BuildReason`` and ``build_modaction_conv``
-are the two primary exports.  All proof-step concerns (``BuildProof``) live in
-``proof_flow.py`` and are imported from there.
-
-Exports
-───────
-Constants
-    WAITING_REASON   = 0
-    WAITING_PROOF    = 1
-
-Parsing
-    parse_inline_reason(args, has_explicit_target) → str
-
-Builder
-    BuildReason — configurable reason-step keyboard and prompt
-
-ConversationHandler factory
-    build_modaction_conv(reason, proof, entry_fn, executor, entry_filter, ...) → ConversationHandler
-"""
+"""Central reason-step infrastructure."""
 
 from __future__ import annotations
 
@@ -51,7 +29,7 @@ WAITING_REASON = 0
 WAITING_PROOF = 1
 
 
-# ─────────────────────────── Reason parsing ─────────────────────── #
+# ───────────────────────── Reason parsing ───────────────────────── #
 
 
 def parse_inline_reason(
@@ -63,25 +41,11 @@ def parse_inline_reason(
     return " ".join(tokens).strip()
 
 
-# ─────────────────────────────── BuildReason ────────────────────── #
+# ─────────────────────────── BuildReason ────────────────────────── #
 
 
 class BuildReason:
-    """Configurable reason-step keyboard and prompt builder.
-
-    Instantiate once per action with the action-specific configuration;
-    call methods to produce the keyboard and prompt string.  No action
-    names, button labels, or routing logic are hardcoded inside the class.
-
-    Args:
-        action:       Lowercase action slug used to build callback_data prefixes
-                      (e.g. ``"kick"``, ``"mute"``, ``"warn"``).
-        skip_allowed: When ``True`` a Skip button is included in the keyboard
-                      and the prompt hints at it.  Set to ``False`` for flows
-                      where a reason is mandatory (e.g. warn).
-        skip_label:   Label for the Skip button (default ``"Skip"``).
-        cancel_label: Label for the Cancel button (default ``"Cancel"``).
-    """
+    """Configurable reason-step keyboard and prompt builder."""
 
     def __init__(
         self,
@@ -97,7 +61,7 @@ class BuildReason:
         self.cancel_label = cancel_label
 
     def keyboard(self) -> InlineKeyboardMarkup:
-        """Reason-step keyboard. Includes Skip only when ``skip_allowed`` is True."""
+        """Reason-step keyboard. Includes Skip only when skip_allowed is True."""
         buttons: list[InlineKeyboardButton] = []
         if self.skip_allowed:
             buttons.append(
@@ -127,7 +91,7 @@ class BuildReason:
         )
 
 
-# ────────────────── Generic ConversationHandler factory ─────────── #
+# ─────────────── Generic ConversationHandler factory ────────────── #
 
 
 def build_modaction_conv(
@@ -138,35 +102,7 @@ def build_modaction_conv(
     entry_filter,
     escape_filter=None,
 ) -> ConversationHandler:
-    """Build a generic reason + proof ConversationHandler.
-
-    All moderation actions (kick, mute, warn) use this single factory.
-    Individual flow files supply ``BuildReason`` and ``BuildProof`` instances
-    configured for their action, an ``executor`` coroutine, and call this
-    function — no state handler code lives outside this module.
-
-    The executor is called as ``await executor(update, ctx)`` after all data
-    has been collected into ``ctx.user_data``.  It is responsible for reading
-    and cleaning up its own keys.
-
-    ``ctx.user_data`` keys read by the generic handlers:
-
-    - ``{action}_target_name``  or  ``{action}_target_fname``  — display name
-    - ``{action}_extra_info``   — optional extra context for prompts (e.g. duration)
-    - ``{action}_prompt_chat``  + ``{action}_prompt_id``  — if both are present the
-      reason-step text handler edits that message instead of sending a new reply
-      (used by mute to keep the conversation compact)
-
-    Args:
-        reason:        ``BuildReason`` instance configured for this action.
-        proof:         ``BuildProof`` instance configured for this action.
-        entry_fn:      Entry-point coroutine (the decorated command handler).
-        executor:      Coroutine ``(update, ctx) → None`` that executes the action.
-        entry_filter:  MessageHandler filter that triggers the ConversationHandler.
-        escape_filter: Filter for commands that must NOT be consumed by the
-                       fallback (e.g. unmute commands should reach their own
-                       MessageHandler even if a mute conversation is open).
-    """
+    """Build a generic reason + proof ConversationHandler."""
     action = reason.action
     _reason_key = f"{action}_reason"
     _proof_key = f"{action}_proof_desc"

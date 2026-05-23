@@ -2,11 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Promotion request queue - manages promotion request queue for staff applications
-* Handles enqueuing, resolving, and retrieving pending promotion requests
-* Uses MongoDB's promotion_requests collection to store all request data
-"""
+"""Promotion request queue - manages promotion request queue for staff applications."""
 
 from __future__ import annotations
 
@@ -39,12 +35,7 @@ async def enqueue(
     first_name: str,
     promoted_by: int,
 ) -> str:
-    """
-    Add a new promotion request to the queue
-    * Generates a unique request ID for the new entry
-    * Initializes all metadata fields with default values
-    * Returns the generated request_id for future reference
-    """
+    """Add a new promotion request to the queue."""
     request_id = _new_request_id()
     await _requests().insert_one(
         {
@@ -68,35 +59,22 @@ async def enqueue(
 
 
 async def get_request_by_id(request_id: str) -> PromotionRequestDoc | None:
-    """
-    Get a promotion request by its unique request ID
-    * Returns the full request document including all metadata
-    """
+    """Get a promotion request by its unique request ID."""
     return await _requests().find_one({"request_id": request_id})
 
 
 async def get_request(user_id: int) -> PromotionRequestDoc | None:
-    """
-    Get the pending request for a specific user
-    * Only returns requests that are still in "pending" status
-    """
+    """Get the pending request for a specific user."""
     return await _requests().find_one({"target_id": user_id, "status": "pending"})
 
 
 async def all_pending() -> list[PromotionRequestDoc]:
-    """
-    Get all currently pending promotion requests
-    * Returns full documents for all unresolved requests
-    """
+    """Get all currently pending promotion requests."""
     return await _requests().find({"status": "pending"}).to_list(None)
 
 
 async def resolve(request_id: str, status: str, resolved_by: int) -> None:
-    """
-    Mark a pending promotion request as resolved
-    * Sets resolution status, timestamp, and the admin who resolved it
-    * Changes status from "pending" to approved/rejected
-    """
+    """Mark a pending promotion request as resolved."""
     await _requests().update_one(
         {"request_id": request_id},
         {
@@ -110,8 +88,5 @@ async def resolve(request_id: str, status: str, resolved_by: int) -> None:
 
 
 async def pending_count() -> int:
-    """
-    Count the number of pending promotion requests
-    * Uses efficient count_documents for fast retrieval
-    """
+    """Count the number of pending promotion requests."""
     return await _requests().count_documents({"status": "pending"})

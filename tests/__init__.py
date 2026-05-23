@@ -2,8 +2,6 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Pytest test suite for the Transsion Core Federation bot.
-"""
+"""Pytest test suite for the Transsion Core Federation bot."""
 
 from __future__ import annotations

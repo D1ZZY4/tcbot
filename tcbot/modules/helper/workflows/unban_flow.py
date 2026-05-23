@@ -2,9 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Unban flow - invoked directly by the unban command
-"""
+"""Unban flow - invoked directly by the unban command."""
 
 from __future__ import annotations
 
@@ -23,7 +21,7 @@ from tcbot.utils.dispatch import fan_out
 log = logging.getLogger(__name__)
 
 
-# ── Unban executor ──────────────────────────────────────────────────────────
+# ───────────────────────── Unban executor ───────────────────────── #
 
 
 async def execute_unban(

@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Group disconnect handlers – removes a group from the federation."""
+
 from __future__ import annotations
 
 import asyncio
@@ -96,7 +98,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 
-# ────────── Command to Force-Remove a Group </rmtc> ───────── #
+# ───────────── Command to Force-Remove a Group </rmtc> ──────────── #
 
 
 @decorators.ratelimiter(limit=5, period=60)

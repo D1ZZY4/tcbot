@@ -1,12 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-"""
-MongoDB connection manager - single client shared across the entire application
-* Manages the database connection pool and client lifecycle
-* Provides collection access shortcuts and index management
-* Includes DNS patching for compatibility with restricted environments
-"""
+"""MongoDB connection manager - single client shared across the entire application."""
 
 from __future__ import annotations
 
@@ -34,14 +29,7 @@ _RESOLV_CONF = "/etc/resolv.conf"
 
 
 def _patch_dns_if_needed() -> None:
-    """
-    On platforms without /etc/resolv.conf (e.g. Termux/Android),
-    configure dnspython with a fallback public nameserver so that
-    mongodb+srv:// SRV resolution still works.
-    * Uses Google's public DNS servers as fallback
-    * Only runs if /etc/resolv.conf is not found on the system
-    * Silently fails if dnspython isn't installed (unlikely but handled)
-    """
+    """On platforms without /etc/resolv.conf (e.g. Termux/Android),."""
     if not os.path.exists(_RESOLV_CONF):
         try:
             import dns.resolver
@@ -66,12 +54,7 @@ _ID_ALPHABET: str = string.ascii_lowercase + string.digits
 
 
 def make_short_id(length: int = 10) -> str:
-    """
-    Generate a random URL-safe lowercase alphanumeric ID.
-    * Uses secrets.choice for cryptographically secure randomness
-    * Default length of 10 provides 36^10 possible combinations
-    * Creates collision-resistant IDs for ban_id, request_id, etc.
-    """
+    """Generate a random URL-safe lowercase alphanumeric ID."""
     return "".join(secrets.choice(_ID_ALPHABET) for _ in range(length))
 
 
@@ -81,11 +64,7 @@ def make_short_id(length: int = 10) -> str:
 
 
 def db() -> AsyncIOMotorDatabase:
-    """
-    Get the main MongoDB database instance
-    ! CRITICAL: Raises RuntimeError if called before connect()
-    * Ensures the database is properly initialized before use
-    """
+    """Get the main MongoDB database instance."""
     if _db is None:
         raise RuntimeError("DB not initialised – call connect() first.")
     return _db
@@ -98,13 +77,7 @@ def db() -> AsyncIOMotorDatabase:
 
 
 async def connect() -> None:
-    """
-    Establish MongoDB connection and initialize the global _db instance
-    * Applies DNS patch if needed for platform compatibility
-    * Configures connection pool with optimized timeout and size settings
-    * Pings the database to verify connection before returning
-    * Sets up zlib compression and automatic write/retry reads
-    """
+    """Establish MongoDB connection and initialize the global _db instance."""
     global _db
     _patch_dns_if_needed()
     client = AsyncIOMotorClient(
@@ -132,13 +105,7 @@ async def connect() -> None:
 
 
 async def ensure_indexes() -> None:
-    """
-    Create all critical collection indexes in parallel. No-op if they already exist.
-    * Runs all index creation concurrently using asyncio.gather()
-    * Creates unique indexes to prevent duplicate records
-    * Creates compound indexes for frequently queried field combinations
-    * Logs confirmation once all indexes are ready
-    """
+    """Create all critical collection indexes in parallel. No-op if they already exist."""
     await asyncio.gather(
         col("bans").create_index([("banned_user_id", 1), ("is_active", 1)]),
         col("bans").create_index([("ban_id", 1)], unique=True),
@@ -162,9 +129,5 @@ async def ensure_indexes() -> None:
 
 
 def col(name: str) -> AsyncIOMotorCollection:
-    """
-    Get a MongoDB collection by name
-    * Convenience wrapper around db()[name]
-    * Automatically checks that database is initialized
-    """
+    """Get a MongoDB collection by name."""
     return db()[name]

@@ -2,14 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Centralized error reporter — classifies, formats, and ships errors to LOG_ERRORS.
-
-Three automatic coverage layers (no per-file changes needed):
-    1. TelegramErrorHandler on the root logger  → catches every log.error() / log.critical()
-    2. PTB application.add_error_handler()      → catches all unhandled handler exceptions
-    3. asyncio loop.set_exception_handler()     → catches background-task / create_task() failures
-"""
+"""Centralized error reporter — classifies, formats, and ships errors to LOG_ERRORS."""
 
 from __future__ import annotations
 
@@ -30,7 +23,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-# ───────────────────── Module-Level State ───────────────────────── #
+# ─────────────────────── Module-Level State ─────────────────────── #
 # * Set once during bot post-init via attach() — never mutated after that
 
 _bot: "Bot | None" = None
@@ -39,27 +32,18 @@ _thread_id: int | None = None
 
 
 def attach(bot: "Bot", chat_id: int, thread_id: int | None) -> None:
-    """
-    Inject live bot instance and log channel config.
-
-    * Called exactly once during post-init
-    * Required before any error can be shipped to Telegram
-    """
+    """Inject live bot instance and log channel config."""
     global _bot, _chat_id, _thread_id
     _bot = bot
     _chat_id = chat_id
     _thread_id = thread_id
 
 
-# ──────────────────── Error Classification ──────────────────────── #
+# ────────────────────── Error Classification ────────────────────── #
 
 
 def _classify(exc: BaseException | None) -> tuple[str, str]:
-    """
-    Categorize an exception into a human-readable label and slug.
-
-    Returns ``(display_label, slug)`` — slug reserved for future analytics.
-    """
+    """Categorize an exception into a human-readable label and slug."""
     if exc is None:
         return "[?] Unknown", "unknown"
 
@@ -91,7 +75,7 @@ def _classify(exc: BaseException | None) -> tuple[str, str]:
     return "[!] Code Bug", "code_bug"
 
 
-# ───────────────────── Message Formatting ───────────────────────── #
+# ─────────────────────── Message Formatting ─────────────────────── #
 
 _MAX_TB = 3000
 _MAX_MSG = 500
@@ -115,13 +99,7 @@ def build_error_message(
     record: logging.LogRecord | None = None,
     context: str | None = None,
 ) -> str:
-    """
-    Build a complete HTML-formatted error message for Telegram.
-
-    Accepts either an exception or a logging record. Extracts source
-    file and line number automatically. Trims long tracebacks to fit
-    Telegram message limits. Escapes all HTML to prevent parse errors.
-    """
+    """Build a complete HTML-formatted error message for Telegram."""
     now = utc_now()
     time_str = now.strftime("%H:%M:%S UTC")
     date_str = now.strftime("%d-%m-%Y")
@@ -189,16 +167,11 @@ def build_error_message(
     )
 
 
-# ─────────────────────── Low-Level Send ─────────────────────────── #
+# ───────────────────────── Low-Level Send ───────────────────────── #
 
 
 async def send_to_log_errors(text: str) -> None:
-    """
-    Fire-and-forget send to LOG_ERRORS channel.
-
-    * Never raises — uses print() on failure to avoid recursive logging
-    * Returns early if bot or chat_id not initialized yet
-    """
+    """Fire-and-forget send to LOG_ERRORS channel."""
     if not _bot or not _chat_id:
         return
     try:
@@ -214,7 +187,7 @@ async def send_to_log_errors(text: str) -> None:
         )
 
 
-# ──────────────────── Convenience Wrappers ──────────────────────── #
+# ────────────────────── Convenience Wrappers ────────────────────── #
 
 
 async def report_exc(

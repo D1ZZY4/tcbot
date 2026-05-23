@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Appeal handlers – routes incoming appeals and admin review decisions."""
+
 from __future__ import annotations
 
 import re
@@ -63,7 +65,7 @@ def text_references_log_message(text: str, msg_id: int) -> bool:
     return bool(re.search(rf"\b{msg_id}\b", text))
 
 
-# ───────────────────────── Handlers ─────────────────────────────── #
+# ──────────────────────────── Handlers ──────────────────────────── #
 
 _APPEAL_START_CMDS = filters.ChatType.PRIVATE & filters.Regex(
     r"^/start\s+appeal_[a-z0-9]{10}$"

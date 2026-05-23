@@ -10,7 +10,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from tcbot.database.roles_db import ROLE_LABEL as _ROLE_LABELS
 
-# ── Ban flow ───────────────────────────────────────────────────────────────
+# ──────────────────────────── Ban flow ──────────────────────────── #
 
 
 def cancel_proof_kb() -> InlineKeyboardMarkup:
@@ -57,7 +57,7 @@ def ban_log_update(
     )
 
 
-# ── Appeal flow ────────────────────────────────────────────────────────────
+# ─────────────────────────── Appeal flow ────────────────────────── #
 
 
 def appeal_cancel_kb() -> InlineKeyboardMarkup:
@@ -83,7 +83,7 @@ def appeal_review_kb(ban_id: str) -> InlineKeyboardMarkup:
     )
 
 
-# ── Admin promotion ────────────────────────────────────────────────────────
+# ───────────────────────── Admin promotion ──────────────────────── #
 
 
 def promote_role_kb(target_id: int, available_roles: list[str]) -> InlineKeyboardMarkup:
@@ -134,7 +134,7 @@ def promo_decision_kb(request_id: str) -> InlineKeyboardMarkup:
     )
 
 
-# ── Group connect prompt ───────────────────────────────────────────────────
+# ────────────────────── Group connect prompt ────────────────────── #
 
 
 def join_group_kb() -> InlineKeyboardMarkup:
@@ -148,7 +148,7 @@ def join_group_kb() -> InlineKeyboardMarkup:
     )
 
 
-# ── Check-me / baninfo ─────────────────────────────────────────────────────
+# ─────────────────────── Check-me / baninfo ─────────────────────── #
 
 
 def checkme_ban_kb(
@@ -193,7 +193,7 @@ def baninfo_proof_kb(proof_lnk: str) -> InlineKeyboardMarkup:
     )
 
 
-# ── Start / Help menus ─────────────────────────────────────────────────────
+# ─────────────────────── Start / Help menus ─────────────────────── #
 
 
 def main_menu_kb() -> InlineKeyboardMarkup:
@@ -225,12 +225,7 @@ def help_modules(
     *,
     with_back_to_start: bool = False,
 ) -> InlineKeyboardMarkup:
-    """Build a help menu keyboard from (text, callback_data) tuples.
-
-    Args:
-        rows: Each inner list is a button row; each element is (text, callback_data).
-        with_back_to_start: Append a Back button pointing to the start menu.
-    """
+    """Build a help menu keyboard from (text, callback_data) tuples."""
     kb_rows = [
         [InlineKeyboardButton(text, callback_data=cb) for text, cb in row]
         for row in rows

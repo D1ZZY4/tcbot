@@ -2,11 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Mute log helpers - tracks all mute events in groups
-* Logs every time a user is muted by an admin in any chat
-* Stores basic metadata about the mute event
-"""
+"""Mute log helpers - tracks all mute events in groups."""
 
 from __future__ import annotations
 
@@ -28,12 +24,7 @@ def _mutes():
 
 
 async def log_mute(user_id: int, chat_id: int, reason: str, admin_id: int) -> None:
-    """
-    Log a mute event to the database for audit purposes
-    * Records who was muted, in which chat, why, and who muted them
-    * Timestamps are stored in UTC for consistency across timezones
-    * Creates a permanent record that can be used for moderation history
-    """
+    """Log a mute event to the database for audit purposes."""
     await _mutes().insert_one(
         {
             "user_id": user_id,

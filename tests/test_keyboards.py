@@ -2,9 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Tests for tcbot.modules.helper.keyboards - all keyboard factory functions.
-"""
+"""Tests for tcbot.modules.helper.keyboards - all keyboard factory functions."""
 
 from __future__ import annotations
 
@@ -12,7 +10,7 @@ from telegram import InlineKeyboardMarkup
 
 from tcbot.modules.helper import keyboards
 
-# ── Helper ─────────────────────────────────────────────────────────────
+# ───────────────────────────── Helper ───────────────────────────── #
 
 
 def _rows(kb: InlineKeyboardMarkup) -> list[list[dict]]:
@@ -22,7 +20,7 @@ def _rows(kb: InlineKeyboardMarkup) -> list[list[dict]]:
     ]
 
 
-# ── Start / main menu ──────────────────────────────────────────────────────
+# ──────────────────────── Start / main menu ─────────────────────── #
 
 
 def test_main_menu_kb_has_three_rows() -> None:
@@ -41,7 +39,7 @@ def test_back_to_start_kb_single_back_button() -> None:
     assert rows[0][0]["cb"] == "back_to_start"
 
 
-# ── Appeal flow ─────────────────────────────────────────────────────────────
+# ─────────────────────────── Appeal flow ────────────────────────── #
 
 
 def test_appeal_review_kb_callback_data_includes_ban_id() -> None:
@@ -55,7 +53,7 @@ def test_appeal_cancel_kb_is_single_cancel_button() -> None:
     assert rows[0][0]["cb"] == "cancel_appeal"
 
 
-# ── Promo decision ───────────────────────────────────────────────────────────
+# ───────────────────────── Promo decision ───────────────────────── #
 
 
 def test_promo_decision_kb_uses_colon_separator() -> None:
@@ -64,7 +62,7 @@ def test_promo_decision_kb_uses_colon_separator() -> None:
     assert rows[0][1]["cb"] == "promo_reject:req-uuid"
 
 
-# ── Ban log keyboards (positional args, not keyword-only) ────────────────────
+# ────── Ban log keyboards (positional args, not keyword-only) ───── #
 
 
 def test_ban_log_new_has_proof_and_appeal_rows() -> None:
@@ -94,7 +92,7 @@ def test_ban_log_update_has_previous_proof_button() -> None:
     assert rows[1][0]["text"] == "Submit Appeal"
 
 
-# ── Help menus ───────────────────────────────────────────────────────────────
+# ─────────────────────────── Help menus ─────────────────────────── #
 
 
 def test_help_modules_optional_back_to_start() -> None:

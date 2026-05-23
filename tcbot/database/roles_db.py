@@ -2,12 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Role management system - handles custom staff roles like developer and tester
-* Manages the tc_roles collection for non-admin staff permissions
-* Resolves effective role hierarchy: founder > admin > developer > tester
-* Includes caching to minimize database roundtrips for permission checks
-"""
+"""Role management system - handles custom staff roles like developer and tester."""
 
 from __future__ import annotations
 
@@ -38,11 +33,7 @@ ROLE_LABEL: dict[str, str] = {
 
 
 def role_rank(role: str | None) -> int:
-    """
-    Convert a role string to its numeric rank value for comparison
-    * Returns 0 for unknown or no role (lowest priority)
-    * Higher numbers mean higher permissions
-    """
+    """Convert a role string to its numeric rank value for comparison."""
     return ROLE_RANK.get(role or "", 0)
 
 
@@ -57,12 +48,7 @@ def _col():
 
 
 async def set_role(user_id: int, role: str, assigned_by: int) -> None:
-    """
-    Assign a custom role to a user
-    * Uses upsert to create new records or update existing ones
-    * Automatically invalidates the user's effective role cache
-    * Records who assigned the role and when
-    """
+    """Assign a custom role to a user."""
     await _col().update_one(
         {"user_id": user_id},
         {
@@ -79,39 +65,25 @@ async def set_role(user_id: int, role: str, assigned_by: int) -> None:
 
 
 async def remove_role(user_id: int) -> bool:
-    """
-    Remove a user's custom role from the database
-    * Returns True if the role was successfully removed
-    * Invalidates the user's cache after deletion
-    """
+    """Remove a user's custom role from the database."""
     r = await _col().delete_one({"user_id": user_id})
     effective_role_cache.invalidate(user_id)
     return r.deleted_count > 0
 
 
 async def get_role(user_id: int) -> str | None:
-    """
-    Get a user's custom role from the database only
-    * Returns None if the user has no custom role assigned
-    * This only fetches the tc_roles collection entry, not effective role
-    """
+    """Get a user's custom role from the database only."""
     doc = await _col().find_one({"user_id": user_id}, {"role": 1})
     return doc["role"] if doc else None
 
 
 async def all_by_role(role: str) -> list[RoleRefDoc]:
-    """
-    Get all users with a specific custom role
-    * Returns only user IDs for efficient data transfer
-    """
+    """Get all users with a specific custom role."""
     return await _col().find({"role": role}, {"_id": 0, "user_id": 1}).to_list(None)
 
 
 async def all_roles() -> list[RoleDoc]:
-    """
-    Get all custom role assignments in the database
-    * Returns full documents for all users with custom roles
-    """
+    """Get all custom role assignments in the database."""
     return await _col().find({}).to_list(None)
 
 
@@ -121,12 +93,7 @@ async def all_roles() -> list[RoleDoc]:
 
 
 async def can_act_on(executor_id: int, target_id: int) -> bool:
-    """
-    Check if an executor can perform moderation actions on a target
-    * Returns True only if executor's role rank is strictly higher than target's
-    * Runs both role lookups in parallel with asyncio.gather() for speed
-    * This is the primary permission check for all moderation commands
-    """
+    """Check if an executor can perform moderation actions on a target."""
     executor_role, target_role = await asyncio.gather(
         get_effective_role(executor_id),
         get_effective_role(target_id),
@@ -135,13 +102,7 @@ async def can_act_on(executor_id: int, target_id: int) -> bool:
 
 
 async def get_effective_role(user_id: int) -> str | None:
-    """
-    Resolve a user's full effective role including owner/admin status
-    * Hierarchy: founder (owner) > admin > developer > tester > None
-    * Caches result for 60 seconds to eliminate repeated DB queries
-    * Cache is invalidated automatically whenever roles are modified
-    * Combines owner, admin, and custom role checks in parallel
-    """
+    """Resolve a user's full effective role including owner/admin status."""
     cached = effective_role_cache.get(user_id)
     if cached is not CACHE_MISS:
         return cast(str | None, cached)

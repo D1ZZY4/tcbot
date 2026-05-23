@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Target extraction helpers – ``extract_target()``, ``ResolvedTarget``, and ``resolve_identity()``."""
+"""Target extraction helpers – extract_target(), ResolvedTarget, and resolve_identity()."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ class _BotContext(Protocol):
     bot: Bot
 
 
-# ── Target resolution ──────────────────────────────────────────────────────
+# ──────────────────────── Target resolution ─────────────────────── #
 
 
 @dataclass
@@ -57,12 +57,7 @@ class ResolvedTarget:
 
 
 def get_reason(context: _ArgsContext, update: _ReasonUpdate) -> str:
-    """Extract the ban/action reason from command arguments.
-
-    When the command was used as a reply, *all* args are the reason.
-    When the command used an explicit target (@user or user_id as first arg),
-    the first arg is skipped and the rest form the reason.
-    """
+    """Extract the ban/action reason from command arguments."""
     msg = getattr(update, "effective_message", None)
     reply = getattr(msg, "reply_to_message", None) if msg else None
     is_reply = bool(reply and getattr(reply, "from_user", None))
@@ -78,15 +73,7 @@ async def extract_target(
     args: list[str],
     bot: Bot | None = None,
 ) -> tuple[int, str] | tuple[None, None]:
-    """Return (user_id, first_name) resolved from args, reply, entity, or mention.
-
-    Resolution order (explicit args always win over reply):
-    1. Numeric ID or @username in args[0] - highest priority.
-    2. Reply-to-message sender - only when no explicit arg was given.
-    3. text_mention entity in the message.
-    4. @mention entity resolved via bot.get_chat().
-    Returns (None, None) if no valid target can be resolved.
-    """
+    """Return (user_id, first_name) resolved from args, reply, entity, or mention."""
     msg: Message = update.effective_message
 
     # * Explicit numeric ID or @username always takes priority over reply
@@ -131,7 +118,7 @@ async def extract_target(
     return None, None
 
 
-# ── Identity resolution ────────────────────────────────────────────────────
+# ─────────────────────── Identity resolution ────────────────────── #
 
 
 @dataclass(frozen=True)
@@ -160,13 +147,7 @@ members_repo = _MembersRepo()
 
 
 async def resolve_identity(ctx: _BotContext, user_id: int) -> UserIdentity:
-    """Resolve a user's display identity.
-
-    Resolution order:
-    1. ``ctx.bot.get_chat`` – live data from Telegram.
-    2. ``members_repo.find_latest_for_user`` – member-cache fallback.
-    3. Bare user_id string – ultimate fallback.
-    """
+    """Resolve a user's display identity."""
     try:
         chat = await ctx.bot.get_chat(user_id)
         first = getattr(chat, "first_name", None)

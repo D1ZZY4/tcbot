@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Help command and callback handlers – renders module help index and topics."""
+
 from __future__ import annotations
 
 import asyncio
@@ -25,10 +27,7 @@ __module_name__ = None
 
 
 def _builder_help() -> dict[str, tuple[str, str]]:
-    """Collect modules that expose ``__module_name__`` and ``__help_text__``.
-
-    Returns a mapping of ``"help_<mod_filename>"`` → ``(display_name, help_text)``.
-    """
+    """Collect module help entries from all loaded modules."""
     content: dict[str, tuple[str, str]] = {}
     for mod_name in ALL_MODULES:
         try:
@@ -132,16 +131,7 @@ async def _show_topic(q: CallbackQuery, menu_key: str, back_kb) -> None:
 @decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Show the help index, or a specific module's help if an arg is given.
-
-    Usage::
-
-        /help            → shows help topic index
-        /help ban        → shows Ban module help directly
-        /help banning    → same (module filename also accepted)
-        /help admins     → shows Admins module help
-    """
+    """Show the help index, or a specific topic when an argument is given."""
     botname = ctx.bot.first_name
     args = parse_cmd_args(update.effective_message.text)
 
@@ -207,12 +197,7 @@ async def on_helpc_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_help_topic_any(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Handle both ``help_<mod>`` (menu path) and ``helpc_<mod>`` (command path).
-
-    * ``helpc_*`` data is normalised to its ``help_*`` key before lookup.
-    * The two paths differ only in which back-button keyboard is used.
-    """
+    """Handle help_<mod> and helpc_<mod> callbacks, routing to the correct topic."""
     q: CallbackQuery = update.callback_query
     if q.data.startswith("helpc_"):
         await _show_topic(q, "help_" + q.data[6:], keyboards.back_to_help_cmd_kb())

@@ -20,35 +20,17 @@ Every file starts with the copyright header followed by a one-line module docstr
 from __future__ import annotations
 ```
 
-The docstring is a single sentence. No trailing period for one-liners. Multi-line docstrings are allowed for complex modules (e.g. `muting_flow.py` with its state diagram).
+The docstring is a single sentence ending with a period. Always single-line — never multi-line.
 
 ---
 
 ## Function Docstrings
 
-Write docstrings only when the function's purpose is **not immediately obvious** from its name and signature. Keep them concise — one sentence or a short paragraph. Do not use `:param:` / `:returns:` Sphinx tags.
+Write docstrings only when the function's purpose is **not immediately obvious** from its name and signature. Always single-line. Do not use `:param:` / `:returns:` Sphinx tags. Do not use Sphinx double-backtick notation (``X``) — write plain text.
 
 ```python
 async def sweep_group(chat_id: int) -> tuple[int, int]:
-    """
-    Ban all currently-present federation-banned members in `chat_id`.
-
-    Returns (banned_count, error_count). Individual errors do not abort
-    the sweep.
-    """
-```
-
-Annotation prefixes inside docstrings:
-
-```python
-"""
-! WARNING: Short or long warning description
-! CRITICAL: Short or long critical description
-TODO: Short or long deferred task
-NOTE: Short or long note
-? Short or long question
-* Short or long highlight, info, or general description
-"""
+    """Ban all federation-banned members in chat_id; returns (banned, errors)."""
 ```
 
 Obvious helper functions do not need docstrings:

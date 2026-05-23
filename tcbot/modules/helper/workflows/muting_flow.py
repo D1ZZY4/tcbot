@@ -2,19 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Mute/unmute executor + conversation factory
-
-Exports
-───────
-reason            — BuildReason instance for the mute action
-proof             — BuildProof instance for the mute action
-parse_duration()  — parse '3d', '1mo', '2ye' tokens
-fmt_duration()    — human-readable duration string
-_execute_mute()   — federation-wide mute executor
-execute_unmute()  — restore full permissions across all groups
-mute_conversation() — ConversationHandler factory (delegates to reason_flow)
-"""
+"""Mute/unmute executor + conversation factory."""
 
 from __future__ import annotations
 
@@ -44,7 +32,7 @@ reason = BuildReason("mute")
 proof = BuildProof("mute")
 
 
-# ── Duration helpers ────────────────────────────────────────────────────────
+# ──────────────────────── Duration helpers ──────────────────────── #
 
 
 def parse_duration(raw: str) -> timedelta | None:
@@ -87,7 +75,7 @@ def fmt_duration(td: timedelta | None) -> str:
     return f"{days // 365}ye"
 
 
-# ── Mute executor ───────────────────────────────────────────────────────────
+# ────────────────────────── Mute executor ───────────────────────── #
 
 
 async def _execute_mute(bot, update: Update, meta: dict) -> None:
@@ -162,7 +150,7 @@ async def _execute_mute(bot, update: Update, meta: dict) -> None:
             await msg.reply_text(summary, parse_mode="HTML")
 
 
-# ── Unmute executor ─────────────────────────────────────────────────────────
+# ───────────────────────── Unmute executor ──────────────────────── #
 
 
 async def execute_unmute(
@@ -224,7 +212,7 @@ async def execute_unmute(
         await msg.reply_text(reply, parse_mode="HTML")
 
 
-# ── Executor adapter ────────────────────────────────────────────────────────
+# ──────────────────────── Executor adapter ──────────────────────── #
 
 
 async def _exec_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -235,7 +223,7 @@ async def _exec_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _execute_mute(ctx.bot, update, meta)
 
 
-# ── ConversationHandler factory ─────────────────────────────────────────────
+# ─────────────────── ConversationHandler factory ────────────────── #
 
 
 def mute_conversation(

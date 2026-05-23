@@ -2,16 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Kick executor + conversation factory
-
-Exports
-───────
-reason            — BuildReason instance for the kick action
-proof             — BuildProof instance for the kick action
-execute_kick()    — group-level user removal (ban + immediate unban)
-kick_conversation() — ConversationHandler factory (delegates to reason_flow)
-"""
+"""Kick executor + conversation factory."""
 
 from __future__ import annotations
 
@@ -35,7 +26,7 @@ reason = BuildReason("kick")
 proof = BuildProof("kick")
 
 
-# ── Kick executor ───────────────────────────────────────────────────────────
+# ────────────────────────── Kick executor ───────────────────────── #
 
 
 async def execute_kick(
@@ -89,7 +80,7 @@ async def execute_kick(
         )
 
 
-# ── Executor adapter ────────────────────────────────────────────────────────
+# ──────────────────────── Executor adapter ──────────────────────── #
 
 
 async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -104,7 +95,7 @@ async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-# ── ConversationHandler factory ─────────────────────────────────────────────
+# ─────────────────── ConversationHandler factory ────────────────── #
 
 
 def kick_conversation(entry_fn, entry_filter) -> object:

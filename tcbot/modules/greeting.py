@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""New and left member event handlers – greets users and enforces bans on join."""
+
 from __future__ import annotations
 
 import asyncio
@@ -18,7 +20,7 @@ from tcbot.modules.helper.formatter import mention
 log = logging.getLogger(__name__)
 
 
-# ──────────────────────── Member Handlers ───────────────────────── #
+# ───────────────────────── Member Handlers ──────────────────────── #
 
 
 async def _handle_member(member, msg, chat, bot) -> None:
@@ -87,7 +89,7 @@ async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         )
 
 
-# ───────────────────────── Handlers ─────────────────────────────── #
+# ──────────────────────────── Handlers ──────────────────────────── #
 
 __handlers__ = [
     MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, on_new_member),

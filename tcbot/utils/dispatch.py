@@ -2,9 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Throttled multi-group dispatcher – runs coroutines concurrently with a semaphore cap.
-"""
+"""Throttled multi-group dispatcher – runs coroutines concurrently with a semaphore cap."""
 
 from __future__ import annotations
 
@@ -28,20 +26,7 @@ async def fan_out(
     *,
     max_concurrent: int = _MAX_CONCURRENT,
 ) -> list[T | BaseException]:
-    """
-    Run a list of coroutines concurrently with concurrency limiting.
-
-    * Semaphore ensures no more than max_concurrent tasks run at once
-    * Returns list matching input order — result or captured exception
-    * Never raises — all errors are captured and returned in-place
-
-    Usage::
-
-        results = await fan_out(
-            [bot.ban_chat_member(grp["chat_id"], uid) for grp in groups]
-        )
-        failed = sum(1 for r in results if isinstance(r, BaseException))
-    """
+    """Run coros concurrently up to max_concurrent at once; never raises."""
     if not coros:
         return []
 

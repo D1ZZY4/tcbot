@@ -2,11 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Warnings collection helpers - manages user warning records in groups
-* Tracks all warnings issued to users by admins in specific chats
-* Stores warning metadata including reason, admin, and timestamp
-"""
+"""Warnings collection helpers - manages user warning records in groups."""
 
 from __future__ import annotations
 
@@ -90,12 +86,7 @@ async def _store_warn_count(user_id: int, chat_id: int, count: int) -> None:
 
 
 async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> int:
-    """
-    Add a new warning to a user in a specific chat
-    * Creates a new warn document with all required metadata
-    * Returns the updated warning count for that user in the chat
-    * Timestamps are stored in UTC for consistency
-    """
+    """Add a new warning to a user in a specific chat."""
     c = _warns()
     inserted = await c.insert_one(
         {
@@ -136,30 +127,19 @@ async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> in
 
 
 async def warn_count(user_id: int, chat_id: int) -> int:
-    """
-    Get the current number of warnings for a user in a specific chat
-    * Uses efficient count_documents to get the total quickly
-    """
+    """Get the current number of warnings for a user in a specific chat."""
     return await _sync_warn_count(user_id, chat_id)
 
 
 async def clear_warns(user_id: int, chat_id: int) -> int:
-    """
-    Remove ALL warnings for a user in a specific chat
-    * Returns the number of warning documents that were deleted
-    * Use this to reset a user's warning count completely
-    """
+    """Remove ALL warnings for a user in a specific chat."""
     r = await _warns().delete_many(_warn_key(user_id, chat_id))
     await _warn_counts().delete_one(_warn_key(user_id, chat_id))
     return r.deleted_count
 
 
 async def get_warns(user_id: int, chat_id: int) -> list[WarnDoc]:
-    """
-    Return all warn documents for a user in a chat, oldest first.
-    * Sorts results by timestamp ascending to maintain chronological order
-    * Returns full warning documents including all metadata
-    """
+    """Return all warn documents for a user in a chat, oldest first."""
     cursor = _warns().find(
         {"user_id": user_id, "chat_id": chat_id},
         sort=[("timestamp", 1)],
@@ -168,11 +148,7 @@ async def get_warns(user_id: int, chat_id: int) -> list[WarnDoc]:
 
 
 async def remove_last_warn(user_id: int, chat_id: int) -> bool:
-    """
-    Delete the most recent warn document. Returns True if one was removed.
-    * Finds the latest warning by sorting timestamps in descending order
-    * Only removes a single warning - use clear_warns() to remove all
-    """
+    """Delete the most recent warn document. Returns True if one was removed."""
     doc = await _warns().find_one(
         _warn_key(user_id, chat_id),
         sort=[("timestamp", -1), ("_id", -1)],

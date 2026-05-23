@@ -2,11 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Kick log helpers - tracks all kick events in groups
-* Logs every time a user is kicked by an admin in any chat
-* Stores basic metadata about the kick event for audit
-"""
+"""Kick log helpers - tracks all kick events in groups."""
 
 from __future__ import annotations
 
@@ -28,12 +24,7 @@ def _kicks():
 
 
 async def log_kick(user_id: int, chat_id: int, reason: str, admin_id: int) -> None:
-    """
-    Log a kick event to the database for audit purposes
-    * Records who was kicked, in which chat, why, and who kicked them
-    * Timestamps are stored in UTC for consistency across timezones
-    * Creates a permanent record of the moderation action
-    """
+    """Log a kick event to the database for audit purposes."""
     await _kicks().insert_one(
         {
             "user_id": user_id,

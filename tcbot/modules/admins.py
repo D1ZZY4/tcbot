@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Admin management handlers – promote, demote, transfer ownership, and manage requests."""
+
 from __future__ import annotations
 
 import asyncio

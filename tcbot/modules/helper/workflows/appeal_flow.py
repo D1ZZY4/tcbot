@@ -2,9 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Appeal conversation – entry via /start appeal<ban_id> deep link, DM only
-"""
+"""Appeal conversation – entry via /start appeal<ban_id> deep link, DM only."""
 
 from __future__ import annotations
 
@@ -40,20 +38,7 @@ _ID_RE = re.compile(r"^/start\s+appeal_([a-z0-9]{10})$")
 
 
 class BuildAppeal:
-    """Configurable appeal ConversationHandler builder.
-
-    All user-visible strings and callback identifiers are injected at
-    construction time — the class contains no community-specific hardcoded
-    values.  Each constructor parameter changes a distinct aspect of the
-    appeal flow:
-
-    - ``community_name`` — shown in the instruction header and approval DMs
-    - ``log_channel``    — @handle shown at the bottom of the instruction text
-    - ``cancel_label``   — label on the Cancel button during the waiting state
-    - ``cancel_callback`` — ``callback_data`` value for that button (also used
-                            as the ``CallbackQueryHandler`` pattern inside
-                            ``build_handler()``)
-    """
+    """Configurable appeal ConversationHandler builder."""
 
     def __init__(
         self,
@@ -487,7 +472,7 @@ class BuildAppeal:
         )
 
 
-# ── Module-level instance ─────────────────────────────────────────────────
+# ────────────────────── Module-level instance ───────────────────── #
 
 appeal = BuildAppeal(cfg.community_name, cfg.appeal_log_handle)
 
@@ -497,13 +482,7 @@ def reviewer_locked_out(
     ban_admin_id: int | None,
     reviewer_id: int,
 ) -> bool:
-    """
-    Check whether reviewer_id is blocked from reviewing within the lock window.
-
-    Returns False when metadata is absent or reviewer is the original banning
-    admin — they may always review their own bans. Returns True only if
-    elapsed < _LOCK_WINDOW and reviewer is a different admin.
-    """
+    """Check whether reviewer_id is blocked from reviewing within the lock window."""
     if review_timestamp is None or ban_admin_id is None:
         return False
     if reviewer_id == ban_admin_id:

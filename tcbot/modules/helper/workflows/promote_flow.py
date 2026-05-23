@@ -36,7 +36,7 @@ def _available_roles_for(executor_role: str) -> list[str]:
     return []
 
 
-# ── Shared promote executor ────────────────────────────────────────────────
+# ───────────────────── Shared promote executor ──────────────────── #
 
 
 async def _execute_promote(

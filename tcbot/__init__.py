@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Configuration singleton – loads env vars into a frozen dataclass and exposes a thin ``cfg`` adapter."""
+"""Configuration singleton – loads env vars into a frozen dataclass and exposes a thin cfg adapter."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ def parse_list(raw: str) -> list[str]:
 
 
 def parse_port(port_str: str) -> int:
-    """Resolve a port string to an integer; ``'auto'`` or empty strings default to 5000."""
+    """Resolve a port string to an integer; 'auto' or empty strings default to 5000."""
     if not port_str or port_str.lower() == "auto":
         return 5000
     try:
@@ -48,7 +48,7 @@ def parse_port(port_str: str) -> int:
 
 
 def parse_chat_id(raw: str) -> tuple[int, int | None]:
-    """Parse a ``CHAT_ID`` or ``CHAT_ID/THREAD_ID`` env string into ``(chat_id, thread_id | None)``."""
+    """Parse a CHAT_ID or CHAT_ID/THREAD_ID env string into (chat_id, thread_id | None)."""
     if not raw:
         return 0, None
     if "/" in raw:
@@ -74,7 +74,7 @@ def _owner_id_from_env() -> int:
 
 
 def _int_from_env(key: str, default: int) -> int:
-    """Read an integer env var, returning ``default`` on parse error."""
+    """Read an integer env var, returning default on parse error."""
     try:
         return int(os.getenv(key, str(default)))
     except ValueError:
@@ -163,7 +163,7 @@ class Configs:
 
     @staticmethod
     def load(env_file: str = "config.env") -> "Configs":
-        """Load all configuration from environment variables and return a ``Configs`` instance."""
+        """Load all configuration from environment variables and return a Configs instance."""
         load_dotenv(find_dotenv(env_file))
 
         # ! BOT_TOKEN is strictly required; the bot cannot start without it.
@@ -210,7 +210,7 @@ configs = Configs.load()
 
 # ! Property names in _CfgAdapter are imported by every module — rename with caution.
 class _CfgAdapter:
-    """Thin adapter that exposes ``Configs`` fields with the short canonical names used by all modules."""
+    """Thin adapter that exposes Configs fields with the short canonical names used by all modules."""
 
     def __init__(self, c: Configs) -> None:
         self._c = c

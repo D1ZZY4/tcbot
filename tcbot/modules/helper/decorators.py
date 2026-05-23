@@ -24,20 +24,11 @@ log = logging.getLogger(__name__)
 R = TypeVar("R")
 
 
-# ── Per-user sliding-window rate limiter ───────────────────────────────────
+# ────────────── Per-user sliding-window rate limiter ────────────── #
 
 
 class _RateLimiter:
-    """
-    Sliding-window per-user rate limiter.
-
-    ``check(uid)`` records the call and returns ``0.0`` when allowed.
-    Returns the remaining seconds in the window (> 0) when the limit is hit
-    *without* recording the blocked call.
-
-    Memory is proportional to currently-active users - stale buckets are
-    pruned eagerly so the dict never accumulates all-time unique users.
-    """
+    """Sliding-window per-user rate limiter."""
 
     __slots__ = ("max_calls", "window", "_buckets")
 
@@ -47,7 +38,7 @@ class _RateLimiter:
         self._buckets: dict[int, deque[float]] = {}
 
     def check(self, uid: int) -> float:
-        """Return ``0.0`` if allowed (call recorded), or seconds to wait if denied."""
+        """Return 0.0 if allowed (call recorded), or seconds to wait if denied."""
         now = time.monotonic()
         dq = self._buckets.get(uid)
 
@@ -82,20 +73,7 @@ _cbq_limiter = _RateLimiter(max_calls=20, window=10.0)
 async def global_rate_limit_handler(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    """Universal per-user rate limiter - registered at group -1.
-
-    Runs before every handler group so the check is always first.
-
-    * **CallbackQuery** - 20 per 10 s.
-      Denied presses get a brief *toast* (``show_alert=True``) so the UI
-      never freezes with a blocking popup.
-
-    * **Command text** - 8 per 30 s.
-      Denied commands get a reply showing exactly how many seconds to wait,
-      then ``ApplicationHandlerStop`` drops the update from all other groups.
-
-    * **Everything else** - always passes (member cache, conversation text, …).
-    """
+    """Universal per-user rate limiter - registered at group -1."""
     uid = update.effective_user.id if update.effective_user else None
     if not uid:
         return
@@ -133,32 +111,11 @@ async def global_rate_limit_handler(
         raise ApplicationHandlerStop
 
 
-# ── Per-handler rate limiter factory ───────────────────────────────────────
+# ──────────────── Per-handler rate limiter factory ──────────────── #
 
 
 def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
-    """Per-handler sliding-window rate limiter factory.
-
-    Returns a decorator that applies a per-user rate limit to a specific
-    handler. Complements the global rate limiter (group -1) with fine-grained
-    per-command control.
-
-    The limiter is non-blocking: allowed requests pass through with zero
-    added latency. Denied requests receive an immediate reply and return
-    without executing the handler body.
-
-    Args:
-        limit:  Maximum number of calls allowed within ``period`` seconds.
-        period: Sliding window duration in seconds.
-
-    Usage::
-
-        @decorators.ratelimiter(limit=3, period=60)
-        @decorators.staff_only
-        @decorators.log_execution
-        async def cmd_broadcast(update, ctx):
-            ...
-    """
+    """Per-handler sliding-window rate limiter factory."""
     _limiter = _RateLimiter(max_calls=limit, window=period)
 
     def decorator(
@@ -194,21 +151,13 @@ def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
     return decorator
 
 
-# ── Execution tracer ───────────────────────────────────────────────────────
+# ──────────────────────── Execution tracer ──────────────────────── #
 
 
 def log_execution(
     func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R]],
 ) -> Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R]]:
-    """Wrap a handler to emit entry / exit / exception traces at DEBUG level.
-
-    Logs the handler name and effective user ID on entry.
-    On success logs elapsed milliseconds.  On exception logs at ERROR level
-    (with full traceback) and re-raises so PTB error handling stays intact.
-
-    Opt-in: apply to any command or callback handler you want to trace.
-    Has zero overhead when the root logger is above DEBUG.
-    """
+    """Wrap a handler to emit entry / exit / exception traces at DEBUG level."""
 
     @functools.wraps(func)
     async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> R:
@@ -228,7 +177,7 @@ def log_execution(
     return wrapper
 
 
-# ── Auth decorators ────────────────────────────────────────────────────────
+# ───────────────────────── Auth decorators ──────────────────────── #
 
 
 def owner_only(func: Callable) -> Callable:

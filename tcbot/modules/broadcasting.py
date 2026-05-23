@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Broadcast command handler – sends a message to all connected groups."""
+
 from __future__ import annotations
 
 import asyncio

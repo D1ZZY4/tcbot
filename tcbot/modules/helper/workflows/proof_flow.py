@@ -2,21 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Proof-step infrastructure — keyboards, prompts, media recording, and channel upload.
-
-All proof-step concerns for every moderation action live here.  Import
-``BuildProof`` to produce keyboards and prompt text.  ``upload_proof`` handles
-the physical media upload to the proof channel used by the ban flow.
-
-Exports
-───────
-Builder
-    BuildProof — configurable proof-step keyboard, prompts, and media recording
-
-Channel upload
-    upload_proof(bot, msgs, caption, proof_chat, proof_thread) → int | None
-"""
+"""Proof-step infrastructure — keyboards, prompts, media recording, and channel upload."""
 
 from __future__ import annotations
 
@@ -34,25 +20,11 @@ from telegram import (
 log = logging.getLogger(__name__)
 
 
-# ─────────────────────────────── BuildProof ─────────────────────── #
+# ─────────────────────────── BuildProof ─────────────────────────── #
 
 
 class BuildProof:
-    """Configurable proof-step keyboard, prompts, and media recording.
-
-    Instantiate once per action with the action-specific configuration;
-    call methods to produce keyboards and prompt strings.  No action names,
-    button labels, or routing logic are hardcoded inside the class.
-
-    Args:
-        action:       Lowercase action slug used to build callback_data prefixes
-                      (e.g. ``"kick"``, ``"mute"``, ``"ban"``).
-        skip_allowed: When ``True`` a Skip button is included in the keyboard and
-                      prompt hints reference it.  Set to ``False`` for flows where
-                      proof collection is not skippable.
-        skip_label:   Label for the Skip button (default ``"Skip"``).
-        cancel_label: Label for the Cancel button (default ``"Cancel"``).
-    """
+    """Configurable proof-step keyboard, prompts, and media recording."""
 
     def __init__(
         self,
@@ -68,7 +40,7 @@ class BuildProof:
         self.cancel_label = cancel_label
 
     def keyboard(self) -> InlineKeyboardMarkup:
-        """Proof-step keyboard. Includes Skip only when ``skip_allowed`` is True."""
+        """Proof-step keyboard. Includes Skip only when skip_allowed is True."""
         buttons: list[InlineKeyboardButton] = []
         if self.skip_allowed:
             buttons.append(
@@ -129,7 +101,7 @@ class BuildProof:
         return None
 
 
-# ─────────────────────────── Channel upload ─────────────────────── #
+# ───────────────────────── Channel upload ───────────────────────── #
 
 
 async def upload_proof(

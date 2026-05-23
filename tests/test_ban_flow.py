@@ -2,9 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-Regression tests for the ban update workflow.
-"""
+"""Regression tests for the ban update workflow."""
 
 from __future__ import annotations
 

@@ -2,6 +2,8 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
+"""Additional links callback – shows official channels and groups from the start menu."""
+
 from __future__ import annotations
 
 import asyncio

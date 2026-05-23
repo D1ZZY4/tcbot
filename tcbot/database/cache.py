@@ -2,13 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""
-In-process TTL cache - shared singletons for hot-path DB call elimination
-* Provides lightweight in-memory caching with automatic expiration
-* Eliminates repeated database queries for frequently accessed data
-* All caches are thread-safe within asyncio's cooperative multitasking
-* Multiple shared singleton instances used throughout the application
-"""
+"""In-process TTL cache - shared singletons for hot-path DB call elimination."""
 
 from __future__ import annotations
 
@@ -31,13 +25,7 @@ CACHE_MISS: object = object()
 
 
 class TTLCache(Generic[T]):
-    """
-    Single-process in-memory TTL cache for asyncio-based code.
-    * All operations are synchronous - no locks needed because asyncio is cooperative and only one coroutine runs at a time on the event loop.
-    * ``get_or_fetch`` is the primary interface for most use cases
-    * ``get`` / ``put`` / ``invalidate`` available for fine-grained control
-    * Uses slots for memory efficiency and faster attribute access
-    """
+    """Single-process in-memory TTL cache for asyncio-based code."""
 
     __slots__ = ("_ttl", "_store")
 
@@ -46,11 +34,7 @@ class TTLCache(Generic[T]):
         self._store: dict[Any, tuple[T, float]] = {}
 
     def get(self, key: Any) -> T | object:
-        """
-        Return the cached value, or ``CACHE_MISS`` if absent or expired.
-        * Automatically purges expired entries when accessed
-        * Uses monotonic time for accurate expiration calculations
-        """
+        """Return the cached value, or CACHE_MISS if absent or expired."""
         entry = self._store.get(key, CACHE_MISS)
         if entry is CACHE_MISS:
             return CACHE_MISS
@@ -61,27 +45,15 @@ class TTLCache(Generic[T]):
         return val
 
     def put(self, key: Any, val: T) -> None:
-        """
-        Store *val* under *key* for ``ttl`` seconds.
-        * Sets expiration timestamp based on the cache's TTL
-        * Overwrites any existing value for the same key
-        """
+        """Store *val* under *key* for ttl seconds."""
         self._store[key] = (val, time.monotonic() + self._ttl)
 
     def invalidate(self, key: Any) -> None:
-        """
-        Remove *key* from the cache (no-op if absent or already expired).
-        * Used for manual cache invalidation when data changes
-        * Safe to call even if the key doesn't exist in the cache
-        """
+        """Remove *key* from the cache (no-op if absent or already expired)."""
         self._store.pop(key, None)
 
     def clear(self) -> None:
-        """
-        Remove all entries immediately.
-        * Complete cache flush - deletes everything in the store
-        * Used when bulk invalidation is needed
-        """
+        """Remove all entries immediately."""
         self._store.clear()
 
     async def get_or_fetch(
@@ -89,12 +61,7 @@ class TTLCache(Generic[T]):
         key: Any,
         fetch: Callable[[], Awaitable[T]],
     ) -> T:
-        """
-        Return cached value, or call *fetch()*, cache the result, and return it.
-        * Primary interface for most cache usage
-        * Only calls fetch() on cache miss to avoid redundant DB queries
-        * Automatically caches the fetched value for future requests
-        """
+        """Return cached value, or call *fetch()*, cache the result, and return it."""
         val = self.get(key)
         if val is not CACHE_MISS:
             return cast(T, val)
