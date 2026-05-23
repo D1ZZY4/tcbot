@@ -18,7 +18,7 @@ from tcbot.modules.helper.parse_editmsg import safe_edit
 from tcbot.utils.prefixes import build_prefixed_filters
 
 
-## ── Module & Help ─────────────────────────────────────────────────────────
+# ── Module & Help ─────────────────────────────────────────────────────────
 
 __module_name__ = "Groups"
 __help_text__ = (
@@ -42,7 +42,7 @@ __help_text__ = (
 )
 
 
-## ── Helpers ────────────────────────────────────────────────────────────────
+# ── Helpers ────────────────────────────────────────────────────────────────
 
 def _render(groups: list[dict], detailed: bool) -> str:
     lines = [f"<b>Connected Groups</b>\n\nCount: {len(groups)}\n"]
@@ -64,7 +64,7 @@ def _kb(detailed: bool) -> InlineKeyboardMarkup:
     ]])
 
 
-## ── /tcfgroups command ──────────────────────────────────────────────────────
+# ── /tcfgroups command ──────────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
@@ -79,7 +79,7 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-## ── Toggle detail / simple callbacks ───────────────────────────────────────
+# ── Toggle detail / simple callbacks ───────────────────────────────────────
 
 async def _toggle(update: Update, ctx: ContextTypes.DEFAULT_TYPE, detailed: bool) -> None:
     q      = update.callback_query
@@ -87,7 +87,7 @@ async def _toggle(update: Update, ctx: ContextTypes.DEFAULT_TYPE, detailed: bool
     if groups:
         await q.answer()
     else:
-        ## q.answer + cache-miss DB fetch run in parallel
+        # * q.answer + cache-miss DB fetch run in parallel
         _, groups = await asyncio.gather(q.answer(), db.groups_db.active_groups())
         ctx.user_data["groups_cache"] = groups
     await safe_edit(q.message, _render(groups, detailed), reply_markup=_kb(detailed))
@@ -105,7 +105,7 @@ async def on_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     await _toggle(update, ctx, False)
 
 
-## ── Handlers ───────────────────────────────────────────────────────────────
+# ── Handlers ───────────────────────────────────────────────────────────────
 
 _GROUPS_CMDS = (
     build_prefixed_filters("tcfgroups")

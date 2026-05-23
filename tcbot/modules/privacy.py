@@ -17,7 +17,7 @@ from tcbot.modules.helper import decorators, keyboards
 __module_name__ = None
 
 
-# ─────────────── Privacy and Privacy Policy Messages ────────────── #
+# ─────────────────────── Privacy Messages ───────────────────────── #
 
 _PRIVACY_MSG = (
     "<b>Privacy & Data</b>\n\n"
@@ -78,6 +78,7 @@ async def on_privacy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         ),
     )
 
+
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_privacy_policy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -92,7 +93,7 @@ async def on_privacy_policy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
     )
 
 
-# ──────────────────────────── Handlers ──────────────────────────── #
+# ───────────────────────── Handlers ─────────────────────────────── #
 
 __handlers__ = [
     CallbackQueryHandler(on_privacy_menu,        pattern=r"^privacy_menu$"),

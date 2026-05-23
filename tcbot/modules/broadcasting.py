@@ -2,8 +2,6 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Federation broadcast command – forwards a message to all connected groups."""
-
 from __future__ import annotations
 
 import asyncio
@@ -21,7 +19,7 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 log = logging.getLogger(__name__)
 
 
-## ── Module & Help ─────────────────────────────────────────────────────────
+# ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Broadcast"
 __help_text__ = (
@@ -49,7 +47,7 @@ __help_text__ = (
 )
 
 
-## ── /tcbroadcast command ───────────────────────────────────────────────────
+# ──────────────── Command Broadcast </tcbroadcast> ──────────────── #
 
 @decorators.ratelimiter(limit=3, period=60)
 @decorators.staff_only
@@ -73,7 +71,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     status = await msg.reply_text(f"Broadcasting to {len(groups)} group(s)...")
 
-    ## Build per-group send coroutines, then fan out with semaphore limiting
+    # * Build per-group send coroutines, then fan out with semaphore limiting
     async def _send_one(grp: dict) -> None:
         if has_reply and msg.reply_to_message:
             await msg.reply_to_message.forward(grp["chat_id"])
@@ -91,7 +89,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     preview = broadcast_text or (msg.reply_to_message.text or "media") if msg.reply_to_message else ""
     lc, lt  = cfg.logs
 
-    ## send log and update status message in parallel
+    # * send log and update status message in parallel
     await asyncio.gather(
         ctx.bot.send_message(
             lc,
@@ -107,11 +105,8 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-## ── Handlers ───────────────────────────────────────────────────────────────
+# ──────────────────────────── Handlers ──────────────────────────── #
 
-_BROADCAST_CMDS = (
-    build_prefixed_filters("tcbroadcast")
-    | build_prefixed_filters("bc")
-)
+_BROADCAST_CMDS = (build_prefixed_filters("tcbroadcast") | build_prefixed_filters("bc"))
 
 __handlers__ = [MessageHandler(_BROADCAST_CMDS, cmd_broadcast)]

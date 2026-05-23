@@ -17,7 +17,7 @@ from tcbot.database import users_db
 log = logging.getLogger(__name__)
 
 
-## ── Target resolution ──────────────────────────────────────────────────────
+# ── Target resolution ──────────────────────────────────────────────────────
 
 @dataclass
 class ResolvedTarget:
@@ -66,7 +66,7 @@ async def extract_target(
     """
     msg: Message = update.effective_message
 
-    ## Explicit numeric ID or @username always takes priority over reply
+    # * Explicit numeric ID or @username always takes priority over reply
     if args:
         arg = args[0].lstrip("@")
         if arg.lstrip("-").isdigit():
@@ -85,7 +85,7 @@ async def extract_target(
             except Exception as exc:
                 log.debug("Username lookup failed for @%s: %s", arg, exc)
 
-    ## Fall back to reply target only when no explicit arg resolved above
+    # * Fall back to reply target only when no explicit arg resolved above
     if msg.reply_to_message and msg.reply_to_message.from_user:
         u: User = msg.reply_to_message.from_user
         return u.id, u.first_name
@@ -108,7 +108,7 @@ async def extract_target(
     return None, None
 
 
-## ── Identity resolution ────────────────────────────────────────────────────
+# ── Identity resolution ────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class UserIdentity:

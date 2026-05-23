@@ -1,5 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
-## Workflow sub-package - conversation handlers and action flow executors
+
+"""Workflow sub-package - conversation handlers and action flow executors."""
+
 from __future__ import annotations

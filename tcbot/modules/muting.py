@@ -35,7 +35,7 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 log = logging.getLogger(__name__)
 
 
-## ── Module & Help ─────────────────────────────────────────────────────────
+# ── Module & Help ─────────────────────────────────────────────────────────
 
 __module_name__ = "Mute"
 __help_text__ = (
@@ -75,7 +75,7 @@ __help_text__ = (
 )
 
 
-## ── /tcmute entry point ────────────────────────────────────────────────────
+# ── /tcmute entry point ────────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.log_execution
@@ -87,7 +87,7 @@ async def cmd_mute_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     has_explicit_target = bool(raw_args) and (
         raw_args[0].lstrip("-").isdigit() or raw_args[0].startswith("@")
     )
-    ## Role check and target resolution run in parallel
+    # * Role check and target resolution run in parallel
     executor_role, (target_id, target_fname) = await asyncio.gather(
         get_effective_role(admin.id),
         extraction.extract_target(update, raw_args, ctx.bot),
@@ -168,7 +168,7 @@ async def cmd_mute_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return WAITING_REASON
 
 
-## ── /tcunmute command ──────────────────────────────────────────────────────
+# ── /tcunmute command ──────────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.basic_mod_only
@@ -212,7 +212,7 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await execute_unmute(update, ctx, target_id, target_name or str(target_id))
 
 
-## ── Handlers ───────────────────────────────────────────────────────────────
+# ── Handlers ───────────────────────────────────────────────────────────────
 
 _MUTE_CMDS = build_prefixed_filters("tcmute") | build_prefixed_filters("tcm")
 _UNMUTE_CMDS = (

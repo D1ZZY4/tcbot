@@ -118,7 +118,7 @@ class BuildConnection:
         bot,
     ) -> None:
         """Connect the group, apply all active federation bans, and notify LOG_CHANNEL."""
-        ## Fetch chat info + active ban IDs + register group + clear pending - all in parallel
+        # * Fetch chat info + active ban IDs + register group + clear pending - all in parallel
         chat_result, ban_uids, *_ = await asyncio.gather(
             bot.get_chat(chat_id),
             db.bans_db.active_ban_user_ids(),
@@ -133,7 +133,7 @@ class BuildConnection:
         if isinstance(ban_uids, BaseException):
             ban_uids = []
 
-        ## Apply all existing federation bans concurrently - semaphore-bounded
+        # * Apply all existing federation bans concurrently - semaphore-bounded
         results = await fan_out([bot.ban_chat_member(chat_id, uid) for uid in ban_uids])
         applied = sum(1 for r in results if not isinstance(r, BaseException))
 
@@ -167,7 +167,7 @@ class BuildConnection:
         lc, lt     = cfg.logs
 
         if new_status in (ChatMemberStatus.LEFT, ChatMemberStatus.BANNED):
-            ## is_connected, deactivate, and remove_pending all run in parallel
+            # * is_connected, deactivate, and remove_pending all run in parallel
             was_connected, *_ = await asyncio.gather(
                 db.groups_db.is_connected(chat.id),
                 db.groups_db.deactivate_group(chat.id),
@@ -241,7 +241,7 @@ class BuildConnection:
             await q.answer("Only the group owner can decide.", show_alert=True)
             return
 
-        action = q.data  ## sync read before any await
+        action = q.data  # * sync read before any await
 
         if action == self.join_callback:
             try:
@@ -293,6 +293,6 @@ class BuildConnection:
             )
 
 
-## ── Module-level instance ─────────────────────────────────────────────────
+# ── Module-level instance ─────────────────────────────────────────────────
 
 connection = BuildConnection(cfg.community_name)

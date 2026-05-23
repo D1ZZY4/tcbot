@@ -25,7 +25,7 @@ from tcbot.utils.prefixes import build_prefixed_filters
 log = logging.getLogger(__name__)
 
 
-## ── Module & Help ─────────────────────────────────────────────────────────
+# ── Module & Help ─────────────────────────────────────────────────────────
 
 __module_name__ = "Connect"
 __help_text__ = (
@@ -56,7 +56,7 @@ __help_text__ = (
 )
 
 
-## ── /tcconnect command ─────────────────────────────────────────────────────
+# ── /tcconnect command ─────────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=3, period=60)
 @decorators.log_execution
@@ -75,7 +75,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    ## Both DB reads are independent - run them in parallel
+    # * Both DB reads are independent - run them in parallel
     is_connected, pending = await asyncio.gather(
         db.groups_db.is_connected(chat.id),
         db.groups_db.get_pending(chat.id),
@@ -100,14 +100,14 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await update.effective_message.reply_text(connection.perms_required_message())
         return
 
-    ## complete_join returns None - reply can be sent in parallel
+    # * complete_join returns None - reply can be sent in parallel
     await asyncio.gather(
         connection.complete_join(chat.id, chat.title or "", user.id, user.first_name, ctx.bot),
         update.effective_message.reply_text(connection.connected_message()),
     )
 
 
-## ── Handlers ───────────────────────────────────────────────────────────────
+# ── Handlers ───────────────────────────────────────────────────────────────
 
 _CONNECT_CMDS = (
     build_prefixed_filters("tcconnect")

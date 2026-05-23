@@ -29,12 +29,12 @@ from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modact
 
 log = logging.getLogger(__name__)
 
-## Per-action BuildReason and BuildProof instances — imported by kicking.py
+# * Per-action BuildReason and BuildProof instances — imported by kicking.py
 reason = BuildReason("kick")
 proof  = BuildProof("kick")
 
 
-## ── Kick executor ───────────────────────────────────────────────────────────
+# ── Kick executor ───────────────────────────────────────────────────────────
 
 async def execute_kick(
     update: Update,
@@ -58,7 +58,7 @@ async def execute_kick(
         log_text    = parse_logmsg.kick_log(
             target_id, target_name, admin_id, admin_fname, reason_text, chat_id, chat_title,
         )
-        ## unban + log_kick + federation log + reply all run in parallel
+        # * unban + log_kick + federation log + reply all run in parallel
         results = await asyncio.gather(
             ctx.bot.unban_chat_member(chat_id, target_id, only_if_banned=True),
             db.kicks_db.log_kick(target_id, chat_id, reason_text, admin_id),
@@ -81,7 +81,7 @@ async def execute_kick(
         )
 
 
-## ── Executor adapter ────────────────────────────────────────────────────────
+# ── Executor adapter ────────────────────────────────────────────────────────
 
 async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Pop kick data from user_data and call execute_kick."""
@@ -93,7 +93,7 @@ async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await execute_kick(update, ctx, target_id, target_name, reason_text, proof_desc=proof_desc)
 
 
-## ── ConversationHandler factory ─────────────────────────────────────────────
+# ── ConversationHandler factory ─────────────────────────────────────────────
 
 def kick_conversation(entry_fn, entry_filter) -> object:
     """Return the kick ConversationHandler via the central reason_flow factory."""

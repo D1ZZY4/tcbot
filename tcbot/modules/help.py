@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 __module_name__ = None
 
 
-## ── Build help content ─────────────────────────────────────────────────────
+# ── Build help content ─────────────────────────────────────────────────────
 
 def _build_help_content() -> dict[str, tuple[str, str]]:
     """Collect modules that expose ``__module_name__`` and ``__help_text__``.
@@ -46,30 +46,30 @@ def _build_help_content() -> dict[str, tuple[str, str]]:
 
 HELP_CONTENT = _build_help_content()
 
-## Sorted by display name (case-insensitive)
+# * Sorted by display name (case-insensitive)
 _TOPICS_SORTED: list[tuple[str, str]] = sorted(
     ((name, key) for key, (name, _) in HELP_CONTENT.items()),
     key=lambda t: t[0].lower(),
 )
 
-## Menu-path topics - callback keys stay as "help_<mod>"
+# * Menu-path topics - callback keys stay as "help_<mod>"
 HELP_TOPICS_MENU: list[tuple[str, str]] = _TOPICS_SORTED
 
-## Command-path topics - callback keys become "helpc_<mod>"
+# * Command-path topics - callback keys become "helpc_<mod>"
 HELP_TOPICS_CMD: list[tuple[str, str]] = [
     (name, "helpc_" + key[5:]) for name, key in _TOPICS_SORTED
 ]
 
-## Module name → help key mapping for /help <module> lookup
+# * Module name → help key mapping for /help <module> lookup
 _MODULE_NAME_MAP: dict[str, str] = {}
 for _key, (_dname, _) in HELP_CONTENT.items():
-    ## "help_banning" → key "banning"; display name "Ban" → normalized "ban"
-    _module_slug = _key[5:]                     ## "banning"
+    # * "help_banning" → key "banning"; display name "Ban" → normalized "ban"
+    _module_slug = _key[5:]                     # * "banning"
     _MODULE_NAME_MAP[_module_slug.lower()] = _key
     _MODULE_NAME_MAP[_dname.lower()]       = _key
 
 
-## ── Prefix note ────────────────────────────────────────────────────────────
+# ── Prefix note ────────────────────────────────────────────────────────────
 
 def _prefix_note() -> str:
     """Return an HTML footer listing every configured command prefix."""
@@ -77,7 +77,7 @@ def _prefix_note() -> str:
     return f"\n<b>INFO!! Prefixes:</b> All commands also work with {codes}"
 
 
-## ── Shared text ────────────────────────────────────────────────────────────
+# ── Shared text ────────────────────────────────────────────────────────────
 
 _HELP_INDEX_TEXT = (
     "<b>{botname} Help</b>\n\n"
@@ -86,7 +86,7 @@ _HELP_INDEX_TEXT = (
 )
 
 
-## ── Shared rendering helper ────────────────────────────────────────────────
+# ── Shared rendering helper ────────────────────────────────────────────────
 
 async def _render_help_index(
     update: Update,
@@ -112,7 +112,7 @@ async def _render_help_index(
     )
 
 
-## ── /help command ──────────────────────────────────────────────────────────
+# ── /help command ──────────────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
@@ -130,7 +130,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args    = parse_cmd_args(update.effective_message.text)
 
     if args:
-        ## Attempt to resolve argument to a module
+        # * Attempt to resolve argument to a module
         query   = " ".join(args).strip().lower()
         help_key = _MODULE_NAME_MAP.get(query)
 
@@ -143,7 +143,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             )
             return
 
-        ## Module not found - show closest matches from known names
+        # * Module not found - show closest matches from known names
         candidates = sorted(
             _MODULE_NAME_MAP,
             key=lambda k: (query not in k, abs(len(k) - len(query))),
@@ -157,7 +157,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    ## No args - show full index
+    # * No args - show full index
     await update.effective_message.reply_text(
         _HELP_INDEX_TEXT.format(botname=botname),
         parse_mode="HTML",
@@ -165,7 +165,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-## ── Help from menu ─────────────────────────────────────────────────────────
+# ── Help from menu ─────────────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
@@ -173,7 +173,7 @@ async def on_help_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _render_help_index(update, ctx, with_back_to_start=True)
 
 
-## ── Help in group ──────────────────────────────────────────────────────────
+# ── Help in group ──────────────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
@@ -186,7 +186,7 @@ async def on_help_menu_group(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     )
 
 
-## ── Help index callback ────────────────────────────────────────────────────
+# ── Help index callback ────────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
@@ -194,7 +194,7 @@ async def on_helpc_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _render_help_index(update, ctx, with_back_to_start=False)
 
 
-## ── Shared topic renderer ──────────────────────────────────────────────────
+# ── Shared topic renderer ──────────────────────────────────────────────────
 
 async def _show_topic(q: CallbackQuery, menu_key: str, back_kb) -> None:
     """Render a help topic and edit the current message in place."""
@@ -215,7 +215,7 @@ async def _show_topic(q: CallbackQuery, menu_key: str, back_kb) -> None:
     )
 
 
-## ── Help topic - unified handler (menu path + command path) ────────────────
+# ── Help topic - unified handler (menu path + command path) ────────────────
 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
@@ -227,13 +227,13 @@ async def on_help_topic_any(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     """
     q: CallbackQuery = update.callback_query
     if q.data.startswith("helpc_"):
-        ## "helpc_banning" → "help_banning"
+        # * "helpc_banning" → "help_banning"
         await _show_topic(q, "help_" + q.data[6:], keyboards.back_to_help_cmd_kb())
     else:
         await _show_topic(q, q.data, keyboards.back_to_help_kb())
 
 
-## ── Handlers ───────────────────────────────────────────────────────────────
+# ── Handlers ───────────────────────────────────────────────────────────────
 
 _HELP_CMDS = build_prefixed_filters("help") | build_prefixed_filters("commands")
 
@@ -242,7 +242,7 @@ __handlers__ = [
     CallbackQueryHandler(on_help_menu,       pattern=r"^help_menu$"),
     CallbackQueryHandler(on_help_menu_group, pattern=r"^help_menu_group$"),
     CallbackQueryHandler(on_helpc_main,      pattern=r"^helpc_main$"),
-    ## Unified topic handler - catches both help_<mod> and helpc_<mod>
-    ## Registered after specific patterns above so they take priority
+    # * Unified topic handler - catches both help_<mod> and helpc_<mod>
+    # * Registered after specific patterns above so they take priority
     CallbackQueryHandler(on_help_topic_any,  pattern=r"^(help|helpc)_\w+$"),
 ]

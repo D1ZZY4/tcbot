@@ -43,16 +43,16 @@ log = logging.getLogger(__name__)
 
 WAITING_PROOF = 0
 
-## Per-action BuildProof instance — imported by banning.py
-## skip_allowed=False: ban proof is required; there is no Skip option
+# * Per-action BuildProof instance — imported by banning.py
+# * skip_allowed=False: ban proof is required; there is no Skip option
 proof = BuildProof("ban", skip_allowed=False)
 
-## Module-level album accumulators (keyed by media_group_id)
+# * Module-level album accumulators (keyed by media_group_id)
 _albums:     dict[str, list[Message]]  = {}
 _album_meta: dict[str, dict[str, Any]] = {}
 
 
-## ── Ban executor ────────────────────────────────────────────────────────────
+# ── Ban executor ────────────────────────────────────────────────────────────
 
 async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> None:
     target_id: int      = meta.get("ban_target_id")
@@ -69,14 +69,14 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     existing  = await db.bans_db.get_active_ban(target_id)
     is_update = existing is not None
 
-    ## Start old-admin name fetch immediately - runs during proof upload I/O below
+    # * Start old-admin name fetch immediately - runs during proof upload I/O below
     _old_admin_fname_task = (
         asyncio.create_task(
             db.users_db.get_first_name(existing.get("admin_user_id", admin_id), "Admin")
         ) if is_update else None
     )
 
-    ## Build proof caption
+    # * Build proof caption
     if is_update:
         prev_proof_msg_id = existing.get("proof_message_id")
         prev_proof_link   = (
@@ -91,7 +91,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         prev_proof_link = None
         caption = parse_logmsg.proof_caption_new(target_id, admin_id, admin_fname, now)
 
-    ## Upload proof to PROOF channel
+    # * Upload proof to PROOF channel
     proof_msg_id = await upload_proof(bot, msgs, caption, proof_chat, proof_thread)
     proof_link   = (
         message_link(proof_chat, proof_msg_id, proof_thread) if proof_msg_id else None
@@ -155,7 +155,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             return_exceptions=True,
         )
 
-    ## Extract log_msg_id from parallel result
+    # * Extract log_msg_id from parallel result
     log_msg_id: int = 0
     if not isinstance(log_result, BaseException):
         log_msg_id = log_result.message_id
@@ -163,7 +163,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     else:
         log.error("Ban log send failed: %s", log_result)
 
-    ## set_log_message_id and active_groups fetched in parallel
+    # * set_log_message_id and active_groups fetched in parallel
     if log_msg_id:
         _, groups = await asyncio.gather(
             db.bans_db.set_log_message_id(ban_id, log_msg_id),
@@ -172,14 +172,14 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     else:
         groups = await db.groups_db.active_groups()
 
-    ## Enforce across all connected groups - semaphore-bounded for rate safety
+    # * Enforce across all connected groups - semaphore-bounded for rate safety
     results = await fan_out(
         [bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
     )
     failed = sum(1 for r in results if isinstance(r, BaseException))
     log.info("Ban enforced: target=%s groups=%d/%d", target_id, len(groups) - failed, len(groups))
 
-    ## Edit the original prompt to a summary + cache user in parallel
+    # * Edit the original prompt to a summary + cache user in parallel
     summary = (
         f"{mention(target_id, target_fname)} (<code>{target_id}</code>) has been banned.\n"
         f"Reason: {reason}\n"
@@ -201,7 +201,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         await db.users_db.upsert_user(target_id, None, target_fname)
 
 
-## ── Proof collection state handlers ─────────────────────────────────────────
+# ── Proof collection state handlers ─────────────────────────────────────────
 
 async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     msg = update.effective_message
@@ -215,7 +215,7 @@ async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
         _albums[mgid].append(msg)
         return WAITING_PROOF
 
-    ## Single media file - execute immediately
+    # * Single media file - execute immediately
     await _execute_ban(ctx.bot, [msg], dict(ctx.user_data))
     return ConversationHandler.END
 
@@ -247,7 +247,7 @@ async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
     return ConversationHandler.END
 
 
-## ── ConversationHandler factory ─────────────────────────────────────────────
+# ── ConversationHandler factory ─────────────────────────────────────────────
 
 def ban_conversation(entry_fn, entry_filter) -> ConversationHandler:
     """Return the ban ConversationHandler with the given entry-point function."""

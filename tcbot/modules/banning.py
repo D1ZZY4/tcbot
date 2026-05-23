@@ -2,8 +2,6 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Federation ban command entry point – validates permissions and delegates to ban_flow."""
-
 from __future__ import annotations
 
 import asyncio
@@ -24,7 +22,7 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 log = logging.getLogger(__name__)
 
 
-## ── Module & Help ─────────────────────────────────────────────────────────
+# ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Ban"
 __help_text__ = (
@@ -58,7 +56,7 @@ __help_text__ = (
 )
 
 
-## ── Entry point ────────────────────────────────────────────────────────────
+# ────────────────────── Command Ban </tcban> ────────────────────── #
 
 @decorators.ratelimiter(limit=3, period=60)
 @decorators.log_execution
@@ -70,7 +68,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     has_explicit_target = bool(raw_args) and (
         raw_args[0].lstrip("-").isdigit() or raw_args[0].startswith("@")
     )
-    ## Role check and target resolution run in parallel
+    # * Role check and target resolution run in parallel
     executor_role, (target_id, target_fname) = await asyncio.gather(
         get_effective_role(admin.id),
         extraction.extract_target(update, raw_args, ctx.bot),
@@ -138,7 +136,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return WAITING_PROOF
 
 
-## ── Handlers ───────────────────────────────────────────────────────────────
+# ──────────────────────────── Handlers ──────────────────────────── #
 
 _BAN_CMDS = build_prefixed_filters("tcban") | build_prefixed_filters("tcb")
 

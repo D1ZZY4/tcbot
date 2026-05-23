@@ -38,12 +38,12 @@ log = logging.getLogger(__name__)
 
 _DURATION_RE = re.compile(r"^(\d+)(ye|mo|[smhdw])$", re.IGNORECASE)
 
-## Per-action BuildReason and BuildProof instances — imported by muting.py
+# * Per-action BuildReason and BuildProof instances — imported by muting.py
 reason = BuildReason("mute")
 proof  = BuildProof("mute")
 
 
-## ── Duration helpers ────────────────────────────────────────────────────────
+# ── Duration helpers ────────────────────────────────────────────────────────
 
 def parse_duration(raw: str) -> timedelta | None:
     """Parse a single duration token like '3d', '1mo', '2ye'. Returns None if invalid."""
@@ -85,7 +85,7 @@ def fmt_duration(td: timedelta | None) -> str:
     return f"{days // 365}ye"
 
 
-## ── Mute executor ───────────────────────────────────────────────────────────
+# ── Mute executor ───────────────────────────────────────────────────────────
 
 async def _execute_mute(bot, update: Update, meta: dict) -> None:
     """Apply a federation-wide mute across all connected groups and edit the prompt to a summary."""
@@ -102,7 +102,7 @@ async def _execute_mute(bot, update: Update, meta: dict) -> None:
     until = utc_now() + duration if duration else None
     perms = ChatPermissions(can_send_messages=False)
 
-    ## Apply across all connected groups - semaphore-bounded for rate safety
+    # * Apply across all connected groups - semaphore-bounded for rate safety
     groups  = await db.groups_db.active_groups()
     results = await fan_out(
         [bot.restrict_chat_member(
@@ -128,7 +128,7 @@ async def _execute_mute(bot, update: Update, meta: dict) -> None:
         target_id, target_fname, admin_id, admin_fname, reason_text, dur_str,
     )
 
-    ## Log to DB, post to log channel, and edit summary - all in parallel
+    # * Log to DB, post to log channel, and edit summary - all in parallel
     chat_id  = update.effective_chat.id
     results2 = await asyncio.gather(
         db.mutes_db.log_mute(target_id, chat_id, reason_text, admin_id),
@@ -148,7 +148,7 @@ async def _execute_mute(bot, update: Update, meta: dict) -> None:
             await msg.reply_text(summary, parse_mode="HTML")
 
 
-## ── Unmute executor ─────────────────────────────────────────────────────────
+# ── Unmute executor ─────────────────────────────────────────────────────────
 
 async def execute_unmute(
     update: Update,
@@ -168,7 +168,7 @@ async def execute_unmute(
         can_pin_messages=False,
     )
 
-    ## Unrestrict across all connected groups - semaphore-bounded for rate safety
+    # * Unrestrict across all connected groups - semaphore-bounded for rate safety
     groups  = await db.groups_db.active_groups()
     results = await fan_out(
         [ctx.bot.restrict_chat_member(
@@ -189,7 +189,7 @@ async def execute_unmute(
         f"restored in {len(groups) - failed}/{len(groups)} groups."
     )
 
-    ## Send log to channel and reply in parallel
+    # * Send log to channel and reply in parallel
     if lc:
         results2 = await asyncio.gather(
             ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
@@ -202,7 +202,7 @@ async def execute_unmute(
         await msg.reply_text(reply, parse_mode="HTML")
 
 
-## ── Executor adapter ────────────────────────────────────────────────────────
+# ── Executor adapter ────────────────────────────────────────────────────────
 
 async def _exec_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Copy mute data from user_data, clean up, then call _execute_mute."""
@@ -212,7 +212,7 @@ async def _exec_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _execute_mute(ctx.bot, update, meta)
 
 
-## ── ConversationHandler factory ─────────────────────────────────────────────
+# ── ConversationHandler factory ─────────────────────────────────────────────
 
 def mute_conversation(
     entry_fn,

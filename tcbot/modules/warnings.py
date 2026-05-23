@@ -35,7 +35,7 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 log = logging.getLogger(__name__)
 
 
-## ── Module & Help ─────────────────────────────────────────────────────────
+# ── Module & Help ─────────────────────────────────────────────────────────
 
 __module_name__ = "Warnings"
 __help_text__ = (
@@ -80,7 +80,7 @@ __help_text__ = (
 )
 
 
-## ── Helpers ────────────────────────────────────────────────────────────────
+# ── Helpers ────────────────────────────────────────────────────────────────
 
 async def _role_note(
     target_id: int,
@@ -93,7 +93,7 @@ async def _role_note(
     return fname, role_label
 
 
-## ── /tcwarn entry point ────────────────────────────────────────────────────
+# ── /tcwarn entry point ────────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.log_execution
@@ -105,7 +105,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     has_explicit_target = bool(args) and (
         args[0].lstrip("-").isdigit() or args[0].startswith("@")
     )
-    ## Role check and target resolution run in parallel
+    # * Role check and target resolution run in parallel
     executor_role, (target_id, target_name) = await asyncio.gather(
         get_effective_role(admin.id),
         extraction.extract_target(update, args, ctx.bot),
@@ -167,7 +167,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return WAITING_REASON
 
 
-## ── /tcunwarn ───────────────────────────────────────────────────────────────
+# ── /tcunwarn ───────────────────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.basic_mod_only
@@ -207,7 +207,7 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await execute_unwarn(update, ctx, target_id, target_name or str(target_id))
 
 
-## ── /warns ──────────────────────────────────────────────────────────────────
+# ── /warns ──────────────────────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
@@ -222,7 +222,7 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await execute_warnlist(update, ctx, target_id, target_name or str(target_id))
 
 
-## ── /resetwarns ─────────────────────────────────────────────────────────────
+# ── /resetwarns ─────────────────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.basic_mod_only
@@ -262,14 +262,14 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await execute_resetwarns(update, ctx, target_id, target_name or str(target_id))
 
 
-## ── Handlers ───────────────────────────────────────────────────────────────
+# ── Handlers ───────────────────────────────────────────────────────────────
 
 _WARN_CMDS = build_prefixed_filters("tcwarn") | build_prefixed_filters("tcw")
 _UNWARN_CMDS = build_prefixed_filters("tcunwarn") | build_prefixed_filters("tcunw")
 _WARNLIST_CMDS = build_prefixed_filters("warns") | build_prefixed_filters("warnlist")
 _RESET_CMDS = build_prefixed_filters("resetwarns") | build_prefixed_filters("clearwarns")
 
-## Commands that must NOT be swallowed by the warn conversation fallback.
+# * Commands that must NOT be swallowed by the warn conversation fallback.
 _WARN_ESCAPE_CMDS = _UNWARN_CMDS | _WARNLIST_CMDS | _RESET_CMDS
 
 __handlers__ = [

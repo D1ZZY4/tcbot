@@ -11,7 +11,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from tcbot.database.roles_db import ROLE_LABEL as _ROLE_LABELS
 
 
-## ── Ban flow ───────────────────────────────────────────────────────────────
+# ── Ban flow ───────────────────────────────────────────────────────────────
 
 def cancel_proof_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
@@ -51,7 +51,7 @@ def ban_log_update(
     ])
 
 
-## ── Appeal flow ────────────────────────────────────────────────────────────
+# ── Appeal flow ────────────────────────────────────────────────────────────
 
 def appeal_cancel_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
@@ -76,7 +76,7 @@ def appeal_review_kb(ban_id: str) -> InlineKeyboardMarkup:
     )
 
 
-## ── Admin promotion ────────────────────────────────────────────────────────
+# ── Admin promotion ────────────────────────────────────────────────────────
 
 def promote_role_kb(target_id: int, available_roles: list[str]) -> InlineKeyboardMarkup:
     """Role selection keyboard shown when /tcpromote is used without a role argument."""
@@ -116,7 +116,7 @@ def promo_decision_kb(request_id: str) -> InlineKeyboardMarkup:
     )
 
 
-## ── Group connect prompt ───────────────────────────────────────────────────
+# ── Group connect prompt ───────────────────────────────────────────────────
 
 def join_group_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
@@ -129,7 +129,7 @@ def join_group_kb() -> InlineKeyboardMarkup:
     )
 
 
-## ── Check-me / baninfo ─────────────────────────────────────────────────────
+# ── Check-me / baninfo ─────────────────────────────────────────────────────
 
 def checkme_ban_kb(
     bot_username: str,
@@ -169,7 +169,7 @@ def baninfo_proof_kb(proof_lnk: str) -> InlineKeyboardMarkup:
     )
 
 
-## ── Start / Help menus ─────────────────────────────────────────────────────
+# ── Start / Help menus ─────────────────────────────────────────────────────
 
 def main_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(

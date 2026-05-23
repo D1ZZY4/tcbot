@@ -12,7 +12,7 @@ from tcbot.modules.helper.formatter import link, mention
 from tcbot.utils.timedate_format import fmt_dt, utc_now
 
 
-## ── Ban logs ───────────────────────────────────────────────────────────────
+# ── Ban logs ───────────────────────────────────────────────────────────────
 
 def ban_log(
     target_id: int,
@@ -72,7 +72,7 @@ def ban_update_log(
     )
 
 
-## ── Proof captions ─────────────────────────────────────────────────────────
+# ── Proof captions ─────────────────────────────────────────────────────────
 
 def proof_caption_new(
     target_id: int,
@@ -109,7 +109,7 @@ def proof_caption_update(
     )
 
 
-## ── Mute logs ──────────────────────────────────────────────────────────────
+# ── Mute logs ──────────────────────────────────────────────────────────────
 
 def mute_log(
     target_id: int,
@@ -147,7 +147,7 @@ def unmute_log(
     )
 
 
-## ── Kick log ───────────────────────────────────────────────────────────────
+# ── Kick log ───────────────────────────────────────────────────────────────
 
 def kick_log(
     target_id: int,
@@ -170,7 +170,7 @@ def kick_log(
     )
 
 
-## ── Warn log ───────────────────────────────────────────────────────────────
+# ── Warn log ───────────────────────────────────────────────────────────────
 
 def warn_log(
     target_id: int,
@@ -196,7 +196,7 @@ def warn_log(
     )
 
 
-## ── Unwarn log ─────────────────────────────────────────────────────────────
+# ── Unwarn log ─────────────────────────────────────────────────────────────
 
 def unwarn_log(
     target_id: int,
@@ -220,7 +220,7 @@ def unwarn_log(
     )
 
 
-## ── Unban log ──────────────────────────────────────────────────────────────
+# ── Unban log ──────────────────────────────────────────────────────────────
 
 def unban_log(
     target_id: int,
@@ -242,7 +242,7 @@ def unban_log(
     )
 
 
-## ── Appeal logs ────────────────────────────────────────────────────────────
+# ── Appeal logs ────────────────────────────────────────────────────────────
 
 def appeal_received_log(
     target_id: int,
@@ -347,7 +347,7 @@ def appeal_unban_log(
     )
 
 
-## ── Admin management logs ──────────────────────────────────────────────────
+# ── Admin management logs ──────────────────────────────────────────────────
 
 def admin_promoted(
     target_id: int,
@@ -455,7 +455,7 @@ def promo_rejected_log(
     )
 
 
-## ── Group connection logs ──────────────────────────────────────────────────
+# ── Group connection logs ──────────────────────────────────────────────────
 
 def group_connected_log(
     chat_id: int,
@@ -543,7 +543,7 @@ def broadcast_log(
     )
 
 
-## ── Role management logs ───────────────────────────────────────────────────
+# ── Role management logs ───────────────────────────────────────────────────
 
 def role_assigned(
     target_id: int,

@@ -21,7 +21,7 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.timedate_format import fmt_dt
 
 
-## ── Module & Help ─────────────────────────────────────────────────────────
+# ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Checking"
 __help_text__ = (
@@ -57,7 +57,7 @@ __help_text__ = (
 )
 
 
-## ── Helpers ────────────────────────────────────────────────────────────────
+# ───────────────────────────── Helpers ──────────────────────────── #
 
 async def _ban_summary(
     ban: dict,
@@ -95,7 +95,7 @@ async def _ban_summary(
     return text, proof_link
 
 
-## ── /checkme ───────────────────────────────────────────────────────────────
+# ─────────── Command Check Ban for User Self </checkme> ─────────── #
 
 @decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
@@ -104,7 +104,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg   = update.effective_message
     fname = user.first_name or str(user.id)
 
-    ## Fetch owner ID, user role, and active ban all in parallel
+    # * Fetch owner ID, user role, and active ban all in parallel
     owner_id, user_role, ban = await asyncio.gather(
         db.admins_db.get_owner_id(),
         get_effective_role(user.id),
@@ -154,7 +154,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-## ── /checkme inline callbacks ──────────────────────────────────────────────
+# ──────────────────────── Callback Handlers ─────────────────────── #
 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
@@ -207,7 +207,8 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     )
 
 
-## ── /checkban ──────────────────────────────────────────────────────────────
+# ────────── Command Check Ban for Any Target </checkban> ────────── #
+# * Read Extract Target for more information on how the target is resolved (reply, ID, or @username)
 
 @decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
@@ -232,7 +233,7 @@ async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    ## Fetch owner ID, target role, active ban, and target name - all in parallel
+    # * Fetch owner ID, target role, active ban, and target name - all in parallel
     owner_id, target_role, ban, cached_fname = await asyncio.gather(
         db.admins_db.get_owner_id(),
         get_effective_role(target_id),
@@ -280,9 +281,9 @@ async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await msg.reply_text(text, parse_mode="HTML", reply_markup=kb)
 
 
-## ── Handlers ───────────────────────────────────────────────────────────────
+# ──────────────────────────── Handlers ──────────────────────────── #
 
-_CHECKME_CMDS = build_prefixed_filters("checkme") | build_prefixed_filters("cme")
+_CHECKME_CMDS = build_prefixed_filters("checkme")  | build_prefixed_filters("cme")
 _BANINFO_CMDS = build_prefixed_filters("checkban") | build_prefixed_filters("cban")
 
 __handlers__ = [

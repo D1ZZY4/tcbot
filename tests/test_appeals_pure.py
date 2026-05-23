@@ -13,7 +13,7 @@ from datetime import timedelta
 from tcbot.modules import appeals
 from tcbot.utils.timedate_format import utc_now
 
-## ── Imports and test setup ─────────────────────────────────────────────────
+# ── Imports and test setup ─────────────────────────────────────────────────
 
 def test_starts_with_appeal_tag_lowercase() -> None:
     assert appeals.starts_with_appeal_tag("#appeal\nLog link: ...")

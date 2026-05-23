@@ -31,7 +31,7 @@ from tcbot.modules.helper.workflows.stats_flow import (
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
 
 
-## ── Module & Help ─────────────────────────────────────────────────────────
+# ── Module & Help ─────────────────────────────────────────────────────────
 
 __module_name__ = "Stats"
 __help_text__ = (
@@ -60,7 +60,7 @@ __help_text__ = (
 )
 
 
-## ── Helpers ────────────────────────────────────────────────────────────────
+# ── Helpers ────────────────────────────────────────────────────────────────
 
 def _stats_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
@@ -98,7 +98,7 @@ async def _stats_text() -> str:
     )
 
 
-## ── /tcstats command ───────────────────────────────────────────────────────
+# ── /tcstats command ───────────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
@@ -107,7 +107,7 @@ async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_message.reply_text(text, parse_mode="HTML", reply_markup=_stats_kb())
 
 
-## ── stats_main callback ─────────────────────────────────────────────────────
+# ── stats_main callback ─────────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
@@ -121,14 +121,14 @@ async def on_stats_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             raise
 
 
-## ── stats_admins callback ───────────────────────────────────────────────────
+# ── stats_admins callback ───────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
 
-    ## Gather q.answer() alongside all DB calls in one shot
+    # * Gather q.answer() alongside all DB calls in one shot
     _, owner_id, admins, developers, testers = await asyncio.gather(
         q.answer(),
         db.admins_db.get_owner_id(),
@@ -137,7 +137,7 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         db.roles_db.all_by_role("tester"),
     )
 
-    ## Build name-fetch tasks in order: owner, admins, devs, testers
+    # * Build name-fetch tasks in order: owner, admins, devs, testers
     name_tasks: list = []
     owner_idx = None
     if owner_id:
@@ -154,12 +154,10 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
     lines: list[str] = [f"<b>Staff Roster - {esc(cfg.community_name)}</b>\n"]
 
-    ## Founder
     if owner_idx is not None:
         lines.append("<b>Founder</b>")
         lines.append(f"- {mention(owner_id, all_names[owner_idx])}\n")
 
-    ## Admins
     lines.append(f"<b>Admins ({len(admins)})</b>")
     if admins:
         for adm, fname in zip(admins, all_names[admin_start:admin_start + len(admins)]):
@@ -168,7 +166,6 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         lines.append("- None assigned")
     lines.append("")
 
-    ## Developers
     lines.append(f"<b>Developers ({len(developers)})</b>")
     if developers:
         for dev, fname in zip(developers, all_names[dev_start:dev_start + len(developers)]):
@@ -177,7 +174,6 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         lines.append("- None assigned")
     lines.append("")
 
-    ## Testers
     lines.append(f"<b>Testers ({len(testers)})</b>")
     if testers:
         for tst, fname in zip(testers, all_names[tester_start:tester_start + len(testers)]):
@@ -191,7 +187,7 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     )
 
 
-## ── Handlers ───────────────────────────────────────────────────────────────
+# ── Handlers ───────────────────────────────────────────────────────────────
 
 _STATS_CMDS = build_prefixed_filters("tcstats")
 

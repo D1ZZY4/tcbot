@@ -35,13 +35,13 @@ log = logging.getLogger(__name__)
 
 WARN_LIMIT = 3
 
-## Per-action BuildReason and BuildProof instances — imported by warnings.py
-## skip_allowed=False because warn requires a reason — Skip is not offered
+# * Per-action BuildReason and BuildProof instances — imported by warnings.py
+# * skip_allowed=False because warn requires a reason — Skip is not offered
 reason = BuildReason("warn", skip_allowed=False)
 proof  = BuildProof("warn")
 
 
-## ── Executors ───────────────────────────────────────────────────────────────
+# ── Executors ───────────────────────────────────────────────────────────────
 
 async def execute_warn(
     update: Update,
@@ -66,7 +66,7 @@ async def execute_warn(
     )
 
     if count >= WARN_LIMIT:
-        ## clear warns + ban + federation log - all in parallel
+        # * clear warns + ban + federation log - all in parallel
         results = await asyncio.gather(
             db.warns_db.clear_warns(target_id, chat_id),
             ctx.bot.ban_chat_member(chat_id, target_id),
@@ -90,7 +90,7 @@ async def execute_warn(
                 parse_mode="HTML",
             )
     else:
-        ## federation log + reply in parallel
+        # * federation log + reply in parallel
         results2 = await asyncio.gather(
             ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             msg.reply_text(
@@ -129,7 +129,7 @@ async def execute_unwarn(
         target_id, target_name, admin.id, admin.first_name,
         new_count, WARN_LIMIT, chat_id, chat_title,
     )
-    ## remove warn + send log + reply in parallel
+    # * remove warn + send log + reply in parallel
     results = await asyncio.gather(
         db.warns_db.remove_last_warn(target_id, chat_id),
         ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
@@ -193,7 +193,7 @@ async def execute_resetwarns(
     )
 
 
-## ── Executor adapter ────────────────────────────────────────────────────────
+# ── Executor adapter ────────────────────────────────────────────────────────
 
 async def _exec_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Pop warn data from user_data and call execute_warn."""
@@ -205,7 +205,7 @@ async def _exec_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await execute_warn(update, ctx, target_id, target_name, reason_text, proof_desc=proof_desc)
 
 
-## ── ConversationHandler factory ─────────────────────────────────────────────
+# ── ConversationHandler factory ─────────────────────────────────────────────
 
 def warn_conversation(entry_fn, entry_filter, *, escape_filter=None) -> object:
     """Return the warn ConversationHandler via the central reason_flow factory."""

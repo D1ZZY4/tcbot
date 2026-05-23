@@ -23,7 +23,7 @@ from tcbot.utils.dispatch import fan_out
 log = logging.getLogger(__name__)
 
 
-## ── Unban executor ──────────────────────────────────────────────────────────
+# ── Unban executor ──────────────────────────────────────────────────────────
 
 async def execute_unban(
     update: Update,
@@ -44,13 +44,13 @@ async def execute_unban(
 
     ban_id = ban["ban_id"]
 
-    ## deactivate ban and fetch active groups in parallel
+    # * deactivate ban and fetch active groups in parallel
     _, groups = await asyncio.gather(
         db.bans_db.deactivate_ban(ban_id),
         db.groups_db.active_groups(),
     )
 
-    ## unban from all groups - semaphore-bounded for rate safety
+    # * unban from all groups - semaphore-bounded for rate safety
     results = await fan_out(
         [ctx.bot.unban_chat_member(grp["chat_id"], target_id, only_if_banned=True)
          for grp in groups]
@@ -62,7 +62,7 @@ async def execute_unban(
         target_id, target_fname, admin.id, admin.first_name, ban_id,
     )
 
-    ## send log and reply in parallel
+    # * send log and reply in parallel
     await asyncio.gather(
         ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
         msg.reply_text(

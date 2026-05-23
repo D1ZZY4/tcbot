@@ -24,7 +24,7 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 log = logging.getLogger(__name__)
 
 
-# ───────────────────── Module and Help Message ──────────────────── #
+# ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Admins"
 __help_text__ = (
@@ -77,7 +77,7 @@ __help_text__ = (
 )
 
 
-## ── Promote Command ────────────────────────────────────────────────────────
+# ────────────────── Command Promote </tcpromote> ────────────────── #
 
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.log_execution
@@ -89,7 +89,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     has_explicit_target = bool(args) and (
         args[0].lstrip("-").isdigit() or args[0].startswith("@")
     )
-    ## Role check and target resolution run in parallel
+    # * Role check and target resolution run in parallel
     executor_role, (target_id, target_fname) = await asyncio.gather(
         get_effective_role(admin.id),
         extraction.extract_target(update, args, ctx.bot),
@@ -126,7 +126,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await msg.reply_text(text, parse_mode="HTML")
         return
 
-    ## No role arg - show selection buttons
+    # * No role arg - show selection buttons
     available = _available_roles_for(executor_role)
     if not available:
         await msg.reply_text("You don't have permission to assign any roles.")
@@ -138,7 +138,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-## ── Promote role selection callback ────────────────────────────────────────
+# ──────────────────────── Callback Handlers ─────────────────────── #
 
 @decorators.ratelimiter(limit=10, period=30)
 @decorators.log_execution
@@ -165,7 +165,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         await q.edit_message_text("Unknown role.", reply_markup=None)
         return
 
-    ## answer + fetch name + current role in parallel
+    # * answer + fetch name + current role in parallel
     _, target_fname, current_role = await asyncio.gather(
         q.answer(),
         db.users_db.get_first_name(target_id, str(target_id)),
@@ -179,8 +179,6 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     await q.edit_message_text(text, parse_mode="HTML", reply_markup=None)
 
 
-## ── Promote role cancel callback ────────────────────────────────────────────
-
 @decorators.ratelimiter(limit=10, period=30)
 @decorators.log_execution
 async def on_promote_role_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -191,7 +189,7 @@ async def on_promote_role_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
     )
 
 
-## ── Demote Command ─────────────────────────────────────────────────────────
+# ─────────────────── Command Demote </tcdemote> ─────────────────── #
 
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.log_execution
@@ -200,7 +198,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg   = update.effective_message
     args  = parse_cmd_args(msg.text)
 
-    ## Role check and target resolution run in parallel
+    # * Role check and target resolution run in parallel
     executor_role, (target_id, target_fname) = await asyncio.gather(
         get_effective_role(admin.id),
         extraction.extract_target(update, args, ctx.bot),
@@ -238,7 +236,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-## ── Demote confirm callback ─────────────────────────────────────────────────
+# ──────────────────────── Callback Handlers ─────────────────────── #
 
 @decorators.ratelimiter(limit=10, period=30)
 @decorators.log_execution
@@ -256,7 +254,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             pass
         return
 
-    ## answer + fetch target role + name in parallel
+    # * answer + fetch target role + name in parallel
     _, target_role, target_fname = await asyncio.gather(
         q.answer(),
         get_effective_role(target_id),
@@ -290,7 +288,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     log_text   = parse_logmsg.role_removed(
         target_id, target_fname, target_role, admin.id, admin.first_name,
     )
-    ## log, notify, and edit review message all in parallel
+    # * log, notify, and edit review message all in parallel
     await asyncio.gather(
         ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
         ctx.bot.send_message(
@@ -307,8 +305,6 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     )
 
 
-## ── Demote cancel callback ──────────────────────────────────────────────────
-
 @decorators.ratelimiter(limit=10, period=30)
 @decorators.log_execution
 async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -319,7 +315,7 @@ async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 
-## ── Transfer Ownership ─────────────────────────────────────────────────────
+# ───────────── Command Transfer Owner </transferowner> ──────────── #
 
 @decorators.ratelimiter(limit=3, period=300)
 @decorators.owner_only
@@ -338,14 +334,14 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             "You're already the Founder - can't transfer ownership to yourself. 😅"
         )
         return
-    ## add_admin must complete before set_owner (set_owner does delete_many + insert)
+    # * add_admin must complete before set_owner (set_owner does delete_many + insert)
     await db.admins_db.add_admin(current_owner.id, current_owner.id)
     await db.admins_db.set_owner(target_id)
     lc, lt   = cfg.logs
     log_text = parse_logmsg.ownership_transferred(
         target_id, target_fname, current_owner.id, current_owner.first_name,
     )
-    ## log and reply in parallel
+    # * log and reply in parallel
     await asyncio.gather(
         ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
         update.effective_message.reply_text(
@@ -356,7 +352,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-## ── Promotion request (any user) ───────────────────────────────────────────
+# ───────── Command Promotion Requests </tcpromoterequests> ──────── #
 
 @decorators.ratelimiter(limit=3, period=300)
 @decorators.log_execution
@@ -369,7 +365,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
             parse_mode="HTML",
         )
         return
-    ## enqueue + get_owner_id in parallel
+    # * enqueue + get_owner_id in parallel
     request_id, owner_id = await asyncio.gather(
         db.queues_db.enqueue(user.id, user.username, user.first_name, user.id),
         db.admins_db.get_owner_id(),
@@ -401,7 +397,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     )
 
 
-## ── Promotion List (Admin and above) ───────────────────────────────────────
+# ──────── Command Promotion Requests List </tcpromotelist> ──────── #
 
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.staff_only
@@ -421,7 +417,7 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
-## ── Promotion decision callback (Founder only) ─────────────────────────────
+# ──────────────────────── Callback Handlers ─────────────────────── #
 
 @decorators.ratelimiter(limit=10, period=30)
 @decorators.log_execution
@@ -433,7 +429,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         await q.answer("Founder only.", show_alert=True)
         return
     action, request_id = q.data.split(":", 1)
-    ## answer + fetch request in parallel
+    # * answer + fetch request in parallel
     _, req = await asyncio.gather(
         q.answer(),
         db.queues_db.get_request_by_id(request_id),
@@ -446,7 +442,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     lc, lt       = cfg.logs
 
     if action == "promo_approve":
-        ## DB writes in parallel
+        # * DB writes in parallel
         await asyncio.gather(
             db.admins_db.add_admin(target_id, admin.id),
             db.queues_db.resolve(request_id, "approved", admin.id),
@@ -454,7 +450,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         log_text = parse_logmsg.promo_approved_log(
             target_id, target_fname, admin.id, admin.first_name, request_id,
         )
-        ## notify target, send log, and edit review message all in parallel
+        # * notify target, send log, and edit review message all in parallel
         await asyncio.gather(
             ctx.bot.send_message(
                 target_id,
@@ -472,7 +468,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         log_text = parse_logmsg.promo_rejected_log(
             target_id, target_fname, admin.id, admin.first_name, request_id,
         )
-        ## resolve DB + notify + send log + edit review message all in parallel
+        # * resolve DB + notify + send log + edit review message all in parallel
         await asyncio.gather(
             db.queues_db.resolve(request_id, "rejected", admin.id),
             ctx.bot.send_message(
@@ -488,7 +484,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         )
 
 
-## ── Handlers ───────────────────────────────────────────────────────────────
+# ──────────────────────────── Handlers ──────────────────────────── #
 
 _PMT_CMDS     = build_prefixed_filters("tcpromote")         | build_prefixed_filters("tcp")
 _DMT_CMDS     = build_prefixed_filters("tcdemote")          | build_prefixed_filters("tcd")

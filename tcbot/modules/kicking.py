@@ -28,7 +28,7 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 log = logging.getLogger(__name__)
 
 
-## ── Module & Help ─────────────────────────────────────────────────────────
+# ── Module & Help ─────────────────────────────────────────────────────────
 
 __module_name__ = "Kick"
 __help_text__ = (
@@ -63,7 +63,7 @@ __help_text__ = (
 )
 
 
-## ── Entry point ────────────────────────────────────────────────────────────
+# ── Entry point ────────────────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.log_execution
@@ -75,7 +75,7 @@ async def cmd_kick_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     has_explicit_target = bool(args) and (
         args[0].lstrip("-").isdigit() or args[0].startswith("@")
     )
-    ## Role check and target resolution run in parallel
+    # * Role check and target resolution run in parallel
     executor_role, (target_id, target_name) = await asyncio.gather(
         get_effective_role(admin.id),
         extraction.extract_target(update, args, ctx.bot),
@@ -142,7 +142,7 @@ async def cmd_kick_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return WAITING_REASON
 
 
-## ── Handlers ───────────────────────────────────────────────────────────────
+# ── Handlers ───────────────────────────────────────────────────────────────
 
 _KICK_CMDS = build_prefixed_filters("tckick") | build_prefixed_filters("tck")
 

@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Module discovery, filtering, and handler collection for the TCF bot."""
+"""Module discovery, filtering, and handler collection."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from .. import configs
 log = logging.getLogger(__name__)
 
 
-## ── Module discovery and filtering ─────────────────────────────────────────
+# ─────────────────────── Module Discovery ───────────────────────── #
 
 def _discover_modules() -> list[str]:
     """Return all .py module names in this directory, excluding __init__.py."""
@@ -31,8 +31,9 @@ def _discover_modules() -> list[str]:
 def _filter_modules(modules: list[str]) -> list[str]:
     """
     Apply load / no-load filters from the central configuration.
-    - If configs.modules_load is not empty, keep only those and validate.
-    - If configs.modules_no_load is not empty, remove those.
+
+    * If configs.modules_load is not empty, keep only those and validate.
+    * If configs.modules_no_load is not empty, remove those.
     """
     to_load = configs.modules_load
     no_load = configs.modules_no_load
@@ -40,9 +41,7 @@ def _filter_modules(modules: list[str]) -> list[str]:
     if to_load:
         invalid = [m for m in to_load if m not in modules]
         if invalid:
-            log.error(
-                "MODULES_LOAD contains invalid names: %s. Exiting.", invalid
-            )
+            log.error("MODULES_LOAD contains invalid names: %s. Exiting.", invalid)
             raise SystemExit(1)
         modules = [m for m in to_load if m in modules]
 
@@ -53,20 +52,24 @@ def _filter_modules(modules: list[str]) -> list[str]:
     return modules
 
 
+# ──────────────────────── Module Registry ───────────────────────── #
+
 ALL_MODULES = _filter_modules(_discover_modules())
 log.info("Modules to load: %s", ALL_MODULES)
 
 __all__ = ALL_MODULES + ["ALL_MODULES"]
 
 
-## ── Handler discovery ──────────────────────────────────────────────────────
+# ─────────────────────── Handler Collection ─────────────────────── #
 
 def get_handlers() -> list[Any]:
     """
-    Import all active modules and collect their __handlers__ lists,
-    respecting the priority order defined above.
+    Import all active modules and collect their __handlers__ lists.
+
+    * Import phase runs first across all modules before handler collection
+    * Failed imports are logged and skipped without aborting the bot
     """
-    handlers: list[Any] = []
+    handlers:  list[Any]       = []
     mods_found: dict[str, Any] = {}
 
     for mod_name in ALL_MODULES:
@@ -75,7 +78,6 @@ def get_handlers() -> list[Any]:
             mods_found[mod_name] = mod
         except Exception as exc:
             log.error("Failed to import tcbot.modules.%s: %s", mod_name, exc)
-
 
     for mod_name in ALL_MODULES:
         mod = mods_found.get(mod_name)

@@ -22,7 +22,7 @@ from tcbot.database.roles_db import get_effective_role, role_rank
 log = logging.getLogger(__name__)
 
 
-## ── Per-user sliding-window rate limiter ───────────────────────────────────
+# ── Per-user sliding-window rate limiter ───────────────────────────────────
 
 class _RateLimiter:
     """
@@ -52,27 +52,27 @@ class _RateLimiter:
             self._buckets[uid] = deque([now])
             return 0.0
 
-        ## drop timestamps outside the current window
+        # * drop timestamps outside the current window
         while dq and now - dq[0] >= self.window:
             dq.popleft()
 
         if not dq:
-            ## bucket fully cleared - recycle slot and allow
+            # * bucket fully cleared - recycle slot and allow
             self._buckets[uid] = deque([now])
             return 0.0
 
         if len(dq) >= self.max_calls:
-            ## blocked - tell caller how long until the oldest slot expires
+            # * blocked - tell caller how long until the oldest slot expires
             return round(self.window - (now - dq[0]), 1)
 
         dq.append(now)
         return 0.0
 
 
-## Commands : 8 calls per 30 s - comfortable for regular moderation
+# * Commands : 8 calls per 30 s - comfortable for regular moderation
 _cmd_limiter = _RateLimiter(max_calls=8, window=30.0)
 
-## Buttons  : 20 presses per 10 s - allows snappy navigation
+# * Buttons  : 20 presses per 10 s - allows snappy navigation
 _cbq_limiter = _RateLimiter(max_calls=20, window=10.0)
 
 
@@ -95,7 +95,7 @@ async def global_rate_limit_handler(update: Update, ctx: ContextTypes.DEFAULT_TY
     if not uid:
         return
 
-    ## ── button press ─────────────────────────────────────────────────────────
+    # * ── button press ─────────────────────────────────────────────────────────
     if update.callback_query:
         wait = _cbq_limiter.check(uid)
         if wait:
@@ -109,14 +109,14 @@ async def global_rate_limit_handler(update: Update, ctx: ContextTypes.DEFAULT_TY
             raise ApplicationHandlerStop
         return
 
-    ## ── command message ──────────────────────────────────────────────────────
+    # * ── command message ──────────────────────────────────────────────────────
     msg  = update.effective_message
     text = (msg.text or "") if msg else ""
     if not text:
         return
 
     if not any(text.startswith(p) for p in cfg.prefixes):
-        return  ## plain chat message - never rate-limit
+        return  # * plain chat message - never rate-limit
 
     wait = _cmd_limiter.check(uid)
     if wait:
@@ -130,7 +130,7 @@ async def global_rate_limit_handler(update: Update, ctx: ContextTypes.DEFAULT_TY
         raise ApplicationHandlerStop
 
 
-## ── Per-handler rate limiter factory ───────────────────────────────────────
+# ── Per-handler rate limiter factory ───────────────────────────────────────
 
 def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
     """Per-handler sliding-window rate limiter factory.
@@ -186,7 +186,7 @@ def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
     return decorator
 
 
-## ── Execution tracer ───────────────────────────────────────────────────────
+# ── Execution tracer ───────────────────────────────────────────────────────
 
 def log_execution(func: Callable) -> Callable:
     """Wrap a handler to emit entry / exit / exception traces at DEBUG level.
@@ -215,7 +215,7 @@ def log_execution(func: Callable) -> Callable:
     return wrapper
 
 
-## ── Auth decorators ────────────────────────────────────────────────────────
+# ── Auth decorators ────────────────────────────────────────────────────────
 
 def owner_only(func: Callable) -> Callable:
     """Restrict handler to the Founder only."""

@@ -21,7 +21,7 @@ from tcbot.utils.prefixes import build_prefixed_filters
 log = logging.getLogger(__name__)
 
 
-## ── Module & Help ─────────────────────────────────────────────────────────
+# ── Module & Help ─────────────────────────────────────────────────────────
 
 __module_name__ = "Cleanup"
 __help_text__ = (
@@ -52,7 +52,7 @@ __help_text__ = (
 )
 
 
-## ── Helpers ────────────────────────────────────────────────────────────────
+# ── Helpers ────────────────────────────────────────────────────────────────
 
 async def _leave_one(
     bot,
@@ -87,7 +87,7 @@ async def _should_remove(bot, grp: dict) -> bool:
         return True
 
 
-## ── /leaveall command ──────────────────────────────────────────────────────
+# ── /leaveall command ──────────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=1, period=300)
 @decorators.owner_only
@@ -102,7 +102,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     status = await update.effective_message.reply_text(f"Leaving {len(groups)} groups...")
     lc, lt = cfg.logs
 
-    ## All groups processed concurrently - no sequential sleep between them
+    # * All groups processed concurrently - no sequential sleep between them
     all_results = await asyncio.gather(
         *(_leave_one(ctx.bot, g, lc, lt, admin.id, admin.first_name) for g in groups),
         return_exceptions=True,
@@ -123,7 +123,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.error("Leaveall status edit failed: %s", exc)
 
 
-## ── /cleanup command ───────────────────────────────────────────────────────
+# ── /cleanup command ───────────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=3, period=60)
 @decorators.staff_only
@@ -131,7 +131,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     groups = await db.groups_db.active_groups()
 
-    ## Check all groups concurrently - one network round-trip per group, all in parallel
+    # * Check all groups concurrently - one network round-trip per group, all in parallel
     checks = await asyncio.gather(
         *(_should_remove(ctx.bot, g) for g in groups),
         return_exceptions=True,
@@ -150,7 +150,7 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-## ── Handlers ───────────────────────────────────────────────────────────────
+# ── Handlers ───────────────────────────────────────────────────────────────
 
 _LEAVEALL_CMDS = (
     build_prefixed_filters("leaveall")

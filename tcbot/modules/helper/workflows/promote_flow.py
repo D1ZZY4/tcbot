@@ -35,7 +35,7 @@ def _available_roles_for(executor_role: str) -> list[str]:
     return []
 
 
-## ── Shared promote executor ────────────────────────────────────────────────
+# ── Shared promote executor ────────────────────────────────────────────────
 
 async def _execute_promote(
     bot: Bot,
@@ -59,7 +59,7 @@ async def _execute_promote(
 
     if role == "admin":
         if executor_role == "founder":
-            ## DB writes in parallel
+            # * DB writes in parallel
             if current_role in ("developer", "tester"):
                 await asyncio.gather(
                     db.admins_db.add_admin(target_id, admin_id),
@@ -72,7 +72,7 @@ async def _execute_promote(
                     db.users_db.upsert_user(target_id, None, target_fname),
                 )
             log_text = parse_logmsg.admin_promoted(target_id, target_fname, admin_id, admin_fname)
-            ## log and notify in parallel
+            # * log and notify in parallel
             await asyncio.gather(
                 bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
                 bot.send_message(
@@ -85,14 +85,14 @@ async def _execute_promote(
                 f"Done. {mention(target_id, target_fname)} is now a {cfg.community_name} Admin."
             )
 
-        ## executor is admin → send request to owner for approval
+        # * executor is admin → send request to owner for approval
         existing = await db.queues_db.get_request(target_id)
         if existing:
             return False, (
                 f"There's already a pending promotion request for "
                 f"{mention(target_id, target_fname)}."
             )
-        ## enqueue + get_owner_id in parallel
+        # * enqueue + get_owner_id in parallel
         request_id, owner_id = await asyncio.gather(
             db.queues_db.enqueue(target_id, None, target_fname, admin_id),
             db.admins_db.get_owner_id(),
@@ -119,7 +119,7 @@ async def _execute_promote(
                 log.error("Promo request notify failed: %s", exc)
         return True, "Submitted - the Founder has been notified and will review it shortly. ✅"
 
-    ## role in ("developer", "tester")
+    # * role in ("developer", "tester")
     if executor_role not in ("founder", "admin"):
         return False, "You don't have permission to assign this role."
 
@@ -130,7 +130,7 @@ async def _execute_promote(
     if current_role in ("developer", "tester"):
         await db.roles_db.remove_role(target_id)
 
-    ## set_role + upsert_user in parallel
+    # * set_role + upsert_user in parallel
     await asyncio.gather(
         db.roles_db.set_role(target_id, role, admin_id),
         db.users_db.upsert_user(target_id, None, target_fname),
@@ -138,7 +138,7 @@ async def _execute_promote(
 
     role_label = ROLE_LABEL.get(role, role)
     log_text   = parse_logmsg.role_assigned(target_id, target_fname, role, admin_id, admin_fname)
-    ## log and notify in parallel
+    # * log and notify in parallel
     await asyncio.gather(
         bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
         bot.send_message(

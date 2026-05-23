@@ -35,7 +35,7 @@ _GROUP_START_TEXT = (
 )
 
 
-## ── /start command ─────────────────────────────────────────────────────────
+# ── /start command ─────────────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
@@ -47,7 +47,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     arg      = parts[1].strip() if len(parts) > 1 else ""
     botname = ctx.bot.first_name
 
-    ## Group / supergroup context - send a minimal message with PM link
+    # * Group / supergroup context - send a minimal message with PM link
     if chat.type in ("group", "supergroup"):
         bot_username = ctx.bot.username or ""
         await msg.reply_text(
@@ -57,7 +57,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    ## PM context below
+    # * PM context below
     if arg == "about":
         await msg.reply_text(
             __about_msg__, parse_mode="HTML",
@@ -65,7 +65,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    ## appeal<ban_id> deep links are handled by the ConversationHandler in appeals.py
+    # * appeal<ban_id> deep links are handled by the ConversationHandler in appeals.py
     await msg.reply_text(
         _PRIVATE_START_TEXT.format(botname=botname),
         parse_mode="HTML",
@@ -73,7 +73,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-## ── Menu callbacks ─────────────────────────────────────────────────────────
+# ── Menu callbacks ─────────────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
@@ -132,7 +132,7 @@ async def on_menu_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) 
     await _show_groups(update.callback_query, False)
 
 
-## ── Handlers ───────────────────────────────────────────────────────────────
+# ── Handlers ───────────────────────────────────────────────────────────────
 
 _START_CMDS = build_prefixed_filters("start")
 

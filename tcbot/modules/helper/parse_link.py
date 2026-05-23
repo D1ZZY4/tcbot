@@ -32,7 +32,7 @@ def appeal_deep_link(bot_username: str, ban_id: str) -> str:
     return f"https://t.me/{bot_username}?start=appeal_{ban_id}"
 
 
-## ── HTML helpers ───────────────────────────────────────────────────────────
+# ── HTML helpers ───────────────────────────────────────────────────────────
 
 def user_link(user_id: int, name: str) -> str:
     """HTML mention link. Falls back to str(user_id) when name is blank."""

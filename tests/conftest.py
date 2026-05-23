@@ -12,7 +12,7 @@ import os
 import pytest
 
 
-## ── Environment ───────────────────────────────────────────────────────────
+# ── Environment ───────────────────────────────────────────────────────────
 
 os.environ.setdefault("BOT_TOKEN",       "test:token")
 os.environ.setdefault("MONGODB_URI",     "mongodb://localhost:27017")
@@ -24,6 +24,6 @@ os.environ.setdefault("PROOFS",          "-1001000000002")
 os.environ.setdefault("APPEALS",         "-1001000000003")
 
 
-## ── Pytest ────────────────────────────────────────────────────────────────
+# ── Pytest ────────────────────────────────────────────────────────────────
 
 pytestmark = pytest.mark.asyncio

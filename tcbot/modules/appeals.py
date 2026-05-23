@@ -12,10 +12,11 @@ from telegram.ext import CallbackQueryHandler, filters
 from tcbot.modules.helper.workflows.appeal_flow import appeal
 from tcbot.utils.timedate_format import to_utc, utc_now
 
+# * 12-hour priority window before any admin can act on an appeal
 _LOCK_WINDOW = timedelta(hours=12)
 
 
-# ───────────────────── Module and Help Message ──────────────────── #
+# ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Appeal"
 
@@ -51,7 +52,7 @@ __help_text__ = (
 )
 
 
-## ── Pure guard functions ───────────────────────────────────────────────────
+# ──────────────────────────── Functions ─────────────────────────── #
 
 def starts_with_appeal_tag(text: str) -> bool:
     """Return True when text (stripped) starts with #appeal (case-insensitive)."""
@@ -68,11 +69,12 @@ def reviewer_locked_out(
     ban_admin_id: int | None,
     reviewer_id: int,
 ) -> bool:
-    """Check whether reviewer_id is blocked from reviewing within the lock window.
+    """
+    Check whether reviewer_id is blocked from reviewing within the lock window.
 
-    Returns False immediately when metadata is absent or reviewer is the
-    original banning admin (they may always review their own bans).
-    Returns True only if elapsed < LOCK_WINDOW and reviewer is a different admin.
+    Returns False when metadata is absent or reviewer is the original banning
+    admin — they may always review their own bans. Returns True only if
+    elapsed < _LOCK_WINDOW and reviewer is a different admin.
     """
     if review_timestamp is None or ban_admin_id is None:
         return False
@@ -82,7 +84,7 @@ def reviewer_locked_out(
     return elapsed < _LOCK_WINDOW
 
 
-# ──────────────────────────── Handlers ──────────────────────────── #
+# ───────────────────────── Handlers ─────────────────────────────── #
 
 _APPEAL_START_CMDS = (
     filters.ChatType.PRIVATE & filters.Regex(r"^/start\s+appeal_[a-z0-9]{10}$")

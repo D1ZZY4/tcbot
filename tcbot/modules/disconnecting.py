@@ -21,7 +21,7 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 log = logging.getLogger(__name__)
 
 
-## ── Module & Help ─────────────────────────────────────────────────────────
+# ── Module & Help ─────────────────────────────────────────────────────────
 
 __module_name__ = "Disconnect"
 __help_text__ = (
@@ -50,7 +50,7 @@ __help_text__ = (
 )
 
 
-## ── /tcdisconnect command ──────────────────────────────────────────────────
+# ── /tcdisconnect command ──────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=3, period=60)
 @decorators.log_execution
@@ -68,7 +68,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    ## staff check and group membership check run in parallel
+    # * staff check and group membership check run in parallel
     is_tc_staff, member = await asyncio.gather(
         db.admins_db.is_staff(user.id),
         ctx.bot.get_chat_member(chat.id, user.id),
@@ -82,7 +82,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     lc, lt = cfg.logs
-    ## deactivate, log, reply, and leave all run in parallel
+    # * deactivate, log, reply, and leave all run in parallel
     await asyncio.gather(
         db.groups_db.deactivate_group(chat.id),
         ctx.bot.send_message(
@@ -101,7 +101,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 
-## ── /rmtc command ──────────────────────────────────────────────────────────
+# ── /rmtc command ──────────────────────────────────────────────────────────
 
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.staff_only
@@ -116,7 +116,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     removed = await db.groups_db.deactivate_group(chat_id)
     if removed:
         lc, lt = cfg.logs
-        ## log, leave, and reply all run in parallel
+        # * log, leave, and reply all run in parallel
         await asyncio.gather(
             ctx.bot.send_message(
                 lc,
@@ -139,7 +139,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await update.effective_message.reply_text("Group not found or already removed.")
 
 
-## ── Handlers ───────────────────────────────────────────────────────────────
+# ── Handlers ───────────────────────────────────────────────────────────────
 
 _DISCONNECT_CMDS = (
     build_prefixed_filters("tcdisconnect")

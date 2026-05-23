@@ -24,7 +24,7 @@ _MSG_KEY      = "stats_search_msg_id"
 _CHAT_KEY     = "stats_search_chat_id"
 
 
-## ── Keyboards ──────────────────────────────────────────────────────────────
+# ── Keyboards ──────────────────────────────────────────────────────────────
 
 def _bans_list_kb(page: int, total: int, n_items: int) -> InlineKeyboardMarkup:
     total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
@@ -85,7 +85,7 @@ def _ban_detail_kb(page: int, proof_link: str | None = None) -> InlineKeyboardMa
     return InlineKeyboardMarkup(rows)
 
 
-## ── Shared bans-page renderer ──────────────────────────────────────────────
+# ── Shared bans-page renderer ──────────────────────────────────────────────
 
 async def _render_bans_page(q, page: int) -> None:
     """Fetch active bans and render the numbered page - answers q in parallel."""
@@ -110,7 +110,7 @@ async def _render_bans_page(q, page: int) -> None:
     )
 
 
-## ── Bans list handlers ─────────────────────────────────────────────────────
+# ── Bans list handlers ─────────────────────────────────────────────────────
 
 async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
@@ -130,7 +130,7 @@ async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     await q.edit_message_text(text, parse_mode="HTML", reply_markup=_ban_detail_kb(page, proof_link))
 
 
-## ── Search flow handlers ───────────────────────────────────────────────────
+# ── Search flow handlers ───────────────────────────────────────────────────
 
 def _clear_search(ctx: ContextTypes.DEFAULT_TYPE) -> None:
     for key in (_SEARCH_KEY, _RESULTS_KEY, _MSG_KEY, _CHAT_KEY):
@@ -161,7 +161,7 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     msg   = update.effective_message
 
     if query.isdigit():
-        ## Targeted lookup + message delete in parallel
+        # * Targeted lookup + message delete in parallel
         ban_result, *_ = await asyncio.gather(
             db.bans_db.get_active_ban(int(query)),
             msg.delete(),
@@ -171,14 +171,14 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
             [ban_result] if ban_result and not isinstance(ban_result, BaseException) else []
         )
     else:
-        ## Full name scan + message delete in parallel
+        # * Full name scan + message delete in parallel
         bans_result, *_ = await asyncio.gather(
             db.bans_db.active_bans(),
             msg.delete(),
             return_exceptions=True,
         )
         bans = bans_result if not isinstance(bans_result, BaseException) else []
-        ## Fetch all names in parallel, then filter by query
+        # * Fetch all names in parallel, then filter by query
         uids   = [ban["banned_user_id"] for ban in bans]
         fnames = list(
             await asyncio.gather(*[db.users_db.get_first_name(uid, "") for uid in uids])
@@ -202,7 +202,7 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         )
         return
 
-    ## Fetch display names for results in parallel
+    # * Fetch display names for results in parallel
     result_uids   = [ban["banned_user_id"] for ban in results]
     result_fnames = await asyncio.gather(
         *[db.users_db.get_first_name(uid, str(uid)) for uid in result_uids]

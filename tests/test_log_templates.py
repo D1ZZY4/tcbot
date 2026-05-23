@@ -19,13 +19,13 @@ from tcbot.modules.helper import parse_logmsg
 from tcbot import cfg
 
 
-## ── Helpers ───────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────
 
 def _community_present(text: str) -> bool:
     return cfg.community_name in text
 
 
-## ── Ban logs ───────────────────────────────────────────────────────────────
+# ── Ban logs ───────────────────────────────────────────────────────────────
 
 def test_ban_log_contains_community_and_key_fields() -> None:
     ts = datetime(2026, 4, 30, 12, 0, tzinfo=timezone.utc)
@@ -62,7 +62,7 @@ def test_ban_log_with_proof_link_includes_anchor() -> None:
     assert "https://t.me/c/1234/5" in out
 
 
-## ── Unban log ──────────────────────────────────────────────────────────────
+# ── Unban log ──────────────────────────────────────────────────────────────
 
 def test_unban_log_without_reason_has_no_reason_line() -> None:
     out = parse_logmsg.unban_log(
@@ -83,7 +83,7 @@ def test_unban_log_with_reason_includes_reason() -> None:
     assert "Unban Reason: Appeal Approved" in out
 
 
-## ── Proof captions ──────────────────────────────────────────────────────────
+# ── Proof captions ──────────────────────────────────────────────────────────
 
 def test_proof_caption_new_includes_admin_and_timestamp() -> None:
     ts = datetime(2026, 4, 30, 12, 30, tzinfo=timezone.utc)
@@ -95,7 +95,7 @@ def test_proof_caption_new_includes_admin_and_timestamp() -> None:
     assert "Commit at: 30-04-2026 | 12:30" in out
 
 
-## ── Admin management logs ───────────────────────────────────────────────────
+# ── Admin management logs ───────────────────────────────────────────────────
 
 def test_admin_promoted_contains_community_and_both_ids() -> None:
     out = parse_logmsg.admin_promoted(
@@ -124,7 +124,7 @@ def test_ownership_transferred_shows_new_and_previous_owner() -> None:
     assert "New Owner" in out and "Previous Owner" in out
 
 
-## ── Appeal logs ───────────────────────────────────────────────────────────────
+# ── Appeal logs ───────────────────────────────────────────────────────────────
 
 def test_appeal_submitted_log_contains_ban_id_and_community() -> None:
     out = parse_logmsg.appeal_submitted_log(
@@ -147,7 +147,7 @@ def test_appeal_received_log_includes_ban_id_and_user() -> None:
     assert "Citra" in out
 
 
-## ── Broadcast log ───────────────────────────────────────────────────────────────
+# ── Broadcast log ───────────────────────────────────────────────────────────────
 
 def test_broadcast_log_truncates_preview_at_100_chars() -> None:
     long_text = "x" * 500
@@ -160,7 +160,7 @@ def test_broadcast_log_truncates_preview_at_100_chars() -> None:
     assert "x" * 101 not in out
 
 
-## ── Kick log ───────────────────────────────────────────────────────────────
+# ── Kick log ───────────────────────────────────────────────────────────────
 
 def test_kick_log_contains_community_and_key_fields() -> None:
     out = parse_logmsg.kick_log(
@@ -193,7 +193,7 @@ def test_kick_log_shows_user_id() -> None:
     assert "User ID: 99" in out
 
 
-## ── Warn log ───────────────────────────────────────────────────────────────
+# ── Warn log ───────────────────────────────────────────────────────────────
 
 def test_warn_log_contains_community_and_count() -> None:
     out = parse_logmsg.warn_log(
@@ -229,7 +229,7 @@ def test_warn_log_at_limit_shows_correct_count() -> None:
     assert "3/3" in out
 
 
-## ── Unwarn log ───────────────────────────────────────────────────────────────
+# ── Unwarn log ───────────────────────────────────────────────────────────────
 
 def test_unwarn_log_contains_community_and_new_count() -> None:
     out = parse_logmsg.unwarn_log(
@@ -264,7 +264,7 @@ def test_unwarn_log_at_zero_shows_zero_count() -> None:
     assert "User ID: 2" in out
 
 
-## Mute / unmute logs ───────────────────────────────────────────────────────────────
+# * Mute / unmute logs ───────────────────────────────────────────────────────────────
 
 def test_mute_log_contains_community_and_key_fields() -> None:
     out = parse_logmsg.mute_log(
@@ -308,7 +308,7 @@ def test_unmute_log_contains_community_and_both_users() -> None:
     assert "User ID: 2" in out
 
 
-## ── Group logs ───────────────────────────────────────────────────────────────
+# ── Group logs ───────────────────────────────────────────────────────────────
 
 def test_group_connected_log_contains_community_title_and_id() -> None:
     out = parse_logmsg.group_connected_log(

@@ -214,7 +214,7 @@ class BuildAppeal:
         review_text = parse_logmsg.appeal_received_log(uid, user.first_name, ban_id, appeal_link)
         lc, lt      = cfg.logs
 
-        ## Send review post + log message in parallel
+        # * Send review post + log message in parallel
         rv, sent_log = await asyncio.gather(
             ctx.bot.send_message(
                 cfg.main_group,
@@ -240,7 +240,7 @@ class BuildAppeal:
         if isinstance(sent_log, BaseException):
             log.error("Appeal log failed: %s", sent_log)
 
-        ## Store review + log msg IDs in DB in parallel
+        # * Store review + log msg IDs in DB in parallel
         db_tasks = []
         if review_msg_id:
             db_tasks.append(db.bans_db.set_review(ban_id, review_msg_id))
@@ -249,7 +249,7 @@ class BuildAppeal:
         if db_tasks:
             await asyncio.gather(*db_tasks, return_exceptions=True)
 
-        ## Edit instruction message + cache user in parallel
+        # * Edit instruction message + cache user in parallel
         instr_mid = ctx.user_data.get("appeal_instruction_msg_id")
         edit_coro = (
             ctx.bot.edit_message_text(
@@ -316,20 +316,20 @@ class BuildAppeal:
         lc, lt    = cfg.logs
 
         if action == "approve":
-            ## Deactivate ban + fetch active groups + fetch target name - all in parallel
+            # * Deactivate ban + fetch active groups + fetch target name - all in parallel
             _, groups, target_fname = await asyncio.gather(
                 db.bans_db.deactivate_ban(ban_id),
                 db.groups_db.active_groups(),
                 db.users_db.get_first_name(target_id, str(target_id)),
             )
 
-            ## Unban from all groups - semaphore-bounded for rate safety
+            # * Unban from all groups - semaphore-bounded for rate safety
             await fan_out(
                 [ctx.bot.unban_chat_member(grp["chat_id"], target_id, only_if_banned=True)
                  for grp in groups]
             )
 
-            ## Notify user + edit review message in parallel
+            # * Notify user + edit review message in parallel
             await asyncio.gather(
                 ctx.bot.send_message(
                     target_id,
@@ -345,7 +345,7 @@ class BuildAppeal:
                 return_exceptions=True,
             )
 
-            ## Edit the submitted appeal log message in LOG_CHANNEL
+            # * Edit the submitted appeal log message in LOG_CHANNEL
             await self._update_or_send_log(
                 ctx.bot, lc, lt,
                 ban.get("appeal_log_msg_id"),
@@ -358,7 +358,7 @@ class BuildAppeal:
                 ),
             )
 
-            ## Send separate unban log
+            # * Send separate unban log
             try:
                 await ctx.bot.send_message(
                     lc,
@@ -372,7 +372,7 @@ class BuildAppeal:
                 log.error("Appeal unban log failed: %s", exc)
 
         elif action == "reject":
-            ## Fetch target name + notify user + edit review message - all in parallel
+            # * Fetch target name + notify user + edit review message - all in parallel
             target_fname_result, *_ = await asyncio.gather(
                 db.users_db.get_first_name(target_id, str(target_id)),
                 ctx.bot.send_message(
@@ -394,7 +394,7 @@ class BuildAppeal:
                 else str(target_id)
             )
 
-            ## Edit the submitted appeal log message in LOG_CHANNEL
+            # * Edit the submitted appeal log message in LOG_CHANNEL
             await self._update_or_send_log(
                 ctx.bot, lc, lt,
                 ban.get("appeal_log_msg_id"),
@@ -432,7 +432,7 @@ class BuildAppeal:
         )
 
 
-## ── Module-level instance ─────────────────────────────────────────────────
+# ── Module-level instance ─────────────────────────────────────────────────
 
 _LOG_CHANNEL_HANDLE = "@TranssionCoreFederationLogs"
 

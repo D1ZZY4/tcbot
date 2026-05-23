@@ -18,7 +18,7 @@ _IGNORED = {
 }
 
 
-## ── safe_edit helper ────────────────────────────────────────────────────────
+# ── safe_edit helper ────────────────────────────────────────────────────────
 
 async def safe_edit(msg: Message, text: str, **kwargs) -> None:
     try:
