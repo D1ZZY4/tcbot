@@ -15,8 +15,8 @@ import pytest
 
 from tcbot.modules.helper.decorators import log_execution
 
-
 # ── Helpers ────────────────────────────────────────────────────────────────
+
 
 def _update(uid: int | None = 1) -> SimpleNamespace:
     user = SimpleNamespace(id=uid) if uid is not None else None
@@ -28,6 +28,7 @@ def _ctx() -> SimpleNamespace:
 
 
 # ── Basic invocation ───────────────────────────────────────────────────────
+
 
 async def test_log_execution_calls_wrapped_function() -> None:
     called: list[int] = []
@@ -51,6 +52,7 @@ async def test_log_execution_returns_handler_result() -> None:
 
 # ── Metadata preservation ──────────────────────────────────────────────────
 
+
 async def test_log_execution_preserves_function_name() -> None:
     @log_execution
     async def my_handler(update, ctx) -> None:
@@ -68,6 +70,7 @@ async def test_log_execution_preserves_docstring() -> None:
 
 
 # ── Exception handling ─────────────────────────────────────────────────────
+
 
 async def test_log_execution_reraises_exception() -> None:
     @log_execution
@@ -93,6 +96,7 @@ async def test_log_execution_logs_exception_at_error_level(caplog) -> None:
 
 # ── Logging traces ─────────────────────────────────────────────────────────
 
+
 async def test_log_execution_logs_entry_at_debug(caplog) -> None:
     @log_execution
     async def traced(update, ctx) -> None:
@@ -117,6 +121,7 @@ async def test_log_execution_logs_ok_at_debug(caplog) -> None:
 
 
 # ── Edge cases ─────────────────────────────────────────────────────────────
+
 
 async def test_log_execution_works_when_effective_user_is_none() -> None:
     """Decorator must not crash when there is no user on the update."""

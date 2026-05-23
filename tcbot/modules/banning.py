@@ -11,12 +11,15 @@ from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
 
 from tcbot import cfg
-from tcbot import database as db
 from tcbot.database.roles_db import ROLE_LABEL, get_effective_role, role_rank
 from tcbot.modules.helper import decorators, extraction
 from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.role_guard import auto_demote
-from tcbot.modules.helper.workflows.ban_flow import WAITING_PROOF, ban_conversation, proof
+from tcbot.modules.helper.workflows.ban_flow import (
+    WAITING_PROOF,
+    ban_conversation,
+    proof,
+)
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
@@ -28,13 +31,10 @@ __module_name__ = "Ban"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
     "<code>/tcban</code> (alias: <code>/tcb</code>)\n\n"
-
     "<b>Who can use it</b>\n"
     "Developer and above (Founder / Admin / Developer).\n\n"
-
     "<b>Where to use it</b>\n"
     "Exec group, any connected group, or bot PM.\n\n"
-
     "<b>What it does</b>\n"
     "Issues a <b>federation-wide ban</b> on the target, applied across all connected groups "
     "automatically. A reason is required - provide it directly after the target in the command.\n\n"
@@ -45,10 +45,8 @@ __help_text__ = (
     "and proof rather than creating a duplicate.\n"
     "If the target holds a federation role (Tester / Developer / Admin), that role is "
     "automatically removed and they are notified by DM before the ban is enforced.\n\n"
-
     "<b>How to specify the target</b>\n"
     "Reply to a message, or provide a user ID / @username after the command.\n\n"
-
     "<b>Examples</b>\n"
     "<code>/tcban @username spamming in connected groups</code>\n"
     "<code>/tcban 123456789 scamming members</code>\n"
@@ -58,11 +56,12 @@ __help_text__ = (
 
 # ────────────────────── Command Ban </tcban> ────────────────────── #
 
+
 @decorators.ratelimiter(limit=3, period=60)
 @decorators.log_execution
 async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-    msg      = update.effective_message
-    admin    = update.effective_user
+    msg = update.effective_message
+    admin = update.effective_user
     raw_args = parse_cmd_args(msg.text)
 
     has_explicit_target = bool(raw_args) and (
@@ -74,13 +73,17 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         extraction.extract_target(update, raw_args, ctx.bot),
     )
     if role_rank(executor_role) < role_rank("developer"):
-        await msg.reply_text("You need Developer rank or above to issue bans. Not your call. 🚫")
+        await msg.reply_text(
+            "You need Developer rank or above to issue bans. Not your call. 🚫"
+        )
         return ConversationHandler.END
 
     ban_reason = " ".join(raw_args[1:] if has_explicit_target else raw_args).strip()
 
     if not target_id:
-        await msg.reply_text("Cannot resolve target. Reply to a message or provide a user ID.")
+        await msg.reply_text(
+            "Cannot resolve target. Reply to a message or provide a user ID."
+        )
         return ConversationHandler.END
 
     if not ban_reason:
@@ -114,15 +117,19 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             return ConversationHandler.END
         await auto_demote(
             ctx.bot,
-            target_id, target_fname or str(target_id), target_role,
-            admin.id, admin.first_name, "ban",
+            target_id,
+            target_fname or str(target_id),
+            target_role,
+            admin.id,
+            admin.first_name,
+            "ban",
         )
 
-    ctx.user_data["ban_target_id"]    = target_id
+    ctx.user_data["ban_target_id"] = target_id
     ctx.user_data["ban_target_fname"] = target_fname or str(target_id)
-    ctx.user_data["ban_reason"]       = ban_reason
-    ctx.user_data["ban_admin_id"]     = admin.id
-    ctx.user_data["ban_admin_fname"]  = admin.first_name
+    ctx.user_data["ban_reason"] = ban_reason
+    ctx.user_data["ban_admin_id"] = admin.id
+    ctx.user_data["ban_admin_fname"] = admin.first_name
 
     target_mention = mention(target_id, target_fname or str(target_id))
     prompt = await msg.reply_text(
@@ -130,7 +137,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         parse_mode="HTML",
         reply_markup=proof.keyboard(),
     )
-    ctx.user_data["ban_prompt_msg_id"]  = prompt.message_id
+    ctx.user_data["ban_prompt_msg_id"] = prompt.message_id
     ctx.user_data["ban_prompt_chat_id"] = msg.chat.id
 
     return WAITING_PROOF

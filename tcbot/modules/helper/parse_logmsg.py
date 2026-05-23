@@ -11,8 +11,8 @@ from tcbot.database.roles_db import ROLE_LABEL as _ROLE_LABELS
 from tcbot.modules.helper.formatter import link, mention
 from tcbot.utils.timedate_format import fmt_dt, utc_now
 
-
 # ── Ban logs ───────────────────────────────────────────────────────────────
+
 
 def ban_log(
     target_id: int,
@@ -55,7 +55,11 @@ def ban_update_log(
 ) -> str:
     original_dt = fmt_dt(original_ts)
     update_str = fmt_dt(utc_now())
-    prev_part = f'\nPrevious Proof: <a href="{prev_proof_lnk}">Click Here</a>' if prev_proof_lnk else ""
+    prev_part = (
+        f'\nPrevious Proof: <a href="{prev_proof_lnk}">Click Here</a>'
+        if prev_proof_lnk
+        else ""
+    )
     proof_part = f'\n<a href="{proof_lnk}">View Proof</a>' if proof_lnk else ""
     return (
         f"Update {cfg.community_name} Ban\n\n"
@@ -73,6 +77,7 @@ def ban_update_log(
 
 
 # ── Proof captions ─────────────────────────────────────────────────────────
+
 
 def proof_caption_new(
     target_id: int,
@@ -98,7 +103,11 @@ def proof_caption_update(
 ) -> str:
     original_dt = fmt_dt(original_ts)
     update_dt = fmt_dt(utc_now())
-    prev_part = f'\n\nPrevious: <a href="{prev_proof_lnk}">Click Here</a>' if prev_proof_lnk else ""
+    prev_part = (
+        f'\n\nPrevious: <a href="{prev_proof_lnk}">Click Here</a>'
+        if prev_proof_lnk
+        else ""
+    )
     return (
         f"ID: {target_id}\n\n"
         f"Admin: {mention(admin_id, admin_fname)}\n"
@@ -110,6 +119,7 @@ def proof_caption_update(
 
 
 # ── Mute logs ──────────────────────────────────────────────────────────────
+
 
 def mute_log(
     target_id: int,
@@ -149,6 +159,7 @@ def unmute_log(
 
 # ── Kick log ───────────────────────────────────────────────────────────────
 
+
 def kick_log(
     target_id: int,
     target_fname: str,
@@ -171,6 +182,7 @@ def kick_log(
 
 
 # ── Warn log ───────────────────────────────────────────────────────────────
+
 
 def warn_log(
     target_id: int,
@@ -198,6 +210,7 @@ def warn_log(
 
 # ── Unwarn log ─────────────────────────────────────────────────────────────
 
+
 def unwarn_log(
     target_id: int,
     target_fname: str,
@@ -222,6 +235,7 @@ def unwarn_log(
 
 # ── Unban log ──────────────────────────────────────────────────────────────
 
+
 def unban_log(
     target_id: int,
     target_fname: str,
@@ -243,6 +257,7 @@ def unban_log(
 
 
 # ── Appeal logs ────────────────────────────────────────────────────────────
+
 
 def appeal_received_log(
     target_id: int,
@@ -348,6 +363,7 @@ def appeal_unban_log(
 
 
 # ── Admin management logs ──────────────────────────────────────────────────
+
 
 def admin_promoted(
     target_id: int,
@@ -457,6 +473,7 @@ def promo_rejected_log(
 
 # ── Group connection logs ──────────────────────────────────────────────────
 
+
 def group_connected_log(
     chat_id: int,
     chat_title: str,
@@ -545,6 +562,7 @@ def broadcast_log(
 
 # ── Role management logs ───────────────────────────────────────────────────
 
+
 def role_assigned(
     target_id: int,
     target_fname: str,
@@ -552,7 +570,7 @@ def role_assigned(
     admin_id: int,
     admin_fname: str,
 ) -> str:
-    dt         = fmt_dt(utc_now())
+    dt = fmt_dt(utc_now())
     role_label = _ROLE_LABELS.get(role, role.capitalize())
     return (
         f"New {cfg.community_name} {role_label} Assigned\n\n"
@@ -571,7 +589,7 @@ def role_removed(
     admin_id: int,
     admin_fname: str,
 ) -> str:
-    dt         = fmt_dt(utc_now())
+    dt = fmt_dt(utc_now())
     role_label = _ROLE_LABELS.get(role, role.capitalize())
     return (
         f"{cfg.community_name} Role Removed\n\n"
@@ -592,8 +610,8 @@ def role_auto_demoted(
     admin_fname: str,
     action: str,
 ) -> str:
-    dt           = fmt_dt(utc_now())
-    role_label   = _ROLE_LABELS.get(role, role.capitalize())
+    dt = fmt_dt(utc_now())
+    role_label = _ROLE_LABELS.get(role, role.capitalize())
     action_label = "Banned" if action == "ban" else "Kicked"
     return (
         f"{cfg.community_name} Auto-Demote\n\n"

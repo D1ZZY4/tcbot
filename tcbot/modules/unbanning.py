@@ -9,7 +9,8 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes, MessageHandler
 
-from tcbot import cfg, database as db
+from tcbot import cfg
+from tcbot import database as db
 from tcbot.database.roles_db import ROLE_LABEL, get_effective_role
 from tcbot.modules.helper import decorators, extraction
 from tcbot.modules.helper.formatter import mention
@@ -25,23 +26,18 @@ __module_name__ = "Unban"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
     "<code>/tcunban</code> (alias: <code>/tcunb</code>)\n\n"
-
     "<b>Who can use it</b>\n"
     "Developer and above (Founder / Admin / Developer).\n\n"
-
     "<b>Where to use it</b>\n"
     "Exec group, any connected group, or bot PM.\n\n"
-
     "<b>What it does</b>\n"
     "Lifts an active federation ban on the target user. The unban is applied across "
     "<b>all connected groups</b> simultaneously - the user's Telegram ban is removed in "
     "every group so they can rejoin freely. A log entry is posted to the federation logs channel.\n\n"
     "If the user has no active federation ban, the bot will let you know and take no action.\n"
     "If the target's ban was under appeal, the appeal is also resolved as approved.\n\n"
-
     "<b>How to specify the target</b>\n"
     "Reply to a message, or provide a user ID / @username after the command.\n\n"
-
     "<b>Examples</b>\n"
     "<code>/tcunban @username</code>\n"
     "<code>/tcunb 123456789</code>\n"
@@ -51,11 +47,12 @@ __help_text__ = (
 
 # ──────────────── Command Unban </tcunban> ───────────────────────── #
 
+
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.mod_only
 @decorators.log_execution
 async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    msg  = update.effective_message
+    msg = update.effective_message
     args = parse_cmd_args(msg.text)
     target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
@@ -83,7 +80,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     if target_role in ("admin", "developer", "tester"):
         role_label = ROLE_LABEL.get(target_role, target_role)
-        fname      = await db.users_db.get_first_name(target_id, str(target_id))
+        fname = await db.users_db.get_first_name(target_id, str(target_id))
         await msg.reply_text(
             f"That's a {cfg.community_name} {role_label} - "
             "staff can't be federation-banned, so there's nothing to undo here.",

@@ -25,8 +25,7 @@ import telegram.error as _te
 from tcbot.utils.timedate_format import utc_now
 
 if TYPE_CHECKING:
-    from telegram import Bot, Update
-    from telegram.ext import ContextTypes
+    from telegram import Bot
 
 log = logging.getLogger(__name__)
 
@@ -34,9 +33,9 @@ log = logging.getLogger(__name__)
 # ───────────────────── Module-Level State ───────────────────────── #
 # * Set once during bot post-init via attach() — never mutated after that
 
-_bot:      "Bot | None" = None
-_chat_id:   int         = 0
-_thread_id: int | None  = None
+_bot: "Bot | None" = None
+_chat_id: int = 0
+_thread_id: int | None = None
 
 
 def attach(bot: "Bot", chat_id: int, thread_id: int | None) -> None:
@@ -47,12 +46,13 @@ def attach(bot: "Bot", chat_id: int, thread_id: int | None) -> None:
     * Required before any error can be shipped to Telegram
     """
     global _bot, _chat_id, _thread_id
-    _bot       = bot
-    _chat_id   = chat_id
+    _bot = bot
+    _chat_id = chat_id
     _thread_id = thread_id
 
 
 # ──────────────────── Error Classification ──────────────────────── #
+
 
 def _classify(exc: BaseException | None) -> tuple[str, str]:
     """
@@ -77,9 +77,8 @@ def _classify(exc: BaseException | None) -> tuple[str, str]:
     if any(x in mod for x in ("motor", "pymongo", "mongo")):
         return "[DB] Database Error", "database"
 
-    if (
-        isinstance(exc, (ConnectionError, TimeoutError, OSError))
-        or any(x in mod for x in ("httpx", "aiohttp", "urllib3", "ssl"))
+    if isinstance(exc, (ConnectionError, TimeoutError, OSError)) or any(
+        x in mod for x in ("httpx", "aiohttp", "urllib3", "ssl")
     ):
         return "[~] Network / Server Error", "network"
 
@@ -94,7 +93,7 @@ def _classify(exc: BaseException | None) -> tuple[str, str]:
 
 # ───────────────────── Message Formatting ───────────────────────── #
 
-_MAX_TB  = 3000
+_MAX_TB = 3000
 _MAX_MSG = 500
 
 
@@ -112,9 +111,9 @@ def _trim_tb(tb_str: str) -> str:
 
 def build_error_message(
     *,
-    exc:     BaseException | None     = None,
-    record:  logging.LogRecord | None = None,
-    context: str | None               = None,
+    exc: BaseException | None = None,
+    record: logging.LogRecord | None = None,
+    context: str | None = None,
 ) -> str:
     """
     Build a complete HTML-formatted error message for Telegram.
@@ -123,7 +122,7 @@ def build_error_message(
     file and line number automatically. Trims long tracebacks to fit
     Telegram message limits. Escapes all HTML to prevent parse errors.
     """
-    now      = utc_now()
+    now = utc_now()
     time_str = now.strftime("%H:%M:%S UTC")
     date_str = now.strftime("%d-%m-%Y")
 
@@ -131,29 +130,33 @@ def build_error_message(
         exc = exc or record.exc_info[1]
 
     if record:
-        raw_path    = record.pathname.replace("\\", "/")
-        module_path = raw_path.split("tcbot/")[-1] if "tcbot/" in raw_path else record.name
-        func_name   = record.funcName
-        line_no     = record.lineno
-        raw_msg     = record.getMessage()
+        raw_path = record.pathname.replace("\\", "/")
+        module_path = (
+            raw_path.split("tcbot/")[-1] if "tcbot/" in raw_path else record.name
+        )
+        func_name = record.funcName
+        line_no = record.lineno
+        raw_msg = record.getMessage()
     elif exc and exc.__traceback__:
         frames = traceback.extract_tb(exc.__traceback__)
-        last   = frames[-1] if frames else None
+        last = frames[-1] if frames else None
         if last:
-            raw_path    = last.filename.replace("\\", "/")
-            module_path = raw_path.split("tcbot/")[-1] if "tcbot/" in raw_path else raw_path
-            func_name   = last.name
-            line_no     = last.lineno
+            raw_path = last.filename.replace("\\", "/")
+            module_path = (
+                raw_path.split("tcbot/")[-1] if "tcbot/" in raw_path else raw_path
+            )
+            func_name = last.name
+            line_no = last.lineno
         else:
             module_path = type(exc).__module__
-            func_name   = "?"
-            line_no     = 0
+            func_name = "?"
+            line_no = 0
         raw_msg = str(exc)
     else:
         module_path = "?"
-        func_name   = "?"
-        line_no     = 0
-        raw_msg     = "No detail available."
+        func_name = "?"
+        line_no = 0
+        raw_msg = "No detail available."
 
     label, _ = _classify(exc)
 
@@ -168,7 +171,7 @@ def build_error_message(
         ctx_block = f"\n\n<b>Context:</b>\n<code>{_esc(str(context)[:400])}</code>"
 
     py_ver = sys.version.split()[0]
-    host   = platform.node() or "?"
+    host = platform.node() or "?"
 
     return (
         f"<b>[ ERROR REPORT ]</b>\n"
@@ -188,6 +191,7 @@ def build_error_message(
 
 # ─────────────────────── Low-Level Send ─────────────────────────── #
 
+
 async def send_to_log_errors(text: str) -> None:
     """
     Fire-and-forget send to LOG_ERRORS channel.
@@ -205,13 +209,16 @@ async def send_to_log_errors(text: str) -> None:
             message_thread_id=_thread_id,
         )
     except Exception as exc:
-        print(f"[error_reporter] Failed to ship error to Telegram: {exc}", file=sys.stderr)
+        print(
+            f"[error_reporter] Failed to ship error to Telegram: {exc}", file=sys.stderr
+        )
 
 
 # ──────────────────── Convenience Wrappers ──────────────────────── #
 
+
 async def report_exc(
-    exc:     BaseException,
+    exc: BaseException,
     context: str | None = None,
 ) -> None:
     """Report an exception with optional context string."""

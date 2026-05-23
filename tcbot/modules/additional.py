@@ -26,23 +26,37 @@ __additional_msg__ = (
 
 
 def _additional_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
+    return InlineKeyboardMarkup(
         [
-            InlineKeyboardButton("Main Channel",     url="https://t.me/TranssionCoreFederation"),
-            InlineKeyboardButton("Discussion Group", url="https://t.me/TranssionCoreFederationGroup"),
-        ],
-        [
-            InlineKeyboardButton("Logs Channel", url="https://t.me/TranssionCoreFederationLogs"),
-            InlineKeyboardButton("Exec Group",   url="https://t.me/+A105pfnCvkhiZWM1"),
-        ],
-        [
-            InlineKeyboardButton("TRAVEL - Transsion Development (Community)", url="http://t.me/+S2C_ppFvHlAwMzNl"),
-        ],
-        [InlineKeyboardButton("« Back", callback_data="back_to_start")],
-    ])
+            [
+                InlineKeyboardButton(
+                    "Main Channel", url="https://t.me/TranssionCoreFederation"
+                ),
+                InlineKeyboardButton(
+                    "Discussion Group", url="https://t.me/TranssionCoreFederationGroup"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "Logs Channel", url="https://t.me/TranssionCoreFederationLogs"
+                ),
+                InlineKeyboardButton(
+                    "Exec Group", url="https://t.me/+A105pfnCvkhiZWM1"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "TRAVEL - Transsion Development (Community)",
+                    url="http://t.me/+S2C_ppFvHlAwMzNl",
+                ),
+            ],
+            [InlineKeyboardButton("« Back", callback_data="back_to_start")],
+        ]
+    )
 
 
 # ──────────────────────── Callback Handler ──────────────────────── #
+
 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution

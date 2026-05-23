@@ -11,6 +11,7 @@ import logging
 import time
 from collections import deque
 from collections.abc import Callable
+from typing import Awaitable, TypeVar
 
 from telegram import Update
 from telegram.ext import ApplicationHandlerStop, ContextTypes
@@ -20,9 +21,11 @@ from tcbot import database as db
 from tcbot.database.roles_db import get_effective_role, role_rank
 
 log = logging.getLogger(__name__)
+R = TypeVar("R")
 
 
 # ── Per-user sliding-window rate limiter ───────────────────────────────────
+
 
 class _RateLimiter:
     """
@@ -40,13 +43,13 @@ class _RateLimiter:
 
     def __init__(self, max_calls: int, window: float) -> None:
         self.max_calls = max_calls
-        self.window    = window
+        self.window = window
         self._buckets: dict[int, deque[float]] = {}
 
     def check(self, uid: int) -> float:
         """Return ``0.0`` if allowed (call recorded), or seconds to wait if denied."""
         now = time.monotonic()
-        dq  = self._buckets.get(uid)
+        dq = self._buckets.get(uid)
 
         if dq is None:
             self._buckets[uid] = deque([now])
@@ -76,7 +79,9 @@ _cmd_limiter = _RateLimiter(max_calls=8, window=30.0)
 _cbq_limiter = _RateLimiter(max_calls=20, window=10.0)
 
 
-async def global_rate_limit_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def global_rate_limit_handler(
+    update: Update, ctx: ContextTypes.DEFAULT_TYPE
+) -> None:
     """Universal per-user rate limiter - registered at group -1.
 
     Runs before every handler group so the check is always first.
@@ -110,7 +115,7 @@ async def global_rate_limit_handler(update: Update, ctx: ContextTypes.DEFAULT_TY
         return
 
     # * ── command message ──────────────────────────────────────────────────────
-    msg  = update.effective_message
+    msg = update.effective_message
     text = (msg.text or "") if msg else ""
     if not text:
         return
@@ -122,15 +127,14 @@ async def global_rate_limit_handler(update: Update, ctx: ContextTypes.DEFAULT_TY
     if wait:
         if msg:
             try:
-                await msg.reply_text(
-                    f"⏳ Slow down! try again in {wait:.0f} seconds."
-                )
-            except Exception:
-                pass
+                await msg.reply_text(f"⏳ Slow down! try again in {wait:.0f} seconds.")
+            except Exception as exc:
+                log.debug("Command rate-limit reply failed: %s", exc)
         raise ApplicationHandlerStop
 
 
 # ── Per-handler rate limiter factory ───────────────────────────────────────
+
 
 def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
     """Per-handler sliding-window rate limiter factory.
@@ -157,9 +161,11 @@ def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
     """
     _limiter = _RateLimiter(max_calls=limit, window=period)
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(
+        func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R]],
+    ) -> Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R | None]]:
         @functools.wraps(func)
-        async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> R | None:
             uid = update.effective_user.id if update.effective_user else None
             if uid:
                 wait = _limiter.check(uid)
@@ -170,25 +176,30 @@ def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
                                 f"⏳ Slow down - try again in {wait:.0f}s.",
                                 show_alert=True,
                             )
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            log.debug("Callback rate-limit answer failed: %s", exc)
                         return
                     if update.effective_message:
                         try:
                             await update.effective_message.reply_text(
                                 f"⏳ Slow down! Try again in {wait:.0f} seconds."
                             )
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            log.debug("Message rate-limit reply failed: %s", exc)
                         return
             return await func(update, ctx)
+
         return wrapper
+
     return decorator
 
 
 # ── Execution tracer ───────────────────────────────────────────────────────
 
-def log_execution(func: Callable) -> Callable:
+
+def log_execution(
+    func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R]],
+) -> Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R]]:
     """Wrap a handler to emit entry / exit / exception traces at DEBUG level.
 
     Logs the handler name and effective user ID on entry.
@@ -198,11 +209,12 @@ def log_execution(func: Callable) -> Callable:
     Opt-in: apply to any command or callback handler you want to trace.
     Has zero overhead when the root logger is above DEBUG.
     """
+
     @functools.wraps(func)
-    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        uid  = update.effective_user.id if update.effective_user else "?"
+    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> R:
+        uid = update.effective_user.id if update.effective_user else "?"
         name = func.__name__
-        t0   = time.monotonic()
+        t0 = time.monotonic()
         log.debug("[%s] uid=%s enter", name, uid)
         try:
             result = await func(update, ctx)
@@ -211,14 +223,17 @@ def log_execution(func: Callable) -> Callable:
             log.exception("[%s] uid=%s raised after %.1fms", name, uid, elapsed)
             raise
         log.debug("[%s] uid=%s ok (%.1fms)", name, uid, (time.monotonic() - t0) * 1_000)
-        return result  # type: ignore[return-value]
+        return result
+
     return wrapper
 
 
 # ── Auth decorators ────────────────────────────────────────────────────────
 
+
 def owner_only(func: Callable) -> Callable:
     """Restrict handler to the Founder only."""
+
     @functools.wraps(func)
     async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         uid = update.effective_user.id if update.effective_user else None
@@ -228,11 +243,13 @@ def owner_only(func: Callable) -> Callable:
             await update.effective_message.reply_text(
                 "This command is reserved for the Founder - you're not authorized. 🔒"
             )
+
     return wrapper
 
 
 def staff_only(func: Callable) -> Callable:
     """Restrict handler to Founder and Admin."""
+
     @functools.wraps(func)
     async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         uid = update.effective_user.id if update.effective_user else None
@@ -242,11 +259,13 @@ def staff_only(func: Callable) -> Callable:
             await update.effective_message.reply_text(
                 "Staff and Founder only for this one - you don't have the rank. 🚫"
             )
+
     return wrapper
 
 
 def mod_only(func: Callable) -> Callable:
     """Restrict handler to Founder, Admin, Developer (ban/unban level)."""
+
     @functools.wraps(func)
     async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         uid = update.effective_user.id if update.effective_user else None
@@ -256,11 +275,13 @@ def mod_only(func: Callable) -> Callable:
             await update.effective_message.reply_text(
                 "You need Developer rank or above for this - not your call. 🚫"
             )
+
     return wrapper
 
 
 def basic_mod_only(func: Callable) -> Callable:
     """Restrict handler to Founder, Admin, Developer, Tester (kick/mute/warn level)."""
+
     @functools.wraps(func)
     async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         uid = update.effective_user.id if update.effective_user else None
@@ -270,4 +291,5 @@ def basic_mod_only(func: Callable) -> Callable:
             await update.effective_message.reply_text(
                 "You need at least a Tester role for this - not your call. 🚫"
             )
+
     return wrapper

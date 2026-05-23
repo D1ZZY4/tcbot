@@ -25,7 +25,8 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from tcbot import cfg, database as db
+from tcbot import cfg
+from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.formatter import code, mention
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
@@ -38,10 +39,11 @@ WARN_LIMIT = 3
 # * Per-action BuildReason and BuildProof instances — imported by warnings.py
 # * skip_allowed=False because warn requires a reason — Skip is not offered
 reason = BuildReason("warn", skip_allowed=False)
-proof  = BuildProof("warn")
+proof = BuildProof("warn")
 
 
 # ── Executors ───────────────────────────────────────────────────────────────
+
 
 async def execute_warn(
     update: Update,
@@ -51,18 +53,25 @@ async def execute_warn(
     reason_text: str,
     proof_desc: str | None = None,
 ) -> None:
-    msg         = update.effective_message
-    chat_id     = update.effective_chat.id
-    admin_id    = update.effective_user.id
-    proof_line  = f"\nProof: {proof_desc}" if proof_desc else ""
-    chat_title  = update.effective_chat.title or str(chat_id)
+    msg = update.effective_message
+    chat_id = update.effective_chat.id
+    admin_id = update.effective_user.id
+    proof_line = f"\nProof: {proof_desc}" if proof_desc else ""
+    chat_title = update.effective_chat.title or str(chat_id)
     admin_fname = update.effective_user.first_name
-    lc, lt      = cfg.logs
+    lc, lt = cfg.logs
 
-    count    = await db.warns_db.add_warn(target_id, reason_text, admin_id, chat_id)
+    count = await db.warns_db.add_warn(target_id, reason_text, admin_id, chat_id)
     log_text = parse_logmsg.warn_log(
-        target_id, target_name, admin_id, admin_fname,
-        reason_text, count, WARN_LIMIT, chat_id, chat_title,
+        target_id,
+        target_name,
+        admin_id,
+        admin_fname,
+        reason_text,
+        count,
+        WARN_LIMIT,
+        chat_id,
+        chat_title,
     )
 
     if count >= WARN_LIMIT:
@@ -110,7 +119,7 @@ async def execute_unwarn(
     target_id: int,
     target_name: str,
 ) -> None:
-    msg     = update.effective_message
+    msg = update.effective_message
     chat_id = update.effective_chat.id
 
     count = await db.warns_db.warn_count(target_id, chat_id)
@@ -121,13 +130,19 @@ async def execute_unwarn(
         )
         return
 
-    new_count   = max(count - 1, 0)
-    chat_title  = update.effective_chat.title or str(chat_id)
-    admin       = update.effective_user
-    lc, lt      = cfg.logs
-    log_text    = parse_logmsg.unwarn_log(
-        target_id, target_name, admin.id, admin.first_name,
-        new_count, WARN_LIMIT, chat_id, chat_title,
+    new_count = max(count - 1, 0)
+    chat_title = update.effective_chat.title or str(chat_id)
+    admin = update.effective_user
+    lc, lt = cfg.logs
+    log_text = parse_logmsg.unwarn_log(
+        target_id,
+        target_name,
+        admin.id,
+        admin.first_name,
+        new_count,
+        WARN_LIMIT,
+        chat_id,
+        chat_title,
     )
     # * remove warn + send log + reply in parallel
     results = await asyncio.gather(
@@ -150,7 +165,7 @@ async def execute_warnlist(
     target_id: int,
     target_name: str,
 ) -> None:
-    msg     = update.effective_message
+    msg = update.effective_message
     chat_id = update.effective_chat.id
 
     warns = await db.warns_db.get_warns(target_id, chat_id)
@@ -176,7 +191,7 @@ async def execute_resetwarns(
     target_id: int,
     target_name: str,
 ) -> None:
-    msg     = update.effective_message
+    msg = update.effective_message
     chat_id = update.effective_chat.id
 
     removed = await db.warns_db.clear_warns(target_id, chat_id)
@@ -195,21 +210,29 @@ async def execute_resetwarns(
 
 # ── Executor adapter ────────────────────────────────────────────────────────
 
+
 async def _exec_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Pop warn data from user_data and call execute_warn."""
-    target_id   = ctx.user_data.pop("warn_target_id", 0)
+    target_id = ctx.user_data.pop("warn_target_id", 0)
     target_name = ctx.user_data.pop("warn_target_name", "")
     reason_text = ctx.user_data.pop("warn_reason", "")
-    proof_desc  = ctx.user_data.pop("warn_proof_desc", None)
+    proof_desc = ctx.user_data.pop("warn_proof_desc", None)
     ctx.user_data.pop("warn_extra_info", None)
-    await execute_warn(update, ctx, target_id, target_name, reason_text, proof_desc=proof_desc)
+    await execute_warn(
+        update, ctx, target_id, target_name, reason_text, proof_desc=proof_desc
+    )
 
 
 # ── ConversationHandler factory ─────────────────────────────────────────────
 
+
 def warn_conversation(entry_fn, entry_filter, *, escape_filter=None) -> object:
     """Return the warn ConversationHandler via the central reason_flow factory."""
     return build_modaction_conv(
-        reason, proof, entry_fn, _exec_warn, entry_filter,
+        reason,
+        proof,
+        entry_fn,
+        _exec_warn,
+        entry_filter,
         escape_filter=escape_filter,
     )

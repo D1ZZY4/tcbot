@@ -9,6 +9,7 @@ dependencies = [
     "flask>=3.1.0",
     "python-dotenv>=1.0.0",
     "pytest>=9.0.3",
+    "ruff",
 ]
 
 [project.optional-dependencies]
@@ -24,3 +25,10 @@ addopts = "-ra -q"
 filterwarnings = [
     "ignore:If 'per_message=False', 'CallbackQueryHandler'.*:UserWarning",
 ]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

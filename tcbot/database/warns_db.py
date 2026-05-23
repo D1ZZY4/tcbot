@@ -10,12 +10,13 @@ Warnings collection helpers - manages user warning records in groups
 
 from __future__ import annotations
 
+from tcbot.database.documents import WarnDoc
 from tcbot.database.mongos import col
 from tcbot.utils.timedate_format import utc_now
 
-
 # ─────────────────────── Collection Helpers ─────────────────────── #
 # * Internal collection access utilities for the warns database
+
 
 def _warns():
     """Get the warns collection reference from MongoDB"""
@@ -27,6 +28,7 @@ def _warns():
 # * Includes adding, removing, and clearing warnings
 # ! CRITICAL: These functions modify per-chat warning counts
 
+
 async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> int:
     """
     Add a new warning to a user in a specific chat
@@ -35,19 +37,22 @@ async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> in
     * Timestamps are stored in UTC for consistency
     """
     c = _warns()
-    await c.insert_one({
-        "user_id": user_id,
-        "reason": reason,
-        "admin_id": admin_id,
-        "chat_id": chat_id,
-        "timestamp": utc_now(),
-    })
+    await c.insert_one(
+        {
+            "user_id": user_id,
+            "reason": reason,
+            "admin_id": admin_id,
+            "chat_id": chat_id,
+            "timestamp": utc_now(),
+        }
+    )
     return await c.count_documents({"user_id": user_id, "chat_id": chat_id})
 
 
 # ─────────────────────── Queries & Retrieval ────────────────────── #
 # * Functions to fetch warning data from the database
 # * Includes counting, listing, and retrieving user warnings
+
 
 async def warn_count(user_id: int, chat_id: int) -> int:
     """
@@ -67,7 +72,7 @@ async def clear_warns(user_id: int, chat_id: int) -> int:
     return r.deleted_count
 
 
-async def get_warns(user_id: int, chat_id: int) -> list[dict]:
+async def get_warns(user_id: int, chat_id: int) -> list[WarnDoc]:
     """
     Return all warn documents for a user in a chat, oldest first.
     * Sorts results by timestamp ascending to maintain chronological order

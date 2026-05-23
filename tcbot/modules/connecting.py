@@ -15,7 +15,8 @@ from telegram.ext import (
     MessageHandler,
 )
 
-from tcbot import cfg, database as db
+from tcbot import cfg
+from tcbot import database as db
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.workflows.connected_flow import connection
 from tcbot.utils.prefixes import build_prefixed_filters
@@ -29,13 +30,10 @@ __module_name__ = "Connect"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
     "<code>/tcconnect</code> (alias: <code>/tccon</code>)\n\n"
-
     "<b>Who can use it</b>\n"
     "Group admins and creators only (checked per-group).\n\n"
-
     "<b>Where to use it</b>\n"
     f"Inside the group you want to connect to {cfg.community_name}.\n\n"
-
     "<b>What it does</b>\n"
     f"Connects your group to the {cfg.community_name} federation. Once connected:\n"
     "- Federation bans are automatically enforced - any currently banned user in your group "
@@ -48,13 +46,13 @@ __help_text__ = (
     "wait for TC Staff to process the existing one.\n\n"
     "When the bot is first added to a group, it automatically prompts the group owner to "
     "connect - so you can also just add the bot and follow that prompt.\n\n"
-
     "<b>Example</b>\n"
     "Make the bot a group admin, then run <code>/tcconnect</code> inside the group."
 )
 
 
 # ───────────── Command to Connect a Group </tcconnect> ──────────── #
+
 
 @decorators.ratelimiter(limit=3, period=60)
 @decorators.log_execution
@@ -79,7 +77,9 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         db.groups_db.get_pending(chat.id),
     )
     if is_connected:
-        await update.effective_message.reply_text(connection.already_connected_message())
+        await update.effective_message.reply_text(
+            connection.already_connected_message()
+        )
         return
 
     if pending:
@@ -90,7 +90,8 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     try:
         bot_member = await ctx.bot.get_chat_member(chat.id, ctx.bot.id)
-    except Exception:
+    except Exception as exc:
+        log.debug("Could not verify bot permissions for %d: %s", chat.id, exc)
         await update.effective_message.reply_text("Could not verify bot permissions.")
         return
 
@@ -100,21 +101,22 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     # * complete_join returns None - reply can be sent in parallel
     await asyncio.gather(
-        connection.complete_join(chat.id, chat.title or "", user.id, user.first_name, ctx.bot),
+        connection.complete_join(
+            chat.id, chat.title or "", user.id, user.first_name, ctx.bot
+        ),
         update.effective_message.reply_text(connection.connected_message()),
     )
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #
 
-_CONNECT_CMDS = (
-    build_prefixed_filters("tcconnect") | build_prefixed_filters("tccon")
-)
+_CONNECT_CMDS = build_prefixed_filters("tcconnect") | build_prefixed_filters("tccon")
 
 __handlers__ = [
     ChatMemberHandler(connection.on_bot_added, ChatMemberHandler.MY_CHAT_MEMBER),
     MessageHandler(_CONNECT_CMDS, cmd_tcconnect),
-    CallbackQueryHandler(connection.on_join_decision, 
-                         pattern=rf"^({connection.join_callback}|{connection.cancel_callback})$",
+    CallbackQueryHandler(
+        connection.on_join_decision,
+        pattern=rf"^({connection.join_callback}|{connection.cancel_callback})$",
     ),
 ]

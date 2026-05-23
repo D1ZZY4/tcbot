@@ -23,6 +23,7 @@ __module_name__ = None
 
 # ────────────────────── Help Content Builder ────────────────────── #
 
+
 def _builder_help() -> dict[str, tuple[str, str]]:
     """Collect modules that expose ``__module_name__`` and ``__help_text__``.
 
@@ -31,7 +32,7 @@ def _builder_help() -> dict[str, tuple[str, str]]:
     content: dict[str, tuple[str, str]] = {}
     for mod_name in ALL_MODULES:
         try:
-            mod  = importlib.import_module(f"tcbot.modules.{mod_name}")
+            mod = importlib.import_module(f"tcbot.modules.{mod_name}")
             name = getattr(mod, "__module_name__", None)
             text = getattr(mod, "__help_text__", None)
             if name and text:
@@ -64,7 +65,7 @@ _MODULE_NAME_MAP: dict[str, str] = {}
 for _key, (_dname, _) in HELP_CONTENT.items():
     _module_slug = _key[5:]
     _MODULE_NAME_MAP[_module_slug.lower()] = _key
-    _MODULE_NAME_MAP[_dname.lower()]       = _key
+    _MODULE_NAME_MAP[_dname.lower()] = _key
 
 _HELP_INDEX_TEXT = (
     "<b>{botname} Help</b>\n"
@@ -74,6 +75,7 @@ _HELP_INDEX_TEXT = (
 
 
 # ──────────────────────── Shared Renderers ──────────────────────── #
+
 
 def _prefix_note() -> str:
     """Return an HTML footer listing every configured command prefix."""
@@ -126,6 +128,7 @@ async def _show_topic(q: CallbackQuery, menu_key: str, back_kb) -> None:
 
 # ──────────────────────── Command Handlers ──────────────────────── #
 
+
 @decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -140,10 +143,10 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         /help admins     → shows Admins module help
     """
     botname = ctx.bot.first_name
-    args    = parse_cmd_args(update.effective_message.text)
+    args = parse_cmd_args(update.effective_message.text)
 
     if args:
-        query    = " ".join(args).strip().lower()
+        query = " ".join(args).strip().lower()
         help_key = _MODULE_NAME_MAP.get(query)
 
         if help_key and help_key in HELP_CONTENT:
@@ -176,6 +179,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 # ──────────────────────── Callback Handlers ─────────────────────── #
+
 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
@@ -222,8 +226,8 @@ _HELP_CMDS = build_prefixed_filters("help")
 
 __handlers__ = [
     MessageHandler(_HELP_CMDS, cmd_help),
-    CallbackQueryHandler(on_help_menu,       pattern=r"^help_menu$"),
+    CallbackQueryHandler(on_help_menu, pattern=r"^help_menu$"),
     CallbackQueryHandler(on_help_menu_group, pattern=r"^help_menu_group$"),
-    CallbackQueryHandler(on_helpc_main,      pattern=r"^helpc_main$"),
-    CallbackQueryHandler(on_help_topic_any,  pattern=r"^(help|helpc)_\w+$"),
+    CallbackQueryHandler(on_helpc_main, pattern=r"^helpc_main$"),
+    CallbackQueryHandler(on_help_topic_any, pattern=r"^(help|helpc)_\w+$"),
 ]

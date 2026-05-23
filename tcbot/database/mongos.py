@@ -7,6 +7,7 @@ MongoDB connection manager - single client shared across the entire application
 * Provides collection access shortcuts and index management
 * Includes DNS patching for compatibility with restricted environments
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -15,7 +16,11 @@ import os
 import secrets
 import string
 
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection, AsyncIOMotorDatabase
+from motor.motor_asyncio import (
+    AsyncIOMotorClient,
+    AsyncIOMotorCollection,
+    AsyncIOMotorDatabase,
+)
 
 from tcbot import cfg
 
@@ -26,6 +31,7 @@ _RESOLV_CONF = "/etc/resolv.conf"
 # * Fixes DNS resolution issues on platforms without standard resolv.conf
 # * Required for Termux/Android and other restricted environments
 # * Enables mongodb+srv:// SRV records to work correctly
+
 
 def _patch_dns_if_needed() -> None:
     """
@@ -39,11 +45,13 @@ def _patch_dns_if_needed() -> None:
     if not os.path.exists(_RESOLV_CONF):
         try:
             import dns.resolver
+
             resolver = dns.resolver.Resolver(configure=False)
             resolver.nameservers = ["8.8.8.8", "8.8.4.4"]
             dns.resolver.default_resolver = resolver
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.getLogger(__name__).debug("DNS patch skipped: %s", exc)
+
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +63,7 @@ _ID_ALPHABET: str = string.ascii_lowercase + string.digits
 # ────────────────────────── ID Generator ────────────────────────── #
 # * Creates unique, URL-safe IDs for database records
 # * Uses cryptographically secure random number generation
+
 
 def make_short_id(length: int = 10) -> str:
     """
@@ -69,6 +78,7 @@ def make_short_id(length: int = 10) -> str:
 # ──────────────────────── Client Accessors ──────────────────────── #
 # * Safe accessors to get the database instance
 # * Prevents accidental use before connection is established
+
 
 def db() -> AsyncIOMotorDatabase:
     """
@@ -85,6 +95,7 @@ def db() -> AsyncIOMotorDatabase:
 # * Establishes the main MongoDB connection pool
 # * Configures all connection parameters for optimal performance
 # ! CRITICAL: Must be called before any database operations
+
 
 async def connect() -> None:
     """
@@ -119,6 +130,7 @@ async def connect() -> None:
 # * Improves query performance and enforces data uniqueness
 # * Safe to call multiple times - MongoDB ignores existing indexes
 
+
 async def ensure_indexes() -> None:
     """
     Create all critical collection indexes in parallel. No-op if they already exist.
@@ -146,6 +158,7 @@ async def ensure_indexes() -> None:
 # ─────────────────────── Collection Shortcut ────────────────────── #
 # * Convenience function to get a collection by name
 # * Wraps the db() accessor for cleaner code
+
 
 def col(name: str) -> AsyncIOMotorCollection:
     """

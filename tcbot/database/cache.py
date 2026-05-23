@@ -14,10 +14,14 @@ from __future__ import annotations
 
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, Generic, TypeVar, cast
+
+from tcbot.database.documents import GroupDoc
 
 # * Public sentinel - use ``val is CACHE_MISS`` to detect a cache miss.
 # * Distinct from None because None is a valid cache value (e.g. user has no role).
+T = TypeVar("T")
+
 CACHE_MISS: object = object()
 
 
@@ -25,7 +29,8 @@ CACHE_MISS: object = object()
 # * Core cache implementation with TTL (time-to-live) expiration
 # * Designed specifically for asyncio applications - no locks needed
 
-class TTLCache:
+
+class TTLCache(Generic[T]):
     """
     Single-process in-memory TTL cache for asyncio-based code.
     * All operations are synchronous - no locks needed because asyncio is cooperative and only one coroutine runs at a time on the event loop.
@@ -38,9 +43,9 @@ class TTLCache:
 
     def __init__(self, ttl: float) -> None:
         self._ttl: float = ttl
-        self._store: dict[Any, tuple[Any, float]] = {}
+        self._store: dict[Any, tuple[T, float]] = {}
 
-    def get(self, key: Any) -> Any:
+    def get(self, key: Any) -> T | object:
         """
         Return the cached value, or ``CACHE_MISS`` if absent or expired.
         * Automatically purges expired entries when accessed
@@ -55,7 +60,7 @@ class TTLCache:
             return CACHE_MISS
         return val
 
-    def put(self, key: Any, val: Any) -> None:
+    def put(self, key: Any, val: T) -> None:
         """
         Store *val* under *key* for ``ttl`` seconds.
         * Sets expiration timestamp based on the cache's TTL
@@ -82,8 +87,8 @@ class TTLCache:
     async def get_or_fetch(
         self,
         key: Any,
-        fetch: Callable[[], Awaitable[Any]],
-    ) -> Any:
+        fetch: Callable[[], Awaitable[T]],
+    ) -> T:
         """
         Return cached value, or call *fetch()*, cache the result, and return it.
         * Primary interface for most cache usage
@@ -92,7 +97,7 @@ class TTLCache:
         """
         val = self.get(key)
         if val is not CACHE_MISS:
-            return val
+            return cast(T, val)
         val = await fetch()
         self.put(key, val)
         return val
@@ -105,18 +110,18 @@ class TTLCache:
 
 # 60-second per-user effective-role cache (str | None per user_id)
 # Populated by roles_db.get_effective_role; invalidated on every role write
-effective_role_cache: TTLCache = TTLCache(ttl=60.0)
+effective_role_cache: TTLCache[int | None] = TTLCache(ttl=60.0)
 
 # 120-second per-chat connection cache (bool per chat_id)
 # Populated by groups_db.is_connected; invalidated on add/deactivate
-connected_cache: TTLCache = TTLCache(ttl=120.0)
+connected_cache: TTLCache[bool] = TTLCache(ttl=120.0)
 
 # 30-second whole-list active-groups cache (list[dict], single entry)
 # Populated by groups_db.active_groups; invalidated on add/deactivate
-active_groups_cache: TTLCache = TTLCache(ttl=30.0)
+active_groups_cache: TTLCache[list[GroupDoc]] = TTLCache(ttl=30.0)
 _ALL_GROUPS_KEY: str = "__all__"
 
 # 300-second owner-ID cache (single int entry - ownership transfers are very rare)
 # Populated by admins_db.get_owner_id; invalidated on set_owner / ensure_initial_owner
-owner_id_cache: TTLCache = TTLCache(ttl=300.0)
+owner_id_cache: TTLCache[int | None] = TTLCache(ttl=300.0)
 _OWNER_KEY: str = "__owner__"

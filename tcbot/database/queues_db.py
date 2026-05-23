@@ -10,12 +10,13 @@ Promotion request queue - manages promotion request queue for staff applications
 
 from __future__ import annotations
 
+from tcbot.database.documents import PromotionRequestDoc
 from tcbot.database.mongos import col, make_short_id
 from tcbot.utils.timedate_format import utc_now
 
-
 # ─────────────────────── Collection Helpers ─────────────────────── #
 # * Internal collection access and ID generation utilities
+
 
 def _requests():
     """Get the promotion_requests collection reference from MongoDB"""
@@ -31,6 +32,7 @@ def _new_request_id() -> str:
 # * Functions that create or modify promotion request records
 # * Manages the queue's state for pending and resolved requests
 
+
 async def enqueue(
     user_id: int,
     username: str | None,
@@ -44,17 +46,19 @@ async def enqueue(
     * Returns the generated request_id for future reference
     """
     request_id = _new_request_id()
-    await _requests().insert_one({
-        "request_id": request_id,
-        "target_id": user_id,
-        "username": username,
-        "first_name": first_name,
-        "promoted_by": promoted_by,
-        "status": "pending",
-        "requested_date": utc_now(),
-        "resolved_date": None,
-        "resolved_by": None,
-    })
+    await _requests().insert_one(
+        {
+            "request_id": request_id,
+            "target_id": user_id,
+            "username": username,
+            "first_name": first_name,
+            "promoted_by": promoted_by,
+            "status": "pending",
+            "requested_date": utc_now(),
+            "resolved_date": None,
+            "resolved_by": None,
+        }
+    )
     return request_id
 
 
@@ -62,7 +66,8 @@ async def enqueue(
 # * Functions to retrieve promotion request data from the database
 # * Includes lookups by ID, user, and counts of pending requests
 
-async def get_request_by_id(request_id: str) -> dict | None:
+
+async def get_request_by_id(request_id: str) -> PromotionRequestDoc | None:
     """
     Get a promotion request by its unique request ID
     * Returns the full request document including all metadata
@@ -70,7 +75,7 @@ async def get_request_by_id(request_id: str) -> dict | None:
     return await _requests().find_one({"request_id": request_id})
 
 
-async def get_request(user_id: int) -> dict | None:
+async def get_request(user_id: int) -> PromotionRequestDoc | None:
     """
     Get the pending request for a specific user
     * Only returns requests that are still in "pending" status
@@ -78,7 +83,7 @@ async def get_request(user_id: int) -> dict | None:
     return await _requests().find_one({"target_id": user_id, "status": "pending"})
 
 
-async def all_pending() -> list[dict]:
+async def all_pending() -> list[PromotionRequestDoc]:
     """
     Get all currently pending promotion requests
     * Returns full documents for all unresolved requests
@@ -94,11 +99,13 @@ async def resolve(request_id: str, status: str, resolved_by: int) -> None:
     """
     await _requests().update_one(
         {"request_id": request_id},
-        {"$set": {
-            "status": status,
-            "resolved_date": utc_now(),
-            "resolved_by": resolved_by,
-        }},
+        {
+            "$set": {
+                "status": status,
+                "resolved_date": utc_now(),
+                "resolved_by": resolved_by,
+            }
+        },
     )
 
 

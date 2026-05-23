@@ -12,26 +12,28 @@ Role management system - handles custom staff roles like developer and tester
 from __future__ import annotations
 
 import asyncio
+from typing import cast
 
 from tcbot.database.admins_db import is_admin, is_owner
 from tcbot.database.cache import CACHE_MISS, effective_role_cache
+from tcbot.database.documents import RoleDoc, RoleRefDoc
 from tcbot.database.mongos import col
 from tcbot.utils.timedate_format import utc_now
 
 VALID_ROLES: frozenset[str] = frozenset({"developer", "tester"})
 
 ROLE_RANK: dict[str, int] = {
-    "founder":   4,
-    "admin":     3,
+    "founder": 4,
+    "admin": 3,
     "developer": 2,
-    "tester":    1,
+    "tester": 1,
 }
 
 ROLE_LABEL: dict[str, str] = {
-    "founder":   "Founder",
-    "admin":     "Admin",
+    "founder": "Founder",
+    "admin": "Admin",
     "developer": "Developer",
-    "tester":    "Tester",
+    "tester": "Tester",
 }
 
 
@@ -53,6 +55,7 @@ def _col():
 # * Create, read, update, delete operations for role records
 # * All write operations automatically invalidate the user's cache
 
+
 async def set_role(user_id: int, role: str, assigned_by: int) -> None:
     """
     Assign a custom role to a user
@@ -62,12 +65,14 @@ async def set_role(user_id: int, role: str, assigned_by: int) -> None:
     """
     await _col().update_one(
         {"user_id": user_id},
-        {"$set": {
-            "user_id":     user_id,
-            "role":        role,
-            "assigned_by": assigned_by,
-            "assigned_at": utc_now(),
-        }},
+        {
+            "$set": {
+                "user_id": user_id,
+                "role": role,
+                "assigned_by": assigned_by,
+                "assigned_at": utc_now(),
+            }
+        },
         upsert=True,
     )
     effective_role_cache.invalidate(user_id)
@@ -94,7 +99,7 @@ async def get_role(user_id: int) -> str | None:
     return doc["role"] if doc else None
 
 
-async def all_by_role(role: str) -> list[dict]:
+async def all_by_role(role: str) -> list[RoleRefDoc]:
     """
     Get all users with a specific custom role
     * Returns only user IDs for efficient data transfer
@@ -102,7 +107,7 @@ async def all_by_role(role: str) -> list[dict]:
     return await _col().find({"role": role}, {"_id": 0, "user_id": 1}).to_list(None)
 
 
-async def all_roles() -> list[dict]:
+async def all_roles() -> list[RoleDoc]:
     """
     Get all custom role assignments in the database
     * Returns full documents for all users with custom roles
@@ -113,6 +118,7 @@ async def all_roles() -> list[dict]:
 # ───────────────────────── Role Resolution ──────────────────────── #
 # * Functions to resolve effective permissions and role hierarchy
 # * Core permission system that powers all staff-only command checks
+
 
 async def can_act_on(executor_id: int, target_id: int) -> bool:
     """
@@ -138,7 +144,7 @@ async def get_effective_role(user_id: int) -> str | None:
     """
     cached = effective_role_cache.get(user_id)
     if cached is not CACHE_MISS:
-        return cached  # type: ignore[return-value]
+        return cast(str | None, cached)
 
     owner, admin, role = await asyncio.gather(
         is_owner(user_id),

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import html
 
+
 def chat_id_to_link_id(chat_id: int) -> str:
     """Strip the -100 supergroup prefix for use in t.me/c/ URLs."""
     s = str(chat_id)
@@ -33,6 +34,7 @@ def appeal_deep_link(bot_username: str, ban_id: str) -> str:
 
 
 # ── HTML helpers ───────────────────────────────────────────────────────────
+
 
 def user_link(user_id: int, name: str) -> str:
     """HTML mention link. Falls back to str(user_id) when name is blank."""

@@ -4,10 +4,6 @@
 
 from __future__ import annotations
 
-from . import dispatch
-from . import error_reporter
-from . import logger
-from . import prefixes
-from . import timedate_format
+from . import dispatch, error_reporter, logger, prefixes, timedate_format
 
 __all__ = ["dispatch", "error_reporter", "logger", "prefixes", "timedate_format"]

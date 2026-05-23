@@ -21,7 +21,8 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from tcbot import cfg, database as db
+from tcbot import cfg
+from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.formatter import code, mention
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
@@ -31,10 +32,11 @@ log = logging.getLogger(__name__)
 
 # * Per-action BuildReason and BuildProof instances — imported by kicking.py
 reason = BuildReason("kick")
-proof  = BuildProof("kick")
+proof = BuildProof("kick")
 
 
 # ── Kick executor ───────────────────────────────────────────────────────────
+
 
 async def execute_kick(
     update: Update,
@@ -45,18 +47,24 @@ async def execute_kick(
     proof_desc: str | None = None,
 ) -> None:
     """Kick (ban then immediately unban) a user from the current group."""
-    msg      = update.effective_message
-    chat_id  = update.effective_chat.id
+    msg = update.effective_message
+    chat_id = update.effective_chat.id
     admin_id = update.effective_user.id
 
     try:
         await ctx.bot.ban_chat_member(chat_id, target_id)
-        proof_line  = f"\nProof: {proof_desc}" if proof_desc else ""
-        chat_title  = update.effective_chat.title or str(chat_id)
+        proof_line = f"\nProof: {proof_desc}" if proof_desc else ""
+        chat_title = update.effective_chat.title or str(chat_id)
         admin_fname = update.effective_user.first_name
-        lc, lt      = cfg.logs
-        log_text    = parse_logmsg.kick_log(
-            target_id, target_name, admin_id, admin_fname, reason_text, chat_id, chat_title,
+        lc, lt = cfg.logs
+        log_text = parse_logmsg.kick_log(
+            target_id,
+            target_name,
+            admin_id,
+            admin_fname,
+            reason_text,
+            chat_id,
+            chat_title,
         )
         # * unban + log_kick + federation log + reply all run in parallel
         results = await asyncio.gather(
@@ -83,17 +91,21 @@ async def execute_kick(
 
 # ── Executor adapter ────────────────────────────────────────────────────────
 
+
 async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Pop kick data from user_data and call execute_kick."""
-    target_id   = ctx.user_data.pop("kick_target_id", 0)
+    target_id = ctx.user_data.pop("kick_target_id", 0)
     target_name = ctx.user_data.pop("kick_target_name", "")
     reason_text = ctx.user_data.pop("kick_reason", "No reason provided")
-    proof_desc  = ctx.user_data.pop("kick_proof_desc", None)
+    proof_desc = ctx.user_data.pop("kick_proof_desc", None)
     ctx.user_data.pop("kick_extra_info", None)
-    await execute_kick(update, ctx, target_id, target_name, reason_text, proof_desc=proof_desc)
+    await execute_kick(
+        update, ctx, target_id, target_name, reason_text, proof_desc=proof_desc
+    )
 
 
 # ── ConversationHandler factory ─────────────────────────────────────────────
+
 
 def kick_conversation(entry_fn, entry_filter) -> object:
     """Return the kick ConversationHandler via the central reason_flow factory."""

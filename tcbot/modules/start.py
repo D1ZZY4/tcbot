@@ -12,7 +12,8 @@ import logging
 from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
-from tcbot import cfg, database as db
+from tcbot import cfg
+from tcbot import database as db
 from tcbot.modules.about import __about_msg__
 from tcbot.modules.groups import _render
 from tcbot.modules.helper import decorators, keyboards
@@ -40,15 +41,16 @@ _GROUP_START_TEXT = (
 
 # ──────────────────────── Command Handlers ──────────────────────── #
 
+
 @decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    msg      = update.effective_message
-    chat     = update.effective_chat
-    text     = (msg.text or "").strip()
-    parts    = text.split(None, 1)
-    arg      = parts[1].strip() if len(parts) > 1 else ""
-    botname  = ctx.bot.first_name
+    msg = update.effective_message
+    chat = update.effective_chat
+    text = (msg.text or "").strip()
+    parts = text.split(None, 1)
+    arg = parts[1].strip() if len(parts) > 1 else ""
+    botname = ctx.bot.first_name
 
     # * Group / supergroup context - send a minimal message with PM link
     if chat.type in ("group", "supergroup", "forum"):
@@ -63,7 +65,8 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * PM context below
     if arg == "about":
         await msg.reply_text(
-            __about_msg__, parse_mode="HTML",
+            __about_msg__,
+            parse_mode="HTML",
             reply_markup=keyboards.back_to_start_kb(),
         )
         return
@@ -77,6 +80,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 # ──────────────────────── Callback Handlers ─────────────────────── #
+
 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
@@ -112,7 +116,8 @@ async def _show_groups(q: CallbackQuery, detailed: bool) -> None:
         )
         return
     await q.edit_message_text(
-        _render(groups, detailed), parse_mode="HTML",
+        _render(groups, detailed),
+        parse_mode="HTML",
         reply_markup=_groups_menu_kb(detailed),
     )
 
@@ -125,7 +130,9 @@ async def on_menu_groups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
-async def on_menu_groups_details(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_menu_groups_details(
+    update: Update, ctx: ContextTypes.DEFAULT_TYPE
+) -> None:
     await _show_groups(update.callback_query, True)
 
 
@@ -141,8 +148,8 @@ _START_CMDS = build_prefixed_filters("start")
 
 __handlers__ = [
     MessageHandler(_START_CMDS, cmd_start),
-    CallbackQueryHandler(on_back_to_start,       pattern=r"^back_to_start$"),
-    CallbackQueryHandler(on_menu_groups,         pattern=r"^menu_groups$"),
+    CallbackQueryHandler(on_back_to_start, pattern=r"^back_to_start$"),
+    CallbackQueryHandler(on_menu_groups, pattern=r"^menu_groups$"),
     CallbackQueryHandler(on_menu_groups_details, pattern=r"^menu_groups_details$"),
-    CallbackQueryHandler(on_menu_groups_simple,  pattern=r"^menu_groups_simple$"),
+    CallbackQueryHandler(on_menu_groups_simple, pattern=r"^menu_groups_simple$"),
 ]

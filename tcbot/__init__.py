@@ -11,13 +11,14 @@ import logging
 import os
 import sys
 from dataclasses import dataclass
-from dotenv import load_dotenv, find_dotenv
 
+from dotenv import find_dotenv, load_dotenv
 
 load_dotenv(find_dotenv("config.env"))
 
 
 # ───────────────────────── Config Parsing ───────────────────────── #
+
 
 def parse_list(raw: str) -> list[str]:
     """Safely evaluate a stringified list from env; fall back to raw comma-separated strings."""
@@ -27,8 +28,10 @@ def parse_list(raw: str) -> list[str]:
         parsed = ast.literal_eval(raw)
         if isinstance(parsed, list):
             return [str(item).strip() for item in parsed]
-    except (ValueError, SyntaxError):
-        pass
+    except (ValueError, SyntaxError) as exc:
+        logging.getLogger(__name__).debug(
+            "parse_list falling back to CSV parsing: %s", exc
+        )
     items = raw.strip("[]").split(",")
     return [item.strip().strip("'\"") for item in items if item.strip()]
 
@@ -80,6 +83,7 @@ def _parse_log_level(raw: str) -> int:
 
 
 # ─────────────────── Immutable Config Dataclass ─────────────────── #
+
 
 @dataclass(frozen=True)
 class Configs:

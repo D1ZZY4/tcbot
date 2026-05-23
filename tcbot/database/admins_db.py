@@ -12,14 +12,21 @@ Owners and admins collection helpers - manages bot staff permissions
 from __future__ import annotations
 
 import asyncio
+from typing import cast
 
-from tcbot.database.cache import CACHE_MISS, _OWNER_KEY, effective_role_cache, owner_id_cache
+from tcbot.database.cache import (
+    _OWNER_KEY,
+    CACHE_MISS,
+    effective_role_cache,
+    owner_id_cache,
+)
+from tcbot.database.documents import AdminDoc
 from tcbot.database.mongos import col
 from tcbot.utils.timedate_format import utc_now
 
-
 # ─────────────────────── Collection Helpers ─────────────────────── #
 # * Internal collection accessors for owners and admins collections
+
 
 def _owners():
     return col("tc_owners")
@@ -33,6 +40,7 @@ def _admins():
 # * Retrieve owner status and owner ID from database
 # * All functions are async to prevent blocking on I/O operations
 
+
 async def get_owner_id() -> int | None:
     """
     Get the current bot owner's user ID from cache or database
@@ -42,8 +50,8 @@ async def get_owner_id() -> int | None:
     """
     cached = owner_id_cache.get(_OWNER_KEY)
     if cached is not CACHE_MISS:
-        return cached  # type: ignore[return-value]
-    doc = await _owners().find_one({}, {"_id": 0, "user_id": 1})
+        return cast(int | None, cached)
+    doc: AdminDoc | None = await _owners().find_one({}, {"_id": 0, "user_id": 1})
     result = doc["user_id"] if doc else None
     owner_id_cache.put(_OWNER_KEY, result)
     return result
@@ -67,6 +75,7 @@ async def is_admin(user_id: int) -> bool:
 # * Combined permission checks that run multiple DB queries in parallel
 # * Uses asyncio.gather() to optimize latency of parallel checks
 
+
 async def is_staff(user_id: int) -> bool:
     """
     True if user is owner or admin - both checks run in parallel.
@@ -78,6 +87,7 @@ async def is_staff(user_id: int) -> bool:
 # ───────────────────────── Owner Mutations ──────────────────────── #
 # * Modify owner collection (only used for initial setup and ownership transfer)
 # ! CRITICAL: These functions clear cache entries that depend on ownership
+
 
 async def ensure_initial_owner(initial_id: int) -> None:
     """
@@ -106,6 +116,7 @@ async def set_owner(user_id: int) -> None:
 # * Add, remove, and manage admin users in the database
 # * Automatically invalidates cache for affected users after changes
 
+
 async def add_admin(user_id: int, promoted_by: int) -> None:
     """
     Add a new admin to the database if not already present
@@ -115,11 +126,13 @@ async def add_admin(user_id: int, promoted_by: int) -> None:
     """
     await _admins().update_one(
         {"user_id": user_id},
-        {"$setOnInsert": {
-            "user_id":       user_id,
-            "promoted_by":   promoted_by,
-            "promoted_date": utc_now(),
-        }},
+        {
+            "$setOnInsert": {
+                "user_id": user_id,
+                "promoted_by": promoted_by,
+                "promoted_date": utc_now(),
+            }
+        },
         upsert=True,
     )
     effective_role_cache.invalidate(user_id)
@@ -140,7 +153,8 @@ async def remove_admin(user_id: int) -> bool:
 # * Retrieve list of all admins and admin count from database
 # * Used for staff management and audit logging
 
-async def all_admins() -> list[dict]:
+
+async def all_admins() -> list[AdminDoc]:
     """
     Get list of all admins with their user IDs
     """

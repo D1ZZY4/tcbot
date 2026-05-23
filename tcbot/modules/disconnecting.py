@@ -10,8 +10,8 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes, MessageHandler
 
-from tcbot import database as db
 from tcbot import cfg
+from tcbot import database as db
 from tcbot.modules.helper import decorators, parse_logmsg
 from tcbot.modules.helper.formatter import code
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
@@ -26,22 +26,18 @@ __help_text__ = (
     "<b>Commands & Aliases</b>\n"
     "<code>/tcdisconnect</code> (alias: <code>/tcdiscon</code>)\n"
     "<code>/rmtc</code>\n\n"
-
     "<b>Who can use it</b>\n"
     "<code>/tcdisconnect</code>: the group owner or TC Staff (Admin and above).\n"
     "<code>/rmtc</code>: TC Staff only.\n\n"
-
     "<b>Where to use it</b>\n"
     "<code>/tcdisconnect</code>: inside the group you want to disconnect.\n"
     "<code>/rmtc</code>: exec group or bot PM (works remotely by chat ID).\n\n"
-
     "<b>What it does</b>\n"
     f"<code>/tcdisconnect</code>: removes the current group from {cfg.community_name}, "
     "posts a disconnection log entry, and causes the bot to leave the group.\n\n"
     "<code>/rmtc</code>: force-removes a group from the federation by chat ID. Use this for "
     "groups the bot has already been kicked from, or to remove a group remotely without being "
     "inside it. A log entry is still posted.\n\n"
-
     "<b>Examples</b>\n"
     "Run <code>/tcdisconnect</code> inside the group to disconnect it.\n"
     "<code>/rmtc -1001234567890</code> - force-remove a group by chat ID."
@@ -49,6 +45,7 @@ __help_text__ = (
 
 
 # ────────── Command to Disconnect a Group </tcdisconnect> ───────── #
+
 
 @decorators.ratelimiter(limit=3, period=60)
 @decorators.log_execution
@@ -101,6 +98,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
 # ────────── Command to Force-Remove a Group </rmtc> ───────── #
 
+
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.staff_only
 @decorators.log_execution
@@ -119,7 +117,8 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             ctx.bot.send_message(
                 lc,
                 parse_logmsg.group_disconnected_log(
-                    chat_id, str(chat_id),
+                    chat_id,
+                    str(chat_id),
                     update.effective_user.id,
                     update.effective_user.first_name,
                 ),
@@ -139,11 +138,13 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 # ──────────────────────────── Handlers ──────────────────────────── #
 
-_DISCONNECT_CMDS = build_prefixed_filters("tcdisconnect") | build_prefixed_filters("tcdiscon")
-_RMTC_CMDS       = build_prefixed_filters("rmtc")
+_DISCONNECT_CMDS = build_prefixed_filters("tcdisconnect") | build_prefixed_filters(
+    "tcdiscon"
+)
+_RMTC_CMDS = build_prefixed_filters("rmtc")
 
 
 __handlers__ = [
-    MessageHandler(_DISCONNECT_CMDS,    cmd_tcdisconnect),
-    MessageHandler(_RMTC_CMDS,          cmd_rmtc),
+    MessageHandler(_DISCONNECT_CMDS, cmd_tcdisconnect),
+    MessageHandler(_RMTC_CMDS, cmd_rmtc),
 ]

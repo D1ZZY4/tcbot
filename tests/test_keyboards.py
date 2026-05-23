@@ -12,8 +12,8 @@ from telegram import InlineKeyboardMarkup
 
 from tcbot.modules.helper import keyboards
 
-
 # ── Helper ─────────────────────────────────────────────────────────────
+
 
 def _rows(kb: InlineKeyboardMarkup) -> list[list[dict]]:
     return [
@@ -23,6 +23,7 @@ def _rows(kb: InlineKeyboardMarkup) -> list[list[dict]]:
 
 
 # ── Start / main menu ──────────────────────────────────────────────────────
+
 
 def test_main_menu_kb_has_three_rows() -> None:
     rows = _rows(keyboards.main_menu_kb())
@@ -42,6 +43,7 @@ def test_back_to_start_kb_single_back_button() -> None:
 
 # ── Appeal flow ─────────────────────────────────────────────────────────────
 
+
 def test_appeal_review_kb_callback_data_includes_ban_id() -> None:
     rows = _rows(keyboards.appeal_review_kb("ban_42_1714"))
     assert rows[0][0]["cb"] == "appeal_approve_ban_42_1714"
@@ -55,6 +57,7 @@ def test_appeal_cancel_kb_is_single_cancel_button() -> None:
 
 # ── Promo decision ───────────────────────────────────────────────────────────
 
+
 def test_promo_decision_kb_uses_colon_separator() -> None:
     rows = _rows(keyboards.promo_decision_kb("req-uuid"))
     assert rows[0][0]["cb"] == "promo_approve:req-uuid"
@@ -62,6 +65,7 @@ def test_promo_decision_kb_uses_colon_separator() -> None:
 
 
 # ── Ban log keyboards (positional args, not keyword-only) ────────────────────
+
 
 def test_ban_log_new_has_proof_and_appeal_rows() -> None:
     rows = _rows(
@@ -91,6 +95,7 @@ def test_ban_log_update_has_previous_proof_button() -> None:
 
 
 # ── Help menus ───────────────────────────────────────────────────────────────
+
 
 def test_help_modules_optional_back_to_start() -> None:
     sample = [[("A", "help_a"), ("B", "help_b")]]

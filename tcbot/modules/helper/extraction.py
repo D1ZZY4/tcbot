@@ -8,16 +8,39 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from typing import Protocol
 
 from telegram import Bot, Message, Update, User
 from telegram.error import TelegramError
 
 from tcbot.database import users_db
+from tcbot.database.documents import UserDoc
 
 log = logging.getLogger(__name__)
 
 
+class _ArgsContext(Protocol):
+    args: list[str]
+
+
+class _ReplyMessage(Protocol):
+    from_user: User | None
+
+
+class _ReasonMessage(Protocol):
+    reply_to_message: _ReplyMessage | None
+
+
+class _ReasonUpdate(Protocol):
+    effective_message: _ReasonMessage | None
+
+
+class _BotContext(Protocol):
+    bot: Bot
+
+
 # ── Target resolution ──────────────────────────────────────────────────────
+
 
 @dataclass
 class ResolvedTarget:
@@ -33,7 +56,7 @@ class ResolvedTarget:
             self.first_name = str(self.id)
 
 
-def get_reason(context: object, update: object) -> str:
+def get_reason(context: _ArgsContext, update: _ReasonUpdate) -> str:
     """Extract the ban/action reason from command arguments.
 
     When the command was used as a reply, *all* args are the reason.
@@ -75,8 +98,8 @@ async def extract_target(
                 try:
                     chat = await bot.get_chat(uid)
                     return chat.id, chat.first_name or str(uid)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log.debug("Target lookup failed for %s: %s", arg, exc)
             return uid, f"User {uid}"
         if bot and arg:
             try:
@@ -98,17 +121,18 @@ async def extract_target(
         text = msg.text or ""
         for ent in msg.entities or []:
             if ent.type == "mention":
-                uname = text[ent.offset + 1: ent.offset + ent.length]
+                uname = text[ent.offset + 1 : ent.offset + ent.length]
                 try:
                     chat = await bot.get_chat(f"@{uname}")
                     return chat.id, chat.first_name or uname
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log.debug("Mention lookup failed for @%s: %s", uname, exc)
 
     return None, None
 
 
 # ── Identity resolution ────────────────────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class UserIdentity:
@@ -128,14 +152,14 @@ class UserIdentity:
 class _MembersRepo:
     """Thin adapter over the member-cache collection."""
 
-    async def find_latest_for_user(self, user_id: int) -> dict | None:
+    async def find_latest_for_user(self, user_id: int) -> UserDoc | None:
         return await users_db.get_user(user_id)
 
 
 members_repo = _MembersRepo()
 
 
-async def resolve_identity(ctx: object, user_id: int) -> UserIdentity:
+async def resolve_identity(ctx: _BotContext, user_id: int) -> UserIdentity:
     """Resolve a user's display identity.
 
     Resolution order:
@@ -144,7 +168,7 @@ async def resolve_identity(ctx: object, user_id: int) -> UserIdentity:
     3. Bare user_id string – ultimate fallback.
     """
     try:
-        chat = await ctx.bot.get_chat(user_id)  # type: ignore[attr-defined]
+        chat = await ctx.bot.get_chat(user_id)
         first = getattr(chat, "first_name", None)
         title = getattr(chat, "title", None)
         uname = getattr(chat, "username", None)

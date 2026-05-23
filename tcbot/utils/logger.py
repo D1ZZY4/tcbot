@@ -19,12 +19,12 @@ import logging
 from tcbot import cfg
 from tcbot.utils.timedate_format import utc_now
 
-
 # ────────────────────── Console Log Formatter ───────────────────── #
 # * Color-coded bracket format: [HH:MM] [DD/MM/YY] [LEVEL] [module:line] → message
 # * Level and message color match per severity — no background badges
 # * Module name: last segment only (e.g. ban_flow, not tcbot.modules.helper.workflows.ban_flow)
 # * All timestamps in UTC
+
 
 class BotLogFormatter(logging.Formatter):
     """
@@ -35,44 +35,45 @@ class BotLogFormatter(logging.Formatter):
     * Timestamps in UTC
     """
 
-    _R  = "\033[0m"
-    _BR = "\033[38;5;236m"   # bracket color — dark gray
-    _TM = "\033[38;5;242m"   # time
-    _DT = "\033[38;5;238m"   # date
-    _MD = "\033[38;5;75m"    # module:line
-    _AW = "\033[38;5;242m"   # arrow →
-    _MS = "\033[38;5;253m"   # default message
+    _R = "\033[0m"
+    _BR = "\033[38;5;236m"  # bracket color — dark gray
+    _TM = "\033[38;5;242m"  # time
+    _DT = "\033[38;5;238m"  # date
+    _MD = "\033[38;5;75m"  # module:line
+    _AW = "\033[38;5;242m"  # arrow →
+    _MS = "\033[38;5;253m"  # default message
 
     _LEVELS = {
-        logging.DEBUG:    ("\033[38;5;246m", "DEBUG"),
-        logging.INFO:     ("\033[38;5;114m", "INFO"),
-        logging.WARNING:  ("\033[38;5;178m", "WARN"),
-        logging.ERROR:    ("\033[38;5;203m", "ERROR"),
+        logging.DEBUG: ("\033[38;5;246m", "DEBUG"),
+        logging.INFO: ("\033[38;5;114m", "INFO"),
+        logging.WARNING: ("\033[38;5;178m", "WARN"),
+        logging.ERROR: ("\033[38;5;203m", "ERROR"),
         logging.CRITICAL: ("\033[38;5;177m", "CRIT"),
     }
     _COLORED_MSG = {logging.WARNING, logging.ERROR, logging.CRITICAL}
 
     def __init__(self, project_name: str) -> None:
         super().__init__()
-        self.project_name = project_name
 
     def _bracket(self, color: str, text: str) -> str:
         return f"{self._BR}[{self._R}{color}{text}{self._R}{self._BR}]{self._R}"
 
     def format(self, record: logging.LogRecord) -> str:
-        now             = utc_now()
+        now = utc_now()
         level_color, level_label = self._LEVELS.get(record.levelno, ("\033[0m", "???"))
-        module          = record.name.split(".")[-1]
-        msg_color       = level_color if record.levelno in self._COLORED_MSG else self._MS
+        module = record.name.split(".")[-1]
+        msg_color = level_color if record.levelno in self._COLORED_MSG else self._MS
 
-        time_part   = self._bracket(self._TM, now.strftime("%H:%M"))
-        date_part   = self._bracket(self._DT, now.strftime("%d/%m/%y"))
-        level_part  = self._bracket(level_color, level_label)
+        time_part = self._bracket(self._TM, now.strftime("%H:%M"))
+        date_part = self._bracket(self._DT, now.strftime("%d/%m/%y"))
+        level_part = self._bracket(level_color, level_label)
         module_part = self._bracket(self._MD, f"{module}:{record.lineno}")
-        arrow_part  = f"{self._AW} → {self._R}"
-        msg_part    = f"{msg_color}{record.getMessage()}{self._R}"
+        arrow_part = f"{self._AW} → {self._R}"
+        msg_part = f"{msg_color}{record.getMessage()}{self._R}"
 
-        return f"{time_part} {date_part} {level_part} {module_part}{arrow_part}{msg_part}"
+        return (
+            f"{time_part} {date_part} {level_part} {module_part}{arrow_part}{msg_part}"
+        )
 
 
 # ─────────────────── Telegram Error Log Handler ─────────────────── #
@@ -107,11 +108,13 @@ class TelegramErrorHandler(logging.Handler):
         except RuntimeError:
             return
         from tcbot.utils import error_reporter
+
         loop.create_task(error_reporter.report_record(record))
 
 
 # ─────────────────────── Logging Setup Entry ────────────────────── #
 # * Called once at bot startup — initializes all handlers and log levels
+
 
 def setup(level: int = logging.INFO) -> None:
     """

@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     CallbackQueryHandler,
@@ -20,8 +21,8 @@ from telegram.ext import (
     filters,
 )
 
-from tcbot import database as db
 from tcbot import cfg
+from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.parse_link import message_link
@@ -59,9 +60,9 @@ class BuildAppeal:
         cancel_label: str = "Cancel",
         cancel_callback: str = "cancel_appeal",
     ) -> None:
-        self.community_name  = community_name
-        self.log_channel     = log_channel
-        self.cancel_label    = cancel_label
+        self.community_name = community_name
+        self.log_channel = log_channel
+        self.cancel_label = cancel_label
         self.cancel_callback = cancel_callback
 
     # ── Keyboard and text factories ────────────────────────────────────────
@@ -86,16 +87,28 @@ class BuildAppeal:
     def cancel_keyboard(self) -> InlineKeyboardMarkup:
         """Single-button keyboard attached to the instruction prompt."""
         return InlineKeyboardMarkup(
-            [[InlineKeyboardButton(self.cancel_label, callback_data=self.cancel_callback)]]
+            [
+                [
+                    InlineKeyboardButton(
+                        self.cancel_label, callback_data=self.cancel_callback
+                    )
+                ]
+            ]
         )
 
     def review_keyboard(self, ban_id: str) -> InlineKeyboardMarkup:
         """Approve / Reject keyboard attached to the staff review card."""
         return InlineKeyboardMarkup(
-            [[
-                InlineKeyboardButton("Approve", callback_data=f"appeal_approve_{ban_id}"),
-                InlineKeyboardButton("Reject",  callback_data=f"appeal_reject_{ban_id}"),
-            ]]
+            [
+                [
+                    InlineKeyboardButton(
+                        "Approve", callback_data=f"appeal_approve_{ban_id}"
+                    ),
+                    InlineKeyboardButton(
+                        "Reject", callback_data=f"appeal_reject_{ban_id}"
+                    ),
+                ]
+            ]
         )
 
     # ── Private helpers ────────────────────────────────────────────────────
@@ -111,18 +124,22 @@ class BuildAppeal:
         """Edit the existing appeal log message, or post a new one as fallback."""
         if msg_id:
             try:
-                await bot.edit_message_text(text, chat_id=lc, message_id=msg_id, parse_mode="HTML")
+                await bot.edit_message_text(
+                    text, chat_id=lc, message_id=msg_id, parse_mode="HTML"
+                )
                 return
             except Exception as exc:
                 log.warning("Could not edit appeal submitted log: %s", exc)
         try:
             await bot.send_message(lc, text, parse_mode="HTML", message_thread_id=lt)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Could not send appeal submitted log: %s", exc)
 
     # ── ConversationHandler step methods ──────────────────────────────────
 
-    async def _start(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, ban_id: str) -> int:
+    async def _start(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, ban_id: str
+    ) -> int:
         """Validate the deep-link and open the WAITING_APPEAL state."""
         msg = update.effective_message
         uid = update.effective_user.id
@@ -144,7 +161,7 @@ class BuildAppeal:
             await msg.reply_text("You already have a pending appeal under review.")
             return ConversationHandler.END
 
-        ctx.user_data["appeal_ban_id"]     = ban_id
+        ctx.user_data["appeal_ban_id"] = ban_id
         ctx.user_data["appeal_log_msg_id"] = ban.get("log_message_id", 0)
 
         instr = await msg.reply_text(
@@ -159,7 +176,7 @@ class BuildAppeal:
     async def _on_entry(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Entry-point handler — parses the /start appeal_<id> deep link."""
         text = (update.effective_message.text or "").strip()
-        m    = _ID_RE.match(text)
+        m = _ID_RE.match(text)
         if not m:
             return ConversationHandler.END
         return await self._start(update, ctx, m.group(1))
@@ -182,13 +199,13 @@ class BuildAppeal:
 
     async def _on_message(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Text message handler — validates and submits a #appeal message."""
-        msg  = update.effective_message
+        msg = update.effective_message
         text = (msg.text or "").strip()
 
         if not text.startswith("#appeal"):
             return WAITING_APPEAL
 
-        ban_id     = ctx.user_data.get("appeal_ban_id")
+        ban_id = ctx.user_data.get("appeal_ban_id")
         log_msg_id = ctx.user_data.get("appeal_log_msg_id", 0)
 
         if not ban_id:
@@ -199,20 +216,26 @@ class BuildAppeal:
             await msg.reply_text("Invalid log link. Please check and try again.")
             return WAITING_APPEAL
 
-        uid  = update.effective_user.id
+        uid = update.effective_user.id
         user = update.effective_user
 
         appeal_chat, appeal_thread = cfg.appeals
         appeal_msg_id: int | None = None
         try:
-            fwd           = await msg.forward(appeal_chat, message_thread_id=appeal_thread)
+            fwd = await msg.forward(appeal_chat, message_thread_id=appeal_thread)
             appeal_msg_id = fwd.message_id
         except Exception as exc:
             log.error("Appeal forward failed: %s", exc)
 
-        appeal_link = message_link(appeal_chat, appeal_msg_id, appeal_thread) if appeal_msg_id else ""
-        review_text = parse_logmsg.appeal_received_log(uid, user.first_name, ban_id, appeal_link)
-        lc, lt      = cfg.logs
+        appeal_link = (
+            message_link(appeal_chat, appeal_msg_id, appeal_thread)
+            if appeal_msg_id
+            else ""
+        )
+        review_text = parse_logmsg.appeal_received_log(
+            uid, user.first_name, ban_id, appeal_link
+        )
+        lc, lt = cfg.logs
 
         # * Send review post + log message in parallel
         rv, sent_log = await asyncio.gather(
@@ -225,18 +248,24 @@ class BuildAppeal:
             ),
             ctx.bot.send_message(
                 lc,
-                parse_logmsg.appeal_submitted_log(uid, user.first_name, ban_id, appeal_link),
+                parse_logmsg.appeal_submitted_log(
+                    uid, user.first_name, ban_id, appeal_link
+                ),
                 parse_mode="HTML",
                 message_thread_id=lt,
             ),
             return_exceptions=True,
         )
 
-        review_msg_id: int | None = rv.message_id if not isinstance(rv, BaseException) else None
+        review_msg_id: int | None = (
+            rv.message_id if not isinstance(rv, BaseException) else None
+        )
         if isinstance(rv, BaseException):
             log.error("Appeal review post failed: %s", rv)
 
-        appeal_log_sent_id: int | None = sent_log.message_id if not isinstance(sent_log, BaseException) else None
+        appeal_log_sent_id: int | None = (
+            sent_log.message_id if not isinstance(sent_log, BaseException) else None
+        )
         if isinstance(sent_log, BaseException):
             log.error("Appeal log failed: %s", sent_log)
 
@@ -245,7 +274,11 @@ class BuildAppeal:
         if review_msg_id:
             db_tasks.append(db.bans_db.set_review(ban_id, review_msg_id))
         if appeal_log_sent_id and ban_id:
-            db_tasks.append(db.bans_db.set_appeal_log_msg(ban_id, appeal_log_sent_id, appeal_link=appeal_link))
+            db_tasks.append(
+                db.bans_db.set_appeal_log_msg(
+                    ban_id, appeal_log_sent_id, appeal_link=appeal_link
+                )
+            )
         if db_tasks:
             await asyncio.gather(*db_tasks, return_exceptions=True)
 
@@ -257,9 +290,12 @@ class BuildAppeal:
                 chat_id=update.effective_chat.id,
                 message_id=instr_mid,
             )
-            if instr_mid else None
+            if instr_mid
+            else None
         )
-        upsert_coro = db.users_db.upsert_user(uid, user.username, user.first_name, user.last_name)
+        upsert_coro = db.users_db.upsert_user(
+            uid, user.username, user.first_name, user.last_name
+        )
 
         if edit_coro:
             await asyncio.gather(edit_coro, upsert_coro, return_exceptions=True)
@@ -272,7 +308,7 @@ class BuildAppeal:
 
     async def on_decision(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Approve / Reject callback for the staff review card in the main group."""
-        q     = update.callback_query
+        q = update.callback_query
         admin = update.effective_user
 
         if not await db.admins_db.is_staff(admin.id):
@@ -282,10 +318,10 @@ class BuildAppeal:
         data = q.data
         if data.startswith("appeal_approve_"):
             action = "approve"
-            ban_id = data[len("appeal_approve_"):]
+            ban_id = data[len("appeal_approve_") :]
         elif data.startswith("appeal_reject_"):
             action = "reject"
-            ban_id = data[len("appeal_reject_"):]
+            ban_id = data[len("appeal_reject_") :]
         else:
             await q.answer()
             return
@@ -296,7 +332,9 @@ class BuildAppeal:
             return
 
         if not ban.get("is_active"):
-            await q.edit_message_text("Appeal already resolved (ban is no longer active).", reply_markup=None)
+            await q.edit_message_text(
+                "Appeal already resolved (ban is no longer active).", reply_markup=None
+            )
             return
 
         review_ts = ban.get("review_timestamp")
@@ -304,7 +342,9 @@ class BuildAppeal:
             from tcbot.modules import appeals
 
             if appeals.reviewer_locked_out(
-                review_ts, ban.get("admin_user_id"), admin.id,
+                review_ts,
+                ban.get("admin_user_id"),
+                admin.id,
             ):
                 await q.answer(
                     "Only the admin who issued this ban can review it within the first 12 hours.",
@@ -313,7 +353,7 @@ class BuildAppeal:
                 return
 
         target_id = ban["banned_user_id"]
-        lc, lt    = cfg.logs
+        lc, lt = cfg.logs
 
         if action == "approve":
             # * Deactivate ban + fetch active groups + fetch target name - all in parallel
@@ -325,8 +365,12 @@ class BuildAppeal:
 
             # * Unban from all groups - semaphore-bounded for rate safety
             await fan_out(
-                [ctx.bot.unban_chat_member(grp["chat_id"], target_id, only_if_banned=True)
-                 for grp in groups]
+                [
+                    ctx.bot.unban_chat_member(
+                        grp["chat_id"], target_id, only_if_banned=True
+                    )
+                    for grp in groups
+                ]
             )
 
             # * Notify user + edit review message in parallel
@@ -347,11 +391,15 @@ class BuildAppeal:
 
             # * Edit the submitted appeal log message in LOG_CHANNEL
             await self._update_or_send_log(
-                ctx.bot, lc, lt,
+                ctx.bot,
+                lc,
+                lt,
                 ban.get("appeal_log_msg_id"),
                 parse_logmsg.appeal_approved_edit(
-                    target_id, target_fname,
-                    admin.id, admin.first_name,
+                    target_id,
+                    target_fname,
+                    admin.id,
+                    admin.first_name,
                     ban_id,
                     ban.get("appeal_link", ""),
                     ban.get("appeal_submitted_at"),
@@ -363,7 +411,11 @@ class BuildAppeal:
                 await ctx.bot.send_message(
                     lc,
                     parse_logmsg.appeal_unban_log(
-                        target_id, target_fname, admin.id, admin.first_name, ban_id,
+                        target_id,
+                        target_fname,
+                        admin.id,
+                        admin.first_name,
+                        ban_id,
                     ),
                     parse_mode="HTML",
                     message_thread_id=lt,
@@ -396,11 +448,15 @@ class BuildAppeal:
 
             # * Edit the submitted appeal log message in LOG_CHANNEL
             await self._update_or_send_log(
-                ctx.bot, lc, lt,
+                ctx.bot,
+                lc,
+                lt,
                 ban.get("appeal_log_msg_id"),
                 parse_logmsg.appeal_rejected_edit(
-                    target_id, target_fname,
-                    admin.id, admin.first_name,
+                    target_id,
+                    target_fname,
+                    admin.id,
+                    admin.first_name,
                     ban_id,
                     ban.get("appeal_link", ""),
                     ban.get("appeal_submitted_at"),
@@ -419,7 +475,9 @@ class BuildAppeal:
                         self._on_cancel,
                         pattern=rf"^{re.escape(self.cancel_callback)}$",
                     ),
-                    MessageHandler(filters.ChatType.PRIVATE & filters.TEXT, self._on_message),
+                    MessageHandler(
+                        filters.ChatType.PRIVATE & filters.TEXT, self._on_message
+                    ),
                 ],
             },
             fallbacks=[

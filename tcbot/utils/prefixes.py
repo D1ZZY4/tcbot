@@ -13,11 +13,23 @@ import logging
 import os
 import re
 from collections.abc import Callable, Coroutine
-from typing import Any
+from typing import Any, Protocol
 
 from telegram.ext import filters
 
 log = logging.getLogger(__name__)
+
+
+class _MessageLike(Protocol):
+    text: str | None
+
+
+class _UpdateLike(Protocol):
+    effective_message: _MessageLike | None
+
+
+class _ContextLike(Protocol):
+    args: list[str]
 
 
 # ─────────────────────── Alt-Prefix Registry ────────────────────── #
@@ -28,12 +40,14 @@ _ALT_RE = re.compile(r"^[.!]([a-z][a-z0-9]*)(?:@\w+)?(?:\s|$)", re.IGNORECASE)
 _REGISTRY: dict[str, Callable[..., Coroutine[Any, Any, None]]] = {}
 
 
-def register_command(name: str, callback: Callable[..., Coroutine[Any, Any, None]]) -> None:
+def register_command(
+    name: str, callback: Callable[..., Coroutine[Any, Any, None]]
+) -> None:
     """Register an async callback for a given command name (case-insensitive)."""
     _REGISTRY[name.lower()] = callback
 
 
-async def dispatch_alt_prefix(update: object, context: object) -> None:
+async def dispatch_alt_prefix(update: _UpdateLike, context: _ContextLike) -> None:
     """
     Dispatch an update to a registered alt-prefix command handler.
 
@@ -52,13 +66,13 @@ async def dispatch_alt_prefix(update: object, context: object) -> None:
     if not m:
         return
 
-    cmd      = m.group(1).lower()
+    cmd = m.group(1).lower()
     callback = _REGISTRY.get(cmd)
     if callback is None:
         return
 
-    parts          = text.strip().split(None, 1)
-    context.args   = parts[1].split() if len(parts) > 1 else []  # * type: ignore[attr-defined]
+    parts = text.strip().split(None, 1)
+    context.args = parts[1].split() if len(parts) > 1 else []
 
     try:
         await callback(update, context)
@@ -67,6 +81,7 @@ async def dispatch_alt_prefix(update: object, context: object) -> None:
 
 
 # ──────────────────────── Prefix Resolution ─────────────────────── #
+
 
 def _get_prefixes() -> list[str]:
     """
@@ -82,8 +97,8 @@ def _get_prefixes() -> list[str]:
         parsed = ast.literal_eval(raw)
         if isinstance(parsed, list):
             return [str(p) for p in parsed if p]
-    except Exception:
-        pass
+    except (ValueError, SyntaxError) as exc:
+        log.debug("PREFIXES parse fallback to raw string: %s", exc)
 
     return list(raw)
 
@@ -95,6 +110,7 @@ def _get_custom_prefixes() -> list[str]:
 
 # ───────────────────────── Filter Builders ──────────────────────── #
 
+
 def build_prefixed_filters(command: str) -> filters.BaseFilter:
     """
     Return a filter matching ``<prefix><command>`` for all configured prefixes.
@@ -102,9 +118,9 @@ def build_prefixed_filters(command: str) -> filters.BaseFilter:
     * Case-insensitive, supports @mention suffixes
     * Works for /cmd, !cmd, .cmd etc. in a single filter
     """
-    prefixes         = _get_prefixes()
+    prefixes = _get_prefixes()
     escaped_prefixes = re.escape("".join(set(prefixes)))
-    pattern          = rf"^[{escaped_prefixes}]{re.escape(command)}(?:@\w+)?(?:\s|$)"
+    pattern = rf"^[{escaped_prefixes}]{re.escape(command)}(?:@\w+)?(?:\s|$)"
     return filters.Regex(re.compile(pattern, re.IGNORECASE))
 
 
@@ -127,6 +143,7 @@ ALL_PREFIXES_CMD_FILTER: filters.BaseFilter = filters.Regex(
 
 
 # ──────────────────────── Argument Parsing ──────────────────────── #
+
 
 def parse_cmd_args(text: str | None) -> list[str]:
     """

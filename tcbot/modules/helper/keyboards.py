@@ -10,8 +10,8 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from tcbot.database.roles_db import ROLE_LABEL as _ROLE_LABELS
 
-
 # ── Ban flow ───────────────────────────────────────────────────────────────
+
 
 def cancel_proof_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
@@ -29,10 +29,12 @@ def ban_log_new(
     appeal_url: str,
 ) -> InlineKeyboardMarkup:
     """Ban-log keyboard with explicit appeal URL."""
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton(f"Proof {target_id}", url=proof_link)],
-        [InlineKeyboardButton("Submit Appeal",       url=appeal_url)],
-    ])
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton(f"Proof {target_id}", url=proof_link)],
+            [InlineKeyboardButton("Submit Appeal", url=appeal_url)],
+        ]
+    )
 
 
 def ban_log_update(
@@ -42,16 +44,21 @@ def ban_log_update(
     appeal_url: str,
 ) -> InlineKeyboardMarkup:
     """Updated ban-log keyboard with previous-proof button and explicit appeal URL."""
-    return InlineKeyboardMarkup([
+    return InlineKeyboardMarkup(
         [
-            InlineKeyboardButton(f"Proof {target_id}",          url=proof_link),
-            InlineKeyboardButton(f"Previous Proof {target_id}", url=previous_proof_link),
-        ],
-        [InlineKeyboardButton("Submit Appeal", url=appeal_url)],
-    ])
+            [
+                InlineKeyboardButton(f"Proof {target_id}", url=proof_link),
+                InlineKeyboardButton(
+                    f"Previous Proof {target_id}", url=previous_proof_link
+                ),
+            ],
+            [InlineKeyboardButton("Submit Appeal", url=appeal_url)],
+        ]
+    )
 
 
 # ── Appeal flow ────────────────────────────────────────────────────────────
+
 
 def appeal_cancel_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
@@ -78,27 +85,38 @@ def appeal_review_kb(ban_id: str) -> InlineKeyboardMarkup:
 
 # ── Admin promotion ────────────────────────────────────────────────────────
 
+
 def promote_role_kb(target_id: int, available_roles: list[str]) -> InlineKeyboardMarkup:
     """Role selection keyboard shown when /tcpromote is used without a role argument."""
     buttons = [
-        InlineKeyboardButton(_ROLE_LABELS[r], callback_data=f"promo_role:{r}:{target_id}")
+        InlineKeyboardButton(
+            _ROLE_LABELS[r], callback_data=f"promo_role:{r}:{target_id}"
+        )
         for r in available_roles
         if r in _ROLE_LABELS
     ]
     rows: list[list[InlineKeyboardButton]] = [
         buttons[i : i + 2] for i in range(0, len(buttons), 2)
     ]
-    rows.append([InlineKeyboardButton("Cancel", callback_data=f"promo_role_cancel:{target_id}")])
+    rows.append(
+        [InlineKeyboardButton("Cancel", callback_data=f"promo_role_cancel:{target_id}")]
+    )
     return InlineKeyboardMarkup(rows)
 
 
 def demote_confirm_kb(target_id: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
+    return InlineKeyboardMarkup(
         [
-            InlineKeyboardButton("Confirm", callback_data=f"demote_confirm:{target_id}"),
-            InlineKeyboardButton("Cancel",  callback_data=f"demote_cancel:{target_id}"),
+            [
+                InlineKeyboardButton(
+                    "Confirm", callback_data=f"demote_confirm:{target_id}"
+                ),
+                InlineKeyboardButton(
+                    "Cancel", callback_data=f"demote_cancel:{target_id}"
+                ),
+            ]
         ]
-    ])
+    )
 
 
 def promo_decision_kb(request_id: str) -> InlineKeyboardMarkup:
@@ -118,6 +136,7 @@ def promo_decision_kb(request_id: str) -> InlineKeyboardMarkup:
 
 # ── Group connect prompt ───────────────────────────────────────────────────
 
+
 def join_group_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
@@ -131,6 +150,7 @@ def join_group_kb() -> InlineKeyboardMarkup:
 
 # ── Check-me / baninfo ─────────────────────────────────────────────────────
 
+
 def checkme_ban_kb(
     bot_username: str,
     ban_id: str,
@@ -141,10 +161,12 @@ def checkme_ban_kb(
     row1 = [InlineKeyboardButton("Details", callback_data=f"checkme_detail:{ban_id}")]
     if proof_link:
         row1.append(InlineKeyboardButton("Proof", url=proof_link))
-    return InlineKeyboardMarkup([
-        row1,
-        [InlineKeyboardButton("Appeal", url=appeal_url)],
-    ])
+    return InlineKeyboardMarkup(
+        [
+            row1,
+            [InlineKeyboardButton("Appeal", url=appeal_url)],
+        ]
+    )
 
 
 def checkme_detail_back_kb(
@@ -155,7 +177,9 @@ def checkme_detail_back_kb(
     rows = []
     if proof_link:
         rows.append([InlineKeyboardButton("Proof", url=proof_link)])
-    rows.append([InlineKeyboardButton("« Back", callback_data=f"checkme_back:{ban_id}")])
+    rows.append(
+        [InlineKeyboardButton("« Back", callback_data=f"checkme_back:{ban_id}")]
+    )
     return InlineKeyboardMarkup(rows)
 
 
@@ -171,15 +195,16 @@ def baninfo_proof_kb(proof_lnk: str) -> InlineKeyboardMarkup:
 
 # ── Start / Help menus ─────────────────────────────────────────────────────
 
+
 def main_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
                 InlineKeyboardButton("About", callback_data="about_menu"),
-                InlineKeyboardButton("Help",  callback_data="help_menu"),
+                InlineKeyboardButton("Help", callback_data="help_menu"),
             ],
             [InlineKeyboardButton("Additional", callback_data="additional_menu")],
-            [InlineKeyboardButton("Privacy",    callback_data="privacy_menu")],
+            [InlineKeyboardButton("Privacy", callback_data="privacy_menu")],
         ]
     )
 
@@ -190,7 +215,7 @@ def group_start_kb(bot_username: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [InlineKeyboardButton("Open in PM ↗", url=pm_url)],
-            [InlineKeyboardButton("Help",          callback_data="help_menu_group")],
+            [InlineKeyboardButton("Help", callback_data="help_menu_group")],
         ]
     )
 
@@ -215,15 +240,19 @@ def help_modules(
     return InlineKeyboardMarkup(kb_rows)
 
 
-def _build_topic_rows(topics: list[tuple[str, str]]) -> list[list[InlineKeyboardButton]]:
+def _build_topic_rows(
+    topics: list[tuple[str, str]],
+) -> list[list[InlineKeyboardButton]]:
     """Pair topics into two-column rows, with any odd item on its own row."""
     rows: list[list[InlineKeyboardButton]] = []
     it = iter(topics)
     for a, b in zip(it, it):
-        rows.append([
-            InlineKeyboardButton(a[0], callback_data=a[1]),
-            InlineKeyboardButton(b[0], callback_data=b[1]),
-        ])
+        rows.append(
+            [
+                InlineKeyboardButton(a[0], callback_data=a[1]),
+                InlineKeyboardButton(b[0], callback_data=b[1]),
+            ]
+        )
     for item in list(it):
         rows.append([InlineKeyboardButton(item[0], callback_data=item[1])])
     return rows

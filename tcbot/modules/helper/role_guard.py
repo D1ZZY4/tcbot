@@ -11,7 +11,8 @@ import logging
 
 from telegram import Bot
 
-from tcbot import cfg, database as db
+from tcbot import cfg
+from tcbot import database as db
 from tcbot.database.roles_db import ROLE_LABEL, get_effective_role, role_rank
 from tcbot.modules.helper import parse_logmsg
 
@@ -68,15 +69,19 @@ async def auto_demote(
         await db.roles_db.remove_role(target_id)
 
     lc, lt = cfg.logs
-    verb  = "banned" if action == "ban" else "kicked"
+    verb = "banned" if action == "ban" else "kicked"
     label = ROLE_LABEL.get(target_role, target_role.capitalize())
 
     await asyncio.gather(
         bot.send_message(
             lc,
             parse_logmsg.role_auto_demoted(
-                target_id, target_fname, target_role,
-                executor_id, executor_fname, action,
+                target_id,
+                target_fname,
+                target_role,
+                executor_id,
+                executor_fname,
+                action,
             ),
             parse_mode="HTML",
             message_thread_id=lt,
