@@ -20,6 +20,7 @@ _IGNORED = {
 
 # ── safe_edit helper ────────────────────────────────────────────────────────
 
+
 async def safe_edit(msg: Message, text: str, **kwargs) -> None:
     try:
         await msg.edit_text(text, parse_mode="HTML", **kwargs)

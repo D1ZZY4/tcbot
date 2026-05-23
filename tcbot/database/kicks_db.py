@@ -13,9 +13,9 @@ from __future__ import annotations
 from tcbot.database.mongos import col
 from tcbot.utils.timedate_format import utc_now
 
-
 # ─────────────────────── Collection Helpers ─────────────────────── #
 # * Internal collection access utilities for the kicks database
+
 
 def _kicks():
     """Get the kicks collection reference from MongoDB"""
@@ -26,6 +26,7 @@ def _kicks():
 # * Functions that create or modify kick log records
 # * Used exclusively for audit logging of moderation actions
 
+
 async def log_kick(user_id: int, chat_id: int, reason: str, admin_id: int) -> None:
     """
     Log a kick event to the database for audit purposes
@@ -33,10 +34,12 @@ async def log_kick(user_id: int, chat_id: int, reason: str, admin_id: int) -> No
     * Timestamps are stored in UTC for consistency across timezones
     * Creates a permanent record of the moderation action
     """
-    await _kicks().insert_one({
-        "user_id": user_id,
-        "chat_id": chat_id,
-        "reason": reason,
-        "admin_id": admin_id,
-        "timestamp": utc_now(),
-    })
+    await _kicks().insert_one(
+        {
+            "user_id": user_id,
+            "chat_id": chat_id,
+            "reason": reason,
+            "admin_id": admin_id,
+            "timestamp": utc_now(),
+        }
+    )

@@ -11,13 +11,14 @@ import logging
 import os
 import sys
 from dataclasses import dataclass
-from dotenv import load_dotenv, find_dotenv
 
+from dotenv import find_dotenv, load_dotenv
 
 load_dotenv(find_dotenv("config.env"))
 
 
 # ───────────────────────── Config Parsing ───────────────────────── #
+
 
 def parse_list(raw: str) -> list[str]:
     """Safely evaluate a stringified list from env; fall back to raw comma-separated strings."""
@@ -80,6 +81,7 @@ def _parse_log_level(raw: str) -> int:
 
 
 # ─────────────────── Immutable Config Dataclass ─────────────────── #
+
 
 @dataclass(frozen=True)
 class Configs:

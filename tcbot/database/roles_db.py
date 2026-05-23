@@ -21,17 +21,17 @@ from tcbot.utils.timedate_format import utc_now
 VALID_ROLES: frozenset[str] = frozenset({"developer", "tester"})
 
 ROLE_RANK: dict[str, int] = {
-    "founder":   4,
-    "admin":     3,
+    "founder": 4,
+    "admin": 3,
     "developer": 2,
-    "tester":    1,
+    "tester": 1,
 }
 
 ROLE_LABEL: dict[str, str] = {
-    "founder":   "Founder",
-    "admin":     "Admin",
+    "founder": "Founder",
+    "admin": "Admin",
     "developer": "Developer",
-    "tester":    "Tester",
+    "tester": "Tester",
 }
 
 
@@ -53,6 +53,7 @@ def _col():
 # * Create, read, update, delete operations for role records
 # * All write operations automatically invalidate the user's cache
 
+
 async def set_role(user_id: int, role: str, assigned_by: int) -> None:
     """
     Assign a custom role to a user
@@ -62,12 +63,14 @@ async def set_role(user_id: int, role: str, assigned_by: int) -> None:
     """
     await _col().update_one(
         {"user_id": user_id},
-        {"$set": {
-            "user_id":     user_id,
-            "role":        role,
-            "assigned_by": assigned_by,
-            "assigned_at": utc_now(),
-        }},
+        {
+            "$set": {
+                "user_id": user_id,
+                "role": role,
+                "assigned_by": assigned_by,
+                "assigned_at": utc_now(),
+            }
+        },
         upsert=True,
     )
     effective_role_cache.invalidate(user_id)
@@ -113,6 +116,7 @@ async def all_roles() -> list[dict]:
 # ───────────────────────── Role Resolution ──────────────────────── #
 # * Functions to resolve effective permissions and role hierarchy
 # * Core permission system that powers all staff-only command checks
+
 
 async def can_act_on(executor_id: int, target_id: int) -> bool:
     """

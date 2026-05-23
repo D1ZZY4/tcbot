@@ -28,6 +28,7 @@ dist/
 build/
 .cache/
 .local/
+.ruff_cache/
 
 # Replit attached assets
 attached_assets/

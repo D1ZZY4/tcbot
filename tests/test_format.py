@@ -20,8 +20,8 @@ from tcbot.modules.helper.parse_link import (
 )
 from tcbot.utils.timedate_format import fmt_dt, to_utc, utc_now, utc_now_str
 
-
 # ── utc_now ───────────────────────────────────────────────────────────
+
 
 def test_utc_now_returns_aware_datetime() -> None:
     now = utc_now()
@@ -36,6 +36,7 @@ def test_to_utc_handles_naive_and_aware() -> None:
 
 
 # ── fmt_dt ────────────────────────────────────────────────────────────
+
 
 def test_fmt_dt_formats_as_dd_mm_yyyy_pipe_hhmm() -> None:
     dt = datetime(2026, 4, 30, 14, 5, tzinfo=timezone.utc)
@@ -55,6 +56,7 @@ def test_utc_now_str_matches_pattern() -> None:
 
 # ── chat_id_to_link_id ─────────────────────────────────────────────────
 
+
 def test_chat_id_to_link_id_strips_supergroup_prefix() -> None:
     assert chat_id_to_link_id(-1001234567890) == "1234567890"
 
@@ -69,6 +71,7 @@ def test_chat_id_to_link_id_with_plain_channel() -> None:
 
 
 # ── message_link / topic_link ───────────────────────────────────────────
+
 
 def test_message_link_without_thread() -> None:
     url = message_link(-1001111111111, 42)
@@ -86,6 +89,7 @@ def test_topic_link_delegates_to_message_link() -> None:
 
 # ── user_link ───────────────────────────────────────────────────────────
 
+
 def test_user_link_escapes_html_in_name() -> None:
     result = user_link(123, "<b>Evil</b>")
     assert '<a href="tg://user?id=123">' in result
@@ -98,6 +102,7 @@ def test_user_link_falls_back_to_id_when_name_blank() -> None:
 
 
 # ── safe_first_name ──────────────────────────────────────────────────────
+
 
 def test_safe_first_name_prefers_first_name() -> None:
     obj = SimpleNamespace(first_name="Andi", title="Group", id=99)

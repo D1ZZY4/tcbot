@@ -9,7 +9,8 @@ import asyncio
 from telegram import Update
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
-from tcbot import cfg, database as db
+from tcbot import cfg
+from tcbot import database as db
 from tcbot.database.roles_db import ROLE_LABEL, get_effective_role
 from tcbot.modules.helper import decorators, extraction, keyboards
 from tcbot.modules.helper.ban_info import build_ban_detail
@@ -18,7 +19,6 @@ from tcbot.modules.helper.parse_link import message_link
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.timedate_format import fmt_dt
 
-
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Checking"
@@ -26,28 +26,22 @@ __help_text__ = (
     "<b>Commands & Aliases</b>\n"
     "<code>/checkme</code> (alias: <code>/cme</code>)\n"
     "<code>/checkban</code> (alias: <code>/cban</code>)\n\n"
-
     "<b>Who can use it</b>\n"
     "Anyone - no special permissions needed.\n\n"
-
     "<b>Where to use it</b>\n"
     "Bot PM, exec group, or any connected group.\n\n"
-
     "<b>/checkme</b>\n"
     "Checks your own federation ban status.\n"
     "- If you are <b>not banned</b>: the bot confirms your account is in good standing.\n"
     "- If you are <b>banned</b>: the bot shows the reason, the admin who issued the ban, "
     "the ban date, and gives you a <b>Submit Appeal</b> button to start the appeal process.\n\n"
-
     "<b>/checkban</b>\n"
     "Looks up the ban status of any user by user ID or @username.\n"
     "- If banned: shows the full record - reason, ban date, banning admin, and a "
     "<b>View Proof</b> button if evidence was submitted.\n"
     "- If not banned: confirms the user has no active federation ban.\n\n"
-
     "<b>How to specify the target (/checkban)</b>\n"
     "Reply to a message, or provide a user ID / @username after the command.\n\n"
-
     "<b>Examples</b>\n"
     "<code>/checkme</code>\n"
     "<code>/checkban @username</code>\n"
@@ -56,6 +50,7 @@ __help_text__ = (
 
 
 # ───────────────────────────── Helpers ──────────────────────────── #
+
 
 async def _ban_summary(
     ban: dict,
@@ -75,10 +70,11 @@ async def _ban_summary(
     proof_chat, proof_thread = cfg.proofs
     proof_link = (
         message_link(proof_chat, ban["proof_message_id"], proof_thread)
-        if ban.get("proof_message_id") else None
+        if ban.get("proof_message_id")
+        else None
     )
 
-    ts       = ban.get("timestamp")
+    ts = ban.get("timestamp")
     date_str = fmt_dt(ts) if ts else "Unknown"
 
     text = (
@@ -95,11 +91,12 @@ async def _ban_summary(
 
 # ─────────── Command Check Ban for User Self </checkme> ─────────── #
 
+
 @decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
 async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    user  = update.effective_user
-    msg   = update.effective_message
+    user = update.effective_user
+    msg = update.effective_message
     fname = user.first_name or str(user.id)
 
     # * Fetch owner ID, user role, and active ban all in parallel
@@ -138,7 +135,9 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if not ban:
-        await msg.reply_text(f"You're clean - no active ban in {cfg.community_name}. ✅")
+        await msg.reply_text(
+            f"You're clean - no active ban in {cfg.community_name}. ✅"
+        )
         return
 
     ban_id = ban["ban_id"]
@@ -154,10 +153,11 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 # ──────────────────────── Callback Handlers ─────────────────────── #
 
+
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    q      = update.callback_query
+    q = update.callback_query
     ban_id = q.data.split(":")[1]
 
     ban = await db.bans_db.get_ban(ban_id)
@@ -179,7 +179,7 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    q      = update.callback_query
+    q = update.callback_query
     ban_id = q.data.split(":")[1]
 
     ban = await db.bans_db.get_ban(ban_id)
@@ -208,6 +208,7 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 # ────────── Command Check Ban for Any Target </checkban> ────────── #
 # * Read Extract Target for more information on how the target is resolved (reply, ID, or @username)
 
+
 @decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
 async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -219,7 +220,7 @@ async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    msg   = update.effective_message
+    msg = update.effective_message
     fname = target_fname or str(target_id)
 
     if target_id == ctx.bot.id:
@@ -281,12 +282,12 @@ async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 # ──────────────────────────── Handlers ──────────────────────────── #
 
-_CHECKME_CMDS = build_prefixed_filters("checkme")  | build_prefixed_filters("cme")
+_CHECKME_CMDS = build_prefixed_filters("checkme") | build_prefixed_filters("cme")
 _BANINFO_CMDS = build_prefixed_filters("checkban") | build_prefixed_filters("cban")
 
 __handlers__ = [
     MessageHandler(_CHECKME_CMDS, cmd_checkme),
     MessageHandler(_BANINFO_CMDS, cmd_baninfo),
     CallbackQueryHandler(on_checkme_detail, pattern=r"^checkme_detail:"),
-    CallbackQueryHandler(on_checkme_back,   pattern=r"^checkme_back:"),
+    CallbackQueryHandler(on_checkme_back, pattern=r"^checkme_back:"),
 ]

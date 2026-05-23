@@ -15,10 +15,10 @@ from datetime import datetime
 from tcbot.database.mongos import col, make_short_id
 from tcbot.utils.timedate_format import utc_now
 
-
 # ─────────────────────── Collection Helpers ─────────────────────── #
 # * Internal collection access and ID generation utilities
 # * These are only used within this module for database interactions
+
 
 def _bans():
     """Get the bans collection reference from MongoDB"""
@@ -33,6 +33,7 @@ def make_ban_id() -> str:
 # ──────────────────────────── Retrieval ─────────────────────────── #
 # * Functions to fetch ban data from the database
 # * Includes both active ban queries and full ban record lookups
+
 
 async def get_active_ban(user_id: int) -> dict | None:
     """
@@ -56,6 +57,7 @@ async def get_ban(ban_id: str) -> dict | None:
 # * Functions that modify ban records in the database
 # * Includes creation, updates, deactivation, and metadata changes
 # ! CRITICAL: These functions modify persistent data - always validate inputs
+
 
 async def create_ban(
     target_id: int,
@@ -172,17 +174,20 @@ async def set_appeal_log_msg(
     """
     await _bans().update_one(
         {"ban_id": ban_id},
-        {"$set": {
-            "appeal_log_msg_id": msg_id,
-            "appeal_submitted_at": submitted_at or utc_now(),
-            "appeal_link": appeal_link,
-        }},
+        {
+            "$set": {
+                "appeal_log_msg_id": msg_id,
+                "appeal_submitted_at": submitted_at or utc_now(),
+                "appeal_link": appeal_link,
+            }
+        },
     )
 
 
 # ─────────────────────────── Statistics ─────────────────────────── #
 # * Aggregation and counting functions for ban statistics
 # * Optimized queries for performance-critical operations
+
 
 async def active_ban_count() -> int:
     """
@@ -206,7 +211,9 @@ async def active_ban_user_ids() -> list[int]:
     * Uses projection to fetch only the required field, minimizing data transfer
     * This is the most efficient way to get a list of banned user IDs
     """
-    docs = await _bans().find(
-        {"is_active": True}, {"_id": 0, "banned_user_id": 1}
-    ).to_list(None)
+    docs = (
+        await _bans()
+        .find({"is_active": True}, {"_id": 0, "banned_user_id": 1})
+        .to_list(None)
+    )
     return [doc["banned_user_id"] for doc in docs]

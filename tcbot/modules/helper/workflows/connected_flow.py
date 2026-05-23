@@ -15,8 +15,8 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatMemberStatus
 from telegram.ext import ContextTypes
 
-from tcbot import database as db
 from tcbot import cfg
+from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
 from tcbot.utils.dispatch import fan_out
 
@@ -55,11 +55,11 @@ class BuildConnection:
         join_callback: str = "tc_join",
         cancel_callback: str = "tc_cancel",
     ) -> None:
-        self.community_name  = community_name
-        self.required_perms  = required_perms
-        self.join_label      = join_label
-        self.cancel_label    = cancel_label
-        self.join_callback   = join_callback
+        self.community_name = community_name
+        self.required_perms = required_perms
+        self.join_label = join_label
+        self.cancel_label = cancel_label
+        self.join_callback = join_callback
         self.cancel_callback = cancel_callback
 
     # ── Text factories ─────────────────────────────────────────────────────
@@ -95,10 +95,16 @@ class BuildConnection:
     def join_keyboard(self) -> InlineKeyboardMarkup:
         """Connect / Cancel inline keyboard attached to the join prompt."""
         return InlineKeyboardMarkup(
-            [[
-                InlineKeyboardButton(self.join_label,   callback_data=self.join_callback),
-                InlineKeyboardButton(self.cancel_label, callback_data=self.cancel_callback),
-            ]]
+            [
+                [
+                    InlineKeyboardButton(
+                        self.join_label, callback_data=self.join_callback
+                    ),
+                    InlineKeyboardButton(
+                        self.cancel_label, callback_data=self.cancel_callback
+                    ),
+                ]
+            ]
         )
 
     # ── Permission check ───────────────────────────────────────────────────
@@ -128,7 +134,8 @@ class BuildConnection:
         )
         chat_username: str | None = (
             getattr(chat_result, "username", None)
-            if not isinstance(chat_result, BaseException) else None
+            if not isinstance(chat_result, BaseException)
+            else None
         )
         if isinstance(ban_uids, BaseException):
             ban_uids = []
@@ -141,18 +148,24 @@ class BuildConnection:
         try:
             await bot.send_message(
                 lc,
-                parse_logmsg.group_connected_log(chat_id, chat_title, owner_id, owner_fname, chat_username),
+                parse_logmsg.group_connected_log(
+                    chat_id, chat_title, owner_id, owner_fname, chat_username
+                ),
                 parse_mode="HTML",
                 message_thread_id=lt,
             )
         except Exception as exc:
             log.error("Group connect log failed: %s", exc)
 
-        log.info("Group %d ('%s') connected. %d bans applied.", chat_id, chat_title, applied)
+        log.info(
+            "Group %d ('%s') connected. %d bans applied.", chat_id, chat_title, applied
+        )
 
     # ── PTB event handlers ─────────────────────────────────────────────────
 
-    async def on_bot_added(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    async def on_bot_added(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> None:
         """Fired on every change to the bot's own member status in any chat."""
         cmc = update.my_chat_member
         if not cmc:
@@ -163,8 +176,8 @@ class BuildConnection:
             return
 
         new_status = cmc.new_chat_member.status
-        by_user    = cmc.from_user
-        lc, lt     = cfg.logs
+        by_user = cmc.from_user
+        lc, lt = cfg.logs
 
         if new_status in (ChatMemberStatus.LEFT, ChatMemberStatus.BANNED):
             # * is_connected, deactivate, and remove_pending all run in parallel
@@ -177,7 +190,9 @@ class BuildConnection:
                 try:
                     await ctx.bot.send_message(
                         lc,
-                        parse_logmsg.group_bot_removed_log(chat.id, chat.title or "Unknown"),
+                        parse_logmsg.group_bot_removed_log(
+                            chat.id, chat.title or "Unknown"
+                        ),
                         parse_mode="HTML",
                         message_thread_id=lt,
                     )
@@ -191,9 +206,15 @@ class BuildConnection:
 
             if pending and new_status == ChatMemberStatus.ADMINISTRATOR:
                 if self.check_perms(cmc.new_chat_member):
-                    owner_fname = await db.users_db.get_first_name(pending["owner_id"], "Owner")
+                    owner_fname = await db.users_db.get_first_name(
+                        pending["owner_id"], "Owner"
+                    )
                     await self.complete_join(
-                        chat.id, chat.title or "", pending["owner_id"], owner_fname, ctx.bot,
+                        chat.id,
+                        chat.title or "",
+                        pending["owner_id"],
+                        owner_fname,
+                        ctx.bot,
                     )
                     try:
                         await ctx.bot.edit_message_text(
@@ -219,14 +240,19 @@ class BuildConnection:
                     reply_markup=self.join_keyboard(),
                 )
                 await db.groups_db.add_pending(
-                    chat.id, chat.title or "", by_user.id, prompt.message_id,
+                    chat.id,
+                    chat.title or "",
+                    by_user.id,
+                    prompt.message_id,
                 )
             except Exception as exc:
                 log.error("Join prompt send failed for %d: %s", chat.id, exc)
 
-    async def on_join_decision(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    async def on_join_decision(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> None:
         """Callback handler for Connect / Cancel buttons on the join prompt."""
-        q    = update.callback_query
+        q = update.callback_query
         chat = update.effective_chat
         user = update.effective_user
         lc, lt = cfg.logs
@@ -258,17 +284,26 @@ class BuildConnection:
 
             if not self.check_perms(bot_member):
                 await db.groups_db.add_pending(
-                    chat.id, chat.title or "", user.id, q.message.message_id,
+                    chat.id,
+                    chat.title or "",
+                    user.id,
+                    q.message.message_id,
                 )
-                await q.edit_message_text(self.perms_required_message(), reply_markup=None)
+                await q.edit_message_text(
+                    self.perms_required_message(), reply_markup=None
+                )
                 return
 
             if await db.groups_db.is_connected(chat.id):
-                await q.edit_message_text(self.already_connected_message(), reply_markup=None)
+                await q.edit_message_text(
+                    self.already_connected_message(), reply_markup=None
+                )
                 return
 
             await asyncio.gather(
-                self.complete_join(chat.id, chat.title or "", user.id, user.first_name, ctx.bot),
+                self.complete_join(
+                    chat.id, chat.title or "", user.id, user.first_name, ctx.bot
+                ),
                 q.edit_message_text(self.connected_message(), reply_markup=None),
             )
 
@@ -283,7 +318,10 @@ class BuildConnection:
                 ctx.bot.send_message(
                     lc,
                     parse_logmsg.group_connection_rejected_log(
-                        chat.id, chat.title or "Unknown", user.id, user.first_name,
+                        chat.id,
+                        chat.title or "Unknown",
+                        user.id,
+                        user.first_name,
                     ),
                     parse_mode="HTML",
                     message_thread_id=lt,

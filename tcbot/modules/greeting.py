@@ -10,7 +10,8 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes, MessageHandler, filters
 
-from tcbot import cfg, database as db
+from tcbot import cfg
+from tcbot import database as db
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.formatter import mention
 
@@ -19,6 +20,7 @@ log = logging.getLogger(__name__)
 
 # ──────────────────────── Member Handlers ───────────────────────── #
 
+
 async def _handle_member(member, msg, chat, bot) -> None:
     """Process a single new member: cache, ban-check, then greet or remove."""
     if member.is_bot:
@@ -26,7 +28,10 @@ async def _handle_member(member, msg, chat, bot) -> None:
 
     _, ban = await asyncio.gather(
         db.users_db.upsert_user(
-            member.id, member.username, member.first_name, member.last_name,
+            member.id,
+            member.username,
+            member.first_name,
+            member.last_name,
         ),
         db.bans_db.get_active_ban(member.id),
     )
@@ -54,22 +59,21 @@ async def _handle_member(member, msg, chat, bot) -> None:
 
 @decorators.log_execution
 async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    msg  = update.effective_message
+    msg = update.effective_message
     chat = update.effective_chat
 
     if chat.id not in (cfg.main_group, cfg.exec_group):
         return
 
     # * Process all new members concurrently — handles batch joins via invite links
-    await asyncio.gather(*[
-        _handle_member(m, msg, chat, ctx.bot)
-        for m in msg.new_chat_members
-    ])
+    await asyncio.gather(
+        *[_handle_member(m, msg, chat, ctx.bot) for m in msg.new_chat_members]
+    )
 
 
 @decorators.log_execution
 async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    msg  = update.effective_message
+    msg = update.effective_message
     chat = update.effective_chat
 
     if chat.id not in (cfg.main_group, cfg.exec_group):

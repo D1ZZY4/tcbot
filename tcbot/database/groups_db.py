@@ -12,17 +12,17 @@ Federated groups and pending joins collection helpers
 from __future__ import annotations
 
 from tcbot.database.cache import (
-    CACHE_MISS,
     _ALL_GROUPS_KEY,
+    CACHE_MISS,
     active_groups_cache,
     connected_cache,
 )
 from tcbot.database.mongos import col
 from tcbot.utils.timedate_format import utc_now
 
-
 # ─────────────────────── Collection Helpers ─────────────────────── #
 # * Internal collection access utilities for groups database
+
 
 def _groups():
     """Get the federated_groups collection reference from MongoDB"""
@@ -38,6 +38,7 @@ def _pending():
 # * Functions to manage active connected groups in the federation
 # * Includes caching to minimize database roundtrips
 # ! CRITICAL: Cache invalidation is crucial here - always clear caches on changes
+
 
 async def get_group(chat_id: int) -> dict | None:
     """
@@ -74,13 +75,15 @@ async def add_group(chat_id: int, title: str, added_by: int) -> None:
     """
     await _groups().update_one(
         {"chat_id": chat_id},
-        {"$set": {
-            "chat_id":    chat_id,
-            "title":      title,
-            "added_by":   added_by,
-            "added_date": utc_now(),
-            "is_active":  True,
-        }},
+        {
+            "$set": {
+                "chat_id": chat_id,
+                "title": title,
+                "added_by": added_by,
+                "added_date": utc_now(),
+                "is_active": True,
+            }
+        },
         upsert=True,
     )
     connected_cache.put(chat_id, True)
@@ -125,6 +128,7 @@ async def active_group_count() -> int:
 # * Functions to manage groups waiting to be approved into the federation
 # * Tracks join requests with all necessary metadata
 
+
 async def add_pending(chat_id: int, title: str, owner_id: int, message_id: int) -> None:
     """
     Add or update a pending join request from a group
@@ -133,13 +137,15 @@ async def add_pending(chat_id: int, title: str, owner_id: int, message_id: int) 
     """
     await _pending().update_one(
         {"chat_id": chat_id},
-        {"$set": {
-            "chat_id":    chat_id,
-            "title":      title,
-            "owner_id":   owner_id,
-            "message_id": message_id,
-            "added_date": utc_now(),
-        }},
+        {
+            "$set": {
+                "chat_id": chat_id,
+                "title": title,
+                "owner_id": owner_id,
+                "message_id": message_id,
+                "added_date": utc_now(),
+            }
+        },
         upsert=True,
     )
 

@@ -48,10 +48,11 @@ log = logging.getLogger(__name__)
 
 # * State constants used by all moderation ConversationHandlers
 WAITING_REASON = 0
-WAITING_PROOF  = 1
+WAITING_PROOF = 1
 
 
 # ─────────────────────────── Reason parsing ─────────────────────── #
+
 
 def parse_inline_reason(
     args: list[str],
@@ -63,6 +64,7 @@ def parse_inline_reason(
 
 
 # ─────────────────────────────── BuildReason ────────────────────── #
+
 
 class BuildReason:
     """Configurable reason-step keyboard and prompt builder.
@@ -99,10 +101,14 @@ class BuildReason:
         buttons: list[InlineKeyboardButton] = []
         if self.skip_allowed:
             buttons.append(
-                InlineKeyboardButton(self.skip_label, callback_data=f"{self.action}_skip_reason")
+                InlineKeyboardButton(
+                    self.skip_label, callback_data=f"{self.action}_skip_reason"
+                )
             )
         buttons.append(
-            InlineKeyboardButton(self.cancel_label, callback_data=f"{self.action}_cancel")
+            InlineKeyboardButton(
+                self.cancel_label, callback_data=f"{self.action}_cancel"
+            )
         )
         return InlineKeyboardMarkup([buttons])
 
@@ -113,7 +119,7 @@ class BuildReason:
         extra_info: str = "",
     ) -> str:
         """Prompt asking the moderator to type a reason."""
-        suffix    = f" {extra_info}" if extra_info else ""
+        suffix = f" {extra_info}" if extra_info else ""
         skip_hint = f", or tap <b>{self.skip_label}</b>" if self.skip_allowed else ""
         return (
             f"About to {action_label} {target_mention}{suffix}.\n"
@@ -122,6 +128,7 @@ class BuildReason:
 
 
 # ────────────────── Generic ConversationHandler factory ─────────── #
+
 
 def build_modaction_conv(
     reason: BuildReason,
@@ -160,12 +167,12 @@ def build_modaction_conv(
                        fallback (e.g. unmute commands should reach their own
                        MessageHandler even if a mute conversation is open).
     """
-    action           = reason.action
-    _reason_key      = f"{action}_reason"
-    _proof_key       = f"{action}_proof_desc"
-    _extra_info_key  = f"{action}_extra_info"
+    action = reason.action
+    _reason_key = f"{action}_reason"
+    _proof_key = f"{action}_proof_desc"
+    _extra_info_key = f"{action}_extra_info"
     _prompt_chat_key = f"{action}_prompt_chat"
-    _prompt_id_key   = f"{action}_prompt_id"
+    _prompt_id_key = f"{action}_prompt_id"
 
     def _get_target(ctx: ContextTypes.DEFAULT_TYPE) -> str:
         return (
@@ -177,12 +184,12 @@ def build_modaction_conv(
     # ── WAITING_REASON handlers ──────────────────────────────────── #
 
     async def _on_reason_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        text        = update.effective_message.text.strip()
+        text = update.effective_message.text.strip()
         ctx.user_data[_reason_key] = text
-        extra_info  = ctx.user_data.get(_extra_info_key, "")
-        prompt_txt  = proof.step_prompt(_get_target(ctx), action, text, extra_info)
+        extra_info = ctx.user_data.get(_extra_info_key, "")
+        prompt_txt = proof.step_prompt(_get_target(ctx), action, text, extra_info)
         prompt_chat = ctx.user_data.get(_prompt_chat_key)
-        prompt_id   = ctx.user_data.get(_prompt_id_key)
+        prompt_id = ctx.user_data.get(_prompt_id_key)
         if prompt_id and prompt_chat:
             try:
                 await ctx.bot.edit_message_text(
@@ -196,19 +203,25 @@ def build_modaction_conv(
                 log.error("%s prompt edit failed (reason step): %s", action, exc)
         else:
             await update.effective_message.reply_text(
-                prompt_txt, parse_mode="HTML", reply_markup=proof.keyboard(),
+                prompt_txt,
+                parse_mode="HTML",
+                reply_markup=proof.keyboard(),
             )
         return WAITING_PROOF
 
     async def _on_skip_reason(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        q          = update.callback_query
+        q = update.callback_query
         ctx.user_data[_reason_key] = "No reason provided"
         extra_info = ctx.user_data.get(_extra_info_key, "")
-        prompt_txt = proof.step_prompt(_get_target(ctx), action, "No reason provided", extra_info)
+        prompt_txt = proof.step_prompt(
+            _get_target(ctx), action, "No reason provided", extra_info
+        )
         try:
             await asyncio.gather(
                 q.answer(),
-                q.edit_message_text(prompt_txt, parse_mode="HTML", reply_markup=proof.keyboard()),
+                q.edit_message_text(
+                    prompt_txt, parse_mode="HTML", reply_markup=proof.keyboard()
+                ),
             )
         except Exception as exc:
             log.error("%s prompt edit failed (skip-reason step): %s", action, exc)
@@ -239,7 +252,9 @@ def build_modaction_conv(
         return ConversationHandler.END
 
     async def _end_conv(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        await update.effective_message.reply_text(f"{action.capitalize()} operation cancelled.")
+        await update.effective_message.reply_text(
+            f"{action.capitalize()} operation cancelled."
+        )
         return ConversationHandler.END
 
     # ── Build states ─────────────────────────────────────────────── #
@@ -249,14 +264,18 @@ def build_modaction_conv(
         CallbackQueryHandler(_on_cancel, pattern=rf"^{action}_cancel$"),
     ]
     if reason.skip_allowed:
-        reason_state.insert(1, CallbackQueryHandler(
-            _on_skip_reason, pattern=rf"^{action}_skip_reason$",
-        ))
+        reason_state.insert(
+            1,
+            CallbackQueryHandler(
+                _on_skip_reason,
+                pattern=rf"^{action}_skip_reason$",
+            ),
+        )
 
     proof_state = [
         MessageHandler(filters.PHOTO | filters.VIDEO, _on_proof),
         CallbackQueryHandler(_on_skip_proof, pattern=rf"^{action}_skip_proof$"),
-        CallbackQueryHandler(_on_cancel,     pattern=rf"^{action}_cancel$"),
+        CallbackQueryHandler(_on_cancel, pattern=rf"^{action}_cancel$"),
     ]
 
     fallback_filter = ALL_PREFIXES_CMD_FILTER
@@ -267,7 +286,7 @@ def build_modaction_conv(
         entry_points=[MessageHandler(entry_filter, entry_fn)],
         states={
             WAITING_REASON: reason_state,
-            WAITING_PROOF:  proof_state,
+            WAITING_PROOF: proof_state,
         },
         fallbacks=[
             CallbackQueryHandler(_on_cancel, pattern=rf"^{action}_cancel$"),

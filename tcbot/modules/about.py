@@ -30,6 +30,7 @@ __about_msg__ = (
 
 # ──────────────────────── Callback Handler ──────────────────────── #
 
+
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_about_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -37,7 +38,8 @@ async def on_about_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(
-            __about_msg__, parse_mode="HTML",
+            __about_msg__,
+            parse_mode="HTML",
             reply_markup=keyboards.back_to_start_kb(),
         ),
     )

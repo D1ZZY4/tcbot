@@ -8,15 +8,18 @@ from __future__ import annotations
 
 import asyncio
 
-from tcbot import cfg, database as db
+from tcbot import cfg
+from tcbot import database as db
 from tcbot.modules.helper.formatter import code, esc, mention
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.utils.timedate_format import fmt_dt
 
-
 # ── Ban detail builder ──────────────────────────────────────────────────────
 
-async def build_ban_detail(ban: dict, target_fname: str | None = None) -> tuple[str, str | None]:
+
+async def build_ban_detail(
+    ban: dict, target_fname: str | None = None
+) -> tuple[str, str | None]:
     """Return (formatted text, proof_link or None) for a ban document."""
     uid = ban["banned_user_id"]
     aid = ban.get("admin_user_id", 0)
@@ -32,7 +35,8 @@ async def build_ban_detail(ban: dict, target_fname: str | None = None) -> tuple[
     proof_chat, proof_thread = cfg.proofs
     proof_link = (
         message_link(proof_chat, ban["proof_message_id"], proof_thread)
-        if ban.get("proof_message_id") else None
+        if ban.get("proof_message_id")
+        else None
     )
 
     ts = ban.get("timestamp")

@@ -9,12 +9,12 @@ import asyncio
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
-from tcbot import cfg, database as db
+from tcbot import cfg
+from tcbot import database as db
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.formatter import code, esc
 from tcbot.modules.helper.parse_editmsg import safe_edit
 from tcbot.utils.prefixes import build_prefixed_filters
-
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -22,25 +22,22 @@ __module_name__ = "Groups"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
     "<code>/tcgroups</code> (alias: <code>/tcg</code>)\n\n"
-
     "<b>Who can use it</b>\n"
     "Anyone - no special permissions needed.\n\n"
-
     "<b>Where to use it</b>\n"
     "Bot PM, exec group, or any connected group.\n\n"
-
     "<b>What it does</b>\n"
     f"Lists all groups currently connected to {cfg.community_name}, along with the total count. "
     "The default view shows group names only.\n"
     "Tap <b>Details</b> to expand the list and show each group's chat ID alongside its name. "
     "Tap <b>Simple</b> to collapse back to names only.\n\n"
-
     "<b>Example</b>\n"
     "<code>/tcgroups</code> or <code>/tcg</code>"
 )
 
 
 # ──────────────────────── Helper Functions ──────────────────────── #
+
 
 def _render(groups: list[dict], detailed: bool) -> str:
     lines = [f"<b>Connected Groups</b>\n\nCount: {len(groups)}\n"]
@@ -54,22 +51,33 @@ def _render(groups: list[dict], detailed: bool) -> str:
 
 def _kb(detailed: bool) -> InlineKeyboardMarkup:
     if detailed:
-        return InlineKeyboardMarkup([[
-            InlineKeyboardButton("Simple", callback_data="groups_simple"),
-        ]])
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton("Details", callback_data="groups_details"),
-    ]])
+        return InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("Simple", callback_data="groups_simple"),
+                ]
+            ]
+        )
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("Details", callback_data="groups_details"),
+            ]
+        ]
+    )
 
 
 # ────────── Command for see Connected Groups </tcgroups> ────────── #
+
 
 @decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
 async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     groups = await db.groups_db.active_groups()
     if not groups:
-        await update.effective_message.reply_text(f"No groups are currently connected to {cfg.community_name}.")
+        await update.effective_message.reply_text(
+            f"No groups are currently connected to {cfg.community_name}."
+        )
         return
     ctx.user_data["groups_cache"] = groups
     await update.effective_message.reply_text(
@@ -79,8 +87,11 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 # ────────────── Callback Handlers (Details & Simple) ────────────── #
 
-async def _toggle(update: Update, ctx: ContextTypes.DEFAULT_TYPE, detailed: bool) -> None:
-    q      = update.callback_query
+
+async def _toggle(
+    update: Update, ctx: ContextTypes.DEFAULT_TYPE, detailed: bool
+) -> None:
+    q = update.callback_query
     groups = ctx.user_data.get("groups_cache")
     if groups:
         await q.answer()
@@ -105,12 +116,10 @@ async def on_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
 # ──────────────────────────── Handlers ──────────────────────────── #
 
-_GROUPS_CMDS = (
-    build_prefixed_filters("tcgroups") | build_prefixed_filters("tcg")
-)
+_GROUPS_CMDS = build_prefixed_filters("tcgroups") | build_prefixed_filters("tcg")
 
 __handlers__ = [
     MessageHandler(_GROUPS_CMDS, cmd_tcfgroups),
     CallbackQueryHandler(on_groups_details, pattern=r"^groups_details$"),
-    CallbackQueryHandler(on_groups_simple,  pattern=r"^groups_simple$"),
+    CallbackQueryHandler(on_groups_simple, pattern=r"^groups_simple$"),
 ]

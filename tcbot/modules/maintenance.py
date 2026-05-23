@@ -12,8 +12,8 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes, MessageHandler
 
-from tcbot import database as db
 from tcbot import cfg
+from tcbot import database as db
 from tcbot.modules.helper import decorators, parse_logmsg
 from tcbot.modules.helper.formatter import code
 from tcbot.utils.prefixes import build_prefixed_filters
@@ -28,14 +28,11 @@ __help_text__ = (
     "<b>Commands & Aliases</b>\n"
     "<code>/leaveall</code> - aliases: <code>/exitall</code>, <code>/tcleave</code>\n"
     "<code>/cleanup</code> - aliases: <code>/tcclean</code>, <code>/tcc</code>\n\n"
-
     "<b>Who can use it</b>\n"
     "<code>/leaveall</code>: Founder only.\n"
     "<code>/cleanup</code>: TC Staff (Admin and above).\n\n"
-
     "<b>Where to use it</b>\n"
     "Exec group or bot PM.\n\n"
-
     "<b>What it does</b>\n"
     "<code>/leaveall</code>: makes the bot leave every connected group simultaneously, marks "
     "them all as disconnected in the database, and posts a log entry for each group. "
@@ -45,7 +42,6 @@ __help_text__ = (
     "still has access. Any group where the bot was kicked, removed, or can no longer reach is "
     "marked as disconnected and removed from the active list. "
     "Run this periodically to keep the group list accurate.\n\n"
-
     "<b>Examples</b>\n"
     "<code>/cleanup</code> - remove stale or inaccessible groups from the federation.\n"
     "<code>/leaveall</code> - emergency withdrawal from all connected groups."
@@ -53,6 +49,7 @@ __help_text__ = (
 
 
 # ──────────────────────── Helper Functions ──────────────────────── #
+
 
 async def _leave_one(
     bot,
@@ -69,7 +66,10 @@ async def _leave_one(
         bot.send_message(
             lc,
             parse_logmsg.group_disconnected_log(
-                grp["chat_id"], grp["title"], admin_id, admin_name,
+                grp["chat_id"],
+                grp["title"],
+                admin_id,
+                admin_name,
             ),
             parse_mode="HTML",
             message_thread_id=lt,
@@ -89,17 +89,20 @@ async def _should_remove(bot, grp: dict) -> bool:
 
 # ────────────────── Command Leave All </leaveall> ───────────────── #
 
+
 @decorators.ratelimiter(limit=1, period=300)
 @decorators.owner_only
 @decorators.log_execution
 async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    admin  = update.effective_user
+    admin = update.effective_user
     groups = await db.groups_db.active_groups()
     if not groups:
         await update.effective_message.reply_text("No connected groups.")
         return
 
-    status = await update.effective_message.reply_text(f"Leaving {len(groups)} groups...")
+    status = await update.effective_message.reply_text(
+        f"Leaving {len(groups)} groups..."
+    )
     lc, lt = cfg.logs
 
     # * All groups processed concurrently - no sequential sleep between them
@@ -109,7 +112,8 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
     left = sum(
-        1 for r in all_results
+        1
+        for r in all_results
         if not isinstance(r, BaseException) and not isinstance(r[0], BaseException)
     )
     failed = len(groups) - left
@@ -124,6 +128,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 # ─────────────────── Command CleanUp </cleanup> ─────────────────── #
+
 
 @decorators.ratelimiter(limit=3, period=60)
 @decorators.staff_only
@@ -152,11 +157,19 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 # ──────────────────────────── Handlers ──────────────────────────── #
 
-_LEAVEALL_CMDS = build_prefixed_filters("leaveall") | build_prefixed_filters("exitall") | build_prefixed_filters("tcleave")
-_CLEANUP_CMDS  = build_prefixed_filters("cleanup")  | build_prefixed_filters("tcclean") | build_prefixed_filters("tcc")
+_LEAVEALL_CMDS = (
+    build_prefixed_filters("leaveall")
+    | build_prefixed_filters("exitall")
+    | build_prefixed_filters("tcleave")
+)
+_CLEANUP_CMDS = (
+    build_prefixed_filters("cleanup")
+    | build_prefixed_filters("tcclean")
+    | build_prefixed_filters("tcc")
+)
 
 
 __handlers__ = [
     MessageHandler(_LEAVEALL_CMDS, cmd_leaveall),
-    MessageHandler(_CLEANUP_CMDS,  cmd_cleanup),
+    MessageHandler(_CLEANUP_CMDS, cmd_cleanup),
 ]

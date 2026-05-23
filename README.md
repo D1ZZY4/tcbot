@@ -139,6 +139,16 @@ python3 -m pytest tests/ -v
 | `test_log_templates.py` | Log message formatters |
 | `test_rate_limiter.py` | `_RateLimiter` sliding-window logic |
 
+## Code Quality
+
+```bash
+uv run ruff format .
+uv run ruff check --fix .
+```
+
+Use `ruff format` for automatic prettifying and `ruff check --fix` to clean up lint
+issues such as unused imports and import order.
+
 ---
 
 ## Documentation

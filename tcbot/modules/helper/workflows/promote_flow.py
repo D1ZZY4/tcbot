@@ -11,19 +11,20 @@ import logging
 
 from telegram import Bot
 
-from tcbot import cfg, database as db
-from tcbot.database.roles_db import ROLE_LABEL, get_effective_role, role_rank
+from tcbot import cfg
+from tcbot import database as db
+from tcbot.database.roles_db import ROLE_LABEL, role_rank
 from tcbot.modules.helper import keyboards, parse_logmsg
 from tcbot.modules.helper.formatter import mention
 
 log = logging.getLogger(__name__)
 
 _ROLE_ALIASES: dict[str, str] = {
-    "admin":     "admin",
+    "admin": "admin",
     "developer": "developer",
-    "dev":       "developer",
-    "tester":    "tester",
-    "test":      "tester",
+    "dev": "developer",
+    "tester": "tester",
+    "test": "tester",
 }
 
 
@@ -36,6 +37,7 @@ def _available_roles_for(executor_role: str) -> list[str]:
 
 
 # ── Shared promote executor ────────────────────────────────────────────────
+
 
 async def _execute_promote(
     bot: Bot,
@@ -71,7 +73,9 @@ async def _execute_promote(
                     db.admins_db.add_admin(target_id, admin_id),
                     db.users_db.upsert_user(target_id, None, target_fname),
                 )
-            log_text = parse_logmsg.admin_promoted(target_id, target_fname, admin_id, admin_fname)
+            log_text = parse_logmsg.admin_promoted(
+                target_id, target_fname, admin_id, admin_fname
+            )
             # * log and notify in parallel
             await asyncio.gather(
                 bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
@@ -97,12 +101,16 @@ async def _execute_promote(
             db.queues_db.enqueue(target_id, None, target_fname, admin_id),
             db.admins_db.get_owner_id(),
         )
-        req_text = parse_logmsg.promo_request_log(target_id, target_fname, None, request_id)
-        notified   = False
+        req_text = parse_logmsg.promo_request_log(
+            target_id, target_fname, None, request_id
+        )
+        notified = False
         if owner_id:
             try:
                 await bot.send_message(
-                    owner_id, req_text, parse_mode="HTML",
+                    owner_id,
+                    req_text,
+                    parse_mode="HTML",
                     reply_markup=keyboards.promo_decision_kb(request_id),
                 )
                 notified = True
@@ -111,13 +119,18 @@ async def _execute_promote(
         if not notified:
             try:
                 await bot.send_message(
-                    lc, req_text, parse_mode="HTML",
+                    lc,
+                    req_text,
+                    parse_mode="HTML",
                     message_thread_id=lt,
                     reply_markup=keyboards.promo_decision_kb(request_id),
                 )
             except Exception as exc:
                 log.error("Promo request notify failed: %s", exc)
-        return True, "Submitted - the Founder has been notified and will review it shortly. ✅"
+        return (
+            True,
+            "Submitted - the Founder has been notified and will review it shortly. ✅",
+        )
 
     # * role in ("developer", "tester")
     if executor_role not in ("founder", "admin"):
@@ -125,7 +138,10 @@ async def _execute_promote(
 
     if current_role == "admin":
         label = ROLE_LABEL.get(role, role)
-        return False, f"That user is already an Admin. Demote them first before assigning {label}."
+        return (
+            False,
+            f"That user is already an Admin. Demote them first before assigning {label}.",
+        )
 
     if current_role in ("developer", "tester"):
         await db.roles_db.remove_role(target_id)
@@ -137,7 +153,9 @@ async def _execute_promote(
     )
 
     role_label = ROLE_LABEL.get(role, role)
-    log_text   = parse_logmsg.role_assigned(target_id, target_fname, role, admin_id, admin_fname)
+    log_text = parse_logmsg.role_assigned(
+        target_id, target_fname, role, admin_id, admin_fname
+    )
     # * log and notify in parallel
     await asyncio.gather(
         bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
@@ -147,4 +165,7 @@ async def _execute_promote(
         ),
         return_exceptions=True,
     )
-    return True, f"Done. {mention(target_id, target_fname)} is now a {cfg.community_name} {role_label}."
+    return (
+        True,
+        f"Done. {mention(target_id, target_fname)} is now a {cfg.community_name} {role_label}.",
+    )

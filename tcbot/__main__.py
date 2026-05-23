@@ -11,7 +11,14 @@ import logging
 import sys
 
 from telegram import Update
-from telegram.ext import Application, ApplicationBuilder, ContextTypes, MessageHandler, TypeHandler, filters
+from telegram.ext import (
+    Application,
+    ApplicationBuilder,
+    ContextTypes,
+    MessageHandler,
+    TypeHandler,
+    filters,
+)
 
 from tcbot import cfg
 from tcbot import database as db
@@ -21,8 +28,8 @@ from tcbot.database.mongos import connect, ensure_indexes
 from tcbot.modules import get_handlers
 from tcbot.modules.helper.decorators import global_rate_limit_handler
 from tcbot.utils import error_reporter
-from tcbot.utils.prefixes import ANY_CMD_FILTER
 from tcbot.utils.logger import setup as setup_logging
+from tcbot.utils.prefixes import ANY_CMD_FILTER
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +37,7 @@ log = logging.getLogger(__name__)
 # ────────────────── Member Cache Update (layer 1) ───────────────── #
 # * Updates user profile cache for every message in connected groups
 # * Runs in low-priority group to avoid interfering with command handlers
+
 
 async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Update the member cache with the sender's profile info for every group message."""
@@ -45,7 +53,9 @@ async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         return
 
     try:
-        await db.users_db.upsert_user(user.id, user.username, user.first_name, user.last_name)
+        await db.users_db.upsert_user(
+            user.id, user.username, user.first_name, user.last_name
+        )
     except Exception as exc:
         log.debug("Member cache update failed for %d: %s", user.id, exc)
 
@@ -53,6 +63,7 @@ async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
 # ─────────────────── PTB Error Handler (Layer 2) ────────────────── #
 # * Catches all unhandled exceptions from Telegram Bot API handlers
 # * Layer 2 of 3 error handling system - reports to logs_errors channel
+
 
 async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Catch all unhandled PTB handler exceptions and report them to the logs-errors channel."""
@@ -91,11 +102,13 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
 # * Catches unhandled asyncio exceptions from background tasks
 # * Layer 3 of 3 error handling system - last line of defense for errors
 
+
 def _make_asyncio_exc_handler(loop: asyncio.AbstractEventLoop):
     """Return a synchronous asyncio exception handler that mirrors errors to the error reporter."""
+
     def handler(lp: asyncio.AbstractEventLoop, context: dict) -> None:
-        exc    = context.get("exception")
-        msg    = context.get("message", "Unhandled asyncio exception")
+        exc = context.get("exception")
+        msg = context.get("message", "Unhandled asyncio exception")
         future = context.get("future") or context.get("task")
         detail = f"{msg} | Task: {future!r}" if future else msg
 
@@ -117,6 +130,7 @@ def _make_asyncio_exc_handler(loop: asyncio.AbstractEventLoop):
 # * Runs after PTB Application is built but before polling starts
 # * Initializes database connections and all core bot systems
 
+
 async def _post_init(app: Application) -> None:
     """Connect to MongoDB, ensure indexes, seed owner, and attach the error reporter."""
     await connect()
@@ -137,6 +151,7 @@ async def _post_init(app: Application) -> None:
 # ──────────────────────── Main Entry Point ──────────────────────── #
 # * The main function that starts the entire bot application
 # * Configures PTB Application and registers all handlers
+
 
 def main() -> None:
     """Configure and start the PTB application with long-polling."""

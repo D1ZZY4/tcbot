@@ -24,12 +24,15 @@ def _ctx(get_chat: AsyncMock) -> SimpleNamespace:
 
 # ── UserIdentity ───────────────────────────────────────────────────────────
 
+
 def test_user_identity_name_with_username_combines() -> None:
     ident = UserIdentity(user_id=1, display_name="Andi", username="andi")
     assert ident.name_with_username == "Andi (@andi)"
 
 
-def test_user_identity_name_with_username_returns_display_only_when_no_username() -> None:
+def test_user_identity_name_with_username_returns_display_only_when_no_username() -> (
+    None
+):
     ident = UserIdentity(user_id=1, display_name="Andi", username=None)
     assert ident.name_with_username == "Andi"
 
@@ -41,6 +44,7 @@ def test_user_identity_is_frozen_dataclass() -> None:
 
 
 # ── resolve_identity - live path ───────────────────────────────────────────
+
 
 async def test_resolve_identity_uses_get_chat_first_name() -> None:
     chat = SimpleNamespace(first_name="Andi", title=None, username="andi")
@@ -56,12 +60,14 @@ async def test_resolve_identity_uses_title_when_no_first_name() -> None:
 
 # ── resolve_identity - cache fallback ──────────────────────────────────────
 
+
 async def test_resolve_identity_falls_back_to_cache_on_telegram_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ctx = _ctx(AsyncMock(side_effect=TelegramError("forbidden")))
     monkeypatch.setattr(
-        extraction.members_repo, "find_latest_for_user",
+        extraction.members_repo,
+        "find_latest_for_user",
         AsyncMock(return_value={"first_name": "Citra", "username": "citra"}),
     )
     ident = await resolve_identity(ctx, 99)
@@ -73,7 +79,8 @@ async def test_resolve_identity_uses_username_from_cache_when_no_first_name(
 ) -> None:
     ctx = _ctx(AsyncMock(side_effect=TelegramError("unreachable")))
     monkeypatch.setattr(
-        extraction.members_repo, "find_latest_for_user",
+        extraction.members_repo,
+        "find_latest_for_user",
         AsyncMock(return_value={"first_name": None, "username": "fromcache"}),
     )
     ident = await resolve_identity(ctx, 12)
@@ -83,12 +90,14 @@ async def test_resolve_identity_uses_username_from_cache_when_no_first_name(
 
 # ── resolve_identity - ultimate fallback ───────────────────────────────────
 
+
 async def test_resolve_identity_ultimate_fallback_uses_str_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ctx = _ctx(AsyncMock(side_effect=TelegramError("gone")))
     monkeypatch.setattr(
-        extraction.members_repo, "find_latest_for_user",
+        extraction.members_repo,
+        "find_latest_for_user",
         AsyncMock(return_value=None),
     )
     ident = await resolve_identity(ctx, 7)
@@ -101,7 +110,8 @@ async def test_resolve_identity_skips_chat_with_blank_names_to_cache(
     blank = SimpleNamespace(first_name=None, title=None, username=None)
     ctx = _ctx(AsyncMock(return_value=blank))
     monkeypatch.setattr(
-        extraction.members_repo, "find_latest_for_user",
+        extraction.members_repo,
+        "find_latest_for_user",
         AsyncMock(return_value={"first_name": "Dani", "username": None}),
     )
     ident = await resolve_identity(ctx, 55)

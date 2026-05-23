@@ -8,8 +8,6 @@ from __future__ import annotations
 
 import html
 
-from tcbot import cfg
-
 
 def bold(text: str) -> str:
     return f"<b>{html.escape(str(text))}</b>"

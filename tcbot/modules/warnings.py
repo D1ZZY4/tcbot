@@ -12,7 +12,8 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 
-from tcbot import cfg, database as db
+from tcbot import cfg
+from tcbot import database as db
 from tcbot.database.roles_db import ROLE_LABEL, get_effective_role, role_rank
 from tcbot.modules.helper import decorators, extraction
 from tcbot.modules.helper.formatter import mention
@@ -44,14 +45,11 @@ __help_text__ = (
     f"<code>/tcunwarn</code> (alias: <code>/tcunw</code>)\n"
     "<code>/warns</code> (alias: <code>/warnlist</code>)\n"
     "<code>/resetwarns</code> (alias: <code>/clearwarns</code>)\n\n"
-
     "<b>Who can use it</b>\n"
     f"<code>/tcwarn</code>, <code>/tcunwarn</code>, <code>/resetwarns</code>: Tester and above.\n"
     "<code>/warns</code>: anyone.\n\n"
-
     "<b>Where to use it</b>\n"
     "Inside any connected group.\n\n"
-
     "<b>What it does</b>\n"
     f"<code>/tcwarn</code>: issues a formal warning to a user in the current group. "
     "Warnings are tracked <b>per-group</b> and do not carry across connected groups. "
@@ -62,15 +60,12 @@ __help_text__ = (
     "for a user in the current group.\n\n"
     "<code>/resetwarns</code>: clears all warnings for a user in the current group at once, "
     "without triggering the ban threshold.\n\n"
-
     "<b>Flow (/tcwarn)</b>\n"
     "1. Run <code>/tcwarn</code> with the target (and optional inline reason).\n"
     "2. If no reason was given, the bot asks - reply with text.\n"
     "3. The bot asks for proof - send a photo/video or tap <b>Skip</b> to warn without proof.\n\n"
-
     "<b>How to specify the target</b>\n"
     "Reply to a message, or provide a user ID / @username after the command.\n\n"
-
     "<b>Examples</b>\n"
     "<code>/tcwarn @username spamming</code> - reason inline\n"
     "<code>/tcw 123456789</code> - bot will ask for reason\n"
@@ -82,23 +77,25 @@ __help_text__ = (
 
 # ──────────────────────── Helper Functions ──────────────────────── #
 
+
 async def _role_note(
     target_id: int,
     target_name: str | None,
     target_role: str,
 ) -> tuple[str, str]:
     """Return (fname, role_label) for a staff target."""
-    fname      = await db.users_db.get_first_name(target_id, target_name or str(target_id))
+    fname = await db.users_db.get_first_name(target_id, target_name or str(target_id))
     role_label = ROLE_LABEL.get(target_role, target_role)
     return fname, role_label
 
 
 # ───────────────────── Command Warn </tcwarn> ───────────────────── #
 
+
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.log_execution
 async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-    msg   = update.effective_message
+    msg = update.effective_message
     admin = update.effective_user
 
     args = parse_cmd_args(msg.text)
@@ -111,7 +108,9 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         extraction.extract_target(update, args, ctx.bot),
     )
     if role_rank(executor_role) < role_rank("tester"):
-        await msg.reply_text("You need at least a Tester role to warn users - not your call. 🚫")
+        await msg.reply_text(
+            "You need at least a Tester role to warn users - not your call. 🚫"
+        )
         return ConversationHandler.END
 
     inline_reason = parse_inline_reason(args, has_explicit_target)
@@ -123,7 +122,9 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     if target_id == ctx.bot.id:
-        await msg.reply_text("Warn me? 😄 I'm the one who manages warnings around here.")
+        await msg.reply_text(
+            "Warn me? 😄 I'm the one who manages warnings around here."
+        )
         return ConversationHandler.END
 
     target_role = await get_effective_role(target_id)
@@ -142,11 +143,13 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
                 )
             return ConversationHandler.END
 
-    ctx.user_data.update({
-        "warn_target_id":   target_id,
-        "warn_target_name": target_name or str(target_id),
-        "warn_proof_desc":  None,
-    })
+    ctx.user_data.update(
+        {
+            "warn_target_id": target_id,
+            "warn_target_name": target_name or str(target_id),
+            "warn_proof_desc": None,
+        }
+    )
 
     target_mention = mention(target_id, target_name or str(target_id))
 
@@ -169,15 +172,18 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
 # ─────────────────── Command Unwarn </tcunwarn> ─────────────────── #
 
+
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    msg  = update.effective_message
+    msg = update.effective_message
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        await msg.reply_text("Specify a target - reply to a message or provide a user ID.")
+        await msg.reply_text(
+            "Specify a target - reply to a message or provide a user ID."
+        )
         return
 
     if target_id == ctx.bot.id:
@@ -209,6 +215,7 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 # ─────────────────── Command Warn List </warns> ─────────────────── #
 
+
 @decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
 async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -224,15 +231,18 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 # ──────────────── Command Reset Warns </resetwarns> ─────────────── #
 
+
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    msg  = update.effective_message
+    msg = update.effective_message
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        await msg.reply_text("Specify a target - reply to a message or provide a user ID.")
+        await msg.reply_text(
+            "Specify a target - reply to a message or provide a user ID."
+        )
         return
 
     if target_id == ctx.bot.id:
@@ -264,17 +274,19 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
 # ──────────────────────────── Handlers ──────────────────────────── #
 
-_WARN_CMDS     = build_prefixed_filters("tcwarn")     | build_prefixed_filters("tcw")
-_UNWARN_CMDS   = build_prefixed_filters("tcunwarn")   | build_prefixed_filters("tcunw")
-_WARNLIST_CMDS = build_prefixed_filters("warns")      | build_prefixed_filters("warnlist")
-_RESET_CMDS    = build_prefixed_filters("resetwarns") | build_prefixed_filters("clearwarns")
+_WARN_CMDS = build_prefixed_filters("tcwarn") | build_prefixed_filters("tcw")
+_UNWARN_CMDS = build_prefixed_filters("tcunwarn") | build_prefixed_filters("tcunw")
+_WARNLIST_CMDS = build_prefixed_filters("warns") | build_prefixed_filters("warnlist")
+_RESET_CMDS = build_prefixed_filters("resetwarns") | build_prefixed_filters(
+    "clearwarns"
+)
 
 # * Commands that must NOT be swallowed by the warn conversation fallback.
 _WARN_ESCAPE_CMDS = _UNWARN_CMDS | _WARNLIST_CMDS | _RESET_CMDS
 
 __handlers__ = [
     warn_conversation(cmd_warn_entry, _WARN_CMDS, escape_filter=_WARN_ESCAPE_CMDS),
-    MessageHandler(_UNWARN_CMDS,   cmd_unwarn),
+    MessageHandler(_UNWARN_CMDS, cmd_unwarn),
     MessageHandler(_WARNLIST_CMDS, cmd_warnlist),
-    MessageHandler(_RESET_CMDS,    cmd_resetwarns),
+    MessageHandler(_RESET_CMDS, cmd_resetwarns),
 ]

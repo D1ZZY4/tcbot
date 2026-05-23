@@ -10,12 +10,13 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
-from tcbot import cfg, database as db
+from tcbot import cfg
+from tcbot import database as db
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.formatter import esc, mention
 from tcbot.modules.helper.workflows.stats_chats_flow import (
-    on_stats_chats,
     on_stats_chat_item,
+    on_stats_chats,
 )
 from tcbot.modules.helper.workflows.stats_flow import (
     on_bans_search_input,
@@ -28,20 +29,16 @@ from tcbot.modules.helper.workflows.stats_flow import (
 )
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
 
-
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Stats"
 __help_text__ = (
     "<b>Commands & Aliases</b>\n"
     "<code>/tcstats</code>\n\n"
-
     "<b>Who can use it</b>\n"
     "Anyone - no special permissions needed.\n\n"
-
     "<b>Where to use it</b>\n"
     "Bot PM, exec group, or any connected group.\n\n"
-
     "<b>What it does</b>\n"
     "Shows a live overview of the federation: the Founder, total staff count, number of "
     "active federation bans, and number of connected groups.\n\n"
@@ -52,7 +49,6 @@ __help_text__ = (
     "- <b>User Bans</b>: paginated list of all active federation bans, with a "
     "<b>Search</b> option to look up a specific user by name or ID.\n"
     "Each view has a <b>Back</b> button to return to the main summary.\n\n"
-
     "<b>Example</b>\n"
     "<code>/tcstats</code>"
 )
@@ -60,23 +56,27 @@ __help_text__ = (
 
 # ──────────────────────── Helper Functions ──────────────────────── #
 
+
 def _stats_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("Staff Roster",    callback_data="stats_admins")],
-        [InlineKeyboardButton("Connected Chats", callback_data="stats_chats:0")],
-        [InlineKeyboardButton("User Bans",       callback_data="stats_bans:0")],
-    ])
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("Staff Roster", callback_data="stats_admins")],
+            [InlineKeyboardButton("Connected Chats", callback_data="stats_chats:0")],
+            [InlineKeyboardButton("User Bans", callback_data="stats_bans:0")],
+        ]
+    )
 
 
 def _simple_back_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("Back", callback_data="stats_main")],
-    ])
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("Back", callback_data="stats_main")],
+        ]
+    )
 
 
 async def _stats_text() -> str:
-    (owner_id, admin_cnt, dev_list, tester_list,
-     bans, groups) = await asyncio.gather(
+    (owner_id, admin_cnt, dev_list, tester_list, bans, groups) = await asyncio.gather(
         db.admins_db.get_owner_id(),
         db.admins_db.admin_count(),
         db.roles_db.all_by_role("developer"),
@@ -84,9 +84,11 @@ async def _stats_text() -> str:
         db.bans_db.active_ban_count(),
         db.groups_db.active_group_count(),
     )
-    owner_fname   = await db.users_db.get_first_name(owner_id, "Owner") if owner_id else "Unknown"
+    owner_fname = (
+        await db.users_db.get_first_name(owner_id, "Owner") if owner_id else "Unknown"
+    )
     owner_mention = mention(owner_id, owner_fname) if owner_id else "Unknown"
-    staff_total   = 1 + admin_cnt + len(dev_list) + len(tester_list)
+    staff_total = 1 + admin_cnt + len(dev_list) + len(tester_list)
     return (
         f"<b>Stats - {esc(cfg.community_name)}</b>\n\n"
         f"Founder: {owner_mention}\n"
@@ -98,14 +100,18 @@ async def _stats_text() -> str:
 
 # ──────────────────────── Command Handlers ──────────────────────── #
 
+
 @decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
 async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     text = await _stats_text()
-    await update.effective_message.reply_text(text, parse_mode="HTML", reply_markup=_stats_kb())
+    await update.effective_message.reply_text(
+        text, parse_mode="HTML", reply_markup=_stats_kb()
+    )
 
 
 # ──────────────────────── Callback Handlers ─────────────────────── #
+
 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
@@ -140,11 +146,17 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         owner_idx = len(name_tasks)
         name_tasks.append(db.users_db.get_first_name(owner_id, "Founder"))
     admin_start = len(name_tasks)
-    name_tasks.extend(db.users_db.get_first_name(a["user_id"], str(a["user_id"])) for a in admins)
+    name_tasks.extend(
+        db.users_db.get_first_name(a["user_id"], str(a["user_id"])) for a in admins
+    )
     dev_start = len(name_tasks)
-    name_tasks.extend(db.users_db.get_first_name(d["user_id"], str(d["user_id"])) for d in developers)
+    name_tasks.extend(
+        db.users_db.get_first_name(d["user_id"], str(d["user_id"])) for d in developers
+    )
     tester_start = len(name_tasks)
-    name_tasks.extend(db.users_db.get_first_name(t["user_id"], str(t["user_id"])) for t in testers)
+    name_tasks.extend(
+        db.users_db.get_first_name(t["user_id"], str(t["user_id"])) for t in testers
+    )
 
     all_names = list(await asyncio.gather(*name_tasks)) if name_tasks else []
 
@@ -156,7 +168,9 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
     lines.append(f"<b>Admins ({len(admins)})</b>")
     if admins:
-        for adm, fname in zip(admins, all_names[admin_start:admin_start + len(admins)]):
+        for adm, fname in zip(
+            admins, all_names[admin_start : admin_start + len(admins)]
+        ):
             lines.append(f"- {mention(adm['user_id'], fname)}")
     else:
         lines.append("- None assigned")
@@ -164,7 +178,9 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
     lines.append(f"<b>Developers ({len(developers)})</b>")
     if developers:
-        for dev, fname in zip(developers, all_names[dev_start:dev_start + len(developers)]):
+        for dev, fname in zip(
+            developers, all_names[dev_start : dev_start + len(developers)]
+        ):
             lines.append(f"- {mention(dev['user_id'], fname)}")
     else:
         lines.append("- None assigned")
@@ -172,13 +188,16 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
     lines.append(f"<b>Testers ({len(testers)})</b>")
     if testers:
-        for tst, fname in zip(testers, all_names[tester_start:tester_start + len(testers)]):
+        for tst, fname in zip(
+            testers, all_names[tester_start : tester_start + len(testers)]
+        ):
             lines.append(f"- {mention(tst['user_id'], fname)}")
     else:
         lines.append("- None assigned")
 
     await q.edit_message_text(
-        "\n".join(lines), parse_mode="HTML",
+        "\n".join(lines),
+        parse_mode="HTML",
         reply_markup=_simple_back_kb(),
     )
 
@@ -188,16 +207,16 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 _STATS_CMDS = build_prefixed_filters("tcstats")
 
 __handlers__ = [
-    MessageHandler(_STATS_CMDS,                        cmd_stats),
-    CallbackQueryHandler(on_stats_main,                pattern=r"^stats_main$"),
-    CallbackQueryHandler(on_stats_admins,              pattern=r"^stats_admins$"),
-    CallbackQueryHandler(on_stats_chats,               pattern=r"^stats_chats:\d+$"),
-    CallbackQueryHandler(on_stats_chat_item,           pattern=r"^stats_chat_item:\d+:\d+$"),
-    CallbackQueryHandler(on_stats_bans,                pattern=r"^stats_bans:\d+$"),
-    CallbackQueryHandler(on_stats_ban_item,            pattern=r"^stats_ban_item:\d+:\d+$"),
-    CallbackQueryHandler(on_stats_bans_search,         pattern=r"^stats_bans_search$"),
-    CallbackQueryHandler(on_stats_search_item,         pattern=r"^stats_search_item:\d+$"),
-    CallbackQueryHandler(on_stats_search_back,         pattern=r"^stats_search_back$"),
-    CallbackQueryHandler(on_stats_search_cancel,       pattern=r"^stats_search_cancel$"),
+    MessageHandler(_STATS_CMDS, cmd_stats),
+    CallbackQueryHandler(on_stats_main, pattern=r"^stats_main$"),
+    CallbackQueryHandler(on_stats_admins, pattern=r"^stats_admins$"),
+    CallbackQueryHandler(on_stats_chats, pattern=r"^stats_chats:\d+$"),
+    CallbackQueryHandler(on_stats_chat_item, pattern=r"^stats_chat_item:\d+:\d+$"),
+    CallbackQueryHandler(on_stats_bans, pattern=r"^stats_bans:\d+$"),
+    CallbackQueryHandler(on_stats_ban_item, pattern=r"^stats_ban_item:\d+:\d+$"),
+    CallbackQueryHandler(on_stats_bans_search, pattern=r"^stats_bans_search$"),
+    CallbackQueryHandler(on_stats_search_item, pattern=r"^stats_search_item:\d+$"),
+    CallbackQueryHandler(on_stats_search_back, pattern=r"^stats_search_back$"),
+    CallbackQueryHandler(on_stats_search_cancel, pattern=r"^stats_search_cancel$"),
     MessageHandler(filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, on_bans_search_input),
 ]

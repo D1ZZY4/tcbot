@@ -13,9 +13,9 @@ from __future__ import annotations
 from tcbot.database.mongos import col
 from tcbot.utils.timedate_format import utc_now
 
-
 # ─────────────────────── Collection Helpers ─────────────────────── #
 # * Internal collection access utilities for the member cache database
+
 
 def _users():
     """Get the member_cache collection reference from MongoDB"""
@@ -26,6 +26,7 @@ def _users():
 # * Functions that update or create user cache records
 # * Keeps profile data fresh for all interacting users
 # ! CRITICAL: This is the primary way to update cached user information
+
 
 async def upsert_user(
     user_id: int,
@@ -61,6 +62,7 @@ async def upsert_user(
 # ─────────────────────── Queries & Retrieval ────────────────────── #
 # * Functions to fetch user cache data from the database
 # * Includes profile lookups and statistics
+
 
 async def get_user(user_id: int) -> dict | None:
     """

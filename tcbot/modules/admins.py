@@ -10,7 +10,8 @@ import logging
 from telegram import Update
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
-from tcbot import cfg, database as db
+from tcbot import cfg
+from tcbot import database as db
 from tcbot.database.roles_db import ROLE_LABEL, get_effective_role
 from tcbot.modules.helper import decorators, extraction, keyboards, parse_logmsg
 from tcbot.modules.helper.formatter import code, mention
@@ -34,10 +35,8 @@ __help_text__ = (
     "<code>/transferowner</code> (alias: <code>/tfowner</code>)\n"
     "<code>/tcpromoterequests</code> (alias: <code>/tcreqs</code>)\n"
     "<code>/tcpromotelist</code> (alias: <code>/tcplist</code>\n\n"
-
     "<b>Role Hierarchy</b>\n"
     "Founder (rank 4) › Admin (rank 3) › Developer (rank 2) › Tester (rank 1)\n\n"
-
     "<b>/tcpromote</b>\n"
     "Assigns a role to a user. Omit the role argument to get an inline button menu.\n"
     "Usage: <code>/tcpromote @user [admin|developer|tester]</code>\n"
@@ -45,7 +44,6 @@ __help_text__ = (
     "- Admin can promote to Developer or Tester directly; promoting someone to Admin "
     "sends a pending request to the Founder for approval.\n"
     "- You cannot promote a user to a rank equal to or above your own.\n\n"
-
     "<b>/tcdemote</b>\n"
     "Removes a user's role. A confirmation button is shown before the action executes.\n"
     "Usage: <code>/tcdemote @user</code>\n"
@@ -53,22 +51,17 @@ __help_text__ = (
     "- Admin can demote Developer or Tester only.\n"
     "- When a user with a role is banned or kicked, their role is automatically removed "
     "and they are notified by DM.\n\n"
-
     "<b>/transferowner</b>\n"
     "Transfers federation ownership to another user. The current Founder steps down to Admin. "
     "Founder only.\n"
     "Usage: <code>/transferowner @user</code>\n\n"
-
     "<b>/tcpromoterequests</b>\n"
     "Submits a request to the Founder to be promoted to Admin. The Founder receives a "
     "notification with Approve / Reject buttons.\n\n"
-
     "<b>/tcpromotelist</b>\n"
     "Lists all pending Admin promotion requests. Admin and above only.\n\n"
-
     "<b>How to specify the target</b>\n"
     "Reply to a message, or provide a user ID / @username after the command.\n\n"
-
     "<b>Examples</b>\n"
     "<code>/tcpromote @username developer</code>\n"
     "<code>/tcpromote 123456789</code> - shows role selection menu\n"
@@ -79,12 +72,13 @@ __help_text__ = (
 
 # ────────────────── Command Promote </tcpromote> ────────────────── #
 
+
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.log_execution
 async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
-    msg   = update.effective_message
-    args  = parse_cmd_args(msg.text)
+    msg = update.effective_message
+    args = parse_cmd_args(msg.text)
 
     has_explicit_target = bool(args) and (
         args[0].lstrip("-").isdigit() or args[0].startswith("@")
@@ -95,10 +89,12 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         extraction.extract_target(update, args, ctx.bot),
     )
     remaining_args = args[1:] if has_explicit_target else args
-    role_arg       = remaining_args[0].lower() if remaining_args else ""
+    role_arg = remaining_args[0].lower() if remaining_args else ""
 
     if executor_role not in ("founder", "admin"):
-        await msg.reply_text("Only Founder and Admin can promote users - not your call. 🚫")
+        await msg.reply_text(
+            "Only Founder and Admin can promote users - not your call. 🚫"
+        )
         return
 
     if not target_id:
@@ -108,20 +104,28 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if target_id == admin.id:
-        await msg.reply_text("Can't promote yourself - the hierarchy doesn't work that way. 🙃")
+        await msg.reply_text(
+            "Can't promote yourself - the hierarchy doesn't work that way. 🙃"
+        )
         return
 
     if target_id == ctx.bot.id:
         await msg.reply_text("That's me - promoting a bot doesn't quite work. 😄")
         return
 
-    role         = _ROLE_ALIASES.get(role_arg)
+    role = _ROLE_ALIASES.get(role_arg)
     current_role = await get_effective_role(target_id)
 
     if role:
         ok, text = await _execute_promote(
-            ctx.bot, admin.id, admin.first_name, executor_role,
-            target_id, target_fname or str(target_id), current_role, role,
+            ctx.bot,
+            admin.id,
+            admin.first_name,
+            executor_role,
+            target_id,
+            target_fname or str(target_id),
+            current_role,
+            role,
         )
         await msg.reply_text(text, parse_mode="HTML")
         return
@@ -140,11 +144,12 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 # ──────────────────────── Callback Handlers ─────────────────────── #
 
+
 @decorators.ratelimiter(limit=10, period=30)
 @decorators.log_execution
 async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    q             = update.callback_query
-    admin         = update.effective_user
+    q = update.callback_query
+    admin = update.effective_user
     executor_role = await get_effective_role(admin.id)
 
     if executor_role not in ("founder", "admin"):
@@ -173,30 +178,41 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     )
 
     ok, text = await _execute_promote(
-        ctx.bot, admin.id, admin.first_name, executor_role,
-        target_id, target_fname, current_role, role,
+        ctx.bot,
+        admin.id,
+        admin.first_name,
+        executor_role,
+        target_id,
+        target_fname,
+        current_role,
+        role,
     )
     await q.edit_message_text(text, parse_mode="HTML", reply_markup=None)
 
 
 @decorators.ratelimiter(limit=10, period=30)
 @decorators.log_execution
-async def on_promote_role_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_promote_role_cancel(
+    update: Update, ctx: ContextTypes.DEFAULT_TYPE
+) -> None:
     q = update.callback_query
     await asyncio.gather(
         q.answer(),
-        q.edit_message_text("Promotion cancelled. No changes were made.", reply_markup=None),
+        q.edit_message_text(
+            "Promotion cancelled. No changes were made.", reply_markup=None
+        ),
     )
 
 
 # ─────────────────── Command Demote </tcdemote> ─────────────────── #
 
+
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.log_execution
 async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
-    msg   = update.effective_message
-    args  = parse_cmd_args(msg.text)
+    msg = update.effective_message
+    args = parse_cmd_args(msg.text)
 
     # * Role check and target resolution run in parallel
     executor_role, (target_id, target_fname) = await asyncio.gather(
@@ -204,7 +220,9 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         extraction.extract_target(update, args, ctx.bot),
     )
     if executor_role not in ("founder", "admin"):
-        await msg.reply_text("Only Founder and Admin can demote users - not your call. 🚫")
+        await msg.reply_text(
+            "Only Founder and Admin can demote users - not your call. 🚫"
+        )
         return
 
     if not target_id:
@@ -238,12 +256,13 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 # ──────────────────────── Callback Handlers ─────────────────────── #
 
+
 @decorators.ratelimiter(limit=10, period=30)
 @decorators.log_execution
 async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    q             = update.callback_query
-    admin         = update.effective_user
-    target_id     = int(q.data.split(":", 1)[1])
+    q = update.callback_query
+    admin = update.effective_user
+    target_id = int(q.data.split(":", 1)[1])
     executor_role = await get_effective_role(admin.id)
 
     if executor_role not in ("founder", "admin"):
@@ -279,14 +298,19 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
     if not removed:
         await q.edit_message_text(
-            "Couldn't remove the role - it may have already been cleared.", reply_markup=None
+            "Couldn't remove the role - it may have already been cleared.",
+            reply_markup=None,
         )
         return
 
-    lc, lt     = cfg.logs
+    lc, lt = cfg.logs
     role_label = ROLE_LABEL.get(target_role, target_role)
-    log_text   = parse_logmsg.role_removed(
-        target_id, target_fname, target_role, admin.id, admin.first_name,
+    log_text = parse_logmsg.role_removed(
+        target_id,
+        target_fname,
+        target_role,
+        admin.id,
+        admin.first_name,
     )
     # * log, notify, and edit review message all in parallel
     await asyncio.gather(
@@ -317,6 +341,7 @@ async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
 # ───────────── Command Transfer Owner </transferowner> ──────────── #
 
+
 @decorators.ratelimiter(limit=3, period=300)
 @decorators.owner_only
 @decorators.log_execution
@@ -337,9 +362,12 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * add_admin must complete before set_owner (set_owner does delete_many + insert)
     await db.admins_db.add_admin(current_owner.id, current_owner.id)
     await db.admins_db.set_owner(target_id)
-    lc, lt   = cfg.logs
+    lc, lt = cfg.logs
     log_text = parse_logmsg.ownership_transferred(
-        target_id, target_fname, current_owner.id, current_owner.first_name,
+        target_id,
+        target_fname,
+        current_owner.id,
+        current_owner.first_name,
     )
     # * log and reply in parallel
     await asyncio.gather(
@@ -354,10 +382,11 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 # ───────── Command Promotion Requests </tcpromoterequests> ──────── #
 
+
 @decorators.ratelimiter(limit=3, period=300)
 @decorators.log_execution
 async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    user     = update.effective_user
+    user = update.effective_user
     existing = await db.queues_db.get_request(user.id)
     if existing:
         await update.effective_message.reply_text(
@@ -370,13 +399,17 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         db.queues_db.enqueue(user.id, user.username, user.first_name, user.id),
         db.admins_db.get_owner_id(),
     )
-    req_text = parse_logmsg.promo_request_log(user.id, user.first_name, user.username, request_id)
-    lc, lt   = cfg.logs
-    notified   = False
+    req_text = parse_logmsg.promo_request_log(
+        user.id, user.first_name, user.username, request_id
+    )
+    lc, lt = cfg.logs
+    notified = False
     if owner_id:
         try:
             await ctx.bot.send_message(
-                owner_id, req_text, parse_mode="HTML",
+                owner_id,
+                req_text,
+                parse_mode="HTML",
                 reply_markup=keyboards.promo_decision_kb(request_id),
             )
             notified = True
@@ -385,7 +418,9 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     if not notified:
         try:
             await ctx.bot.send_message(
-                lc, req_text, parse_mode="HTML",
+                lc,
+                req_text,
+                parse_mode="HTML",
                 message_thread_id=lt,
                 reply_markup=keyboards.promo_decision_kb(request_id),
             )
@@ -398,6 +433,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
 
 
 # ──────── Command Promotion Requests List </tcpromotelist> ──────── #
+
 
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.staff_only
@@ -419,11 +455,12 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
 # ──────────────────────── Callback Handlers ─────────────────────── #
 
+
 @decorators.ratelimiter(limit=10, period=30)
 @decorators.log_execution
 async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    q        = update.callback_query
-    admin    = update.effective_user
+    q = update.callback_query
+    admin = update.effective_user
     is_owner = await db.admins_db.is_owner(admin.id)
     if not is_owner:
         await q.answer("Founder only.", show_alert=True)
@@ -437,9 +474,9 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     if not req:
         await q.edit_message_text("Request not found or already resolved.")
         return
-    target_id    = req["target_id"]
+    target_id = req["target_id"]
     target_fname = req.get("first_name", str(target_id))
-    lc, lt       = cfg.logs
+    lc, lt = cfg.logs
 
     if action == "promo_approve":
         # * DB writes in parallel
@@ -448,7 +485,11 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             db.queues_db.resolve(request_id, "approved", admin.id),
         )
         log_text = parse_logmsg.promo_approved_log(
-            target_id, target_fname, admin.id, admin.first_name, request_id,
+            target_id,
+            target_fname,
+            admin.id,
+            admin.first_name,
+            request_id,
         )
         # * notify target, send log, and edit review message all in parallel
         await asyncio.gather(
@@ -466,7 +507,11 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
     elif action == "promo_reject":
         log_text = parse_logmsg.promo_rejected_log(
-            target_id, target_fname, admin.id, admin.first_name, request_id,
+            target_id,
+            target_fname,
+            admin.id,
+            admin.first_name,
+            request_id,
         )
         # * resolve DB + notify + send log + edit review message all in parallel
         await asyncio.gather(
@@ -486,21 +531,25 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
 # ──────────────────────────── Handlers ──────────────────────────── #
 
-_PMT_CMDS     = build_prefixed_filters("tcpromote")         | build_prefixed_filters("tcp")
-_DMT_CMDS     = build_prefixed_filters("tcdemote")          | build_prefixed_filters("tcd")
-_TF_CMDS      = build_prefixed_filters("transferowner")     | build_prefixed_filters("tfowner")
-_PMTREQ_CMDS  = build_prefixed_filters("tcpromoterequests") | build_prefixed_filters("tcreqs")
-_PMTLIST_CMDS = build_prefixed_filters("tcpromotelist")     | build_prefixed_filters("tcplist")
+_PMT_CMDS = build_prefixed_filters("tcpromote") | build_prefixed_filters("tcp")
+_DMT_CMDS = build_prefixed_filters("tcdemote") | build_prefixed_filters("tcd")
+_TF_CMDS = build_prefixed_filters("transferowner") | build_prefixed_filters("tfowner")
+_PMTREQ_CMDS = build_prefixed_filters("tcpromoterequests") | build_prefixed_filters(
+    "tcreqs"
+)
+_PMTLIST_CMDS = build_prefixed_filters("tcpromotelist") | build_prefixed_filters(
+    "tcplist"
+)
 
 __handlers__ = [
-    MessageHandler(_PMT_CMDS,     cmd_promote),
-    MessageHandler(_DMT_CMDS,     cmd_demote),
-    MessageHandler(_TF_CMDS,      cmd_transfer),
-    MessageHandler(_PMTREQ_CMDS,  cmd_promote_request),
+    MessageHandler(_PMT_CMDS, cmd_promote),
+    MessageHandler(_DMT_CMDS, cmd_demote),
+    MessageHandler(_TF_CMDS, cmd_transfer),
+    MessageHandler(_PMTREQ_CMDS, cmd_promote_request),
     MessageHandler(_PMTLIST_CMDS, cmd_promote_list),
-    CallbackQueryHandler(on_promo_decision,      pattern=r"^(promo_approve|promo_reject):"),
-    CallbackQueryHandler(on_promote_role_btn,    pattern=r"^promo_role:[a-z]+:\d+$"),
+    CallbackQueryHandler(on_promo_decision, pattern=r"^(promo_approve|promo_reject):"),
+    CallbackQueryHandler(on_promote_role_btn, pattern=r"^promo_role:[a-z]+:\d+$"),
     CallbackQueryHandler(on_promote_role_cancel, pattern=r"^promo_role_cancel:\d+$"),
-    CallbackQueryHandler(on_demote_confirm,      pattern=r"^demote_confirm:\d+$"),
-    CallbackQueryHandler(on_demote_cancel,       pattern=r"^demote_cancel:\d+$"),
+    CallbackQueryHandler(on_demote_confirm, pattern=r"^demote_confirm:\d+$"),
+    CallbackQueryHandler(on_demote_cancel, pattern=r"^demote_cancel:\d+$"),
 ]

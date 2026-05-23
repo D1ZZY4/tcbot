@@ -15,6 +15,7 @@ from tcbot.utils.timedate_format import utc_now
 
 # ── Imports and test setup ─────────────────────────────────────────────────
 
+
 def test_starts_with_appeal_tag_lowercase() -> None:
     assert appeals.starts_with_appeal_tag("#appeal\nLog link: ...")
 
@@ -57,32 +58,41 @@ def test_text_references_log_message_matches_bare_number() -> None:
 def test_reviewer_locked_out_blocks_other_admin_within_window() -> None:
     ts = utc_now() - timedelta(hours=1)
     assert appeals.reviewer_locked_out(
-        review_timestamp=ts, ban_admin_id=10, reviewer_id=20,
+        review_timestamp=ts,
+        ban_admin_id=10,
+        reviewer_id=20,
     )
 
 
 def test_reviewer_locked_out_allows_banning_admin() -> None:
     ts = utc_now() - timedelta(hours=1)
     assert not appeals.reviewer_locked_out(
-        review_timestamp=ts, ban_admin_id=10, reviewer_id=10,
+        review_timestamp=ts,
+        ban_admin_id=10,
+        reviewer_id=10,
     )
 
 
 def test_reviewer_locked_out_allows_anyone_after_12h() -> None:
     ts = utc_now() - timedelta(hours=13)
     assert not appeals.reviewer_locked_out(
-        review_timestamp=ts, ban_admin_id=10, reviewer_id=20,
+        review_timestamp=ts,
+        ban_admin_id=10,
+        reviewer_id=20,
     )
 
 
 def test_reviewer_locked_out_returns_false_when_timestamp_none() -> None:
     assert not appeals.reviewer_locked_out(
-        review_timestamp=None, ban_admin_id=10, reviewer_id=20,
+        review_timestamp=None,
+        ban_admin_id=10,
+        reviewer_id=20,
     )
 
 
 def test_reviewer_locked_out_returns_false_when_ban_admin_none() -> None:
     assert not appeals.reviewer_locked_out(
-        review_timestamp=utc_now(), ban_admin_id=None, reviewer_id=20,
+        review_timestamp=utc_now(),
+        ban_admin_id=None,
+        reviewer_id=20,
     )
-

@@ -18,13 +18,12 @@ log = logging.getLogger(__name__)
 
 # ─────────────────────── Module Discovery ───────────────────────── #
 
+
 def _discover_modules() -> list[str]:
     """Return all .py module names in this directory, excluding __init__.py."""
     this_dir = Path(__file__).parent
     return [
-        p.stem
-        for p in this_dir.glob("*.py")
-        if p.is_file() and p.name != "__init__.py"
+        p.stem for p in this_dir.glob("*.py") if p.is_file() and p.name != "__init__.py"
     ]
 
 
@@ -62,6 +61,7 @@ __all__ = ALL_MODULES + ["ALL_MODULES"]
 
 # ─────────────────────── Handler Collection ─────────────────────── #
 
+
 def get_handlers() -> list[Any]:
     """
     Import all active modules and collect their __handlers__ lists.
@@ -69,7 +69,7 @@ def get_handlers() -> list[Any]:
     * Import phase runs first across all modules before handler collection
     * Failed imports are logged and skipped without aborting the bot
     """
-    handlers:  list[Any]       = []
+    handlers: list[Any] = []
     mods_found: dict[str, Any] = {}
 
     for mod_name in ALL_MODULES:

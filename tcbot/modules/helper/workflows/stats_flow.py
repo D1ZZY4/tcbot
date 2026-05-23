@@ -17,14 +17,15 @@ from tcbot import database as db
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.formatter import code, esc
 
-_PAGE_SIZE    = 6
-_SEARCH_KEY   = "stats_search_active"
-_RESULTS_KEY  = "stats_search_results"
-_MSG_KEY      = "stats_search_msg_id"
-_CHAT_KEY     = "stats_search_chat_id"
+_PAGE_SIZE = 6
+_SEARCH_KEY = "stats_search_active"
+_RESULTS_KEY = "stats_search_results"
+_MSG_KEY = "stats_search_msg_id"
+_CHAT_KEY = "stats_search_chat_id"
 
 
 # ── Keyboards ──────────────────────────────────────────────────────────────
+
 
 def _bans_list_kb(page: int, total: int, n_items: int) -> InlineKeyboardMarkup:
     total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
@@ -32,9 +33,13 @@ def _bans_list_kb(page: int, total: int, n_items: int) -> InlineKeyboardMarkup:
 
     nav = []
     if page > 0:
-        nav.append(InlineKeyboardButton("« Prev", callback_data=f"stats_bans:{page - 1}"))
+        nav.append(
+            InlineKeyboardButton("« Prev", callback_data=f"stats_bans:{page - 1}")
+        )
     if page < total_pages - 1:
-        nav.append(InlineKeyboardButton("Next »", callback_data=f"stats_bans:{page + 1}"))
+        nav.append(
+            InlineKeyboardButton("Next »", callback_data=f"stats_bans:{page + 1}")
+        )
     if nav:
         rows.append(nav)
 
@@ -43,17 +48,19 @@ def _bans_list_kb(page: int, total: int, n_items: int) -> InlineKeyboardMarkup:
         for i in range(n_items)
     ]
     for i in range(0, len(num_btns), 3):
-        rows.append(num_btns[i: i + 3])
+        rows.append(num_btns[i : i + 3])
 
-    rows.append([InlineKeyboardButton("Search",  callback_data="stats_bans_search")])
+    rows.append([InlineKeyboardButton("Search", callback_data="stats_bans_search")])
     rows.append([InlineKeyboardButton("« Back", callback_data="stats_main")])
     return InlineKeyboardMarkup(rows)
 
 
 def _search_panel_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("Cancel", callback_data="stats_search_cancel")],
-    ])
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("Cancel", callback_data="stats_search_cancel")],
+        ]
+    )
 
 
 def _search_results_kb(n: int) -> InlineKeyboardMarkup:
@@ -63,9 +70,9 @@ def _search_results_kb(n: int) -> InlineKeyboardMarkup:
         for i in range(n)
     ]
     for i in range(0, len(num_btns), 3):
-        rows.append(num_btns[i: i + 3])
+        rows.append(num_btns[i : i + 3])
     rows.append([InlineKeyboardButton("New Search", callback_data="stats_bans_search")])
-    rows.append([InlineKeyboardButton("Cancel",     callback_data="stats_search_cancel")])
+    rows.append([InlineKeyboardButton("Cancel", callback_data="stats_search_cancel")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -73,7 +80,9 @@ def _search_detail_kb(proof_link: str | None = None) -> InlineKeyboardMarkup:
     rows = []
     if proof_link:
         rows.append([InlineKeyboardButton("View Proof", url=proof_link)])
-    rows.append([InlineKeyboardButton("Back to Results", callback_data="stats_search_back")])
+    rows.append(
+        [InlineKeyboardButton("Back to Results", callback_data="stats_search_back")]
+    )
     return InlineKeyboardMarkup(rows)
 
 
@@ -87,30 +96,41 @@ def _ban_detail_kb(page: int, proof_link: str | None = None) -> InlineKeyboardMa
 
 # ── Shared bans-page renderer ──────────────────────────────────────────────
 
+
 async def _render_bans_page(q, page: int) -> None:
     """Fetch active bans and render the numbered page - answers q in parallel."""
     _, bans = await asyncio.gather(q.answer(), db.bans_db.active_bans())
-    total       = len(bans)
+    total = len(bans)
     total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
-    page        = min(page, total_pages - 1)
-    chunk       = bans[page * _PAGE_SIZE: (page + 1) * _PAGE_SIZE]
+    page = min(page, total_pages - 1)
+    chunk = bans[page * _PAGE_SIZE : (page + 1) * _PAGE_SIZE]
 
-    uids   = [ban["banned_user_id"] for ban in chunk]
-    fnames = list(
-        await asyncio.gather(*[db.users_db.get_first_name(uid, str(uid)) for uid in uids])
-    ) if uids else []
+    uids = [ban["banned_user_id"] for ban in chunk]
+    fnames = (
+        list(
+            await asyncio.gather(
+                *[db.users_db.get_first_name(uid, str(uid)) for uid in uids]
+            )
+        )
+        if uids
+        else []
+    )
 
     lines = [f"<b>User Bans ({total})</b>\n"]
     for i, (ban, fname) in enumerate(zip(chunk, fnames), start=1):
-        lines.append(f"{page * _PAGE_SIZE + i}. {esc(fname)} - {code(str(ban['banned_user_id']))}")
+        lines.append(
+            f"{page * _PAGE_SIZE + i}. {esc(fname)} - {code(str(ban['banned_user_id']))}"
+        )
 
     await q.edit_message_text(
-        "\n".join(lines), parse_mode="HTML",
+        "\n".join(lines),
+        parse_mode="HTML",
         reply_markup=_bans_list_kb(page, total, len(chunk)),
     )
 
 
 # ── Bans list handlers ─────────────────────────────────────────────────────
+
 
 async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
@@ -119,18 +139,21 @@ async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    q              = update.callback_query
+    q = update.callback_query
     _, page_str, idx_str = q.data.split(":")
-    page           = int(page_str)
-    idx            = int(idx_str)
+    page = int(page_str)
+    idx = int(idx_str)
 
     _, bans = await asyncio.gather(q.answer(), db.bans_db.active_bans())
-    ban              = bans[page * _PAGE_SIZE + idx]
+    ban = bans[page * _PAGE_SIZE + idx]
     text, proof_link = await build_ban_detail(ban)
-    await q.edit_message_text(text, parse_mode="HTML", reply_markup=_ban_detail_kb(page, proof_link))
+    await q.edit_message_text(
+        text, parse_mode="HTML", reply_markup=_ban_detail_kb(page, proof_link)
+    )
 
 
 # ── Search flow handlers ───────────────────────────────────────────────────
+
 
 def _clear_search(ctx: ContextTypes.DEFAULT_TYPE) -> None:
     for key in (_SEARCH_KEY, _RESULTS_KEY, _MSG_KEY, _CHAT_KEY):
@@ -140,8 +163,8 @@ def _clear_search(ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_stats_bans_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     ctx.user_data[_SEARCH_KEY] = True
-    ctx.user_data[_MSG_KEY]    = q.message.message_id
-    ctx.user_data[_CHAT_KEY]   = q.message.chat_id
+    ctx.user_data[_MSG_KEY] = q.message.message_id
+    ctx.user_data[_CHAT_KEY] = q.message.chat_id
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(
@@ -158,7 +181,7 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     ctx.user_data.pop(_SEARCH_KEY, None)
 
     query = update.effective_message.text.strip()
-    msg   = update.effective_message
+    msg = update.effective_message
 
     if query.isdigit():
         # * Targeted lookup + message delete in parallel
@@ -168,7 +191,9 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
             return_exceptions=True,
         )
         results = (
-            [ban_result] if ban_result and not isinstance(ban_result, BaseException) else []
+            [ban_result]
+            if ban_result and not isinstance(ban_result, BaseException)
+            else []
         )
     else:
         # * Full name scan + message delete in parallel
@@ -179,49 +204,56 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         )
         bans = bans_result if not isinstance(bans_result, BaseException) else []
         # * Fetch all names in parallel, then filter by query
-        uids   = [ban["banned_user_id"] for ban in bans]
-        fnames = list(
-            await asyncio.gather(*[db.users_db.get_first_name(uid, "") for uid in uids])
-        ) if uids else []
+        uids = [ban["banned_user_id"] for ban in bans]
+        fnames = (
+            list(
+                await asyncio.gather(
+                    *[db.users_db.get_first_name(uid, "") for uid in uids]
+                )
+            )
+            if uids
+            else []
+        )
         results = [
-            ban for ban, fname in zip(bans, fnames)
-            if query.lower() in fname.lower()
+            ban for ban, fname in zip(bans, fnames) if query.lower() in fname.lower()
         ]
 
     ctx.user_data[_RESULTS_KEY] = results
 
     chat_id = ctx.user_data.get(_CHAT_KEY)
-    msg_id  = ctx.user_data.get(_MSG_KEY)
+    msg_id = ctx.user_data.get(_MSG_KEY)
 
     if not results:
         await ctx.bot.edit_message_text(
-            f"<b>Search: \"{esc(query)}\"</b>\n\nNo results found.",
-            chat_id=chat_id, message_id=msg_id,
+            f'<b>Search: "{esc(query)}"</b>\n\nNo results found.',
+            chat_id=chat_id,
+            message_id=msg_id,
             parse_mode="HTML",
             reply_markup=_search_results_kb(0),
         )
         return
 
     # * Fetch display names for results in parallel
-    result_uids   = [ban["banned_user_id"] for ban in results]
+    result_uids = [ban["banned_user_id"] for ban in results]
     result_fnames = await asyncio.gather(
         *[db.users_db.get_first_name(uid, str(uid)) for uid in result_uids]
     )
-    lines = [f"<b>Search: \"{esc(query)}\" ({len(results)} found)</b>\n"]
+    lines = [f'<b>Search: "{esc(query)}" ({len(results)} found)</b>\n']
     for i, (ban, fname) in enumerate(zip(results, result_fnames), 1):
         uid = ban["banned_user_id"]
         lines.append(f"{i}. {esc(fname)} - {code(str(uid))}")
 
     await ctx.bot.edit_message_text(
         "\n".join(lines),
-        chat_id=chat_id, message_id=msg_id,
+        chat_id=chat_id,
+        message_id=msg_id,
         parse_mode="HTML",
         reply_markup=_search_results_kb(len(results)),
     )
 
 
 async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    q   = update.callback_query
+    q = update.callback_query
     idx = int(q.data.split(":")[1])
 
     results = ctx.user_data.get(_RESULTS_KEY, [])
@@ -233,11 +265,13 @@ async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         q.answer(),
         build_ban_detail(results[idx]),
     )
-    await q.edit_message_text(text, parse_mode="HTML", reply_markup=_search_detail_kb(proof_link))
+    await q.edit_message_text(
+        text, parse_mode="HTML", reply_markup=_search_detail_kb(proof_link)
+    )
 
 
 async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    q       = update.callback_query
+    q = update.callback_query
     results = ctx.user_data.get(_RESULTS_KEY, [])
 
     if not results:
@@ -252,7 +286,7 @@ async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         )
         return
 
-    uids   = [ban["banned_user_id"] for ban in results]
+    uids = [ban["banned_user_id"] for ban in results]
     _, fnames = await asyncio.gather(
         q.answer(),
         asyncio.gather(*[db.users_db.get_first_name(uid, str(uid)) for uid in uids]),
@@ -264,14 +298,15 @@ async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         lines.append(f"{i}. {esc(fname)} - {code(str(uid))}")
 
     await q.edit_message_text(
-        "\n".join(lines), parse_mode="HTML",
+        "\n".join(lines),
+        parse_mode="HTML",
         reply_markup=_search_results_kb(len(results)),
     )
 
 
-async def on_stats_search_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_stats_search_cancel(
+    update: Update, ctx: ContextTypes.DEFAULT_TYPE
+) -> None:
     q = update.callback_query
     _clear_search(ctx)
     await _render_bans_page(q, 0)
-
-

@@ -26,7 +26,8 @@ from datetime import timedelta
 from telegram import ChatPermissions, Update
 from telegram.ext import ContextTypes
 
-from tcbot import cfg, database as db
+from tcbot import cfg
+from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.formatter import code, mention
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
@@ -40,10 +41,11 @@ _DURATION_RE = re.compile(r"^(\d+)(ye|mo|[smhdw])$", re.IGNORECASE)
 
 # * Per-action BuildReason and BuildProof instances — imported by muting.py
 reason = BuildReason("mute")
-proof  = BuildProof("mute")
+proof = BuildProof("mute")
 
 
 # ── Duration helpers ────────────────────────────────────────────────────────
+
 
 def parse_duration(raw: str) -> timedelta | None:
     """Parse a single duration token like '3d', '1mo', '2ye'. Returns None if invalid."""
@@ -51,13 +53,13 @@ def parse_duration(raw: str) -> timedelta | None:
     if not m:
         return None
     value = int(m.group(1))
-    unit  = m.group(2).lower()
+    unit = m.group(2).lower()
     mapping = {
-        "s":  timedelta(seconds=value),
-        "m":  timedelta(minutes=value),
-        "h":  timedelta(hours=value),
-        "d":  timedelta(days=value),
-        "w":  timedelta(weeks=value),
+        "s": timedelta(seconds=value),
+        "m": timedelta(minutes=value),
+        "h": timedelta(hours=value),
+        "d": timedelta(days=value),
+        "w": timedelta(weeks=value),
         "mo": timedelta(days=value * 30),
         "ye": timedelta(days=value * 365),
     }
@@ -87,29 +89,34 @@ def fmt_duration(td: timedelta | None) -> str:
 
 # ── Mute executor ───────────────────────────────────────────────────────────
 
+
 async def _execute_mute(bot, update: Update, meta: dict) -> None:
     """Apply a federation-wide mute across all connected groups and edit the prompt to a summary."""
-    target_id    = meta["mute_target_id"]
+    target_id = meta["mute_target_id"]
     target_fname = meta["mute_target_fname"]
-    reason_text  = meta.get("mute_reason") or "No reason provided"
-    admin_id     = meta["mute_admin_id"]
-    duration     = meta.get("mute_duration")
-    proof_desc   = meta.get("mute_proof_desc")
-    prompt_chat  = meta.get("mute_prompt_chat")
-    prompt_id    = meta.get("mute_prompt_id")
-    dur_str      = fmt_duration(duration)
+    reason_text = meta.get("mute_reason") or "No reason provided"
+    admin_id = meta["mute_admin_id"]
+    duration = meta.get("mute_duration")
+    proof_desc = meta.get("mute_proof_desc")
+    prompt_chat = meta.get("mute_prompt_chat")
+    prompt_id = meta.get("mute_prompt_id")
+    dur_str = fmt_duration(duration)
 
     until = utc_now() + duration if duration else None
     perms = ChatPermissions(can_send_messages=False)
 
     # * Apply across all connected groups - semaphore-bounded for rate safety
-    groups  = await db.groups_db.active_groups()
+    groups = await db.groups_db.active_groups()
     results = await fan_out(
-        [bot.restrict_chat_member(
-            grp["chat_id"], target_id,
-            permissions=perms,
-            until_date=until,
-        ) for grp in groups]
+        [
+            bot.restrict_chat_member(
+                grp["chat_id"],
+                target_id,
+                permissions=perms,
+                until_date=until,
+            )
+            for grp in groups
+        ]
     )
     failed = sum(1 for r in results if isinstance(r, BaseException))
 
@@ -123,20 +130,27 @@ async def _execute_mute(bot, update: Update, meta: dict) -> None:
     )
 
     admin_fname = meta.get("mute_admin_fname", "Admin")
-    lc, lt      = cfg.logs
-    log_text    = parse_logmsg.mute_log(
-        target_id, target_fname, admin_id, admin_fname, reason_text, dur_str,
+    lc, lt = cfg.logs
+    log_text = parse_logmsg.mute_log(
+        target_id,
+        target_fname,
+        admin_id,
+        admin_fname,
+        reason_text,
+        dur_str,
     )
 
     # * Log to DB, post to log channel, and edit summary - all in parallel
-    chat_id  = update.effective_chat.id
+    chat_id = update.effective_chat.id
     results2 = await asyncio.gather(
         db.mutes_db.log_mute(target_id, chat_id, reason_text, admin_id),
         bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
         bot.edit_message_text(
             summary,
-            chat_id=prompt_chat, message_id=prompt_id,
-            parse_mode="HTML", reply_markup=None,
+            chat_id=prompt_chat,
+            message_id=prompt_id,
+            parse_mode="HTML",
+            reply_markup=None,
         ),
         return_exceptions=True,
     )
@@ -150,6 +164,7 @@ async def _execute_mute(bot, update: Update, meta: dict) -> None:
 
 # ── Unmute executor ─────────────────────────────────────────────────────────
 
+
 async def execute_unmute(
     update: Update,
     ctx: ContextTypes.DEFAULT_TYPE,
@@ -157,7 +172,7 @@ async def execute_unmute(
     target_name: str,
 ) -> None:
     """Restore full send permissions across all connected groups."""
-    msg        = update.effective_message
+    msg = update.effective_message
     full_perms = ChatPermissions(
         can_send_messages=True,
         can_send_polls=True,
@@ -169,19 +184,26 @@ async def execute_unmute(
     )
 
     # * Unrestrict across all connected groups - semaphore-bounded for rate safety
-    groups  = await db.groups_db.active_groups()
+    groups = await db.groups_db.active_groups()
     results = await fan_out(
-        [ctx.bot.restrict_chat_member(
-            grp["chat_id"], target_id,
-            permissions=full_perms,
-        ) for grp in groups]
+        [
+            ctx.bot.restrict_chat_member(
+                grp["chat_id"],
+                target_id,
+                permissions=full_perms,
+            )
+            for grp in groups
+        ]
     )
     failed = sum(1 for r in results if isinstance(r, BaseException))
 
-    admin    = update.effective_user
-    lc, lt   = cfg.logs
+    admin = update.effective_user
+    lc, lt = cfg.logs
     log_text = parse_logmsg.unmute_log(
-        target_id, target_name, admin.id, admin.first_name,
+        target_id,
+        target_name,
+        admin.id,
+        admin.first_name,
     )
 
     reply = (
@@ -204,6 +226,7 @@ async def execute_unmute(
 
 # ── Executor adapter ────────────────────────────────────────────────────────
 
+
 async def _exec_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Copy mute data from user_data, clean up, then call _execute_mute."""
     meta = {k: v for k, v in ctx.user_data.items() if k.startswith("mute_")}
@@ -214,6 +237,7 @@ async def _exec_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 # ── ConversationHandler factory ─────────────────────────────────────────────
 
+
 def mute_conversation(
     entry_fn,
     entry_filter,
@@ -222,6 +246,10 @@ def mute_conversation(
 ) -> object:
     """Return the mute ConversationHandler via the central reason_flow factory."""
     return build_modaction_conv(
-        reason, proof, entry_fn, _exec_mute, entry_filter,
+        reason,
+        proof,
+        entry_fn,
+        _exec_mute,
+        entry_filter,
         escape_filter=escape_filter,
     )

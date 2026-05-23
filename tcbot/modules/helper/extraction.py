@@ -19,6 +19,7 @@ log = logging.getLogger(__name__)
 
 # ── Target resolution ──────────────────────────────────────────────────────
 
+
 @dataclass
 class ResolvedTarget:
     """A resolved Telegram user target with a guaranteed display name."""
@@ -98,7 +99,7 @@ async def extract_target(
         text = msg.text or ""
         for ent in msg.entities or []:
             if ent.type == "mention":
-                uname = text[ent.offset + 1: ent.offset + ent.length]
+                uname = text[ent.offset + 1 : ent.offset + ent.length]
                 try:
                     chat = await bot.get_chat(f"@{uname}")
                     return chat.id, chat.first_name or uname
@@ -109,6 +110,7 @@ async def extract_target(
 
 
 # ── Identity resolution ────────────────────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class UserIdentity:

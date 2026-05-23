@@ -36,6 +36,7 @@ log = logging.getLogger(__name__)
 
 # ─────────────────────────────── BuildProof ─────────────────────── #
 
+
 class BuildProof:
     """Configurable proof-step keyboard, prompts, and media recording.
 
@@ -71,10 +72,14 @@ class BuildProof:
         buttons: list[InlineKeyboardButton] = []
         if self.skip_allowed:
             buttons.append(
-                InlineKeyboardButton(self.skip_label, callback_data=f"{self.action}_skip_proof")
+                InlineKeyboardButton(
+                    self.skip_label, callback_data=f"{self.action}_skip_proof"
+                )
             )
         buttons.append(
-            InlineKeyboardButton(self.cancel_label, callback_data=f"{self.action}_cancel")
+            InlineKeyboardButton(
+                self.cancel_label, callback_data=f"{self.action}_cancel"
+            )
         )
         return InlineKeyboardMarkup([buttons])
 
@@ -86,8 +91,10 @@ class BuildProof:
         extra_info: str = "",
     ) -> str:
         """Proof-step prompt after reason was collected in-conversation."""
-        suffix    = f" {extra_info}" if extra_info else ""
-        skip_hint = f", or tap <b>{self.skip_label}</b> to proceed" if self.skip_allowed else ""
+        suffix = f" {extra_info}" if extra_info else ""
+        skip_hint = (
+            f", or tap <b>{self.skip_label}</b> to proceed" if self.skip_allowed else ""
+        )
         return (
             f"Reason noted — {action_label.lower()}ing {target_mention}{suffix}.\n"
             f"Reason: <b>{reason}</b>\n\n"
@@ -102,8 +109,10 @@ class BuildProof:
         extra_info: str = "",
     ) -> str:
         """Proof-step prompt when an inline reason was already provided."""
-        suffix    = f" {extra_info}" if extra_info else ""
-        skip_hint = f", or tap <b>{self.skip_label}</b> to proceed" if self.skip_allowed else ""
+        suffix = f" {extra_info}" if extra_info else ""
+        skip_hint = (
+            f", or tap <b>{self.skip_label}</b> to proceed" if self.skip_allowed else ""
+        )
         return (
             f"{action_label.capitalize()}ing {target_mention}{suffix}.\n"
             f"Reason: <b>{inline_reason}</b>\n\n"
@@ -122,6 +131,7 @@ class BuildProof:
 
 # ─────────────────────────── Channel upload ─────────────────────── #
 
+
 async def upload_proof(
     bot: Bot,
     msgs: list[Message],
@@ -137,28 +147,42 @@ async def upload_proof(
             for m in msgs:
                 if m.photo:
                     cap = caption if not first_caption_set else None
-                    media.append(InputMediaPhoto(m.photo[-1].file_id, caption=cap, parse_mode="HTML"))
+                    media.append(
+                        InputMediaPhoto(
+                            m.photo[-1].file_id, caption=cap, parse_mode="HTML"
+                        )
+                    )
                     first_caption_set = True
                 elif m.video:
                     cap = caption if not first_caption_set else None
-                    media.append(InputMediaVideo(m.video.file_id, caption=cap, parse_mode="HTML"))
+                    media.append(
+                        InputMediaVideo(m.video.file_id, caption=cap, parse_mode="HTML")
+                    )
                     first_caption_set = True
-            sent = await bot.send_media_group(proof_chat, media, message_thread_id=proof_thread)
+            sent = await bot.send_media_group(
+                proof_chat, media, message_thread_id=proof_thread
+            )
             proof_msg_id = sent[0].message_id
-            log.info("Proof album uploaded: %d items, message_id=%s", len(sent), proof_msg_id)
+            log.info(
+                "Proof album uploaded: %d items, message_id=%s", len(sent), proof_msg_id
+            )
             return proof_msg_id
         elif msgs[0].photo:
             sent = await bot.send_photo(
-                proof_chat, msgs[0].photo[-1].file_id,
-                caption=caption, parse_mode="HTML",
+                proof_chat,
+                msgs[0].photo[-1].file_id,
+                caption=caption,
+                parse_mode="HTML",
                 message_thread_id=proof_thread,
             )
             log.info("Proof photo uploaded: message_id=%s", sent.message_id)
             return sent.message_id
         elif msgs[0].video:
             sent = await bot.send_video(
-                proof_chat, msgs[0].video.file_id,
-                caption=caption, parse_mode="HTML",
+                proof_chat,
+                msgs[0].video.file_id,
+                caption=caption,
+                parse_mode="HTML",
                 message_thread_id=proof_thread,
             )
             log.info("Proof video uploaded: message_id=%s", sent.message_id)
