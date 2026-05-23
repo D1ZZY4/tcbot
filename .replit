@@ -1,6 +1,4 @@
-## Copyright (c) 2026 Replit
-
-modules = ["python-3.12"]
+modules = ["python-3.11"]
 [agent]
 expertMode = true
 stack = "FLASK_VANILLA_JS"
@@ -29,12 +27,12 @@ args = "Run Tests (TDD)"
 name = "Start application"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python -m tcbot"
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python3 -m tcbot"
 
 [[workflows.workflow]]
 name = "Run Tests (TDD)"
