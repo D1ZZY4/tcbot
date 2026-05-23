@@ -16,7 +16,6 @@ venv/
 requirements.txt
 
 # IDE
-.vscode/
 .idea/
 
 # OS
