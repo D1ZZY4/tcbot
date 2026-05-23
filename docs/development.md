@@ -89,7 +89,7 @@ See `config.env.example` for the full list with descriptions. The most important
 python3 -m pytest tests/ -v
 ```
 
-All 121 tests run fully offline — no bot token or MongoDB required. Run after every code change.
+All 134 tests run fully offline — no bot token or MongoDB required. Run after every code change.
 
 | Test file | What it covers |
 |---|---|

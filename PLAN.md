@@ -276,6 +276,22 @@ All three layers route to `error_reporter.report_exc()` which ships a formatted 
 - [ ] Verify auto-demote fires on all required code paths
 - [ ] Expand test coverage for appeal flow edge cases
 
+### Session 5 — Full Codebase Read-Through & Audit ✅
+
+Complete read of every file in the project (50+ source files, all tests, all docs, all config).
+
+**Ruff result:** `uv tool run ruff check . --select E4,E7,E9,F,I` → **All checks passed — 0 issues found.**
+
+Corrections applied:
+
+- [x] `docs/development.md` — test count updated 121 → 134
+- [x] `agents/REPLIT.md` — test count updated 121 → 134
+- [x] `pyproject.toml` — `requires-python` updated `>=3.12` → `>=3.13`; `target-version` updated `py312` → `py313`
+- [x] `Dockerfile` — base image updated `python:3.12-slim` → `python:3.13-slim`
+
+No source code changes required — zero Ruff violations, zero logic/style issues found.
+All 134 tests pass.
+
 ---
 
 ## Code Quality Checklist (Task File — Session 5)

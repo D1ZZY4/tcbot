@@ -2,7 +2,7 @@
 name = "tgbot-tcf"
 version = "1.0.0"
 description = "Transsion Core Federation (TCF) Telegram bot"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     "python-telegram-bot[job-queue]==22.5",
     "motor>=3.7.1",
@@ -28,7 +28,7 @@ filterwarnings = [
 
 [tool.ruff]
 line-length = 88
-target-version = "py312"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I"]

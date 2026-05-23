@@ -76,7 +76,7 @@ The port is controlled by the `PORT` environment variable. When running locally 
 python3 -m pytest tests/ -v
 ```
 
-All 121 tests run offline — no bot token or MongoDB connection required. Run this after any code change before restarting the bot.
+All 134 tests run offline — no bot token or MongoDB connection required. Run this after any code change before restarting the bot.
 
 ---
 
