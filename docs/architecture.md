@@ -108,6 +108,29 @@ Modules are identified by `__module_name__`. Modules with `__module_name__ = Non
 
 ---
 
+## Type System
+
+`tcbot/database/types.py` defines `NewType` domain primitives for every ID field used in the database layer:
+
+| Type | Base | Represents |
+|---|---|---|
+| `UserId` | `int` | Telegram user ID |
+| `GroupId` | `int` | Telegram supergroup / group chat ID |
+| `ChatId` | `int` | Generic Telegram chat ID |
+| `BanId` | `str` | Short alphanumeric federation ban identifier |
+
+`tcbot/database/documents.py` defines `TypedDict` shapes for every MongoDB document and `Literal` type aliases:
+
+| Alias | Values |
+|---|---|
+| `BanStatus` | `"active"` / `"expired"` / `"revoked"` |
+| `RoleName` | `"founder"` / `"admin"` / `"developer"` / `"tester"` |
+| `RequestStatus` | `"pending"` / `"approved"` / `"rejected"` |
+
+All `NewType` and `TypedDict` definitions are structural at runtime (zero overhead). Import from these modules when adding new code to benefit from nominal type safety.
+
+---
+
 ## Database Schema
 
 ### Collections

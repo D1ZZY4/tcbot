@@ -30,6 +30,8 @@ tcbot/
 ├── alive.py             Flask keepalive thread (port 8080)
 ├── database/
 │   ├── cache.py         In-memory TTL caches (role, groups, owner)
+│   ├── documents.py     TypedDict document shapes + Literal type aliases (BanStatus, RoleName, RequestStatus)
+│   ├── types.py         NewType domain primitives: UserId, GroupId, ChatId, BanId
 │   ├── mongos.py        Motor client, connect(), ensure_indexes(), col()
 │   ├── admins_db.py     Owner + admin CRUD, is_owner/is_admin/is_staff
 │   ├── bans_db.py       Federation ban CRUD (create, update, deactivate, query)

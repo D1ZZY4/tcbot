@@ -27,6 +27,7 @@ A Telegram bot for the Transsion Core Federation (TCF) community. Manages federa
 | `tcbot/database/roles_db.py` | Developer/Tester roles collection (`tc_roles`); also exports `get_effective_role`, `role_rank`, `can_act_on` |
 | `tcbot/database/users_db.py` | Member-cache collection |
 | `tcbot/modules/appeals.py` | Pure functions for appeal business logic |
+| `tcbot/database/types.py` | Domain primitive `NewType` definitions: `UserId`, `GroupId`, `ChatId`, `BanId` |
 | `tcbot/modules/helper/parse_link.py` | Link builders, HTML helpers (`user_link`, `safe_first_name`) |
 | `tcbot/modules/helper/keyboards.py` | All inline-keyboard factory functions (includes `promote_role_kb`, `demote_confirm_kb`) |
 | `tcbot/modules/helper/decorators.py` | Auth decorators (`owner_only`, `staff_only`, `mod_only`, `basic_mod_only`) + `log_execution` tracer + `ratelimiter(limit, period)` per-user throttle |
@@ -87,7 +88,7 @@ Auto-demote: when a user with any role is **banned or kicked**, their role is au
 
 Run with: `python3 -m pytest`
 
-121 tests across 9 files - all pass offline (no real bot token or MongoDB needed).
+134 tests across 13 files - all pass offline (no real bot token or MongoDB needed).
 Test dependencies: `pip install pytest pytest-asyncio` (Replit) or `uv sync --extra test` (local).
 
 | File | What it tests |
@@ -100,7 +101,12 @@ Test dependencies: `pip install pytest pytest-asyncio` (Replit) or `uv sync --ex
 | `tests/test_decorators.py` | `log_execution` tracer decorator |
 | `tests/test_appeals_pure.py` | Pure appeal logic functions |
 | `tests/test_log_templates.py` | `parse_logmsg` log-message formatters |
+| `tests/test_bans_db.py` | `bans_db` helpers (create, update, deactivate) |
+| `tests/test_ban_flow.py` | Ban flow album buffering and state |
+| `tests/test_config_parse.py` | Config parsing (`parse_list`, `parse_port`, `parse_chat_id`) |
 | `tests/test_rate_limiter.py` | `_RateLimiter` sliding-window logic |
+| `tests/test_users_resolver.py` | `resolve_identity` with mocked repos |
+| `tests/test_warns_db.py` | `warns_db` helpers (add, remove, reset) |
 
 ## Docker
 

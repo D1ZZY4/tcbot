@@ -16,7 +16,6 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from tcbot import cfg
 from tcbot.utils.timedate_format import utc_now
 
 # ────────────────────── Console Log Formatter ───────────────────── #
@@ -52,7 +51,7 @@ class BotLogFormatter(logging.Formatter):
     }
     _COLORED_MSG = {logging.WARNING, logging.ERROR, logging.CRITICAL}
 
-    def __init__(self, project_name: str) -> None:
+    def __init__(self) -> None:
         super().__init__()
 
     def _bracket(self, color: str, text: str) -> str:
@@ -125,7 +124,7 @@ def setup(level: int = logging.INFO) -> None:
     * Must be called once before any logging occurs
     """
     con_handler = logging.StreamHandler()
-    con_handler.setFormatter(BotLogFormatter(cfg.community_name))
+    con_handler.setFormatter(BotLogFormatter())
 
     root = logging.getLogger()
     root.setLevel(level)

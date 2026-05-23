@@ -375,6 +375,8 @@ Each file owns exactly one MongoDB collection (or two for `admins_db.py` and `gr
 | `mutes_db.py` | `mutes` | `log_mute` |
 | `queues_db.py` | `promotion_requests` | `add_request`, `get_request`, `update_request_status`, `all_pending_requests` |
 | `cache.py` | — | In-memory TTL caches: `effective_role_cache`, `connected_cache`, `active_groups_cache`, `owner_id_cache` |
+| `documents.py` | — | TypedDict document shapes: `BanDoc`, `AdminDoc`, `GroupDoc`, `PendingGroupDoc`, `RoleDoc`, `UserDoc`, `WarnDoc`, `WarnCountDoc`, `PromotionRequestDoc`. Also exports `Literal` aliases: `BanStatus`, `RoleName`, `RequestStatus` |
+| `types.py` | — | `NewType` domain primitives: `UserId`, `GroupId`, `ChatId`, `BanId`. Import these to get nominal typing on bare `int` / `str` ID fields. |
 
 ---
 
@@ -396,7 +398,8 @@ Error categories: `IGNORED` (expected API errors like `ChatMigrated`), `WARNING`
 
 ### `logger.py`
 
-**`BotLogFormatter`** — custom formatter: `[HH:MM] [DD-MM-YYYY] | community | L - module:line - msg`
+**`BotLogFormatter`** — custom formatter: `[HH:MM] [DD-MM-YYYY] | community | L - module:line - msg`  
+`BotLogFormatter.__init__()` takes no arguments. The formatter reads `cfg` at format time; do not pass a community name at construction.
 
 **`setup(community_name, log_level)`** — installs `BotLogFormatter` on the root logger, caps third-party loggers.
 

@@ -275,3 +275,51 @@ All three layers route to `error_reporter.report_exc()` which ships a formatted 
 - [ ] Review ConversationHandler fallback paths for completeness
 - [ ] Verify auto-demote fires on all required code paths
 - [ ] Expand test coverage for appeal flow edge cases
+
+---
+
+## Code Quality Checklist (Task File — Session 5)
+
+### Ruff
+- [x] Run `uv tool run ruff check . --select E4,E7,E9,F,I` — 1 violation found (unused import in logger.py, fixed as part of Issue 8)
+- [x] Run `uv tool run ruff format .` — no formatting changes needed; codebase already conforms
+
+### Issue 1 — Missing `from __future__ import annotations`
+- [x] `tests/__init__.py` — already present at line 9; no change needed
+
+### Issue 2 — Exception chaining never used
+- [x] Audited all 30+ `except ... as exc:` blocks; none re-raise a new exception without `from exc`. The one true re-raise (`_owner_id_from_env` in `__init__.py`) already uses `raise RuntimeError(...) from exc`. All other blocks log and continue; bare `raise` in `warns_db.py` correctly re-raises the caught exception. No chaining gaps found.
+
+### Issue 3 — `# type: ignore` suppressions in `cache.py`
+- [x] `TTLCache` is already `Generic[T]`; no `# type: ignore` comments exist anywhere in `cache.py`. Issue pre-resolved.
+
+### Issue 4 — Weakly-typed parameters
+- [x] `prefixes.py` — `dispatch_alt_prefix` already uses `_UpdateLike` / `_ContextLike` Protocol types
+- [x] `extraction.py` — `get_reason()` already uses `_UpdateLike` / `_ContextLike` Protocol types
+- [x] `dispatch.py` — `fan_out` already uses a proper `TypeVar T` bound to `Awaitable`; issue pre-resolved
+
+### Issue 5 — `list[dict]` anti-pattern in DB layer
+- [x] All DB helpers already return typed shapes (`BanDoc`, `AdminDoc`, `GroupDoc`, `UserDoc`, `WarnDoc`, `PromotionRequestDoc`, etc.) from `documents.py`. Issue pre-resolved.
+
+### Issue 6 — Module-level mutable state
+- [x] `ban_flow.py` — `_albums` / `_album_meta` are intentional asyncio-safe module-level dicts; concurrency is single-threaded via the event loop. Accepted design; no refactor warranted without clear regression risk.
+- [x] `prefixes.py` — `_REGISTRY` is an intentional asyncio-safe module-level dict; populated at import time and only read thereafter.
+- [x] `error_reporter.py` — `_bot` / `_chat_id` / `_thread_id` set once via `attach()` in `_post_init`; safe under asyncio. Accepted design.
+
+### Issue 7 — Bare `except Exception: pass` (silent failures)
+- [x] `tcbot/__init__.py:parse_list` — logs with `logging.getLogger(__name__).debug(...)` on `(ValueError, SyntaxError)`. Not bare.
+- [x] `tcbot/__main__.py` — asyncio handler creation failure logs via `log.debug("Failed to schedule async error report: %s", err)`
+- [x] `tcbot/modules/helper/decorators.py` — all rate-limit reply failures log via `log.debug(...)`
+- [x] `tcbot/modules/connecting.py` — permission check failure logs via `log.debug(...)` and replies with an error message
+
+### Issue 8 — Dead code in `logger.py`
+- [x] Removed unused `project_name: str` parameter from `BotLogFormatter.__init__`; signature is now `__init__(self) -> None`
+- [x] Updated `setup()` call from `BotLogFormatter(cfg.community_name)` to `BotLogFormatter()`
+- [x] Removed now-unused `from tcbot import cfg` import in `logger.py` (Ruff F401 fix)
+
+### Issue 9 — Unused advanced type patterns
+- [x] Created `tcbot/database/types.py` with `NewType` domain primitives: `UserId`, `GroupId`, `ChatId`, `BanId`
+- [x] Added `Literal` type aliases to `documents.py`: `BanStatus`, `RoleName`, `RequestStatus`
+- [x] Applied `RoleName` to `RoleDoc.role`; `RequestStatus` to `PromotionRequestDoc.status`
+- [x] Applied `UserId` / `GroupId` / `ChatId` / `BanId` throughout all `TypedDict` document definitions
+- [x] `Protocol` classes for duck-typed interfaces already exist in `prefixes.py` and `extraction.py`; discriminated unions deferred (no current state machine ambiguity warrants them)

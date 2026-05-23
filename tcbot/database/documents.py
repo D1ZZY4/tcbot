@@ -1,20 +1,30 @@
+# © Copyright 2024 - 2026 Transsion Core
+# © Copyright 2024 - 2026 Dizzy
+# © Copyright 2026 Aveum Apps
+
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TypedDict
+from typing import Literal, TypedDict
+
+from tcbot.database.types import BanId, ChatId, GroupId, UserId
+
+BanStatus = Literal["active", "expired", "revoked"]
+RoleName = Literal["founder", "admin", "developer", "tester"]
+RequestStatus = Literal["pending", "approved", "rejected"]
 
 
 class AdminDoc(TypedDict, total=False):
-    user_id: int
-    promoted_by: int
+    user_id: UserId
+    promoted_by: UserId
     promoted_date: datetime
 
 
 class BanDoc(TypedDict, total=False):
-    ban_id: str
-    banned_user_id: int
+    ban_id: BanId
+    banned_user_id: UserId
     reason: str
-    admin_user_id: int
+    admin_user_id: UserId
     proof_message_id: int
     log_message_id: int
     previous_proof_message_id: int | None
@@ -31,34 +41,34 @@ class BanDoc(TypedDict, total=False):
 
 
 class GroupDoc(TypedDict, total=False):
-    chat_id: int
+    chat_id: GroupId
     title: str
-    added_by: int
+    added_by: UserId
     added_date: datetime
     is_active: bool
 
 
 class PendingGroupDoc(TypedDict, total=False):
-    chat_id: int
+    chat_id: ChatId
     title: str
-    owner_id: int
+    owner_id: UserId
     message_id: int
     added_date: datetime
 
 
 class RoleDoc(TypedDict, total=False):
-    user_id: int
-    role: str
-    assigned_by: int
+    user_id: UserId
+    role: RoleName
+    assigned_by: UserId
     assigned_at: datetime
 
 
 class RoleRefDoc(TypedDict, total=False):
-    user_id: int
+    user_id: UserId
 
 
 class UserDoc(TypedDict, total=False):
-    user_id: int
+    user_id: UserId
     username: str | None
     first_name: str | None
     last_name: str | None
@@ -68,27 +78,27 @@ class UserDoc(TypedDict, total=False):
 
 class WarnDoc(TypedDict, total=False):
     _id: object
-    user_id: int
+    user_id: UserId
     reason: str
-    admin_id: int
-    chat_id: int
+    admin_id: UserId
+    chat_id: ChatId
     timestamp: datetime
 
 
 class WarnCountDoc(TypedDict, total=False):
-    user_id: int
-    chat_id: int
+    user_id: UserId
+    chat_id: ChatId
     count: int
     updated_at: datetime
 
 
 class PromotionRequestDoc(TypedDict, total=False):
     request_id: str
-    target_id: int
+    target_id: UserId
     username: str | None
     first_name: str
-    promoted_by: int
-    status: str
+    promoted_by: UserId
+    status: RequestStatus
     requested_date: datetime
     resolved_date: datetime | None
-    resolved_by: int | None
+    resolved_by: UserId | None
