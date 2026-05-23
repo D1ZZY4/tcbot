@@ -10,6 +10,7 @@ Member cache collection - stores user profile information
 
 from __future__ import annotations
 
+from tcbot.database.documents import UserDoc
 from tcbot.database.mongos import col
 from tcbot.utils.timedate_format import utc_now
 
@@ -64,7 +65,7 @@ async def upsert_user(
 # * Includes profile lookups and statistics
 
 
-async def get_user(user_id: int) -> dict | None:
+async def get_user(user_id: int) -> UserDoc | None:
     """
     Get the full cached profile for a specific user
     * Returns None if the user has never interacted with the bot

@@ -12,6 +12,7 @@ Owners and admins collection helpers - manages bot staff permissions
 from __future__ import annotations
 
 import asyncio
+from typing import cast
 
 from tcbot.database.cache import (
     _OWNER_KEY,
@@ -19,6 +20,7 @@ from tcbot.database.cache import (
     effective_role_cache,
     owner_id_cache,
 )
+from tcbot.database.documents import AdminDoc
 from tcbot.database.mongos import col
 from tcbot.utils.timedate_format import utc_now
 
@@ -48,8 +50,8 @@ async def get_owner_id() -> int | None:
     """
     cached = owner_id_cache.get(_OWNER_KEY)
     if cached is not CACHE_MISS:
-        return cached  # type: ignore[return-value]
-    doc = await _owners().find_one({}, {"_id": 0, "user_id": 1})
+        return cast(int | None, cached)
+    doc: AdminDoc | None = await _owners().find_one({}, {"_id": 0, "user_id": 1})
     result = doc["user_id"] if doc else None
     owner_id_cache.put(_OWNER_KEY, result)
     return result
@@ -152,7 +154,7 @@ async def remove_admin(user_id: int) -> bool:
 # * Used for staff management and audit logging
 
 
-async def all_admins() -> list[dict]:
+async def all_admins() -> list[AdminDoc]:
     """
     Get list of all admins with their user IDs
     """

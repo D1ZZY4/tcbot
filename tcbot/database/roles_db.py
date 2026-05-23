@@ -12,9 +12,11 @@ Role management system - handles custom staff roles like developer and tester
 from __future__ import annotations
 
 import asyncio
+from typing import cast
 
 from tcbot.database.admins_db import is_admin, is_owner
 from tcbot.database.cache import CACHE_MISS, effective_role_cache
+from tcbot.database.documents import RoleDoc, RoleRefDoc
 from tcbot.database.mongos import col
 from tcbot.utils.timedate_format import utc_now
 
@@ -97,7 +99,7 @@ async def get_role(user_id: int) -> str | None:
     return doc["role"] if doc else None
 
 
-async def all_by_role(role: str) -> list[dict]:
+async def all_by_role(role: str) -> list[RoleRefDoc]:
     """
     Get all users with a specific custom role
     * Returns only user IDs for efficient data transfer
@@ -105,7 +107,7 @@ async def all_by_role(role: str) -> list[dict]:
     return await _col().find({"role": role}, {"_id": 0, "user_id": 1}).to_list(None)
 
 
-async def all_roles() -> list[dict]:
+async def all_roles() -> list[RoleDoc]:
     """
     Get all custom role assignments in the database
     * Returns full documents for all users with custom roles
@@ -142,7 +144,7 @@ async def get_effective_role(user_id: int) -> str | None:
     """
     cached = effective_role_cache.get(user_id)
     if cached is not CACHE_MISS:
-        return cached  # type: ignore[return-value]
+        return cast(str | None, cached)
 
     owner, admin, role = await asyncio.gather(
         is_owner(user_id),

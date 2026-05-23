@@ -49,8 +49,8 @@ def _patch_dns_if_needed() -> None:
             resolver = dns.resolver.Resolver(configure=False)
             resolver.nameservers = ["8.8.8.8", "8.8.4.4"]
             dns.resolver.default_resolver = resolver
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.getLogger(__name__).debug("DNS patch skipped: %s", exc)
 
 
 log = logging.getLogger(__name__)

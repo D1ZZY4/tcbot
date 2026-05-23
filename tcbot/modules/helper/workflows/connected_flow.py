@@ -223,8 +223,8 @@ class BuildConnection:
                             message_id=pending["message_id"],
                             reply_markup=None,
                         )
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        log.debug("Failed to edit pending connect prompt: %s", exc)
                 return
 
             if await db.groups_db.is_connected(chat.id):
@@ -259,7 +259,8 @@ class BuildConnection:
 
         try:
             member = await ctx.bot.get_chat_member(chat.id, user.id)
-        except Exception:
+        except Exception as exc:
+            log.debug("Join decision role check failed: %s", exc)
             await q.answer("Could not verify your role.", show_alert=True)
             return
 
@@ -275,7 +276,8 @@ class BuildConnection:
                     q.answer(),
                     ctx.bot.get_chat_member(chat.id, ctx.bot.id),
                 )
-            except Exception:
+            except Exception as exc:
+                log.debug("Join decision permission check failed: %s", exc)
                 await q.edit_message_text(
                     "Could not verify my own permissions. Please promote me as admin and try again.",
                     reply_markup=None,

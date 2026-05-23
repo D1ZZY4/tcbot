@@ -90,7 +90,8 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     try:
         bot_member = await ctx.bot.get_chat_member(chat.id, ctx.bot.id)
-    except Exception:
+    except Exception as exc:
+        log.debug("Could not verify bot permissions for %d: %s", chat.id, exc)
         await update.effective_message.reply_text("Could not verify bot permissions.")
         return
 

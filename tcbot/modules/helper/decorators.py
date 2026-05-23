@@ -11,6 +11,7 @@ import logging
 import time
 from collections import deque
 from collections.abc import Callable
+from typing import Awaitable, TypeVar
 
 from telegram import Update
 from telegram.ext import ApplicationHandlerStop, ContextTypes
@@ -20,6 +21,7 @@ from tcbot import database as db
 from tcbot.database.roles_db import get_effective_role, role_rank
 
 log = logging.getLogger(__name__)
+R = TypeVar("R")
 
 
 # ── Per-user sliding-window rate limiter ───────────────────────────────────
@@ -126,8 +128,8 @@ async def global_rate_limit_handler(
         if msg:
             try:
                 await msg.reply_text(f"⏳ Slow down! try again in {wait:.0f} seconds.")
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("Command rate-limit reply failed: %s", exc)
         raise ApplicationHandlerStop
 
 
@@ -159,9 +161,11 @@ def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
     """
     _limiter = _RateLimiter(max_calls=limit, window=period)
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(
+        func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R]],
+    ) -> Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R | None]]:
         @functools.wraps(func)
-        async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> R | None:
             uid = update.effective_user.id if update.effective_user else None
             if uid:
                 wait = _limiter.check(uid)
@@ -172,16 +176,16 @@ def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
                                 f"⏳ Slow down - try again in {wait:.0f}s.",
                                 show_alert=True,
                             )
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            log.debug("Callback rate-limit answer failed: %s", exc)
                         return
                     if update.effective_message:
                         try:
                             await update.effective_message.reply_text(
                                 f"⏳ Slow down! Try again in {wait:.0f} seconds."
                             )
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            log.debug("Message rate-limit reply failed: %s", exc)
                         return
             return await func(update, ctx)
 
@@ -193,7 +197,9 @@ def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
 # ── Execution tracer ───────────────────────────────────────────────────────
 
 
-def log_execution(func: Callable) -> Callable:
+def log_execution(
+    func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R]],
+) -> Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R]]:
     """Wrap a handler to emit entry / exit / exception traces at DEBUG level.
 
     Logs the handler name and effective user ID on entry.
@@ -205,7 +211,7 @@ def log_execution(func: Callable) -> Callable:
     """
 
     @functools.wraps(func)
-    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> R:
         uid = update.effective_user.id if update.effective_user else "?"
         name = func.__name__
         t0 = time.monotonic()
@@ -217,7 +223,7 @@ def log_execution(func: Callable) -> Callable:
             log.exception("[%s] uid=%s raised after %.1fms", name, uid, elapsed)
             raise
         log.debug("[%s] uid=%s ok (%.1fms)", name, uid, (time.monotonic() - t0) * 1_000)
-        return result  # type: ignore[return-value]
+        return result
 
     return wrapper
 

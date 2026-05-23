@@ -5,3 +5,5 @@
 """
 Pytest test suite for the Transsion Core Federation bot.
 """
+
+from __future__ import annotations

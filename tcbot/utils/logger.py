@@ -54,7 +54,6 @@ class BotLogFormatter(logging.Formatter):
 
     def __init__(self, project_name: str) -> None:
         super().__init__()
-        self.project_name = project_name
 
     def _bracket(self, color: str, text: str) -> str:
         return f"{self._BR}[{self._R}{color}{text}{self._R}{self._BR}]{self._R}"

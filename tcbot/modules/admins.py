@@ -156,8 +156,8 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         await q.answer("You no longer have permission to do this.", show_alert=True)
         try:
             await q.edit_message_reply_markup(None)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Failed to clear promote reply markup: %s", exc)
         return
 
     parts = q.data.split(":", 2)
@@ -269,8 +269,8 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         await q.answer("You no longer have permission to do this.", show_alert=True)
         try:
             await q.edit_message_reply_markup(None)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Failed to clear demote reply markup: %s", exc)
         return
 
     # * answer + fetch target role + name in parallel

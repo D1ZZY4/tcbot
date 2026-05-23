@@ -40,7 +40,7 @@ def test_user_identity_name_with_username_returns_display_only_when_no_username(
 def test_user_identity_is_frozen_dataclass() -> None:
     ident = UserIdentity(user_id=1, display_name="Andi", username=None)
     with pytest.raises((AttributeError, TypeError)):
-        ident.display_name = "Changed"  # type: ignore[misc]
+        setattr(ident, "display_name", "Changed")
 
 
 # ── resolve_identity - live path ───────────────────────────────────────────

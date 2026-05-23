@@ -10,6 +10,7 @@ Promotion request queue - manages promotion request queue for staff applications
 
 from __future__ import annotations
 
+from tcbot.database.documents import PromotionRequestDoc
 from tcbot.database.mongos import col, make_short_id
 from tcbot.utils.timedate_format import utc_now
 
@@ -66,7 +67,7 @@ async def enqueue(
 # * Includes lookups by ID, user, and counts of pending requests
 
 
-async def get_request_by_id(request_id: str) -> dict | None:
+async def get_request_by_id(request_id: str) -> PromotionRequestDoc | None:
     """
     Get a promotion request by its unique request ID
     * Returns the full request document including all metadata
@@ -74,7 +75,7 @@ async def get_request_by_id(request_id: str) -> dict | None:
     return await _requests().find_one({"request_id": request_id})
 
 
-async def get_request(user_id: int) -> dict | None:
+async def get_request(user_id: int) -> PromotionRequestDoc | None:
     """
     Get the pending request for a specific user
     * Only returns requests that are still in "pending" status
@@ -82,7 +83,7 @@ async def get_request(user_id: int) -> dict | None:
     return await _requests().find_one({"target_id": user_id, "status": "pending"})
 
 
-async def all_pending() -> list[dict]:
+async def all_pending() -> list[PromotionRequestDoc]:
     """
     Get all currently pending promotion requests
     * Returns full documents for all unresolved requests

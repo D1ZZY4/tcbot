@@ -11,6 +11,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
+from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.formatter import code, esc
 from tcbot.modules.helper.parse_editmsg import safe_edit
@@ -39,7 +40,7 @@ __help_text__ = (
 # ──────────────────────── Helper Functions ──────────────────────── #
 
 
-def _render(groups: list[dict], detailed: bool) -> str:
+def _render(groups: list[GroupDoc], detailed: bool) -> str:
     lines = [f"<b>Connected Groups</b>\n\nCount: {len(groups)}\n"]
     for g in groups:
         if detailed:

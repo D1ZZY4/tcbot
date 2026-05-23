@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
+from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, parse_logmsg
 from tcbot.modules.helper.formatter import code
 from tcbot.utils.prefixes import build_prefixed_filters
@@ -78,12 +79,13 @@ async def _leave_one(
     )
 
 
-async def _should_remove(bot, grp: dict) -> bool:
+async def _should_remove(bot, grp: GroupDoc) -> bool:
     """Return True if the bot has left or been kicked from the group."""
     try:
         member = await bot.get_chat_member(grp["chat_id"], bot.id)
         return member.status in ("left", "kicked")
-    except Exception:
+    except Exception as exc:
+        log.debug("Could not verify membership for %d: %s", grp["chat_id"], exc)
         return True
 
 

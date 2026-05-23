@@ -120,8 +120,8 @@ def _make_asyncio_exc_handler(loop: asyncio.AbstractEventLoop):
             lp.create_task(
                 error_reporter.report_exc(exc or RuntimeError(detail), context=detail)
             )
-        except Exception:
-            pass
+        except Exception as err:
+            log.debug("Failed to schedule async error report: %s", err)
 
     return handler
 

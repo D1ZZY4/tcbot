@@ -11,12 +11,15 @@ Federated groups and pending joins collection helpers
 
 from __future__ import annotations
 
+from typing import cast
+
 from tcbot.database.cache import (
     _ALL_GROUPS_KEY,
     CACHE_MISS,
     active_groups_cache,
     connected_cache,
 )
+from tcbot.database.documents import GroupDoc, PendingGroupDoc
 from tcbot.database.mongos import col
 from tcbot.utils.timedate_format import utc_now
 
@@ -40,7 +43,7 @@ def _pending():
 # ! CRITICAL: Cache invalidation is crucial here - always clear caches on changes
 
 
-async def get_group(chat_id: int) -> dict | None:
+async def get_group(chat_id: int) -> GroupDoc | None:
     """
     Get the full group record for a specific chat ID
     * Returns None if the group is not in the federated_groups collection
@@ -57,7 +60,7 @@ async def is_connected(chat_id: int) -> bool:
     """
     cached = connected_cache.get(chat_id)
     if cached is not CACHE_MISS:
-        return cached  # type: ignore[return-value]
+        return cast(bool, cached)
     result = (
         await _groups().find_one({"chat_id": chat_id, "is_active": True}, {"_id": 1})
         is not None
@@ -102,7 +105,7 @@ async def deactivate_group(chat_id: int) -> bool:
     return r.matched_count > 0
 
 
-async def active_groups() -> list[dict]:
+async def active_groups() -> list[GroupDoc]:
     """
     Get all currently active and connected groups
     * Caches the full list to avoid repeated full-collection queries
@@ -110,8 +113,8 @@ async def active_groups() -> list[dict]:
     """
     cached = active_groups_cache.get(_ALL_GROUPS_KEY)
     if cached is not CACHE_MISS:
-        return cached  # type: ignore[return-value]
-    result: list[dict] = await _groups().find({"is_active": True}).to_list(None)
+        return cast(list[GroupDoc], cached)
+    result: list[GroupDoc] = await _groups().find({"is_active": True}).to_list(None)
     active_groups_cache.put(_ALL_GROUPS_KEY, result)
     return result
 
@@ -150,7 +153,7 @@ async def add_pending(chat_id: int, title: str, owner_id: int, message_id: int) 
     )
 
 
-async def get_pending(chat_id: int) -> dict | None:
+async def get_pending(chat_id: int) -> PendingGroupDoc | None:
     """
     Get a pending join request by chat ID
     * Returns None if there's no pending request for that chat

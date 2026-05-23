@@ -10,6 +10,7 @@ Warnings collection helpers - manages user warning records in groups
 
 from __future__ import annotations
 
+from tcbot.database.documents import WarnDoc
 from tcbot.database.mongos import col
 from tcbot.utils.timedate_format import utc_now
 
@@ -71,7 +72,7 @@ async def clear_warns(user_id: int, chat_id: int) -> int:
     return r.deleted_count
 
 
-async def get_warns(user_id: int, chat_id: int) -> list[dict]:
+async def get_warns(user_id: int, chat_id: int) -> list[WarnDoc]:
     """
     Return all warn documents for a user in a chat, oldest first.
     * Sorts results by timestamp ascending to maintain chronological order

@@ -13,11 +13,23 @@ import logging
 import os
 import re
 from collections.abc import Callable, Coroutine
-from typing import Any
+from typing import Any, Protocol
 
 from telegram.ext import filters
 
 log = logging.getLogger(__name__)
+
+
+class _MessageLike(Protocol):
+    text: str | None
+
+
+class _UpdateLike(Protocol):
+    effective_message: _MessageLike | None
+
+
+class _ContextLike(Protocol):
+    args: list[str]
 
 
 # ─────────────────────── Alt-Prefix Registry ────────────────────── #
@@ -35,7 +47,7 @@ def register_command(
     _REGISTRY[name.lower()] = callback
 
 
-async def dispatch_alt_prefix(update: object, context: object) -> None:
+async def dispatch_alt_prefix(update: _UpdateLike, context: _ContextLike) -> None:
     """
     Dispatch an update to a registered alt-prefix command handler.
 
@@ -60,9 +72,7 @@ async def dispatch_alt_prefix(update: object, context: object) -> None:
         return
 
     parts = text.strip().split(None, 1)
-    context.args = (
-        parts[1].split() if len(parts) > 1 else []
-    )  # * type: ignore[attr-defined]
+    context.args = parts[1].split() if len(parts) > 1 else []
 
     try:
         await callback(update, context)
@@ -87,8 +97,8 @@ def _get_prefixes() -> list[str]:
         parsed = ast.literal_eval(raw)
         if isinstance(parsed, list):
             return [str(p) for p in parsed if p]
-    except Exception:
-        pass
+    except (ValueError, SyntaxError) as exc:
+        log.debug("PREFIXES parse fallback to raw string: %s", exc)
 
     return list(raw)
 

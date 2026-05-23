@@ -132,8 +132,8 @@ class BuildAppeal:
                 log.warning("Could not edit appeal submitted log: %s", exc)
         try:
             await bot.send_message(lc, text, parse_mode="HTML", message_thread_id=lt)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Could not send appeal submitted log: %s", exc)
 
     # ── ConversationHandler step methods ──────────────────────────────────
 
