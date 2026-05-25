@@ -1,4 +1,4 @@
-modules = ["python-3.11"]
+modules = ["python-3.12", "tree", "git"]
 [agent]
 expertMode = true
 stack = "FLASK_VANILLA_JS"
@@ -17,14 +17,14 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Start application"
+args = "Start Application"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "Run Tests (TDD)"
 
 [[workflows.workflow]]
-name = "Start application"
+name = "Start Application"
 author = "agent"
 
 [workflows.workflow.metadata]

@@ -1,10 +1,10 @@
-# TCF Bot — Execution Plan
+# TCF Bot — Planning and Project State
 
 This document is the authoritative reference for how the project runs, where the known bugs are, what the improvement strategy is, and how sessions are tracked. Update it whenever the state of the project changes.
 
 ---
 
-## How the Project Runs End-to-End
+## HOW TO PROJECT RUNS (STEP by STEP)
 
 ### Startup Sequence
 
@@ -130,78 +130,47 @@ All three layers route to `error_reporter.report_exc()` which ships a formatted 
 
 ## Role System
 
-| Role | Rank | Collection |
-|---|---|---|
-| founder | 4 | `tc_owners` |
-| admin | 3 | `tc_admins` |
-| developer | 2 | `tc_roles` |
-| tester | 1 | `tc_roles` |
-
-**Canonical resolver:** `roles_db.get_effective_role(user_id)` → queries owner, admin, and role collections in parallel via `asyncio.gather()`, caches for 60 s.
-
-**Permission check:** `roles_db.can_act_on(executor_id, target_id)` → executor rank must be strictly greater than target rank.
-
-**Auto-demote:** When any role holder is banned or kicked, `role_guard.auto_demote()` removes their role, posts a log entry, and sends them a DM notification. Fires unconditionally before the moderation action executes.
-
-**Decorator minimum ranks:**
-
-| Decorator | Minimum role | Used for |
-|---|---|---|
-| `owner_only` | founder (4) | Transfer ownership, direct commands |
-| `staff_only` | admin (3) | Promotion requests, staff lists |
-| `mod_only` | developer (2) | Ban / unban |
-| `basic_mod_only` | tester (1) | Kick / mute / warn |
 
 ---
 
 ## Conversation Flows Summary
-
-| Flow | Factory | States | Entry trigger |
-|---|---|---|---|
-| Ban | `ban_flow.ban_conversation(entry)` | `WAITING_PROOF` | `/tcban` |
-| Kick | `reason_flow.build_modaction_conv(...)` | `WAITING_REASON`, `WAITING_PROOF` | `/tckick` |
-| Mute | `reason_flow.build_modaction_conv(...)` | `WAITING_REASON`, `WAITING_PROOF` | `/tcmute` |
-| Warn | `reason_flow.build_modaction_conv(...)` | `WAITING_REASON`, `WAITING_PROOF` | `/tcwarn` |
-| Appeal | `appeal_flow.build_handler()` | `WAITING_APPEAL`, `WAITING_CONFIRM` | `/start appeal_<ban_id>` |
-
-**Rule:** There are no `*_conv.py` files. Every `ConversationHandler` is built inside a `*_flow.py` file via a factory function. The module file defines `*_CMDS` filters, the entry point, and `__handlers__ = [factory(entry_fn, *_CMDS)]` (see `admins.py`).
+REFER TO `docs/workflows/workflows.md` FOR FULL DETAILS AND EXAMPLES
 
 ---
 
-## Bug Fix Priorities
+## BUG FIX PRIORITY
 
-### P0 — Critical
+You can add bugs to the tables below as you find them.
 
-| # | File | Issue | Fix |
-|---|---|---|---|
-| 1 | `agents/REPLIT.md` | Says "never use Replit Secrets" — contradicts current setup | Update to reflect actual Replit Secret usage |
-| 2 | `README.md` | Still says all secrets go in `config.env` — wrong for Replit deployment | Update Quick Start and Configuration sections |
 
-### P1 — High
+### P0 — PRIORITY
 
-| # | File | Issue | Fix |
-|---|---|---|---|
-| 3 | `docs/agent-guidelines.md` | Duplicates `agents/CLAUDE.md` — stale, confusing | Delete; merge unique content into `agents/CLAUDE.md` |
-| 4 | `PLAN.md` | Was a placeholder with no real execution plan | Replaced by this document |
-| 5 | `docs/workflows.md` | Content was truncated; per-flow descriptions missing | Expanded in this session |
+| No | File | Issue | Fix Status | Note | 
+|---|---|---|---|---|
+| 1 | `EXAMPLE.py` | Bugs its so fucking laggy | Not Yet | - |
+| 2 | `EXAMPLE.py` | Crashes when you do the thing | Done - Maybe Stable | So fucking a buggy a so lazy for fix any buggy |
 
-### P2 — Medium
+### P1 — HIGH
 
-| # | File | Issue | Fix |
-|---|---|---|---|
-| 6 | `appeal_flow.py` appeal lock check | Duplicate datetime logic vs `appeals.reviewer_locked_out` | Resolved — shared guard + `timedate_format` |
-| 7 | Multiple modules | Bare `except: pass` or `except Exception: pass` with no log line — silent production failures | Replace with at minimum `log.debug(...)` |
+| No | File | Issue | Fix Status | Note |
+|---|---|---|---|---|---|
+|  |  |  |  |  |
 
-### P3 — Low
+### P2 — MEDIUM
 
-| # | File | Issue | Fix |
-|---|---|---|---|
-| 8 | `agents/REPLIT.md` | Still references port 5000 — bot runs on 8080 in Replit | Update port reference |
-| 9 | `tcbot/database/cache.py` | Potential thundering-herd if N coroutines all miss the same cache key simultaneously | Add asyncio.Lock per key |
+| No | File | Issue | Fix Status | Note |
+|---|---|---|---|---|
+|  |  |  |  |  |
+
+### P3 — LOW
+
+| No | File | Issue | Fix Status | Note |
+|---|---|---|---|---|
+|  |  |  |  |  |
 
 ---
 
-## Code Improvement Strategy
+## CODE IMPROVEMENT STRATEGY
 
 ### Principles (in order of priority)
 
@@ -224,7 +193,7 @@ All three layers route to `error_reporter.report_exc()` which ships a formatted 
 
 ---
 
-## Performance and Stability Goals
+## PERFORMANCE AND STABILITY GOALS
 
 ### Performance
 
@@ -249,20 +218,20 @@ All three layers route to `error_reporter.report_exc()` which ships a formatted 
 
 ---
 
-## Session Progress
+## SESSION LOGS HISTORY
 
 ### Session 1 — Environment Setup ✅
-- Migrated from Replit Agent to Replit environment
-- Stored `BOT_TOKEN` and `MONGODB_URI` in Replit Secrets
-- All 121 tests pass, bot starts and connects to MongoDB
-- Cleaned `config.env` of hardcoded secrets
+- [x] Migrated from Replit Agent to Replit environment
+- [x] Stored `BOT_TOKEN` and `MONGODB_URI` in Replit Secrets
+- [x] All 121 tests pass, bot starts and connects to MongoDB
+- [x] Cleaned `config.env` of hardcoded secrets
 
-### Session 2 — Documentation Overhaul ✅ (current)
-- Rewrote `PLAN.md` (this document)
-- Rewrote all `agents/*.md` as comprehensive AI agent instructions
-- Rewrote all `docs/*.md` as thorough developer documentation
-- Removed duplicate `docs/agent-guidelines.md`
-- Updated `README.md`
+### Session 2 — Documentation Overhaul ✅
+- [x] Rewrote `PLAN.md` (this document)
+- [x] Rewrote all `agents/*.md` as comprehensive AI agent instructions
+- [x] Rewrote all `docs/*.md` as thorough developer documentation
+- [x] Removed duplicate `docs/agent-guidelines.md`
+- [x] Updated `README.md`
 
 ### Session 3 — Code Quality Pass (planned)
 - [ ] Audit every module for 3-layer decorator stack compliance
@@ -316,7 +285,7 @@ Corrections applied:
 
 ---
 
-## Code Quality Checklist (Task File — Session 5)
+## Session 5 — Code Quality Checklist
 
 ### Ruff
 - [x] Run `uv tool run ruff check . --select E4,E7,E9,F,I` — 1 violation found (unused import in logger.py, fixed as part of Issue 8)

@@ -11,7 +11,7 @@ Compatible with: Replit AI, Claude, Gemini, Qwen, GitHub Copilot, and any AI cod
 
 TCF Bot is a **production Telegram federation management bot** for the Transsion Core Federation community. It handles federation-wide bans, user appeals, staff role management, multi-group moderation, and full audit logging.
 
-- **Language:** Python 3.13
+- **Language:** Python 3.12
 - **Framework:** python-telegram-bot 22.5 (PTB v22, async, long polling — no webhook)
 - **Database:** MongoDB via Motor (async)
 - **Keepalive:** Flask thread on port 5000
@@ -21,7 +21,109 @@ TCF Bot is a **production Telegram federation management bot** for the Transsion
 
 ---
 
-## Architecture Map
+## MAKING CHANGES
+
+### BEFORE EDITING ANY FILE
+
+1. Read the entire file to understand what already exists.
+2. Confirm no equivalent function already exists elsewhere.
+3. Confirm the change does not break the 3-layer decorator stack.
+
+### After editing a file
+
+1. Run the bot: `python3 -m tcbot`
+   └ for Replit AI: use the `Start Application` workflow to run the bot. if already running, `Restart Application`.
+2. Checking logs for import errors. If there are any `ERROR` logs during startup, stop and fix the issue before testing further.
+3. If touching a handler, verify the relevant command works in Telegram.
+
+---
+
+## MAPPING
+
+### Tree Map
+
+```
+tcbot/
+│   alive.py
+│   __init__.py
+│   __main__.py
+│   
+├───database
+│       admins_db.py
+│       bans_db.py
+│       cache.py
+│       documents.py
+│       groups_db.py
+│       kicks_db.py
+│       mongos.py
+│       mutes_db.py
+│       queues_db.py
+│       roles_db.py
+│       types.py
+│       users_db.py
+│       warns_db.py
+│       __init__.py
+│       
+├───modules
+│   │   about.py
+│   │   additional.py
+│   │   admins.py
+│   │   appeals.py
+│   │   banning.py
+│   │   broadcasting.py
+│   │   checking.py
+│   │   connecting.py
+│   │   disconnecting.py
+│   │   greeting.py
+│   │   groups.py
+│   │   help.py
+│   │   kicking.py
+│   │   maintenance.py
+│   │   muting.py
+│   │   privacy.py
+│   │   start.py
+│   │   stats.py
+│   │   unbanning.py
+│   │   warnings.py
+│   │   __init__.py
+│   │   
+│   └───helper
+│       │   ban_info.py
+│       │   decorators.py
+│       │   extraction.py
+│       │   formatter.py
+│       │   keyboards.py
+│       │   parse_editmsg.py
+│       │   parse_link.py
+│       │   parse_logmsg.py
+│       │   role_guard.py
+│       │   __init__.py
+│       │   
+│       └───workflows
+│               appeal_flow.py
+│               ban_flow.py
+│               connected_flow.py
+│               kicking_flow.py
+│               muting_flow.py
+│               promote_flow.py
+│               proof_flow.py
+│               reason_flow.py
+│               stats_chats_flow.py
+│               stats_flow.py
+│               unban_flow.py
+│               warning_flow.py
+│               __init__.py
+│               
+└───utils
+        dispatch.py
+        error_reporter.py
+        logger.py
+        prefixes.py
+        timedate_format.py
+        __init__.py
+```
+
+### Architecture Map
 
 ```
 tcbot/
@@ -417,7 +519,7 @@ All 134 tests run offline — no bot token or MongoDB connection required.
 
 After any code change:
 1. Run all tests — all 134 must pass
-2. Restart the `Start application` workflow
+2. Restart the `Start Application` workflow
 3. Verify startup logs: no import errors, MongoDB connected, handlers registered
 
 ---

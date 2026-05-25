@@ -1,6 +1,6 @@
 # Replit Environment — TCF Bot
 
-**Read `agents/CLAUDE.md` first.** This file documents how the project is configured on Replit.
+**Read `agents/CLAUDE.md` and `./replit.md` first.** This file documents how the project is configured on Replit.
 
 Compatible with: Replit AI, Claude, Gemini, Qwen, GitHub Copilot, and any AI coding agent.
 
@@ -8,11 +8,11 @@ Compatible with: Replit AI, Claude, Gemini, Qwen, GitHub Copilot, and any AI cod
 
 ## Workflow
 
-- **Name:** `Start application`
+- **Name:** `Start Application`
 - **Command:** `python3 -m tcbot`
 - This is the only workflow needed. It starts the bot, connects to MongoDB, and starts the Flask keepalive on port 8080.
 
-To restart the bot after code changes: stop and restart the `Start application` workflow via the Replit Run button or the Workflows panel.
+To restart the bot after code changes: stop and restart the `Start Application` workflow via the Replit Run button or the Workflows panel.
 
 ---
 
@@ -86,7 +86,7 @@ Dependencies are managed via `uv` and `pyproject.toml`.
 
 - **Do not add packages to `requirements.txt`** — this file is legacy and may be gitignored.
 - To add a dependency: `uv add <package>` (this updates `pyproject.toml` and `uv.lock`)
-- To install for Replit: `uv sync` (already done on workflow start via the `Start application` command setup)
+- To install for Replit: `uv sync` (already done on workflow start via the `Start Application` command setup)
 
 ---
 

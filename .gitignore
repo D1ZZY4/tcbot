@@ -35,5 +35,4 @@ attached_assets/
 
 # Local
 logs*/
-.trae/
 .pytest_cache/

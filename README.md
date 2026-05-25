@@ -41,7 +41,7 @@ This project is hosted on Replit. Secrets are stored in Replit Secrets — not i
 
 All other configuration is managed as Replit environment variables. See `config.env.example` for the full list of keys.
 
-**Start the bot:** use the `Start application` workflow (`python3 -m tcbot`).
+**Start the bot:** use the `Start Application` workflow (`python3 -m tcbot`).
 
 ---
 
@@ -155,7 +155,7 @@ issues such as unused imports and import order.
 ## Documentation
 
 - [Execution plan and project state](PLAN.md)
-- [Documentation hub](docs/index.md)
+- [Documentation Overview](docs/README.md)
 - [Architecture](docs/architecture.md)
 - [Modules and service boundaries](docs/modules.md)
 - [Conversation flows](docs/workflows.md)

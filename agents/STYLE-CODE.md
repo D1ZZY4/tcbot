@@ -8,7 +8,7 @@ Compatible with: Replit AI, Claude, Gemini, Qwen, GitHub Copilot, and any AI cod
 
 ## Language and Runtime
 
-- Python 3.13
+- Python 3.12
 - Built-in generic types: `list[str]`, `dict[str, int]`, `tuple[int, int | None]`
 - Union syntax: `X | Y` — never `Optional[X]` or `Union[X, Y]`
 - Always add `from __future__ import annotations` as the first non-comment line in every module file
@@ -60,37 +60,44 @@ This applies to multi-line variable blocks, not single assignments.
 
 ---
 
-## Section Dividers
+## Comments & Section Dividers
 
-Separate logical sections with the following format. The title line must be exactly **70 characters** wide with the text centered and flanked by `#` and `─` characters:
+See `agents/STYLE-COMMENTS.md` for the full comment convention.
 
-```python
-# ────────────────────────── Section Title ───────────────────────── #
-```
+**Quick reference — Better Comments annotation prefixes:**
 
-Comment annotation prefixes:
+Works in both inline `#` comments and inside docstrings:
 
 ```python
-# ! WARNING: Short or long warning description
-# ! CRITICAL: Short or long critical description
-# TODO: Short or long deferred task
-# NOTE: Short or long note
-# ? Short or long question
-# * Short or long highlight, info, or general description
+# Inline # comments:
+# ! WARNING: dangerous or critical behavior
+# ! CRITICAL: must-not-ignore issue
+# ? question or uncertainty to revisit
+# TODO: deferred task with enough context to act on
+# * highlight, info, or general description
+# // dead code — must be removed, not temporarily disabled
+
+# Inside docstrings (no # prefix):
+"""
+Function description.
+
+! Warning about this function.
+? Something to verify.
+TODO: deferred improvement.
+* Important note about behavior.
+"""
 ```
 
-Use section dividers for major logical blocks within a file — not for every minor group of lines.
-
-Do not add comments that explain what the next line obviously does:
+**Section dividers — Comment Divider extension (4 levels):**
 
 ```python
-# Bad
-# * Get the user ID
-uid = update.effective_user.id
-
-# Good — no comment needed
-uid = update.effective_user.id
+# ────────────────────────────────── H1 ───────────────────────────────── #   ← file-level section
+# ────────────────────────── H2 ────────────────────────── #                  ← major block
+# ~~~~~~~~~~~~~~~~~~~ H3 ~~~~~~~~~~~~~~~~~~~~ #                               ← sub-block
+# ~~~~~~~~~~~ H4 ~~~~~~~~~~~ #                                                ← minor grouping
 ```
+
+Default to **H1** for module-level sections. Always generate with Comment Divider — never hand-type.
 
 ---
 
@@ -208,9 +215,12 @@ Every module file in `tcbot/modules/` must follow this structure:
 
 from __future__ import annotations
 
-# stdlib imports
-# third-party imports
-# internal imports
+import logging
+
+from telegram import Update
+from telegram.ext import ContextTypes
+
+from tcbot.modules.helper import decorators
 
 log = logging.getLogger(__name__)
 
@@ -218,7 +228,7 @@ __module_name__ = "Module Name"   # or None to hide from /help
 __help_text__   = "..."           # omit if __module_name__ is None
 
 
-# ── Section Divider ──────────────────────────────────────────────── #
+# ──────────────────────────── Command Name ──────────────────────────── #
 
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.mod_only
@@ -227,7 +237,7 @@ async def cmd_example(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ...
 
 
-# ── Handlers ──────────────────────────────────────────────────────── #
+# ─────────────────────────────── Handlers ───────────────────────────── #
 
 __handlers__ = [...]
 ```
@@ -239,7 +249,7 @@ __handlers__ = [...]
 - Do not add `from typing import List, Optional, Tuple` — use `list`, `int | None`, `tuple`
 - Do not use `datetime.utcnow()` or inline `datetime.now(timezone.utc)` — use `tcbot.utils.timedate_format` only
 - Do not use more than 3 emojis per message
-- Do not add comments explaining what the next line obviously does
+- Do not add comments that explain what the next line obviously does
 - Do not create duplicate render/keyboard functions across modules
 - Do not inline imports inside function bodies
 - Do not use `mention(x) + code(x)` pattern — pick one per context
@@ -247,3 +257,4 @@ __handlers__ = [...]
 - Do not create `*_conv.py` files — ConversationHandlers belong in `*_flow.py`
 - Do not duplicate reason/proof state handlers — use `reason_flow.build_modaction_conv()`
 - Do not add packages to `requirements.txt` — managed via `pyproject.toml`
+- Do not hand-type section dividers — use the Comment Divider extension

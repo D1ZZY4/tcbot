@@ -98,7 +98,7 @@ Compatible with: Replit AI, Claude, Gemini, Qwen, GitHub Copilot, and any AI cod
 
 1. Follow `agents/STYLE-CODE.md` for all code formatting decisions.
 2. Follow `agents/STYLE-COMMENTS.md` for all comment and docstring decisions.
-3. Section dividers use the exact 70-character format specified in the style guides.
+3. Section dividers use the H1/H2/H3/H4 format from the Comment Divider extension — see `agents/STYLE-COMMENTS.md`.
 4. `from __future__ import annotations` must appear as the first non-comment line in every module file.
 5. Built-in generic types only: `list[str]`, `dict[str, int]`, `tuple[int, ...]`, `int | None`. Never `typing.List`, `typing.Optional`, etc.
 6. Never use `datetime.utcnow()` or inline `datetime.now(timezone.utc)` — import from `tcbot.utils.timedate_format` only.

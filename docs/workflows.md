@@ -1,8 +1,6 @@
 # Conversation Flows — TCF Bot
 
 This document describes every `ConversationHandler` flow in the project — state graphs, entry points, exit conditions, and implementation conventions.  
-For architecture context, see [docs/architecture.md](architecture.md).  
-For per-module details, see [docs/modules.md](modules.md).
 
 ---
 
@@ -434,10 +432,3 @@ Timeout durations:
 Never hardcode timeout values. Always reference `cfg`.
 
 ---
-
-## Related Documentation
-
-- [Architecture](architecture.md)
-- [Modules and service boundaries](modules.md)
-- [Development workflow and onboarding](development.md)
-- [AI agent instructions](../agents/CLAUDE.md)
