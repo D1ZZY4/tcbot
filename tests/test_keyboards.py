@@ -39,20 +39,6 @@ def test_back_to_start_kb_single_back_button() -> None:
     assert rows[0][0]["cb"] == "back_to_start"
 
 
-# ─────────────────────────── Appeal flow ────────────────────────── #
-
-
-def test_appeal_review_kb_callback_data_includes_ban_id() -> None:
-    rows = _rows(keyboards.appeal_review_kb("ban_42_1714"))
-    assert rows[0][0]["cb"] == "appeal_approve_ban_42_1714"
-    assert rows[0][1]["cb"] == "appeal_reject_ban_42_1714"
-
-
-def test_appeal_cancel_kb_is_single_cancel_button() -> None:
-    rows = _rows(keyboards.appeal_cancel_kb())
-    assert rows[0][0]["cb"] == "cancel_appeal"
-
-
 # ───────────────────────── Promo decision ───────────────────────── #
 
 
@@ -110,11 +96,6 @@ def test_demote_confirm_kb_confirm_and_cancel() -> None:
     cbs = [b["cb"] for b in rows[0]]
     assert "demote_confirm:42" in cbs
     assert "demote_cancel:42" in cbs
-
-
-def test_cancel_proof_kb_single_button() -> None:
-    rows = _rows(keyboards.cancel_proof_kb())
-    assert rows[0][0]["cb"] == "cancel_proof"
 
 
 def test_privacy_kb_has_two_rows() -> None:

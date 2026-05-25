@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -37,21 +38,14 @@ _LOCK_WINDOW = timedelta(hours=12)
 _ID_RE = re.compile(r"^/start\s+appeal_([a-z0-9]{10})$")
 
 
+@dataclass(frozen=True)
 class BuildAppeal:
     """Configurable appeal ConversationHandler builder."""
 
-    def __init__(
-        self,
-        community_name: str,
-        log_channel: str,
-        *,
-        cancel_label: str = "Cancel",
-        cancel_callback: str = "cancel_appeal",
-    ) -> None:
-        self.community_name = community_name
-        self.log_channel = log_channel
-        self.cancel_label = cancel_label
-        self.cancel_callback = cancel_callback
+    community_name: str
+    log_channel: str
+    cancel_label: str = field(default="Cancel", kw_only=True)
+    cancel_callback: str = field(default="cancel_appeal", kw_only=True)
 
     # ── Keyboard and text factories ────────────────────────────────────────
 

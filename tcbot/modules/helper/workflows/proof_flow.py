@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 
 from telegram import (
     Bot,
@@ -23,21 +24,14 @@ log = logging.getLogger(__name__)
 # ─────────────────────────── BuildProof ─────────────────────────── #
 
 
+@dataclass(frozen=True)
 class BuildProof:
     """Configurable proof-step keyboard, prompts, and media recording."""
 
-    def __init__(
-        self,
-        action: str,
-        *,
-        skip_allowed: bool = True,
-        skip_label: str = "Skip",
-        cancel_label: str = "Cancel",
-    ) -> None:
-        self.action = action
-        self.skip_allowed = skip_allowed
-        self.skip_label = skip_label
-        self.cancel_label = cancel_label
+    action: str
+    skip_allowed: bool = field(default=True, kw_only=True)
+    skip_label: str = field(default="Skip", kw_only=True)
+    cancel_label: str = field(default="Cancel", kw_only=True)
 
     def keyboard(self) -> InlineKeyboardMarkup:
         """Proof-step keyboard. Includes Skip only when skip_allowed is True."""

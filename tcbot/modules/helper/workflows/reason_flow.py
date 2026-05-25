@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass, field
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
@@ -44,21 +45,14 @@ def parse_inline_reason(
 # ─────────────────────────── BuildReason ────────────────────────── #
 
 
+@dataclass(frozen=True)
 class BuildReason:
     """Configurable reason-step keyboard and prompt builder."""
 
-    def __init__(
-        self,
-        action: str,
-        *,
-        skip_allowed: bool = True,
-        skip_label: str = "Skip",
-        cancel_label: str = "Cancel",
-    ) -> None:
-        self.action = action
-        self.skip_allowed = skip_allowed
-        self.skip_label = skip_label
-        self.cancel_label = cancel_label
+    action: str
+    skip_allowed: bool = field(default=True, kw_only=True)
+    skip_label: str = field(default="Skip", kw_only=True)
+    cancel_label: str = field(default="Cancel", kw_only=True)
 
     def keyboard(self) -> InlineKeyboardMarkup:
         """Reason-step keyboard. Includes Skip only when skip_allowed is True."""

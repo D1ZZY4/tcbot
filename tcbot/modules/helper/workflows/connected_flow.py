@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass, field
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatMemberStatus
@@ -27,25 +28,16 @@ _REQUIRED_PERMS: tuple[str, ...] = (
 )
 
 
+@dataclass(frozen=True)
 class BuildConnection:
     """Configurable group-connection flow builder."""
 
-    def __init__(
-        self,
-        community_name: str,
-        *,
-        required_perms: tuple[str, ...] = _REQUIRED_PERMS,
-        join_label: str = "Connect",
-        cancel_label: str = "Cancel",
-        join_callback: str = "tc_join",
-        cancel_callback: str = "tc_cancel",
-    ) -> None:
-        self.community_name = community_name
-        self.required_perms = required_perms
-        self.join_label = join_label
-        self.cancel_label = cancel_label
-        self.join_callback = join_callback
-        self.cancel_callback = cancel_callback
+    community_name: str
+    required_perms: tuple[str, ...] = field(default=_REQUIRED_PERMS, kw_only=True)
+    join_label: str = field(default="Connect", kw_only=True)
+    cancel_label: str = field(default="Cancel", kw_only=True)
+    join_callback: str = field(default="tc_join", kw_only=True)
+    cancel_callback: str = field(default="tc_cancel", kw_only=True)
 
     # ── Text factories ─────────────────────────────────────────────────────
 

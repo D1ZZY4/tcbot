@@ -13,16 +13,6 @@ from tcbot.database.roles_db import ROLE_LABEL as _ROLE_LABELS
 # ──────────────────────────── Ban flow ──────────────────────────── #
 
 
-def cancel_proof_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("Cancel", callback_data="cancel_proof"),
-            ]
-        ]
-    )
-
-
 def ban_log_new(
     target_id: int,
     proof_link: str,
@@ -53,32 +43,6 @@ def ban_log_update(
                 ),
             ],
             [InlineKeyboardButton("Submit Appeal", url=appeal_url)],
-        ]
-    )
-
-
-# ─────────────────────────── Appeal flow ────────────────────────── #
-
-
-def appeal_cancel_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("Cancel", callback_data="cancel_appeal"),
-            ]
-        ]
-    )
-
-
-def appeal_review_kb(ban_id: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(
-                    "Approve", callback_data=f"appeal_approve_{ban_id}"
-                ),
-                InlineKeyboardButton("Reject", callback_data=f"appeal_reject_{ban_id}"),
-            ]
         ]
     )
 
@@ -129,20 +93,6 @@ def promo_decision_kb(request_id: str) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     "Reject", callback_data=f"promo_reject:{request_id}"
                 ),
-            ]
-        ]
-    )
-
-
-# ────────────────────── Group connect prompt ────────────────────── #
-
-
-def join_group_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("Connect", callback_data="tc_join"),
-                InlineKeyboardButton("Cancel", callback_data="tc_cancel"),
             ]
         ]
     )
