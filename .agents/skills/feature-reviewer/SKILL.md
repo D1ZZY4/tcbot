@@ -1,13 +1,13 @@
 ---
-name: tcbot-feature-reviewer
-description: Review TCF Bot feature changes for correctness, security, tests, documentation, Telegram UX, database impact, and project convention compliance.
+name: feature-reviewer
+description: Review project feature changes for correctness, security, tests, documentation, Telegram UX, database impact, and convention compliance.
 ---
 Last updated: 2026-05-28
 
 
-# TCBot Feature Reviewer
+# Feature Reviewer
 
-Use this skill when the user asks for a code review, final check, regression review, or "is this ready?" review of TCF Bot changes.
+Use this skill when the user asks for a code review, final check, regression review, or "is this ready?" review of project changes.
 
 ## Review Goals
 

@@ -1,13 +1,13 @@
 ---
-name: tcbot-docs-maintainer
-description: Update and review TCF Bot Markdown documentation so root docs, agents docs, docs indexes, detailed guides, and setup instructions stay accurate and English-only.
+name: docs-maintainer
+description: Update and review project Markdown documentation so root docs, agent docs, docs indexes, detailed guides, setup instructions, and local skill docs stay accurate and English-only.
 ---
 Last updated: 2026-05-28
 
 
-# TCBot Docs Maintainer
+# Docs Maintainer
 
-Use this skill when the user asks to update, fill in, review, or reorganize Markdown documentation for the TCF Bot project.
+Use this skill when the user asks to update, fill in, review, or reorganize Markdown documentation for this project.
 
 ## Scope
 

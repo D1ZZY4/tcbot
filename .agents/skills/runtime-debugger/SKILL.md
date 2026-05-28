@@ -1,13 +1,13 @@
 ---
-name: tcbot-runtime-debugger
-description: Diagnose TCF Bot startup, polling, Telegram token, MongoDB, Flask keep-alive, handler registration, and local runtime problems safely.
+name: runtime-debugger
+description: Diagnose project startup, polling, Telegram token, MongoDB, Flask keep-alive, handler registration, environment loading, and local runtime problems safely.
 ---
 Last updated: 2026-05-28
 
 
-# TCBot Runtime Debugger
+# Runtime Debugger
 
-Use this skill when the user asks to run the bot, debug startup, inspect runtime logs, or diagnose local deployment problems.
+Use this skill when the user asks to run the project, debug startup, inspect runtime logs, or diagnose local deployment problems.
 
 ## What This Skill Covers
 
