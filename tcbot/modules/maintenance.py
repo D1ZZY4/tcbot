@@ -82,9 +82,11 @@ async def _leave_one(
 async def _should_remove(bot, grp: GroupDoc) -> bool:
     """Return True if the bot has left or been kicked from the group."""
     try:
-        member = await bot.get_chat_member(grp["chat_id"], bot.id)
+        member = await asyncio.wait_for(
+            bot.get_chat_member(grp["chat_id"], bot.id), timeout=3.0
+        )
         return member.status in ("left", "kicked")
-    except Exception as exc:
+    except (asyncio.TimeoutError, Exception) as exc:
         log.debug("Could not verify membership for %d: %s", grp["chat_id"], exc)
         return True
 

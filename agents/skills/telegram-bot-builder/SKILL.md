@@ -302,6 +302,6 @@ For focused workflow changes, run the nearest test file first, then broaden to t
 - python-telegram-bot docs: https://docs.python-telegram-bot.org/
 - Telegram Bot API: https://core.telegram.org/bots/api
 - Motor docs: https://motor.readthedocs.io/
-- Project policy: `tgbot/.agents/skills/project-policy/SKILL.md`
-- Async patterns: `tgbot/.agents/skills/async-python-patterns/SKILL.md`
-- Code quality: `tgbot/.agents/skills/python-code-quality/SKILL.md`
+- Project policy: `tgbot/agents/skills/project-policy/SKILL.md`
+- Async patterns: `tgbot/agents/skills/async-python-patterns/SKILL.md`
+- Code quality: `tgbot/agents/skills/python-code-quality/SKILL.md`

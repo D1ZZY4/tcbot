@@ -80,11 +80,21 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    # * staff check and group membership check run in parallel
+    # * Staff check + group membership check + Telegram lookup run in parallel.
+    # * The Telegram call is bounded so a stalled API never blocks the reply.
     is_tc_staff, member = await asyncio.gather(
         db.users_db.is_staff(user.id),
-        ctx.bot.get_chat_member(chat.id, user.id),
+        asyncio.wait_for(
+            ctx.bot.get_chat_member(chat.id, user.id), timeout=3.0
+        ),
+        return_exceptions=True,
     )
+    if isinstance(member, BaseException):
+        log.debug("Disconnect: get_chat_member failed for %d: %s", chat.id, member)
+        await update.effective_message.reply_text("Could not verify your group role.")
+        return
+    if isinstance(is_tc_staff, BaseException):
+        is_tc_staff = False
     is_group_owner = member.status == "creator"
 
     if not is_tc_staff and not is_group_owner:

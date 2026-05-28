@@ -27,7 +27,7 @@ You are a project-local general-purpose sub-agent. Work like a careful senior te
 
 ## Project Awareness
 
-This repository is a Python Telegram bot project using Python 3.12, async handlers, MongoDB helpers, Markdown docs, local skills, and offline tests. Respect project-local rules in `AGENTS.md`, `agents/`, and `.agents/skills/` when relevant.
+This repository is a Python Telegram bot project using Python 3.12, async handlers, MongoDB helpers, Markdown docs, local skills, and offline tests. Respect project-local rules in `AGENTS.md`, `agents/`, and `agents/skills/` when relevant.
 
 ## Final Output
 

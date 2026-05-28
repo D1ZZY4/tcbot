@@ -16,7 +16,7 @@ Documentation normally lives in:
 - root docs: `README.md`, `AGENTS.md`, `PLAN.md`, `replit.md`
 - agent/contributor rules: `agents/*.md`
 - developer docs: `docs/**/*.md`
-- project-local skills: `.agents/skills/**/SKILL.md` when the task explicitly mentions skills
+- project-local skills: `agents/skills/**/SKILL.md` when the task explicitly mentions skills
 
 Do not edit `config.env` while doing documentation maintenance unless the user explicitly asks.
 

@@ -6,15 +6,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 
 from tcbot import cfg
-from tcbot import database as db
-from tcbot.database.users_db import ROLE_LABEL, get_effective_role
-from tcbot.modules.helper import decorators, extraction
+from tcbot.modules.helper import decorators, extraction, identity
 from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.formatter import code, mention
 from tcbot.modules.helper.workflows.muting_flow import (
@@ -117,19 +116,15 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         )
         return ConversationHandler.END
 
-    if target_id == ctx.bot.id:
-        await msg.reply_text(
-            "Muting me won't do much - I don't send messages on my own anyway."
-        )
-        return ConversationHandler.END
-
-    if target_id == admin.id:
-        await msg.reply_text("Can't mute yourself - that's not how this works.")
-        return ConversationHandler.END
-
-    _, target_role = await resolve_and_check(
-        msg, admin.id, target_id, min_role="tester"
+    ident, (_, target_role) = await asyncio.gather(
+        identity.classify(ctx.bot, admin.id, target_id, target_fname),
+        resolve_and_check(msg, admin.id, target_id, min_role="tester"),
     )
+    refusal = identity.refuse_message("mute", ident)
+    if refusal is not None:
+        await msg.reply_text(refusal, parse_mode="HTML")
+        return ConversationHandler.END
+
     if _ is None:
         return ConversationHandler.END
 
@@ -185,6 +180,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 @decorators.log_execution
 async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.effective_message
+    admin = update.effective_user
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
@@ -193,31 +189,15 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    if target_id == ctx.bot.id:
-        await msg.reply_text(
-            f"That's {mention(ctx.bot.id, ctx.bot.first_name or 'me')} - "
-            "can't mute a bot anyway, so nothing to undo here.",
-            parse_mode="HTML",
-        )
+    ident = await identity.classify(ctx.bot, admin.id, target_id, target_name)
+    refusal = identity.refuse_message("unmute", ident)
+    if refusal is not None:
+        await msg.reply_text(refusal, parse_mode="HTML")
         return
 
-    target_role = await get_effective_role(target_id)
-    if target_role == "founder":
-        fname = await db.users_db.get_first_name(target_id, "the Founder")
-        await msg.reply_text(
-            f"That's {mention(target_id, fname)}, the Founder - "
-            "definitely not muted. Nothing to undo.",
-            parse_mode="HTML",
-        )
-        return
-    if target_role in ("admin", "developer", "tester"):
-        role_label = ROLE_LABEL.get(target_role, target_role)
-        fname = await db.users_db.get_first_name(target_id, str(target_id))
-        await msg.reply_text(
-            f"Just so you know, {mention(target_id, fname)} is a {cfg.community_name} {role_label}. "
-            "Proceeding with unmute anyway.",
-            parse_mode="HTML",
-        )
+    notice = identity.staff_notice("unmute", ident, cfg.community_name)
+    if notice is not None:
+        await msg.reply_text(notice, parse_mode="HTML")
 
     await execute_unmute(update, ctx, target_id, target_name or str(target_id))
 

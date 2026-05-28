@@ -25,6 +25,8 @@ from tcbot.utils.prefixes import build_prefixed_filters
 
 log = logging.getLogger(__name__)
 
+_TG_TIMEOUT = 3.0
+
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -88,18 +90,32 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await update.effective_message.reply_text("Use this command in a group.")
         return
 
-    member = await ctx.bot.get_chat_member(chat.id, user.id)
+    # * Telegram lookup + DB reads run in parallel; member check is bounded so a
+    # * stalled Telegram API never blocks the user-facing reply.
+    member, is_connected, pending = await asyncio.gather(
+        asyncio.wait_for(
+            ctx.bot.get_chat_member(chat.id, user.id), timeout=_TG_TIMEOUT
+        ),
+        db.groups_db.is_connected(chat.id),
+        db.groups_db.get_pending(chat.id),
+        return_exceptions=True,
+    )
+    if isinstance(member, BaseException):
+        log.debug("get_chat_member failed for %d/%d: %s", chat.id, user.id, member)
+        await update.effective_message.reply_text("Could not verify your group role.")
+        return
+
     if member.status not in ("administrator", "creator"):
         await update.effective_message.reply_text(
             "Only group admins can request to connect."
         )
         return
 
-    # * Both DB reads are independent - run them in parallel
-    is_connected, pending = await asyncio.gather(
-        db.groups_db.is_connected(chat.id),
-        db.groups_db.get_pending(chat.id),
-    )
+    if isinstance(is_connected, BaseException):
+        is_connected = False
+    if isinstance(pending, BaseException):
+        pending = None
+
     if is_connected:
         await update.effective_message.reply_text(
             connection.already_connected_message()
@@ -113,8 +129,10 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     try:
-        bot_member = await ctx.bot.get_chat_member(chat.id, ctx.bot.id)
-    except Exception as exc:
+        bot_member = await asyncio.wait_for(
+            ctx.bot.get_chat_member(chat.id, ctx.bot.id), timeout=_TG_TIMEOUT
+        )
+    except (asyncio.TimeoutError, Exception) as exc:
         log.debug("Could not verify bot permissions for %d: %s", chat.id, exc)
         await update.effective_message.reply_text("Could not verify bot permissions.")
         return

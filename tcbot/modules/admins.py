@@ -15,7 +15,13 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.users_db import ROLE_LABEL, get_effective_role
-from tcbot.modules.helper import decorators, extraction, keyboards, parse_logmsg
+from tcbot.modules.helper import (
+    decorators,
+    extraction,
+    identity,
+    keyboards,
+    parse_logmsg,
+)
 from tcbot.modules.helper.formatter import code, mention
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.promote_flow import ROLE_ALIASES, Promote
@@ -124,14 +130,10 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    if target_id == admin.id:
-        await msg.reply_text(
-            "Can't promote yourself - the hierarchy doesn't work that way."
-        )
-        return
-
-    if target_id == ctx.bot.id:
-        await msg.reply_text("That's me - promoting a bot doesn't quite work.")
+    ident = await identity.classify(ctx.bot, admin.id, target_id, target_fname)
+    refusal = identity.refuse_message("promote", ident)
+    if refusal is not None:
+        await msg.reply_text(refusal, parse_mode="HTML")
         return
 
     role = ROLE_ALIASES.get(role_arg)
@@ -248,13 +250,15 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    if target_id == admin.id:
-        await msg.reply_text("Can't demote yourself - ask a higher-up if needed.")
+    ident = await identity.classify(ctx.bot, admin.id, target_id, target_fname)
+    refusal = identity.refuse_message("demote", ident)
+    if refusal is not None:
+        await msg.reply_text(refusal, parse_mode="HTML")
         return
 
     target_role = await get_effective_role(target_id)
 
-    if not target_role or target_role == "founder":
+    if not target_role:
         await msg.reply_text("That user doesn't hold a role that can be removed.")
         return
 

@@ -489,7 +489,83 @@ when available. Do not claim tests passed unless you ran them successfully.
 
 ---
 
-## Related Agent Files
+## Bot Voice
+
+The bot speaks to users in **professional + friendly + lightly humorous** English. Replies are short, plain-text, and human; no exclamation cascades, no marketing tone.
+
+- **Pictograph emoji are forbidden** (e.g. 👋 🎉 🚫 ⚠️ 🟥). Strip them on sight.
+- **Text emoticons are allowed sparingly** when they fit a joke beat: `:)`, `:v`, `:')`, `:D`. At most one per reply, and only in the *witty refusal* path — never in success/error/data views.
+- The bot identifies the target before speaking. The canonical identity classes are defined in `tcbot/modules/helper/identity.py`:
+  - `self` — the executor targeted themselves
+  - `this_bot` — this bot is the target
+  - `other_bot` — any other Telegram bot
+  - `telegram` — Telegram service account (id `777000`)
+  - `founder`, `admin`, `developer`, `tester` — federation roles
+  - `user` — regular user, no federation role
+- Use `identity.classify(...)` plus `identity.refuse_message(action, ident)` and `identity.staff_notice(action, ident, community)` instead of repeating self/bot/founder branches inline. Each moderation entry handler should follow this shape:
+
+```python
+ident, (executor_role, target_role) = await asyncio.gather(
+    identity.classify(ctx.bot, admin.id, target_id, target_fname),
+    resolve_and_check(msg, admin.id, target_id, min_role="..."),
+)
+refusal = identity.refuse_message("ban", ident)
+if refusal is not None:
+    await msg.reply_text(refusal, parse_mode="HTML")
+    return ConversationHandler.END
+```
+
+- Refusal copy belongs in `identity.py`, not in `modules/*.py`. Add new lines or new actions there so the voice stays consistent across the whole bot.
+
+---
+
+## Async + Parallelism Rules
+
+This bot must respond with **zero perceived delay**. The hot path of every command handler should issue independent async work in parallel.
+
+- Any two `await`s that do not depend on each other **must** be combined with `asyncio.gather(...)`. Sequential awaits are a defect.
+- Cache-only reads (`users_db.get_first_name`, `get_effective_role`) are still awaits — gather them with the DB writes / Telegram calls that happen alongside.
+- For lists rendered in a loop (kicks, mutes, warns, bans), resolve every per-item lookup *before* the formatting loop runs. The loop itself stays synchronous string-building.
+- External Telegram lookups (`bot.get_chat`) **must** be wrapped in `asyncio.wait_for(timeout=3.0)` so a stalled API call cannot block a user-facing reply.
+- DM + log + audit writes that fan out to multiple chats use `asyncio.gather(..., return_exceptions=True)` — one recipient failing must not roll back the others.
+- Module-level handler registration is the only place sequential awaits are acceptable.
+
+If you add a new handler, prove the parallelism in code review by pointing at the `asyncio.gather` block. If there isn't one, justify why every read/write in that handler is dependent on the previous.
+
+---
+
+## Always Update Docs After Refactors
+
+Whenever you rename, move, or replace an internal API, **update every reference in the same change**. Do not wait to be told. The repository keeps the following sources in sync at all times:
+
+| Surface | What to update |
+|---|---|
+| `docs/*.md` | Detailed feature docs (e.g. `check-detailed.md`, `promote-detailed.md`, `demote-detailed.md`, `banning-detailed.md`, `appeal-detailed.md`, `warnings-detailed.md`, `role-detailed.md`) |
+| `docs/{databases,helper,modules,utils,workflows}/*.md` | Per-package reference docs |
+| `docs/mapping.md` | The repository tree at the top of the docs |
+| `docs/README.md` | The "Detailed feature guides" index |
+| `agents/*.md` | All agent policy files (especially `agents/CLAUDE.md` repo map + `RULES.md`) |
+| `agents/skills/*/SKILL.md` | Reusable agent skills referencing canonical helpers |
+| `agents/agents/*.md` | Project-local sub-agent prompts (coordinator, debug-investigator, etc.) |
+| `PLAN.md`, `AGENTS.md` | Top-level planning + AI agent entry points |
+
+Steps every refactor must perform:
+
+1. Rename / move / replace the API.
+2. Run `uv run ruff check --fix . && uv run ruff format . && uv run --extra test pytest tests/ -q` and fix anything that breaks.
+3. Grep the entire repo for the **old** name (and any obvious aliases) — every match is a doc to update or delete:
+   ```bash
+   grep -RIn 'old_name\|old.module\|old/path' agents docs PLAN.md AGENTS.md README.md .agents
+   ```
+4. When you add a new feature, write its `docs/<feature>-detailed.md` in the same change and add a row to `docs/README.md`.
+5. When you delete an API, remove every doc reference to it. Do not leave "see also" stubs pointing at vanished symbols.
+6. Restart the bot and confirm clean startup before declaring done.
+
+Skipping the doc sweep is a defect of the same severity as a failing test.
+
+---
+
+
 
 | File | Purpose |
 |---|---|

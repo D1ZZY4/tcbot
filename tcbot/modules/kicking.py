@@ -6,12 +6,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
 
-from tcbot.modules.helper import decorators, extraction
+from tcbot.modules.helper import decorators, extraction, identity
 from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.workflows.demote_flow import Demote
@@ -99,13 +100,15 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         )
         return ConversationHandler.END
 
-    if target_id == ctx.bot.id:
-        await msg.reply_text("Kick me? I run this place. Not happening.")
+    ident, (executor_role, target_role) = await asyncio.gather(
+        identity.classify(ctx.bot, admin.id, target_id, target_name),
+        resolve_and_check(msg, admin.id, target_id, min_role="tester"),
+    )
+    refusal = identity.refuse_message("kick", ident)
+    if refusal is not None:
+        await msg.reply_text(refusal, parse_mode="HTML")
         return ConversationHandler.END
 
-    executor_role, target_role = await resolve_and_check(
-        msg, admin.id, target_id, min_role="tester"
-    )
     if executor_role is None:
         return ConversationHandler.END
 

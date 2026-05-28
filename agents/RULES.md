@@ -221,3 +221,34 @@ Rules:
 - Adding dependencies without updating `pyproject.toml` and `uv.lock` through
   `uv`.
 - Editing secrets or unrelated project files during a scoped task.
+- Pictograph emoji in any bot reply or audit log message (`👋`, `🎉`, `🚫`, `⚠️`, etc.).
+- Sequential awaits when the operations are independent — must use `asyncio.gather`.
+- Inlining self / bot / Telegram / Founder / staff branches in command handlers — must use `identity.classify`.
+
+---
+
+## Bot Voice and Replies
+
+1. Bot replies are professional + friendly + lightly humorous. Plain text, no exclamation cascades.
+2. Pictograph emoji are forbidden in any bot output. Strip on sight.
+3. Text emoticons (`:)`, `:v`, `:')`, `:D`) are allowed at most one per reply and only in witty refusal paths — never in success / error / data views.
+4. Self / bot / Telegram / Founder / staff branches must use `tcbot.modules.helper.identity.classify` plus `identity.refuse_message` / `identity.staff_notice`. Do not duplicate target-type branches inline.
+5. New refusal copy belongs in `identity.py`, not in `modules/*.py`.
+
+---
+
+## Async / Parallelism
+
+1. Independent awaits must be combined with `asyncio.gather`. Sequential awaits are a defect.
+2. External Telegram lookups (`bot.get_chat`, etc.) must be wrapped in `asyncio.wait_for(timeout=...)`.
+3. Fan-out writes (DMs, logs, per-chat enforcement) use `asyncio.gather(..., return_exceptions=True)`.
+4. Pre-resolve per-item lookups for paginated views before the formatting loop runs.
+
+---
+
+## Always Update Docs After Refactors
+
+1. After every rename / move / replace, grep the repo for the old name and update every match in `docs/`, `agents/` (including `agents/skills/` and `agents/agents/`), `PLAN.md`, `AGENTS.md`, and `README.md` in the same change.
+2. New features ship with their `docs/<feature>-detailed.md` and a row in `docs/README.md`.
+3. Removed APIs lose every doc reference; no "see also" stubs to vanished symbols.
+4. Restart the bot and confirm clean startup before declaring done.

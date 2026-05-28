@@ -6,15 +6,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 
 from tcbot import cfg
-from tcbot import database as db
-from tcbot.database.users_db import ROLE_LABEL, get_effective_role
-from tcbot.modules.helper import decorators, extraction
+from tcbot.modules.helper import decorators, extraction, identity
 from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.workflows.reason_flow import (
@@ -94,17 +93,7 @@ __help_sections__: list[tuple[str, str]] = [
 
 
 # ──────────────────────── Helper Functions ──────────────────────── #
-
-
-async def _role_note(
-    target_id: int,
-    target_name: str | None,
-    target_role: str,
-) -> tuple[str, str]:
-    """Return (fname, role_label) for a staff target."""
-    fname = await db.users_db.get_first_name(target_id, target_name or str(target_id))
-    role_label = ROLE_LABEL.get(target_role, target_role)
-    return fname, role_label
+# (Per-target identity classification now lives in helper/identity.py.)
 
 
 # ───────────────────── Command Warn </tcwarn> ───────────────────── #
@@ -131,13 +120,15 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         )
         return ConversationHandler.END
 
-    if target_id == ctx.bot.id:
-        await msg.reply_text("Warn me? I'm the one who manages warnings around here.")
+    ident, (executor_role, _) = await asyncio.gather(
+        identity.classify(ctx.bot, admin.id, target_id, target_name),
+        resolve_and_check(msg, admin.id, target_id, min_role="tester"),
+    )
+    refusal = identity.refuse_message("warn", ident)
+    if refusal is not None:
+        await msg.reply_text(refusal, parse_mode="HTML")
         return ConversationHandler.END
 
-    executor_role, _ = await resolve_and_check(
-        msg, admin.id, target_id, min_role="tester"
-    )
     if executor_role is None:
         return ConversationHandler.END
 
@@ -176,6 +167,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 @decorators.log_execution
 async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.effective_message
+    admin = update.effective_user
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
@@ -184,29 +176,23 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    if target_id == ctx.bot.id:
+    ident = await identity.classify(ctx.bot, admin.id, target_id, target_name)
+    if ident.kind == "this_bot":
         await msg.reply_text(
-            f"That's {mention(ctx.bot.id, ctx.bot.first_name or 'me')} - "
-            "zero warnings here, ever. Nothing to remove.",
+            f"{mention(target_id, ident.fname)} - zero warnings here, ever. Nothing to remove.",
+            parse_mode="HTML",
+        )
+        return
+    if ident.kind == "founder":
+        await msg.reply_text(
+            f"{mention(target_id, ident.fname)} is the Founder - no warnings on record.",
             parse_mode="HTML",
         )
         return
 
-    target_role = await get_effective_role(target_id)
-    if target_role == "founder":
-        fname = await db.users_db.get_first_name(target_id, "the Founder")
-        await msg.reply_text(
-            f"That's {mention(target_id, fname)}, the Founder - no warnings on record.",
-            parse_mode="HTML",
-        )
-        return
-    if target_role in ("admin", "developer", "tester"):
-        fname, role_label = await _role_note(target_id, target_name, target_role)
-        await msg.reply_text(
-            f"Heads up - {mention(target_id, fname)} is a {cfg.community_name} {role_label}. "
-            "Proceeding with unwarn anyway.",
-            parse_mode="HTML",
-        )
+    notice = identity.staff_notice("unwarn", ident, cfg.community_name)
+    if notice is not None:
+        await msg.reply_text(notice, parse_mode="HTML")
 
     await execute_unwarn(update, ctx, target_id, target_name or str(target_id))
 
@@ -235,6 +221,7 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.log_execution
 async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.effective_message
+    admin = update.effective_user
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
@@ -243,29 +230,23 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         )
         return
 
-    if target_id == ctx.bot.id:
+    ident = await identity.classify(ctx.bot, admin.id, target_id, target_name)
+    if ident.kind == "this_bot":
         await msg.reply_text(
-            f"That's {mention(ctx.bot.id, ctx.bot.first_name or 'me')} - "
-            "already at zero, always. Nothing to clear.",
+            f"{mention(target_id, ident.fname)} - already at zero, always. Nothing to clear.",
+            parse_mode="HTML",
+        )
+        return
+    if ident.kind == "founder":
+        await msg.reply_text(
+            f"{mention(target_id, ident.fname)} is the Founder - no warnings to clear.",
             parse_mode="HTML",
         )
         return
 
-    target_role = await get_effective_role(target_id)
-    if target_role == "founder":
-        fname = await db.users_db.get_first_name(target_id, "the Founder")
-        await msg.reply_text(
-            f"That's {mention(target_id, fname)}, the Founder - no warnings to clear.",
-            parse_mode="HTML",
-        )
-        return
-    if target_role in ("admin", "developer", "tester"):
-        fname, role_label = await _role_note(target_id, target_name, target_role)
-        await msg.reply_text(
-            f"Heads up - {mention(target_id, fname)} is a {cfg.community_name} {role_label}. "
-            "Proceeding with reset anyway.",
-            parse_mode="HTML",
-        )
+    notice = identity.staff_notice("resetwarns", ident, cfg.community_name)
+    if notice is not None:
+        await msg.reply_text(notice, parse_mode="HTML")
 
     await execute_resetwarns(update, ctx, target_id, target_name or str(target_id))
 

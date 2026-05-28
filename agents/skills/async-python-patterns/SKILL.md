@@ -284,8 +284,8 @@ Before finishing async work, verify:
 
 ## References
 
-- Project policy: `tgbot/.agents/skills/project-policy/SKILL.md`.
-- Detailed async examples: `tgbot/.agents/skills/async-python-patterns/references/details.md`.
+- Project policy: `tgbot/agents/skills/project-policy/SKILL.md`.
+- Detailed async examples: `tgbot/agents/skills/async-python-patterns/references/details.md`.
 - Python asyncio documentation: https://docs.python.org/3/library/asyncio.html
 - python-telegram-bot docs: https://docs.python-telegram-bot.org/
 - Motor docs: https://motor.readthedocs.io/

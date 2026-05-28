@@ -6,12 +6,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
 
-from tcbot.modules.helper import decorators, extraction
+from tcbot.modules.helper import decorators, extraction, identity
 from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.workflows.ban_flow import (
@@ -99,19 +100,17 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         await msg.reply_text("A reason is required - /tcban <target> <reason>.")
         return ConversationHandler.END
 
-    if target_id == ctx.bot.id:
-        await msg.reply_text(
-            "That's me you're trying to ban - I keep this federation running. Nice try."
-        )
-        return ConversationHandler.END
-
-    if target_id == admin.id:
-        await msg.reply_text("Can't ban yourself - that's not how moderation works.")
-        return ConversationHandler.END
-
-    executor_role, target_role = await resolve_and_check(
-        msg, admin.id, target_id, min_role="developer"
+    # * Identity check + role lookup happen in parallel — both depend only on
+    # * already-resolved IDs so there is no need to wait for them sequentially.
+    ident, (executor_role, target_role) = await asyncio.gather(
+        identity.classify(ctx.bot, admin.id, target_id, target_fname),
+        resolve_and_check(msg, admin.id, target_id, min_role="developer"),
     )
+    refusal = identity.refuse_message("ban", ident)
+    if refusal is not None:
+        await msg.reply_text(refusal, parse_mode="HTML")
+        return ConversationHandler.END
+
     if executor_role is None:
         return ConversationHandler.END
 

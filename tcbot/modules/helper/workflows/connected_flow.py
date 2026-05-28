@@ -21,6 +21,8 @@ from tcbot.utils.dispatch import fan_out
 
 log = logging.getLogger(__name__)
 
+_TG_TIMEOUT = 3.0
+
 _REQUIRED_PERMS: tuple[str, ...] = (
     "can_delete_messages",
     "can_restrict_members",
@@ -101,9 +103,10 @@ class BuildConnection:
         bot,
     ) -> None:
         """Connect the group, apply all active federation bans, and notify LOG_CHANNEL."""
-        # * Fetch chat info + active ban IDs + register group + clear pending - all in parallel
+        # * Fetch chat info + active ban IDs + register group + clear pending - all in parallel.
+        # * The Telegram lookup is bounded so a stalled API never blocks the connect flow.
         chat_result, ban_uids, *_ = await asyncio.gather(
-            bot.get_chat(chat_id),
+            asyncio.wait_for(bot.get_chat(chat_id), timeout=_TG_TIMEOUT),
             db.bans_db.active_ban_user_ids(),
             db.groups_db.add_group(chat_id, chat_title, owner_id),
             db.groups_db.remove_pending(chat_id),
@@ -235,8 +238,10 @@ class BuildConnection:
         lc, lt = cfg.logs
 
         try:
-            member = await ctx.bot.get_chat_member(chat.id, user.id)
-        except Exception as exc:
+            member = await asyncio.wait_for(
+                ctx.bot.get_chat_member(chat.id, user.id), timeout=_TG_TIMEOUT
+            )
+        except (asyncio.TimeoutError, Exception) as exc:
             log.debug("Join decision role check failed: %s", exc)
             await q.answer("Could not verify your role.", show_alert=True)
             return
@@ -252,8 +257,10 @@ class BuildConnection:
 
         if action == self.join_callback:
             try:
-                bot_member = await ctx.bot.get_chat_member(chat.id, ctx.bot.id)
-            except Exception as exc:
+                bot_member = await asyncio.wait_for(
+                    ctx.bot.get_chat_member(chat.id, ctx.bot.id), timeout=_TG_TIMEOUT
+                )
+            except (asyncio.TimeoutError, Exception) as exc:
                 log.debug("Join decision permission check failed: %s", exc)
                 await q.edit_message_text(
                     "Could not verify my own permissions. Please promote me as admin and try again.",

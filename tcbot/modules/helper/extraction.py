@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 
@@ -14,6 +15,21 @@ from telegram import Bot, Message, Update, User
 from tcbot.database import users_db
 
 log = logging.getLogger(__name__)
+
+# * Telegram lookups are wrapped in wait_for so a stalled API call never blocks
+# * the user-facing reply. Three seconds is the standard project-wide budget.
+_GET_CHAT_TIMEOUT = 3.0
+
+
+async def _safe_get_chat(bot: Bot, ident: str | int):
+    """Call ``bot.get_chat`` with a bounded timeout; returns ``None`` on failure."""
+    try:
+        return await asyncio.wait_for(
+            bot.get_chat(ident), timeout=_GET_CHAT_TIMEOUT
+        )
+    except (asyncio.TimeoutError, Exception) as exc:
+        log.debug("get_chat(%s) failed: %s", ident, exc)
+        return None
 
 
 # ──────────────────────── Target resolution ─────────────────────── #
@@ -66,22 +82,18 @@ async def extract_target(
             chat_first: str | None = None
             chat_username: str | None = None
             if bot:
-                try:
-                    chat = await bot.get_chat(uid)
+                chat = await _safe_get_chat(bot, uid)
+                if chat is not None:
                     chat_first = chat.first_name
                     chat_username = chat.username
-                except Exception as exc:
-                    log.debug("Target lookup failed for %s: %s", arg, exc)
             return uid, await _best_name(uid, chat_first, chat_username)
 
         if bot and arg:
-            try:
-                chat = await bot.get_chat(f"@{arg}")
+            chat = await _safe_get_chat(bot, f"@{arg}")
+            if chat is not None:
                 return chat.id, await _best_name(
                     chat.id, chat.first_name, chat.username, arg
                 )
-            except Exception as exc:
-                log.debug("Username lookup failed for @%s: %s", arg, exc)
 
     # * Fall back to reply target only when no explicit arg resolved above
     if msg.reply_to_message and msg.reply_to_message.from_user:
@@ -98,10 +110,10 @@ async def extract_target(
         for ent in msg.entities or []:
             if ent.type == "mention":
                 uname = text[ent.offset + 1 : ent.offset + ent.length]
-                try:
-                    chat = await bot.get_chat(f"@{uname}")
-                    return chat.id, await _best_name(chat.id, chat.first_name, uname)
-                except Exception as exc:
-                    log.debug("Mention lookup failed for @%s: %s", uname, exc)
+                chat = await _safe_get_chat(bot, f"@{uname}")
+                if chat is not None:
+                    return chat.id, await _best_name(
+                        chat.id, chat.first_name, uname
+                    )
 
     return None, None

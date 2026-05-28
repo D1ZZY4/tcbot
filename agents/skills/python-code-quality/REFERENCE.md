@@ -192,7 +192,7 @@ For a code-quality pass:
 
 ## Skill and Markdown Quality
 
-For `.agents/skills/*/SKILL.md` files:
+For `agents/skills/*/SKILL.md` files:
 
 - Frontmatter begins and ends with `---`.
 - `name` exactly matches the skill directory.

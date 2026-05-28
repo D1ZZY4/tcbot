@@ -261,7 +261,7 @@ Never remove meaningful code only to silence a diagnostic.
 
 ## Documentation and Skill-Only Changes
 
-For Markdown-only changes in `.agents/skills/`, validate mentally unless the content includes executable examples that should be syntax-checked. Ensure each Zed skill has YAML frontmatter with:
+For Markdown-only changes in `agents/skills/`, validate mentally unless the content includes executable examples that should be syntax-checked. Ensure each skill has YAML frontmatter with:
 
 - `name` matching the skill directory.
 - An actionable `description` explaining when to use it.
@@ -275,4 +275,4 @@ Avoid stale generic references, outdated Python versions, unrelated frameworks, 
 - pytest documentation: https://docs.pytest.org/
 - pytest-asyncio documentation: https://pytest-asyncio.readthedocs.io/
 - Python typing documentation: https://docs.python.org/3/library/typing.html
-- Project-specific reference: `tgbot/.agents/skills/python-code-quality/REFERENCE.md`
+- Project-specific reference: `tgbot/agents/skills/python-code-quality/REFERENCE.md`

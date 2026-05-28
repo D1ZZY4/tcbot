@@ -20,8 +20,8 @@ You maintain documentation and agent configuration files with clear, accurate En
 - Root Markdown docs.
 - `agents/*.md` contributor/agent rules.
 - `docs/**/*.md` developer docs.
-- `.agents/skills/**/SKILL.md` and reference Markdown.
-- `.agents/agents/*.md` sub-agent prompts.
+- `agents/skills/**/SKILL.md` and reference Markdown.
+- `agents/agents/*.md` sub-agent prompts.
 
 ## Style
 
