@@ -126,12 +126,12 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     if target_id == admin.id:
         await msg.reply_text(
-            "Can't promote yourself - the hierarchy doesn't work that way. 🙃"
+            "Can't promote yourself - the hierarchy doesn't work that way."
         )
         return
 
     if target_id == ctx.bot.id:
-        await msg.reply_text("That's me - promoting a bot doesn't quite work. 😄")
+        await msg.reply_text("That's me - promoting a bot doesn't quite work.")
         return
 
     role = ROLE_ALIASES.get(role_arg)
@@ -249,7 +249,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if target_id == admin.id:
-        await msg.reply_text("Can't demote yourself - ask a higher-up if needed. 🙃")
+        await msg.reply_text("Can't demote yourself - ask a higher-up if needed.")
         return
 
     target_role = await get_effective_role(target_id)
@@ -360,7 +360,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     if target_id == current_owner.id:
         await update.effective_message.reply_text(
-            "You're already the Founder - can't transfer ownership to yourself. 😅"
+            "You're already the Founder - can't transfer ownership to yourself."
         )
         return
     # * add_admin must complete before set_owner (set_owner does delete_many + insert)
@@ -468,7 +468,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         await asyncio.gather(
             ctx.bot.send_message(
                 target_id,
-                f"Your promotion request has been approved - welcome to the {cfg.community_name} staff team, Admin! 🎉",
+                f"Your promotion request has been approved - welcome to the {cfg.community_name} staff team, Admin.",
             ),
             ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             q.edit_message_text(

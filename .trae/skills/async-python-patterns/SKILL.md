@@ -92,7 +92,7 @@ Use `asyncio.gather()` when independent async operations can safely run in paral
 
 ```python
 executor_role, target = await asyncio.gather(
-    db.roles_db.get_effective_role(executor_id),
+    db.users_db.get_effective_role(executor_id),
     extraction.extract_target(update, args, ctx.bot),
 )
 ```

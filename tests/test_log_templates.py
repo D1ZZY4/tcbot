@@ -137,7 +137,7 @@ def test_admin_demoted_contains_community() -> None:
     assert "Citra" in out and "Andi" in out
 
 
-def test_promoted_uses_role_label_in_title() -> None:
+def test_promoted_uses_unified_title() -> None:
     out = parse_logmsg.promoted(
         target_id=2,
         target_fname="Citra",
@@ -145,11 +145,21 @@ def test_promoted_uses_role_label_in_title() -> None:
         by_id=1,
         by_fname="Andi",
     )
-    assert "Developer Promoted" in out
+    # * Title is unified, role moves to a field below the user.
+    assert f"New {cfg.community_name} Promoted" in out
+    assert "Role: Developer" in out
+    assert "Promoted by:" in out
 
 
-def test_demoted_with_trigger_renders_auto_demote() -> None:
-    out = parse_logmsg.demoted(
+def test_demoted_unified_for_manual_and_trigger() -> None:
+    manual = parse_logmsg.demoted(
+        target_id=2,
+        target_fname="Citra",
+        role="tester",
+        by_id=1,
+        by_fname="Andi",
+    )
+    auto = parse_logmsg.demoted(
         target_id=2,
         target_fname="Citra",
         role="tester",
@@ -157,8 +167,12 @@ def test_demoted_with_trigger_renders_auto_demote() -> None:
         by_fname="Andi",
         trigger="ban",
     )
-    assert "Auto-Demote" in out
-    assert "Trigger: Banned" in out
+    # * Both call sites produce the same unified shape — no Auto-Demote title.
+    assert f"{cfg.community_name} Demoted" in manual
+    assert f"{cfg.community_name} Demoted" in auto
+    assert "Auto-Demote" not in manual
+    assert "Auto-Demote" not in auto
+    assert "Role removed: Tester" in manual and "Role removed: Tester" in auto
 
 
 def test_ownership_transferred_shows_new_and_previous_owner() -> None:

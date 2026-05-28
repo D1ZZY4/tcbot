@@ -124,7 +124,7 @@ If the review post fails, `review_message_id` is not stored. If the appeal-log p
 
 ## Staff review rules
 
-Appeal decisions are handled by `appeal.on_decision` and are registered outside the conversation handler. Only users for whom `admins_db.is_staff(user_id)` returns true may use the review buttons. In this codebase, `is_staff` means Founder/owner or Admin; Developer and Tester custom roles are not included by that helper.
+Appeal decisions are handled by `appeal.on_decision` and are registered outside the conversation handler. Only users for whom `users_db.is_staff(user_id)` returns true may use the review buttons. In this codebase, `is_staff` means Founder/owner or Admin; Developer and Tester custom roles are not included by that helper.
 
 The original banning admin gets a 12-hour priority window after the appeal review timestamp is set:
 

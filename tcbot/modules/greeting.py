@@ -52,7 +52,7 @@ async def _handle_member(member, msg, chat, bot) -> None:
         return
 
     await msg.reply_text(
-        f"Welcome, {mention(member.id, member.first_name)}! 👋 "
+        f"Welcome, {mention(member.id, member.first_name)}. "
         f"This is an official {cfg.community_name} group. "
         "Please go through the group rules before participating.",
         parse_mode="HTML",

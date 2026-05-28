@@ -100,7 +100,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     if target_id == ctx.bot.id:
-        await msg.reply_text("Kick me? 😂 I run this place. Not happening.")
+        await msg.reply_text("Kick me? I run this place. Not happening.")
         return ConversationHandler.END
 
     executor_role, target_role = await resolve_and_check(

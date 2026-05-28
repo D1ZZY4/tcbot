@@ -108,10 +108,8 @@ Current collection/domain owners include:
 | Collection/domain | Helper |
 |---|---|
 | Federation bans | `bans_db.py` |
-| Owners/admins | `admins_db.py` |
-| Developer/tester roles | `roles_db.py` |
 | Connected and pending groups | `groups_db.py` |
-| Member profile cache | `users_db.py` |
+| Member profile cache + owners/admins + dev/tester roles | `users_db.py` |
 | Warnings | `warns_db.py` |
 | Kicks | `kicks_db.py` |
 | Mutes | `mutes_db.py` |
@@ -140,7 +138,7 @@ Role hierarchy:
 
 Important rules:
 
-- Use canonical role helpers from `tcbot.database.roles_db` and `tcbot.modules.helper.role_guard`.
+- Use canonical role helpers from `tcbot.database.users_db` and `tcbot.modules.helper.decorators.resolve_and_check`.
 - Do not duplicate manual role-check chains in handlers.
 - Ban and kick flows must auto-demote targets that currently hold a federation role.
 - Promotion and demotion workflows should preserve auditability through logs and queue records.

@@ -79,7 +79,7 @@ class Promote:
             bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             bot.send_message(
                 target_id,
-                f"You've been promoted to Admin in {cfg.community_name} - welcome to the staff team! 🎉",
+                f"You've been promoted to Admin in {cfg.community_name} - welcome to the staff team.",
             ),
             return_exceptions=True,
         )
@@ -120,7 +120,7 @@ class Promote:
             bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             bot.send_message(
                 target_id,
-                f"You've been assigned the {role_label} role in {cfg.community_name} - welcome to the team! 🎉",
+                f"You've been assigned the {role_label} role in {cfg.community_name} - welcome to the team.",
             ),
             return_exceptions=True,
         )
@@ -179,7 +179,7 @@ class Promote:
                 log.error("Promo request notify failed: %s", exc)
         return (
             True,
-            "Submitted - the Founder has been notified and will review it shortly. ✅",
+            "Submitted - the Founder has been notified and will review it shortly.",
         )
 
     @classmethod
@@ -201,7 +201,7 @@ class Promote:
         * Admin requesting Admin promotion creates a queue entry for the Founder.
         """
         if current_role == "founder":
-            return False, "That's the Founder - can't assign a role over them. 👑"
+            return False, "That's the Founder - can't assign a role over them."
 
         if role_rank(current_role) >= role_rank(role):
             label = ROLE_LABEL.get(current_role, current_role)

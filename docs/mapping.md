@@ -26,14 +26,12 @@ tcbot/
 ├── alive.py                Flask health endpoint
 ├── database/
 │   ├── mongos.py           Motor client, collection accessor, indexes
-│   ├── admins_db.py        Founder/admin helpers
-│   ├── bans_db.py          Federation ban records
+│   ├── bans_db.py          Federation ban records (incl. per-user history)
 │   ├── groups_db.py        Connected groups and pending joins
-│   ├── roles_db.py         Role hierarchy and effective-role resolution
-│   ├── users_db.py         Member profile cache
-│   ├── warns_db.py         Warnings and warning counters
-│   ├── kicks_db.py         Kick audit records
-│   ├── mutes_db.py         Mute audit records
+│   ├── users_db.py         Member cache + owners/admins + dev/tester roles, effective-role resolution
+│   ├── warns_db.py         Warnings and warning counters (incl. per-user aggregates)
+│   ├── kicks_db.py         Kick audit records (incl. per-user history)
+│   ├── mutes_db.py         Mute audit records (incl. per-user history)
 │   ├── queues_db.py        Promotion request queue
 │   ├── cache.py            Single-process TTL caches
 │   ├── documents.py        TypedDict document shapes
@@ -42,15 +40,14 @@ tcbot/
 │   ├── __init__.py         Dynamic module discovery and handler collection
 │   ├── *.py                Command and callback modules
 │   └── helper/
-│       ├── decorators.py   Auth, per-handler rate limits, tracing
-│       ├── extraction.py   Target and identity resolution
+│       ├── decorators.py   Auth, per-handler rate limits, tracing, resolve_and_check
+│       ├── extraction.py   Target resolution
 │       ├── formatter.py    HTML escaping and formatting
 │       ├── keyboards.py    Inline keyboard factories
-│       ├── role_guard.py   Role checks and auto-demotion
 │       ├── ban_info.py     Ban detail renderer
 │       ├── parse_*.py      Link, log, and safe-edit helpers
 │       └── workflows/
-│           └── *_flow.py   Conversation factories and flow executors
+│           └── *_flow.py   Conversation factories, plus Promote / Demote / Check classes
 └── utils/
     ├── dispatch.py         Bounded concurrent fan-out
     ├── error_reporter.py   Telegram error classification and reporting

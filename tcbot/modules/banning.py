@@ -101,12 +101,12 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     if target_id == ctx.bot.id:
         await msg.reply_text(
-            "That's me you're trying to ban 😐 - I keep this federation running. Nice try."
+            "That's me you're trying to ban - I keep this federation running. Nice try."
         )
         return ConversationHandler.END
 
     if target_id == admin.id:
-        await msg.reply_text("Can't ban yourself - that's not how moderation works. 🙃")
+        await msg.reply_text("Can't ban yourself - that's not how moderation works.")
         return ConversationHandler.END
 
     executor_role, target_role = await resolve_and_check(

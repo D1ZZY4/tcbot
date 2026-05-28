@@ -286,9 +286,9 @@ Rules:
 Use shared helpers:
 
 ```python
-from tcbot.database.roles_db import ROLE_LABEL, can_act_on, get_effective_role
+from tcbot.database.users_db import ROLE_LABEL, can_act_on, get_effective_role
 from tcbot.modules.helper import extraction
-from tcbot.modules.helper.role_guard import resolve_and_check
+from tcbot.modules.helper.decorators import resolve_and_check
 
 target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
 executor_role, target_role = await resolve_and_check(

@@ -257,7 +257,7 @@ def build_error_message(
     sep = "━" * 30
 
     return (
-        f"<b>⚠️ Error Report</b>\n"
+        f"<b>Error Report</b>\n"
         f"{sep}\n"
         f"<b>Type:</b> {label}\n"
         f"<b>Where:</b> <code>{_esc(file_part)}:{line_no}</code> in <code>{_esc(func_name)}</code>\n"

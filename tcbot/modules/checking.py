@@ -137,26 +137,26 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     if user.id == owner_id:
         await msg.reply_text(
-            f"Bro, {mention(user.id, fname)}... seriously? 😂\n\n"
+            f"Bro, {mention(user.id, fname)}... seriously?\n\n"
             "You're the Founder - you built this whole place. "
             "The ban list doesn't apply to you, you run it. "
-            "Go touch grass, you're fine. 👑",
+            "Go touch grass, you're fine.",
             parse_mode="HTML",
         )
         return
 
     if user_role == "admin":
         await msg.reply_text(
-            f"Hey {mention(user.id, fname)}, checking yourself? 😄\n\n"
+            f"Hey {mention(user.id, fname)}, checking yourself?\n\n"
             "You're on the staff team - you handle bans, not receive them. "
-            "No active ban on your end. You're good. 👍",
+            "No active ban on your end. You're good.",
             parse_mode="HTML",
         )
         return
     if user_role in ("developer", "tester"):
         role_label = ROLE_LABEL.get(user_role, user_role)
         await msg.reply_text(
-            f"Hey {mention(user.id, fname)}, all good! 👍\n\n"
+            f"Hey {mention(user.id, fname)}, all good.\n\n"
             f"You're a {cfg.community_name} {role_label} - on the team, not on the ban list. "
             "Nothing to worry about.",
             parse_mode="HTML",
@@ -164,9 +164,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if not ban:
-        await msg.reply_text(
-            f"You're clean - no active ban in {cfg.community_name}. ✅"
-        )
+        await msg.reply_text(f"You're clean - no active ban in {cfg.community_name}.")
         return
 
     ban_id = ban["ban_id"]

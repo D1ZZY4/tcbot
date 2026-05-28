@@ -37,7 +37,7 @@ Set `__module_name__ = None` for internal/menu modules hidden from `/help`.
 | `appeals.py` | `Appeal` | `/start appeal_<ban_id>` plus appeal decision callbacks | Registers `appeal.build_handler()` and approve/reject callbacks. |
 | `banning.py` | `Ban` | `/tcban`, `/tcb` | Validates Developer+ access, auto-demotes role holders, enters `ban_flow`. |
 | `broadcasting.py` | `Broadcast` | `/tcbroadcast`, `/bc` | Sends a message to all active groups and logs results. |
-| `checking.py` | `Checking` | `/checkme`, `/cme`, `/checkban`, `/cban` | Ban status lookup and detail/back callbacks. |
+| `checking.py` | `Checking` | `/checkme`, `/cme`, `/check`, `/c` | Ban status lookup (`/checkme`) and comprehensive user profile (`/check`) with bans/warns/kicks/mutes/appeals drill-down. |
 | `connecting.py` | `Connect` | `/tcconnect`, `/tccon`, bot-added updates, connect/cancel callbacks | Group connection approval and permission checks. |
 | `disconnecting.py` | `Disconnect` | `/tcdisconnect`, `/tcdiscon`, `/rmtc` | Group-owner disconnect and staff remote disconnect. |
 | `groups.py` | `Groups` | `/tcgroups`, `/tcg` | Connected group list and details toggle. |
@@ -100,7 +100,7 @@ Always call `await q.answer()` at the beginning of callback handlers.
 | `mod_only` | Developer+ | Ban and unban. |
 | `basic_mod_only` | Tester+ | Kick, mute, warn. |
 
-Use role helpers from `roles_db` and `role_guard`; avoid manual chains of `is_owner()` + `is_admin()` checks.
+Use role helpers from `users_db` and `decorators.resolve_and_check`; avoid manual chains of `is_owner()` + `is_admin()` checks.
 
 ## Module implementation checklist
 

@@ -83,7 +83,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if target_id == ctx.bot.id:
         await msg.reply_text(
             f"That's {mention(ctx.bot.id, ctx.bot.first_name or 'me')} - I manage the bans, "
-            "not receive them. Nothing to undo here. 😄",
+            "not receive them. Nothing to undo here.",
             parse_mode="HTML",
         )
         return
@@ -93,7 +93,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         fname = await db.users_db.get_first_name(target_id, "the Founder")
         await msg.reply_text(
             f"That's {mention(target_id, fname)}, the Founder - "
-            "they've never been banned. Nothing to undo. 👑",
+            "they've never been banned. Nothing to undo.",
             parse_mode="HTML",
         )
         return

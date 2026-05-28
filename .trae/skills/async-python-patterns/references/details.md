@@ -36,8 +36,8 @@ Use `asyncio.gather()` when operations are independent and all are required befo
 import asyncio
 
 executor_role, target_role, group = await asyncio.gather(
-    db.roles_db.get_effective_role(executor_id),
-    db.roles_db.get_effective_role(target_id),
+    db.users_db.get_effective_role(executor_id),
+    db.users_db.get_effective_role(target_id),
     db.groups_db.get_group(chat_id),
 )
 ```

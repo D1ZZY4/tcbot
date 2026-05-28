@@ -6,39 +6,42 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 
-from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.users_db import ROLE_LABEL, role_meta
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.formatter import bold, code, esc, mention
-from tcbot.modules.helper.parse_link import message_link
 from tcbot.utils.timedate_format import fmt_dt
 
 _PAGE_SIZE = 5
+_GET_CHAT_TIMEOUT = 3.0
 
 
 # ────────────────────────── Small helpers ───────────────────────── #
 
 
 async def _resolve_user_info(bot: Bot, target_id: int) -> tuple[str, str | None]:
-    """Return (display_name, username_or_None) — best-effort across cache + Telegram."""
-    fname = ""
-    uname: str | None = None
+    """Return (display_name, username_or_None) — fast-path cache hit, bounded Telegram fallback."""
     cached = await db.users_db.get_user(target_id)
-    if cached:
-        fname = cached.get("first_name") or ""
-        uname = cached.get("username")
-    if not fname or not uname:
-        try:
-            chat = await bot.get_chat(target_id)
-            fname = fname or (chat.first_name or "")
-            uname = uname or chat.username
-        except Exception:
-            pass
+    fname = (cached.get("first_name") or "") if cached else ""
+    uname = (cached.get("username") if cached else None) or None
+
+    if fname and uname:
+        return fname, uname
+
+    try:
+        chat = await asyncio.wait_for(
+            bot.get_chat(target_id), timeout=_GET_CHAT_TIMEOUT
+        )
+        fname = fname or (chat.first_name or "")
+        uname = uname or chat.username
+    except (asyncio.TimeoutError, Exception):
+        pass
+
     if not fname:
         fname = f"User {target_id}"
     return fname, uname
@@ -82,6 +85,16 @@ def _back_to_check(target_id: int) -> list[InlineKeyboardButton]:
     return [InlineKeyboardButton("« Back", callback_data=f"check_main:{target_id}")]
 
 
+async def _name(uid: int) -> str:
+    """Fast cache-only name lookup; falls back to 'User <id>' string."""
+    return await db.users_db.get_first_name(uid, f"User {uid}")
+
+
+async def _async_const(value: str) -> str:
+    """Wrap a constant in an async coroutine so gather() can mix it with awaits."""
+    return value
+
+
 # ─────────────────────────── Check class ────────────────────────── #
 
 
@@ -99,15 +112,28 @@ class Check:
         target_id: int,
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Build the top-level profile view: identity + counts + drill-down keyboard."""
-        fname, uname = await _resolve_user_info(bot, target_id)
-        role, role_by_id, role_at = await role_meta(target_id)
-        active_ban = await db.bans_db.get_active_ban(target_id)
-        ban_total = await db.bans_db.user_ban_count(target_id)
-        appeal_total = await db.bans_db.user_appeal_count(target_id)
-        warn_total = await db.warns_db.user_total_warns(target_id)
-        warn_groups = await db.warns_db.user_warn_groups(target_id)
-        kick_total = await db.kicks_db.user_kick_count(target_id)
-        mute_total = await db.mutes_db.user_mute_count(target_id)
+        # * All 9 reads are independent — fire them in parallel for a single round-trip.
+        (
+            (fname, uname),
+            (role, role_by_id, role_at),
+            active_ban,
+            ban_total,
+            appeal_total,
+            warn_total,
+            warn_groups,
+            kick_total,
+            mute_total,
+        ) = await asyncio.gather(
+            _resolve_user_info(bot, target_id),
+            role_meta(target_id),
+            db.bans_db.get_active_ban(target_id),
+            db.bans_db.user_ban_count(target_id),
+            db.bans_db.user_appeal_count(target_id),
+            db.warns_db.user_total_warns(target_id),
+            db.warns_db.user_warn_groups(target_id),
+            db.kicks_db.user_kick_count(target_id),
+            db.mutes_db.user_mute_count(target_id),
+        )
 
         role_label = ROLE_LABEL.get(role, "None") if role else "None"
         uname_part = f"@{esc(uname)}" if uname else "—"
@@ -123,29 +149,29 @@ class Check:
         role_block = "\n".join(role_lines)
 
         text = (
-            f"👤 {bold('Profile')}\n\n"
+            f"{bold('Profile')}\n\n"
             f"Name: {mention(target_id, fname)}\n"
             f"ID: {code(str(target_id))}\n"
             f"Username: {uname_part}\n"
             f"{role_block}\n\n"
-            f"📊 {bold('Federation Activity')}\n\n"
-            f"🚫 Active Ban: {active_part}\n"
-            f"📜 Total Bans: {ban_total}\n"
-            f"⚠️ Warnings: {warn_total} across {len(warn_groups)} group(s)\n"
-            f"🦶 Kicks: {kick_total}\n"
-            f"🔇 Mutes: {mute_total}\n"
-            f"📝 Appeals: {appeal_total}"
+            f"{bold('Federation Activity')}\n\n"
+            f"Active Ban: {active_part}\n"
+            f"Total Bans: {ban_total}\n"
+            f"Warnings: {warn_total} across {len(warn_groups)} group(s)\n"
+            f"Kicks: {kick_total}\n"
+            f"Mutes: {mute_total}\n"
+            f"Appeals: {appeal_total}"
         )
 
         rows: list[list[InlineKeyboardButton]] = []
         rows.append(
             [
                 InlineKeyboardButton(
-                    f"📜 Bans ({ban_total})",
+                    f"Bans ({ban_total})",
                     callback_data=f"check_bans:{target_id}:0",
                 ),
                 InlineKeyboardButton(
-                    f"📝 Appeals ({appeal_total})",
+                    f"Appeals ({appeal_total})",
                     callback_data=f"check_appeals:{target_id}:0",
                 ),
             ]
@@ -153,7 +179,7 @@ class Check:
         rows.append(
             [
                 InlineKeyboardButton(
-                    f"⚠️ Warnings ({warn_total})",
+                    f"Warnings ({warn_total})",
                     callback_data=f"check_warns:{target_id}",
                 ),
             ]
@@ -161,11 +187,11 @@ class Check:
         rows.append(
             [
                 InlineKeyboardButton(
-                    f"🦶 Kicks ({kick_total})",
+                    f"Kicks ({kick_total})",
                     callback_data=f"check_kicks:{target_id}:0",
                 ),
                 InlineKeyboardButton(
-                    f"🔇 Mutes ({mute_total})",
+                    f"Mutes ({mute_total})",
                     callback_data=f"check_mutes:{target_id}:0",
                 ),
             ]
@@ -187,18 +213,18 @@ class Check:
 
         if not bans:
             text = (
-                f"📜 {bold('Bans')}\n\n"
+                f"{bold('Bans')}\n\n"
                 f"No ban records for {mention(target_id, await _name(target_id))}."
             )
             return text, InlineKeyboardMarkup([_back_to_check(target_id)])
 
         lines = [
-            f"📜 {bold('Bans')} — {len(bans)} total  ·  page {page + 1}/{total_pages}\n"
+            f"{bold('Bans')} — {len(bans)} total  ·  page {page + 1}/{total_pages}\n"
         ]
         item_btns: list[InlineKeyboardButton] = []
         base_idx = page * _PAGE_SIZE
         for i, ban in enumerate(chunk, start=1):
-            status = "🟥 Active" if ban.get("is_active") else "⬜ Inactive"
+            status = bold("Active") if ban.get("is_active") else "Inactive"
             ts = _date(ban.get("timestamp"))
             reason_short = esc(str(ban.get("reason", "—"))[:60])
             lines.append(
@@ -271,7 +297,7 @@ class Check:
         groups = await db.warns_db.user_warn_groups(target_id)
         if not groups:
             text = (
-                f"⚠️ {bold('Warnings')}\n\n"
+                f"{bold('Warnings')}\n\n"
                 f"No warning records for {mention(target_id, await _name(target_id))}."
             )
             return text, InlineKeyboardMarkup([_back_to_check(target_id)])
@@ -279,9 +305,7 @@ class Check:
         titles = await db.groups_db.get_group_titles([cid for cid, _ in groups])
         total = sum(c for _, c in groups)
 
-        lines = [
-            f"⚠️ {bold('Warnings')} — {total} total across {len(groups)} group(s)\n"
-        ]
+        lines = [f"{bold('Warnings')} — {total} total across {len(groups)} group(s)\n"]
         rows: list[list[InlineKeyboardButton]] = []
         for cid, count in groups:
             title = titles.get(cid) or str(cid)
@@ -306,15 +330,17 @@ class Check:
         page: int,
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Paginated list of individual warnings inside one chat."""
-        warns = await db.warns_db.get_warns(target_id, chat_id)
+        warns, titles = await asyncio.gather(
+            db.warns_db.get_warns(target_id, chat_id),
+            db.groups_db.get_group_titles([chat_id]),
+        )
         # * get_warns is oldest-first; reverse to newest-first for consistency
         warns = list(reversed(warns))
         chunk, total_pages, page = _paginate(warns, page)
-        titles = await db.groups_db.get_group_titles([chat_id])
         title = titles.get(chat_id) or str(chat_id)
 
         if not warns:
-            text = f"⚠️ {bold('Warnings in')} {esc(title)}\n\nNo warning records here."
+            text = f"{bold('Warnings in')} {esc(title)}\n\nNo warning records here."
             rows = [
                 [
                     InlineKeyboardButton(
@@ -325,16 +351,21 @@ class Check:
             ]
             return text, InlineKeyboardMarkup(rows)
 
+        # * Resolve admin names in parallel up-front so the line loop is sync.
+        admin_ids = [w.get("admin_id", 0) for w in chunk]
+        admin_names = await asyncio.gather(
+            *[_name(aid) if aid else _async_const("Admin") for aid in admin_ids]
+        )
+
         lines = [
-            f"⚠️ {bold('Warnings in')} {esc(title)} — {len(warns)} total"
+            f"{bold('Warnings in')} {esc(title)} — {len(warns)} total"
             f"  ·  page {page + 1}/{total_pages}\n"
         ]
         base_idx = page * _PAGE_SIZE
-        for i, w in enumerate(chunk, start=1):
+        for i, (w, admin_name) in enumerate(zip(chunk, admin_names), start=1):
             ts = _date(w.get("timestamp"))
             reason_short = esc(str(w.get("reason", "—"))[:80])
             admin_id = w.get("admin_id", 0)
-            admin_name = await _name(admin_id) if admin_id else "Admin"
             lines.append(
                 f"{base_idx + i}. {ts}\n"
                 f"   <i>{reason_short}</i>\n"
@@ -367,7 +398,6 @@ class Check:
         return await _per_chat_event_list(
             target_id,
             page,
-            heading_emoji="🦶",
             heading_name="Kicks",
             db_call=db.kicks_db.user_kicks,
             cb_prefix=f"check_kicks:{target_id}",
@@ -385,7 +415,6 @@ class Check:
         return await _per_chat_event_list(
             target_id,
             page,
-            heading_emoji="🔇",
             heading_name="Mutes",
             db_call=db.mutes_db.user_mutes,
             cb_prefix=f"check_mutes:{target_id}",
@@ -406,23 +435,22 @@ class Check:
 
         if not bans:
             text = (
-                f"📝 {bold('Appeals')}\n\n"
+                f"{bold('Appeals')}\n\n"
                 f"No appeal records for {mention(target_id, await _name(target_id))}."
             )
             return text, InlineKeyboardMarkup([_back_to_check(target_id)])
 
         lines = [
-            f"📝 {bold('Appeals')} — {len(bans)} total"
-            f"  ·  page {page + 1}/{total_pages}\n"
+            f"{bold('Appeals')} — {len(bans)} total  ·  page {page + 1}/{total_pages}\n"
         ]
         item_btns: list[InlineKeyboardButton] = []
         base_idx = page * _PAGE_SIZE
         for i, ban in enumerate(chunk, start=1):
             ts = _date(ban.get("appeal_submitted_at") or ban.get("timestamp"))
             status = (
-                "🟢 Approved (unbanned)"
+                f"{bold('Approved')} (unbanned)"
                 if not ban.get("is_active")
-                else "🟡 Pending / Rejected"
+                else "Pending / Rejected"
             )
             lines.append(
                 f"{base_idx + i}. {status}\n   Ban ID: {code(ban['ban_id'])} · {ts}"
@@ -447,16 +475,10 @@ class Check:
 # ─────────────────────── Shared list helper ─────────────────────── #
 
 
-async def _name(uid: int) -> str:
-    """Fast cache-only name lookup; falls back to 'User <id>' string."""
-    return await db.users_db.get_first_name(uid, f"User {uid}")
-
-
 async def _per_chat_event_list(
     target_id: int,
     page: int,
     *,
-    heading_emoji: str,
     heading_name: str,
     db_call,
     cb_prefix: str,
@@ -467,27 +489,32 @@ async def _per_chat_event_list(
 
     if not records:
         text = (
-            f"{heading_emoji} {bold(heading_name)}\n\n"
+            f"{bold(heading_name)}\n\n"
             f"No {heading_name.lower()} records for "
             f"{mention(target_id, await _name(target_id))}."
         )
         return text, InlineKeyboardMarkup([_back_to_check(target_id)])
 
     chat_ids = list({r["chat_id"] for r in chunk if "chat_id" in r})
-    titles = await db.groups_db.get_group_titles(chat_ids)
+    admin_ids = [r.get("admin_id", 0) for r in chunk]
+
+    # * Resolve all titles + all admin names in parallel.
+    titles, *admin_names = await asyncio.gather(
+        db.groups_db.get_group_titles(chat_ids),
+        *[_name(aid) if aid else _async_const("Admin") for aid in admin_ids],
+    )
 
     lines = [
-        f"{heading_emoji} {bold(heading_name)} — {len(records)} total"
+        f"{bold(heading_name)} — {len(records)} total"
         f"  ·  page {page + 1}/{total_pages}\n"
     ]
     base_idx = page * _PAGE_SIZE
-    for i, rec in enumerate(chunk, start=1):
+    for i, (rec, admin_name) in enumerate(zip(chunk, admin_names), start=1):
         ts = _date(rec.get("timestamp"))
         reason_short = esc(str(rec.get("reason", "—"))[:80])
         chat_id = rec.get("chat_id", 0)
         title = titles.get(chat_id) or str(chat_id)
         admin_id = rec.get("admin_id", 0)
-        admin_name = await _name(admin_id) if admin_id else "Admin"
         lines.append(
             f"{base_idx + i}. {ts}\n"
             f"   Group: {esc(title)}\n"
@@ -503,7 +530,4 @@ async def _per_chat_event_list(
     return "\n".join(lines), InlineKeyboardMarkup(rows)
 
 
-# ─────────────────── build_ban_detail re-export ─────────────────── #
-# * Re-exported so callers can keep using the existing rich ban-detail renderer.
-
-__all__ = ("Check", "build_ban_detail", "message_link", "cfg")
+__all__ = ("Check", "build_ban_detail")

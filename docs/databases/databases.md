@@ -18,8 +18,7 @@ The database layer lives in `tcbot/database/` and is the only place that should 
 
 | Helper | Collection(s) | Main responsibilities |
 |---|---|---|
-| `admins_db.py` | `tc_owners`, `tc_admins` | Founder/admin checks, initial owner seeding, owner transfer, admin add/remove/list/count. |
-| `roles_db.py` | `tc_roles` | Tester/developer role assignment, effective role resolution, rank comparison, role cache invalidation. |
+| `users_db.py` | `member_cache`, `tc_owners`, `tc_admins`, `tc_roles` | Member profile cache, owner/admin storage, Tester/Developer custom-role assignment, effective-role resolution, rank comparison, role-cache invalidation. |
 | `bans_db.py` | `bans` | Active ban lookup, ban creation/update, unban deactivation, appeal/review metadata, active ban lists. |
 | `groups_db.py` | `federated_groups`, `pending_joins` | Connected group state, pending connection requests, group cache invalidation. |
 | `users_db.py` | `member_cache` | Cached Telegram profile data from group messages and lookup fallbacks. |
@@ -54,7 +53,7 @@ If a new query depends on a new access pattern, add the matching index in `ensur
 
 ## Role model
 
-Effective roles are resolved in `roles_db.get_effective_role()`:
+Effective roles are resolved in `users_db.get_effective_role()`:
 
 1. Founder from `tc_owners` returns `"founder"`.
 2. Admin from `tc_admins` returns `"admin"`.
@@ -67,7 +66,7 @@ Rank ordering:
 founder = 4 > admin = 3 > developer = 2 > tester = 1 > none = 0
 ```
 
-Use `roles_db.role_rank()` and `roles_db.can_act_on()` instead of hand-written comparisons.
+Use `users_db.role_rank()` and `users_db.can_act_on()` instead of hand-written comparisons.
 
 ## Ban document fields
 
@@ -108,10 +107,10 @@ Warnings are stored per user and chat:
 
 | Cache | Typical key | Used by |
 |---|---|---|
-| `effective_role_cache` | `user_id` | `roles_db.get_effective_role()` |
+| `effective_role_cache` | `user_id` | `users_db.get_effective_role()` |
 | `connected_cache` | `chat_id` | `groups_db.is_connected()` |
 | `active_groups_cache` | fixed key | `groups_db.active_groups()` |
-| `owner_id_cache` | fixed key | `admins_db.get_owner_id()` |
+| `owner_id_cache` | fixed key | `users_db.get_owner_id()` |
 
 Write helpers must invalidate or refresh related cache entries. For example, role writes invalidate the target user's effective role cache, and group writes clear or update group caches.
 

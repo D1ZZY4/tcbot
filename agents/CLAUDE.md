@@ -45,7 +45,7 @@ tgbot/
 │   ├── __main__.py                 Startup, handlers, polling, error handling
 │   ├── alive.py                    Flask keep-alive server
 │   ├── database/                   Async MongoDB helpers, one file per area
-│   │   ├── admins_db.py            Founder/admin storage and checks
+│   │   ├── users_db.py             Member cache + owners + admins + developer/tester roles, effective-role resolution
 │   │   ├── bans_db.py              Federation bans
 │   │   ├── cache.py                In-memory TTL caches
 │   │   ├── documents.py            TypedDict document shapes and Literal aliases
@@ -54,10 +54,9 @@ tgbot/
 │   │   ├── mongos.py               Motor client, connect(), indexes, col()
 │   │   ├── mutes_db.py             Mute log
 │   │   ├── queues_db.py            Promotion request queue
-│   │   ├── roles_db.py             Developer/tester roles and role resolution
 │   │   ├── types.py                NewType domain primitives
-│   │   ├── users_db.py             User profile cache
-│   │   └── warns_db.py             Warning records and counts
+│   │   ├── warns_db.py             Warning records and counts
+│   │   └── mongos.py               Motor client, connect(), indexes, col()
 │   ├── modules/                    Telegram command modules
 │   │   ├── helper/                 Shared decorators, formatting, keyboards
 │   │   │   └── workflows/          ConversationHandler flows (`*_flow.py` only)
@@ -253,7 +252,7 @@ Hierarchy:
 Canonical helpers:
 
 ```python
-from tcbot.database.roles_db import ROLE_LABEL, can_act_on, get_effective_role
+from tcbot.database.users_db import ROLE_LABEL, can_act_on, get_effective_role
 
 role = await get_effective_role(user_id)
 # "founder" | "admin" | "developer" | "tester" | None
@@ -270,10 +269,10 @@ Rules:
 - Admin promotion requests use `queues_db`; do not bypass the queue unless the
   existing workflow explicitly allows a Founder action.
 
-For commands that target a user, use the shared guard:
+For commands that target a user, use the shared guard from `decorators`:
 
 ```python
-from tcbot.modules.helper.role_guard import resolve_and_check
+from tcbot.modules.helper.decorators import resolve_and_check
 
 executor_role, target_role = await resolve_and_check(
     msg, executor_id, target_id, min_role="developer"
@@ -282,21 +281,21 @@ if executor_role is None:
     return
 ```
 
-Auto-demote before ban or kick:
+Auto-demote before ban or kick uses the `Demote` class:
 
 ```python
-from tcbot.modules.helper.role_guard import auto_demote
+from tcbot.modules.helper.workflows.demote_flow import Demote
 
 target_role = await get_effective_role(target_id)
 if target_role:
-    await auto_demote(
+    await Demote.execute(
         ctx.bot,
         target_id,
         target_fname,
         target_role,
         executor_id,
         executor_fname,
-        "ban",
+        trigger="ban",  # or "kick"
     )
 ```
 
@@ -429,7 +428,7 @@ Every command that targets a user must guard special targets before acting:
 1. Bot self-check: never ban, kick, mute, warn, or demote the bot itself.
 2. Founder check: respond respectfully and stop.
 3. Staff role check: use `get_effective_role()`, `ROLE_LABEL`, and
-   `resolve_and_check()`/`can_act_on()`.
+- Role checks should use the canonical role helpers in `tcbot.database.users_db` and the shared guard in `tcbot.modules.helper.decorators.resolve_and_check`.
 4. Auto-demote staff targets before ban or kick when allowed.
 
 Keep responses clear, English-only, HTML formatted, and short.

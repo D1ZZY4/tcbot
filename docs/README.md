@@ -23,6 +23,9 @@ This directory documents the internal architecture and developer workflows for T
 |---|---|
 | [Appeals detailed](appeal-detailed.md) | Appeal deep links, private DM submission, review buttons, approval/rejection behavior, and edge cases. |
 | [Banning detailed](banning-detailed.md) | Federation ban flow, proof collection, ban updates, unban checks, logs, and appeal links. |
+| [Check detailed](check-detailed.md) | `/check` user-profile command, drill-down views, pagination, parallel DB reads, and edge cases. |
+| [Demote detailed](demote-detailed.md) | Manual `/tcdemote`, auto-demote on ban/kick, the `Demote` class, permission rules, and unified log format. |
+| [Promote detailed](promote-detailed.md) | `/tcpromote`, the `Promote` class, role hierarchy, direct vs request flow, callbacks, and edge cases. |
 | [Roles detailed](role-detailed.md) | Founder/Admin/Developer/Tester hierarchy, promotion/demotion behavior, and role safety rules. |
 | [Warnings detailed](warnings-detailed.md) | Per-group warnings, optional proof, warn-limit auto-ban behavior, and warning storage. |
 

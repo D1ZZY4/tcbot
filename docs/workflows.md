@@ -115,7 +115,7 @@ Disconnected groups are marked inactive rather than deleted, preserving historic
 ## Statistics and lookup flows
 
 - `/checkme` shows the caller's active ban status and appeal/proof buttons when applicable.
-- `/checkban` / `/cban` lets staff inspect a user's ban status.
+- `/check` / `/c` lets anyone inspect a user's full federation profile (identity, role, bans, warnings, kicks, mutes, appeals).
 - `/tcgroups` lists connected groups with a details toggle.
 - `/tcstats` shows summary cards, active bans, connected chats, and search/detail views.
 

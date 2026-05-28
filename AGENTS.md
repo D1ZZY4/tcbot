@@ -145,7 +145,7 @@ Repository conventions:
 - `tcbot/modules/__init__.py` discovers top-level module files, applies `MODULES_LOAD` / `MODULES_NO_LOAD` filters, and fails startup if an enabled module cannot be imported.
 - Handlers should use database helper modules instead of calling `mongos.col()` directly.
 - Multi-group actions should use `tcbot.utils.dispatch.fan_out()` to bound concurrent Telegram API calls.
-- Role checks should use the canonical role helpers in `tcbot.database.roles_db` and `tcbot.modules.helper.role_guard`.
+- Role checks should use the canonical role helpers in `tcbot.database.users_db` and `tcbot.modules.helper.decorators.resolve_and_check`.
 - Ban/kick flows must auto-demote users who currently hold a federation role.
 - New conversation logic belongs in `tcbot/modules/helper/workflows/*_flow.py`.
 

@@ -67,16 +67,15 @@ Main groups:
 
 See [button styles](../button-styles.md) for layout and callback-data conventions.
 
-## `role_guard.py`
+## Permission helpers in `decorators.py`
 
-Role guard helpers centralize moderation permission checks.
+The `decorators.py` module centralizes both auth-guard decorators and the shared executor-vs-target permission check used by ban/kick/mute/warn entry handlers.
 
 | Export | Purpose |
 |---|---|
 | `resolve_and_check(msg, executor_id, target_id, min_role=...)` | Resolves executor and target roles, checks minimum executor rank, checks executor outranks target, and replies on failure. |
-| `auto_demote(bot, target_id, target_fname, target_role, executor_id, executor_fname, action)` | Removes a target's role before ban/kick, notifies the target, and logs the auto-demotion. |
 
-Ban and kick flows must call `auto_demote()` before enforcing the action when the target currently holds a federation role.
+Ban and kick entry points pair this with `Demote.execute(..., trigger="ban"/"kick")` from `workflows/demote_flow.py` to remove the target's role before the moderation action.
 
 ## `ban_info.py`
 
@@ -115,5 +114,5 @@ Unexpected edit failures are logged as warnings.
 
 - Keep user-facing HTML escaped.
 - Keep keyboard callback-data stable because handlers match it with regex patterns.
-- Do not duplicate role checks that already exist in `roles_db` or `role_guard`.
+- Do not duplicate role checks that already exist in `users_db` or `decorators.resolve_and_check`.
 - Do not create keyboard factories outside `keyboards.py` unless the workflow needs a one-off private helper for local pagination.

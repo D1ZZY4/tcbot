@@ -13,7 +13,7 @@ A federation ban marks a user as banned in the persistent `bans` collection and 
 | `/tcban` | `/tcb` | Create or update a federation-wide ban. | Developer and above. |
 | `/tcunban` | `/tcunb` | Deactivate an active federation ban and unban across connected groups. | Developer and above via `mod_only`. |
 | `/checkme` | `/cme` | Let a user check their own active federation ban and access the appeal link. | Anyone. |
-| `/checkban` | `/cban` | Look up another user's active federation ban. | Anyone. |
+| `/check` | `/c` | Look up any user's full federation profile (identity, role, bans, warns, kicks, mutes, appeals). | Anyone. |
 
 Commands use the project's configured prefixes; slash commands are examples.
 
@@ -134,7 +134,7 @@ Failures are counted but do not roll back the database ban record.
 
 ## Role hierarchy and target protection
 
-Ban execution uses the role hierarchy from `roles_db`:
+Ban execution uses the role hierarchy from `users_db`:
 
 | Role | Rank |
 |---|---:|
@@ -150,7 +150,7 @@ The executor must have rank >= Developer. The target check behaves as follows:
 - If the target has a role with rank greater than or equal to the executor's rank, the action is blocked.
 - If the target has a lower role, the bot automatically removes that role before continuing with the ban.
 
-Auto-demotion is handled by `role_guard.auto_demote(...)`:
+Auto-demotion is handled by `Demote.execute(..., trigger="ban")` from `workflows/demote_flow.py`:
 
 - Admin targets are removed from `tc_admins`.
 - Developer/Tester targets are removed from `tc_roles`.
@@ -242,19 +242,20 @@ The `Appeal` button opens the same bot DM deep link used by the ban log `Submit 
 
 If the ban is inactive when details are requested, the callback alert says the ban is no longer active.
 
-## `/checkban` behavior
+## `/check` behavior
 
-`/checkban` looks up any target by reply, user ID, or resolvable username.
+`/check` (alias `/c`) builds a comprehensive federation profile for any target — identity (mention, ID, username), role and assignment metadata, active ban, ban history, warnings by group, kicks, mutes, and appeals. Each section opens a drill-down inline keyboard so staff can inspect every record individually.
 
-Special cases:
+The target is resolved by reply, user ID, or resolvable username.
+
+Special cases for the active-ban summary line:
 
 - The bot itself is always reported clean.
 - Founder cannot be banned and is reported clean.
 - Admin/Developer/Tester targets are reported as staff with no active ban.
-- If no active ban exists, the bot reports the target clean.
-- If an active ban exists, the bot sends the full ban detail card and a `View Proof` button when proof exists.
+- If an active ban exists, the profile shows the ban ID inline and the Bans drill-down lists the full record with a `View Proof` button when proof exists.
 
-Unlike `/checkme`, `/checkban` does not provide an appeal button because it is for third-party lookup.
+Unlike `/checkme`, `/check` does not provide an appeal button because it is for third-party lookup.
 
 ## `/tcunban` behavior
 
@@ -303,6 +304,6 @@ Useful scenarios for tests and manual verification:
 11. A second ban against an already active-banned target updates the existing ban and preserves previous proof/log IDs.
 12. Failed group bans are counted in the final summary but do not roll back the DB record.
 13. `/checkme` on an active ban shows `Details`, optional `Proof`, and `Appeal` buttons.
-14. `/checkban` on an active ban shows details and optional proof, but no appeal button.
+14. `/check` on a user shows full federation profile with bans/warns/kicks/mutes/appeals drill-down.
 15. `/tcunban` deactivates the active ban and unbans across all connected groups.
 16. Active-ban reads prefer the newest active duplicate record.

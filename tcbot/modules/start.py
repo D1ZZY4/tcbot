@@ -27,13 +27,13 @@ __module_name__ = None
 # ────────────────────────── Start Message ───────────────────────── #
 
 _PRIVATE_START_TEXT = (
-    "<b>Hey! I'm {botname}. 👋</b>\n\n"
+    "<b>Hey, I'm {botname}.</b>\n\n"
     f"I am an assistant of {cfg.community_name} to manage the groups connected to me centrally\n"
     "Use the buttons below to explore."
 )
 
 _GROUP_START_TEXT = (
-    "<b>Hey! I'm {botname}. 👋</b>\n\n"
+    "<b>Hey, I'm {botname}.</b>\n\n"
     f"I am an assistant of {cfg.community_name} to manage the groups connected to me centrally\n"
     "Use /help for all help menu, or open me in PM for the full menu."
 )

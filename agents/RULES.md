@@ -81,13 +81,13 @@ Rules:
 
 ## Role System
 
-1. Use `roles_db.get_effective_role(user_id)` to resolve roles.
-2. Use `roles_db.can_act_on(executor_id, target_id)` or
-   `role_guard.resolve_and_check()` for executor-vs-target checks.
+1. Use `users_db.get_effective_role(user_id)` to resolve roles.
+2. Use `users_db.can_act_on(executor_id, target_id)` or
+   `decorators.resolve_and_check()` for executor-vs-target checks.
 3. Never chain `is_owner()` + `is_admin()` + `get_role()` manually in handlers.
 4. Never compare role ranks inline in command modules.
 5. Use `ROLE_LABEL` for user-facing labels.
-6. Call `auto_demote()` before executing a ban or kick against a target who holds
+6. Call `Demote.execute(..., trigger="ban"|"kick")` before executing a ban or kick against a target who holds
    any role.
 7. Developer and Tester roles live in `tc_roles`.
 8. Admin promotion requests use `queues_db` and the existing promotion workflow.

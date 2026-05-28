@@ -191,7 +191,7 @@ def owner_only(func: Callable) -> Callable:
             return await func(update, ctx)
         if update.effective_message:
             await update.effective_message.reply_text(
-                "This command is reserved for the Founder - you're not authorized. 🔒"
+                "This command is reserved for the Founder - you're not authorized."
             )
 
     return wrapper
@@ -207,7 +207,7 @@ def staff_only(func: Callable) -> Callable:
             return await func(update, ctx)
         if update.effective_message:
             await update.effective_message.reply_text(
-                "Staff and Founder only for this one - you don't have the rank. 🚫"
+                "Staff and Founder only for this one - you don't have the rank."
             )
 
     return wrapper
@@ -223,7 +223,7 @@ def mod_only(func: Callable) -> Callable:
             return await func(update, ctx)
         if update.effective_message:
             await update.effective_message.reply_text(
-                "You need Developer rank or above for this - not your call. 🚫"
+                "You need Developer rank or above for this - not your call."
             )
 
     return wrapper
@@ -239,7 +239,7 @@ def basic_mod_only(func: Callable) -> Callable:
             return await func(update, ctx)
         if update.effective_message:
             await update.effective_message.reply_text(
-                "You need at least a Tester role for this - not your call. 🚫"
+                "You need at least a Tester role for this - not your call."
             )
 
     return wrapper
@@ -267,7 +267,7 @@ async def resolve_and_check(
         get_effective_role(target_id),
     )
     if role_rank(executor_role) < role_rank(min_role):
-        await msg.reply_text("You don't have the rank for this one. 🚫")
+        await msg.reply_text("You don't have the rank for this one.")
         return None, None
 
     if target_role and role_rank(executor_role) <= role_rank(target_role):

@@ -132,9 +132,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     if target_id == ctx.bot.id:
-        await msg.reply_text(
-            "Warn me? 😄 I'm the one who manages warnings around here."
-        )
+        await msg.reply_text("Warn me? I'm the one who manages warnings around here.")
         return ConversationHandler.END
 
     executor_role, _ = await resolve_and_check(
@@ -189,7 +187,7 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if target_id == ctx.bot.id:
         await msg.reply_text(
             f"That's {mention(ctx.bot.id, ctx.bot.first_name or 'me')} - "
-            "zero warnings here, ever. Nothing to remove. 😄",
+            "zero warnings here, ever. Nothing to remove.",
             parse_mode="HTML",
         )
         return
@@ -198,7 +196,7 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if target_role == "founder":
         fname = await db.users_db.get_first_name(target_id, "the Founder")
         await msg.reply_text(
-            f"That's {mention(target_id, fname)}, the Founder - no warnings on record. 👑",
+            f"That's {mention(target_id, fname)}, the Founder - no warnings on record.",
             parse_mode="HTML",
         )
         return
@@ -248,7 +246,7 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     if target_id == ctx.bot.id:
         await msg.reply_text(
             f"That's {mention(ctx.bot.id, ctx.bot.first_name or 'me')} - "
-            "already at zero, always. Nothing to clear. 😄",
+            "already at zero, always. Nothing to clear.",
             parse_mode="HTML",
         )
         return
@@ -257,7 +255,7 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     if target_role == "founder":
         fname = await db.users_db.get_first_name(target_id, "the Founder")
         await msg.reply_text(
-            f"That's {mention(target_id, fname)}, the Founder - no warnings to clear. 👑",
+            f"That's {mention(target_id, fname)}, the Founder - no warnings to clear.",
             parse_mode="HTML",
         )
         return

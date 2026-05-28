@@ -516,12 +516,16 @@ def promoted(
     by_id: int,
     by_fname: str,
 ) -> str:
-    """Promotion audit-log: a user receives `role` from another user."""
+    """Unified promotion audit-log for Admin / Developer / Tester.
+
+    Single shape — the role is shown as a field below the user, not in the title.
+    """
     role_label = _role_title(role)
     return (
-        LogBuilder(f"New {cfg.community_name} {role_label} Promoted")
-        .mention_field(role_label, target_id, target_fname)
-        .field("ID", target_id, escape=False)
+        LogBuilder(f"New {cfg.community_name} Promoted")
+        .mention_field("User", target_id, target_fname)
+        .field("User ID", target_id, escape=False)
+        .field("Role", role_label, escape=False)
         .section()
         .mention_field("Promoted by", by_id, by_fname)
         .field("ID", by_id, escape=False)
@@ -538,40 +542,17 @@ def demoted(
     by_id: int,
     by_fname: str,
     *,
-    trigger: str | None = None,
+    trigger: str | None = None,  # noqa: ARG001 — kept for caller API compatibility
 ) -> str:
-    """
-    Demotion audit-log.
-
-    * Manual: trigger=None → "{community} {Role} Demoted"
-    * Auto-demote on ban/kick: trigger="ban" or "kick" → "{community} Auto-Demote"
-    """
+    """Unified demotion audit-log — manual demote and ban/kick auto-demote share one format."""
     role_label = _role_title(role)
-    if trigger is None:
-        return (
-            LogBuilder(f"{cfg.community_name} {role_label} Demoted")
-            .mention_field("User", target_id, target_fname)
-            .field("ID", target_id, escape=False)
-            .field("Role removed", role_label, escape=False)
-            .section()
-            .mention_field("Demoted by", by_id, by_fname)
-            .field("ID", by_id, escape=False)
-            .section()
-            .date()
-            .build()
-        )
-
-    trigger_label = {"ban": "Banned", "kick": "Kicked"}.get(
-        trigger, trigger.capitalize()
-    )
     return (
-        LogBuilder(f"{cfg.community_name} Auto-Demote")
+        LogBuilder(f"{cfg.community_name} Demoted")
         .mention_field("User", target_id, target_fname)
-        .field("ID", target_id, escape=False)
+        .field("User ID", target_id, escape=False)
         .field("Role removed", role_label, escape=False)
-        .field("Trigger", trigger_label, escape=False)
         .section()
-        .mention_field("By", by_id, by_fname)
+        .mention_field("Demoted by", by_id, by_fname)
         .field("ID", by_id, escape=False)
         .section()
         .date()

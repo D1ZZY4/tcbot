@@ -119,12 +119,12 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     if target_id == ctx.bot.id:
         await msg.reply_text(
-            "Muting me won't do much - I don't send messages on my own anyway. 😄"
+            "Muting me won't do much - I don't send messages on my own anyway."
         )
         return ConversationHandler.END
 
     if target_id == admin.id:
-        await msg.reply_text("Can't mute yourself - that's not how this works. 🙃")
+        await msg.reply_text("Can't mute yourself - that's not how this works.")
         return ConversationHandler.END
 
     _, target_role = await resolve_and_check(
@@ -196,7 +196,7 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if target_id == ctx.bot.id:
         await msg.reply_text(
             f"That's {mention(ctx.bot.id, ctx.bot.first_name or 'me')} - "
-            "can't mute a bot anyway, so nothing to undo here. 😄",
+            "can't mute a bot anyway, so nothing to undo here.",
             parse_mode="HTML",
         )
         return
@@ -206,7 +206,7 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         fname = await db.users_db.get_first_name(target_id, "the Founder")
         await msg.reply_text(
             f"That's {mention(target_id, fname)}, the Founder - "
-            "definitely not muted. Nothing to undo. 👑",
+            "definitely not muted. Nothing to undo.",
             parse_mode="HTML",
         )
         return

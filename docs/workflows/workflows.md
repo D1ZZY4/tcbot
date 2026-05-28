@@ -152,7 +152,7 @@ Appeal flow requirements:
 
 ## Promotion: `promote_flow.py`
 
-Promotion is not a conversation. `_execute_promote(...)` performs direct role assignment or creates a promotion request for Founder approval when required. `admins.py` registers the command and callback handlers.
+Promotion is not a conversation. `Promote.execute(...)` in `workflows/promote_flow.py` performs direct role assignment or creates a promotion request for Founder approval when required. `admins.py` registers the command and callback handlers. Manual demotion uses `Demote.execute(...)` in `workflows/demote_flow.py` (also called with `trigger="ban"`/`"kick"` by the ban and kick entry points to auto-remove a role before the moderation action).
 
 ## Stats: `stats_flow.py` and `stats_chats_flow.py`
 

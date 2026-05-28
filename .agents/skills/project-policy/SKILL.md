@@ -91,9 +91,9 @@ owning area.
 
 ## Role and Moderation Rules
 
-- Use canonical role helpers from `tcbot.database.roles_db`; do not chain manual owner/admin role
+- Use canonical role helpers from `tcbot.database.users_db`; do not chain manual owner/admin role
   checks.
-- Use role guard helpers from `tcbot.modules.helper.role_guard` for combined executor/target
+- Use the shared permission helper `tcbot.modules.helper.decorators.resolve_and_check` for combined executor/target
   checks where appropriate.
 - Ban and kick flows must auto-demote targets who currently hold a federation role before the
   destructive action proceeds.
