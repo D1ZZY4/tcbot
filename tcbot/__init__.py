@@ -37,14 +37,18 @@ def parse_list(raw: str) -> list[str]:
 
 
 def parse_port(port_str: str) -> int:
-    """Resolve a port string to an integer; 'auto' or empty strings default to 5000."""
+    """Resolve a port string to a valid TCP port; 'auto' or empty defaults to 5000."""
     if not port_str or port_str.lower() == "auto":
         return 5000
     try:
-        return int(port_str)
+        port = int(port_str)
     except ValueError:
         print(f"Invalid PORT '{port_str}', defaulting to 5000.", file=sys.stderr)
         return 5000
+    if 1 <= port <= 65_535:
+        return port
+    print(f"PORT '{port_str}' is outside 1-65535, defaulting to 5000.", file=sys.stderr)
+    return 5000
 
 
 def parse_chat_id(raw: str) -> tuple[int, int | None]:
@@ -73,13 +77,26 @@ def _owner_id_from_env() -> int:
     return owner_id
 
 
-def _int_from_env(key: str, default: int) -> int:
-    """Read an integer env var, returning default on parse error."""
+def _required_env(key: str) -> str:
+    """Return a required env var or raise a clear startup error without exposing values."""
+    value = os.getenv(key, "").strip()
+    if not value:
+        raise RuntimeError(f"{key} is required but not set.")
+    return value
+
+
+def _int_from_env(key: str, default: int, *, minimum: int | None = None) -> int:
+    """Read an integer env var, returning default on parse error or out-of-range values."""
+    raw = os.getenv(key, str(default))
     try:
-        return int(os.getenv(key, str(default)))
+        value = int(raw)
     except ValueError:
         print(f"Invalid integer for {key}, using {default}.", file=sys.stderr)
         return default
+    if minimum is not None and value < minimum:
+        print(f"{key} must be >= {minimum}, using {default}.", file=sys.stderr)
+        return default
+    return value
 
 
 def _env_list(key: str) -> list[str]:
@@ -166,21 +183,22 @@ class Configs:
         """Load all configuration from environment variables and return a Configs instance."""
         load_dotenv(find_dotenv(env_file))
 
-        # ! BOT_TOKEN is strictly required; the bot cannot start without it.
-        token = os.getenv("BOT_TOKEN", "").strip()
-        if not token:
-            raise RuntimeError("BOT_TOKEN is required but not set.")
+        # ! BOT_TOKEN and MONGODB_URI are strictly required for runtime startup.
+        token = _required_env("BOT_TOKEN")
+        mongodb_uri = _required_env("MONGODB_URI")
 
         owner_id = _owner_id_from_env()
 
         raw_prefixes = os.getenv("PREFIXES", '["/", "!", "."]')
         prefixes = parse_list(raw_prefixes) or ["/"]
 
+        db_name = os.getenv("DB_NAME", "tcbot").strip() or "tcbot"
+
         return Configs(
             bot_token=token,
             owner_id=owner_id,
-            mongodb_uri=os.getenv("MONGODB_URI", "").strip(),
-            db_name=os.getenv("DB_NAME", "tcbot").strip(),
+            mongodb_uri=mongodb_uri,
+            db_name=db_name,
             community_name=os.getenv("COMMUNITY_NAME", "Bot").strip(),
             prefixes=prefixes,
             port=os.getenv("PORT", "5000").strip(),
@@ -194,11 +212,17 @@ class Configs:
                 "APPEAL_LOG_HANDLE", "@TranssionCoreFederationLogs"
             ).strip()
             or "@TranssionCoreFederationLogs",
-            proof_timeout_seconds=_int_from_env("PROOF_TIMEOUT_SECONDS", 100),
-            appeal_timeout_seconds=_int_from_env("APPEAL_TIMEOUT_SECONDS", 600),
+            proof_timeout_seconds=_int_from_env(
+                "PROOF_TIMEOUT_SECONDS", 100, minimum=1
+            ),
+            appeal_timeout_seconds=_int_from_env(
+                "APPEAL_TIMEOUT_SECONDS", 600, minimum=1
+            ),
             appeal_discussion_topic=_int_from_env("APPEAL_DISCUSSION_TOPIC", 0),
             extend_group=os.getenv("EXTEND_GROUP", "").strip(),
-            album_debounce_seconds=_int_from_env("ALBUM_DEBOUNCE_SECONDS", 2),
+            album_debounce_seconds=_int_from_env(
+                "ALBUM_DEBOUNCE_SECONDS", 2, minimum=1
+            ),
             log_level=_parse_log_level(os.getenv("LOG_LEVEL", "INFO")),
             modules_load=_env_list("MODULES_LOAD"),
             modules_no_load=_env_list("MODULES_NO_LOAD"),

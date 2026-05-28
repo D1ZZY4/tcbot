@@ -101,7 +101,7 @@ PROOFS="-1001234567890"
 | `DB_NAME` | No | string | MongoDB database name. Defaults to `tcbot`. |
 | `COMMUNITY_NAME` | No | string | Display name in messages and logs. Defaults to `Bot`. |
 | `PREFIXES` | No | Python-style list or CSV | Command prefixes. Default is `["/", "!", "."]`. |
-| `PORT` | No | integer or `auto` | Flask keep-alive port. `auto` currently resolves to `5000`. |
+| `PORT` | No | integer or `auto` | Flask keep-alive port. `auto`, invalid, or out-of-range values resolve to `5000`. |
 | `MAIN_GROUP` | Usually | integer chat ID | Main community group or forum. |
 | `MAIN_CHANNEL` | No | integer chat ID | Optional announcement channel reference. |
 | `EXTEND_GROUP` | No | integer chat ID | Secondary group watched by selected handlers. |
@@ -111,21 +111,21 @@ PROOFS="-1001234567890"
 | `APPEALS` | Yes for appeals | `chat_id` or `chat_id/thread_id` | Submitted appeal record destination. |
 | `APPEAL_LOG_HANDLE` | No | channel handle | Displayed in appeal instructions. Defaults to `@TranssionCoreFederationLogs`. |
 | `APPEAL_DISCUSSION_TOPIC` | Yes for reviews | integer thread ID | Topic inside `MAIN_GROUP` where review cards are posted. |
-| `PROOF_TIMEOUT_SECONDS` | No | integer seconds | Ban proof conversation timeout. Default `100`. |
-| `APPEAL_TIMEOUT_SECONDS` | No | integer seconds | Appeal conversation timeout. Default `600`. |
-| `ALBUM_DEBOUNCE_SECONDS` | No | integer seconds | Album buffering window for ban proof media. Default `2`. |
+| `PROOF_TIMEOUT_SECONDS` | No | integer seconds | Ban proof conversation timeout. Default `100`; values below `1` fall back to default. |
+| `APPEAL_TIMEOUT_SECONDS` | No | integer seconds | Appeal conversation timeout. Default `600`; values below `1` fall back to default. |
+| `ALBUM_DEBOUNCE_SECONDS` | No | integer seconds | Album buffering window for ban proof media. Default `2`; values below `1` fall back to default. |
 | `LOG_LEVEL` | No | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | Runtime logging level. Default `INFO`. |
 | `MODULES_LOAD` | No | comma-separated module names | Optional whitelist, e.g. `banning,appeals`. |
 | `MODULES_NO_LOAD` | No | comma-separated module names | Optional blacklist, e.g. `maintenance,broadcasting`. |
 
 ## Startup sequence
 
-1. `tcbot.__init__` loads configuration into `cfg`.
+1. `tcbot.__init__` loads configuration into `cfg` and fails fast when `BOT_TOKEN`, `MONGODB_URI`, or `OWNER_ID` are missing.
 2. `tcbot.__main__.main()` configures logging.
 3. `tcbot.alive.start_keepalive()` starts Flask on `0.0.0.0:PORT`.
 4. PTB `ApplicationBuilder` builds the bot application.
-5. `_post_init()` connects MongoDB, ensures indexes, seeds the initial owner, and attaches the error reporter.
-6. `tcbot.modules.get_handlers()` imports active modules and registers their `__handlers__`.
+5. `tcbot.modules.get_handlers()` imports active modules and stops startup if an enabled module fails to import.
+6. `_post_init()` connects MongoDB, ensures indexes, seeds the initial owner, and attaches the error reporter.
 7. Long polling starts with `drop_pending_updates=True`.
 
 ## Troubleshooting
@@ -138,9 +138,17 @@ Set `BOT_TOKEN` in `config.env` or the host secret manager.
 
 Set `OWNER_ID` to your numeric Telegram user ID, not a username.
 
+### `MONGODB_URI is required but not set`
+
+Set `MONGODB_URI` in `config.env` or the host secret manager. Do not paste real connection strings into logs or documentation.
+
 ### MongoDB connection failure
 
 Check `MONGODB_URI`, network access, Atlas IP allowlists, and database credentials.
+
+### `Module import failed for: ...`
+
+Check the named module's import traceback, missing dependencies, and top-level syntax before redeploying. Enabled modules should fail loudly rather than being skipped silently.
 
 ### A command does nothing
 

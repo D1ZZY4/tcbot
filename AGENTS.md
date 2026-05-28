@@ -53,16 +53,16 @@ Core ownership rules:
 
 ## Development Commands
 
-Install dependencies:
+Install dependencies from the lockfile:
 
 ```bash
-uv sync
+uv sync --frozen
 ```
 
 Install test extras when needed:
 
 ```bash
-uv sync --extra test
+uv sync --extra test --frozen
 ```
 
 Run the bot locally:
@@ -113,7 +113,7 @@ Important non-secret/runtime variables include:
 - `DB_NAME` — MongoDB database name, default `tcbot`.
 - `COMMUNITY_NAME` — display name used in bot messages and logs.
 - `PREFIXES` — command prefix list, default `['/', '!', '.']`.
-- `PORT` — Flask keep-alive port, default `5000`.
+- `PORT` — Flask keep-alive port, default `5000`; invalid or out-of-range values fall back to `5000`.
 - `MAIN_GROUP`, `MAIN_CHANNEL`, `EXTEND_GROUP` — community chat IDs.
 - `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS` — log/proof/appeal destinations; values may be `chat_id` or `chat_id/thread_id`.
 - `APPEAL_DISCUSSION_TOPIC` — thread ID in `MAIN_GROUP` for appeal review cards.
@@ -142,7 +142,7 @@ Repository conventions:
 ## Architecture Rules
 
 - `tcbot/__main__.py` builds the PTB application, starts Flask keep-alive, registers the global rate limiter, loads module handlers, and starts long polling.
-- `tcbot/modules/__init__.py` discovers top-level module files and applies `MODULES_LOAD` / `MODULES_NO_LOAD` filters.
+- `tcbot/modules/__init__.py` discovers top-level module files, applies `MODULES_LOAD` / `MODULES_NO_LOAD` filters, and fails startup if an enabled module cannot be imported.
 - Handlers should use database helper modules instead of calling `mongos.col()` directly.
 - Multi-group actions should use `tcbot.utils.dispatch.fan_out()` to bound concurrent Telegram API calls.
 - Role checks should use the canonical role helpers in `tcbot.database.roles_db` and `tcbot.modules.helper.role_guard`.

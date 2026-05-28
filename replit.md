@@ -32,7 +32,7 @@ Use `config.env.example` as the complete template. Important variables:
 | `DB_NAME` | Optional database name; defaults to `tcbot`. |
 | `COMMUNITY_NAME` | Display name used in bot messages and logs. |
 | `PREFIXES` | Python-style prefix list, default `["/", "!", "."]`. |
-| `PORT` | Flask keep-alive port. Defaults to `5000` if unset/invalid; set this to the port Replit expects for your deployment. |
+| `PORT` | Flask keep-alive port. Defaults to `5000` if unset, invalid, or outside `1..65535`; set this to the port Replit expects for your deployment. |
 | `MAIN_GROUP` | Main community group or forum chat ID. |
 | `MAIN_CHANNEL` | Optional announcement channel chat ID. |
 | `EXTEND_GROUP` | Optional secondary/staff group chat ID. |
@@ -42,9 +42,9 @@ Use `config.env.example` as the complete template. Important variables:
 | `APPEALS` | Appeal record destination: `chat_id` or `chat_id/thread_id`. |
 | `APPEAL_LOG_HANDLE` | Public log handle shown to users in appeal instructions. |
 | `APPEAL_DISCUSSION_TOPIC` | Thread ID inside `MAIN_GROUP` where appeal review cards are posted. |
-| `PROOF_TIMEOUT_SECONDS` | Ban proof timeout; default `100`. |
-| `APPEAL_TIMEOUT_SECONDS` | Appeal conversation timeout; default `600`. |
-| `ALBUM_DEBOUNCE_SECONDS` | Album grouping window; default `2`. |
+| `PROOF_TIMEOUT_SECONDS` | Ban proof timeout; default `100`; values below `1` fall back to default. |
+| `APPEAL_TIMEOUT_SECONDS` | Appeal conversation timeout; default `600`; values below `1` fall back to default. |
+| `ALBUM_DEBOUNCE_SECONDS` | Album grouping window; default `2`; values below `1` fall back to default. |
 | `LOG_LEVEL` | Logging verbosity; default `INFO`. |
 | `MODULES_LOAD` | Optional comma-separated allowlist of module names. |
 | `MODULES_NO_LOAD` | Optional comma-separated denylist of module names. |
@@ -83,7 +83,7 @@ If your Replit workflow supports custom commands, set the run command to:
 python3 -m tcbot
 ```
 
-The bot starts polling Telegram after MongoDB connection, index creation, owner seeding, handler registration, and error reporter setup complete.
+The bot fails fast when `BOT_TOKEN`, `MONGODB_URI`, or `OWNER_ID` are missing. It starts polling Telegram after MongoDB connection, index creation, owner seeding, handler registration, and error reporter setup complete.
 
 ## Health Check
 
@@ -94,7 +94,7 @@ The bot starts polling Telegram after MongoDB connection, index creation, owner 
 - Endpoint: `GET /`
 - Response: `OK`
 
-If the hosting platform requires a specific public port, set `PORT` accordingly in the environment.
+If the hosting platform requires a specific public port, set `PORT` accordingly in the environment. Invalid or out-of-range values fall back to `5000` instead of crashing the health server.
 
 ## Tests on Replit
 
@@ -139,5 +139,5 @@ Before starting the deployment:
 
 - Do not commit `config.env` with real values.
 - Do not paste real tokens, MongoDB URIs, or private chat IDs into Markdown files.
-- Do not add dependencies to `requirements.txt`; this project uses `uv` and `pyproject.toml`.
+- Do not add dependencies to `requirements.txt`; this project uses `uv`, `pyproject.toml`, and `uv.lock`.
 - Keep deployment configuration in environment variables or the platform secret manager.

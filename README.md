@@ -86,13 +86,13 @@ Recommended run command:
 python3 -m tcbot
 ```
 
-The Flask keep-alive server binds to `0.0.0.0:${PORT}`. If `PORT` is unset or invalid, the application defaults to `5000`.
+The Flask keep-alive server binds to `0.0.0.0:${PORT}`. If `PORT` is unset, invalid, or outside `1..65535`, the application defaults to `5000`.
 
 See `replit.md` for Replit-specific setup notes.
 
 ## Configuration
 
-Configuration is loaded from environment variables in `tcbot/__init__.py`. For local development, `python-dotenv` reads `config.env` if it exists.
+Configuration is loaded from environment variables in `tcbot/__init__.py`. For local development, `python-dotenv` reads `config.env` if it exists. Startup fails fast when required runtime values such as `BOT_TOKEN`, `MONGODB_URI`, or `OWNER_ID` are missing.
 
 | Variable | Required | Description |
 |---|---:|---|
@@ -102,7 +102,7 @@ Configuration is loaded from environment variables in `tcbot/__init__.py`. For l
 | `DB_NAME` | No | MongoDB database name, default `tcbot`. |
 | `COMMUNITY_NAME` | No | Display name used in bot messages and logs. |
 | `PREFIXES` | No | Python-style list of command prefixes, default `["/", "!", "."]`. |
-| `PORT` | No | Flask keep-alive port, default `5000`. |
+| `PORT` | No | Flask keep-alive port, default `5000`; invalid or out-of-range values fall back to `5000`. |
 | `MAIN_GROUP` | Usually | Main community group/forum chat ID. |
 | `MAIN_CHANNEL` | No | Main announcement channel chat ID. |
 | `EXTEND_GROUP` | No | Optional secondary/staff group watched by selected handlers. |
@@ -112,9 +112,9 @@ Configuration is loaded from environment variables in `tcbot/__init__.py`. For l
 | `APPEALS` | Usually | Appeal record destination as `chat_id` or `chat_id/thread_id`. |
 | `APPEAL_LOG_HANDLE` | No | Public log handle shown in appeal instructions. |
 | `APPEAL_DISCUSSION_TOPIC` | Usually | Thread ID inside `MAIN_GROUP` for appeal review cards. |
-| `PROOF_TIMEOUT_SECONDS` | No | Ban proof conversation timeout, default `100`. |
-| `APPEAL_TIMEOUT_SECONDS` | No | Appeal DM conversation timeout, default `600`. |
-| `ALBUM_DEBOUNCE_SECONDS` | No | Album media grouping window, default `2`. |
+| `PROOF_TIMEOUT_SECONDS` | No | Ban proof conversation timeout, default `100`; values below `1` fall back to default. |
+| `APPEAL_TIMEOUT_SECONDS` | No | Appeal DM conversation timeout, default `600`; values below `1` fall back to default. |
+| `ALBUM_DEBOUNCE_SECONDS` | No | Album media grouping window, default `2`; values below `1` fall back to default. |
 | `LOG_LEVEL` | No | Logging level, default `INFO`. |
 | `MODULES_LOAD` | No | Comma-separated module allowlist. |
 | `MODULES_NO_LOAD` | No | Comma-separated module denylist. |
@@ -143,7 +143,7 @@ Key runtime pieces:
 
 - `tcbot/__init__.py` loads environment configuration into an immutable dataclass and exposes the `cfg` adapter.
 - `tcbot/__main__.py` starts logging, launches Flask keep-alive, builds the PTB application, registers handlers, connects MongoDB in `post_init`, and starts long polling.
-- `tcbot/modules/__init__.py` discovers top-level modules and collects their `__handlers__` lists.
+- `tcbot/modules/__init__.py` discovers top-level modules, collects their `__handlers__` lists, and fails startup if an enabled module cannot be imported.
 - `tcbot/database/mongos.py` owns the Motor client, database accessor, short ID generator, and index setup.
 - `tcbot/utils/dispatch.py` provides bounded concurrent fan-out for multi-group Telegram API calls.
 - `tcbot/utils/error_reporter.py` receives handler, asyncio, and logging errors for reporting to the configured error destination.
@@ -195,7 +195,7 @@ uv run ruff format .
 uv run ruff check --fix .
 ```
 
-Ruff targets Python 3.12 and line length 88. Project code should follow the detailed rules in `agents/CLAUDE.md`, `agents/RULES.md`, `agents/STYLE-CODE.md`, and `agents/STYLE-COMMENTS.md`.
+Ruff targets Python 3.12 and line length 88. GitHub Actions install dependencies through `uv sync --frozen` / `uv sync --extra test --frozen` so CI follows `pyproject.toml` and `uv.lock`. Project code should follow the detailed rules in `agents/CLAUDE.md`, `agents/RULES.md`, `agents/STYLE-CODE.md`, and `agents/STYLE-COMMENTS.md`.
 
 ## Documentation Index
 

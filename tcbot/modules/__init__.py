@@ -62,12 +62,17 @@ def get_handlers() -> list[Any]:
     handlers: list[Any] = []
     mods_found: dict[str, Any] = {}
 
+    failed: list[str] = []
     for mod_name in ALL_MODULES:
         try:
             mod = importlib.import_module(f"tcbot.modules.{mod_name}")
             mods_found[mod_name] = mod
         except Exception as exc:
-            log.error("Failed to import tcbot.modules.%s: %s", mod_name, exc)
+            failed.append(mod_name)
+            log.exception("Failed to import tcbot.modules.%s: %s", mod_name, exc)
+
+    if failed:
+        raise SystemExit(f"Module import failed for: {', '.join(failed)}")
 
     for mod_name in ALL_MODULES:
         mod = mods_found.get(mod_name)

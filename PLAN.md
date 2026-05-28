@@ -11,7 +11,7 @@ This document tracks how TCF Bot currently runs, what is considered stable, and 
 | Bot framework | `python-telegram-bot[job-queue] == 22.5`. |
 | Database | MongoDB through Motor, connected during PTB `post_init`. |
 | Health check | Flask app in `tcbot/alive.py`, `GET /` returns `OK` on `PORT` (default `5000`). |
-| Dependency management | `uv` with `uv.lock`. |
+| Dependency management | `uv` with `uv.lock`; CI installs with frozen lockfile by default. |
 | Formatting/linting | Ruff, configured in `pyproject.toml`. |
 | Tests | 134 collected tests across 14 `tests/test_*.py` files; designed to run offline. |
 | Deployment notes | Local `config.env`, Docker Compose, and Replit/hosted environment variables are documented. |
@@ -55,11 +55,13 @@ python3 -m tcbot
 
 `_post_init(app)` runs after the PTB application is built and before polling starts:
 
-1. `connect()` creates the Motor client and verifies MongoDB with `ping`.
-2. `ensure_indexes()` creates required MongoDB indexes in parallel.
-3. `ensure_initial_owner(cfg.initial_owner_id)` seeds the first owner when needed.
-4. `error_reporter.attach(...)` stores the bot and error destination for async reports.
-5. The asyncio loop exception handler is registered.
+1. Required env vars are parsed before startup; `BOT_TOKEN`, `MONGODB_URI`, and `OWNER_ID` must be present.
+2. Enabled modules are imported during handler collection; import failures stop startup instead of silently skipping handlers.
+3. `connect()` creates the Motor client and verifies MongoDB with `ping`.
+4. `ensure_indexes()` creates required MongoDB indexes in parallel.
+5. `ensure_initial_owner(cfg.initial_owner_id)` seeds the first owner when needed.
+6. `error_reporter.attach(...)` stores the bot and error destination for async reports.
+7. The asyncio loop exception handler is registered.
 
 ### Request Processing Pipeline
 
@@ -95,7 +97,7 @@ Telegram update
 
 ### Module Discovery
 
-`tcbot/modules/__init__.py` discovers top-level `*.py` files in `tcbot/modules/`, excludes `__init__.py`, applies the optional `MODULES_LOAD` allowlist and `MODULES_NO_LOAD` denylist, imports active modules, and collects their `__handlers__` lists.
+`tcbot/modules/__init__.py` discovers top-level `*.py` files in `tcbot/modules/`, excludes `__init__.py`, applies the optional `MODULES_LOAD` allowlist and `MODULES_NO_LOAD` denylist, imports active modules, and collects their `__handlers__` lists. If any enabled module fails to import, startup now exits with the failing module names so a partially registered bot is not deployed.
 
 ### Database Layer
 
@@ -227,15 +229,16 @@ No active P0 items are documented in this file.
 
 | Item | Area | Status | Notes |
 |---|---|---|---|
-| Verify full suite on every source change | Tests | Ongoing | Use `uv run --extra test pytest tests/ -v`. |
+| Verify full suite on every source change | Tests | Ongoing | Use `uv run --extra test pytest tests/ -v` when tests are in scope. |
 | Keep docs aligned with env/config changes | Documentation | Ongoing | Update `README.md`, `AGENTS.md`, `PLAN.md`, and `replit.md` when runtime setup changes. |
+| Keep CI dependency installs aligned with `uv.lock` | Automation | Ongoing | GitHub Actions should use `uv sync --frozen` instead of missing `requirements.txt` files. |
 
 ### P2 — Medium
 
 | Item | Area | Status | Notes |
 |---|---|---|---|
 | Expand edge-case workflow tests | Tests | Open | Appeal, ban proof album buffering, and timeout paths are good candidates. |
-| Review deployment-specific port assumptions | Deployment | Open | Runtime defaults to `PORT=5000`; hosts may require a different value. |
+| Review deployment-specific port assumptions | Deployment | Improved | Runtime validates `PORT` range and falls back to `5000`; hosts may still require an explicit value. |
 
 ### P3 — Low
 
