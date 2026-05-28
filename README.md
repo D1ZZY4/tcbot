@@ -172,7 +172,7 @@ tgbot/
 
 ## Tests
 
-The current collected inventory is 134 tests across 14 `tests/test_*.py` files. The suite is designed to run offline without a real Telegram token or MongoDB connection.
+The current collected inventory is 143 tests across 15 `tests/test_*.py` files. The suite is designed to run offline without a real Telegram token or MongoDB connection.
 
 Run the full suite:
 
@@ -218,7 +218,7 @@ Ruff targets Python 3.12 and line length 88. GitHub Actions install dependencies
 - Dependency management: `uv` and `uv.lock`.
 - Database: MongoDB/Motor with startup index creation.
 - Health check: Flask `GET /` endpoint on `PORT`.
-- Test inventory: 134 collected tests across 14 files.
+- Test inventory: 143 collected tests across 15 files.
 - Secrets policy: use environment variables; never commit real tokens, MongoDB URIs, or private chat IDs.
 
 ## License

@@ -268,3 +268,71 @@ def back_to_privacy_kb() -> InlineKeyboardMarkup:
             ]
         ]
     )
+
+
+# ─────────────────── Additional / Groups menus ──────────────────── #
+
+
+def additional_menu_kb() -> InlineKeyboardMarkup:
+    """Static links menu shown from the start menu — channels, groups, TRAVEL."""
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "Main Channel", url="https://t.me/TranssionCoreFederation"
+                ),
+                InlineKeyboardButton(
+                    "Discussion Group",
+                    url="https://t.me/TranssionCoreFederationGroup",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "Logs Channel", url="https://t.me/TranssionCoreFederationLogs"
+                ),
+                InlineKeyboardButton(
+                    "Exec Group", url="https://t.me/+A105pfnCvkhiZWM1"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "TRAVEL - Transsion Development (Community)",
+                    url="http://t.me/+S2C_ppFvHlAwMzNl",
+                ),
+            ],
+            [InlineKeyboardButton("« Back", callback_data="back_to_start")],
+        ]
+    )
+
+
+def groups_menu_kb(detailed: bool) -> InlineKeyboardMarkup:
+    """Detailed/Simple toggle keyboard for the start-menu groups list."""
+    toggle = InlineKeyboardButton(
+        "Simple" if detailed else "Details",
+        callback_data="menu_groups_simple" if detailed else "menu_groups_details",
+    )
+    back = InlineKeyboardButton("« Back", callback_data="back_to_start")
+    return InlineKeyboardMarkup([[toggle], [back]])
+
+
+# ─────────────────────────── Stats menus ────────────────────────── #
+
+
+def stats_main_kb() -> InlineKeyboardMarkup:
+    """Top-level /tcstats inline menu — staff/chats/bans drill-down."""
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("Staff Roster", callback_data="stats_admins")],
+            [InlineKeyboardButton("Connected Chats", callback_data="stats_chats:0")],
+            [InlineKeyboardButton("User Bans", callback_data="stats_bans:0")],
+        ]
+    )
+
+
+def stats_back_kb() -> InlineKeyboardMarkup:
+    """Single-button « Back to the stats main menu."""
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("« Back", callback_data="stats_main")],
+        ]
+    )

@@ -77,7 +77,7 @@ class TTLCache(Generic[T]):
 
 # 60-second per-user effective-role cache (str | None per user_id)
 # Populated by roles_db.get_effective_role; invalidated on every role write
-effective_role_cache: TTLCache[int | None] = TTLCache(ttl=60.0)
+effective_role_cache: TTLCache[str | None] = TTLCache(ttl=60.0)
 
 # 120-second per-chat connection cache (bool per chat_id)
 # Populated by groups_db.is_connected; invalidated on add/deactivate

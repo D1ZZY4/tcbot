@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import asyncio
 
-from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import CallbackQuery, Update
 from telegram.ext import CallbackQueryHandler, ContextTypes
 
 from tcbot import cfg
-from tcbot.modules.helper import decorators
+from tcbot.modules.helper import decorators, keyboards
 
 __module_name__ = None
 
@@ -27,36 +27,6 @@ __additional_msg__ = (
 )
 
 
-def _additional_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(
-                    "Main Channel", url="https://t.me/TranssionCoreFederation"
-                ),
-                InlineKeyboardButton(
-                    "Discussion Group", url="https://t.me/TranssionCoreFederationGroup"
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    "Logs Channel", url="https://t.me/TranssionCoreFederationLogs"
-                ),
-                InlineKeyboardButton(
-                    "Exec Group", url="https://t.me/+A105pfnCvkhiZWM1"
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    "TRAVEL - Transsion Development (Community)",
-                    url="http://t.me/+S2C_ppFvHlAwMzNl",
-                ),
-            ],
-            [InlineKeyboardButton("« Back", callback_data="back_to_start")],
-        ]
-    )
-
-
 # ──────────────────────── Callback Handler ──────────────────────── #
 
 
@@ -69,7 +39,7 @@ async def on_additional_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         q.edit_message_text(
             __additional_msg__,
             parse_mode="HTML",
-            reply_markup=_additional_kb(),
+            reply_markup=keyboards.additional_menu_kb(),
         ),
     )
 

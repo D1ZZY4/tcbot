@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import CallbackQuery, Update
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
@@ -97,15 +97,6 @@ async def on_back_to_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 
-def _groups_menu_kb(detailed: bool) -> InlineKeyboardMarkup:
-    toggle = InlineKeyboardButton(
-        "Simple" if detailed else "Details",
-        callback_data="menu_groups_simple" if detailed else "menu_groups_details",
-    )
-    back = InlineKeyboardButton("« Back", callback_data="back_to_start")
-    return InlineKeyboardMarkup([[toggle], [back]])
-
-
 async def _show_groups(q: CallbackQuery, detailed: bool) -> None:
     """Shared renderer for all group-menu callbacks."""
     _, groups = await asyncio.gather(q.answer(), db.groups_db.active_groups())
@@ -118,7 +109,7 @@ async def _show_groups(q: CallbackQuery, detailed: bool) -> None:
     await q.edit_message_text(
         _render(groups, detailed),
         parse_mode="HTML",
-        reply_markup=_groups_menu_kb(detailed),
+        reply_markup=keyboards.groups_menu_kb(detailed),
     )
 
 

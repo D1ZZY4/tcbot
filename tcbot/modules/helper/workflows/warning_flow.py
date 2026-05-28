@@ -14,8 +14,10 @@ from telegram.ext import ContextTypes
 
 from tcbot import cfg
 from tcbot import database as db
+from tcbot.database.roles_db import get_effective_role
 from tcbot.modules.helper import parse_logmsg
-from tcbot.modules.helper.formatter import code, mention
+from tcbot.modules.helper.formatter import mention
+from tcbot.modules.helper.role_guard import auto_demote
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
 
@@ -62,6 +64,23 @@ async def execute_warn(
     )
 
     if count >= WARN_LIMIT:
+        # * If the target somehow holds a federation role (e.g. promoted mid-warn-cycle),
+        # * remove the role before the auto-ban so they don't keep staff perms after exile.
+        target_role = await get_effective_role(target_id)
+        if target_role:
+            try:
+                await auto_demote(
+                    ctx.bot,
+                    target_id,
+                    target_name,
+                    target_role,
+                    admin_id,
+                    admin_fname,
+                    "ban",
+                )
+            except Exception as exc:
+                log.error("Auto-demote on warn limit failed: %s", exc)
+
         # * Ban + federation log run in parallel; clear warns only after ban succeeds.
         ban_result, log_result = await asyncio.gather(
             ctx.bot.ban_chat_member(chat_id, target_id),
@@ -114,7 +133,7 @@ async def execute_unwarn(
     count = await db.warns_db.warn_count(target_id, chat_id)
     if count == 0:
         await msg.reply_text(
-            f"{mention(target_id, target_name)} {code(str(target_id))} has no warnings in this group.",
+            f"{mention(target_id, target_name)} has no warnings in this group.",
             parse_mode="HTML",
         )
         return
@@ -162,7 +181,7 @@ async def execute_warnlist(
 
     if count == 0:
         await msg.reply_text(
-            f"{mention(target_id, target_name)} {code(str(target_id))} has no warnings in this group.",
+            f"{mention(target_id, target_name)} has no warnings in this group.",
             parse_mode="HTML",
         )
         return
@@ -186,7 +205,7 @@ async def execute_resetwarns(
     removed = await db.warns_db.clear_warns(target_id, chat_id)
     if removed == 0:
         await msg.reply_text(
-            f"{mention(target_id, target_name)} {code(str(target_id))} has no warnings to clear.",
+            f"{mention(target_id, target_name)} has no warnings to clear.",
             parse_mode="HTML",
         )
         return

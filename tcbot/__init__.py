@@ -9,12 +9,13 @@ from __future__ import annotations
 import ast
 import logging
 import os
-import sys
 from dataclasses import dataclass
 
 from dotenv import find_dotenv, load_dotenv
 
 load_dotenv(find_dotenv("config.env"))
+
+log = logging.getLogger(__name__)
 
 
 # ───────────────────────── Config Parsing ───────────────────────── #
@@ -43,11 +44,11 @@ def parse_port(port_str: str) -> int:
     try:
         port = int(port_str)
     except ValueError:
-        print(f"Invalid PORT '{port_str}', defaulting to 5000.", file=sys.stderr)
+        log.warning("Invalid PORT '%s', defaulting to 5000.", port_str)
         return 5000
     if 1 <= port <= 65_535:
         return port
-    print(f"PORT '{port_str}' is outside 1-65535, defaulting to 5000.", file=sys.stderr)
+    log.warning("PORT '%s' is outside 1-65535, defaulting to 5000.", port_str)
     return 5000
 
 
@@ -91,10 +92,10 @@ def _int_from_env(key: str, default: int, *, minimum: int | None = None) -> int:
     try:
         value = int(raw)
     except ValueError:
-        print(f"Invalid integer for {key}, using {default}.", file=sys.stderr)
+        log.warning("Invalid integer for %s, using %d.", key, default)
         return default
     if minimum is not None and value < minimum:
-        print(f"{key} must be >= {minimum}, using {default}.", file=sys.stderr)
+        log.warning("%s must be >= %d, using %d.", key, minimum, default)
         return default
     return value
 
@@ -111,7 +112,7 @@ def _parse_log_level(raw: str) -> int:
     level = getattr(logging, raw.strip().upper(), None)
     if isinstance(level, int):
         return level
-    print(f"Invalid LOG_LEVEL '{raw}', defaulting to INFO.", file=sys.stderr)
+    log.warning("Invalid LOG_LEVEL '%s', defaulting to INFO.", raw)
     return logging.INFO
 
 

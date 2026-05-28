@@ -6,18 +6,22 @@
 
 from __future__ import annotations
 
-import re
-
 from telegram.ext import CallbackQueryHandler, filters
 
 from tcbot.modules.helper.workflows.appeal_flow import (
     appeal,
-)
-from tcbot.modules.helper.workflows.appeal_flow import (
-    reviewer_locked_out as _reviewer_locked_out,
+    reviewer_locked_out,
+    starts_with_appeal_tag,
+    text_references_log_message,
 )
 
-reviewer_locked_out = _reviewer_locked_out
+# * Re-exported for backward-compatible test imports.
+__all__ = (
+    "appeal",
+    "reviewer_locked_out",
+    "starts_with_appeal_tag",
+    "text_references_log_message",
+)
 
 
 # ────────────────────── Module & Help Message ───────────────────── #
@@ -50,19 +54,6 @@ __help_text__ = (
     "If rejected → your ban remains in place.\n"
     "You will be notified by the bot either way."
 )
-
-
-# ──────────────────────────── Functions ─────────────────────────── #
-
-
-def starts_with_appeal_tag(text: str) -> bool:
-    """Return True when text (stripped) starts with #appeal (case-insensitive)."""
-    return text.strip().lower().startswith("#appeal")
-
-
-def text_references_log_message(text: str, msg_id: int) -> bool:
-    """Return True when text contains msg_id as a standalone integer token."""
-    return bool(re.search(rf"\b{msg_id}\b", text))
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

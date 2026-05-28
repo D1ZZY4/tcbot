@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from pymongo import ReturnDocument
+
 from tcbot.database.documents import BanDoc
 from tcbot.database.mongos import col, make_short_id
 from tcbot.utils.timedate_format import utc_now
@@ -105,7 +107,7 @@ async def update_ban(
             },
             "$inc": {"update_count": 1},
         },
-        return_document=True,
+        return_document=ReturnDocument.AFTER,
     )
 
 
@@ -118,9 +120,9 @@ async def set_log_message_id(ban_id: str, log_msg_id: int) -> None:
 
 
 async def deactivate_ban(ban_id: str) -> bool:
-    """Mark a ban as inactive (user is unbanned)."""
+    """Mark a ban as inactive (user is unbanned). Returns True if the ban exists."""
     r = await _bans().update_one({"ban_id": ban_id}, {"$set": {"is_active": False}})
-    return r.modified_count > 0
+    return r.matched_count > 0
 
 
 async def set_review(ban_id: str, msg_id: int) -> None:

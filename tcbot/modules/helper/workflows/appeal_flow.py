@@ -38,6 +38,19 @@ _LOCK_WINDOW = timedelta(hours=12)
 _ID_RE = re.compile(r"^/start\s+appeal_([a-z0-9]{10})$")
 
 
+# ─────────────────────── Appeal pure helpers ────────────────────── #
+
+
+def starts_with_appeal_tag(text: str) -> bool:
+    """Return True when text (stripped) starts with #appeal (case-insensitive)."""
+    return text.strip().lower().startswith("#appeal")
+
+
+def text_references_log_message(text: str, msg_id: int) -> bool:
+    """Return True when text contains msg_id as a standalone integer token."""
+    return bool(re.search(rf"\b{msg_id}\b", text))
+
+
 @dataclass(frozen=True)
 class BuildAppeal:
     """Configurable appeal ConversationHandler builder."""
@@ -184,7 +197,7 @@ class BuildAppeal:
         msg = update.effective_message
         text = (msg.text or "").strip()
 
-        if not text.lower().startswith("#appeal"):
+        if not starts_with_appeal_tag(text):
             return WAITING_APPEAL
 
         ban_id = ctx.user_data.get("appeal_ban_id")
@@ -194,7 +207,7 @@ class BuildAppeal:
             await msg.reply_text("Session expired - please start the appeal again.")
             return ConversationHandler.END
 
-        if log_msg_id and not re.search(rf"\b{log_msg_id}\b", text):
+        if log_msg_id and not text_references_log_message(text, log_msg_id):
             await msg.reply_text("Invalid log link. Please check and try again.")
             return WAITING_APPEAL
 

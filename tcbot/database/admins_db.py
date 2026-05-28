@@ -9,6 +9,8 @@ from __future__ import annotations
 import asyncio
 from typing import cast
 
+from pymongo.errors import DuplicateKeyError
+
 from tcbot.database.cache import (
     _OWNER_KEY,
     CACHE_MISS,
@@ -70,15 +72,26 @@ async def is_staff(user_id: int) -> bool:
 
 async def ensure_initial_owner(initial_id: int) -> None:
     """Create the first owner entry if the owners collection is empty."""
-    if await _owners().count_documents({}) == 0:
+    if await _owners().count_documents({}) > 0:
+        return
+    try:
         await _owners().insert_one({"user_id": initial_id})
         owner_id_cache.put(_OWNER_KEY, initial_id)
+    except DuplicateKeyError:
+        # * Another instance won the startup race; drop the cache so the next read refreshes.
+        owner_id_cache.invalidate(_OWNER_KEY)
 
 
 async def set_owner(user_id: int) -> None:
     """Replace the current owner with user_id; clears the role cache."""
-    await _owners().delete_many({})
-    await _owners().insert_one({"user_id": user_id})
+    # * Insert the new owner first so a mid-flight crash leaves the new owner present,
+    # * not zero owners. The unique index on user_id makes the upsert idempotent.
+    await _owners().update_one(
+        {"user_id": user_id},
+        {"$setOnInsert": {"user_id": user_id}},
+        upsert=True,
+    )
+    await _owners().delete_many({"user_id": {"$ne": user_id}})
     owner_id_cache.put(_OWNER_KEY, user_id)
     # * Clear the full role cache – the old owner's ID is unknown
     effective_role_cache.clear()

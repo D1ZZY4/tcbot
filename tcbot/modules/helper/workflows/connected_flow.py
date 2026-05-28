@@ -245,14 +245,14 @@ class BuildConnection:
             await q.answer("Only the group owner can decide.", show_alert=True)
             return
 
-        action = q.data  # * sync read before any await
+        # * Owner verified — ack the callback before any callback-query edits.
+        await q.answer()
+
+        action = q.data
 
         if action == self.join_callback:
             try:
-                _, bot_member = await asyncio.gather(
-                    q.answer(),
-                    ctx.bot.get_chat_member(chat.id, ctx.bot.id),
-                )
+                bot_member = await ctx.bot.get_chat_member(chat.id, ctx.bot.id)
             except Exception as exc:
                 log.debug("Join decision permission check failed: %s", exc)
                 await q.edit_message_text(
@@ -288,9 +288,9 @@ class BuildConnection:
 
         elif action == self.cancel_callback:
             await asyncio.gather(
-                q.answer(),
                 db.groups_db.remove_pending(chat.id),
                 q.edit_message_text(self.declined_message(), reply_markup=None),
+                return_exceptions=True,
             )
 
             await asyncio.gather(

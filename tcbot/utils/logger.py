@@ -38,9 +38,6 @@ class BotLogFormatter(logging.Formatter):
     }
     _COLORED_MSG = {logging.WARNING, logging.ERROR, logging.CRITICAL}
 
-    def __init__(self) -> None:
-        super().__init__()
-
     def _bracket(self, color: str, text: str) -> str:
         return f"{self._BR}[{self._R}{color}{text}{self._R}{self._BR}]{self._R}"
 

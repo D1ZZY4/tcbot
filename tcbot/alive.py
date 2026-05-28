@@ -1,6 +1,7 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
+
 """Keep-alive server - maintains bot uptime with Flask health check endpoint."""
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from flask import Flask
 
 from tcbot import cfg
 
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 
 # ───────────────────────── Flask App Setup ──────────────────────── #
@@ -49,4 +50,4 @@ def start_keepalive() -> None:
         daemon=True,
     )
     t.start()
-    logger.info("Keep-alive server started on 0.0.0.0:%d", cfg.port)
+    log.info("Keep-alive server started on 0.0.0.0:%d", cfg.port)

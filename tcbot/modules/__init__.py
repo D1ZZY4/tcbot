@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from .. import configs
+from tcbot import cfg
 
 log = logging.getLogger(__name__)
 
@@ -29,8 +29,8 @@ def _discover_modules() -> list[str]:
 
 def _filter_modules(modules: list[str]) -> list[str]:
     """Apply load / no-load filters from the central configuration."""
-    to_load = configs.modules_load
-    no_load = configs.modules_no_load
+    to_load = cfg.modules_load
+    no_load = cfg.modules_no_load
 
     if to_load:
         invalid = [m for m in to_load if m not in modules]

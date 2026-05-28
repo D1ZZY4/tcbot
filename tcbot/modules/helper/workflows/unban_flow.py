@@ -15,7 +15,7 @@ from telegram.ext import ContextTypes
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
-from tcbot.modules.helper.formatter import code, mention
+from tcbot.modules.helper.formatter import mention
 from tcbot.utils.dispatch import fan_out
 
 log = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ async def execute_unban(
     ban = await db.bans_db.get_active_ban(target_id)
     if not ban:
         await msg.reply_text(
-            f"{mention(target_id, target_fname)} {code(str(target_id))} has no active federation ban.",
+            f"{mention(target_id, target_fname)} has no active federation ban.",
             parse_mode="HTML",
         )
         return
@@ -71,7 +71,7 @@ async def execute_unban(
     await asyncio.gather(
         ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
         msg.reply_text(
-            f"{mention(target_id, target_fname)} {code(str(target_id))} has been unbanned - "
+            f"{mention(target_id, target_fname)} has been unbanned - "
             f"removed from {len(groups) - failed}/{len(groups)} groups.",
             parse_mode="HTML",
         ),

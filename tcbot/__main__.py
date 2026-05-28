@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import sys
 
 from telegram import Update
 from telegram.ext import (
@@ -112,8 +111,8 @@ def _make_asyncio_exc_handler(loop: asyncio.AbstractEventLoop):
         future = context.get("future") or context.get("task")
         detail = f"{msg} | Task: {future!r}" if future else msg
 
-        # * Always mirror to stderr so nothing is silently swallowed
-        print(f"[asyncio] {detail}" + (f" - {exc}" if exc else ""), file=sys.stderr)
+        # * Mirror to module logger so nothing is silently swallowed.
+        log.error("[asyncio] %s%s", detail, f" - {exc}" if exc else "")
 
         # * Schedule async report on the running loop
         try:
@@ -145,7 +144,9 @@ async def _post_init(app: Application) -> None:
     loop = asyncio.get_running_loop()
     loop.set_exception_handler(_make_asyncio_exc_handler(loop))
 
-    log.info("Bot initialised. Owner: %d | LOG_ERRORS: %d", cfg.initial_owner_id, lec)
+    log.info("Bot initialised.")
+    # * Internal IDs go to DEBUG so they do not appear in default INFO logs.
+    log.debug("Owner: %d | LOG_ERRORS: %d", cfg.initial_owner_id, lec)
 
 
 # ──────────────────────── Main Entry Point ──────────────────────── #

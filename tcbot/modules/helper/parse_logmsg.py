@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from tcbot import cfg
 from tcbot.database.roles_db import ROLE_LABEL as _ROLE_LABELS
-from tcbot.modules.helper.formatter import link, mention
+from tcbot.modules.helper.formatter import esc, link, mention
 from tcbot.utils.timedate_format import fmt_dt, utc_now
 
 # ──────────────────────────── Ban logs ──────────────────────────── #
@@ -33,7 +33,7 @@ def ban_log(
         f"User: {mention(target_id, target_fname)}\n"
         f"User ID: {target_id}\n"
         f"Ban ID: {ban_id}\n"
-        f"Reason: {reason}\n\n"
+        f"Reason: {esc(reason)}\n\n"
         f"Commit at: {dt}"
         f"{proof_part}"
     )
@@ -68,7 +68,7 @@ def ban_update_log(
         f"User: {mention(target_id, target_fname)}\n"
         f"User ID: {target_id}\n"
         f"Ban ID: {ban_id}\n"
-        f"Reason: {reason}\n\n"
+        f"Reason: {esc(reason)}\n\n"
         f"Commit at: {original_dt}\n"
         f"Update at: {update_str}"
         f"{prev_part}"
@@ -135,8 +135,8 @@ def mute_log(
         f"Admin: {mention(admin_id, admin_fname)}\n"
         f"User: {mention(target_id, target_fname)}\n"
         f"User ID: {target_id}\n"
-        f"Reason: {reason}\n"
-        f"Duration: {duration_str}\n\n"
+        f"Reason: {esc(reason)}\n"
+        f"Duration: {esc(duration_str)}\n\n"
         f"Date: {dt}"
     )
 
@@ -175,8 +175,8 @@ def kick_log(
         f"Admin: {mention(admin_id, admin_fname)}\n"
         f"User: {mention(target_id, target_fname)}\n"
         f"User ID: {target_id}\n"
-        f"Reason: {reason}\n"
-        f"Group: {chat_title} (<code>{chat_id}</code>)\n\n"
+        f"Reason: {esc(reason)}\n"
+        f"Group: {esc(chat_title)} (<code>{chat_id}</code>)\n\n"
         f"Date: {dt}"
     )
 
@@ -201,9 +201,9 @@ def warn_log(
         f"Admin: {mention(admin_id, admin_fname)}\n"
         f"User: {mention(target_id, target_fname)}\n"
         f"User ID: {target_id}\n"
-        f"Reason: {reason}\n"
+        f"Reason: {esc(reason)}\n"
         f"Warnings: {count}/{warn_limit}\n"
-        f"Group: {chat_title} (<code>{chat_id}</code>)\n\n"
+        f"Group: {esc(chat_title)} (<code>{chat_id}</code>)\n\n"
         f"Date: {dt}"
     )
 
@@ -228,7 +228,7 @@ def unwarn_log(
         f"User: {mention(target_id, target_fname)}\n"
         f"User ID: {target_id}\n"
         f"Warnings now: {new_count}/{warn_limit}\n"
-        f"Group: {chat_title} (<code>{chat_id}</code>)\n\n"
+        f"Group: {esc(chat_title)} (<code>{chat_id}</code>)\n\n"
         f"Date: {dt}"
     )
 
@@ -245,7 +245,7 @@ def unban_log(
     reason: str | None = None,
 ) -> str:
     dt = fmt_dt(utc_now())
-    reason_part = f"\nUnban Reason: {reason}" if reason else ""
+    reason_part = f"\nUnban Reason: {esc(reason)}" if reason else ""
     return (
         f"{cfg.community_name} Unban\n\n"
         f"Admin: {mention(admin_id, admin_fname)}\n"
@@ -483,9 +483,11 @@ def group_connected_log(
 ) -> str:
     dt = fmt_dt(utc_now())
     if chat_username:
-        group_display = f'<a href="https://t.me/{chat_username}">{chat_title}</a>'
+        group_display = (
+            f'<a href="https://t.me/{esc(chat_username)}">{esc(chat_title)}</a>'
+        )
     else:
-        group_display = chat_title
+        group_display = esc(chat_title)
     return (
         f"New {cfg.community_name} Connected Group\n\n"
         f"Group: {group_display}\n"
@@ -505,7 +507,7 @@ def group_connection_rejected_log(
     dt = fmt_dt(utc_now())
     return (
         f"{cfg.community_name} Connection Rejected\n\n"
-        f"Group: {chat_title} (ID: {chat_id})\n\n"
+        f"Group: {esc(chat_title)} (ID: {chat_id})\n\n"
         f"Rejected by Owner: {mention(owner_id, owner_fname)} (ID: {owner_id})\n\n"
         f"Date: {dt}"
     )
@@ -520,7 +522,7 @@ def group_disconnected_log(
     dt = fmt_dt(utc_now())
     return (
         f"{cfg.community_name} Group Disconnected\n\n"
-        f"Group: {chat_title}\n"
+        f"Group: {esc(chat_title)}\n"
         f"ID: {chat_id}\n\n"
         f"Removed by: {mention(actor_id, actor_fname)}\n"
         f"ID: {actor_id}\n\n"
@@ -535,7 +537,7 @@ def group_bot_removed_log(
     dt = fmt_dt(utc_now())
     return (
         f"{cfg.community_name} Group Removed Bot\n\n"
-        f"Group: {chat_title}\n"
+        f"Group: {esc(chat_title)}\n"
         f"ID: {chat_id}\n\n"
         f"Date: {dt}"
     )
@@ -553,7 +555,7 @@ def broadcast_log(
     return (
         f"{cfg.community_name} Broadcast Sent\n\n"
         f"Admin: {mention(admin_id, admin_fname)}\n"
-        f"Message: {preview}\n\n"
+        f"Message: {esc(preview)}\n\n"
         f"Groups reached: {success}\n"
         f"Failed groups: {failed}\n\n"
         f"Date: {dt}"

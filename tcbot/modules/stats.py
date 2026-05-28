@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import asyncio
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Update
 from telegram.error import BadRequest
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import decorators
+from tcbot.modules.helper import decorators, keyboards
 from tcbot.modules.helper.formatter import esc, mention
 from tcbot.modules.helper.workflows.stats_chats_flow import (
     on_stats_chat_item,
@@ -59,24 +59,6 @@ __help_text__ = (
 # ──────────────────────── Helper Functions ──────────────────────── #
 
 
-def _stats_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("Staff Roster", callback_data="stats_admins")],
-            [InlineKeyboardButton("Connected Chats", callback_data="stats_chats:0")],
-            [InlineKeyboardButton("User Bans", callback_data="stats_bans:0")],
-        ]
-    )
-
-
-def _simple_back_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("Back", callback_data="stats_main")],
-        ]
-    )
-
-
 async def _stats_text() -> str:
     (owner_id, admin_cnt, dev_list, tester_list, bans, groups) = await asyncio.gather(
         db.admins_db.get_owner_id(),
@@ -108,7 +90,7 @@ async def _stats_text() -> str:
 async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     text = await _stats_text()
     await update.effective_message.reply_text(
-        text, parse_mode="HTML", reply_markup=_stats_kb()
+        text, parse_mode="HTML", reply_markup=keyboards.stats_main_kb()
     )
 
 
@@ -121,7 +103,9 @@ async def on_stats_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     _, text = await asyncio.gather(q.answer(), _stats_text())
     try:
-        await q.edit_message_text(text, parse_mode="HTML", reply_markup=_stats_kb())
+        await q.edit_message_text(
+            text, parse_mode="HTML", reply_markup=keyboards.stats_main_kb()
+        )
     except BadRequest as e:
         if "not modified" not in str(e).lower():
             raise
@@ -200,7 +184,7 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     await q.edit_message_text(
         "\n".join(lines),
         parse_mode="HTML",
-        reply_markup=_simple_back_kb(),
+        reply_markup=keyboards.stats_back_kb(),
     )
 
 
@@ -220,5 +204,10 @@ __handlers__ = [
     CallbackQueryHandler(on_stats_search_item, pattern=r"^stats_search_item:\d+$"),
     CallbackQueryHandler(on_stats_search_back, pattern=r"^stats_search_back$"),
     CallbackQueryHandler(on_stats_search_cancel, pattern=r"^stats_search_cancel$"),
-    MessageHandler(filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, on_bans_search_input),
+    # * Scoped to private chat: search input is only meaningful in PM where the user
+    # * opened the bans panel. Avoids absorbing every non-command text in groups.
+    MessageHandler(
+        filters.ChatType.PRIVATE & filters.TEXT & ~ALL_PREFIXES_CMD_FILTER,
+        on_bans_search_input,
+    ),
 ]

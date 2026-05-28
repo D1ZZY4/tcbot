@@ -78,7 +78,9 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if has_reply and msg.reply_to_message:
             await msg.reply_to_message.forward(grp["chat_id"])
         elif broadcast_text:
-            await ctx.bot.send_message(grp["chat_id"], broadcast_text)
+            await ctx.bot.send_message(
+                grp["chat_id"], broadcast_text, parse_mode="HTML"
+            )
 
     results = await fan_out([_send_one(grp) for grp in groups])
     success = sum(1 for r in results if not isinstance(r, BaseException))
@@ -88,11 +90,12 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if isinstance(r, BaseException):
             log.warning("Broadcast failed for %d: %s", grp["chat_id"], r)
 
-    preview = (
-        broadcast_text or (msg.reply_to_message.text or "media")
-        if msg.reply_to_message
-        else ""
-    )
+    if broadcast_text:
+        preview = broadcast_text
+    elif msg.reply_to_message:
+        preview = msg.reply_to_message.text or "media"
+    else:
+        preview = ""
     lc, lt = cfg.logs
 
     # * send log and update status message in parallel

@@ -43,15 +43,12 @@ Use `esc()`, `code()`, or `mention()` for any user-provided value in HTML messag
 
 ## `extraction.py`
 
-Target and identity resolution for moderation commands.
+Target resolution for moderation commands.
 
 | Export | Purpose |
 |---|---|
 | `ResolvedTarget` | Dataclass-like resolved target with ID, first name, optional username, and raw object. |
-| `UserIdentity` | Display identity object with `name_with_username`. |
-| `get_reason(context, update)` | Extracts reason text while accounting for reply-based commands. |
 | `extract_target(update, args, bot=None)` | Resolves numeric IDs, usernames, replies, and text mentions. |
-| `resolve_identity(ctx, user_id)` | Resolves display name and username through Telegram or member cache fallback. |
 
 Resolution order for `extract_target()` starts with explicit command arguments, then falls back to reply/user mention data.
 
@@ -90,11 +87,8 @@ Ban and kick flows must call `auto_demote()` before enforcing the action when th
 | Function | Purpose |
 |---|---|
 | `chat_id_to_link_id(chat_id)` | Converts Telegram supergroup IDs to `t.me/c` path IDs. |
-| `message_link(chat_id, message_id, thread_id=None)` | Builds a private-channel/group message link. |
-| `topic_link(chat_id, message_id, thread_id)` | Builds a message link to a specific topic thread. |
+| `message_link(chat_id, message_id, thread_id=None)` | Builds a private-channel/group message link; pass `thread_id` for topic threads. |
 | `appeal_deep_link(bot_username, ban_id)` | Builds `https://t.me/<bot>?start=appeal_<ban_id>`. |
-| `user_link(user_id, name)` | Builds an HTML mention. |
-| `safe_first_name(obj)` | Extracts a display name from Telegram-like objects. |
 
 ## `parse_logmsg.py`
 

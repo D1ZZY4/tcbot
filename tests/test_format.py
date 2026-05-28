@@ -7,14 +7,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from types import SimpleNamespace
 
 from tcbot.modules.helper.parse_link import (
     chat_id_to_link_id,
     message_link,
-    safe_first_name,
-    topic_link,
-    user_link,
 )
 from tcbot.utils.timedate_format import fmt_dt, to_utc, utc_now, utc_now_str
 
@@ -68,7 +64,7 @@ def test_chat_id_to_link_id_with_plain_channel() -> None:
     assert chat_id_to_link_id(-1009999999999) == "9999999999"
 
 
-# ──────────────────── message_link / topic_link ─────────────────── #
+# ─────────────────────────── message_link ───────────────────────── #
 
 
 def test_message_link_without_thread() -> None:
@@ -79,43 +75,3 @@ def test_message_link_without_thread() -> None:
 def test_message_link_with_thread() -> None:
     url = message_link(-1001111111111, 42, thread_id=7)
     assert url == "https://t.me/c/1111111111/42?thread=7"
-
-
-def test_topic_link_delegates_to_message_link() -> None:
-    assert topic_link(-1001111111111, 42, 7) == "https://t.me/c/1111111111/42?thread=7"
-
-
-# ──────────────────────────── user_link ─────────────────────────── #
-
-
-def test_user_link_escapes_html_in_name() -> None:
-    result = user_link(123, "<b>Evil</b>")
-    assert '<a href="tg://user?id=123">' in result
-    assert "&lt;b&gt;Evil&lt;/b&gt;" in result
-    assert "<b>Evil</b>" not in result
-
-
-def test_user_link_falls_back_to_id_when_name_blank() -> None:
-    assert "456" in user_link(456, "")
-
-
-# ───────────────────────── safe_first_name ──────────────────────── #
-
-
-def test_safe_first_name_prefers_first_name() -> None:
-    obj = SimpleNamespace(first_name="Andi", title="Group", id=99)
-    assert safe_first_name(obj) == "Andi"
-
-
-def test_safe_first_name_falls_back_to_title() -> None:
-    obj = SimpleNamespace(first_name=None, title="Group", id=99)
-    assert safe_first_name(obj) == "Group"
-
-
-def test_safe_first_name_falls_back_to_id() -> None:
-    obj = SimpleNamespace(first_name=None, title=None, id=99)
-    assert safe_first_name(obj) == "99"
-
-
-def test_safe_first_name_returns_unknown_for_bare_object() -> None:
-    assert safe_first_name(SimpleNamespace()) == "Unknown"

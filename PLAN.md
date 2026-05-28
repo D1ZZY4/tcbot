@@ -13,7 +13,7 @@ This document tracks how TCF Bot currently runs, what is considered stable, and 
 | Health check | Flask app in `tcbot/alive.py`, `GET /` returns `OK` on `PORT` (default `5000`). |
 | Dependency management | `uv` with `uv.lock`; CI installs with frozen lockfile by default. |
 | Formatting/linting | Ruff, configured in `pyproject.toml`. |
-| Tests | 134 collected tests across 14 `tests/test_*.py` files; designed to run offline. |
+| Tests | 143 collected tests across 15 `tests/test_*.py` files; designed to run offline. |
 | Deployment notes | Local `config.env`, Docker Compose, and Replit/hosted environment variables are documented. |
 
 ## Runtime Flow
@@ -271,4 +271,4 @@ Validation used for this baseline:
 uv run --extra test pytest --collect-only -q
 ```
 
-Result: 134 tests collected across 14 test files.
+Result: 143 tests collected across 15 test files.
