@@ -1,463 +1,159 @@
 ---
-created: 2026-05-25
-last-modified: 2026-05-25
 name: project-policy
-description: >
-  Enforces strict project conventions and rules for the TCBot (TCF Bot) Python Telegram bot project.
-  ALWAYS use this skill before writing, editing, or generating any code for TCBot — even for small
-  changes, quick fixes, refactors, or adding new features. Triggers on any code generation, file
-  creation, module addition, handler registration, database interaction, import changes, or
-  helper/workflow additions within the TCBot codebase. If the user mentions TCBot, tgbot_tcf,
-  tcbot/, modules/, database/, utils/, handlers, flows, or anything related to the project structure,
-  consult this skill immediately and before producing any output.
-user-invocable: false
+description: Enforces project-local conventions for the TCF Bot Python Telegram bot. Use before writing, editing, or generating code in tcbot/, including handlers, database helpers, workflows, imports, utilities, tests, and configuration-related changes.
 ---
 
-# TCBot Project Policy
-
-Read and apply every rule below before generating or modifying any code.
-When in doubt, **defer to `agents/CLAUDE.md`** — it is the canonical source of truth.
-
----
-
-## Project Overview
-
-```
-(root)/
-├── agents/           # ⚠️ Source of truth — read before coding
-│   ├── CLAUDE.md     # Primary AI agent instructions (read first)
-│   ├── RULES.md      # Hard constraints
-│   ├── STYLE-CODE.md # Code style
-│   ├── STYLE-COMMENTS.md  # Comment/docstring conventions
-│   ├── WORKFLOW.md   # Branching, commits, deployment
-│   └── REPLIT.md     # AI agent instructions for Replit environment
-├── docs/             # Architecture & module documentation
-├── tests/            # pytest suite (134 tests, all offline)
-└── tcbot/            # Main bot package
-    ├── __init__.py   # Configs dataclass + cfg singleton
-    ├── __main__.py   # Startup, handler registration, polling
-    ├── alive.py      # Flask keepalive (port 8080)
-    ├── database/     # MongoDB layer — all writes go here
-    ├── modules/      # Command handlers (dynamic discovery)
-    │   └── helper/
-    │       └── workflows/  # ConversationHandler flows (*_flow.py only)
-    └── utils/        # Shared utilities
-```
-
-**Stack**: Python 3.12 · python-telegram-bot 22.5 · MongoDB (Motor async) · Flask  
-**Entry point**: `python3 -m tcbot`  
-**Tests**: `python3 -m pytest tests/ -v` — must all pass before and after any change
-
----
-
-## 1. Code Style
-
-### Imports (strict order)
-```python
-from __future__ import annotations   # ← ALWAYS first non-comment line
-
-import logging                        # stdlib
-
-from telegram import Update           # third-party
-from telegram.ext import ContextTypes
-
-from tcbot.modules.helper import decorators   # internal (tcbot.*)
-from tcbot.utils.prefixes import build_prefixed_filters
-```
-One blank line between groups. Never wildcard imports. Never inline imports inside function bodies.
-
-### Naming
-| Construct | Convention | Example |
-|---|---|---|
-| Module-level private | `_snake_case` | `_render()`, `_kb()` |
-| Module-level constant | `_UPPER_CASE` | `_PAGE_SIZE` |
-| Class | `PascalCase` | `BanEnforcer` |
-| Async handler | `cmd_*` or `on_*` | `cmd_ban_start`, `on_join_decision` |
-| ConversationHandler state | `WAITING_*` | `WAITING_PROOF`, `WAITING_REASON` |
-
-### Alignment
-Align grouped assignments of 3+ variables:
-```python
-uid     = ban["banned_user_id"]
-aid     = ban.get("admin_user_id", 0)
-ban_id  = ban["ban_id"]
-```
-
-### Formatting
-- Indentation: 4 spaces. No tabs.
-- Max line length: 100 characters.
-- Two blank lines between top-level definitions.
-
-### Types
-- `list[str]`, `dict[str, int]`, `int | None` — never `List`, `Optional`, `Union`
-- `from __future__ import annotations` enables forward references everywhere
-
----
-
-## 2. Comments & Section Dividers
-
-Full reference: `agents/STYLE-COMMENTS.md`
-
-### Better Comments — annotation prefixes
-Works in both inline `#` comments and inside docstrings:
-
-```python
-# ! WARNING: dangerous behavior / # ! CRITICAL: must-not-ignore issue
-# ? question or uncertainty to revisit
-# TODO: deferred task (enough context to act on)
-# * highlight, info, general description
-# // dead code — must be removed, not disabled temporarily
-```
-
-Inside docstrings (no `#` prefix):
-```python
-"""
-Function description.
-
-! Must be called with mod_only permission.
-? Consider adding a dry-run mode.
-TODO: batch with asyncio.gather() once stable.
-* Returns (banned_count, error_count).
-"""
-```
-
-### Section dividers (Comment Divider extension — never hand-type)
-```python
-# ────────────────────────────────── H1 ───────────────────────────────── #  ← module-level
-# ────────────────────────── H2 ────────────────────────── #                 ← major block
-# ~~~~~~~~~~~~~~~~~~~ H3 ~~~~~~~~~~~~~~~~~~~~ #                              ← sub-block
-# ~~~~~~~~~~~ H4 ~~~~~~~~~~~ #                                               ← minor grouping
-```
-Default to **H1** for all module-level sections.
-
----
-
-## 3. Module File Structure
-
-Every `tcbot/modules/*.py` must follow this template exactly:
-
-```python
-# © Copyright 2024 - 2026 Transsion Core
-# © Copyright 2024 - 2026 Dizzy
-# © Copyright 2026 Aveum Apps
-
-"""One-line description of what this module does."""
-
-from __future__ import annotations
-
-import logging
-
-from telegram import Update
-from telegram.ext import ContextTypes, MessageHandler
-
-from tcbot.modules.helper import decorators
-from tcbot.utils.prefixes import build_prefixed_filters
-
-log = logging.getLogger(__name__)
-
-__module_name__ = "MyModule"       # None to hide from /help
-__help_text__   = "<b>Commands</b>\n..."
-
-
-# ──────────────────────────── Command Name ──────────────────────────── #
-
-@decorators.ratelimiter(limit=5, period=60)
-@decorators.mod_only
-@decorators.log_execution
-async def cmd_example(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    ...
-
-
-# ─────────────────────────────── Handlers ───────────────────────────── #
-
-_EXAMPLE_CMDS = build_prefixed_filters("tcexample")
-
-__handlers__ = [MessageHandler(_EXAMPLE_CMDS, cmd_example)]
-```
-
-**Module checklist (run before outputting any module file):**
-- [ ] `from __future__ import annotations` as first non-comment line
-- [ ] Copyright header (3 lines)
-- [ ] One-line module docstring
-- [ ] `__module_name__` and `__help_text__` set
-- [ ] All handlers carry the 3-layer decorator stack
-- [ ] `__handlers__` at the bottom
-- [ ] No inline imports, no raw `col()` calls
-
----
-
-## 4. Decorator Stack
-
-Three layers, fixed order — outermost to innermost:
-
-```python
-@decorators.ratelimiter(limit=5, period=60)   # 1. outermost — rate checked first
-@decorators.mod_only                          # 2. auth guard — checked second
-@decorators.log_execution                     # 3. innermost — logs after auth passes
-async def cmd_ban_start(...):
-```
-
-**Standard rate limits:**
-| Category | limit | period |
-|---|---|---|
-| Destructive (ban, kick, unban, broadcast) | 3–5 | 60 |
-| Moderation (mute, warn, cleanup) | 3–5 | 60 |
-| Read commands (stats, groups, help) | 8 | 30 |
-| Inline callbacks | 15 | 30 |
-| Emergency-only (leaveall) | 1 | 300 |
-
-Message-event handlers (`on_new_member`, etc.) are **exempt** from rate limiters.
-
----
-
-## 5. Role System
-
-**Always use canonical helpers — never chain manual checks:**
-
-```python
-from tcbot.database.roles_db import get_effective_role, can_act_on, ROLE_LABEL
-
-role = await get_effective_role(user_id)
-# → "founder" | "admin" | "developer" | "tester" | None
-
-ok = await can_act_on(executor_id, target_id)
-```
-
-**Never** call `is_owner()` + `is_admin()` + `get_role()` manually.
-
-**Auto-demote before ban/kick:**
-```python
-from tcbot.modules.helper.role_guard import auto_demote
-
-target_role = await get_effective_role(target_id)
-if target_role:
-    await auto_demote(ctx.bot, target_id, target_fname, target_role,
-                      executor_id, executor_fname, "ban")
-# Then proceed with ban/kick
-```
-
-**Role guard for simultaneous executor + target check:**
-```python
-from tcbot.modules.helper.role_guard import resolve_and_check
-
-executor_role, target_role = await resolve_and_check(
-    msg, executor_id, target_id, min_role="developer"
-)
-if executor_role is None:
-    return  # already replied with error
-```
-
----
-
-## 6. Database Layer
-
-- All write operations (insert, update, delete) live in `tcbot/database/` — **never in module handlers**
-- Never call `col()` directly from module code — use per-collection helper functions
-- Global import pattern: `from tcbot import database as db` → `db.bans_db.get_ban(ban_id)`
-- All helpers must be `async` with full type annotations
-- Naming: `get_<entity>`, `get_all_<entities>`, `add_<entity>`, `update_<entity>`, `delete_<entity>`
-- Index-sensitive queries must match indexes in `mongos.ensure_indexes()`
-- When adding a new collection: add indexes to `ensure_indexes()` immediately
-- Use `database/documents.py` for TypedDict document shapes and Literal type aliases
-- Use `database/types.py` for NewType domain primitives: `UserId`, `GroupId`, `BanId`
-- Use `database/cache.py` for in-memory TTL caches
-
----
-
-## 7. Conversation Flows
-
-**No `*_conv.py` files** — all ConversationHandlers live in `*_flow.py` files in `tcbot/modules/helper/workflows/`.
-
-| Action | Use |
-|---|---|
-| Kick / Mute / Warn | `reason_flow.build_modaction_conv()` — never duplicate state handlers |
-| Ban | `ban_flow.ban_conversation(entry_fn)` — album-aware proof flow |
-| Appeal | `appeal_flow.build_handler()` — standalone deep-link flow |
-| New flow | Model after `appeal_flow.py` |
-
-States are always `WAITING_*` module-level constants. Every flow must have a `cancel` fallback. Timeouts must use `cfg.proof_timeout` or `cfg.appeal_timeout` — never hardcoded integers.
-
----
-
-## 8. HTML Formatting
-
-Always `parse_mode="HTML"`. Never Markdown. Canonical helpers from `tcbot/modules/helper/formatter.py`:
-
-```python
-from tcbot.modules.helper.formatter import esc, code, mention, bold
-
-esc(user_input)        # escape &, <, > — ALWAYS on user-provided strings
-code("123456789")      # <code>123456789</code>
-mention(uid, fname)    # <a href="tg://user?id=uid">fname</a>
-bold("text")           # <b>text</b>
-```
-
-Multi-line strings use parenthesized concatenation:
-```python
-text = (
-    "<b>Ban Information</b>\n\n"
-    f"User: {mention(uid, fname)}\n"
-    f"Ban ID: {code(ban_id)}"
-)
-```
-
-Do not use `mention(x) + code(x)` — pick one per context.
-
----
-
-## 9. Async Patterns
-
-```python
-# Good — parallel
-executor_role, (target_id, fname) = await asyncio.gather(
-    get_effective_role(admin.id),
-    extraction.extract_target(update, args, ctx.bot),
-)
-```
-
-Fan-out to multiple groups must go through `fan_out()`:
-```python
-from tcbot.utils.dispatch import fan_out
-
-groups  = await db.groups_db.active_groups()
-results = await fan_out([
-    ctx.bot.ban_chat_member(g["chat_id"], target_id)
-    for g in groups
-])
-errors = sum(1 for r in results if isinstance(r, BaseException))
-```
-
-`fan_out()` caps concurrency at 10, never raises, returns results in order.
-
----
-
-## 10. Telegram API Rules
-
-- Always `await q.answer()` before any further action in a `CallbackQueryHandler`
-- Wrap every `bot.send_message` / `bot.ban_chat_member` in try/except when iterating over groups
-- Never store `Update` or `Message` objects beyond the handler call lifetime
-- Never use `q._bot` — use `ctx.bot`
-
----
-
-## 11. Bot Persona Pattern
-
-Required for every command that targets a user:
-
-```python
-# 1. Bot self-check
-if target_id == ctx.bot.id:
-    await msg.reply_text("That's me — [context]. 😄", parse_mode="HTML")
-    return
-
-# 2. Role check
-target_role = await get_effective_role(target_id)
-if target_role == "founder":
-    fname = await db.users_db.get_first_name(target_id, "the Founder")
-    await msg.reply_text(
-        f"That's {mention(target_id, fname)}, our Founder — [context]. 👑",
-        parse_mode="HTML",
-    )
-    return
-if target_role in ("admin", "developer", "tester"):
-    label = ROLE_LABEL.get(target_role, target_role.capitalize())
-    fname = await db.users_db.get_first_name(target_id, str(target_id))
-    await msg.reply_text(
-        f"That's a {cfg.community_name} {label} — [context].",
-        parse_mode="HTML",
-    )
-    return
-```
-
-Tone: friendly-formal. 1–3 emojis per message. Short and direct. No filler phrases.
-
----
-
-## 12. Datetime
-
-Never use `datetime.utcnow()` or `datetime.now(timezone.utc)` anywhere. Always import from `tcbot.utils.timedate_format`:
-
-| Function | Use when |
-|---|---|
-| `utc_now()` | Storing timestamps in DB, elapsed-time checks |
-| `to_utc(dt)` | Normalizing before subtracting datetimes |
-| `fmt_dt(dt)` | Displaying any datetime to users |
-| `utc_now_str()` | One-line formatted current time |
-
----
-
-## 13. Secret & Credential Safety
-
-Before outputting any code, scan for:
-
-| Pattern | Action |
-|---|---|
-| Bot tokens (`\d+:[A-Za-z0-9_-]{35,}`) | BLOCK — replace with `os.getenv("BOT_TOKEN")` |
-| MongoDB URIs (`mongodb://`, `mongodb+srv://`) | BLOCK — replace with `os.getenv("MONGO_URI")` |
-| Any API key, webhook secret, password | BLOCK — replace with env var reference |
-
-If detected: show `⚠️ SECRET DETECTED — replaced with environment variable reference.`  
-On Replit: secrets go in Replit Secrets panel. `config.env` is for non-sensitive config only and is gitignored.
-
----
-
-## 14. File Creation Policy
-
-Before creating any new file:
-- Can this logic fit in an **existing module** that owns this feature area?
-- Can this be a helper function added to an existing file in `tcbot/modules/helper/`?
-
-**Allowed:** New `tcbot/modules/<name>.py` for a genuinely new command group.  
-**Allowed:** New `tcbot/modules/helper/workflows/<name>_flow.py` for a new conversation flow.  
-**Allowed:** New `tcbot/database/<name>_db.py` for a new MongoDB collection.  
-**Forbidden:** `*_conv.py` files — flows belong in `*_flow.py`.  
-**Forbidden:** Keyboard functions anywhere except `tcbot/modules/helper/keyboards.py`.  
-**Forbidden:** Duplicating logic that already exists in another module — refactor instead.  
-**Forbidden:** Adding packages to `requirements.txt` — use `uv add <package>` → `pyproject.toml`.
-
----
-
-## 15. Testing
-
-- All 134 tests run offline — no bot token or MongoDB connection required
-- Run `python3 -m pytest tests/ -v` before **and** after every change
-- New DB functions → test in `tests/test_<entity>_db.py`
-- New decorators/helpers → test alongside existing `tests/test_decorators.py` etc.
-- Use `tests/conftest.py` for shared fixtures — do not duplicate setup
-- Tests must be pure — mock external dependencies (DB, Telegram API)
-
----
-
-## 16. General Rules
-
-- **No dead code** — unused functions, imports, and variables must be removed
-- **No duplicate logic** — if a pattern appears in two modules, extract to a shared helper
-- **No silent fallbacks** — always log at minimum `log.debug()`, never bare `except: pass`
-- **No `print()`** — use `log = logging.getLogger(__name__)` only
-- **Backward compatibility** — every change must be backward-compatible with existing MongoDB data. Never rename/delete collection fields without a migration plan
-- **Minimal diff** — when editing, change only what's necessary. Don't reformat unrelated lines
-- **All bot responses in English** with `parse_mode="HTML"`
-
----
-
-## Final Checklist — Before Outputting Any Code
-
-- [ ] `from __future__ import annotations` present as first non-comment line?
-- [ ] Copyright header (3 lines)?
-- [ ] Imports in correct order and grouped?
-- [ ] All non-obvious functions have single-line docstrings?
-- [ ] Better Comments prefixes used correctly (`# !`, `# ?`, `# TODO:`, `# *`, `# //`)?
-- [ ] Section dividers are H1/H2/H3/H4 format (not hand-typed)?
-- [ ] `snake_case` naming, `WAITING_*` for states, `cmd_*`/`on_*` for handlers?
-- [ ] 3-layer decorator stack in correct order?
-- [ ] No secrets or hardcoded credentials?
-- [ ] DB access only through `tcbot/database/` layer?
-- [ ] No `*_conv.py` files — flows in `*_flow.py` only?
-- [ ] `asyncio.gather()` used for parallel async ops?
-- [ ] Fan-out operations use `fan_out()` from `dispatch.py`?
-- [ ] `auto_demote()` called before ban/kick when target holds a role?
-- [ ] `await q.answer()` before any callback action?
-- [ ] All datetimes via `tcbot.utils.timedate_format`?
-- [ ] No `print()` — using `log` only?
-- [ ] No unnecessary new files created?
-- [ ] Tests still pass after the change?
+# TCF Bot Project Policy
+
+Last updated: 2026-05-28
+
+Use this skill before changing TCF Bot code. Keep changes focused, safe, and consistent with the
+existing architecture. Prefer existing helpers and patterns over new abstractions.
+
+## Project Snapshot
+
+- Project: TCF Bot, a Telegram moderation and federation management bot.
+- Runtime: Python 3.12.
+- Telegram framework: `python-telegram-bot[job-queue] == 22.5`.
+- Database: MongoDB through async Motor helpers.
+- Keepalive: Flask health/keep-alive server.
+- Tooling: `uv` for dependency management, Ruff for format/lint, pytest + pytest-asyncio for
+  offline tests.
+- Entry point: `python -m tcbot` on Windows, `python3 -m tcbot` elsewhere.
+
+## Repository Boundaries
+
+- Bot package: `tcbot/`.
+- Command/event modules: `tcbot/modules/`.
+- Shared module helpers: `tcbot/modules/helper/`.
+- Conversation workflows: `tcbot/modules/helper/workflows/`.
+- Database helpers: `tcbot/database/`.
+- Runtime utilities: `tcbot/utils/`.
+- Offline tests: `tests/`.
+
+Do not place Telegram handlers, MongoDB access, workflows, or utility functions outside their
+owning area.
+
+## Python and Style Rules
+
+- Put `from __future__ import annotations` as the first non-comment line in Python modules.
+- Use Python 3.12 syntax and built-in generics: `list[str]`, `dict[str, int]`, `int | None`.
+- Use 4-space indentation and keep diffs minimal.
+- Avoid wildcard imports and inline imports.
+- Use `logging.getLogger(__name__)`; do not use `print()`.
+- Let Ruff handle formatting and import cleanup.
+- Add comments only for non-obvious intent, constraints, or tradeoffs.
+
+## Module and Handler Rules
+
+- Top-level command modules belong in `tcbot/modules/*.py`.
+- Modules should expose `__module_name__`, `__help_text__`, and `__handlers__` where consistent
+  with existing modules.
+- Async command handlers should be named `cmd_*`.
+- Event handlers should be named `on_*`.
+- Use existing decorators from `tcbot.modules.helper.decorators` for rate limiting, role checks,
+  and execution logging where applicable.
+- Register commands with existing prefix/filter helpers, especially `build_prefixed_filters()`.
+- Message-event handlers may be exempt from command rate limiters when existing patterns do so.
+- Do not duplicate command parsing, target extraction, keyboard, formatting, or role-check logic;
+  reuse helpers under `tcbot/modules/helper/`.
+
+## Conversation Workflow Rules
+
+- Conversation handlers live only in `tcbot/modules/helper/workflows/`.
+- Workflow files must be named `*_flow.py`; do not create `*_conv.py` files.
+- Conversation states are module-level `WAITING_*` constants.
+- Every conversation should provide a cancel path/fallback.
+- Use configured timeout values from `cfg`, such as proof and appeal timeouts; avoid hardcoded
+  timeout literals.
+- Reuse existing flows when possible, such as moderation action, ban proof, and appeal flows.
+
+## Database Rules
+
+- Database access belongs in `tcbot/database/`, one domain/collection helper per `*_db.py` file.
+- Handler modules must not call Mongo collections directly; use database helper functions.
+- Keep database helpers async and fully typed.
+- Prefer naming helpers `get_*`, `get_all_*`, `add_*`, `update_*`, `delete_*`, or an existing
+  domain-specific pattern.
+- Keep MongoDB schema changes backward-compatible unless a migration plan is included.
+- When adding a collection or index-sensitive query, update index creation logic accordingly.
+- Tests for database helpers must remain offline and mock external services.
+
+## Telegram Message Rules
+
+- Bot messages must use `parse_mode="HTML"`; do not introduce Markdown parse mode.
+- Escape user-provided text with formatter helpers before interpolation.
+- Prefer helpers from `tcbot/modules/helper/formatter.py`, such as `esc`, `code`, `mention`, and
+  `bold`.
+- Keep user-facing tone professional-friendly, concise, and clear.
+- Always answer callback queries with `await query.answer()` before doing further callback work.
+- Do not store `Update`, `Message`, or callback query objects beyond the handler lifetime.
+
+## Role and Moderation Rules
+
+- Use canonical role helpers from `tcbot.database.roles_db`; do not chain manual owner/admin role
+  checks.
+- Use role guard helpers from `tcbot.modules.helper.role_guard` for combined executor/target
+  checks where appropriate.
+- Ban and kick flows must auto-demote targets who currently hold a federation role before the
+  destructive action proceeds.
+- Preserve founder/admin/developer/tester hierarchy behavior and existing role labels.
+- Never weaken authorization checks while refactoring.
+
+## Async and Fan-Out Rules
+
+- Keep Telegram and MongoDB I/O non-blocking.
+- Use `asyncio.gather()` only when operations are independent and error handling remains clear.
+- Multi-group Telegram actions must use `tcbot.utils.dispatch.fan_out()` to bound concurrency and
+  collect per-group results.
+- When iterating over Telegram API calls manually, handle recoverable exceptions and log useful
+  context.
+
+## Datetime Rules
+
+- Use helpers from `tcbot.utils.timedate_format` for UTC timestamps, normalization, and display.
+- Use project helpers such as `utc_now()`, `to_utc()`, `fmt_dt()`, and `utc_now_str()` as
+  appropriate.
+- Do not introduce raw `datetime.utcnow()` or ad-hoc timezone formatting.
+
+## Secrets and Configuration
+
+- Never hardcode or commit bot tokens, MongoDB URIs, API keys, passwords, or private secrets.
+- Read secrets from environment/config mechanisms already used by the project.
+- Do not edit `config.env` during normal code changes.
+- Keep `config.env.example` as a template only when configuration documentation genuinely changes.
+- Do not log secrets or include them in errors, tests, fixtures, or examples.
+
+## Dependencies and Tooling
+
+- Use `uv` for dependency changes; do not hand-edit lockfiles casually.
+- Prefer dependencies already present in `pyproject.toml`.
+- Add new packages only when the project cannot reasonably solve the task with existing code.
+- If dependencies change, update both `pyproject.toml` and `uv.lock` through the proper `uv`
+  workflow.
+
+## Testing and Validation
+
+Choose the narrowest useful validation first, then broaden when appropriate.
+
+- Source changes: run relevant pytest tests, then consider `uv run --extra test pytest tests/ -v`.
+- Formatting/lint changes: run `uv run ruff format .` and `uv run ruff check --fix .` when safe.
+- Documentation or skill-only changes: tests are usually unnecessary; state that no runtime
+  validation was run.
+- New or changed helpers, workflows, decorators, database functions, or formatting behavior should
+  include or update offline tests.
+- Do not claim validation passed unless the command was run and succeeded.
+
+## Pre-Edit Checklist
+
+Before editing TCF Bot code, verify:
+
+- The change belongs in the selected file and not in an existing helper or workflow.
+- Handlers stay in `tcbot/modules/`; workflows stay in `*_flow.py`; database access stays in
+  `tcbot/database/`.
+- Messages are HTML-only and user content is escaped.
+- Role checks use canonical helpers and destructive actions preserve auto-demotion behavior.
+- Multi-group actions use `fan_out()`.
+- Datetimes use project datetime helpers.
+- No secrets, credentials, or private IDs are introduced.
+- Validation plan is appropriate for the scope of the change.

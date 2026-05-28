@@ -1,150 +1,189 @@
 ---
 name: mongodb-query-optimizer
-description: >-
-  Help with MongoDB query optimization and indexing. Use only when the user asks for optimization or performance: "How do I optimize this query?", "How do I index this?", "Why is this query slow?", "Can you fix my slow queries?", "What are the slow queries on my cluster?", etc. Do not invoke for general MongoDB query writing unless user asks for performance or index help. Prefer indexing as optimization strategy. Use MongoDB MCP when available.
-compatibility: >-
-  Best with MongoDB MCP server. Uses collection-indexes and explain when the connection string works; uses Atlas Performance Advisor when Atlas API is configured. Without either, suggest indexes from query shape only. User creates indexes in Atlas or migrations unless tooling allows otherwise.
-license: Apache-2.0
-metadata:
-  version: "1.0.0"
+description: Optimize MongoDB query and index performance for the TCF Bot project. Use only when the user asks about slow MongoDB queries, indexes, query plans, Motor async database helper performance, mongos.ensure_indexes(), Atlas Performance Advisor, or database access patterns that affect performance.
 ---
 
-# MongoDB Query Optimizer
+# MongoDB Query Optimizer for TCF Bot
 
-## When this skill is invoked
+Use this skill only for MongoDB performance, query-plan, or indexing work. Keep guidance aligned with TCF Bot's async Motor database layer and project architecture.
 
-Invoke **only** when the user wants:
+Last refreshed for this project: 2026-05-28.
 
-- Query/index **optimization** or **performance** help  
-- **Why** a query is slow or **how to speed it up**  
-- **Slow queries** on their cluster and/or **how to optimize them**
+## When to Use This Skill
 
-Do **not** invoke for routine query authoring unless the user has requested help with optimization, slow queries, or indexing.
+Invoke this skill when the user asks about:
 
-## High Level Workflow
+- Slow MongoDB queries or collections.
+- Index design, index review, index bloat, or query coverage.
+- `explain()` output, `COLLSCAN`, in-memory sort, high `docsExamined`, or poor selectivity.
+- Motor async helper performance in `tcbot/database/*_db.py`.
+- Updating or reviewing indexes in `tcbot/database/mongos.py` `ensure_indexes()`.
+- Atlas Performance Advisor or slow query log analysis.
 
-### General Performance Help
+Do **not** invoke this skill for routine MongoDB query writing unless the user asks for performance or indexing help.
 
-If the user wants to examine slow queries, or is looking for general performance suggestions (not regarding any particular query):
+## Project Rules
 
-- Use MongoDB MCP server **atlas-get-performance-advisor** tool to fetch slow query logs and performance advisor output  
-- Make suggestions based on this information
+TCF Bot stores all MongoDB access behind domain helper modules:
 
-If Atlas MCP Server for Atlas is not configured or you don’t have enough information to run **atlas-get-performance-advisor** against the correct cluster, tell the user that general performance analysis requires Atlas MCP Server configuration with API credentials, and suggest they configure it or ask about a specific query instead.
+- `tcbot/database/mongos.py` owns the `AsyncIOMotorClient`, database accessor, collection accessor, connection pool settings, and `ensure_indexes()`.
+- `tcbot/database/*_db.py` files contain async helper functions for each collection/domain.
+- `tcbot/modules/` and workflow modules should call database helpers instead of calling `mongos.col()` or Motor collections directly.
+- Index changes should be made in `tcbot/database/mongos.py` inside `ensure_indexes()` so startup creates required indexes consistently.
+- Keep index creation idempotent. `ensure_indexes()` is called during application post-init after `connect()` and before handlers run.
+- Do not add direct collection calls to command modules as an optimization shortcut.
+- Keep tests offline; do not require a live MongoDB service for normal test validation.
 
-### Help with a Specific Query
+Current critical indexes in `ensure_indexes()` include:
 
-If the user is asking about a particular query:
+- `bans`: `banned_user_id + is_active`, unique `ban_id`.
+- `tc_owners`: unique `user_id`.
+- `tc_admins`: unique `user_id`.
+- `tc_roles`: unique `user_id`.
+- `federated_groups`: `chat_id + is_active`, unique `chat_id`.
+- `member_cache`: unique `user_id`.
+- `warns`: `user_id + chat_id + timestamp desc`.
+- `warn_counts`: unique `user_id + chat_id`.
+- `promotion_requests`: unique `request_id`, plus `target_id + status`.
 
-- Use **collection-indexes**, **explain**, and **find** MCP tools to get existing indexes on the collection, explain() output for the query, and a sample document from the collection  
-- Use **atlas-get-performance-advisor MCP** tool to fetch slow query logs and performance advisor output
+Verify these before recommending duplicates.
 
-Then make an optimization suggestion based on collected information and MongoDB best practices and examples from reference files. Prefer creating an index that fully covers the query if possible. If you cannot use MongoDB MCP Server then still try to make a suggestion.
+## Optimization Workflow
 
-## MCP: available tools
+### 1. Identify the Query Shape
 
-**How to invoke.** Call the **MongoDB MCP server** with the **exact tool name** as `toolName` and a single **arguments object** as `arguments`. Do not pass the tool name as an option, query param, or nested key; pass it as the MCP tool name and the parameters as the arguments object. Full MCP Server tool reference: [MongoDB MCP Server Tools](https://www.mongodb.com/docs/mcp-server/tools/).
+Start from the exact helper or query path when possible:
 
-**Database tools** (when the MCP cluster connection works):
+- Collection name.
+- Filter fields and equality/range predicates.
+- Sort order.
+- Projection fields.
+- Limit or pagination behavior.
+- Update predicate for write operations.
+- Expected cardinality and hot path frequency.
 
-| Tool name (exact) | Arguments object |
-| :---- | :---- |
-| `collection-indexes` | `{ "database": "<db>", "collection": "<coll>" }` — both required strings. |
-| `explain` | `{ "database": "<db>", "collection": "<coll>", "method": [ { "name": "find", "arguments": { "filter": {...}, "sort": {...}, "limit": N } } ], "verbosity": "executionStats" }`. `method` is an array of one object: `name` is `"find"`, `"aggregate"`, or `"count"`; `arguments` holds that method's params (e.g. find: `filter`, `sort`, `limit`; aggregate: `pipeline`; count: `query`). Optional `verbosity`: `"queryPlanner"` (default), `"executionStats"`, `"queryPlannerExtended"`, `"allPlansExecution"`. |
-| `find` |  `{ "database": "<db>", "collection": "<coll>", "filter": {...}, "projection": {...}, "sort": {...}, "limit": N }` — `database`, `collection`, and `filter` are required. Optional: `projection`, `sort`, `limit`. |
+Prefer inspecting `tcbot/database/*_db.py` helper code before suggesting changes. If the user only provides a query snippet, ask for or infer the collection and call site carefully.
 
-**Atlas tools** (when Atlas API credentials are configured):
+### 2. Review Existing Indexes
 
-| Tool name (exact) | Arguments object |
-| :---- | :---- |
-| `atlas-list-projects` | `{}` or `{ "orgId": "<24-char hex>" }`. Returns projects with their IDs; use to get `projectId` for Performance Advisor. |
-| `atlas-get-performance-advisor` | **Required:** `"projectId"` (24-character hex string), `"clusterName"` (string, 1–64 chars, alphanumeric/underscore/dash). **Optional:** `"operations"` — array of strings from `"suggestedIndexes"`, `"dropIndexSuggestions"`, `"slowQueryLogs"`, `"schemaSuggestions"` (request only what you need); for slowQueryLogs only: `"since"` (ISO 8601 date-time), `"namespaces"` (array of `"db.coll"` strings). |
+Check `tcbot/database/mongos.py` `ensure_indexes()` first. If a live database tool is available, also inspect actual collection indexes because deployed indexes may differ from the repository.
 
-For a user question, try to fetch information from both the connection string and Atlas API related to the query you are optimizing.
+Look for:
 
-### 1\. DB connection string works for MongoDB MCP
+- Existing compound indexes that already satisfy the filter and sort.
+- Duplicate or prefix-redundant indexes.
+- Unique indexes used for data integrity.
+- Missing indexes for frequent active-record lookups.
+- Sorts that are not supported by index order.
 
-Typical flow: call `collection-indexes` → `explain` → `find` (sample doc).
+### 3. Use Evidence When Available
 
-- **`collection-indexes`** — Use the result's `classicIndexes` (each has `name`, `key`) to see if the query can already use an existing index.
-- **`explain`** — Run in `"queryPlanner"` mode first to check for COLLSCAN. If the query uses an index or the collection is very small, run again with `"executionStats"` (10-second timeout) to get docs scanned vs. returned.
+If MongoDB MCP or another safe database inspection tool is available, prefer evidence over guessing:
 
-### 2\. Atlas API access works for MongoDB MCP
+- `collection-indexes` to list actual indexes.
+- `explain` with `queryPlanner` and, when safe, `executionStats`.
+- `find` with a small `limit` only when a sample document is needed.
+- Atlas Performance Advisor for slow query logs, suggested indexes, schema suggestions, and drop-index suggestions.
 
-If you need a project ID, call `atlas-list-projects` first. Then call `atlas-get-performance-advisor` with only the `operations` you need:
+Never expose secrets or connection strings. Do not run destructive operations.
 
-| Operation value | Use when |
-| :---- | :---- |
-| `slowQueryLogs` | Fetching slow queries—**prioritize by slowest and most frequent**. Optional: `namespaces` to scope to a collection; `since` for a time window. |
-| `suggestedIndexes` | Fetching cluster index recommendations |
-| `dropIndexSuggestions` | User asks what to remove or reduce index overhead |
-| `schemaSuggestions` | User asks for schema/query-structure advice alongside indexes |
+### 4. Diagnose the Bottleneck
 
-Do not pass the MCP tool name as an `operations` value—`operations` is a separate argument listing what data to fetch.
+Common causes in this project:
 
-## Example workflow 1 (help with specific query)
+- A helper filters by one field but sorts by another without a compound index.
+- Active-record queries filter by `is_active` plus a user or chat field but use only a partial prefix.
+- Review or queue lookups filter by status without matching a request or target field.
+- Warning history queries need `user_id`, `chat_id`, and descending `timestamp` together.
+- Count/update helpers use predicates that are not backed by unique or selective indexes.
+- A suggested index duplicates an existing unique or compound index.
 
-**User:** "Why is this query slow? `db.orders.find({status: 'shipped', region: 'US'}).sort({date: -1})`"
+For reads, compare `nReturned`, `totalDocsExamined`, `totalKeysExamined`, stage names, and whether a blocking sort appears. For writes, index the update predicate, not the updated fields unless they are also queried.
 
-**If MCP db connection is configured and the database + collection names are known**, run steps 1–3. Otherwise skip to step 4.
+### 5. Recommend or Implement the Minimal Fix
 
-1. **Check existing collection indexes:**
-   - Call `collection-indexes` with database=`store`, collection=`orders`
-   - Result shows: `{_id: 1}`, `{status: 1}`, `{date: -1}`
+Prefer one focused fix:
 
-2. **Run explain:**
-   - Call `explain` with method=`find`, filter=`{status: 'shipped', region: 'US'}`, sort=`{date: -1}`, verbosity=`queryPlanner` and `executionStats`
-   - Result: Uses `{status: 1}` index, then in-memory SORT, `totalKeysExamined: 50000`, `nReturned: 100`
+- Adjust an existing helper query only when the query shape is the real problem.
+- Add or refine an index in `mongos.ensure_indexes()` when the query shape is valid but unsupported.
+- Prefer compound indexes following ESR: equality fields first, then sort fields, then range fields when applicable.
+- Preserve unique constraints and data integrity indexes.
+- Avoid adding many speculative indexes. Each index slows writes and consumes memory/storage.
+- Suggest dropping indexes only with strong evidence, such as Atlas drop-index suggestions or verified redundancy.
 
-3. **Run find:**
-   - Call `find` with limit=1 to fetch a sample document to impute the schema.
+When editing code, keep changes scoped to `tcbot/database/mongos.py` and related `tcbot/database/*_db.py` helpers unless the user explicitly asks for broader refactoring.
 
-**If MCP Atlas connection is configured**, run step 4. Otherwise skip to step 5.
+## TCF Bot Index Design Guidelines
 
-4. **Run atlas-get-performance-advisor:**
-   - Try to get the cluster name from the MCP connection string, or ask the user for projectId/clusterName
-   - Use slowQueryLogs to fetch slow query logs from database=`store`, collection=`orders` in the past 24 hours
-   - Use suggestedIndexes to check for index suggestions for the query
+Use these rules when reviewing or proposing indexes:
 
-5. **Diagnose:** Based on explain output and slow query logs, this query targets 100 docs but scans 50K index entries (poor selectivity: 0.002). In-memory sort adds overhead. Index doesn't support both filter fields or sort.
+- Index helper predicates used by hot command paths and scheduled maintenance paths.
+- Match compound index field order to the helper's filter and sort.
+- Include `is_active` in indexes only when active/inactive filtering is a common predicate with another selective field.
+- Keep unique indexes for identity fields such as `user_id`, `chat_id`, `ban_id`, and request IDs when uniqueness is required.
+- For descending history views, include timestamp as `-1` after equality predicates.
+- Do not index low-cardinality fields alone, such as `status` or `is_active`, unless combined with selective fields.
+- Avoid direct module-level database calls to bypass helper overhead; the architecture cost is negligible compared with MongoDB I/O and keeps behavior testable.
+- Consider cache invalidation and role-cache behavior when optimizing role, owner, admin, or group helpers.
 
-6. **Recommend:** Create compound index `{status: 1, region: 1, date: -1}` following ESR (two equality fields, then sort). This eliminates in-memory sort and improves selectivity by filtering on both status and region.
+## Motor Async Patterns
 
-If the MongoDB MCP server is not set up, follow best indexing practices.
+Keep recommendations compatible with Motor async code:
 
-## Example workflow 2 (general database performance help)
+- Always `await` Motor calls such as `find_one`, `insert_one`, `update_one`, `delete_one`, `count_documents`, and `create_index`.
+- Use `.to_list(None)` or a bounded limit intentionally; avoid unbounded reads on large collections unless the helper already represents an admin-only complete export.
+- Prefer projections for existence checks and lightweight reads, for example `{"_id": 1}` or `{"_id": 0, "user_id": 1}`.
+- Keep startup index creation parallel in `asyncio.gather()` when adding independent `create_index()` calls.
+- Keep helper APIs async and domain-focused.
 
-**User:** "Can you help with optimizing slow queries on my cluster?”
+## MCP and Atlas Guidance
 
-1. **Run atlas-get-performance-advisor:**  
-   - Try to get the cluster name from the connection string and deduce the project name you need in atlas-list-projects; if you are not sure, then ask the user for cluster name and project id.
-   - Use slowQueryLogs to fetch slow query logs from the past 24 hours  
-   - Use suggestedIndexes  
-   - Use dropIndexSuggestions  
-   - Use schemaSuggestions  
-2. **Diagnose and Recommend:** Based on slow query logs and performance advisor advice, you can create the compound index `{status: 1, region: 1, date: -1}` on the `db.orders` collection to optimize queries such as `find({status: 'shipped', region: 'US'}).sort({date: -1})`
+If MongoDB MCP tools are available, use them when the user asks for live performance analysis.
 
-Examine all performance advisor output as well as slow query logs. Provide information on what is being improved and why, and focus on suggestions that have the potential for greatest impact (e.g., indexes that affect the most queries, or queries that have the worst performance).
+Useful database tools:
 
-## Load references
+| Tool | Use |
+| --- | --- |
+| `collection-indexes` | Inspect actual collection indexes. |
+| `explain` | Check query plan, index use, blocking sort, and execution stats. |
+| `find` | Fetch a tiny sample when schema shape is unclear. |
 
-Before beginning diagnosis and recommendation, load reference files.
+Useful Atlas tools:
 
-Always load:
+| Tool | Use |
+| --- | --- |
+| `atlas-list-projects` | Find the Atlas project ID when needed. |
+| `atlas-get-performance-advisor` | Fetch slow query logs, suggested indexes, drop-index suggestions, and schema suggestions. |
+
+If Atlas or MCP is unavailable, explain that recommendations are based on repository query shape rather than live workload metrics.
+
+Do not create indexes directly through live tooling unless the user explicitly approves. For this project, prefer committing index definitions in `mongos.ensure_indexes()`.
+
+## Reference Files
+
+Load these project-local references when useful:
+
+Always useful for index work:
 
 - `references/core-indexing-principles.md`
 - `references/antipattern-examples.md`
 
-Conditionally load these files:
+Conditional references:
 
-- **If diagnosing aggregation pipelines** → `references/aggregation-optimization.md`
-- **If diagnosing queries that change docs such as replaceOne, findOneAndUpdate, etc.** → `references/update-query-examples.md` for oplog-efficient updates and common update anti-patterns
+- `references/aggregation-optimization.md` when diagnosing aggregation pipelines.
+- `references/update-query-examples.md` when diagnosing `update_one`, `find_one_and_update`, replacement, or write-heavy paths.
 
-## Output
+## Response Style
 
-- Keep answers short and clear: a few sentences on index and optimization suggestions, and reasoning behind them (e.g. general indexing principles, observing slow query logs in the cluster, or seeing advice in Performance Advisor)
-- Focus on highest impact indexes or optimizations - if you've omitted some optimizations let the user know and present them if asked.
-- Do not use strong language, such as saying “You should create these indexes and they will definitely improve application performance” \-  Explain they are suggestions for certain queries, and give the reasoning behind them.
-- Consider how many indexes already exist on the collection (if known) \- there shouldn’t generally be more than 20
-- Suggest removing indexes only if the suggestion comes from Atlas Performance Advisor
-- Do not create indexes directly via MCP unless the user gives approval
+When returning recommendations:
+
+- Be concise and evidence-based.
+- Name the collection, helper/query shape, and proposed index.
+- Explain why the index order matches the query.
+- Mention tradeoffs such as write overhead or redundant indexes.
+- Distinguish verified findings from assumptions.
+- If code was changed, summarize the exact files changed and validation run.
+
+Example recommendation:
+
+> For `bans.find_one({"banned_user_id": user_id, "is_active": True}, sort=[("timestamp", -1), ("ban_id", -1)])`, the existing `banned_user_id + is_active` index supports filtering but not the sort. If this lookup is hot and users can have many ban records, consider `[("banned_user_id", 1), ("is_active", 1), ("timestamp", -1), ("ban_id", -1)]`. This improves newest-active-ban lookup at the cost of one wider write-maintained index.

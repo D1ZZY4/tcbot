@@ -184,7 +184,7 @@ class BuildAppeal:
         msg = update.effective_message
         text = (msg.text or "").strip()
 
-        if not text.startswith("#appeal"):
+        if not text.lower().startswith("#appeal"):
             return WAITING_APPEAL
 
         ban_id = ctx.user_data.get("appeal_ban_id")
@@ -452,7 +452,10 @@ class BuildAppeal:
                         pattern=rf"^{re.escape(self.cancel_callback)}$",
                     ),
                     MessageHandler(
-                        filters.ChatType.PRIVATE & filters.TEXT, self._on_message
+                        filters.ChatType.PRIVATE
+                        & filters.TEXT
+                        & ~ALL_PREFIXES_CMD_FILTER,
+                        self._on_message,
                     ),
                 ],
             },

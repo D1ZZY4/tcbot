@@ -62,17 +62,19 @@ async def execute_warn(
     )
 
     if count >= WARN_LIMIT:
-        # * clear warns + ban + federation log - all in parallel
-        results = await asyncio.gather(
-            db.warns_db.clear_warns(target_id, chat_id),
+        # * Ban + federation log run in parallel; clear warns only after ban succeeds.
+        ban_result, log_result = await asyncio.gather(
             ctx.bot.ban_chat_member(chat_id, target_id),
             ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             return_exceptions=True,
         )
-        if isinstance(results[2], BaseException):
-            log.error("Warn log send failed: %s", results[2])
-        ban_result = results[1]
+        if isinstance(log_result, BaseException):
+            log.error("Warn log send failed: %s", log_result)
         if not isinstance(ban_result, BaseException):
+            try:
+                await db.warns_db.clear_warns(target_id, chat_id)
+            except Exception as exc:
+                log.error("Warn clear after auto-ban failed: %s", exc)
             await msg.reply_text(
                 f"{mention(target_id, target_name)} hit {WARN_LIMIT} warnings "
                 f"and has been banned from this group.{proof_line}",

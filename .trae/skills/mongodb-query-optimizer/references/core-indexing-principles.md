@@ -7,7 +7,7 @@ The first field of the index should be in the query's filter or sort condition.
 **Equality → Sort → Range** order is most often preferred:
 
 - **Equality** fields first (e.g. `{field: value}`, `{$in: [...]}` with \<= 200 elements, `{field: {$eq: value}}`)
-- **Sort** fields next  
+- **Sort** fields next
 - **Range** fields last (e.g. `$gt`, `$lt`, `$gte`, `$lte`, `{$in: [...]}` with \> 200 elements in the array, `$ne`, anchored case-sensitive `$regex`)
 
 If equality is not very selective and range is, then ERS may perform better than ESR.
@@ -42,9 +42,9 @@ A covered query retrieves data directly from the index, never accessing the actu
 
 ## Requirements
 
-1. **All query fields** are in the index  
-2. **All returned fields** are in the index (includes sort fields)  
-3. **Inclusion projection required** \- you must use an inclusion projection (e.g., `{ field: 1 }`) that requests only indexed fields, plus `_id: 0` if `_id` is not in the index. Exclusion projections cannot produce covered queries.  
+1. **All query fields** are in the index
+2. **All returned fields** are in the index (includes sort fields)
+3. **Inclusion projection required** \- you must use an inclusion projection (e.g., `{ field: 1 }`) that requests only indexed fields, plus `_id: 0` if `_id` is not in the index. Exclusion projections cannot produce covered queries.
 4. **No `$exists` or null equality checks** \- queries using `$exists` or querying for null/missing values cannot usually be covered by an index
 5. **Multikey index constraints** \- multikey indexes can cover queries under certain conditions, such as when the array field itself is not included in the projection and operators like `$elemMatch` are not used. If the array field must be projected, covering is not possible.
 
@@ -73,8 +73,8 @@ db.products.createIndex({
 
 **Step 3:** Project only indexed fields
 
-- Include indexed fields in projection  
-- **Exclude \_id** unless \_id is in the index (use `_id: 0`)  
+- Include indexed fields in projection
+- **Exclude \_id** unless \_id is in the index (use `_id: 0`)
 - Don't request fields not in the index
 
 ## Common mistakes

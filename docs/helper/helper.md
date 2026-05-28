@@ -1,0 +1,123 @@
+# Helper Package
+
+Shared handler helpers live in `tcbot/modules/helper/`. These modules support command modules and workflow files but do not perform top-level module discovery.
+
+## `decorators.py`
+
+Decorators provide authorization, handler-level rate limiting, and debug tracing.
+
+| Decorator/helper | Purpose |
+|---|---|
+| `ratelimiter(limit=5, period=60.0)` | Per-handler sliding-window user throttle. Use as the outermost command decorator. |
+| `log_execution` | DEBUG-level entry/exit/exception tracing. Use as the innermost decorator. |
+| `owner_only` | Founder-only commands. |
+| `staff_only` | Founder/Admin commands. |
+| `mod_only` | Developer+ commands, such as ban and unban. |
+| `basic_mod_only` | Tester+ commands, such as kick, mute, and warn. |
+| `global_rate_limit_handler` | Universal rate limiter registered by `__main__.py` at group `-1`. |
+
+Typical command decorator order:
+
+```python
+@decorators.ratelimiter(limit=5, period=60)
+@decorators.mod_only
+@decorators.log_execution
+async def cmd_example(update, ctx):
+    ...
+```
+
+## `formatter.py`
+
+All bot messages use Telegram HTML parse mode.
+
+| Function | Output/use |
+|---|---|
+| `esc(text)` | Escape user-provided text. |
+| `bold(text)` | `<b>...</b>` with escaped content. |
+| `italic(text)` | `<i>...</i>` with escaped content. |
+| `code(text)` | `<code>...</code>` with escaped content. |
+| `link(text, url)` | HTML link. Escape or validate URLs before passing untrusted values. |
+| `mention(user_id, name)` | `tg://user?id=...` mention with escaped display name. |
+
+Use `esc()`, `code()`, or `mention()` for any user-provided value in HTML messages.
+
+## `extraction.py`
+
+Target and identity resolution for moderation commands.
+
+| Export | Purpose |
+|---|---|
+| `ResolvedTarget` | Dataclass-like resolved target with ID, first name, optional username, and raw object. |
+| `UserIdentity` | Display identity object with `name_with_username`. |
+| `get_reason(context, update)` | Extracts reason text while accounting for reply-based commands. |
+| `extract_target(update, args, bot=None)` | Resolves numeric IDs, usernames, replies, and text mentions. |
+| `resolve_identity(ctx, user_id)` | Resolves display name and username through Telegram or member cache fallback. |
+
+Resolution order for `extract_target()` starts with explicit command arguments, then falls back to reply/user mention data.
+
+## `keyboards.py`
+
+All inline keyboard factories live here. Command modules and workflows should import keyboard factories instead of constructing repeated keyboard layouts inline.
+
+Main groups:
+
+| Factory group | Examples |
+|---|---|
+| Ban/checking | `ban_log_new`, `ban_log_update`, `checkme_ban_kb`, `checkme_detail_back_kb`, `baninfo_proof_kb` |
+| Admin roles | `promote_role_kb`, `demote_confirm_kb`, `promo_decision_kb` |
+| Menus/help | `main_menu_kb`, `group_start_kb`, `help_modules`, `help_topics_menu_kb`, `help_topics_kb`, `back_to_start_kb`, `back_to_help_kb`, `back_to_help_cmd_kb` |
+| Privacy | `privacy_kb`, `back_to_privacy_kb` |
+
+See [button styles](../button-styles.md) for layout and callback-data conventions.
+
+## `role_guard.py`
+
+Role guard helpers centralize moderation permission checks.
+
+| Export | Purpose |
+|---|---|
+| `resolve_and_check(msg, executor_id, target_id, min_role=...)` | Resolves executor and target roles, checks minimum executor rank, checks executor outranks target, and replies on failure. |
+| `auto_demote(bot, target_id, target_fname, target_role, executor_id, executor_fname, action)` | Removes a target's role before ban/kick, notifies the target, and logs the auto-demotion. |
+
+Ban and kick flows must call `auto_demote()` before enforcing the action when the target currently holds a federation role.
+
+## `ban_info.py`
+
+`build_ban_detail(ban, target_fname=None)` returns formatted HTML ban details and an optional proof link. It is shared by checking and stats flows to avoid duplicate ban rendering.
+
+## `parse_link.py`
+
+| Function | Purpose |
+|---|---|
+| `chat_id_to_link_id(chat_id)` | Converts Telegram supergroup IDs to `t.me/c` path IDs. |
+| `message_link(chat_id, message_id, thread_id=None)` | Builds a private-channel/group message link. |
+| `topic_link(chat_id, message_id, thread_id)` | Builds a message link to a specific topic thread. |
+| `appeal_deep_link(bot_username, ban_id)` | Builds `https://t.me/<bot>?start=appeal_<ban_id>`. |
+| `user_link(user_id, name)` | Builds an HTML mention. |
+| `safe_first_name(obj)` | Extracts a display name from Telegram-like objects. |
+
+## `parse_logmsg.py`
+
+This file builds HTML audit log messages for moderation, appeals, staff roles, group connections, broadcasts, and auto-demotions.
+
+Common families:
+
+- `ban_log`, `ban_update_log`, `proof_caption_new`, `proof_caption_update`;
+- `mute_log`, `unmute_log`, `kick_log`, `warn_log`, `unwarn_log`, `unban_log`;
+- `appeal_received_log`, `appeal_submitted_log`, appeal decision edit messages, `appeal_unban_log`;
+- `admin_promoted`, `admin_demoted`, `ownership_transferred`, promotion request logs;
+- `group_connected_log`, `group_connection_rejected_log`, `group_disconnected_log`, `group_bot_removed_log`;
+- `broadcast_log`, `role_assigned`, `role_removed`, `role_auto_demoted`.
+
+## `parse_editmsg.py`
+
+`safe_edit(msg, text, **kwargs)` edits a message with `parse_mode="HTML"` and ignores expected Telegram `BadRequest` cases such as `message is not modified`, `message to edit not found`, and `chat not found`.
+
+Unexpected edit failures are logged as warnings.
+
+## Helper usage rules
+
+- Keep user-facing HTML escaped.
+- Keep keyboard callback-data stable because handlers match it with regex patterns.
+- Do not duplicate role checks that already exist in `roles_db` or `role_guard`.
+- Do not create keyboard factories outside `keyboards.py` unless the workflow needs a one-off private helper for local pagination.

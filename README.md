@@ -1,144 +1,192 @@
 # TCF Bot
 
-Telegram federation management bot for the Transsion Core Federation (TCF) community. Manages federation-wide bans, user appeals, staff roles, group moderation, and audit logging across all affiliated groups simultaneously.
-
-Before changing any code or documentation, read the agent guidance in `agents/` first — especially `agents/RULES.md` and `agents/STYLE-CODE.md`.
-
----
+TCF Bot is a Telegram federation management bot for the Transsion Core Federation community. It coordinates moderation across connected groups, records audit trails, supports appeal review, and exposes a small Flask health-check endpoint for hosted environments.
 
 ## Features
 
-- **Federation bans** — issue, update, and lift bans that propagate across all connected groups instantly
-- **Appeals** — deep-link appeal flow with staff review, priority window, approve/reject workflow
-- **Group management** — connect and disconnect groups, sweep existing bans on join
-- **Staff promotions** — request and approve role changes with a full audit trail
-- **Moderation** — per-group mute (with duration), kick, and warn commands
-- **Check-me** — users can query their own ban status from the bot PM
-- **Keep-alive** — Flask health-check endpoint on port 8080
-
----
+- **Federation bans** — create, update, and lift bans across all connected groups.
+- **Ban proof workflow** — collect proof media/text before enforcement and store proof message references.
+- **Appeals** — deep-link private-message flow with staff review buttons and appeal records.
+- **Connected groups** — approve group joins, track active groups, and run multi-group actions safely.
+- **Staff roles** — Founder, Admin, Developer, and Tester hierarchy with promotion/demotion workflows.
+- **Moderation actions** — ban, unban, kick, mute, warn, warning reset, checks, stats, and broadcast helpers.
+- **Audit logging** — moderation, appeal, role, and error reports to configured log destinations.
+- **Health checks** — Flask keep-alive server on `PORT` with `GET /` returning `OK`.
 
 ## Stack
 
-| Component | Version |
+| Component | Current project setting |
 |---|---|
-| Python | 3.12 |
-| python-telegram-bot | 22.5 |
-| Motor (async MongoDB) | 3.7+ |
-| Flask | 3.1+ |
-| pytest + pytest-asyncio | test suite only |
+| Python | 3.12 project target (`requires-python = ">=3.12"`) |
+| Bot framework | `python-telegram-bot[job-queue] == 22.5` |
+| Database | MongoDB through Motor (`motor >= 3.7.1`) |
+| Health server | Flask (`flask >= 3.1.0`) |
+| Configuration | Environment variables, with `python-dotenv` loading local `config.env` |
+| Dependency manager | `uv` with `uv.lock` |
+| Formatting/linting | Ruff |
+| Tests | pytest + pytest-asyncio offline suite |
 
----
+## Quick Start
 
-## Running on Replit
-
-This project is hosted on Replit. Secrets are stored in Replit Secrets — not in `config.env`.
-
-| Secret | Description |
-|---|---|
-| `BOT_TOKEN` | Telegram bot token from @BotFather |
-| `MONGODB_URI` | MongoDB connection string (Atlas or other) |
-
-All other configuration is managed as Replit environment variables. See `config.env.example` for the full list of keys.
-
-**Start the bot:** use the `Start Application` workflow (`python3 -m tcbot`).
-
----
-
-## Running Locally
+### 1. Install dependencies
 
 ```bash
-# 1. Copy and fill in your config (including secrets for local dev)
-cp config.env.example config.env
-# Edit config.env — add BOT_TOKEN, MONGODB_URI, and all other required values
-
-# 2. Install dependencies
 uv sync
+```
 
-# 3. Run
+For tests, include the optional test dependencies:
+
+```bash
+uv sync --extra test
+```
+
+### 2. Configure environment
+
+For local development, copy the template and fill in your own values:
+
+```bash
+cp config.env.example config.env
+```
+
+Never commit real credentials. At minimum, the bot needs:
+
+- `BOT_TOKEN` — Telegram bot token from BotFather.
+- `MONGODB_URI` — MongoDB connection string.
+- `OWNER_ID` — Telegram user ID for the initial federation founder.
+
+See [Configuration](#configuration) below and `config.env.example` for the complete list.
+
+### 3. Run the bot
+
+```bash
 python3 -m tcbot
 ```
 
-### Docker
+On Windows, use this if `python3` is not available:
+
+```bash
+python -m tcbot
+```
+
+## Docker Compose
 
 ```bash
 docker-compose up --build
 ```
 
-The compose file starts the bot and a local MongoDB instance. The bot waits for MongoDB to pass its health-check before connecting.
+The compose setup starts the bot and a local `mongo:7` service. The bot reads `config.env` and waits for MongoDB to pass its health check.
 
----
+## Replit / Hosted Deployment
 
-## Configuration Reference
+Use Replit Secrets or the hosting platform's secret manager for credentials. Do not store tokens or MongoDB URIs in committed files.
+
+Recommended run command:
+
+```bash
+python3 -m tcbot
+```
+
+The Flask keep-alive server binds to `0.0.0.0:${PORT}`. If `PORT` is unset or invalid, the application defaults to `5000`.
+
+See `replit.md` for Replit-specific setup notes.
+
+## Configuration
+
+Configuration is loaded from environment variables in `tcbot/__init__.py`. For local development, `python-dotenv` reads `config.env` if it exists.
 
 | Variable | Required | Description |
-|---|---|---|
-| `BOT_TOKEN` | Yes | Telegram bot token from @BotFather |
-| `OWNER_ID` | Yes | Positive Telegram user ID of the federation founder |
-| `MONGODB_URI` | Yes | MongoDB connection string |
-| `DB_NAME` | No | Database name (default: `tcbot`) |
-| `COMMUNITY_NAME` | No | Display name used in bot messages |
-| `MAIN_GROUP` | Yes | Main group/forum chat ID for appeal review cards |
-| `MAIN_CHANNEL` | No | Main announcement channel chat ID |
-| `LOGS` | Yes | Log channel: `chat_id` or `chat_id/thread_id` |
-| `LOGS_ERRORS` | No | Error log destination (same format as LOGS) |
-| `PROOFS` | Yes | Ban proof channel: `chat_id` or `chat_id/thread_id` |
-| `APPEALS` | Yes | Appeal record channel: `chat_id` or `chat_id/thread_id` |
-| `APPEAL_LOG_HANDLE` | No | Public `@handle` shown in appeal instructions (default: `@TranssionCoreFederationLogs`) |
-| `APPEAL_DISCUSSION_TOPIC` | Yes | Thread ID inside MAIN_GROUP for appeal review cards |
-| `PROOF_TIMEOUT_SECONDS` | No | Ban proof conversation timeout (default: 100) |
-| `APPEAL_TIMEOUT_SECONDS` | No | Appeal conversation timeout (default: 600) |
-| `ALBUM_DEBOUNCE_SECONDS` | No | Album message grouping window (default: 2) |
-| `PREFIXES` | No | Command prefixes list (default: `["/", "!", "."]`) |
-| `PORT` | No | Flask keepalive port (default: 5000, Replit uses 8080) |
-| `LOG_LEVEL` | No | Log verbosity: DEBUG/INFO/WARNING/ERROR (default: INFO) |
-| `MODULES_LOAD` | No | Comma-separated allowlist of modules to load |
-| `MODULES_NO_LOAD` | No | Comma-separated denylist of modules to skip |
+|---|---:|---|
+| `BOT_TOKEN` | Yes | Telegram bot token from BotFather. |
+| `OWNER_ID` | Yes | Positive Telegram user ID seeded as the initial Founder. |
+| `MONGODB_URI` | Yes | MongoDB connection string. |
+| `DB_NAME` | No | MongoDB database name, default `tcbot`. |
+| `COMMUNITY_NAME` | No | Display name used in bot messages and logs. |
+| `PREFIXES` | No | Python-style list of command prefixes, default `["/", "!", "."]`. |
+| `PORT` | No | Flask keep-alive port, default `5000`. |
+| `MAIN_GROUP` | Usually | Main community group/forum chat ID. |
+| `MAIN_CHANNEL` | No | Main announcement channel chat ID. |
+| `EXTEND_GROUP` | No | Optional secondary/staff group watched by selected handlers. |
+| `PROOFS` | Usually | Proof destination as `chat_id` or `chat_id/thread_id`. |
+| `LOGS` | Usually | Action log destination as `chat_id` or `chat_id/thread_id`. |
+| `LOGS_ERRORS` | No | Error log destination; if empty, code paths may use the parsed empty value. |
+| `APPEALS` | Usually | Appeal record destination as `chat_id` or `chat_id/thread_id`. |
+| `APPEAL_LOG_HANDLE` | No | Public log handle shown in appeal instructions. |
+| `APPEAL_DISCUSSION_TOPIC` | Usually | Thread ID inside `MAIN_GROUP` for appeal review cards. |
+| `PROOF_TIMEOUT_SECONDS` | No | Ban proof conversation timeout, default `100`. |
+| `APPEAL_TIMEOUT_SECONDS` | No | Appeal DM conversation timeout, default `600`. |
+| `ALBUM_DEBOUNCE_SECONDS` | No | Album media grouping window, default `2`. |
+| `LOG_LEVEL` | No | Logging level, default `INFO`. |
+| `MODULES_LOAD` | No | Comma-separated module allowlist. |
+| `MODULES_NO_LOAD` | No | Comma-separated module denylist. |
 
----
+Destination variables such as `LOGS`, `PROOFS`, and `APPEALS` accept either a chat ID (`-1001234567890`) or a forum topic pair (`-1001234567890/42`).
 
-## Project Structure
+## Architecture Summary
 
-```
-tcbot/
-├── __init__.py          Config singleton (Configs dataclass + cfg adapter)
-├── __main__.py          Entry point, handler registration, polling
-├── alive.py             Flask keepalive thread
-├── database/            Async MongoDB collection helpers (one file per collection)
-├── modules/
-│   ├── __init__.py      Module discovery, filtering, and handler collection
-│   ├── helper/          Shared keyboards, formatters, decorators, workflows
-│   │   └── workflows/   ConversationHandler flows (*_flow.py only, no *_conv.py)
-│   └── *.py             Command modules (banning, muting, kicking, appeals, …)
-└── utils/               Logger, dispatcher, prefix builder, datetime helpers
-agents/                  AI agent instructions (RULES, STYLE-CODE, CLAUDE, etc.)
-docs/                    Developer documentation (architecture, modules, workflows)
-tests/                   Offline unit tests (121 tests, no token/DB required)
-config.env               Local dev config (gitignored; secrets go in Replit Secrets)
-config.env.example       Template for new deployments
+```text
+Telegram updates
+  ↓
+python-telegram-bot Application (`tcbot/__main__.py`)
+  ↓
+Global rate limiter (group -1)
+  ↓
+Dynamically discovered command modules (`tcbot/modules/*.py`)
+  ↓
+Shared helpers and workflows (`tcbot/modules/helper/`)
+  ↓
+Database helpers (`tcbot/database/*_db.py`)
+  ↓
+MongoDB via Motor
 ```
 
----
+Key runtime pieces:
+
+- `tcbot/__init__.py` loads environment configuration into an immutable dataclass and exposes the `cfg` adapter.
+- `tcbot/__main__.py` starts logging, launches Flask keep-alive, builds the PTB application, registers handlers, connects MongoDB in `post_init`, and starts long polling.
+- `tcbot/modules/__init__.py` discovers top-level modules and collects their `__handlers__` lists.
+- `tcbot/database/mongos.py` owns the Motor client, database accessor, short ID generator, and index setup.
+- `tcbot/utils/dispatch.py` provides bounded concurrent fan-out for multi-group Telegram API calls.
+- `tcbot/utils/error_reporter.py` receives handler, asyncio, and logging errors for reporting to the configured error destination.
+
+## Repository Layout
+
+```text
+tgbot/
+├── tcbot/                    Bot package
+│   ├── database/             Async MongoDB helper modules
+│   ├── modules/              Command modules and Telegram handlers
+│   │   └── helper/           Formatters, decorators, keyboards, workflows
+│   │       └── workflows/    Conversation flows (`*_flow.py`)
+│   └── utils/                Logging, prefixes, dispatch, datetime helpers
+├── tests/                    Offline pytest tests
+├── docs/                     Developer subsystem documentation
+├── agents/                   Detailed agent and contributor rules
+├── config.env.example        Environment template
+├── docker-compose.yml        Bot + MongoDB local compose setup
+├── pyproject.toml            Project metadata, dependencies, pytest, Ruff
+├── uv.lock                   Locked dependency graph
+├── AGENTS.md                 Project guide for agents/contributors
+├── PLAN.md                   Current project state and improvement plan
+└── replit.md                 Replit deployment notes
+```
 
 ## Tests
 
+The current collected inventory is 134 tests across 14 `tests/test_*.py` files. The suite is designed to run offline without a real Telegram token or MongoDB connection.
+
+Run the full suite:
+
 ```bash
-python3 -m pytest tests/ -v
+uv run --extra test pytest tests/ -v
 ```
 
-121 tests — all run fully offline without a bot token or MongoDB connection.
+Collect tests only:
 
-| File | What it covers |
-|---|---|
-| `test_format.py` | `parse_link` HTML helpers |
-| `test_targets.py` | `ResolvedTarget` and `get_reason` |
-| `test_users_resolver.py` | `resolve_identity` with mocked repos |
-| `test_prefix.py` | Alt-prefix dispatcher and registry |
-| `test_keyboards.py` | Keyboard factory shapes |
-| `test_decorators.py` | `log_execution` tracer |
-| `test_appeals_pure.py` | Pure appeal guard functions |
-| `test_log_templates.py` | Log message formatters |
-| `test_rate_limiter.py` | `_RateLimiter` sliding-window logic |
+```bash
+uv run --extra test pytest --collect-only -q
+```
+
+The pytest configuration lives in `pyproject.toml`.
 
 ## Code Quality
 
@@ -147,29 +195,34 @@ uv run ruff format .
 uv run ruff check --fix .
 ```
 
-Use `ruff format` for automatic prettifying and `ruff check --fix` to clean up lint
-issues such as unused imports and import order.
+Ruff targets Python 3.12 and line length 88. Project code should follow the detailed rules in `agents/CLAUDE.md`, `agents/RULES.md`, `agents/STYLE-CODE.md`, and `agents/STYLE-COMMENTS.md`.
 
----
+## Documentation Index
 
-## Documentation
+- `AGENTS.md` — project guide for agents and contributors.
+- `PLAN.md` — current state, runtime flow, priorities, and maintenance plan.
+- `replit.md` — Replit deployment notes.
+- `docs/README.md` — developer documentation overview and detailed guide index.
+- `docs/setup.md` — local, Docker, and hosted setup workflow.
+- `docs/modules/modules.md` — module boundaries.
+- `docs/databases/databases.md` — database layer notes.
+- `docs/helper/helper.md` — shared helper documentation.
+- `docs/utils/utils.md` — utility module notes.
+- `docs/workflows.md` and `docs/workflows/workflows.md` — user-facing flow overview and conversation internals.
+- `docs/appeal-detailed.md`, `docs/banning-detailed.md`, `docs/role-detailed.md`, `docs/warnings-detailed.md` — detailed feature guides.
+- `agents/CLAUDE.md`, `agents/RULES.md`, `agents/STYLE-CODE.md`, `agents/STYLE-COMMENTS.md`, `agents/WORKFLOW.md` — detailed engineering rules.
 
-- [Execution plan and project state](PLAN.md)
-- [Documentation Overview](docs/README.md)
-- [Architecture](docs/architecture.md)
-- [Modules and service boundaries](docs/modules.md)
-- [Conversation flows](docs/workflows.md)
-- [Development workflow and onboarding](docs/development.md)
-- [AI agent instructions](agents/CLAUDE.md)
-- [Code style](agents/STYLE-CODE.md)
-- [Comment style](agents/STYLE-COMMENTS.md)
-- [Project rules](agents/RULES.md)
-- [Workflow conventions](agents/WORKFLOW.md)
-- [Replit environment](agents/REPLIT.md)
+## Current Status
 
----
+- Runtime entry point: `python3 -m tcbot`.
+- Dependency management: `uv` and `uv.lock`.
+- Database: MongoDB/Motor with startup index creation.
+- Health check: Flask `GET /` endpoint on `PORT`.
+- Test inventory: 134 collected tests across 14 files.
+- Secrets policy: use environment variables; never commit real tokens, MongoDB URIs, or private chat IDs.
 
 ## License
 
-Copyright © 2024–2026 Transsion Core, Dizzy, Aveum Apps. All rights reserved.  
-See [LICENSE](LICENSE) for details.
+Copyright © 2024–2026 Transsion Core, Dizzy, Aveum Apps. All rights reserved.
+
+See `LICENSE` for details.

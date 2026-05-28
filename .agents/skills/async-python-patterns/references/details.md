@@ -1,445 +1,212 @@
-# async-python-patterns — detailed worked examples
+# Async Python Patterns — TCBot Reference
 
-## Advanced Patterns
+Updated: 2026-05-28
 
-### Pattern 6: Async Context Managers
+This reference expands the `async-python-patterns` skill with practical examples for TCBot's Python 3.12, `python-telegram-bot` 22.5, Motor/MongoDB, and pytest-asyncio stack.
+
+## Choosing the Right Async Pattern
+
+| Situation | Preferred pattern |
+|---|---|
+| One Telegram API call | Direct `await` |
+| A few independent DB/API reads | `asyncio.gather()` |
+| Federation-wide Telegram actions | `tcbot.utils.dispatch.fan_out()` |
+| User-driven multi-step input | `ConversationHandler` flow in `*_flow.py` |
+| Scheduled expiration or cleanup | PTB job queue |
+| Blocking file or CPU-heavy work | Avoid; if necessary, `asyncio.to_thread()` |
+
+## Direct Await
+
+Use direct `await` when an operation is sequential or the next step depends on the result.
 
 ```python
-import asyncio
-from typing import Optional
+user_doc = await db.users_db.get_user(user_id)
+if user_doc is None:
+    await msg.reply_text("User is not known yet.", parse_mode="HTML")
+    return
 
-class AsyncDatabaseConnection:
-    """Async database connection context manager."""
-
-    def __init__(self, dsn: str):
-        self.dsn = dsn
-        self.connection: Optional[object] = None
-
-    async def __aenter__(self):
-        print("Opening connection")
-        await asyncio.sleep(0.1)  # Simulate connection
-        self.connection = {"dsn": self.dsn, "connected": True}
-        return self.connection
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        print("Closing connection")
-        await asyncio.sleep(0.1)  # Simulate cleanup
-        self.connection = None
-
-async def query_database():
-    """Use async context manager."""
-    async with AsyncDatabaseConnection("postgresql://localhost") as conn:
-        print(f"Using connection: {conn}")
-        await asyncio.sleep(0.2)  # Simulate query
-        return {"rows": 10}
-
-asyncio.run(query_database())
+await msg.reply_text("User found.", parse_mode="HTML")
 ```
 
-### Pattern 7: Async Iterators and Generators
+## Parallel Independent Reads
+
+Use `asyncio.gather()` when operations are independent and all are required before continuing.
 
 ```python
 import asyncio
-from typing import AsyncIterator
 
-async def async_range(start: int, end: int, delay: float = 0.1) -> AsyncIterator[int]:
-    """Async generator that yields numbers with delay."""
-    for i in range(start, end):
-        await asyncio.sleep(delay)
-        yield i
-
-async def fetch_pages(url: str, max_pages: int) -> AsyncIterator[dict]:
-    """Fetch paginated data asynchronously."""
-    for page in range(1, max_pages + 1):
-        await asyncio.sleep(0.2)  # Simulate API call
-        yield {
-            "page": page,
-            "url": f"{url}?page={page}",
-            "data": [f"item_{page}_{i}" for i in range(5)]
-        }
-
-async def consume_async_iterator():
-    """Consume async iterator."""
-    async for number in async_range(1, 5):
-        print(f"Number: {number}")
-
-    print("\nFetching pages:")
-    async for page_data in fetch_pages("https://api.example.com/items", 3):
-        print(f"Page {page_data['page']}: {len(page_data['data'])} items")
-
-asyncio.run(consume_async_iterator())
+executor_role, target_role, group = await asyncio.gather(
+    db.roles_db.get_effective_role(executor_id),
+    db.roles_db.get_effective_role(target_id),
+    db.groups_db.get_group(chat_id),
+)
 ```
 
-### Pattern 8: Producer-Consumer Pattern
+Avoid gathering operations when one result determines whether the others should run. In those cases, sequence the calls for clearer control flow and fewer unnecessary database requests.
+
+## Handling Partial Failures
+
+When partial success is acceptable, inspect every result explicitly.
 
 ```python
-import asyncio
-from asyncio import Queue
-from typing import Optional
+results = await asyncio.gather(
+    db.users_db.get_user(user_id),
+    db.groups_db.get_group(chat_id),
+    return_exceptions=True,
+)
 
-async def producer(queue: Queue, producer_id: int, num_items: int):
-    """Produce items and put them in queue."""
-    for i in range(num_items):
-        item = f"Item-{producer_id}-{i}"
-        await queue.put(item)
-        print(f"Producer {producer_id} produced: {item}")
-        await asyncio.sleep(0.1)
-    await queue.put(None)  # Signal completion
+for result in results:
+    if isinstance(result, BaseException):
+        log.warning("Lookup failed", exc_info=result)
+```
 
-async def consumer(queue: Queue, consumer_id: int):
-    """Consume items from queue."""
-    while True:
-        item = await queue.get()
-        if item is None:
-            queue.task_done()
-            break
+Do not use `return_exceptions=True` and then treat the result list as if every element succeeded.
 
-        print(f"Consumer {consumer_id} processing: {item}")
-        await asyncio.sleep(0.2)  # Simulate work
-        queue.task_done()
+## Bounded Telegram Fan-Out
 
-async def producer_consumer_example():
-    """Run producer-consumer pattern."""
-    queue = Queue(maxsize=10)
+Use `fan_out()` for connected-group moderation because it bounds concurrency and keeps ordered results.
 
-    # Create tasks
-    producers = [
-        asyncio.create_task(producer(queue, i, 5))
-        for i in range(2)
+```python
+from tcbot.utils.dispatch import fan_out
+
+active_groups = await db.groups_db.active_groups()
+results = await fan_out(
+    [
+        ctx.bot.restrict_chat_member(group["chat_id"], target_id, permissions)
+        for group in active_groups
     ]
+)
 
-    consumers = [
-        asyncio.create_task(consumer(queue, i))
-        for i in range(3)
-    ]
-
-    # Wait for producers
-    await asyncio.gather(*producers)
-
-    # Wait for queue to be empty
-    await queue.join()
-
-    # Cancel consumers
-    for c in consumers:
-        c.cancel()
-
-asyncio.run(producer_consumer_example())
+success_count = sum(1 for result in results if not isinstance(result, BaseException))
+failure_count = len(results) - success_count
 ```
 
-### Pattern 9: Semaphore for Rate Limiting
+Report partial failures in staff-facing summaries and audit logs when the action is federation-wide.
+
+## Cancellation-Safe Cleanup
+
+Cancellation is part of normal shutdown and timeout behavior. Clean up, then re-raise.
 
 ```python
-import asyncio
-from typing import List
-
-async def api_call(url: str, semaphore: asyncio.Semaphore) -> dict:
-    """Make API call with rate limiting."""
-    async with semaphore:
-        print(f"Calling {url}")
-        await asyncio.sleep(0.5)  # Simulate API call
-        return {"url": url, "status": 200}
-
-async def rate_limited_requests(urls: List[str], max_concurrent: int = 5):
-    """Make multiple requests with rate limiting."""
-    semaphore = asyncio.Semaphore(max_concurrent)
-    tasks = [api_call(url, semaphore) for url in urls]
-    results = await asyncio.gather(*tasks)
-    return results
-
-async def main():
-    urls = [f"https://api.example.com/item/{i}" for i in range(20)]
-    results = await rate_limited_requests(urls, max_concurrent=3)
-    print(f"Completed {len(results)} requests")
-
-asyncio.run(main())
-```
-
-### Pattern 10: Async Locks and Synchronization
-
-```python
-import asyncio
-
-class AsyncCounter:
-    """Thread-safe async counter."""
-
-    def __init__(self):
-        self.value = 0
-        self.lock = asyncio.Lock()
-
-    async def increment(self):
-        """Safely increment counter."""
-        async with self.lock:
-            current = self.value
-            await asyncio.sleep(0.01)  # Simulate work
-            self.value = current + 1
-
-    async def get_value(self) -> int:
-        """Get current value."""
-        async with self.lock:
-            return self.value
-
-async def worker(counter: AsyncCounter, worker_id: int):
-    """Worker that increments counter."""
-    for _ in range(10):
-        await counter.increment()
-        print(f"Worker {worker_id} incremented")
-
-async def test_counter():
-    """Test concurrent counter."""
-    counter = AsyncCounter()
-
-    workers = [asyncio.create_task(worker(counter, i)) for i in range(5)]
-    await asyncio.gather(*workers)
-
-    final_value = await counter.get_value()
-    print(f"Final counter value: {final_value}")
-
-asyncio.run(test_counter())
-```
-
-## Real-World Applications
-
-### Web Scraping with aiohttp
-
-```python
-import asyncio
-import aiohttp
-from typing import List, Dict
-
-async def fetch_url(session: aiohttp.ClientSession, url: str) -> Dict:
-    """Fetch single URL."""
+async def run_cleanup_job() -> None:
     try:
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
-            text = await response.text()
-            return {
-                "url": url,
-                "status": response.status,
-                "length": len(text)
-            }
-    except Exception as e:
-        return {"url": url, "error": str(e)}
-
-async def scrape_urls(urls: List[str]) -> List[Dict]:
-    """Scrape multiple URLs concurrently."""
-    async with aiohttp.ClientSession() as session:
-        tasks = [fetch_url(session, url) for url in urls]
-        results = await asyncio.gather(*tasks)
-        return results
-
-async def main():
-    urls = [
-        "https://httpbin.org/delay/1",
-        "https://httpbin.org/delay/2",
-        "https://httpbin.org/status/404",
-    ]
-
-    results = await scrape_urls(urls)
-    for result in results:
-        print(result)
-
-asyncio.run(main())
+        await expire_old_records()
+    except asyncio.CancelledError:
+        log.debug("Cleanup job cancelled")
+        raise
 ```
 
-### Async Database Operations
+Never hide cancellation with broad exception handlers.
 
 ```python
-import asyncio
-from typing import List, Optional
-
-# Simulated async database client
-class AsyncDB:
-    """Simulated async database."""
-
-    async def execute(self, query: str) -> List[dict]:
-        """Execute query."""
-        await asyncio.sleep(0.1)
-        return [{"id": 1, "name": "Example"}]
-
-    async def fetch_one(self, query: str) -> Optional[dict]:
-        """Fetch single row."""
-        await asyncio.sleep(0.1)
-        return {"id": 1, "name": "Example"}
-
-async def get_user_data(db: AsyncDB, user_id: int) -> dict:
-    """Fetch user and related data concurrently."""
-    user_task = db.fetch_one(f"SELECT * FROM users WHERE id = {user_id}")
-    orders_task = db.execute(f"SELECT * FROM orders WHERE user_id = {user_id}")
-    profile_task = db.fetch_one(f"SELECT * FROM profiles WHERE user_id = {user_id}")
-
-    user, orders, profile = await asyncio.gather(user_task, orders_task, profile_task)
-
-    return {
-        "user": user,
-        "orders": orders,
-        "profile": profile
-    }
-
-async def main():
-    db = AsyncDB()
-    user_data = await get_user_data(db, 1)
-    print(user_data)
-
-asyncio.run(main())
+try:
+    await do_work()
+except asyncio.CancelledError:
+    raise
+except Exception:
+    log.exception("Work failed")
 ```
 
-### WebSocket Server
+## Timeouts
+
+Use Python 3.12 `asyncio.timeout()` for local bounds around an operation.
 
 ```python
-import asyncio
-from typing import Set
-
-# Simulated WebSocket connection
-class WebSocket:
-    """Simulated WebSocket."""
-
-    def __init__(self, client_id: str):
-        self.client_id = client_id
-
-    async def send(self, message: str):
-        """Send message."""
-        print(f"Sending to {self.client_id}: {message}")
-        await asyncio.sleep(0.01)
-
-    async def recv(self) -> str:
-        """Receive message."""
-        await asyncio.sleep(1)
-        return f"Message from {self.client_id}"
-
-class WebSocketServer:
-    """Simple WebSocket server."""
-
-    def __init__(self):
-        self.clients: Set[WebSocket] = set()
-
-    async def register(self, websocket: WebSocket):
-        """Register new client."""
-        self.clients.add(websocket)
-        print(f"Client {websocket.client_id} connected")
-
-    async def unregister(self, websocket: WebSocket):
-        """Unregister client."""
-        self.clients.remove(websocket)
-        print(f"Client {websocket.client_id} disconnected")
-
-    async def broadcast(self, message: str):
-        """Broadcast message to all clients."""
-        if self.clients:
-            tasks = [client.send(message) for client in self.clients]
-            await asyncio.gather(*tasks)
-
-    async def handle_client(self, websocket: WebSocket):
-        """Handle individual client connection."""
-        await self.register(websocket)
-        try:
-            async for message in self.message_iterator(websocket):
-                await self.broadcast(f"{websocket.client_id}: {message}")
-        finally:
-            await self.unregister(websocket)
-
-    async def message_iterator(self, websocket: WebSocket):
-        """Iterate over messages from client."""
-        for _ in range(3):  # Simulate 3 messages
-            yield await websocket.recv()
+async def safe_lookup(user_id: int) -> dict[str, object] | None:
+    try:
+        async with asyncio.timeout(3):
+            return await db.users_db.get_user(user_id)
+    except TimeoutError:
+        log.warning("Timed out loading user %s", user_id)
+        return None
 ```
 
-## Performance Best Practices
+For conversation flows, use project configuration such as `cfg.proof_timeout` or `cfg.appeal_timeout` instead of local magic numbers.
 
-### 1. Use Connection Pools
+## PTB Job Queue
+
+Use the job queue for delayed state changes. Persist durable state in MongoDB and pass small IDs through job data.
 
 ```python
-import asyncio
-import aiohttp
+from telegram.ext import ContextTypes
 
-async def with_connection_pool():
-    """Use connection pool for efficiency."""
-    connector = aiohttp.TCPConnector(limit=100, limit_per_host=10)
 
-    async with aiohttp.ClientSession(connector=connector) as session:
-        tasks = [session.get(f"https://api.example.com/item/{i}") for i in range(50)]
-        responses = await asyncio.gather(*tasks)
-        return responses
+async def expire_proof_request(ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    proof_id = (ctx.job.data or {}).get("proof_id") if ctx.job else None
+    if proof_id is None:
+        return
+
+    await db.proofs_db.mark_expired(str(proof_id))
 ```
 
-### 2. Batch Operations
+Job callbacks should be idempotent: if a record was already resolved, they should return cleanly.
+
+## Motor Cursor Handling
+
+Prefer turning cursors into concrete values inside database helpers.
 
 ```python
-async def batch_process(items: List[str], batch_size: int = 10):
-    """Process items in batches."""
-    for i in range(0, len(items), batch_size):
-        batch = items[i:i + batch_size]
-        tasks = [process_item(item) for item in batch]
-        await asyncio.gather(*tasks)
-        print(f"Processed batch {i // batch_size + 1}")
-
-async def process_item(item: str):
-    """Process single item."""
-    await asyncio.sleep(0.1)
-    return f"Processed: {item}"
+async def active_groups() -> list[dict[str, object]]:
+    cursor = mongos.groups().find({"active": True})
+    return await cursor.to_list(length=None)
 ```
 
-### 3. Avoid Blocking Operations
-
-Never block the event loop with synchronous operations. A single blocking call stalls all concurrent tasks.
+Use projections for large documents or list views.
 
 ```python
-# BAD - blocks the entire event loop
-async def fetch_data_bad():
-    import time
-    import requests
-    time.sleep(1)  # Blocks!
-    response = requests.get(url)  # Also blocks!
-
-# GOOD - use async-native libraries (e.g., httpx for async HTTP)
-import httpx
-
-async def fetch_data_good(url: str):
-    await asyncio.sleep(1)
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
+cursor = mongos.groups().find(
+    {"active": True},
+    {"chat_id": 1, "title": 1, "_id": 0},
+)
 ```
 
-**Wrapping Blocking Code with `asyncio.to_thread()` (Python 3.9+):**
+## Avoid Blocking the Event Loop
 
-When you must use synchronous libraries, offload to a thread pool:
+Do not use:
 
 ```python
-import asyncio
-from pathlib import Path
-
-async def read_file_async(path: str) -> str:
-    """Read file without blocking event loop."""
-    # asyncio.to_thread() runs sync code in a thread pool
-    return await asyncio.to_thread(Path(path).read_text)
-
-async def call_sync_library(data: dict) -> dict:
-    """Wrap a synchronous library call."""
-    # Useful for sync database drivers, file I/O, CPU work
-    return await asyncio.to_thread(sync_library.process, data)
+time.sleep(1)
+requests.get(url)
+subprocess.run(args)
 ```
 
-**Lower-level approach with `run_in_executor()`:**
+Inside handlers, callbacks, jobs, or database helpers. If blocking work is unavoidable and small, isolate it:
 
 ```python
-import asyncio
-import concurrent.futures
-from typing import Any
-
-def blocking_operation(data: Any) -> Any:
-    """CPU-intensive blocking operation."""
-    import time
-    time.sleep(1)
-    return data * 2
-
-async def run_in_executor(data: Any) -> Any:
-    """Run blocking operation in thread pool."""
-    loop = asyncio.get_running_loop()
-    with concurrent.futures.ThreadPoolExecutor() as pool:
-        result = await loop.run_in_executor(pool, blocking_operation, data)
-        return result
-
-async def main():
-    results = await asyncio.gather(*[run_in_executor(i) for i in range(5)])
-    print(results)
-
-asyncio.run(main())
+result = await asyncio.to_thread(render_report_sync, report_data)
 ```
+
+For recurring heavy work, design a bounded worker or external process instead of using unbounded threads.
+
+## Async Test Patterns
+
+With `asyncio_mode = "auto"`, async tests do not need explicit markers unless the local test style prefers them.
+
+```python
+async def test_marks_appeal_expired(fake_appeals_db) -> None:
+    await fake_appeals_db.insert_one({"appeal_id": "a1", "status": "pending"})
+
+    await appeals_db.mark_expired("a1")
+
+    appeal = await fake_appeals_db.find_one({"appeal_id": "a1"})
+    assert appeal["status"] == "expired"
+```
+
+Keep tests deterministic:
+
+- Mock Telegram API calls.
+- Use fake collections or monkeypatch database helpers.
+- Avoid real sleeps; prefer short configured intervals or direct helper calls.
+- Assert timeout and cancellation paths when they are part of the feature.
+
+## Review Prompts
+
+When reviewing async code, ask:
+
+1. Can this handler block polling?
+2. Are all coroutines awaited?
+3. Is concurrency bounded for potentially large lists?
+4. Are partial Telegram failures visible to staff?
+5. Can shutdown cancel this task cleanly?
+6. Is durable state in MongoDB instead of only context memory?
+7. Does the test avoid network, Telegram, and real MongoDB?

@@ -1,271 +1,196 @@
-# Project Overview and Repository Details
+# TCF Bot Project Guide
 
-## Project Structure & Module Organization
-tgbot_tcf or root project folder/
-│   .gitignore
-│   .replit
-│   AGENTS.md
-│   config.env
-│   config.env.example
-│   docker-compose.yml
-│   Dockerfile
-│   LICENSE
-│   PLAN.md
-│   pyproject.toml
-│   README.md
-│   replit.md
-│   skills-lock.json
-│   uv.lock
-│   
-├───.agents
-│   └───skills
-│       ├───async-python-patterns
-│       │   │   SKILL.md
-│       │   │   
-│       │   └───references
-│       │           details.md
-│       │           
-│       ├───mermaid-diagrams
-│       │   │   README.md
-│       │   │   SKILL.md
-│       │   │   
-│       │   └───references
-│       │           advanced-features.md
-│       │           architecture-diagrams.md
-│       │           c4-diagrams.md
-│       │           class-diagrams.md
-│       │           erd-diagrams.md
-│       │           flowcharts.md
-│       │           sequence-diagrams.md
-│       │           
-│       ├───mongodb-query-optimizer
-│       │   │   SKILL.md
-│       │   │   
-│       │   └───references
-│       │           aggregation-optimization.md
-│       │           antipattern-examples.md
-│       │           core-indexing-principles.md
-│       │           update-query-examples.md
-│       │           
-│       ├───project-policy
-│       │       SKILL.md
-│       │       
-│       ├───python-code-quality
-│       │       REFERENCE.md
-│       │       SKILL.md
-│       │       
-│       └───telegram-bot-builder
-│               SKILL.md
-│               
-├───.github
-│   │   dependabot.yml
-│   │   
-│   └───workflows
-│           codeql.yml
-│           run-bot.yml
-│           run-tdd.yml
-│           verification.yml
-│           
-├───.trae
-│   ├───rules
-│   └───skills
-│       ├───async-python-patterns
-│       │   │   SKILL.md
-│       │   │   
-│       │   └───references
-│       │           details.md
-│       │           
-│       ├───mermaid-diagrams
-│       │   │   README.md
-│       │   │   SKILL.md
-│       │   │   
-│       │   └───references
-│       │           advanced-features.md
-│       │           architecture-diagrams.md
-│       │           c4-diagrams.md
-│       │           class-diagrams.md
-│       │           erd-diagrams.md
-│       │           flowcharts.md
-│       │           sequence-diagrams.md
-│       │           
-│       ├───mongodb-query-optimizer
-│       │   │   SKILL.md
-│       │   │   
-│       │   └───references
-│       │           aggregation-optimization.md
-│       │           antipattern-examples.md
-│       │           core-indexing-principles.md
-│       │           update-query-examples.md
-│       │           
-│       ├───python-code-quality
-│       │       REFERENCE.md
-│       │       SKILL.md
-│       │       
-│       └───telegram-bot-builder
-│               SKILL.md
-│               
-├───.vscode
-│       launch.json
-│       settings.json
-│       
-├───agents
-│       CLAUDE.md
-│       REPLIT.md
-│       RULES.md
-│       STYLE-CODE.md
-│       STYLE-COMMENTS.md
-│       TEST-RUFF.md
-│       WORKFLOW.md
-│       
-├───docs
-│   │   appeal-detailed.md
-│   │   banning-detailed.md
-│   │   button-styles.md
-│   │   development.md
-│   │   git-commit.md
-│   │   mapping.md
-│   │   README.md
-│   │   role-detailed.md
-│   │   workflows.md
-│   │   
-│   ├───databases
-│   │       databases.md
-│   │       
-│   ├───helper
-│   │       helper.md
-│   │       
-│   ├───modules
-│   │       modules.md
-│   │       
-│   ├───utils
-│   │       utils.md
-│   │       
-│   └───workflows
-│           workflows.md
-│           
-├───tcbot
-│   │   alive.py
-│   │   __init__.py
-│   │   __main__.py
-│   │   
-│   ├───database
-│   │       admins_db.py
-│   │       bans_db.py
-│   │       cache.py
-│   │       documents.py
-│   │       groups_db.py
-│   │       kicks_db.py
-│   │       mongos.py
-│   │       mutes_db.py
-│   │       queues_db.py
-│   │       roles_db.py
-│   │       types.py
-│   │       users_db.py
-│   │       warns_db.py
-│   │       __init__.py
-│   │       
-│   ├───modules
-│   │   │   about.py
-│   │   │   additional.py
-│   │   │   admins.py
-│   │   │   appeals.py
-│   │   │   banning.py
-│   │   │   broadcasting.py
-│   │   │   checking.py
-│   │   │   connecting.py
-│   │   │   disconnecting.py
-│   │   │   greeting.py
-│   │   │   groups.py
-│   │   │   help.py
-│   │   │   kicking.py
-│   │   │   maintenance.py
-│   │   │   muting.py
-│   │   │   privacy.py
-│   │   │   start.py
-│   │   │   stats.py
-│   │   │   unbanning.py
-│   │   │   warnings.py
-│   │   │   __init__.py
-│   │   │   
-│   │   └───helper
-│   │       │   ban_info.py
-│   │       │   decorators.py
-│   │       │   extraction.py
-│   │       │   formatter.py
-│   │       │   keyboards.py
-│   │       │   parse_editmsg.py
-│   │       │   parse_link.py
-│   │       │   parse_logmsg.py
-│   │       │   role_guard.py
-│   │       │   __init__.py
-│   │       │   
-│   │       └───workflows
-│   │               appeal_flow.py
-│   │               ban_flow.py
-│   │               connected_flow.py
-│   │               kicking_flow.py
-│   │               muting_flow.py
-│   │               promote_flow.py
-│   │               proof_flow.py
-│   │               reason_flow.py
-│   │               stats_chats_flow.py
-│   │               stats_flow.py
-│   │               unban_flow.py
-│   │               warning_flow.py
-│   │               __init__.py
-│   │               
-│   └───utils
-│           dispatch.py
-│           error_reporter.py
-│           logger.py
-│           prefixes.py
-│           timedate_format.py
-│           __init__.py
-│           
-└───tests
-        conftest.py
-        test_appeals_pure.py
-        test_bans_db.py
-        test_ban_flow.py
-        test_config_parse.py
-        test_decorators.py
-        test_format.py
-        test_keyboards.py
-        test_log_templates.py
-        test_prefix.py
-        test_rate_limiter.py
-        test_targets.py
-        test_users_resolver.py
-        test_warns_db.py
-        __init__.py
+This file is the top-level guide for agents and contributors working in this repository. It summarizes the current project layout, development commands, style rules, and safety requirements.
 
-Core code lives in `tcbot/`:
-- Command modules in `tcbot/modules/`.
-- Shared helpers in `tcbot/modules/helper/`.
-- MongoDB access in `tcbot/database/`.
-- Runtime utilities in `tcbot/utils/`.
-- TDD tests in `tests/`. Tests are in `tests/` and run fully offline.
+## Project Overview
 
-Project notes and agent-specific rules live in `agents/` and `docs/`.
-Keep new database code in a `*_db.py` file.
-Keep new conversation flows in a `*_flow.py` file.
+TCF Bot is a Python Telegram bot for the Transsion Core Federation community. It manages federation-wide moderation actions, appeal workflows, staff roles, connected groups, audit logging, and health checks.
 
-## Build, Test, and Development Commands
-- `uv sync` installs Python 3.12 dependencies from `pyproject.toml` and `uv.lock`.
-- `python3 -m tcbot` starts the bot locally.
-- `python3 -m pytest tests/ -v` runs the full test suite.
-- `uv run ruff format .` reformats Python files with Ruff.
-- `uv run ruff check --fix .` applies lint fixes and import cleanup.
-- `docker-compose up --build` starts the bot plus a local MongoDB instance.
+Current stack:
 
-## Coding Style & Naming Conventions
-Use Python 3.12, 4-space indentation, and `from __future__ import annotations` as the first non-comment line in every module. Ruff is the repo formatter and linter, so prefer `ruff format` for whitespace/layout and `ruff check --fix` for automatic cleanup. Prefer built-in generic types such as `list[str]` and `dict[str, int]`; avoid inline imports. Name async handlers `cmd_*` or `on_*`, conversation states `WAITING_*`, and keep module files descriptive (`banning.py`, `appeal_flow.py`). Follow the existing HTML-only bot message style and the conventions in `agents/STYLE-CODE.md`.
+- Python 3.12 project target (`pyproject.toml` requires `>=3.12`)
+- `python-telegram-bot[job-queue] == 22.5`
+- MongoDB through Motor (`motor >= 3.7.1`)
+- Flask keep-alive / health-check server
+- `uv` for dependency management and lockfile-based installs
+- Ruff for formatting and lint checks
+- pytest + pytest-asyncio for offline tests
+
+## Repository Layout
+
+```text
+tgbot/
+├── tcbot/                    Main bot package
+│   ├── __init__.py           Environment config loader and `cfg` adapter
+│   ├── __main__.py           Runtime entry point, handler registration, polling
+│   ├── alive.py              Flask keep-alive endpoint
+│   ├── database/             MongoDB helpers, one file per collection/domain
+│   ├── modules/              Telegram command modules and handlers
+│   │   └── helper/           Shared helper code and conversation workflows
+│   │       └── workflows/    ConversationHandler flows (`*_flow.py` only)
+│   └── utils/                Logging, dispatch, prefixes, datetime helpers
+├── tests/                    Offline pytest suite
+├── docs/                     Developer documentation by subsystem
+├── agents/                   Detailed coding, workflow, and style rules
+├── config.env.example        Environment variable template
+├── docker-compose.yml        Local bot + MongoDB compose setup
+├── Dockerfile                Container image definition
+├── pyproject.toml            Dependencies, pytest, and Ruff settings
+├── uv.lock                   Locked dependency graph
+├── README.md                 User-facing setup and architecture overview
+├── PLAN.md                   Current project state and improvement plan
+└── replit.md                 Replit deployment notes
+```
+
+Core ownership rules:
+
+- Command handlers live in `tcbot/modules/`.
+- Shared handler helpers live in `tcbot/modules/helper/`.
+- Conversation flows live in `tcbot/modules/helper/workflows/` and must be named `*_flow.py`.
+- MongoDB access lives in `tcbot/database/`; keep new database helpers in `*_db.py` files.
+- Runtime utilities live in `tcbot/utils/`.
+- Tests live in `tests/` and should remain fully offline.
+
+## Development Commands
+
+Install dependencies:
+
+```bash
+uv sync
+```
+
+Install test extras when needed:
+
+```bash
+uv sync --extra test
+```
+
+Run the bot locally:
+
+```bash
+python3 -m tcbot
+```
+
+On Windows, use `python -m tcbot` if `python3` is not available.
+
+Run tests:
+
+```bash
+python3 -m pytest tests/ -v
+```
+
+Equivalent with `uv` and test extras:
+
+```bash
+uv run --extra test pytest tests/ -v
+```
+
+Format and lint:
+
+```bash
+uv run ruff format .
+uv run ruff check --fix .
+```
+
+Run with Docker Compose:
+
+```bash
+docker-compose up --build
+```
+
+## Configuration and Secrets
+
+Configuration is loaded from environment variables. For local development, `python-dotenv` loads `config.env` when present. For Replit or hosted deployment, store secrets in the platform secret manager instead of committing them.
+
+Never commit real credentials. Required secret values include:
+
+- `BOT_TOKEN` — Telegram bot token from BotFather.
+- `MONGODB_URI` — MongoDB connection string.
+
+Important non-secret/runtime variables include:
+
+- `OWNER_ID` — initial federation founder Telegram user ID.
+- `DB_NAME` — MongoDB database name, default `tcbot`.
+- `COMMUNITY_NAME` — display name used in bot messages and logs.
+- `PREFIXES` — command prefix list, default `['/', '!', '.']`.
+- `PORT` — Flask keep-alive port, default `5000`.
+- `MAIN_GROUP`, `MAIN_CHANNEL`, `EXTEND_GROUP` — community chat IDs.
+- `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS` — log/proof/appeal destinations; values may be `chat_id` or `chat_id/thread_id`.
+- `APPEAL_DISCUSSION_TOPIC` — thread ID in `MAIN_GROUP` for appeal review cards.
+- `PROOF_TIMEOUT_SECONDS`, `APPEAL_TIMEOUT_SECONDS`, `ALBUM_DEBOUNCE_SECONDS` — conversation timing settings.
+- `LOG_LEVEL` — bot log level.
+- `MODULES_LOAD`, `MODULES_NO_LOAD` — optional module allowlist/denylist.
+
+Use `config.env.example` as the complete template.
+
+## Code Style and Naming
+
+Follow the detailed rules in `agents/CLAUDE.md`, `agents/RULES.md`, `agents/STYLE-CODE.md`, and `agents/STYLE-COMMENTS.md` before editing source code.
+
+Repository conventions:
+
+- Use Python 3.12 syntax and 4-space indentation.
+- Place `from __future__ import annotations` as the first non-comment line in Python modules.
+- Prefer built-in generics such as `list[str]`, `dict[str, int]`, and `int | None`.
+- Avoid inline imports and wildcard imports.
+- Use Ruff for formatting and import cleanup.
+- Name async command handlers `cmd_*` and event handlers `on_*`.
+- Name conversation states `WAITING_*`.
+- Keep all bot messages HTML-only (`parse_mode='HTML'`) and escape user-provided text through the formatter helpers.
+- Use `tcbot.utils.timedate_format` for UTC timestamps and display formatting.
+
+## Architecture Rules
+
+- `tcbot/__main__.py` builds the PTB application, starts Flask keep-alive, registers the global rate limiter, loads module handlers, and starts long polling.
+- `tcbot/modules/__init__.py` discovers top-level module files and applies `MODULES_LOAD` / `MODULES_NO_LOAD` filters.
+- Handlers should use database helper modules instead of calling `mongos.col()` directly.
+- Multi-group actions should use `tcbot.utils.dispatch.fan_out()` to bound concurrent Telegram API calls.
+- Role checks should use the canonical role helpers in `tcbot.database.roles_db` and `tcbot.modules.helper.role_guard`.
+- Ban/kick flows must auto-demote users who currently hold a federation role.
+- New conversation logic belongs in `tcbot/modules/helper/workflows/*_flow.py`.
 
 ## Testing Guidelines
-The project uses `pytest` with `pytest-asyncio`. Test files are named `test_*.py` and live under `tests/`. Prefer small, behavior-focused tests that mirror the existing offline coverage. If you change database behavior, handlers, or shared helpers, add or update tests in the matching file.
 
-## Commit & Pull Request Guidelines
-Git history uses conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, and `chore:`. Keep commits focused and descriptive. Pull requests should summarize the change, note any config or database impact, and include test results. Add screenshots or log excerpts only for user-visible behavior changes.
+The test suite is designed to run offline without a real Telegram token or MongoDB connection. Add or update tests when changing database helpers, handler behavior, workflow logic, formatting helpers, decorators, or utilities.
 
-## Security & Configuration Tips
-Do not commit real secrets. Use `config.env` locally and Replit Secrets in hosted environments. Required values include `BOT_TOKEN` and `MONGODB_URI`. For schema changes, update all read paths and migration-sensitive code together so existing MongoDB data remains compatible.
+Current collected test inventory: 134 tests across 14 `tests/test_*.py` files.
+
+Recommended validation after source changes:
+
+```bash
+uv run --extra test pytest tests/ -v
+uv run ruff format .
+uv run ruff check --fix .
+```
+
+For documentation-only changes, a test collection check is usually enough:
+
+```bash
+uv run --extra test pytest --collect-only -q
+```
+
+## Commit and Pull Request Guidance
+
+Use focused commits and conventional prefixes when appropriate:
+
+- `feat:` for user-facing features
+- `fix:` for bug fixes
+- `refactor:` for behavior-preserving code changes
+- `docs:` for documentation changes
+- `test:` for test-only changes
+- `chore:` for maintenance work
+
+Pull requests should include:
+
+- A short summary of the change.
+- Test or validation commands run.
+- Any configuration, database, or deployment impact.
+- Screenshots or log excerpts only when user-visible behavior changed.
+
+## Security Requirements
+
+- Do not commit tokens, MongoDB URIs, API keys, passwords, or private chat IDs that should remain secret.
+- Do not print or log secrets.
+- Do not change `config.env` as part of normal code or documentation work.
+- Keep database schema changes backward-compatible unless a migration plan is included.
+- Update every read path if a stored MongoDB field is added, renamed, or removed.

@@ -1,103 +1,213 @@
 # Development Workflow — TCF Bot
 
-**Read `agents/CLAUDE.md` first.** This file defines branching strategy, commit conventions, and the deployment checklist.
-
-Compatible with: Replit AI, Claude, Gemini, Qwen, GitHub Copilot, and any AI coding agent.
-
----
-
-## Before Making Any Change
-
-1. Read the full content of the file you are about to edit.
-2. Check for duplicate logic across modules before adding a new function.
-3. If you are changing a database schema (adding or removing fields), update all read paths too.
-4. Run `python3 -m pytest tests/ -v` — all 134 tests must pass before you start.
+Read `agents/CLAUDE.md` first. This file describes the safe working process for
+changes in TCF Bot.
 
 ---
 
-## Branching Strategy
+## Scope Discipline
 
-| Branch | Purpose |
+Before changing anything:
+
+1. Identify the exact files in scope.
+2. Read the existing file before editing it.
+3. Search for existing helpers or patterns.
+4. Avoid unrelated refactors.
+5. Do not edit `config.env` during normal development tasks.
+6. Do not touch secrets, production credentials, or private deployment values.
+
+When the user explicitly limits write scope, obey that scope even if other files
+contain stale information.
+
+---
+
+## Standard Local Setup
+
+Install dependencies:
+
+```bash
+uv sync
+```
+
+Install test dependencies:
+
+```bash
+uv sync --extra test
+```
+
+Run the bot locally:
+
+```bash
+python3 -m tcbot
+```
+
+On Windows, use `python -m tcbot` if `python3` is not available.
+
+---
+
+## Validation Workflow
+
+For code changes, prefer this order:
+
+1. Run a focused test or import check for the changed area.
+2. Run Ruff formatting and linting.
+3. Run the full offline test suite.
+4. If the task affects runtime behavior, start the bot and inspect startup logs.
+
+Commands:
+
+```bash
+uv run ruff format .
+uv run ruff check --fix .
+python3 -m pytest tests/ -v
+python3 -m tcbot
+```
+
+If a command cannot run in the current environment, record the exact command and
+error in the final summary.
+
+---
+
+## Adding or Changing Command Modules
+
+1. Put command handlers in `tcbot/modules/<name>.py`.
+2. Use the standard file header and import order.
+3. Define `__module_name__` and `__help_text__` unless the module is intentionally
+   hidden from help.
+4. Use `build_prefixed_filters()` for command filters.
+5. Apply the decorator stack in the required order.
+6. Use shared helpers for formatting, target extraction, roles, keyboards, and DB
+   access.
+7. Export handlers through `__handlers__` at the bottom.
+8. Add or update tests when logic changes.
+
+---
+
+## Adding Database Helpers
+
+1. Add or edit the owning `tcbot/database/<name>_db.py` file.
+2. Keep all collection writes inside database helper modules.
+3. Use a private `_col()` accessor inside the DB helper if direct `col()` access
+   is needed.
+4. Keep helpers async and fully typed.
+5. Add document shapes to `documents.py` when needed.
+6. Add domain primitives to `types.py` only when they improve clarity and are used
+   consistently.
+7. Add indexes to `mongos.ensure_indexes()` for new indexed queries.
+8. Invalidate caches after writes when relevant.
+9. Update every read path if a stored field changes.
+10. Add or update offline tests.
+
+Do not rename or delete MongoDB fields without a migration plan.
+
+---
+
+## Adding Conversation Flows
+
+Never create `*_conv.py` files.
+
+Use existing flow factories where possible:
+
+| Action | Workflow |
 |---|---|
-| `main` | Production-ready code only. Never push broken code here. |
-| `feat/<short-description>` | New features |
-| `fix/<short-description>` | Bug fixes |
-| `refactor/<short-description>` | Refactors and code quality improvements |
-| `docs/<short-description>` | Documentation-only changes |
+| Kick / Mute / Warn | `reason_flow.build_modaction_conv()` |
+| Ban | `ban_flow.ban_conversation(entry_fn)` |
+| Appeal | `appeal_flow.build_handler()` |
 
-Merge to `main` only after the bot starts without any `ERROR` in startup logs.
+For a new standalone flow:
 
----
-
-## Adding a Database Collection
-
-1. Create `tcbot/database/<name>_db.py`
-2. Add a private `_col()` accessor: `return col("<collection_name>")`
-3. Implement all helpers as `async def` with full type annotations
-4. Add the collection's indexes to `mongos.ensure_indexes()` in `tcbot/database/mongos.py`
-5. Export the module from `tcbot/database/__init__.py`
+1. Create `tcbot/modules/helper/workflows/<name>_flow.py`.
+2. Model the state graph after `appeal_flow.py`.
+3. Name states `WAITING_*`.
+4. Include a cancel fallback.
+5. Use `cfg.proof_timeout` or `cfg.appeal_timeout` for timeouts.
+6. Keep Telegram messages HTML-only and escaped.
+7. Add tests for state transitions and pure helpers.
 
 ---
 
-## Adding a ConversationHandler Flow
+## Adding Dependencies
 
-**Never create `*_conv.py` files.** All flows live in `*_flow.py` files.
+Use `uv`; do not edit `requirements.txt`.
 
-For kick / mute / warn — add an executor adapter and call `reason_flow.build_modaction_conv()`:
-
-```python
-# myaction_flow.py
-from tcbot.modules.helper.workflows.reason_flow import (
-    WAITING_REASON, WAITING_PROOF, build_modaction_conv,
-)
-
-async def _exec_myaction(
-    update: Update, ctx: ContextTypes.DEFAULT_TYPE,
-    target_id: int, target_fname: str, reason: str, proof_desc: str | None,
-    executor_id: int, executor_fname: str,
-) -> None:
-    ...  # your executor logic
-
-def myaction_conversation(entry_fn) -> ConversationHandler:
-    return build_modaction_conv(
-        action="myaction",
-        entry_fn=entry_fn,
-        executor=_exec_myaction,
-        entry_filter=build_prefixed_filters("tcmyaction"),
-    )
+```bash
+uv add <package>
+uv sync
 ```
 
-For ban — add an entry function and call `ban_flow.ban_conversation(entry_fn)`.
-For a completely new flow — model it after `appeal_flow.py` (standalone state graph).
+Before adding a dependency, confirm:
+
+- The project does not already provide the needed functionality.
+- The package is maintained and compatible with Python 3.12.
+- The package does not require secrets or network access during tests.
+- The dependency is justified by the feature scope.
 
 ---
 
-## Commit Messages
+## Branch and Commit Guidance
 
-Use conventional commits:
+Suggested branch names:
 
+| Prefix | Use |
+|---|---|
+| `feat/` | User-facing features |
+| `fix/` | Bug fixes |
+| `refactor/` | Behavior-preserving code changes |
+| `docs/` | Documentation-only work |
+| `test/` | Test-only changes |
+| `chore/` | Maintenance |
+
+Commit messages should be short, imperative, and focused. Conventional prefixes
+are welcome when helpful:
+
+```text
+feat: add federation sweep command
+fix: guard appeal review callbacks
+docs: refresh agent project rules
+test: cover warning reset flow
 ```
-feat: add /tcsweep command with SweepAgent
-fix: remove dead bans variable in connected_flow
-refactor: deduplicate _render() between start.py and groups.py
-chore: modernize typing hints to Python 3.12 built-ins
-docs: rewrite agents/CLAUDE.md with full architecture detail
-test: add rate-limiter edge cases for concurrent callers
-```
+
+Do not commit unless the user explicitly asks.
 
 ---
 
 ## Deployment Checklist
 
-Before any merge to `main`:
+Before deploying or merging runtime changes:
 
-- [ ] All 134 tests pass: `python3 -m pytest tests/ -v`
-- [ ] Bot starts without any `ERROR` in startup logs
-- [ ] MongoDB connection confirmed in logs: `MongoDB connected → <db_name>`
-- [ ] Keep-alive Flask confirmed in logs: `Flask keepalive started on port 5000`
-- [ ] `/start` shows the main menu in bot PM
-- [ ] `/help` lists all expected modules
-- [ ] At least one moderation command tested end-to-end in a connected group
-- [ ] `config.env` is gitignored and not committed to version control
+- [ ] Ruff format completed.
+- [ ] Ruff lint completed.
+- [ ] Full offline tests passed.
+- [ ] Bot starts without import errors.
+- [ ] MongoDB connection succeeds in startup logs.
+- [ ] Keep-alive server starts on the configured port.
+- [ ] Relevant command or workflow was tested manually when practical.
+- [ ] No real secrets were added to tracked files.
+- [ ] `config.env` remains untracked.
+- [ ] Any database schema impact is documented with a migration plan.
 
 ---
+
+## Replit Runtime Workflow
+
+For Replit-specific deployment details, read `agents/REPLIT.md`.
+
+Operational summary:
+
+- Start command: `python3 -m tcbot`.
+- Replit health port: set `PORT=8080`.
+- Store `BOT_TOKEN` and `MONGODB_URI` in Replit Secrets.
+- Store non-sensitive environment values through Replit environment management or
+  a gitignored local `config.env` only when appropriate.
+
+---
+
+## Final Response Checklist for Agents
+
+When completing a task, summarize:
+
+1. What changed.
+2. Which project-relative files changed.
+3. What validation ran and the result.
+4. Any commands that could not run and why.
+5. Any safe follow-up the user may want.

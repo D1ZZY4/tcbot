@@ -1,217 +1,213 @@
 ---
 name: mermaid-diagrams
-description: Comprehensive guide for creating software diagrams using Mermaid syntax. Use when users need to create, visualize, or document software through diagrams including class diagrams (domain modeling, object-oriented design), sequence diagrams (application flows, API interactions, code execution), flowcharts (processes, algorithms, user journeys), entity relationship diagrams (database schemas), C4 architecture diagrams (system context, containers, components), state diagrams, git graphs, pie charts, gantt charts, or any other diagram type. Triggers include requests to "diagram", "visualize", "model", "map out", "show the flow", or when explaining system architecture, database design, code structure, or user/application flows.
+description: Create render-safe Mermaid diagrams for the TCF Bot project. Use when users ask to diagram, visualize, map out, or explain architecture, Telegram handler flows, ConversationHandler workflows, MongoDB schemas, database relationships, sequence interactions, state transitions, or operational processes.
 ---
 
-# Mermaid Diagramming
+# Mermaid Diagrams for TCF Bot
 
-Create professional software diagrams using Mermaid's text-based syntax. Mermaid renders diagrams from simple text definitions, making diagrams version-controllable, easy to update, and maintainable alongside code.
+Use this skill to create clear, professional Mermaid diagrams for the TCF Bot codebase. Prefer diagrams that help contributors understand architecture, Telegram bot flows, MongoDB data relationships, moderation workflows, and operational boundaries.
 
-## Core Syntax Structure
+Last refreshed for this project: 2026-05-28.
 
-All Mermaid diagrams follow this pattern:
+## Project Context
+
+TCF Bot is a Python 3.12 Telegram bot built with `python-telegram-bot` 22.5, Motor async MongoDB helpers, a Flask keep-alive endpoint, Ruff, and offline pytest tests.
+
+Relevant project structure:
+
+- `tcbot/__main__.py` builds the PTB application, starts keep-alive, connects MongoDB, ensures indexes, registers handlers, and starts polling.
+- `tcbot/modules/` contains top-level Telegram command and event handler modules.
+- `tcbot/modules/helper/` contains shared handler helpers.
+- `tcbot/modules/helper/workflows/*_flow.py` contains `ConversationHandler` workflows.
+- `tcbot/database/*_db.py` contains domain-specific async MongoDB helpers.
+- `tcbot/database/mongos.py` owns the Motor client, collection accessor, and `ensure_indexes()`.
+- `tcbot/utils/` contains dispatch, logging, prefixes, and datetime helpers.
+
+## What to Diagram First
+
+Prioritize these diagram types for this repository:
+
+1. **Architecture flowcharts** for runtime structure, module boundaries, and deployment/health-check context.
+2. **Sequence diagrams** for Telegram update handling, command execution, moderation actions, appeals, proof collection, and logging.
+3. **Flowcharts** for command workflows, role checks, ban/kick/mute/warn paths, appeal decisions, and error handling.
+4. **ER diagrams** for MongoDB collections and relationships between users, roles, groups, moderation records, warnings, caches, and queues.
+5. **State diagrams** for `ConversationHandler` states such as `WAITING_*`, proof submission, appeals, promotion requests, or review flows.
+
+Use class diagrams only when modeling Python object responsibilities or typed document shapes. Use C4-style diagrams only when the user wants a layered architecture view.
+
+## Render-Safe Mermaid Rules
+
+Zed renders Mermaid using the editor's Mermaid renderer. Keep diagrams portable and safe:
+
+- Use standard Mermaid blocks: `flowchart`, `sequenceDiagram`, `erDiagram`, `stateDiagram-v2`, `classDiagram`, `gitGraph`, `gantt`, `pie`, `journey`, `timeline`, `mindmap`, `quadrantChart`, or `xychart-beta` when appropriate.
+- Do **not** include `%%{init}%%` directives.
+- Do **not** hardcode themes, hex colors, or custom `classDef` styles unless the user explicitly asks for exact colors.
+- Do **not** use inline HTML in labels or notes.
+- Prefer simple labels with letters, numbers, spaces, hyphens, underscores, parentheses, colons, and slashes.
+- Quote labels that contain punctuation likely to confuse Mermaid.
+- Avoid `{}`, `[]`, pipes, and raw angle brackets inside labels unless syntax requires them.
+- Prefer taller diagrams over very wide diagrams for editor readability.
+- Split large systems into multiple focused diagrams instead of one dense diagram.
+- Keep node IDs short and stable, and put readable text in labels.
+
+## TCF Bot Diagram Patterns
+
+### Runtime Architecture
+
+Use this pattern when explaining how the bot starts and routes work:
 
 ```mermaid
-diagramType
-  definition content
+flowchart TD
+    Entry[python -m tcbot] --> App[Build PTB application]
+    App --> KeepAlive[Start Flask keep-alive]
+    App --> Mongo[Connect MongoDB]
+    Mongo --> Indexes[Run mongos.ensure_indexes]
+    Indexes --> Owner[Ensure initial owner]
+    Owner --> Modules[Load tcbot.modules handlers]
+    Modules --> Polling[Start Telegram polling]
+    Polling --> Handlers[Command and event handlers]
+    Handlers --> Helpers[Helper utilities and workflows]
+    Helpers --> Database[Async database helpers]
+    Database --> Motor[Motor MongoDB client]
 ```
 
-**Key principles:**
-- First line declares diagram type (e.g., `classDiagram`, `sequenceDiagram`, `flowchart`)
-- Use `%%` for comments
-- Line breaks and indentation improve readability but aren't required
-- Unknown words break diagrams; parameters fail silently
+### Handler-to-Database Boundary
 
-## Diagram Type Selection Guide
+Use this pattern to reinforce repository boundaries. Modules should call domain helpers, not collections directly:
 
-**Choose the right diagram type:**
-
-1. **Class Diagrams** - Domain modeling, OOP design, entity relationships
-   - Domain-driven design documentation
-   - Object-oriented class structures
-   - Entity relationships and dependencies
-
-2. **Sequence Diagrams** - Temporal interactions, message flows
-   - API request/response flows
-   - User authentication flows
-   - System component interactions
-   - Method call sequences
-
-3. **Flowcharts** - Processes, algorithms, decision trees
-   - User journeys and workflows
-   - Business processes
-   - Algorithm logic
-   - Deployment pipelines
-
-4. **Entity Relationship Diagrams (ERD)** - Database schemas
-   - Table relationships
-   - Data modeling
-   - Schema design
-
-5. **C4 Diagrams** - Software architecture at multiple levels
-   - System Context (systems and users)
-   - Container (applications, databases, services)
-   - Component (internal structure)
-   - Code (class/interface level)
-
-6. **State Diagrams** - State machines, lifecycle states
-7. **Git Graphs** - Version control branching strategies
-8. **Gantt Charts** - Project timelines, scheduling
-9. **Pie/Bar Charts** - Data visualization
-
-## Quick Start Examples
-
-### Class Diagram (Domain Model)
 ```mermaid
-classDiagram
-    Title -- Genre
-    Title *-- Season
-    Title *-- Review
-    User --> Review : creates
-
-    class Title {
-        +string name
-        +int releaseYear
-        +play()
-    }
-
-    class Genre {
-        +string name
-        +getTopTitles()
-    }
+flowchart TD
+    Update[Telegram update] --> Handler[tcbot.modules handler]
+    Handler --> Guard[Role guard and prefix checks]
+    Guard --> Workflow[Optional workflow helper]
+    Workflow --> DbHelper[tcbot.database domain helper]
+    Handler --> DbHelper
+    DbHelper --> Mongos[tcbot.database.mongos]
+    Mongos --> MongoDB[(MongoDB)]
 ```
 
-### Sequence Diagram (API Flow)
+### Telegram Command Sequence
+
+Use sequence diagrams for temporal behavior and external API calls:
+
 ```mermaid
 sequenceDiagram
-    participant User
-    participant API
-    participant Database
+    actor Staff
+    participant Telegram
+    participant Bot as TCF Bot
+    participant Guard as Role Guard
+    participant DB as Database Helper
+    participant Logs as Log Chat
 
-    User->>API: POST /login
-    API->>Database: Query credentials
-    Database-->>API: Return user data
-    alt Valid credentials
-        API-->>User: 200 OK + JWT token
-    else Invalid credentials
-        API-->>User: 401 Unauthorized
+    Staff->>Telegram: Send moderation command
+    Telegram->>Bot: Deliver update
+    Bot->>Guard: Check effective role
+    alt Authorized
+        Bot->>DB: Read or write moderation record
+        DB-->>Bot: Return result
+        Bot->>Telegram: Apply Telegram action
+        Bot->>Logs: Send audit log
+        Bot-->>Staff: Confirm action
+    else Unauthorized
+        Bot-->>Staff: Show permission error
     end
 ```
 
-### Flowchart (User Journey)
+### Conversation Workflow
+
+Use flowcharts or state diagrams for `ConversationHandler` flows:
+
 ```mermaid
-flowchart TD
-    Start([User visits site]) --> Auth{Authenticated?}
-    Auth -->|No| Login[Show login page]
-    Auth -->|Yes| Dashboard[Show dashboard]
-    Login --> Creds[Enter credentials]
-    Creds --> Validate{Valid?}
-    Validate -->|Yes| Dashboard
-    Validate -->|No| Error[Show error]
-    Error --> Login
+stateDiagram-v2
+    [*] --> WaitingProof
+    WaitingProof --> WaitingReason: Proof accepted
+    WaitingProof --> Cancelled: Timeout or cancel
+    WaitingReason --> Review: Reason submitted
+    Review --> Approved: Staff approves
+    Review --> Rejected: Staff rejects
+    Approved --> [*]
+    Rejected --> [*]
+    Cancelled --> [*]
 ```
 
-### ERD (Database Schema)
+### MongoDB ER Diagram
+
+Use ER diagrams for collections and fields. Keep fields representative, not exhaustive, unless the user asks for a full schema:
+
 ```mermaid
 erDiagram
-    USER ||--o{ ORDER : places
-    ORDER ||--|{ LINE_ITEM : contains
-    PRODUCT ||--o{ LINE_ITEM : includes
+    USER ||--o{ BAN : receives
+    USER ||--o{ WARN : receives
+    USER ||--o{ ROLE : holds
+    FEDERATED_GROUP ||--o{ WARN : contains
+    BAN ||--o| APPEAL : may_have
 
     USER {
-        int id PK
-        string email UK
-        string name
-        datetime created_at
+        int user_id PK
+        string username
+        datetime updated_at
     }
 
-    ORDER {
-        int id PK
+    ROLE {
+        int user_id PK
+        string role
+        datetime promoted_date
+    }
+
+    FEDERATED_GROUP {
+        int chat_id PK
+        string title
+        bool is_active
+    }
+
+    BAN {
+        string ban_id PK
+        int banned_user_id FK
+        bool is_active
+        datetime timestamp
+    }
+
+    WARN {
         int user_id FK
-        decimal total
-        datetime created_at
+        int chat_id FK
+        datetime timestamp
+    }
+
+    APPEAL {
+        string ban_id FK
+        int review_message_id
+        datetime appeal_submitted_at
     }
 ```
+
+## Diagram Creation Workflow
+
+1. Identify the question: architecture, runtime flow, database model, workflow state, or interaction sequence.
+2. Inspect relevant files before diagramming when paths are known. For this project, common sources are `tcbot/__main__.py`, `tcbot/modules/`, `tcbot/modules/helper/workflows/`, `tcbot/database/`, and `tcbot/utils/`.
+3. Choose the smallest useful diagram type.
+4. Use project names exactly where helpful, but keep labels concise.
+5. Prefer HTML-safe, readable labels. Do not paste long code expressions into nodes.
+6. Add a one- or two-sentence explanation before or after the diagram when it clarifies scope.
+7. If the diagram is inferred rather than verified, say so.
 
 ## Detailed References
 
-For in-depth guidance on specific diagram types, see:
+Load these project-local references when deeper Mermaid syntax guidance is needed:
 
-- **[references/class-diagrams.md](references/class-diagrams.md)** - Domain modeling, relationships (association, composition, aggregation, inheritance), multiplicity, methods/properties
-- **[references/sequence-diagrams.md](references/sequence-diagrams.md)** - Actors, participants, messages (sync/async), activations, loops, alt/opt/par blocks, notes
-- **[references/flowcharts.md](references/flowcharts.md)** - Node shapes, connections, decision logic, subgraphs, styling
-- **[references/erd-diagrams.md](references/erd-diagrams.md)** - Entities, relationships, cardinality, keys, attributes
-- **[references/c4-diagrams.md](references/c4-diagrams.md)** - System context, container, component diagrams, boundaries
-- **[references/architecture-diagrams.md](references/architecture-diagrams.md)** - Cloud services, infrastructure, CI/CD deployments
-- **[references/advanced-features.md](references/advanced-features.md)** - Themes, styling, configuration, layout options
+- `references/architecture-diagrams.md` for architecture and infrastructure views.
+- `references/sequence-diagrams.md` for Telegram/API interactions and call ordering.
+- `references/flowcharts.md` for command paths and decision logic.
+- `references/erd-diagrams.md` for MongoDB collections and schema relationships.
+- `references/class-diagrams.md` for domain modeling or Python responsibility maps.
+- `references/c4-diagrams.md` for system context, container, and component diagrams.
+- `references/advanced-features.md` only when the user asks for advanced Mermaid syntax or export details.
 
-## Best Practices
+## Quality Checklist
 
-1. **Start Simple** - Begin with core entities/components, add details incrementally
-2. **Use Meaningful Names** - Clear labels make diagrams self-documenting
-3. **Comment Extensively** - Use `%%` comments to explain complex relationships
-4. **Keep Focused** - One diagram per concept; split large diagrams into multiple focused views
-5. **Version Control** - Store `.mmd` files alongside code for easy updates
-6. **Add Context** - Include titles and notes to explain diagram purpose
-7. **Iterate** - Refine diagrams as understanding evolves
+Before returning a diagram:
 
-## Configuration and Theming
-
-Configure diagrams using frontmatter:
-
-```mermaid
----
-config:
-  theme: base
-  themeVariables:
-    primaryColor: "#ff6b6b"
----
-flowchart LR
-    A --> B
-```
-
-**Available themes:** default, forest, dark, neutral, base
-
-**Layout options:**
-- `layout: dagre` (default) - Classic balanced layout
-- `layout: elk` - Advanced layout for complex diagrams (requires integration)
-
-**Look options:**
-- `look: classic` - Traditional Mermaid style
-- `look: handDrawn` - Sketch-like appearance
-
-## Exporting and Rendering
-
-**Native support in:**
-- GitHub/GitLab - Automatically renders in Markdown
-- VS Code - With Markdown Mermaid extension
-- Notion, Obsidian, Confluence - Built-in support
-
-**Export options:**
-- [Mermaid Live Editor](https://mermaid.live) - Online editor with PNG/SVG export
-- Mermaid CLI - `npm install -g @mermaid-js/mermaid-cli` then `mmdc -i input.mmd -o output.png`
-- Docker - `docker run --rm -v $(pwd):/data minlag/mermaid-cli -i /data/input.mmd -o /data/output.png`
-
-## Common Pitfalls
-
-- **Breaking characters** - Avoid `{}` in comments, use proper escape sequences for special characters
-- **Syntax errors** - Misspellings break diagrams; validate syntax in Mermaid Live
-- **Overcomplexity** - Split complex diagrams into multiple focused views
-- **Missing relationships** - Document all important connections between entities
-
-## When to Create Diagrams
-
-**Always diagram when:**
-- Starting new projects or features
-- Documenting complex systems
-- Explaining architecture decisions
-- Designing database schemas
-- Planning refactoring efforts
-- Onboarding new team members
-
-**Use diagrams to:**
-- Align stakeholders on technical decisions
-- Document domain models collaboratively
-- Visualize data flows and system interactions
-- Plan before coding
-- Create living documentation that evolves with code
+- The diagram uses a Mermaid type supported by Zed.
+- It contains no inline HTML, `%%{init}%%`, hardcoded theme config, or unnecessary styling.
+- It is focused enough to render in a narrow editor pane.
+- It reflects TCF Bot boundaries: handlers in `tcbot/modules/`, workflows in `tcbot/modules/helper/workflows/`, database access through `tcbot/database/*_db.py`, and MongoDB connection/indexing through `tcbot/database/mongos.py`.
+- User-provided or uncertain details are labeled as assumptions instead of facts.

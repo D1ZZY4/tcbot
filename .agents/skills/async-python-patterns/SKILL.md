@@ -1,295 +1,291 @@
 ---
 name: async-python-patterns
-description: Master Python asyncio, concurrent programming, and async/await patterns for high-performance applications. Use when building async APIs, concurrent systems, or I/O-bound applications requiring non-blocking operations.
+description: Use when designing, reviewing, or debugging async Python code in TCBot, especially python-telegram-bot handlers, Motor/MongoDB helpers, bounded fan-out, cancellation, timeouts, and pytest-asyncio tests.
 ---
+Last updated: 2026-05-28
 
-# Async Python Patterns
 
-Comprehensive guidance for implementing asynchronous Python applications using asyncio, concurrent programming patterns, and async/await for building high-performance, non-blocking systems.
+# Async Python Patterns for TCBot
+
+Use this skill for asynchronous Python work in the TCF Bot codebase. The project runs on Python 3.12 with `python-telegram-bot[job-queue] == 22.5`, Motor/MongoDB, Flask keepalive, `uv`, Ruff, and offline `pytest` + `pytest-asyncio` tests.
+
+This skill is intentionally project-specific. Prefer the conventions below over generic asyncio examples.
 
 ## When to Use This Skill
 
-- Building async web APIs (FastAPI, aiohttp, Sanic)
-- Implementing concurrent I/O operations (database, file, network)
-- Creating web scrapers with concurrent requests
-- Developing real-time applications (WebSocket servers, chat systems)
-- Processing multiple independent tasks simultaneously
-- Building microservices with async communication
-- Optimizing I/O-bound workloads
-- Implementing async background tasks and queues
+Use this skill when the task involves:
 
-## Sync vs Async Decision Guide
+- `async def` Telegram command handlers, event handlers, callbacks, or conversation states.
+- Motor/MongoDB helper functions in `tcbot/database/`.
+- Parallel Telegram API calls across connected groups.
+- Background jobs through `python-telegram-bot` job queue.
+- Conversation timeouts, cancellation, album debounce logic, or appeal/proof workflows.
+- Async unit tests using `pytest-asyncio`.
+- Debugging slow handlers, blocked polling, leaked tasks, or unawaited coroutine warnings.
 
-Before adopting async, consider whether it's the right choice for your use case.
+Do not use this skill for CPU-bound optimization unless the async code is directly affected. CPU-heavy work should be isolated or offloaded instead of running on the bot event loop.
 
-| Use Case | Recommended Approach |
-|----------|---------------------|
-| Many concurrent network/DB calls | `asyncio` |
-| CPU-bound computation | `multiprocessing` or thread pool |
-| Mixed I/O + CPU | Offload CPU work with `asyncio.to_thread()` |
-| Simple scripts, few connections | Sync (simpler, easier to debug) |
-| Web APIs with high concurrency | Async frameworks (FastAPI, aiohttp) |
+## Project Baseline
 
-**Key Rule:** Stay fully sync or fully async within a call path. Mixing creates hidden blocking and complexity.
+- Python target: `>=3.12`.
+- Telegram framework: `python-telegram-bot` 22.5, async-first API.
+- Database driver: Motor (`motor >= 3.7.1`).
+- Runtime entry point: `python -m tcbot` on Windows, `python3 -m tcbot` elsewhere.
+- Keepalive: Flask runs alongside the bot; do not add blocking work to keepalive routes.
+- Dependency workflow: `uv sync`, `uv run ...`.
+- Tests: offline `pytest` with `asyncio_mode = "auto"`.
 
-## Core Concepts
+## Core Rules
 
-### 1. Event Loop
+1. Keep handler call paths async end-to-end.
+2. Never call blocking network, database, file, or sleep operations in the event loop.
+3. Always `await` Telegram API calls and Motor calls.
+4. Use project database helpers instead of calling Mongo collections directly from handlers.
+5. Use `tcbot.utils.dispatch.fan_out()` for multi-group Telegram API operations.
+6. Preserve cancellation semantics: catch `asyncio.CancelledError` only to clean up, then re-raise.
+7. Use configured timeout values from `cfg` for workflows; do not hardcode proof or appeal timeouts.
+8. Test async behavior offline with fakes/mocks; never require a real bot token or MongoDB connection.
 
-The event loop is the heart of asyncio, managing and scheduling asynchronous tasks.
+## Async Handler Pattern
 
-**Key characteristics:**
-
-- Single-threaded cooperative multitasking
-- Schedules coroutines for execution
-- Handles I/O operations without blocking
-- Manages callbacks and futures
-
-### 2. Coroutines
-
-Functions defined with `async def` that can be paused and resumed.
-
-**Syntax:**
+Handlers should be small orchestration functions. Put persistence in `tcbot/database/*_db.py`, shared formatting in helpers, and reusable workflow logic in `tcbot/modules/helper/workflows/*_flow.py`.
 
 ```python
-async def my_coroutine():
-    result = await some_async_operation()
-    return result
+from __future__ import annotations
+
+import logging
+
+from telegram import Update
+from telegram.ext import ContextTypes
+
+from tcbot import database as db
+from tcbot.modules.helper.formatter import code, esc
+
+log = logging.getLogger(__name__)
+
+
+async def cmd_example(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    msg = update.effective_message
+    user = update.effective_user
+    if msg is None or user is None:
+        return
+
+    record = await db.users_db.get_user(user.id)
+    label = esc(record.get("first_name", user.first_name) if record else user.first_name)
+
+    await msg.reply_text(
+        f"User: {label}\nID: {code(str(user.id))}",
+        parse_mode="HTML",
+    )
 ```
 
-### 3. Tasks
+Checklist:
 
-Scheduled coroutines that run concurrently on the event loop.
+- Guard `effective_message`, `effective_user`, and `effective_chat` when they can be absent.
+- Keep user-visible messages HTML-only and escape user-provided text.
+- Do not store `Update`, `Message`, or `CallbackQuery` objects beyond the handler lifetime.
+- Do not use `asyncio.run()` inside handlers; the application already owns the event loop.
 
-### 4. Futures
+## Parallel Work with `asyncio.gather()`
 
-Low-level objects representing eventual results of async operations.
+Use `asyncio.gather()` when independent async operations can safely run in parallel and failure behavior is clear.
 
-### 5. Async Context Managers
+```python
+executor_role, target = await asyncio.gather(
+    db.roles_db.get_effective_role(executor_id),
+    extraction.extract_target(update, args, ctx.bot),
+)
+```
 
-Resources that support `async with` for proper cleanup.
+Guidelines:
 
-### 6. Async Iterators
+- Only gather operations that do not depend on each other.
+- Prefer normal `gather()` when any failure should abort the operation.
+- Use `return_exceptions=True` only when each result is inspected explicitly.
+- Do not create unbounded task lists for large group or user sets; use `fan_out()` or a semaphore.
 
-Objects that support `async for` for iterating over async data sources.
+## Multi-Group Telegram Fan-Out
 
-## Quick Start
+For moderation actions across connected groups, use the project helper instead of raw `gather()`.
+
+```python
+from tcbot.utils.dispatch import fan_out
+
+active_groups = await db.groups_db.active_groups()
+results = await fan_out(
+    [
+        ctx.bot.ban_chat_member(group["chat_id"], target_id)
+        for group in active_groups
+    ]
+)
+
+failures = [result for result in results if isinstance(result, BaseException)]
+```
+
+Why:
+
+- `fan_out()` bounds concurrency.
+- It returns results in order.
+- It prevents one group failure from cancelling every other group action.
+- It makes partial failures reportable in moderation logs.
+
+## Motor/MongoDB Patterns
+
+Database helpers should be async, typed, and domain-focused.
+
+```python
+from __future__ import annotations
+
+from tcbot.database import mongos
+
+
+async def get_group(chat_id: int) -> dict[str, object] | None:
+    return await mongos.groups().find_one({"chat_id": chat_id})
+```
+
+Project expectations:
+
+- Handlers call database helper modules; helpers call Motor collections.
+- Add indexes in the central index setup when adding indexed queries.
+- Keep Mongo document field changes backward-compatible unless a migration plan exists.
+- Avoid returning Motor cursors to handlers; convert to plain lists inside helpers when practical.
+- Use projection when large documents do not need every field.
+
+## Timeouts and Cancellation
+
+Use `asyncio.timeout()` for local async operation bounds in Python 3.12. Use `ConversationHandler` timeouts and project config for workflow deadlines.
 
 ```python
 import asyncio
 
-async def main():
-    print("Hello")
-    await asyncio.sleep(1)
-    print("World")
 
-# Python 3.7+
-asyncio.run(main())
-```
-
-## Fundamental Patterns
-
-### Pattern 1: Basic Async/Await
-
-```python
-import asyncio
-
-async def fetch_data(url: str) -> dict:
-    """Fetch data from URL asynchronously."""
-    await asyncio.sleep(1)  # Simulate I/O
-    return {"url": url, "data": "result"}
-
-async def main():
-    result = await fetch_data("https://api.example.com")
-    print(result)
-
-asyncio.run(main())
-```
-
-### Pattern 2: Concurrent Execution with gather()
-
-```python
-import asyncio
-from typing import List
-
-async def fetch_user(user_id: int) -> dict:
-    """Fetch user data."""
-    await asyncio.sleep(0.5)
-    return {"id": user_id, "name": f"User {user_id}"}
-
-async def fetch_all_users(user_ids: List[int]) -> List[dict]:
-    """Fetch multiple users concurrently."""
-    tasks = [fetch_user(uid) for uid in user_ids]
-    results = await asyncio.gather(*tasks)
-    return results
-
-async def main():
-    user_ids = [1, 2, 3, 4, 5]
-    users = await fetch_all_users(user_ids)
-    print(f"Fetched {len(users)} users")
-
-asyncio.run(main())
-```
-
-### Pattern 3: Task Creation and Management
-
-```python
-import asyncio
-
-async def background_task(name: str, delay: int):
-    """Long-running background task."""
-    print(f"{name} started")
-    await asyncio.sleep(delay)
-    print(f"{name} completed")
-    return f"Result from {name}"
-
-async def main():
-    # Create tasks
-    task1 = asyncio.create_task(background_task("Task 1", 2))
-    task2 = asyncio.create_task(background_task("Task 2", 1))
-
-    # Do other work
-    print("Main: doing other work")
-    await asyncio.sleep(0.5)
-
-    # Wait for tasks
-    result1 = await task1
-    result2 = await task2
-
-    print(f"Results: {result1}, {result2}")
-
-asyncio.run(main())
-```
-
-### Pattern 4: Error Handling in Async Code
-
-```python
-import asyncio
-from typing import List, Optional
-
-async def risky_operation(item_id: int) -> dict:
-    """Operation that might fail."""
-    await asyncio.sleep(0.1)
-    if item_id % 3 == 0:
-        raise ValueError(f"Item {item_id} failed")
-    return {"id": item_id, "status": "success"}
-
-async def safe_operation(item_id: int) -> Optional[dict]:
-    """Wrapper with error handling."""
+async def fetch_with_timeout(user_id: int) -> dict[str, object] | None:
     try:
-        return await risky_operation(item_id)
-    except ValueError as e:
-        print(f"Error: {e}")
+        async with asyncio.timeout(3):
+            return await db.users_db.get_user(user_id)
+    except TimeoutError:
+        log.warning("Timed out loading user %s", user_id)
         return None
-
-async def process_items(item_ids: List[int]):
-    """Process multiple items with error handling."""
-    tasks = [safe_operation(iid) for iid in item_ids]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    # Filter out failures
-    successful = [r for r in results if r is not None and not isinstance(r, Exception)]
-    failed = [r for r in results if isinstance(r, Exception)]
-
-    print(f"Success: {len(successful)}, Failed: {len(failed)}")
-    return successful
-
-asyncio.run(process_items([1, 2, 3, 4, 5, 6]))
 ```
 
-### Pattern 5: Timeout Handling
+Cancellation rules:
 
 ```python
-import asyncio
-
-async def slow_operation(delay: int) -> str:
-    """Operation that takes time."""
-    await asyncio.sleep(delay)
-    return f"Completed after {delay}s"
-
-async def with_timeout():
-    """Execute operation with timeout."""
+async def worker() -> None:
     try:
-        result = await asyncio.wait_for(slow_operation(5), timeout=2.0)
-        print(result)
-    except asyncio.TimeoutError:
-        print("Operation timed out")
-
-asyncio.run(with_timeout())
-```
-
-## Detailed worked examples and patterns
-
-Detailed sections (starting with `## Advanced Patterns`) live in `references/details.md`. Read that file when the navigation summary above is insufficient.
-
-## Common Pitfalls
-
-### 1. Forgetting await
-
-```python
-# Wrong - returns coroutine object, doesn't execute
-result = async_function()
-
-# Correct
-result = await async_function()
-```
-
-### 2. Blocking the Event Loop
-
-```python
-# Wrong - blocks event loop
-import time
-async def bad():
-    time.sleep(1)  # Blocks!
-
-# Correct
-async def good():
-    await asyncio.sleep(1)  # Non-blocking
-```
-
-### 3. Not Handling Cancellation
-
-```python
-async def cancelable_task():
-    """Task that handles cancellation."""
-    try:
-        while True:
-            await asyncio.sleep(1)
-            print("Working...")
+        await do_work()
     except asyncio.CancelledError:
-        print("Task cancelled, cleaning up...")
-        # Perform cleanup
-        raise  # Re-raise to propagate cancellation
+        await cleanup()
+        raise
 ```
 
-### 4. Mixing Sync and Async Code
+Do not swallow `CancelledError`; the bot must be able to shut down cleanly.
+
+## Background Jobs
+
+Use PTB's job queue for scheduled or delayed work. Keep job callbacks short, async, and observable.
 
 ```python
-# Wrong - can't call async from sync directly
-def sync_function():
-    result = await async_function()  # SyntaxError!
+from telegram.ext import ContextTypes
 
-# Correct
-def sync_function():
-    result = asyncio.run(async_function())
+
+async def expire_pending_appeal(ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    job_data = ctx.job.data if ctx.job else {}
+    appeal_id = job_data.get("appeal_id")
+    if not appeal_id:
+        return
+
+    await db.appeals_db.mark_expired(str(appeal_id))
 ```
 
-## Testing Async Code
+Guidelines:
+
+- Store only primitive IDs or small serializable payloads in job data.
+- Re-load current state from the database inside the job.
+- Make jobs idempotent; they may run after state changed elsewhere.
+- Log unexpected exceptions with enough IDs to diagnose without exposing secrets.
+
+## Blocking Work to Avoid
+
+Avoid these in async handlers and database helpers:
+
+- `time.sleep()`; use `await asyncio.sleep()`.
+- Synchronous HTTP clients; use an async client only if the project already depends on one, or justify a new dependency.
+- Long CPU loops, image processing, compression, or parsing large files on the event loop.
+- Synchronous database drivers.
+- Raw subprocess calls from handlers.
+
+If unavoidable, isolate the work:
 
 ```python
-import asyncio
-import pytest
-
-# Using pytest-asyncio
-@pytest.mark.asyncio
-async def test_async_function():
-    """Test async function."""
-    result = await fetch_data("https://api.example.com")
-    assert result is not None
-
-@pytest.mark.asyncio
-async def test_with_timeout():
-    """Test with timeout."""
-    with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(slow_operation(5), timeout=1.0)
+result = await asyncio.to_thread(sync_cpu_or_file_work, arg)
 ```
+
+Use this sparingly; do not hide heavy product behavior in a thread without considering capacity and observability.
+
+## Callback Query Pattern
+
+Always answer callback queries before doing visible work.
+
+```python
+query = update.callback_query
+if query is None:
+    return
+
+await query.answer()
+await query.edit_message_text("Processing complete.", parse_mode="HTML")
+```
+
+This avoids Telegram client spinners and keeps UX responsive.
+
+## Async Testing
+
+The project config enables `pytest-asyncio` auto mode, so async tests can be plain `async def` tests.
+
+```python
+async def test_get_group_returns_document(fake_groups_collection) -> None:
+    await fake_groups_collection.insert_one({"chat_id": -100123, "active": True})
+
+    group = await groups_db.get_group(-100123)
+
+    assert group is not None
+    assert group["active"] is True
+```
+
+Testing rules:
+
+- Keep tests offline: no real Telegram token, no real MongoDB, no network calls.
+- Fake PTB objects or call helper functions directly when possible.
+- Assert side effects and sent messages through mocks/fakes.
+- Include cancellation, timeout, or partial-failure cases when the change depends on them.
+
+Validation commands:
+
+```bash
+uv run --extra test pytest tests/ -v
+uv run ruff format .
+uv run ruff check --fix .
+```
+
+For focused changes, run the nearest test file first, then broaden.
+
+## Review Checklist
+
+Before finishing async work, verify:
+
+- Every coroutine is awaited or deliberately scheduled and tracked.
+- No blocking call was added to a handler, callback, job, or Motor helper.
+- Parallel work is bounded.
+- Callback queries call `await query.answer()` first.
+- Multi-group Telegram operations use `fan_out()`.
+- Exceptions are logged or reported where they affect moderation outcomes.
+- Cancellation is not swallowed.
+- Tests remain offline and deterministic.
+
+## References
+
+- Project policy: `tgbot/.agents/skills/project-policy/SKILL.md`.
+- Detailed async examples: `tgbot/.agents/skills/async-python-patterns/references/details.md`.
+- Python asyncio documentation: https://docs.python.org/3/library/asyncio.html
+- python-telegram-bot docs: https://docs.python-telegram-bot.org/
+- Motor docs: https://motor.readthedocs.io/

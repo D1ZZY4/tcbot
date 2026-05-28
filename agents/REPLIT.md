@@ -1,114 +1,191 @@
 # Replit Environment — TCF Bot
 
-**Read `agents/CLAUDE.md` and `./replit.md` first.** This file documents how the project is configured on Replit.
-
-Compatible with: Replit AI, Claude, Gemini, Qwen, GitHub Copilot, and any AI coding agent.
-
----
-
-## Workflow
-
-- **Name:** `Start Application`
-- **Command:** `python3 -m tcbot`
-- This is the only workflow needed. It starts the bot, connects to MongoDB, and starts the Flask keepalive on port 8080.
-
-To restart the bot after code changes: stop and restart the `Start Application` workflow via the Replit Run button or the Workflows panel.
+Read `agents/CLAUDE.md` first. This file documents Replit-specific runtime,
+secrets, and deployment guidance.
 
 ---
 
-## Secrets
+## Runtime Summary
 
-Two secrets are stored in **Replit Secrets** (not in `config.env`):
+| Setting | Value |
+|---|---|
+| Start command | `python3 -m tcbot` |
+| Bot mode | Long polling, no webhook |
+| Keep-alive | Flask server from `tcbot/alive.py` |
+| Replit port | `PORT=8080` |
+| Local default port | `PORT=5000` when unset |
+| Dependency manager | `uv` |
+
+Use the Replit workflow or Run button to start and restart the bot. If the bot is
+already running, stop it before restarting after code changes.
+
+---
+
+## Required Secrets
+
+Store production secrets in Replit Secrets, not in tracked files.
 
 | Secret | Description |
 |---|---|
-| `BOT_TOKEN` | Telegram bot token from @BotFather |
-| `MONGODB_URI` | MongoDB connection string (Atlas or other) |
+| `BOT_TOKEN` | Telegram bot token from BotFather |
+| `MONGODB_URI` | MongoDB connection string |
 
-All other configuration is stored as Replit shared environment variables, set via the Replit Secrets UI (Replit Secrets can hold both secrets and general env vars).
+Never paste these values into:
 
-**Never** put `BOT_TOKEN` or `MONGODB_URI` in `config.env` on Replit. These are production secrets and must stay in Replit Secrets.
-
----
-
-## config.env on Replit
-
-`config.env` is loaded as a local-dev fallback via `load_dotenv(override=False)`. On Replit, it is used only for non-sensitive config (e.g. `DB_NAME`, `COMMUNITY_NAME`, `LOGS`, `PROOFS`, `APPEALS`, `MAIN_GROUP`, etc.).
-
-The file is gitignored and must never be committed. The template is `config.env.example`.
+- `config.env` committed to git.
+- Markdown documentation.
+- Tests.
+- Code comments.
+- Console output or screenshots shared publicly.
 
 ---
 
-## All Other Environment Variables
+## Environment Variables
 
-The following variables are set as Replit environment variables (via the Secrets panel):
+Non-secret runtime configuration can also be managed through Replit environment
+variables. Use `config.env.example` as the complete template.
 
-| Variable | Example | Description |
-|---|---|---|
-| `OWNER_ID` | `123456789` | Telegram user ID of the federation founder |
-| `DB_NAME` | `tcbot` | MongoDB database name |
-| `COMMUNITY_NAME` | `TCF` | Community display name used in bot messages |
-| `MAIN_GROUP` | `-1001234567890` | Main group/forum chat ID |
-| `MAIN_CHANNEL` | `-1009876543210` | Main channel chat ID |
-| `LOGS` | `-1001111111111/2` | Log channel `chat_id` or `chat_id/thread_id` |
-| `LOGS_ERRORS` | `-1001111111111/3` | Error log channel (optional) |
-| `PROOFS` | `-1002222222222` | Ban proof channel |
-| `APPEALS` | `-1003333333333` | Appeal record channel |
-| `APPEAL_DISCUSSION_TOPIC` | `42` | Thread ID inside MAIN_GROUP for appeal review |
-| `PORT` | `8080` | Flask keepalive port (Replit requires 8080) |
-| `LOG_LEVEL` | `INFO` | Log verbosity |
+Common variables:
+
+| Variable | Description |
+|---|---|
+| `OWNER_ID` | Telegram user ID of the initial Founder |
+| `DB_NAME` | MongoDB database name, default `tcbot` |
+| `COMMUNITY_NAME` | Display name used in bot messages |
+| `PREFIXES` | Command prefix list, default `['/', '!', '.']` |
+| `PORT` | Use `8080` on Replit |
+| `MAIN_GROUP` | Main group/forum chat ID |
+| `MAIN_CHANNEL` | Main channel chat ID |
+| `EXTEND_GROUP` | Additional configured group ID |
+| `LOGS` | Log destination: `chat_id` or `chat_id/thread_id` |
+| `LOGS_ERRORS` | Error log destination |
+| `PROOFS` | Ban proof destination |
+| `APPEALS` | Appeal record destination |
+| `APPEAL_LOG_HANDLE` | Public handle shown in appeal instructions |
+| `APPEAL_DISCUSSION_TOPIC` | Thread ID in `MAIN_GROUP` for appeal review |
+| `PROOF_TIMEOUT_SECONDS` | Proof conversation timeout |
+| `APPEAL_TIMEOUT_SECONDS` | Appeal conversation timeout |
+| `ALBUM_DEBOUNCE_SECONDS` | Media album debounce window |
+| `LOG_LEVEL` | Logging level |
+| `MODULES_LOAD` | Optional module allowlist |
+| `MODULES_NO_LOAD` | Optional module denylist |
+
+Do not include real production values in documentation examples.
 
 ---
 
-## Port
+## `config.env` on Replit
 
-The Flask keepalive server runs on port **8080** on Replit. This is the port that Replit's health-check proxy expects.
+`config.env` is gitignored and is mainly a local-development fallback. On Replit,
+prefer Replit Secrets/environment management for deployed values.
 
-Do not change this to 5000 on Replit — Replit does not expose port 5000 externally.
+Rules:
 
-The port is controlled by the `PORT` environment variable. When running locally without a `PORT` env var, it defaults to 5000.
+- Do not commit `config.env`.
+- Do not put production secrets in tracked files.
+- Keep `config.env.example` as placeholders only.
+- If `config.env` is used for local testing, ensure it stays untracked.
 
 ---
 
-## Running the Test Suite
+## Port Behavior
+
+`tcbot/alive.py` starts Flask on `cfg.port`.
+
+- Local default: `5000`.
+- Replit: set `PORT=8080` so Replit can route health checks correctly.
+
+Do not hardcode Replit port values in code. Use the environment variable.
+
+---
+
+## Installing Dependencies
+
+Runtime dependencies:
+
+```bash
+uv sync
+```
+
+Test dependencies:
+
+```bash
+uv sync --extra test
+```
+
+Add dependencies through `uv` only:
+
+```bash
+uv add <package>
+```
+
+Do not add packages to `requirements.txt`.
+
+---
+
+## Running Tests on Replit
+
+Full offline suite:
 
 ```bash
 python3 -m pytest tests/ -v
 ```
 
-All 134 tests run offline — no bot token or MongoDB connection required. Run this after any code change before restarting the bot.
+Through `uv`:
+
+```bash
+uv run --extra test pytest tests/ -v
+```
+
+The tests should not require real Telegram or MongoDB access. If a test does,
+fix the test to mock external dependencies.
 
 ---
 
-## Package Management
+## Logs and Startup Checks
 
-Dependencies are managed via `uv` and `pyproject.toml`.
+After starting the bot, inspect logs for:
 
-- **Do not add packages to `requirements.txt`** — this file is legacy and may be gitignored.
-- To add a dependency: `uv add <package>` (this updates `pyproject.toml` and `uv.lock`)
-- To install for Replit: `uv sync` (already done on workflow start via the `Start Application` command setup)
+- Logging initialized.
+- Keep-alive server started on the configured port.
+- MongoDB connected to the configured database.
+- Indexes ensured.
+- Initial owner ensured.
+- Modules loaded and handlers registered.
+- Polling started.
+
+Fix startup `ERROR` logs before testing commands in Telegram.
 
 ---
 
-## Local Development
+## Safe Replit Operations
 
-For local development outside Replit, copy `config.env.example` to `config.env` and fill in all values including `BOT_TOKEN` and `MONGODB_URI`. The `load_dotenv(override=False)` call in `tcbot/__init__.py` will pick these up.
+Allowed:
+
+- Restart the workflow after code changes.
+- Run tests and Ruff commands.
+- Update non-secret environment variables when required by a feature.
+- Add dependencies through `uv` when justified.
+
+Forbidden:
+
+- Committing `config.env`.
+- Pasting `BOT_TOKEN` or `MONGODB_URI` into docs or code.
+- Switching the bot to webhook mode unless explicitly requested and planned.
+- Hardcoding deployment chat IDs, secrets, or Replit-specific paths in source.
+- Editing unrelated root docs or configuration during scoped tasks.
+
+---
+
+## Local Development Difference
+
+For local development outside Replit:
 
 ```bash
 cp config.env.example config.env
-# Edit config.env
+# Fill config.env locally; keep it untracked.
 uv sync
 python3 -m tcbot
 ```
 
----
-
-## Docker
-
-A `docker-compose.yml` is provided for local development with a bundled MongoDB:
-
-```bash
-docker-compose up --build
-```
-
-The compose file starts `bot` and `mongo:7` services. The bot waits for MongoDB's health-check before connecting.
+On Windows, use `python -m tcbot` if `python3` is unavailable.

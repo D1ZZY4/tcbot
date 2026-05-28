@@ -1,136 +1,143 @@
-# TCF Telegram Bot
+# Replit Deployment Notes
 
-## Overview
+This file describes how to run TCF Bot on Replit or a similar hosted environment. It is intentionally focused on deployment and environment setup; general architecture and development guidance live in `README.md`, `AGENTS.md`, and `PLAN.md`.
 
-A Telegram bot for the Transsion Core Federation (TCF) community. Manages federation-wide bans, appeals, group affiliations, admin promotions, and moderation.
+## Runtime Summary
 
-## Architecture
+- Entry point: `python3 -m tcbot`
+- Python project target: 3.12 (`pyproject.toml` requires `>=3.12`)
+- Bot framework: `python-telegram-bot[job-queue] == 22.5`
+- Database: MongoDB through Motor
+- Health check: Flask app on `0.0.0.0:${PORT}` with `GET /` returning `OK`
+- Dependency manager: `uv`
 
-- **Language:** Python 3.12
-- **Bot framework:** python-telegram-bot 22.5 (polling mode)
-- **Database:** MongoDB (via motor, async)
-- **Web server:** Flask (keep-alive / health-check on port 5000)
-- **Entry point:** `python3 -m tcbot`
-- **Dependency management:** `uv` (lock file: `uv.lock`; `requirements.txt` is legacy and git-ignored)
+## Required Secrets
 
-## Key Modules
+Store credentials in Replit Secrets or the equivalent platform secret manager. Do not commit real values to the repository.
 
-| Path | Purpose |
+| Secret | Description |
 |---|---|
-| `tcbot/__init__.py` | Config singleton (`cfg` / `configs`), loaded from env vars |
-| `tcbot/__main__.py` | Entry point: logging, Flask keepalive, handler discovery, polling |
-| `tcbot/alive.py` | Flask keep-alive server on port 5000 |
-| `tcbot/database/mongos.py` | MongoDB client, `connect()`, `col()`, `make_short_id()` |
-| `tcbot/database/admins_db.py` | Owners and TC admins collection |
-| `tcbot/database/bans_db.py` | Federation bans collection |
-| `tcbot/database/queues_db.py` | Promotion-request queue collection |
-| `tcbot/database/roles_db.py` | Developer/Tester roles collection (`tc_roles`); also exports `get_effective_role`, `role_rank`, `can_act_on` |
-| `tcbot/database/users_db.py` | Member-cache collection |
-| `tcbot/modules/appeals.py` | Pure functions for appeal business logic |
-| `tcbot/database/types.py` | Domain primitive `NewType` definitions: `UserId`, `GroupId`, `ChatId`, `BanId` |
-| `tcbot/modules/helper/parse_link.py` | Link builders, HTML helpers (`user_link`, `safe_first_name`) |
-| `tcbot/modules/helper/keyboards.py` | All inline-keyboard factory functions (includes `promote_role_kb`, `demote_confirm_kb`) |
-| `tcbot/modules/helper/decorators.py` | Auth decorators (`owner_only`, `staff_only`, `mod_only`, `basic_mod_only`) + `log_execution` tracer + `ratelimiter(limit, period)` per-user throttle |
-| `tcbot/modules/helper/role_guard.py` | `resolve_and_check()` + `auto_demote()` - shared role-permission helpers for moderation flows |
-| `tcbot/modules/helper/extraction.py` | `extract_target()`, `ResolvedTarget`, `resolve_identity()` |
-| `tcbot/modules/helper/workflows/promote_flow.py` | `_execute_promote()`, `_ROLE_ALIASES`, `_available_roles_for()` — promote execution logic shared by admins.py |
-| `tcbot/modules/helper/workflows/reason_flow.py` | `BuildReason` class + `build_modaction_conv(reason, proof, ...)` factory + `WAITING_REASON`/`WAITING_PROOF` constants + `parse_inline_reason()`. `BuildReason(action, *, skip_allowed, skip_label, cancel_label)` — `.keyboard()` and `.prompt()` |
-| `tcbot/modules/helper/workflows/proof_flow.py` | `BuildProof` class + `upload_proof()`. `BuildProof(action, *, skip_allowed, skip_label, cancel_label)` — `.keyboard()`, `.step_prompt()`, `.noted_prompt()`, `.record()` (static) |
-| `tcbot/modules/helper/workflows/ban_flow.py` | Ban executor, album proof state handlers, `ban_conversation(entry_fn)` |
-| `tcbot/modules/helper/workflows/appeal_flow.py` | `BuildAppeal` class + module-level `appeal` instance. `BuildAppeal(community_name, log_channel, *, cancel_label, cancel_callback)` — `.instruction_text()`, `.cancel_keyboard()`, `.review_keyboard(ban_id)`, `.on_decision()`, `.build_handler()` |
-| `tcbot/modules/helper/workflows/connected_flow.py` | `BuildConnection` class + module-level `connection` instance. `BuildConnection(community_name, *, required_perms, join_label, cancel_label, join_callback, cancel_callback)` — `.join_prompt()`, `.connected_message()`, `.check_perms()`, `.complete_join()`, `.on_bot_added()`, `.on_join_decision()` |
-| `tcbot/utils/dispatch.py` | `fan_out()` — semaphore-bounded multi-group dispatcher (max 10 concurrent) |
-| `tcbot/utils/prefixes.py` | Prefix filter builder + alt-prefix dispatcher (`_REGISTRY`) |
-| `tcbot/utils/logger.py` | `BotLogFormatter` and `setup()` |
-| `tcbot/utils/timedate_format.py` | `utc_now()`, `to_utc()`, `fmt_dt()`, `utc_now_str()` — single datetime source |
+| `BOT_TOKEN` | Telegram bot token from BotFather. |
+| `MONGODB_URI` | MongoDB connection string, for example MongoDB Atlas. |
 
-## Configuration
+`OWNER_ID` is also required for startup. It is not a credential, but it identifies the initial Founder account and should be set as an environment variable or secret according to your deployment policy.
 
-**All configuration and secrets are stored exclusively in `config.env`.** Do NOT use Replit Secrets for this project. `config.env` is gitignored and must never be committed.
+## Environment Variables
 
-- `BOT_TOKEN` - Telegram bot token
-- `MONGODB_URI` - MongoDB connection string
-- `OWNER_ID` - Initial owner Telegram user ID
-- `DB_NAME` - MongoDB database name (default: "tcbot")
-- `MAIN_GROUP` - Main Telegram group/forum chat ID
-- `PORT` - Web server port (5000)
+Use `config.env.example` as the complete template. Important variables:
 
-See `config.env.example` for the full list of required keys.
-
-## Role System
-
-Four-level hierarchy: **Founder → Admin → Developer → Tester**
-
-| Role | Rank | Stored in |
-|---|---|---|
-| Founder | 4 | `tc_owners` (single document) |
-| Admin | 3 | `tc_admins` collection |
-| Developer | 2 | `tc_roles` collection |
-| Tester | 1 | `tc_roles` collection |
-
-Permission matrix:
-
-| Action | Min role needed |
+| Variable | Notes |
 |---|---|
-| Ban / Unban | Developer (rank ≥ 2) |
-| Kick / Mute / Warn | Tester (rank ≥ 1) |
-| Promote to Developer/Tester | Admin |
-| Promote to Admin | Admin (request) / Founder (direct) |
-| Demote Developer/Tester | Admin |
-| Demote Admin | Founder only |
+| `OWNER_ID` | Required positive Telegram user ID for the initial Founder. |
+| `DB_NAME` | Optional database name; defaults to `tcbot`. |
+| `COMMUNITY_NAME` | Display name used in bot messages and logs. |
+| `PREFIXES` | Python-style prefix list, default `["/", "!", "."]`. |
+| `PORT` | Flask keep-alive port. Defaults to `5000` if unset/invalid; set this to the port Replit expects for your deployment. |
+| `MAIN_GROUP` | Main community group or forum chat ID. |
+| `MAIN_CHANNEL` | Optional announcement channel chat ID. |
+| `EXTEND_GROUP` | Optional secondary/staff group chat ID. |
+| `PROOFS` | Proof destination: `chat_id` or `chat_id/thread_id`. |
+| `LOGS` | Moderation/action log destination: `chat_id` or `chat_id/thread_id`. |
+| `LOGS_ERRORS` | Error report destination: same format as `LOGS`. |
+| `APPEALS` | Appeal record destination: `chat_id` or `chat_id/thread_id`. |
+| `APPEAL_LOG_HANDLE` | Public log handle shown to users in appeal instructions. |
+| `APPEAL_DISCUSSION_TOPIC` | Thread ID inside `MAIN_GROUP` where appeal review cards are posted. |
+| `PROOF_TIMEOUT_SECONDS` | Ban proof timeout; default `100`. |
+| `APPEAL_TIMEOUT_SECONDS` | Appeal conversation timeout; default `600`. |
+| `ALBUM_DEBOUNCE_SECONDS` | Album grouping window; default `2`. |
+| `LOG_LEVEL` | Logging verbosity; default `INFO`. |
+| `MODULES_LOAD` | Optional comma-separated allowlist of module names. |
+| `MODULES_NO_LOAD` | Optional comma-separated denylist of module names. |
 
-Auto-demote: when a user with any role is **banned or kicked**, their role is automatically removed and they are notified by DM. A log entry is posted to the log channel.
+Destination variables that represent forum topics use this format:
 
-`/tcpromote @user [role]` - omit the role to see an inline button menu.
-`/tcdemote @user` - shows a confirmation button before removing the role.
-
-## Test Suite
-
-Run with: `python3 -m pytest`
-
-134 tests across 13 files - all pass offline (no real bot token or MongoDB needed).
-Test dependencies: `pip install pytest pytest-asyncio` (Replit) or `uv sync --extra test` (local).
-
-| File | What it tests |
-|---|---|
-| `tests/test_format.py` | `tcbot.modules.helper.parse_link` helpers |
-| `tests/test_targets.py` | `ResolvedTarget` and `get_reason` |
-| `tests/test_users_resolver.py` | `resolve_identity` with mocked repos |
-| `tests/test_prefix.py` | Alt-prefix dispatcher and registry |
-| `tests/test_keyboards.py` | `tcbot.modules.helper.keyboards` factory shapes |
-| `tests/test_decorators.py` | `log_execution` tracer decorator |
-| `tests/test_appeals_pure.py` | Pure appeal logic functions |
-| `tests/test_log_templates.py` | `parse_logmsg` log-message formatters |
-| `tests/test_bans_db.py` | `bans_db` helpers (create, update, deactivate) |
-| `tests/test_ban_flow.py` | Ban flow album buffering and state |
-| `tests/test_config_parse.py` | Config parsing (`parse_list`, `parse_port`, `parse_chat_id`) |
-| `tests/test_rate_limiter.py` | `_RateLimiter` sliding-window logic |
-| `tests/test_users_resolver.py` | `resolve_identity` with mocked repos |
-| `tests/test_warns_db.py` | `warns_db` helpers (add, remove, reset) |
-
-## Docker
-
-```
-docker-compose up --build
+```text
+chat_id/thread_id
 ```
 
-- `Dockerfile` - uses `uv` (`COPY --from=ghcr.io/astral-sh/uv:latest`) with `uv sync --frozen --no-dev`
-- `docker-compose.yml` - `bot` + `mongo:7` services; bot waits for MongoDB health-check
+Example shape only:
 
-## Agent Instructions
+```text
+-1001234567890/42
+```
 
-Before making any changes, **read all documentation files in the `agents/` directory** - specifically:
-- `agents/RULES.md` - coding conventions, what is forbidden
-- `agents/STYLE-CODE.md` - code style, typing, and formatting rules
-- `agents/STYLE-COMMENTS.md` - comment and docstring style
-- `agents/WORKFLOW.md` - branching, commit conventions, and deployment checklist
-- `agents/CLAUDE.md` - project-specific guidance and gotchas
-- `agents/REPLIT.md` - Replit environment, config, and secrets guidance
+Do not put real private chat IDs in public documentation.
 
-## Deployment
+## Install and Run
 
-- Workflow: `python3 -m tcbot`
-- Port 5000 exposed as the health-check / keep-alive endpoint
-- Deployment target: **autoscale**, run command: `python3 -m tcbot`
-- DO NOT CHANGE CONFIG.ENV OR ANYTHING, AND RUN THIS PROJECT THROUGH CONFIG.ENV ONLY. DO NOT USE REPLIT SECRET. DO NOT CHANGE ANYTHING!!!
-- DO NOT ADD ANY PACKAGES IN REQUIREMENTS!!
+Install dependencies from the lockfile:
+
+```bash
+uv sync
+```
+
+Run the bot:
+
+```bash
+python3 -m tcbot
+```
+
+If your Replit workflow supports custom commands, set the run command to:
+
+```bash
+python3 -m tcbot
+```
+
+The bot starts polling Telegram after MongoDB connection, index creation, owner seeding, handler registration, and error reporter setup complete.
+
+## Health Check
+
+`tcbot/alive.py` starts Flask in a daemon thread when `tcbot/__main__.py` calls `start_keepalive()`.
+
+- Host: `0.0.0.0`
+- Port: `PORT` from the environment, default `5000`
+- Endpoint: `GET /`
+- Response: `OK`
+
+If the hosting platform requires a specific public port, set `PORT` accordingly in the environment.
+
+## Tests on Replit
+
+Install test extras and run the offline suite:
+
+```bash
+uv sync --extra test
+uv run --extra test pytest tests/ -v
+```
+
+Collect tests without executing them:
+
+```bash
+uv run --extra test pytest --collect-only -q
+```
+
+Current collected inventory: 134 tests across 14 test files. Tests are designed to run without a real bot token or MongoDB connection.
+
+## Code Quality Commands
+
+```bash
+uv run ruff format .
+uv run ruff check --fix .
+```
+
+Use these before committing source changes. For documentation-only changes, a pytest collection check is normally sufficient.
+
+## Deployment Checklist
+
+Before starting the deployment:
+
+- [ ] `BOT_TOKEN` is set in Replit Secrets or the platform secret manager.
+- [ ] `MONGODB_URI` is set and reachable from Replit.
+- [ ] `OWNER_ID` is set to the correct Telegram user ID.
+- [ ] `PORT` matches the hosting platform expectation.
+- [ ] Required Telegram destinations (`MAIN_GROUP`, `LOGS`, `PROOFS`, `APPEALS`, and appeal topic settings) are configured.
+- [ ] The bot has the necessary permissions in connected groups/channels/forums.
+- [ ] The run command is `python3 -m tcbot`.
+- [ ] `uv run --extra test pytest --collect-only -q` succeeds.
+
+## Safety Rules
+
+- Do not commit `config.env` with real values.
+- Do not paste real tokens, MongoDB URIs, or private chat IDs into Markdown files.
+- Do not add dependencies to `requirements.txt`; this project uses `uv` and `pyproject.toml`.
+- Keep deployment configuration in environment variables or the platform secret manager.

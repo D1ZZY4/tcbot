@@ -7,9 +7,16 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from types import SimpleNamespace
+from typing import cast
+from unittest.mock import AsyncMock
+
+from telegram import Update
+from telegram.ext import ContextTypes, ConversationHandler
 
 from tcbot import cfg
 from tcbot.modules import appeals
+from tcbot.modules.helper.workflows.appeal_flow import BuildAppeal
 from tcbot.utils.timedate_format import utc_now
 
 # ───────────────────── Imports and test setup ───────────────────── #
@@ -99,3 +106,18 @@ def test_reviewer_locked_out_returns_false_when_ban_admin_none() -> None:
 
 def test_module_level_appeal_uses_configured_log_handle() -> None:
     assert appeals.appeal.log_channel == cfg.appeal_log_handle
+
+
+async def test_appeal_flow_accepts_uppercase_tag_for_expired_session() -> None:
+    msg = SimpleNamespace(text="#APPEAL body", reply_text=AsyncMock())
+    update = SimpleNamespace(effective_message=msg)
+    ctx = SimpleNamespace(user_data={})
+
+    result = await BuildAppeal("TCF", "@logs")._on_message(
+        cast(Update, update), cast(ContextTypes.DEFAULT_TYPE, ctx)
+    )
+
+    assert result == ConversationHandler.END
+    msg.reply_text.assert_awaited_once_with(
+        "Session expired - please start the appeal again."
+    )

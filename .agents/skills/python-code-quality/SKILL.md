@@ -1,166 +1,278 @@
 ---
-created: 2025-12-16
-modified: 2026-05-09
-reviewed: 2026-04-25
 name: python-code-quality
-description: Python code quality with ruff and ty. Use when the user mentions ruff, ty, linting, formatting, type checking, or Python code style.
-user-invocable: false
-allowed-tools: Bash, Read, Grep, Glob
+description: Use when formatting, linting, typing, testing, or reviewing Python quality in TCBot with Python 3.12, Ruff, uv, pytest, pytest-asyncio, and the project's handler/database conventions.
 ---
+Last updated: 2026-05-28
 
-# Python Code Quality
 
-Quick reference for Python code quality tools: ruff (linting & formatting), ty (type checking).
+# Python Code Quality for TCBot
+
+Use this skill when improving or validating Python code quality in the TCF Bot repository. The project uses Python 3.12, `uv`, Ruff, `pytest`, and `pytest-asyncio`. It does not currently configure a separate type checker in `pyproject.toml`, so type-quality guidance should focus on clear annotations, Ruff-compatible style, and practical review rather than inventing a type-check command.
 
 ## When to Use This Skill
 
-| Use this skill when... | Use a focused sibling instead when... |
-|---|---|
-| Setting up a complete quality stack (lint + format + type-check) for a new project | Tuning only ruff lint rule selection — use ruff-linting |
-| Wiring ruff and ty into pre-commit and CI together | Configuring only ruff formatter quirks — use ruff-formatting |
-| Comparing ruff/ty/basedpyright at a high level before choosing tools | Configuring strict basedpyright/ty type-checker rules — use basedpyright-type-checking or ty-type-checking |
+Use this skill when the task mentions or involves:
 
-## When This Skill Applies
+- Ruff formatting or lint diagnostics.
+- Python import sorting, unused imports, unused variables, or syntax modernization.
+- Test failures, test structure, fixtures, or async tests.
+- Type annotations, `TypedDict`, `NewType`, or handler signatures.
+- Code review for maintainability, duplication, or project convention compliance.
+- Preparing validation commands after a code change.
 
-- Linting Python code
-- Code formatting
-- Type checking
-- Pre-commit hooks
-- CI/CD quality gates
-- Code style enforcement
+If the task edits bot runtime code, also apply the project policy skill before changing code.
 
-## Quick Reference
+## Current Project Tooling
 
-### Ruff (Linter & Formatter)
-
-```bash
-# Lint code
-uv run ruff check .
-
-# Auto-fix issues
-uv run ruff check --fix .
-
-# Format code
-uv run ruff format .
-
-# Check and format
-uv run ruff check --fix . && uv run ruff format .
-
-# Show specific rule
-uv run ruff check --select E501  # Line too long
-
-# Ignore specific rule
-uv run ruff check --ignore E501
-```
-
-### ty (Type Checking)
-
-```bash
-# Type check project
-uv run ty check
-
-# Type check specific file
-uv run ty check src/module.py
-
-# Check with explicit Python version
-uv run ty check --python 3.11
-
-# Verbose output
-uv run ty check --verbose
-```
-
-## pyproject.toml Configuration
+From `pyproject.toml` as of 2026-05-28:
 
 ```toml
+[project]
+requires-python = ">=3.12"
+dependencies = [
+    "python-telegram-bot[job-queue]==22.5",
+    "motor>=3.7.1",
+    "flask>=3.1.0",
+    "python-dotenv>=1.0.0",
+    "ruff",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-ra -q"
+
 [tool.ruff]
 line-length = 88
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
-select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "N",   # pep8-naming
-    "UP",  # pyupgrade
-    "B",   # flake8-bugbear
-]
-ignore = [
-    "E501",  # line too long (handled by formatter)
-]
-
-[tool.ruff.lint.isort]
-known-first-party = ["myproject"]
-
-[tool.ty]
-python-version = "3.11"
-exclude = [
-    "**/__pycache__",
-    "**/.venv",
-    "tests",
-]
-
-[tool.ty.rules]
-possibly-unbound = "warn"
+select = ["E4", "E7", "E9", "F", "I"]
 ```
 
-## Type Hints
+Do not claim `mypy`, `pyright`, or `ty` validation exists unless it is added to the project.
+
+## Standard Commands
+
+Install dependencies:
+
+```bash
+uv sync
+```
+
+Install test extras:
+
+```bash
+uv sync --extra test
+```
+
+Run the test suite:
+
+```bash
+uv run --extra test pytest tests/ -v
+```
+
+Run a focused test file:
+
+```bash
+uv run --extra test pytest tests/test_decorators.py -v
+```
+
+Format:
+
+```bash
+uv run ruff format .
+```
+
+Lint:
+
+```bash
+uv run ruff check .
+```
+
+Auto-fix safe lint issues:
+
+```bash
+uv run ruff check --fix .
+```
+
+Recommended source-change validation order:
+
+```bash
+uv run --extra test pytest tests/ -v
+uv run ruff format .
+uv run ruff check --fix .
+```
+
+For documentation-only or skill-only changes, Python validation is usually unnecessary unless Python snippets or project commands were changed.
+
+## Code Style Priorities
+
+Project-specific conventions take precedence over generic style advice.
+
+- Python 3.12 syntax.
+- `from __future__ import annotations` as the first non-comment line in Python modules.
+- Built-in generics: `list[str]`, `dict[str, int]`, `tuple[int, ...]`.
+- Union operator: `str | None`, not `Optional[str]`.
+- No wildcard imports.
+- Avoid inline imports.
+- Four-space indentation.
+- Ruff-formatted line wrapping, with current configured line length of 88.
+- HTML-only Telegram messages with escaped user-provided text.
+- UTC timestamps through `tcbot.utils.timedate_format`.
+- Database writes through `tcbot/database/*_db.py` helpers, not handlers.
+
+## Import Organization
+
+Use this order:
+
+1. `from __future__ import annotations`
+2. Standard library imports.
+3. Third-party imports.
+4. First-party `tcbot.*` imports.
 
 ```python
-# Modern type hints (Python 3.10+)
-def process_data(
-    items: list[str],                    # Not List[str]
-    config: dict[str, int],              # Not Dict[str, int]
-    optional: str | None = None,         # Not Optional[str]
-) -> tuple[bool, str]:                   # Not Tuple[bool, str]
-    return True, "success"
+from __future__ import annotations
 
-# Type aliases
-from typing import TypeAlias
+import logging
 
-UserId: TypeAlias = int
-UserDict: TypeAlias = dict[str, str | int]
+from telegram import Update
+from telegram.ext import ContextTypes, MessageHandler
 
-def get_user(user_id: UserId) -> UserDict:
-    return {"id": user_id, "name": "Alice"}
+from tcbot.modules.helper import decorators
+from tcbot.utils.prefixes import build_prefixed_filters
 ```
 
-## Pre-commit Configuration
+Ruff's `I` rules should handle sorting. Do not fight the formatter with manual spacing unless the project policy explicitly requires alignment in a specific context.
 
-```yaml
-# .pre-commit-config.yaml
-repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.9
-    hooks:
-      - id: ruff
-        args: [--fix]
-      - id: ruff-format
+## Type Annotation Guidance
 
-  - repo: https://github.com/astral-sh/ty
-    rev: v0.0.10
-    hooks:
-      - id: ty
+Annotate public helpers, database helpers, and handler functions. Prefer domain types already provided by the project where available.
+
+```python
+from __future__ import annotations
+
+from typing import Literal, TypedDict
+
+RoleName = Literal["founder", "admin", "developer", "tester"]
+
+
+class RoleDocument(TypedDict):
+    user_id: int
+    role: RoleName
+    assigned_by: int
 ```
 
-## Common Ruff Rules
+Good patterns:
 
-- **E501**: Line too long
-- **F401**: Unused import
-- **F841**: Unused variable
-- **I001**: Import not sorted
-- **N806**: Variable should be lowercase
-- **B008**: Function call in argument defaults
+- Use `TypedDict` for Mongo document shapes that are read in several places.
+- Use `Literal` for constrained string fields such as roles and statuses.
+- Use `NewType` domain primitives from project database type modules when available.
+- Return `None` explicitly for not-found lookups: `dict[str, object] | None`.
+- Keep handler return type `None` unless the framework requires otherwise.
 
-## See Also
+Avoid:
 
-- `python-testing` - Testing code quality
-- `uv-project-management` - Adding quality tools to projects
-- `python-development` - Core Python patterns
+- `Any` as a shortcut for unclear data shapes.
+- `cast()` to silence a problem that should be modeled or checked.
+- Type comments from older Python versions.
+- Adding a new type checker without updating project configuration and documentation.
+
+## Handler Quality Checklist
+
+For `tcbot/modules/*.py` handlers:
+
+- Handler names use `cmd_*` for commands and `on_*` for events.
+- Command handlers use the required decorator stack when applicable.
+- `__module_name__`, `__help_text__`, and `__handlers__` are present for modules.
+- User-facing text uses `parse_mode="HTML"`.
+- User-provided values are escaped through formatter helpers.
+- Callback queries call `await query.answer()` before other actions.
+- The handler delegates persistence to `tcbot.database` helpers.
+- Multi-group fan-out uses `tcbot.utils.dispatch.fan_out()`.
+- No `print()`; use module loggers.
+
+## Database Helper Quality Checklist
+
+For `tcbot/database/*_db.py` helpers:
+
+- Async functions with explicit parameter and return types.
+- Clear function names: `get_*`, `add_*`, `update_*`, `delete_*`, `list_*`.
+- No Telegram object types in the database layer.
+- Queries match existing indexes, or index setup is updated with the new access pattern.
+- MongoDB field additions are backward-compatible.
+- Callers do not receive raw Motor cursor objects unless there is a deliberate streaming need.
+- Tests cover insert/update/read behavior using offline fakes or mocks.
+
+## Async Test Quality
+
+`pytest-asyncio` is configured with `asyncio_mode = "auto"`, so async tests can be simple.
+
+```python
+async def test_helper_returns_none_when_missing(fake_collection) -> None:
+    result = await helper_db.get_item(123)
+
+    assert result is None
+```
+
+Testing expectations:
+
+- Tests stay offline.
+- No real bot token, MongoDB server, Telegram API, or network.
+- Prefer small fake objects over broad integration setup.
+- Test the behavior changed, not framework internals.
+- Include regression tests for fixed bugs when practical.
+
+## Ruff Diagnostics Triage
+
+Common enabled diagnostics in this project:
+
+- `F401`: unused import. Remove it unless it is part of a documented public API.
+- `F841`: unused local variable. Remove it or use the value meaningfully.
+- `I001`: imports are unsorted. Let `ruff check --fix` or `ruff format` correct it.
+- `E4`, `E7`, `E9`: syntax/indentation/runtime parse problems. Fix manually.
+
+Because the current Ruff selection is intentionally narrow, do not assume Ruff will catch every style issue. Apply project rules during review.
+
+## Safe Auto-Fix Policy
+
+Safe to auto-fix:
+
+- Import sorting.
+- Removing unused imports.
+- Formatting changes from Ruff.
+- Simple unused variable cleanup when the variable has no side effect and is not needed.
+
+Review manually:
+
+- Deleting unused functions or modules.
+- Changing database field names or document shapes.
+- Changing handler registration.
+- Rewriting exception handling.
+- Modifying user-facing moderation behavior.
+
+Never remove meaningful code only to silence a diagnostic.
+
+## Documentation and Skill-Only Changes
+
+For Markdown-only changes in `.agents/skills/`, validate mentally unless the content includes executable examples that should be syntax-checked. Ensure each Zed skill has YAML frontmatter with:
+
+- `name` matching the skill directory.
+- An actionable `description` explaining when to use it.
+- Valid YAML syntax.
+
+Avoid stale generic references, outdated Python versions, unrelated frameworks, or commands not configured for this project.
 
 ## References
 
-- Ruff: https://docs.astral.sh/ruff/
-- ty: https://docs.astral.sh/ty/
-- Detailed guide: See REFERENCE.md
+- Ruff documentation: https://docs.astral.sh/ruff/
+- pytest documentation: https://docs.pytest.org/
+- pytest-asyncio documentation: https://pytest-asyncio.readthedocs.io/
+- Python typing documentation: https://docs.python.org/3/library/typing.html
+- Project-specific reference: `tgbot/.agents/skills/python-code-quality/REFERENCE.md`

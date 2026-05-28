@@ -1,332 +1,271 @@
 # TCF Bot — Planning and Project State
 
-This document is the authoritative reference for how the project runs, where the known bugs are, what the improvement strategy is, and how sessions are tracked. Update it whenever the state of the project changes.
+This document tracks how TCF Bot currently runs, what is considered stable, and what should be improved next. Keep it practical: record current behavior, known risks, and validation commands rather than aspirational placeholders.
 
----
+## Current Project State
 
-## HOW TO PROJECT RUNS (STEP by STEP)
+| Area | Status |
+|---|---|
+| Runtime | Long-polling Telegram bot started with `python3 -m tcbot`. |
+| Python target | Python 3.12 project target (`pyproject.toml` requires `>=3.12`). |
+| Bot framework | `python-telegram-bot[job-queue] == 22.5`. |
+| Database | MongoDB through Motor, connected during PTB `post_init`. |
+| Health check | Flask app in `tcbot/alive.py`, `GET /` returns `OK` on `PORT` (default `5000`). |
+| Dependency management | `uv` with `uv.lock`. |
+| Formatting/linting | Ruff, configured in `pyproject.toml`. |
+| Tests | 134 collected tests across 14 `tests/test_*.py` files; designed to run offline. |
+| Deployment notes | Local `config.env`, Docker Compose, and Replit/hosted environment variables are documented. |
+
+## Runtime Flow
 
 ### Startup Sequence
 
-```
+```text
 python3 -m tcbot
   │
   ├── tcbot/__init__.py
-  │     Loads config from env vars (Replit Secrets + Replit shared env).
-  │     Builds immutable Configs dataclass → exposes thin _CfgAdapter as cfg.
-  │     load_dotenv(config.env, override=False) as local-dev fallback only.
+  │     Loads environment variables.
+  │     Loads local config.env through python-dotenv when present.
+  │     Builds immutable Configs dataclass.
+  │     Exposes cfg adapter used by the rest of the project.
   │
-  └── tcbot/__main__.py : main()
-        ├── setup_logging()
-        │     BotLogFormatter: [HH:MM] [DD-MM-YYYY] | community | L - module:line - msg
-        │     Third-party loggers (httpx, telegram, motor, pymongo) capped at WARNING.
-        │
+  └── tcbot/__main__.py: main()
+        ├── setup_logging(level=cfg.log_level)
         ├── start_keepalive()
-        │     Flask thread on 0.0.0.0:8080 — GET / returns "OK".
-        │     Daemon thread; exits when main process exits.
+        │     Starts Flask in a daemon thread on 0.0.0.0:cfg.port.
         │
         ├── ApplicationBuilder()
-        │     .token(cfg.bot_token)
-        │     .post_init(_post_init)
-        │     .concurrent_updates(True)        — independent updates processed in parallel
-        │     .connection_pool_size(8)          — API call pool
-        │     .get_updates_connection_pool_size(4)
-        │     .read_timeout(15) .write_timeout(15) .connect_timeout(10) .pool_timeout(5)
+        │     token(cfg.bot_token)
+        │     post_init(_post_init)
+        │     concurrent_updates(True)
+        │     connection_pool_size(8)
+        │     get_updates_connection_pool_size(4)
+        │     read/write/connect/pool timeouts
         │
-        ├── Handler registration (in order):
-        │     group -1 : TypeHandler(Update, global_rate_limit_handler)   — runs first
-        │     group  0 : all module __handlers__ via get_handlers()
-        │     group 10 : MessageHandler(groups & text & ~ANY_CMD_FILTER, _update_member_cache)
-        │     error    : _error_handler
+        ├── Handler registration
+        │     group -1: TypeHandler(Update, global_rate_limit_handler)
+        │     group  0: handlers discovered from tcbot/modules/*.py
+        │     group 10: member-cache update for non-command group text
+        │     errors: _error_handler
         │
-        └── app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+        └── run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
 ```
 
-### _post_init (async, runs after PTB builds the Application)
+### `post_init` Sequence
 
-```
-_post_init(app)
-  ├── connect()              Motor client → MongoDB Atlas, 10s timeout, ping verify
-  ├── ensure_indexes()       11 indexes created in parallel via asyncio.gather()
-  ├── ensure_initial_owner() Seed owner if tc_owners is empty
-  └── error_reporter.attach(bot, log_errors_chat, log_errors_thread)
-      loop.set_exception_handler(asyncio exception handler)
-```
+`_post_init(app)` runs after the PTB application is built and before polling starts:
+
+1. `connect()` creates the Motor client and verifies MongoDB with `ping`.
+2. `ensure_indexes()` creates required MongoDB indexes in parallel.
+3. `ensure_initial_owner(cfg.initial_owner_id)` seeds the first owner when needed.
+4. `error_reporter.attach(...)` stores the bot and error destination for async reports.
+5. The asyncio loop exception handler is registered.
 
 ### Request Processing Pipeline
 
+```text
+Telegram update
+  │
+  ├── group -1: global per-user rate limiter
+  │     Callback queries and commands are throttled before module handlers.
+  │
+  ├── group 0: command/module handlers
+  │     Modules are dynamically discovered from tcbot/modules/*.py.
+  │     Handlers apply auth decorators and per-handler rate limits where needed.
+  │
+  └── group 10: member cache updater
+        Stores user profile snapshots for text messages in connected groups.
 ```
-Telegram Update arrives via long poll
-  │
-  ├── group -1: global_rate_limit_handler
-  │     CallbackQuery → 20 presses / 10 s per user
-  │       denied: show_alert toast ("⏳ slow down…"), raise ApplicationHandlerStop
-  │     Command text → 8 commands / 30 s per user
-  │       denied: reply text + raise ApplicationHandlerStop
-  │     Everything else (conversation text, join events, etc.) → always passes
-  │
-  ├── group 0: module handlers
-  │     Each command handler carries (outermost → innermost):
-  │       @decorators.ratelimiter(limit, period)   per-handler fine-grained throttle
-  │       @decorators.owner_only / staff_only / mod_only / basic_mod_only
-  │       @decorators.log_execution                opt-in: entry/exit/elapsed ms at DEBUG
-  │
-  └── group 10: _update_member_cache
-        Runs only for text messages in connected groups that are not commands.
-        Calls users_db.upsert_user() to keep the member cache fresh.
-```
+
+## Architecture Summary
+
+### Main Package Boundaries
+
+| Path | Responsibility |
+|---|---|
+| `tcbot/__init__.py` | Environment parsing, `Configs`, and the global `cfg` adapter. |
+| `tcbot/__main__.py` | Application startup, handler registration, MongoDB startup, polling, error handling. |
+| `tcbot/alive.py` | Flask health-check server. |
+| `tcbot/modules/` | Command modules and Telegram handlers. |
+| `tcbot/modules/helper/` | Shared formatter, keyboard, decorator, target extraction, and role guard helpers. |
+| `tcbot/modules/helper/workflows/` | ConversationHandler flows, all named `*_flow.py`. |
+| `tcbot/database/` | Async MongoDB access helpers and document/type definitions. |
+| `tcbot/utils/` | Logging, bounded fan-out dispatch, prefix filters, datetime helpers, error reporting. |
+| `tests/` | Offline pytest suite. |
 
 ### Module Discovery
 
-`tcbot/modules/__init__.py` — runs at import time:
-
-1. `_discover_modules()` — globs `*.py` in `tcbot/modules/`, strips `__init__.py`
-2. `_filter_modules()` — applies `MODULES_LOAD` (whitelist) and `MODULES_NO_LOAD` (blacklist)
-3. `get_handlers()` — imports each module, collects `__handlers__` lists in discovery order
+`tcbot/modules/__init__.py` discovers top-level `*.py` files in `tcbot/modules/`, excludes `__init__.py`, applies the optional `MODULES_LOAD` allowlist and `MODULES_NO_LOAD` denylist, imports active modules, and collects their `__handlers__` lists.
 
 ### Database Layer
 
-All DB access is async via Motor. Connection is a module-level singleton (`_db` in `mongos.py`). Handlers never call `col()` directly — always go through the per-collection helper files.
+All database operations are async and should go through helper modules in `tcbot/database/`.
 
-```
-Collections and owners:
-  bans               bans_db.py        Federation bans (active / historical)
-  tc_owners          admins_db.py      Single-document owner record
-  tc_admins          admins_db.py      Admin list with promotion metadata
-  tc_roles           roles_db.py       Developer and Tester role assignments
-  federated_groups   groups_db.py      Connected groups with is_active flag
-  pending_joins      groups_db.py      Groups awaiting federation approval
-  member_cache       users_db.py       User profile snapshot cache
-  warns              warns_db.py       Per-group warning records
-  kicks              kicks_db.py       Kick log entries
-  mutes              mutes_db.py       Mute log entries
-  promotion_requests queues_db.py      Admin promotion request queue
-```
+Current collection/domain owners include:
 
-### In-Memory Cache Layer (`tcbot/database/cache.py`)
+| Collection/domain | Helper |
+|---|---|
+| Federation bans | `bans_db.py` |
+| Owners/admins | `admins_db.py` |
+| Developer/tester roles | `roles_db.py` |
+| Connected and pending groups | `groups_db.py` |
+| Member profile cache | `users_db.py` |
+| Warnings | `warns_db.py` |
+| Kicks | `kicks_db.py` |
+| Mutes | `mutes_db.py` |
+| Promotion requests | `queues_db.py` |
+| MongoDB client/indexes | `mongos.py` |
+| In-memory caches | `cache.py` |
+| Typed document shapes | `documents.py` |
+| Domain primitive types | `types.py` |
 
-| Cache | Key | TTL | Invalidated by |
-|---|---|---|---|
-| `effective_role_cache` | `user_id` | 60 s | Any role/admin/owner write |
-| `owner_id_cache` | constant | no TTL | `set_owner()` |
-| `connected_cache` | `chat_id` | no TTL | `add_group()`, `deactivate_group()` |
-| `active_groups_cache` | constant | no TTL | `add_group()`, `deactivate_group()` |
+### Error Handling
 
-### Fan-out Dispatcher (`tcbot/utils/dispatch.py`)
-
-`fan_out(coros, max_concurrent=10)` runs a list of coroutines concurrently bounded by `asyncio.Semaphore(10)`. Returns a list matching input order: result or captured `BaseException`. Never raises. Used for all multi-group operations (ban enforcement, mute, kick, unban sweep).
-
-### Error Handling — 3 Layers
-
-| Layer | Where | Catches |
+| Layer | Location | Purpose |
 |---|---|---|
-| 1 | PTB `app.add_error_handler(_error_handler)` | All unhandled handler exceptions |
-| 2 | `asyncio loop.set_exception_handler(...)` | `create_task()` / background task failures |
-| 3 | `TelegramErrorHandler` on root logger | All `log.error()` / `log.critical()` calls |
+| PTB error handler | `app.add_error_handler(_error_handler)` | Reports unhandled handler exceptions. |
+| Asyncio exception handler | `loop.set_exception_handler(...)` | Reports background task failures. |
+| Logging integration | `tcbot/utils/error_reporter.py` | Sends formatted error details to the configured destination. |
 
-All three layers route to `error_reporter.report_exc()` which ships a formatted HTML message to the `LOGS_ERRORS` channel.
+## Role System Summary
 
----
+Role hierarchy:
 
-## Role System
+1. Founder
+2. Admin
+3. Developer
+4. Tester
 
+Important rules:
 
----
+- Use canonical role helpers from `tcbot.database.roles_db` and `tcbot.modules.helper.role_guard`.
+- Do not duplicate manual role-check chains in handlers.
+- Ban and kick flows must auto-demote targets that currently hold a federation role.
+- Promotion and demotion workflows should preserve auditability through logs and queue records.
 
-## Conversation Flows Summary
-REFER TO `docs/workflows/workflows.md` FOR FULL DETAILS AND EXAMPLES
+## Conversation Flow Summary
 
----
+Conversation flows live in `tcbot/modules/helper/workflows/` and use `ConversationHandler` where needed.
 
-## BUG FIX PRIORITY
+Primary flows:
 
-You can add bugs to the tables below as you find them.
-
-
-### P0 — PRIORITY
-
-| No | File | Issue | Fix Status | Note | 
-|---|---|---|---|---|
-| 1 | `EXAMPLE.py` | Bugs its so fucking laggy | Not Yet | - |
-| 2 | `EXAMPLE.py` | Crashes when you do the thing | Done - Maybe Stable | So fucking a buggy a so lazy for fix any buggy |
-
-### P1 — HIGH
-
-| No | File | Issue | Fix Status | Note |
-|---|---|---|---|---|---|
-|  |  |  |  |  |
-
-### P2 — MEDIUM
-
-| No | File | Issue | Fix Status | Note |
-|---|---|---|---|---|
-|  |  |  |  |  |
-
-### P3 — LOW
-
-| No | File | Issue | Fix Status | Note |
-|---|---|---|---|---|
-|  |  |  |  |  |
-
----
-
-## CODE IMPROVEMENT STRATEGY
-
-### Principles (in order of priority)
-
-1. **No dead code** — Every unused import, variable, or function is removed immediately.
-2. **No duplicate logic** — If the same render or format pattern appears in two modules, extract it.
-3. **No silent fallbacks** — Failed operations are logged explicitly; `pass` in `except` blocks is forbidden.
-4. **Consistent style** — Every file follows `agents/STYLE-CODE.md` and `agents/STYLE-COMMENTS.md` exactly.
-5. **Parallel I/O** — Any two independent async operations must be gathered, never awaited sequentially.
-
-### What NOT to Do
-
-- Do not add new packages to `requirements.txt`
-- Do not use `typing.Optional`, `typing.List`, `typing.Tuple` — use built-in generics
-- Do not use `datetime.utcnow()` or inline `datetime.now(timezone.utc)` — use `tcbot.utils.timedate_format` (`utc_now()`, `to_utc()`, etc.)
-- Do not create `*_conv.py` files — all `ConversationHandler`s live in `*_flow.py`
-- Do not call `col()` directly from module handlers
-- Do not use `q._bot` — use `ctx.bot`
-- Do not inline imports inside function bodies
-- Do not use `mention(x) + code(x)` — pick one per context
-
----
-
-## PERFORMANCE AND STABILITY GOALS
-
-### Performance
-
-| Goal | Mechanism |
+| Flow | Purpose |
 |---|---|
-| Zero per-request DB overhead for role checks | `effective_role_cache` 60 s TTL, invalidated on writes |
-| Zero sequential loops for multi-group actions | `fan_out()` with `Semaphore(10)` |
-| Parallel permission + target resolution at command entry | `asyncio.gather()` in every entry point |
-| Fast group membership check | `connected_cache` boolean, no TTL |
-| Minimal poll latency | `concurrent_updates=True`, pool 8+4 |
+| `ban_flow.py` | Ban proof collection, album buffering, and federation ban execution. |
+| `appeal_flow.py` | Private appeal submission and staff decision handling. |
+| `connected_flow.py` | Group join approval and connection checks. |
+| `reason_flow.py` | Shared reason/proof steps for moderation actions. |
+| `proof_flow.py` | Proof upload helpers and prompts. |
+| `kicking_flow.py`, `muting_flow.py`, `warning_flow.py`, `unban_flow.py` | Action-specific moderation workflows. |
+| `promote_flow.py` | Role promotion execution helpers. |
+| `stats_flow.py`, `stats_chats_flow.py` | Stats display flows. |
 
-### Stability
+For detailed behavior, see `docs/workflows/workflows.md`.
 
-| Goal | Mechanism |
-|---|---|
-| No crashes from Telegram API failures in group loops | `try/except` around every `.send_*` / `.ban_*` inside `fan_out` |
-| No crashes from DB failures at startup | 10 s `serverSelectionTimeoutMS`, clean error before exit |
-| No crashes from bad user input | All entry points validate target + reason before state transition |
-| No infinite error loops | `error_reporter` uses `print()` on send failure — never `log.error()` |
-| No memory leaks in rate limiter | Stale buckets pruned eagerly on every `.check()` call |
-| Bot survives `ConversationHandler` timeouts | `ConversationHandler.END` returned on all fallback paths |
+## Development and Validation Commands
 
----
+Install dependencies:
 
-## SESSION LOGS HISTORY
+```bash
+uv sync
+```
 
-### Session 1 — Environment Setup ✅
-- [x] Migrated from Replit Agent to Replit environment
-- [x] Stored `BOT_TOKEN` and `MONGODB_URI` in Replit Secrets
-- [x] All 121 tests pass, bot starts and connects to MongoDB
-- [x] Cleaned `config.env` of hardcoded secrets
+Install test extras:
 
-### Session 2 — Documentation Overhaul ✅
-- [x] Rewrote `PLAN.md` (this document)
-- [x] Rewrote all `agents/*.md` as comprehensive AI agent instructions
-- [x] Rewrote all `docs/*.md` as thorough developer documentation
-- [x] Removed duplicate `docs/agent-guidelines.md`
-- [x] Updated `README.md`
+```bash
+uv sync --extra test
+```
 
-### Session 3 — Code Quality Pass (planned)
-- [ ] Audit every module for 3-layer decorator stack compliance
-- [ ] Fix all bare `except: pass` blocks
-- [ ] Fix datetime inconsistency in `appeal_flow.py`
-- [ ] Remove any dead code found during documentation pass
+Run the bot:
 
-### Session 4 — Stability Hardening (planned)
-- [ ] Add asyncio lock to cache thundering-herd issue
-- [ ] Review ConversationHandler fallback paths for completeness
-- [ ] Verify auto-demote fires on all required code paths
-- [ ] Expand test coverage for appeal flow edge cases
+```bash
+python3 -m tcbot
+```
 
-### Session 5 — Full Codebase Read-Through & Audit ✅
+Run tests:
 
-Complete read of every file in the project (50+ source files, all tests, all docs, all config).
+```bash
+uv run --extra test pytest tests/ -v
+```
 
-**Ruff result:** `uv tool run ruff check . --select E4,E7,E9,F,I` → **All checks passed — 0 issues found.**
+Collect tests only:
 
-Corrections applied:
+```bash
+uv run --extra test pytest --collect-only -q
+```
 
-- [x] `docs/development.md` — test count updated 121 → 134
-- [x] `agents/REPLIT.md` — test count updated 121 → 134
-- [x] `pyproject.toml` — `requires-python` updated `>=3.12` → `>=3.13`; `target-version` updated `py312` → `py313`
-- [x] `Dockerfile` — base image updated `python:3.12-slim` → `python:3.13-slim`
+Format and lint:
 
-No source code changes required — zero Ruff violations, zero logic/style issues found.
-All 134 tests pass.
+```bash
+uv run ruff format .
+uv run ruff check --fix .
+```
 
-### Session 6 — Style Consistency Pass ✅
+Run local bot + MongoDB:
 
-Deep audit of entire `tcbot/database/` tree against `agents/STYLE-COMMENTS.md` and `agents/STYLE-CODE.md`.
+```bash
+docker-compose up --build
+```
 
-**Ruff result:** `uv tool run ruff check . --select E4,E7,E9,F,I` → **All checks passed — 0 issues found.**
-**Tests:** 134/134 pass.
+## Improvement Strategy
 
-Corrections applied:
+Priorities, in order:
 
-- [x] `tcbot/database/mongos.py` — added missing blank line between copyright block and module docstring (file header rule: copyright → blank → `"""docstring."""`)
-- [x] `tcbot/database/mongos.py` — fixed malformed `_patch_dns_if_needed` docstring that ended with `,."""` (truncated/corrupted sentence); replaced with a complete, well-formed sentence
-- [x] `tcbot/database/bans_db.py` — removed docstring from `_bans()` (private obvious one-liner; style rule: obvious helpers need no docstring); fixed `make_ban_id()` docstring: added terminal period
-- [x] `tcbot/database/groups_db.py` — removed docstrings from `_groups()` and `_pending()` (private obvious one-liners)
-- [x] `tcbot/database/roles_db.py` — removed docstring from `_col()` (private obvious one-liner)
-- [x] `tcbot/database/warns_db.py` — removed docstrings from `_warns()` and `_warn_counts()` (private obvious one-liners)
-- [x] `tcbot/database/kicks_db.py` — removed docstring from `_kicks()` (private obvious one-liner)
-- [x] `tcbot/database/mutes_db.py` — removed docstring from `_mutes()` (private obvious one-liner)
-- [x] `tcbot/database/queues_db.py` — removed docstrings from `_requests()` and `_new_request_id()` (private obvious one-liners)
-- [x] `tcbot/database/users_db.py` — removed docstring from `_users()` (private obvious one-liner)
-- [x] `tcbot/database/types.py` — removed Sphinx double-backticks from `BanId` docstring (`` ``make_short_id()`` `` → `make_short_id()`)
-- [x] `tcbot/database/cache.py` — removed Sphinx double-backticks from inline comment (`# * Public sentinel — compare using is CACHE_MISS…`)
+1. **Correctness and safety** — preserve federation moderation behavior, secrets safety, and database compatibility.
+2. **Offline test coverage** — keep tests independent of Telegram and MongoDB services.
+3. **Clear module boundaries** — handlers call helpers; database writes stay in `tcbot/database/`; shared flows stay in `workflows/`.
+4. **Operational visibility** — errors and important moderation events should be logged to configured destinations.
+5. **Performance** — use bounded fan-out for group-wide operations and avoid sequential I/O where safe.
 
----
+## Current Priority Backlog
 
-## Session 5 — Code Quality Checklist
+### P0 — Critical
 
-### Ruff
-- [x] Run `uv tool run ruff check . --select E4,E7,E9,F,I` — 1 violation found (unused import in logger.py, fixed as part of Issue 8)
-- [x] Run `uv tool run ruff format .` — no formatting changes needed; codebase already conforms
+No active P0 items are documented in this file.
 
-### Issue 1 — Missing `from __future__ import annotations`
-- [x] `tests/__init__.py` — already present at line 9; no change needed
+### P1 — High
 
-### Issue 2 — Exception chaining never used
-- [x] Audited all 30+ `except ... as exc:` blocks; none re-raise a new exception without `from exc`. The one true re-raise (`_owner_id_from_env` in `__init__.py`) already uses `raise RuntimeError(...) from exc`. All other blocks log and continue; bare `raise` in `warns_db.py` correctly re-raises the caught exception. No chaining gaps found.
+| Item | Area | Status | Notes |
+|---|---|---|---|
+| Verify full suite on every source change | Tests | Ongoing | Use `uv run --extra test pytest tests/ -v`. |
+| Keep docs aligned with env/config changes | Documentation | Ongoing | Update `README.md`, `AGENTS.md`, `PLAN.md`, and `replit.md` when runtime setup changes. |
 
-### Issue 3 — `# type: ignore` suppressions in `cache.py`
-- [x] `TTLCache` is already `Generic[T]`; no `# type: ignore` comments exist anywhere in `cache.py`. Issue pre-resolved.
+### P2 — Medium
 
-### Issue 4 — Weakly-typed parameters
-- [x] `prefixes.py` — `dispatch_alt_prefix` already uses `_UpdateLike` / `_ContextLike` Protocol types
-- [x] `extraction.py` — `get_reason()` already uses `_UpdateLike` / `_ContextLike` Protocol types
-- [x] `dispatch.py` — `fan_out` already uses a proper `TypeVar T` bound to `Awaitable`; issue pre-resolved
+| Item | Area | Status | Notes |
+|---|---|---|---|
+| Expand edge-case workflow tests | Tests | Open | Appeal, ban proof album buffering, and timeout paths are good candidates. |
+| Review deployment-specific port assumptions | Deployment | Open | Runtime defaults to `PORT=5000`; hosts may require a different value. |
 
-### Issue 5 — `list[dict]` anti-pattern in DB layer
-- [x] All DB helpers already return typed shapes (`BanDoc`, `AdminDoc`, `GroupDoc`, `UserDoc`, `WarnDoc`, `PromotionRequestDoc`, etc.) from `documents.py`. Issue pre-resolved.
+### P3 — Low
 
-### Issue 6 — Module-level mutable state
-- [x] `ban_flow.py` — `_albums` / `_album_meta` are intentional asyncio-safe module-level dicts; concurrency is single-threaded via the event loop. Accepted design; no refactor warranted without clear regression risk.
-- [x] `prefixes.py` — `_REGISTRY` is an intentional asyncio-safe module-level dict; populated at import time and only read thereafter.
-- [x] `error_reporter.py` — `_bot` / `_chat_id` / `_thread_id` set once via `attach()` in `_post_init`; safe under asyncio. Accepted design.
+| Item | Area | Status | Notes |
+|---|---|---|---|
+| Keep documentation links current | Documentation | Ongoing | Prefer project-relative links that exist in the repository. |
 
-### Issue 7 — Bare `except Exception: pass` (silent failures)
-- [x] `tcbot/__init__.py:parse_list` — logs with `logging.getLogger(__name__).debug(...)` on `(ValueError, SyntaxError)`. Not bare.
-- [x] `tcbot/__main__.py` — asyncio handler creation failure logs via `log.debug("Failed to schedule async error report: %s", err)`
-- [x] `tcbot/modules/helper/decorators.py` — all rate-limit reply failures log via `log.debug(...)`
-- [x] `tcbot/modules/connecting.py` — permission check failure logs via `log.debug(...)` and replies with an error message
+## Maintenance Rules
 
-### Issue 8 — Dead code in `logger.py`
-- [x] Removed unused `project_name: str` parameter from `BotLogFormatter.__init__`; signature is now `__init__(self) -> None`
-- [x] Updated `setup()` call from `BotLogFormatter(cfg.community_name)` to `BotLogFormatter()`
-- [x] Removed now-unused `from tcbot import cfg` import in `logger.py` (Ruff F401 fix)
+- Do not commit real secrets or private chat IDs.
+- Do not edit `config.env` for normal documentation or code changes.
+- Do not add dependencies manually to a requirements file; use `uv` and `pyproject.toml`.
+- Keep database schema changes backward-compatible unless a migration plan is included.
+- Keep bot messages HTML-only and escape user-provided text through formatter helpers.
+- Keep conversation files named `*_flow.py`.
+- Keep tests offline and deterministic.
 
-### Issue 9 — Unused advanced type patterns
-- [x] Created `tcbot/database/types.py` with `NewType` domain primitives: `UserId`, `GroupId`, `ChatId`, `BanId`
-- [x] Added `Literal` type aliases to `documents.py`: `BanStatus`, `RoleName`, `RequestStatus`
-- [x] Applied `RoleName` to `RoleDoc.role`; `RequestStatus` to `PromotionRequestDoc.status`
-- [x] Applied `UserId` / `GroupId` / `ChatId` / `BanId` throughout all `TypedDict` document definitions
-- [x] `Protocol` classes for duck-typed interfaces already exist in `prefixes.py` and `extraction.py`; discriminated unions deferred (no current state machine ambiguity warrants them)
+## Recent Documentation Baseline
+
+This documentation pass updates the root Markdown files to reflect the current project stack, runtime flow, configuration model, test inventory, and deployment guidance:
+
+- `AGENTS.md`
+- `README.md`
+- `PLAN.md`
+- `replit.md`
+
+Validation used for this baseline:
+
+```bash
+uv run --extra test pytest --collect-only -q
+```
+
+Result: 134 tests collected across 14 test files.

@@ -1,378 +1,307 @@
 ---
 name: telegram-bot-builder
-description: Expert in building Telegram bots that solve real problems - from
-  simple automation to complex AI-powered bots. Covers bot architecture, the
-  Telegram Bot API, user experience, monetization strategies, and scaling bots
-  to thousands of users.
-risk: unknown
-source: vibeship-spawner-skills (Apache 2.0)
-date_added: 2026-02-27
+description: Use when designing, implementing, reviewing, or debugging TCBot Telegram bot features with python-telegram-bot 22.5, async handlers, ConversationHandler flows, Motor/MongoDB persistence, moderation UX, and safe deployment practices.
 ---
+Last updated: 2026-05-28
 
-# Telegram Bot Builder
 
-Expert in building Telegram bots that solve real problems - from simple
-automation to complex AI-powered bots. Covers bot architecture, the Telegram
-Bot API, user experience, monetization strategies, and scaling bots to
-thousands of users.
+# Telegram Bot Builder for TCBot
 
-**Role**: Telegram Bot Architect
+Use this skill for Telegram bot product and engineering work in the TCF Bot repository. The project is a Python 3.12 community moderation bot built with `python-telegram-bot[job-queue] == 22.5`, Motor/MongoDB, Flask keepalive, `uv`, Ruff, and offline pytest tests.
 
-You build bots that people actually use daily. You understand that bots
-should feel like helpful assistants, not clunky interfaces. You know
-the Telegram ecosystem deeply - what's possible, what's popular, and
-what makes money. You design conversations that feel natural.
+The goal is to build reliable moderation workflows that feel clear, respectful, and fast for staff and users.
 
-### Expertise
+## When to Use This Skill
 
-- Telegram Bot API
-- Bot UX design
-- Monetization
-- Node.js/Python bots
-- Webhook architecture
-- Inline keyboards
+Use this skill when the task involves:
 
-## Capabilities
+- Telegram commands, message handlers, callback queries, or inline keyboards.
+- `python-telegram-bot` application structure or handler registration.
+- Conversation flows for bans, appeals, proof collection, moderation actions, or setup workflows.
+- Group moderation operations across connected chats.
+- Bot UX copy, command discoverability, and staff-facing workflows.
+- Telegram API error handling, rate limits, callback behavior, or deployment mode decisions.
+- Bot security: token handling, role checks, permissions, audit logs, and abuse prevention.
 
-- Telegram Bot API
-- Bot architecture
-- Command design
-- Inline keyboards
-- Bot monetization
-- User onboarding
-- Bot analytics
-- Webhook management
+Do not use generic Node.js, Telegraf, or webhook-only patterns for this project unless the user explicitly asks for a separate bot outside TCBot.
 
-## Patterns
+## Current Project Stack
 
-### Bot Architecture
+- Python: 3.12.
+- Bot framework: `python-telegram-bot` 22.5.
+- Persistence: MongoDB via Motor.
+- Runtime: long polling from `tcbot/__main__.py`.
+- Keepalive: Flask health endpoint.
+- Dependency manager: `uv`.
+- Quality tools: Ruff, pytest, pytest-asyncio.
+- Configuration: environment variables loaded by `tcbot/__init__.py`, with `config.env.example` as the template.
 
-Structure for maintainable Telegram bots
+## Repository Boundaries
 
-**When to use**: When starting a new bot project
+Place work in the owning layer:
 
-## Bot Architecture
+| Concern | Location |
+|---|---|
+| Command modules and top-level handlers | `tcbot/modules/` |
+| Shared handler helpers | `tcbot/modules/helper/` |
+| Conversation flows | `tcbot/modules/helper/workflows/*_flow.py` |
+| Database helpers | `tcbot/database/*_db.py` |
+| Runtime utilities | `tcbot/utils/` |
+| Offline tests | `tests/` |
 
-### Stack Options
-| Language | Library | Best For |
-|----------|---------|----------|
-| Node.js | telegraf | Most projects |
-| Node.js | grammY | TypeScript, modern |
-| Python | python-telegram-bot | Quick prototypes |
-| Python | aiogram | Async, scalable |
+Do not put MongoDB writes directly in command handlers. Do not create `*_conv.py` files; new conversation logic belongs in `*_flow.py` files.
 
-### Basic Telegraf Setup
-```javascript
-import { Telegraf } from 'telegraf';
+## Telegram UX Principles
 
-const bot = new Telegraf(process.env.BOT_TOKEN);
+TCBot is a moderation and federation-management bot, so prioritize clarity over novelty.
 
-// Command handlers
-bot.start((ctx) => ctx.reply('Welcome!'));
-bot.help((ctx) => ctx.reply('How can I help?'));
+- Keep staff actions explicit: who, what action, where, why, and what happens next.
+- Make destructive operations hard to trigger accidentally.
+- Confirm irreversible or federation-wide actions.
+- Use short, professional-friendly copy.
+- Prefer one clear next step per message.
+- Use inline keyboards for decisions, pagination, and review cards.
+- Avoid cluttered menus with too many buttons.
+- Always answer callback queries promptly to stop client loading indicators.
+- Use HTML parse mode consistently and escape user-provided content.
 
-// Text handler
-bot.on('text', (ctx) => {
-  ctx.reply(`You said: ${ctx.message.text}`);
-});
+Example callback pattern:
 
-// Launch
-bot.launch();
+```python
+query = update.callback_query
+if query is None:
+    return
 
-// Graceful shutdown
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+await query.answer()
+await query.edit_message_text(
+    "Appeal marked for review.",
+    parse_mode="HTML",
+)
 ```
 
-### Project Structure
+## Handler Design Pattern
+
+A good command handler should:
+
+1. Validate the Telegram update shape.
+2. Check permissions through project role helpers/decorators.
+3. Parse arguments or delegate target extraction.
+4. Call database helpers for persistence.
+5. Call Telegram API methods with bounded concurrency when needed.
+6. Send a clear HTML response.
+7. Log or audit important moderation outcomes.
+
+Skeleton:
+
+```python
+from __future__ import annotations
+
+import logging
+
+from telegram import Update
+from telegram.ext import ContextTypes
+
+from tcbot import database as db
+from tcbot.modules.helper.formatter import code, mention
+
+log = logging.getLogger(__name__)
+
+
+async def cmd_lookup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    msg = update.effective_message
+    user = update.effective_user
+    if msg is None or user is None:
+        return
+
+    record = await db.users_db.get_user(user.id)
+    if record is None:
+        await msg.reply_text("No record found.", parse_mode="HTML")
+        return
+
+    await msg.reply_text(
+        f"User: {mention(user.id, user.first_name)}\nID: {code(str(user.id))}",
+        parse_mode="HTML",
+    )
 ```
-telegram-bot/
-├── src/
-│   ├── bot.js           # Bot initialization
-│   ├── commands/        # Command handlers
-│   │   ├── start.js
-│   │   ├── help.js
-│   │   └── settings.js
-│   ├── handlers/        # Message handlers
-│   ├── keyboards/       # Inline keyboards
-│   ├── middleware/      # Auth, logging
-│   └── services/        # Business logic
-├── .env
-└── package.json
-```
 
-### Inline Keyboards
+## Commands and Registration
 
-Interactive button interfaces
+For `tcbot/modules/*.py`:
 
-**When to use**: When building interactive bot flows
+- Use `cmd_*` names for command handlers.
+- Use `on_*` names for event handlers.
+- Keep `__module_name__` and `__help_text__` accurate.
+- Register handlers in `__handlers__` at the bottom of the module.
+- Build command filters through project prefix utilities.
+- Keep decorators in the project-required order for protected commands.
+
+Prefer small, composable handlers over large command functions that parse, authorize, persist, fan out, and format everything inline.
+
+## Roles, Permissions, and Safety
+
+Use canonical role helpers. Do not chain ad-hoc owner/admin checks.
+
+- Use role guard decorators for command access.
+- Use `get_effective_role()` and `can_act_on()` for hierarchy decisions.
+- Use `resolve_and_check()` when both executor and target must be validated.
+- Auto-demote role holders before ban/kick workflows where required by project policy.
+- Never allow staff to accidentally target the bot itself without a friendly guard response.
+- Log moderation actions and partial failures with enough context for auditability.
+
+Security requirements:
+
+- Never hardcode bot tokens, MongoDB URIs, payment tokens, or chat secrets.
+- Do not print secrets.
+- Do not send private internal IDs to public chats unless the workflow requires it.
+- Treat callback data as untrusted input; validate IDs and current state before acting.
+
+## Conversation Flows
+
+Use `ConversationHandler` for multi-step interactions such as proof collection, appeals, and moderation reasons.
+
+Project conventions:
+
+- Flow files live in `tcbot/modules/helper/workflows/`.
+- Flow files are named `*_flow.py`.
+- Conversation states are module-level `WAITING_*` constants.
+- Every flow has a cancel fallback.
+- Timeouts use `cfg.proof_timeout`, `cfg.appeal_timeout`, or another project config value.
+- Store only small IDs or state markers in context data; persist durable workflow state in MongoDB.
+
+Good flow behavior:
+
+- Tell users what input is expected.
+- Accept cancellation at each step.
+- Handle timeout with a clear message and cleanup.
+- Recover gracefully when the underlying database record was changed by another staff member.
+- Make repeated callback presses idempotent.
 
 ## Inline Keyboards
 
-### Basic Keyboard
-```javascript
-import { Markup } from 'telegraf';
+Use inline keyboards for decisions and navigation. Keep callback data compact and structured.
 
-bot.command('menu', (ctx) => {
-  ctx.reply('Choose an option:', Markup.inlineKeyboard([
-    [Markup.button.callback('Option 1', 'opt_1')],
-    [Markup.button.callback('Option 2', 'opt_2')],
+Recommended callback data shape:
+
+```text
+action:entity:id
+```
+
+Examples:
+
+```text
+appeal:approve:abc123
+appeal:deny:abc123
+page:bans:2
+```
+
+Guidelines:
+
+- Keep callback data within Telegram limits.
+- Validate the action, entity, and ID after receiving the callback.
+- Re-load current state from the database before applying a decision.
+- Disable or edit completed review cards where practical.
+- Use URL buttons only for safe external destinations.
+
+## Multi-Group Moderation
+
+Federation-wide operations can touch many connected groups. Use bounded concurrency and explicit partial-failure reporting.
+
+```python
+from tcbot.utils.dispatch import fan_out
+
+active_groups = await db.groups_db.active_groups()
+results = await fan_out(
     [
-      Markup.button.callback('Yes', 'yes'),
-      Markup.button.callback('No', 'no'),
-    ],
-  ]));
-});
+        ctx.bot.ban_chat_member(group["chat_id"], target_id)
+        for group in active_groups
+    ]
+)
 
-// Handle button clicks
-bot.action('opt_1', (ctx) => {
-  ctx.answerCbQuery('You chose Option 1');
-  ctx.editMessageText('You selected Option 1');
-});
+failed = sum(1 for result in results if isinstance(result, BaseException))
 ```
 
-### Keyboard Patterns
-| Pattern | Use Case |
-|---------|----------|
-| Single column | Simple menus |
-| Multi column | Yes/No, pagination |
-| Grid | Category selection |
-| URL buttons | Links, payments |
+Do not use unbounded `asyncio.gather()` for large group lists. Telegram API failures should not hide successful operations in other groups.
 
-### Pagination
-```javascript
-function getPaginatedKeyboard(items, page, perPage = 5) {
-  const start = page * perPage;
-  const pageItems = items.slice(start, start + perPage);
+## MongoDB Persistence
 
-  const buttons = pageItems.map(item =>
-    [Markup.button.callback(item.name, `item_${item.id}`)]
-  );
+Use MongoDB for durable bot state:
 
-  const nav = [];
-  if (page > 0) nav.push(Markup.button.callback('◀️', `page_${page-1}`));
-  if (start + perPage < items.length) nav.push(Markup.button.callback('▶️', `page_${page+1}`));
+- Staff roles.
+- Connected groups.
+- Federation moderation actions.
+- Appeals and proof records.
+- Audit logs.
+- User profile snapshots needed for display.
 
-  return Markup.inlineKeyboard([...buttons, nav]);
-}
+Persistence rules:
+
+- Handlers call `tcbot.database` helper modules.
+- Helper modules own collection access and query details.
+- New query patterns should be supported by indexes.
+- Schema changes must be backward-compatible or include a migration plan.
+- Tests should cover database helper behavior offline.
+
+## Error Handling
+
+Handle errors at the right layer.
+
+- In one-off handler operations, show a concise user-facing failure and log details.
+- In multi-group loops, collect failures and report a summary.
+- In callback handlers, answer the callback even when the action cannot proceed.
+- In background jobs, log exceptions with IDs needed for diagnosis.
+- Do not use bare `except:` or silent `pass`.
+
+Common Telegram API cases to handle:
+
+- Bot lacks admin rights in a target group.
+- User is not found or already left.
+- Message was deleted before edit.
+- Callback query references expired or already-resolved state.
+- Group has been removed or deactivated.
+
+## Deployment Model
+
+TCBot currently uses long polling plus a Flask keepalive endpoint. Do not switch to webhooks unless the user explicitly requests a deployment architecture change.
+
+Operational guidance:
+
+- Configure secrets through environment variables or platform secret storage.
+- Keep `config.env.example` as the template, not a secret store.
+- Validate startup with `python -m tcbot` locally when appropriate.
+- Use `docker-compose up --build` for local bot + MongoDB workflows when requested.
+- Keep health checks lightweight and independent of slow Telegram or MongoDB calls.
+
+## Product Review Checklist
+
+Before finishing a bot feature, verify:
+
+- The command or flow solves a real staff/user need.
+- Permissions and role hierarchy are enforced.
+- Destructive actions require enough context or confirmation.
+- User-facing messages are clear and HTML-safe.
+- Callback queries are answered promptly.
+- Database writes are in helper modules.
+- Multi-group Telegram calls are bounded.
+- Audit/log destinations are used where required.
+- Tests or focused validation were run, or the reason for skipping is clear.
+
+## Validation Commands
+
+For source changes:
+
+```bash
+uv run --extra test pytest tests/ -v
+uv run ruff format .
+uv run ruff check --fix .
 ```
 
-### Bot Monetization
+For focused workflow changes, run the nearest test file first, then broaden to the full suite.
 
-Making money from Telegram bots
+## References
 
-**When to use**: When planning bot revenue
-
-## Bot Monetization
-
-### Revenue Models
-| Model | Example | Complexity |
-|-------|---------|------------|
-| Freemium | Free basic, paid premium | Medium |
-| Subscription | Monthly access | Medium |
-| Per-use | Pay per action | Low |
-| Ads | Sponsored messages | Low |
-| Affiliate | Product recommendations | Low |
-
-### Telegram Payments
-```javascript
-// Create invoice
-bot.command('buy', (ctx) => {
-  ctx.replyWithInvoice({
-    title: 'Premium Access',
-    description: 'Unlock all features',
-    payload: 'premium_monthly',
-    provider_token: process.env.PAYMENT_TOKEN,
-    currency: 'USD',
-    prices: [{ label: 'Premium', amount: 999 }], // $9.99
-  });
-});
-
-// Handle successful payment
-bot.on('successful_payment', (ctx) => {
-  const payment = ctx.message.successful_payment;
-  // Activate premium for user
-  await activatePremium(ctx.from.id);
-  ctx.reply('🎉 Premium activated!');
-});
-```
-
-### Freemium Strategy
-```
-Free tier:
-- 10 uses per day
-- Basic features
-- Ads shown
-
-Premium ($5/month):
-- Unlimited uses
-- Advanced features
-- No ads
-- Priority support
-```
-
-### Usage Limits
-```javascript
-async function checkUsage(userId) {
-  const usage = await getUsage(userId);
-  const isPremium = await checkPremium(userId);
-
-  if (!isPremium && usage >= 10) {
-    return { allowed: false, message: 'Daily limit reached. Upgrade?' };
-  }
-  return { allowed: true };
-}
-```
-
-### Webhook Deployment
-
-Production bot deployment
-
-**When to use**: When deploying bot to production
-
-## Webhook Deployment
-
-### Polling vs Webhooks
-| Method | Best For |
-|--------|----------|
-| Polling | Development, simple bots |
-| Webhooks | Production, scalable |
-
-### Express + Webhook
-```javascript
-import express from 'express';
-import { Telegraf } from 'telegraf';
-
-const bot = new Telegraf(process.env.BOT_TOKEN);
-const app = express();
-
-app.use(express.json());
-app.use(bot.webhookCallback('/webhook'));
-
-// Set webhook
-const WEBHOOK_URL = 'https://your-domain.com/webhook';
-bot.telegram.setWebhook(WEBHOOK_URL);
-
-app.listen(3000);
-```
-
-### Vercel Deployment
-```javascript
-// api/webhook.js
-import { Telegraf } from 'telegraf';
-
-const bot = new Telegraf(process.env.BOT_TOKEN);
-// ... bot setup
-
-export default async (req, res) => {
-  await bot.handleUpdate(req.body);
-  res.status(200).send('OK');
-};
-```
-
-### Railway/Render Deployment
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-CMD ["node", "src/bot.js"]
-```
-
-## Validation Checks
-
-### Bot Token Hardcoded
-
-Severity: HIGH
-
-Message: Bot token appears to be hardcoded - security risk!
-
-Fix action: Move token to environment variable BOT_TOKEN
-
-### No Bot Error Handler
-
-Severity: HIGH
-
-Message: No global error handler for bot.
-
-Fix action: Add bot.catch() to handle errors gracefully
-
-### No Rate Limiting
-
-Severity: MEDIUM
-
-Message: No rate limiting - may hit Telegram limits.
-
-Fix action: Add throttling with Bottleneck or similar library
-
-### In-Memory Sessions in Production
-
-Severity: MEDIUM
-
-Message: Using in-memory sessions - will lose state on restart.
-
-Fix action: Use Redis or database-backed session store for production
-
-### No Typing Indicator
-
-Severity: LOW
-
-Message: Consider adding typing indicator for better UX.
-
-Fix action: Add ctx.sendChatAction('typing') before slow operations
-
-## Collaboration
-
-### Delegation Triggers
-
-- mini app|web app|TON|twa -> telegram-mini-app (Mini App integration)
-- AI|GPT|Claude|LLM|chatbot -> ai-wrapper-product (AI integration)
-- database|postgres|redis -> backend (Data persistence)
-- payments|subscription|billing -> fintech-integration (Payment integration)
-- deploy|host|production -> devops (Deployment)
-
-### AI Telegram Bot
-
-Skills: telegram-bot-builder, ai-wrapper-product, backend
-
-Workflow:
-
-```
-1. Design bot conversation flow
-2. Set up AI integration (OpenAI/Claude)
-3. Build backend for state/data
-4. Implement bot commands and handlers
-5. Add monetization (freemium)
-6. Deploy and monitor
-```
-
-### Bot + Mini App
-
-Skills: telegram-bot-builder, telegram-mini-app, frontend
-
-Workflow:
-
-```
-1. Design bot as entry point
-2. Build Mini App for complex UI
-3. Integrate bot commands with Mini App
-4. Handle payments in Mini App
-5. Deploy both components
-```
-
-## Related Skills
-
-Works well with: `telegram-mini-app`, `backend`, `ai-wrapper-product`, `workflow-automation`
-
-## When to Use
-- User mentions or implies: telegram bot
-- User mentions or implies: bot api
-- User mentions or implies: telegram automation
-- User mentions or implies: chat bot telegram
-- User mentions or implies: tg bot
-
-## Limitations
-- Use this skill only when the task clearly matches the scope described above.
-- Do not treat the output as a substitute for environment-specific validation, testing, or expert review.
-- Stop and ask for clarification if required inputs, permissions, safety boundaries, or success criteria are missing.
+- python-telegram-bot docs: https://docs.python-telegram-bot.org/
+- Telegram Bot API: https://core.telegram.org/bots/api
+- Motor docs: https://motor.readthedocs.io/
+- Project policy: `tgbot/.agents/skills/project-policy/SKILL.md`
+- Async patterns: `tgbot/.agents/skills/async-python-patterns/SKILL.md`
+- Code quality: `tgbot/.agents/skills/python-code-quality/SKILL.md`
