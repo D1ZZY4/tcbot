@@ -493,7 +493,7 @@ when available. Do not claim tests passed unless you ran them successfully.
 
 The bot speaks to users in **professional + friendly + lightly humorous** English. Replies are short, plain-text, and human; no exclamation cascades, no marketing tone.
 
-- **Pictograph emoji are forbidden** (e.g. 👋 🎉 🚫 ⚠️ 🟥). Strip them on sight.
+- **Pictograph emoji are forbidden** (waving hands, party poppers, prohibition signs, warning signs, coloured squares, and the like). Strip them on sight.
 - **Text emoticons are allowed sparingly** when they fit a joke beat: `:)`, `:v`, `:')`, `:D`. At most one per reply, and only in the *witty refusal* path — never in success/error/data views.
 - The bot identifies the target before speaking. The canonical identity classes are defined in `tcbot/modules/helper/identity.py`:
   - `self` — the executor targeted themselves

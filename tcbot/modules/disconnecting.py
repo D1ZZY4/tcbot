@@ -84,9 +84,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     # * The Telegram call is bounded so a stalled API never blocks the reply.
     is_tc_staff, member = await asyncio.gather(
         db.users_db.is_staff(user.id),
-        asyncio.wait_for(
-            ctx.bot.get_chat_member(chat.id, user.id), timeout=3.0
-        ),
+        asyncio.wait_for(ctx.bot.get_chat_member(chat.id, user.id), timeout=3.0),
         return_exceptions=True,
     )
     if isinstance(member, BaseException):

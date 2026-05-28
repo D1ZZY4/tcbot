@@ -24,9 +24,7 @@ _GET_CHAT_TIMEOUT = 3.0
 async def _safe_get_chat(bot: Bot, ident: str | int):
     """Call ``bot.get_chat`` with a bounded timeout; returns ``None`` on failure."""
     try:
-        return await asyncio.wait_for(
-            bot.get_chat(ident), timeout=_GET_CHAT_TIMEOUT
-        )
+        return await asyncio.wait_for(bot.get_chat(ident), timeout=_GET_CHAT_TIMEOUT)
     except (asyncio.TimeoutError, Exception) as exc:
         log.debug("get_chat(%s) failed: %s", ident, exc)
         return None
@@ -112,8 +110,6 @@ async def extract_target(
                 uname = text[ent.offset + 1 : ent.offset + ent.length]
                 chat = await _safe_get_chat(bot, f"@{uname}")
                 if chat is not None:
-                    return chat.id, await _best_name(
-                        chat.id, chat.first_name, uname
-                    )
+                    return chat.id, await _best_name(chat.id, chat.first_name, uname)
 
     return None, None

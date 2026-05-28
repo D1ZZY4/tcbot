@@ -317,8 +317,9 @@ __handlers__ = [
     CallbackQueryHandler(on_help_menu, pattern=r"^help_menu$"),
     CallbackQueryHandler(on_help_menu_group, pattern=r"^help_menu_group$"),
     CallbackQueryHandler(on_helpc_main, pattern=r"^helpc_main$"),
-    # * Section callbacks (helps_<mod>:<idx> / helpcs_<mod>:<idx>) registered before
-    # * the module-level catch-all so the more-specific pattern wins.
-    CallbackQueryHandler(on_help_section, pattern=r"^helps?cs?_\w+:\d+$"),
+    # * Section callbacks (helps_<mod>:<idx> for the menu path,
+    # * helpcs_<mod>:<idx> for the command path) registered before the
+    # * module-level catch-all so the more-specific pattern wins.
+    CallbackQueryHandler(on_help_section, pattern=r"^(helps|helpcs)_\w+:\d+$"),
     CallbackQueryHandler(on_help_topic_any, pattern=r"^(help|helpc)_\w+$"),
 ]

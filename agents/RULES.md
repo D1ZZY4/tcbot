@@ -221,7 +221,7 @@ Rules:
 - Adding dependencies without updating `pyproject.toml` and `uv.lock` through
   `uv`.
 - Editing secrets or unrelated project files during a scoped task.
-- Pictograph emoji in any bot reply or audit log message (`👋`, `🎉`, `🚫`, `⚠️`, etc.).
+- Pictograph emoji in any bot reply or audit log message (waving hands, party poppers, prohibition signs, warning signs, etc.).
 - Sequential awaits when the operations are independent — must use `asyncio.gather`.
 - Inlining self / bot / Telegram / Founder / staff branches in command handlers — must use `identity.classify`.
 
