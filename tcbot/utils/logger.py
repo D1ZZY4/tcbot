@@ -54,9 +54,19 @@ class BotLogFormatter(logging.Formatter):
         arrow_part = f"{self._AW} → {self._R}"
         msg_part = f"{msg_color}{record.getMessage()}{self._R}"
 
-        return (
+        output = (
             f"{time_part} {date_part} {level_part} {module_part}{arrow_part}{msg_part}"
         )
+
+        # * Append traceback for log.exception() and explicit exc_info=... calls.
+        if record.exc_info:
+            if not record.exc_text:
+                record.exc_text = self.formatException(record.exc_info)
+            if record.exc_text:
+                output += f"\n{level_color}{record.exc_text}{self._R}"
+        if record.stack_info:
+            output += f"\n{level_color}{self.formatStack(record.stack_info)}{self._R}"
+        return output
 
 
 # ─────────────────── Telegram Error Log Handler ─────────────────── #

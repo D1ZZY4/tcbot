@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 from telegram import Update
@@ -14,9 +13,10 @@ from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.database.roles_db import ROLE_LABEL, get_effective_role, role_rank
+from tcbot.database.roles_db import ROLE_LABEL, get_effective_role
 from tcbot.modules.helper import decorators, extraction
 from tcbot.modules.helper.formatter import code, mention
+from tcbot.modules.helper.role_guard import resolve_and_check
 from tcbot.modules.helper.workflows.muting_flow import (
     _DURATION_RE,
     execute_unmute,
@@ -79,6 +79,7 @@ __help_text__ = (
 
 
 @decorators.ratelimiter(limit=5, period=60)
+@decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     msg = update.effective_message
@@ -88,16 +89,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     has_explicit_target = bool(raw_args) and (
         raw_args[0].lstrip("-").isdigit() or raw_args[0].startswith("@")
     )
-    # * Role check and target resolution run in parallel
-    executor_role, (target_id, target_fname) = await asyncio.gather(
-        get_effective_role(admin.id),
-        extraction.extract_target(update, raw_args, ctx.bot),
-    )
-    if role_rank(executor_role) < role_rank("tester"):
-        await msg.reply_text(
-            "You need at least a Tester role to mute - not your call. 🚫"
-        )
-        return ConversationHandler.END
+    target_id, target_fname = await extraction.extract_target(update, raw_args, ctx.bot)
 
     remaining_args = list(raw_args[1:] if has_explicit_target else raw_args)
 
@@ -117,21 +109,11 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         await msg.reply_text("Can't mute yourself - that's not how this works. 🙃")
         return ConversationHandler.END
 
-    target_role = await get_effective_role(target_id)
-    if target_role:
-        if role_rank(executor_role) <= role_rank(target_role):
-            if target_role == "founder":
-                await msg.reply_text(
-                    f"That's {mention(target_id, target_fname or 'the Founder')}, our Founder - "
-                    "muting them is not happening. 👑",
-                    parse_mode="HTML",
-                )
-            else:
-                label = ROLE_LABEL.get(target_role, target_role.capitalize())
-                await msg.reply_text(
-                    f"That's a {cfg.community_name} {label} - they outrank you here, can't mute them."
-                )
-            return ConversationHandler.END
+    _, target_role = await resolve_and_check(
+        msg, admin.id, target_id, min_role="tester"
+    )
+    if _ is None:
+        return ConversationHandler.END
 
     duration = None
     if remaining_args and _DURATION_RE.match(remaining_args[0]):

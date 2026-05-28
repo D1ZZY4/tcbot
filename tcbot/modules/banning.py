@@ -6,17 +6,14 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
 
-from tcbot import cfg
-from tcbot.database.roles_db import ROLE_LABEL, get_effective_role, role_rank
 from tcbot.modules.helper import decorators, extraction
 from tcbot.modules.helper.formatter import mention
-from tcbot.modules.helper.role_guard import auto_demote
+from tcbot.modules.helper.role_guard import auto_demote, resolve_and_check
 from tcbot.modules.helper.workflows.ban_flow import (
     WAITING_PROOF,
     ban_conversation,
@@ -59,6 +56,7 @@ __help_text__ = (
 
 
 @decorators.ratelimiter(limit=3, period=60)
+@decorators.mod_only
 @decorators.log_execution
 async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     msg = update.effective_message
@@ -68,16 +66,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     has_explicit_target = bool(raw_args) and (
         raw_args[0].lstrip("-").isdigit() or raw_args[0].startswith("@")
     )
-    # * Role check and target resolution run in parallel
-    executor_role, (target_id, target_fname) = await asyncio.gather(
-        get_effective_role(admin.id),
-        extraction.extract_target(update, raw_args, ctx.bot),
-    )
-    if role_rank(executor_role) < role_rank("developer"):
-        await msg.reply_text(
-            "You need Developer rank or above to issue bans. Not your call. 🚫"
-        )
-        return ConversationHandler.END
+    target_id, target_fname = await extraction.extract_target(update, raw_args, ctx.bot)
 
     ban_reason = " ".join(raw_args[1:] if has_explicit_target else raw_args).strip()
 
@@ -101,21 +90,13 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         await msg.reply_text("Can't ban yourself - that's not how moderation works. 🙃")
         return ConversationHandler.END
 
-    target_role = await get_effective_role(target_id)
+    executor_role, target_role = await resolve_and_check(
+        msg, admin.id, target_id, min_role="developer"
+    )
+    if executor_role is None:
+        return ConversationHandler.END
+
     if target_role:
-        if role_rank(executor_role) <= role_rank(target_role):
-            if target_role == "founder":
-                await msg.reply_text(
-                    f"That's {mention(target_id, target_fname or 'the Founder')}, our Founder - "
-                    "banning them is simply not on the table. 👑",
-                    parse_mode="HTML",
-                )
-            else:
-                label = ROLE_LABEL.get(target_role, target_role.capitalize())
-                await msg.reply_text(
-                    f"That's a {cfg.community_name} {label} - they outrank you here, can't ban them."
-                )
-            return ConversationHandler.END
         await auto_demote(
             ctx.bot,
             target_id,

@@ -122,7 +122,7 @@ When Founder promotes a target to Admin:
 1. `admins_db.add_admin(target_id, founder_id)` upserts into `tc_admins`.
 2. If the target had a Developer/Tester role, `roles_db.remove_role(target_id)` removes it from `tc_roles`.
 3. `users_db.upsert_user(...)` caches the display name.
-4. An `admin_promoted` log is sent to `cfg.logs`.
+4. A `promoted` log (with `role="admin"`) is sent to `cfg.logs`.
 5. The target is notified by DM when possible.
 6. The command message is updated/replied with a success message.
 
@@ -133,7 +133,7 @@ When Founder or Admin assigns Developer/Tester:
 1. Existing Developer/Tester custom role is removed first if present.
 2. `roles_db.set_role(target_id, role, assigned_by)` upserts into `tc_roles`.
 3. `users_db.upsert_user(...)` caches the display name.
-4. A `role_assigned` log is sent to `cfg.logs`.
+4. A `promoted` log (with the assigned role) is sent to `cfg.logs`.
 5. The target is notified by DM when possible.
 
 ### Admin request to promote someone to Admin
@@ -185,7 +185,7 @@ Approval does the following:
 
 1. Adds the target to `tc_admins` with `admins_db.add_admin(...)`.
 2. Marks the request `approved` with `queues_db.resolve(...)`.
-3. Sends a `promo_approved_log` to `cfg.logs`.
+3. Sends a `promote_approved_log` to `cfg.logs`.
 4. Notifies the target by DM when possible.
 5. Edits the review message to append who approved it and removes the keyboard.
 
@@ -196,7 +196,7 @@ Approval does not remove an existing Developer/Tester role in this callback path
 Rejection does the following:
 
 1. Marks the request `rejected` with `queues_db.resolve(...)`.
-2. Sends a `promo_rejected_log` to `cfg.logs`.
+2. Sends a `promote_rejected_log` to `cfg.logs`.
 3. Notifies the target by DM when possible.
 4. Edits the review message to append who rejected it and removes the keyboard.
 
@@ -246,7 +246,7 @@ The confirmation callback re-checks executor permission and target role before w
 
 On success:
 
-- A `role_removed` log is sent to `cfg.logs`.
+- A `demoted` log is sent to `cfg.logs`.
 - The target is notified by DM when possible.
 - The confirmation message is edited with a success message and keyboard removed.
 
@@ -281,7 +281,7 @@ Behavior:
 
 - Admin target: remove from `tc_admins`.
 - Developer/Tester target: remove from `tc_roles`.
-- Send a `role_auto_demoted` log to `cfg.logs`.
+- Send a `demoted` log (with `trigger="ban"` or `trigger="kick"`) to `cfg.logs`.
 - DM the target that their role was removed because they were banned or kicked.
 
 Ban and kick command modules block equal/higher-ranked targets before calling auto-demotion, so auto-demotion only applies to lower-ranked staff targets.
@@ -294,15 +294,12 @@ Role and promotion logs are built in `parse_logmsg.py`:
 
 | Template | Trigger |
 |---|---|
-| `admin_promoted` | Founder directly promotes a user to Admin. |
-| `admin_demoted` | Defined template for Admin demotion; current `/tcdemote` uses `role_removed` instead. |
+| `promoted(role)` | Founder/Admin promotes a user to the named role (Admin, Developer, or Tester). |
+| `demoted(role, trigger=None)` | Role removed. `trigger=None` for manual demotion; `trigger="ban"` / `"kick"` for auto-demote during a ban or kick. |
 | `ownership_transferred` | Founder transfers ownership. |
-| `promo_request_log` | Admin promotion request created. |
-| `promo_approved_log` | Founder approves a promotion request. |
-| `promo_rejected_log` | Founder rejects a promotion request. |
-| `role_assigned` | Developer/Tester assigned. |
-| `role_removed` | Role removed through demotion. |
-| `role_auto_demoted` | Role removed automatically by ban/kick. |
+| `promote_request_log` | Admin promotion request created. |
+| `promote_approved_log` | Founder approves a promotion request. |
+| `promote_rejected_log` | Founder rejects a promotion request. |
 
 ## Edge cases
 

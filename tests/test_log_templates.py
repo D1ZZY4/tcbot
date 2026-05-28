@@ -112,25 +112,51 @@ def test_proof_caption_new_includes_admin_and_timestamp() -> None:
 
 
 def test_admin_promoted_contains_community_and_both_ids() -> None:
-    out = parse_logmsg.admin_promoted(
+    out = parse_logmsg.promoted(
         target_id=2,
         target_fname="Citra",
-        admin_id=1,
-        admin_fname="Andi",
+        role="admin",
+        by_id=1,
+        by_fname="Andi",
     )
     assert _community_present(out)
     assert "ID: 2" in out and "ID: 1" in out
 
 
 def test_admin_demoted_contains_community() -> None:
-    out = parse_logmsg.admin_demoted(
+    out = parse_logmsg.demoted(
         target_id=2,
         target_fname="Citra",
-        admin_id=1,
-        admin_fname="Andi",
+        role="admin",
+        by_id=1,
+        by_fname="Andi",
     )
     assert _community_present(out)
     assert "Citra" in out and "Andi" in out
+
+
+def test_promoted_uses_role_label_in_title() -> None:
+    out = parse_logmsg.promoted(
+        target_id=2,
+        target_fname="Citra",
+        role="developer",
+        by_id=1,
+        by_fname="Andi",
+    )
+    assert "Developer Promoted" in out
+
+
+def test_demoted_with_trigger_renders_auto_demote() -> None:
+    out = parse_logmsg.demoted(
+        target_id=2,
+        target_fname="Citra",
+        role="tester",
+        by_id=1,
+        by_fname="Andi",
+        trigger="ban",
+    )
+    assert "Auto-Demote" in out
+    assert "Trigger: Banned" in out
 
 
 def test_ownership_transferred_shows_new_and_previous_owner() -> None:

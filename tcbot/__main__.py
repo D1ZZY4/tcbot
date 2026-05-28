@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
+import traceback
 
 from telegram import Update
 from telegram.ext import (
@@ -132,8 +134,11 @@ def _make_asyncio_exc_handler(loop: asyncio.AbstractEventLoop):
 
 async def _post_init(app: Application) -> None:
     """Connect to MongoDB, ensure indexes, seed owner, and attach the error reporter."""
+    log.info("post_init: connecting to MongoDB...")
     await connect()
+    log.info("post_init: ensuring indexes...")
     await ensure_indexes()
+    log.info("post_init: ensuring initial owner...")
     await ensure_initial_owner(cfg.initial_owner_id)
 
     # * Attach live bot to the error reporter (enables Layers 1 + 3)
@@ -154,52 +159,78 @@ async def _post_init(app: Application) -> None:
 # * Configures PTB Application and registers all handlers
 
 
+def _print_fatal(stage: str, exc: BaseException) -> None:
+    """Print a fatal startup error with stage label and full traceback to stderr."""
+    border = "═" * 70
+    print(f"\n{border}", file=sys.stderr)
+    print(f" FATAL STARTUP ERROR in stage: {stage}", file=sys.stderr)
+    print(f" {type(exc).__name__}: {exc}", file=sys.stderr)
+    print(f"{border}", file=sys.stderr)
+    traceback.print_exception(type(exc), exc, exc.__traceback__, file=sys.stderr)
+    print(border, file=sys.stderr)
+
+
 def main() -> None:
     """Configure and start the PTB application with long-polling."""
-    setup_logging(level=cfg.log_level)
-    log.info("Starting %s bot...", cfg.community_name)
+    # * Each stage is wrapped so any failure prints a clear stage + traceback before exit.
+    stage = "logging setup"
+    try:
+        setup_logging(level=cfg.log_level)
+        log.info("Starting %s bot...", cfg.community_name)
 
-    start_keepalive()
+        stage = "keepalive server"
+        start_keepalive()
 
-    app: Application = (
-        ApplicationBuilder()
-        .token(cfg.bot_token)
-        .post_init(_post_init)
-        # * Process independent updates in parallel (big latency win)
-        .concurrent_updates(True)
-        # * Connection pools - 8 for API calls, 4 dedicated for getUpdates polling
-        .connection_pool_size(8)
-        .get_updates_connection_pool_size(4)
-        # * HTTP timeouts - generous but bounded so hangs never block the loop
-        .read_timeout(15)
-        .write_timeout(15)
-        .connect_timeout(10)
-        .pool_timeout(5)
-        .build()
-    )
+        stage = "PTB application build"
+        app: Application = (
+            ApplicationBuilder()
+            .token(cfg.bot_token)
+            .post_init(_post_init)
+            # * Process independent updates in parallel (big latency win)
+            .concurrent_updates(True)
+            # * Connection pools - 8 for API calls, 4 dedicated for getUpdates polling
+            .connection_pool_size(8)
+            .get_updates_connection_pool_size(4)
+            # * HTTP timeouts - generous but bounded so hangs never block the loop
+            .read_timeout(15)
+            .write_timeout(15)
+            .connect_timeout(10)
+            .pool_timeout(5)
+            .build()
+        )
 
-    # * Layer 1: Global per-user rate limiter - runs before every handler (group -1)
-    app.add_handler(TypeHandler(Update, global_rate_limit_handler), group=-1)
+        # * Layer 1: Global per-user rate limiter - runs before every handler (group -1)
+        stage = "handler registration"
+        app.add_handler(TypeHandler(Update, global_rate_limit_handler), group=-1)
 
-    # * Register all module handlers via tcbot.modules
-    for handler in get_handlers():
-        app.add_handler(handler)
+        # * Register all module handlers via tcbot.modules
+        for handler in get_handlers():
+            app.add_handler(handler)
 
-    # * Low-priority handler: update member cache on every group message.
-    # * ~ANY_CMD_FILTER excludes custom-prefix commands (!, .) - /commands pass through.
-    app.add_handler(
-        MessageHandler(
-            filters.ChatType.GROUPS & filters.TEXT & ~ANY_CMD_FILTER,
-            _update_member_cache,
-        ),
-        group=10,
-    )
+        # * Low-priority handler: update member cache on every group message.
+        # * ~ANY_CMD_FILTER excludes custom-prefix commands (!, .) - /commands pass through.
+        app.add_handler(
+            MessageHandler(
+                filters.ChatType.GROUPS & filters.TEXT & ~ANY_CMD_FILTER,
+                _update_member_cache,
+            ),
+            group=10,
+        )
 
-    # * Layer 2: PTB global error handler - catches all unhandled handler exceptions
-    app.add_error_handler(_error_handler)
+        # * Layer 2: PTB global error handler - catches all unhandled handler exceptions
+        app.add_error_handler(_error_handler)
 
-    log.info("Handlers registered. Starting polling...")
-    app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+        log.info("Handlers registered. Starting polling...")
+        stage = "polling"
+        app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+    except SystemExit:
+        # * Module discovery uses SystemExit on failure; logging already reported the cause.
+        raise
+    except KeyboardInterrupt:
+        log.info("Shutdown requested (KeyboardInterrupt).")
+    except BaseException as exc:
+        _print_fatal(stage, exc)
+        raise SystemExit(1) from exc
 
 
 if __name__ == "__main__":

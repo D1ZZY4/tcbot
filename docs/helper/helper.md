@@ -99,9 +99,11 @@ Common families:
 - `ban_log`, `ban_update_log`, `proof_caption_new`, `proof_caption_update`;
 - `mute_log`, `unmute_log`, `kick_log`, `warn_log`, `unwarn_log`, `unban_log`;
 - `appeal_received_log`, `appeal_submitted_log`, appeal decision edit messages, `appeal_unban_log`;
-- `admin_promoted`, `admin_demoted`, `ownership_transferred`, promotion request logs;
+- `promoted`, `demoted`, `ownership_transferred`, promotion request logs (`promote_request_log`, `promote_approved_log`, `promote_rejected_log`);
 - `group_connected_log`, `group_connection_rejected_log`, `group_disconnected_log`, `group_bot_removed_log`;
-- `broadcast_log`, `role_assigned`, `role_removed`, `role_auto_demoted`.
+- `broadcast_log`.
+
+Use the `LogBuilder` class in this module to compose new audit-log messages – avoid hand-rolled f-strings so layout stays consistent.
 
 ## `parse_editmsg.py`
 

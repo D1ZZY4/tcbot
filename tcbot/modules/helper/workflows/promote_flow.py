@@ -73,8 +73,8 @@ async def _execute_promote(
                     db.admins_db.add_admin(target_id, admin_id),
                     db.users_db.upsert_user(target_id, None, target_fname),
                 )
-            log_text = parse_logmsg.admin_promoted(
-                target_id, target_fname, admin_id, admin_fname
+            log_text = parse_logmsg.promoted(
+                target_id, target_fname, "admin", admin_id, admin_fname
             )
             # * log and notify in parallel
             await asyncio.gather(
@@ -101,7 +101,7 @@ async def _execute_promote(
             db.queues_db.enqueue(target_id, None, target_fname, admin_id),
             db.admins_db.get_owner_id(),
         )
-        req_text = parse_logmsg.promo_request_log(
+        req_text = parse_logmsg.promote_request_log(
             target_id, target_fname, None, request_id
         )
         notified = False
@@ -153,7 +153,7 @@ async def _execute_promote(
     )
 
     role_label = ROLE_LABEL.get(role, role)
-    log_text = parse_logmsg.role_assigned(
+    log_text = parse_logmsg.promoted(
         target_id, target_fname, role, admin_id, admin_fname
     )
     # * log and notify in parallel

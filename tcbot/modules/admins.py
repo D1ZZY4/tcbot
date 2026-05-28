@@ -76,6 +76,7 @@ __help_text__ = (
 
 
 @decorators.ratelimiter(limit=5, period=60)
+@decorators.staff_only
 @decorators.log_execution
 async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
@@ -85,19 +86,13 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     has_explicit_target = bool(args) and (
         args[0].lstrip("-").isdigit() or args[0].startswith("@")
     )
-    # * Role check and target resolution run in parallel
+    # * Executor role (founder/admin guaranteed by @staff_only) + target run in parallel
     executor_role, (target_id, target_fname) = await asyncio.gather(
         get_effective_role(admin.id),
         extraction.extract_target(update, args, ctx.bot),
     )
     remaining_args = args[1:] if has_explicit_target else args
     role_arg = remaining_args[0].lower() if remaining_args else ""
-
-    if executor_role not in ("founder", "admin"):
-        await msg.reply_text(
-            "Only Founder and Admin can promote users - not your call. 🚫"
-        )
-        return
 
     if not target_id:
         await msg.reply_text(
@@ -210,22 +205,18 @@ async def on_promote_role_cancel(
 
 
 @decorators.ratelimiter(limit=5, period=60)
+@decorators.staff_only
 @decorators.log_execution
 async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
     msg = update.effective_message
     args = parse_cmd_args(msg.text)
 
-    # * Role check and target resolution run in parallel
+    # * Executor role (founder/admin guaranteed by @staff_only) + target run in parallel
     executor_role, (target_id, target_fname) = await asyncio.gather(
         get_effective_role(admin.id),
         extraction.extract_target(update, args, ctx.bot),
     )
-    if executor_role not in ("founder", "admin"):
-        await msg.reply_text(
-            "Only Founder and Admin can demote users - not your call. 🚫"
-        )
-        return
 
     if not target_id:
         await msg.reply_text(
@@ -307,7 +298,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
     lc, lt = cfg.logs
     role_label = ROLE_LABEL.get(target_role, target_role)
-    log_text = parse_logmsg.role_removed(
+    log_text = parse_logmsg.demoted(
         target_id,
         target_fname,
         target_role,
@@ -401,7 +392,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         db.queues_db.enqueue(user.id, user.username, user.first_name, user.id),
         db.admins_db.get_owner_id(),
     )
-    req_text = parse_logmsg.promo_request_log(
+    req_text = parse_logmsg.promote_request_log(
         user.id, user.first_name, user.username, request_id
     )
     lc, lt = cfg.logs
@@ -486,7 +477,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             db.admins_db.add_admin(target_id, admin.id),
             db.queues_db.resolve(request_id, "approved", admin.id),
         )
-        log_text = parse_logmsg.promo_approved_log(
+        log_text = parse_logmsg.promote_approved_log(
             target_id,
             target_fname,
             admin.id,
@@ -508,7 +499,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         )
 
     elif action == "promo_reject":
-        log_text = parse_logmsg.promo_rejected_log(
+        log_text = parse_logmsg.promote_rejected_log(
             target_id,
             target_fname,
             admin.id,

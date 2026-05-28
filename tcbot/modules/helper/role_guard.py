@@ -68,13 +68,13 @@ async def auto_demote(
     await asyncio.gather(
         bot.send_message(
             lc,
-            parse_logmsg.role_auto_demoted(
+            parse_logmsg.demoted(
                 target_id,
                 target_fname,
                 target_role,
                 executor_id,
                 executor_fname,
-                action,
+                trigger=action,
             ),
             parse_mode="HTML",
             message_thread_id=lt,
