@@ -98,13 +98,21 @@ class TelegramErrorHandler(logging.Handler):
 
 def setup(level: int = logging.INFO) -> None:
     """Initialize and configure the bot's logging system."""
-    con_handler = logging.StreamHandler()
-    con_handler.setFormatter(BotLogFormatter())
-
     root = logging.getLogger()
     root.setLevel(level)
-    root.addHandler(con_handler)
-    root.addHandler(TelegramErrorHandler())
+
+    for handler in root.handlers:
+        if isinstance(handler, logging.StreamHandler) and isinstance(
+            handler.formatter, BotLogFormatter
+        ):
+            break
+    else:
+        con_handler = logging.StreamHandler()
+        con_handler.setFormatter(BotLogFormatter())
+        root.addHandler(con_handler)
+
+    if not any(isinstance(handler, TelegramErrorHandler) for handler in root.handlers):
+        root.addHandler(TelegramErrorHandler())
 
     for lib in ("httpx", "telegram", "motor", "pymongo"):
         logging.getLogger(lib).setLevel(logging.WARNING)
