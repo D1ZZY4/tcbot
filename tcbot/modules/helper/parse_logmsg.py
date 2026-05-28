@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from tcbot import cfg
-from tcbot.database.roles_db import ROLE_LABEL as _ROLE_LABELS
+from tcbot.database.users_db import ROLE_LABEL as _ROLE_LABELS
 from tcbot.modules.helper.formatter import code, esc, link, mention
 from tcbot.utils.timedate_format import fmt_dt, utc_now
 

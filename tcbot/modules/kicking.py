@@ -12,8 +12,9 @@ from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
 
 from tcbot.modules.helper import decorators, extraction
+from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.formatter import mention
-from tcbot.modules.helper.role_guard import auto_demote, resolve_and_check
+from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.kicking_flow import kick_conversation, proof, reason
 from tcbot.modules.helper.workflows.reason_flow import (
     WAITING_PROOF,
@@ -89,14 +90,14 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     if target_role:
-        await auto_demote(
+        await Demote.execute(
             ctx.bot,
             target_id,
             target_name or str(target_id),
             target_role,
             admin.id,
             admin.first_name,
-            "kick",
+            trigger="kick",
         )
 
     ctx.user_data.update(

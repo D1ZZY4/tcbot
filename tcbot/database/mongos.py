@@ -115,7 +115,7 @@ async def ensure_indexes() -> None:
         col("tc_owners").create_index([("user_id", 1)], unique=True),
         col("tc_admins").create_index([("user_id", 1)], unique=True),
         col("tc_roles").create_index([("user_id", 1)], unique=True),
-        # * Serves roles_db.all_by_role() which filters by role only
+        # * Serves users_db.all_by_role() which filters by role only
         col("tc_roles").create_index([("role", 1)]),
         col("federated_groups").create_index([("chat_id", 1), ("is_active", 1)]),
         col("federated_groups").create_index([("chat_id", 1)], unique=True),

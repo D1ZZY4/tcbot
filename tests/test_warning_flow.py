@@ -105,14 +105,14 @@ async def test_warn_limit_auto_demotes_role_holder_before_ban(monkeypatch) -> No
 
     add_warn = AsyncMock(return_value=warning_flow.WARN_LIMIT)
     clear_warns = AsyncMock()
-    auto_demote_mock = AsyncMock()
+    demote_execute_mock = AsyncMock(return_value=True)
     monkeypatch.setattr(warning_flow.db.warns_db, "add_warn", add_warn)
     monkeypatch.setattr(warning_flow.db.warns_db, "clear_warns", clear_warns)
     monkeypatch.setattr(warning_flow.parse_logmsg, "warn_log", Mock(return_value="log"))
     monkeypatch.setattr(
         warning_flow, "get_effective_role", AsyncMock(return_value="tester")
     )
-    monkeypatch.setattr(warning_flow, "auto_demote", auto_demote_mock)
+    monkeypatch.setattr(warning_flow.Demote, "execute", demote_execute_mock)
 
     await warning_flow.execute_warn(
         cast(Update, update),
@@ -122,7 +122,9 @@ async def test_warn_limit_auto_demotes_role_holder_before_ban(monkeypatch) -> No
         reason_text="spam",
     )
 
-    auto_demote_mock.assert_awaited_once()
-    assert auto_demote_mock.await_args.args[1] == 20
-    assert auto_demote_mock.await_args.args[3] == "tester"
-    assert auto_demote_mock.await_args.args[6] == "ban"
+    demote_execute_mock.assert_awaited_once()
+    # * Demote.execute(bot, target_id, target_name, target_role, admin_id, admin_fname, trigger="ban")
+    call_args = demote_execute_mock.await_args
+    assert call_args.args[1] == 20
+    assert call_args.args[3] == "tester"
+    assert call_args.kwargs.get("trigger") == "ban"

@@ -13,7 +13,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.database.roles_db import ROLE_LABEL, get_effective_role
+from tcbot.database.users_db import ROLE_LABEL, get_effective_role
 from tcbot.modules.helper import decorators, extraction, keyboards
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.formatter import code, esc, mention
@@ -99,7 +99,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     # * Fetch owner ID, user role, and active ban all in parallel
     owner_id, user_role, ban = await asyncio.gather(
-        db.admins_db.get_owner_id(),
+        db.users_db.get_owner_id(),
         get_effective_role(user.id),
         db.bans_db.get_active_ban(user.id),
     )
@@ -232,7 +232,7 @@ async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     # * Fetch owner ID, target role, active ban, and target name - all in parallel
     owner_id, target_role, ban, cached_fname = await asyncio.gather(
-        db.admins_db.get_owner_id(),
+        db.users_db.get_owner_id(),
         get_effective_role(target_id),
         db.bans_db.get_active_ban(target_id),
         db.users_db.get_first_name(target_id, str(target_id)),

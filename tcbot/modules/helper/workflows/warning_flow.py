@@ -14,10 +14,10 @@ from telegram.ext import ContextTypes
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.database.roles_db import get_effective_role
+from tcbot.database.users_db import get_effective_role
 from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.formatter import mention
-from tcbot.modules.helper.role_guard import auto_demote
+from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
 
@@ -69,14 +69,14 @@ async def execute_warn(
         target_role = await get_effective_role(target_id)
         if target_role:
             try:
-                await auto_demote(
+                await Demote.execute(
                     ctx.bot,
                     target_id,
                     target_name,
                     target_role,
                     admin_id,
                     admin_fname,
-                    "ban",
+                    trigger="ban",
                 )
             except Exception as exc:
                 log.error("Auto-demote on warn limit failed: %s", exc)

@@ -61,10 +61,10 @@ __help_text__ = (
 
 async def _stats_text() -> str:
     (owner_id, admin_cnt, dev_list, tester_list, bans, groups) = await asyncio.gather(
-        db.admins_db.get_owner_id(),
-        db.admins_db.admin_count(),
-        db.roles_db.all_by_role("developer"),
-        db.roles_db.all_by_role("tester"),
+        db.users_db.get_owner_id(),
+        db.users_db.admin_count(),
+        db.users_db.all_by_role("developer"),
+        db.users_db.all_by_role("tester"),
         db.bans_db.active_ban_count(),
         db.groups_db.active_group_count(),
     )
@@ -119,10 +119,10 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     # * Gather q.answer() alongside all DB calls in one shot
     _, owner_id, admins, developers, testers = await asyncio.gather(
         q.answer(),
-        db.admins_db.get_owner_id(),
-        db.admins_db.all_admins(),
-        db.roles_db.all_by_role("developer"),
-        db.roles_db.all_by_role("tester"),
+        db.users_db.get_owner_id(),
+        db.users_db.all_admins(),
+        db.users_db.all_by_role("developer"),
+        db.users_db.all_by_role("tester"),
     )
 
     # * Build name-fetch tasks in order: owner, admins, devs, testers

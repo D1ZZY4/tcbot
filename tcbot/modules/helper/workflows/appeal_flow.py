@@ -306,7 +306,7 @@ class BuildAppeal:
         q = update.callback_query
         admin = update.effective_user
 
-        if not await db.admins_db.is_staff(admin.id):
+        if not await db.users_db.is_staff(admin.id):
             await q.answer("You are not authorized.", show_alert=True)
             return
 

@@ -2,10 +2,11 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Auth decorators, execution tracer, and per-user rate limiter for all command handlers."""
+"""Auth decorators, execution tracer, per-user rate limiter, and shared permission helpers."""
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import logging
 import time
@@ -18,7 +19,7 @@ from telegram.ext import ApplicationHandlerStop, ContextTypes
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.database.roles_db import get_effective_role, role_rank
+from tcbot.database.users_db import ROLE_LABEL, get_effective_role, role_rank
 
 log = logging.getLogger(__name__)
 R = TypeVar("R")
@@ -186,7 +187,7 @@ def owner_only(func: Callable) -> Callable:
     @functools.wraps(func)
     async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         uid = update.effective_user.id if update.effective_user else None
-        if uid and await db.admins_db.is_owner(uid):
+        if uid and await db.users_db.is_owner(uid):
             return await func(update, ctx)
         if update.effective_message:
             await update.effective_message.reply_text(
@@ -202,7 +203,7 @@ def staff_only(func: Callable) -> Callable:
     @functools.wraps(func)
     async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         uid = update.effective_user.id if update.effective_user else None
-        if uid and await db.admins_db.is_staff(uid):
+        if uid and await db.users_db.is_staff(uid):
             return await func(update, ctx)
         if update.effective_message:
             await update.effective_message.reply_text(
@@ -242,3 +243,38 @@ def basic_mod_only(func: Callable) -> Callable:
             )
 
     return wrapper
+
+
+# ────────────────── Shared executor-vs-target check ─────────────── #
+
+
+async def resolve_and_check(
+    msg,
+    executor_id: int,
+    target_id: int,
+    *,
+    min_role: str,
+) -> tuple[str | None, str | None]:
+    """Validate executor permission and target eligibility for moderation actions.
+
+    Replies on the message itself when the executor lacks rank or the target
+    outranks the executor, then returns ``(None, None)``.
+
+    On success, returns ``(executor_role, target_role)``.
+    """
+    executor_role, target_role = await asyncio.gather(
+        get_effective_role(executor_id),
+        get_effective_role(target_id),
+    )
+    if role_rank(executor_role) < role_rank(min_role):
+        await msg.reply_text("You don't have the rank for this one. 🚫")
+        return None, None
+
+    if target_role and role_rank(executor_role) <= role_rank(target_role):
+        label = ROLE_LABEL.get(target_role, target_role.capitalize())
+        await msg.reply_text(
+            f"That's a {label} - they outrank you here, can't take action on them."
+        )
+        return None, None
+
+    return executor_role, target_role

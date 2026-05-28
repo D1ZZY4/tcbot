@@ -67,7 +67,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
     # * staff check and group membership check run in parallel
     is_tc_staff, member = await asyncio.gather(
-        db.admins_db.is_staff(user.id),
+        db.users_db.is_staff(user.id),
         ctx.bot.get_chat_member(chat.id, user.id),
     )
     is_group_owner = member.status == "creator"

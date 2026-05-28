@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-from tcbot.database.roles_db import ROLE_LABEL as _ROLE_LABELS
+from tcbot.database.users_db import ROLE_LABEL as _ROLE_LABELS
 
 # ──────────────────────────── Ban flow ──────────────────────────── #
 

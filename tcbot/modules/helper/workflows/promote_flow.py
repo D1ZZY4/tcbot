@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Promote execution flow – role assignment and request logic shared by admins.py."""
+"""Centralised promotion logic — role assignment and Admin promotion request flow."""
 
 from __future__ import annotations
 
@@ -13,13 +13,14 @@ from telegram import Bot
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.database.roles_db import ROLE_LABEL, role_rank
+from tcbot.database.users_db import ROLE_LABEL, role_rank
 from tcbot.modules.helper import keyboards, parse_logmsg
 from tcbot.modules.helper.formatter import mention
 
 log = logging.getLogger(__name__)
 
-_ROLE_ALIASES: dict[str, str] = {
+# * Tokenised CLI aliases the /tcpromote command accepts.
+ROLE_ALIASES: dict[str, str] = {
     "admin": "admin",
     "developer": "developer",
     "dev": "developer",
@@ -28,82 +29,129 @@ _ROLE_ALIASES: dict[str, str] = {
 }
 
 
-def _available_roles_for(executor_role: str) -> list[str]:
-    if executor_role == "founder":
-        return ["admin", "developer", "tester"]
-    if executor_role == "admin":
-        return ["developer", "tester"]
-    return []
+# ────────────────────────── Promote class ───────────────────────── #
 
 
-# ───────────────────── Shared promote executor ──────────────────── #
+class Promote:
+    """All federation-promotion logic.
 
+    * ``execute(...)`` runs the full role-assignment flow used by /tcpromote
+      (both the inline-role and inline-button entry points).
+    * ``request_admin(...)`` enqueues a promotion request and notifies the Founder.
+    * ``available_roles_for(executor_role)`` lists what roles the executor can assign.
+    """
 
-async def _execute_promote(
-    bot: Bot,
-    admin_id: int,
-    admin_fname: str,
-    executor_role: str,
-    target_id: int,
-    target_fname: str,
-    current_role: str | None,
-    role: str,
-) -> tuple[bool, str]:
-    """Execute a role assignment and return (success, reply_text)."""
-    if current_role == "founder":
-        return False, "That's the Founder - can't assign a role over them. 👑"
-
-    if role_rank(current_role) >= role_rank(role):
-        label = ROLE_LABEL.get(current_role, current_role)
-        return False, f"That user already holds the {label} role or higher."
-
-    lc, lt = cfg.logs
-
-    if role == "admin":
+    @staticmethod
+    def available_roles_for(executor_role: str) -> list[str]:
+        """Return the roles an executor with the given role is allowed to assign."""
         if executor_role == "founder":
-            # * DB writes in parallel
-            if current_role in ("developer", "tester"):
-                await asyncio.gather(
-                    db.admins_db.add_admin(target_id, admin_id),
-                    db.roles_db.remove_role(target_id),
-                    db.users_db.upsert_user(target_id, None, target_fname),
-                )
-            else:
-                await asyncio.gather(
-                    db.admins_db.add_admin(target_id, admin_id),
-                    db.users_db.upsert_user(target_id, None, target_fname),
-                )
-            log_text = parse_logmsg.promoted(
-                target_id, target_fname, "admin", admin_id, admin_fname
-            )
-            # * log and notify in parallel
-            await asyncio.gather(
-                bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
-                bot.send_message(
-                    target_id,
-                    f"You've been promoted to Admin in {cfg.community_name} - welcome to the staff team! 🎉",
-                ),
-                return_exceptions=True,
-            )
-            return True, (
-                f"Done. {mention(target_id, target_fname)} is now a {cfg.community_name} Admin."
-            )
+            return ["admin", "developer", "tester"]
+        if executor_role == "admin":
+            return ["developer", "tester"]
+        return []
 
-        # * executor is admin → send request to owner for approval
+    @staticmethod
+    async def _assign_admin(
+        bot: Bot,
+        admin_id: int,
+        admin_fname: str,
+        target_id: int,
+        target_fname: str,
+        current_role: str | None,
+    ) -> tuple[bool, str]:
+        """Founder-only path: directly add the target to tc_admins and log it."""
+        if current_role in ("developer", "tester"):
+            await asyncio.gather(
+                db.users_db.add_admin(target_id, admin_id),
+                db.users_db.remove_role(target_id),
+                db.users_db.upsert_user(target_id, None, target_fname),
+            )
+        else:
+            await asyncio.gather(
+                db.users_db.add_admin(target_id, admin_id),
+                db.users_db.upsert_user(target_id, None, target_fname),
+            )
+        lc, lt = cfg.logs
+        log_text = parse_logmsg.promoted(
+            target_id, target_fname, "admin", admin_id, admin_fname
+        )
+        await asyncio.gather(
+            bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+            bot.send_message(
+                target_id,
+                f"You've been promoted to Admin in {cfg.community_name} - welcome to the staff team! 🎉",
+            ),
+            return_exceptions=True,
+        )
+        return True, (
+            f"Done. {mention(target_id, target_fname)} is now a {cfg.community_name} Admin."
+        )
+
+    @staticmethod
+    async def _assign_subrole(
+        bot: Bot,
+        admin_id: int,
+        admin_fname: str,
+        target_id: int,
+        target_fname: str,
+        current_role: str | None,
+        role: str,
+    ) -> tuple[bool, str]:
+        """Founder/Admin path for Developer/Tester role assignment."""
+        if current_role == "admin":
+            label = ROLE_LABEL.get(role, role)
+            return (
+                False,
+                f"That user is already an Admin. Demote them first before assigning {label}.",
+            )
+        if current_role in ("developer", "tester"):
+            await db.users_db.remove_role(target_id)
+        await asyncio.gather(
+            db.users_db.set_role(target_id, role, admin_id),
+            db.users_db.upsert_user(target_id, None, target_fname),
+        )
+        role_label = ROLE_LABEL.get(role, role)
+        lc, lt = cfg.logs
+        log_text = parse_logmsg.promoted(
+            target_id, target_fname, role, admin_id, admin_fname
+        )
+        await asyncio.gather(
+            bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+            bot.send_message(
+                target_id,
+                f"You've been assigned the {role_label} role in {cfg.community_name} - welcome to the team! 🎉",
+            ),
+            return_exceptions=True,
+        )
+        return (
+            True,
+            f"Done. {mention(target_id, target_fname)} is now a {cfg.community_name} {role_label}.",
+        )
+
+    @classmethod
+    async def request_admin(
+        cls,
+        bot: Bot,
+        admin_id: int,
+        target_id: int,
+        target_fname: str,
+        target_username: str | None = None,
+    ) -> tuple[bool, str]:
+        """Enqueue an Admin promotion request and notify the Founder (DM, then fallback to log)."""
         existing = await db.queues_db.get_request(target_id)
         if existing:
             return False, (
                 f"There's already a pending promotion request for "
                 f"{mention(target_id, target_fname)}."
             )
-        # * enqueue + get_owner_id in parallel
         request_id, owner_id = await asyncio.gather(
-            db.queues_db.enqueue(target_id, None, target_fname, admin_id),
-            db.admins_db.get_owner_id(),
+            db.queues_db.enqueue(target_id, target_username, target_fname, admin_id),
+            db.users_db.get_owner_id(),
         )
         req_text = parse_logmsg.promote_request_log(
-            target_id, target_fname, None, request_id
+            target_id, target_fname, target_username, request_id
         )
+        lc, lt = cfg.logs
         notified = False
         if owner_id:
             try:
@@ -132,40 +180,48 @@ async def _execute_promote(
             "Submitted - the Founder has been notified and will review it shortly. ✅",
         )
 
-    # * role in ("developer", "tester")
-    if executor_role not in ("founder", "admin"):
-        return False, "You don't have permission to assign this role."
+    @classmethod
+    async def execute(
+        cls,
+        bot: Bot,
+        admin_id: int,
+        admin_fname: str,
+        executor_role: str,
+        target_id: int,
+        target_fname: str,
+        current_role: str | None,
+        role: str,
+    ) -> tuple[bool, str]:
+        """Execute a role assignment. Returns (success, reply_text).
 
-    if current_role == "admin":
-        label = ROLE_LABEL.get(role, role)
-        return (
-            False,
-            f"That user is already an Admin. Demote them first before assigning {label}.",
-        )
+        * Founder can directly assign Admin / Developer / Tester.
+        * Admin can directly assign Developer / Tester.
+        * Admin requesting Admin promotion creates a queue entry for the Founder.
+        """
+        if current_role == "founder":
+            return False, "That's the Founder - can't assign a role over them. 👑"
 
-    if current_role in ("developer", "tester"):
-        await db.roles_db.remove_role(target_id)
+        if role_rank(current_role) >= role_rank(role):
+            label = ROLE_LABEL.get(current_role, current_role)
+            return False, f"That user already holds the {label} role or higher."
 
-    # * set_role + upsert_user in parallel
-    await asyncio.gather(
-        db.roles_db.set_role(target_id, role, admin_id),
-        db.users_db.upsert_user(target_id, None, target_fname),
-    )
+        if role == "admin":
+            if executor_role == "founder":
+                return await cls._assign_admin(
+                    bot, admin_id, admin_fname, target_id, target_fname, current_role
+                )
+            # * Admin promoting to Admin → request for Founder to approve.
+            return await cls.request_admin(bot, admin_id, target_id, target_fname)
 
-    role_label = ROLE_LABEL.get(role, role)
-    log_text = parse_logmsg.promoted(
-        target_id, target_fname, role, admin_id, admin_fname
-    )
-    # * log and notify in parallel
-    await asyncio.gather(
-        bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
-        bot.send_message(
+        if executor_role not in ("founder", "admin"):
+            return False, "You don't have permission to assign this role."
+
+        return await cls._assign_subrole(
+            bot,
+            admin_id,
+            admin_fname,
             target_id,
-            f"You've been assigned the {role_label} role in {cfg.community_name} - welcome to the team! 🎉",
-        ),
-        return_exceptions=True,
-    )
-    return (
-        True,
-        f"Done. {mention(target_id, target_fname)} is now a {cfg.community_name} {role_label}.",
-    )
+            target_fname,
+            current_role,
+            role,
+        )

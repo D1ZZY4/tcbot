@@ -13,10 +13,10 @@ from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.database.roles_db import ROLE_LABEL, get_effective_role
+from tcbot.database.users_db import ROLE_LABEL, get_effective_role
 from tcbot.modules.helper import decorators, extraction
+from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.formatter import code, mention
-from tcbot.modules.helper.role_guard import resolve_and_check
 from tcbot.modules.helper.workflows.muting_flow import (
     _DURATION_RE,
     execute_unmute,

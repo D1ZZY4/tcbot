@@ -12,13 +12,14 @@ from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
 
 from tcbot.modules.helper import decorators, extraction
+from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.formatter import mention
-from tcbot.modules.helper.role_guard import auto_demote, resolve_and_check
 from tcbot.modules.helper.workflows.ban_flow import (
     WAITING_PROOF,
     ban_conversation,
     proof,
 )
+from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
@@ -97,14 +98,14 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     if target_role:
-        await auto_demote(
+        await Demote.execute(
             ctx.bot,
             target_id,
             target_fname or str(target_id),
             target_role,
             admin.id,
             admin.first_name,
-            "ban",
+            trigger="ban",
         )
 
     ctx.user_data["ban_target_id"] = target_id

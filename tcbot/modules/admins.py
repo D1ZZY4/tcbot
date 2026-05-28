@@ -14,14 +14,11 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.database.roles_db import ROLE_LABEL, get_effective_role
+from tcbot.database.users_db import ROLE_LABEL, get_effective_role
 from tcbot.modules.helper import decorators, extraction, keyboards, parse_logmsg
 from tcbot.modules.helper.formatter import code, mention
-from tcbot.modules.helper.workflows.promote_flow import (
-    _ROLE_ALIASES,
-    _available_roles_for,
-    _execute_promote,
-)
+from tcbot.modules.helper.workflows.demote_flow import Demote
+from tcbot.modules.helper.workflows.promote_flow import ROLE_ALIASES, Promote
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
@@ -110,11 +107,11 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await msg.reply_text("That's me - promoting a bot doesn't quite work. 😄")
         return
 
-    role = _ROLE_ALIASES.get(role_arg)
+    role = ROLE_ALIASES.get(role_arg)
     current_role = await get_effective_role(target_id)
 
     if role:
-        ok, text = await _execute_promote(
+        ok, text = await Promote.execute(
             ctx.bot,
             admin.id,
             admin.first_name,
@@ -128,7 +125,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     # * No role arg - show selection buttons
-    available = _available_roles_for(executor_role)
+    available = Promote.available_roles_for(executor_role)
     if not available:
         await msg.reply_text("You don't have permission to assign any roles.")
         return
@@ -174,7 +171,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         get_effective_role(target_id),
     )
 
-    ok, text = await _execute_promote(
+    ok, text = await Promote.execute(
         ctx.bot,
         admin.id,
         admin.first_name,
@@ -284,11 +281,15 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         )
         return
 
-    if target_role == "admin":
-        removed = await db.admins_db.remove_admin(target_id)
-    else:
-        removed = await db.roles_db.remove_role(target_id)
-
+    removed = await Demote.execute(
+        ctx.bot,
+        target_id,
+        target_fname,
+        target_role,
+        admin.id,
+        admin.first_name,
+        trigger=None,
+    )
     if not removed:
         await q.edit_message_text(
             "Couldn't remove the role - it may have already been cleared.",
@@ -296,29 +297,11 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         )
         return
 
-    lc, lt = cfg.logs
     role_label = ROLE_LABEL.get(target_role, target_role)
-    log_text = parse_logmsg.demoted(
-        target_id,
-        target_fname,
-        target_role,
-        admin.id,
-        admin.first_name,
-    )
-    # * log, notify, and edit review message all in parallel
-    await asyncio.gather(
-        ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
-        ctx.bot.send_message(
-            target_id,
-            f"Your {role_label} role in {cfg.community_name} has been removed by "
-            f"{admin.first_name}.",
-        ),
-        q.edit_message_text(
-            f"Done. {mention(target_id, target_fname)} has been removed from {role_label}.",
-            parse_mode="HTML",
-            reply_markup=None,
-        ),
-        return_exceptions=True,
+    await q.edit_message_text(
+        f"Done. {mention(target_id, target_fname)} has been removed from {role_label}.",
+        parse_mode="HTML",
+        reply_markup=None,
     )
 
 
@@ -353,8 +336,8 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     # * add_admin must complete before set_owner (set_owner does delete_many + insert)
-    await db.admins_db.add_admin(current_owner.id, current_owner.id)
-    await db.admins_db.set_owner(target_id)
+    await db.users_db.add_admin(current_owner.id, current_owner.id)
+    await db.users_db.set_owner(target_id)
     lc, lt = cfg.logs
     log_text = parse_logmsg.ownership_transferred(
         target_id,
@@ -387,42 +370,10 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
             parse_mode="HTML",
         )
         return
-    # * enqueue + get_owner_id in parallel
-    request_id, owner_id = await asyncio.gather(
-        db.queues_db.enqueue(user.id, user.username, user.first_name, user.id),
-        db.admins_db.get_owner_id(),
+    ok, reply = await Promote.request_admin(
+        ctx.bot, user.id, user.id, user.first_name, user.username
     )
-    req_text = parse_logmsg.promote_request_log(
-        user.id, user.first_name, user.username, request_id
-    )
-    lc, lt = cfg.logs
-    notified = False
-    if owner_id:
-        try:
-            await ctx.bot.send_message(
-                owner_id,
-                req_text,
-                parse_mode="HTML",
-                reply_markup=keyboards.promo_decision_kb(request_id),
-            )
-            notified = True
-        except Exception as exc:
-            log.warning("Owner DM failed, falling back to log channel: %s", exc)
-    if not notified:
-        try:
-            await ctx.bot.send_message(
-                lc,
-                req_text,
-                parse_mode="HTML",
-                message_thread_id=lt,
-                reply_markup=keyboards.promo_decision_kb(request_id),
-            )
-        except Exception as exc:
-            log.error("Promo request notify failed: %s", exc)
-    await update.effective_message.reply_text(
-        f"Your promotion request has been submitted. Request ID: <code>{request_id}</code>",
-        parse_mode="HTML",
-    )
+    await update.effective_message.reply_text(reply, parse_mode="HTML")
 
 
 # ──────── Command Promotion Requests List </tcpromotelist> ──────── #
@@ -454,7 +405,7 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     admin = update.effective_user
-    is_owner = await db.admins_db.is_owner(admin.id)
+    is_owner = await db.users_db.is_owner(admin.id)
     if not is_owner:
         await q.answer("Founder only.", show_alert=True)
         return
@@ -474,7 +425,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     if action == "promo_approve":
         # * DB writes in parallel
         await asyncio.gather(
-            db.admins_db.add_admin(target_id, admin.id),
+            db.users_db.add_admin(target_id, admin.id),
             db.queues_db.resolve(request_id, "approved", admin.id),
         )
         log_text = parse_logmsg.promote_approved_log(

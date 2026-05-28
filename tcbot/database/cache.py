@@ -76,7 +76,7 @@ class TTLCache(Generic[T]):
 # * All are populated and invalidated by specific database modules
 
 # 60-second per-user effective-role cache (str | None per user_id)
-# Populated by roles_db.get_effective_role; invalidated on every role write
+# Populated by users_db.get_effective_role; invalidated on every role write
 effective_role_cache: TTLCache[str | None] = TTLCache(ttl=60.0)
 
 # 120-second per-chat connection cache (bool per chat_id)
@@ -89,6 +89,6 @@ active_groups_cache: TTLCache[list[GroupDoc]] = TTLCache(ttl=30.0)
 _ALL_GROUPS_KEY: str = "__all__"
 
 # 300-second owner-ID cache (single int entry - ownership transfers are very rare)
-# Populated by admins_db.get_owner_id; invalidated on set_owner / ensure_initial_owner
+# Populated by users_db.get_owner_id; invalidated on set_owner / ensure_initial_owner
 owner_id_cache: TTLCache[int | None] = TTLCache(ttl=300.0)
 _OWNER_KEY: str = "__owner__"
