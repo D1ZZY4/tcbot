@@ -170,3 +170,31 @@ async def remove_last_warn(user_id: int, chat_id: int) -> bool:
             await _warns().count_documents(_warn_key(user_id, chat_id)),
         )
     return True
+
+
+# ─────────────────────── Per-user history ───────────────────────── #
+
+
+async def user_total_warns(user_id: int) -> int:
+    """Total number of warning rows recorded against the user (all groups)."""
+    return await _warns().count_documents({"user_id": user_id})
+
+
+async def user_warn_groups(user_id: int) -> list[tuple[int, int]]:
+    """Return [(chat_id, count), ...] for every group where the user has warns, newest first."""
+    cursor = _warn_counts().find(
+        {"user_id": user_id, "count": {"$gt": 0}},
+        {"_id": 0, "chat_id": 1, "count": 1},
+        sort=[("updated_at", -1)],
+    )
+    docs = await cursor.to_list(length=None)
+    return [(int(d["chat_id"]), int(d["count"])) for d in docs]
+
+
+async def user_all_warns(user_id: int) -> list[WarnDoc]:
+    """Every warn document for a user across all chats, newest first."""
+    return (
+        await _warns()
+        .find({"user_id": user_id}, sort=[("timestamp", -1)])
+        .to_list(length=None)
+    )

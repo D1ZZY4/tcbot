@@ -119,7 +119,10 @@ def ban_log(
     timestamp: datetime | None = None,
 ) -> str:
     """New federation-ban audit-log message."""
-    b = (
+    # * Note: proof_lnk is passed through for the inline Proof button in the
+    # * accompanying keyboard. The text intentionally has no hyperlink — the
+    # * button avoids the visual noise of a redundant 'View Proof' link.
+    return (
         LogBuilder(f"New {cfg.community_name} Ban")
         .mention_field("Admin", admin_id, admin_fname)
         .section()
@@ -129,10 +132,8 @@ def ban_log(
         .field("Reason", reason)
         .section()
         .date(timestamp, label="Commit at")
+        .build()
     )
-    if proof_lnk:
-        b.raw(f'<a href="{proof_lnk}">View Proof</a>')
-    return b.build()
 
 
 def ban_update_log(
@@ -150,7 +151,9 @@ def ban_update_log(
     update_count: int = 0,
 ) -> str:
     """Update-ban audit-log message."""
-    b = (
+    # * Note: proof_lnk / prev_proof_lnk are passed through for the inline
+    # * Proof / Previous-Proof buttons in the keyboard. No hyperlinks in text.
+    return (
         LogBuilder(f"Update {cfg.community_name} Ban")
         .mention_field("Admin", new_admin_id, new_admin_fname)
         .mention_field("Previous Admin", old_admin_id, old_admin_fname)
@@ -162,12 +165,8 @@ def ban_update_log(
         .section()
         .date(original_ts, label="Commit at")
         .date(label="Update at")
+        .build()
     )
-    if prev_proof_lnk:
-        b.raw(f'Previous Proof: <a href="{prev_proof_lnk}">Click Here</a>')
-    if proof_lnk:
-        b.raw(f'<a href="{proof_lnk}">View Proof</a>')
-    return b.build()
 
 
 # ───────────────────────── Proof captions ───────────────────────── #

@@ -40,39 +40,57 @@ log = logging.getLogger(__name__)
 
 __module_name__ = "Mute"
 __help_text__ = (
-    "<b>Commands & Aliases</b>\n"
-    "<code>/tcmute</code> (alias: <code>/tcm</code>)\n"
-    "<code>/tcunmute</code> (aliases: <code>/tcunm</code>, <code>/tcum</code>)\n\n"
-    "<b>Who can use it</b>\n"
-    "Tester and above (Founder / Admin / Developer / Tester).\n\n"
-    "<b>Where to use it</b>\n"
-    "Inside any connected group.\n\n"
-    "<b>What it does</b>\n"
-    "<code>/tcmute</code>: restricts a user from sending messages, media, stickers, and GIFs "
-    "across <b>all connected groups</b> simultaneously. "
-    "After the command, the bot asks for a reason and optionally proof (photo/video) - "
-    "both steps can be skipped. If the user is already muted, the existing restriction is "
-    "replaced with the new duration and reason. A summary shows how many groups the mute "
-    "was applied in.\n\n"
-    "<code>/tcunmute</code>: restores the user's full send permissions across all connected "
-    "groups. A summary shows how many groups the unmute was applied in.\n\n"
-    "<b>Duration formatting</b> (optional - place before the reason):\n"
-    "→ Seconds: <code>s</code>. Example: <code>30s</code> for 30 seconds.\n"
-    "→ Minutes: <code>m</code>. Example: <code>15m</code> for 15 minutes.\n"
-    "→ Hours: <code>h</code>. Example: <code>2h</code> for 2 hours.\n"
-    "→ Days: <code>d</code>. Example: <code>7d</code> for 7 days.\n"
-    "→ Weeks: <code>w</code>. Example: <code>2w</code> for 2 weeks.\n"
-    "→ Months: <code>mo</code>. Example: <code>3mo</code> for 3 months.\n"
-    "→ Years: <code>ye</code>. Example: <code>2ye</code> for 2 years.\n"
-    "Omit a duration token to apply a permanent mute (until unmute).\n\n"
-    "<b>How to specify the target</b>\n"
-    "Reply to a message, or provide a user ID / @username after the command.\n\n"
-    "<b>Examples</b>\n"
-    "<code>/tcmute @username 3d spamming</code> - 3-day mute, reason inline\n"
-    "<code>/tcm @username 1w</code> - 1-week mute, bot will ask for reason\n"
-    "<code>/tcm @username</code> - permanent mute, bot walks you through it\n"
-    "<code>/tcunmute @username</code> - lift mute immediately across all groups"
+    "Federation-wide mute and unmute — restricts a user from sending messages "
+    "across <b>all connected groups</b> at once."
 )
+
+__help_sections__: list[tuple[str, str]] = [
+    (
+        "Commands & Aliases",
+        "<code>/tcmute</code> (alias: <code>/tcm</code>)\n"
+        "<code>/tcunmute</code> (aliases: <code>/tcunm</code>, <code>/tcum</code>)",
+    ),
+    (
+        "Who can use",
+        "Tester and above (Founder / Admin / Developer / Tester).",
+    ),
+    (
+        "Where to use",
+        "Inside any connected group.",
+    ),
+    (
+        "What it does",
+        "<b>/tcmute</b>: restricts a user from sending messages, media, stickers, and GIFs "
+        "across <b>all connected groups</b> simultaneously. After the command, the bot "
+        "asks for a reason and optionally proof - both steps can be skipped. If the user "
+        "is already muted, the existing restriction is replaced. A summary shows how many "
+        "groups the mute was applied in.\n\n"
+        "<b>/tcunmute</b>: restores the user's full send permissions across all connected "
+        "groups. A summary shows how many groups the unmute was applied in.",
+    ),
+    (
+        "Time format",
+        "Place the duration before the reason. Omit a duration to apply a permanent mute.\n\n"
+        "→ <code>s</code> Seconds — <code>30s</code> = 30 seconds\n"
+        "→ <code>m</code> Minutes — <code>15m</code> = 15 minutes\n"
+        "→ <code>h</code> Hours — <code>2h</code> = 2 hours\n"
+        "→ <code>d</code> Days — <code>7d</code> = 7 days\n"
+        "→ <code>w</code> Weeks — <code>2w</code> = 2 weeks\n"
+        "→ <code>mo</code> Months — <code>3mo</code> = 3 months\n"
+        "→ <code>ye</code> Years — <code>2ye</code> = 2 years",
+    ),
+    (
+        "Target syntax",
+        "Reply to a message, or provide a user ID / @username after the command.",
+    ),
+    (
+        "Examples",
+        "<code>/tcmute @username 3d spamming</code> — 3-day mute, reason inline\n"
+        "<code>/tcm @username 1w</code> — 1-week mute, bot will ask for reason\n"
+        "<code>/tcm @username</code> — permanent mute, bot walks you through it\n"
+        "<code>/tcunmute @username</code> — lift mute immediately across all groups",
+    ),
+]
 
 
 # ───────────────────── Command Mute </tcmute> ───────────────────── #

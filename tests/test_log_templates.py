@@ -48,10 +48,12 @@ def test_ban_log_without_proof_link_has_no_href() -> None:
         ban_id="b",
         proof_lnk=None,
     )
+    # * Proof access is now provided by the inline keyboard button, not a hyperlink.
     assert "View Proof" not in out
 
 
-def test_ban_log_with_proof_link_includes_anchor() -> None:
+def test_ban_log_with_proof_link_has_no_inline_link() -> None:
+    """The ban_log text never embeds a hyperlink — the keyboard's Proof button covers it."""
     out = parse_logmsg.ban_log(
         target_id=2,
         target_fname="X",
@@ -61,8 +63,8 @@ def test_ban_log_with_proof_link_includes_anchor() -> None:
         ban_id="b",
         proof_lnk="https://t.me/c/1234/5",
     )
-    assert "View Proof" in out
-    assert "https://t.me/c/1234/5" in out
+    assert "View Proof" not in out
+    assert "https://t.me/c/1234/5" not in out
 
 
 # ──────────────────────────── Unban log ─────────────────────────── #

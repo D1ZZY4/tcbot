@@ -2,22 +2,23 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""checkme and checkban handlers – queries federation ban status for a user."""
+"""checkme and check handlers – self ban status and comprehensive user-profile view."""
 
 from __future__ import annotations
 
 import asyncio
 
 from telegram import Update
+from telegram.error import BadRequest
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.users_db import ROLE_LABEL, get_effective_role
 from tcbot.modules.helper import decorators, extraction, keyboards
-from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.formatter import code, esc, mention
 from tcbot.modules.helper.parse_link import message_link
+from tcbot.modules.helper.workflows.check_flow import Check
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.timedate_format import fmt_dt
 
@@ -25,30 +26,51 @@ from tcbot.utils.timedate_format import fmt_dt
 
 __module_name__ = "Checking"
 __help_text__ = (
-    "<b>Commands & Aliases</b>\n"
-    "<code>/checkme</code> (alias: <code>/cme</code>)\n"
-    "<code>/checkban</code> (alias: <code>/cban</code>)\n\n"
-    "<b>Who can use it</b>\n"
-    "Anyone - no special permissions needed.\n\n"
-    "<b>Where to use it</b>\n"
-    "Bot PM, exec group, or any connected group.\n\n"
-    "<b>/checkme</b>\n"
-    "Checks your own federation ban status.\n"
-    "- If you are <b>not banned</b>: the bot confirms your account is in good standing.\n"
-    "- If you are <b>banned</b>: the bot shows the reason, the admin who issued the ban, "
-    "the ban date, and gives you a <b>Submit Appeal</b> button to start the appeal process.\n\n"
-    "<b>/checkban</b>\n"
-    "Looks up the ban status of any user by user ID or @username.\n"
-    "- If banned: shows the full record - reason, ban date, banning admin, and a "
-    "<b>View Proof</b> button if evidence was submitted.\n"
-    "- If not banned: confirms the user has no active federation ban.\n\n"
-    "<b>How to specify the target (/checkban)</b>\n"
-    "Reply to a message, or provide a user ID / @username after the command.\n\n"
-    "<b>Examples</b>\n"
-    "<code>/checkme</code>\n"
-    "<code>/checkban @username</code>\n"
-    "<code>/cban 123456789</code>"
+    "Look up your own ban status with <code>/checkme</code>, or pull a full "
+    "federation activity profile for any user with <code>/check</code>."
 )
+
+__help_sections__: list[tuple[str, str]] = [
+    (
+        "Commands & Aliases",
+        "<code>/checkme</code> (alias: <code>/cme</code>)\n"
+        "<code>/check</code> (alias: <code>/c</code>)",
+    ),
+    (
+        "Who can use",
+        "Anyone — no special permissions needed.",
+    ),
+    (
+        "Where to use",
+        "Bot PM, exec group, or any connected group.",
+    ),
+    (
+        "/checkme",
+        "Checks your own federation ban status.\n\n"
+        "- If you are <b>not banned</b>: the bot confirms your account is in good standing.\n"
+        "- If you are <b>banned</b>: the bot shows the reason, the admin who issued the ban, "
+        "the ban date, and gives you a <b>Submit Appeal</b> button to start the appeal "
+        "process.",
+    ),
+    (
+        "/check",
+        "Pulls a full federation profile for any user: identity, role, active ban, "
+        "ban history, warnings (by group), kicks, mutes, and appeals.\n\n"
+        "Each section opens a drill-down inline keyboard so you can inspect every "
+        "record individually.",
+    ),
+    (
+        "Target syntax",
+        "Reply to a message, or provide a user ID / @username after the command.",
+    ),
+    (
+        "Examples",
+        "<code>/checkme</code>\n"
+        "<code>/check @username</code>\n"
+        "<code>/c 123456789</code>\n"
+        "Or reply to a message and run <code>/c</code>.",
+    ),
+]
 
 
 # ───────────────────────────── Helpers ──────────────────────────── #
@@ -85,6 +107,15 @@ async def _ban_summary(
         "Tap a button below for more details."
     )
     return text, proof_link
+
+
+async def _safe_edit(q, text: str, reply_markup) -> None:
+    """Edit message text; ignore 'message is not modified' errors."""
+    try:
+        await q.edit_message_text(text, parse_mode="HTML", reply_markup=reply_markup)
+    except BadRequest as e:
+        if "not modified" not in str(e).lower():
+            raise
 
 
 # ─────────── Command Check Ban for User Self </checkme> ─────────── #
@@ -163,6 +194,8 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         await q.answer("This ban is no longer active.", show_alert=True)
         return
 
+    from tcbot.modules.helper.ban_info import build_ban_detail
+
     _, (text, proof_link) = await asyncio.gather(
         q.answer(),
         build_ban_detail(ban),
@@ -203,89 +236,143 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     )
 
 
-# ────────── Command Check Ban for Any Target </checkban> ────────── #
-# * Read Extract Target for more information on how the target is resolved (reply, ID, or @username)
+# ───────────── Command Comprehensive Check </check> ────────────── #
 
 
 @decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
-async def cmd_baninfo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show a comprehensive profile (identity + bans + warns + kicks + mutes + appeals)."""
     args = parse_cmd_args(update.effective_message.text)
     target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
         await update.effective_message.reply_text(
-            "Couldn't resolve that user - reply to a message or provide a valid user ID."
+            "Couldn't resolve that user — reply to a message or provide a valid ID / @username."
         )
         return
 
-    msg = update.effective_message
-    fname = target_fname or str(target_id)
+    # * Refresh cache with whatever we just resolved so future renders have a real name.
+    if target_fname and not target_fname.startswith("User "):
+        try:
+            await db.users_db.upsert_user(target_id, None, target_fname)
+        except Exception:
+            pass
 
-    if target_id == ctx.bot.id:
-        await msg.reply_text(
-            f"That's {mention(ctx.bot.id, ctx.bot.first_name or 'me')} - that's me. 😄\n\n"
-            "I keep this federation running, so I'm definitely not on the ban list. "
-            "All clear.",
-            parse_mode="HTML",
-        )
-        return
+    text, kb = await Check.profile(ctx.bot, target_id)
+    await update.effective_message.reply_text(text, parse_mode="HTML", reply_markup=kb)
 
-    # * Fetch owner ID, target role, active ban, and target name - all in parallel
-    owner_id, target_role, ban, cached_fname = await asyncio.gather(
-        db.users_db.get_owner_id(),
-        get_effective_role(target_id),
-        db.bans_db.get_active_ban(target_id),
-        db.users_db.get_first_name(target_id, str(target_id)),
+
+# ─────────────── Callback Handlers for /check views ─────────────── #
+
+
+@decorators.ratelimiter(limit=20, period=30)
+@decorators.log_execution
+async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    target_id = int(q.data.split(":", 1)[1])
+    _, (text, kb) = await asyncio.gather(q.answer(), Check.profile(ctx.bot, target_id))
+    await _safe_edit(q, text, kb)
+
+
+@decorators.ratelimiter(limit=20, period=30)
+@decorators.log_execution
+async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    _, target_id_str, page_str = q.data.split(":")
+    target_id = int(target_id_str)
+    page = int(page_str)
+    _, (text, kb) = await asyncio.gather(q.answer(), Check.bans_list(target_id, page))
+    await _safe_edit(q, text, kb)
+
+
+@decorators.ratelimiter(limit=20, period=30)
+@decorators.log_execution
+async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    _, target_id_str, ban_id = q.data.split(":", 2)
+    target_id = int(target_id_str)
+    _, (text, kb) = await asyncio.gather(
+        q.answer(), Check.ban_detail(target_id, ban_id)
     )
+    await _safe_edit(q, text, kb)
 
-    if target_id == owner_id:
-        await msg.reply_text(
-            f"That's {mention(owner_id, cached_fname)}, our Founder. 👑\n\n"
-            "They built this whole federation - banning the Founder would be like "
-            "locking the landlord out of their own building. Not happening. "
-            "Definitely clean.",
-            parse_mode="HTML",
-        )
-        return
 
-    if target_role == "admin":
-        await msg.reply_text(
-            f"Hold up - {mention(target_id, fname)} is part of our staff team. 👮\n\n"
-            "They issue bans, not receive them. "
-            "No active ban on record - they're good.",
-            parse_mode="HTML",
-        )
-        return
-    if target_role in ("developer", "tester"):
-        role_label = ROLE_LABEL.get(target_role, target_role)
-        await msg.reply_text(
-            f"Noted - {mention(target_id, fname)} is our {cfg.community_name} {role_label}. 👍\n\n"
-            "Part of the team behind the scenes. No active ban on record - all good.",
-            parse_mode="HTML",
-        )
-        return
+@decorators.ratelimiter(limit=20, period=30)
+@decorators.log_execution
+async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    target_id = int(q.data.split(":", 1)[1])
+    _, (text, kb) = await asyncio.gather(q.answer(), Check.warns_by_group(target_id))
+    await _safe_edit(q, text, kb)
 
-    if not ban:
-        await msg.reply_text(
-            f"All clear - {mention(target_id, fname)} has no active ban in {cfg.community_name}. ✅ "
-            "They're good to go.",
-            parse_mode="HTML",
-        )
-        return
 
-    text, proof_link = await build_ban_detail(ban, target_fname)
-    kb = keyboards.baninfo_proof_kb(proof_link) if proof_link else None
-    await msg.reply_text(text, parse_mode="HTML", reply_markup=kb)
+@decorators.ratelimiter(limit=20, period=30)
+@decorators.log_execution
+async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    _, target_id_str, chat_id_str, page_str = q.data.split(":")
+    target_id = int(target_id_str)
+    chat_id = int(chat_id_str)
+    page = int(page_str)
+    _, (text, kb) = await asyncio.gather(
+        q.answer(), Check.warns_in_group(target_id, chat_id, page)
+    )
+    await _safe_edit(q, text, kb)
+
+
+@decorators.ratelimiter(limit=20, period=30)
+@decorators.log_execution
+async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    _, target_id_str, page_str = q.data.split(":")
+    target_id = int(target_id_str)
+    page = int(page_str)
+    _, (text, kb) = await asyncio.gather(q.answer(), Check.kicks_list(target_id, page))
+    await _safe_edit(q, text, kb)
+
+
+@decorators.ratelimiter(limit=20, period=30)
+@decorators.log_execution
+async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    _, target_id_str, page_str = q.data.split(":")
+    target_id = int(target_id_str)
+    page = int(page_str)
+    _, (text, kb) = await asyncio.gather(q.answer(), Check.mutes_list(target_id, page))
+    await _safe_edit(q, text, kb)
+
+
+@decorators.ratelimiter(limit=20, period=30)
+@decorators.log_execution
+async def on_check_appeals(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    _, target_id_str, page_str = q.data.split(":")
+    target_id = int(target_id_str)
+    page = int(page_str)
+    _, (text, kb) = await asyncio.gather(
+        q.answer(), Check.appeals_list(target_id, page)
+    )
+    await _safe_edit(q, text, kb)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #
 
 _CHECKME_CMDS = build_prefixed_filters("checkme") | build_prefixed_filters("cme")
-_BANINFO_CMDS = build_prefixed_filters("checkban") | build_prefixed_filters("cban")
+_CHECK_CMDS = build_prefixed_filters("check") | build_prefixed_filters("c")
 
 __handlers__ = [
     MessageHandler(_CHECKME_CMDS, cmd_checkme),
-    MessageHandler(_BANINFO_CMDS, cmd_baninfo),
+    MessageHandler(_CHECK_CMDS, cmd_check),
     CallbackQueryHandler(on_checkme_detail, pattern=r"^checkme_detail:"),
     CallbackQueryHandler(on_checkme_back, pattern=r"^checkme_back:"),
+    CallbackQueryHandler(on_check_main, pattern=r"^check_main:\d+$"),
+    CallbackQueryHandler(on_check_bans, pattern=r"^check_bans:\d+:\d+$"),
+    CallbackQueryHandler(on_check_ban_item, pattern=r"^check_ban_item:\d+:[a-z0-9]+$"),
+    CallbackQueryHandler(on_check_warns, pattern=r"^check_warns:\d+$"),
+    CallbackQueryHandler(
+        on_check_warn_chat, pattern=r"^check_warn_chat:\d+:-?\d+:\d+$"
+    ),
+    CallbackQueryHandler(on_check_kicks, pattern=r"^check_kicks:\d+:\d+$"),
+    CallbackQueryHandler(on_check_mutes, pattern=r"^check_mutes:\d+:\d+$"),
+    CallbackQueryHandler(on_check_appeals, pattern=r"^check_appeals:\d+:\d+$"),
 ]

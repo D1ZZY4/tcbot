@@ -16,7 +16,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.users_db import get_effective_role
 from tcbot.modules.helper import parse_logmsg
-from tcbot.modules.helper.formatter import mention
+from tcbot.modules.helper.formatter import code, mention
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
@@ -95,14 +95,16 @@ async def execute_warn(
             except Exception as exc:
                 log.error("Warn clear after auto-ban failed: %s", exc)
             await msg.reply_text(
-                f"{mention(target_id, target_name)} hit {WARN_LIMIT} warnings "
+                f"{mention(target_id, target_name)} - {code(str(target_id))} "
+                f"hit {WARN_LIMIT} warnings "
                 f"and has been banned from this group.{proof_line}",
                 parse_mode="HTML",
             )
         else:
             log.error("Auto-ban on warn limit failed: %s", ban_result)
             await msg.reply_text(
-                f"{mention(target_id, target_name)} hit {WARN_LIMIT} warnings "
+                f"{mention(target_id, target_name)} - {code(str(target_id))} "
+                f"hit {WARN_LIMIT} warnings "
                 f"but auto-ban failed - please ban them manually.{proof_line}",
                 parse_mode="HTML",
             )
@@ -111,7 +113,7 @@ async def execute_warn(
         results2 = await asyncio.gather(
             ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             msg.reply_text(
-                f"{mention(target_id, target_name)} has been warned "
+                f"{mention(target_id, target_name)} - {code(str(target_id))} has been warned "
                 f"({count}/{WARN_LIMIT}) - {reason_text}{proof_line}",
                 parse_mode="HTML",
             ),
@@ -133,7 +135,8 @@ async def execute_unwarn(
     count = await db.warns_db.warn_count(target_id, chat_id)
     if count == 0:
         await msg.reply_text(
-            f"{mention(target_id, target_name)} has no warnings in this group.",
+            f"{mention(target_id, target_name)} - {code(str(target_id))} "
+            f"has no warnings in this group.",
             parse_mode="HTML",
         )
         return
@@ -157,7 +160,7 @@ async def execute_unwarn(
         db.warns_db.remove_last_warn(target_id, chat_id),
         ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
         msg.reply_text(
-            f"One warning removed from {mention(target_id, target_name)}. "
+            f"One warning removed from {mention(target_id, target_name)} - {code(str(target_id))}. "
             f"They're now at {new_count}/{WARN_LIMIT}.",
             parse_mode="HTML",
         ),
@@ -181,12 +184,16 @@ async def execute_warnlist(
 
     if count == 0:
         await msg.reply_text(
-            f"{mention(target_id, target_name)} has no warnings in this group.",
+            f"{mention(target_id, target_name)} - {code(str(target_id))} "
+            f"has no warnings in this group.",
             parse_mode="HTML",
         )
         return
 
-    lines = [f"{mention(target_id, target_name)} has {count}/{WARN_LIMIT} warnings:\n"]
+    lines = [
+        f"{mention(target_id, target_name)} - {code(str(target_id))} "
+        f"has {count}/{WARN_LIMIT} warnings:\n"
+    ]
     for i, w in enumerate(warns, 1):
         lines.append(f"  {i}. {w.get('reason', 'No reason')}")
 
@@ -205,13 +212,15 @@ async def execute_resetwarns(
     removed = await db.warns_db.clear_warns(target_id, chat_id)
     if removed == 0:
         await msg.reply_text(
-            f"{mention(target_id, target_name)} has no warnings to clear.",
+            f"{mention(target_id, target_name)} - {code(str(target_id))} "
+            f"has no warnings to clear.",
             parse_mode="HTML",
         )
         return
 
     await msg.reply_text(
-        f"All {removed} warning(s) cleared for {mention(target_id, target_name)}. Clean slate.",
+        f"All {removed} warning(s) cleared for {mention(target_id, target_name)} - "
+        f"{code(str(target_id))}. Clean slate.",
         parse_mode="HTML",
     )
 

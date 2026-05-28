@@ -29,28 +29,46 @@ log = logging.getLogger(__name__)
 
 __module_name__ = "Ban"
 __help_text__ = (
-    "<b>Commands & Aliases</b>\n"
-    "<code>/tcban</code> (alias: <code>/tcb</code>)\n\n"
-    "<b>Who can use it</b>\n"
-    "Developer and above (Founder / Admin / Developer).\n\n"
-    "<b>Where to use it</b>\n"
-    "Exec group, any connected group, or bot PM.\n\n"
-    "<b>What it does</b>\n"
-    "Issues a <b>federation-wide ban</b> on the target, applied across all connected groups "
-    "automatically. A reason is required - provide it directly after the target in the command.\n\n"
-    "After the command, the bot walks you through the proof step: send one or more photos or "
-    "videos as evidence. Proof is required and is logged with the ban record to the federation log channel.\n\n"
-    "If the user already has an active ban, the existing record is updated with the new reason "
-    "and proof rather than creating a duplicate.\n"
-    "If the target holds a federation role (Tester / Developer / Admin), that role is "
-    "automatically removed and they are notified by DM before the ban is enforced.\n\n"
-    "<b>How to specify the target</b>\n"
-    "Reply to a message, or provide a user ID / @username after the command.\n\n"
-    "<b>Examples</b>\n"
-    "<code>/tcban @username spamming in connected groups</code>\n"
-    "<code>/tcban 123456789 scamming members</code>\n"
-    "Or reply to a message and run <code>/tcb reason here</code>."
+    "Issues a <b>federation-wide ban</b> on a user, applied across every connected "
+    "group at once. Auto-demotes staff targets and stores proof with the ban record."
 )
+
+__help_sections__: list[tuple[str, str]] = [
+    (
+        "Commands & Aliases",
+        "<code>/tcban</code> (alias: <code>/tcb</code>)",
+    ),
+    (
+        "Who can use",
+        "Developer and above (Founder / Admin / Developer).",
+    ),
+    (
+        "Where to use",
+        "Exec group, any connected group, or bot PM.",
+    ),
+    (
+        "What it does",
+        "Issues a <b>federation-wide ban</b> on the target, applied across all connected "
+        "groups automatically. A reason is required - provide it directly after the target.\n\n"
+        "After the command, the bot walks you through the proof step: send one or more "
+        "photos or videos as evidence. Proof is required and is logged with the ban record "
+        "to the federation log channel.\n\n"
+        "If the user already has an active ban, the existing record is updated with the new "
+        "reason and proof rather than creating a duplicate.\n"
+        "If the target holds a federation role (Tester / Developer / Admin), that role is "
+        "automatically removed and they are notified by DM before the ban is enforced.",
+    ),
+    (
+        "Target syntax",
+        "Reply to a message, or provide a user ID / @username after the command.",
+    ),
+    (
+        "Examples",
+        "<code>/tcban @username spamming in connected groups</code>\n"
+        "<code>/tcban 123456789 scamming members</code>\n"
+        "Or reply to a message and run <code>/tcb reason here</code>.",
+    ),
+]
 
 
 # ────────────────────── Command Ban </tcban> ────────────────────── #

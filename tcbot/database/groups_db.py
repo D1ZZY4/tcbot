@@ -41,6 +41,18 @@ async def get_group(chat_id: int) -> GroupDoc | None:
     return await _groups().find_one({"chat_id": chat_id})
 
 
+async def get_group_titles(chat_ids: list[int]) -> dict[int, str]:
+    """Return {chat_id: title} for the given chat_ids; missing groups are absent."""
+    if not chat_ids:
+        return {}
+    docs = (
+        await _groups()
+        .find({"chat_id": {"$in": chat_ids}}, {"_id": 0, "chat_id": 1, "title": 1})
+        .to_list(length=None)
+    )
+    return {int(d["chat_id"]): d.get("title") or str(d["chat_id"]) for d in docs}
+
+
 async def is_connected(chat_id: int) -> bool:
     """Check if a group is currently active and connected to the federation."""
     cached = connected_cache.get(chat_id)

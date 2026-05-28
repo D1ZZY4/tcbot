@@ -30,27 +30,49 @@ log = logging.getLogger(__name__)
 
 __module_name__ = "Connect"
 __help_text__ = (
-    "<b>Commands & Aliases</b>\n"
-    "<code>/tcconnect</code> (alias: <code>/tccon</code>)\n\n"
-    "<b>Who can use it</b>\n"
-    "Group admins and creators only (checked per-group).\n\n"
-    "<b>Where to use it</b>\n"
-    f"Inside the group you want to connect to {cfg.community_name}.\n\n"
-    "<b>What it does</b>\n"
-    f"Connects your group to the {cfg.community_name} federation. Once connected:\n"
-    "- Federation bans are automatically enforced - any currently banned user in your group "
-    "will be removed, and newly banned users will be kicked on ban.\n"
-    "- Federation mutes are applied when issued.\n"
-    "- Broadcast messages from TC Staff will be forwarded to your group.\n\n"
-    "Before running the command, make the bot a group admin with these three permissions: "
-    "<b>Delete Messages</b>, <b>Ban Users</b>, and <b>Invite Users via Link</b>.\n\n"
-    "If a connect request is already pending for your group, a second request will be rejected - "
-    "wait for TC Staff to process the existing one.\n\n"
-    "When the bot is first added to a group, it automatically prompts the group owner to "
-    "connect - so you can also just add the bot and follow that prompt.\n\n"
-    "<b>Example</b>\n"
-    "Make the bot a group admin, then run <code>/tcconnect</code> inside the group."
+    f"Connects your group to the {cfg.community_name} federation so federation bans, "
+    f"mutes, and broadcasts are applied automatically."
 )
+
+__help_sections__: list[tuple[str, str]] = [
+    (
+        "Commands & Aliases",
+        "<code>/tcconnect</code> (alias: <code>/tccon</code>)",
+    ),
+    (
+        "Who can use",
+        "Group admins and creators only (checked per-group).",
+    ),
+    (
+        "Where to use",
+        f"Inside the group you want to connect to {cfg.community_name}.",
+    ),
+    (
+        "What it does",
+        f"Connects your group to the {cfg.community_name} federation. Once connected:\n"
+        f"- Federation bans are automatically enforced — currently banned users are removed, "
+        f"and newly banned users are kicked on ban.\n"
+        f"- Federation mutes are applied when issued.\n"
+        f"- Broadcast messages from TC Staff are forwarded to your group.",
+    ),
+    (
+        "Required permissions",
+        "Before running the command, make the bot a group admin with these three "
+        "permissions: <b>Delete Messages</b>, <b>Ban Users</b>, and <b>Invite Users "
+        "via Link</b>.",
+    ),
+    (
+        "Notes",
+        "If a connect request is already pending for your group, a second request will be "
+        "rejected — wait for TC Staff to process the existing one.\n\n"
+        "When the bot is first added to a group, it automatically prompts the group owner "
+        "to connect — so you can also just add the bot and follow that prompt.",
+    ),
+    (
+        "Example",
+        "Make the bot a group admin, then run <code>/tcconnect</code> inside the group.",
+    ),
+]
 
 
 # ───────────── Command to Connect a Group </tcconnect> ──────────── #

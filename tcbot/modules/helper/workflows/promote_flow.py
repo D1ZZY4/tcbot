@@ -15,7 +15,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.users_db import ROLE_LABEL, role_rank
 from tcbot.modules.helper import keyboards, parse_logmsg
-from tcbot.modules.helper.formatter import mention
+from tcbot.modules.helper.formatter import code, mention
 
 log = logging.getLogger(__name__)
 
@@ -84,7 +84,8 @@ class Promote:
             return_exceptions=True,
         )
         return True, (
-            f"Done. {mention(target_id, target_fname)} is now a {cfg.community_name} Admin."
+            f"Done. {mention(target_id, target_fname)} - {code(str(target_id))} "
+            f"is now a {cfg.community_name} Admin."
         )
 
     @staticmethod
@@ -125,7 +126,8 @@ class Promote:
         )
         return (
             True,
-            f"Done. {mention(target_id, target_fname)} is now a {cfg.community_name} {role_label}.",
+            f"Done. {mention(target_id, target_fname)} - {code(str(target_id))} "
+            f"is now a {cfg.community_name} {role_label}.",
         )
 
     @classmethod
@@ -142,7 +144,7 @@ class Promote:
         if existing:
             return False, (
                 f"There's already a pending promotion request for "
-                f"{mention(target_id, target_fname)}."
+                f"{mention(target_id, target_fname)} - {code(str(target_id))}."
             )
         request_id, owner_id = await asyncio.gather(
             db.queues_db.enqueue(target_id, target_username, target_fname, admin_id),

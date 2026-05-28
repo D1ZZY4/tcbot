@@ -183,3 +183,30 @@ async def active_ban_user_ids() -> list[int]:
         .to_list(None)
     )
     return [doc["banned_user_id"] for doc in docs]
+
+
+# ─────────────────────── Per-user history ───────────────────────── #
+
+
+async def user_bans(user_id: int) -> list[BanDoc]:
+    """Return every ban (active + inactive) for a user, newest first."""
+    return (
+        await _bans()
+        .find(
+            {"banned_user_id": user_id},
+            sort=[("timestamp", -1), ("ban_id", -1)],
+        )
+        .to_list(None)
+    )
+
+
+async def user_ban_count(user_id: int) -> int:
+    """Count every ban ever issued against the user."""
+    return await _bans().count_documents({"banned_user_id": user_id})
+
+
+async def user_appeal_count(user_id: int) -> int:
+    """Count bans on this user that ever had an appeal submitted."""
+    return await _bans().count_documents(
+        {"banned_user_id": user_id, "appeal_log_msg_id": {"$ne": None, "$exists": True}}
+    )

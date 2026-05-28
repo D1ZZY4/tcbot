@@ -28,45 +28,72 @@ log = logging.getLogger(__name__)
 
 __module_name__ = "Admins"
 __help_text__ = (
-    "<b>Commands & Aliases</b>\n"
-    "<code>/tcpromote</code> (alias: <code>/tcp</code>)\n"
-    "<code>/tcdemote</code> (alias: <code>/tcd</code>)\n"
-    "<code>/transferowner</code> (alias: <code>/tfowner</code>)\n"
-    "<code>/tcpromoterequests</code> (alias: <code>/tcreqs</code>)\n"
-    "<code>/tcpromotelist</code> (alias: <code>/tcplist</code>\n\n"
-    "<b>Role Hierarchy</b>\n"
-    "Founder (rank 4) › Admin (rank 3) › Developer (rank 2) › Tester (rank 1)\n\n"
-    "<b>/tcpromote</b>\n"
-    "Assigns a role to a user. Omit the role argument to get an inline button menu.\n"
-    "Usage: <code>/tcpromote @user [admin|developer|tester]</code>\n"
-    "- Founder can promote to any role directly.\n"
-    "- Admin can promote to Developer or Tester directly; promoting someone to Admin "
-    "sends a pending request to the Founder for approval.\n"
-    "- You cannot promote a user to a rank equal to or above your own.\n\n"
-    "<b>/tcdemote</b>\n"
-    "Removes a user's role. A confirmation button is shown before the action executes.\n"
-    "Usage: <code>/tcdemote @user</code>\n"
-    "- Founder can demote any role.\n"
-    "- Admin can demote Developer or Tester only.\n"
-    "- When a user with a role is banned or kicked, their role is automatically removed "
-    "and they are notified by DM.\n\n"
-    "<b>/transferowner</b>\n"
-    "Transfers federation ownership to another user. The current Founder steps down to Admin. "
-    "Founder only.\n"
-    "Usage: <code>/transferowner @user</code>\n\n"
-    "<b>/tcpromoterequests</b>\n"
-    "Submits a request to the Founder to be promoted to Admin. The Founder receives a "
-    "notification with Approve / Reject buttons.\n\n"
-    "<b>/tcpromotelist</b>\n"
-    "Lists all pending Admin promotion requests. Admin and above only.\n\n"
-    "<b>How to specify the target</b>\n"
-    "Reply to a message, or provide a user ID / @username after the command.\n\n"
-    "<b>Examples</b>\n"
-    "<code>/tcpromote @username developer</code>\n"
-    "<code>/tcpromote 123456789</code> - shows role selection menu\n"
-    "<code>/tcdemote @username</code>\n"
-    "<code>/transferowner @newowner</code>"
+    "Promote and demote staff, transfer ownership, and manage promotion requests "
+    "across the federation."
 )
+
+__help_sections__: list[tuple[str, str]] = [
+    (
+        "Commands & Aliases",
+        "<code>/tcpromote</code> (alias: <code>/tcp</code>)\n"
+        "<code>/tcdemote</code> (alias: <code>/tcd</code>)\n"
+        "<code>/transferowner</code> (alias: <code>/tfowner</code>)\n"
+        "<code>/tcpromoterequests</code> (alias: <code>/tcreqs</code>)\n"
+        "<code>/tcpromotelist</code> (alias: <code>/tcplist</code>)",
+    ),
+    (
+        "Who can use",
+        "<b>/tcpromote</b>, <b>/tcdemote</b>, <b>/tcpromotelist</b>: Founder and Admin.\n"
+        "<b>/transferowner</b>: Founder only.\n"
+        "<b>/tcpromoterequests</b>: anyone (creates a self-request to the Founder).",
+    ),
+    (
+        "Where to use",
+        "Bot PM, exec group, or any connected group.",
+    ),
+    (
+        "Role Hierarchy",
+        "Founder (rank 4) › Admin (rank 3) › Developer (rank 2) › Tester (rank 1)\n\n"
+        "You cannot promote a user to a rank equal to or above your own. "
+        "Admins promoting someone to Admin queues a request for the Founder.",
+    ),
+    (
+        "Target syntax",
+        "Reply to a message, or provide a user ID / @username after the command.",
+    ),
+    (
+        "/tcpromote",
+        "Assigns a role to a user. Omit the role argument to get an inline button menu.\n\n"
+        "<b>Usage:</b> <code>/tcpromote &lt;target&gt; [admin|developer|tester]</code>\n"
+        "- Founder can promote to any role directly.\n"
+        "- Admin can promote to Developer or Tester directly; promoting to Admin "
+        "sends a pending request to the Founder for approval.",
+    ),
+    (
+        "/tcdemote",
+        "Removes a user's role. A confirmation button is shown before the action executes.\n\n"
+        "<b>Usage:</b> <code>/tcdemote &lt;target&gt;</code>\n"
+        "- Founder can demote any role.\n"
+        "- Admin can demote Developer or Tester only.\n"
+        "- When a user with a role is banned or kicked, their role is automatically removed "
+        "and they are notified by DM.",
+    ),
+    (
+        "/transferowner",
+        "Transfers federation ownership to another user. The current Founder steps down "
+        "to Admin. Founder only.\n\n"
+        "<b>Usage:</b> <code>/transferowner &lt;target&gt;</code>",
+    ),
+    (
+        "Examples",
+        "<code>/tcpromote @username developer</code>\n"
+        "<code>/tcpromote 123456789</code> - shows role selection menu\n"
+        "<code>/tcdemote @username</code>\n"
+        "<code>/transferowner @newowner</code>\n"
+        "<code>/tcpromoterequests</code> - request promotion to Admin\n"
+        "<code>/tcplist</code> - list pending promotion requests",
+    ),
+]
 
 
 # ────────────────── Command Promote </tcpromote> ────────────────── #
@@ -299,7 +326,8 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
     role_label = ROLE_LABEL.get(target_role, target_role)
     await q.edit_message_text(
-        f"Done. {mention(target_id, target_fname)} has been removed from {role_label}.",
+        f"Done. {mention(target_id, target_fname)} - {code(str(target_id))} "
+        f"has been removed from {role_label}.",
         parse_mode="HTML",
         reply_markup=None,
     )
@@ -349,7 +377,8 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await asyncio.gather(
         ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
         update.effective_message.reply_text(
-            f"Done. Ownership has been transferred to {mention(target_id, target_fname)}.",
+            f"Done. Ownership has been transferred to "
+            f"{mention(target_id, target_fname)} - {code(str(target_id))}.",
             parse_mode="HTML",
         ),
         return_exceptions=True,

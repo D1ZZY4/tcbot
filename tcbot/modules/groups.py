@@ -23,20 +23,35 @@ from tcbot.utils.prefixes import build_prefixed_filters
 
 __module_name__ = "Groups"
 __help_text__ = (
-    "<b>Commands & Aliases</b>\n"
-    "<code>/tcgroups</code> (alias: <code>/tcg</code>)\n\n"
-    "<b>Who can use it</b>\n"
-    "Anyone - no special permissions needed.\n\n"
-    "<b>Where to use it</b>\n"
-    "Bot PM, exec group, or any connected group.\n\n"
-    "<b>What it does</b>\n"
-    f"Lists all groups currently connected to {cfg.community_name}, along with the total count. "
-    "The default view shows group names only.\n"
-    "Tap <b>Details</b> to expand the list and show each group's chat ID alongside its name. "
-    "Tap <b>Simple</b> to collapse back to names only.\n\n"
-    "<b>Example</b>\n"
-    "<code>/tcgroups</code> or <code>/tcg</code>"
+    f"Lists every group currently connected to {cfg.community_name}, with optional "
+    "details view."
 )
+
+__help_sections__: list[tuple[str, str]] = [
+    (
+        "Commands & Aliases",
+        "<code>/tcgroups</code> (alias: <code>/tcg</code>)",
+    ),
+    (
+        "Who can use",
+        "Anyone — no special permissions needed.",
+    ),
+    (
+        "Where to use",
+        "Bot PM, exec group, or any connected group.",
+    ),
+    (
+        "What it does",
+        f"Lists all groups currently connected to {cfg.community_name}, along with the total "
+        f"count.\n\n"
+        f"The default view shows group names only. Tap <b>Details</b> to expand the list and "
+        f"show each group's chat ID alongside its name. Tap <b>Simple</b> to collapse back.",
+    ),
+    (
+        "Example",
+        "<code>/tcgroups</code> or <code>/tcg</code>",
+    ),
+]
 
 
 # ──────────────────────── Helper Functions ──────────────────────── #

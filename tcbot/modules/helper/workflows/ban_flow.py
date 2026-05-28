@@ -216,7 +216,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
 
     # * Edit the original prompt to a summary + cache user in parallel
     summary = (
-        f"{mention(target_id, target_fname)} has been banned.\n"
+        f"{mention(target_id, target_fname)} - <code>{target_id}</code> has been banned.\n"
         f"Reason: {reason}\n"
         f"Applied to {len(groups) - failed}/{len(groups)} groups."
     )

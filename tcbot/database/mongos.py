@@ -112,6 +112,8 @@ async def ensure_indexes() -> None:
         col("bans").create_index([("ban_id", 1)], unique=True),
         # * Serves active_bans()/active_ban_count() which filter on is_active only
         col("bans").create_index([("is_active", 1), ("timestamp", -1), ("ban_id", -1)]),
+        # * Serves /check history: every ban (active+inactive) for a user, newest first
+        col("bans").create_index([("banned_user_id", 1), ("timestamp", -1)]),
         col("tc_owners").create_index([("user_id", 1)], unique=True),
         col("tc_admins").create_index([("user_id", 1)], unique=True),
         col("tc_roles").create_index([("user_id", 1)], unique=True),
@@ -123,7 +125,12 @@ async def ensure_indexes() -> None:
         col("pending_joins").create_index([("chat_id", 1)], unique=True),
         col("member_cache").create_index([("user_id", 1)], unique=True),
         col("warns").create_index([("user_id", 1), ("chat_id", 1), ("timestamp", -1)]),
+        # * Serves /check history: every warning for a user across groups
+        col("warns").create_index([("user_id", 1), ("timestamp", -1)]),
         col("warn_counts").create_index([("user_id", 1), ("chat_id", 1)], unique=True),
+        # * Per-user kick / mute history for /check
+        col("kicks").create_index([("user_id", 1), ("timestamp", -1)]),
+        col("mutes").create_index([("user_id", 1), ("timestamp", -1)]),
         col("promotion_requests").create_index([("request_id", 1)], unique=True),
         col("promotion_requests").create_index([("target_id", 1), ("status", 1)]),
         # * Serves queues_db.all_pending() / pending_count() which filter on status only

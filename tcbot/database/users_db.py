@@ -277,3 +277,28 @@ async def get_effective_role(user_id: int) -> str | None:
     result: str | None = "founder" if owner else "admin" if admin else role
     effective_role_cache.put(user_id, result)
     return result
+
+
+async def role_meta(user_id: int) -> tuple[str | None, int | None, object]:
+    """Return ``(role, assigned_by, assigned_at)`` — owner has no metadata."""
+    role = await get_effective_role(user_id)
+    if role is None:
+        return None, None, None
+    if role == "founder":
+        # * tc_owners stores only user_id; no metadata to surface.
+        return role, None, None
+    if role == "admin":
+        doc = await _admins().find_one(
+            {"user_id": user_id},
+            {"_id": 0, "promoted_by": 1, "promoted_date": 1},
+        )
+        if doc:
+            return role, doc.get("promoted_by"), doc.get("promoted_date")
+        return role, None, None
+    doc = await _roles().find_one(
+        {"user_id": user_id},
+        {"_id": 0, "assigned_by": 1, "assigned_at": 1},
+    )
+    if doc:
+        return role, doc.get("assigned_by"), doc.get("assigned_at")
+    return role, None, None

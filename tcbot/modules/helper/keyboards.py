@@ -336,3 +336,33 @@ def stats_back_kb() -> InlineKeyboardMarkup:
             [InlineKeyboardButton("« Back", callback_data="stats_main")],
         ]
     )
+
+
+# ───────────────────── Module help sub-menu ─────────────────────── #
+
+
+def module_help_kb(
+    section_buttons: list[tuple[str, str]],
+    back_callback: str,
+) -> InlineKeyboardMarkup:
+    """Per-module help view — pair sub-section buttons + Back, with Back last."""
+    rows: list[list[InlineKeyboardButton]] = []
+    it = iter(section_buttons)
+    for a, b in zip(it, it):
+        rows.append(
+            [
+                InlineKeyboardButton(a[0], callback_data=a[1]),
+                InlineKeyboardButton(b[0], callback_data=b[1]),
+            ]
+        )
+    for item in list(it):
+        rows.append([InlineKeyboardButton(item[0], callback_data=item[1])])
+    rows.append([InlineKeyboardButton("« Back", callback_data=back_callback)])
+    return InlineKeyboardMarkup(rows)
+
+
+def back_to_module_kb(module_callback: str) -> InlineKeyboardMarkup:
+    """Single « Back button that returns to the module help view."""
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton("« Back", callback_data=module_callback)]]
+    )

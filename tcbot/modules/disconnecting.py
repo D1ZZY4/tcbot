@@ -25,25 +25,40 @@ log = logging.getLogger(__name__)
 
 __module_name__ = "Disconnect"
 __help_text__ = (
-    "<b>Commands & Aliases</b>\n"
-    "<code>/tcdisconnect</code> (alias: <code>/tcdiscon</code>)\n"
-    "<code>/rmtc</code>\n\n"
-    "<b>Who can use it</b>\n"
-    "<code>/tcdisconnect</code>: the group owner or TC Staff (Admin and above).\n"
-    "<code>/rmtc</code>: TC Staff only.\n\n"
-    "<b>Where to use it</b>\n"
-    "<code>/tcdisconnect</code>: inside the group you want to disconnect.\n"
-    "<code>/rmtc</code>: exec group or bot PM (works remotely by chat ID).\n\n"
-    "<b>What it does</b>\n"
-    f"<code>/tcdisconnect</code>: removes the current group from {cfg.community_name}, "
-    "posts a disconnection log entry, and causes the bot to leave the group.\n\n"
-    "<code>/rmtc</code>: force-removes a group from the federation by chat ID. Use this for "
-    "groups the bot has already been kicked from, or to remove a group remotely without being "
-    "inside it. A log entry is still posted.\n\n"
-    "<b>Examples</b>\n"
-    "Run <code>/tcdisconnect</code> inside the group to disconnect it.\n"
-    "<code>/rmtc -1001234567890</code> - force-remove a group by chat ID."
+    f"Removes a group from {cfg.community_name}. Use <code>/tcdisconnect</code> from "
+    f"inside the group, or <code>/rmtc</code> remotely with a chat ID."
 )
+
+__help_sections__: list[tuple[str, str]] = [
+    (
+        "Commands & Aliases",
+        "<code>/tcdisconnect</code> (alias: <code>/tcdiscon</code>)\n"
+        "<code>/rmtc</code>",
+    ),
+    (
+        "Who can use",
+        "<b>/tcdisconnect</b>: the group owner or TC Staff (Admin and above).\n"
+        "<b>/rmtc</b>: TC Staff only.",
+    ),
+    (
+        "Where to use",
+        "<b>/tcdisconnect</b>: inside the group you want to disconnect.\n"
+        "<b>/rmtc</b>: exec group or bot PM (works remotely by chat ID).",
+    ),
+    (
+        "What it does",
+        f"<b>/tcdisconnect</b>: removes the current group from {cfg.community_name}, posts a "
+        f"disconnection log entry, and causes the bot to leave the group.\n\n"
+        f"<b>/rmtc</b>: force-removes a group from the federation by chat ID. Use this for "
+        f"groups the bot has already been kicked from, or to remove a group remotely without "
+        f"being inside it. A log entry is still posted.",
+    ),
+    (
+        "Examples",
+        "Run <code>/tcdisconnect</code> inside the group to disconnect it.\n"
+        "<code>/rmtc -1001234567890</code> — force-remove a group by chat ID.",
+    ),
+]
 
 
 # ────────── Command to Disconnect a Group </tcdisconnect> ───────── #

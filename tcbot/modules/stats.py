@@ -35,25 +35,43 @@ from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
 
 __module_name__ = "Stats"
 __help_text__ = (
-    "<b>Commands & Aliases</b>\n"
-    "<code>/tcstats</code>\n\n"
-    "<b>Who can use it</b>\n"
-    "Anyone - no special permissions needed.\n\n"
-    "<b>Where to use it</b>\n"
-    "Bot PM, exec group, or any connected group.\n\n"
-    "<b>What it does</b>\n"
-    "Shows a live overview of the federation: the Founder, total staff count, number of "
-    "active federation bans, and number of connected groups.\n\n"
-    "Three drill-down buttons are available below the summary:\n"
-    "- <b>Staff Roster</b>: full breakdown of all staff by role "
-    "(Founder, Admins, Developers, Testers).\n"
-    "- <b>Connected Chats</b>: paginated list of all currently connected groups.\n"
-    "- <b>User Bans</b>: paginated list of all active federation bans, with a "
-    "<b>Search</b> option to look up a specific user by name or ID.\n"
-    "Each view has a <b>Back</b> button to return to the main summary.\n\n"
-    "<b>Example</b>\n"
-    "<code>/tcstats</code>"
+    "Live overview of the federation — Founder, staff count, active bans, "
+    "and connected groups — with drill-down menus."
 )
+
+__help_sections__: list[tuple[str, str]] = [
+    (
+        "Commands & Aliases",
+        "<code>/tcstats</code>",
+    ),
+    (
+        "Who can use",
+        "Anyone — no special permissions needed.",
+    ),
+    (
+        "Where to use",
+        "Bot PM, exec group, or any connected group.",
+    ),
+    (
+        "What it does",
+        "Shows a live overview of the federation: the Founder, total staff count, number of "
+        "active federation bans, and number of connected groups.",
+    ),
+    (
+        "Drill-downs",
+        "Three drill-down buttons are available below the summary:\n\n"
+        "- <b>Staff Roster</b>: full breakdown of all staff by role "
+        "(Founder, Admins, Developers, Testers).\n"
+        "- <b>Connected Chats</b>: paginated list of all currently connected groups.\n"
+        "- <b>User Bans</b>: paginated list of all active federation bans, with a "
+        "<b>Search</b> option to look up a specific user by name or ID.\n\n"
+        "Each view has a <b>Back</b> button to return to the main summary.",
+    ),
+    (
+        "Example",
+        "<code>/tcstats</code>",
+    ),
+]
 
 
 # ──────────────────────── Helper Functions ──────────────────────── #

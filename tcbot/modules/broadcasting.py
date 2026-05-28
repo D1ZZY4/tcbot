@@ -26,24 +26,40 @@ log = logging.getLogger(__name__)
 
 __module_name__ = "Broadcast"
 __help_text__ = (
-    "<b>Commands & Aliases</b>\n"
-    "<code>/tcbroadcast</code> (alias: <code>/bc</code>)\n\n"
-    "<b>Who can use it</b>\n"
-    "TC Staff (Admin and above).\n\n"
-    "<b>Where to use it</b>\n"
-    "Exec group or bot PM.\n\n"
-    "<b>What it does</b>\n"
-    f"Sends a message to every group currently connected to {cfg.community_name}. "
-    "You can compose the message in two ways:\n"
-    "- Type the message directly after the command (HTML formatting is supported).\n"
-    "- Reply to an existing message with <code>/bc</code> to forward that message to all groups.\n\n"
-    "When the broadcast is complete, the bot shows a summary of how many groups received the "
-    "message and how many deliveries failed, and posts a log entry to the federation logs channel.\n\n"
-    "<b>Examples</b>\n"
-    "<code>/tcbroadcast Reminder: please review the community rules before posting.</code>\n"
-    "<code>/bc <b>Event tonight</b> - join us in the main group at 8 PM UTC.</code>\n"
-    "Or reply to any message and run <code>/bc</code> to forward it to all groups."
+    f"Sends a message to every group currently connected to {cfg.community_name}."
 )
+
+__help_sections__: list[tuple[str, str]] = [
+    (
+        "Commands & Aliases",
+        "<code>/tcbroadcast</code> (alias: <code>/bc</code>)",
+    ),
+    (
+        "Who can use",
+        "TC Staff (Admin and above).",
+    ),
+    (
+        "Where to use",
+        "Exec group or bot PM.",
+    ),
+    (
+        "What it does",
+        f"Sends a message to every group currently connected to {cfg.community_name}.\n\n"
+        f"You can compose the message in two ways:\n"
+        f"- Type the message directly after the command (HTML formatting is supported).\n"
+        f"- Reply to an existing message with <code>/bc</code> to forward that message "
+        f"to all groups.\n\n"
+        f"When the broadcast is complete, the bot shows a summary of how many groups "
+        f"received the message and how many deliveries failed, and posts a log entry "
+        f"to the federation logs channel.",
+    ),
+    (
+        "Examples",
+        "<code>/tcbroadcast Reminder: please review the community rules.</code>\n"
+        "<code>/bc &lt;b&gt;Event tonight&lt;/b&gt; — join us at 8 PM UTC.</code>\n"
+        "Or reply to any message and run <code>/bc</code> to forward it to all groups.",
+    ),
+]
 
 
 # ──────────────── Command Broadcast </tcbroadcast> ──────────────── #

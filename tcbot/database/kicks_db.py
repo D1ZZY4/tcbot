@@ -33,3 +33,20 @@ async def log_kick(user_id: int, chat_id: int, reason: str, admin_id: int) -> No
             "timestamp": utc_now(),
         }
     )
+
+
+# ─────────────────────── Per-user history ───────────────────────── #
+
+
+async def user_kicks(user_id: int) -> list[dict]:
+    """Return every kick record for a user, newest first."""
+    return (
+        await _kicks()
+        .find({"user_id": user_id}, sort=[("timestamp", -1)])
+        .to_list(None)
+    )
+
+
+async def user_kick_count(user_id: int) -> int:
+    """Count every kick ever logged against the user."""
+    return await _kicks().count_documents({"user_id": user_id})

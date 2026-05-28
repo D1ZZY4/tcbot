@@ -2,11 +2,10 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Help command and callback handlers – renders module help index and topics."""
+"""Help command and callback handlers – renders module help index, module overview, and per-section topics."""
 
 from __future__ import annotations
 
-import asyncio
 import importlib
 import logging
 
@@ -16,6 +15,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot.modules import ALL_MODULES
 from tcbot.modules.helper import decorators, keyboards
+from tcbot.modules.helper.parse_editmsg import safe_edit_cb
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
@@ -26,16 +26,23 @@ __module_name__ = None
 # ────────────────────── Help Content Builder ────────────────────── #
 
 
-def _builder_help() -> dict[str, tuple[str, str]]:
-    """Collect module help entries from all loaded modules."""
-    content: dict[str, tuple[str, str]] = {}
+def _builder_help() -> dict[str, tuple[str, str, list[tuple[str, str]]]]:
+    """Collect help content from every loaded module.
+
+    Returns a dict keyed by ``help_<module>`` mapping to
+    ``(display_name, overview_text, sections)``.
+    """
+    content: dict[str, tuple[str, str, list[tuple[str, str]]]] = {}
     for mod_name in ALL_MODULES:
         try:
             mod = importlib.import_module(f"tcbot.modules.{mod_name}")
             name = getattr(mod, "__module_name__", None)
             text = getattr(mod, "__help_text__", None)
+            sections: list[tuple[str, str]] = list(
+                getattr(mod, "__help_sections__", []) or []
+            )
             if name and text:
-                content[f"help_{mod_name}"] = (name, text)
+                content[f"help_{mod_name}"] = (name, text, sections)
         except Exception as exc:
             log.warning("Could not read help from %s: %s", mod_name, exc)
     return content
@@ -47,7 +54,7 @@ HELP_CONTENT = _builder_help()
 
 # * Sorted by display name (case-insensitive)
 _TOPICS_SORTED: list[tuple[str, str]] = sorted(
-    ((name, key) for key, (name, _) in HELP_CONTENT.items()),
+    ((name, key) for key, (name, _, _) in HELP_CONTENT.items()),
     key=lambda t: t[0].lower(),
 )
 
@@ -61,14 +68,14 @@ HELP_TOPICS_CMD: list[tuple[str, str]] = [
 
 # * Module name → help key mapping for /help <module> lookup
 _MODULE_NAME_MAP: dict[str, str] = {}
-for _key, (_dname, _) in HELP_CONTENT.items():
+for _key, (_dname, _, _) in HELP_CONTENT.items():
     _module_slug = _key[5:]
     _MODULE_NAME_MAP[_module_slug.lower()] = _key
     _MODULE_NAME_MAP[_dname.lower()] = _key
 
 _HELP_INDEX_TEXT = (
     "<b>{botname} Help</b>\n"
-    f"I manages groups connected on {cfg.community_name}.\n\n"
+    f"I manage groups connected on {cfg.community_name}.\n\n"
     "Select a topic below, or use <code>/help &lt;module&gt;</code> for direct access."
 )
 
@@ -80,6 +87,24 @@ def _prefix_note() -> str:
     """Return an HTML footer listing every configured command prefix."""
     codes = " ".join(f"<code>{p}</code>" for p in cfg.prefixes)
     return f"\n<b>Note:</b> All commands also work with {codes}"
+
+
+def _section_buttons(
+    mod_slug: str,
+    sections: list[tuple[str, str]],
+    *,
+    is_menu_path: bool,
+) -> list[tuple[str, str]]:
+    """Build (label, callback_data) pairs for each section."""
+    prefix = "helps_" if is_menu_path else "helpcs_"
+    return [
+        (label, f"{prefix}{mod_slug}:{idx}") for idx, (label, _) in enumerate(sections)
+    ]
+
+
+def _module_text(name: str, overview: str) -> str:
+    """Compose the module-overview HTML body."""
+    return f"<b>Help for {name}</b>\n\n{overview}\n{_prefix_note()}"
 
 
 async def _render_help_index(
@@ -96,32 +121,86 @@ async def _render_help_index(
         if with_back_to_start
         else keyboards.help_topics_kb(HELP_TOPICS_CMD)
     )
-    await asyncio.gather(
-        q.answer(),
-        q.edit_message_text(
-            _HELP_INDEX_TEXT.format(botname=botname),
-            parse_mode="HTML",
-            reply_markup=kb,
-        ),
+    await q.answer()
+    await safe_edit_cb(
+        q,
+        _HELP_INDEX_TEXT.format(botname=botname),
+        reply_markup=kb,
     )
 
 
-async def _show_topic(q: CallbackQuery, menu_key: str, back_kb) -> None:
-    """Render a help topic and edit the current message in place."""
+async def _show_module(
+    q: CallbackQuery,
+    menu_key: str,
+    *,
+    is_menu_path: bool,
+) -> None:
+    """Render a module overview with sub-section buttons + back to help index."""
     if menu_key not in HELP_CONTENT:
-        await asyncio.gather(
-            q.answer(),
-            q.edit_message_text("Topic not found.", reply_markup=back_kb),
+        back_kb = (
+            keyboards.back_to_help_kb()
+            if is_menu_path
+            else keyboards.back_to_help_cmd_kb()
+        )
+        await q.answer()
+        await safe_edit_cb(q, "Topic not found.", reply_markup=back_kb)
+        return
+
+    name, overview, sections = HELP_CONTENT[menu_key]
+    mod_slug = menu_key[5:]  # strip "help_"
+
+    back_cb = "help_menu" if is_menu_path else "helpc_main"
+    if sections:
+        section_btns = _section_buttons(mod_slug, sections, is_menu_path=is_menu_path)
+        kb = keyboards.module_help_kb(section_btns, back_callback=back_cb)
+    else:
+        kb = (
+            keyboards.back_to_help_kb()
+            if is_menu_path
+            else keyboards.back_to_help_cmd_kb()
+        )
+
+    await q.answer()
+    await safe_edit_cb(q, _module_text(name, overview), reply_markup=kb)
+
+
+async def _show_section(
+    q: CallbackQuery,
+    mod_slug: str,
+    idx: int,
+    *,
+    is_menu_path: bool,
+) -> None:
+    """Render a single help section + back-to-module button."""
+    menu_key = f"help_{mod_slug}"
+    back_module_cb = ("help_" if is_menu_path else "helpc_") + mod_slug
+
+    if menu_key not in HELP_CONTENT:
+        await q.answer()
+        await safe_edit_cb(
+            q,
+            "Topic not found.",
+            reply_markup=keyboards.back_to_module_kb(back_module_cb),
         )
         return
-    name, text = HELP_CONTENT[menu_key]
-    await asyncio.gather(
-        q.answer(),
-        q.edit_message_text(
-            f"<b>Help for {name}</b>\n\n{text}\n{_prefix_note()}",
-            parse_mode="HTML",
-            reply_markup=back_kb,
-        ),
+
+    name, _, sections = HELP_CONTENT[menu_key]
+    if idx < 0 or idx >= len(sections):
+        await q.answer()
+        await safe_edit_cb(
+            q,
+            "Section not found.",
+            reply_markup=keyboards.back_to_module_kb(back_module_cb),
+        )
+        return
+
+    label, content = sections[idx]
+    body = f"<b>{name} › {label}</b>\n\n{content}"
+    await q.answer()
+    await safe_edit_cb(
+        q,
+        body,
+        reply_markup=keyboards.back_to_module_kb(back_module_cb),
     )
 
 
@@ -140,11 +219,17 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         help_key = _MODULE_NAME_MAP.get(query)
 
         if help_key and help_key in HELP_CONTENT:
-            name, text = HELP_CONTENT[help_key]
+            name, overview, sections = HELP_CONTENT[help_key]
+            mod_slug = help_key[5:]
+            if sections:
+                section_btns = _section_buttons(mod_slug, sections, is_menu_path=False)
+                kb = keyboards.module_help_kb(section_btns, back_callback="helpc_main")
+            else:
+                kb = keyboards.back_to_help_cmd_kb()
             await update.effective_message.reply_text(
-                f"<b>Help for {name}</b>\n\n{text}\n{_prefix_note()}",
+                _module_text(name, overview),
                 parse_mode="HTML",
-                reply_markup=keyboards.back_to_help_cmd_kb(),
+                reply_markup=kb,
             )
             return
 
@@ -197,12 +282,30 @@ async def on_helpc_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_help_topic_any(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle help_<mod> and helpc_<mod> callbacks, routing to the correct topic."""
+    """Handle help_<mod> and helpc_<mod> module overview callbacks."""
     q: CallbackQuery = update.callback_query
-    if q.data.startswith("helpc_"):
-        await _show_topic(q, "help_" + q.data[6:], keyboards.back_to_help_cmd_kb())
+    data = q.data
+    if data.startswith("helpc_"):
+        await _show_module(q, "help_" + data[6:], is_menu_path=False)
     else:
-        await _show_topic(q, q.data, keyboards.back_to_help_kb())
+        await _show_module(q, data, is_menu_path=True)
+
+
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
+async def on_help_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle helps_<mod>:<idx> and helpcs_<mod>:<idx> section callbacks."""
+    q: CallbackQuery = update.callback_query
+    data = q.data
+    is_menu_path = data.startswith("helps_")
+    body = data[6:] if is_menu_path else data[7:]
+    try:
+        mod_slug, idx_str = body.split(":", 1)
+        idx = int(idx_str)
+    except (ValueError, IndexError):
+        await q.answer("Invalid section.", show_alert=True)
+        return
+    await _show_section(q, mod_slug, idx, is_menu_path=is_menu_path)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #
@@ -214,5 +317,8 @@ __handlers__ = [
     CallbackQueryHandler(on_help_menu, pattern=r"^help_menu$"),
     CallbackQueryHandler(on_help_menu_group, pattern=r"^help_menu_group$"),
     CallbackQueryHandler(on_helpc_main, pattern=r"^helpc_main$"),
+    # * Section callbacks (helps_<mod>:<idx> / helpcs_<mod>:<idx>) registered before
+    # * the module-level catch-all so the more-specific pattern wins.
+    CallbackQueryHandler(on_help_section, pattern=r"^helps?cs?_\w+:\d+$"),
     CallbackQueryHandler(on_help_topic_any, pattern=r"^(help|helpc)_\w+$"),
 ]

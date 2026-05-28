@@ -16,9 +16,7 @@ from telegram.ext import (
     Application,
     ApplicationBuilder,
     ContextTypes,
-    MessageHandler,
     TypeHandler,
-    filters,
 )
 
 from tcbot import cfg
@@ -30,29 +28,22 @@ from tcbot.modules import get_handlers
 from tcbot.modules.helper.decorators import global_rate_limit_handler
 from tcbot.utils import error_reporter
 from tcbot.utils.logger import setup as setup_logging
-from tcbot.utils.prefixes import ANY_CMD_FILTER
 
 log = logging.getLogger(__name__)
 
 
 # ────────────────── Member Cache Update (layer 1) ───────────────── #
-# * Updates user profile cache for every message in connected groups
-# * Runs in low-priority group to avoid interfering with command handlers
+# * Caches the effective_user from every update so log messages and mention
+# * links resolve to real names instead of falling back to numeric IDs.
 
 
 async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Update the member cache with the sender's profile info for every group message."""
-    chat = update.effective_chat
+    """Cache the effective_user from any update — bot-issued events are skipped."""
     user = update.effective_user
-
     if not user or user.is_bot:
         return
-    if not chat or chat.type not in ("group", "supergroup"):
+    if not user.first_name:
         return
-
-    if not await db.groups_db.is_connected(chat.id):
-        return
-
     try:
         await db.users_db.upsert_user(
             user.id, user.username, user.first_name, user.last_name
@@ -207,15 +198,10 @@ def main() -> None:
         for handler in get_handlers():
             app.add_handler(handler)
 
-        # * Low-priority handler: update member cache on every group message.
-        # * ~ANY_CMD_FILTER excludes custom-prefix commands (!, .) - /commands pass through.
-        app.add_handler(
-            MessageHandler(
-                filters.ChatType.GROUPS & filters.TEXT & ~ANY_CMD_FILTER,
-                _update_member_cache,
-            ),
-            group=10,
-        )
+        # * Low-priority handler: cache every effective_user we observe.
+        # * Runs on every update (messages, callback queries, my_chat_member)
+        # * so future log messages and mention links resolve to real names.
+        app.add_handler(TypeHandler(Update, _update_member_cache), group=10)
 
         # * Layer 2: PTB global error handler - catches all unhandled handler exceptions
         app.add_error_handler(_error_handler)

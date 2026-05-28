@@ -40,39 +40,57 @@ log = logging.getLogger(__name__)
 
 __module_name__ = "Warnings"
 __help_text__ = (
-    "<b>Commands & Aliases</b>\n"
-    f"<code>/tcwarn</code> (alias: <code>/tcw</code>)\n"
-    f"<code>/tcunwarn</code> (alias: <code>/tcunw</code>)\n"
-    "<code>/warns</code> (alias: <code>/warnlist</code>)\n"
-    "<code>/resetwarns</code> (alias: <code>/clearwarns</code>)\n\n"
-    "<b>Who can use it</b>\n"
-    f"<code>/tcwarn</code>, <code>/tcunwarn</code>, <code>/resetwarns</code>: Tester and above.\n"
-    "<code>/warns</code>: anyone.\n\n"
-    "<b>Where to use it</b>\n"
-    "Inside any connected group.\n\n"
-    "<b>What it does</b>\n"
-    f"<code>/tcwarn</code>: issues a formal warning to a user in the current group. "
-    "Warnings are tracked <b>per-group</b> and do not carry across connected groups. "
-    f"At <b>{WARN_LIMIT} warnings</b>, the user is automatically banned from the group "
-    "and their warning record is cleared.\n\n"
-    "<code>/tcunwarn</code>: removes the user's most recent warning in the current group.\n\n"
-    "<code>/warns</code>: shows the current warning count and full list of reasons "
-    "for a user in the current group.\n\n"
-    "<code>/resetwarns</code>: clears all warnings for a user in the current group at once, "
-    "without triggering the ban threshold.\n\n"
-    "<b>Flow (/tcwarn)</b>\n"
-    "1. Run <code>/tcwarn</code> with the target (and optional inline reason).\n"
-    "2. If no reason was given, the bot asks - reply with text.\n"
-    "3. The bot asks for proof - send a photo/video or tap <b>Skip</b> to warn without proof.\n\n"
-    "<b>How to specify the target</b>\n"
-    "Reply to a message, or provide a user ID / @username after the command.\n\n"
-    "<b>Examples</b>\n"
-    "<code>/tcwarn @username spamming</code> - reason inline\n"
-    "<code>/tcw 123456789</code> - bot will ask for reason\n"
-    "<code>/tcunwarn @username</code>\n"
-    "<code>/warns @username</code>\n"
-    "<code>/resetwarns @username</code>"
+    "Per-group warning tracking. At "
+    f"<b>{WARN_LIMIT} warnings</b> the user is automatically banned from the group "
+    "and their record cleared."
 )
+
+__help_sections__: list[tuple[str, str]] = [
+    (
+        "Commands & Aliases",
+        "<code>/tcwarn</code> (alias: <code>/tcw</code>)\n"
+        "<code>/tcunwarn</code> (alias: <code>/tcunw</code>)\n"
+        "<code>/warns</code> (alias: <code>/warnlist</code>)\n"
+        "<code>/resetwarns</code> (alias: <code>/clearwarns</code>)",
+    ),
+    (
+        "Who can use",
+        "<b>/tcwarn</b>, <b>/tcunwarn</b>, <b>/resetwarns</b>: Tester and above.\n"
+        "<b>/warns</b>: anyone.",
+    ),
+    (
+        "Where to use",
+        "Inside any connected group.",
+    ),
+    (
+        "What it does",
+        f"<b>/tcwarn</b>: issues a formal warning. Warnings are tracked <b>per-group</b> and "
+        f"do not carry across connected groups. At <b>{WARN_LIMIT} warnings</b>, the user is "
+        f"automatically banned from the group and their warning record is cleared.\n\n"
+        f"<b>/tcunwarn</b>: removes the user's most recent warning in the current group.\n\n"
+        f"<b>/warns</b>: shows the current warning count and full list of reasons.\n\n"
+        f"<b>/resetwarns</b>: clears all warnings for a user in the current group at once, "
+        f"without triggering the ban threshold.",
+    ),
+    (
+        "Flow (/tcwarn)",
+        "1. Run <code>/tcwarn</code> with the target (and optional inline reason).\n"
+        "2. If no reason was given, the bot asks - reply with text.\n"
+        "3. The bot asks for proof - send a photo/video or tap <b>Skip</b>.",
+    ),
+    (
+        "Target syntax",
+        "Reply to a message, or provide a user ID / @username after the command.",
+    ),
+    (
+        "Examples",
+        "<code>/tcwarn @username spamming</code> — reason inline\n"
+        "<code>/tcw 123456789</code> — bot will ask for reason\n"
+        "<code>/tcunwarn @username</code>\n"
+        "<code>/warns @username</code>\n"
+        "<code>/resetwarns @username</code>",
+    ),
+]
 
 
 # ──────────────────────── Helper Functions ──────────────────────── #
