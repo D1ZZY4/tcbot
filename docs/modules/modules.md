@@ -65,7 +65,7 @@ These modules usually set `__module_name__ = None` so they are not listed as sep
 
 ### Message commands
 
-Most commands use `build_prefixed_filters()` so `/`, `!`, `.`, and configured prefixes work consistently.
+Most commands use `build_prefixed_filters()` so `/`, `!`, `.`, and configured prefixes work consistently. Command matching is case-sensitive and lowercase-only, and `@BotName` suffixes are accepted only when they target the current bot.
 
 ```python
 _BAN_CMDS = build_prefixed_filters("tcban") | build_prefixed_filters("tcb")

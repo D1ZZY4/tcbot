@@ -29,13 +29,13 @@ Command prefix support is centralized here.
 
 | Export | Purpose |
 |---|---|
-| `build_prefixed_filters(command)` | Builds a PTB regex filter matching any configured prefix plus the command. |
+| `build_prefixed_filters(command)` | Builds a PTB message filter matching any configured prefix plus an exact lowercase command. |
 | `parse_cmd_args(text)` | Returns command arguments after the first whitespace. |
 | `register_command(name, callback)` | Registers an async callback for alternate-prefix dispatch. |
-| `dispatch_alt_prefix(update, context)` | Dispatches `!cmd` / `.cmd` style messages from the registry. |
+| `dispatch_alt_prefix(update, context)` | Dispatches configured non-slash prefix commands from the registry. |
 | `ANY_CMD_FILTER` / related filters | Shared command-detection filters used to avoid treating commands as plain text. |
 
-`PREFIXES` supports a Python-style list such as `["/", "!", "."]` and falls back to common prefixes when unset.
+`PREFIXES` supports a Python-style list such as `["/", "!", "."]` and falls back to common prefixes when unset. Prefix filters are case-sensitive, accept lowercase ASCII command names, and only accept `@BotName` suffixes that target the current bot.
 
 ## `logger.py`
 
