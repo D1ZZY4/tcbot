@@ -1,5 +1,7 @@
 # Core Index Principles
 
+For the parent skill instructions, see [`../SKILL.md`](../SKILL.md). For project database layer, see [`../../../../docs/databases/databases.md`](../../../../docs/databases/databases.md).
+
 ### Compound Index Guidelines
 
 The first field of the index should be in the query's filter or sort condition.

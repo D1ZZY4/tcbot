@@ -1,5 +1,7 @@
 # Class Diagrams
 
+For the parent skill instructions, see [`../SKILL.md`](../SKILL.md). For other Mermaid diagram references, see siblings in [`../references/`](../references/).
+
 Class diagrams model object-oriented designs and domain models. They show entities (classes), their attributes/methods, and relationships.
 
 ## Basic Syntax

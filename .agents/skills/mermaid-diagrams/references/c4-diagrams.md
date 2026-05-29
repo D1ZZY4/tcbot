@@ -1,5 +1,7 @@
 # C4 Model Diagrams
 
+For the parent skill instructions, see [`../SKILL.md`](../SKILL.md). For other Mermaid diagram references, see siblings in [`../references/`](../references/).
+
 The C4 model provides a hierarchical way to visualize software architecture at different levels of abstraction: Context, Containers, Components, and Code.
 
 ## C4 Model Levels

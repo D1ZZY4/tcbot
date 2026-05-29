@@ -1,5 +1,7 @@
 # Project Mapping
 
+For project overview, see [`../README.md`](../README.md). For runtime state and priorities, see [`../PLAN.md`](../PLAN.md). For module breakdown, see [`modules/modules.md`](modules/modules.md). For database layer, see [`databases/databases.md`](databases/databases.md). For shared helpers, see [`helper/helper.md`](helper/helper.md). For runtime utilities, see [`utils/utils.md`](utils/utils.md).
+
 This page maps the repository structure and the service boundaries between packages.
 
 ## Top-level layout

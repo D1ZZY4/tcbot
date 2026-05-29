@@ -1,5 +1,7 @@
 # Principles
 
+For the parent skill instructions, see [`../SKILL.md`](../SKILL.md). For project database layer, see [`../../../../docs/databases/databases.md`](../../../../docs/databases/databases.md).
+
 Aggregation pipelines process documents through sequential stages. Focus on:
 
 - Reducing documents early in the pipeline

@@ -73,14 +73,14 @@ Sub-agent quick guide (read prompt before delegating):
 
 | Sub-agent | Use when |
 |---|---|
-| [`coordinator`](.agents/coordinator.md) | A multi-step task needs a written plan with dependencies before starting |
-| [`debug-investigator`](.agents/debug-investigator.md) | Tracing a non-obvious bug across many files where a fresh-eyes pass would help |
-| [`docs-and-skills-editor`](.agents/docs-and-skills-editor.md) | Bulk doc reorganization or skill rewrites — only if the scope is genuinely big |
-| [`general-operator`](.agents/general-operator.md) | A self-contained task that can run end-to-end without the main agent's context |
-| [`implementation-helper`](.agents/implementation-helper.md) | A clearly-spec'd feature implementation that can run independently |
-| [`project-explorer`](.agents/project-explorer.md) | Open-ended codebase research where the answer needs many file reads |
-| [`review-guardian`](.agents/review-guardian.md) | Independent review of a finished change before commit |
-| [`validation-runner`](.agents/validation-runner.md) | Running and parsing tests / Ruff / build for a finished change |
+| [`coordinator`](agents/coordinator.md) | A multi-step task needs a written plan with dependencies before starting |
+| [`debug-investigator`](agents/debug-investigator.md) | Tracing a non-obvious bug across many files where a fresh-eyes pass would help |
+| [`docs-and-skills-editor`](agents/docs-and-skills-editor.md) | Bulk doc reorganization or skill rewrites — only if the scope is genuinely big |
+| [`general-operator`](agents/general-operator.md) | A self-contained task that can run end-to-end without the main agent's context |
+| [`implementation-helper`](agents/implementation-helper.md) | A clearly-spec'd feature implementation that can run independently |
+| [`project-explorer`](agents/project-explorer.md) | Open-ended codebase research where the answer needs many file reads |
+| [`review-guardian`](agents/review-guardian.md) | Independent review of a finished change before commit |
+| [`validation-runner`](agents/validation-runner.md) | Running and parsing tests / Ruff / build for a finished change |
 
 For anything that one focused agent can finish in a few tool calls, **do not spawn a sub-agent**. The user prefers a slightly slower main agent to a fast-but-noisy sub-agent fleet.
 

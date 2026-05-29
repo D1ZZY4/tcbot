@@ -1,6 +1,8 @@
 # Python Code Quality — TCBot Reference
 
-Updated: 2026-05-28
+For the parent skill instructions, see [`SKILL.md`](SKILL.md). For the canonical project rules this reference enforces, see [`../../CLAUDE.md`](../../CLAUDE.md) and [`../../RULES.md`](../../RULES.md).
+
+Updated: 2026-05-29
 
 This reference supports the `python-code-quality` skill for the TCF Bot repository. It reflects the current project stack: Python 3.12, `uv`, Ruff, pytest, pytest-asyncio, `python-telegram-bot` 22.5, Motor/MongoDB, and Flask keepalive.
 

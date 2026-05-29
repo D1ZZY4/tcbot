@@ -1,5 +1,7 @@
 # Sequence Diagrams
 
+For the parent skill instructions, see [`../SKILL.md`](../SKILL.md). For other Mermaid diagram references, see siblings in [`../references/`](../references/).
+
 Sequence diagrams show interactions between participants over time. They're ideal for API flows, authentication sequences, and system component interactions.
 
 ## Basic Syntax

@@ -1,6 +1,8 @@
 # Async Python Patterns — TCBot Reference
 
-Updated: 2026-05-28
+For the parent skill instructions, see [`../SKILL.md`](../SKILL.md). For the canonical project async/fan-out rules, see [`../../../CLAUDE.md`](../../../CLAUDE.md). For database patterns referenced here, see [`../../mongodb-query-optimizer/SKILL.md`](../../mongodb-query-optimizer/SKILL.md).
+
+Updated: 2026-05-29
 
 This reference expands the `async-python-patterns` skill with practical examples for TCBot's Python 3.12, `python-telegram-bot` 22.5, Motor/MongoDB, and pytest-asyncio stack.
 

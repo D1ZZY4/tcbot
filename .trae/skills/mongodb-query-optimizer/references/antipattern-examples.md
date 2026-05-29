@@ -1,3 +1,7 @@
+# MongoDB Antipattern Examples
+
+For the parent skill instructions, see [`../SKILL.md`](../SKILL.md). For project database layer, see [`../../../../docs/databases/databases.md`](../../../../docs/databases/databases.md).
+
 ## $exists on Regular Index vs. Sparse Index
 
 **Bad** — `$exists: true` on a regular index still requires a document fetch:

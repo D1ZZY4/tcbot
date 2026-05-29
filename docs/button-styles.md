@@ -1,5 +1,7 @@
 # Inline Keyboard & Button Reference
 
+For module structure, see [`modules/modules.md`](modules/modules.md). For shared helpers (including the keyboard factory), see [`helper/helper.md`](helper/helper.md). For conversation flows that consume these keyboards, see [`workflows/workflows.md`](workflows/workflows.md).
+
 Every inline keyboard the bot sends is built from a factory in
 `tcbot/modules/helper/keyboards.py` or a workflow-local helper next to the flow
 that owns the state. This document is the single source of truth for callback

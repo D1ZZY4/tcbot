@@ -1,5 +1,7 @@
 # Git Commit Style
 
+For contributor PR guidance, see [`../AGENTS.md`](../AGENTS.md#commit-and-pull-request-guidance). For automated CI/CD that runs on commits, see [`workflows-guide.md`](workflows-guide.md).
+
 Use focused commits that describe one logical change.
 
 ## Subject line

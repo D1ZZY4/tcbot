@@ -1,5 +1,7 @@
 # Architecture Diagrams Reference
 
+For the parent skill instructions, see [`../SKILL.md`](../SKILL.md). For other Mermaid diagram references, see siblings in [`../references/`](../references/).
+
 Architecture diagrams visualize cloud services, CI/CD deployments, and infrastructure relationships. Introduced in Mermaid v11.1.0.
 
 ## Basic Syntax

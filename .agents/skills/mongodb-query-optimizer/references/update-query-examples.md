@@ -1,5 +1,7 @@
 # Update Query Examples
 
+For the parent skill instructions, see [`../SKILL.md`](../SKILL.md). For project database layer, see [`../../../../docs/databases/databases.md`](../../../../docs/databases/databases.md).
+
 ## replaceOne vs. updateOne with $replaceWith
 
 **Bad** — Full document replacement generates a large oplog entry:

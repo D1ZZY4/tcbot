@@ -1,5 +1,7 @@
 # Mermaid Diagrams Skill
 
+For the project-tailored skill instructions, see [`SKILL.md`](SKILL.md). For diagram-type references, see [`references/architecture-diagrams.md`](references/architecture-diagrams.md), [`references/sequence-diagrams.md`](references/sequence-diagrams.md), [`references/flowcharts.md`](references/flowcharts.md), [`references/erd-diagrams.md`](references/erd-diagrams.md), [`references/class-diagrams.md`](references/class-diagrams.md), [`references/c4-diagrams.md`](references/c4-diagrams.md), [`references/advanced-features.md`](references/advanced-features.md).
+
 A comprehensive guide for creating professional software diagrams using Mermaid's text-based syntax. This skill enables you to visualize system architecture, document code structure, model databases, and communicate technical concepts through diagrams.
 
 ## Purpose

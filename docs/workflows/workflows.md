@@ -1,5 +1,7 @@
 # Workflow Internals
 
+For modules that register these conversation handlers, see [`../modules/modules.md`](../modules/modules.md). For shared helpers (formatter, decorators, extraction), see [`../helper/helper.md`](../helper/helper.md). For database helpers consumed by these flows, see [`../databases/databases.md`](../databases/databases.md). For per-feature flow details, see [`../banning-detailed.md`](../banning-detailed.md), [`../warnings-detailed.md`](../warnings-detailed.md), [`../appeal-detailed.md`](../appeal-detailed.md), [`../promote-detailed.md`](../promote-detailed.md), [`../demote-detailed.md`](../demote-detailed.md).
+
 Conversation and multi-step logic lives in `tcbot/modules/helper/workflows/`. New conversation files must be named `*_flow.py`; do not create `*_conv.py` files.
 
 ## Package rules

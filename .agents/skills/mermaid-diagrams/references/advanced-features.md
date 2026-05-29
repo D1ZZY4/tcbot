@@ -1,5 +1,7 @@
 # Advanced Mermaid Features
 
+For the parent skill instructions, see [`../SKILL.md`](../SKILL.md). For other Mermaid diagram references, see siblings in [`../references/`](../references/).
+
 Advanced configuration, styling, theming, and other powerful features for creating professional diagrams.
 
 ## Frontmatter Configuration

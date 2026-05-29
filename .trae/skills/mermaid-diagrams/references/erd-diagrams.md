@@ -1,5 +1,7 @@
 # Entity Relationship Diagrams (ERD)
 
+For the parent skill instructions, see [`../SKILL.md`](../SKILL.md). For other Mermaid diagram references, see siblings in [`../references/`](../references/).
+
 ERDs model database schemas, showing tables (entities), their columns (attributes), and relationships between tables. Essential for database design and documentation.
 
 ## Basic Syntax
