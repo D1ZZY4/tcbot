@@ -109,15 +109,16 @@ async def get_user_mention_data(user_id: int) -> tuple[str, str | None]:
     avoiding full document retrieval.
     """
     doc = await _users().find_one(
-        {"user_id": user_id},
-        {"first_name": 1, "username": 1}
+        {"user_id": user_id}, {"first_name": 1, "username": 1}
     )
     if doc:
         return doc.get("first_name") or f"User {user_id}", doc.get("username")
     return f"User {user_id}", None
 
 
-async def get_mention_data_batch(user_ids: list[int]) -> dict[int, tuple[str, str | None]]:
+async def get_mention_data_batch(
+    user_ids: list[int],
+) -> dict[int, tuple[str, str | None]]:
     """Fetch (first_name, username) for multiple users in a single query.
 
     Optimized batch query that replaces multiple individual get_user_mention_data()
@@ -125,15 +126,20 @@ async def get_mention_data_batch(user_ids: list[int]) -> dict[int, tuple[str, st
     """
     if not user_ids:
         return {}
-    docs = await _users().find(
-        {"user_id": {"$in": user_ids}},
-        {"user_id": 1, "first_name": 1, "username": 1}
-    ).to_list(None)
+    docs = (
+        await _users()
+        .find(
+            {"user_id": {"$in": user_ids}},
+            {"user_id": 1, "first_name": 1, "username": 1},
+        )
+        .to_list(None)
+    )
     result = {
         doc["user_id"]: (
             doc.get("first_name") or f"User {doc['user_id']}",
-            doc.get("username")
-        ) for doc in docs
+            doc.get("username"),
+        )
+        for doc in docs
     }
     # Fill in missing users with defaults
     for uid in user_ids:
@@ -150,10 +156,11 @@ async def get_first_names_batch(user_ids: list[int]) -> dict[int, str]:
     """
     if not user_ids:
         return {}
-    docs = await _users().find(
-        {"user_id": {"$in": user_ids}},
-        {"user_id": 1, "first_name": 1}
-    ).to_list(None)
+    docs = (
+        await _users()
+        .find({"user_id": {"$in": user_ids}}, {"user_id": 1, "first_name": 1})
+        .to_list(None)
+    )
     result = {
         doc["user_id"]: doc.get("first_name") or f"User {doc['user_id']}"
         for doc in docs

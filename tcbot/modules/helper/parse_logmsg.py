@@ -46,7 +46,9 @@ class LogBuilder:
         self._lines.append(f"{label}: {code(str(value))}")
         return self
 
-    def mention_field(self, label: str, user_id: int, name: str, username: str | None = None) -> LogBuilder:
+    def mention_field(
+        self, label: str, user_id: int, name: str, username: str | None = None
+    ) -> LogBuilder:
         """Append a `Label: mention(user_id, name, username)` line."""
         self._lines.append(f"{label}: {mention(user_id, name, username)}")
         return self
@@ -76,7 +78,9 @@ class LogBuilder:
         id_label: str = "User ID",
     ) -> LogBuilder:
         """Append the canonical `Label: mention` + `User ID: <id>` pair."""
-        self._lines.append(f"{user_label}: {mention(target_id, target_fname, target_username)}")
+        self._lines.append(
+            f"{user_label}: {mention(target_id, target_fname, target_username)}"
+        )
         self._lines.append(f"{id_label}: {target_id}")
         return self
 

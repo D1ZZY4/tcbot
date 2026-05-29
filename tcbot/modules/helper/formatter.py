@@ -33,7 +33,7 @@ def mention(user_id: int, name: str, username: str | None = None) -> str:
     """
     if username:
         return f'<a href="https://t.me/{username}">{html.escape(str(name))}</a>'
-    return f'{html.escape(str(name))} <code>{user_id}</code>'
+    return f"{html.escape(str(name))} <code>{user_id}</code>"
 
 
 def esc(text: str) -> str:

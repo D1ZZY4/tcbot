@@ -97,11 +97,17 @@ async def classify(
     if target_id == executor_id:
         return Identity("self", target_id, target_fname, target_username, is_bot=False)
     if target_id == bot.id:
-        return Identity("this_bot", target_id, target_fname, target_username, is_bot=True)
+        return Identity(
+            "this_bot", target_id, target_fname, target_username, is_bot=True
+        )
     if target_id == TELEGRAM_USER_ID:
-        return Identity("telegram", target_id, target_fname, target_username, is_bot=False)
+        return Identity(
+            "telegram", target_id, target_fname, target_username, is_bot=False
+        )
     if target_is_bot:
-        return Identity("other_bot", target_id, target_fname, target_username, is_bot=True)
+        return Identity(
+            "other_bot", target_id, target_fname, target_username, is_bot=True
+        )
 
     role = await get_effective_role(target_id)
     if role == "founder":

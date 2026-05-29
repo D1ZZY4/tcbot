@@ -353,7 +353,9 @@ class Check:
 
         # * Resolve admin names with batch query
         admin_ids = [w.get("admin_id", 0) for w in chunk if w.get("admin_id")]
-        admin_name_map = await db.users_db.get_first_names_batch(admin_ids) if admin_ids else {}
+        admin_name_map = (
+            await db.users_db.get_first_names_batch(admin_ids) if admin_ids else {}
+        )
 
         lines = [
             f"{bold('Warnings in')} {esc(title)} — {len(warns)} total"

@@ -220,7 +220,7 @@ class Stats:
             lines.append(bold(f"{label} ({len(docs)})"))
             if docs:
                 for i, doc in enumerate(docs):
-                    uid = doc['user_id']
+                    uid = doc["user_id"]
                     fname, uname = mention_data_map[uid]
                     lines.append(f"- {mention(uid, fname, uname)}")
             else:
@@ -371,7 +371,6 @@ class Stats:
     @classmethod
     async def bans_list(cls, page: int) -> tuple[str, InlineKeyboardMarkup]:
         """Paginated list of every active federation ban."""
-        import asyncio
 
         bans = await db.bans_db.active_bans()
         chunk, total_pages, page = _paginate(bans, page)
@@ -496,7 +495,11 @@ class Stats:
         uids = [b.get("banned_user_id", 0) for b in bans]
         fname_map = await db.users_db.get_first_names_batch(uids)
         needle = q.lower()
-        return [b for b in bans if needle in fname_map.get(b.get("banned_user_id", 0), "").lower()]
+        return [
+            b
+            for b in bans
+            if needle in fname_map.get(b.get("banned_user_id", 0), "").lower()
+        ]
 
     @classmethod
     async def search_results(
