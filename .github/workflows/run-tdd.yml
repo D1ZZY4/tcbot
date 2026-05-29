@@ -20,6 +20,9 @@ on:
         default: true
         type: boolean
 
+permissions:
+  contents: read
+
 concurrency:
   group: tdd-${{ github.ref }}
   cancel-in-progress: true
