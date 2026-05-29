@@ -2,6 +2,8 @@
 
 This file is the top-level guide for agents and contributors working in this repository. It summarizes the current project layout, development commands, style rules, and safety requirements.
 
+For user-facing setup, see [`README.md`](README.md). For current project state and improvement plan, see [`PLAN.md`](PLAN.md). For Replit deployment, see [`replit.md`](replit.md). For detailed developer documentation, see [`docs/README.md`](docs/README.md).
+
 ## Project Overview
 
 TCF Bot is a Python Telegram bot for the Transsion Core Federation community. It manages federation-wide moderation actions, appeal workflows, staff roles, connected groups, audit logging, and health checks.
@@ -44,11 +46,11 @@ tgbot/
 
 Core ownership rules:
 
-- Command handlers live in `tcbot/modules/`.
-- Shared handler helpers live in `tcbot/modules/helper/`.
-- Conversation flows live in `tcbot/modules/helper/workflows/` and must be named `*_flow.py`.
-- MongoDB access lives in `tcbot/database/`; keep new database helpers in `*_db.py` files.
-- Runtime utilities live in `tcbot/utils/`.
+- Command handlers live in `tcbot/modules/`. See [`docs/modules/modules.md`](docs/modules/modules.md) for module boundaries.
+- Shared handler helpers live in `tcbot/modules/helper/`. See [`docs/helper/helper.md`](docs/helper/helper.md) for helper docs.
+- Conversation flows live in `tcbot/modules/helper/workflows/` and must be named `*_flow.py`. See [`docs/workflows/workflows.md`](docs/workflows/workflows.md) for conversation internals.
+- MongoDB access lives in `tcbot/database/`; keep new database helpers in `*_db.py` files. See [`docs/databases/databases.md`](docs/databases/databases.md) for database layer notes.
+- Runtime utilities live in `tcbot/utils/`. See [`docs/utils/utils.md`](docs/utils/utils.md) for utility docs.
 - Tests live in `tests/` and should remain fully offline.
 
 ## Development Commands
@@ -100,7 +102,7 @@ docker-compose up --build
 
 ## Configuration and Secrets
 
-Configuration is loaded from environment variables. For local development, `python-dotenv` loads `config.env` when present. For Replit or hosted deployment, store secrets in the platform secret manager instead of committing them.
+Configuration is loaded from environment variables. For local development, `python-dotenv` loads `config.env` when present. For Replit or hosted deployment, store secrets in the platform secret manager instead of committing them. See [`docs/setup.md`](docs/setup.md) for detailed setup instructions and [`replit.md`](replit.md) for Replit-specific notes.
 
 Never commit real credentials. Required secret values include:
 
@@ -125,7 +127,7 @@ Use `config.env.example` as the complete template.
 
 ## Code Style and Naming
 
-Follow the detailed rules in `agents/CLAUDE.md`, `agents/RULES.md`, `agents/STYLE-CODE.md`, and `agents/STYLE-COMMENTS.md` before editing source code.
+Follow the detailed rules in [`agents/CLAUDE.md`](agents/CLAUDE.md), [`agents/RULES.md`](agents/RULES.md), [`agents/STYLE-CODE.md`](agents/STYLE-CODE.md), and [`agents/STYLE-COMMENTS.md`](agents/STYLE-COMMENTS.md) before editing source code.
 
 Repository conventions:
 
@@ -170,6 +172,8 @@ uv run --extra test pytest --collect-only -q
 ```
 
 ## Commit and Pull Request Guidance
+
+For commit message conventions, see [`docs/git-commit.md`](docs/git-commit.md). For automated CI/CD and auto-PR workflows, see [`docs/workflows-guide.md`](docs/workflows-guide.md).
 
 Use focused commits and conventional prefixes when appropriate:
 

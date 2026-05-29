@@ -2,6 +2,23 @@
 
 This document describes the current promotion behavior implemented by `tcbot/modules/admins.py` (command + callback handlers) and `tcbot/modules/helper/workflows/promote_flow.py` (the `Promote` class and shared logic).
 
+For role hierarchy and rules, see [`role-detailed.md`](role-detailed.md). For demote (counterpart) flow, see [`demote-detailed.md`](demote-detailed.md). For shared helpers, see [`helper/helper.md`](helper/helper.md). For database layer, see [`databases/databases.md`](databases/databases.md).
+
+```mermaid
+flowchart TD
+    Cmd[/tcpromote command/] --> Permission{Founder/Admin check}
+    Permission -->|denied| End1[Reject]
+    Permission -->|allowed| Resolve[Resolve target + role]
+    Resolve --> Direct{Direct path?}
+    Direct -->|Founder direct| Apply[Apply role]
+    Direct -->|Admin requesting| Queue[Add to promotion queue]
+    Queue --> NotifyFounder[Notify Founder]
+    NotifyFounder --> FounderDecision{Founder approves?}
+    FounderDecision -->|approve| Apply
+    FounderDecision -->|reject| Drop[Drop from queue]
+    Apply --> Log[Write role log]
+```
+
 ## Purpose
 
 Promotion assigns one of the federation roles — Admin, Developer, or Tester — to a user. Founder is not assignable through `/tcpromote`; ownership transfer uses `/transferowner` instead.

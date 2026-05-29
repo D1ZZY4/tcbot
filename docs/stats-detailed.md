@@ -2,6 +2,21 @@
 
 This document describes the unified federation statistics command implemented by `tcbot/modules/stats.py` and `tcbot/modules/helper/workflows/stats_flow.py`.
 
+For module structure, see [`modules/modules.md`](modules/modules.md). For shared helpers and decorators, see [`helper/helper.md`](helper/helper.md). For database access patterns, see [`databases/databases.md`](databases/databases.md). For check command which often complements stats, see [`check-detailed.md`](check-detailed.md).
+
+```mermaid
+flowchart TD
+    Cmd[/tcstats command/] --> Summary[Summary view]
+    Summary --> Buttons{Drill-down}
+    Buttons --> Staff[Staff list<br/>batch query]
+    Buttons --> Users[Users list<br/>batch query]
+    Buttons --> Chats[Connected chats]
+    Buttons --> Bans[Active bans<br/>batch query]
+    Staff & Users & Bans --> SearchPanel[Search panel]
+    Staff & Users & Chats & Bans --> Detail[Detail callback]
+    Detail --> Profile[/check user profile/]
+```
+
 ## Purpose
 
 `/tcstats` is the federation's read-only situational awareness console. A single inline keyboard fans out into four drill-down panes — Staff Roster, Users, Connected Chats, User Bans — plus a search panel for active bans. Every pane returns to the same overview through a `« Back` button.

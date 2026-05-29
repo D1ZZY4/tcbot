@@ -2,9 +2,23 @@
 
 Command and callback modules live in `tcbot/modules/`. They define user-facing entry points, attach decorators, and export PTB handlers through `__handlers__`.
 
+For shared helpers consumed by these modules, see [`../helper/helper.md`](../helper/helper.md). For conversation flows, see [`../workflows/workflows.md`](../workflows/workflows.md). For database access, see [`../databases/databases.md`](../databases/databases.md). For runtime utilities, see [`../utils/utils.md`](../utils/utils.md).
+
 ## Dynamic discovery
 
 `tcbot/modules/__init__.py` discovers every top-level `.py` file in `tcbot/modules/` except `__init__.py`.
+
+```mermaid
+flowchart TD
+    Start[tcbot.__main__] --> Discover[modules.__init__.discover]
+    Discover --> Filter{MODULES_LOAD<br/>or MODULES_NO_LOAD?}
+    Filter -->|filter applied| Active[Active module list]
+    Filter -->|no filter| Active
+    Active --> Import[Import each module]
+    Import --> Collect[Collect __handlers__]
+    Collect --> Register[Register on PTB Application]
+    Register --> Polling[Start long polling]
+```
 
 Environment filters:
 

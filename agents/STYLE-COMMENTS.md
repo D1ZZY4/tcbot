@@ -1,7 +1,6 @@
 # Comment Style — TCF Bot
 
-Read `agents/CLAUDE.md` first. This file defines comments, docstrings, and
-section divider conventions for the project.
+Read [`CLAUDE.md`](CLAUDE.md) first. This file defines comments, docstrings, and section divider conventions for the project. For code style, see [`STYLE-CODE.md`](STYLE-CODE.md). For project rules, see [`RULES.md`](RULES.md).
 
 ---
 

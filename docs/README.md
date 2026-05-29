@@ -2,6 +2,8 @@
 
 This directory documents the internal architecture and developer workflows for TCF Bot, a Python Telegram bot for Transsion Core Federation community moderation.
 
+For user-facing setup, see [`../README.md`](../README.md). For contributor rules and style, see [`../AGENTS.md`](../AGENTS.md). For project state and improvement plan, see [`../PLAN.md`](../PLAN.md). For Replit deployment, see [`../replit.md`](../replit.md). For CI/CD automation details, see [workflows-guide.md](workflows-guide.md).
+
 ## Quick navigation
 
 | Document | Purpose |

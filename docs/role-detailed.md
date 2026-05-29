@@ -2,6 +2,31 @@
 
 This document describes the current role and staff-management behavior implemented by `tcbot/modules/admins.py`, `tcbot/modules/helper/workflows/promote_flow.py`, `tcbot/modules/helper/workflows/demote_flow.py`, `tcbot/modules/helper/decorators.py` (for `resolve_and_check`), `tcbot/database/users_db.py`, and `tcbot/database/queues_db.py`.
 
+For promote command details, see [`promote-detailed.md`](promote-detailed.md). For demote command details, see [`demote-detailed.md`](demote-detailed.md). For module structure, see [`modules/modules.md`](modules/modules.md). For shared helpers, see [`helper/helper.md`](helper/helper.md). For database layer, see [`databases/databases.md`](databases/databases.md).
+
+```mermaid
+flowchart TD
+    Founder[Founder<br/>full power] --> Admin[Admin<br/>broadcast, cleanup, queue]
+    Admin --> Developer[Developer<br/>ban, unban]
+    Developer --> Tester[Tester<br/>kick, mute, warn]
+    Tester --> Member[Regular member]
+    Founder -.->|can promote/demote| Admin
+    Founder -.->|can promote/demote| Developer
+    Founder -.->|can promote/demote| Tester
+    Admin -.->|requests promote| Founder
+    Admin -.->|can demote lower| Developer
+    Admin -.->|can demote lower| Tester
+```
+
+```mermaid
+flowchart TD
+    Action{Ban or Kick action} --> RoleCheck{Target has role?}
+    RoleCheck -->|yes| AutoDemote[Auto-demote via Demote class]
+    RoleCheck -->|no| Continue[Continue action]
+    AutoDemote --> Continue
+    Continue --> Apply[Apply ban/kick]
+```
+
 ## Purpose
 
 The role system controls who can perform moderation and administrative actions. It combines one Founder/owner, Admin records, and custom Developer/Tester roles into a single effective hierarchy used across bans, kicks, warnings, unbans, promotion flows, and role protection.

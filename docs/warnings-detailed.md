@@ -2,6 +2,22 @@
 
 This document describes the current warning behavior implemented by `tcbot/modules/warnings.py`, `tcbot/modules/helper/workflows/warning_flow.py`, `tcbot/modules/helper/workflows/reason_flow.py`, and `tcbot/database/warns_db.py`.
 
+For ban flow triggered by warning limit, see [`banning-detailed.md`](banning-detailed.md). For check command showing warning history, see [`check-detailed.md`](check-detailed.md). For shared helpers, see [`helper/helper.md`](helper/helper.md). For database layer, see [`databases/databases.md`](databases/databases.md).
+
+```mermaid
+flowchart TD
+    Cmd[/tcwarn command/] --> Permission{Tester+ check}
+    Permission -->|denied| End1[Reject]
+    Permission -->|allowed| Reason[WAITING_REASON]
+    Reason --> Proof[WAITING_PROOF]
+    Proof --> AddWarn[warns_db.add_warn<br/>atomic counter]
+    AddWarn --> Check{count >= limit?}
+    Check -->|no| Notify[Send warn notice]
+    Check -->|yes| AutoBan[Auto-ban via ban flow]
+    Notify --> Log[Log entry]
+    AutoBan --> Log
+```
+
 ## Purpose
 
 Warnings are per-group moderation records. They do not create federation-wide bans and do not carry across connected groups. When a user reaches the configured warning threshold in a group, the bot attempts to ban that user from that group only and clears the warning record after a successful auto-ban.

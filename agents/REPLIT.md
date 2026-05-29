@@ -1,7 +1,6 @@
 # Replit Environment — TCF Bot
 
-Read `agents/CLAUDE.md` first. This file documents Replit-specific runtime,
-secrets, and deployment guidance.
+Read [`CLAUDE.md`](CLAUDE.md) first. This file documents Replit-specific runtime, secrets, and deployment guidance. For top-level Replit deployment notes, see [`../replit.md`](../replit.md). For local and Docker setup, see [`../docs/setup.md`](../docs/setup.md). For project rules, see [`RULES.md`](RULES.md).
 
 ---
 

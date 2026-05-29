@@ -2,6 +2,24 @@
 
 This document describes the current federation ban, ban lookup, and unban behavior implemented by `tcbot/modules/banning.py`, `tcbot/modules/helper/workflows/ban_flow.py`, `tcbot/modules/checking.py`, `tcbot/modules/unbanning.py`, and `tcbot/database/bans_db.py`.
 
+For appeal flow following a ban, see [`appeal-detailed.md`](appeal-detailed.md). For check command used to lookup bans, see [`check-detailed.md`](check-detailed.md). For warnings that may auto-ban, see [`warnings-detailed.md`](warnings-detailed.md). For role auto-demotion on ban, see [`role-detailed.md`](role-detailed.md). For shared helpers, see [`helper/helper.md`](helper/helper.md). For database layer, see [`databases/databases.md`](databases/databases.md).
+
+```mermaid
+flowchart TD
+    Cmd[/tcban command/] --> Permission{Developer+ check}
+    Permission -->|denied| End1[Reject]
+    Permission -->|allowed| Target[Resolve target]
+    Target --> RoleCheck{Has federation role?}
+    RoleCheck -->|yes| AutoDemote[Auto-demote first]
+    RoleCheck -->|no| ReasonStep[WAITING_REASON]
+    AutoDemote --> ReasonStep
+    ReasonStep --> ProofStep[WAITING_PROOF]
+    ProofStep --> StoreBan[Store ban in bans_db]
+    StoreBan --> FanOut[Fan-out to all groups]
+    FanOut --> Log[Write log message]
+    Log --> AppealLink[Generate appeal deep-link]
+```
+
 ## Purpose
 
 A federation ban marks a user as banned in the persistent `bans` collection and applies the Telegram ban across all active connected groups. The ban workflow requires a moderator reason and proof media, records proof/log message IDs, and exposes an appeal deep link for the banned user.

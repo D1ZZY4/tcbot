@@ -2,6 +2,8 @@
 
 This document describes all GitHub Actions workflows configured for the TCF Bot project.
 
+For user-facing overview of CI/CD, see [`../README.md`](../README.md#cicd--automation). For contributor commit and PR guidance, see [`../AGENTS.md`](../AGENTS.md#commit-and-pull-request-guidance). For changelog of CI/CD additions, see [`../CHANGELOG.md`](../CHANGELOG.md).
+
 ## Overview
 
 The project uses 7 automated workflows for continuous integration, code quality, and maintenance:

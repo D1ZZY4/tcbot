@@ -2,6 +2,22 @@
 
 Runtime utilities live in `tcbot/utils/`. They provide infrastructure used across command modules, workflows, database helpers, and startup.
 
+For modules that consume these utilities, see [`../modules/modules.md`](../modules/modules.md). For shared helpers, see [`../helper/helper.md`](../helper/helper.md). For database helpers, see [`../databases/databases.md`](../databases/databases.md).
+
+```mermaid
+flowchart TD
+    Main[tcbot/__main__.py] --> Utils[tcbot/utils/]
+    Utils --> Dispatch[dispatch.py<br/>fan_out concurrency]
+    Utils --> Prefixes[prefixes.py<br/>command prefix builders]
+    Utils --> Logging[logging_setup.py<br/>logger config]
+    Utils --> ErrorReporter[error_reporter.py<br/>error sink]
+    Utils --> TimeDate[timedate_format.py<br/>UTC + display]
+    Modules[tcbot/modules/] --> Dispatch
+    Modules --> Prefixes
+    Modules --> TimeDate
+    Logging --> ErrorReporter
+```
+
 ## `dispatch.py`
 
 `fan_out(coros, max_concurrent=10)` runs awaitables concurrently with a semaphore.

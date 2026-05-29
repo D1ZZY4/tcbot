@@ -2,6 +2,21 @@
 
 This document describes the current ban appeal behavior implemented by `tcbot/modules/appeals.py` and `tcbot/modules/helper/workflows/appeal_flow.py`.
 
+For ban flow that triggers appeals, see [`banning-detailed.md`](banning-detailed.md). For check command often used during appeals, see [`check-detailed.md`](check-detailed.md). For shared helpers, see [`helper/helper.md`](helper/helper.md). For database layer, see [`databases/databases.md`](databases/databases.md).
+
+```mermaid
+flowchart TD
+    DeepLink[/start appeal_BANID/] --> Validate{Valid ban_id?}
+    Validate -->|no| Reject[Show error]
+    Validate -->|yes| DM[Open private DM]
+    DM --> Reason[WAITING_APPEAL_REASON]
+    Reason --> Submit[Submit to APPEALS chat]
+    Submit --> ReviewCard[Post review card<br/>in MAIN_GROUP topic]
+    ReviewCard --> Decision{Staff decision}
+    Decision -->|approve| Unban[Run /tcunban + notify]
+    Decision -->|reject| Notify[Notify user rejected]
+```
+
 ## Purpose
 
 The appeal flow lets a user with an active federation ban submit one appeal through the bot in private messages. The appeal is forwarded to the configured appeal channel/topic, posted for staff review in the main group, logged in the federation logs channel, and then resolved through inline callback buttons.

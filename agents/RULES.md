@@ -1,8 +1,8 @@
 # Project Rules — TCF Bot
 
-Read `agents/CLAUDE.md` first. This file lists hard constraints for all AI
-agents and maintainers. These rules apply to code, tests, documentation, and
-configuration unless a task explicitly narrows the allowed scope.
+Read [`CLAUDE.md`](CLAUDE.md) first. This file lists hard constraints for all AI agents and maintainers. These rules apply to code, tests, documentation, and configuration unless a task explicitly narrows the allowed scope.
+
+For code style enforcement, see [`STYLE-CODE.md`](STYLE-CODE.md). For comment conventions, see [`STYLE-COMMENTS.md`](STYLE-COMMENTS.md). For development workflow, see [`WORKFLOW.md`](WORKFLOW.md). For testing and validation commands, see [`TEST-RUFF.md`](TEST-RUFF.md).
 
 ---
 

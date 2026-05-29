@@ -2,6 +2,8 @@
 
 This guide explains how to run TCF Bot locally, with Docker, or in a hosted environment without committing secrets.
 
+For project overview, see [`../README.md`](../README.md). For Replit-specific deployment, see [`../replit.md`](../replit.md). For contributor rules, see [`../AGENTS.md`](../AGENTS.md).
+
 ## Prerequisites
 
 - Python 3.12 or newer. The project metadata targets `>=3.12`.

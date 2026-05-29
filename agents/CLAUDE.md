@@ -1,11 +1,10 @@
 # AI Agent Instructions — TCF Bot
 
-Read this file completely before making any change to this repository. It is the
-canonical project reference for AI coding agents. The other files in `agents/`
-expand specific topics and must stay consistent with this file.
+Read this file completely before making any change to this repository. It is the canonical project reference for AI coding agents. The other files in `agents/` expand specific topics and must stay consistent with this file.
 
-Compatible with: Claude, Replit AI, Gemini, Qwen, GitHub Copilot, and any AI
-coding agent.
+For project rules and hard constraints, see [`RULES.md`](RULES.md). For code style, see [`STYLE-CODE.md`](STYLE-CODE.md). For comment conventions, see [`STYLE-COMMENTS.md`](STYLE-COMMENTS.md). For development workflow, see [`WORKFLOW.md`](WORKFLOW.md). For testing and Ruff commands, see [`TEST-RUFF.md`](TEST-RUFF.md). For Replit deployment, see [`REPLIT.md`](REPLIT.md). For top-level project guide, see [`../AGENTS.md`](../AGENTS.md). For developer documentation, see [`../docs/README.md`](../docs/README.md).
+
+Compatible with: Claude, Replit AI, Gemini, Qwen, GitHub Copilot, and any AI coding agent.
 
 ---
 

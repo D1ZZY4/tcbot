@@ -2,6 +2,22 @@
 
 Shared handler helpers live in `tcbot/modules/helper/`. These modules support command modules and workflow files but do not perform top-level module discovery.
 
+For command modules that consume these helpers, see [`../modules/modules.md`](../modules/modules.md). For conversation flows, see [`../workflows/workflows.md`](../workflows/workflows.md). For database helpers used by these helpers, see [`../databases/databases.md`](../databases/databases.md).
+
+```mermaid
+flowchart TD
+    Modules[tcbot/modules/*.py] --> Helper[tcbot/modules/helper/]
+    Helper --> Decorators[decorators.py<br/>permission guards]
+    Helper --> Formatter[formatter.py<br/>HTML escape, mention]
+    Helper --> Extraction[extraction.py<br/>extract_target]
+    Helper --> Identity[identity.py<br/>role classification]
+    Helper --> Keyboards[keyboards.py<br/>InlineKeyboard builders]
+    Helper --> Workflows[workflows/<br/>conversation flows]
+    Decorators --> DB[tcbot/database/]
+    Identity --> DB
+    Workflows --> DB
+```
+
 ## `decorators.py`
 
 Decorators provide authorization, handler-level rate limiting, and debug tracing.

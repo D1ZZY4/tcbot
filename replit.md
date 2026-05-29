@@ -1,6 +1,6 @@
 # Replit Deployment Notes
 
-This file describes how to run TCF Bot on Replit or a similar hosted environment. It is intentionally focused on deployment and environment setup; general architecture and development guidance live in `README.md`, `AGENTS.md`, and `PLAN.md`.
+This file describes how to run TCF Bot on Replit or a similar hosted environment. It is intentionally focused on deployment and environment setup. For general architecture and development guidance, see [`README.md`](README.md), [`AGENTS.md`](AGENTS.md), and [`PLAN.md`](PLAN.md). For local and Docker setup, see [`docs/setup.md`](docs/setup.md). For automation and CI/CD workflows, see [`docs/workflows-guide.md`](docs/workflows-guide.md).
 
 ## Runtime Summary
 

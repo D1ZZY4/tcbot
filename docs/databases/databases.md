@@ -2,6 +2,21 @@
 
 The database layer lives in `tcbot/database/` and is the only place that should perform MongoDB reads and writes. Command modules and workflows should call helper functions instead of calling `mongos.col()` directly.
 
+For modules that consume these database helpers, see [`../modules/modules.md`](../modules/modules.md). For shared helpers, see [`../helper/helper.md`](../helper/helper.md). For conversation flows, see [`../workflows/workflows.md`](../workflows/workflows.md).
+
+```mermaid
+flowchart TD
+    Modules[tcbot/modules/*.py] --> DBHelpers[tcbot/database/*_db.py]
+    Helpers[tcbot/modules/helper/] --> DBHelpers
+    Workflows[tcbot/modules/helper/workflows/] --> DBHelpers
+    DBHelpers --> Mongos[mongos.py<br/>connection + col]
+    DBHelpers --> Documents[documents.py<br/>TypedDicts]
+    Mongos --> Motor[Motor AsyncIOMotorClient]
+    Motor --> MongoDB[(MongoDB)]
+    DBHelpers --> Indexes[Index setup<br/>on startup]
+    Indexes --> MongoDB
+```
+
 ## Connection manager
 
 `mongos.py` owns the Motor client lifecycle.

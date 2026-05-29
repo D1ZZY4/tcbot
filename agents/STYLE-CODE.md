@@ -1,7 +1,6 @@
 # Code Style — TCF Bot
 
-Read `agents/CLAUDE.md` first. This file defines Python code style for TCF Bot.
-Use it together with `agents/RULES.md` and `agents/STYLE-COMMENTS.md`.
+Read [`CLAUDE.md`](CLAUDE.md) first. This file defines Python code style for TCF Bot. Use it together with [`RULES.md`](RULES.md) and [`STYLE-COMMENTS.md`](STYLE-COMMENTS.md). For development workflow, see [`WORKFLOW.md`](WORKFLOW.md). For testing and Ruff commands, see [`TEST-RUFF.md`](TEST-RUFF.md).
 
 ---
 

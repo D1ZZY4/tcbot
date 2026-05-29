@@ -2,6 +2,23 @@
 
 This document describes the current demotion behavior implemented by `tcbot/modules/admins.py` (command + callback handlers) and `tcbot/modules/helper/workflows/demote_flow.py` (the `Demote` class shared by manual demotion and auto-demote on ban/kick).
 
+For role hierarchy and rules, see [`role-detailed.md`](role-detailed.md). For promote (counterpart) flow, see [`promote-detailed.md`](promote-detailed.md). For ban flow that triggers auto-demotion, see [`banning-detailed.md`](banning-detailed.md). For shared helpers, see [`helper/helper.md`](helper/helper.md).
+
+```mermaid
+flowchart TD
+    Trigger{Trigger source}
+    Trigger -->|manual /tcdemote| Manual[Manual demote]
+    Trigger -->|ban or kick| Auto[Auto-demote]
+    Manual --> Permission{Permission check}
+    Auto --> SkipPerm[Skip permission check]
+    Permission -->|denied| End1[Reject]
+    Permission -->|allowed| Confirm[Show confirm callback]
+    Confirm --> Apply[Apply demotion]
+    SkipPerm --> Apply
+    Apply --> RemoveRole[users_db remove role]
+    RemoveRole --> Log[Unified role log entry]
+```
+
 ## Purpose
 
 Demotion removes a federation role from a user. Three callers reach the same `Demote.execute` method:

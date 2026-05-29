@@ -2,6 +2,23 @@
 
 This document describes the `/check` user-profile command implemented by `tcbot/modules/checking.py` (command + callback handlers) and `tcbot/modules/helper/workflows/check_flow.py` (the `Check` class that builds every view).
 
+For ban data shown in check, see [`banning-detailed.md`](banning-detailed.md). For warnings shown in check, see [`warnings-detailed.md`](warnings-detailed.md). For stats command which often complements check, see [`stats-detailed.md`](stats-detailed.md). For shared helpers, see [`helper/helper.md`](helper/helper.md). For database batch query patterns, see [`databases/databases.md`](databases/databases.md).
+
+```mermaid
+flowchart TD
+    Cmd[/check command/] --> Resolve[Resolve target]
+    Resolve --> Parallel[Parallel batch DB reads]
+    Parallel --> Bans[bans_db]
+    Parallel --> Warns[warns_db]
+    Parallel --> Kicks[kicks history]
+    Parallel --> Mutes[mutes history]
+    Parallel --> Appeals[appeals_db]
+    Bans & Warns & Kicks & Mutes & Appeals --> Compose[Compose profile view]
+    Compose --> Render[Send with drill-down keyboard]
+    Render --> Callback{User clicks drill-down}
+    Callback --> SubView[Render sub-view with pagination]
+```
+
 ## Purpose
 
 `/check` returns a comprehensive federation profile for any user: identity, role and assignment metadata, active ban, total ban history, warning counts per group, kick records, mute records, and appeal history. Each section opens a paginated drill-down keyboard so staff can inspect individual records.

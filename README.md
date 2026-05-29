@@ -56,7 +56,7 @@ Never commit real credentials. At minimum, the bot needs:
 - `MONGODB_URI` — MongoDB connection string.
 - `OWNER_ID` — Telegram user ID for the initial federation founder.
 
-See [Configuration](#configuration) below and `config.env.example` for the complete list.
+See [Configuration](#configuration) below and `config.env.example` for the complete list. For detailed setup instructions, see [`docs/setup.md`](docs/setup.md). For Replit-specific setup, see [`replit.md`](replit.md).
 
 ### 3. Run the bot
 
@@ -78,6 +78,8 @@ docker-compose up --build
 
 The compose setup starts the bot and a local `mongo:7` service. The bot reads `config.env` and waits for MongoDB to pass its health check.
 
+See [`docs/setup.md`](docs/setup.md) for detailed Docker setup instructions.
+
 ## Replit / Hosted Deployment
 
 Use Replit Secrets or the hosting platform's secret manager for credentials. Do not store tokens or MongoDB URIs in committed files.
@@ -90,11 +92,13 @@ python3 -m tcbot
 
 The Flask keep-alive server binds to `0.0.0.0:${PORT}`. If `PORT` is unset, invalid, or outside `1..65535`, the application defaults to `5000`.
 
-See `replit.md` for Replit-specific setup notes.
+See [`replit.md`](replit.md) for Replit-specific setup notes and deployment checklist.
 
 ## Configuration
 
 Configuration is loaded from environment variables in `tcbot/__init__.py`. For local development, `python-dotenv` reads `config.env` if it exists. Startup fails fast when required runtime values such as `BOT_TOKEN`, `MONGODB_URI`, or `OWNER_ID` are missing.
+
+For detailed environment variable formats and validation, see [`docs/setup.md`](docs/setup.md). For Replit-specific deployment, see [`replit.md`](replit.md).
 
 | Variable | Required | Description |
 |---|---:|---|
@@ -150,6 +154,8 @@ Key runtime pieces:
 - `tcbot/utils/dispatch.py` provides bounded concurrent fan-out for multi-group Telegram API calls.
 - `tcbot/utils/error_reporter.py` receives handler, asyncio, and logging errors for reporting to the configured error destination.
 
+For detailed architecture, see [`docs/mapping.md`](docs/mapping.md) and [`PLAN.md`](PLAN.md). For module breakdown, see [`docs/modules/modules.md`](docs/modules/modules.md). For database details, see [`docs/databases/databases.md`](docs/databases/databases.md).
+
 ## Repository Layout
 
 ```text
@@ -188,7 +194,7 @@ Collect tests only:
 uv run --extra test pytest --collect-only -q
 ```
 
-The pytest configuration lives in `pyproject.toml`.
+The pytest configuration lives in `pyproject.toml`. For testing guidelines, see [`AGENTS.md`](AGENTS.md#testing-guidelines). For TDD workflow, see [`docs/workflows-guide.md`](docs/workflows-guide.md).
 
 ## Code Quality
 
@@ -197,7 +203,7 @@ uv run ruff format .
 uv run ruff check --fix .
 ```
 
-Ruff targets Python 3.12 and line length 88. GitHub Actions install dependencies through `uv sync --frozen` / `uv sync --extra test --frozen` so CI follows `pyproject.toml` and `uv.lock`. Project code should follow the detailed rules in `agents/CLAUDE.md`, `agents/RULES.md`, `agents/STYLE-CODE.md`, and `agents/STYLE-COMMENTS.md`.
+Ruff targets Python 3.12 and line length 88. GitHub Actions install dependencies through `uv sync --frozen` / `uv sync --extra test --frozen` so CI follows `pyproject.toml` and `uv.lock`. Project code should follow the detailed rules in [`agents/CLAUDE.md`](agents/CLAUDE.md), [`agents/RULES.md`](agents/RULES.md), [`agents/STYLE-CODE.md`](agents/STYLE-CODE.md), and [`agents/STYLE-COMMENTS.md`](agents/STYLE-COMMENTS.md).
 
 ## CI/CD & Automation
 
@@ -255,12 +261,7 @@ Enhanced test result aggregation and notifications:
 - **Run Bot** (`.github/workflows/run-bot.yml`) - Manual deployment
 
 ### Full Documentation
-See `docs/workflows-guide.md` for:
-- Detailed workflow descriptions
-- Trigger conditions and schedules
-- Notification format examples
-- Troubleshooting guide
-- Best practices for developers and maintainers
+For detailed workflow descriptions, trigger conditions, notification format examples, troubleshooting, and best practices, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For changelog of all CI/CD additions, see [`CHANGELOG.md`](CHANGELOG.md).
 
 ### Required Secrets
 Configure in GitHub repository settings → Secrets:
@@ -268,21 +269,20 @@ Configure in GitHub repository settings → Secrets:
 - `OWNER_ID` - Your Telegram user ID for notifications
 - `GITHUB_TOKEN` - Auto-provided by GitHub Actions
 
-## Documentation Index
+## Where to look next
 
-- `AGENTS.md` — project guide for agents and contributors.
-- `PLAN.md` — current state, runtime flow, priorities, and maintenance plan.
-- `replit.md` — Replit deployment notes.
-- `docs/README.md` — developer documentation overview and detailed guide index.
-- `docs/setup.md` — local, Docker, and hosted setup workflow.
-- `docs/workflows-guide.md` — comprehensive GitHub Actions workflows documentation.
-- `docs/modules/modules.md` — module boundaries.
-- `docs/databases/databases.md` — database layer notes.
-- `docs/helper/helper.md` — shared helper documentation.
-- `docs/utils/utils.md` — utility module notes.
-- `docs/workflows.md` and `docs/workflows/workflows.md` — user-facing flow overview and conversation internals.
-- `docs/appeal-detailed.md`, `docs/banning-detailed.md`, `docs/role-detailed.md`, `docs/warnings-detailed.md` — detailed feature guides.
-- `agents/CLAUDE.md`, `agents/RULES.md`, `agents/STYLE-CODE.md`, `agents/STYLE-COMMENTS.md`, `agents/WORKFLOW.md` — detailed engineering rules.
+- For project guide and contributor rules, see [`AGENTS.md`](AGENTS.md).
+- For current project state, runtime flow, priorities, and maintenance plan, see [`PLAN.md`](PLAN.md).
+- For Replit deployment notes, see [`replit.md`](replit.md).
+- For developer documentation overview and detailed guide index, see [`docs/README.md`](docs/README.md).
+- For local, Docker, and hosted setup workflow, see [`docs/setup.md`](docs/setup.md).
+- For module boundaries and command ownership, see [`docs/modules/modules.md`](docs/modules/modules.md).
+- For database layer notes and indexes, see [`docs/databases/databases.md`](docs/databases/databases.md).
+- For shared helper documentation, see [`docs/helper/helper.md`](docs/helper/helper.md).
+- For utility module notes, see [`docs/utils/utils.md`](docs/utils/utils.md).
+- For user-facing flow overview, see [`docs/workflows.md`](docs/workflows.md). For conversation internals, see [`docs/workflows/workflows.md`](docs/workflows/workflows.md).
+- For appeals flow, see [`docs/appeal-detailed.md`](docs/appeal-detailed.md). For banning flow, see [`docs/banning-detailed.md`](docs/banning-detailed.md). For roles, see [`docs/role-detailed.md`](docs/role-detailed.md). For warnings, see [`docs/warnings-detailed.md`](docs/warnings-detailed.md).
+- For detailed engineering rules, see [`agents/CLAUDE.md`](agents/CLAUDE.md), [`agents/RULES.md`](agents/RULES.md), [`agents/STYLE-CODE.md`](agents/STYLE-CODE.md), [`agents/STYLE-COMMENTS.md`](agents/STYLE-COMMENTS.md), and [`agents/WORKFLOW.md`](agents/WORKFLOW.md).
 
 ## Current Status
 
