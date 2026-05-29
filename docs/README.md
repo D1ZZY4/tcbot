@@ -18,6 +18,8 @@ For user-facing setup, see [`../README.md`](../README.md). For contributor rules
 | [Runtime utils](utils/utils.md) | Dispatch, prefixes, logging, error reporting, and datetime utilities. |
 | [Button styles](button-styles.md) | Inline keyboard layout and callback-data naming conventions. |
 | [Git commit style](git-commit.md) | Commit message conventions for this repository. |
+| [Performance notes](performance.md) | Batch query patterns, optimization rules, and benchmarking. |
+| [GitHub Actions workflows](workflows-guide.md) | All 7 CI/CD workflows: auto-fix PR, dependency updates, performance regression, TDD verification, CodeQL, and bot deployment. |
 
 ## Detailed feature guides
 
