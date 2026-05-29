@@ -2,7 +2,7 @@
 name: runtime-debugger
 description: Diagnose project startup, polling, Telegram token, MongoDB, Flask keep-alive, handler registration, environment loading, and local runtime problems safely.
 ---
-Last updated: 2026-05-28
+Last updated: 2026-05-29
 
 
 # Runtime Debugger

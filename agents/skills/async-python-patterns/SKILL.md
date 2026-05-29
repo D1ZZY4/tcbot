@@ -2,7 +2,7 @@
 name: async-python-patterns
 description: Use when designing, reviewing, or debugging async Python code in TCBot, especially python-telegram-bot handlers, Motor/MongoDB helpers, bounded fan-out, cancellation, timeouts, and pytest-asyncio tests.
 ---
-Last updated: 2026-05-28
+Last updated: 2026-05-29
 
 
 # Async Python Patterns for TCBot

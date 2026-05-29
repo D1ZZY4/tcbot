@@ -9,7 +9,7 @@ Before invoking this skill, confirm the read/update rules in [`agents/CLAUDE.md`
 
 Use this skill only for MongoDB performance, query-plan, or indexing work. Keep guidance aligned with TCF Bot's async Motor database layer and project architecture.
 
-Last refreshed for this project: 2026-05-28.
+Last refreshed for this project: 2026-05-29.
 
 ## When to Use This Skill
 
@@ -36,16 +36,19 @@ TCF Bot stores all MongoDB access behind domain helper modules:
 - Do not add direct collection calls to command modules as an optimization shortcut.
 - Keep tests offline; do not require a live MongoDB service for normal test validation.
 
-Current critical indexes in `ensure_indexes()` include:
+Current critical indexes in `ensure_indexes()` (verify against `tcbot/database/mongos.py` before recommending):
 
-- `bans`: `banned_user_id + is_active`, unique `ban_id`.
+- `bans`: `banned_user_id + is_active`, unique `ban_id`, `is_active + timestamp desc + ban_id desc`, `banned_user_id + timestamp desc`.
 - `tc_owners`: unique `user_id`.
 - `tc_admins`: unique `user_id`.
-- `tc_roles`: unique `user_id`.
+- `tc_roles`: unique `user_id`, plus `role` for staff roster lookups.
 - `federated_groups`: `chat_id + is_active`, unique `chat_id`.
-- `member_cache`: unique `user_id`.
-- `warns`: `user_id + chat_id + timestamp desc`.
+- `pending_joins`: unique `chat_id`.
+- `member_cache`: unique `user_id`, plus `username` and `first_name` for the smart-mention/batch-query helpers (`get_user_mention_data`, `get_mention_data_batch`, `get_first_names_batch`, partial-name search in `extract_target`).
+- `warns`: `user_id + chat_id + timestamp desc`, plus `user_id + timestamp desc` for cross-chat history views.
 - `warn_counts`: unique `user_id + chat_id`.
+- `kicks`: `user_id + timestamp desc`.
+- `mutes`: `user_id + timestamp desc`.
 - `promotion_requests`: unique `request_id`, plus `target_id + status`.
 
 Verify these before recommending duplicates.

@@ -2,7 +2,7 @@
 name: general-sub-agent
 description: Provides a general-purpose TCF Bot workflow for broad coding tasks, including codebase inspection, safe implementation, validation, and concise summaries.
 ---
-Last updated: 2026-05-28
+Last updated: 2026-05-29
 
 
 # General Sub Agent
@@ -44,6 +44,9 @@ Prefer a more specific local skill when available:
 - Use `mongodb-query-optimizer` for database query/index performance.
 - Use `python-code-quality` for Ruff, pytest, typing, and quality gates.
 - Use `mermaid-diagrams` for diagrams.
+- Use `docs-maintainer` for any Markdown documentation update or reorganization.
+- Use `runtime-debugger` for startup, polling, MongoDB, or keep-alive runtime issues.
+- Use `feature-reviewer` for code review and "is this ready?" passes.
 
 ## Workflow
 

@@ -2,7 +2,7 @@
 name: python-code-quality
 description: Use when formatting, linting, typing, testing, or reviewing Python quality in TCBot with Python 3.12, Ruff, uv, pytest, pytest-asyncio, and the project's handler/database conventions.
 ---
-Last updated: 2026-05-28
+Last updated: 2026-05-29
 
 
 # Python Code Quality for TCBot

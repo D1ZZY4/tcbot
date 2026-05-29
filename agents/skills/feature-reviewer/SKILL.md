@@ -2,7 +2,7 @@
 name: feature-reviewer
 description: Review project feature changes for correctness, security, tests, documentation, Telegram UX, database impact, and convention compliance.
 ---
-Last updated: 2026-05-28
+Last updated: 2026-05-29
 
 
 # Feature Reviewer
@@ -65,6 +65,14 @@ Keep feedback practical. Prioritize actionable issues over style preferences.
 - Behavior changes update related docs in `docs/`, `README.md`, or `agents/` when appropriate.
 - New database helpers, formatters, decorators, workflows, or critical branches have tests.
 - Test commands use `uv run --extra test pytest ...` when pytest extras are needed.
+- The change adds an entry to [`CHANGELOG.md`](../../../CHANGELOG.md) under `[Unreleased]` and updates [`PLAN.md`](../../../PLAN.md) when project state, runtime, priorities, or test counts changed.
+
+### CI/CD and Workflows
+
+- Changes to `.github/workflows/*.yml` are documented in [`docs/workflows-guide.md`](../../../docs/workflows-guide.md).
+- Auto-fix workflow still creates a PR (does not commit directly to main) and uses the fixed `auto-fix/ruff` branch.
+- Dependency-update, performance, and verification workflows still gate on tests before opening a PR or issue.
+- Telegram notifications still use `BOT_TOKEN`/`OWNER_ID` secrets and skip cleanly when absent.
 
 ## Review Workflow
 

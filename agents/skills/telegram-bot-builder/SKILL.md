@@ -2,7 +2,7 @@
 name: telegram-bot-builder
 description: Use when designing, implementing, reviewing, or debugging TCBot Telegram bot features with python-telegram-bot 22.5, async handlers, ConversationHandler flows, Motor/MongoDB persistence, moderation UX, and safe deployment practices.
 ---
-Last updated: 2026-05-28
+Last updated: 2026-05-29
 
 
 # Telegram Bot Builder for TCBot
@@ -121,7 +121,7 @@ async def cmd_lookup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     await msg.reply_text(
-        f"User: {mention(user.id, user.first_name)}\nID: {code(str(user.id))}",
+        f"User: {mention(user.id, user.first_name, user.username)}\nID: {code(str(user.id))}",
         parse_mode="HTML",
     )
 ```

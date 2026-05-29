@@ -9,7 +9,7 @@ Before invoking this skill, confirm the read/update rules in [`agents/CLAUDE.md`
 
 Use this skill to create clear, professional Mermaid diagrams for the TCF Bot codebase. Prefer diagrams that help contributors understand architecture, Telegram bot flows, MongoDB data relationships, moderation workflows, and operational boundaries.
 
-Last refreshed for this project: 2026-05-28.
+Last refreshed for this project: 2026-05-29.
 
 ## Project Context
 

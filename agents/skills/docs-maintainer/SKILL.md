@@ -50,7 +50,7 @@ Good documentation should:
 
 ## Project Facts To Keep Current
 
-As of 2026-05-28, TCF Bot uses:
+As of 2026-05-29, TCF Bot uses:
 
 - Python 3.12 project target
 - `python-telegram-bot[job-queue] == 22.5`
@@ -58,7 +58,15 @@ As of 2026-05-28, TCF Bot uses:
 - Flask keep-alive server
 - `uv` and `uv.lock`
 - Ruff
-- pytest + pytest-asyncio offline tests
+- pytest + pytest-asyncio offline tests, currently 125 tests across 14 files
+
+Recent project additions to keep accurate when editing docs:
+
+- Smart mention system in `tcbot/modules/helper/formatter.py` (`mention(user_id, name, username=None)`) with global `t.me/username` link fallback to plain text + ID.
+- Batch query helpers in `tcbot/database/users_db.py` (`get_user_mention_data`, `get_mention_data_batch`, `get_first_names_batch`).
+- Partial-name search in `tcbot.modules.helper.extraction.extract_target`; resolution order is reply → args (full ID/username) → args (partial DB search) → text mention → @mention.
+- Username field on `Identity` and `member_cache` indexes on `username` and `first_name`.
+- CI/CD workflows: `.github/workflows/auto-fix.yml` (auto-PR for Ruff fixes on the fixed `auto-fix/ruff` branch), `.github/workflows/dependency-update.yml` (weekly auto-PR like dependabot), `.github/workflows/performance.yml` (regression detection), enhanced `.github/workflows/verification.yml` (TDD verification with detailed failure output and Telegram notifications). All workflows are documented in [`docs/workflows-guide.md`](../../../docs/workflows-guide.md).
 
 Core commands:
 
