@@ -168,12 +168,12 @@ tgbot/
 │   └── utils/                Logging, prefixes, dispatch, datetime helpers
 ├── tests/                    Offline pytest tests
 ├── docs/                     Developer subsystem documentation
-├── agents/                   Detailed agent and contributor rules
+├── .agents/                   Detailed agent and contributor rules
 ├── config.env.example        Environment template
 ├── docker-compose.yml        Bot + MongoDB local compose setup
 ├── pyproject.toml            Project metadata, dependencies, pytest, Ruff
 ├── uv.lock                   Locked dependency graph
-├── AGENTS.md                 Project guide for agents/contributors
+├── AGENTS.md                 Project guide for .agents/contributors
 ├── PLAN.md                   Current project state and improvement plan
 └── replit.md                 Replit deployment notes
 ```
@@ -203,7 +203,7 @@ uv run ruff format .
 uv run ruff check --fix .
 ```
 
-Ruff targets Python 3.12 and line length 88. GitHub Actions install dependencies through `uv sync --frozen` / `uv sync --extra test --frozen` so CI follows `pyproject.toml` and `uv.lock`. Project code should follow the detailed rules in [`agents/CLAUDE.md`](agents/CLAUDE.md), [`agents/RULES.md`](agents/RULES.md), [`agents/STYLE-CODE.md`](agents/STYLE-CODE.md), and [`agents/STYLE-COMMENTS.md`](agents/STYLE-COMMENTS.md).
+Ruff targets Python 3.12 and line length 88. GitHub Actions install dependencies through `uv sync --frozen` / `uv sync --extra test --frozen` so CI follows `pyproject.toml` and `uv.lock`. Project code should follow the detailed rules in [`.agents/CLAUDE.md`](.agents/CLAUDE.md), [`.agents/RULES.md`](.agents/RULES.md), [`.agents/STYLE-CODE.md`](.agents/STYLE-CODE.md), and [`.agents/STYLE-COMMENTS.md`](.agents/STYLE-COMMENTS.md).
 
 ## CI/CD & Automation
 
@@ -282,7 +282,7 @@ Configure in GitHub repository settings → Secrets:
 - For utility module notes, see [`docs/utils/utils.md`](docs/utils/utils.md).
 - For user-facing flow overview, see [`docs/workflows.md`](docs/workflows.md). For conversation internals, see [`docs/workflows/workflows.md`](docs/workflows/workflows.md).
 - For appeals flow, see [`docs/appeal-detailed.md`](docs/appeal-detailed.md). For banning flow, see [`docs/banning-detailed.md`](docs/banning-detailed.md). For roles, see [`docs/role-detailed.md`](docs/role-detailed.md). For warnings, see [`docs/warnings-detailed.md`](docs/warnings-detailed.md).
-- For detailed engineering rules, see [`agents/CLAUDE.md`](agents/CLAUDE.md), [`agents/RULES.md`](agents/RULES.md), [`agents/STYLE-CODE.md`](agents/STYLE-CODE.md), [`agents/STYLE-COMMENTS.md`](agents/STYLE-COMMENTS.md), and [`agents/WORKFLOW.md`](agents/WORKFLOW.md).
+- For detailed engineering rules, see [`.agents/CLAUDE.md`](.agents/CLAUDE.md), [`.agents/RULES.md`](.agents/RULES.md), [`.agents/STYLE-CODE.md`](.agents/STYLE-CODE.md), [`.agents/STYLE-COMMENTS.md`](.agents/STYLE-COMMENTS.md), and [`.agents/WORKFLOW.md`](.agents/WORKFLOW.md).
 
 ## Current Status
 

@@ -132,10 +132,10 @@ def _line(ident: Identity) -> str:
 # * moderation flow. The reply is one short professional-but-friendly line.
 
 _BAN_REFUSE: dict[IdentityKind, str] = {
-    "self": "Banning yourself is a creative idea, but no - the federation needs you.",
-    "this_bot": "I keep this federation running. Banning me is a no-go :)",
+    "self": "Self-ban? Creative, but no - federation needs you :v",
+    "this_bot": "I keep this place running. Banning me is a no-go :)",
     "telegram": "Telegram itself? Bold move. Not happening.",
-    "founder": "{line} is the Founder - banning the boss is above my pay grade.",
+    "founder": "{line} runs the place, can't ban them through here.",
     "admin": "{line} is an Admin. Demote them first if you really mean it.",
     "developer": "{line} is a Developer. Demote them before you ban.",
     "tester": "{line} is a Tester. Demote them before you ban.",
@@ -143,84 +143,84 @@ _BAN_REFUSE: dict[IdentityKind, str] = {
 
 _KICK_REFUSE: dict[IdentityKind, str] = {
     "self": "Kicking yourself? Just leave the group instead :v",
-    "this_bot": "Kick me? I run this place. Not happening.",
+    "this_bot": "Kick me? I run this place :)",
     "telegram": "Pretty sure I can't kick Telegram from its own group.",
-    "founder": "{line} is the Founder. They are not getting kicked here.",
+    "founder": "{line} runs the place, not getting kicked here.",
     "admin": "{line} is an Admin. Demote them first if you really mean it.",
     "developer": "{line} is a Developer. Demote them before you kick.",
     "tester": "{line} is a Tester. Demote them before you kick.",
 }
 
 _MUTE_REFUSE: dict[IdentityKind, str] = {
-    "self": "Can't mute yourself - that's not how this works.",
-    "this_bot": "Muting me won't do much - I don't send messages on my own anyway.",
+    "self": "Mute yourself? That's not how this works :v",
+    "this_bot": "Muting me won't do much - I don't message on my own anyway.",
     "telegram": "Telegram service messages aren't muteable from here.",
-    "founder": "{line} is the Founder - the mute button doesn't apply :')",
+    "founder": "{line} runs the place, mute button doesn't apply :')",
     "admin": "{line} is an Admin. Demote them first if you really mean it.",
     "developer": "{line} is a Developer. Demote them before you mute.",
     "tester": "{line} is a Tester. Demote them before you mute.",
 }
 
 _WARN_REFUSE: dict[IdentityKind, str] = {
-    "self": "Self-warning is just journaling. Try /reflect ... oh wait, that's not a thing.",
-    "this_bot": "Warn me? I'm the one who manages warnings around here.",
+    "self": "Self-warning is just journaling :v",
+    "this_bot": "Warn me? I'm the one tracking warnings around here.",
     "telegram": "Telegram doesn't take warnings, sorry.",
 }
 
 _UNBAN_REFUSE: dict[IdentityKind, str] = {
-    "self": "You can't unban yourself :v use /checkme and submit an appeal instead.",
-    "this_bot": "{line} - I manage the bans, not receive them. Nothing to undo.",
-    "telegram": "Telegram was never on the ban list to begin with.",
-    "founder": "{line} is the Founder - they have never been banned.",
-    "admin": "{line} is an Admin. Staff are not federation-bannable, so nothing to undo.",
-    "developer": "{line} is a Developer. Staff are not federation-bannable, so nothing to undo.",
-    "tester": "{line} is a Tester. Staff are not federation-bannable, so nothing to undo.",
+    "self": "Can't unban yourself :v use /checkme and submit an appeal instead.",
+    "this_bot": "{line} - I manage the bans, not collect them.",
+    "telegram": "Telegram was never on the ban list anyway.",
+    "founder": "{line} - never been banned, nothing to undo.",
+    "admin": "{line} is an Admin. Staff aren't federation-bannable, nothing to undo.",
+    "developer": "{line} is a Developer. Staff aren't federation-bannable, nothing to undo.",
+    "tester": "{line} is a Tester. Staff aren't federation-bannable, nothing to undo.",
 }
 
 _UNMUTE_REFUSE: dict[IdentityKind, str] = {
-    "self": "You can't unmute yourself - ask a moderator.",
-    "this_bot": "{line} - bots aren't muteable, so nothing to undo.",
+    "self": "Can't unmute yourself - ask a mod.",
+    "this_bot": "{line} - bots aren't muteable, nothing to undo.",
     "telegram": "Telegram service was never muted.",
-    "founder": "{line} is the Founder - definitely not muted.",
+    "founder": "{line} - definitely not muted :)",
 }
 
 _PROMOTE_REFUSE: dict[IdentityKind, str] = {
-    "self": "Promoting yourself would be nice, but the hierarchy says no.",
-    "this_bot": "Promoting a bot doesn't quite work - I'm already running things.",
-    "telegram": "Telegram is doing fine on its own, no role needed.",
-    "other_bot": "Other bots can't hold federation roles - Telegram users only.",
-    "founder": "{line} is the Founder - already at the top of the hierarchy, no promotion needed.",
-    "admin": "{line} is already an Admin. Use /tcpromote to assign Developer or Tester instead.",
+    "self": "Promoting yourself? Nice try - the hierarchy doesn't bend for that :v",
+    "this_bot": "Already running things, no role needed.",
+    "telegram": "Telegram doing fine without a role here.",
+    "other_bot": "Other bots can't hold federation roles - humans only.",
+    "founder": "{line} already runs the place - promoting them is a circular move :v",
+    "admin": "{line} is already an Admin. Use /tcpromote for a different role.",
 }
 
 _DEMOTE_REFUSE: dict[IdentityKind, str] = {
-    "self": "Can't demote yourself - ask a higher-up if you really mean it.",
-    "this_bot": "I have no role to lose. Nothing to demote :)",
-    "telegram": "Telegram has no role here.",
-    "founder": "{line} is the Founder - ownership transfer is a separate command.",
+    "self": "Demoting yourself? Bold. Ask a higher-up if you really mean it.",
+    "this_bot": "No role to lose here :)",
+    "telegram": "Telegram has no role to take.",
+    "founder": "{line} is the Founder - try /transferowner if you really mean it.",
 }
 
 _TRANSFER_REFUSE: dict[IdentityKind, str] = {
-    "self": "You're already the Founder - can't transfer ownership to yourself.",
-    "this_bot": "Transferring ownership to me would be flattering, but no - bots can't be Founder.",
-    "telegram": "Telegram itself isn't a federation user. No transfer possible.",
-    "other_bot": "Other bots can't hold federation roles, including ownership.",
+    "self": "Already the Founder - transferring to yourself is a no-op :v",
+    "this_bot": "Tempting, but I'm not running the place under my own name :)",
+    "telegram": "Telegram doesn't want my keys, sorry.",
+    "other_bot": "Other bots can't hold the keys - humans only.",
 }
 
 _UNWARN_REFUSE: dict[IdentityKind, str] = {
-    "self": "You can't remove your own warnings - ask a moderator.",
-    "this_bot": "{line} - zero warnings here, ever. Nothing to remove.",
-    "telegram": "Telegram has no warnings to remove.",
-    "other_bot": "{line} - bots aren't warnable here, so nothing to undo.",
-    "founder": "{line} is the Founder - no warnings on record.",
+    "self": "Erasing your own warnings? Nice try :v ask a mod.",
+    "this_bot": "{line} - zero warnings, ever. Nothing to undo.",
+    "telegram": "Telegram doesn't get warned here.",
+    "other_bot": "{line} - bots don't pile up warnings, nothing to remove.",
+    "founder": "{line} - clean record, nothing to undo.",
 }
 
 _RESETWARNS_REFUSE: dict[IdentityKind, str] = {
-    "self": "You can't reset your own warnings - ask a moderator.",
-    "this_bot": "{line} - already at zero, always. Nothing to clear.",
-    "telegram": "Telegram has no warnings to clear.",
-    "other_bot": "{line} - bots aren't warnable here, so nothing to clear.",
-    "founder": "{line} is the Founder - no warnings to clear.",
+    "self": "You don't get to reset your own warnings :v ask a mod.",
+    "this_bot": "{line} - already at zero, always was.",
+    "telegram": "Nothing on Telegram to clear.",
+    "other_bot": "{line} - bots stay at zero by default.",
+    "founder": "{line} - nothing on the record to clear.",
 }
 
 

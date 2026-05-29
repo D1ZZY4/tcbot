@@ -12,24 +12,24 @@ Every new conversation in this repository must start by reading the canonical re
 
 **Read at the start of every conversation:**
 
-- [`agents/CLAUDE.md`](agents/CLAUDE.md) — canonical AI-agent reference
-- [`agents/RULES.md`](agents/RULES.md) — hard constraints
+- [`.agents/CLAUDE.md`](.agents/CLAUDE.md) — canonical AI-agent reference
+- [`.agents/RULES.md`](.agents/RULES.md) — hard constraints
 - [`AGENTS.md`](AGENTS.md) (this file), [`PLAN.md`](PLAN.md), [`CHANGELOG.md`](CHANGELOG.md)
-- The relevant subset of [`agents/`](agents/), [`agents/agents/`](agents/agents/), [`agents/skills/`](agents/skills/), [`docs/`](docs/), and project-root docs for the task
+- The relevant subset of [`.agents/`](.agents/), [`.agents/agents/`](.agents/agents/), [`.agents/skills/`](.agents/skills/), [`docs/`](docs/), and project-root docs for the task
 
 **Update in the same turn after every change:**
 
 - [`CHANGELOG.md`](CHANGELOG.md) — entry under `[Unreleased]` (Added / Changed / Fixed / Removed / Documentation)
 - [`PLAN.md`](PLAN.md) — when runtime, project state, priorities, or test counts change
-- Every related `docs/*.md`, `agents/*.md`, [`README.md`](README.md), [`replit.md`](replit.md) whose content is now stale
+- Every related `docs/*.md`, `.agents/*.md`, [`README.md`](README.md), [`replit.md`](replit.md) whose content is now stale
 
-See [`agents/CLAUDE.md`](agents/CLAUDE.md#mandatory-read-these-files-before-any-work) for the complete read/update tables. Skipping either step is a defect of the same severity as a failing test.
+See [`.agents/CLAUDE.md`](.agents/CLAUDE.md#mandatory-read-these-files-before-any-work) for the complete read/update tables. Skipping either step is a defect of the same severity as a failing test.
 
 ## Skills and Sub-Agents Policy
 
-**Skills in `agents/skills/` auto-invoke whenever their trigger matches** — no need for the user to ask. If you are about to write code in `tcbot/`, invoke [`project-policy`](agents/skills/project-policy/SKILL.md). If you are about to edit docs, invoke [`docs-maintainer`](agents/skills/docs-maintainer/SKILL.md). Same for `telegram-bot-builder`, `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `runtime-debugger`, `feature-reviewer`, `general-sub-agent`. Compose multiple skills when one task spans multiple areas.
+**Skills in `.agents/skills/` auto-invoke whenever their trigger matches** — no need for the user to ask. If you are about to write code in `tcbot/`, invoke [`project-policy`](.agents/skills/project-policy/SKILL.md). If you are about to edit docs, invoke [`docs-maintainer`](.agents/skills/docs-maintainer/SKILL.md). Same for `telegram-bot-builder`, `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `runtime-debugger`, `feature-reviewer`, `general-sub-agent`. Compose multiple skills when one task spans multiple areas.
 
-**Sub-agents in `agents/agents/` are expensive and used sparingly.** Default to doing the work yourself in the main agent. Only delegate to a sub-agent when the task is large, the scopes are genuinely independent, and the parallelism justifies the token cost — sub-agents can drift off-task, so prefer one focused main agent over a noisy sub-agent fleet.
+**Sub-agents in `.agents/agents/` are expensive and used sparingly.** Default to doing the work yourself in the main agent. Only delegate to a sub-agent when the task is large, the scopes are genuinely independent, and the parallelism justifies the token cost — sub-agents can drift off-task, so prefer one focused main agent over a noisy sub-agent fleet.
 
 ## Project Overview
 
@@ -60,7 +60,7 @@ tgbot/
 │   └── utils/                Logging, dispatch, prefixes, datetime helpers
 ├── tests/                    Offline pytest suite
 ├── docs/                     Developer documentation by subsystem
-├── agents/                   Detailed coding, workflow, and style rules
+├── .agents/                   Detailed coding, workflow, and style rules
 ├── config.env.example        Environment variable template
 ├── docker-compose.yml        Local bot + MongoDB compose setup
 ├── Dockerfile                Container image definition
@@ -154,7 +154,7 @@ Use `config.env.example` as the complete template.
 
 ## Code Style and Naming
 
-Follow the detailed rules in [`agents/CLAUDE.md`](agents/CLAUDE.md), [`agents/RULES.md`](agents/RULES.md), [`agents/STYLE-CODE.md`](agents/STYLE-CODE.md), and [`agents/STYLE-COMMENTS.md`](agents/STYLE-COMMENTS.md) before editing source code.
+Follow the detailed rules in [`.agents/CLAUDE.md`](.agents/CLAUDE.md), [`.agents/RULES.md`](.agents/RULES.md), [`.agents/STYLE-CODE.md`](.agents/STYLE-CODE.md), and [`.agents/STYLE-COMMENTS.md`](.agents/STYLE-COMMENTS.md) before editing source code.
 
 Repository conventions:
 

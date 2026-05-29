@@ -9,7 +9,7 @@ tgbot/
 ├── tcbot/                  Main Python package
 ├── tests/                  Offline pytest suite
 ├── docs/                   Developer documentation
-├── agents/                 Contributor and agent rules
+├── .agents/                 Contributor and agent rules
 ├── pyproject.toml          Dependencies, pytest config, Ruff config
 ├── uv.lock                 Locked dependency graph
 ├── config.env.example      Environment variable template
