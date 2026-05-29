@@ -14,7 +14,7 @@ These two rules are non-negotiable and apply to every task. The user should NEVE
 
 - [`agents/CLAUDE.md`](CLAUDE.md), [`agents/RULES.md`](RULES.md) (this file)
 - [`AGENTS.md`](../AGENTS.md), [`PLAN.md`](../PLAN.md), [`CHANGELOG.md`](../CHANGELOG.md)
-- The relevant files in [`agents/`](.), [`agents/agents/`](agents/), [`agents/skills/`](skills/), [`docs/`](../docs/), and the root project folder for the area you are touching.
+- The relevant files in [`agents/`](.), [`docs/`](../docs/), and the root project folder for the area you are touching.
 
 **After any work**, in the same turn:
 
@@ -25,6 +25,14 @@ These two rules are non-negotiable and apply to every task. The user should NEVE
 See the **MANDATORY** sections at the top of [`CLAUDE.md`](CLAUDE.md#mandatory-read-these-files-before-any-work) for the full read/update tables.
 
 Skipping either step is a defect of the same severity as a failing test.
+
+---
+
+## Skills and Sub-Agents Policy
+
+**Skills (`agents/skills/`) auto-invoke whenever their trigger matches.** The user does not want to type "use the X skill". If you are about to write code in `tcbot/`, the [`project-policy`](skills/project-policy/SKILL.md) skill applies. If you are about to edit docs, the [`docs-maintainer`](skills/docs-maintainer/SKILL.md) skill applies. The same is true for `telegram-bot-builder`, `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `runtime-debugger`, `feature-reviewer`, and `general-sub-agent` — invoke them silently as part of doing the task, and compose multiple skills when a single task spans multiple areas. See the full table in [`CLAUDE.md`](CLAUDE.md#mandatory-auto-invoke-skills-use-sub-agents-sparingly).
+
+**Sub-agents (`agents/agents/`) are expensive and only used when the work is genuinely heavy.** The default is to do the work yourself in the main agent. Only delegate to a sub-agent when the task is large, the scopes are genuinely independent, and the parallelism or independent-perspective value justifies the token cost. Sub-agents can drift off-task — prefer one focused main agent over many noisy sub-agents.
 
 ---
 

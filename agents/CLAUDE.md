@@ -10,7 +10,9 @@ Compatible with: Claude, Replit AI, Gemini, Qwen, GitHub Copilot, and any AI cod
 
 ## MANDATORY: Read These Files BEFORE Any Work
 
-Every new conversation **must start by reading** the following files. The user should NEVER need to remind you. If you skip this step, you will produce inconsistent or wrong work.
+Every new conversation **must start by reading** the following files. The user should NEVER need to remind you. If you skip this step, you will produce inconsistent or wrong work — exactly the failure mode that has happened repeatedly in this repo.
+
+**This rule already lives in many places** — `agents/CLAUDE.md` (here), `agents/RULES.md`, `AGENTS.md`, `PLAN.md`, `agents/skills/project-policy/SKILL.md`, `agents/skills/docs-maintainer/SKILL.md`, `agents/agents/*.md` sub-agent prompts. If you found this file, you have no excuse.
 
 **Tier 1 — Read every conversation, no exceptions:**
 
@@ -22,19 +24,67 @@ Every new conversation **must start by reading** the following files. The user s
 | [`PLAN.md`](../PLAN.md) | Current project state, runtime flow, priorities |
 | [`CHANGELOG.md`](../CHANGELOG.md) | Recent changes — what already shipped vs what is in flight |
 
-**Tier 2 — Read when relevant to the task:**
+**Tier 2 — Read when relevant to the task (not optional, just task-scoped):**
 
 | Folder | Read when |
 |---|---|
 | [`agents/`](.) | Any code or doc work — see siblings: STYLE-CODE, STYLE-COMMENTS, WORKFLOW, TEST-RUFF, REPLIT |
-| [`agents/agents/`](agents/) | Coordinator/sub-agent prompts — read before delegating to subagents |
-| [`agents/skills/`](skills/) | Reusable agent skills (e.g. mongodb-query-optimizer, telegram-bot-builder, mermaid-diagrams) |
 | [`docs/`](../docs/) | Architecture, modules, helpers, databases, utils, workflows, detailed feature guides |
 | [`docs/workflows-guide.md`](../docs/workflows-guide.md) | CI/CD automation: auto-fix PR, dependency updates, performance, TDD verification |
 | [`README.md`](../README.md) | User-facing setup and feature list |
 | [`replit.md`](../replit.md) | Replit/hosted deployment |
 
 If a task touches a feature, read the matching `docs/*-detailed.md` first.
+
+**Why this is so emphasized:** the user has had to remind agents repeatedly to read the docs before working and to update CHANGELOG.md / PLAN.md after working. That reminder loop is itself the bug. The rule is not "be aware of these files" — the rule is **read them at the start, write to them at the end, every single time, without prompting**.
+
+---
+
+## MANDATORY: Auto-Invoke Skills, Use Sub-Agents Sparingly
+
+**Skills (`agents/skills/`) — auto-invoke every time the trigger matches. No exceptions, no asking.**
+
+The user does not want to type "use the X skill" every time. If a task matches a skill's description, invoke that skill silently as part of doing the task. The cost is essentially free (skill prompts are short and cached) and the upside is consistent project-correct work.
+
+| Skill | Auto-trigger when |
+|---|---|
+| [`project-policy`](skills/project-policy/SKILL.md) | About to write, edit, or generate ANY code under `tcbot/` (handlers, db helpers, workflows, utilities, tests, config) |
+| [`docs-maintainer`](skills/docs-maintainer/SKILL.md) | About to update, fill in, review, or reorganize any Markdown in this repo |
+| [`telegram-bot-builder`](skills/telegram-bot-builder/SKILL.md) | About to add or modify a Telegram handler, ConversationHandler, or PTB-specific code |
+| [`mongodb-query-optimizer`](skills/mongodb-query-optimizer/SKILL.md) | About to write a MongoDB query, index, aggregation, or modify `tcbot/database/*_db.py` |
+| [`async-python-patterns`](skills/async-python-patterns/SKILL.md) | About to write `async def`, `asyncio.gather`, or any concurrency code |
+| [`python-code-quality`](skills/python-code-quality/SKILL.md) | About to write or refactor Python — for typing, imports, naming, Ruff compliance |
+| [`mermaid-diagrams`](skills/mermaid-diagrams/SKILL.md) | About to add or update a flow / architecture / sequence diagram in any `.md` file |
+| [`runtime-debugger`](skills/runtime-debugger/SKILL.md) | Debugging a live runtime issue, exception trace, or hang |
+| [`feature-reviewer`](skills/feature-reviewer/SKILL.md) | Reviewing a feature, PR, or completed change before declaring done |
+| [`general-sub-agent`](skills/general-sub-agent/SKILL.md) | General-purpose fallback when no specific skill applies but heavy guidance is needed |
+
+If a single task touches multiple of these areas, invoke multiple skills. They compose.
+
+**Sub-agents (`agents/agents/`) — use sparingly. Only for heavy or genuinely parallel work.**
+
+The user has flagged sub-agents as expensive (token cost) and risky (sub-agents can drift off-task). Default to **doing the work yourself**. Only delegate when ALL of these hold:
+
+- The task is large enough that one agent cannot finish it cleanly in a single pass.
+- The work splits into independent scopes that can run in parallel without stepping on each other.
+- The cost of running a sub-agent is justified by the parallelism or by the value of an independent reviewer perspective.
+
+Sub-agent quick guide (read prompt before delegating):
+
+| Sub-agent | Use when |
+|---|---|
+| [`coordinator`](agents/coordinator.md) | A multi-step task needs a written plan with dependencies before starting |
+| [`debug-investigator`](agents/debug-investigator.md) | Tracing a non-obvious bug across many files where a fresh-eyes pass would help |
+| [`docs-and-skills-editor`](agents/docs-and-skills-editor.md) | Bulk doc reorganization or skill rewrites — only if the scope is genuinely big |
+| [`general-operator`](agents/general-operator.md) | A self-contained task that can run end-to-end without the main agent's context |
+| [`implementation-helper`](agents/implementation-helper.md) | A clearly-spec'd feature implementation that can run independently |
+| [`project-explorer`](agents/project-explorer.md) | Open-ended codebase research where the answer needs many file reads |
+| [`review-guardian`](agents/review-guardian.md) | Independent review of a finished change before commit |
+| [`validation-runner`](agents/validation-runner.md) | Running and parsing tests / Ruff / build for a finished change |
+
+For anything that one focused agent can finish in a few tool calls, **do not spawn a sub-agent**. The user prefers a slightly slower main agent to a fast-but-noisy sub-agent fleet.
+
+---
 
 ---
 

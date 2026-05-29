@@ -5,10 +5,23 @@ description: Enforces project-local conventions for the TCF Bot Python Telegram 
 
 # TCF Bot Project Policy
 
-Last updated: 2026-05-28
+Last updated: 2026-05-29
 
 Use this skill before changing TCF Bot code. Keep changes focused, safe, and consistent with the
 existing architecture. Prefer existing helpers and patterns over new abstractions.
+
+## Mandatory Read-Before-Work and Update-After-Work
+
+Before invoking this skill, you must already have read [`agents/CLAUDE.md`](../../CLAUDE.md), [`agents/RULES.md`](../../RULES.md), [`AGENTS.md`](../../../AGENTS.md), [`PLAN.md`](../../../PLAN.md), and [`CHANGELOG.md`](../../../CHANGELOG.md) at the start of this conversation. The full read/update tables live at [`agents/CLAUDE.md`](../../CLAUDE.md#mandatory-read-these-files-before-any-work).
+
+After any code change in `tcbot/`, in the same turn:
+
+- Add an entry to [`CHANGELOG.md`](../../../CHANGELOG.md) under `[Unreleased]`.
+- Update [`PLAN.md`](../../../PLAN.md) when the change affects runtime, project state, priorities, or test counts.
+- Update the matching `docs/<area>/<area>.md` and `docs/<feature>-detailed.md` if the area or feature changed.
+- Update the matching `tests/test_*.py` if behavior changed.
+
+Skipping the doc sweep is a defect of the same severity as a failing test.
 
 ## Project Snapshot
 

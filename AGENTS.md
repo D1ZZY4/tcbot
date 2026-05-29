@@ -25,6 +25,12 @@ Every new conversation in this repository must start by reading the canonical re
 
 See [`agents/CLAUDE.md`](agents/CLAUDE.md#mandatory-read-these-files-before-any-work) for the complete read/update tables. Skipping either step is a defect of the same severity as a failing test.
 
+## Skills and Sub-Agents Policy
+
+**Skills in `agents/skills/` auto-invoke whenever their trigger matches** — no need for the user to ask. If you are about to write code in `tcbot/`, invoke [`project-policy`](agents/skills/project-policy/SKILL.md). If you are about to edit docs, invoke [`docs-maintainer`](agents/skills/docs-maintainer/SKILL.md). Same for `telegram-bot-builder`, `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `runtime-debugger`, `feature-reviewer`, `general-sub-agent`. Compose multiple skills when one task spans multiple areas.
+
+**Sub-agents in `agents/agents/` are expensive and used sparingly.** Default to doing the work yourself in the main agent. Only delegate to a sub-agent when the task is large, the scopes are genuinely independent, and the parallelism justifies the token cost — sub-agents can drift off-task, so prefer one focused main agent over a noisy sub-agent fleet.
+
 ## Project Overview
 
 TCF Bot is a Python Telegram bot for the Transsion Core Federation community. It manages federation-wide moderation actions, appeal workflows, staff roles, connected groups, audit logging, and health checks.

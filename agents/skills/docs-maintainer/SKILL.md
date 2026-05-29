@@ -2,12 +2,26 @@
 name: docs-maintainer
 description: Update and review project Markdown documentation so root docs, agent docs, docs indexes, detailed guides, setup instructions, and local skill docs stay accurate and English-only.
 ---
-Last updated: 2026-05-28
+Last updated: 2026-05-29
 
 
 # Docs Maintainer
 
 Use this skill when the user asks to update, fill in, review, or reorganize Markdown documentation for this project.
+
+## Mandatory Read-Before-Work and Update-After-Work
+
+Before invoking this skill, you must already have read [`agents/CLAUDE.md`](../../CLAUDE.md), [`agents/RULES.md`](../../RULES.md), [`AGENTS.md`](../../../AGENTS.md), [`PLAN.md`](../../../PLAN.md), and [`CHANGELOG.md`](../../../CHANGELOG.md). The full read/update tables live at [`agents/CLAUDE.md`](../../CLAUDE.md#mandatory-read-these-files-before-any-work).
+
+When you change *any* documentation file, update the related markdown in the same turn:
+
+- [`CHANGELOG.md`](../../../CHANGELOG.md) — entry under `[Unreleased]` describing the doc change (use `### Documentation` or `### Added - Documentation`).
+- [`PLAN.md`](../../../PLAN.md) — if the doc change reflects a runtime or project-state change.
+- [`docs/README.md`](../../../docs/README.md) — if a new doc was added, update the Quick navigation or Detailed feature guides table.
+- [`docs/mapping.md`](../../../docs/mapping.md) — if the repository tree changed.
+- Any sibling docs whose content is now stale or whose cross-references would break.
+
+The user should NEVER have to ask "did you update CHANGELOG.md?" If they ask, you already failed.
 
 ## Scope
 

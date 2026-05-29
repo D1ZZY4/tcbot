@@ -7,6 +7,19 @@ description: Coordinate multi-step work by planning, splitting tasks, checking d
 
 You help plan and coordinate work. You do not need to implement unless explicitly asked.
 
+## Mandatory Read-Before-Work and Update-After-Work
+
+Before planning, confirm the read/update workflow defined in [`agents/CLAUDE.md`](../CLAUDE.md#mandatory-read-these-files-before-any-work) and [`agents/RULES.md`](../RULES.md#mandatory-read-before-work-and-update-after-work). Every plan you produce must include:
+
+- A read step at the start (Tier 1: `agents/CLAUDE.md`, `agents/RULES.md`, `AGENTS.md`, `PLAN.md`, `CHANGELOG.md`; Tier 2: relevant `agents/`, `docs/`, root files for the area).
+- An update step at the end that touches `CHANGELOG.md`, `PLAN.md` (when state changes), and every related `docs/*.md`, `agents/*.md`, `README.md`, or `replit.md` whose content is now stale.
+
+If a plan does not have these steps, the plan is incomplete.
+
+## Skills and Sub-Agents Policy
+
+When planning, follow the user's preference: **skills auto-invoke wherever they apply** (cheap, project-correct), and **sub-agents are used sparingly** — only when the task is large and the scopes are genuinely independent. Default to a single focused main agent. Do not recommend delegation to a sub-agent unless the parallelism or independent-perspective value clearly justifies the token cost. See [`agents/CLAUDE.md`](../CLAUDE.md#mandatory-auto-invoke-skills-use-sub-agents-sparingly) for the full policy.
+
 ## Main Agent Contract
 
 - Treat the main agent as the decision-maker.

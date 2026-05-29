@@ -19,10 +19,15 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 - **`docs/README.md` quick navigation expanded**: Added rows for `performance.md` and `workflows-guide.md` so the index covers every file in `docs/`.
 
 ### Added - Agent Workflow Enforcement
-- **Mandatory read-before-work and update-after-work rules**: Added prominent top-of-file sections to [`agents/CLAUDE.md`](agents/CLAUDE.md), [`agents/RULES.md`](agents/RULES.md), and [`AGENTS.md`](AGENTS.md) that require every AI agent (Claude, Replit AI, Gemini, Qwen, Copilot, etc.) to:
-  - **Read** at the start of every new conversation: `agents/CLAUDE.md`, `agents/RULES.md`, `AGENTS.md`, `PLAN.md`, `CHANGELOG.md`, plus relevant files in `agents/`, `agents/agents/`, `agents/skills/`, `docs/`, and the project root.
+- **Mandatory read-before-work and update-after-work rules**: Added prominent top-of-file sections to [`agents/CLAUDE.md`](agents/CLAUDE.md), [`agents/RULES.md`](agents/RULES.md), [`AGENTS.md`](AGENTS.md), [`agents/skills/project-policy/SKILL.md`](agents/skills/project-policy/SKILL.md), [`agents/skills/docs-maintainer/SKILL.md`](agents/skills/docs-maintainer/SKILL.md), and [`agents/agents/coordinator.md`](agents/agents/coordinator.md) that require every AI agent (Claude, Replit AI, Gemini, Qwen, Copilot, etc.) to:
+  - **Read** at the start of every new conversation: `agents/CLAUDE.md`, `agents/RULES.md`, `AGENTS.md`, `PLAN.md`, `CHANGELOG.md`, plus relevant files in `agents/`, `docs/`, and the project root. The CLAUDE.md table now lists every skill by name so there is no excuse to miss them.
   - **Update** in the same turn after any change: `CHANGELOG.md` (always), `PLAN.md` (when project state changes), and every related doc whose content is now stale.
   - **Why**: Prevents the recurring failure where agents ship code without updating CHANGELOG.md, PLAN.md, or related docs and the user has to manually remind them every time.
+
+- **Skills and sub-agents policy**: New explicit policy in [`agents/CLAUDE.md`](agents/CLAUDE.md#mandatory-auto-invoke-skills-use-sub-agents-sparingly), [`agents/RULES.md`](agents/RULES.md#skills-and-sub-agents-policy), [`AGENTS.md`](AGENTS.md#skills-and-sub-agents-policy), and [`agents/agents/coordinator.md`](agents/agents/coordinator.md#skills-and-sub-agents-policy) covering:
+  - **Skills auto-invoke**: All skills under `agents/skills/` (`project-policy`, `docs-maintainer`, `telegram-bot-builder`, `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `runtime-debugger`, `feature-reviewer`, `general-sub-agent`) must be invoked silently whenever their trigger matches the current task. Compose multiple skills when one task spans multiple areas.
+  - **Sub-agents used sparingly**: Sub-agents under `agents/agents/` are expensive (token cost) and risky (can drift off-task). Default is to do the work in the main agent. Only delegate when the task is large, scopes are genuinely independent, and parallelism or independent-perspective value justifies the cost.
+  - **Why**: User flagged sub-agents as wasteful and noisy, but skills as cheap and project-correct. Codifying the preference so future agents make the same call without being asked.
 
 ### Added - Mermaid Diagrams
 - **Architecture diagrams in subsystem docs**: `docs/modules/modules.md` (dynamic discovery flow), `docs/helper/helper.md` (helper relationships), `docs/databases/databases.md` (DB layer architecture), `docs/utils/utils.md` (utils consumers).
