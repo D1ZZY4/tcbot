@@ -63,25 +63,40 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          BRANCH="auto-fix/ruff-$(date +%Y%m%d-%H%M%S)"
+          BRANCH="auto-fix/ruff"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git checkout -b "$BRANCH"
-          git add -A
-          git commit -m "chore: Auto-fix code quality issues
+          # Check if branch exists remotely
+          if git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
+            echo "Branch exists, updating it..."
+            git fetch origin "$BRANCH"
+            git checkout "$BRANCH"
+            git reset --hard origin/main
+            git add -A
+            git commit -m "chore: Auto-fix code quality issues
 
           - Ruff format: ${{ steps.format.outputs.formatted }} files
           - Ruff check --fix: ${{ steps.check.outputs.fixed }} files
 
           Auto-applied by GitHub Actions"
+            git push --force origin "$BRANCH"
+          else
+            echo "Creating new branch..."
+            git checkout -b "$BRANCH"
+            git add -A
+            git commit -m "chore: Auto-fix code quality issues
 
-          git push origin "$BRANCH"
+          - Ruff format: ${{ steps.format.outputs.formatted }} files
+          - Ruff check --fix: ${{ steps.check.outputs.fixed }} files
 
-          gh pr create \
-            --title "chore: Auto-fix code quality issues" \
-            --body "## Auto-Fix Code Quality
+          Auto-applied by GitHub Actions"
+            git push origin "$BRANCH"
+
+            gh pr create \
+              --title "chore: Auto-fix code quality issues" \
+              --body "## Auto-Fix Code Quality
 
           Ruff found and fixed code quality issues automatically.
 
@@ -107,9 +122,10 @@ jobs:
           </details>
 
           **Safe to merge** - all fixes are automated and follow project style guide." \
-            --label "chore" \
-            --base main \
-            --head "$BRANCH"
+              --label "chore" \
+              --base main \
+              --head "$BRANCH"
+          fi
 
       - name: Comment on PR
         if: steps.changes.outputs.has_changes == 'true' && github.event_name == 'pull_request'
