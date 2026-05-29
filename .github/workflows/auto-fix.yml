@@ -58,11 +58,17 @@ jobs:
             echo "No changes needed - code is clean!"
           fi
 
-      - name: Commit and push fixes
+      - name: Create PR with fixes
         if: steps.changes.outputs.has_changes == 'true' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          BRANCH="auto-fix/ruff-$(date +%Y%m%d-%H%M%S)"
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git checkout -b "$BRANCH"
           git add -A
           git commit -m "chore: Auto-fix code quality issues
 
@@ -70,7 +76,40 @@ jobs:
           - Ruff check --fix: ${{ steps.check.outputs.fixed }} files
 
           Auto-applied by GitHub Actions"
-          git push
+
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --title "chore: Auto-fix code quality issues" \
+            --body "## Auto-Fix Code Quality
+
+          Ruff found and fixed code quality issues automatically.
+
+          ### Changes
+          - **Format changes:** ${{ steps.format.outputs.formatted }} files
+          - **Lint fixes:** ${{ steps.check.outputs.fixed }} files
+
+          ### Logs
+          <details>
+          <summary>Format log</summary>
+
+          \`\`\`
+          $(cat format.log)
+          \`\`\`
+          </details>
+
+          <details>
+          <summary>Check log</summary>
+
+          \`\`\`
+          $(cat check.log)
+          \`\`\`
+          </details>
+
+          **Safe to merge** - all fixes are automated and follow project style guide." \
+            --label "chore" \
+            --base main \
+            --head "$BRANCH"
 
       - name: Comment on PR
         if: steps.changes.outputs.has_changes == 'true' && github.event_name == 'pull_request'
@@ -80,7 +119,7 @@ jobs:
             const formatted = '${{ steps.format.outputs.formatted }}';
             const fixed = '${{ steps.check.outputs.fixed }}';
 
-            const body = `## 🤖 Auto-Fix Available
+            const body = `## Auto-Fix Available
 
             Ruff found code quality issues that can be auto-fixed:
             - **Format changes:** ${formatted} files
@@ -90,9 +129,7 @@ jobs:
             \`\`\`bash
             uv run ruff format .
             uv run ruff check --fix .
-            \`\`\`
-
-            Or merge this PR and the fixes will be auto-committed.`;
+            \`\`\``;
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,

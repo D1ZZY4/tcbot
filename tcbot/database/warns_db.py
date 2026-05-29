@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from pymongo import ReturnDocument
 
 from tcbot.database.documents import WarnCountDoc, WarnDoc

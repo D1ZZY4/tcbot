@@ -209,8 +209,8 @@ The project uses **7 automated GitHub Actions workflows** for continuous integra
 Automatically fixes code style and linting issues with Ruff:
 - Runs on push to `main`, `feat/**`, `fix/**` branches
 - Runs on pull requests and weekly (Monday 02:00 UTC)
-- **Auto-commits fixes** to branches (not PRs)
-- **Comments on PRs** with fix suggestions
+- **Creates PR with fixes** for review before merge
+- **Never commits directly to main** - always requires review
 - Zero manual intervention for code style
 
 ### Dependency Updates (Like Dependabot)

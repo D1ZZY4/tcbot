@@ -3,7 +3,7 @@
 ## [Unreleased] - 2026-05-29
 
 ### Added - CI/CD & Automation
-- **Auto-fix workflow** (`.github/workflows/auto-fix.yml`): Automatically fixes code quality issues with Ruff format and check --fix. Runs on push to main/feat/fix branches, PRs, weekly schedule, and manual dispatch. Auto-commits fixes to branches or comments on PRs with suggestions.
+- **Auto-fix workflow** (`.github/workflows/auto-fix.yml`): Automatically fixes code quality issues with Ruff format and check --fix. Runs on push to main/feat/fix branches, PRs, weekly schedule, and manual dispatch. **Creates PR with fixes** for review before merge (never commits directly to main).
 - **Dependency update workflow** (`.github/workflows/dependency-update.yml`): Weekly automated dependency updates (Monday 04:00 UTC). Runs `uv lock --upgrade`, tests with new versions, and **auto-creates PR** if tests pass (like dependabot) or **auto-creates issue** if tests fail. Includes Telegram notifications.
 - **Performance regression detection** (`.github/workflows/performance.yml`): Benchmarks batch query and mention data performance. Compares against baseline, detects >10% regressions/improvements, comments on PRs, creates issues on regressions, and auto-updates baseline on main branch.
 - **Enhanced verification workflow** (`.github/workflows/verification.yml`): Improved TDD verification with detailed failure analysis, top 50 failing tests with reasons, diagnostic recommendations, auto-created GitHub issues on failures, and enhanced Telegram notifications with top 3 failures and emoji status indicators.
@@ -39,6 +39,7 @@
 - **N+1 query patterns**: Eliminated all N+1 patterns in list views by using batch queries.
 - **Unused variable**: Fixed unused variable in `muting.py` (executor_role).
 - **Code standards compliance**: Removed all pictograph emoji from bot messages per agents/RULES.md.
+- **Missing asyncio import**: Fixed `NameError` in `warns_db.py` - added missing `import asyncio` for parallel operations in `clear_warns()` and `remove_last_warn()`.
 
 ### Performance Impact
 
