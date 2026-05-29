@@ -4,7 +4,7 @@ version = "1.0.0"
 description = "Transsion Core Federation (TCF) Telegram bot"
 requires-python = ">=3.12"
 dependencies = [
-    "python-telegram-bot[job-queue]==22.5",
+    "python-telegram-bot[job-queue]==22.7",
     "motor>=3.7.1,<4",
     "flask>=3.1.0,<4",
     "python-dotenv>=1.0.0,<2",
