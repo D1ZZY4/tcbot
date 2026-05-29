@@ -72,8 +72,11 @@ jobs:
           if git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
             echo "Branch exists, updating it..."
             git fetch origin "$BRANCH"
+            git add -A
+            git stash
             git checkout "$BRANCH"
             git reset --hard origin/main
+            git stash pop || true
             git add -A
             git commit -m "chore: Auto-fix code quality issues
 
