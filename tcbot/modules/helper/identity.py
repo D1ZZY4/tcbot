@@ -189,6 +189,8 @@ _PROMOTE_REFUSE: dict[IdentityKind, str] = {
     "this_bot": "Promoting a bot doesn't quite work - I'm already running things.",
     "telegram": "Telegram is doing fine on its own, no role needed.",
     "other_bot": "Other bots can't hold federation roles - Telegram users only.",
+    "founder": "{line} is the Founder - already at the top of the hierarchy, no promotion needed.",
+    "admin": "{line} is already an Admin. Use /tcpromote to assign Developer or Tester instead.",
 }
 
 _DEMOTE_REFUSE: dict[IdentityKind, str] = {
@@ -196,6 +198,29 @@ _DEMOTE_REFUSE: dict[IdentityKind, str] = {
     "this_bot": "I have no role to lose. Nothing to demote :)",
     "telegram": "Telegram has no role here.",
     "founder": "{line} is the Founder - ownership transfer is a separate command.",
+}
+
+_TRANSFER_REFUSE: dict[IdentityKind, str] = {
+    "self": "You're already the Founder - can't transfer ownership to yourself.",
+    "this_bot": "Transferring ownership to me would be flattering, but no - bots can't be Founder.",
+    "telegram": "Telegram itself isn't a federation user. No transfer possible.",
+    "other_bot": "Other bots can't hold federation roles, including ownership.",
+}
+
+_UNWARN_REFUSE: dict[IdentityKind, str] = {
+    "self": "You can't remove your own warnings - ask a moderator.",
+    "this_bot": "{line} - zero warnings here, ever. Nothing to remove.",
+    "telegram": "Telegram has no warnings to remove.",
+    "other_bot": "{line} - bots aren't warnable here, so nothing to undo.",
+    "founder": "{line} is the Founder - no warnings on record.",
+}
+
+_RESETWARNS_REFUSE: dict[IdentityKind, str] = {
+    "self": "You can't reset your own warnings - ask a moderator.",
+    "this_bot": "{line} - already at zero, always. Nothing to clear.",
+    "telegram": "Telegram has no warnings to clear.",
+    "other_bot": "{line} - bots aren't warnable here, so nothing to clear.",
+    "founder": "{line} is the Founder - no warnings to clear.",
 }
 
 
@@ -208,6 +233,9 @@ _REFUSE_TABLES: dict[str, dict[IdentityKind, str]] = {
     "unmute": _UNMUTE_REFUSE,
     "promote": _PROMOTE_REFUSE,
     "demote": _DEMOTE_REFUSE,
+    "transfer": _TRANSFER_REFUSE,
+    "unwarn": _UNWARN_REFUSE,
+    "resetwarns": _RESETWARNS_REFUSE,
 }
 
 

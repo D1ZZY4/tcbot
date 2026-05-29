@@ -1,8 +1,10 @@
 # Role Detailed Documentation
 
-This document describes the current role and staff-management behavior implemented by `tcbot/modules/admins.py`, `tcbot/modules/helper/workflows/promote_flow.py`, `tcbot/modules/helper/workflows/demote_flow.py`, `tcbot/modules/helper/decorators.py` (for `resolve_and_check`), `tcbot/database/users_db.py`, and `tcbot/database/queues_db.py`.
+This document describes the current role and staff-management behavior implemented by `tcbot/modules/admins.py`, `tcbot/modules/helper/workflows/promote_flow.py`, `tcbot/modules/helper/workflows/demote_flow.py`, `tcbot/modules/helper/decorators.py` (for `resolve_and_check`), `tcbot/modules/helper/identity.py` (for target identity refusals), `tcbot/database/users_db.py`, and `tcbot/database/queues_db.py`.
 
 For promote command details, see [`promote-detailed.md`](promote-detailed.md). For demote command details, see [`demote-detailed.md`](demote-detailed.md). For module structure, see [`modules/modules.md`](modules/modules.md). For shared helpers, see [`helper/helper.md`](helper/helper.md). For database layer, see [`databases/databases.md`](databases/databases.md).
+
+Every staff-management command (`/tcpromote`, `/tcdemote`, `/tcpromoterequests`, `/transferowner`, `/tcunwarn`, `/resetwarns`) classifies the target through `identity.classify(...)` and refuses disallowed identities (self, this bot, Telegram service account, other bots, Founder, and higher-rank staff where applicable) via `identity.refuse_message(action, ident)` before mutating state.
 
 ```mermaid
 flowchart TD

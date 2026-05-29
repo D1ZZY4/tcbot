@@ -177,17 +177,9 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     ident = await identity.classify(ctx.bot, admin.id, target_id, target_name)
-    if ident.kind == "this_bot":
-        await msg.reply_text(
-            f"{mention(target_id, ident.fname, ident.username)} - zero warnings here, ever. Nothing to remove.",
-            parse_mode="HTML",
-        )
-        return
-    if ident.kind == "founder":
-        await msg.reply_text(
-            f"{mention(target_id, ident.fname, ident.username)} is the Founder - no warnings on record.",
-            parse_mode="HTML",
-        )
+    refusal = identity.refuse_message("unwarn", ident)
+    if refusal is not None:
+        await msg.reply_text(refusal, parse_mode="HTML")
         return
 
     notice = identity.staff_notice("unwarn", ident, cfg.community_name)
@@ -231,17 +223,9 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         return
 
     ident = await identity.classify(ctx.bot, admin.id, target_id, target_name)
-    if ident.kind == "this_bot":
-        await msg.reply_text(
-            f"{mention(target_id, ident.fname, ident.username)} - already at zero, always. Nothing to clear.",
-            parse_mode="HTML",
-        )
-        return
-    if ident.kind == "founder":
-        await msg.reply_text(
-            f"{mention(target_id, ident.fname, ident.username)} is the Founder - no warnings to clear.",
-            parse_mode="HTML",
-        )
+    refusal = identity.refuse_message("resetwarns", ident)
+    if refusal is not None:
+        await msg.reply_text(refusal, parse_mode="HTML")
         return
 
     notice = identity.staff_notice("resetwarns", ident, cfg.community_name)

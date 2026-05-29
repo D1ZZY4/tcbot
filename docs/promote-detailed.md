@@ -133,7 +133,7 @@ Only one pending request per target is allowed.
 
 ## `/tcpromoterequests` behavior
 
-A user submits a request for themselves to become Admin. `cmd_promote_request` delegates to `Promote.request_admin` with `admin_id = user.id` and `target_id = user.id`. The same DM/log/queue path applies. The command does not check the requester's existing role.
+A user submits a request for themselves to become Admin. `cmd_promote_request` first calls `identity.classify(ctx.bot, user.id, user.id, user.first_name)` and refuses through `identity.refuse_message("promote", ident)` when the requester is the Founder, this bot, the Telegram service account, another bot, or already an Admin. Otherwise it delegates to `Promote.request_admin` with `admin_id = user.id` and `target_id = user.id`, and the same DM/log/queue path applies. Only one pending request per requester is allowed.
 
 ## Callback routing
 

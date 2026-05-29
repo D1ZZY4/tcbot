@@ -356,21 +356,25 @@ async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 @decorators.log_execution
 async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     current_owner = update.effective_user
-    args = parse_cmd_args(update.effective_message.text)
+    msg = update.effective_message
+    if current_owner is None or msg is None:
+        return
+
+    args = parse_cmd_args(msg.text)
     target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        await update.effective_message.reply_text(
+        await msg.reply_text(
             "Specify the new owner - reply to a message, or provide a user ID / @username."
         )
         return
-    if target_id == current_owner.id:
-        await update.effective_message.reply_text(
-            "You're already the Founder - can't transfer ownership to yourself."
-        )
+
+    ident = await identity.classify(ctx.bot, current_owner.id, target_id, target_fname)
+    refusal = identity.refuse_message("transfer", ident)
+    if refusal is not None:
+        await msg.reply_text(refusal, parse_mode="HTML")
         return
 
-    # Fetch username for mention (optimized)
-    _, target_uname = await db.users_db.get_user_mention_data(target_id)
+    target_uname = ident.username
 
     # * add_admin must complete before set_owner (set_owner does delete_many + insert)
     await db.users_db.add_admin(current_owner.id, current_owner.id)
@@ -385,7 +389,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * log and reply in parallel
     await asyncio.gather(
         ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
-        update.effective_message.reply_text(
+        msg.reply_text(
             f"Done. Ownership has been transferred to "
             f"{mention(target_id, target_fname, target_uname)} - {code(str(target_id))}.",
             parse_mode="HTML",
@@ -401,9 +405,21 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.log_execution
 async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    existing = await db.queues_db.get_request(user.id)
+    msg = update.effective_message
+    if user is None or msg is None:
+        return
+
+    ident, existing = await asyncio.gather(
+        identity.classify(ctx.bot, user.id, user.id, user.first_name),
+        db.queues_db.get_request(user.id),
+    )
+    refusal = identity.refuse_message("promote", ident)
+    if refusal is not None:
+        await msg.reply_text(refusal, parse_mode="HTML")
+        return
+
     if existing:
-        await update.effective_message.reply_text(
+        await msg.reply_text(
             f"You already have a pending request (ID: <code>{existing['request_id']}</code>).",
             parse_mode="HTML",
         )
@@ -411,7 +427,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     ok, reply = await Promote.request_admin(
         ctx.bot, user.id, user.id, user.first_name, user.username
     )
-    await update.effective_message.reply_text(reply, parse_mode="HTML")
+    await msg.reply_text(reply, parse_mode="HTML")
 
 
 # ──────── Command Promotion Requests List </tcpromotelist> ──────── #
