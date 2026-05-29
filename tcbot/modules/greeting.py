@@ -43,7 +43,7 @@ async def _handle_member(member, msg, chat, bot) -> None:
             await asyncio.gather(
                 bot.ban_chat_member(chat.id, member.id),
                 msg.reply_text(
-                    f"{mention(member.id, member.first_name)} is federation-banned and was removed.",
+                    f"{mention(member.id, member.first_name, member.username)} is federation-banned and was removed.",
                     parse_mode="HTML",
                 ),
             )
@@ -52,7 +52,7 @@ async def _handle_member(member, msg, chat, bot) -> None:
         return
 
     await msg.reply_text(
-        f"Welcome, {mention(member.id, member.first_name)}. "
+        f"Welcome, {mention(member.id, member.first_name, member.username)}. "
         f"This is an official {cfg.community_name} group. "
         "Please go through the group rules before participating.",
         parse_mode="HTML",
@@ -84,7 +84,7 @@ async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     member = msg.left_chat_member
     if member and not member.is_bot:
         await msg.reply_text(
-            f"{mention(member.id, member.first_name)} has left.",
+            f"{mention(member.id, member.first_name, member.username)} has left.",
             parse_mode="HTML",
         )
 

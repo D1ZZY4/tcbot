@@ -85,7 +85,7 @@ async def global_rate_limit_handler(
         if wait:
             try:
                 await update.callback_query.answer(
-                    f"⏳ Upss, slow down.. try again in {wait:.0f} seconds.",
+                    f"Slow down - try again in {wait:.0f} seconds.",
                     show_alert=True,
                 )
             except Exception as exc:
@@ -106,7 +106,7 @@ async def global_rate_limit_handler(
     if wait:
         if msg:
             try:
-                await msg.reply_text(f"⏳ Slow down! try again in {wait:.0f} seconds.")
+                await msg.reply_text(f"Slow down - try again in {wait:.0f} seconds.")
             except Exception as exc:
                 log.debug("Command rate-limit reply failed: %s", exc)
         raise ApplicationHandlerStop
@@ -131,7 +131,7 @@ def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
                     if update.callback_query:
                         try:
                             await update.callback_query.answer(
-                                f"⏳ Slow down - try again in {wait:.0f}s.",
+                                f"Slow down - try again in {wait:.0f}s.",
                                 show_alert=True,
                             )
                         except Exception as exc:
@@ -140,7 +140,7 @@ def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
                     if update.effective_message:
                         try:
                             await update.effective_message.reply_text(
-                                f"⏳ Slow down! Try again in {wait:.0f} seconds."
+                                f"Slow down - try again in {wait:.0f} seconds."
                             )
                         except Exception as exc:
                             log.debug("Message rate-limit reply failed: %s", exc)

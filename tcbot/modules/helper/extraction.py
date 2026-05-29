@@ -64,7 +64,14 @@ async def extract_target(
     args: list[str],
     bot: Bot | None = None,
 ) -> tuple[int, str] | tuple[None, None]:
-    """Return (user_id, first_name) resolved from args, reply, entity, or mention.
+    """Return (user_id, first_name) resolved from reply, args, entity, or mention.
+
+    Priority order:
+    1. Reply (most common use case)
+    2. Args with full info (numeric ID or @username)
+    3. Args with partial info (search users_db by name)
+    4. Text mention entity
+    5. @Mention entity
 
     The returned name is always a human-readable string. When Telegram returns
     no first_name and the member cache has no entry, falls back to ``User <uid>``
@@ -72,9 +79,16 @@ async def extract_target(
     """
     msg: Message = update.effective_message
 
-    # * Explicit numeric ID or @username always takes priority over reply
+    # * Priority 1: Reply target (most common use case)
+    if msg.reply_to_message and msg.reply_to_message.from_user:
+        u: User = msg.reply_to_message.from_user
+        return u.id, u.first_name or await _best_name(u.id)
+
+    # * Priority 2 & 3: Explicit args (full ID/username or partial name search)
     if args:
         arg = args[0].lstrip("@")
+
+        # * Priority 2a: Numeric ID
         if arg.lstrip("-").isdigit():
             uid = int(arg)
             chat_first: str | None = None
@@ -86,6 +100,7 @@ async def extract_target(
                     chat_username = chat.username
             return uid, await _best_name(uid, chat_first, chat_username)
 
+        # * Priority 2b: @username lookup
         if bot and arg:
             chat = await _safe_get_chat(bot, f"@{arg}")
             if chat is not None:
@@ -93,16 +108,25 @@ async def extract_target(
                     chat.id, chat.first_name, chat.username, arg
                 )
 
-    # * Fall back to reply target only when no explicit arg resolved above
-    if msg.reply_to_message and msg.reply_to_message.from_user:
-        u: User = msg.reply_to_message.from_user
-        return u.id, u.first_name or await _best_name(u.id)
+        # * Priority 3: Partial name search in users_db
+        if arg:
+            all_users = await users_db.all_users()
+            needle = arg.lower()
+            for user in all_users:
+                fname = (user.get("first_name") or "").lower()
+                uname = (user.get("username") or "").lower()
+                if needle in fname or needle in uname:
+                    uid = user.get("user_id")
+                    if uid:
+                        return uid, user.get("first_name") or await _best_name(uid)
 
+    # * Priority 4: Text mention entity
     for ent in msg.entities or []:
         if ent.type == "text_mention" and ent.user:
             u = ent.user
             return u.id, u.first_name or await _best_name(u.id)
 
+    # * Priority 5: @Mention entity
     if bot:
         text = msg.text or ""
         for ent in msg.entities or []:

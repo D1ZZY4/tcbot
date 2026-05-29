@@ -159,7 +159,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await msg.reply_text("You don't have permission to assign any roles.")
         return
     await msg.reply_text(
-        f"Choose a role to assign to {mention(target_id, target_fname or str(target_id))}:",
+        f"Choose a role to assign to {mention(target_id, target_fname or str(target_id), ident.username)}:",
         parse_mode="HTML",
         reply_markup=keyboards.promote_role_kb(target_id, available),
     )
@@ -268,7 +268,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     role_label = ROLE_LABEL.get(target_role, target_role)
     await msg.reply_text(
-        f"{mention(target_id, target_fname or str(target_id))} is currently a "
+        f"{mention(target_id, target_fname or str(target_id), ident.username)} is currently a "
         f"<b>{role_label}</b>.\nConfirm to remove their role.",
         parse_mode="HTML",
         reply_markup=keyboards.demote_confirm_kb(target_id),
@@ -294,12 +294,13 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             log.debug("Failed to clear demote reply markup: %s", exc)
         return
 
-    # * answer + fetch target role + name in parallel
-    _, target_role, target_fname = await asyncio.gather(
+    # * answer + fetch target role + mention data in parallel
+    _, target_role, (target_fname, target_uname) = await asyncio.gather(
         q.answer(),
         get_effective_role(target_id),
-        db.users_db.get_first_name(target_id, str(target_id)),
+        db.users_db.get_user_mention_data(target_id),
     )
+
     if not target_role or target_role == "founder":
         await q.edit_message_text(
             "That user no longer holds a removable role.", reply_markup=None
@@ -330,7 +331,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
     role_label = ROLE_LABEL.get(target_role, target_role)
     await q.edit_message_text(
-        f"Done. {mention(target_id, target_fname)} - {code(str(target_id))} "
+        f"Done. {mention(target_id, target_fname, target_uname)} - {code(str(target_id))} "
         f"has been removed from {role_label}.",
         parse_mode="HTML",
         reply_markup=None,
@@ -367,6 +368,10 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             "You're already the Founder - can't transfer ownership to yourself."
         )
         return
+
+    # Fetch username for mention (optimized)
+    _, target_uname = await db.users_db.get_user_mention_data(target_id)
+
     # * add_admin must complete before set_owner (set_owner does delete_many + insert)
     await db.users_db.add_admin(current_owner.id, current_owner.id)
     await db.users_db.set_owner(target_id)
@@ -382,7 +387,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
         update.effective_message.reply_text(
             f"Done. Ownership has been transferred to "
-            f"{mention(target_id, target_fname)} - {code(str(target_id))}.",
+            f"{mention(target_id, target_fname, target_uname)} - {code(str(target_id))}.",
             parse_mode="HTML",
         ),
         return_exceptions=True,
@@ -424,7 +429,7 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     for req in pending:
         uname = f"@{req['username']}" if req.get("username") else "no username"
         lines.append(
-            f"- {mention(req['target_id'], req['first_name'])} "
+            f"- {mention(req['target_id'], req['first_name'], req.get('username'))} "
             f"{code(str(req['target_id']))} | {uname} | ID: <code>{req['request_id']}</code>"
         )
     await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")

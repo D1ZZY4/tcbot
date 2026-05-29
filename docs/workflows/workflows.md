@@ -154,12 +154,6 @@ Appeal flow requirements:
 
 Promotion is not a conversation. `Promote.execute(...)` in `workflows/promote_flow.py` performs direct role assignment or creates a promotion request for Founder approval when required. `admins.py` registers the command and callback handlers. Manual demotion uses `Demote.execute(...)` in `workflows/demote_flow.py` (also called with `trigger="ban"`/`"kick"` by the ban and kick entry points to auto-remove a role before the moderation action).
 
-## Stats: `stats_flow.py` and `stats_chats_flow.py`
+## Stats: `stats_flow.py`
 
-These files provide callback-driven detail and pagination flows for `/tcstats`:
-
-- active ban pages and ban details;
-- active ban search by numeric ID or cached user name;
-- connected chat pages and chat detail cards.
-
-They are workflow helpers, not standalone modules.
+`stats_flow.py` exposes the unified `Stats` class used by `/tcstats`. Every drill-down — overview, staff roster, users, connected chats, active bans, and the search panel — is a classmethod on `Stats` returning `(text, InlineKeyboardMarkup)`. Callbacks pair `q.answer()` with `safe_edit_cb` so the same view can be re-tapped without raising `Message is not modified`. See `docs/stats-detailed.md` for the full method list and callback namespaces.

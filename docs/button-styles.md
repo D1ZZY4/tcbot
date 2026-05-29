@@ -15,7 +15,7 @@ useful without becoming a checklist of every keystroke.
 
 | Topic | Rule |
 |---|---|
-| Source of truth | `tcbot/modules/helper/keyboards.py` for reusable builders. Workflow-local builders are allowed when callback state is private to the workflow (`stats_flow.py`, `stats_chats_flow.py`, `check_flow.py`, conversation flows). |
+| Source of truth | `tcbot/modules/helper/keyboards.py` for reusable builders. Workflow-local builders are allowed when callback state is private to the workflow (`stats_flow.py`, `check_flow.py`, conversation flows). |
 | Labels | Title case, short, plain English. No pictograph emoji. `«` and `»` are allowed for navigation arrows. |
 | Back navigation | `« Back` always returns one step. Nested views use `back_to_module_kb` / `back_to_help_kb` / `back_to_help_cmd_kb`. |
 | Pagination | `« Prev` and `Next »` on a single nav row, then numbered drill-in buttons three per row, then optional global actions, then `« Back`. |
@@ -52,7 +52,7 @@ prefix; subsequent segments are typed positional fields.
 | `promo_approve:<request_id>` / `promo_reject:<request_id>` | Founder DM | request | Founder resolves a pending Admin promotion request. |
 | `demote_confirm:<target_id>` / `demote_cancel:<target_id>` | demote prompt | target | Confirm or cancel a demotion. |
 | `checkme_detail:<ban_id>` / `checkme_back:<ban_id>` | `/checkme` | ban | Toggle the `/checkme` summary and detail views. |
-| `stats_main` / `stats_admins` / `stats_chats:<page>` / `stats_chat_item:<page>:<idx>` / `stats_bans:<page>` / `stats_ban_item:<page>:<idx>` | `/tcstats` | varies | Federation stats drill-downs. |
+| `stats_main` / `stats_admins` / `stats_users:<page>` / `stats_user_item:<page>:<idx>` / `stats_chats:<page>` / `stats_chat_item:<page>:<idx>` / `stats_bans:<page>` / `stats_ban_item:<page>:<idx>` | `/tcstats` | varies | Federation stats drill-downs (`Stats` class). |
 | `stats_bans_search` / `stats_search_cancel` / `stats_search_back` / `stats_search_item:<idx>` | stats search | varies | Search panel for the active-ban list. |
 | `check_main:<uid>` | `/check` | target | Top-level profile (used by every drill-down's `« Back`). |
 | `check_bans:<uid>:<page>` / `check_ban_item:<uid>:<ban_id>` | `/check` | target, page or ban | Bans drill-down list and per-record detail. |

@@ -27,6 +27,7 @@ This directory documents the internal architecture and developer workflows for T
 | [Demote detailed](demote-detailed.md) | Manual `/tcdemote`, auto-demote on ban/kick, the `Demote` class, permission rules, and unified log format. |
 | [Promote detailed](promote-detailed.md) | `/tcpromote`, the `Promote` class, role hierarchy, direct vs request flow, callbacks, and edge cases. |
 | [Roles detailed](role-detailed.md) | Founder/Admin/Developer/Tester hierarchy, promotion/demotion behavior, and role safety rules. |
+| [Stats detailed](stats-detailed.md) | `/tcstats`, the `Stats` class, drill-downs (Staff / Users / Chats / Bans), search panel, and async design. |
 | [Warnings detailed](warnings-detailed.md) | Per-group warnings, optional proof, warn-limit auto-ban behavior, and warning storage. |
 
 ## Architecture at a glance

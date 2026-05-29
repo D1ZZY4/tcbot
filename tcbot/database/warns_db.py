@@ -131,9 +131,11 @@ async def warn_count(user_id: int, chat_id: int) -> int:
 
 async def clear_warns(user_id: int, chat_id: int) -> int:
     """Remove ALL warnings for a user in a specific chat."""
-    r = await _warns().delete_many(_warn_key(user_id, chat_id))
-    await _warn_counts().delete_one(_warn_key(user_id, chat_id))
-    return r.deleted_count
+    results = await asyncio.gather(
+        _warns().delete_many(_warn_key(user_id, chat_id)),
+        _warn_counts().delete_one(_warn_key(user_id, chat_id)),
+    )
+    return results[0].deleted_count
 
 
 async def get_warns(user_id: int, chat_id: int) -> list[WarnDoc]:
@@ -153,22 +155,24 @@ async def remove_last_warn(user_id: int, chat_id: int) -> bool:
     )
     if not doc:
         return False
-    await _warns().delete_one({"_id": doc["_id"]})
-    counter = await _warn_counts().find_one_and_update(
-        {
-            **_warn_key(user_id, chat_id),
-            "count": {"$gt": 0},
-        },
-        {"$inc": {"count": -1}, "$set": {"updated_at": utc_now()}},
-        return_document=ReturnDocument.AFTER,
-        projection={"_id": 0, "count": 1},
+
+    # Delete warn and update counter in parallel
+    _, counter = await asyncio.gather(
+        _warns().delete_one({"_id": doc["_id"]}),
+        _warn_counts().find_one_and_update(
+            {
+                **_warn_key(user_id, chat_id),
+                "count": {"$gt": 0},
+            },
+            {"$inc": {"count": -1}, "$set": {"updated_at": utc_now()}},
+            return_document=ReturnDocument.AFTER,
+            projection={"_id": 0, "count": 1},
+        ),
     )
+
     if counter is None:
-        await _store_warn_count(
-            user_id,
-            chat_id,
-            await _warns().count_documents(_warn_key(user_id, chat_id)),
-        )
+        count = await _warns().count_documents(_warn_key(user_id, chat_id))
+        await _store_warn_count(user_id, chat_id, count)
     return True
 
 

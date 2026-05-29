@@ -46,9 +46,9 @@ class LogBuilder:
         self._lines.append(f"{label}: {code(str(value))}")
         return self
 
-    def mention_field(self, label: str, user_id: int, name: str) -> LogBuilder:
-        """Append a `Label: mention(user_id, name)` line."""
-        self._lines.append(f"{label}: {mention(user_id, name)}")
+    def mention_field(self, label: str, user_id: int, name: str, username: str | None = None) -> LogBuilder:
+        """Append a `Label: mention(user_id, name, username)` line."""
+        self._lines.append(f"{label}: {mention(user_id, name, username)}")
         return self
 
     def link_field(self, label: str, text: str, url: str) -> LogBuilder:
@@ -70,12 +70,13 @@ class LogBuilder:
         self,
         target_id: int,
         target_fname: str,
+        target_username: str | None = None,
         *,
         user_label: str = "User",
         id_label: str = "User ID",
     ) -> LogBuilder:
         """Append the canonical `Label: mention` + `User ID: <id>` pair."""
-        self._lines.append(f"{user_label}: {mention(target_id, target_fname)}")
+        self._lines.append(f"{user_label}: {mention(target_id, target_fname, target_username)}")
         self._lines.append(f"{id_label}: {target_id}")
         return self
 
@@ -83,12 +84,13 @@ class LogBuilder:
         self,
         actor_id: int,
         actor_fname: str,
+        actor_username: str | None = None,
         *,
         label: str = "Admin",
         id_label: str = "ID",
     ) -> LogBuilder:
         """Append the canonical `Label: mention` + `ID: <id>` pair for an actor."""
-        self._lines.append(f"{label}: {mention(actor_id, actor_fname)}")
+        self._lines.append(f"{label}: {mention(actor_id, actor_fname, actor_username)}")
         self._lines.append(f"{id_label}: {actor_id}")
         return self
 

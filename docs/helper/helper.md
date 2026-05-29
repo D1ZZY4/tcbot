@@ -37,7 +37,7 @@ All bot messages use Telegram HTML parse mode.
 | `italic(text)` | `<i>...</i>` with escaped content. |
 | `code(text)` | `<code>...</code>` with escaped content. |
 | `link(text, url)` | HTML link. Escape or validate URLs before passing untrusted values. |
-| `mention(user_id, name)` | `tg://user?id=...` mention with escaped display name. |
+| `mention(user_id, name, username=None)` | Smart mention with username fallback. If username is provided, creates a global `https://t.me/username` link that works across all groups. Otherwise, falls back to plain text name with copyable user ID. |
 
 Use `esc()`, `code()`, or `mention()` for any user-provided value in HTML messages.
 
@@ -48,9 +48,16 @@ Target resolution for moderation commands.
 | Export | Purpose |
 |---|---|
 | `ResolvedTarget` | Dataclass-like resolved target with ID, first name, optional username, and raw object. |
-| `extract_target(update, args, bot=None)` | Resolves numeric IDs, usernames, replies, and text mentions. |
+| `extract_target(update, args, bot=None)` | Resolves targets with priority: reply → args (ID/username) → args (partial name search in DB) → text mentions → @mentions. |
 
-Resolution order for `extract_target()` starts with explicit command arguments, then falls back to reply/user mention data.
+**Resolution priority for `extract_target()`:**
+1. **Reply** - Most common use case, checked first
+2. **Args with full info** - Numeric ID or @username
+3. **Args with partial info** - Searches users_db by name (e.g., `/ban John` finds users with "John" in their name)
+4. **Text mention entity** - Direct user mention in message
+5. **@Mention entity** - Username mention in message
+
+This priority order makes reply-based targeting more natural while adding support for partial name searches.
 
 ## `keyboards.py`
 
@@ -69,7 +76,16 @@ See [button styles](../button-styles.md) for layout and callback-data convention
 
 ## `identity.py`
 
-`identity.classify(bot, executor_id, target_id, target_fname)` returns an `Identity` dataclass that classifies a moderation target as one of: `self`, `this_bot`, `other_bot`, `telegram`, `founder`, `admin`, `developer`, `tester`, `user`. The companion helpers `identity.refuse_message(action, ident)` and `identity.staff_notice(action, ident, community_name)` produce the witty refusal lines and staff heads-up notices used by every moderation entry handler.
+`identity.classify(bot, executor_id, target_id, target_fname)` returns an `Identity` dataclass that classifies a moderation target as one of: `self`, `this_bot`, `other_bot`, `telegram`, `founder`, `admin`, `developer`, `tester`, `user`. 
+
+The `Identity` dataclass now includes:
+- `kind`: The identity type
+- `target_id`: User ID
+- `fname`: First name
+- `username`: Optional username (used for global mentions)
+- `is_bot`: Boolean flag
+
+The companion helpers `identity.refuse_message(action, ident)` and `identity.staff_notice(action, ident, community_name)` produce the witty refusal lines and staff heads-up notices used by every moderation entry handler.
 
 Every moderation command (ban, kick, mute, warn, unban, unmute, promote, demote) must call `identity.classify` once and route through `refuse_message` instead of inlining `target_id == ctx.bot.id` / `user.id == owner_id` / role-string branches. Refusal copy lives in `identity.py` so the bot's voice stays consistent across the whole project.
 

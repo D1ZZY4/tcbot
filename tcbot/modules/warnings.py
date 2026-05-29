@@ -179,13 +179,13 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ident = await identity.classify(ctx.bot, admin.id, target_id, target_name)
     if ident.kind == "this_bot":
         await msg.reply_text(
-            f"{mention(target_id, ident.fname)} - zero warnings here, ever. Nothing to remove.",
+            f"{mention(target_id, ident.fname, ident.username)} - zero warnings here, ever. Nothing to remove.",
             parse_mode="HTML",
         )
         return
     if ident.kind == "founder":
         await msg.reply_text(
-            f"{mention(target_id, ident.fname)} is the Founder - no warnings on record.",
+            f"{mention(target_id, ident.fname, ident.username)} is the Founder - no warnings on record.",
             parse_mode="HTML",
         )
         return
@@ -233,13 +233,13 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     ident = await identity.classify(ctx.bot, admin.id, target_id, target_name)
     if ident.kind == "this_bot":
         await msg.reply_text(
-            f"{mention(target_id, ident.fname)} - already at zero, always. Nothing to clear.",
+            f"{mention(target_id, ident.fname, ident.username)} - already at zero, always. Nothing to clear.",
             parse_mode="HTML",
         )
         return
     if ident.kind == "founder":
         await msg.reply_text(
-            f"{mention(target_id, ident.fname)} is the Founder - no warnings to clear.",
+            f"{mention(target_id, ident.fname, ident.username)} is the Founder - no warnings to clear.",
             parse_mode="HTML",
         )
         return

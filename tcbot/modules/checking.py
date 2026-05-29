@@ -84,8 +84,15 @@ async def _ban_summary(
 ) -> tuple[str, str | None]:
     """Build the /checkme summary text and proof link."""
     aid = ban.get("admin_user_id", 0)
+
+    # Fetch mention data for both users in parallel
+    (user_fname_cached, user_uname), (admin_fname_cached, admin_uname) = await asyncio.gather(
+        db.users_db.get_user_mention_data(user_id),
+        db.users_db.get_user_mention_data(aid),
+    )
+
     if admin_fname is None:
-        admin_fname = await db.users_db.get_first_name(aid, "Admin")
+        admin_fname = admin_fname_cached
 
     proof_chat, proof_thread = cfg.proofs
     proof_link = (
@@ -99,10 +106,10 @@ async def _ban_summary(
 
     text = (
         f"You are currently banned from {cfg.community_name}.\n\n"
-        f"User: {mention(user_id, user_fname)}\n"
+        f"User: {mention(user_id, user_fname, user_uname)}\n"
         f"User ID: {code(str(user_id))}\n"
         f"Reason: {esc(ban.get('reason', 'No reason provided'))}\n\n"
-        f"Banned by: {mention(aid, admin_fname)}\n\n"
+        f"Banned by: {mention(aid, admin_fname, admin_uname)}\n\n"
         f"Commit Date: {date_str}\n"
         "Tap a button below for more details."
     )
@@ -137,7 +144,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     if user.id == owner_id:
         await msg.reply_text(
-            f"Bro, {mention(user.id, fname)}... seriously?\n\n"
+            f"Bro, {mention(user.id, fname, user.username)}... seriously?\n\n"
             "You're the Founder - you built this whole place. "
             "The ban list doesn't apply to you, you run it. "
             "Go touch grass, you're fine.",
@@ -147,7 +154,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     if user_role == "admin":
         await msg.reply_text(
-            f"Hey {mention(user.id, fname)}, checking yourself?\n\n"
+            f"Hey {mention(user.id, fname, user.username)}, checking yourself?\n\n"
             "You're on the staff team - you handle bans, not receive them. "
             "No active ban on your end. You're good.",
             parse_mode="HTML",
@@ -156,7 +163,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if user_role in ("developer", "tester"):
         role_label = ROLE_LABEL.get(user_role, user_role)
         await msg.reply_text(
-            f"Hey {mention(user.id, fname)}, all good.\n\n"
+            f"Hey {mention(user.id, fname, user.username)}, all good.\n\n"
             f"You're a {cfg.community_name} {role_label} - on the team, not on the ban list. "
             "Nothing to worry about.",
             parse_mode="HTML",

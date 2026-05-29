@@ -351,21 +351,20 @@ class Check:
             ]
             return text, InlineKeyboardMarkup(rows)
 
-        # * Resolve admin names in parallel up-front so the line loop is sync.
-        admin_ids = [w.get("admin_id", 0) for w in chunk]
-        admin_names = await asyncio.gather(
-            *[_name(aid) if aid else _async_const("Admin") for aid in admin_ids]
-        )
+        # * Resolve admin names with batch query
+        admin_ids = [w.get("admin_id", 0) for w in chunk if w.get("admin_id")]
+        admin_name_map = await db.users_db.get_first_names_batch(admin_ids) if admin_ids else {}
 
         lines = [
             f"{bold('Warnings in')} {esc(title)} — {len(warns)} total"
             f"  ·  page {page + 1}/{total_pages}\n"
         ]
         base_idx = page * _PAGE_SIZE
-        for i, (w, admin_name) in enumerate(zip(chunk, admin_names), start=1):
+        for i, w in enumerate(chunk, start=1):
             ts = _date(w.get("timestamp"))
             reason_short = esc(str(w.get("reason", "—"))[:80])
             admin_id = w.get("admin_id", 0)
+            admin_name = admin_name_map.get(admin_id, "Admin") if admin_id else "Admin"
             lines.append(
                 f"{base_idx + i}. {ts}\n"
                 f"   <i>{reason_short}</i>\n"
@@ -496,12 +495,12 @@ async def _per_chat_event_list(
         return text, InlineKeyboardMarkup([_back_to_check(target_id)])
 
     chat_ids = list({r["chat_id"] for r in chunk if "chat_id" in r})
-    admin_ids = [r.get("admin_id", 0) for r in chunk]
+    admin_ids = [r.get("admin_id", 0) for r in chunk if r.get("admin_id")]
 
-    # * Resolve all titles + all admin names in parallel.
-    titles, *admin_names = await asyncio.gather(
+    # * Resolve all titles + all admin names in parallel with batch query
+    titles, admin_name_map = await asyncio.gather(
         db.groups_db.get_group_titles(chat_ids),
-        *[_name(aid) if aid else _async_const("Admin") for aid in admin_ids],
+        db.users_db.get_first_names_batch(admin_ids) if admin_ids else _async_const({}),
     )
 
     lines = [
@@ -509,12 +508,13 @@ async def _per_chat_event_list(
         f"  ·  page {page + 1}/{total_pages}\n"
     ]
     base_idx = page * _PAGE_SIZE
-    for i, (rec, admin_name) in enumerate(zip(chunk, admin_names), start=1):
+    for i, rec in enumerate(chunk, start=1):
         ts = _date(rec.get("timestamp"))
         reason_short = esc(str(rec.get("reason", "—"))[:80])
         chat_id = rec.get("chat_id", 0)
         title = titles.get(chat_id) or str(chat_id)
         admin_id = rec.get("admin_id", 0)
+        admin_name = admin_name_map.get(admin_id, "Admin") if admin_id else "Admin"
         lines.append(
             f"{base_idx + i}. {ts}\n"
             f"   Group: {esc(title)}\n"

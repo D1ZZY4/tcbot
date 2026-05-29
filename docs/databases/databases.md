@@ -18,7 +18,7 @@ The database layer lives in `tcbot/database/` and is the only place that should 
 
 | Helper | Collection(s) | Main responsibilities |
 |---|---|---|
-| `users_db.py` | `member_cache`, `tc_owners`, `tc_admins`, `tc_roles` | Member profile cache, owner/admin storage, Tester/Developer custom-role assignment, effective-role resolution, rank comparison, role-cache invalidation. |
+| `users_db.py` | `member_cache`, `tc_owners`, `tc_admins`, `tc_roles` | Member profile cache, owner/admin storage, Tester/Developer custom-role assignment, effective-role resolution, rank comparison, role-cache invalidation. Provides optimized `get_user_mention_data()` for fetching only first_name and username fields. |
 | `bans_db.py` | `bans` | Active ban lookup, ban creation/update, unban deactivation, appeal/review metadata, active ban lists. |
 | `groups_db.py` | `federated_groups`, `pending_joins` | Connected group state, pending connection requests, group cache invalidation. |
 | `users_db.py` | `member_cache` | Cached Telegram profile data from group messages and lookup fallbacks. |
@@ -29,6 +29,18 @@ The database layer lives in `tcbot/database/` and is the only place that should 
 | `cache.py` | in-memory only | TTL caches for owner, roles, connection status, and active groups. |
 | `documents.py` | type-only | `TypedDict` document shapes and `Literal` aliases. |
 | `types.py` | type-only | `NewType` primitives such as `UserId`, `GroupId`, `ChatId`, and `BanId`. |
+
+## Member cache optimization
+
+The `member_cache` collection stores user profile data. For performance, use the appropriate query function:
+
+| Function | Fields fetched | Use case |
+|---|---|---|
+| `get_user(user_id)` | All fields | When you need complete user profile |
+| `get_first_name(user_id, fallback)` | `first_name` only | When you only need the name |
+| `get_user_mention_data(user_id)` | `first_name`, `username` | Optimized for mention formatting (returns tuple) |
+
+**Performance tip:** Always use `get_user_mention_data()` when building mentions to avoid fetching unnecessary fields like `last_name`, `commit_date`, and `last_updated`.
 
 ## Startup indexes
 

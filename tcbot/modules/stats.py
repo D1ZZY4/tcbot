@@ -2,32 +2,23 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""tcstats command and callback handlers – federation stats overview and drill-downs."""
+"""``/tcstats`` command and callback handlers — federation-wide overview and drill-downs."""
 
 from __future__ import annotations
 
 import asyncio
 
 from telegram import Update
-from telegram.error import BadRequest
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
-from tcbot import cfg
-from tcbot import database as db
-from tcbot.modules.helper import decorators, keyboards
-from tcbot.modules.helper.formatter import esc, mention
-from tcbot.modules.helper.workflows.stats_chats_flow import (
-    on_stats_chat_item,
-    on_stats_chats,
-)
+from tcbot.modules.helper import decorators
+from tcbot.modules.helper.parse_editmsg import safe_edit_cb
 from tcbot.modules.helper.workflows.stats_flow import (
-    on_bans_search_input,
-    on_stats_ban_item,
-    on_stats_bans,
-    on_stats_bans_search,
-    on_stats_search_back,
-    on_stats_search_cancel,
-    on_stats_search_item,
+    CHAT_KEY,
+    MSG_KEY,
+    RESULTS_KEY,
+    SEARCH_KEY,
+    Stats,
 )
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
 
@@ -35,14 +26,14 @@ from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
 
 __module_name__ = "Stats"
 __help_text__ = (
-    "Live overview of the federation — Founder, staff count, active bans, "
-    "and connected groups — with drill-down menus."
+    "Live federation overview — Founder, staff, users, active bans, and "
+    "connected groups, with drill-down menus for every section."
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         "Commands & Aliases",
-        "<code>/tcstats</code>",
+        "<code>/tcstats</code> (alias: <code>/tcs</code>)",
     ),
     (
         "Who can use",
@@ -54,50 +45,27 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "What it does",
-        "Shows a live overview of the federation: the Founder, total staff count, number of "
-        "active federation bans, and number of connected groups.",
+        "Shows a live federation summary: Founder, total staff broken down by "
+        "role, the number of cached users, active federation bans, and "
+        "connected chats.",
     ),
     (
         "Drill-downs",
-        "Three drill-down buttons are available below the summary:\n\n"
-        "- <b>Staff Roster</b>: full breakdown of all staff by role "
-        "(Founder, Admins, Developers, Testers).\n"
-        "- <b>Connected Chats</b>: paginated list of all currently connected groups.\n"
-        "- <b>User Bans</b>: paginated list of all active federation bans, with a "
-        "<b>Search</b> option to look up a specific user by name or ID.\n\n"
-        "Each view has a <b>Back</b> button to return to the main summary.",
+        "<b>Staff Roster</b> — Founder, Admins, Developers, Testers, all listed "
+        "with mentions.\n"
+        "<b>Users</b> — paginated list of every cached user. Numbered buttons "
+        "open a per-user detail card.\n"
+        "<b>Connected Chats</b> — paginated list of every active group; "
+        "drill-in shows owner, ID, and connect date.\n"
+        "<b>User Bans</b> — paginated list of every active ban with a "
+        "<b>Search</b> shortcut to look up a user by name or ID.\n\n"
+        "Every view ends with a <b>« Back</b> button to the main summary.",
     ),
     (
-        "Example",
-        "<code>/tcstats</code>",
+        "Examples",
+        "<code>/tcstats</code>\n<code>/tcs</code>",
     ),
 ]
-
-
-# ──────────────────────── Helper Functions ──────────────────────── #
-
-
-async def _stats_text() -> str:
-    (owner_id, admin_cnt, dev_list, tester_list, bans, groups) = await asyncio.gather(
-        db.users_db.get_owner_id(),
-        db.users_db.admin_count(),
-        db.users_db.all_by_role("developer"),
-        db.users_db.all_by_role("tester"),
-        db.bans_db.active_ban_count(),
-        db.groups_db.active_group_count(),
-    )
-    owner_fname = (
-        await db.users_db.get_first_name(owner_id, "Owner") if owner_id else "Unknown"
-    )
-    owner_mention = mention(owner_id, owner_fname) if owner_id else "Unknown"
-    staff_total = 1 + admin_cnt + len(dev_list) + len(tester_list)
-    return (
-        f"<b>Stats - {esc(cfg.community_name)}</b>\n\n"
-        f"Founder: {owner_mention}\n"
-        f"Staff: {staff_total} total\n"
-        f"Active bans: {bans}\n"
-        f"Connected chats: {groups}"
-    )
 
 
 # ──────────────────────── Command Handlers ──────────────────────── #
@@ -106,114 +74,184 @@ async def _stats_text() -> str:
 @decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
 async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    text = await _stats_text()
-    await update.effective_message.reply_text(
-        text, parse_mode="HTML", reply_markup=keyboards.stats_main_kb()
-    )
+    """Send the federation overview message."""
+    text, kb = await Stats.main()
+    await update.effective_message.reply_text(text, parse_mode="HTML", reply_markup=kb)
 
 
 # ──────────────────────── Callback Handlers ─────────────────────── #
+
+
+async def _ack_and_render(q, text: str, kb) -> None:
+    """Answer the callback then safely edit the card with the rendered view."""
+    await q.answer()
+    await safe_edit_cb(q, text, reply_markup=kb)
 
 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_stats_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
-    _, text = await asyncio.gather(q.answer(), _stats_text())
-    try:
-        await q.edit_message_text(
-            text, parse_mode="HTML", reply_markup=keyboards.stats_main_kb()
-        )
-    except BadRequest as e:
-        if "not modified" not in str(e).lower():
-            raise
+    text, kb = await Stats.main()
+    await _ack_and_render(q, text, kb)
 
 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
+    text, kb = await Stats.staff_roster()
+    await _ack_and_render(q, text, kb)
 
-    # * Gather q.answer() alongside all DB calls in one shot
-    _, owner_id, admins, developers, testers = await asyncio.gather(
-        q.answer(),
-        db.users_db.get_owner_id(),
-        db.users_db.all_admins(),
-        db.users_db.all_by_role("developer"),
-        db.users_db.all_by_role("tester"),
+
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
+async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    page = int(q.data.split(":")[1])
+    text, kb = await Stats.users_list(page)
+    await _ack_and_render(q, text, kb)
+
+
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
+async def on_stats_user_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    _, page_str, idx_str = q.data.split(":")
+    text, kb = await Stats.user_detail(int(page_str), int(idx_str))
+    await _ack_and_render(q, text, kb)
+
+
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
+async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    page = int(q.data.split(":")[1])
+    text, kb = await Stats.chats_list(page)
+    await _ack_and_render(q, text, kb)
+
+
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
+async def on_stats_chat_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    _, page_str, idx_str = q.data.split(":")
+    text, kb = await Stats.chat_detail(int(page_str), int(idx_str))
+    await _ack_and_render(q, text, kb)
+
+
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
+async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    page = int(q.data.split(":")[1])
+    Stats.clear_search(ctx)
+    text, kb = await Stats.bans_list(page)
+    await _ack_and_render(q, text, kb)
+
+
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
+async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    _, page_str, idx_str = q.data.split(":")
+    text, kb = await Stats.ban_detail(int(page_str), int(idx_str))
+    await _ack_and_render(q, text, kb)
+
+
+# ── Search panel ─────────────────────────────────────────────────────
+
+
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
+async def on_stats_bans_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    text, kb = Stats.open_search(ctx, q)
+    await _ack_and_render(q, text, kb)
+
+
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
+async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Free-text query message handler — only reacts when the search panel is active."""
+    if ctx.user_data is None or not ctx.user_data.get(SEARCH_KEY):
+        return
+    ctx.user_data.pop(SEARCH_KEY, None)
+
+    msg = update.effective_message
+    query = (msg.text or "").strip()
+
+    # * Run the search and delete the user's input message in parallel.
+    results, _ = await asyncio.gather(
+        Stats.search_run(query),
+        msg.delete(),
+        return_exceptions=True,
     )
+    if isinstance(results, BaseException):
+        results = []
 
-    # * Build name-fetch tasks in order: owner, admins, devs, testers
-    name_tasks: list = []
-    owner_idx = None
-    if owner_id:
-        owner_idx = len(name_tasks)
-        name_tasks.append(db.users_db.get_first_name(owner_id, "Founder"))
-    admin_start = len(name_tasks)
-    name_tasks.extend(
-        db.users_db.get_first_name(a["user_id"], str(a["user_id"])) for a in admins
-    )
-    dev_start = len(name_tasks)
-    name_tasks.extend(
-        db.users_db.get_first_name(d["user_id"], str(d["user_id"])) for d in developers
-    )
-    tester_start = len(name_tasks)
-    name_tasks.extend(
-        db.users_db.get_first_name(t["user_id"], str(t["user_id"])) for t in testers
-    )
+    ctx.user_data[RESULTS_KEY] = results
 
-    all_names = list(await asyncio.gather(*name_tasks)) if name_tasks else []
+    chat_id = ctx.user_data.get(CHAT_KEY)
+    msg_id = ctx.user_data.get(MSG_KEY)
+    text, kb = await Stats.search_results(query, results)
+    if chat_id is not None and msg_id is not None:
+        await ctx.bot.edit_message_text(
+            text,
+            chat_id=chat_id,
+            message_id=msg_id,
+            parse_mode="HTML",
+            reply_markup=kb,
+        )
 
-    lines: list[str] = [f"<b>Staff Roster - {esc(cfg.community_name)}</b>\n"]
 
-    if owner_idx is not None:
-        lines.append("<b>Founder</b>")
-        lines.append(f"- {mention(owner_id, all_names[owner_idx])}\n")
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
+async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    idx = int(q.data.split(":")[1])
+    results = ctx.user_data.get(RESULTS_KEY, []) if ctx.user_data else []
+    text, kb = await Stats.search_detail(results, idx)
+    await _ack_and_render(q, text, kb)
 
-    lines.append(f"<b>Admins ({len(admins)})</b>")
-    if admins:
-        for adm, fname in zip(
-            admins, all_names[admin_start : admin_start + len(admins)]
-        ):
-            lines.append(f"- {mention(adm['user_id'], fname)}")
+
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
+async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    results = ctx.user_data.get(RESULTS_KEY, []) if ctx.user_data else []
+    if not results:
+        text, kb = Stats.open_search(ctx, q)
     else:
-        lines.append("- None assigned")
-    lines.append("")
+        # * Re-render the previous results without re-running the query.
+        previous_query = (
+            ctx.user_data.get("stats_last_query", "") if ctx.user_data else ""
+        )
+        text, kb = await Stats.search_results(previous_query, results)
+    await _ack_and_render(q, text, kb)
 
-    lines.append(f"<b>Developers ({len(developers)})</b>")
-    if developers:
-        for dev, fname in zip(
-            developers, all_names[dev_start : dev_start + len(developers)]
-        ):
-            lines.append(f"- {mention(dev['user_id'], fname)}")
-    else:
-        lines.append("- None assigned")
-    lines.append("")
 
-    lines.append(f"<b>Testers ({len(testers)})</b>")
-    if testers:
-        for tst, fname in zip(
-            testers, all_names[tester_start : tester_start + len(testers)]
-        ):
-            lines.append(f"- {mention(tst['user_id'], fname)}")
-    else:
-        lines.append("- None assigned")
-
-    await q.edit_message_text(
-        "\n".join(lines),
-        parse_mode="HTML",
-        reply_markup=keyboards.stats_back_kb(),
-    )
+@decorators.ratelimiter(limit=15, period=30)
+@decorators.log_execution
+async def on_stats_search_cancel(
+    update: Update, ctx: ContextTypes.DEFAULT_TYPE
+) -> None:
+    q = update.callback_query
+    Stats.clear_search(ctx)
+    text, kb = await Stats.bans_list(0)
+    await _ack_and_render(q, text, kb)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #
 
-_STATS_CMDS = build_prefixed_filters("tcstats")
+_STATS_CMDS = build_prefixed_filters("tcstats") | build_prefixed_filters("tcs")
 
 __handlers__ = [
     MessageHandler(_STATS_CMDS, cmd_stats),
     CallbackQueryHandler(on_stats_main, pattern=r"^stats_main$"),
     CallbackQueryHandler(on_stats_admins, pattern=r"^stats_admins$"),
+    CallbackQueryHandler(on_stats_users, pattern=r"^stats_users:\d+$"),
+    CallbackQueryHandler(on_stats_user_item, pattern=r"^stats_user_item:\d+:\d+$"),
     CallbackQueryHandler(on_stats_chats, pattern=r"^stats_chats:\d+$"),
     CallbackQueryHandler(on_stats_chat_item, pattern=r"^stats_chat_item:\d+:\d+$"),
     CallbackQueryHandler(on_stats_bans, pattern=r"^stats_bans:\d+$"),
@@ -222,8 +260,9 @@ __handlers__ = [
     CallbackQueryHandler(on_stats_search_item, pattern=r"^stats_search_item:\d+$"),
     CallbackQueryHandler(on_stats_search_back, pattern=r"^stats_search_back$"),
     CallbackQueryHandler(on_stats_search_cancel, pattern=r"^stats_search_cancel$"),
-    # * Scoped to private chat: search input is only meaningful in PM where the user
-    # * opened the bans panel. Avoids absorbing every non-command text in groups.
+    # * Scoped to private chat: search input is only meaningful in PM where the
+    # * user opened the bans panel. Avoids absorbing every non-command text in
+    # * groups.
     MessageHandler(
         filters.ChatType.PRIVATE & filters.TEXT & ~ALL_PREFIXES_CMD_FILTER,
         on_bans_search_input,

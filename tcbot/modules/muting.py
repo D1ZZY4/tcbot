@@ -116,7 +116,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         )
         return ConversationHandler.END
 
-    ident, (_, target_role) = await asyncio.gather(
+    ident, (executor_role, target_role) = await asyncio.gather(
         identity.classify(ctx.bot, admin.id, target_id, target_fname),
         resolve_and_check(msg, admin.id, target_id, min_role="tester"),
     )
@@ -125,7 +125,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         await msg.reply_text(refusal, parse_mode="HTML")
         return ConversationHandler.END
 
-    if _ is None:
+    if executor_role is None:
         return ConversationHandler.END
 
     duration = None

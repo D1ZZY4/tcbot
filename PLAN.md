@@ -158,7 +158,7 @@ Primary flows:
 | `proof_flow.py` | Proof upload helpers and prompts. |
 | `kicking_flow.py`, `muting_flow.py`, `warning_flow.py`, `unban_flow.py` | Action-specific moderation workflows. |
 | `promote_flow.py` | Role promotion execution helpers. |
-| `stats_flow.py`, `stats_chats_flow.py` | Stats display flows. |
+| `stats_flow.py` | Unified `Stats` class — overview, staff roster, users, chats, bans, search. |
 
 For detailed behavior, see `docs/workflows/workflows.md`.
 

@@ -47,6 +47,7 @@ class Identity:
     kind: IdentityKind
     target_id: int
     fname: str
+    username: str | None = None
     is_bot: bool = False
 
     @property
@@ -88,35 +89,35 @@ async def classify(
     cheap — every code path that calls ``classify`` already has the user's
     profile resolved upstream, so the only async hit is the role cache.
     """
+    # Optimized: fetch only first_name and username, not full document
+    cached_fname, target_username = await db.users_db.get_user_mention_data(target_id)
     if not target_fname or target_fname.startswith("User "):
-        target_fname = await db.users_db.get_first_name(
-            target_id, target_fname or f"User {target_id}"
-        )
+        target_fname = cached_fname
 
     if target_id == executor_id:
-        return Identity("self", target_id, target_fname, is_bot=False)
+        return Identity("self", target_id, target_fname, target_username, is_bot=False)
     if target_id == bot.id:
-        return Identity("this_bot", target_id, target_fname, is_bot=True)
+        return Identity("this_bot", target_id, target_fname, target_username, is_bot=True)
     if target_id == TELEGRAM_USER_ID:
-        return Identity("telegram", target_id, target_fname, is_bot=False)
+        return Identity("telegram", target_id, target_fname, target_username, is_bot=False)
     if target_is_bot:
-        return Identity("other_bot", target_id, target_fname, is_bot=True)
+        return Identity("other_bot", target_id, target_fname, target_username, is_bot=True)
 
     role = await get_effective_role(target_id)
     if role == "founder":
-        return Identity("founder", target_id, target_fname)
+        return Identity("founder", target_id, target_fname, target_username)
     if role == "admin":
-        return Identity("admin", target_id, target_fname)
+        return Identity("admin", target_id, target_fname, target_username)
     if role == "developer":
-        return Identity("developer", target_id, target_fname)
+        return Identity("developer", target_id, target_fname, target_username)
     if role == "tester":
-        return Identity("tester", target_id, target_fname)
-    return Identity("user", target_id, target_fname)
+        return Identity("tester", target_id, target_fname, target_username)
+    return Identity("user", target_id, target_fname, target_username)
 
 
 def _line(ident: Identity) -> str:
     """Build the canonical ``mention - <id>`` chunk for an identity."""
-    return f"{mention(ident.target_id, ident.fname)} - {code(str(ident.target_id))}"
+    return f"{mention(ident.target_id, ident.fname, ident.username)} - {code(str(ident.target_id))}"
 
 
 # ────────────────── Per-action witty refusals ───────────────────── #

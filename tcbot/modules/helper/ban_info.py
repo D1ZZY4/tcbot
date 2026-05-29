@@ -25,12 +25,14 @@ async def build_ban_detail(
     aid = ban.get("admin_user_id", 0)
 
     if target_fname is None:
-        target_fname, admin_fname = await asyncio.gather(
-            db.users_db.get_first_name(uid, str(uid)),
-            db.users_db.get_first_name(aid, str(aid)),
+        # Fetch mention data for both users in parallel
+        (target_fname, target_uname), (admin_fname, admin_uname) = await asyncio.gather(
+            db.users_db.get_user_mention_data(uid),
+            db.users_db.get_user_mention_data(aid),
         )
     else:
-        admin_fname = await db.users_db.get_first_name(aid, str(aid))
+        admin_fname, admin_uname = await db.users_db.get_user_mention_data(aid)
+        target_uname = None
 
     proof_chat, proof_thread = cfg.proofs
     proof_link = (
@@ -44,9 +46,9 @@ async def build_ban_detail(
 
     text = (
         "<b>Ban Information</b>\n\n"
-        f"User: {mention(uid, target_fname)}\n"
+        f"User: {mention(uid, target_fname, target_uname)}\n"
         f"User ID: {code(str(uid))}\n\n"
-        f"Banned by: {mention(aid, admin_fname)}\n"
+        f"Banned by: {mention(aid, admin_fname, admin_uname)}\n"
         f"Admin ID: {code(str(aid))}\n\n"
         f"Reason: {esc(ban.get('reason', 'No reason provided'))}\n"
         f"Ban ID: {code(ban['ban_id'])}\n"
