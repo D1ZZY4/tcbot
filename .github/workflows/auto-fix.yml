@@ -122,7 +122,6 @@ jobs:
           </details>
 
           **Safe to merge** - all fixes are automated and follow project style guide." \
-              --label "chore" \
               --base main \
               --head "$BRANCH"
           fi
