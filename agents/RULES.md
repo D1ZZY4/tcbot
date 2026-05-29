@@ -6,6 +6,28 @@ For code style enforcement, see [`STYLE-CODE.md`](STYLE-CODE.md). For comment co
 
 ---
 
+## Mandatory Read-Before-Work and Update-After-Work
+
+These two rules are non-negotiable and apply to every task. The user should NEVER need to remind you about either.
+
+**Before any work**, read these files at the start of every new conversation:
+
+- [`agents/CLAUDE.md`](CLAUDE.md), [`agents/RULES.md`](RULES.md) (this file)
+- [`AGENTS.md`](../AGENTS.md), [`PLAN.md`](../PLAN.md), [`CHANGELOG.md`](../CHANGELOG.md)
+- The relevant files in [`agents/`](.), [`agents/agents/`](agents/), [`agents/skills/`](skills/), [`docs/`](../docs/), and the root project folder for the area you are touching.
+
+**After any work**, in the same turn:
+
+- Add an entry to [`CHANGELOG.md`](../CHANGELOG.md) under `[Unreleased]` (Added / Changed / Fixed / Removed / Documentation).
+- Update [`PLAN.md`](../PLAN.md) when the change affects runtime, project state, priorities, or test counts.
+- Update every related `docs/*.md`, `agents/*.md`, `README.md`, or `replit.md` whose content is now stale.
+
+See the **MANDATORY** sections at the top of [`CLAUDE.md`](CLAUDE.md#mandatory-read-these-files-before-any-work) for the full read/update tables.
+
+Skipping either step is a defect of the same severity as a failing test.
+
+---
+
 ## General Constraints
 
 1. TCF Bot is a production federation bot. Preserve backward compatibility.

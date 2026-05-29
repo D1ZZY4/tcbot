@@ -8,6 +8,75 @@ Compatible with: Claude, Replit AI, Gemini, Qwen, GitHub Copilot, and any AI cod
 
 ---
 
+## MANDATORY: Read These Files BEFORE Any Work
+
+Every new conversation **must start by reading** the following files. The user should NEVER need to remind you. If you skip this step, you will produce inconsistent or wrong work.
+
+**Tier 1 — Read every conversation, no exceptions:**
+
+| File | Why |
+|---|---|
+| [`agents/CLAUDE.md`](CLAUDE.md) (this file) | Canonical project reference |
+| [`agents/RULES.md`](RULES.md) | Hard constraints and forbidden actions |
+| [`AGENTS.md`](../AGENTS.md) | Top-level project guide |
+| [`PLAN.md`](../PLAN.md) | Current project state, runtime flow, priorities |
+| [`CHANGELOG.md`](../CHANGELOG.md) | Recent changes — what already shipped vs what is in flight |
+
+**Tier 2 — Read when relevant to the task:**
+
+| Folder | Read when |
+|---|---|
+| [`agents/`](.) | Any code or doc work — see siblings: STYLE-CODE, STYLE-COMMENTS, WORKFLOW, TEST-RUFF, REPLIT |
+| [`agents/agents/`](agents/) | Coordinator/sub-agent prompts — read before delegating to subagents |
+| [`agents/skills/`](skills/) | Reusable agent skills (e.g. mongodb-query-optimizer, telegram-bot-builder, mermaid-diagrams) |
+| [`docs/`](../docs/) | Architecture, modules, helpers, databases, utils, workflows, detailed feature guides |
+| [`docs/workflows-guide.md`](../docs/workflows-guide.md) | CI/CD automation: auto-fix PR, dependency updates, performance, TDD verification |
+| [`README.md`](../README.md) | User-facing setup and feature list |
+| [`replit.md`](../replit.md) | Replit/hosted deployment |
+
+If a task touches a feature, read the matching `docs/*-detailed.md` first.
+
+---
+
+## MANDATORY: Update These Files AFTER Any Work
+
+Every change — code, docs, workflows, refactors, bug fixes — **must update the related markdown in the same turn**. The user should NEVER need to remind you to update CHANGELOG.md or PLAN.md.
+
+**Always update:**
+
+| File | Update with |
+|---|---|
+| [`CHANGELOG.md`](../CHANGELOG.md) | An entry under `[Unreleased]` describing what changed and why. Group under Added / Changed / Fixed / Removed / Documentation as appropriate. Be specific about file paths and behavior. |
+| [`PLAN.md`](../PLAN.md) | If the change affects runtime, project state, priorities, or known risks. Update test inventory counts when tests are added/removed. |
+
+**Update when relevant:**
+
+| File | Update when |
+|---|---|
+| [`README.md`](../README.md) | User-facing feature, setup step, command, or config variable changed |
+| [`docs/setup.md`](../docs/setup.md) | Setup instructions, environment variables, or validation commands changed |
+| [`docs/workflows-guide.md`](../docs/workflows-guide.md) | A `.github/workflows/*.yml` file is added, removed, or its behavior changes |
+| [`docs/<area>/<area>.md`](../docs/) | The corresponding `tcbot/<area>/` package changed |
+| [`docs/<feature>-detailed.md`](../docs/) | A specific feature (ban, appeal, check, warn, role, promote, demote, stats) changed |
+| [`docs/mapping.md`](../docs/mapping.md) | Repository tree changed (new files, moved files, renamed packages) |
+| [`docs/README.md`](../docs/README.md) | A new doc was added — update the Quick navigation or Detailed feature guides table |
+| [`agents/CLAUDE.md`](CLAUDE.md), [`agents/RULES.md`](RULES.md) | A canonical pattern, helper, or rule changed |
+| [`AGENTS.md`](../AGENTS.md) | Repository structure, ownership rules, or contributor commands changed |
+| [`replit.md`](../replit.md) | Deployment-relevant change (port, entry command, env var) |
+
+**Format for CHANGELOG entries:**
+
+```markdown
+## [Unreleased] - YYYY-MM-DD
+
+### Fixed
+- **Short title** (`path/to/file.py`): What changed, why it matters, and the user-visible effect. Include the symptom (e.g. "caused NameError in 4 tests") so future readers understand the impact.
+```
+
+Skipping the doc sweep is a defect of the same severity as a failing test. The user should not have to ask "did you update the CHANGELOG?" — that question is a sign you failed.
+
+---
+
 ## Project Identity
 
 TCF Bot is a production Telegram federation management bot for the Transsion Core

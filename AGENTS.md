@@ -4,6 +4,27 @@ This file is the top-level guide for agents and contributors working in this rep
 
 For user-facing setup, see [`README.md`](README.md). For current project state and improvement plan, see [`PLAN.md`](PLAN.md). For Replit deployment, see [`replit.md`](replit.md). For detailed developer documentation, see [`docs/README.md`](docs/README.md).
 
+---
+
+## Mandatory Read-Before-Work and Update-After-Work
+
+Every new conversation in this repository must start by reading the canonical references and end by updating the related markdown. The user should NEVER need to remind you.
+
+**Read at the start of every conversation:**
+
+- [`agents/CLAUDE.md`](agents/CLAUDE.md) — canonical AI-agent reference
+- [`agents/RULES.md`](agents/RULES.md) — hard constraints
+- [`AGENTS.md`](AGENTS.md) (this file), [`PLAN.md`](PLAN.md), [`CHANGELOG.md`](CHANGELOG.md)
+- The relevant subset of [`agents/`](agents/), [`agents/agents/`](agents/agents/), [`agents/skills/`](agents/skills/), [`docs/`](docs/), and project-root docs for the task
+
+**Update in the same turn after every change:**
+
+- [`CHANGELOG.md`](CHANGELOG.md) — entry under `[Unreleased]` (Added / Changed / Fixed / Removed / Documentation)
+- [`PLAN.md`](PLAN.md) — when runtime, project state, priorities, or test counts change
+- Every related `docs/*.md`, `agents/*.md`, [`README.md`](README.md), [`replit.md`](replit.md) whose content is now stale
+
+See [`agents/CLAUDE.md`](agents/CLAUDE.md#mandatory-read-these-files-before-any-work) for the complete read/update tables. Skipping either step is a defect of the same severity as a failing test.
+
 ## Project Overview
 
 TCF Bot is a Python Telegram bot for the Transsion Core Federation community. It manages federation-wide moderation actions, appeal workflows, staff roles, connected groups, audit logging, and health checks.

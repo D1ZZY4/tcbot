@@ -16,6 +16,13 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 - **Top-level files updated**: `README.md`, `AGENTS.md`, `PLAN.md`, `CHANGELOG.md`, `replit.md` all received intro paragraphs and inline cross-refs at relevant sections.
 - **All `agents/*.md` files updated**: `CLAUDE.md`, `RULES.md`, `STYLE-CODE.md`, `STYLE-COMMENTS.md`, `WORKFLOW.md`, `TEST-RUFF.md`, `REPLIT.md` now cross-link to siblings and parent docs using clickable markdown links.
 - **All `docs/*.md` files updated**: `setup.md`, `workflows-guide.md`, `README.md`, `modules/modules.md`, `helper/helper.md`, `databases/databases.md`, `utils/utils.md`, and all `*-detailed.md` feature guides now cross-reference related docs inline.
+- **`docs/README.md` quick navigation expanded**: Added rows for `performance.md` and `workflows-guide.md` so the index covers every file in `docs/`.
+
+### Added - Agent Workflow Enforcement
+- **Mandatory read-before-work and update-after-work rules**: Added prominent top-of-file sections to [`agents/CLAUDE.md`](agents/CLAUDE.md), [`agents/RULES.md`](agents/RULES.md), and [`AGENTS.md`](AGENTS.md) that require every AI agent (Claude, Replit AI, Gemini, Qwen, Copilot, etc.) to:
+  - **Read** at the start of every new conversation: `agents/CLAUDE.md`, `agents/RULES.md`, `AGENTS.md`, `PLAN.md`, `CHANGELOG.md`, plus relevant files in `agents/`, `agents/agents/`, `agents/skills/`, `docs/`, and the project root.
+  - **Update** in the same turn after any change: `CHANGELOG.md` (always), `PLAN.md` (when project state changes), and every related doc whose content is now stale.
+  - **Why**: Prevents the recurring failure where agents ship code without updating CHANGELOG.md, PLAN.md, or related docs and the user has to manually remind them every time.
 
 ### Added - Mermaid Diagrams
 - **Architecture diagrams in subsystem docs**: `docs/modules/modules.md` (dynamic discovery flow), `docs/helper/helper.md` (helper relationships), `docs/databases/databases.md` (DB layer architecture), `docs/utils/utils.md` (utils consumers).
