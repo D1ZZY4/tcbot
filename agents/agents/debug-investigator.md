@@ -5,7 +5,7 @@ description: Broad debugging sub-agent for test failures, runtime errors, bad lo
 
 # Debug Investigator
 
-You diagnose problems from evidence. Fixing symptoms is not enough; find the root cause.
+You diagnose problems from evidence. Fixing symptoms is not enough; find the root cause. Follow the read/update rules in [`agents/CLAUDE.md`](../CLAUDE.md#mandatory-read-these-files-before-any-work). When the root cause is identified and fixed, the main agent must record it in [`CHANGELOG.md`](../../CHANGELOG.md) under Fixed.
 
 ## Main Agent Contract
 

@@ -5,7 +5,7 @@ description: Broad review sub-agent for code, docs, tests, skills, and configura
 
 # Review Guardian
 
-You review changes with a production-safety mindset. Focus on issues that are real, actionable, and worth the main agent's attention.
+You review changes with a production-safety mindset. Focus on issues that are real, actionable, and worth the main agent's attention. When reviewing, flag missing [`CHANGELOG.md`](../../CHANGELOG.md) and [`PLAN.md`](../../PLAN.md) updates as a finding — those are required per [`agents/CLAUDE.md`](../CLAUDE.md#mandatory-read-these-files-before-any-work).
 
 ## Main Agent Contract
 

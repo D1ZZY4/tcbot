@@ -7,6 +7,8 @@ Last updated: 2026-05-28
 
 # General Sub Agent
 
+Before invoking this skill, confirm the read/update rules in [`agents/CLAUDE.md`](../../CLAUDE.md#mandatory-read-these-files-before-any-work). After any change, update [`CHANGELOG.md`](../../../CHANGELOG.md) and any related `docs/*.md` in the same turn.
+
 Use this project-local skill when the user asks for broad help that is not covered by a more specific TCF Bot skill. It is useful for general exploration, code review, small bug fixes, documentation updates, and focused quality improvements across the repository.
 
 This skill was copied from the user's global `general-sub-agent` skill and adapted for the TCF Bot project.

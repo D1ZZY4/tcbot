@@ -7,6 +7,8 @@ Last updated: 2026-05-28
 
 # Runtime Debugger
 
+Before invoking this skill, confirm the read/update rules in [`agents/CLAUDE.md`](../../CLAUDE.md#mandatory-read-these-files-before-any-work). After diagnosing or fixing a runtime issue, update [`CHANGELOG.md`](../../../CHANGELOG.md) under Fixed and [`PLAN.md`](../../../PLAN.md) if the fix changes runtime behavior, in the same turn.
+
 Use this skill when the user asks to run the project, debug startup, inspect runtime logs, or diagnose local deployment problems.
 
 ## What This Skill Covers

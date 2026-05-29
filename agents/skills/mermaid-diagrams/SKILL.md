@@ -5,6 +5,8 @@ description: Create render-safe Mermaid diagrams for the TCF Bot project. Use wh
 
 # Mermaid Diagrams for TCF Bot
 
+Before invoking this skill, confirm the read/update rules in [`agents/CLAUDE.md`](../../CLAUDE.md#mandatory-read-these-files-before-any-work). After adding or updating a diagram, update [`CHANGELOG.md`](../../../CHANGELOG.md) noting which doc gained the diagram, in the same turn.
+
 Use this skill to create clear, professional Mermaid diagrams for the TCF Bot codebase. Prefer diagrams that help contributors understand architecture, Telegram bot flows, MongoDB data relationships, moderation workflows, and operational boundaries.
 
 Last refreshed for this project: 2026-05-28.

@@ -29,6 +29,11 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
   - **Sub-agents used sparingly**: Sub-agents under `agents/agents/` are expensive (token cost) and risky (can drift off-task). Default is to do the work in the main agent. Only delegate when the task is large, scopes are genuinely independent, and parallelism or independent-perspective value justifies the cost.
   - **Why**: User flagged sub-agents as wasteful and noisy, but skills as cheap and project-correct. Codifying the preference so future agents make the same call without being asked.
 
+- **Pointers added to every skill and sub-agent**: Each `agents/skills/*/SKILL.md` and `agents/agents/*.md` file now opens with a short pointer to the read/update rules in [`agents/CLAUDE.md`](agents/CLAUDE.md#mandatory-read-these-files-before-any-work) and a reminder to update [`CHANGELOG.md`](CHANGELOG.md) (and `PLAN.md` when relevant) in the same turn. Files updated:
+  - **Skills (10)**: `project-policy`, `docs-maintainer`, `telegram-bot-builder`, `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `runtime-debugger`, `feature-reviewer`, `general-sub-agent`.
+  - **Sub-agents (8)**: `coordinator`, `debug-investigator`, `docs-and-skills-editor`, `general-operator`, `implementation-helper`, `project-explorer`, `review-guardian`, `validation-runner`.
+  - **Why**: Even when an agent loads only a single skill or sub-agent prompt without reading CLAUDE.md, it still sees the rule. No entry point in `agents/` lets you skip the read/update workflow.
+
 ### Added - Mermaid Diagrams
 - **Architecture diagrams in subsystem docs**: `docs/modules/modules.md` (dynamic discovery flow), `docs/helper/helper.md` (helper relationships), `docs/databases/databases.md` (DB layer architecture), `docs/utils/utils.md` (utils consumers).
 - **Flow diagrams in detailed feature docs**:
