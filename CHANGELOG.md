@@ -2,7 +2,14 @@
 
 ## [Unreleased] - 2026-05-29
 
-### Added
+### Added - CI/CD & Automation
+- **Auto-fix workflow** (`.github/workflows/auto-fix.yml`): Automatically fixes code quality issues with Ruff format and check --fix. Runs on push to main/feat/fix branches, PRs, weekly schedule, and manual dispatch. Auto-commits fixes to branches or comments on PRs with suggestions.
+- **Dependency update workflow** (`.github/workflows/dependency-update.yml`): Weekly automated dependency updates (Monday 04:00 UTC). Runs `uv lock --upgrade`, tests with new versions, and **auto-creates PR** if tests pass (like dependabot) or **auto-creates issue** if tests fail. Includes Telegram notifications.
+- **Performance regression detection** (`.github/workflows/performance.yml`): Benchmarks batch query and mention data performance. Compares against baseline, detects >10% regressions/improvements, comments on PRs, creates issues on regressions, and auto-updates baseline on main branch.
+- **Enhanced verification workflow** (`.github/workflows/verification.yml`): Improved TDD verification with detailed failure analysis, top 50 failing tests with reasons, diagnostic recommendations, auto-created GitHub issues on failures, and enhanced Telegram notifications with top 3 failures and emoji status indicators.
+- **Workflows documentation** (`docs/workflows-guide.md`): Comprehensive guide covering all 7 workflows, trigger conditions, notification formats, troubleshooting, and best practices.
+
+### Added - Features
 - **Smart mention system with username fallback**: `mention()` function now accepts optional `username` parameter. When username is available, creates global `https://t.me/username` links that work across all groups. Falls back to plain text name with copyable user ID when username is unavailable.
 - **Optimized database query functions**: 
   - New `get_user_mention_data(user_id)` fetches only `first_name` and `username` fields
@@ -83,8 +90,9 @@
 #### Documentation Updated
 - `docs/helper/helper.md` - Updated formatter and extraction documentation
 - `docs/databases/databases.md` - Added member cache optimization section
-- `README.md` - Added smart mentions and flexible target resolution to features
-- `CHANGELOG.md` - Comprehensive changelog with technical details
+- `docs/workflows-guide.md` - Comprehensive GitHub Actions workflows documentation
+- `README.md` - Added smart mentions, flexible target resolution, and CI/CD automation section
+- `CHANGELOG.md` - Comprehensive changelog with technical details and workflow additions
 
 #### Database Indexes Added
 ```python

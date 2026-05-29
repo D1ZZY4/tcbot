@@ -199,6 +199,75 @@ uv run ruff check --fix .
 
 Ruff targets Python 3.12 and line length 88. GitHub Actions install dependencies through `uv sync --frozen` / `uv sync --extra test --frozen` so CI follows `pyproject.toml` and `uv.lock`. Project code should follow the detailed rules in `agents/CLAUDE.md`, `agents/RULES.md`, `agents/STYLE-CODE.md`, and `agents/STYLE-COMMENTS.md`.
 
+## CI/CD & Automation
+
+The project uses **7 automated GitHub Actions workflows** for continuous integration, code quality, and maintenance:
+
+### Auto-Fix Code Quality
+**File:** `.github/workflows/auto-fix.yml`
+
+Automatically fixes code style and linting issues with Ruff:
+- Runs on push to `main`, `feat/**`, `fix/**` branches
+- Runs on pull requests and weekly (Monday 02:00 UTC)
+- **Auto-commits fixes** to branches (not PRs)
+- **Comments on PRs** with fix suggestions
+- Zero manual intervention for code style
+
+### Dependency Updates (Like Dependabot)
+**File:** `.github/workflows/dependency-update.yml`
+
+Weekly automated dependency updates with testing:
+- Runs every Monday 04:00 UTC
+- Executes `uv lock --upgrade` to update all dependencies
+- **Runs full test suite** with new versions
+- **Auto-creates PR** if tests pass
+- **Auto-creates issue** if tests fail
+- **Telegram notifications** with results
+- Zero manual work for routine updates
+
+### Performance Regression Detection
+**File:** `.github/workflows/performance.yml`
+
+Tracks performance metrics and detects regressions:
+- Benchmarks batch queries and mention data operations
+- Compares against baseline (>10% threshold)
+- **Comments on PRs** with performance comparison
+- **Creates issues** on regressions in main branch
+- **Auto-updates baseline** on main branch pushes
+
+### TDD Verification & Reporting
+**File:** `.github/workflows/verification.yml`
+
+Enhanced test result aggregation and notifications:
+- Parses JUnit XML from multi-Python test matrix
+- Creates detailed GitHub summary with pass/fail/skip counts
+- **Auto-creates GitHub issues** on test failures
+- **Enhanced Telegram notifications** with:
+  - Pass/fail status indicators
+  - Commit SHA and branch name
+  - Detailed test counts
+  - Top 3 failing tests (on failure)
+  - Direct link to full report
+
+### Other Workflows
+- **TDD Multi-Python Matrix** (`.github/workflows/run-tdd.yml`) - Tests across Python 3.12 and 3.13
+- **CodeQL** (`.github/workflows/codeql.yml`) - Security analysis
+- **Run Bot** (`.github/workflows/run-bot.yml`) - Manual deployment
+
+### Full Documentation
+See `docs/workflows-guide.md` for:
+- Detailed workflow descriptions
+- Trigger conditions and schedules
+- Notification format examples
+- Troubleshooting guide
+- Best practices for developers and maintainers
+
+### Required Secrets
+Configure in GitHub repository settings → Secrets:
+- `BOT_TOKEN` - Telegram bot token for notifications
+- `OWNER_ID` - Your Telegram user ID for notifications
+- `GITHUB_TOKEN` - Auto-provided by GitHub Actions
+
 ## Documentation Index
 
 - `AGENTS.md` — project guide for agents and contributors.
@@ -206,6 +275,7 @@ Ruff targets Python 3.12 and line length 88. GitHub Actions install dependencies
 - `replit.md` — Replit deployment notes.
 - `docs/README.md` — developer documentation overview and detailed guide index.
 - `docs/setup.md` — local, Docker, and hosted setup workflow.
+- `docs/workflows-guide.md` — comprehensive GitHub Actions workflows documentation.
 - `docs/modules/modules.md` — module boundaries.
 - `docs/databases/databases.md` — database layer notes.
 - `docs/helper/helper.md` — shared helper documentation.

@@ -223,7 +223,7 @@ jobs:
           2>/dev/null || echo "Issue creation skipped (no label or permission issue - check repo settings)"
 
       # -----------------------------------------------------------------------
-      # Telegram notification - uses the existing bot token, no extra cost
+      # Telegram notification - enhanced with detailed info
       # -----------------------------------------------------------------------
       - name: Telegram notification
         if: always()
@@ -232,7 +232,7 @@ jobs:
           OWNER_ID:  ${{ secrets.OWNER_ID }}
         run: |
           python - << 'PYEOF'
-          import json, os, sys, urllib.request
+          import json, os, sys, urllib.request, pathlib
 
           token    = os.getenv("BOT_TOKEN", "")
           owner_id = os.getenv("OWNER_ID", "")
@@ -243,18 +243,39 @@ jobs:
 
           passed   = "${{ steps.parse.outputs.total_passed }}"
           failed   = "${{ steps.parse.outputs.total_failed }}"
+          skipped  = "${{ steps.parse.outputs.total_skipped }}"
           run_url  = (
               "${{ github.server_url }}/${{ github.repository }}"
               "/actions/runs/${{ github.run_id }}"
           )
           sha      = "${{ github.event.workflow_run.head_sha || github.sha }}"[:7]
-          status   = "PASS" if failed == "0" else "FAIL"
+          status   = "✅ PASS" if failed == "0" else "❌ FAIL"
+          branch   = "${{ github.ref_name }}"
+
+          # Read failure details if available
+          failure_summary = ""
+          if failed != "0":
+              try:
+                  failure_body = pathlib.Path("failure_body.txt").read_text()
+                  # Extract first 3 failures
+                  lines = [l for l in failure_body.split("\n") if l.strip().startswith("- `")]
+                  if lines:
+                      failure_summary = "\n\n<b>Top failures:</b>\n" + "\n".join(lines[:3])
+                      if len(lines) > 3:
+                          failure_summary += f"\n...and {len(lines) - 3} more"
+              except:
+                  pass
 
           text = (
-              f"<b>TCF Bot TDD - {status}</b>\n"
-              f"Commit: <code>{sha}</code>\n"
-              f"Passed: {passed}  |  Failed: {failed}\n"
-              f'<a href="{run_url}">View run</a>'
+              f"<b>TCF Bot TDD - {status}</b>\n\n"
+              f"<b>Commit:</b> <code>{sha}</code>\n"
+              f"<b>Branch:</b> <code>{branch}</code>\n\n"
+              f"<b>Results:</b>\n"
+              f"  ✅ Passed: {passed}\n"
+              f"  ❌ Failed: {failed}\n"
+              f"  ⏭ Skipped: {skipped}\n"
+              f"{failure_summary}\n\n"
+              f'<a href="{run_url}">View full report</a>'
           )
 
           payload = json.dumps({

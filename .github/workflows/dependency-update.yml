@@ -1,0 +1,189 @@
+name: Dependency Updates
+
+on:
+  schedule:
+    - cron: "0 4 * * 1"  # Weekly Monday 04:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  update-dependencies:
+    name: Update and test dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Backup current lock
+        run: cp uv.lock uv.lock.backup
+
+      - name: Update dependencies
+        id: update
+        run: |
+          echo "Updating dependencies..."
+          uv lock --upgrade 2>&1 | tee update.log
+
+          if diff -q uv.lock uv.lock.backup > /dev/null; then
+            echo "has_updates=false" >> "$GITHUB_OUTPUT"
+            echo "No dependency updates available"
+          else
+            echo "has_updates=true" >> "$GITHUB_OUTPUT"
+            echo "Dependencies updated!"
+          fi
+
+      - name: Show changes
+        if: steps.update.outputs.has_updates == 'true'
+        run: |
+          echo "## Dependency Changes" >> changes.md
+          echo "" >> changes.md
+          echo "\`\`\`diff" >> changes.md
+          diff -u uv.lock.backup uv.lock | head -100 >> changes.md || true
+          echo "\`\`\`" >> changes.md
+
+      - name: Install updated dependencies
+        if: steps.update.outputs.has_updates == 'true'
+        run: uv sync --extra test --frozen
+
+      - name: Run tests with updated deps
+        if: steps.update.outputs.has_updates == 'true'
+        id: test
+        env:
+          BOT_TOKEN: "test:token"
+          MONGODB_URI: "mongodb://localhost:27017"
+          DB_NAME: "tcbot_test"
+          COMMUNITY_NAME: "TCF"
+          OWNER_ID: "123456"
+          LOGS: "-1001000000001"
+          PROOFS: "-1001000000002"
+          APPEALS: "-1001000000003"
+        run: |
+          uv run --extra test pytest tests/ -q 2>&1 | tee test.log
+          echo "test_exit=$?" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      - name: Create PR if tests pass
+        if: steps.update.outputs.has_updates == 'true' && steps.test.outputs.test_exit == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="deps/auto-update-$(date +%Y%m%d)"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git checkout -b "$BRANCH"
+          git add uv.lock
+          git commit -m "chore: Update dependencies
+
+          Auto-updated by GitHub Actions
+          All tests passing with new versions
+
+          $(cat changes.md)"
+
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --title "chore: Auto-update dependencies" \
+            --body "$(cat <<EOF
+          ## 🤖 Automated Dependency Update
+
+          This PR updates project dependencies to their latest compatible versions.
+
+          ### Test Results
+          ✅ All tests passing with updated dependencies
+
+          ### Changes
+          $(cat changes.md)
+
+          ### Test Log
+          \`\`\`
+          $(cat test.log | tail -50)
+          \`\`\`
+
+          **Safe to merge** - all tests pass with new versions.
+          EOF
+          )" \
+            --label "dependencies" \
+            --base main \
+            --head "$BRANCH"
+
+      - name: Create issue if tests fail
+        if: steps.update.outputs.has_updates == 'true' && steps.test.outputs.test_exit != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "Dependency update failed tests" \
+            --body "$(cat <<EOF
+          ## ⚠️ Dependency Update Failed
+
+          Attempted to update dependencies but tests failed with new versions.
+
+          ### Changes
+          $(cat changes.md)
+
+          ### Test Failures
+          \`\`\`
+          $(cat test.log | tail -100)
+          \`\`\`
+
+          **Action needed:** Review the test failures and update dependencies manually.
+          EOF
+          )" \
+            --label "dependencies,bug"
+
+      - name: Telegram notification
+        if: always() && steps.update.outputs.has_updates == 'true'
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          OWNER_ID: ${{ secrets.OWNER_ID }}
+        run: |
+          python - << 'PYEOF'
+          import json, os, sys, urllib.request
+
+          token = os.getenv("BOT_TOKEN", "")
+          owner_id = os.getenv("OWNER_ID", "")
+
+          if not token or not owner_id or token.startswith("test:"):
+              sys.exit(0)
+
+          test_exit = "${{ steps.test.outputs.test_exit }}"
+          status = "✅ PASS" if test_exit == "0" else "❌ FAIL"
+          action = "PR created" if test_exit == "0" else "Issue created"
+
+          text = (
+              f"<b>🔄 Dependency Update - {status}</b>\n\n"
+              f"Dependencies updated and tested\n"
+              f"Result: {action}\n\n"
+              f'<a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View workflow</a>'
+          )
+
+          payload = json.dumps({
+              "chat_id": owner_id,
+              "text": text,
+              "parse_mode": "HTML",
+              "disable_web_page_preview": True,
+          }).encode()
+
+          req = urllib.request.Request(
+              f"https://api.telegram.org/bot{token}/sendMessage",
+              data=payload,
+              headers={"Content-Type": "application/json"},
+          )
+          try:
+              urllib.request.urlopen(req, timeout=15)
+          except Exception as exc:
+              print(f"Notification failed: {exc}", file=sys.stderr)
+          PYEOF

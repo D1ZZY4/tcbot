@@ -1,0 +1,125 @@
+name: Auto-Fix Code Quality
+
+on:
+  push:
+    branches: [main, "feat/**", "fix/**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * 1"  # Weekly Monday 02:00 UTC
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-fix:
+    name: Auto-fix with Ruff
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run Ruff format
+        id: format
+        run: |
+          uv run ruff format . 2>&1 | tee format.log
+          echo "formatted=$(git diff --name-only | wc -l)" >> "$GITHUB_OUTPUT"
+
+      - name: Run Ruff check --fix
+        id: check
+        run: |
+          uv run ruff check --fix . 2>&1 | tee check.log
+          echo "fixed=$(git diff --name-only | wc -l)" >> "$GITHUB_OUTPUT"
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Files changed:"
+            git status --short
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No changes needed - code is clean!"
+          fi
+
+      - name: Commit and push fixes
+        if: steps.changes.outputs.has_changes == 'true' && github.event_name != 'pull_request'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: Auto-fix code quality issues
+
+          - Ruff format: ${{ steps.format.outputs.formatted }} files
+          - Ruff check --fix: ${{ steps.check.outputs.fixed }} files
+
+          Auto-applied by GitHub Actions"
+          git push
+
+      - name: Comment on PR
+        if: steps.changes.outputs.has_changes == 'true' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const formatted = '${{ steps.format.outputs.formatted }}';
+            const fixed = '${{ steps.check.outputs.fixed }}';
+
+            const body = `## 🤖 Auto-Fix Available
+
+            Ruff found code quality issues that can be auto-fixed:
+            - **Format changes:** ${formatted} files
+            - **Lint fixes:** ${fixed} files
+
+            Run locally to apply:
+            \`\`\`bash
+            uv run ruff format .
+            uv run ruff check --fix .
+            \`\`\`
+
+            Or merge this PR and the fixes will be auto-committed.`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+      - name: Summary
+        if: always()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## Auto-Fix Results
+
+          | Metric | Value |
+          |--------|-------|
+          | Files formatted | ${{ steps.format.outputs.formatted }} |
+          | Files fixed | ${{ steps.check.outputs.fixed }} |
+          | Changes committed | ${{ steps.changes.outputs.has_changes }} |
+
+          ### Format Log
+          \`\`\`
+          $(cat format.log)
+          \`\`\`
+
+          ### Check Log
+          \`\`\`
+          $(cat check.log)
+          \`\`\`
+          EOF
