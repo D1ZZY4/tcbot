@@ -13,7 +13,6 @@ from telegram import Bot
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.database.users_db import ROLE_LABEL
 from tcbot.modules.helper import parse_logmsg
 
 log = logging.getLogger(__name__)
@@ -34,8 +33,8 @@ class Demote:
     async def remove_role(target_id: int, target_role: str) -> bool:
         """Remove the user's role from the correct collection."""
         if target_role == "admin":
-            return await db.users_db.remove_admin(target_id)
-        return await db.users_db.remove_role(target_id)
+            return await db.users_roles.remove_admin(target_id)
+        return await db.users_roles.remove_role(target_id)
 
     @classmethod
     async def execute(
@@ -67,7 +66,9 @@ class Demote:
             trigger=trigger,
         )
 
-        role_label = ROLE_LABEL.get(target_role, target_role.capitalize())
+        role_label = db.users_roles.ROLE_LABEL.get(
+            target_role, target_role.capitalize()
+        )
         if trigger is None:
             user_msg = (
                 f"Your {role_label} role in {cfg.community_name} has been removed by "

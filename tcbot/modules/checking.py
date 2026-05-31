@@ -14,7 +14,6 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.database.users_db import ROLE_LABEL, get_effective_role
 from tcbot.modules.helper import decorators, extraction, keyboards
 from tcbot.modules.helper.formatter import code, esc, mention
 from tcbot.modules.helper.parse_link import message_link
@@ -90,8 +89,8 @@ async def _ban_summary(
         (user_fname_cached, user_uname),
         (admin_fname_cached, admin_uname),
     ) = await asyncio.gather(
-        db.users_db.get_user_mention_data(user_id),
-        db.users_db.get_user_mention_data(aid),
+        db.users_cache.get_user_mention_data(user_id),
+        db.users_cache.get_user_mention_data(aid),
     )
 
     if admin_fname is None:
@@ -140,8 +139,8 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     # * Fetch owner ID, user role, and active ban all in parallel
     owner_id, user_role, ban = await asyncio.gather(
-        db.users_db.get_owner_id(),
-        get_effective_role(user.id),
+        db.users_roles.get_owner_id(),
+        db.users_roles.get_effective_role(user.id),
         db.bans_db.get_active_ban(user.id),
     )
 
@@ -164,7 +163,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     if user_role in ("developer", "tester"):
-        role_label = ROLE_LABEL.get(user_role, user_role)
+        role_label = db.users_roles.ROLE_LABEL.get(user_role, user_role)
         await msg.reply_text(
             f"Hey {mention(user.id, fname, user.username)}, all good.\n\n"
             f"You're a {cfg.community_name} {role_label} - on the team, not on the ban list. "
@@ -231,8 +230,8 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     _, (fname, admin_fname) = await asyncio.gather(
         q.answer(),
         asyncio.gather(
-            db.users_db.get_first_name(uid, str(uid)),
-            db.users_db.get_first_name(aid, "Admin"),
+            db.users_cache.get_first_name(uid, str(uid)),
+            db.users_cache.get_first_name(aid, "Admin"),
         ),
     )
     text, proof_link = await _ban_summary(ban, uid, fname, admin_fname)
@@ -262,7 +261,7 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * Refresh cache with whatever we just resolved so future renders have a real name.
     if target_fname and not target_fname.startswith("User "):
         try:
-            await db.users_db.upsert_user(target_id, None, target_fname)
+            await db.users_cache.upsert_user(target_id, None, target_fname)
         except Exception:
             pass
 

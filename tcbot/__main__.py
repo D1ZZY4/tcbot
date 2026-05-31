@@ -23,7 +23,6 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.alive import start_keepalive
 from tcbot.database.mongos import connect, ensure_indexes
-from tcbot.database.users_db import ensure_initial_owner
 from tcbot.modules import get_handlers
 from tcbot.modules.helper.decorators import global_rate_limit_handler
 from tcbot.utils import error_reporter
@@ -45,7 +44,7 @@ async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     if not user.first_name:
         return
     try:
-        await db.users_db.upsert_user(
+        await db.users_cache.upsert_user(
             user.id, user.username, user.first_name, user.last_name
         )
     except Exception as exc:
@@ -130,7 +129,7 @@ async def _post_init(app: Application) -> None:
     log.info("post_init: ensuring indexes...")
     await ensure_indexes()
     log.info("post_init: ensuring initial owner...")
-    await ensure_initial_owner(cfg.initial_owner_id)
+    await db.users_roles.ensure_initial_owner(cfg.initial_owner_id)
 
     # * Attach live bot to the error reporter (enables Layers 1 + 3)
     lec, let = cfg.logs_errors

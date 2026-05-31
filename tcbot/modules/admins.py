@@ -14,7 +14,6 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.database.users_db import ROLE_LABEL, get_effective_role
 from tcbot.modules.helper import (
     decorators,
     extraction,
@@ -118,7 +117,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
     # * Executor role (founder/admin guaranteed by @staff_only) + target run in parallel
     executor_role, (target_id, target_fname) = await asyncio.gather(
-        get_effective_role(admin.id),
+        db.users_roles.get_effective_role(admin.id),
         extraction.extract_target(update, args, ctx.bot),
     )
     remaining_args = args[1:] if has_explicit_target else args
@@ -137,7 +136,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     role = ROLE_ALIASES.get(role_arg)
-    current_role = await get_effective_role(target_id)
+    current_role = await db.users_roles.get_effective_role(target_id)
 
     if role:
         ok, text = await Promote.execute(
@@ -173,7 +172,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     admin = update.effective_user
-    executor_role = await get_effective_role(admin.id)
+    executor_role = await db.users_roles.get_effective_role(admin.id)
 
     if executor_role not in ("founder", "admin"):
         await q.answer("You no longer have permission to do this.", show_alert=True)
@@ -196,8 +195,8 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     # * answer + fetch name + current role in parallel
     _, target_fname, current_role = await asyncio.gather(
         q.answer(),
-        db.users_db.get_first_name(target_id, str(target_id)),
-        get_effective_role(target_id),
+        db.users_cache.get_first_name(target_id, str(target_id)),
+        db.users_roles.get_effective_role(target_id),
     )
 
     ok, text = await Promote.execute(
@@ -240,7 +239,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     # * Executor role (founder/admin guaranteed by @staff_only) + target run in parallel
     executor_role, (target_id, target_fname) = await asyncio.gather(
-        get_effective_role(admin.id),
+        db.users_roles.get_effective_role(admin.id),
         extraction.extract_target(update, args, ctx.bot),
     )
 
@@ -256,7 +255,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await msg.reply_text(refusal, parse_mode="HTML")
         return
 
-    target_role = await get_effective_role(target_id)
+    target_role = await db.users_roles.get_effective_role(target_id)
 
     if not target_role:
         await msg.reply_text("That user doesn't hold a role that can be removed.")
@@ -266,7 +265,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await msg.reply_text("Only the Founder can demote an Admin.")
         return
 
-    role_label = ROLE_LABEL.get(target_role, target_role)
+    role_label = db.users_roles.ROLE_LABEL.get(target_role, target_role)
     await msg.reply_text(
         f"{mention(target_id, target_fname or str(target_id), ident.username)} is currently a "
         f"<b>{role_label}</b>.\nConfirm to remove their role.",
@@ -284,7 +283,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     q = update.callback_query
     admin = update.effective_user
     target_id = int(q.data.split(":", 1)[1])
-    executor_role = await get_effective_role(admin.id)
+    executor_role = await db.users_roles.get_effective_role(admin.id)
 
     if executor_role not in ("founder", "admin"):
         await q.answer("You no longer have permission to do this.", show_alert=True)
@@ -297,8 +296,8 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     # * answer + fetch target role + mention data in parallel
     _, target_role, (target_fname, target_uname) = await asyncio.gather(
         q.answer(),
-        get_effective_role(target_id),
-        db.users_db.get_user_mention_data(target_id),
+        db.users_roles.get_effective_role(target_id),
+        db.users_cache.get_user_mention_data(target_id),
     )
 
     if not target_role or target_role == "founder":
@@ -329,7 +328,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         )
         return
 
-    role_label = ROLE_LABEL.get(target_role, target_role)
+    role_label = db.users_roles.ROLE_LABEL.get(target_role, target_role)
     await q.edit_message_text(
         f"Done. {mention(target_id, target_fname, target_uname)} - {code(str(target_id))} "
         f"has been removed from {role_label}.",
@@ -377,8 +376,8 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     target_uname = ident.username
 
     # * add_admin must complete before set_owner (set_owner does delete_many + insert)
-    await db.users_db.add_admin(current_owner.id, current_owner.id)
-    await db.users_db.set_owner(target_id)
+    await db.users_roles.add_admin(current_owner.id, current_owner.id)
+    await db.users_roles.set_owner(target_id)
     lc, lt = cfg.logs
     log_text = parse_logmsg.ownership_transferred(
         target_id,
@@ -459,7 +458,7 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     admin = update.effective_user
-    is_owner = await db.users_db.is_owner(admin.id)
+    is_owner = await db.users_roles.is_owner(admin.id)
     if not is_owner:
         await q.answer("Founder only.", show_alert=True)
         return
@@ -479,7 +478,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     if action == "promo_approve":
         # * DB writes in parallel
         await asyncio.gather(
-            db.users_db.add_admin(target_id, admin.id),
+            db.users_roles.add_admin(target_id, admin.id),
             db.queues_db.resolve(request_id, "approved", admin.id),
         )
         log_text = parse_logmsg.promote_approved_log(

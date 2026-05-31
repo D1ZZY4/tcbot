@@ -4,7 +4,7 @@ This file describes how to run TCF Bot on Replit or a similar hosted environment
 
 ## Runtime Summary
 
-- Entry point: `python3 -m tcbot`
+- Entry point: `uv run python -m tcbot`
 - Python project target: 3.12 (`pyproject.toml` requires `>=3.12`)
 - Bot framework: `python-telegram-bot[job-queue] == 22.5`
 - Database: MongoDB through Motor
@@ -74,13 +74,13 @@ uv sync
 Run the bot:
 
 ```bash
-python3 -m tcbot
+uv run python -m tcbot
 ```
 
 If your Replit workflow supports custom commands, set the run command to:
 
 ```bash
-python3 -m tcbot
+uv run python -m tcbot
 ```
 
 The bot fails fast when `BOT_TOKEN`, `MONGODB_URI`, or `OWNER_ID` are missing. It starts polling Telegram after MongoDB connection, index creation, owner seeding, handler registration, and error reporter setup complete.
@@ -132,7 +132,7 @@ Before starting the deployment:
 - [ ] `PORT` matches the hosting platform expectation.
 - [ ] Required Telegram destinations (`MAIN_GROUP`, `LOGS`, `PROOFS`, `APPEALS`, and appeal topic settings) are configured.
 - [ ] The bot has the necessary permissions in connected groups/channels/forums.
-- [ ] The run command is `python3 -m tcbot`.
+- [ ] `uv run python -m tcbot` succeeds.
 - [ ] `uv run --extra test pytest --collect-only -q` succeeds.
 
 ## Safety Rules

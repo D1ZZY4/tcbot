@@ -14,7 +14,6 @@ from telegram.ext import ContextTypes
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.database.users_db import get_effective_role
 from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.formatter import code, mention
 from tcbot.modules.helper.workflows.demote_flow import Demote
@@ -66,7 +65,7 @@ async def execute_warn(
     if count >= WARN_LIMIT:
         # * If the target somehow holds a federation role (e.g. promoted mid-warn-cycle),
         # * remove the role before the auto-ban so they don't keep staff perms after exile.
-        target_role = await get_effective_role(target_id)
+        target_role = await db.users_roles.get_effective_role(target_id)
         if target_role:
             try:
                 await Demote.execute(

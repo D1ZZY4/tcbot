@@ -33,10 +33,9 @@ flowchart TD
 
 | Helper | Collection(s) | Main responsibilities |
 |---|---|---|
-| `users_db.py` | `member_cache`, `tc_owners`, `tc_admins`, `tc_roles` | Member profile cache, owner/admin storage, Tester/Developer custom-role assignment, effective-role resolution, rank comparison, role-cache invalidation. Provides optimized `get_user_mention_data()` for fetching only first_name and username fields. |
+| `users_cache.py` | `member_cache` | Member profile cache operations: upsert, get, batch queries, mention formatting, total count, all users list. |
+| `users_roles.py` | `tc_owners`, `tc_admins`, `tc_roles` | Owner CRUD, admin CRUD, developer/tester role CRUD, effective-role resolution, can_act_on checks. |
 | `bans_db.py` | `bans` | Active ban lookup, ban creation/update, unban deactivation, appeal/review metadata, active ban lists. |
-| `groups_db.py` | `federated_groups`, `pending_joins` | Connected group state, pending connection requests, group cache invalidation. |
-| `users_db.py` | `member_cache` | Cached Telegram profile data from group messages and lookup fallbacks. |
 | `warns_db.py` | `warns`, `warn_counts` | Warning history, warning counters, backfill/sync, remove latest warning, clear warnings. |
 | `kicks_db.py` | `kicks` | Kick audit records. |
 | `mutes_db.py` | `mutes` | Mute audit records. |
@@ -44,6 +43,7 @@ flowchart TD
 | `cache.py` | in-memory only | TTL caches for owner, roles, connection status, and active groups. |
 | `documents.py` | type-only | `TypedDict` document shapes and `Literal` aliases. |
 | `types.py` | type-only | `NewType` primitives such as `UserId`, `GroupId`, `ChatId`, and `BanId`. |
+| `groups_db.py` | `federated_groups`, `pending_joins` | Connected group state, pending connection requests, group cache invalidation. |
 
 ## Member cache optimization
 
@@ -80,7 +80,7 @@ If a new query depends on a new access pattern, add the matching index in `ensur
 
 ## Role model
 
-Effective roles are resolved in `users_db.get_effective_role()`:
+Effective roles are resolved in `users_roles.get_effective_role()`:
 
 1. Founder from `tc_owners` returns `"founder"`.
 2. Admin from `tc_admins` returns `"admin"`.
@@ -93,7 +93,7 @@ Rank ordering:
 founder = 4 > admin = 3 > developer = 2 > tester = 1 > none = 0
 ```
 
-Use `users_db.role_rank()` and `users_db.can_act_on()` instead of hand-written comparisons.
+Use `users_roles.role_rank()` and `users_roles.can_act_on()` instead of hand-written comparisons.
 
 ## Ban document fields
 
@@ -134,10 +134,10 @@ Warnings are stored per user and chat:
 
 | Cache | Typical key | Used by |
 |---|---|---|
-| `effective_role_cache` | `user_id` | `users_db.get_effective_role()` |
+| `effective_role_cache` | `user_id` | `users_roles.get_effective_role()` |
 | `connected_cache` | `chat_id` | `groups_db.is_connected()` |
 | `active_groups_cache` | fixed key | `groups_db.active_groups()` |
-| `owner_id_cache` | fixed key | `users_db.get_owner_id()` |
+| `owner_id_cache` | fixed key | `users_roles.get_owner_id()` |
 
 Write helpers must invalidate or refresh related cache entries. For example, role writes invalidate the target user's effective role cache, and group writes clear or update group caches.
 

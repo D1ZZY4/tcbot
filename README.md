@@ -61,13 +61,7 @@ See [Configuration](#configuration) below and `config.env.example` for the compl
 ### 3. Run the bot
 
 ```bash
-python3 -m tcbot
-```
-
-On Windows, use this if `python3` is not available:
-
-```bash
-python -m tcbot
+uv run python -m tcbot
 ```
 
 ## Docker Compose
@@ -87,7 +81,7 @@ Use Replit Secrets or the hosting platform's secret manager for credentials. Do 
 Recommended run command:
 
 ```bash
-python3 -m tcbot
+uv run python -m tcbot
 ```
 
 The Flask keep-alive server binds to `0.0.0.0:${PORT}`. If `PORT` is unset, invalid, or outside `1..65535`, the application defaults to `5000`.
@@ -286,7 +280,7 @@ Configure in GitHub repository settings → Secrets:
 
 ## Current Status
 
-- Runtime entry point: `python3 -m tcbot`.
+- Runtime entry point: `uv run python -m tcbot`.
 - Dependency management: `uv` and `uv.lock`.
 - Database: MongoDB/Motor with startup index creation.
 - Health check: Flask `GET /` endpoint on `PORT`.

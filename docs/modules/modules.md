@@ -114,7 +114,7 @@ Always call `await q.answer()` at the beginning of callback handlers.
 | `mod_only` | Developer+ | Ban and unban. |
 | `basic_mod_only` | Tester+ | Kick, mute, warn. |
 
-Use role helpers from `users_db` and `decorators.resolve_and_check`; avoid manual chains of `is_owner()` + `is_admin()` checks.
+Use role helpers from `users_roles` and `decorators.resolve_and_check`; avoid manual chains of `is_owner()` + `is_admin()` checks.
 
 ## Module implementation checklist
 

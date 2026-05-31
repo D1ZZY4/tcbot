@@ -74,7 +74,7 @@ await Promote.request_admin(bot, admin_id,
 | `Promote.execute(...)` | Full role-assignment flow used by `/tcpromote` (command + inline button). Routes to `_assign_admin`, `_assign_subrole`, or `request_admin` depending on requested role and executor role. |
 | `Promote.request_admin(...)` | Enqueues an Admin promotion request and notifies the Founder via DM, with the log channel as a fallback. |
 | `Promote._assign_admin(...)` | Founder-only path that upserts `tc_admins`, removes any existing Developer/Tester role, sends the promotion log, and DMs the target. |
-| `Promote._assign_subrole(...)` | Founder/Admin path for Developer/Tester role; removes the previous custom role if any, calls `users_db.set_role`, sends the promotion log, and DMs the target. |
+| `Promote._assign_subrole(...)` | Founder/Admin path for Developer/Tester role; removes the previous custom role if any, calls `users_roles.set_role`, sends the promotion log, and DMs the target. |
 
 ## Permission matrix
 
@@ -101,9 +101,9 @@ The command-level handler `cmd_promote` rejects self-promotion and the bot itsel
 
 When the Founder issues `/tcpromote @user admin`:
 
-1. `users_db.add_admin(target_id, founder_id)` upserts into `tc_admins`.
-2. If the target previously held Developer or Tester, `users_db.remove_role(target_id)` clears `tc_roles`.
-3. `users_db.upsert_user(target_id, None, target_fname)` refreshes the member cache.
+1. `users_roles.add_admin(target_id, founder_id)` upserts into `tc_admins`.
+2. If the target previously held Developer or Tester, `users_roles.remove_role(target_id)` clears `tc_roles`.
+3. `users_cache.upsert_user(target_id, None, target_fname)` refreshes the member cache.
 4. A `parse_logmsg.promoted(role="admin", ...)` log is sent to `cfg.logs`.
 5. The target is DM'd a welcome notification.
 6. The command replies with `Done. <mention> - <code id> is now a <community> Admin.`
@@ -113,8 +113,8 @@ When the Founder issues `/tcpromote @user admin`:
 When Founder or Admin assigns Developer/Tester:
 
 1. Existing Developer/Tester is removed first (if any).
-2. `users_db.set_role(target_id, role, assigned_by)` upserts into `tc_roles`.
-3. `users_db.upsert_user(...)` refreshes the cache.
+2. `users_roles.set_role(target_id, role, assigned_by)` upserts into `tc_roles`.
+3. `users_cache.upsert_user(...)` refreshes the cache.
 4. A `parse_logmsg.promoted(role=role, ...)` log is sent to `cfg.logs`.
 5. Target is DM'd.
 
@@ -124,7 +124,7 @@ Admins cannot directly assign Admin. `Promote.execute` detects this and delegate
 
 1. Checks for an existing pending request via `queues_db.get_request(target_id)`.
 2. Inserts a new `promotion_requests` document with `status="pending"` via `queues_db.enqueue(...)`.
-3. Resolves the Founder's user ID via `users_db.get_owner_id()`.
+3. Resolves the Founder's user ID via `users_roles.get_owner_id()`.
 4. DMs the Founder a review card with Approve / Reject buttons (`keyboards.promo_decision_kb`).
 5. Falls back to posting in `cfg.logs` when the Founder DM fails.
 6. Returns `Submitted - the Founder has been notified and will review it shortly.`
@@ -147,7 +147,7 @@ All callbacks re-check the executor's current effective role before applying any
 
 ### Approval path
 
-1. `users_db.add_admin(target_id, admin.id)` upserts `tc_admins`.
+1. `users_roles.add_admin(target_id, admin.id)` upserts `tc_admins`.
 2. `queues_db.resolve(request_id, "approved", admin.id)` marks the request resolved.
 3. `parse_logmsg.promote_approved_log(...)` is sent to `cfg.logs`.
 4. Target is DM'd a welcome notification.

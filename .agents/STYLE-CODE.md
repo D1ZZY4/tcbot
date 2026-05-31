@@ -16,7 +16,7 @@ Commands:
 ```bash
 uv run ruff format .
 uv run ruff check --fix .
-python3 -m pytest tests/ -v
+uv run --extra test pytest tests/ -v
 ```
 
 ---
@@ -285,14 +285,21 @@ Rules:
 Use shared helpers:
 
 ```python
-from tcbot.database.users_db import ROLE_LABEL, can_act_on, get_effective_role
+from tcbot import database as db
 from tcbot.modules.helper import extraction
 from tcbot.modules.helper.decorators import resolve_and_check
 
+# Extract target from command
 target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
+
+# Check roles and permissions (uses db.users_roles internally)
 executor_role, target_role = await resolve_and_check(
     msg, executor_id, target_id, min_role="developer"
 )
+
+# Or check roles manually
+role = await db.users_roles.get_effective_role(user_id)
+label = db.users_roles.ROLE_LABEL.get(role, role)
 ```
 
 Rules:

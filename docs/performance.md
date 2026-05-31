@@ -22,14 +22,14 @@ The bot is optimized for **zero-delay, instant response** across all operations:
 ```python
 # Fetches each user individually - N database roundtrips
 for user_id in user_ids:
-    name = await db.users_db.get_first_name(user_id)
+    name = await db.users_cache.get_first_name(user_id)
     # ... use name
 ```
 
 **Good (Batch):**
 ```python
 # Single database query for all users
-name_map = await db.users_db.get_first_names_batch(user_ids)
+name_map = await db.users_cache.get_first_names_batch(user_ids)
 for user_id in user_ids:
     name = name_map[user_id]
     # ... use name
@@ -51,7 +51,7 @@ for user_id in user_ids:
 **Bad (Full Document):**
 ```python
 # Fetches all fields: user_id, username, first_name, last_name, commit_date, last_updated
-user = await db.users_db.get_user(user_id)
+user = await db.users_cache.get_user(user_id)
 name = user.get("first_name")
 username = user.get("username")
 ```
@@ -59,7 +59,7 @@ username = user.get("username")
 **Good (Projection):**
 ```python
 # Fetches only 2 fields
-name, username = await db.users_db.get_user_mention_data(user_id)
+name, username = await db.users_cache.get_user_mention_data(user_id)
 ```
 
 **Performance gain:** 40-60% reduction in data transfer.
@@ -173,7 +173,7 @@ def mention(user_id: int, name: str, username: str | None = None) -> str:
    # Get all user IDs first
    user_ids = [item["user_id"] for item in items]
    # Single batch query
-   name_map = await db.users_db.get_first_names_batch(user_ids)
+   name_map = await db.users_cache.get_first_names_batch(user_ids)
    # Use the map
    for item in items:
        name = name_map[item["user_id"]]
@@ -183,7 +183,7 @@ def mention(user_id: int, name: str, username: str | None = None) -> str:
    ```python
    # If operations don't depend on each other, use gather
    user_data, ban_data, group_data = await asyncio.gather(
-       db.users_db.get_user(user_id),
+       db.users_cache.get_user(user_id),
        db.bans_db.get_active_ban(user_id),
        db.groups_db.get_group(chat_id),
    )
@@ -226,7 +226,7 @@ async def list_items(items: list[dict]) -> str:
     user_ids = [item["user_id"] for item in items]
     
     # Single batch query
-    name_map = await db.users_db.get_first_names_batch(user_ids)
+    name_map = await db.users_cache.get_first_names_batch(user_ids)
     
     # Build output
     lines = []
@@ -245,8 +245,8 @@ async def cmd_example(update, ctx):
     
     # Parallelize all independent queries
     user_data, role, ban_status = await asyncio.gather(
-        db.users_db.get_user(user.id),
-        db.users_db.get_effective_role(user.id),
+        db.users_cache.get_user(user.id),
+        db.users_cache.get_effective_role(user.id),
         db.bans_db.get_active_ban(user.id),
     )
     

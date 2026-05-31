@@ -43,8 +43,8 @@ async def test_execute_ban_update_preserves_previous_ids_and_username_fallback(
     monkeypatch.setattr(ban_flow.db.bans_db, "update_ban", update_ban)
     monkeypatch.setattr(ban_flow.db.bans_db, "set_log_message_id", set_log_message_id)
     monkeypatch.setattr(ban_flow.db.groups_db, "active_groups", active_groups)
-    monkeypatch.setattr(ban_flow.db.users_db, "get_first_name", get_first_name)
-    monkeypatch.setattr(ban_flow.db.users_db, "upsert_user", upsert_user)
+    monkeypatch.setattr(ban_flow.db.users_cache, "get_first_name", get_first_name)
+    monkeypatch.setattr(ban_flow.db.users_cache, "upsert_user", upsert_user)
     monkeypatch.setattr(ban_flow, "upload_proof", AsyncMock(return_value=None))
     monkeypatch.setattr(ban_flow, "fan_out", AsyncMock(return_value=[]))
     monkeypatch.setattr(

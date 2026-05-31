@@ -32,7 +32,7 @@ uv run ruff check .
 uv run ruff format --check .
 uv run --extra test pytest --collect-only -q
 uv run --extra test pytest tests/ -q
-python -m tcbot
+uv run python -m tcbot
 ```
 
 Adjust commands to the project and platform. On Windows, `python` may be available when `python3` is not.

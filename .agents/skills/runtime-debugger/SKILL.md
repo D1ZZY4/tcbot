@@ -13,7 +13,7 @@ Use this skill when the user asks to run the project, debug startup, inspect run
 
 ## What This Skill Covers
 
-- `python -m tcbot` startup failures
+- `uv run python -m tcbot` startup failures
 - invalid or missing `BOT_TOKEN`
 - MongoDB connection or index setup issues
 - Flask keep-alive binding problems
@@ -59,7 +59,7 @@ Start from the virtual environment on Windows:
 Start from an activated environment:
 
 ```bash
-python -m tcbot
+uv run python -m tcbot
 ```
 
 Run with a timeout from an agent tool so polling does not block forever.

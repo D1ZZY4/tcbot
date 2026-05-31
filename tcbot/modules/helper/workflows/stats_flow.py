@@ -13,7 +13,6 @@ from telegram.ext import ContextTypes
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.database.users_db import ROLE_LABEL
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.formatter import bold, code, esc, mention
 from tcbot.utils.timedate_format import fmt_dt
@@ -148,18 +147,20 @@ class Stats:
             group_count,
             user_count,
         ) = await asyncio.gather(
-            db.users_db.get_owner_id(),
-            db.users_db.admin_count(),
-            db.users_db.all_by_role("developer"),
-            db.users_db.all_by_role("tester"),
+            db.users_roles.get_owner_id(),
+            db.users_roles.admin_count(),
+            db.users_roles.all_by_role("developer"),
+            db.users_roles.all_by_role("tester"),
             db.bans_db.active_ban_count(),
             db.groups_db.active_group_count(),
-            db.users_db.total_users(),
+            db.users_cache.total_users(),
         )
 
         # Fetch owner mention data in parallel with building the response
         if owner_id:
-            owner_fname, owner_uname = await db.users_db.get_user_mention_data(owner_id)
+            owner_fname, owner_uname = await db.users_cache.get_user_mention_data(
+                owner_id
+            )
             owner_line = mention(owner_id, owner_fname, owner_uname)
         else:
             owner_line = "Not set"
@@ -187,10 +188,10 @@ class Stats:
         import asyncio
 
         owner_id, admins, developers, testers = await asyncio.gather(
-            db.users_db.get_owner_id(),
-            db.users_db.all_admins(),
-            db.users_db.all_by_role("developer"),
-            db.users_db.all_by_role("tester"),
+            db.users_roles.get_owner_id(),
+            db.users_roles.all_admins(),
+            db.users_roles.all_by_role("developer"),
+            db.users_roles.all_by_role("tester"),
         )
 
         # * Resolve user mention data in one batch query instead of individual queries
@@ -207,7 +208,7 @@ class Stats:
         all_user_ids.extend(t["user_id"] for t in testers)
 
         # Single batch query for all users
-        mention_data_map = await db.users_db.get_mention_data_batch(all_user_ids)
+        mention_data_map = await db.users_cache.get_mention_data_batch(all_user_ids)
 
         lines = [f"{bold('Staff Roster')} - {esc(cfg.community_name)}\n"]
 
@@ -238,7 +239,7 @@ class Stats:
     @classmethod
     async def users_list(cls, page: int) -> tuple[str, InlineKeyboardMarkup]:
         """Paginated list of every cached user."""
-        users = await db.users_db.all_users()
+        users = await db.users_cache.all_users()
         chunk, total_pages, page = _paginate(users, page)
 
         if not users:
@@ -272,7 +273,7 @@ class Stats:
     @classmethod
     async def user_detail(cls, page: int, idx: int) -> tuple[str, InlineKeyboardMarkup]:
         """Detail card for a single cached user, with a link back into the list page."""
-        users = await db.users_db.all_users()
+        users = await db.users_cache.all_users()
         chunk, _total, page = _paginate(users, page)
         if idx < 0 or idx >= len(chunk):
             text = "User not found in this page."
@@ -351,7 +352,7 @@ class Stats:
         chat_id = grp.get("chat_id", 0)
         title = grp.get("title", "Unknown")
         added_by = grp.get("added_by", 0)
-        adder_fname, adder_uname = await db.users_db.get_user_mention_data(added_by)
+        adder_fname, adder_uname = await db.users_cache.get_user_mention_data(added_by)
         date_str = _date(grp.get("added_date"))
 
         text = (
@@ -381,7 +382,7 @@ class Stats:
 
         # * Pre-resolve banned-user names with batch query
         uids = [b.get("banned_user_id", 0) for b in chunk]
-        fname_map = await db.users_db.get_first_names_batch(uids) if uids else {}
+        fname_map = await db.users_cache.get_first_names_batch(uids) if uids else {}
 
         lines = [
             f"{bold('User Bans')} - {len(bans)} total  "
@@ -493,7 +494,7 @@ class Stats:
 
         # Batch query for all user names
         uids = [b.get("banned_user_id", 0) for b in bans]
-        fname_map = await db.users_db.get_first_names_batch(uids)
+        fname_map = await db.users_cache.get_first_names_batch(uids)
         needle = q.lower()
         return [
             b
@@ -514,7 +515,7 @@ class Stats:
 
         # Batch query for all user names
         uids = [b.get("banned_user_id", 0) for b in results]
-        fname_map = await db.users_db.get_first_names_batch(uids)
+        fname_map = await db.users_cache.get_first_names_batch(uids)
         lines = [f'{bold("Search:")} "{esc(query)}" ({len(results)} found)\n']
         for i, ban in enumerate(results, start=1):
             uid = ban.get("banned_user_id", 0)
@@ -536,5 +537,7 @@ class Stats:
         text, proof_link = await build_ban_detail(results[idx])
         return text, cls._search_detail_kb(proof_link)
 
+
+ROLE_LABEL = db.users_roles.ROLE_LABEL
 
 __all__ = ("Stats", "ROLE_LABEL", "SEARCH_KEY", "RESULTS_KEY", "MSG_KEY", "CHAT_KEY")

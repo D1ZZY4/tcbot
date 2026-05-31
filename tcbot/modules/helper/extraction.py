@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 from telegram import Bot, Message, Update, User
 
-from tcbot.database import users_db
+from tcbot import database as db
 
 log = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ async def _best_name(uid: int, *primary: str | None) -> str:
         if cand and not cand.lstrip("-").isdigit():
             return cand
     # * Try the member cache before resorting to "User <id>".
-    cached = await users_db.get_first_name(uid, "")
+    cached = await db.users_cache.get_first_name(uid, "")
     if cached and not cached.lstrip("-").isdigit():
         return cached
     return f"User {uid}"
@@ -69,7 +69,7 @@ async def extract_target(
     Priority order:
     1. Reply (most common use case)
     2. Args with full info (numeric ID or @username)
-    3. Args with partial info (search users_db by name)
+    3. Args with partial info (search users_cache by name)
     4. Text mention entity
     5. @Mention entity
 
@@ -108,9 +108,9 @@ async def extract_target(
                     chat.id, chat.first_name, chat.username, arg
                 )
 
-        # * Priority 3: Partial name search in users_db
+        # * Priority 3: Partial name search in users_cache
         if arg:
-            all_users = await users_db.all_users()
+            all_users = await db.users_cache.all_users()
             needle = arg.lower()
             for user in all_users:
                 fname = (user.get("first_name") or "").lower()

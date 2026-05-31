@@ -37,10 +37,8 @@ uv sync --extra test
 Run the bot locally:
 
 ```bash
-python3 -m tcbot
+uv run python -m tcbot
 ```
-
-On Windows, use `python -m tcbot` if `python3` is not available.
 
 ---
 
@@ -58,8 +56,8 @@ Commands:
 ```bash
 uv run ruff format .
 uv run ruff check --fix .
-python3 -m pytest tests/ -v
-python3 -m tcbot
+uv run --extra test pytest tests/ -v
+uv run python -m tcbot
 ```
 
 If a command cannot run in the current environment, record the exact command and
@@ -193,7 +191,7 @@ For Replit-specific deployment details, read `.agents/REPLIT.md`.
 
 Operational summary:
 
-- Start command: `python3 -m tcbot`.
+- Start command: `uv run python -m tcbot`.
 - Replit health port: set `PORT=8080`.
 - Store `BOT_TOKEN` and `MONGODB_URI` in Replit Secrets.
 - Store non-sensitive environment values through Replit environment management or

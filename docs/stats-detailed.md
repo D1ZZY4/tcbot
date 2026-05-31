@@ -80,7 +80,7 @@ Testers (n)
 
 ### Users (`stats_users:<page>` and `stats_user_item:<page>:<idx>`)
 
-`Stats.users_list(page)` paginates `users_db.all_users()` (sorted by `first_name`). Each row shows the cached display name, ID, and `@username` when present. Numbered buttons open `Stats.user_detail(page, idx)` which renders:
+`Stats.users_list(page)` paginates `users_cache.all_users()` (sorted by `first_name`). Each row shows the cached display name, ID, and `@username` when present. Numbered buttons open `Stats.user_detail(page, idx)` which renders:
 
 ```text
 User Details
@@ -156,13 +156,13 @@ The previous `stats_chats_flow.py` has been removed; its responsibilities live e
 
 | Helper | Purpose |
 |---|---|
-| `users_db.get_owner_id()` | Founder's user ID for the overview line. |
-| `users_db.admin_count()` | Total Admins for the overview. |
-| `users_db.all_admins()` | Full Admin list for the staff roster. |
-| `users_db.all_by_role("developer" \| "tester")` | Per-role lists for the staff roster. |
-| `users_db.total_users()` | Cached-user count for the overview. |
-| `users_db.all_users()` | Paginated user list (server-sorted by `first_name`). |
-| `users_db.get_first_name(uid, fallback)` | Display-name lookups. |
+| `users_roles.get_owner_id()` | Founder's user ID for the overview line. |
+| `users_roles.admin_count()` | Total Admins for the overview. |
+| `users_roles.all_admins()` | Full Admin list for the staff roster. |
+| `users_roles.all_by_role("developer" \| "tester")` | Per-role lists for the staff roster. |
+| `users_cache.total_users()` | Cached-user count for the overview. |
+| `users_cache.all_users()` | Paginated user list (server-sorted by `first_name`). |
+| `users_cache.get_first_name(uid, fallback)` | Display-name lookups. |
 | `bans_db.active_ban_count()` | Active-ban count for the overview. |
 | `bans_db.active_bans()` | Paginated ban list and search corpus. |
 | `bans_db.get_active_ban(uid)` | Direct ID search hit. |

@@ -13,7 +13,6 @@ from telegram import Bot
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.database.users_db import ROLE_LABEL, role_rank
 from tcbot.modules.helper import keyboards, parse_logmsg
 from tcbot.modules.helper.formatter import code, mention
 
@@ -62,14 +61,14 @@ class Promote:
         """Founder-only path: directly add the target to tc_admins and log it."""
         if current_role in ("developer", "tester"):
             await asyncio.gather(
-                db.users_db.add_admin(target_id, admin_id),
-                db.users_db.remove_role(target_id),
-                db.users_db.upsert_user(target_id, None, target_fname),
+                db.users_roles.add_admin(target_id, admin_id),
+                db.users_roles.remove_role(target_id),
+                db.users_cache.upsert_user(target_id, None, target_fname),
             )
         else:
             await asyncio.gather(
-                db.users_db.add_admin(target_id, admin_id),
-                db.users_db.upsert_user(target_id, None, target_fname),
+                db.users_roles.add_admin(target_id, admin_id),
+                db.users_cache.upsert_user(target_id, None, target_fname),
             )
         lc, lt = cfg.logs
         log_text = parse_logmsg.promoted(
@@ -100,18 +99,18 @@ class Promote:
     ) -> tuple[bool, str]:
         """Founder/Admin path for Developer/Tester role assignment."""
         if current_role == "admin":
-            label = ROLE_LABEL.get(role, role)
+            label = db.users_roles.ROLE_LABEL.get(role, role)
             return (
                 False,
                 f"That user is already an Admin. Demote them first before assigning {label}.",
             )
         if current_role in ("developer", "tester"):
-            await db.users_db.remove_role(target_id)
+            await db.users_roles.remove_role(target_id)
         await asyncio.gather(
-            db.users_db.set_role(target_id, role, admin_id),
-            db.users_db.upsert_user(target_id, None, target_fname),
+            db.users_roles.set_role(target_id, role, admin_id),
+            db.users_cache.upsert_user(target_id, None, target_fname),
         )
-        role_label = ROLE_LABEL.get(role, role)
+        role_label = db.users_roles.ROLE_LABEL.get(role, role)
         lc, lt = cfg.logs
         log_text = parse_logmsg.promoted(
             target_id, target_fname, role, admin_id, admin_fname
@@ -148,7 +147,7 @@ class Promote:
             )
         request_id, owner_id = await asyncio.gather(
             db.queues_db.enqueue(target_id, target_username, target_fname, admin_id),
-            db.users_db.get_owner_id(),
+            db.users_roles.get_owner_id(),
         )
         req_text = parse_logmsg.promote_request_log(
             target_id, target_fname, target_username, request_id
@@ -203,8 +202,8 @@ class Promote:
         if current_role == "founder":
             return False, "That's the Founder - can't assign a role over them."
 
-        if role_rank(current_role) >= role_rank(role):
-            label = ROLE_LABEL.get(current_role, current_role)
+        if db.users_roles.role_rank(current_role) >= db.users_roles.role_rank(role):
+            label = db.users_roles.ROLE_LABEL.get(current_role, current_role)
             return False, f"That user already holds the {label} role or higher."
 
         if role == "admin":

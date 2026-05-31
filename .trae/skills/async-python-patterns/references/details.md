@@ -22,7 +22,7 @@ This reference expands the `async-python-patterns` skill with practical examples
 Use direct `await` when an operation is sequential or the next step depends on the result.
 
 ```python
-user_doc = await db.users_db.get_user(user_id)
+user_doc = await db.users_cache.get_user(user_id)
 if user_doc is None:
     await msg.reply_text("User is not known yet.", parse_mode="HTML")
     return
@@ -38,8 +38,8 @@ Use `asyncio.gather()` when operations are independent and all are required befo
 import asyncio
 
 executor_role, target_role, group = await asyncio.gather(
-    db.users_db.get_effective_role(executor_id),
-    db.users_db.get_effective_role(target_id),
+    db.users_roles.get_effective_role(executor_id),
+    db.users_roles.get_effective_role(target_id),
     db.groups_db.get_group(chat_id),
 )
 ```
@@ -52,7 +52,7 @@ When partial success is acceptable, inspect every result explicitly.
 
 ```python
 results = await asyncio.gather(
-    db.users_db.get_user(user_id),
+    db.users_cache.get_user(user_id),
     db.groups_db.get_group(chat_id),
     return_exceptions=True,
 )
@@ -117,7 +117,7 @@ Use Python 3.12 `asyncio.timeout()` for local bounds around an operation.
 async def safe_lookup(user_id: int) -> dict[str, object] | None:
     try:
         async with asyncio.timeout(3):
-            return await db.users_db.get_user(user_id)
+            return await db.users_cache.get_user(user_id)
     except TimeoutError:
         log.warning("Timed out loading user %s", user_id)
         return None

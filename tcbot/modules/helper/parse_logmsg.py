@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from tcbot import cfg
-from tcbot.database.users_db import ROLE_LABEL as _ROLE_LABELS
+from tcbot import database as db
 from tcbot.modules.helper.formatter import code, esc, link, mention
 from tcbot.utils.timedate_format import fmt_dt, utc_now
 
@@ -512,7 +512,7 @@ def appeal_unban_log(
 
 def _role_title(role: str) -> str:
     """Return the human-readable label for a role string."""
-    return _ROLE_LABELS.get(role, role.capitalize())
+    return db.users_roles.ROLE_LABEL.get(role, role.capitalize())
 
 
 def promoted(

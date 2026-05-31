@@ -32,7 +32,7 @@ Skipping the doc sweep is a defect of the same severity as a failing test.
 - Keepalive: Flask health/keep-alive server.
 - Tooling: `uv` for dependency management, Ruff for format/lint, pytest + pytest-asyncio for
   offline tests.
-- Entry point: `python -m tcbot` on Windows, `python3 -m tcbot` elsewhere.
+- Entry point: `uv run python -m tcbot` on Windows, `uv run python -m tcbot` elsewhere.
 
 ## Repository Boundaries
 
@@ -104,7 +104,7 @@ owning area.
 
 ## Role and Moderation Rules
 
-- Use canonical role helpers from `tcbot.database.users_db`; do not chain manual owner/admin role
+- Use canonical role helpers from `tcbot.database.users_roles`; do not chain manual owner/admin role
   checks.
 - Use the shared permission helper `tcbot.modules.helper.decorators.resolve_and_check` for combined executor/target
   checks where appropriate.

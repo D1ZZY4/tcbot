@@ -288,7 +288,7 @@ class BuildAppeal:
             if instr_mid
             else None
         )
-        upsert_coro = db.users_db.upsert_user(
+        upsert_coro = db.users_cache.upsert_user(
             uid, user.username, user.first_name, user.last_name
         )
 
@@ -306,7 +306,7 @@ class BuildAppeal:
         q = update.callback_query
         admin = update.effective_user
 
-        if not await db.users_db.is_staff(admin.id):
+        if not await db.users_roles.is_staff(admin.id):
             await q.answer("You are not authorized.", show_alert=True)
             return
 
@@ -349,7 +349,7 @@ class BuildAppeal:
             _, groups, target_fname = await asyncio.gather(
                 db.bans_db.deactivate_ban(ban_id),
                 db.groups_db.active_groups(),
-                db.users_db.get_first_name(target_id, str(target_id)),
+                db.users_cache.get_first_name(target_id, str(target_id)),
             )
 
             # * Unban from all groups - semaphore-bounded for rate safety
@@ -415,7 +415,7 @@ class BuildAppeal:
         elif action == "reject":
             # * Fetch target name + notify user + edit review message - all in parallel
             target_fname_result, *_ = await asyncio.gather(
-                db.users_db.get_first_name(target_id, str(target_id)),
+                db.users_cache.get_first_name(target_id, str(target_id)),
                 ctx.bot.send_message(
                     target_id,
                     f"Your appeal for ban <code>{ban_id}</code> has been reviewed and not approved. "

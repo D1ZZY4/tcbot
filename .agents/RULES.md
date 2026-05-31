@@ -111,8 +111,8 @@ Rules:
 
 ## Role System
 
-1. Use `users_db.get_effective_role(user_id)` to resolve roles.
-2. Use `users_db.can_act_on(executor_id, target_id)` or
+1. Use `users_roles.get_effective_role(user_id)` to resolve roles.
+2. Use `users_roles.can_act_on(executor_id, target_id)` or
    `decorators.resolve_and_check()` for executor-vs-target checks.
 3. Never chain `is_owner()` + `is_admin()` + `get_role()` manually in handlers.
 4. Never compare role ranks inline in command modules.
@@ -210,7 +210,7 @@ Rules:
 2. Run the full suite before merging code changes:
 
    ```bash
-   python3 -m pytest tests/ -v
+   uv run --extra test pytest tests/ -v
    ```
 
 3. Run Ruff before finalizing code changes:

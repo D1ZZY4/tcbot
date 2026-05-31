@@ -186,7 +186,7 @@ class BuildConnection:
 
             if pending and new_status == ChatMemberStatus.ADMINISTRATOR:
                 if self.check_perms(cmc.new_chat_member):
-                    owner_fname = await db.users_db.get_first_name(
+                    owner_fname = await db.users_cache.get_first_name(
                         pending["owner_id"], "Owner"
                     )
                     await self.complete_join(

@@ -1,0 +1,149 @@
+# © Copyright 2024 - 2026 Transsion Core
+# © Copyright 2024 - 2026 Dizzy
+# © Copyright 2026 Aveum Apps
+
+"""Member profile cache helpers.
+
+This module handles all member_cache collection operations for Telegram user profiles.
+Do not mix with users_roles.py which handles tc_owners, tc_admins, and tc_roles.
+"""
+
+from __future__ import annotations
+
+from tcbot.database.documents import UserDoc
+from tcbot.database.mongos import col
+from tcbot.utils.timedate_format import utc_now
+
+# ────────── Member cache mutations ─────────
+
+
+async def upsert_user(
+    user_id: int,
+    username: str | None,
+    first_name: str,
+    last_name: str | None = None,
+) -> None:
+    """Update or insert a user's profile information into the cache."""
+    now = utc_now()
+    await col("member_cache").update_one(
+        {"user_id": user_id},
+        {
+            "$set": {
+                "user_id": user_id,
+                "username": username,
+                "first_name": first_name,
+                "last_name": last_name,
+                "last_updated": now,
+            },
+            "$setOnInsert": {
+                "commit_date": now,
+            },
+        },
+        upsert=True,
+    )
+
+
+# ───────── Member cache queries ─────────
+
+
+async def get_user(user_id: int) -> UserDoc | None:
+    """Get the full cached profile for a specific user."""
+    return await col("member_cache").find_one({"user_id": user_id})
+
+
+async def get_user_mention_data(user_id: int) -> tuple[str, str | None]:
+    """Return (first_name, username) for mention formatting.
+
+    Optimized query that fetches only the fields needed for mentions,
+    avoiding full document retrieval.
+    """
+    doc = await col("member_cache").find_one(
+        {"user_id": user_id}, {"first_name": 1, "username": 1}
+    )
+    if doc:
+        return doc.get("first_name") or f"User {user_id}", doc.get("username")
+    return f"User {user_id}", None
+
+
+async def get_mention_data_batch(
+    user_ids: list[int],
+) -> dict[int, tuple[str, str | None]]:
+    """Fetch (first_name, username) for multiple users in a single query.
+
+    Optimized batch query that replaces multiple individual get_user_mention_data()
+    calls with a single database roundtrip.
+    """
+    if not user_ids:
+        return {}
+    docs = (
+        await col("member_cache")
+        .find(
+            {"user_id": {"$in": user_ids}},
+            {"user_id": 1, "first_name": 1, "username": 1},
+        )
+        .to_list(None)
+    )
+    result = {
+        doc["user_id"]: (
+            doc.get("first_name") or f"User {doc['user_id']}",
+            doc.get("username"),
+        )
+        for doc in docs
+    }
+    # Fill in missing users with defaults
+    for uid in user_ids:
+        if uid not in result:
+            result[uid] = (f"User {uid}", None)
+    return result
+
+
+async def get_first_names_batch(user_ids: list[int]) -> dict[int, str]:
+    """Fetch first names for multiple users in a single query.
+
+    Optimized batch query that replaces multiple individual get_first_name()
+    calls with a single database roundtrip.
+    """
+    if not user_ids:
+        return {}
+    docs = (
+        await col("member_cache")
+        .find({"user_id": {"$in": user_ids}}, {"user_id": 1, "first_name": 1})
+        .to_list(None)
+    )
+    result = {
+        doc["user_id"]: doc.get("first_name") or f"User {doc['user_id']}"
+        for doc in docs
+    }
+    # Fill in missing users with defaults
+    for uid in user_ids:
+        if uid not in result:
+            result[uid] = f"User {uid}"
+    return result
+
+
+async def get_first_name(user_id: int, fallback: str = "") -> str:
+    """Return cached first_name or fallback string."""
+    doc = await col("member_cache").find_one({"user_id": user_id}, {"first_name": 1})
+    if doc:
+        return doc.get("first_name") or fallback
+    return fallback
+
+
+async def total_users() -> int:
+    """Get the total number of unique users in the cache."""
+    return await col("member_cache").count_documents({})
+
+
+async def all_users(*, sort_by: str = "first_name") -> list[UserDoc]:
+    """Return every cached user, sorted by ``sort_by`` (default: first name).
+
+    Used by the ``/tcstats`` Users drill-down. Sorted server-side so the
+    paginated view does not need to sort in-process for large caches.
+    """
+    sort_dir = 1 if sort_by != "last_updated" else -1
+    return (
+        await col("member_cache")
+        .find({}, {"_id": 0})
+        .sort(sort_by, sort_dir)
+        .to_list(length=None)
+    )

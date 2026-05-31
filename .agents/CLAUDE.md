@@ -140,10 +140,10 @@ connected groups, per-group moderation, and audit logging.
 | Database | MongoDB through Motor async |
 | Keep-alive | Flask health endpoint, default local port 5000 |
 | Replit port | `PORT=8080` |
-| Entry point | `python3 -m tcbot` |
+| Entry point | `uv run python -m tcbot` |
 | Dependencies | `uv`, `pyproject.toml`, `uv.lock` |
 | Formatter/linter | Ruff (`uv run ruff format .`, `uv run ruff check --fix .`) |
-| Tests | `python3 -m pytest tests/ -v`, offline tests |
+| Tests | `uv run --extra test pytest tests/ -v`, offline tests |
 
 Secrets are never committed. On Replit, put `BOT_TOKEN` and `MONGODB_URI` in
 Replit Secrets. For local development, use a gitignored `config.env` copied from
@@ -163,7 +163,8 @@ tgbot/
 │   ├── __main__.py                 Startup, handlers, polling, error handling
 │   ├── alive.py                    Flask keep-alive server
 │   ├── database/                   Async MongoDB helpers, one file per area
-│   │   ├── users_db.py             Member cache + owners + admins + developer/tester roles, effective-role resolution
+│   │   ├── users_cache.py          Member profile cache operations
+│   │   ├── users_roles.py          Owners + admins + developer/tester roles, effective-role resolution
 │   │   ├── bans_db.py              Federation bans
 │   │   ├── cache.py                In-memory TTL caches
 │   │   ├── documents.py            TypedDict document shapes and Literal aliases
@@ -370,12 +371,17 @@ Hierarchy:
 Canonical helpers:
 
 ```python
-from tcbot.database.users_db import ROLE_LABEL, can_act_on, get_effective_role
+from tcbot import database as db
 
-role = await get_effective_role(user_id)
+# Check user's role
+role = await db.users_roles.get_effective_role(user_id)
 # "founder" | "admin" | "developer" | "tester" | None
 
-ok = await can_act_on(executor_id, target_id)
+# Check if executor can act on target
+ok = await db.users_roles.can_act_on(executor_id, target_id)
+
+# Get role label for display
+label = db.users_roles.ROLE_LABEL.get(role, role)
 ```
 
 Rules:
@@ -402,9 +408,10 @@ if executor_role is None:
 Auto-demote before ban or kick uses the `Demote` class:
 
 ```python
+from tcbot import database as db
 from tcbot.modules.helper.workflows.demote_flow import Demote
 
-target_role = await get_effective_role(target_id)
+target_role = await db.users_roles.get_effective_role(target_id)
 if target_role:
     await Demote.execute(
         ctx.bot,
@@ -546,7 +553,7 @@ Every command that targets a user must guard special targets before acting:
 1. Bot self-check: never ban, kick, mute, warn, or demote the bot itself.
 2. Founder check: respond respectfully and stop.
 3. Staff role check: use `get_effective_role()`, `ROLE_LABEL`, and
-- Role checks should use the canonical role helpers in `tcbot.database.users_db` and the shared guard in `tcbot.modules.helper.decorators.resolve_and_check`.
+- Role checks should use the canonical role helpers in `tcbot.database.users_roles` and the shared guard in `tcbot.modules.helper.decorators.resolve_and_check`.
 4. Auto-demote staff targets before ban or kick when allowed.
 
 Keep responses clear, English-only, HTML formatted, and short.
@@ -564,7 +571,7 @@ uv sync
 Run tests:
 
 ```bash
-python3 -m pytest tests/ -v
+uv run --extra test pytest tests/ -v
 ```
 
 Format and lint:
@@ -573,9 +580,6 @@ Format and lint:
 uv run ruff format .
 uv run ruff check --fix .
 ```
-
-If `python3` is unavailable on Windows, use the project interpreter or `uv run`
-when available. Do not claim tests passed unless you ran them successfully.
 
 ---
 
@@ -642,7 +646,7 @@ if refusal is not None:
 This bot must respond with **zero perceived delay**. The hot path of every command handler should issue independent async work in parallel.
 
 - Any two `await`s that do not depend on each other **must** be combined with `asyncio.gather(...)`. Sequential awaits are a defect.
-- Cache-only reads (`users_db.get_first_name`, `get_effective_role`) are still awaits — gather them with the DB writes / Telegram calls that happen alongside.
+- Cache-only reads (`users_cache.get_first_name`, `users_roles.get_effective_role`) are still awaits — gather them with the DB writes / Telegram calls that happen alongside.
 - For lists rendered in a loop (kicks, mutes, warns, bans), resolve every per-item lookup *before* the formatting loop runs. The loop itself stays synchronous string-building.
 - External Telegram lookups (`bot.get_chat`) **must** be wrapped in `asyncio.wait_for(timeout=3.0)` so a stalled API call cannot block a user-facing reply.
 - DM + log + audit writes that fan out to multiple chats use `asyncio.gather(..., return_exceptions=True)` — one recipient failing must not roll back the others.

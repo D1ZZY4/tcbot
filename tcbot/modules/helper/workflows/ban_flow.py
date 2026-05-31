@@ -63,7 +63,9 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     # * Start old-admin name fetch immediately - runs during proof upload I/O below
     _old_admin_fname_task = (
         asyncio.create_task(
-            db.users_db.get_first_name(existing.get("admin_user_id", admin_id), "Admin")
+            db.users_cache.get_first_name(
+                existing.get("admin_user_id", admin_id), "Admin"
+            )
         )
         if is_update
         else None
@@ -229,11 +231,11 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
                 parse_mode="HTML",
                 reply_markup=None,
             ),
-            db.users_db.upsert_user(target_id, None, target_fname),
+            db.users_cache.upsert_user(target_id, None, target_fname),
             return_exceptions=True,
         )
     else:
-        await db.users_db.upsert_user(target_id, None, target_fname)
+        await db.users_cache.upsert_user(target_id, None, target_fname)
 
 
 # ───────────────── Proof collection state handlers ──────────────── #

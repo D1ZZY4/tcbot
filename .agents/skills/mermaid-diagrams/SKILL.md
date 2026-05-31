@@ -60,7 +60,7 @@ Use this pattern when explaining how the bot starts and routes work:
 
 ```mermaid
 flowchart TD
-    Entry[python -m tcbot] --> App[Build PTB application]
+    Entry[uv run python -m tcbot] --> App[Build PTB application]
     App --> KeepAlive[Start Flask keep-alive]
     App --> Mongo[Connect MongoDB]
     Mongo --> Indexes[Run mongos.ensure_indexes]

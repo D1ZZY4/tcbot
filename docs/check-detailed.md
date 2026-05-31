@@ -127,9 +127,9 @@ All callbacks are registered in `checking.py` and run safely on repeated taps th
 
 | Helper | Purpose |
 |---|---|
-| `users_db.get_user(uid)` | Cached profile snapshot — first name, username, last name. |
-| `users_db.role_meta(uid)` | `(role, assigned_by, assigned_at)` for the Role line. |
-| `users_db.get_first_name(uid, fallback)` | Cache-only name lookup used for admin attribution in drill-down lists. |
+| `users_cache.get_user(uid)` | Cached profile snapshot — first name, username, last name. |
+| `users_roles.role_meta(uid)` | `(role, assigned_by, assigned_at)` for the Role line. |
+| `users_cache.get_first_name(uid, fallback)` | Cache-only name lookup used for admin attribution in drill-down lists. |
 | `bans_db.get_active_ban(uid)` | Current active ban, if any. |
 | `bans_db.user_bans(uid)` | Every ban record (active + inactive), newest first. |
 | `bans_db.user_ban_count(uid)` | Count of bans on this user. |

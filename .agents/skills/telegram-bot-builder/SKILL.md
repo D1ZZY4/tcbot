@@ -115,7 +115,7 @@ async def cmd_lookup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if msg is None or user is None:
         return
 
-    record = await db.users_db.get_user(user.id)
+    record = await db.users_cache.get_user(user.id)
     if record is None:
         await msg.reply_text("No record found.", parse_mode="HTML")
         return
@@ -269,7 +269,7 @@ Operational guidance:
 
 - Configure secrets through environment variables or platform secret storage.
 - Keep `config.env.example` as the template, not a secret store.
-- Validate startup with `python -m tcbot` locally when appropriate.
+- Validate startup with `uv run python -m tcbot` locally when appropriate.
 - Use `docker-compose up --build` for local bot + MongoDB workflows when requested.
 - Keep health checks lightweight and independent of slow Telegram or MongoDB calls.
 

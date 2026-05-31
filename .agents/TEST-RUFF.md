@@ -32,23 +32,14 @@ uv sync --extra test
 Run the full suite:
 
 ```bash
-python3 -m pytest tests/ -v
-```
-
-Equivalent through `uv` with test extras:
-
-```bash
 uv run --extra test pytest tests/ -v
 ```
 
 Collect tests only:
 
 ```bash
-python3 -m pytest --collect-only -q tests/
+uv run --extra test pytest --collect-only -q tests/
 ```
-
-Windows note: if `python3` is unavailable, use `python` or `uv run` with the
-project environment.
 
 ---
 
@@ -83,7 +74,7 @@ rather than relying on editor-specific settings.
 |---|---|
 | Documentation-only | Read changed docs; optionally run Markdown preview or spell check |
 | Formatter/comment-only code change | `uv run ruff format .` and focused tests if behavior may be touched |
-| Command handler change | Focused tests if available, then `python3 -m pytest tests/ -v` |
+| Command handler change | Focused tests if available, then `uv run --extra test pytest tests/ -v` |
 | Database helper change | Relevant DB tests plus full test suite |
 | Workflow change | Relevant workflow tests plus full test suite |
 | Dependency/config change | `uv sync`, Ruff, full test suite |

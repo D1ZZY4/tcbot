@@ -84,7 +84,7 @@ uv run ruff check .
 uv run ruff format .
 uv run --extra test pytest tests/ -q
 uv run --extra test pytest --collect-only -q
-python -m tcbot
+uv run python -m tcbot
 ```
 
 Notes:

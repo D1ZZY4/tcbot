@@ -93,7 +93,7 @@ When a valid appeal message is submitted:
 3. A submitted-appeal log is posted to `cfg.logs`.
 4. The ban record is updated with review/log metadata when those messages are successfully sent.
 5. The original DM instruction message is edited to confirm submission.
-6. The user is cached/updated in `users_db`.
+6. The user is cached/updated in `users_cache`.
 
 The review card contains two inline buttons:
 
@@ -133,13 +133,13 @@ The update helpers involved are:
 - `bans_db.set_review(ban_id, review_msg_id)`
 - `bans_db.set_appeal_log_msg(ban_id, appeal_log_msg_id, appeal_link=...)`
 - `bans_db.deactivate_ban(ban_id)` on approval
-- `users_db.upsert_user(...)` after submission
+- `users_cache.upsert_user(...)` after submission
 
 If the review post fails, `review_message_id` is not stored. If the appeal-log post fails, `appeal_log_msg_id` is not stored. The implementation logs those failures and continues where possible.
 
 ## Staff review rules
 
-Appeal decisions are handled by `appeal.on_decision` and are registered outside the conversation handler. Only users for whom `users_db.is_staff(user_id)` returns true may use the review buttons. In this codebase, `is_staff` means Founder/owner or Admin; Developer and Tester custom roles are not included by that helper.
+Appeal decisions are handled by `appeal.on_decision` and are registered outside the conversation handler. Only users for whom `users_roles.is_staff(user_id)` returns true may use the review buttons. In this codebase, `is_staff` means Founder/owner or Admin; Developer and Tester custom roles are not included by that helper.
 
 The original banning admin gets a 12-hour priority window after the appeal review timestamp is set:
 

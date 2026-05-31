@@ -41,7 +41,7 @@ Keep feedback practical. Prioritize actionable issues over style preferences.
 
 ### Roles and Permissions
 
-- Role checks use canonical helpers from `tcbot.database.users_db`.
+- Role checks use canonical helpers from `tcbot.database.users_roles`.
 - Executor/target comparisons use role hierarchy helpers.
 - Ban/kick flows auto-demote federation role holders before enforcement.
 - Founder/admin/developer/tester protections are preserved.

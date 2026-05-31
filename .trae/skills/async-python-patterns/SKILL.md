@@ -32,7 +32,7 @@ Do not use this skill for CPU-bound optimization unless the async code is direct
 - Python target: `>=3.12`.
 - Telegram framework: `python-telegram-bot` 22.5, async-first API.
 - Database driver: Motor (`motor >= 3.7.1`).
-- Runtime entry point: `python -m tcbot` on Windows, `python3 -m tcbot` elsewhere.
+- Runtime entry point: `uv run python -m tcbot` on Windows, `uv run python -m tcbot` elsewhere.
 - Keepalive: Flask runs alongside the bot; do not add blocking work to keepalive routes.
 - Dependency workflow: `uv sync`, `uv run ...`.
 - Tests: offline `pytest` with `asyncio_mode = "auto"`.
@@ -72,7 +72,7 @@ async def cmd_example(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if msg is None or user is None:
         return
 
-    record = await db.users_db.get_user(user.id)
+    record = await db.users_cache.get_user(user.id)
     label = esc(record.get("first_name", user.first_name) if record else user.first_name)
 
     await msg.reply_text(
@@ -94,7 +94,7 @@ Use `asyncio.gather()` when independent async operations can safely run in paral
 
 ```python
 executor_role, target = await asyncio.gather(
-    db.users_db.get_effective_role(executor_id),
+    db.users_roles.get_effective_role(executor_id),
     extraction.extract_target(update, args, ctx.bot),
 )
 ```
@@ -164,7 +164,7 @@ import asyncio
 async def fetch_with_timeout(user_id: int) -> dict[str, object] | None:
     try:
         async with asyncio.timeout(3):
-            return await db.users_db.get_user(user_id)
+            return await db.users_cache.get_user(user_id)
     except TimeoutError:
         log.warning("Timed out loading user %s", user_id)
         return None

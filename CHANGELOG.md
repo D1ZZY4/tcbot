@@ -2,10 +2,21 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
-## [Unreleased] - 2026-05-29
+## [Unreleased] - 2026-05-31
 
-### Changed - Folder & Voice
+### Changed
+- **Split `users_db.py` into `users_cache.py` and `users_roles.py`**: Separated member_cache operations from role system operations for better separation of concerns. The old `users_db.py` has been completely removed. All imports updated to use `db.users_cache.*` or `db.users_roles.*` directly. Files modified: `tcbot/database/users_cache.py`, `tcbot/database/users_roles.py`, `tcbot/database/__init__.py`, and 22 other files across modules, helpers, and workflows.
 - **Renamed top-level `agents/` to `.agents/`**: The agent/contributor rules folder is now hidden by default (dotfile convention), matching `.github/`, `.claude/`, etc. The internal `.agents/agents/` (sub-agent prompts) and `.agents/skills/` (reusable skills) keep their names. Every Markdown reference across `README.md`, `AGENTS.md`, `PLAN.md`, `replit.md`, `CHANGELOG.md`, `docs/**/*.md`, `.agents/*.md`, `.agents/agents/*.md`, and `.agents/skills/**/*.md` has been updated to the new path. No code references the folder, so this is a documentation-only rename.
+
+### Added - Files
+- **`tcbot/database/users_cache.py`**: New module for member_cache collection operations (upsert_user, get_user, get_user_mention_data, get_mention_data_batch, get_first_names_batch, get_first_name, total_users, all_users).
+- **`tcbot/database/users_roles.py`**: New module for tc_owners, tc_admins, tc_roles collection operations (get_owner_id, is_owner, is_admin, is_staff, ensure_initial_owner, set_owner, add_admin, remove_admin, all_admins, admin_count, set_role, remove_role, get_role, all_by_role, all_roles, get_effective_role, can_act_on, role_meta, role_rank, ROLE_RANK, ROLE_LABEL, VALID_ROLES).
+
+### Removed - Files
+- **`tcbot/database/users_db.py`**: Completely removed. All code now imports directly from `users_cache` or `users_roles`.
+
+### Changed - Documentation
+- **`config.env.example`**: Added default value note for `COMMUNITY_NAME` (defaults to "Bot"). The agent/contributor rules folder is now hidden by default (dotfile convention), matching `.github/`, `.claude/`, etc. The internal `.agents/agents/` (sub-agent prompts) and `.agents/skills/` (reusable skills) keep their names. Every Markdown reference across `README.md`, `AGENTS.md`, `PLAN.md`, `replit.md`, `CHANGELOG.md`, `docs/**/*.md`, `.agents/*.md`, `.agents/agents/*.md`, and `.agents/skills/**/*.md` has been updated to the new path. No code references the folder, so this is a documentation-only rename.
 - **Identity refusal voice softened**: Reworked all refusal lines in `tcbot/modules/helper/identity.py` to match the documented bot voice (witty/dry/casual + occasional `:v` / `:)` / `:')`). Removed phrasing that read as overly formal or worshipful toward the Founder ("above my pay grade", "the boss", "they have never been banned", etc.) and replaced with shorter, equal-footing lines like *"runs the place, can't ban them through here"* and *"already runs the place - promoting them is a circular move :v"*. Applies to `_BAN_REFUSE`, `_KICK_REFUSE`, `_MUTE_REFUSE`, `_WARN_REFUSE`, `_UNBAN_REFUSE`, `_UNMUTE_REFUSE`, `_PROMOTE_REFUSE`, `_DEMOTE_REFUSE`, plus the new `_TRANSFER_REFUSE`, `_UNWARN_REFUSE`, and `_RESETWARNS_REFUSE` tables.
 
 ### Added - CI/CD & Automation

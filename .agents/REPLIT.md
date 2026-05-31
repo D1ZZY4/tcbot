@@ -8,7 +8,7 @@ Read [`CLAUDE.md`](CLAUDE.md) first. This file documents Replit-specific runtime
 
 | Setting | Value |
 |---|---|
-| Start command | `python3 -m tcbot` |
+| Start command | `uv run python -m tcbot` |
 | Bot mode | Long polling, no webhook |
 | Keep-alive | Flask server from `tcbot/alive.py` |
 | Replit port | `PORT=8080` |
@@ -127,12 +127,6 @@ Do not add packages to `requirements.txt`.
 Full offline suite:
 
 ```bash
-python3 -m pytest tests/ -v
-```
-
-Through `uv`:
-
-```bash
 uv run --extra test pytest tests/ -v
 ```
 
@@ -184,7 +178,5 @@ For local development outside Replit:
 cp config.env.example config.env
 # Fill config.env locally; keep it untracked.
 uv sync
-python3 -m tcbot
+uv run python -m tcbot
 ```
-
-On Windows, use `python -m tcbot` if `python3` is unavailable.

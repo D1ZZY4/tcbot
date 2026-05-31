@@ -27,11 +27,11 @@ async def build_ban_detail(
     if target_fname is None:
         # Fetch mention data for both users in parallel
         (target_fname, target_uname), (admin_fname, admin_uname) = await asyncio.gather(
-            db.users_db.get_user_mention_data(uid),
-            db.users_db.get_user_mention_data(aid),
+            db.users_cache.get_user_mention_data(uid),
+            db.users_cache.get_user_mention_data(aid),
         )
     else:
-        admin_fname, admin_uname = await db.users_db.get_user_mention_data(aid)
+        admin_fname, admin_uname = await db.users_cache.get_user_mention_data(aid)
         target_uname = None
 
     proof_chat, proof_thread = cfg.proofs

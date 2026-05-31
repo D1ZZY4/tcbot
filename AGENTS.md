@@ -54,6 +54,18 @@ tgbot/
 │   ├── __main__.py           Runtime entry point, handler registration, polling
 │   ├── alive.py              Flask keep-alive endpoint
 │   ├── database/             MongoDB helpers, one file per collection/domain
+│   │   ├── users_cache.py    Member profile cache operations (new)
+│   │   ├── users_roles.py    Role system: owners/admins/roles (new)
+│   │   ├── bans_db.py        Federation bans
+│   │   ├── groups_db.py      Connected and pending groups
+│   │   ├── warns_db.py       Warnings
+│   │   ├── kicks_db.py       Kicks
+│   │   ├── mutes_db.py       Mutes
+│   │   ├── queues_db.py      Promotion requests
+│   │   ├── cache.py          In-memory caches
+│   │   ├── mongos.py         MongoDB client/indexes
+│   │   ├── documents.py      Typed document shapes
+│   │   └── types.py          Domain primitive types
 │   ├── modules/              Telegram command modules and handlers
 │   │   └── helper/           Shared helper code and conversation workflows
 │   │       └── workflows/    ConversationHandler flows (`*_flow.py` only)
@@ -97,18 +109,10 @@ uv sync --extra test --frozen
 Run the bot locally:
 
 ```bash
-python3 -m tcbot
+uv run python -m tcbot
 ```
-
-On Windows, use `python -m tcbot` if `python3` is not available.
 
 Run tests:
-
-```bash
-python3 -m pytest tests/ -v
-```
-
-Equivalent with `uv` and test extras:
 
 ```bash
 uv run --extra test pytest tests/ -v
@@ -174,7 +178,7 @@ Repository conventions:
 - `tcbot/modules/__init__.py` discovers top-level module files, applies `MODULES_LOAD` / `MODULES_NO_LOAD` filters, and fails startup if an enabled module cannot be imported.
 - Handlers should use database helper modules instead of calling `mongos.col()` directly.
 - Multi-group actions should use `tcbot.utils.dispatch.fan_out()` to bound concurrent Telegram API calls.
-- Role checks should use the canonical role helpers in `tcbot.database.users_db` and `tcbot.modules.helper.decorators.resolve_and_check`.
+- Role checks should use the canonical role helpers in `tcbot.database.users_roles` and `tcbot.modules.helper.decorators.resolve_and_check`.
 - Ban/kick flows must auto-demote users who currently hold a federation role.
 - New conversation logic belongs in `tcbot/modules/helper/workflows/*_flow.py`.
 

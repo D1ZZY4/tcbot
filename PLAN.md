@@ -8,7 +8,7 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 
 | Area | Status |
 |---|---|
-| Runtime | Long-polling Telegram bot started with `python3 -m tcbot`. |
+| Runtime | Long-polling Telegram bot started with `uv run python -m tcbot`. |
 | Python target | Python 3.12 project target (`pyproject.toml` requires `>=3.12`). |
 | Bot framework | `python-telegram-bot[job-queue] == 22.5`. |
 | Database | MongoDB through Motor, connected during PTB `post_init`. |
@@ -23,7 +23,7 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 ### Startup Sequence
 
 ```text
-python3 -m tcbot
+uv run python -m tcbot
   │
   ├── tcbot/__init__.py
   │     Loads environment variables.
@@ -111,7 +111,8 @@ Current collection/domain owners include:
 |---|---|
 | Federation bans | `bans_db.py` |
 | Connected and pending groups | `groups_db.py` |
-| Member profile cache + owners/admins + dev/tester roles | `users_db.py` |
+| Member profile cache | `users_cache.py` |
+| Owners/admins + dev/tester roles | `users_roles.py` |
 | Warnings | `warns_db.py` |
 | Kicks | `kicks_db.py` |
 | Mutes | `mutes_db.py` |
@@ -140,7 +141,7 @@ Role hierarchy:
 
 Important rules:
 
-- Use canonical role helpers from `tcbot.database.users_db` and `tcbot.modules.helper.decorators.resolve_and_check`.
+- Use canonical role helpers from `tcbot.database.users_roles` and `tcbot.modules.helper.decorators.resolve_and_check`.
 - Do not duplicate manual role-check chains in handlers.
 - Ban and kick flows must auto-demote targets that currently hold a federation role.
 - Promotion and demotion workflows should preserve auditability through logs and queue records.
@@ -181,7 +182,7 @@ uv sync --extra test
 Run the bot:
 
 ```bash
-python3 -m tcbot
+uv run python -m tcbot
 ```
 
 Run tests:
@@ -232,12 +233,16 @@ No active P0 items are documented in this file.
 | Verify full suite on every source change | Tests | Ongoing | Use `uv run --extra test pytest tests/ -v` when tests are in scope. |
 | Keep docs aligned with env/config changes | Documentation | Ongoing | Update `README.md`, `AGENTS.md`, `PLAN.md`, and `replit.md` when runtime setup changes. |
 | Keep CI dependency installs aligned with `uv.lock` | Automation | Ongoing | GitHub Actions should use `uv sync --frozen` instead of missing `requirements.txt` files. |
+| **Split `users_db.py` into cache/roles** | Database | **Done** | `users_db.py` completely removed. All code now uses `users_cache.py` and `users_roles.py` directly. 25 files updated. |
+| **Add database tests** | Tests | Open | Need tests for `users_cache`, `users_roles`, `groups_db`, `kicks_db`, `mutes_db`, `queues_db`, `cache.py`. |
 
 ### P2 — Medium
 
 | Item | Area | Status | Notes |
 |---|---|---|---|
 | Expand edge-case workflow tests | Tests | Open | Appeal, ban proof album buffering, and timeout paths are good candidates. |
+| **Add `users_db` documentation** | Documentation | **Done** | Already documented in `docs/databases/databases.md` and `docs/helper/helper.md`. |
+| **Standardize `COMMUNITY_NAME` default** | Documentation | **Done** | Updated in `README.md`, `setup.md`, and `config.env.example`. |
 | Review deployment-specific port assumptions | Deployment | Improved | Runtime validates `PORT` range and falls back to `5000`; hosts may still require an explicit value. |
 
 ### P3 — Low

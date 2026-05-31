@@ -18,7 +18,6 @@ from typing import Literal
 from telegram import Bot
 
 from tcbot import database as db
-from tcbot.database.users_db import ROLE_LABEL, get_effective_role
 from tcbot.modules.helper.formatter import code, mention
 
 # ───────────────────────────── Constants ────────────────────────────── #
@@ -53,7 +52,11 @@ class Identity:
     @property
     def role_label(self) -> str | None:
         """Public-facing role label or ``None`` for non-staff identities."""
-        return ROLE_LABEL.get(self.kind) if self.kind in ROLE_LABEL else None
+        return (
+            db.users_roles.ROLE_LABEL.get(self.kind)
+            if self.kind in db.users_roles.ROLE_LABEL
+            else None
+        )
 
 
 # ────────────────────────── Resolution ──────────────────────────── #
@@ -90,7 +93,9 @@ async def classify(
     profile resolved upstream, so the only async hit is the role cache.
     """
     # Optimized: fetch only first_name and username, not full document
-    cached_fname, target_username = await db.users_db.get_user_mention_data(target_id)
+    cached_fname, target_username = await db.users_cache.get_user_mention_data(
+        target_id
+    )
     if not target_fname or target_fname.startswith("User "):
         target_fname = cached_fname
 
@@ -109,7 +114,7 @@ async def classify(
             "other_bot", target_id, target_fname, target_username, is_bot=True
         )
 
-    role = await get_effective_role(target_id)
+    role = await db.users_roles.get_effective_role(target_id)
     if role == "founder":
         return Identity("founder", target_id, target_fname, target_username)
     if role == "admin":

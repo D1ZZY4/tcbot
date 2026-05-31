@@ -15,7 +15,7 @@ flowchart TD
     Permission -->|allowed| Confirm[Show confirm callback]
     Confirm --> Apply[Apply demotion]
     SkipPerm --> Apply
-    Apply --> RemoveRole[users_db remove role]
+    Apply --> RemoveRole[users_roles remove role]
     RemoveRole --> Log[Unified role log entry]
 ```
 
@@ -73,7 +73,7 @@ The federation log emitted by `parse_logmsg.demoted` is identical in every case 
 ## Manual demotion flow (`/tcdemote`)
 
 1. Founder or Admin runs `/tcdemote <target>`. The `@staff_only` decorator rejects non-staff executors.
-2. `cmd_demote` resolves the target via `extract_target` in parallel with the executor's effective role (`users_db.get_effective_role`).
+2. `cmd_demote` resolves the target via `extract_target` in parallel with the executor's effective role (`users_roles.get_effective_role`).
 3. The bot reads the target's effective role:
    - If `None` or `"founder"`, the bot replies `That user doesn't hold a role that can be removed.` and stops.
    - If the target is `"admin"` and the executor is not Founder, the bot replies `Only the Founder can demote an Admin.` and stops.
@@ -146,8 +146,8 @@ No `Auto-Demote` title, no `Trigger:` field — auto-paths look identical to man
 
 `Demote.remove_role` is the single point where the database is mutated:
 
-- `users_db.remove_admin(target_id)` for Admin targets — deletes from `tc_admins`.
-- `users_db.remove_role(target_id)` for Developer/Tester targets — deletes from `tc_roles`.
+- `users_roles.remove_admin(target_id)` for Admin targets — deletes from `tc_admins`.
+- `users_roles.remove_role(target_id)` for Developer/Tester targets — deletes from `tc_roles`.
 
 Both helpers invalidate the affected user's entry in `effective_role_cache` so the next role read returns the post-demote state.
 

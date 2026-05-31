@@ -12,7 +12,6 @@ from typing import Any
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 
 from tcbot import database as db
-from tcbot.database.users_db import ROLE_LABEL, role_meta
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.formatter import bold, code, esc, mention
 from tcbot.utils.timedate_format import fmt_dt
@@ -26,7 +25,7 @@ _GET_CHAT_TIMEOUT = 3.0
 
 async def _resolve_user_info(bot: Bot, target_id: int) -> tuple[str, str | None]:
     """Return (display_name, username_or_None) — fast-path cache hit, bounded Telegram fallback."""
-    cached = await db.users_db.get_user(target_id)
+    cached = await db.users_cache.get_user(target_id)
     fname = (cached.get("first_name") or "") if cached else ""
     uname = (cached.get("username") if cached else None) or None
 
@@ -87,7 +86,7 @@ def _back_to_check(target_id: int) -> list[InlineKeyboardButton]:
 
 async def _name(uid: int) -> str:
     """Fast cache-only name lookup; falls back to 'User <id>' string."""
-    return await db.users_db.get_first_name(uid, f"User {uid}")
+    return await db.users_cache.get_first_name(uid, f"User {uid}")
 
 
 async def _async_const(value: str) -> str:
@@ -125,7 +124,7 @@ class Check:
             mute_total,
         ) = await asyncio.gather(
             _resolve_user_info(bot, target_id),
-            role_meta(target_id),
+            db.users_roles.role_meta(target_id),
             db.bans_db.get_active_ban(target_id),
             db.bans_db.user_ban_count(target_id),
             db.bans_db.user_appeal_count(target_id),
@@ -135,14 +134,16 @@ class Check:
             db.mutes_db.user_mute_count(target_id),
         )
 
-        role_label = ROLE_LABEL.get(role, "None") if role else "None"
+        role_label = db.users_roles.ROLE_LABEL.get(role, "None") if role else "None"
         uname_part = f"@{esc(uname)}" if uname else "—"
         active_part = f"Yes ({code(active_ban['ban_id'])})" if active_ban else "No"
 
         # * Build the rich role line with assignment metadata where available.
         role_lines = [f"Role: {bold(role_label)}"]
         if role and role != "founder" and role_by_id:
-            by_name = await db.users_db.get_first_name(role_by_id, f"User {role_by_id}")
+            by_name = await db.users_cache.get_first_name(
+                role_by_id, f"User {role_by_id}"
+            )
             role_lines.append(f"   Assigned by: {mention(role_by_id, by_name)}")
         if role and role != "founder" and role_at:
             role_lines.append(f"   Assigned at: {fmt_dt(role_at)}")
@@ -354,7 +355,7 @@ class Check:
         # * Resolve admin names with batch query
         admin_ids = [w.get("admin_id", 0) for w in chunk if w.get("admin_id")]
         admin_name_map = (
-            await db.users_db.get_first_names_batch(admin_ids) if admin_ids else {}
+            await db.users_cache.get_first_names_batch(admin_ids) if admin_ids else {}
         )
 
         lines = [
@@ -502,7 +503,9 @@ async def _per_chat_event_list(
     # * Resolve all titles + all admin names in parallel with batch query
     titles, admin_name_map = await asyncio.gather(
         db.groups_db.get_group_titles(chat_ids),
-        db.users_db.get_first_names_batch(admin_ids) if admin_ids else _async_const({}),
+        db.users_cache.get_first_names_batch(admin_ids)
+        if admin_ids
+        else _async_const({}),
     )
 
     lines = [

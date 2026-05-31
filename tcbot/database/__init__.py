@@ -11,5 +11,17 @@ from . import groups_db as groups_db
 from . import kicks_db as kicks_db
 from . import mutes_db as mutes_db
 from . import queues_db as queues_db
-from . import users_db as users_db
+from . import users_cache as users_cache
+from . import users_roles as users_roles
 from . import warns_db as warns_db
+
+__all__ = [
+    "bans_db",
+    "groups_db",
+    "kicks_db",
+    "mutes_db",
+    "queues_db",
+    "users_cache",
+    "users_roles",
+    "warns_db",
+]

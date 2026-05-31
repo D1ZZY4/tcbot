@@ -29,7 +29,7 @@ async def _handle_member(member, msg, chat, bot) -> None:
         return
 
     _, ban = await asyncio.gather(
-        db.users_db.upsert_user(
+        db.users_cache.upsert_user(
             member.id,
             member.username,
             member.first_name,

@@ -30,7 +30,8 @@ tcbot/
 │   ├── mongos.py           Motor client, collection accessor, indexes
 │   ├── bans_db.py          Federation ban records (incl. per-user history)
 │   ├── groups_db.py        Connected groups and pending joins
-│   ├── users_db.py         Member cache + owners/admins + dev/tester roles, effective-role resolution
+│   ├── users_cache.py      Member profile cache operations
+│   ├── users_roles.py      Owners/admins + dev/tester roles, effective-role resolution
 │   ├── warns_db.py         Warnings and warning counters (incl. per-user aggregates)
 │   ├── kicks_db.py         Kick audit records (incl. per-user history)
 │   ├── mutes_db.py         Mute audit records (incl. per-user history)
@@ -73,7 +74,7 @@ tcbot/
 
 ```mermaid
 sequenceDiagram
-    participant Proc as python -m tcbot
+    participant Proc as uv run python -m tcbot
     participant Config as tcbot.__init__
     participant Main as tcbot.__main__
     participant Alive as tcbot.alive

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-from tcbot.database.users_db import ROLE_LABEL as _ROLE_LABELS
+from tcbot import database as db
 
 # ──────────────────────────── Ban flow ──────────────────────────── #
 
@@ -54,10 +54,10 @@ def promote_role_kb(target_id: int, available_roles: list[str]) -> InlineKeyboar
     """Role selection keyboard shown when /tcpromote is used without a role argument."""
     buttons = [
         InlineKeyboardButton(
-            _ROLE_LABELS[r], callback_data=f"promo_role:{r}:{target_id}"
+            db.users_roles.ROLE_LABEL[r], callback_data=f"promo_role:{r}:{target_id}"
         )
         for r in available_roles
-        if r in _ROLE_LABELS
+        if r in db.users_roles.ROLE_LABEL
     ]
     rows: list[list[InlineKeyboardButton]] = [
         buttons[i : i + 2] for i in range(0, len(buttons), 2)

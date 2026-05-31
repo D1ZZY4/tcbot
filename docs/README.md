@@ -53,7 +53,7 @@ flowchart TD
     CommandModules --> Utils[tcbot.utils]
 ```
 
-Runtime starts with `python -m tcbot` (or `python3 -m tcbot`). The entry point loads configuration, starts the Flask health endpoint, builds the Telegram application, connects MongoDB, ensures indexes, seeds the initial owner, dynamically loads handlers, and starts long polling.
+Runtime starts with `uv run python -m tcbot` (or `uv run python -m tcbot`). The entry point loads configuration, starts the Flask health endpoint, builds the Telegram application, connects MongoDB, ensures indexes, seeds the initial owner, dynamically loads handlers, and starts long polling.
 
 ## Core rules
 
@@ -72,7 +72,7 @@ uv sync
 uv run --extra test pytest tests/ -v
 uv run ruff format .
 uv run ruff check --fix .
-python -m tcbot
+uv run python -m tcbot
 ```
 
 On systems where `python3` is preferred, replace `python` with `python3`.

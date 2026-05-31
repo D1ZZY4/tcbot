@@ -108,7 +108,7 @@ When the target has no active ban:
    - `Submit Appeal` URL button.
 6. The sent log message ID is saved with `bans_db.set_log_message_id(...)` when available.
 7. The target is banned in every active connected group returned by `groups_db.active_groups()`.
-8. The target user is cached with `users_db.upsert_user(...)`.
+8. The target user is cached with `users_cache.upsert_user(...)`.
 9. The original proof prompt is edited with an applied-groups summary.
 
 The `Submit Appeal` button opens the bot DM deep link:
@@ -152,7 +152,7 @@ Failures are counted but do not roll back the database ban record.
 
 ## Role hierarchy and target protection
 
-Ban execution uses the role hierarchy from `users_db`:
+Ban execution uses the role hierarchy from `users_roles`:
 
 | Role | Rank |
 |---|---:|
