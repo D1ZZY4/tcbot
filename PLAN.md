@@ -222,34 +222,40 @@ Priorities, in order:
 
 ## Current Priority Backlog
 
-### P0 — Critical
+### P0 — Critical (Must Fix Before Next Release)
 
-No active P0 items are documented in this file.
+| # | Security/Performance Issue | Location | Fix | Priority |
+|--|--|--|--|----------|
+| 1 | Missing bot token validation at startup | `tcbot/__init__.py:188` | Add explicit token format validation with clear error message | CRITICAL - Prevents runtime authentication failures |
+| 2 | No MongoDB URI validation | `tcbot/__main__.py:128-130` | Add URI format validation before connection attempt | HIGH - Prevents information disclosure |
+| 3 | Missing timeouts on Telegram API calls | `tcbot/modules/helper/extraction.py:97-100` | Add `asyncio.wait_for(timeout=3.0)` to all `get_chat()` calls | HIGH - Prevents 30s+ hangs |
+| 4 | Missing composite indexes for $in queries | `users_cache.py:78-84`, `users_cache.py:108-111` | Add composite indexes `{user_id: 1, first_name: 1, username: 1}` | HIGH - 50-100ms improvement per batch query |
 
-### P1 — High
+### P1 — High (Before Next Release)
 
-| Item | Area | Status | Notes |
-|---|---|---|---|
-| Verify full suite on every source change | Tests | Ongoing | Use `uv run --extra test pytest tests/ -v` when tests are in scope. |
-| Keep docs aligned with env/config changes | Documentation | Ongoing | Update `README.md`, `AGENTS.md`, `PLAN.md`, and `replit.md` when runtime setup changes. |
-| Keep CI dependency installs aligned with `uv.lock` | Automation | Ongoing | GitHub Actions should use `uv sync --frozen` instead of missing `requirements.txt` files. |
-| **Split `users_db.py` into cache/roles** | Database | **Done** | `users_db.py` completely removed. All code now uses `users_cache.py` and `users_roles.py` directly. 25 files updated. |
-| **Add database tests** | Tests | Open | Need tests for `users_cache`, `users_roles`, `groups_db`, `kicks_db`, `mutes_db`, `queues_db`, `cache.py`. |
+| # | Test Coverage/Integration Issue | Location | Fix | Priority |
+|--|--|--|--|----------|
+| 1 | No tests for users_roles.py | `tcbot/database/users_roles.py` | Add fixtures for tc_owners, tc_admins, tc_roles collections | CRITICAL - Core authorization logic untested |
+| 2 | No tests for auth decorators | `tcbot/modules/helper/decorators.py` | Create mock Update objects for testing | CRITICAL - Security logic untested |
+| 3 | No tests for complete workflows | `tcbot/modules/helper/workflows/*.py` | Test full conversation flows from entry to completion | HIGH - Critical user flows untested |
+| 4 | ctx.user_data used as long-term state | Across all modules | Move to proper ConversationHandler state or dedicated cache module | HIGH - Prevents state leakage, improves testability |
+| 5 | No shared type definitions for module interfaces | `tcbot/modules/**/*.py` | Create `tcbot/modules/types.py` for all module-to-module interfaces | MEDIUM - Eliminates ambiguity in function signatures |
 
-### P2 — Medium
+### P2 — Medium (Next Release)
 
-| Item | Area | Status | Notes |
-|---|---|---|---|
-| Expand edge-case workflow tests | Tests | Open | Appeal, ban proof album buffering, and timeout paths are good candidates. |
-| **Add `users_db` documentation** | Documentation | **Done** | Already documented in `docs/databases/databases.md` and `docs/helper/helper.md`. |
-| **Standardize `COMMUNITY_NAME` default** | Documentation | **Done** | Updated in `README.md`, `setup.md`, and `config.env.example`. |
-| Review deployment-specific port assumptions | Deployment | Improved | Runtime validates `PORT` range and falls back to `5000`; hosts may still require an explicit value. |
+| # | Documentation Issue | Location | Fix | Priority |
+|--|--|--|--|----------|
+| 1 | Add docstrings to conversation flow classes | `tcbot/modules/helper/workflows/*.py` | Add docstrings to all class methods | MEDIUM - Better API documentation |
+| 2 | Document remaining workflow files | `tcbot/modules/helper/workflows/*.py` | Add mermaid diagrams and detailed documentation | MEDIUM - Complete workflow documentation |
 
-### P3 — Low
+### P3 — Low (Future)
 
-| Item | Area | Status | Notes |
-|---|---|---|---|
-| Keep documentation links current | Documentation | Ongoing | Prefer project-relative links that exist in the repository. |
+| # | Nice to Have | Priority |
+|--|--|----------|
+| 1 | Add query metrics collection | LOW - Enables data-driven tuning |
+| 2 | Standardize docstring format | LOW - Documentation consistency |
+
+
 
 ## Maintenance Rules
 
