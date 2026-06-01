@@ -1,6 +1,6 @@
 # Git Commit Style
 
-For contributor PR guidance, see [`../AGENTS.md`](../AGENTS.md#commit-and-pull-request-guidance). For automated CI/CD that runs on commits, see [`workflows-guide.md`](workflows-guide.md).
+For contributor PR guidance, see [`../AGENTS.md`](../AGENTS.md). For automated CI/CD that runs on commits, see [`workflows-guide.md`](workflows-guide.md).
 
 Use focused commits that describe one logical change.
 
@@ -11,6 +11,9 @@ Use focused commits that describe one logical change.
 - Do not end with punctuation.
 - Keep it short, ideally 50 characters or fewer.
 - Prefer a body only when it adds useful context.
+- MUST BE add:
+  - Author-by: Dizzy <176969112+D1ZZY4@users.noreply.github.com>
+  - Signed-off-by: Dizzy <176969112+D1ZZY4@users.noreply.github.com>
 
 Good examples:
 
@@ -19,6 +22,9 @@ Update developer docs
 Fix appeal review lockout
 Add warning counter backfill
 Refactor module discovery docs
+
+Author-by: Dizzy <176969112+D1ZZY4@users.noreply.github.com>
+Signed-off-by: Dizzy <176969112+D1ZZY4@users.noreply.github.com>
 ```
 
 Avoid:
@@ -30,7 +36,10 @@ WIP
 Changes from today
 ```
 
-## Optional prefixes
+## MUST BE USED PREFIXES
+
+Author-by: Dizzy <176969112+D1ZZY4@users.noreply.github.com>
+Signed-off-by: Dizzy <176969112+D1ZZY4@users.noreply.github.com>
 
 Project commit guidance allows conventional prefixes when useful:
 
@@ -46,9 +55,11 @@ Project commit guidance allows conventional prefixes when useful:
 Examples:
 
 ```text
-docs: Update setup and architecture docs
-fix: Handle missing appeal review timestamp
-refactor: Centralize warn counter updates
+docs: Update setup and architecture docs, see `CHANGELOG.md` for more details.
+fix: Handle missing appeal review timestamp, see `CHANGELOG.md` for more details.
+refactor: Centralize warn counter updates, see `CHANGELOG.md` for more details.
+
+
 ```
 
 ## Body format
@@ -59,7 +70,7 @@ Use a body when the subject cannot explain the why or impact.
 Fix appeal review lockout
 
 Normalize stored review timestamps before comparing them with the
-12-hour reviewer priority window.
+12-hour reviewer priority window. (see `CHANGELOG.md` for more details)
 ```
 
 Rules:
@@ -67,6 +78,7 @@ Rules:
 - Separate subject and body with a blank line.
 - Wrap body lines around 72 characters.
 - Explain why, risk, or migration impact; do not repeat the subject.
+- Explain long or short descriptions for complex changes on `CHANGELOG.md`.
 
 ## Before committing
 

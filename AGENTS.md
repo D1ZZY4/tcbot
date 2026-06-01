@@ -204,7 +204,7 @@ uv run --extra test pytest --collect-only -q
 
 ## Commit and Pull Request Guidance
 
-For commit message conventions, see [`docs/git-commit.md`](docs/git-commit.md). For automated CI/CD and auto-PR workflows, see [`docs/workflows-guide.md`](docs/workflows-guide.md).
+For commit message conventions, see [`docs/git-commit.md`](docs/git-commit.md) for more details. For automated CI/CD and auto-PR workflows, see [`docs/workflows-guide.md`](docs/workflows-guide.md) for more details.
 
 Use focused commits and conventional prefixes when appropriate:
 
@@ -218,6 +218,7 @@ Use focused commits and conventional prefixes when appropriate:
 Pull requests should include:
 
 - A short summary of the change.
+- For a long or detailed or short description submit to [`CHANGELOG.md`](CHANGELOG.md).
 - Test or validation commands run.
 - Any configuration, database, or deployment impact.
 - Screenshots or log excerpts only when user-visible behavior changed.

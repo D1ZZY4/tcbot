@@ -1,0 +1,59 @@
+{
+	"terminal": {
+		"working_directory": "current_project_directory",
+	},
+	"inlay_hints": {
+		"edit_debounce_ms": 0,
+	},
+	"completions": {
+		"words": "enabled",
+	},
+	"always_treat_brackets_as_autoclosed": true,
+	"format_on_save": "on",
+	"allow_rewrap": "anywhere",
+	"hard_tabs": true,
+	"prettier": {
+		"allowed": true,
+	},
+	"document_symbols": "on",
+	"document_folding_ranges": "on",
+	"semantic_tokens": "full",
+	"languages": {
+		"Python": {
+			"format_on_save": "on",
+			"formatter": {
+				"external": {
+					"command": "uv",
+					"arguments": ["run", "ruff", "format", "-"],
+				},
+			},
+			"code_actions_on_format": {
+				"source.organizeImports": true,
+				"source.fixAll": true,
+			},
+		},
+		"Markdown": {
+			"format_on_save": "off",
+			"soft_wrap": "editor_width",
+		},
+	},
+	"lsp": {
+		"pyright": {
+			"settings": {
+				"python.analysis.typeCheckingMode": "basic",
+				"python.analysis.diagnosticMode": "workspace",
+				"python.analysis.autoImportCompletions": true,
+			},
+		},
+	},
+	"tasks": {
+		"enabled": true,
+		"prefer_lsp": true,
+		"variables": {
+			"workspaceFolder": "${workspaceFolder}",
+		},
+	},
+	"auto_indent": "syntax_aware",
+	"auto_indent_on_paste": true,
+	"enable_language_server": true,
+}
