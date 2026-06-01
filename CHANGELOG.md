@@ -2,6 +2,22 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-01
+
+### Added - Tests
+- **`tests/test_users_roles.py`** (14 tests): First offline coverage for `tcbot/database/users_roles.py`, the core federation authorization layer. Covers `role_rank` hierarchy ordering, `is_owner` / `is_admin` / `is_staff`, `get_effective_role` resolution order (founder → admin → custom role → none), `can_act_on` rank comparison, `ensure_initial_owner` seeding and no-op-when-present, `set_owner` replacement, admin and custom-role CRUD, and `effective_role_cache` invalidation after a promotion. MongoDB is replaced with in-memory fake collections (dispatched by name through a patched `col`), so the suite stays offline and deterministic.
+- **`tests/test_decorators.py`** (extended 10 → 19 tests): Added coverage for the authorization guards that were previously untested. New cases exercise `owner_only`, `staff_only`, `mod_only`, `basic_mod_only` (allow vs. block paths), and `resolve_and_check` (low-rank executor rejected, target-outranks-executor rejected, and the valid-action success path). The existing `log_execution` tracer tests are unchanged.
+
+### Changed - Documentation
+- **`PLAN.md` backlog re-verified and corrected**: The "Current Priority Backlog" was re-checked line by line against the source tree instead of being trusted from the prior review. Several previously listed P0/P1 items were found to be already implemented or overstated and have been removed or accurately reclassified, with each disposition recorded under a new "Backlog Review (2026-06-01)" section:
+  - *Dismissed (already implemented)*: "Missing Telegram API timeouts" (`extraction.py` `_safe_get_chat` already wraps `bot.get_chat()` in `asyncio.wait_for(timeout=3.0)`).
+  - *Dismissed (presence already validated)*: "Missing bot token validation" and "Missing MongoDB URI validation" (`_required_env` already enforces both; only optional format checks remain, moved to P3). The previously cited `__main__.py:128-130` does not handle the URI.
+  - *Dismissed (not a defect)*: "`ctx.user_data` used as long-term state" (idiomatic per-conversation store, cleared with `.pop`) and "flow classes lack docstrings" (all flow classes already have class docstrings).
+  - *Reclassified to P3*: composite covered-query index on `member_cache` (the existing unique `user_id` index already serves the `$in` batch lookups).
+  - *Resolved*: the two genuine gaps, authorization tests for `users_roles.py` and the auth decorators, are now closed by the new tests above.
+- **Test inventory updated**: `PLAN.md` "Current Project State" and the documentation baseline now record 148 tests across 15 files (was 125 across 14), verified with `uv run --extra test pytest --collect-only -q`.
+- **Added a reusable "Code Review Findings" section to `PLAN.md`**: Empty tables for tiers P1 through P5 where anyone reviewing the code records findings in a consistent, evidence-backed shape. Columns are Finding, Location (`file.py:line`), Evidence (code quote or observed behavior), Proposed Fix, and Status. Includes a "how to record a finding" block that requires a real cited location, supporting evidence, and verification against the source before listing, plus a set of status values (`Open`, `Verified`, `In Progress`, `Resolved`, `Dismissed`) and priority-tier definitions. Codifies the lessons from the 2026-06-01 backlog review, where unverified findings had been logged as critical despite already being implemented.
+
 ## [Unreleased] - 2026-05-31
 
 ### Changed

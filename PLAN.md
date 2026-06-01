@@ -1,4 +1,4 @@
-# TCF Bot — Planning and Project State
+# TCF Bot: Planning and Project State
 
 This document tracks how TCF Bot currently runs, what is considered stable, and what should be improved next. Keep it practical: record current behavior, known risks, and validation commands rather than aspirational placeholders.
 
@@ -15,7 +15,7 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 | Health check | Flask app in `tcbot/alive.py`, `GET /` returns `OK` on `PORT` (default `5000`). |
 | Dependency management | `uv` with `uv.lock`; CI installs with frozen lockfile by default. |
 | Formatting/linting | Ruff, configured in `pyproject.toml`. |
-| Tests | 125 collected tests across 14 `tests/test_*.py` files; designed to run offline. |
+| Tests | 148 collected tests across 15 `tests/test_*.py` files; designed to run offline. |
 | Deployment notes | Local `config.env`, Docker Compose, and Replit/hosted environment variables are documented. |
 
 ## Runtime Flow
@@ -161,7 +161,7 @@ Primary flows:
 | `proof_flow.py` | Proof upload helpers and prompts. |
 | `kicking_flow.py`, `muting_flow.py`, `warning_flow.py`, `unban_flow.py` | Action-specific moderation workflows. |
 | `promote_flow.py` | Role promotion execution helpers. |
-| `stats_flow.py` | Unified `Stats` class — overview, staff roster, users, chats, bans, search. |
+| `stats_flow.py` | Unified `Stats` class covering overview, staff roster, users, chats, bans, and search. |
 
 For detailed behavior, see `docs/workflows/workflows.md`.
 
@@ -214,48 +214,155 @@ docker-compose up --build
 
 Priorities, in order:
 
-1. **Correctness and safety** — preserve federation moderation behavior, secrets safety, and database compatibility.
-2. **Offline test coverage** — keep tests independent of Telegram and MongoDB services.
-3. **Clear module boundaries** — handlers call helpers; database writes stay in `tcbot/database/`; shared flows stay in `workflows/`.
-4. **Operational visibility** — errors and important moderation events should be logged to configured destinations.
-5. **Performance** — use bounded fan-out for group-wide operations and avoid sequential I/O where safe.
+1. **Correctness and safety:** preserve federation moderation behavior, secrets safety, and database compatibility.
+2. **Offline test coverage:** keep tests independent of Telegram and MongoDB services.
+3. **Clear module boundaries:** handlers call helpers; database writes stay in `tcbot/database/`; shared flows stay in `workflows/`.
+4. **Operational visibility:** errors and important moderation events should be logged to configured destinations.
+5. **Performance:** use bounded fan-out for group-wide operations and avoid sequential I/O where safe.
 
 ## Current Priority Backlog
 
-### P0 — Critical (Must Fix Before Next Release)
+> The backlog below was re-verified line by line against the source tree on
+> 2026-06-01. Each prior entry was checked against the actual code rather than
+> trusted from a previous review pass. The disposition of every prior claim is
+> recorded under "Backlog Review" so the audit trail stays clear.
 
-| # | Security/Performance Issue | Location | Fix | Priority |
-|--|--|--|--|----------|
-| 1 | Missing bot token validation at startup | `tcbot/__init__.py:188` | Add explicit token format validation with clear error message | CRITICAL - Prevents runtime authentication failures |
-| 2 | No MongoDB URI validation | `tcbot/__main__.py:128-130` | Add URI format validation before connection attempt | HIGH - Prevents information disclosure |
-| 3 | Missing timeouts on Telegram API calls | `tcbot/modules/helper/extraction.py:97-100` | Add `asyncio.wait_for(timeout=3.0)` to all `get_chat()` calls | HIGH - Prevents 30s+ hangs |
-| 4 | Missing composite indexes for $in queries | `users_cache.py:78-84`, `users_cache.py:108-111` | Add composite indexes `{user_id: 1, first_name: 1, username: 1}` | HIGH - 50-100ms improvement per batch query |
+### Backlog Review (2026-06-01)
 
-### P1 — High (Before Next Release)
+#### Resolved in this pass
 
-| # | Test Coverage/Integration Issue | Location | Fix | Priority |
-|--|--|--|--|----------|
-| 1 | No tests for users_roles.py | `tcbot/database/users_roles.py` | Add fixtures for tc_owners, tc_admins, tc_roles collections | CRITICAL - Core authorization logic untested |
-| 2 | No tests for auth decorators | `tcbot/modules/helper/decorators.py` | Create mock Update objects for testing | CRITICAL - Security logic untested |
-| 3 | No tests for complete workflows | `tcbot/modules/helper/workflows/*.py` | Test full conversation flows from entry to completion | HIGH - Critical user flows untested |
-| 4 | ctx.user_data used as long-term state | Across all modules | Move to proper ConversationHandler state or dedicated cache module | HIGH - Prevents state leakage, improves testability |
-| 5 | No shared type definitions for module interfaces | `tcbot/modules/**/*.py` | Create `tcbot/modules/types.py` for all module-to-module interfaces | MEDIUM - Eliminates ambiguity in function signatures |
+- **Authorization test coverage.** Added `tests/test_users_roles.py` (14 tests)
+  covering role-rank ordering, owner/admin/role CRUD, effective-role resolution,
+  and role-cache invalidation. Extended `tests/test_decorators.py` (10 → 19
+  tests) to cover the authorization guards `owner_only`, `staff_only`,
+  `mod_only`, `basic_mod_only`, and `resolve_and_check`. MongoDB is replaced with
+  in-memory fakes so both suites stay offline and deterministic. Full suite is
+  now 148 tests across 15 files.
 
-### P2 — Medium (Next Release)
+#### Dismissed after verification (no action required)
 
-| # | Documentation Issue | Location | Fix | Priority |
-|--|--|--|--|----------|
-| 1 | Add docstrings to conversation flow classes | `tcbot/modules/helper/workflows/*.py` | Add docstrings to all class methods | MEDIUM - Better API documentation |
-| 2 | Document remaining workflow files | `tcbot/modules/helper/workflows/*.py` | Add mermaid diagrams and detailed documentation | MEDIUM - Complete workflow documentation |
+- **"Missing Telegram API timeouts."** Already implemented. `extraction.py:24-30`
+  (`_safe_get_chat`) wraps every `bot.get_chat()` call in
+  `asyncio.wait_for(timeout=3.0)`; the previously proposed fix already exists in
+  the code.
+- **"Missing bot token validation."** `tcbot/__init__.py:188` calls
+  `_required_env("BOT_TOKEN")`, which already enforces presence with a clear
+  startup error. Only token *format* validation is absent, and that is tracked as
+  optional hardening under P3.
+- **"Missing MongoDB URI validation."** `MONGODB_URI` presence is enforced via
+  `_required_env` at `tcbot/__init__.py:189`. The cited `tcbot/__main__.py:128-130`
+  does not handle the URI at all (it calls `connect()` / `ensure_indexes()`).
+  Only URI *format* validation is absent, and that is tracked as optional
+  hardening under P3.
+- **"Missing composite indexes for `$in` queries."** The unique `user_id` index
+  on `member_cache` (`mongos.py:126`) already serves the `$in` batch lookups in
+  `users_cache.py`. A composite index would only enable a covered query, which is
+  a marginal optimization rather than a correctness or hot-path issue. Tracked
+  under P3.
+- **"`ctx.user_data` used as long-term state."** This is the idiomatic
+  python-telegram-bot per-conversation store. Usages are transient and explicitly
+  cleared (`.pop(...)`) after each flow step, so this is not a defect.
+- **"Conversation flow classes lack docstrings."** Every flow class already has a
+  class-level docstring (`BuildAppeal`, `Check`, `BuildConnection`, `Demote`,
+  `Promote`, `BuildProof`, `BuildReason`, `Stats`). Only some method docstrings
+  are missing, and those are tracked under P2.
 
-### P3 — Low (Future)
+### P1: High (Before Next Release)
 
-| # | Nice to Have | Priority |
-|--|--|----------|
-| 1 | Add query metrics collection | LOW - Enables data-driven tuning |
-| 2 | Standardize docstring format | LOW - Documentation consistency |
+| # | Issue | Location | Fix |
+|--|--|--|--|
+| 1 | No end-to-end conversation-flow tests | `tcbot/modules/helper/workflows/*.py` | Partial flow tests exist (`test_ban_flow.py`, `test_warning_flow.py`, `test_appeals_pure.py`); add entry-to-completion coverage for the ban/kick/mute/warn/appeal ConversationHandlers. |
+
+### P2: Medium (Documentation)
+
+| # | Issue | Location | Fix |
+|--|--|--|--|
+| 1 | Method-level docstrings incomplete on flow classes | `tcbot/modules/helper/workflows/*.py` | Add docstrings to the remaining class methods (class docstrings already present). |
+| 2 | Remaining workflow files undocumented | `docs/workflows/workflows.md` | Extend with diagrams and detailed notes for the flow files not yet covered. |
+
+### P3: Low (Optional hardening, nice to have)
+
+| # | Item | Notes |
+|--|--|--|
+| 1 | `BOT_TOKEN` format validation | Presence already enforced; format check is optional and PTB fails fast on a malformed token anyway. |
+| 2 | `MONGODB_URI` format validation | Presence already enforced; format check is optional and the driver fails fast on a malformed URI. |
+| 3 | Covered-query composite index on `member_cache` | `{user_id: 1, first_name: 1, username: 1}` to cover the batch `$in` projections; marginal gain over the existing `user_id` index. |
+| 4 | Shared module-interface types (`tcbot/modules/types.py`) | Only if module-to-module signatures grow ambiguous. |
+| 5 | Query metrics collection / docstring-format standardization | Data-driven tuning and documentation consistency. |
 
 
+
+## Code Review Findings
+
+Use this section to keep code review findings in one consistent place. It applies
+to anyone reviewing this codebase. After a review, add each finding as a row in the
+table for its priority tier, where P1 is the highest and P5 is the lowest.
+Confirmed and prioritized items move up into the
+[Current Priority Backlog](#current-priority-backlog) above. Cleared items are set
+to `Dismissed` with the reason written in the Evidence column. The italic rows are
+placeholders that show the expected format, so replace them and do not leave them
+in.
+
+### How to record a finding
+
+- One finding per row, specific and self-contained.
+- **Location** must be a real `file.py:line` you actually opened, never a guess.
+- **Evidence** must quote the relevant code or describe the behavior you observed
+  that proves the finding is real. A finding with no evidence counts as unverified.
+- **Verify first.** Open the cited file and confirm the issue is not already
+  handled before listing it. In the 2026-06-01 review, several findings flagged as
+  critical turned out to be already implemented in the code.
+- **Do not overstate severity.** Already-validated input, idiomatic framework
+  usage, and marginal micro-optimizations are not P1 or P2.
+- **Status** uses the values below. Use `Resolved` only when a fix has landed and
+  tests pass. Use `Dismissed` (with a reason) when verification shows the finding
+  is not a real issue.
+
+**Status values:**
+
+- `Open`: logged, not started.
+- `Verified`: confirmed against the code.
+- `In Progress`: being worked on.
+- `Resolved`: fixed and tests pass.
+- `Dismissed`: checked and not a real issue, with the reason in Evidence.
+
+**Priority tiers:**
+
+- **P1 (Critical):** security holes, data loss, crashes, or broken core moderation; fix before the next release.
+- **P2 (High):** incorrect behavior or untested critical logic such as auth and federation actions.
+- **P3 (Medium):** maintainability, partial test coverage, and non-hot-path performance.
+- **P4 (Low):** documentation gaps, minor cleanups, and naming.
+- **P5 (Optional / Future):** speculative or nice-to-have ideas; gather evidence before promoting them.
+
+### P1 (Critical)
+
+| # | Finding | Location (`file.py:line`) | Evidence (code quote / observed behavior) | Proposed Fix | Status |
+|--|--|--|--|--|--|
+| 1 | _Short, specific description of the issue_ | `tcbot/path/file.py:NN` | _Quote the exact lines or describe what you observed that proves it_ | _Concrete change to make_ | `Open` |
+
+### P2 (High)
+
+| # | Finding | Location (`file.py:line`) | Evidence (code quote / observed behavior) | Proposed Fix | Status |
+|--|--|--|--|--|--|
+| 1 | _Replace this placeholder row_ | `tcbot/path/file.py:NN` | _Quoted code or observed behavior_ | _Concrete change to make_ | `Open` |
+
+### P3 (Medium)
+
+| # | Finding | Location (`file.py:line`) | Evidence (code quote / observed behavior) | Proposed Fix | Status |
+|--|--|--|--|--|--|
+| 1 | _Replace this placeholder row_ | `tcbot/path/file.py:NN` | _Quoted code or observed behavior_ | _Concrete change to make_ | `Open` |
+
+### P4 (Low)
+
+| # | Finding | Location (`file.py:line`) | Evidence (code quote / observed behavior) | Proposed Fix | Status |
+|--|--|--|--|--|--|
+| 1 | _Replace this placeholder row_ | `tcbot/path/file.py:NN` | _Quoted code or observed behavior_ | _Concrete change to make_ | `Open` |
+
+### P5 (Optional / Future)
+
+| # | Finding | Location (`file.py:line`) | Evidence (code quote / observed behavior) | Proposed Fix | Status |
+|--|--|--|--|--|--|
+| 1 | _Replace this placeholder row_ | `tcbot/path/file.py:NN` | _Quoted code or observed behavior_ | _Concrete change to make_ | `Open` |
 
 ## Maintenance Rules
 
@@ -282,4 +389,4 @@ Validation used for this baseline:
 uv run --extra test pytest --collect-only -q
 ```
 
-Result: 125 tests collected across 14 test files.
+Result: 148 tests collected across 15 test files.
