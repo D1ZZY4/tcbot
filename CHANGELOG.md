@@ -2,6 +2,25 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-02
+
+### Added - Tests
+
+- **`tests/test_kick_flow.py`** (4 tests): Offline coverage for `kicking_flow.execute_kick`. Cases: happy path (ban + unban + log + reply all succeed), proof description appended in reply, `ban_chat_member` raises (error reply sent, other ops skipped), audit-log send failure (kick reply still sent via `return_exceptions=True`).
+- **`tests/test_mute_flow.py`** (21 tests): Offline coverage for `muting_flow`. Duration parser (`parse_duration`): valid tokens for all 7 units (s/m/h/d/w/mo/ye), case-insensitive matching, and invalid-input returns `None`. Formatter (`fmt_duration`): all unit tiers from seconds to years, plus `None → "permanently"`. Mute executor (`_execute_mute`): happy path with fan-out across multiple groups, proof description included in edited summary. Unmute executor (`execute_unmute`): all groups restored successfully (2/2 reply), partial fan-out failure reported in reply (2/3). Fan-out is mocked in all executor tests; bot methods that generate list-comprehension coroutines use `Mock()` rather than `AsyncMock()` to avoid `PytestUnraisableExceptionWarning`.
+- **`tests/test_unban_flow.py`** (3 tests): Offline coverage for `unban_flow.execute_unban`. Cases: no-active-ban guard (reply sent, fan-out and log skipped), happy path (ban deactivated, fan-out called, 2/2 ratio in reply), partial group failure reported (2/3 ratio in reply). Same `Mock()` pattern for bot methods under a mocked `fan_out`.
+
+### Changed - Documentation
+
+- **`PLAN.md` test count updated**: 148 → 176 tests across 15 → 18 files (verified with pytest collect).
+- **`PLAN.md` P2 backlog resolved**: P2-1 (method-level docstrings) and P2-2 (workflow file docs) verified against source tree — both already complete. Both rows marked `Resolved`.
+- **`PLAN.md` P1 refined**: Rephrased to distinguish resolved executor tests (kick/mute/unmute/unban) from still-open full ConversationHandler state-machine simulation (ban/warn/appeal entry-to-completion).
+
+### Added - Agent Memory
+
+- **`.agents/memory/MEMORY.md`**: Created persistent memory index.
+- **`.agents/memory/replit-test-runner.md`**: Documents Replit test runner quirks — packages live in `.pythonlibs/lib/python3.11/site-packages/`, must use `python3.11 -m pytest` with explicit `PYTHONPATH`; ruff via `uvx ruff check .`. Baseline: 176 tests, ruff clean.
+
 ## [Unreleased] - 2026-06-01
 
 ### Added - Tests

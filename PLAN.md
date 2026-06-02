@@ -15,7 +15,7 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 | Health check | Flask app in `tcbot/alive.py`, `GET /` returns `OK` on `PORT` (default `5000`). |
 | Dependency management | `uv` with `uv.lock`; CI installs with frozen lockfile by default. |
 | Formatting/linting | Ruff, configured in `pyproject.toml`. |
-| Tests | 148 collected tests across 15 `tests/test_*.py` files; designed to run offline. |
+| Tests | 176 collected tests across 18 `tests/test_*.py` files; designed to run offline. |
 | Deployment notes | Local `config.env`, Docker Compose, and Replit/hosted environment variables are documented. |
 
 ## Runtime Flow
@@ -271,14 +271,14 @@ Priorities, in order:
 
 | # | Issue | Location | Fix |
 |--|--|--|--|
-| 1 | No end-to-end conversation-flow tests | `tcbot/modules/helper/workflows/*.py` | Partial flow tests exist (`test_ban_flow.py`, `test_warning_flow.py`, `test_appeals_pure.py`); add entry-to-completion coverage for the ban/kick/mute/warn/appeal ConversationHandlers. |
+| 1 | No entry-to-completion ConversationHandler state-machine tests | `tcbot/modules/helper/workflows/*.py` | Executor tests for kick/mute/unmute/unban added (see 2026-06-02 pass). Full ConversationHandler simulation (entry → reason → proof → execute) not yet covered for ban/warn/appeal flows. |
 
-### P2: Medium (Documentation)
+### P2: Medium (Documentation and Coverage)
 
-| # | Issue | Location | Fix |
-|--|--|--|--|
-| 1 | Method-level docstrings incomplete on flow classes | `tcbot/modules/helper/workflows/*.py` | Add docstrings to the remaining class methods (class docstrings already present). |
-| 2 | Remaining workflow files undocumented | `docs/workflows/workflows.md` | Extend with diagrams and detailed notes for the flow files not yet covered. |
+| # | Issue | Location | Fix | Status |
+|--|--|--|--|--|
+| 1 | Method-level docstrings incomplete on flow classes | `tcbot/modules/helper/workflows/*.py` | Verified 2026-06-02: all flow class methods already have docstrings. | Resolved |
+| 2 | Remaining workflow files undocumented | `docs/workflows/workflows.md` | Verified 2026-06-02: all 12 flows are documented. | Resolved |
 
 ### P3: Low (Optional hardening, nice to have)
 
@@ -389,4 +389,4 @@ Validation used for this baseline:
 uv run --extra test pytest --collect-only -q
 ```
 
-Result: 148 tests collected across 15 test files.
+Result: 176 tests collected across 18 test files.
