@@ -9,6 +9,7 @@ from __future__ import annotations
 import ast
 import logging
 import os
+import re
 from dataclasses import dataclass
 
 from dotenv import find_dotenv, load_dotenv
@@ -84,6 +85,24 @@ def _required_env(key: str) -> str:
     if not value:
         raise RuntimeError(f"{key} is required but not set.")
     return value
+
+
+def _warn_bot_token_fmt(token: str) -> None:
+    """Log a WARNING if the token does not match the Telegram bot-token pattern."""
+    if not re.fullmatch(r"\d+:[A-Za-z0-9_-]{35}", token):
+        log.warning(
+            "BOT_TOKEN format looks unexpected (expected <digits>:<35chars>). "
+            "PTB will fail at startup if the value is wrong."
+        )
+
+
+def _warn_mongodb_uri_fmt(uri: str) -> None:
+    """Log a WARNING if the MongoDB URI does not start with a recognised scheme."""
+    if not (uri.startswith("mongodb://") or uri.startswith("mongodb+srv://")):
+        log.warning(
+            "MONGODB_URI does not start with 'mongodb://' or 'mongodb+srv://'. "
+            "Motor will fail at connect time if the value is wrong."
+        )
 
 
 def _int_from_env(key: str, default: int, *, minimum: int | None = None) -> int:
@@ -186,7 +205,9 @@ class Configs:
 
         # ! BOT_TOKEN and MONGODB_URI are strictly required for runtime startup.
         token = _required_env("BOT_TOKEN")
+        _warn_bot_token_fmt(token)
         mongodb_uri = _required_env("MONGODB_URI")
+        _warn_mongodb_uri_fmt(mongodb_uri)
 
         owner_id = _owner_id_from_env()
 

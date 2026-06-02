@@ -69,6 +69,7 @@ def promote_role_kb(target_id: int, available_roles: list[str]) -> InlineKeyboar
 
 
 def demote_confirm_kb(target_id: int) -> InlineKeyboardMarkup:
+    """Confirm/Cancel keyboard for the demotion confirmation flow."""
     return InlineKeyboardMarkup(
         [
             [
@@ -84,6 +85,7 @@ def demote_confirm_kb(target_id: int) -> InlineKeyboardMarkup:
 
 
 def promo_decision_kb(request_id: str) -> InlineKeyboardMarkup:
+    """Approve/Reject keyboard for promotion request review cards."""
     return InlineKeyboardMarkup(
         [
             [
@@ -98,7 +100,7 @@ def promo_decision_kb(request_id: str) -> InlineKeyboardMarkup:
     )
 
 
-# ─────────────────────── Check-me / baninfo ─────────────────────── #
+# ───────────────────────────── Check-me ────────────────────────── #
 
 
 def checkme_ban_kb(
@@ -133,20 +135,11 @@ def checkme_detail_back_kb(
     return InlineKeyboardMarkup(rows)
 
 
-def baninfo_proof_kb(proof_lnk: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("View Proof", url=proof_lnk),
-            ]
-        ]
-    )
-
-
 # ─────────────────────── Start / Help menus ─────────────────────── #
 
 
 def main_menu_kb() -> InlineKeyboardMarkup:
+    """Top-level start-menu keyboard: About, Help, Additional, Privacy."""
     return InlineKeyboardMarkup(
         [
             [
@@ -216,6 +209,7 @@ def help_topics_kb(topics: list[tuple[str, str]]) -> InlineKeyboardMarkup:
 
 
 def back_to_start_kb() -> InlineKeyboardMarkup:
+    """Single Back button that returns the user to the start menu."""
     return InlineKeyboardMarkup(
         [
             [
@@ -248,6 +242,7 @@ def back_to_help_cmd_kb() -> InlineKeyboardMarkup:
 
 
 def privacy_kb() -> InlineKeyboardMarkup:
+    """Privacy section keyboard: policy link + Back to start."""
     return InlineKeyboardMarkup(
         [
             [
@@ -261,6 +256,7 @@ def privacy_kb() -> InlineKeyboardMarkup:
 
 
 def back_to_privacy_kb() -> InlineKeyboardMarkup:
+    """Single Back button that returns the user to the privacy section."""
     return InlineKeyboardMarkup(
         [
             [

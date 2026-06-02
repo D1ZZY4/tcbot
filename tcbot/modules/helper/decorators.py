@@ -14,7 +14,7 @@ from collections import deque
 from collections.abc import Callable
 from typing import Awaitable, TypeVar
 
-from telegram import Update
+from telegram import Message, Update
 from telegram.ext import ApplicationHandlerStop, ContextTypes
 
 from tcbot import cfg
@@ -252,7 +252,7 @@ def basic_mod_only(func: Callable) -> Callable:
 
 
 async def resolve_and_check(
-    msg,
+    msg: Message,
     executor_id: int,
     target_id: int,
     *,

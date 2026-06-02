@@ -4,6 +4,30 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ## [Unreleased] - 2026-06-02
 
+### Fixed - Replace `type: ignore` with `cast` in `users_roles.get_owner_id`
+
+- **`tcbot/database/users_roles.py` line 60**: `return cached  # type: ignore[return-value]` replaced with `return cast(int | None, cached)`. The `cast` import was already present and used for `get_effective_role` on line 209; the `get_owner_id` function had been missed. Consistent with `groups_db.py` which uses `cast(bool, cached)` and `cast(list[GroupDoc], cached)` for the same `CACHE_MISS`-guard pattern.
+
+### Fixed - Named constants for cache TTL values
+
+- **`tcbot/database/cache.py`**: Replaced four inline float literals with named module-level constants: `_ROLE_CACHE_TTL_S = 600.0`, `_CONNECTION_CACHE_TTL_S = 120.0`, `_GROUPS_LIST_CACHE_TTL_S = 60.0`, `_OWNER_CACHE_TTL_S = 3600.0`. All four are now referenced by name inside the cache-population coroutines, making timeouts discoverable without hunting through logic.
+
+### Fixed - Dead code removal and docstring additions in keyboards.py
+
+- **`tcbot/modules/helper/keyboards.py` dead code**: Removed `baninfo_proof_kb(proof_lnk)` which had zero callers across the entire codebase. Section header updated from "Check-me / baninfo" to "Check-me".
+- **`tcbot/modules/helper/keyboards.py` docstrings**: Added one-line docstrings to six public keyboard-factory functions that had none: `demote_confirm_kb`, `promo_decision_kb`, `main_menu_kb`, `back_to_start_kb`, `privacy_kb`, `back_to_privacy_kb`. Consistent with the existing style used on `checkme_ban_kb`, `help_topics_menu_kb`, and others.
+
+### Added - BOT_TOKEN and MONGODB_URI format validators
+
+- **`tcbot/__init__.py` `_warn_bot_token_fmt`**: New helper that logs a WARNING when `BOT_TOKEN` does not match `\d+:[A-Za-z0-9_-]{35}`. Called from `Configs.load()` immediately after the required-env check.
+- **`tcbot/__init__.py` `_warn_mongodb_uri_fmt`**: New helper that logs a WARNING when `MONGODB_URI` does not start with `mongodb://` or `mongodb+srv://`. Called from `Configs.load()` immediately after the required-env check.
+- **`tcbot/__init__.py` `import re`**: Module-level import added (was inline inside the helper; project policy disallows inline imports).
+- **`tests/test_config_parse.py` 13 new tests**: Parametrized valid-no-warning and invalid-emits-warning cases for both validators. Valid token fixture uses exactly 35 chars after the colon (A-Z + a-i = 35). Total test count raised to 332.
+
+### Fixed - Type annotation on `resolve_and_check` msg parameter
+
+- **`tcbot/modules/helper/decorators.py`**: `Message` added to the `from telegram import ...` line; `msg` parameter in `resolve_and_check` now typed as `msg: Message` instead of bare `msg`. Callers already pass `update.effective_message` which is `Message | None` checked by the caller before calling.
+
 ### Added - Covered-query composite index on `member_cache`
 
 - **`tcbot/database/mongos.py` composite index**: Added `{user_id: 1, first_name: 1, username: 1}` compound index to `ensure_indexes()`. This covers the projection fields used by `get_first_names_batch` and `get_mention_data_batch` — MongoDB can now satisfy `$in` queries on `user_id` with `first_name`/`username` projections entirely from the index without loading the document. All 319 tests pass; `uv run ruff check .` clean.

@@ -14,7 +14,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv sync --extra test` | PASS |
 | `uv run ruff format --check .` | PASS (97 files formatted/clean) |
 | `uv run ruff check .` | PASS (0 errors) |
-| `uv run --extra test pytest tests/ -q` | PASS (319 tests, 26 files, all green) |
+| `uv run --extra test pytest tests/ -q` | PASS (332 tests, 26 files, all green) |
 
 ## Completed items
 
@@ -36,11 +36,15 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | README.md stale test count | Updated from 125/14 to 319/26 | 2026-06-02 |
 | python-code-quality SKILL.md | pyproject.toml snippet updated to reflect current `[dependency-groups]` structure | 2026-06-02 |
 
-## Pending (remaining P3 optional)
+| cache.py TTL named constants | P3 | `_ROLE_CACHE_TTL_S`, `_CONNECTION_CACHE_TTL_S`, `_GROUPS_LIST_CACHE_TTL_S`, `_OWNER_CACHE_TTL_S` — replaced inline floats with named module-level constants | 2026-06-02 |
+| BOT_TOKEN / MONGODB_URI validators | P3 | `_warn_bot_token_fmt` + `_warn_mongodb_uri_fmt` added to `__init__.py`; called from `Configs.load()`; `import re` moved to module level; 13 new tests in `test_config_parse.py` — total now 332 | 2026-06-02 |
+| `resolve_and_check` type annotation | P3 | `Message` added to `from telegram import ...` in `decorators.py`; `msg` parameter typed as `msg: Message` | 2026-06-02 |
+| `keyboards.py` dead code removal | P3 | Removed `baninfo_proof_kb` (zero callers); section header updated; docstrings added to 6 public functions | 2026-06-02 |
+| `users_roles.get_owner_id` cast fix | P3 | `# type: ignore[return-value]` replaced with `cast(int | None, cached)` — consistent with `get_effective_role` line 209 and `groups_db.py` pattern | 2026-06-02 |
+
+## Pending (remaining optional)
 
 | Item | Priority | Notes |
 |---|---|---|
-| BOT_TOKEN format validation | P3 | Optional — PTB fails fast on malformed token; presence already enforced |
-| MONGODB_URI format validation | P3 | Optional — Motor fails fast on malformed URI; presence already enforced |
 | Module-interface types (types.py) | P3 | Only if cross-module signatures grow ambiguous |
 | Query metrics collection | P3 | Data-driven tuning; gather Atlas PA data first |

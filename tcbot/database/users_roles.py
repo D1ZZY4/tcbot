@@ -57,7 +57,7 @@ async def get_owner_id() -> int | None:
     """Return the current owner's user ID (cached)."""
     cached = owner_id_cache.get(_OWNER_KEY)
     if cached is not CACHE_MISS:
-        return cached  # type: ignore[return-value]
+        return cast(int | None, cached)
     doc: AdminDoc | None = await col("tc_owners").find_one({}, {"_id": 0, "user_id": 1})
     result = doc["user_id"] if doc else None
     owner_id_cache.put(_OWNER_KEY, result)

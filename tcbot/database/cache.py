@@ -70,25 +70,42 @@ class TTLCache(Generic[T]):
         return val
 
 
+# ───────────────────────── Cache TTL Constants ──────────────────────── #
+# * Named TTL constants kept together so tuning is one-place-one-change.
+# * Unit: seconds (float).
+
+# Per-user effective-role: short enough to pick up role changes quickly.
+_ROLE_CACHE_TTL_S: float = 60.0
+
+# Per-chat connection status: medium window; connection changes are infrequent.
+_CONNECTION_CACHE_TTL_S: float = 120.0
+
+# Full active-groups list: short window; group add/remove is rare but must propagate.
+_GROUPS_LIST_CACHE_TTL_S: float = 30.0
+
+# Owner ID: long window; ownership transfers are very rare.
+_OWNER_CACHE_TTL_S: float = 300.0
+
+
 # ───────────────────── Shared Cache Singletons ──────────────────── #
 # * Global cache instances used throughout the application
 # * Each has specific TTLs tuned to their usage patterns
 # * All are populated and invalidated by specific database modules
 
-# 60-second per-user effective-role cache (str | None per user_id)
+# Per-user effective-role cache (str | None per user_id)
 # Populated by users_roles.get_effective_role; invalidated on every role write
-effective_role_cache: TTLCache[str | None] = TTLCache(ttl=60.0)
+effective_role_cache: TTLCache[str | None] = TTLCache(ttl=_ROLE_CACHE_TTL_S)
 
-# 120-second per-chat connection cache (bool per chat_id)
+# Per-chat connection cache (bool per chat_id)
 # Populated by groups_db.is_connected; invalidated on add/deactivate
-connected_cache: TTLCache[bool] = TTLCache(ttl=120.0)
+connected_cache: TTLCache[bool] = TTLCache(ttl=_CONNECTION_CACHE_TTL_S)
 
-# 30-second whole-list active-groups cache (list[dict], single entry)
+# Whole-list active-groups cache (list[dict], single entry keyed by _ALL_GROUPS_KEY)
 # Populated by groups_db.active_groups; invalidated on add/deactivate
-active_groups_cache: TTLCache[list[GroupDoc]] = TTLCache(ttl=30.0)
+active_groups_cache: TTLCache[list[GroupDoc]] = TTLCache(ttl=_GROUPS_LIST_CACHE_TTL_S)
 _ALL_GROUPS_KEY: str = "__all__"
 
-# 300-second owner-ID cache (single int entry - ownership transfers are very rare)
+# Owner-ID cache (single int entry - ownership transfers are very rare)
 # Populated by users_roles.get_owner_id; invalidated on set_owner / ensure_initial_owner
-owner_id_cache: TTLCache[int | None] = TTLCache(ttl=300.0)
+owner_id_cache: TTLCache[int | None] = TTLCache(ttl=_OWNER_CACHE_TTL_S)
 _OWNER_KEY: str = "__owner__"
