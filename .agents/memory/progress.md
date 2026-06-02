@@ -14,7 +14,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv sync --extra test` | PASS |
 | `uv run ruff format --check .` | PASS (all files unchanged) |
 | `uv run ruff check .` | PASS (0 errors) |
-| `uv run --extra test pytest tests/ -q` | PASS (1078 tests, 69 files, all green) |
+| `uv run --extra test pytest tests/ -q` | PASS (1091 tests, 69 files, all green) |
 
 ## Completed items
 
@@ -79,6 +79,12 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Docstrings batch 3 (13 fns, 3-4 lines) | P4 | checking(×2), parse_link, ban_flow, start, stats(×8). AST audit: 0 public fns 3+ lines missing | 2026-06-02 (s3) |
 | Class docstrings (10 TypedDict classes) | P4 | All public classes in documents.py. AST audit: 0 public classes missing docstrings | 2026-06-02 (s3) |
 | CHANGELOG.md duplicate removed | docs | Removed stale duplicate batch-1 docstring entry from session-3 header | 2026-06-02 (s3) |
+
+| Sequential await fix: admins.py (cmd_promote/cmd_demote) | P3 | asyncio.gather(identity.classify(...), db.users_roles.get_effective_role(...)) | 2026-06-02 (s5) |
+| Sequential await fix: stats.py (12 handlers) | P3 | Refactored _ack_and_render(q, data_coro); q.answer() + DB fetch now parallel | 2026-06-02 (s5) |
+| Sequential await fix: groups.py _toggle cache-hit path | P3 | asyncio.gather(q.answer(), safe_edit(...)) in cache-hit branch | 2026-06-02 (s5) |
+| Sequential await fix: identity.classify() (high-impact) | P3 | get_user_mention_data + get_effective_role now gathered; affects all mod commands | 2026-06-02 (s5) |
+| 13 async tests for classify() in test_identity.py | P3 | All 9 identity kinds + fname fallback + gather-correctness assertion; suite 1078→1091 | 2026-06-02 (s5) |
 
 ## Pending (remaining optional)
 

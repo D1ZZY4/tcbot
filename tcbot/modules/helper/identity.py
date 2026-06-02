@@ -12,6 +12,7 @@ enough; no exclamation cascades.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Literal
 
@@ -88,13 +89,15 @@ async def classify(
 
     Notes
     -----
-    Role resolution uses the cached :func:`get_effective_role` so this stays
-    cheap; every code path that calls ``classify`` already has the user's
-    profile resolved upstream, so the only async hit is the role cache.
+    Both the name cache lookup and the role cache lookup are independent reads;
+    they run in parallel via :func:`asyncio.gather` so the total latency is one
+    round-trip rather than two, even when the role is ultimately unused (e.g.
+    self / bot / Telegram early-returns).
     """
-    # Optimized: fetch only first_name and username, not full document
-    cached_fname, target_username = await db.users_cache.get_user_mention_data(
-        target_id
+    # * Both are independent cached reads; run in parallel.
+    (cached_fname, target_username), role = await asyncio.gather(
+        db.users_cache.get_user_mention_data(target_id),
+        db.users_roles.get_effective_role(target_id),
     )
     if not target_fname or target_fname.startswith("User "):
         target_fname = cached_fname
@@ -114,7 +117,6 @@ async def classify(
             "other_bot", target_id, target_fname, target_username, is_bot=True
         )
 
-    role = await db.users_roles.get_effective_role(target_id)
     if role == "founder":
         return Identity("founder", target_id, target_fname, target_username)
     if role == "admin":

@@ -7,3 +7,4 @@
 - [Technical decisions](decisions.md) — non-trivial decisions with why and how-to-apply
 - [Module structure](structure.md) — full repo layout snapshot, cross-cutting constraints
 - [Replit nix store constraint](replit-nix-store.md) — uv sync fails writing to nix store; fix and runtime workaround
+- [Sequential await audit complete](sequential-await-audit.md) — all module files audited; key fixes in identity.classify, stats.py, groups._toggle, admins cmd_promote/demote

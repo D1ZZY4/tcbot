@@ -96,14 +96,20 @@ async def _toggle(
     q = update.callback_query
     groups = ctx.user_data.get("groups_cache")
     if groups:
-        await q.answer()
+        # * Groups already cached; q.answer() and safe_edit() are independent.
+        await asyncio.gather(
+            q.answer(),
+            safe_edit(
+                q.message, _render(groups, detailed), reply_markup=tcgroups_kb(detailed)
+            ),
+        )
     else:
-        # * q.answer + cache-miss DB fetch run in parallel
+        # * Cache miss: q.answer + DB fetch run in parallel.
         _, groups = await asyncio.gather(q.answer(), db.groups_db.active_groups())
         ctx.user_data["groups_cache"] = groups
-    await safe_edit(
-        q.message, _render(groups, detailed), reply_markup=tcgroups_kb(detailed)
-    )
+        await safe_edit(
+            q.message, _render(groups, detailed), reply_markup=tcgroups_kb(detailed)
+        )
 
 
 @decorators.ratelimiter(limit=15, period=30)

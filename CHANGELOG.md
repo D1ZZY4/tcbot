@@ -4,6 +4,57 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ## [Unreleased] - 2026-06-02 (session 5)
 
+### Added - 13 async tests for `identity.classify()` in `test_identity.py`
+
+All 9 identity kinds (self, this_bot, telegram, other_bot, founder, admin,
+developer, tester, user), fname-fallback logic (None / "User <id>" / explicit),
+and a gather-correctness assertion verifying that both
+``get_user_mention_data`` and ``get_effective_role`` are always invoked.
+Suite grows from 1078 → 1091 tests.  Ruff-clean; all green.
+
+### Fixed - Sequential await defect in `identity.classify()` (high-impact)
+
+``classify()`` performed ``get_user_mention_data`` then ``get_effective_role``
+sequentially, adding an extra MongoDB round-trip on every moderation command
+(ban, kick, mute, warn, unban, unwarn, promote, demote).  Both reads are
+independent cached lookups; fixed with ``asyncio.gather``.  Added ``import
+asyncio`` to ``identity.py``; updated docstring.  The role value is now always
+fetched eagerly alongside the name data (cost is nil since it is cached), and
+the early-return checks (self / bot / Telegram / other_bot) still work
+correctly.  Ruff-clean; all 1078 tests green.
+
+### Fixed - Sequential await defects in `stats.py` callback handlers (10+ handlers)
+
+``_ack_and_render(q, text, kb)`` was gathering ``q.answer()`` with ``safe_edit_cb``,
+but the data fetch (``Stats.main()``, ``Stats.staff_roster()``, etc.) ran sequentially
+before it.  Refactored ``_ack_and_render(q, data_coro)`` to accept a coroutine, so
+``q.answer()`` and the DB-heavy data fetch run in parallel -- the same pattern already
+used in ``checking.py``.  Two ``open_search`` handlers (synchronous data) are inlined
+with ``asyncio.gather(q.answer(), safe_edit_cb(...))`` directly.  12 callback handlers
+fixed in total.  Ruff-clean; all 1078 tests green.
+
+### Fixed - Sequential await defect in `groups.py` ``_toggle`` cache-hit path
+
+When ``groups_cache`` was already populated, ``_toggle`` did ``await q.answer()`` then
+``await safe_edit(...)`` sequentially.  Fixed with
+``asyncio.gather(q.answer(), safe_edit(...))``; the cache-miss path was already correct.
+Ruff reformatted; all 1078 tests green.
+
+### Fixed - Sequential await defects in `cmd_promote` and `cmd_demote` (admins.py)
+
+Two Forbidden Action violations (RULES.md: "sequential awaits on independent operations")
+were present in `tcbot/modules/admins.py`:
+
+- **`cmd_promote`** (line 155): `identity.classify` was awaited first, then after the
+  refusal guard, `db.users_roles.get_effective_role` was awaited separately. Both reads
+  are independent (no data dependency). Fixed with
+  `asyncio.gather(identity.classify(...), db.users_roles.get_effective_role(...))`.
+- **`cmd_demote`** (line 286): same pattern — `identity.classify` then `get_effective_role`
+  sequentially. Fixed with the same gather.
+
+Docstrings updated for both handlers to describe the two-phase parallel fetch.
+Ruff-clean; all 1078 tests green.
+
 ### Maintenance - Ruff format applied to three session-4 test files
 
 Three test files written during session 4 were left unformatted:

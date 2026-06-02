@@ -125,11 +125,12 @@ __help_sections__: list[tuple[str, str]] = [
 async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Assign a federation role to a user (admin / developer / tester).
 
-    Fetches the executor role and resolves the target in parallel. When a role
-    name is given inline, executes the promotion immediately via
-    ``Promote.execute``. When no role is given, shows a role-selection keyboard.
-    Identity and rank checks prevent self-promotion or promoting above one's own
-    rank.
+    Fetches the executor role and resolves the target in parallel. Then fetches
+    identity classification and the target's current role in a second parallel
+    gather, since both are independent reads. When a role name is given inline,
+    executes the promotion immediately via ``Promote.execute``. When no role is
+    given, shows a role-selection keyboard. Identity and rank checks prevent
+    self-promotion or promoting above one's own rank.
     """
     admin = update.effective_user
     msg = update.effective_message
@@ -152,14 +153,17 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    ident = await identity.classify(ctx.bot, admin.id, target_id, target_fname)
+    # * identity classify and current-role fetch are independent reads; run in parallel.
+    ident, current_role = await asyncio.gather(
+        identity.classify(ctx.bot, admin.id, target_id, target_fname),
+        db.users_roles.get_effective_role(target_id),
+    )
     refusal = identity.refuse_message("promote", ident)
     if refusal is not None:
         await msg.reply_text(refusal, parse_mode="HTML")
         return
 
     role = ROLE_ALIASES.get(role_arg)
-    current_role = await db.users_roles.get_effective_role(target_id)
 
     if role:
         ok, text = await Promote.execute(
@@ -263,9 +267,11 @@ async def on_promote_role_cancel(
 async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Remove a user's federation role.
 
-    Fetches the executor role and resolves the target in parallel. Shows a
-    confirmation keyboard for the target's current role. Identity guards prevent
-    demoting the Founder or self without the correct flow.
+    Fetches the executor role and resolves the target in parallel. Then fetches
+    identity classification and the target's current role in a second parallel
+    gather, since both are independent reads. Shows a confirmation keyboard for
+    the target's current role. Identity guards prevent demoting the Founder or
+    self without the correct flow.
     """
     admin = update.effective_user
     msg = update.effective_message
@@ -283,13 +289,15 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    ident = await identity.classify(ctx.bot, admin.id, target_id, target_fname)
+    # * identity classify and target-role fetch are independent reads; run in parallel.
+    ident, target_role = await asyncio.gather(
+        identity.classify(ctx.bot, admin.id, target_id, target_fname),
+        db.users_roles.get_effective_role(target_id),
+    )
     refusal = identity.refuse_message("demote", ident)
     if refusal is not None:
         await msg.reply_text(refusal, parse_mode="HTML")
         return
-
-    target_role = await db.users_roles.get_effective_role(target_id)
 
     if not target_role:
         await msg.reply_text(_ERR_NO_REMOVABLE_ROLE)

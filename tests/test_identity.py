@@ -2,11 +2,19 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Tests for tcbot.modules.helper.identity - refuse_message and staff_notice."""
+"""Tests for tcbot.modules.helper.identity - classify, refuse_message, staff_notice."""
 
 from __future__ import annotations
 
-from tcbot.modules.helper.identity import Identity, refuse_message, staff_notice
+from unittest.mock import AsyncMock, MagicMock
+
+import tcbot.modules.helper.identity as identity_mod
+from tcbot.modules.helper.identity import (
+    Identity,
+    classify,
+    refuse_message,
+    staff_notice,
+)
 
 # ──────────────────── refuse_message - basic ───────────────────── #
 
@@ -181,3 +189,157 @@ def test_staff_notice_action_present_in_output() -> None:
     result = staff_notice("unmute", ident, "FedX")
     assert result is not None
     assert "unmute" in result
+
+
+# ─────────────────────── classify() - helpers ─────────────────────── #
+
+
+def _patch_db(
+    monkeypatch, *, cached_fname: str, username: str | None, role: str | None
+) -> None:
+    """Patch both DB calls that classify() gathers in parallel."""
+    monkeypatch.setattr(
+        identity_mod.db.users_cache,
+        "get_user_mention_data",
+        AsyncMock(return_value=(cached_fname, username)),
+    )
+    monkeypatch.setattr(
+        identity_mod.db.users_roles,
+        "get_effective_role",
+        AsyncMock(return_value=role),
+    )
+
+
+def _make_bot(bot_id: int = 9999) -> MagicMock:
+    bot = MagicMock()
+    bot.id = bot_id
+    return bot
+
+
+# ──────────────────── classify() - early returns ───────────────────── #
+
+
+async def test_classify_self_returns_self_identity(monkeypatch) -> None:
+    """When target_id == executor_id the result is always 'self'."""
+    _patch_db(monkeypatch, cached_fname="Alice", username="alice", role=None)
+    result = await classify(
+        _make_bot(), executor_id=42, target_id=42, target_fname="Alice"
+    )
+    assert result.kind == "self"
+    assert result.target_id == 42
+
+
+async def test_classify_this_bot_returns_this_bot_identity(monkeypatch) -> None:
+    """When target_id matches bot.id the result is 'this_bot'."""
+    _patch_db(monkeypatch, cached_fname="TcBot", username="tcbot", role=None)
+    result = await classify(
+        _make_bot(9999), executor_id=1, target_id=9999, target_fname="TcBot"
+    )
+    assert result.kind == "this_bot"
+    assert result.is_bot is True
+
+
+async def test_classify_telegram_service_returns_telegram_identity(monkeypatch) -> None:
+    """target_id == 777000 (Telegram service account) returns 'telegram'."""
+    _patch_db(monkeypatch, cached_fname="Telegram", username=None, role=None)
+    result = await classify(
+        _make_bot(), executor_id=1, target_id=777000, target_fname="Telegram"
+    )
+    assert result.kind == "telegram"
+
+
+async def test_classify_other_bot_flag_returns_other_bot_identity(monkeypatch) -> None:
+    """target_is_bot=True on an unknown ID returns 'other_bot'."""
+    _patch_db(monkeypatch, cached_fname="SomeBot", username="somebot", role=None)
+    result = await classify(
+        _make_bot(),
+        executor_id=1,
+        target_id=555,
+        target_fname="SomeBot",
+        target_is_bot=True,
+    )
+    assert result.kind == "other_bot"
+    assert result.is_bot is True
+
+
+# ──────────────────── classify() - role-based paths ────────────────── #
+
+
+async def test_classify_founder_role(monkeypatch) -> None:
+    _patch_db(monkeypatch, cached_fname="Owner", username="owner", role="founder")
+    result = await classify(
+        _make_bot(), executor_id=1, target_id=2, target_fname="Owner"
+    )
+    assert result.kind == "founder"
+
+
+async def test_classify_admin_role(monkeypatch) -> None:
+    _patch_db(monkeypatch, cached_fname="Admn", username="admn", role="admin")
+    result = await classify(_make_bot(), executor_id=1, target_id=3)
+    assert result.kind == "admin"
+
+
+async def test_classify_developer_role(monkeypatch) -> None:
+    _patch_db(monkeypatch, cached_fname="Dev", username="dev", role="developer")
+    result = await classify(_make_bot(), executor_id=1, target_id=4)
+    assert result.kind == "developer"
+
+
+async def test_classify_tester_role(monkeypatch) -> None:
+    _patch_db(monkeypatch, cached_fname="Tst", username="tst", role="tester")
+    result = await classify(_make_bot(), executor_id=1, target_id=5)
+    assert result.kind == "tester"
+
+
+async def test_classify_no_role_returns_user(monkeypatch) -> None:
+    _patch_db(monkeypatch, cached_fname="Bob", username="bob", role=None)
+    result = await classify(_make_bot(), executor_id=1, target_id=6)
+    assert result.kind == "user"
+
+
+# ──────────────────── classify() - fname fallback ──────────────────── #
+
+
+async def test_classify_uses_cached_fname_when_target_fname_missing(
+    monkeypatch,
+) -> None:
+    """If target_fname is None, the cached first name is used."""
+    _patch_db(monkeypatch, cached_fname="CachedName", username="cn", role=None)
+    result = await classify(_make_bot(), executor_id=1, target_id=6, target_fname=None)
+    assert result.fname == "CachedName"
+
+
+async def test_classify_uses_cached_fname_when_target_fname_is_placeholder(
+    monkeypatch,
+) -> None:
+    """If target_fname starts with 'User ', the cached name overrides it."""
+    _patch_db(monkeypatch, cached_fname="RealName", username="rn", role=None)
+    result = await classify(
+        _make_bot(), executor_id=1, target_id=6, target_fname="User 6"
+    )
+    assert result.fname == "RealName"
+
+
+async def test_classify_uses_provided_fname_over_cache(monkeypatch) -> None:
+    """An explicit, non-placeholder target_fname is kept as-is."""
+    _patch_db(monkeypatch, cached_fname="CachedName", username="cn", role=None)
+    result = await classify(
+        _make_bot(), executor_id=1, target_id=6, target_fname="Provided"
+    )
+    assert result.fname == "Provided"
+
+
+# ─────────── classify() - both DB calls are actually invoked ─────────── #
+
+
+async def test_classify_gather_invokes_both_db_calls(monkeypatch) -> None:
+    """Both get_user_mention_data and get_effective_role must be called (parallel gather)."""
+    mention_mock = AsyncMock(return_value=("N", "n"))
+    role_mock = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        identity_mod.db.users_cache, "get_user_mention_data", mention_mock
+    )
+    monkeypatch.setattr(identity_mod.db.users_roles, "get_effective_role", role_mock)
+    await classify(_make_bot(), executor_id=1, target_id=7)
+    mention_mock.assert_called_once_with(7)
+    role_mock.assert_called_once_with(7)

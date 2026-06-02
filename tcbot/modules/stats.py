@@ -79,12 +79,22 @@ async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_message.reply_text(text, parse_mode="HTML", reply_markup=kb)
 
 
+# ──────────────────────── Callback Helpers ──────────────────────── #
+
+
+async def _ack_and_render(q, data_coro) -> None:
+    """Acknowledge the callback in parallel with the data coroutine, then edit.
+
+    ``data_coro`` must be a coroutine that returns ``(text, kb)``.  Running
+    ``q.answer()`` concurrently with the DB-heavy data fetch removes one
+    sequential await per callback handler, matching the pattern used in
+    checking.py.
+    """
+    _, (text, kb) = await asyncio.gather(q.answer(), data_coro)
+    await safe_edit_cb(q, text, reply_markup=kb)
+
+
 # ──────────────────────── Callback Handlers ─────────────────────── #
-
-
-async def _ack_and_render(q, text: str, kb) -> None:
-    """Answer the callback then safely edit the card with the rendered view."""
-    await asyncio.gather(q.answer(), safe_edit_cb(q, text, reply_markup=kb))
 
 
 @decorators.ratelimiter(limit=15, period=30)
@@ -92,8 +102,8 @@ async def _ack_and_render(q, text: str, kb) -> None:
 async def on_stats_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the top-level stats menu."""
     q = update.callback_query
-    text, kb = await Stats.main()
-    await _ack_and_render(q, text, kb)
+    # * q.answer() and Stats.main() are independent; run in parallel.
+    await _ack_and_render(q, Stats.main())
 
 
 @decorators.ratelimiter(limit=15, period=30)
@@ -101,8 +111,7 @@ async def on_stats_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the current staff roster page."""
     q = update.callback_query
-    text, kb = await Stats.staff_roster()
-    await _ack_and_render(q, text, kb)
+    await _ack_and_render(q, Stats.staff_roster())
 
 
 @decorators.ratelimiter(limit=15, period=30)
@@ -111,8 +120,7 @@ async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     """Render a paginated list of cached users."""
     q = update.callback_query
     page = int(q.data.split(":")[1])
-    text, kb = await Stats.users_list(page)
-    await _ack_and_render(q, text, kb)
+    await _ack_and_render(q, Stats.users_list(page))
 
 
 @decorators.ratelimiter(limit=15, period=30)
@@ -121,8 +129,7 @@ async def on_stats_user_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     """Render the detail view for a single cached user entry."""
     q = update.callback_query
     _, page_str, idx_str = q.data.split(":")
-    text, kb = await Stats.user_detail(int(page_str), int(idx_str))
-    await _ack_and_render(q, text, kb)
+    await _ack_and_render(q, Stats.user_detail(int(page_str), int(idx_str)))
 
 
 @decorators.ratelimiter(limit=15, period=30)
@@ -131,8 +138,7 @@ async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     """Render a paginated list of connected groups."""
     q = update.callback_query
     page = int(q.data.split(":")[1])
-    text, kb = await Stats.chats_list(page)
-    await _ack_and_render(q, text, kb)
+    await _ack_and_render(q, Stats.chats_list(page))
 
 
 @decorators.ratelimiter(limit=15, period=30)
@@ -141,8 +147,7 @@ async def on_stats_chat_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     """Render the detail view for a single connected group entry."""
     q = update.callback_query
     _, page_str, idx_str = q.data.split(":")
-    text, kb = await Stats.chat_detail(int(page_str), int(idx_str))
-    await _ack_and_render(q, text, kb)
+    await _ack_and_render(q, Stats.chat_detail(int(page_str), int(idx_str)))
 
 
 @decorators.ratelimiter(limit=15, period=30)
@@ -152,8 +157,7 @@ async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     page = int(q.data.split(":")[1])
     Stats.clear_search(ctx)
-    text, kb = await Stats.bans_list(page)
-    await _ack_and_render(q, text, kb)
+    await _ack_and_render(q, Stats.bans_list(page))
 
 
 @decorators.ratelimiter(limit=15, period=30)
@@ -162,8 +166,7 @@ async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     """Render the detail view for a single ban entry from the stats list."""
     q = update.callback_query
     _, page_str, idx_str = q.data.split(":")
-    text, kb = await Stats.ban_detail(int(page_str), int(idx_str))
-    await _ack_and_render(q, text, kb)
+    await _ack_and_render(q, Stats.ban_detail(int(page_str), int(idx_str)))
 
 
 # ── Search panel ─────────────────────────────────────────────────────
@@ -174,8 +177,9 @@ async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 async def on_stats_bans_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Open the user search prompt within the stats ban view."""
     q = update.callback_query
+    # * Stats.open_search is synchronous; gather q.answer() with the edit directly.
     text, kb = Stats.open_search(ctx, q)
-    await _ack_and_render(q, text, kb)
+    await asyncio.gather(q.answer(), safe_edit_cb(q, text, reply_markup=kb))
 
 
 @decorators.ratelimiter(limit=15, period=30)
@@ -220,8 +224,7 @@ async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     q = update.callback_query
     idx = int(q.data.split(":")[1])
     results = ctx.user_data.get(RESULTS_KEY, []) if ctx.user_data else []
-    text, kb = await Stats.search_detail(results, idx)
-    await _ack_and_render(q, text, kb)
+    await _ack_and_render(q, Stats.search_detail(results, idx))
 
 
 @decorators.ratelimiter(limit=15, period=30)
@@ -231,14 +234,15 @@ async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     q = update.callback_query
     results = ctx.user_data.get(RESULTS_KEY, []) if ctx.user_data else []
     if not results:
+        # * open_search is synchronous; gather q.answer() with the edit directly.
         text, kb = Stats.open_search(ctx, q)
+        await asyncio.gather(q.answer(), safe_edit_cb(q, text, reply_markup=kb))
     else:
         # * Re-render the previous results without re-running the query.
         previous_query = (
             ctx.user_data.get("stats_last_query", "") if ctx.user_data else ""
         )
-        text, kb = await Stats.search_results(previous_query, results)
-    await _ack_and_render(q, text, kb)
+        await _ack_and_render(q, Stats.search_results(previous_query, results))
 
 
 @decorators.ratelimiter(limit=15, period=30)
@@ -249,8 +253,7 @@ async def on_stats_search_cancel(
     """Clear the active search and return to the first page of the ban list."""
     q = update.callback_query
     Stats.clear_search(ctx)
-    text, kb = await Stats.bans_list(0)
-    await _ack_and_render(q, text, kb)
+    await _ack_and_render(q, Stats.bans_list(0))
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #
