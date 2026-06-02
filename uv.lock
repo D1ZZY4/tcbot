@@ -413,12 +413,14 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-dev = [
-    { name = "ruff" },
-]
 test = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "ruff" },
 ]
 
 [package.metadata]
@@ -429,9 +431,11 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=1.3.0" },
     { name = "python-dotenv", specifier = ">=1.0.0,<2" },
     { name = "python-telegram-bot", extras = ["job-queue"], specifier = "==22.5" },
-    { name = "ruff", marker = "extra == 'dev'" },
 ]
-provides-extras = ["test", "dev"]
+provides-extras = ["test"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "ruff" }]
 
 [[package]]
 name = "typing-extensions"

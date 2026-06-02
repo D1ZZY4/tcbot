@@ -286,7 +286,7 @@ Priorities, in order:
 |--|--|--|
 | 1 | `BOT_TOKEN` format validation | Presence already enforced; format check is optional and PTB fails fast on a malformed token anyway. |
 | 2 | `MONGODB_URI` format validation | Presence already enforced; format check is optional and the driver fails fast on a malformed URI. |
-| 3 | Covered-query composite index on `member_cache` | `{user_id: 1, first_name: 1, username: 1}` to cover the batch `$in` projections; marginal gain over the existing `user_id` index. |
+| 3 | ~~Covered-query composite index on `member_cache`~~ | `{user_id: 1, first_name: 1, username: 1}` index added to `mongos.ensure_indexes()`. Resolved 2026-06-02. |
 | 4 | Shared module-interface types (`tcbot/modules/types.py`) | Only if module-to-module signatures grow ambiguous. |
 | 5 | Query metrics collection / docstring-format standardization | Data-driven tuning and documentation consistency. |
 
@@ -351,7 +351,7 @@ in.
 
 | # | Finding | Location (`file.py:line`) | Evidence (code quote / observed behavior) | Proposed Fix | Status |
 |--|--|--|--|--|--|
-| 1 | `uv run ruff` documented throughout `.agents/` but silently fails on Replit | `.agents/STYLE-CODE.md:17`, `.agents/TEST-RUFF.md:53` | `uv run ruff format .` exits with code 1 on this Replit environment; correct command is `uvx ruff format .` and `uvx ruff check .` | Update all `.agents/` doc command examples from `uv run ruff` to `uvx ruff`; record in `.agents/memory/decisions.md` | `Open` |
+| 1 | `uv run ruff` documented throughout `.agents/` but silently failed on Replit | `.agents/STYLE-CODE.md:17`, `.agents/TEST-RUFF.md:53` | `uv run ruff format .` exited with code 1 because ruff was in `[project.optional-dependencies.dev]`, which `uv run` does not install by default | Moved ruff to `[dependency-groups] dev = ["ruff"]` in `pyproject.toml`; `uv sync` now installs it automatically; `uv run ruff check .` and `uv run ruff format .` both pass clean | `Resolved` |
 
 ### P4 (Low)
 
@@ -363,7 +363,7 @@ in.
 
 | # | Finding | Location (`file.py:line`) | Evidence (code quote / observed behavior) | Proposed Fix | Status |
 |--|--|--|--|--|--|
-| 1 | `member_cache` batch queries could benefit from a covered composite index | `tcbot/database/mongos.py:1` | `get_first_names_batch` issues `$in` on `user_id` with a `first_name` projection; existing `user_id` index is not covering | Add `{user_id: 1, first_name: 1, username: 1}` partial index to `ensure_indexes()`; gather Atlas Performance Advisor data first to confirm real-world impact | `Open` |
+| 1 | `member_cache` batch queries could benefit from a covered composite index | `tcbot/database/mongos.py:1` | `get_first_names_batch` issues `$in` on `user_id` with a `first_name` projection; existing `user_id` index is not covering | `{user_id: 1, first_name: 1, username: 1}` index added to `ensure_indexes()` on 2026-06-02; batch `$in` projections are now covered queries. | `Resolved` |
 
 ## Maintenance Rules
 

@@ -4,6 +4,19 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ## [Unreleased] - 2026-06-02
 
+### Added - Covered-query composite index on `member_cache`
+
+- **`tcbot/database/mongos.py` composite index**: Added `{user_id: 1, first_name: 1, username: 1}` compound index to `ensure_indexes()`. This covers the projection fields used by `get_first_names_batch` and `get_mention_data_batch` — MongoDB can now satisfy `$in` queries on `user_id` with `first_name`/`username` projections entirely from the index without loading the document. All 319 tests pass; `uv run ruff check .` clean.
+- **`docs/databases/databases.md` index table**: Added the new composite index row to the startup-indexes reference table.
+- **`PLAN.md` P3.3**: Updated P3 backlog row to reflect the index is resolved.
+
+### Fixed - Build tooling (`uv run ruff` now works)
+
+- **`pyproject.toml` dependency group fix**: Ruff was declared under `[project.optional-dependencies.dev]`, which `uv run` does not install by default, causing `uv run ruff` to fail with "No such file". Moved ruff to `[dependency-groups] dev = ["ruff"]` (PEP 735). `uv sync` now installs ruff automatically into the project venv; `uv run ruff check .` and `uv run ruff format .` both pass without extra flags.
+- **PLAN.md Code Review Findings P3.1**: Updated status from `Open` to `Resolved`; evidence and proposed-fix columns updated to reflect the actual fix applied.
+- **`.agents/memory/decisions.md`, `replit-test-runner.md`, `context.md`**: Removed stale `uvx ruff` instructions; all three files now document `uv run ruff` as the correct command.
+- **`.agents/memory/MEMORY.md`**: Index entry for `replit-test-runner.md` corrected from `uvx ruff check .` to `uv run ruff check .`.
+
 ### Added - Tests (check_flow full coverage)
 
 - **`tests/test_check_flow.py`** (19 tests, new file): Full coverage for the `Check` class view builders in `check_flow.py`. `Check.profile`: no-ban/no-role card, active-ban ID visible in text, staff role label and "Assigned by" line when `role_meta` returns a role. `Check.bans_list`: empty no-records message, non-empty list with ban ID/status/reason visible. `Check.ban_detail`: `get_ban` returning `None` → not-found message; ban belonging to different user ID → not-found; valid ban with no proof → no proof button in keyboard; valid ban with proof link → proof button present. `Check.warns_by_group`: empty no-records message, non-empty list with group title and warn count visible. `Check.warns_in_group`: empty no-records message, non-empty with reason, group title, and admin name. `Check.kicks_list`: empty no-records message, non-empty with reason/group/pagination header. `Check.mutes_list`: empty no-records message. `Check.appeals_list`: bans without `appeal_log_msg_id` filtered → no-records message; approved appeal (inactive ban) → "Approved" status; active ban with appeal → "Pending" status.

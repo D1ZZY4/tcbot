@@ -15,13 +15,13 @@ description: Non-trivial technical decisions made during development. Format: da
 
 ---
 
-## 2026-06-02: Test command on Replit is `uv run --extra test pytest`; ruff is `uvx ruff`
+## 2026-06-02: `uv run ruff` is the correct command; `uvx ruff` is not needed
 
-**Decision:** On the Replit environment, `uv run ruff` fails (no such file). The correct commands are `uvx ruff format .`, `uvx ruff check --fix .`, and `uv run --extra test pytest tests/ -q`.
+**Decision:** On this Replit environment, `uv run ruff` is the correct way to run ruff. Ruff belongs in `[dependency-groups] dev = ["ruff"]` in `pyproject.toml` so `uv sync` installs it into the project venv and `uv run ruff` resolves it correctly.
 
-**Why:** Ruff is a dev-extra dependency. `uv run ruff` only works when ruff is in the runtime dependencies or in the PATH. On Replit, `uvx` resolves and runs dev tools correctly. The docs in `.agents/` say `uv run ruff` — that is wrong for this environment. Use `uvx ruff` instead.
+**Why:** An earlier session mistakenly recorded `uvx ruff` as the correct command because ruff was in `[project.optional-dependencies.dev]`, which `uv run` does not install by default. Moving ruff to `[dependency-groups]` (PEP 735) makes `uv sync` install it automatically. `uv run ruff check .` and `uv run ruff format .` now work without any extra flags.
 
-**How to apply:** Always run `uvx ruff check .` and `uvx ruff format .` for lint/format checks; `uv run --extra test pytest` for tests.
+**How to apply:** Always run `uv run ruff check .` and `uv run ruff format .`. Never use `uvx ruff`. `uv run --extra test pytest` is still the correct test command.
 
 ---
 
@@ -41,4 +41,4 @@ description: Non-trivial technical decisions made during development. Format: da
 
 **Why:** The Replit platform memory can be reset on account change. Storing state in tracked files guarantees continuity across sessions and accounts.
 
-**How to apply:** Before finishing any work session, update context.md (state), progress.md (item status), and decisions.md (new decisions). Update MEMORY.md index if a new topic file is created.
+**How to apply:** Before finishing any work session, update context.md (state), progress.md (last-known work), and decisions.md (new decisions). Update MEMORY.md index if a new topic file is created.

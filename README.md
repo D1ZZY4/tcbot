@@ -284,7 +284,7 @@ Configure in GitHub repository settings → Secrets:
 - Dependency management: `uv` and `uv.lock`.
 - Database: MongoDB/Motor with startup index creation.
 - Health check: Flask `GET /` endpoint on `PORT`.
-- Test inventory: 125 collected tests across 14 files.
+- Test inventory: 319 collected tests across 26 files.
 - Secrets policy: use environment variables; never commit real tokens, MongoDB URIs, or private chat IDs.
 
 ## License

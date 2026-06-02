@@ -26,17 +26,16 @@ If the task edits bot runtime code, also apply the project policy skill before c
 
 ## Current Project Tooling
 
-From `pyproject.toml` as of 2026-05-28:
+From `pyproject.toml` as of 2026-06-02:
 
 ```toml
 [project]
 requires-python = ">=3.12"
 dependencies = [
     "python-telegram-bot[job-queue]==22.5",
-    "motor>=3.7.1",
-    "flask>=3.1.0",
-    "python-dotenv>=1.0.0",
-    "ruff",
+    "motor>=3.7.1,<4",
+    "flask>=3.1.0,<4",
+    "python-dotenv>=1.0.0,<2",
 ]
 
 [project.optional-dependencies]
@@ -45,10 +44,16 @@ test = [
     "pytest-asyncio>=1.3.0",
 ]
 
+[dependency-groups]
+dev = ["ruff"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "-ra -q"
+filterwarnings = [
+    "ignore:If 'per_message=False', 'CallbackQueryHandler'.*:UserWarning",
+]
 
 [tool.ruff]
 line-length = 88
@@ -57,6 +62,8 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I"]
 ```
+
+Ruff is in `[dependency-groups] dev` (PEP 735), installed automatically by `uv sync`. Use `uv run ruff format .` and `uv run ruff check .` directly; `uvx ruff` is not needed.
 
 Do not claim `mypy`, `pyright`, or `ty` validation exists unless it is added to the project.
 

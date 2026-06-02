@@ -124,6 +124,11 @@ async def ensure_indexes() -> None:
         # * pending_joins keyed by chat_id with upsert (one pending per chat)
         col("pending_joins").create_index([("chat_id", 1)], unique=True),
         col("member_cache").create_index([("user_id", 1)], unique=True),
+        # * Covered-query index: serves get_first_names_batch and get_mention_data_batch
+        # * $in on user_id with {first_name,username} projection — all fields in index
+        col("member_cache").create_index(
+            [("user_id", 1), ("first_name", 1), ("username", 1)]
+        ),
         # * Serves batch username lookups and search operations
         col("member_cache").create_index([("username", 1)]),
         # * Serves name search operations (case-insensitive search by first_name)
