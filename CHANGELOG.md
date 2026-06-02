@@ -4,6 +4,13 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ## [Unreleased] - 2026-06-02
 
+### Documentation - Fix four stale references across docs and agent files
+
+- **`.agents/skills/docs-maintainer/SKILL.md`**: Updated test count from stale 300/25 to current 698/50 and bumped `Last updated` date to 2026-06-02.
+- **`docs/helper/helper.md`**: Expanded `replies.py` constants table from 10 to 15 entries. Added `ERR_GROUP_ONLY`, `ERR_NO_CONNECTED_GROUPS`, `ERR_GROUP_NOT_FOUND`, `PERM_FOUNDER_ONLY`, `PERM_STAFF_ONLY`, `PERM_ADMIN_ABOVE`. Updated closing note to reflect current usage.
+- **`docs/utils/utils.md`**: Fixed Mermaid diagram node label from `logging_setup.py` to `logger.py` (the actual filename).
+- **`.agents/memory/structure.md`**: Corrected `logging_setup.py` to `logger.py` in the utils tree; updated test inventory from 25+ files to 50 files / 698 tests.
+
 ### Fixed - SyntaxError in kicking_flow.py: variable used as implicit string concatenation
 
 - **`tcbot/modules/helper/workflows/kicking_flow.py` line 72**: `_MSG_REJOIN_ALLOWED` was placed adjacent to two f-string literals as implicit concatenation, but Python only allows implicit concatenation between string *literals*, not variables. Changed to `f"{_MSG_REJOIN_ALLOWED}"` so the variable is interpolated inside an f-string. This caused a `SyntaxError` at import time, blocking collection of `tests/test_kick_flow.py` and `tests/test_kicking.py` and crashing any attempt to load the kick conversation. All 698 tests now pass and Ruff is clean.

@@ -127,13 +127,19 @@ Shared bot-reply string constants used by multiple command modules. Import with 
 | `ERR_CANNOT_RESOLVE` | Error when the target ID/username cannot be resolved via Telegram. |
 | `ERR_CANT_FIND_USER` | Error when a user is not found in the cache or Telegram. |
 | `ERR_ROLE_VERIFY` | Error when executor or target role cannot be verified. |
+| `ERR_GROUP_ONLY` | Error when a command is used outside a group. |
+| `ERR_NO_CONNECTED_GROUPS` | Error when no connected groups exist for the operation. |
+| `ERR_GROUP_NOT_FOUND` | Error when the target group is not found or already removed. |
 | `CONTEXT_BOT_OR_GROUP` | Context guard: command must be used in a bot DM or group. |
 | `CONTEXT_EXEC_OR_GROUP` | Context guard: command must be used in an executor-owned group or DM. |
 | `CONTEXT_ANYONE` | Context hint shown to regular users. |
+| `PERM_FOUNDER_ONLY` | Permission hint: Founder only. |
+| `PERM_STAFF_ONLY` | Permission hint: Admin and above required. |
+| `PERM_ADMIN_ABOVE` | Permission hint: Admin and above (Founder / Admin). |
 | `PERM_DEV_ABOVE` | Permission hint: Developer or above required. |
 | `PERM_TESTER_ABOVE` | Permission hint: Tester or above required. |
 
-All 11 command modules that had duplicated versions of these strings now import from `replies.py` instead.
+Command modules import from `replies.py` instead of inlining these strings.
 
 ## `ban_info.py`
 

@@ -2,7 +2,7 @@
 name: docs-maintainer
 description: Update and review project Markdown documentation so root docs, agent docs, docs indexes, detailed guides, setup instructions, and local skill docs stay accurate and English-only.
 ---
-Last updated: 2026-05-29
+Last updated: 2026-06-02
 
 
 # Docs Maintainer
@@ -58,7 +58,7 @@ As of 2026-05-29, TCF Bot uses:
 - Flask keep-alive server
 - `uv` and `uv.lock`
 - Ruff
-- pytest + pytest-asyncio offline tests, currently 300 tests across 25 files
+- pytest + pytest-asyncio offline tests, currently 698 tests across 50 files
 
 Recent project additions to keep accurate when editing docs:
 

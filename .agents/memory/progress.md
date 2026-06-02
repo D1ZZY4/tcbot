@@ -61,6 +61,10 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | PLAN.md test count | docs | Updated from 332/26 to 428/30 | 2026-06-02 |
 
 | kicking_flow.py SyntaxError fix | P1 | `_MSG_REJOIN_ALLOWED` used as implicit string concat (variable, not literal); changed to `f"{_MSG_REJOIN_ALLOWED}"` — unblocked test_kick_flow.py + test_kicking.py collection | 2026-06-02 |
+| docs-maintainer SKILL.md staleness | docs | Test count 300/25 → 698/50; date bumped to 2026-06-02 | 2026-06-02 |
+| docs/helper/helper.md replies.py table | docs | Expanded from 10 to 15 constants; added ERR_GROUP_ONLY, ERR_NO_CONNECTED_GROUPS, ERR_GROUP_NOT_FOUND, PERM_FOUNDER_ONLY, PERM_STAFF_ONLY, PERM_ADMIN_ABOVE | 2026-06-02 |
+| docs/utils/utils.md mermaid filename | docs | Fixed `logging_setup.py` → `logger.py` in Mermaid diagram node | 2026-06-02 |
+| .agents/memory/structure.md filename | docs | Corrected `logging_setup.py` → `logger.py`; updated test count 25+ → 50 files / 698 tests | 2026-06-02 |
 
 ## Pending (remaining optional)
 

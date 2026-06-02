@@ -24,6 +24,7 @@ description: Current state of TCF Bot project — what is done, in progress, and
 - Bot restarts cleanly: MongoDB connected, indexes ensured, 75 handlers registered, polling active.
 - `kicking_flow.py` SyntaxError fixed: `_MSG_REJOIN_ALLOWED` was used as implicit string concatenation (only works with string literals); changed to `f"{_MSG_REJOIN_ALLOWED}"`.
 - All inline-string extractions complete across all modules and workflows; no unextracted static user-facing reply strings remain.
+- Comprehensive doc audit complete (2026-06-02): fixed 4 stale references — docs-maintainer SKILL.md test count (300/25 → 698/50), helper.md replies.py table (10 → 15 constants), utils.md mermaid diagram (logging_setup.py → logger.py), structure.md filename + test count.
 
 ## What is in progress
 

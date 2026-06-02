@@ -9,7 +9,7 @@ flowchart TD
     Main[tcbot/__main__.py] --> Utils[tcbot/utils/]
     Utils --> Dispatch[dispatch.py<br/>fan_out concurrency]
     Utils --> Prefixes[prefixes.py<br/>command prefix builders]
-    Utils --> Logging[logging_setup.py<br/>logger config]
+    Utils --> Logging[logger.py<br/>logger config]
     Utils --> ErrorReporter[error_reporter.py<br/>error sink]
     Utils --> TimeDate[timedate_format.py<br/>UTC + display]
     Modules[tcbot/modules/] --> Dispatch

@@ -76,12 +76,12 @@ tcbot/
 └── utils/
     ├── dispatch.py          fan_out() bounded async fan-out for multi-group ops
     ├── error_reporter.py    Async error reporting to configured Telegram destination
-    ├── logging_setup.py     Logging configuration
+    ├── logger.py            Logging configuration (BotLogFormatter, TelegramErrorHandler, setup)
     ├── pagination.py        paginate(), nav_row(), date_or_unknown() — shared paginators
     ├── prefixes.py          build_prefixed_filters() — command filter builder
     └── timedate_format.py   utc_now(), fmt_dt(), to_utc(), utc_now_str()
 
-tests/                       25+ offline pytest files (asyncio_mode=auto, no real Telegram/MongoDB)
+tests/                       50 offline pytest files, 698 tests (asyncio_mode=auto, no real Telegram/MongoDB)
 docs/                        Architecture docs, feature guides, module references
 .agents/                     Agent policy, style, workflow, skills, memory
 ```
