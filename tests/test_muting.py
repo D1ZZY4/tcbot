@@ -2,11 +2,18 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Tests for tcbot.modules.muting - module metadata and help structure."""
+"""Tests for tcbot.modules.muting - module metadata, help structure, and handler logic."""
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+
+from telegram.ext import ConversationHandler
+
 import tcbot.modules.muting as muting
+from tcbot.modules.helper.identity import Identity
+from tcbot.modules.helper.workflows.reason_flow import WAITING_PROOF, WAITING_REASON
 
 # ───────────────────────── Module metadata ──────────────────────── #
 
@@ -88,6 +95,115 @@ def test_help_sections_no_emdash() -> None:
 def test_help_sections_keys_unique() -> None:
     keys = [k for k, _ in muting.__help_sections__]
     assert len(keys) == len(set(keys))
+
+
+# ───────────────────── cmd_mute handler logic ────────────────────── #
+
+# Access the unwrapped handler (bypass ratelimiter / basic_mod_only / log_execution).
+_cmd_mute = muting.cmd_mute.__wrapped__.__wrapped__.__wrapped__
+
+
+def _make_mute_context(*, text: str = "/tcmute @target reason") -> tuple:
+    """Return (update, ctx) mocks ready for cmd_mute."""
+    msg = AsyncMock()
+    msg.text = text
+    msg.chat = SimpleNamespace(id=100)
+    msg.reply_text = AsyncMock(return_value=SimpleNamespace(message_id=1))
+    admin = SimpleNamespace(id=1, first_name="Admin")
+    update = MagicMock()
+    update.effective_message = msg
+    update.effective_user = admin
+    ctx = MagicMock()
+    ctx.bot = AsyncMock()
+    ctx.bot.id = 9999
+    ctx.user_data = {}
+    return update, ctx
+
+
+async def test_cmd_mute_no_target_returns_end(monkeypatch) -> None:
+    """When no target is resolved, handler ends the conversation."""
+    monkeypatch.setattr(
+        muting.extraction, "extract_target", AsyncMock(return_value=(None, None))
+    )
+    update, ctx = _make_mute_context()
+    result = await _cmd_mute(update, ctx)
+    assert result == ConversationHandler.END
+    update.effective_message.reply_text.assert_called_once()
+
+
+async def test_cmd_mute_refused_identity_returns_end(monkeypatch) -> None:
+    """A refused identity (e.g. self-mute) sends the refusal and ends."""
+    monkeypatch.setattr(
+        muting.extraction, "extract_target", AsyncMock(return_value=(1, "Me"))
+    )
+    monkeypatch.setattr(
+        muting.identity,
+        "classify",
+        AsyncMock(return_value=Identity("self", 1, "Me", None)),
+    )
+    monkeypatch.setattr(
+        muting, "resolve_and_check", AsyncMock(return_value=("tester", None))
+    )
+    update, ctx = _make_mute_context(text="/tcmute 1 reason")
+    result = await _cmd_mute(update, ctx)
+    assert result == ConversationHandler.END
+    update.effective_message.reply_text.assert_called_once()
+
+
+async def test_cmd_mute_executor_role_none_returns_end_silently(monkeypatch) -> None:
+    """When resolve_and_check returns executor_role=None, handler exits without reply."""
+    monkeypatch.setattr(
+        muting.extraction, "extract_target", AsyncMock(return_value=(42, "Target"))
+    )
+    monkeypatch.setattr(
+        muting.identity,
+        "classify",
+        AsyncMock(return_value=Identity("user", 42, "Target", None)),
+    )
+    monkeypatch.setattr(
+        muting, "resolve_and_check", AsyncMock(return_value=(None, None))
+    )
+    update, ctx = _make_mute_context(text="/tcmute 42 reason")
+    result = await _cmd_mute(update, ctx)
+    assert result == ConversationHandler.END
+
+
+async def test_cmd_mute_with_inline_reason_returns_waiting_proof(monkeypatch) -> None:
+    """When target + inline reason are given (no duration), handler opens proof step."""
+    monkeypatch.setattr(
+        muting.extraction, "extract_target", AsyncMock(return_value=(42, "Target"))
+    )
+    monkeypatch.setattr(
+        muting.identity,
+        "classify",
+        AsyncMock(return_value=Identity("user", 42, "Target", None)),
+    )
+    monkeypatch.setattr(
+        muting, "resolve_and_check", AsyncMock(return_value=("tester", None))
+    )
+    update, ctx = _make_mute_context(text="/tcmute 42 spamming")
+    result = await _cmd_mute(update, ctx)
+    assert result == WAITING_PROOF
+    assert ctx.user_data["mute_target_id"] == 42
+    assert ctx.user_data["mute_reason"] == "spamming"
+
+
+async def test_cmd_mute_no_inline_reason_returns_waiting_reason(monkeypatch) -> None:
+    """Without an inline reason, handler opens the reason-collection step."""
+    monkeypatch.setattr(
+        muting.extraction, "extract_target", AsyncMock(return_value=(42, "Target"))
+    )
+    monkeypatch.setattr(
+        muting.identity,
+        "classify",
+        AsyncMock(return_value=Identity("user", 42, "Target", None)),
+    )
+    monkeypatch.setattr(
+        muting, "resolve_and_check", AsyncMock(return_value=("tester", None))
+    )
+    update, ctx = _make_mute_context(text="/tcmute 42")
+    result = await _cmd_mute(update, ctx)
+    assert result == WAITING_REASON
 
 
 # ───────────────────────────── Handlers ─────────────────────────── #

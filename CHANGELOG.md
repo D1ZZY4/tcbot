@@ -4,6 +4,23 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ## [Unreleased] - 2026-06-02 (session 5)
 
+### Added - 21 handler-behavior tests across four command modules
+
+Handler-level tests added for `cmd_ban_start` (6 tests in `test_banning.py`),
+`cmd_kick` (5 in `test_kicking.py`), `cmd_mute` (5 in `test_muting.py`), and
+`cmd_warn_entry` (5 in `test_warnings.py`).  Each test file gains imports for
+`AsyncMock`, `MagicMock`, `Identity`, and the relevant `WAITING_*` constants,
+plus a `_make_*_context` factory and an unwrapped handler reference via
+`__wrapped__.__wrapped__.__wrapped__`.
+
+Paths tested per handler: no target → `END`, refused identity → `END`,
+executor_role `None` → `END`, inline reason → `WAITING_PROOF`, no inline
+reason → `WAITING_REASON`.  The ban handler additionally tests `Demote.execute`
+being called when the target holds a DB role.
+
+All 21 new tests green; suite grows from 1091 → 1112.  Ruff-clean; 141 files
+unchanged.
+
 ### Added - 13 async tests for `identity.classify()` in `test_identity.py`
 
 All 9 identity kinds (self, this_bot, telegram, other_bot, founder, admin,
