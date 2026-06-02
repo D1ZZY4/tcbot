@@ -169,8 +169,10 @@ _MAX_CTX = 250
 _TB_FRAMES = 8
 
 
-def _esc(s: str) -> str:
+def _esc(s: str | None) -> str:
     """Escape HTML special characters for Telegram HTML parse mode."""
+    if s is None:
+        return ""
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 

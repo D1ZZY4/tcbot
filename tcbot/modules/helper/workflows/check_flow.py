@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -15,6 +16,8 @@ from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.formatter import bold, code, esc, mention
 from tcbot.utils.pagination import date_or_unknown, nav_row, paginate
 from tcbot.utils.timedate_format import fmt_dt
+
+log = logging.getLogger(__name__)
 
 _PAGE_SIZE = 5
 _GET_CHAT_TIMEOUT = 3.0
@@ -38,8 +41,8 @@ async def _resolve_user_info(bot: Bot, target_id: int) -> tuple[str, str | None]
         )
         fname = fname or (chat.first_name or "")
         uname = uname or chat.username
-    except (asyncio.TimeoutError, Exception):
-        pass
+    except Exception as exc:
+        log.debug("get_chat(%s) failed: %s", target_id, exc)
 
     if not fname:
         fname = f"User {target_id}"

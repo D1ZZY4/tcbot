@@ -50,7 +50,7 @@ Good documentation should:
 
 ## Project Facts To Keep Current
 
-As of 2026-05-29, TCF Bot uses:
+As of 2026-06-02, TCF Bot uses:
 
 - Python 3.12 project target
 - `python-telegram-bot[job-queue] == 22.5`
@@ -58,7 +58,7 @@ As of 2026-05-29, TCF Bot uses:
 - Flask keep-alive server
 - `uv` and `uv.lock`
 - Ruff
-- pytest + pytest-asyncio offline tests, currently 698 tests across 50 files
+- pytest + pytest-asyncio offline tests, currently 1005 tests across 66 files
 
 Recent project additions to keep accurate when editing docs:
 

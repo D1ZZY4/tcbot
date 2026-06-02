@@ -25,7 +25,7 @@ async def _safe_get_chat(bot: Bot, ident: str | int):
     """Call ``bot.get_chat`` with a bounded timeout; returns ``None`` on failure."""
     try:
         return await asyncio.wait_for(bot.get_chat(ident), timeout=_GET_CHAT_TIMEOUT)
-    except (asyncio.TimeoutError, Exception) as exc:
+    except Exception as exc:
         log.debug("get_chat(%s) failed: %s", ident, exc)
         return None
 

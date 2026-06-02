@@ -107,7 +107,7 @@ async def _should_remove(bot, grp: GroupDoc) -> bool:
             timeout=_MEMBERSHIP_CHECK_TIMEOUT,
         )
         return member.status in ("left", "kicked")
-    except (asyncio.TimeoutError, Exception) as exc:
+    except Exception as exc:
         log.debug("Could not verify membership for %d: %s", grp["chat_id"], exc)
         return True
 

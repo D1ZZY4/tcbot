@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from telegram import Update
 from telegram.error import BadRequest
@@ -20,6 +21,8 @@ from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.check_flow import Check
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.timedate_format import fmt_dt
+
+log = logging.getLogger(__name__)
 
 # ──────────────── User-facing reply constants ──────────────────── #
 
@@ -267,8 +270,8 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if target_fname and not target_fname.startswith("User "):
         try:
             await db.users_cache.upsert_user(target_id, None, target_fname)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("users_cache upsert failed for %d: %s", target_id, exc)
 
     text, kb = await Check.profile(ctx.bot, target_id)
     await update.effective_message.reply_text(text, parse_mode="HTML", reply_markup=kb)

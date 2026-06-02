@@ -124,7 +124,10 @@ def _parse_prefixed_command(
     if prefix is None:
         return None
 
-    token = text[len(prefix) :].split(None, 1)[0]
+    _parts = text[len(prefix) :].split(None, 1)
+    if not _parts:
+        return None
+    token = _parts[0]
     if not token:
         return None
 

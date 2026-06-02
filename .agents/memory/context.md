@@ -11,7 +11,7 @@ description: Current state of TCF Bot project — what is done, in progress, and
 
 - Python 3.12, uv, python-telegram-bot 22.5, Motor/MongoDB stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
-- 698 tests across 50 test files; full suite passes offline.
+- 1005 tests across 66 test files; full suite passes offline.
 - `uv run ruff format .` and `uv run ruff check .` both clean.
 - All P1/P2/P3 backlog items resolved (ConversationHandler tests, pagination NameError, composite indexes, asyncio.gather conversions, shared replies.py, em-dash removal, cache TTL constants, keyboards.py dead code).
 - `docs/mapping.md` updated: added `identity.py`, `replies.py` to helper section; added `pagination.py` to utils section.
@@ -25,6 +25,7 @@ description: Current state of TCF Bot project — what is done, in progress, and
 - `kicking_flow.py` SyntaxError fixed: `_MSG_REJOIN_ALLOWED` was used as implicit string concatenation (only works with string literals); changed to `f"{_MSG_REJOIN_ALLOWED}"`.
 - All inline-string extractions complete across all modules and workflows; no unextracted static user-facing reply strings remain.
 - Comprehensive doc audit complete (2026-06-02): fixed 4 stale references — docs-maintainer SKILL.md test count (300/25 → 698/50), helper.md replies.py table (10 → 15 constants), utils.md mermaid diagram (logging_setup.py → logger.py), structure.md filename + test count.
+- 15 new test files added (2026-06-02): kicks_db, mutes_db, queues_db, users_cache, groups_db, error_reporter, mongos, formatter, extraction, parse_editmsg, ban_info (+ 4 earlier utility files). Bug fix: `_esc()` in error_reporter.py hardened to accept `str | None`. Suite: 698 → 966 tests / 50 → 65 files.
 
 ## What is in progress
 

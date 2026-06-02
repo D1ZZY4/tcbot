@@ -249,7 +249,7 @@ class BuildConnection:
             member = await asyncio.wait_for(
                 ctx.bot.get_chat_member(chat.id, user.id), timeout=_TG_TIMEOUT
             )
-        except (asyncio.TimeoutError, Exception) as exc:
+        except Exception as exc:
             log.debug("Join decision role check failed: %s", exc)
             await q.answer(_ERR_ROLE_CHECK_FAILED, show_alert=True)
             return
@@ -268,7 +268,7 @@ class BuildConnection:
                 bot_member = await asyncio.wait_for(
                     ctx.bot.get_chat_member(chat.id, ctx.bot.id), timeout=_TG_TIMEOUT
                 )
-            except (asyncio.TimeoutError, Exception) as exc:
+            except Exception as exc:
                 log.debug("Join decision permission check failed: %s", exc)
                 await q.edit_message_text(_ERR_BOT_PERMS_VERIFY, reply_markup=None)
                 return

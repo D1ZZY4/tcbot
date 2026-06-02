@@ -133,7 +133,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         bot_member = await asyncio.wait_for(
             ctx.bot.get_chat_member(chat.id, ctx.bot.id), timeout=_TG_TIMEOUT
         )
-    except (asyncio.TimeoutError, Exception) as exc:
+    except Exception as exc:
         log.debug("Could not verify bot permissions for %d: %s", chat.id, exc)
         await update.effective_message.reply_text(replies.ERR_ROLE_VERIFY)
         return

@@ -4,6 +4,56 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ## [Unreleased] - 2026-06-02
 
+### Added - Tests: 10 new test files covering DB helpers and error reporter (889 tests total)
+
+Added 10 new offline test files to eliminate the remaining untested source modules:
+
+- **`tests/test_kicks_db.py`** (8 tests): `log_kick`, `user_kicks`, `user_kick_count` — insert, filter-by-user, sort order, count isolation.
+- **`tests/test_mutes_db.py`** (8 tests): `log_mute`, `user_mutes`, `user_mute_count` — mirrors kicks_db coverage.
+- **`tests/test_queues_db.py`** (16 tests): `enqueue`, `get_request_by_id`, `get_request`, `all_pending`, `resolve`, `pending_count` — request lifecycle, status filtering, field validation.
+- **`tests/test_users_cache.py`** (17 tests): `upsert_user`, `get_user`, `get_user_mention_data`, `get_mention_data_batch`, `get_first_names_batch`, `get_first_name`, `total_users` — upsert semantics, batch fallbacks, default name generation.
+- **`tests/test_groups_db.py`** (20 tests): `get_group`, `is_connected` (with cache hit), `add_group`, `deactivate_group`, `active_groups`, `active_group_count`, `add_pending`, `get_pending`, `remove_pending` — cache coherence via autouse `clear_caches` fixture.
+- **`tests/test_error_reporter.py`** (44 tests): `_benign`, `_classify`, `_shorten_path`, `_log_noise`, `_fingerprint`, `_seen_recently`, `build_error_message`, `attach`, `send_to_log_errors`, `report_exc`, `report_record` — all pure logic tested without Telegram connection; dedup and noise-filter verified.
+
+- **`tests/test_mongos.py`** (9 tests): `make_short_id` (length, charset, uniqueness, edge cases) and `db()` error path (raises `RuntimeError` when `_db` is `None`, returns the set instance otherwise).
+- **`tests/test_formatter.py`** (26 tests): `bold`, `italic`, `code`, `link`, `mention`, `esc` — HTML escape, username-link vs code-fallback, non-string inputs, all HTML special chars.
+- **`tests/test_extraction.py`** (15 tests): `ResolvedTarget` dataclass (None/empty name coercion, raw field excluded from comparison and repr), `_best_name` (primary selection, digit-only skip, cache fallback, User-id default).
+- **`tests/test_parse_editmsg.py`** (13 tests): `safe_edit` and `safe_edit_cb` — normal edit, extra kwargs passthrough, ignored BadRequest variants (not-modified, not-found, chat-not-found), unexpected error logged via warning.
+- **`tests/test_ban_info.py`** (14 tests): `build_ban_detail` — ban card text, ban ID and reason included, HTML escaping, proof link present/absent, target_fname shortcut (skips user fetch), missing timestamp falls back to "Unknown", cfg mocked via MagicMock (property without setter requires module-level replacement).
+
+**Bug fix found and applied:** `_esc()` in `tcbot/utils/error_reporter.py` typed as `str -> str` but called with `None` when `logging.LogRecord.funcName` is `None`. Changed signature to `str | None -> str` with early `""` return to guard the `None` case.
+
+All docs updated: `README.md`, `AGENTS.md`, `PLAN.md`, `replit.md`, `docs-maintainer/SKILL.md`, memory files, and this file. Suite: 698 -> 776 -> 898 -> 966 tests / 50 -> 54 -> 61 -> 65 files.
+
+### Added - Tests: `test_prefixes.py` (39 tests) + Bug fix in `prefixes.py`
+
+**Bug fix found and applied:** `_parse_prefixed_command()` in `tcbot/utils/prefixes.py` performed `text[len(prefix):].split(None, 1)[0]` unconditionally. When the text after the prefix is all whitespace (e.g. `"!   "`), `split(None, 1)` returns an empty list and `[0]` raises `IndexError`. Fixed by splitting into a named variable, checking `if not _parts`, and then indexing.
+
+**`tests/test_prefixes.py`** (39 tests):
+- `_parse_prefixed_command` — slash/bang/dot prefix matching, multiple-prefix resolution, longest-prefix precedence, command with args, bot-mention validation (correct/wrong/missing bot username, case-insensitive, min/max length), uppercase command rejected, non-ASCII rejected, empty command after prefix, digit-leading command, empty-mention, whitespace-only-after-prefix (the new IndexError guard).
+- `parse_cmd_args` — no-args, single/multiple args, `None` input, empty string, whitespace-only, slash-only, extra-whitespace normalized, alt-prefix input.
+- `register_command` — registry insertion, automatic lowercase normalization.
+- `dispatch_alt_prefix` — no effective_message skips, no text skips, unregistered command skips, registered command called, exception in handler swallowed.
+
+Suite: 966 -> 1005 tests / 65 -> 66 files.
+
+### Fixed - RULES compliance: `except Exception: pass` and redundant `asyncio.TimeoutError` catches
+
+Six source files had `except (asyncio.TimeoutError, Exception)` — redundant because `asyncio.TimeoutError` is already a subclass of `Exception` in Python 3.11+. One of these also violated the RULES `no except Exception: pass` rule by swallowing the exception without any log.
+
+Files changed:
+- **`tcbot/modules/helper/workflows/check_flow.py`**: Added `import logging` and `log = logging.getLogger(__name__)` (previously missing). Changed `except (asyncio.TimeoutError, Exception): pass` to `except Exception as exc: log.debug("get_chat(%s) failed: %s", target_id, exc)` — RULES compliant, debug-logged fallback.
+- **`tcbot/modules/helper/workflows/connected_flow.py`**: Two occurrences of `except (asyncio.TimeoutError, Exception) as exc:` simplified to `except Exception as exc:`.
+- **`tcbot/modules/helper/extraction.py`**: Same simplification.
+- **`tcbot/modules/connecting.py`**: Same simplification.
+- **`tcbot/modules/maintenance.py`**: Same simplification.
+
+All 1005 tests still pass; lint clean.
+
+### Fixed - RULES compliance: `except Exception: pass` in `checking.py`
+
+`tcbot/modules/checking.py` had a bare `except Exception: pass` on a non-critical cache upsert (silently dropped any DB error). This violates the `RULES.md` rule "No bare `except:` and no `except Exception: pass`." Fix: added `import logging` and `log = logging.getLogger(__name__)`, then changed the bare `pass` to `log.debug("users_cache upsert failed for %d: %s", target_id, exc)`.
+
 ### Documentation - Fix four stale references across docs and agent files
 
 - **`.agents/skills/docs-maintainer/SKILL.md`**: Updated test count from stale 300/25 to current 698/50 and bumped `Last updated` date to 2026-06-02.

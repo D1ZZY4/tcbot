@@ -1,4 +1,4 @@
-- [Replit test runner](replit-test-runner.md) — `uv run --extra test pytest` and `uv run ruff`; baseline 698 tests / 50 files green
+- [Replit test runner](replit-test-runner.md) — `uv run --extra test pytest` and `uv run ruff`; current baseline 1005 tests / 66 files green
 - [Python implicit-string-concat pitfall](decisions.md) — variables cannot participate in implicit string concat; use `f"{var}"` instead of placing a bare variable name adjacent to string literals
 - [ConversationHandler test patterns](conv-handler-test-patterns.md) — mocking rules for ban/appeal/warn state-machine tests: album state, `_flush_album`, `asyncio.gather` return shapes
 - [Pagination refactor pattern](pagination-refactor.md) — `paginate`, `nav_row`, `date_or_unknown` live in `tcbot.utils.pagination`; flow files must import and call these directly with `_PAGE_SIZE` as third arg
