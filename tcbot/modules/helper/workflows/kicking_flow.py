@@ -69,7 +69,7 @@ async def execute_kick(
             msg.reply_text(
                 f"{mention(target_id, target_name)} - {code(str(target_id))} has been kicked.\n"
                 f"Reason: {reason_text}{proof_line}\n"
-                _MSG_REJOIN_ALLOWED,
+                f"{_MSG_REJOIN_ALLOWED}",
                 parse_mode="HTML",
             ),
             return_exceptions=True,

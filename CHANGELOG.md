@@ -4,6 +4,10 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ## [Unreleased] - 2026-06-02
 
+### Fixed - SyntaxError in kicking_flow.py: variable used as implicit string concatenation
+
+- **`tcbot/modules/helper/workflows/kicking_flow.py` line 72**: `_MSG_REJOIN_ALLOWED` was placed adjacent to two f-string literals as implicit concatenation, but Python only allows implicit concatenation between string *literals*, not variables. Changed to `f"{_MSG_REJOIN_ALLOWED}"` so the variable is interpolated inside an f-string. This caused a `SyntaxError` at import time, blocking collection of `tests/test_kick_flow.py` and `tests/test_kicking.py` and crashing any attempt to load the kick conversation. All 698 tests now pass and Ruff is clean.
+
 ### Refactored - promote_flow.py: extract 3 return-value strings + pinning tests
 
 Extracted three static return-value strings from `tcbot/modules/helper/workflows/promote_flow.py` into module-level constants: `_MSG_REQUEST_SUBMITTED`, `_ERR_TARGET_IS_FOUNDER`, `_ERR_NO_ASSIGN_PERMS`. Added `_ERR_RANK_INSUFFICIENT` to `decorators.py` and added two pinning tests for it in `test_decorators.py`. Suite grows to 698 tests.

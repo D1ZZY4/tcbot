@@ -12,9 +12,9 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Check | Result |
 |---|---|
 | `uv sync --extra test` | PASS |
-| `uv run ruff format --check .` | PASS (106 files unchanged) |
+| `uv run ruff format --check .` | PASS (all files unchanged) |
 | `uv run ruff check .` | PASS (0 errors) |
-| `uv run --extra test pytest tests/ -q` | PASS (428 tests, 30 files, all green) |
+| `uv run --extra test pytest tests/ -q` | PASS (698 tests, 50 files, all green) |
 
 ## Completed items
 
@@ -60,10 +60,11 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | test_privacy.py (14 tests) | P3 | Privacy messages + both callbacks | 2026-06-02 |
 | PLAN.md test count | docs | Updated from 332/26 to 428/30 | 2026-06-02 |
 
+| kicking_flow.py SyntaxError fix | P1 | `_MSG_REJOIN_ALLOWED` used as implicit string concat (variable, not literal); changed to `f"{_MSG_REJOIN_ALLOWED}"` — unblocked test_kick_flow.py + test_kicking.py collection | 2026-06-02 |
+
 ## Pending (remaining optional)
 
 | Item | Priority | Notes |
 |---|---|---|
-| test_help.py | P3 | help content builder + HELP_CONTENT structure tests (in progress) |
 | Module-interface types (types.py) | P3 | Only if cross-module signatures grow ambiguous |
 | Query metrics collection | P3 | Data-driven tuning; gather Atlas PA data first |
