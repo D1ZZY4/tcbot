@@ -178,5 +178,3 @@ jobs:
           $(cat check.log)
           \`\`\`
           EOF
-# update
-# patch terbaru
