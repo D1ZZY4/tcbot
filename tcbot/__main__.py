@@ -110,6 +110,7 @@ def _make_asyncio_exc_handler(loop: asyncio.AbstractEventLoop):
     """Return a synchronous asyncio exception handler that mirrors errors to the error reporter."""
 
     def handler(lp: asyncio.AbstractEventLoop, context: dict) -> None:
+        """Forward asyncio exceptions to the error reporter and module logger."""
         exc = context.get("exception")
         msg = context.get("message", "Unhandled asyncio exception")
         future = context.get("future") or context.get("task")

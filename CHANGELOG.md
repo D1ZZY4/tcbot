@@ -2,6 +2,86 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-02 (session 3)
+
+### Added - Test coverage for three previously untested modules
+
+Added test files covering every previously untested source module, bringing the
+suite from 1005 tests / 66 files to 1039 tests / 69 files.
+
+- **`tests/test_alive.py`** (5 tests): Flask health endpoint (`GET /` returns
+  `"OK"` with HTTP 200; POST and unknown paths yield expected error codes),
+  `start_keepalive()` spawns a daemon thread named `"keepalive"`, and the
+  function emits an INFO log containing the configured port number.
+- **`tests/test_documents.py`** (17 tests): All TypedDict schemas in
+  `tcbot.database.documents` verified — Literal alias values (`BanStatus`,
+  `RoleName`, `RequestStatus`), key membership for every schema, and runtime
+  construction of `AdminDoc`, `BanDoc`, `GroupDoc`, `WarnDoc`, and
+  `PromotionRequestDoc`.
+- **`tests/test_types.py`** (12 tests): All four `NewType` domain primitives
+  (`UserId`, `GroupId`, `ChatId`, `BanId`) verified — runtime backing type,
+  arithmetic and comparison behaviour, zero/empty falsy semantics, and distinct
+  `__qualname__` values for static-analysis isolation.
+
+### Documentation - Docstrings added to 36 functions (two batches)
+
+**Batch 1 — 14 functions of 10+ lines** that previously had none:
+
+- **`tcbot/__main__.py`** — `handler()` inside `_make_asyncio_exc_handler`.
+- **`tcbot/modules/admins.py`** — `cmd_promote_list`.
+- **`tcbot/modules/greeting.py`** — `on_new_member`, `on_left_member`.
+- **`tcbot/modules/groups.py`** — `cmd_tcfgroups`.
+- **`tcbot/modules/helper/decorators.py`** — `decorator` and `wrapper` inside
+  `ratelimiter`; `wrapper` inside `log_execution`.
+- **`tcbot/modules/helper/workflows/ban_flow.py`** — `on_proof_received`.
+- **`tcbot/modules/privacy.py`** — `on_privacy_menu`, `on_privacy_policy_menu`.
+- **`tcbot/modules/start.py`** — `on_back_to_start`.
+- **`tcbot/modules/stats.py`** — `on_stats_search_back`.
+- **`tcbot/modules/unbanning.py`** — `cmd_unban`.
+
+**Batch 2 — 22 functions of 5-9 lines** closing the last documentation gaps:
+
+- **`tcbot/modules/about.py`** — `on_about_menu`.
+- **`tcbot/modules/additional.py`** — `on_additional_menu`.
+- **`tcbot/modules/admins.py`** — `on_promote_role_cancel`, `on_demote_cancel`.
+- **`tcbot/modules/checking.py`** — `on_check_bans`, `on_check_ban_item`,
+  `on_check_warn_chat`, `on_check_kicks`, `on_check_mutes`, `on_check_appeals`.
+- **`tcbot/modules/helper/decorators.py`** — `wrapper` inside each of
+  `owner_only`, `staff_only`, `mod_only`, `basic_mod_only`.
+- **`tcbot/modules/helper/workflows/ban_flow.py`** — `on_cancel_proof`.
+- **`tcbot/modules/stats.py`** — `on_stats_bans`, `on_stats_search_item`,
+  `on_stats_search_cancel`.
+- **`tcbot/modules/warnings.py`** — `cmd_warnlist`.
+- **`tcbot/utils/logger.py`** — `emit`.
+- **`tcbot/utils/prefixes.py`** — `filter` in both filter classes.
+
+**Batch 3 — 13 functions of 3-4 lines** completing full docstring coverage:
+
+- **`tcbot/modules/checking.py`** — `on_check_main`, `on_check_warns`.
+- **`tcbot/modules/helper/parse_link.py`** — `message_link`.
+- **`tcbot/modules/helper/workflows/ban_flow.py`** — `on_proof_timeout`.
+- **`tcbot/modules/start.py`** — `on_menu_groups_details`.
+- **`tcbot/modules/stats.py`** — `on_stats_main`, `on_stats_admins`,
+  `on_stats_users`, `on_stats_user_item`, `on_stats_chats`,
+  `on_stats_chat_item`, `on_stats_ban_item`, `on_stats_bans_search`.
+
+AST audit now reports **0 public functions of 3+ lines missing a docstring**
+across the entire `tcbot/` package.
+
+**Class docstrings — 10 public TypedDict classes** in `tcbot/database/documents.py`:
+`AdminDoc`, `BanDoc`, `GroupDoc`, `PendingGroupDoc`, `RoleDoc`, `RoleRefDoc`,
+`UserDoc`, `WarnDoc`, `WarnCountDoc`, `PromotionRequestDoc`.
+
+AST audit now reports **0 public classes missing a docstring** across the
+entire `tcbot/` package.
+
+### Documentation - Test baseline updated in PLAN.md
+
+- **`PLAN.md`**: Updated test count in the project summary table (1005/66 →
+  1039/69) and corrected the stale "Recent Documentation Baseline" section
+  (previously frozen at 176 tests / 18 files from an old session; now
+  reflects the current 1039/69 baseline).
+
 ## [Unreleased] - 2026-06-02 (session 2)
 
 ### Fixed - Runtime and test warning noise eliminated; 8 test files auto-formatted

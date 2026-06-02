@@ -17,12 +17,16 @@ RequestStatus = Literal["pending", "approved", "rejected"]
 
 
 class AdminDoc(TypedDict, total=False):
+    """MongoDB document for a federation admin record."""
+
     user_id: UserId
     promoted_by: UserId
     promoted_date: datetime
 
 
 class BanDoc(TypedDict, total=False):
+    """MongoDB document for a federation ban record."""
+
     ban_id: BanId
     banned_user_id: UserId
     reason: str
@@ -43,6 +47,8 @@ class BanDoc(TypedDict, total=False):
 
 
 class GroupDoc(TypedDict, total=False):
+    """MongoDB document for a connected group."""
+
     chat_id: GroupId
     title: str
     added_by: UserId
@@ -51,6 +57,8 @@ class GroupDoc(TypedDict, total=False):
 
 
 class PendingGroupDoc(TypedDict, total=False):
+    """MongoDB document for a group awaiting connection approval."""
+
     chat_id: ChatId
     title: str
     owner_id: UserId
@@ -59,6 +67,8 @@ class PendingGroupDoc(TypedDict, total=False):
 
 
 class RoleDoc(TypedDict, total=False):
+    """MongoDB document for a user's federation role assignment."""
+
     user_id: UserId
     role: RoleName
     assigned_by: UserId
@@ -66,10 +76,14 @@ class RoleDoc(TypedDict, total=False):
 
 
 class RoleRefDoc(TypedDict, total=False):
+    """Minimal reference document storing only a user ID for role index lookups."""
+
     user_id: UserId
 
 
 class UserDoc(TypedDict, total=False):
+    """MongoDB document for a cached user profile."""
+
     user_id: UserId
     username: str | None
     first_name: str | None
@@ -79,6 +93,8 @@ class UserDoc(TypedDict, total=False):
 
 
 class WarnDoc(TypedDict, total=False):
+    """MongoDB document for a single warning issued to a user."""
+
     _id: object
     user_id: UserId
     reason: str
@@ -88,6 +104,8 @@ class WarnDoc(TypedDict, total=False):
 
 
 class WarnCountDoc(TypedDict, total=False):
+    """MongoDB document tracking the running warning total for a user in a chat."""
+
     user_id: UserId
     chat_id: ChatId
     count: int
@@ -95,6 +113,8 @@ class WarnCountDoc(TypedDict, total=False):
 
 
 class PromotionRequestDoc(TypedDict, total=False):
+    """MongoDB document for a pending or resolved staff promotion request."""
+
     request_id: str
     target_id: UserId
     username: str | None

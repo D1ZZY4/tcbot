@@ -247,6 +247,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
 
 
 async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle incoming proof media: buffer albums or execute the ban immediately."""
     msg = update.effective_message
 
     if msg.media_group_id:
@@ -274,6 +275,7 @@ async def _flush_album(mgid: str, bot: Bot) -> None:
 
 
 async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    """Acknowledge the cancel button and end the proof-collection conversation."""
     q = update.callback_query
     await asyncio.gather(
         q.answer(),
@@ -283,6 +285,7 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
 
 
 async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    """Notify the user that the proof window expired and end the conversation."""
     if update.effective_message:
         await update.effective_message.reply_text(_MSG_TIMEOUT)
     return ConversationHandler.END

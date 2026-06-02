@@ -300,6 +300,7 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.ratelimiter(limit=20, period=30)
 @decorators.log_execution
 async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render the top-level profile summary for the checked user."""
     q = update.callback_query
     target_id = int(q.data.split(":", 1)[1])
     _, (text, kb) = await asyncio.gather(q.answer(), Check.profile(ctx.bot, target_id))
@@ -309,6 +310,7 @@ async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.ratelimiter(limit=20, period=30)
 @decorators.log_execution
 async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render a paginated list of federation bans for the checked user."""
     q = update.callback_query
     _, target_id_str, page_str = q.data.split(":")
     target_id = int(target_id_str)
@@ -320,6 +322,7 @@ async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.ratelimiter(limit=20, period=30)
 @decorators.log_execution
 async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render the full detail view for a single federation ban record."""
     q = update.callback_query
     _, target_id_str, ban_id = q.data.split(":", 2)
     target_id = int(target_id_str)
@@ -332,6 +335,7 @@ async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 @decorators.ratelimiter(limit=20, period=30)
 @decorators.log_execution
 async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render the per-group warning summary for the checked user."""
     q = update.callback_query
     target_id = int(q.data.split(":", 1)[1])
     _, (text, kb) = await asyncio.gather(q.answer(), Check.warns_by_group(target_id))
@@ -341,6 +345,7 @@ async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 @decorators.ratelimiter(limit=20, period=30)
 @decorators.log_execution
 async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render a paginated list of warnings for the checked user in a specific group."""
     q = update.callback_query
     _, target_id_str, chat_id_str, page_str = q.data.split(":")
     target_id = int(target_id_str)
@@ -355,6 +360,7 @@ async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
 @decorators.ratelimiter(limit=20, period=30)
 @decorators.log_execution
 async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render a paginated list of kick records for the checked user."""
     q = update.callback_query
     _, target_id_str, page_str = q.data.split(":")
     target_id = int(target_id_str)
@@ -366,6 +372,7 @@ async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 @decorators.ratelimiter(limit=20, period=30)
 @decorators.log_execution
 async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render a paginated list of mute records for the checked user."""
     q = update.callback_query
     _, target_id_str, page_str = q.data.split(":")
     target_id = int(target_id_str)
@@ -377,6 +384,7 @@ async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 @decorators.ratelimiter(limit=20, period=30)
 @decorators.log_execution
 async def on_check_appeals(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render a paginated list of appeal records for the checked user."""
     q = update.callback_query
     _, target_id_str, page_str = q.data.split(":")
     target_id = int(target_id_str)

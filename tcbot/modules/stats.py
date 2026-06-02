@@ -90,6 +90,7 @@ async def _ack_and_render(q, text: str, kb) -> None:
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_stats_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render the top-level stats menu."""
     q = update.callback_query
     text, kb = await Stats.main()
     await _ack_and_render(q, text, kb)
@@ -98,6 +99,7 @@ async def on_stats_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render the current staff roster page."""
     q = update.callback_query
     text, kb = await Stats.staff_roster()
     await _ack_and_render(q, text, kb)
@@ -106,6 +108,7 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render a paginated list of cached users."""
     q = update.callback_query
     page = int(q.data.split(":")[1])
     text, kb = await Stats.users_list(page)
@@ -115,6 +118,7 @@ async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_stats_user_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render the detail view for a single cached user entry."""
     q = update.callback_query
     _, page_str, idx_str = q.data.split(":")
     text, kb = await Stats.user_detail(int(page_str), int(idx_str))
@@ -124,6 +128,7 @@ async def on_stats_user_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render a paginated list of connected groups."""
     q = update.callback_query
     page = int(q.data.split(":")[1])
     text, kb = await Stats.chats_list(page)
@@ -133,6 +138,7 @@ async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_stats_chat_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render the detail view for a single connected group entry."""
     q = update.callback_query
     _, page_str, idx_str = q.data.split(":")
     text, kb = await Stats.chat_detail(int(page_str), int(idx_str))
@@ -142,6 +148,7 @@ async def on_stats_chat_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render a paginated ban-list page and clear any active search state."""
     q = update.callback_query
     page = int(q.data.split(":")[1])
     Stats.clear_search(ctx)
@@ -152,6 +159,7 @@ async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render the detail view for a single ban entry from the stats list."""
     q = update.callback_query
     _, page_str, idx_str = q.data.split(":")
     text, kb = await Stats.ban_detail(int(page_str), int(idx_str))
@@ -164,6 +172,7 @@ async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_stats_bans_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Open the user search prompt within the stats ban view."""
     q = update.callback_query
     text, kb = Stats.open_search(ctx, q)
     await _ack_and_render(q, text, kb)
@@ -207,6 +216,7 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render the detail view for a search result selected by the user."""
     q = update.callback_query
     idx = int(q.data.split(":")[1])
     results = ctx.user_data.get(RESULTS_KEY, []) if ctx.user_data else []
@@ -217,6 +227,7 @@ async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Return to search results (or the open-search prompt) without re-running the query."""
     q = update.callback_query
     results = ctx.user_data.get(RESULTS_KEY, []) if ctx.user_data else []
     if not results:
@@ -235,6 +246,7 @@ async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
 async def on_stats_search_cancel(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE
 ) -> None:
+    """Clear the active search and return to the first page of the ban list."""
     q = update.callback_query
     Stats.clear_search(ctx)
     text, kb = await Stats.bans_list(0)

@@ -154,6 +154,7 @@ class _PrefixedCommandFilter(filters.MessageFilter):
         self.prefixes = prefixes
 
     def filter(self, message: Message) -> bool:
+        """Return True when the message matches this filter's specific command."""
         text = message.text or ""
         parsed = _parse_prefixed_command(
             text,
@@ -171,6 +172,7 @@ class _AnyPrefixedCommandFilter(filters.MessageFilter):
         self.prefixes = prefixes
 
     def filter(self, message: Message) -> bool:
+        """Return True when the message is any valid prefixed command."""
         text = message.text or ""
         return (
             _parse_prefixed_command(

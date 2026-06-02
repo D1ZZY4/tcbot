@@ -74,6 +74,7 @@ def _render(groups: list[GroupDoc], detailed: bool) -> str:
 @decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
 async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Reply with a paginated list of all currently active connected groups."""
     groups = await db.groups_db.active_groups()
     if not groups:
         await update.effective_message.reply_text(

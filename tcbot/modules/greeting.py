@@ -61,6 +61,7 @@ async def _handle_member(member, msg, chat, bot) -> None:
 
 @decorators.log_execution
 async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Greet every new member that joins the main or exec group."""
     msg = update.effective_message
     chat = update.effective_chat
 
@@ -75,6 +76,7 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 @decorators.log_execution
 async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Announce when a non-bot member leaves the main or exec group."""
     msg = update.effective_message
     chat = update.effective_chat
 

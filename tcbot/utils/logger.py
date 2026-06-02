@@ -93,6 +93,7 @@ class TelegramErrorHandler(logging.Handler):
         super().__init__(logging.ERROR)
 
     def emit(self, record: logging.LogRecord) -> None:
+        """Schedule an async Telegram error report for the given log record."""
         if any(record.name.startswith(p) for p in _SUPPRESS_PREFIXES):
             return
         try:

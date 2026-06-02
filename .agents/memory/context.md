@@ -5,13 +5,13 @@ description: Current state of TCF Bot project — what is done, in progress, and
 
 # TCF Bot — Current Context
 
-**Last updated:** 2026-06-02 (session 2)
+**Last updated:** 2026-06-02 (session 3 — continued)
 
 ## What is done
 
 - Python 3.12, uv, python-telegram-bot 22.5, Motor/MongoDB stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
-- 1005 tests across 66 test files; full suite passes offline with 0 warnings.
+- 1039 tests across 69 test files; full suite passes offline with 0 warnings.
 - `python -m ruff format .` and `python -m ruff check .` both clean (138 files formatted).
 - All P1/P2/P3 backlog items resolved (ConversationHandler tests, pagination NameError, composite indexes, asyncio.gather conversions, shared replies.py, em-dash removal, cache TTL constants, keyboards.py dead code).
 - `docs/mapping.md` updated: added `identity.py`, `replies.py` to helper section; added `pagination.py` to utils section.
@@ -39,6 +39,18 @@ description: Current state of TCF Bot project — what is done, in progress, and
   functions 30+ lines long.
 - Comprehensive source audit (session 2): no emoji, no em-dash, no emoticons; all typing imports
   are appropriate built-in or stdlib; no blocking I/O; no hardcoded timeouts beyond named constants.
+
+- 3 more test files added (session 3 continued): `test_alive.py` (5 tests),
+  `test_documents.py` (17 tests), `test_types.py` (12 tests). Suite: 966 → 1039 / 65 → 69 files.
+- Stale test counts (1005/66 → 1039/69) updated in PLAN.md (×2), README.md (×2),
+  replit.md, AGENTS.md.
+- Docstrings batch 1 (14 functions, 10+ lines), batch 2 (22 functions, 5-9 lines),
+  batch 3 (13 functions, 3-4 lines): AST audit now reports 0 public functions of 3+ lines
+  missing a docstring across the entire tcbot/ package.
+- Class docstrings: 10 public TypedDict classes in documents.py now have docstrings.
+  AST audit reports 0 public classes missing a docstring across the entire tcbot/ package.
+- CHANGELOG.md updated with all session 3 work (3 test file entries + 3 docstring batch
+  entries + class docstring entry).
 
 ## What is in progress
 

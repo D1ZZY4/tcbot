@@ -33,6 +33,7 @@ __additional_msg__ = (
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_additional_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render the Additional Info page when the button is tapped."""
     q: CallbackQuery = update.callback_query
     await asyncio.gather(
         q.answer(),

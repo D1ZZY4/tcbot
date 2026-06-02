@@ -63,6 +63,7 @@ _PRIVACY_POLICY_MSG = (
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_privacy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render the data-collection privacy notice when the Privacy button is tapped."""
     q: CallbackQuery = update.callback_query
     botname = ctx.bot.first_name or "This bot"
     await asyncio.gather(
@@ -80,6 +81,7 @@ async def on_privacy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 async def on_privacy_policy_menu(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE
 ) -> None:
+    """Render the full privacy policy text when the Privacy Policy button is tapped."""
     q: CallbackQuery = update.callback_query
     botname = ctx.bot.first_name or "This bot"
     await asyncio.gather(

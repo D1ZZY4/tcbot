@@ -36,6 +36,7 @@ __about_msg__ = (
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_about_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render the About page when the About button is tapped."""
     q: CallbackQuery = update.callback_query
     await asyncio.gather(
         q.answer(),

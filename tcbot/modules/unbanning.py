@@ -67,6 +67,7 @@ __help_sections__: list[tuple[str, str]] = [
 @decorators.mod_only
 @decorators.log_execution
 async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Lift the federation ban on a target user after identity and refusal checks."""
     msg = update.effective_message
     admin = update.effective_user
     args = parse_cmd_args(msg.text)

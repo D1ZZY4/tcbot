@@ -121,8 +121,11 @@ def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
     def decorator(
         func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R]],
     ) -> Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R | None]]:
+        """Wrap ``func`` with a sliding-window per-user rate check."""
+
         @functools.wraps(func)
         async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> R | None:
+            """Block the call and notify the user if the rate limit is exceeded."""
             uid = update.effective_user.id if update.effective_user else None
             if uid:
                 wait = _limiter.check(uid)
@@ -161,6 +164,7 @@ def log_execution(
 
     @functools.wraps(func)
     async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> R:
+        """Emit entry, exit, and exception traces at DEBUG level around ``func``."""
         uid = update.effective_user.id if update.effective_user else "?"
         name = func.__name__
         t0 = time.monotonic()
@@ -193,6 +197,7 @@ def owner_only(func: Callable) -> Callable:
 
     @functools.wraps(func)
     async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Allow the call only when the invoking user is the Founder."""
         uid = update.effective_user.id if update.effective_user else None
         if uid and await db.users_roles.is_owner(uid):
             return await func(update, ctx)
@@ -207,6 +212,7 @@ def staff_only(func: Callable) -> Callable:
 
     @functools.wraps(func)
     async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Allow the call only when the invoking user is Founder or Admin."""
         uid = update.effective_user.id if update.effective_user else None
         if uid and await db.users_roles.is_staff(uid):
             return await func(update, ctx)
@@ -221,6 +227,7 @@ def mod_only(func: Callable) -> Callable:
 
     @functools.wraps(func)
     async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Allow the call only when the invoking user holds Developer rank or above."""
         uid = update.effective_user.id if update.effective_user else None
         if uid and db.users_roles.role_rank(
             await db.users_roles.get_effective_role(uid)
@@ -237,6 +244,7 @@ def basic_mod_only(func: Callable) -> Callable:
 
     @functools.wraps(func)
     async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Allow the call only when the invoking user holds Tester rank or above."""
         uid = update.effective_user.id if update.effective_user else None
         if uid and db.users_roles.role_rank(
             await db.users_roles.get_effective_role(uid)

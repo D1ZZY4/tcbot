@@ -92,6 +92,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_back_to_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Return to the main menu when the Back button is tapped in a sub-menu."""
     q: CallbackQuery = update.callback_query
     botname = ctx.bot.first_name
     await asyncio.gather(
@@ -131,6 +132,7 @@ async def on_menu_groups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 async def on_menu_groups_details(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE
 ) -> None:
+    """Show the connected-groups list with full group IDs visible."""
     await _show_groups(update.callback_query, True)
 
 

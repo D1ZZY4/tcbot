@@ -16,6 +16,7 @@ def chat_id_to_link_id(chat_id: int) -> str:
 
 
 def message_link(chat_id: int, message_id: int, thread_id: int | None = None) -> str:
+    """Build a ``t.me/c/`` deep link to a specific message, optionally in a thread."""
     cid = chat_id_to_link_id(chat_id)
     if thread_id:
         return f"https://t.me/c/{cid}/{message_id}?thread={thread_id}"

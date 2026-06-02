@@ -246,6 +246,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
 async def on_promote_role_cancel(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE
 ) -> None:
+    """Acknowledge the cancel button and replace the role-selection prompt with a cancellation notice."""
     q = update.callback_query
     await asyncio.gather(
         q.answer(),
@@ -372,6 +373,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 @decorators.ratelimiter(limit=10, period=30)
 @decorators.log_execution
 async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Acknowledge the cancel button and collapse the demotion confirmation prompt."""
     q = update.callback_query
     await asyncio.gather(
         q.answer(),
@@ -482,6 +484,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Reply with a formatted list of all pending promotion requests."""
     pending = await db.queues_db.all_pending()
     if not pending:
         await update.effective_message.reply_text(_MSG_NO_PENDING)
