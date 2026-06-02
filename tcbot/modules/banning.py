@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Federation ban command entry point – validates permissions and starts the ban flow."""
+"""Federation ban command entry point: validates permissions and starts the ban flow."""
 
 from __future__ import annotations
 
@@ -100,7 +100,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         await msg.reply_text("A reason is required - /tcban <target> <reason>.")
         return ConversationHandler.END
 
-    # * Identity check + role lookup happen in parallel — both depend only on
+    # * Identity check + role lookup happen in parallel; both depend only on
     # * already-resolved IDs so there is no need to wait for them sequentially.
     ident, (executor_role, target_role) = await asyncio.gather(
         identity.classify(ctx.bot, admin.id, target_id, target_fname),

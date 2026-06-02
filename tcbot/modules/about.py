@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""About callback – shows the community description from the start menu."""
+"""About callback: shows the community description from the start menu."""
 
 from __future__ import annotations
 

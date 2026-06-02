@@ -1,4 +1,4 @@
-# Development Workflow — TCF Bot
+# Development Workflow: TCF Bot
 
 Read [`CLAUDE.md`](CLAUDE.md) first. This file describes the safe working process for changes in TCF Bot. For project rules, see [`RULES.md`](RULES.md). For testing and validation, see [`TEST-RUFF.md`](TEST-RUFF.md). For commit conventions, see [`../docs/git-commit.md`](../docs/git-commit.md). For CI/CD automation, see [`../docs/workflows-guide.md`](../docs/workflows-guide.md).
 

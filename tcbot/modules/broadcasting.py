@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Broadcast command handler – sends a message to all connected groups."""
+"""Broadcast command handler: sends a message to all connected groups."""
 
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ __help_sections__: list[tuple[str, str]] = [
     (
         "Examples",
         "<code>/tcbroadcast Reminder: please review the community rules.</code>\n"
-        "<code>/bc &lt;b&gt;Event tonight&lt;/b&gt; — join us at 8 PM UTC.</code>\n"
+        "<code>/bc &lt;b&gt;Event tonight&lt;/b&gt; (join us at 8 PM UTC).</code>\n"
         "Or reply to any message and run <code>/bc</code> to forward it to all groups.",
     ),
 ]

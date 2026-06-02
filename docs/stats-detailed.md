@@ -19,7 +19,7 @@ flowchart TD
 
 ## Purpose
 
-`/tcstats` is the federation's read-only situational awareness console. A single inline keyboard fans out into four drill-down panes — Staff Roster, Users, Connected Chats, User Bans — plus a search panel for active bans. Every pane returns to the same overview through a `« Back` button.
+`/tcstats` is the federation's read-only situational awareness console. A single inline keyboard fans out into four drill-down panes (Staff Roster, Users, Connected Chats, User Bans) plus a search panel for active bans. Every pane returns to the same overview through a `« Back` button.
 
 Aliases:
 
@@ -59,7 +59,7 @@ Every counter and the Founder mention are fetched in a single `asyncio.gather` s
 
 ### Staff Roster (`stats_admins`)
 
-`Stats.staff_roster()` lists every staff member, grouped by role. Names are resolved in a single parallel pass for the whole roster — owner first, then each role section.
+`Stats.staff_roster()` lists every staff member, grouped by role. Names are resolved in a single parallel pass for the whole roster: owner first, then each role section.
 
 ```text
 Staff Roster - <community>
@@ -125,7 +125,7 @@ Date: <utc>
 
 Results are rendered with a numbered keyboard. Each hit opens `Stats.search_detail`, which reuses `build_ban_detail` and offers `View Proof` plus `Back to Results`.
 
-The free-text input handler is scoped to private chats and only fires while the search panel is active — it ignores every other text message.
+The free-text input handler is scoped to private chats and only fires while the search panel is active; it ignores every other text message.
 
 ## Class architecture
 
@@ -175,9 +175,9 @@ Every list view that needs more than one read parallelises with `asyncio.gather`
 
 ## Edge cases
 
-- A user with no cached profile renders as `User <id>` in every list — never as a bare numeric ID.
+- A user with no cached profile renders as `User <id>` in every list, never as a bare numeric ID.
 - An empty roster ("None assigned") never crashes pagination because the user/chat/ban lists have their own empty-state branch.
-- Re-tapping the same drill-down does not raise — `safe_edit_cb` swallows the `Message is not modified` `BadRequest`.
+- Re-tapping the same drill-down does not raise; `safe_edit_cb` swallows the `Message is not modified` `BadRequest`.
 - The search input handler is private-chat only and gated by `SEARCH_KEY`; it never absorbs unrelated group messages.
 - `Stats.clear_search(ctx)` is called whenever the user navigates away from the bans panel so stale results never leak into a new search.
 

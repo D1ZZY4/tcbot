@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Group disconnect handlers – removes a group from the federation."""
+"""Group disconnect handlers: removes a group from the federation."""
 
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ __help_sections__: list[tuple[str, str]] = [
     (
         "Examples",
         "Run <code>/tcdisconnect</code> inside the group to disconnect it.\n"
-        "<code>/rmtc -1001234567890</code> — force-remove a group by chat ID.",
+        "<code>/rmtc -1001234567890</code>: force-remove a group by chat ID.",
     ),
 ]
 

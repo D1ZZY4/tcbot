@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""``/tcstats`` command and callback handlers — federation-wide overview and drill-downs."""
+"""``/tcstats`` command and callback handlers: federation-wide overview and drill-downs."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
 
 __module_name__ = "Stats"
 __help_text__ = (
-    "Live federation overview — Founder, staff, users, active bans, and "
+    "Live federation overview: Founder, staff, users, active bans, and "
     "connected groups, with drill-down menus for every section."
 )
 
@@ -37,7 +37,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Who can use",
-        "Anyone — no special permissions needed.",
+        "Anyone, no special permissions needed.",
     ),
     (
         "Where to use",
@@ -51,13 +51,13 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Drill-downs",
-        "<b>Staff Roster</b> — Founder, Admins, Developers, Testers, all listed "
+        "<b>Staff Roster</b>: Founder, Admins, Developers, Testers, all listed "
         "with mentions.\n"
-        "<b>Users</b> — paginated list of every cached user. Numbered buttons "
+        "<b>Users</b>: paginated list of every cached user. Numbered buttons "
         "open a per-user detail card.\n"
-        "<b>Connected Chats</b> — paginated list of every active group; "
+        "<b>Connected Chats</b>: paginated list of every active group; "
         "drill-in shows owner, ID, and connect date.\n"
-        "<b>User Bans</b> — paginated list of every active ban with a "
+        "<b>User Bans</b>: paginated list of every active ban with a "
         "<b>Search</b> shortcut to look up a user by name or ID.\n\n"
         "Every view ends with a <b>« Back</b> button to the main summary.",
     ),
@@ -173,7 +173,7 @@ async def on_stats_bans_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Free-text query message handler — only reacts when the search panel is active."""
+    """Free-text query message handler; only reacts when the search panel is active."""
     if ctx.user_data is None or not ctx.user_data.get(SEARCH_KEY):
         return
     ctx.user_data.pop(SEARCH_KEY, None)

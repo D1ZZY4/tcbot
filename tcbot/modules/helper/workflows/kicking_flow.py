@@ -21,7 +21,7 @@ from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modact
 
 log = logging.getLogger(__name__)
 
-# * Per-action BuildReason and BuildProof instances — imported by kicking.py
+# * Per-action BuildReason and BuildProof instances; imported by kicking.py
 reason = BuildReason("kick")
 proof = BuildProof("kick")
 

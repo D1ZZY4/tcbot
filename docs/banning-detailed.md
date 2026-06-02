@@ -262,7 +262,7 @@ If the ban is inactive when details are requested, the callback alert says the b
 
 ## `/check` behavior
 
-`/check` (alias `/c`) builds a comprehensive federation profile for any target — identity (mention, ID, username), role and assignment metadata, active ban, ban history, warnings by group, kicks, mutes, and appeals. Each section opens a drill-down inline keyboard so staff can inspect every record individually.
+`/check` (alias `/c`) builds a comprehensive federation profile for any target: identity (mention, ID, username), role and assignment metadata, active ban, ban history, warnings by group, kicks, mutes, and appeals. Each section opens a drill-down inline keyboard so staff can inspect every record individually.
 
 The target is resolved by reply, user ID, or resolvable username.
 

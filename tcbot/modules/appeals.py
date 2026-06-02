@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Appeal handlers – routes incoming appeals and admin review decisions."""
+"""Appeal handlers: routes incoming appeals and admin review decisions."""
 
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ __help_sections__: list[tuple[str, str]] = [
     (
         "What happens next",
         "Your appeal is forwarded to TC admins for review. The admin who issued the original "
-        "ban has a <b>12-hour priority window</b> to respond — after that, any admin can act.\n\n"
+        "ban has a <b>12-hour priority window</b> to respond; after that, any admin can act.\n\n"
         "If approved → your ban is lifted immediately across all connected groups.\n"
         "If rejected → your ban remains in place.\n"
         "You will be notified by the bot either way.",

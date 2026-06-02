@@ -12,24 +12,24 @@ Every new conversation in this repository must start by reading the canonical re
 
 **Read at the start of every conversation:**
 
-- [`.agents/CLAUDE.md`](.agents/CLAUDE.md) — canonical AI-agent reference
-- [`.agents/RULES.md`](.agents/RULES.md) — hard constraints
+- [`.agents/CLAUDE.md`](.agents/CLAUDE.md): canonical AI-agent reference
+- [`.agents/RULES.md`](.agents/RULES.md): hard constraints
 - [`AGENTS.md`](AGENTS.md) (this file), [`PLAN.md`](PLAN.md), [`CHANGELOG.md`](CHANGELOG.md)
 - The relevant subset of [`.agents/`](.agents/), [`.agents/agents/`](.agents/agents/), [`.agents/skills/`](.agents/skills/), [`docs/`](docs/), and project-root docs for the task
 
 **Update in the same turn after every change:**
 
-- [`CHANGELOG.md`](CHANGELOG.md) — entry under `[Unreleased]` (Added / Changed / Fixed / Removed / Documentation)
-- [`PLAN.md`](PLAN.md) — when runtime, project state, priorities, or test counts change
+- [`CHANGELOG.md`](CHANGELOG.md): entry under `[Unreleased]` (Added / Changed / Fixed / Removed / Documentation)
+- [`PLAN.md`](PLAN.md): when runtime, project state, priorities, or test counts change
 - Every related `docs/*.md`, `.agents/*.md`, [`README.md`](README.md), [`replit.md`](replit.md) whose content is now stale
 
 See [`.agents/CLAUDE.md`](.agents/CLAUDE.md#mandatory-read-these-files-before-any-work) for the complete read/update tables. Skipping either step is a defect of the same severity as a failing test.
 
 ## Skills and Sub-Agents Policy
 
-**Skills in `.agents/skills/` auto-invoke whenever their trigger matches** — no need for the user to ask. If you are about to write code in `tcbot/`, invoke [`project-policy`](.agents/skills/project-policy/SKILL.md). If you are about to edit docs, invoke [`docs-maintainer`](.agents/skills/docs-maintainer/SKILL.md). Same for `telegram-bot-builder`, `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `runtime-debugger`, `feature-reviewer`, `general-sub-agent`. Compose multiple skills when one task spans multiple areas.
+**Skills in `.agents/skills/` auto-invoke whenever their trigger matches**: no need for the user to ask. If you are about to write code in `tcbot/`, invoke [`project-policy`](.agents/skills/project-policy/SKILL.md). If you are about to edit docs, invoke [`docs-maintainer`](.agents/skills/docs-maintainer/SKILL.md). Same for `telegram-bot-builder`, `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `runtime-debugger`, `feature-reviewer`, `general-sub-agent`. Compose multiple skills when one task spans multiple areas.
 
-**Sub-agents in `.agents/agents/` are expensive and used sparingly.** Default to doing the work yourself in the main agent. Only delegate to a sub-agent when the task is large, the scopes are genuinely independent, and the parallelism justifies the token cost — sub-agents can drift off-task, so prefer one focused main agent over a noisy sub-agent fleet.
+**Sub-agents in `.agents/agents/` are expensive and used sparingly.** Default to doing the work yourself in the main agent. Only delegate to a sub-agent when the task is large, the scopes are genuinely independent, and the parallelism justifies the token cost; sub-agents can drift off-task, so prefer one focused main agent over a noisy sub-agent fleet.
 
 ## Project Overview
 
@@ -137,22 +137,22 @@ Configuration is loaded from environment variables. For local development, `pyth
 
 Never commit real credentials. Required secret values include:
 
-- `BOT_TOKEN` — Telegram bot token from BotFather.
-- `MONGODB_URI` — MongoDB connection string.
+- `BOT_TOKEN`: Telegram bot token from BotFather.
+- `MONGODB_URI`: MongoDB connection string.
 
 Important non-secret/runtime variables include:
 
-- `OWNER_ID` — initial federation founder Telegram user ID.
-- `DB_NAME` — MongoDB database name, default `tcbot`.
-- `COMMUNITY_NAME` — display name used in bot messages and logs.
-- `PREFIXES` — command prefix list, default `['/', '!', '.']`.
-- `PORT` — Flask keep-alive port, default `5000`; invalid or out-of-range values fall back to `5000`.
-- `MAIN_GROUP`, `MAIN_CHANNEL`, `EXTEND_GROUP` — community chat IDs.
-- `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS` — log/proof/appeal destinations; values may be `chat_id` or `chat_id/thread_id`.
-- `APPEAL_DISCUSSION_TOPIC` — thread ID in `MAIN_GROUP` for appeal review cards.
-- `PROOF_TIMEOUT_SECONDS`, `APPEAL_TIMEOUT_SECONDS`, `ALBUM_DEBOUNCE_SECONDS` — conversation timing settings.
-- `LOG_LEVEL` — bot log level.
-- `MODULES_LOAD`, `MODULES_NO_LOAD` — optional module allowlist/denylist.
+- `OWNER_ID`: initial federation founder Telegram user ID.
+- `DB_NAME`: MongoDB database name, default `tcbot`.
+- `COMMUNITY_NAME`: display name used in bot messages and logs.
+- `PREFIXES`: command prefix list, default `['/', '!', '.']`.
+- `PORT`: Flask keep-alive port, default `5000`; invalid or out-of-range values fall back to `5000`.
+- `MAIN_GROUP`, `MAIN_CHANNEL`, `EXTEND_GROUP`: community chat IDs.
+- `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`: log/proof/appeal destinations; values may be `chat_id` or `chat_id/thread_id`.
+- `APPEAL_DISCUSSION_TOPIC`: thread ID in `MAIN_GROUP` for appeal review cards.
+- `PROOF_TIMEOUT_SECONDS`, `APPEAL_TIMEOUT_SECONDS`, `ALBUM_DEBOUNCE_SECONDS`: conversation timing settings.
+- `LOG_LEVEL`: bot log level.
+- `MODULES_LOAD`, `MODULES_NO_LOAD`: optional module allowlist/denylist.
 
 Use `config.env.example` as the complete template.
 

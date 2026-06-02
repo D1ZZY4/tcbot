@@ -23,24 +23,24 @@ flowchart TD
 
 Demotion removes a federation role from a user. Three callers reach the same `Demote.execute` method:
 
-1. `/tcdemote` — manual demotion by Founder or Admin.
-2. Ban entry handler (`/tcban`) — auto-demote a role-holding target before the federation ban.
-3. Kick entry handler (`/tckick`) — auto-demote a role-holding target before the per-group kick.
+1. `/tcdemote`: manual demotion by Founder or Admin.
+2. Ban entry handler (`/tcban`): auto-demote a role-holding target before the federation ban.
+3. Kick entry handler (`/tckick`): auto-demote a role-holding target before the per-group kick.
 
-The same log format is emitted in every case — there is no separate "Auto-Demote" template.
+The same log format is emitted in every case; there is no separate "Auto-Demote" template.
 
 ## Command surface
 
 - `/tcdemote <target>` (alias: `/tcd`)
 - Confirmation buttons: `Confirm`, `Cancel` (from `keyboards.demote_confirm_kb`).
 
-The target is resolved by `extraction.extract_target` — reply, user ID, or `@username`.
+The target is resolved by `extraction.extract_target`: reply, user ID, or `@username`.
 
 | Who | Targets they can demote |
 |---|---|
 | Founder | Admin / Developer / Tester |
 | Admin | Developer / Tester only |
-| Developer / Tester / no-role | — (rejected by `@staff_only`) |
+| Developer / Tester / no-role | N/A (rejected by `@staff_only`) |
 
 Founder is never demotable through this flow; ownership transfer uses `/transferowner`.
 
@@ -68,7 +68,7 @@ The `trigger` parameter controls only the DM body wording:
 - `trigger="ban"`: `Your <Role> role in <community> has been removed - you were banned from the federation.`
 - `trigger="kick"`: `Your <Role> role in <community> has been removed - you were kicked from the federation.`
 
-The federation log emitted by `parse_logmsg.demoted` is identical in every case — `trigger` is accepted in the signature for caller API compatibility but ignored in the rendered output.
+The federation log emitted by `parse_logmsg.demoted` is identical in every case; `trigger` is accepted in the signature for caller API compatibility but ignored in the rendered output.
 
 ## Manual demotion flow (`/tcdemote`)
 
@@ -90,7 +90,7 @@ Callback data: `demote_confirm:<target_id>` and `demote_cancel:<target_id>`.
 3. Re-applies the Admin-only-Founder rule.
 4. Calls `Demote.execute(ctx.bot, target_id, target_fname, target_role, admin.id, admin.first_name, trigger=None)`.
 5. On a successful removal, edits the confirmation message to `Done. <mention> - <code id> has been removed from <Role>.` and clears the keyboard.
-6. If `Demote.execute` returns False (nothing was removed — the record was cleared by another path), edits to `Couldn't remove the role - it may have already been cleared.`
+6. If `Demote.execute` returns False (nothing was removed; the record was cleared by another path), edits to `Couldn't remove the role - it may have already been cleared.`
 
 `on_demote_cancel` simply answers the callback and edits the message to say no changes were made.
 
@@ -111,7 +111,7 @@ if target_role:
     )
 ```
 
-Auto-demote is also invoked by `warning_flow.execute_warn` when a warn-limit auto-ban is about to fire and the warned user happens to hold a federation role (an edge case — staff should not normally accumulate warnings).
+Auto-demote is also invoked by `warning_flow.execute_warn` when a warn-limit auto-ban is about to fire and the warned user happens to hold a federation role (an edge case; staff should not normally accumulate warnings).
 
 ## Permission matrix
 
@@ -121,7 +121,7 @@ The combined effect of `@staff_only` on `cmd_demote` plus the Admin-only-Founder
 |---|---|---|
 | Founder | Yes | Yes |
 | Admin | No (Founder only) | Yes |
-| Developer / Tester / no-role | — | — |
+| Developer / Tester / no-role | N/A | N/A |
 
 ## Logs
 
@@ -140,21 +140,21 @@ ID: <id>
 Date: <utc>
 ```
 
-No `Auto-Demote` title, no `Trigger:` field — auto-paths look identical to manual demotion in the log channel. The next federation log entry (the ban or kick that triggered the auto-demote) provides the surrounding context.
+No `Auto-Demote` title, no `Trigger:` field; auto-paths look identical to manual demotion in the log channel. The next federation log entry (the ban or kick that triggered the auto-demote) provides the surrounding context.
 
 ## DB writes
 
 `Demote.remove_role` is the single point where the database is mutated:
 
-- `users_roles.remove_admin(target_id)` for Admin targets — deletes from `tc_admins`.
-- `users_roles.remove_role(target_id)` for Developer/Tester targets — deletes from `tc_roles`.
+- `users_roles.remove_admin(target_id)` for Admin targets: deletes from `tc_admins`.
+- `users_roles.remove_role(target_id)` for Developer/Tester targets: deletes from `tc_roles`.
 
 Both helpers invalidate the affected user's entry in `effective_role_cache` so the next role read returns the post-demote state.
 
 ## Edge cases
 
 - If the target's role record was already gone by the time the callback fires, `Demote.execute` returns False and the caller surfaces a friendly message.
-- DM and log channel sends are wrapped in `asyncio.gather(..., return_exceptions=True)` — a failed DM does not roll back the role removal.
+- DM and log channel sends are wrapped in `asyncio.gather(..., return_exceptions=True)`; a failed DM does not roll back the role removal.
 - Self-demotion is rejected by `cmd_demote` (`Can't demote yourself - ask a higher-up if needed.`).
 - Founder demotion is rejected at the role check (`That user doesn't hold a role that can be removed.`).
 - Auto-demote is best-effort: a failure inside `warning_flow.execute_warn` is logged via `log.error` but never aborts the surrounding action.

@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""tcgroups command handler – lists all connected federation groups."""
+"""tcgroups command handler: lists all connected federation groups."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Who can use",
-        "Anyone — no special permissions needed.",
+        "Anyone, no special permissions needed.",
     ),
     (
         "Where to use",

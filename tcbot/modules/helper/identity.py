@@ -2,12 +2,12 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Identity helpers — classify a user (self / bot / Telegram / Founder / staff / regular)
+"""Identity helpers: classify a user (self / bot / Telegram / Founder / staff / regular)
 and produce friendly, identity-aware replies for moderation commands.
 
-The bot voice is professional + friendly with light, dry humour. Plain text only —
-text emoticons like ``:)``, ``:v``, ``:')`` are allowed sparingly; pictograph emoji
-are not. One short witty line per identity is enough — no exclamation cascades.
+The bot voice is professional, friendly, and formal with light dry humour. Plain text
+only; no pictograph emoji, no text emoticons. One short witty line per identity is
+enough; no exclamation cascades.
 """
 
 from __future__ import annotations
@@ -89,7 +89,7 @@ async def classify(
     Notes
     -----
     Role resolution uses the cached :func:`get_effective_role` so this stays
-    cheap — every code path that calls ``classify`` already has the user's
+    cheap; every code path that calls ``classify`` already has the user's
     profile resolved upstream, so the only async hit is the role cache.
     """
     # Optimized: fetch only first_name and username, not full document
@@ -133,12 +133,12 @@ def _line(ident: Identity) -> str:
 
 # ────────────────── Per-action witty refusals ───────────────────── #
 # * Each map covers identities that should *not* be acted on. ``user`` and
-# * lower-rank staff are never returned here — those go through the normal
+# * lower-rank staff are never returned here; those go through the normal
 # * moderation flow. The reply is one short professional-but-friendly line.
 
 _BAN_REFUSE: dict[IdentityKind, str] = {
-    "self": "Self-ban? Creative, but no - federation needs you :v",
-    "this_bot": "I keep this place running. Banning me is a no-go :)",
+    "self": "Self-ban? Creative, but no. Federation needs you here.",
+    "this_bot": "I keep this place running. Banning me is a no-go.",
     "telegram": "Telegram itself? Bold move. Not happening.",
     "founder": "{line} runs the place, can't ban them through here.",
     "admin": "{line} is an Admin. Demote them first if you really mean it.",
@@ -147,8 +147,8 @@ _BAN_REFUSE: dict[IdentityKind, str] = {
 }
 
 _KICK_REFUSE: dict[IdentityKind, str] = {
-    "self": "Kicking yourself? Just leave the group instead :v",
-    "this_bot": "Kick me? I run this place :)",
+    "self": "Kicking yourself? Just leave the group instead.",
+    "this_bot": "Kick me? I run this place.",
     "telegram": "Pretty sure I can't kick Telegram from its own group.",
     "founder": "{line} runs the place, not getting kicked here.",
     "admin": "{line} is an Admin. Demote them first if you really mean it.",
@@ -157,23 +157,23 @@ _KICK_REFUSE: dict[IdentityKind, str] = {
 }
 
 _MUTE_REFUSE: dict[IdentityKind, str] = {
-    "self": "Mute yourself? That's not how this works :v",
+    "self": "Mute yourself? That's not how this works.",
     "this_bot": "Muting me won't do much - I don't message on my own anyway.",
     "telegram": "Telegram service messages aren't muteable from here.",
-    "founder": "{line} runs the place, mute button doesn't apply :')",
+    "founder": "{line} runs the place, mute button doesn't apply.",
     "admin": "{line} is an Admin. Demote them first if you really mean it.",
     "developer": "{line} is a Developer. Demote them before you mute.",
     "tester": "{line} is a Tester. Demote them before you mute.",
 }
 
 _WARN_REFUSE: dict[IdentityKind, str] = {
-    "self": "Self-warning is just journaling :v",
+    "self": "Self-warning is just journaling. Ask a mod if needed.",
     "this_bot": "Warn me? I'm the one tracking warnings around here.",
     "telegram": "Telegram doesn't take warnings, sorry.",
 }
 
 _UNBAN_REFUSE: dict[IdentityKind, str] = {
-    "self": "Can't unban yourself :v use /checkme and submit an appeal instead.",
+    "self": "Can't unban yourself. Use /checkme and submit an appeal instead.",
     "this_bot": "{line} - I manage the bans, not collect them.",
     "telegram": "Telegram was never on the ban list anyway.",
     "founder": "{line} - never been banned, nothing to undo.",
@@ -186,34 +186,34 @@ _UNMUTE_REFUSE: dict[IdentityKind, str] = {
     "self": "Can't unmute yourself - ask a mod.",
     "this_bot": "{line} - bots aren't muteable, nothing to undo.",
     "telegram": "Telegram service was never muted.",
-    "founder": "{line} - definitely not muted :)",
+    "founder": "{line} - definitely not muted.",
 }
 
 _PROMOTE_REFUSE: dict[IdentityKind, str] = {
-    "self": "Promoting yourself? Nice try - the hierarchy doesn't bend for that :v",
+    "self": "Promoting yourself? Nice try, the hierarchy doesn't bend for that.",
     "this_bot": "Already running things, no role needed.",
     "telegram": "Telegram doing fine without a role here.",
     "other_bot": "Other bots can't hold federation roles - humans only.",
-    "founder": "{line} already runs the place - promoting them is a circular move :v",
+    "founder": "{line} already runs the place, promoting them is a circular move.",
     "admin": "{line} is already an Admin. Use /tcpromote for a different role.",
 }
 
 _DEMOTE_REFUSE: dict[IdentityKind, str] = {
     "self": "Demoting yourself? Bold. Ask a higher-up if you really mean it.",
-    "this_bot": "No role to lose here :)",
+    "this_bot": "No role to lose here.",
     "telegram": "Telegram has no role to take.",
     "founder": "{line} is the Founder - try /transferowner if you really mean it.",
 }
 
 _TRANSFER_REFUSE: dict[IdentityKind, str] = {
-    "self": "Already the Founder - transferring to yourself is a no-op :v",
-    "this_bot": "Tempting, but I'm not running the place under my own name :)",
+    "self": "Already the Founder, transferring to yourself is a no-op.",
+    "this_bot": "Tempting, but I'm not running the place under my own name.",
     "telegram": "Telegram doesn't want my keys, sorry.",
     "other_bot": "Other bots can't hold the keys - humans only.",
 }
 
 _UNWARN_REFUSE: dict[IdentityKind, str] = {
-    "self": "Erasing your own warnings? Nice try :v ask a mod.",
+    "self": "Erasing your own warnings? Nice try, ask a mod.",
     "this_bot": "{line} - zero warnings, ever. Nothing to undo.",
     "telegram": "Telegram doesn't get warned here.",
     "other_bot": "{line} - bots don't pile up warnings, nothing to remove.",
@@ -221,7 +221,7 @@ _UNWARN_REFUSE: dict[IdentityKind, str] = {
 }
 
 _RESETWARNS_REFUSE: dict[IdentityKind, str] = {
-    "self": "You don't get to reset your own warnings :v ask a mod.",
+    "self": "You don't get to reset your own warnings, ask a mod.",
     "this_bot": "{line} - already at zero, always was.",
     "telegram": "Nothing on Telegram to clear.",
     "other_bot": "{line} - bots stay at zero by default.",
@@ -260,7 +260,7 @@ def refuse_message(action: str, ident: Identity) -> str | None:
 # ─────────────── Staff heads-up (action proceeds) ───────────────── #
 # * For unwarn / unmute / resetwarns on staff targets, the action proceeds
 # * but we surface a short heads-up so the executor knows the target is
-# * staff — useful when an Admin is cleaning up a stale record.
+# * staff; useful when an Admin is cleaning up a stale record.
 
 
 def staff_notice(action: str, ident: Identity, community_name: str) -> str | None:

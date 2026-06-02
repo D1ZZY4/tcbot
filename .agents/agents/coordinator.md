@@ -18,7 +18,7 @@ If a plan does not have these steps, the plan is incomplete.
 
 ## Skills and Sub-Agents Policy
 
-When planning, follow the user's preference: **skills auto-invoke wherever they apply** (cheap, project-correct), and **sub-agents are used sparingly** — only when the task is large and the scopes are genuinely independent. Default to a single focused main agent. Do not recommend delegation to a sub-agent unless the parallelism or independent-perspective value clearly justifies the token cost. See [`.agents/CLAUDE.md`](../CLAUDE.md#mandatory-auto-invoke-skills-use-sub-agents-sparingly) for the full policy.
+When planning, follow the user's preference: **skills auto-invoke wherever they apply** (cheap, project-correct), and **sub-agents are used sparingly**: only when the task is large and the scopes are genuinely independent. Default to a single focused main agent. Do not recommend delegation to a sub-agent unless the parallelism or independent-perspective value clearly justifies the token cost. See [`.agents/CLAUDE.md`](../CLAUDE.md#mandatory-auto-invoke-skills-use-sub-agents-sparingly) for the full policy.
 
 ## Main Agent Contract
 

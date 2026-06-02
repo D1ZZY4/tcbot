@@ -21,7 +21,7 @@ flowchart TD
 
 ## Purpose
 
-Promotion assigns one of the federation roles — Admin, Developer, or Tester — to a user. Founder is not assignable through `/tcpromote`; ownership transfer uses `/transferowner` instead.
+Promotion assigns one of the federation roles (Admin, Developer, or Tester) to a user. Founder is not assignable through `/tcpromote`; ownership transfer uses `/transferowner` instead.
 
 ## Command surface
 
@@ -37,7 +37,7 @@ Aliases (matched in any prefix configured by `cfg.prefixes`):
 | `/tcpromoterequests` | Anyone | User submits a request for themselves to become Admin. |
 | `/tcpromotelist` | Founder, Admin (`@staff_only`) | Lists pending Admin promotion requests. |
 
-The target is resolved by `extraction.extract_target` — accepts a reply, user ID, or resolvable `@username`.
+The target is resolved by `extraction.extract_target`; accepts a reply, user ID, or resolvable `@username`.
 
 ## Role aliases
 
@@ -82,9 +82,9 @@ await Promote.request_admin(bot, admin_id,
 |---|---|---|
 | Founder | Admin / Developer / Tester | Direct assign |
 | Admin | Developer / Tester | Submits request to Founder |
-| Developer / Tester / no-role | — | — (no permission) |
+| Developer / Tester / no-role | N/A | N/A (no permission) |
 
-The executor's role is enforced by the `@decorators.staff_only` decorator on `cmd_promote` — the actual decision logic inside `Promote.execute` then rejects rank-equal or rank-higher targets.
+The executor's role is enforced by the `@decorators.staff_only` decorator on `cmd_promote`; the actual decision logic inside `Promote.execute` then rejects rank-equal or rank-higher targets.
 
 ## Guardrails
 
@@ -180,7 +180,7 @@ The unified `promoted` builder places the role as a field below the user (`Role:
 - The effective-role cache (`effective_role_cache` in `tcbot/database/cache.py`) is invalidated by every write so subsequent reads see the new role.
 - A user can hold both a Developer/Tester record and an Admin record at once; effective-role resolution prefers Admin.
 - The promotion-request approve path does not clear an existing Developer/Tester role, so the user becomes Admin but the custom-role document may remain in `tc_roles` until manually removed.
-- DM notification failures are tolerated through `asyncio.gather(..., return_exceptions=True)` or explicit fallback logging — promotion still completes.
+- DM notification failures are tolerated through `asyncio.gather(..., return_exceptions=True)` or explicit fallback logging; promotion still completes.
 - Pending requests are not deleted after approval/rejection; they are flagged with `status`, `resolved_date`, and `resolved_by`.
 
 ## Testable scenarios

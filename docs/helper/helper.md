@@ -140,7 +140,7 @@ Common families:
 - `group_connected_log`, `group_connection_rejected_log`, `group_disconnected_log`, `group_bot_removed_log`;
 - `broadcast_log`.
 
-Use the `LogBuilder` class in this module to compose new audit-log messages – avoid hand-rolled f-strings so layout stays consistent.
+Use the `LogBuilder` class in this module to compose new audit-log messages; avoid hand-rolled f-strings so layout stays consistent.
 
 ## `parse_editmsg.py`
 

@@ -92,7 +92,7 @@ async def set_owner(user_id: int) -> None:
     )
     await col("tc_owners").delete_many({"user_id": {"$ne": user_id}})
     owner_id_cache.put(_OWNER_KEY, user_id)
-    # * Clear the full role cache – the old owner's ID is unknown
+    # * Clear the full role cache; the old owner's ID is unknown
     effective_role_cache.clear()
 
 
@@ -219,7 +219,7 @@ async def get_effective_role(user_id: int) -> str | None:
 
 
 async def role_meta(user_id: int) -> tuple[str | None, int | None, Any]:
-    """Return ``(role, assigned_by, assigned_at)`` — owner has no metadata."""
+    """Return ``(role, assigned_by, assigned_at)``; owner has no metadata."""
     role = await get_effective_role(user_id)
     if role is None:
         return None, None, None

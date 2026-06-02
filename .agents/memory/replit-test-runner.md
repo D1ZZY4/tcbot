@@ -1,6 +1,6 @@
 ---
 name: Replit test runner
-description: How to run tests and ruff in the Replit environment for TCF Bot — the normal uv commands fail due to nix Python permission issues.
+description: How to run tests and ruff in the Replit environment for TCF Bot; the normal uv commands fail due to nix Python permission issues.
 ---
 
 ## Problem
@@ -32,5 +32,5 @@ uvx ruff format .
 
 ## Baseline (2026-06-02)
 
-- 176 tests across 18 test files — all pass, zero warnings.
+- 176 tests across 18 test files: all pass, zero warnings.
 - `uvx ruff check .` → `All checks passed!`

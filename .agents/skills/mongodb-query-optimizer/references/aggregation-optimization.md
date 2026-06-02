@@ -26,7 +26,7 @@ These examples are not exhaustive but representative of some common optimization
 
 ## Unindexed $lookup vs. Indexed $lookup
 
-**Bad** — No index on the foreign collection's join field:
+**Bad**: No index on the foreign collection's join field:
 
 ```javascript
 db.orders.aggregate([
@@ -39,7 +39,7 @@ db.orders.aggregate([
 ])
 ```
 
-**Good** — Index on `foreignField` in the foreign collection:
+**Good**: Index on `foreignField` in the foreign collection:
 
 ```javascript
 db.products.createIndex({ sku: 1 })
@@ -58,7 +58,7 @@ db.orders.aggregate([
 
 ## Early $project Defeating Optimization vs. Late $project
 
-**Bad** — Early `$project` prevents the optimizer from pruning unused fields, forgets to exclude `_id` which is unneeded, and includes `name` which is not used:
+**Bad**: Early `$project` prevents the optimizer from pruning unused fields, forgets to exclude `_id` which is unneeded, and includes `name` which is not used:
 
 ```javascript
 db.collection.aggregate([
@@ -68,7 +68,7 @@ db.collection.aggregate([
 ])
 ```
 
-**Good** — Let the optimizer handle field pruning; use `$project` only at the end for reshaping:
+**Good**: Let the optimizer handle field pruning; use `$project` only at the end for reshaping:
 
 ```javascript
 db.collection.aggregate([
@@ -82,7 +82,7 @@ db.collection.aggregate([
 
 ## $facet for Divergent Processing vs. $unionWith
 
-**Bad** — `$facet` sends all documents to every branch, even if branches need very different subsets:
+**Bad**: `$facet` sends all documents to every branch, even if branches need very different subsets:
 
 ```javascript
 db.collection.aggregate([
@@ -93,7 +93,7 @@ db.collection.aggregate([
 ])
 ```
 
-**Good** — Separate pipelines via `$unionWith` let each branch optimize independently:
+**Good**: Separate pipelines via `$unionWith` let each branch optimize independently:
 
 ```javascript
 db.collection.aggregate([
@@ -109,7 +109,7 @@ db.collection.aggregate([
 
 ## $sort \+ $limit as Separate Concerns vs. Top-N Sort
 
-**Bad** — Large sort, then limit (MongoDB may sort entire dataset):
+**Bad**: Large sort, then limit (MongoDB may sort entire dataset):
 
 ```javascript
 db.collection.aggregate([
@@ -120,7 +120,7 @@ db.collection.aggregate([
 ])
 ```
 
-**Good** — Place `$limit` immediately after `$sort`:
+**Good**: Place `$limit` immediately after `$sort`:
 
 ```javascript
 db.collection.aggregate([
@@ -130,7 +130,7 @@ db.collection.aggregate([
 ])
 ```
 
-**Why:** When `$sort` is immediately followed by `$limit`, MongoDB performs a *top-N sort* — it only tracks the top N values instead of sorting the full dataset. Far less memory.
+**Why:** When `$sort` is immediately followed by `$limit`, MongoDB performs a *top-N sort*: it only tracks the top N values instead of sorting the full dataset. Far less memory.
 
 ## $unwind Best Practices
 

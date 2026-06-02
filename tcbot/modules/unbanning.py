@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Federation unban command entry point – validates permissions and delegates to unban_flow."""
+"""Federation unban command entry point: validates permissions and delegates to unban_flow."""
 
 from __future__ import annotations
 

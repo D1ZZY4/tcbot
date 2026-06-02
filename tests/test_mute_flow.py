@@ -106,7 +106,7 @@ async def test_execute_mute_happy_path(monkeypatch) -> None:
     bot = SimpleNamespace(
         send_message=AsyncMock(),
         edit_message_text=AsyncMock(),
-        # * fan_out is mocked — use Mock() so the list comprehension does not
+        # * fan_out is mocked; use Mock() so the list comprehension does not
         # * create unawaited coroutines that trigger PytestUnraisableExceptionWarning.
         restrict_chat_member=Mock(),
     )
@@ -192,7 +192,7 @@ async def test_execute_unmute_happy_path(monkeypatch) -> None:
     )
     ctx = SimpleNamespace(
         bot=SimpleNamespace(
-            # * fan_out is mocked — use Mock() so the list comprehension does not
+            # * fan_out is mocked; use Mock() so the list comprehension does not
             # * create unawaited coroutines that trigger PytestUnraisableExceptionWarning.
             restrict_chat_member=Mock(),
             send_message=AsyncMock(),
@@ -229,7 +229,7 @@ async def test_execute_unmute_partial_failure_reported_in_reply(monkeypatch) -> 
     )
     ctx = SimpleNamespace(
         bot=SimpleNamespace(
-            # * fan_out is mocked — use Mock() so the list comprehension does not
+            # * fan_out is mocked; use Mock() so the list comprehension does not
             # * create unawaited coroutines that trigger PytestUnraisableExceptionWarning.
             restrict_chat_member=Mock(),
             send_message=AsyncMock(),

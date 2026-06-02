@@ -274,7 +274,7 @@ def back_to_privacy_kb() -> InlineKeyboardMarkup:
 
 
 def additional_menu_kb() -> InlineKeyboardMarkup:
-    """Static links menu shown from the start menu — channels, groups, TRAVEL."""
+    """Static links menu shown from the start menu: channels, groups, TRAVEL."""
     return InlineKeyboardMarkup(
         [
             [
@@ -319,7 +319,7 @@ def groups_menu_kb(detailed: bool) -> InlineKeyboardMarkup:
 
 
 def stats_main_kb() -> InlineKeyboardMarkup:
-    """Top-level /tcstats inline menu — staff/chats/bans drill-down."""
+    """Top-level /tcstats inline menu: staff/chats/bans drill-down."""
     return InlineKeyboardMarkup(
         [
             [InlineKeyboardButton("Staff Roster", callback_data="stats_admins")],
@@ -345,7 +345,7 @@ def module_help_kb(
     section_buttons: list[tuple[str, str]],
     back_callback: str,
 ) -> InlineKeyboardMarkup:
-    """Per-module help view — pair sub-section buttons + Back, with Back last."""
+    """Per-module help view: pair sub-section buttons + Back, with Back last."""
     rows: list[list[InlineKeyboardButton]] = []
     it = iter(section_buttons)
     for a, b in zip(it, it):

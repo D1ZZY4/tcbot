@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Centralised demotion logic — manual via /tcdemote and auto-demote on ban/kick."""
+"""Centralised demotion logic: manual via /tcdemote and auto-demote on ban/kick."""
 
 from __future__ import annotations
 

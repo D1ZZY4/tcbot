@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Proof-step infrastructure — keyboards, prompts, media recording, and channel upload."""
+"""Proof-step infrastructure: keyboards, prompts, media recording, and channel upload."""
 
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ class BuildProof:
             f", or tap <b>{self.skip_label}</b> to proceed" if self.skip_allowed else ""
         )
         return (
-            f"Reason noted — {action_label.lower()}ing {target_mention}{suffix}.\n"
+            f"Reason noted; {action_label.lower()}ing {target_mention}{suffix}.\n"
             f"Reason: <b>{reason}</b>\n\n"
             f"Got any proof? Send a photo or video{skip_hint}."
         )

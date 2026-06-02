@@ -33,7 +33,7 @@ log = logging.getLogger(__name__)
 
 WAITING_PROOF = 0
 
-# * Per-action BuildProof instance — imported by banning.py
+# * Per-action BuildProof instance; imported by banning.py
 # * skip_allowed=False: ban proof is required; there is no Skip option
 proof = BuildProof("ban", skip_allowed=False)
 

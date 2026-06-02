@@ -16,7 +16,7 @@ from tcbot.utils.timedate_format import fmt_dt, utc_now
 # ─────────────────────────── LogBuilder ─────────────────────────── #
 # * Fluent builder for HTML audit-log messages with consistent layout.
 # * Title is rendered on its own line, separated from fields by a blank line.
-# * All `field(...)` values are HTML-escaped by default — pass `escape=False`
+# * All `field(...)` values are HTML-escaped by default; pass `escape=False`
 # *   only when interpolating already-trusted markup (e.g. mention/link/code).
 # * Use `.section()` to start a new logical block (adds a blank separator).
 
@@ -126,7 +126,7 @@ def ban_log(
 ) -> str:
     """New federation-ban audit-log message."""
     # * Note: proof_lnk is passed through for the inline Proof button in the
-    # * accompanying keyboard. The text intentionally has no hyperlink — the
+    # * accompanying keyboard. The text intentionally has no hyperlink; the
     # * button avoids the visual noise of a redundant 'View Proof' link.
     return (
         LogBuilder(f"New {cfg.community_name} Ban")
@@ -524,7 +524,7 @@ def promoted(
 ) -> str:
     """Unified promotion audit-log for Admin / Developer / Tester.
 
-    Single shape — the role is shown as a field below the user, not in the title.
+    Single shape: the role is shown as a field below the user, not in the title.
     """
     role_label = _role_title(role)
     return (
@@ -548,9 +548,9 @@ def demoted(
     by_id: int,
     by_fname: str,
     *,
-    trigger: str | None = None,  # noqa: ARG001 — kept for caller API compatibility
+    trigger: str | None = None,  # noqa: ARG001  (kept for caller API compatibility)
 ) -> str:
-    """Unified demotion audit-log — manual demote and ban/kick auto-demote share one format."""
+    """Unified demotion audit-log: manual demote and ban/kick auto-demote share one format."""
     role_label = _role_title(role)
     return (
         LogBuilder(f"{cfg.community_name} Demoted")

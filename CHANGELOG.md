@@ -13,13 +13,20 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 ### Changed - Documentation
 
 - **`PLAN.md` test count updated**: 148 → 176 tests across 15 → 18 files (verified with pytest collect).
-- **`PLAN.md` P2 backlog resolved**: P2-1 (method-level docstrings) and P2-2 (workflow file docs) verified against source tree — both already complete. Both rows marked `Resolved`.
+- **`PLAN.md` P2 backlog resolved**: P2-1 (method-level docstrings) and P2-2 (workflow file docs) verified against source tree: both already complete. Both rows marked `Resolved`.
 - **`PLAN.md` P1 refined**: Rephrased to distinguish resolved executor tests (kick/mute/unmute/unban) from still-open full ConversationHandler state-machine simulation (ban/warn/appeal entry-to-completion).
+
+### Changed - Refactoring
+
+- **Em-dash and en-dash removal (Python source)**: All em-dashes (`—`) and en-dashes (`–`) removed from every Python source file across `tcbot/`, `tests/`, and all workflow, database, helper, and utility files. Replaced with `:`, `;`, `,`, or parentheses as appropriate for the context. Numeric ranges changed to hyphens (e.g. `1-3`). 176/176 tests pass, ruff clean after the full sweep.
+- **Em-dash and en-dash removal (documentation)**: All em/en-dashes removed from every `.md` file in the repository: `README.md`, `AGENTS.md`, `PLAN.md`, `CHANGELOG.md`, `docs/`, `.agents/CLAUDE.md`, `.agents/RULES.md`, `.agents/STYLE-CODE.md`, `.agents/STYLE-COMMENTS.md`, `.agents/WORKFLOW.md`, `.agents/TEST-RUFF.md`, `.agents/REPLIT.md`, all `.agents/agents/*.md`, all `.agents/skills/**/*.md`, and `.agents/memory/*.md`. Final grep across all project `.md` files (excluding `.git/`, `.trae/`, `.local/`) confirms 0 remaining occurrences.
+- **Text emoticon removal from bot responses**: All text emoticons (`:)`, `:v`, `:')`, `:D`) removed from `tcbot/modules/helper/identity.py`. Agent instruction files (`.agents/CLAUDE.md`, `.agents/RULES.md`) updated to reflect the new policy: the bot expresses dry humor through word choice only, no text emoticons in any reply path.
+- **Bot voice policy updated**: `.agents/CLAUDE.md` and `.agents/RULES.md` now state the canonical voice as professional, friendly, formal, and dry; humor via word choice only. No pictograph emoji, no text emoticons.
 
 ### Added - Agent Memory
 
 - **`.agents/memory/MEMORY.md`**: Created persistent memory index.
-- **`.agents/memory/replit-test-runner.md`**: Documents Replit test runner quirks — packages live in `.pythonlibs/lib/python3.11/site-packages/`, must use `python3.11 -m pytest` with explicit `PYTHONPATH`; ruff via `uvx ruff check .`. Baseline: 176 tests, ruff clean.
+- **`.agents/memory/replit-test-runner.md`**: Documents Replit test runner quirks: packages live in `.pythonlibs/lib/python3.11/site-packages/`, must use `python3.11 -m pytest` with explicit `PYTHONPATH`; ruff via `uvx ruff check .`. Baseline: 176 tests, ruff clean.
 
 ## [Unreleased] - 2026-06-01
 
@@ -68,7 +75,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 - **All `docs/*.md` files updated**: `setup.md`, `workflows-guide.md`, `README.md`, `modules/modules.md`, `helper/helper.md`, `databases/databases.md`, `utils/utils.md`, `git-commit.md`, `mapping.md`, `button-styles.md`, `performance.md`, `workflows.md`, `workflows/workflows.md`, and all `*-detailed.md` feature guides now cross-reference related docs inline.
 - **All skill reference files updated**: `.agents/skills/mermaid-diagrams/README.md`, `.agents/skills/python-code-quality/REFERENCE.md`, `.agents/skills/async-python-patterns/references/details.md`, every `.agents/skills/mermaid-diagrams/references/*.md` (7 files: advanced-features, architecture-diagrams, c4-diagrams, class-diagrams, erd-diagrams, flowcharts, sequence-diagrams), and every `.agents/skills/mongodb-query-optimizer/references/*.md` (4 files: aggregation-optimization, antipattern-examples, core-indexing-principles, update-query-examples) now point back to their parent SKILL.md and to relevant project docs.
 - **`docs/README.md` quick navigation expanded**: Added rows for `performance.md` and `workflows-guide.md` so the index covers every file in `docs/`.
-- **Link integrity verified**: Every internal markdown link (path + anchor) across all 65 project .md files (excluding `.trae/` mirror) was validated against existing files and headings — 0 broken paths, 0 broken anchors.
+- **Link integrity verified**: Every internal markdown link (path + anchor) across all 65 project .md files (excluding `.trae/` mirror) was validated against existing files and headings: 0 broken paths, 0 broken anchors.
 
 ### Added - Agent Workflow Enforcement
 - **Mandatory read-before-work and update-after-work rules**: Added prominent top-of-file sections to [`.agents/CLAUDE.md`](.agents/CLAUDE.md), [`.agents/RULES.md`](.agents/RULES.md), [`AGENTS.md`](AGENTS.md), [`.agents/skills/project-policy/SKILL.md`](.agents/skills/project-policy/SKILL.md), [`.agents/skills/docs-maintainer/SKILL.md`](.agents/skills/docs-maintainer/SKILL.md), and [`.agents/agents/coordinator.md`](.agents/agents/coordinator.md) that require every AI agent (Claude, Replit AI, Gemini, Qwen, Copilot, etc.) to:
@@ -97,14 +104,14 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 ### Added - Mermaid Diagrams
 - **Architecture diagrams in subsystem docs**: `docs/modules/modules.md` (dynamic discovery flow), `docs/helper/helper.md` (helper relationships), `docs/databases/databases.md` (DB layer architecture), `docs/utils/utils.md` (utils consumers).
 - **Flow diagrams in detailed feature docs**:
-  - `docs/banning-detailed.md` — ban command with auto-demote and fan-out
-  - `docs/appeal-detailed.md` — deep-link to staff decision flow
-  - `docs/check-detailed.md` — parallel batch reads with drill-down callbacks
-  - `docs/warnings-detailed.md` — warn flow with auto-ban on limit
-  - `docs/stats-detailed.md` — drill-down navigation paths
-  - `docs/role-detailed.md` — role hierarchy and auto-demote on ban/kick
-  - `docs/promote-detailed.md` — direct vs queue-based promotion paths
-  - `docs/demote-detailed.md` — manual vs auto-demote sources
+  - `docs/banning-detailed.md`: ban command with auto-demote and fan-out
+  - `docs/appeal-detailed.md`: deep-link to staff decision flow
+  - `docs/check-detailed.md`: parallel batch reads with drill-down callbacks
+  - `docs/warnings-detailed.md`: warn flow with auto-ban on limit
+  - `docs/stats-detailed.md`: drill-down navigation paths
+  - `docs/role-detailed.md`: role hierarchy and auto-demote on ban/kick
+  - `docs/promote-detailed.md`: direct vs queue-based promotion paths
+  - `docs/demote-detailed.md`: manual vs auto-demote sources
 
 ### Added - Features
 - **Smart mention system with username fallback**: `mention()` function now accepts optional `username` parameter. When username is available, creates global `https://t.me/username` links that work across all groups. Falls back to plain text name with copyable user ID when username is unavailable.
@@ -133,7 +140,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 ### Fixed
 - **Identity coverage audit across every targeted command**: Bot now recognizes the special target identities (`self`, `this_bot`, `telegram`, `other_bot`, `founder`, `admin`, `developer`, `tester`) on every command and refuses through the canonical `identity.refuse_message(...)` flow before mutating state. Previously, three commands either skipped identity classification entirely or only checked a subset of identities by hand:
   - **`/tcpromoterequests`** (`tcbot/modules/admins.py::cmd_promote_request`): no identity check at all. The Founder could submit a self-promotion-to-Admin request, and the bot then notified the Founder of their own request. Now classifies the requester and refuses Founder/this_bot/telegram/other_bot/admin via `_PROMOTE_REFUSE`.
-  - **`/transferowner`** (`tcbot/modules/admins.py::cmd_transfer`): only had a manual `target_id == current_owner.id` self-check. Founder could transfer ownership to the bot, the Telegram service account, or another bot — leaving the federation in an unrecoverable state. Now classifies the target and refuses through a new `_TRANSFER_REFUSE` table covering self/this_bot/telegram/other_bot.
+  - **`/transferowner`** (`tcbot/modules/admins.py::cmd_transfer`): only had a manual `target_id == current_owner.id` self-check. Founder could transfer ownership to the bot, the Telegram service account, or another bot, leaving the federation in an unrecoverable state. Now classifies the target and refuses through a new `_TRANSFER_REFUSE` table covering self/this_bot/telegram/other_bot.
   - **`/tcunwarn`** and **`/resetwarns`** (`tcbot/modules/warnings.py::cmd_unwarn`, `cmd_resetwarns`): only handled `this_bot` and `founder` inline, missed `self`, `telegram`, and `other_bot`. Now use the canonical refuse-table flow through new `_UNWARN_REFUSE` and `_RESETWARNS_REFUSE` tables that cover every disallowed identity consistently.
 - **`tcbot/modules/helper/identity.py`**: Added `founder` and `admin` entries to `_PROMOTE_REFUSE`, plus three new tables (`_TRANSFER_REFUSE`, `_UNWARN_REFUSE`, `_RESETWARNS_REFUSE`) registered in `_REFUSE_TABLES` so `refuse_message("transfer", ident)`, `refuse_message("unwarn", ident)`, and `refuse_message("resetwarns", ident)` all return the same friendly Founder/bot/telegram refusal voice as the moderation flows.
 - **Cross-group mention issues**: Mentions now work globally when username is available, solving the issue where mentions only worked for users in the same group.

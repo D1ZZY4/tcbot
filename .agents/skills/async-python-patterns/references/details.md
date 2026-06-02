@@ -1,4 +1,4 @@
-# Async Python Patterns — TCBot Reference
+# Async Python Patterns: TCBot Reference
 
 For the parent skill instructions, see [`../SKILL.md`](../SKILL.md). For the canonical project async/fan-out rules, see [`../../../CLAUDE.md`](../../../CLAUDE.md). For database patterns referenced here, see [`../../mongodb-query-optimizer/SKILL.md`](../../mongodb-query-optimizer/SKILL.md).
 

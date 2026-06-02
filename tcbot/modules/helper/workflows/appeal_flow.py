@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Appeal conversation – entry via /start appeal<ban_id> deep link, DM only."""
+"""Appeal conversation: entry via /start appeal<ban_id> deep link, DM only."""
 
 from __future__ import annotations
 
@@ -169,7 +169,7 @@ class BuildAppeal:
         return WAITING_APPEAL
 
     async def _on_entry(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        """Entry-point handler — parses the /start appeal_<id> deep link."""
+        """Entry-point handler; parses the /start appeal_<id> deep link."""
         text = (update.effective_message.text or "").strip()
         m = _ID_RE.match(text)
         if not m:
@@ -177,7 +177,7 @@ class BuildAppeal:
         return await self._start(update, ctx, m.group(1))
 
     async def _on_cancel(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        """Cancel button handler — clears state and ends the conversation."""
+        """Cancel button handler; clears state and ends the conversation."""
         q = update.callback_query
         for key in ("appeal_ban_id", "appeal_log_msg_id", "appeal_instruction_msg_id"):
             ctx.user_data.pop(key, None)
@@ -188,12 +188,12 @@ class BuildAppeal:
         return ConversationHandler.END
 
     async def _end(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        """Fallback handler — fires on any unrecognised command during the flow."""
+        """Fallback handler; fires on any unrecognised command during the flow."""
         await update.effective_message.reply_text("Appeal session ended.")
         return ConversationHandler.END
 
     async def _on_message(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        """Text message handler — validates and submits a #appeal message."""
+        """Text message handler; validates and submits a #appeal message."""
         msg = update.effective_message
         text = (msg.text or "").strip()
 

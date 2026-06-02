@@ -83,8 +83,8 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Examples",
-        "<code>/tcwarn @username spamming</code> — reason inline\n"
-        "<code>/tcw 123456789</code> — bot will ask for reason\n"
+        "<code>/tcwarn @username spamming</code>: reason inline\n"
+        "<code>/tcw 123456789</code>: bot will ask for reason\n"
         "<code>/tcunwarn @username</code>\n"
         "<code>/warns @username</code>\n"
         "<code>/resetwarns @username</code>",

@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 
 _DURATION_RE = re.compile(r"^(\d+)(ye|mo|[smhdw])$", re.IGNORECASE)
 
-# * Per-action BuildReason and BuildProof instances — imported by muting.py
+# * Per-action BuildReason and BuildProof instances; imported by muting.py
 reason = BuildReason("mute")
 proof = BuildProof("mute")
 

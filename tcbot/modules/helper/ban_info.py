@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Shared ban-detail formatter – builds the rich ban information card from a ban document."""
+"""Shared ban-detail formatter: builds the rich ban information card from a ban document."""
 
 from __future__ import annotations
 

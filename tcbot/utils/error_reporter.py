@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Centralized error reporter — classifies, formats, dedupes, and ships errors to LOG_ERRORS."""
+"""Centralized error reporter: classifies, formats, dedupes, and ships errors to LOG_ERRORS."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 
 
 # ─────────────────────── Module-Level State ─────────────────────── #
-# * Set once during bot post-init via attach() — never mutated after that
+# * Set once during bot post-init via attach(); never mutated after that
 
 _bot: "Bot | None" = None
 _chat_id: int = 0
@@ -126,9 +126,9 @@ def _classify(exc: BaseException | None) -> str:
     if exc is None:
         return "[?] Unknown"
 
-    # * Specific Telegram error subclasses first — BadRequest inherits NetworkError.
+    # * Specific Telegram error subclasses first; BadRequest inherits NetworkError.
     if isinstance(exc, _te.RetryAfter):
-        return "[~] Rate Limit — Flood Wait"
+        return "[~] Rate Limit: Flood Wait"
     if isinstance(exc, _te.TimedOut):
         return "[~] Telegram Timed Out"
     if isinstance(exc, _te.BadRequest):

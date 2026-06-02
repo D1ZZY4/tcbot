@@ -158,4 +158,4 @@ Promotion is not a conversation. `Promote.execute(...)` in `workflows/promote_fl
 
 ## Stats: `stats_flow.py`
 
-`stats_flow.py` exposes the unified `Stats` class used by `/tcstats`. Every drill-down — overview, staff roster, users, connected chats, active bans, and the search panel — is a classmethod on `Stats` returning `(text, InlineKeyboardMarkup)`. Callbacks pair `q.answer()` with `safe_edit_cb` so the same view can be re-tapped without raising `Message is not modified`. See `docs/stats-detailed.md` for the full method list and callback namespaces.
+`stats_flow.py` exposes the unified `Stats` class used by `/tcstats`. Every drill-down (overview, staff roster, users, connected chats, active bans, and the search panel) is a classmethod on `Stats` returning `(text, InlineKeyboardMarkup)`. Callbacks pair `q.answer()` with `safe_edit_cb` so the same view can be re-tapped without raising `Message is not modified`. See `docs/stats-detailed.md` for the full method list and callback namespaces.

@@ -4,13 +4,13 @@ For the parent skill instructions, see [`../SKILL.md`](../SKILL.md). For project
 
 ## replaceOne vs. updateOne with $replaceWith
 
-**Bad** — Full document replacement generates a large oplog entry:
+**Bad**: Full document replacement generates a large oplog entry:
 
 ```javascript
 db.coll.replaceOne({ _id: X }, entireNewDocument)
 ```
 
-**Good** — Use aggregation-based update to generate smaller oplog deltas:
+**Good**: Use aggregation-based update to generate smaller oplog deltas:
 
 ```javascript
 db.coll.updateOne({ _id: X }, [{ $replaceWith: { $literal: entireNewDocument } }])
@@ -20,7 +20,7 @@ db.coll.updateOne({ _id: X }, [{ $replaceWith: { $literal: entireNewDocument } }
 
 ## findOneAndUpdate Misuse vs. updateOne
 
-**Bad** — Using `findOneAndUpdate` when you don't need the document returned:
+**Bad**: Using `findOneAndUpdate` when you don't need the document returned:
 
 ```javascript
 db.coll.findOneAndUpdate(
@@ -29,7 +29,7 @@ db.coll.findOneAndUpdate(
 )
 ```
 
-**Good** — Use `updateOne` when you don't need the result document:
+**Good**: Use `updateOne` when you don't need the result document:
 
 ```javascript
 db.coll.updateOne(

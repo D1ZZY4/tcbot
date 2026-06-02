@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Datetime helpers – UTC storage and DD-MM-YYYY | HH:MM display."""
+"""Datetime helpers: UTC storage and DD-MM-YYYY | HH:MM display."""
 
 from __future__ import annotations
 

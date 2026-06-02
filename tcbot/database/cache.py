@@ -12,7 +12,7 @@ from typing import Any, Generic, TypeVar, cast
 
 from tcbot.database.documents import GroupDoc
 
-# * Public sentinel — compare using is CACHE_MISS to detect a cache miss.
+# * Public sentinel; compare using is CACHE_MISS to detect a cache miss.
 # * Distinct from None because None is a valid cache value (e.g. user has no role).
 T = TypeVar("T")
 

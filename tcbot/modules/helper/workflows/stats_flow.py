@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Federation stats — overview, staff roster, users, connected chats, bans, search."""
+"""Federation stats: overview, staff roster, users, connected chats, bans, search."""
 
 from __future__ import annotations
 
@@ -68,7 +68,7 @@ def _date(value: Any) -> str:
 
 
 def main_kb() -> InlineKeyboardMarkup:
-    """Top-level ``/tcstats`` menu — Staff / Users / Chats / Bans drill-downs."""
+    """Top-level ``/tcstats`` menu: Staff / Users / Chats / Bans drill-downs."""
     return InlineKeyboardMarkup(
         [
             [
@@ -122,7 +122,7 @@ def _list_kb(
 class Stats:
     """All view builders for ``/tcstats``.
 
-    The class is the single integration point for federation statistics — main
+    The class is the single integration point for federation statistics: main
     overview, staff roster, member roster, connected chats, active bans, and
     the search panel. Every method is a classmethod returning ``(text, markup)``
     so callers can ``await q.answer()`` and ``safe_edit_cb`` without further
@@ -135,7 +135,7 @@ class Stats:
 
     @classmethod
     async def main(cls) -> tuple[str, InlineKeyboardMarkup]:
-        """Federation overview — Founder, staff total, user cache, bans, chats."""
+        """Federation overview: Founder, staff total, user cache, bans, chats."""
         import asyncio
 
         (
@@ -244,7 +244,7 @@ class Stats:
 
         if not users:
             text = (
-                f"{bold('Users')}\n\nNo cached users yet — the bot caches users "
+                f"{bold('Users')}\n\nNo cached users yet. The bot caches users "
                 "as it sees them across connected groups."
             )
             return text, back_kb()
@@ -508,7 +508,7 @@ class Stats:
         query: str,
         results: list[dict],
     ) -> tuple[str, InlineKeyboardMarkup]:
-        """Render search results — empty state or numbered hits."""
+        """Render search results: empty state or numbered hits."""
         if not results:
             text = f'{bold("Search:")} "{esc(query)}"\n\nNo results found.'
             return text, cls._search_results_kb(0)

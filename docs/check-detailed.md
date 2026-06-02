@@ -32,7 +32,7 @@ flowchart TD
 | `/checkme` | `/cme` | Anyone (for themselves) | Bot PM, exec group, any connected group |
 | `/check` | `/c` | Anyone | Bot PM, exec group, any connected group |
 
-The target is resolved by `extraction.extract_target` — reply, user ID, or resolvable `@username`. The old `/checkban` and `/cban` aliases have been removed; `/check` now covers and extends that surface.
+The target is resolved by `extraction.extract_target`: reply, user ID, or resolvable `@username`. The old `/checkban` and `/cban` aliases have been removed; `/check` now covers and extends that surface.
 
 ## Top-level profile view
 
@@ -43,7 +43,7 @@ Profile
 
 Name: <mention>
 ID: <code id>
-Username: @username or —
+Username: @username or (none)
 Role: <Role>
    Assigned by: <mention>
    Assigned at: dd-mm-yyyy | HH:MM
@@ -66,7 +66,7 @@ Inline keyboard:
 [ Kicks (n) ] [ Mutes (n)  ]
 ```
 
-Founder targets show only `Role: Founder` (no `Assigned by` / `Assigned at` — `tc_owners` does not record metadata).
+Founder targets show only `Role: Founder` (no `Assigned by` / `Assigned at`; `tc_owners` does not record metadata).
 
 ## Drill-down views
 
@@ -74,10 +74,10 @@ Every drill-down keyboard ends with `« Back` which re-renders the profile via `
 
 ### Bans (`check_bans:<target_id>:<page>`)
 
-`Check.bans_list` lists every ban — active and inactive — newest first, 5 per page. Each line shows status (`Active` / `Inactive`), Ban ID, timestamp, and a 60-character reason snippet. Numbered buttons open `Check.ban_detail` for the full ban card.
+`Check.bans_list` lists every ban (active and inactive), newest first, 5 per page. Each line shows status (`Active` / `Inactive`), Ban ID, timestamp, and a 60-character reason snippet. Numbered buttons open `Check.ban_detail` for the full ban card.
 
 ```text
-Bans — N total · page p/P
+Bans: N total · page p/P
 
 1. Active · <code ban_id> · dd-mm-yyyy | HH:MM
    spam in connected groups
@@ -96,7 +96,7 @@ Bans — N total · page p/P
 Two-level drill-down because warnings are per-group:
 
 1. `Check.warns_by_group` lists groups where the user has warns, with the count and a button per group. Group titles come from `groups_db.get_group_titles`.
-2. `Check.warns_in_group` paginates the individual warnings inside the chosen chat — timestamp, reason snippet, and the admin who issued the warning.
+2. `Check.warns_in_group` paginates the individual warnings inside the chosen chat: timestamp, reason snippet, and the admin who issued the warning.
 
 ### Kicks (`check_kicks:<target_id>:<page>`)
 
@@ -112,7 +112,7 @@ All callbacks are registered in `checking.py` and run safely on repeated taps th
 
 | Callback data | Handler |
 |---|---|
-| `check_main:<uid>` | `on_check_main` — re-renders the profile (used by all `« Back` buttons). |
+| `check_main:<uid>` | `on_check_main`: re-renders the profile (used by all `« Back` buttons). |
 | `check_bans:<uid>:<page>` | `on_check_bans` |
 | `check_ban_item:<uid>:<ban_id>` | `on_check_ban_item` |
 | `check_warns:<uid>` | `on_check_warns` (warns-by-group view). |
@@ -127,7 +127,7 @@ All callbacks are registered in `checking.py` and run safely on repeated taps th
 
 | Helper | Purpose |
 |---|---|
-| `users_cache.get_user(uid)` | Cached profile snapshot — first name, username, last name. |
+| `users_cache.get_user(uid)` | Cached profile snapshot: first name, username, last name. |
 | `users_roles.role_meta(uid)` | `(role, assigned_by, assigned_at)` for the Role line. |
 | `users_cache.get_first_name(uid, fallback)` | Cache-only name lookup used for admin attribution in drill-down lists. |
 | `bans_db.get_active_ban(uid)` | Current active ban, if any. |
@@ -143,7 +143,7 @@ All callbacks are registered in `checking.py` and run safely on repeated taps th
 | `mutes_db.user_mute_count(uid)` | Mute count. |
 | `groups_db.get_group_titles([chat_ids])` | Bulk title lookup for kicks / mutes / warnings lists. |
 
-## Async behavior — zero-delay design
+## Async behavior: zero-delay design
 
 The profile view performs nine independent reads in a single `asyncio.gather`:
 
@@ -173,7 +173,7 @@ The profile view performs nine independent reads in a single `asyncio.gather`:
 
 Per-record renderers in `kicks_list`, `mutes_list`, and `warns_in_group` also gather admin-name lookups and group-title lookups up front so the line loop is purely synchronous string-building.
 
-`_resolve_user_info` consults the member cache first; only on a partial cache miss does it call `bot.get_chat` — and that call is wrapped in `asyncio.wait_for(timeout=3.0)` so a stalled Telegram lookup never blocks the user for more than three seconds.
+`_resolve_user_info` consults the member cache first; only on a partial cache miss does it call `bot.get_chat`, and that call is wrapped in `asyncio.wait_for(timeout=3.0)` so a stalled Telegram lookup never blocks the user for more than three seconds.
 
 ## Indexes
 

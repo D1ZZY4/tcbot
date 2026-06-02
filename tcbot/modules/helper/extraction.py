@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Target extraction helpers – ResolvedTarget and extract_target()."""
+"""Target extraction helpers: ResolvedTarget and extract_target()."""
 
 from __future__ import annotations
 

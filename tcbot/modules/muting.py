@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Group mute and unmute command handlers – validates permissions and delegates to muting_flow."""
+"""Group mute and unmute command handlers: validates permissions and delegates to muting_flow."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ log = logging.getLogger(__name__)
 
 __module_name__ = "Mute"
 __help_text__ = (
-    "Federation-wide mute and unmute — restricts a user from sending messages "
+    "Federation-wide mute and unmute: restricts a user from sending messages "
     "across <b>all connected groups</b> at once."
 )
 
@@ -70,13 +70,13 @@ __help_sections__: list[tuple[str, str]] = [
     (
         "Time format",
         "Place the duration before the reason. Omit a duration to apply a permanent mute.\n\n"
-        "→ <code>s</code> Seconds — <code>30s</code> = 30 seconds\n"
-        "→ <code>m</code> Minutes — <code>15m</code> = 15 minutes\n"
-        "→ <code>h</code> Hours — <code>2h</code> = 2 hours\n"
-        "→ <code>d</code> Days — <code>7d</code> = 7 days\n"
-        "→ <code>w</code> Weeks — <code>2w</code> = 2 weeks\n"
-        "→ <code>mo</code> Months — <code>3mo</code> = 3 months\n"
-        "→ <code>ye</code> Years — <code>2ye</code> = 2 years",
+        "→ <code>s</code> Seconds: <code>30s</code> = 30 seconds\n"
+        "→ <code>m</code> Minutes: <code>15m</code> = 15 minutes\n"
+        "→ <code>h</code> Hours: <code>2h</code> = 2 hours\n"
+        "→ <code>d</code> Days: <code>7d</code> = 7 days\n"
+        "→ <code>w</code> Weeks: <code>2w</code> = 2 weeks\n"
+        "→ <code>mo</code> Months: <code>3mo</code> = 3 months\n"
+        "→ <code>ye</code> Years: <code>2ye</code> = 2 years",
     ),
     (
         "Target syntax",
@@ -84,10 +84,10 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Examples",
-        "<code>/tcmute @username 3d spamming</code> — 3-day mute, reason inline\n"
-        "<code>/tcm @username 1w</code> — 1-week mute, bot will ask for reason\n"
-        "<code>/tcm @username</code> — permanent mute, bot walks you through it\n"
-        "<code>/tcunmute @username</code> — lift mute immediately across all groups",
+        "<code>/tcmute @username 3d spamming</code>: 3-day mute, reason inline\n"
+        "<code>/tcm @username 1w</code>: 1-week mute, bot will ask for reason\n"
+        "<code>/tcm @username</code>: permanent mute, bot walks you through it\n"
+        "<code>/tcunmute @username</code>: lift mute immediately across all groups",
     ),
 ]
 
@@ -135,7 +135,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     inline_reason = parse_inline_reason(remaining_args, has_explicit_target=False)
     target_mention = mention(target_id, target_fname or str(target_id))
     dur_str = fmt_duration(duration)
-    extra_info = f"{code(str(target_id))} — {dur_str}"
+    extra_info = f"{code(str(target_id))}: {dur_str}"
 
     ctx.user_data.update(
         {

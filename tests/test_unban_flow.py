@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Tests for the unban executor — no-active-ban guard and happy path."""
+"""Tests for the unban executor: no-active-ban guard and happy path."""
 
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ async def test_execute_unban_happy_path(monkeypatch) -> None:
     )
     ctx = SimpleNamespace(
         bot=SimpleNamespace(
-            # * fan_out is mocked — use Mock() so the list comprehension does not
+            # * fan_out is mocked; use Mock() so the list comprehension does not
             # * create unawaited coroutines that trigger PytestUnraisableExceptionWarning.
             unban_chat_member=Mock(),
             send_message=AsyncMock(),
@@ -106,7 +106,7 @@ async def test_execute_unban_partial_group_failure_reported(monkeypatch) -> None
     )
     ctx = SimpleNamespace(
         bot=SimpleNamespace(
-            # * fan_out is mocked — use Mock() so the list comprehension does not
+            # * fan_out is mocked; use Mock() so the list comprehension does not
             # * create unawaited coroutines that trigger PytestUnraisableExceptionWarning.
             unban_chat_member=Mock(),
             send_message=AsyncMock(),

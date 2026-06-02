@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""New and left member event handlers – greets users and enforces bans on join."""
+"""New and left member event handlers: greets users and enforces bans on join."""
 
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if chat.id not in (cfg.main_group, cfg.exec_group):
         return
 
-    # * Process all new members concurrently — handles batch joins via invite links
+    # * Process all new members concurrently; handles batch joins via invite links
     await asyncio.gather(
         *[_handle_member(m, msg, chat, ctx.bot) for m in msg.new_chat_members]
     )

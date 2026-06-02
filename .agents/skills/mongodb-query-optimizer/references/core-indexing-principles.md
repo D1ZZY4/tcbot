@@ -20,7 +20,7 @@ Index `{a:1, b:1}` supports `sort({a:1, b:1})` and reverse `sort({a:-1, b:-1})`,
 
 ### Collation Match
 
-**Before** — Query collation differs from index collation, so the index cannot be used:
+**Before**: Query collation differs from index collation, so the index cannot be used:
 
 ```javascript
 db.users.createIndex({ name: 1 })
@@ -28,7 +28,7 @@ db.users.find({ name: "José" }).collation({ locale: "es", strength: 2 })
 // Index cannot be used for query
 ```
 
-**After** — Create the index with the same collation the query uses:
+**After**: Create the index with the same collation the query uses:
 
 ```javascript
 db.users.createIndex({ name: 1 }, { collation: { locale: "es", strength: 2 } })

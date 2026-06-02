@@ -13,7 +13,7 @@ from tcbot.utils.timedate_format import utc_now
 
 # ────────────────────── Console Log Formatter ───────────────────── #
 # * Color-coded bracket format: [HH:MM] [DD/MM/YY] [LEVEL] [module:line] → message
-# * Level and message color match per severity — no background badges
+# * Level and message color match per severity; no background badges
 # * Module name: last segment only (e.g. ban_flow, not tcbot.modules.helper.workflows.ban_flow)
 # * All timestamps in UTC
 
@@ -22,7 +22,7 @@ class BotLogFormatter(logging.Formatter):
     """Custom log formatter for console output with ANSI bracket format."""
 
     _R = "\033[0m"
-    _BR = "\033[38;5;236m"  # bracket color — dark gray
+    _BR = "\033[38;5;236m"  # bracket color (dark gray)
     _TM = "\033[38;5;242m"  # time
     _DT = "\033[38;5;238m"  # date
     _MD = "\033[38;5;75m"  # module:line
@@ -71,7 +71,7 @@ class BotLogFormatter(logging.Formatter):
 
 # ─────────────────── Telegram Error Log Handler ─────────────────── #
 # * Sends ERROR/CRITICAL logs to the configured LOG_ERRORS channel
-# * Zero blocking — schedules coroutine on the running asyncio event loop
+# * Zero blocking; schedules coroutine on the running asyncio event loop
 # * Suppression list prevents infinite loops and network noise
 
 _SUPPRESS_PREFIXES: tuple[str, ...] = (
@@ -100,7 +100,7 @@ class TelegramErrorHandler(logging.Handler):
 
 
 # ─────────────────────── Logging Setup Entry ────────────────────── #
-# * Called once at bot startup — initializes all handlers and log levels
+# * Called once at bot startup; initializes all handlers and log levels
 
 
 def setup(level: int = logging.INFO) -> None:

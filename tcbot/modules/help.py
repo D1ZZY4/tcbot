@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Help command and callback handlers – renders module help index, module overview, and per-section topics."""
+"""Help command and callback handlers: renders module help index, module overview, and per-section topics."""
 
 from __future__ import annotations
 
@@ -58,10 +58,10 @@ _TOPICS_SORTED: list[tuple[str, str]] = sorted(
     key=lambda t: t[0].lower(),
 )
 
-# * Menu-path topics — callback keys stay as "help_<mod>"
+# * Menu-path topics; callback keys stay as "help_<mod>"
 HELP_TOPICS_MENU: list[tuple[str, str]] = _TOPICS_SORTED
 
-# * Command-path topics — callback keys become "helpc_<mod>"
+# * Command-path topics; callback keys become "helpc_<mod>"
 HELP_TOPICS_CMD: list[tuple[str, str]] = [
     (name, "helpc_" + key[5:]) for name, key in _TOPICS_SORTED
 ]
@@ -265,7 +265,7 @@ async def on_help_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_help_menu_group(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Help tapped from group /start inline — answer with alert, no edit."""
+    """Help tapped from group /start inline; answer with alert, no edit."""
     q: CallbackQuery = update.callback_query
     await q.answer(
         "Use /help in this group to browse all commands.",

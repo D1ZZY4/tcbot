@@ -67,7 +67,7 @@ def make_short_id(length: int = 10) -> str:
 def db() -> AsyncIOMotorDatabase:
     """Get the main MongoDB database instance."""
     if _db is None:
-        raise RuntimeError("DB not initialised – call connect() first.")
+        raise RuntimeError("DB not initialised; call connect() first.")
     return _db
 
 

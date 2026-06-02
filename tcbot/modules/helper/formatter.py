@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""HTML text formatters – mention(), code(), bold(), and other inline-markup helpers."""
+"""HTML text formatters: mention(), code(), bold(), and other inline-markup helpers."""
 
 from __future__ import annotations
 

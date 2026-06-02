@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Tests for the kick executor — happy path, ban failure, and log-send failure."""
+"""Tests for the kick executor: happy path, ban failure, and log-send failure."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ def _make_ctx(
 
 
 async def test_execute_kick_happy_path(monkeypatch) -> None:
-    """All four parallel operations succeed — user is kicked and reply is sent."""
+    """All four parallel operations succeed; user is kicked and reply is sent."""
     update = _make_update()
     ctx = _make_ctx()
 

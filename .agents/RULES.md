@@ -1,4 +1,4 @@
-# Project Rules — TCF Bot
+# Project Rules: TCF Bot
 
 Read [`CLAUDE.md`](CLAUDE.md) first. This file lists hard constraints for all AI agents and maintainers. These rules apply to code, tests, documentation, and configuration unless a task explicitly narrows the allowed scope.
 
@@ -30,9 +30,10 @@ Skipping either step is a defect of the same severity as a failing test.
 
 ## Skills and Sub-Agents Policy
 
-**Skills (`.agents/skills/`) auto-invoke whenever their trigger matches.** The user does not want to type "use the X skill". If you are about to write code in `tcbot/`, the [`project-policy`](skills/project-policy/SKILL.md) skill applies. If you are about to edit docs, the [`docs-maintainer`](skills/docs-maintainer/SKILL.md) skill applies. The same is true for `telegram-bot-builder`, `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `runtime-debugger`, `feature-reviewer`, and `general-sub-agent` — invoke them silently as part of doing the task, and compose multiple skills when a single task spans multiple areas. See the full table in [`CLAUDE.md`](CLAUDE.md#mandatory-auto-invoke-skills-use-sub-agents-sparingly).
+**Skills (`.agents/skills/`) auto-invoke whenever their trigger matches.** The user does not want to type "use the X skill". If you are about to write code in `tcbot/`, the [`project-policy`](skills/project-policy/SKILL.md) skill applies. If you are about to edit docs, the [`docs-maintainer`](skills/docs-maintainer/SKILL.md) skill applies. The same is true for `telegram-bot-builder`, `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `runtime-debugger`, `feature-reviewer`, and `general-sub-agent`; invoke them silently as part of doing the task, and compose multiple skills when a single task spans multiple areas. See the full table in [`CLAUDE.md`](CLAUDE.md#mandatory-auto-invoke-skills-use-sub-agents-sparingly).
 
-**Sub-agents (`.agents/agents/`) are expensive and only used when the work is genuinely heavy.** The default is to do the work yourself in the main agent. Only delegate to a sub-agent when the task is large, the scopes are genuinely independent, and the parallelism or independent-perspective value justifies the token cost. Sub-agents can drift off-task — prefer one focused main agent over many noisy sub-agents.
+
+**Sub-agents (`.agents/agents/`) are expensive and only used when the work is genuinely heavy.** The default is to do the work yourself in the main agent. Only delegate to a sub-agent when the task is large, the scopes are genuinely independent, and the parallelism or independent-perspective value justifies the token cost. Sub-agents can drift off-task; prefer one focused main agent over many noisy sub-agents.
 
 ---
 
@@ -252,8 +253,8 @@ Rules:
   `uv`.
 - Editing secrets or unrelated project files during a scoped task.
 - Pictograph emoji in any bot reply or audit log message (waving hands, party poppers, prohibition signs, warning signs, etc.).
-- Sequential awaits when the operations are independent — must use `asyncio.gather`.
-- Inlining self / bot / Telegram / Founder / staff branches in command handlers — must use `identity.classify`.
+- Sequential awaits when the operations are independent; must use `asyncio.gather`.
+- Inlining self / bot / Telegram / Founder / staff branches in command handlers; must use `identity.classify`.
 
 ---
 
@@ -261,7 +262,7 @@ Rules:
 
 1. Bot replies are professional + friendly + lightly humorous. Plain text, no exclamation cascades.
 2. Pictograph emoji are forbidden in any bot output. Strip on sight.
-3. Text emoticons (`:)`, `:v`, `:')`, `:D`) are allowed at most one per reply and only in witty refusal paths — never in success / error / data views.
+3. Text emoticons (`:)`, `:v`, `:')`, `:D`) are not used. The bot expresses dry humor through word choice only.
 4. Self / bot / Telegram / Founder / staff branches must use `tcbot.modules.helper.identity.classify` plus `identity.refuse_message` / `identity.staff_notice`. Do not duplicate target-type branches inline.
 5. New refusal copy belongs in `identity.py`, not in `modules/*.py`.
 

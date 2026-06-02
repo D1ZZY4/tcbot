@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Comprehensive user-profile view for /check — bans, warns, kicks, mutes, appeals."""
+"""Comprehensive user-profile view for /check: bans, warns, kicks, mutes, appeals."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ _GET_CHAT_TIMEOUT = 3.0
 
 
 async def _resolve_user_info(bot: Bot, target_id: int) -> tuple[str, str | None]:
-    """Return (display_name, username_or_None) — fast-path cache hit, bounded Telegram fallback."""
+    """Return (display_name, username_or_None); fast-path cache hit, bounded Telegram fallback."""
     cached = await db.users_cache.get_user(target_id)
     fname = (cached.get("first_name") or "") if cached else ""
     uname = (cached.get("username") if cached else None) or None
@@ -111,7 +111,7 @@ class Check:
         target_id: int,
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Build the top-level profile view: identity + counts + drill-down keyboard."""
-        # * All 9 reads are independent — fire them in parallel for a single round-trip.
+        # * All 9 reads are independent; fire them in parallel for a single round-trip.
         (
             (fname, uname),
             (role, role_by_id, role_at),
@@ -135,7 +135,7 @@ class Check:
         )
 
         role_label = db.users_roles.ROLE_LABEL.get(role, "None") if role else "None"
-        uname_part = f"@{esc(uname)}" if uname else "—"
+        uname_part = f"@{esc(uname)}" if uname else "(none)"
         active_part = f"Yes ({code(active_ban['ban_id'])})" if active_ban else "No"
 
         # * Build the rich role line with assignment metadata where available.
@@ -220,14 +220,14 @@ class Check:
             return text, InlineKeyboardMarkup([_back_to_check(target_id)])
 
         lines = [
-            f"{bold('Bans')} — {len(bans)} total  ·  page {page + 1}/{total_pages}\n"
+            f"{bold('Bans')}: {len(bans)} total, page {page + 1}/{total_pages}\n"
         ]
         item_btns: list[InlineKeyboardButton] = []
         base_idx = page * _PAGE_SIZE
         for i, ban in enumerate(chunk, start=1):
             status = bold("Active") if ban.get("is_active") else "Inactive"
             ts = _date(ban.get("timestamp"))
-            reason_short = esc(str(ban.get("reason", "—"))[:60])
+            reason_short = esc(str(ban.get("reason", "(no reason)"))[:60])
             lines.append(
                 f"{base_idx + i}. {status} · {code(ban['ban_id'])} · {ts}\n"
                 f"   <i>{reason_short}</i>"
@@ -306,11 +306,11 @@ class Check:
         titles = await db.groups_db.get_group_titles([cid for cid, _ in groups])
         total = sum(c for _, c in groups)
 
-        lines = [f"{bold('Warnings')} — {total} total across {len(groups)} group(s)\n"]
+        lines = [f"{bold('Warnings')}: {total} total across {len(groups)} group(s)\n"]
         rows: list[list[InlineKeyboardButton]] = []
         for cid, count in groups:
             title = titles.get(cid) or str(cid)
-            lines.append(f"• {esc(title)} — {bold(str(count))}")
+            lines.append(f"• {esc(title)}: {bold(str(count))}")
             rows.append(
                 [
                     InlineKeyboardButton(
@@ -359,13 +359,13 @@ class Check:
         )
 
         lines = [
-            f"{bold('Warnings in')} {esc(title)} — {len(warns)} total"
-            f"  ·  page {page + 1}/{total_pages}\n"
+            f"{bold('Warnings in')} {esc(title)}: {len(warns)} total"
+            f", page {page + 1}/{total_pages}\n"
         ]
         base_idx = page * _PAGE_SIZE
         for i, w in enumerate(chunk, start=1):
             ts = _date(w.get("timestamp"))
-            reason_short = esc(str(w.get("reason", "—"))[:80])
+            reason_short = esc(str(w.get("reason", "(no reason)"))[:80])
             admin_id = w.get("admin_id", 0)
             admin_name = admin_name_map.get(admin_id, "Admin") if admin_id else "Admin"
             lines.append(
@@ -443,7 +443,7 @@ class Check:
             return text, InlineKeyboardMarkup([_back_to_check(target_id)])
 
         lines = [
-            f"{bold('Appeals')} — {len(bans)} total  ·  page {page + 1}/{total_pages}\n"
+            f"{bold('Appeals')}: {len(bans)} total, page {page + 1}/{total_pages}\n"
         ]
         item_btns: list[InlineKeyboardButton] = []
         base_idx = page * _PAGE_SIZE
@@ -485,7 +485,7 @@ async def _per_chat_event_list(
     db_call,
     cb_prefix: str,
 ) -> tuple[str, InlineKeyboardMarkup]:
-    """Shared renderer for kicks/mutes — both have the same shape."""
+    """Shared renderer for kicks/mutes; both have the same shape."""
     records = await db_call(target_id)
     chunk, total_pages, page = _paginate(records, page)
 
@@ -509,13 +509,13 @@ async def _per_chat_event_list(
     )
 
     lines = [
-        f"{bold(heading_name)} — {len(records)} total"
-        f"  ·  page {page + 1}/{total_pages}\n"
+        f"{bold(heading_name)}: {len(records)} total"
+        f", page {page + 1}/{total_pages}\n"
     ]
     base_idx = page * _PAGE_SIZE
     for i, rec in enumerate(chunk, start=1):
         ts = _date(rec.get("timestamp"))
-        reason_short = esc(str(rec.get("reason", "—"))[:80])
+        reason_short = esc(str(rec.get("reason", "(no reason)"))[:80])
         chat_id = rec.get("chat_id", 0)
         title = titles.get(chat_id) or str(chat_id)
         admin_id = rec.get("admin_id", 0)

@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""checkme and check handlers – self ban status and comprehensive user-profile view."""
+"""checkme and check handlers: self ban status and comprehensive user-profile view."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Who can use",
-        "Anyone — no special permissions needed.",
+        "Anyone, no special permissions needed.",
     ),
     (
         "Where to use",
@@ -254,7 +254,7 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
         await update.effective_message.reply_text(
-            "Couldn't resolve that user — reply to a message or provide a valid ID / @username."
+            "Couldn't resolve that user. Reply to a message or provide a valid ID / @username."
         )
         return
 

@@ -15,10 +15,10 @@ Before invoking this skill, you must already have read [`.agents/CLAUDE.md`](../
 
 When you change *any* documentation file, update the related markdown in the same turn:
 
-- [`CHANGELOG.md`](../../../CHANGELOG.md) — entry under `[Unreleased]` describing the doc change (use `### Documentation` or `### Added - Documentation`).
-- [`PLAN.md`](../../../PLAN.md) — if the doc change reflects a runtime or project-state change.
-- [`docs/README.md`](../../../docs/README.md) — if a new doc was added, update the Quick navigation or Detailed feature guides table.
-- [`docs/mapping.md`](../../../docs/mapping.md) — if the repository tree changed.
+- [`CHANGELOG.md`](../../../CHANGELOG.md): entry under `[Unreleased]` describing the doc change (use `### Documentation` or `### Added - Documentation`).
+- [`PLAN.md`](../../../PLAN.md): if the doc change reflects a runtime or project-state change.
+- [`docs/README.md`](../../../docs/README.md): if a new doc was added, update the Quick navigation or Detailed feature guides table.
+- [`docs/mapping.md`](../../../docs/mapping.md): if the repository tree changed.
 - Any sibling docs whose content is now stale or whose cross-references would break.
 
 The user should NEVER have to ask "did you update CHANGELOG.md?" If they ask, you already failed.

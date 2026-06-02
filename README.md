@@ -4,16 +4,16 @@ TCF Bot is a Telegram federation management bot for the Transsion Core Federatio
 
 ## Features
 
-- **Federation bans** — create, update, and lift bans across all connected groups.
-- **Ban proof workflow** — collect proof media/text before enforcement and store proof message references.
-- **Appeals** — deep-link private-message flow with staff review buttons and appeal records.
-- **Connected groups** — approve group joins, track active groups, and run multi-group actions safely.
-- **Staff roles** — Founder, Admin, Developer, and Tester hierarchy with promotion/demotion workflows.
-- **Moderation actions** — ban, unban, kick, mute, warn, warning reset, checks, stats, and broadcast helpers.
-- **Smart mentions** — global username-based mentions with automatic fallback to plain text + ID for users without usernames.
-- **Flexible target resolution** — reply-first priority with partial name search support for natural command usage.
-- **Audit logging** — moderation, appeal, role, and error reports to configured log destinations.
-- **Health checks** — Flask keep-alive server on `PORT` with `GET /` returning `OK`.
+- **Federation bans**: create, update, and lift bans across all connected groups.
+- **Ban proof workflow**: collect proof media/text before enforcement and store proof message references.
+- **Appeals**: deep-link private-message flow with staff review buttons and appeal records.
+- **Connected groups**: approve group joins, track active groups, and run multi-group actions safely.
+- **Staff roles**: Founder, Admin, Developer, and Tester hierarchy with promotion/demotion workflows.
+- **Moderation actions**: ban, unban, kick, mute, warn, warning reset, checks, stats, and broadcast helpers.
+- **Smart mentions**: global username-based mentions with automatic fallback to plain text + ID for users without usernames.
+- **Flexible target resolution**: reply-first priority with partial name search support for natural command usage.
+- **Audit logging**: moderation, appeal, role, and error reports to configured log destinations.
+- **Health checks**: Flask keep-alive server on `PORT` with `GET /` returning `OK`.
 
 ## Stack
 
@@ -52,9 +52,9 @@ cp config.env.example config.env
 
 Never commit real credentials. At minimum, the bot needs:
 
-- `BOT_TOKEN` — Telegram bot token from BotFather.
-- `MONGODB_URI` — MongoDB connection string.
-- `OWNER_ID` — Telegram user ID for the initial federation founder.
+- `BOT_TOKEN`: Telegram bot token from BotFather.
+- `MONGODB_URI`: MongoDB connection string.
+- `OWNER_ID`: Telegram user ID for the initial federation founder.
 
 See [Configuration](#configuration) below and `config.env.example` for the complete list. For detailed setup instructions, see [`docs/setup.md`](docs/setup.md). For Replit-specific setup, see [`replit.md`](replit.md).
 
@@ -289,6 +289,6 @@ Configure in GitHub repository settings → Secrets:
 
 ## License
 
-Copyright © 2024–2026 Transsion Core, Dizzy, Aveum Apps. All rights reserved.
+Copyright © 2024-2026 Transsion Core, Dizzy, Aveum Apps. All rights reserved.
 
 See `LICENSE` for details.

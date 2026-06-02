@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Centralised promotion logic — role assignment and Admin promotion request flow."""
+"""Centralised promotion logic: role assignment and Admin promotion request flow."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-# AI Agent Instructions — TCF Bot
+# AI Agent Instructions: TCF Bot
 
 Read this file completely before making any change to this repository. It is the canonical project reference for AI coding agents. The other files in `.agents/` expand specific topics and must stay consistent with this file.
 
@@ -10,11 +10,11 @@ Compatible with: Claude, Replit AI, Gemini, Qwen, GitHub Copilot, and any AI cod
 
 ## MANDATORY: Read These Files BEFORE Any Work
 
-Every new conversation **must start by reading** the following files. The user should NEVER need to remind you. If you skip this step, you will produce inconsistent or wrong work — exactly the failure mode that has happened repeatedly in this repo.
+Every new conversation **must start by reading** the following files. The user should NEVER need to remind you. If you skip this step, you will produce inconsistent or wrong work, exactly the failure mode that has happened repeatedly in this repo.
 
-**This rule already lives in many places** — `.agents/CLAUDE.md` (here), `.agents/RULES.md`, `AGENTS.md`, `PLAN.md`, `.agents/skills/project-policy/SKILL.md`, `.agents/skills/docs-maintainer/SKILL.md`, `.agents/agents/*.md` sub-agent prompts. If you found this file, you have no excuse.
+**This rule already lives in many places**: `.agents/CLAUDE.md` (here), `.agents/RULES.md`, `AGENTS.md`, `PLAN.md`, `.agents/skills/project-policy/SKILL.md`, `.agents/skills/docs-maintainer/SKILL.md`, `.agents/agents/*.md` sub-agent prompts. If you found this file, you have no excuse.
 
-**Tier 1 — Read every conversation, no exceptions:**
+**Tier 1: Read every conversation, no exceptions:**
 
 | File | Why |
 |---|---|
@@ -22,13 +22,13 @@ Every new conversation **must start by reading** the following files. The user s
 | [`.agents/RULES.md`](RULES.md) | Hard constraints and forbidden actions |
 | [`AGENTS.md`](../AGENTS.md) | Top-level project guide |
 | [`PLAN.md`](../PLAN.md) | Current project state, runtime flow, priorities |
-| [`CHANGELOG.md`](../CHANGELOG.md) | Recent changes — what already shipped vs what is in flight |
+| [`CHANGELOG.md`](../CHANGELOG.md) | Recent changes: what already shipped vs what is in flight |
 
-**Tier 2 — Read when relevant to the task (not optional, just task-scoped):**
+**Tier 2: Read when relevant to the task (not optional, just task-scoped):**
 
 | Folder | Read when |
 |---|---|
-| [`.agents/`](.) | Any code or doc work — see siblings: STYLE-CODE, STYLE-COMMENTS, WORKFLOW, TEST-RUFF, REPLIT |
+| [`.agents/`](.) | Any code or doc work; see siblings: STYLE-CODE, STYLE-COMMENTS, WORKFLOW, TEST-RUFF, REPLIT |
 | [`docs/`](../docs/) | Architecture, modules, helpers, databases, utils, workflows, detailed feature guides |
 | [`docs/workflows-guide.md`](../docs/workflows-guide.md) | CI/CD automation: auto-fix PR, dependency updates, performance, TDD verification |
 | [`README.md`](../README.md) | User-facing setup and feature list |
@@ -36,13 +36,13 @@ Every new conversation **must start by reading** the following files. The user s
 
 If a task touches a feature, read the matching `docs/*-detailed.md` first.
 
-**Why this is so emphasized:** the user has had to remind agents repeatedly to read the docs before working and to update CHANGELOG.md / PLAN.md after working. That reminder loop is itself the bug. The rule is not "be aware of these files" — the rule is **read them at the start, write to them at the end, every single time, without prompting**.
+**Why this is so emphasized:** the user has had to remind agents repeatedly to read the docs before working and to update CHANGELOG.md / PLAN.md after working. That reminder loop is itself the bug. The rule is not "be aware of these files"; the rule is **read them at the start, write to them at the end, every single time, without prompting**.
 
 ---
 
 ## MANDATORY: Auto-Invoke Skills, Use Sub-Agents Sparingly
 
-**Skills (`.agents/skills/`) — auto-invoke every time the trigger matches. No exceptions, no asking.**
+**Skills (`.agents/skills/`): auto-invoke every time the trigger matches. No exceptions, no asking.**
 
 The user does not want to type "use the X skill" every time. If a task matches a skill's description, invoke that skill silently as part of doing the task. The cost is essentially free (skill prompts are short and cached) and the upside is consistent project-correct work.
 
@@ -53,7 +53,7 @@ The user does not want to type "use the X skill" every time. If a task matches a
 | [`telegram-bot-builder`](skills/telegram-bot-builder/SKILL.md) | About to add or modify a Telegram handler, ConversationHandler, or PTB-specific code |
 | [`mongodb-query-optimizer`](skills/mongodb-query-optimizer/SKILL.md) | About to write a MongoDB query, index, aggregation, or modify `tcbot/database/*_db.py` |
 | [`async-python-patterns`](skills/async-python-patterns/SKILL.md) | About to write `async def`, `asyncio.gather`, or any concurrency code |
-| [`python-code-quality`](skills/python-code-quality/SKILL.md) | About to write or refactor Python — for typing, imports, naming, Ruff compliance |
+| [`python-code-quality`](skills/python-code-quality/SKILL.md) | About to write or refactor Python; for typing, imports, naming, Ruff compliance |
 | [`mermaid-diagrams`](skills/mermaid-diagrams/SKILL.md) | About to add or update a flow / architecture / sequence diagram in any `.md` file |
 | [`runtime-debugger`](skills/runtime-debugger/SKILL.md) | Debugging a live runtime issue, exception trace, or hang |
 | [`feature-reviewer`](skills/feature-reviewer/SKILL.md) | Reviewing a feature, PR, or completed change before declaring done |
@@ -61,7 +61,7 @@ The user does not want to type "use the X skill" every time. If a task matches a
 
 If a single task touches multiple of these areas, invoke multiple skills. They compose.
 
-**Sub-agents (`.agents/agents/`) — use sparingly. Only for heavy or genuinely parallel work.**
+**Sub-agents (`.agents/agents/`): use sparingly. Only for heavy or genuinely parallel work.**
 
 The user has flagged sub-agents as expensive (token cost) and risky (sub-agents can drift off-task). Default to **doing the work yourself**. Only delegate when ALL of these hold:
 
@@ -75,7 +75,7 @@ Sub-agent quick guide (read prompt before delegating):
 |---|---|
 | [`coordinator`](agents/coordinator.md) | A multi-step task needs a written plan with dependencies before starting |
 | [`debug-investigator`](agents/debug-investigator.md) | Tracing a non-obvious bug across many files where a fresh-eyes pass would help |
-| [`docs-and-skills-editor`](agents/docs-and-skills-editor.md) | Bulk doc reorganization or skill rewrites — only if the scope is genuinely big |
+| [`docs-and-skills-editor`](agents/docs-and-skills-editor.md) | Bulk doc reorganization or skill rewrites; only if the scope is genuinely big |
 | [`general-operator`](agents/general-operator.md) | A self-contained task that can run end-to-end without the main agent's context |
 | [`implementation-helper`](agents/implementation-helper.md) | A clearly-spec'd feature implementation that can run independently |
 | [`project-explorer`](agents/project-explorer.md) | Open-ended codebase research where the answer needs many file reads |
@@ -90,7 +90,7 @@ For anything that one focused agent can finish in a few tool calls, **do not spa
 
 ## MANDATORY: Update These Files AFTER Any Work
 
-Every change — code, docs, workflows, refactors, bug fixes — **must update the related markdown in the same turn**. The user should NEVER need to remind you to update CHANGELOG.md or PLAN.md.
+Every change (code, docs, workflows, refactors, bug fixes) **must update the related markdown in the same turn**. The user should NEVER need to remind you to update CHANGELOG.md or PLAN.md.
 
 **Always update:**
 
@@ -109,7 +109,7 @@ Every change — code, docs, workflows, refactors, bug fixes — **must update t
 | [`docs/<area>/<area>.md`](../docs/) | The corresponding `tcbot/<area>/` package changed |
 | [`docs/<feature>-detailed.md`](../docs/) | A specific feature (ban, appeal, check, warn, role, promote, demote, stats) changed |
 | [`docs/mapping.md`](../docs/mapping.md) | Repository tree changed (new files, moved files, renamed packages) |
-| [`docs/README.md`](../docs/README.md) | A new doc was added — update the Quick navigation or Detailed feature guides table |
+| [`docs/README.md`](../docs/README.md) | A new doc was added: update the Quick navigation or Detailed feature guides table |
 | [`.agents/CLAUDE.md`](CLAUDE.md), [`.agents/RULES.md`](RULES.md) | A canonical pattern, helper, or rule changed |
 | [`AGENTS.md`](../AGENTS.md) | Repository structure, ownership rules, or contributor commands changed |
 | [`replit.md`](../replit.md) | Deployment-relevant change (port, entry command, env var) |
@@ -123,7 +123,7 @@ Every change — code, docs, workflows, refactors, bug fixes — **must update t
 - **Short title** (`path/to/file.py`): What changed, why it matters, and the user-visible effect. Include the symptom (e.g. "caused NameError in 4 tests") so future readers understand the impact.
 ```
 
-Skipping the doc sweep is a defect of the same severity as a failing test. The user should not have to ask "did you update the CHANGELOG?" — that question is a sign you failed.
+Skipping the doc sweep is a defect of the same severity as a failing test. The user should not have to ask "did you update the CHANGELOG?"; that question is a sign you failed.
 
 ---
 
@@ -346,8 +346,8 @@ Standard rate limits:
 
 | Category | Limit | Period |
 |---|---:|---:|
-| Destructive commands: ban, kick, unban, broadcast | 3–5 | 60s |
-| Moderation commands: mute, warn, cleanup | 3–5 | 60s |
+| Destructive commands: ban, kick, unban, broadcast | 3-5 | 60s |
+| Moderation commands: mute, warn, cleanup | 3-5 | 60s |
 | Read commands: stats, groups, checkme, help | 8 | 30s |
 | Inline callbacks | 15 | 30s |
 | Emergency-only actions | 1 | 300s |
@@ -490,7 +490,7 @@ Rules:
 - Use `mention()` for user display and `code()` for IDs; do not concatenate both
   for the same value.
 - Use parenthesized multi-line strings, not backslash continuation.
-- Tone is friendly-formal, short, and direct; use 1–3 emojis only where natural.
+- Tone is friendly-formal, short, and direct; use 1-3 emojis only where natural.
 - All bot responses must be in English.
 
 ---
@@ -616,14 +616,14 @@ uv run ruff check --fix .
 The bot speaks to users in **professional + friendly + lightly humorous** English. Replies are short, plain-text, and human; no exclamation cascades, no marketing tone.
 
 - **Pictograph emoji are forbidden** (waving hands, party poppers, prohibition signs, warning signs, coloured squares, and the like). Strip them on sight.
-- **Text emoticons are allowed sparingly** when they fit a joke beat: `:)`, `:v`, `:')`, `:D`. At most one per reply, and only in the *witty refusal* path — never in success/error/data views.
+- **Text emoticons are not used.** The bot expresses dry humor through word choice only. No `:)`, `:v`, `:')`, or `:D` in any reply.
 - The bot identifies the target before speaking. The canonical identity classes are defined in `tcbot/modules/helper/identity.py`:
-  - `self` — the executor targeted themselves
-  - `this_bot` — this bot is the target
-  - `other_bot` — any other Telegram bot
-  - `telegram` — Telegram service account (id `777000`)
-  - `founder`, `admin`, `developer`, `tester` — federation roles
-  - `user` — regular user, no federation role
+  - `self`: the executor targeted themselves
+  - `this_bot`: this bot is the target
+  - `other_bot`: any other Telegram bot
+  - `telegram`: Telegram service account (id `777000`)
+  - `founder`, `admin`, `developer`, `tester`: federation roles
+  - `user`: regular user, no federation role
 - Use `identity.classify(...)` plus `identity.refuse_message(action, ident)` and `identity.staff_notice(action, ident, community)` instead of repeating self/bot/founder branches inline. Each moderation entry handler should follow this shape:
 
 ```python
@@ -646,10 +646,10 @@ if refusal is not None:
 This bot must respond with **zero perceived delay**. The hot path of every command handler should issue independent async work in parallel.
 
 - Any two `await`s that do not depend on each other **must** be combined with `asyncio.gather(...)`. Sequential awaits are a defect.
-- Cache-only reads (`users_cache.get_first_name`, `users_roles.get_effective_role`) are still awaits — gather them with the DB writes / Telegram calls that happen alongside.
+- Cache-only reads (`users_cache.get_first_name`, `users_roles.get_effective_role`) are still awaits; gather them with the DB writes / Telegram calls that happen alongside.
 - For lists rendered in a loop (kicks, mutes, warns, bans), resolve every per-item lookup *before* the formatting loop runs. The loop itself stays synchronous string-building.
 - External Telegram lookups (`bot.get_chat`) **must** be wrapped in `asyncio.wait_for(timeout=3.0)` so a stalled API call cannot block a user-facing reply.
-- DM + log + audit writes that fan out to multiple chats use `asyncio.gather(..., return_exceptions=True)` — one recipient failing must not roll back the others.
+- DM + log + audit writes that fan out to multiple chats use `asyncio.gather(..., return_exceptions=True)`; one recipient failing must not roll back the others.
 - Module-level handler registration is the only place sequential awaits are acceptable.
 
 If you add a new handler, prove the parallelism in code review by pointing at the `asyncio.gather` block. If there isn't one, justify why every read/write in that handler is dependent on the previous.
@@ -675,7 +675,7 @@ Steps every refactor must perform:
 
 1. Rename / move / replace the API.
 2. Run `uv run ruff check --fix . && uv run ruff format . && uv run --extra test pytest tests/ -q` and fix anything that breaks.
-3. Grep the entire repo for the **old** name (and any obvious aliases) — every match is a doc to update or delete:
+3. Grep the entire repo for the **old** name (and any obvious aliases): every match is a doc to update or delete:
    ```bash
    grep -RIn 'old_name\|old.module\|old/path' agents docs PLAN.md AGENTS.md README.md .agents
    ```

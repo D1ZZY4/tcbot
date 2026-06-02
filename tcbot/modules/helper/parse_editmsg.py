@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""safe_edit / safe_edit_cb helpers – edit messages in place, suppressing benign Telegram errors."""
+"""safe_edit / safe_edit_cb helpers: edit messages in place, suppressing benign Telegram errors."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ _IGNORED = {
 
 
 async def safe_edit(msg: Message, text: str, **kwargs) -> None:
-    """Edit a message via msg.edit_text — swallow harmless not-modified errors."""
+    """Edit a message via msg.edit_text; swallow harmless not-modified errors."""
     try:
         await msg.edit_text(text, parse_mode="HTML", **kwargs)
     except BadRequest as e:
@@ -34,7 +34,7 @@ async def safe_edit(msg: Message, text: str, **kwargs) -> None:
 
 
 async def safe_edit_cb(q: CallbackQuery, text: str, **kwargs) -> None:
-    """Edit a callback-query message — swallow harmless not-modified errors.
+    """Edit a callback-query message; swallow harmless not-modified errors.
 
     Use this whenever a user can re-tap a button that lands them on the same
     content (e.g. a section sub-button while already viewing that section).

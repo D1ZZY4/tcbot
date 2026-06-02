@@ -7,7 +7,7 @@ Last updated: 2026-05-29
 
 # Feature Reviewer
 
-Before invoking this skill, confirm the read/update rules in [`.agents/CLAUDE.md`](../../CLAUDE.md#mandatory-read-these-files-before-any-work). When reviewing, flag missing [`CHANGELOG.md`](../../../CHANGELOG.md) and [`PLAN.md`](../../../PLAN.md) updates as a review finding — those are required, not optional.
+Before invoking this skill, confirm the read/update rules in [`.agents/CLAUDE.md`](../../CLAUDE.md#mandatory-read-these-files-before-any-work). When reviewing, flag missing [`CHANGELOG.md`](../../../CHANGELOG.md) and [`PLAN.md`](../../../PLAN.md) updates as a review finding; those are required, not optional.
 
 Use this skill when the user asks for a code review, final check, regression review, or "is this ready?" review of project changes.
 

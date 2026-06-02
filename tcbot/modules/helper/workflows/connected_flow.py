@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Group connection flow – in-group join prompt, permission check, pending monitoring."""
+"""Group connection flow: in-group join prompt, permission check, pending monitoring."""
 
 from __future__ import annotations
 
@@ -178,7 +178,7 @@ class BuildConnection:
                     )
                 except Exception as exc:
                     log.error("Bot removed log failed for %d: %s", chat.id, exc)
-            log.info("Bot removed from %d – group deactivated", chat.id)
+            log.info("Bot removed from %d; group deactivated", chat.id)
             return
 
         if new_status in (ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR):
@@ -250,7 +250,7 @@ class BuildConnection:
             await q.answer("Only the group owner can decide.", show_alert=True)
             return
 
-        # * Owner verified — ack the callback before any callback-query edits.
+        # * Owner verified; ack the callback before any callback-query edits.
         await q.answer()
 
         action = q.data

@@ -24,8 +24,8 @@ log = logging.getLogger(__name__)
 
 WARN_LIMIT = 3
 
-# * Per-action BuildReason and BuildProof instances — imported by warnings.py
-# * skip_allowed=False because warn requires a reason — Skip is not offered
+# * Per-action BuildReason and BuildProof instances; imported by warnings.py
+# * skip_allowed=False because warn requires a reason; Skip is not offered
 reason = BuildReason("warn", skip_allowed=False)
 proof = BuildProof("warn")
 

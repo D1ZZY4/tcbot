@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Configuration singleton – loads env vars into a frozen dataclass and exposes a thin cfg adapter."""
+"""Configuration singleton: loads env vars into a frozen dataclass and exposes a thin cfg adapter."""
 
 from __future__ import annotations
 
@@ -121,7 +121,7 @@ def _parse_log_level(raw: str) -> int:
 
 @dataclass(frozen=True)
 class Configs:
-    """Immutable configuration dataclass – all fields are loaded from environment variables."""
+    """Immutable configuration dataclass: all fields are loaded from environment variables."""
 
     bot_token: str
     owner_id: int
@@ -233,7 +233,7 @@ class Configs:
 configs = Configs.load()
 
 
-# ! Property names in _CfgAdapter are imported by every module — rename with caution.
+# ! Property names in _CfgAdapter are imported by every module; rename with caution.
 class _CfgAdapter:
     """Thin adapter that exposes Configs fields with the short canonical names used by all modules."""
 

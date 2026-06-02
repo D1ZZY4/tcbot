@@ -35,7 +35,7 @@ async def test_warn_limit_keeps_warns_when_auto_ban_fails(monkeypatch) -> None:
     monkeypatch.setattr(warning_flow.db.warns_db, "add_warn", add_warn)
     monkeypatch.setattr(warning_flow.db.warns_db, "clear_warns", clear_warns)
     monkeypatch.setattr(warning_flow.parse_logmsg, "warn_log", Mock(return_value="log"))
-    # * Target holds no federation role — auto_demote should be skipped.
+    # * Target holds no federation role; auto_demote should be skipped.
     monkeypatch.setattr(
         warning_flow.db.users_roles, "get_effective_role", AsyncMock(return_value=None)
     )

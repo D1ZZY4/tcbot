@@ -187,7 +187,7 @@ def build_prefixed_filters(command: str) -> filters.BaseFilter:
     return _PrefixedCommandFilter(command.lower(), _get_prefixes())
 
 
-# * Matches !, . etc. — does NOT match Telegram-native /commands
+# * Matches !, . etc.; does NOT match Telegram-native /commands
 # * Used in __main__.py member-cache guard (intentionally excludes /)
 _custom_prefixes = _get_custom_prefixes()
 ANY_CMD_FILTER: filters.BaseFilter = (
@@ -196,7 +196,7 @@ ANY_CMD_FILTER: filters.BaseFilter = (
     else _never_match_filter()
 )
 
-# * Includes /, !, . — use in ConversationHandler fallbacks to catch all commands
+# * Includes /, !, .; use in ConversationHandler fallbacks to catch all commands
 _prefixes = _get_prefixes()
 ALL_PREFIXES_CMD_FILTER: filters.BaseFilter = (
     _AnyPrefixedCommandFilter(_prefixes, name="AnyPrefixedCommand")

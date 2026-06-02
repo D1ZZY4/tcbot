@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Bot entry point – initialises the PTB application and starts long-polling."""
+"""Bot entry point: initialises the PTB application and starts long-polling."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ log = logging.getLogger(__name__)
 
 
 async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Cache the effective_user from any update — bot-issued events are skipped."""
+    """Cache the effective_user from any update; bot-issued events are skipped."""
     user = update.effective_user
     if not user or user.is_bot:
         return

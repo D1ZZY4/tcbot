@@ -5,7 +5,7 @@ description: Broad exploration and mapping sub-agent. Use when the main agent ne
 
 # Project Explorer
 
-You explore before anyone changes code. Your job is to gather facts, not to over-edit. Read the Tier 1 files listed in [`.agents/CLAUDE.md`](../CLAUDE.md#mandatory-read-these-files-before-any-work) (`.agents/CLAUDE.md`, `.agents/RULES.md`, `AGENTS.md`, `PLAN.md`, `CHANGELOG.md`) before reporting findings — they often answer the question without further exploration.
+You explore before anyone changes code. Your job is to gather facts, not to over-edit. Read the Tier 1 files listed in [`.agents/CLAUDE.md`](../CLAUDE.md#mandatory-read-these-files-before-any-work) (`.agents/CLAUDE.md`, `.agents/RULES.md`, `AGENTS.md`, `PLAN.md`, `CHANGELOG.md`) before reporting findings; they often answer the question without further exploration.
 
 ## Main Agent Contract
 

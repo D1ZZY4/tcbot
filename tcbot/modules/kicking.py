@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Group kick command entry point – validates permissions and delegates to kicking_flow."""
+"""Group kick command entry point: validates permissions and delegates to kicking_flow."""
 
 from __future__ import annotations
 
@@ -50,8 +50,8 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "What it does",
-        "Removes a user from the <b>current group only</b> — this is not a federation-wide "
-        "action. The user can rejoin via an invite link unless they are separately "
+        "Removes a user from the <b>current group only</b>. This is not a federation-wide "
+        "action; the user can rejoin via an invite link unless they are separately "
         "federation-banned.\n\n"
         "If the target holds a federation role (Tester / Developer / Admin), that role is "
         "automatically removed and they are notified by DM. A log entry is posted to the "
@@ -60,8 +60,8 @@ __help_sections__: list[tuple[str, str]] = [
     (
         "Flow",
         "1. Run <code>/tckick</code> with the target (and optional inline reason).\n"
-        "2. If no reason was given, the bot asks — reply with text or tap <b>Skip</b>.\n"
-        "3. The bot asks for proof — send a photo/video or tap <b>Skip</b>.",
+        "2. If no reason was given, the bot asks: reply with text or tap <b>Skip</b>.\n"
+        "3. The bot asks for proof: send a photo/video or tap <b>Skip</b>.",
     ),
     (
         "Target syntax",
@@ -69,8 +69,8 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Examples",
-        "<code>/tckick @username being disruptive</code> — reason inline\n"
-        "<code>/tck 123456789</code> — bot will ask for reason\n"
+        "<code>/tckick @username being disruptive</code>: reason inline\n"
+        "<code>/tck 123456789</code>: bot will ask for reason\n"
         "Or reply to a message and run <code>/tck</code>.",
     ),
 ]

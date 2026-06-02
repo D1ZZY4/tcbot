@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Aveum Apps
 
-"""Group connect command handler – manages federation group onboarding."""
+"""Group connect command handler: manages federation group onboarding."""
 
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ __help_sections__: list[tuple[str, str]] = [
     (
         "What it does",
         f"Connects your group to the {cfg.community_name} federation. Once connected:\n"
-        f"- Federation bans are automatically enforced — currently banned users are removed, "
+        f"- Federation bans are automatically enforced: currently banned users are removed, "
         f"and newly banned users are kicked on ban.\n"
         f"- Federation mutes are applied when issued.\n"
         f"- Broadcast messages from TC Staff are forwarded to your group.",
@@ -66,9 +66,9 @@ __help_sections__: list[tuple[str, str]] = [
     (
         "Notes",
         "If a connect request is already pending for your group, a second request will be "
-        "rejected — wait for TC Staff to process the existing one.\n\n"
+        "rejected; wait for TC Staff to process the existing one.\n\n"
         "When the bot is first added to a group, it automatically prompts the group owner "
-        "to connect — so you can also just add the bot and follow that prompt.",
+        "to connect, so you can also just add the bot and follow that prompt.",
     ),
     (
         "Example",

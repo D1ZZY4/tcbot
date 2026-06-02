@@ -53,7 +53,7 @@ def test_ban_log_without_proof_link_has_no_href() -> None:
 
 
 def test_ban_log_with_proof_link_has_no_inline_link() -> None:
-    """The ban_log text never embeds a hyperlink — the keyboard's Proof button covers it."""
+    """The ban_log text never embeds a hyperlink; the keyboard's Proof button covers it."""
     out = parse_logmsg.ban_log(
         target_id=2,
         target_fname="X",
@@ -167,7 +167,7 @@ def test_demoted_unified_for_manual_and_trigger() -> None:
         by_fname="Andi",
         trigger="ban",
     )
-    # * Both call sites produce the same unified shape — no Auto-Demote title.
+    # * Both call sites produce the same unified shape; no Auto-Demote title.
     assert f"{cfg.community_name} Demoted" in manual
     assert f"{cfg.community_name} Demoted" in auto
     assert "Auto-Demote" not in manual
