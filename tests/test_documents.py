@@ -46,9 +46,13 @@ def test_admin_doc_keys() -> None:
 def test_ban_doc_keys() -> None:
     """BanDoc declares the core ban fields used by bans_db."""
     keys = set(docs.BanDoc.__annotations__)
-    assert {"ban_id", "banned_user_id", "reason", "admin_user_id", "is_active"}.issubset(
-        keys
-    )
+    assert {
+        "ban_id",
+        "banned_user_id",
+        "reason",
+        "admin_user_id",
+        "is_active",
+    }.issubset(keys)
 
 
 def test_group_doc_keys() -> None:

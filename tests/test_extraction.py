@@ -25,7 +25,9 @@ def _make_update(
     text: str = "",
 ) -> Update:
     """Build a minimal Update/Message stub for extract_target tests."""
-    reply_msg = SimpleNamespace(from_user=reply_user) if reply_user is not None else None
+    reply_msg = (
+        SimpleNamespace(from_user=reply_user) if reply_user is not None else None
+    )
     msg = SimpleNamespace(
         reply_to_message=reply_msg,
         entities=entities or [],
@@ -229,9 +231,7 @@ class TestExtractTargetNumericArg:
         assert uid == 333
         assert fname == "User 333"
 
-    async def test_numeric_arg_bot_get_chat_fails_uses_cache(
-        self, monkeypatch
-    ) -> None:
+    async def test_numeric_arg_bot_get_chat_fails_uses_cache(self, monkeypatch) -> None:
         """Priority 2a: when _safe_get_chat returns None, fall back to cache name."""
         update = _make_update()
         bot = cast(Bot, SimpleNamespace(id=1))

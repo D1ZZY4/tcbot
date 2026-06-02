@@ -58,7 +58,7 @@ As of 2026-06-02, TCF Bot uses:
 - Flask keep-alive server
 - `uv` and `uv.lock`
 - Ruff
-- pytest + pytest-asyncio offline tests, currently 1005 tests across 66 files
+- pytest + pytest-asyncio offline tests, currently 1078 tests across 69 files
 
 Recent project additions to keep accurate when editing docs:
 

@@ -2,6 +2,21 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-02 (session 5)
+
+### Maintenance - Ruff format applied to three session-4 test files
+
+Three test files written during session 4 were left unformatted:
+`tests/test_documents.py`, `tests/test_extraction.py`, `tests/test_warns_db.py`.
+Applied `ruff format` to all three; 141 files are now clean.
+`ruff check .` remains at 0 errors.
+
+### Documentation - Stale test counts updated in memory and PLAN.md
+
+Updated stale session-3 / 1039-tests references to the current 1078-tests / 69-files
+baseline across: `.agents/memory/replit-test-runner.md`, `.agents/memory/structure.md`,
+`.agents/memory/MEMORY.md`, `.agents/memory/context.md`, and `PLAN.md` (baseline footer).
+
 ## [Unreleased] - 2026-06-02 (session 4)
 
 ### Added - Test coverage expansion: extract_target(), bans_db mutations, warns_db queries

@@ -326,4 +326,4 @@ Validation used for this baseline:
 uv run --extra test pytest --collect-only -q
 ```
 
-Result: 1039 tests collected across 69 test files.
+Result: 1078 tests collected across 69 test files.

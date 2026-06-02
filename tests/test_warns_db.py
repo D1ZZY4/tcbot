@@ -140,7 +140,9 @@ class FakeWarnCountsCollection:
             return SimpleNamespace(deleted_count=1)
         return SimpleNamespace(deleted_count=0)
 
-    def find(self, flt: dict, projection=None, sort: list[tuple[str, int]] | None = None) -> FakeCursor:
+    def find(
+        self, flt: dict, projection=None, sort: list[tuple[str, int]] | None = None
+    ) -> FakeCursor:
         docs = [doc for doc in self.docs.values() if self._match(doc, flt)]
         if sort:
             for key, direction in reversed(sort):
@@ -379,9 +381,24 @@ async def test_user_warn_groups_returns_chats_with_active_warns(monkeypatch) -> 
     warns = FakeWarnsCollection()
     counts = FakeWarnCountsCollection(
         [
-            {"user_id": 40, "chat_id": 10, "count": 2, "updated_at": datetime(2025, 1, 2, tzinfo=timezone.utc)},
-            {"user_id": 40, "chat_id": 20, "count": 1, "updated_at": datetime(2025, 1, 1, tzinfo=timezone.utc)},
-            {"user_id": 40, "chat_id": 30, "count": 0, "updated_at": datetime(2025, 1, 3, tzinfo=timezone.utc)},
+            {
+                "user_id": 40,
+                "chat_id": 10,
+                "count": 2,
+                "updated_at": datetime(2025, 1, 2, tzinfo=timezone.utc),
+            },
+            {
+                "user_id": 40,
+                "chat_id": 20,
+                "count": 1,
+                "updated_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+            },
+            {
+                "user_id": 40,
+                "chat_id": 30,
+                "count": 0,
+                "updated_at": datetime(2025, 1, 3, tzinfo=timezone.utc),
+            },
         ]
     )
     _patch_collections(monkeypatch, warns, counts)

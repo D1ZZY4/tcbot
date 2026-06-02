@@ -14,7 +14,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv sync --extra test` | PASS |
 | `uv run ruff format --check .` | PASS (all files unchanged) |
 | `uv run ruff check .` | PASS (0 errors) |
-| `uv run --extra test pytest tests/ -q` | PASS (1039 tests, 69 files, all green) |
+| `uv run --extra test pytest tests/ -q` | PASS (1078 tests, 69 files, all green) |
 
 ## Completed items
 
