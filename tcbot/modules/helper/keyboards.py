@@ -311,6 +311,13 @@ def groups_menu_kb(detailed: bool) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[toggle], [back]])
 
 
+def tcgroups_kb(detailed: bool) -> InlineKeyboardMarkup:
+    """Toggle keyboard for the /tcgroups command: Simple/Details switch."""
+    label = "Simple" if detailed else "Details"
+    callback = "groups_simple" if detailed else "groups_details"
+    return InlineKeyboardMarkup([[InlineKeyboardButton(label, callback_data=callback)]])
+
+
 # ─────────────────────────── Stats menus ────────────────────────── #
 
 

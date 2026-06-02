@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import asyncio
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Update
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import GroupDoc
-from tcbot.modules.helper import decorators
+from tcbot.modules.helper import decorators, keyboards
 from tcbot.modules.helper.formatter import code, esc
 from tcbot.modules.helper.parse_editmsg import safe_edit
 from tcbot.utils.prefixes import build_prefixed_filters
@@ -66,23 +66,6 @@ def _render(groups: list[GroupDoc], detailed: bool) -> str:
             lines.append(f"- {esc(g['title'])}")
     return "\n".join(lines)
 
-
-def _kb(detailed: bool) -> InlineKeyboardMarkup:
-    if detailed:
-        return InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton("Simple", callback_data="groups_simple"),
-                ]
-            ]
-        )
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("Details", callback_data="groups_details"),
-            ]
-        ]
-    )
 
 
 # ────────── Command for see Connected Groups </tcgroups> ────────── #

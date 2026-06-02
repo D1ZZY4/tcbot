@@ -15,7 +15,7 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 | Health check | Flask app in `tcbot/alive.py`, `GET /` returns `OK` on `PORT` (default `5000`). |
 | Dependency management | `uv` with `uv.lock`; CI installs with frozen lockfile by default. |
 | Formatting/linting | Ruff, configured in `pyproject.toml`. |
-| Tests | 319 collected tests across 26 `tests/test_*.py` files; designed to run offline. |
+| Tests | 332 collected tests across 26 `tests/test_*.py` files; designed to run offline. |
 | Deployment notes | Local `config.env`, Docker Compose, and Replit/hosted environment variables are documented. |
 
 ## Runtime Flow
@@ -284,8 +284,8 @@ Priorities, in order:
 
 | # | Item | Notes |
 |--|--|--|
-| 1 | `BOT_TOKEN` format validation | Presence already enforced; format check is optional and PTB fails fast on a malformed token anyway. |
-| 2 | `MONGODB_URI` format validation | Presence already enforced; format check is optional and the driver fails fast on a malformed URI. |
+| 1 | ~~`BOT_TOKEN` format validation~~ | `_warn_bot_token_fmt` added to `tcbot/__init__.py`; logs WARNING on bad format. 13 new tests. Resolved 2026-06-02. |
+| 2 | ~~`MONGODB_URI` format validation~~ | `_warn_mongodb_uri_fmt` added to `tcbot/__init__.py`; logs WARNING on bad prefix. Resolved 2026-06-02. |
 | 3 | ~~Covered-query composite index on `member_cache`~~ | `{user_id: 1, first_name: 1, username: 1}` index added to `mongos.ensure_indexes()`. Resolved 2026-06-02. |
 | 4 | Shared module-interface types (`tcbot/modules/types.py`) | Only if module-to-module signatures grow ambiguous. |
 | 5 | Query metrics collection / docstring-format standardization | Data-driven tuning and documentation consistency. |
