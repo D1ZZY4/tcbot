@@ -47,7 +47,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python -m pytest tests/ -v"
+args = "uv run --extra test pytest tests/ -v"
 
 [[workflows.workflow]]
 name = "Bash (Don't Delete This)"
