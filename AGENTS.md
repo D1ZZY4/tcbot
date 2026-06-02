@@ -54,8 +54,8 @@ tgbot/
 │   ├── __main__.py           Runtime entry point, handler registration, polling
 │   ├── alive.py              Flask keep-alive endpoint
 │   ├── database/             MongoDB helpers, one file per collection/domain
-│   │   ├── users_cache.py    Member profile cache operations (new)
-│   │   ├── users_roles.py    Role system: owners/admins/roles (new)
+│   │   ├── users_cache.py    Member profile cache operations
+│   │   ├── users_roles.py    Role system: owners/admins/roles
 │   │   ├── bans_db.py        Federation bans
 │   │   ├── groups_db.py      Connected and pending groups
 │   │   ├── warns_db.py       Warnings
@@ -186,7 +186,7 @@ Repository conventions:
 
 The test suite is designed to run offline without a real Telegram token or MongoDB connection. Add or update tests when changing database helpers, handler behavior, workflow logic, formatting helpers, decorators, or utilities.
 
-Current collected test inventory: 1039 tests across 69 `tests/test_*.py` files.
+Current collected test inventory: 1078 tests across 69 `tests/test_*.py` files.
 
 Recommended validation after source changes:
 

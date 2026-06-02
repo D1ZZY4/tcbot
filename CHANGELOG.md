@@ -2,6 +2,43 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-02 (session 4)
+
+### Added - Test coverage expansion: extract_target(), bans_db mutations, warns_db queries
+
+Expanded three existing test files to cover previously untested critical paths,
+bringing the suite from 1039 tests / 69 files to **1078 tests / 69 files** (+39).
+
+- **`tests/test_extraction.py`** (+13 tests, now 24): Full `extract_target()` coverage
+  across all 5 priority paths — reply-to user (with/without first_name), numeric ID
+  argument (with/without bot, with/without cache), @username argument (resolved and
+  fallback to partial search), partial name/username search (match, no-match), `text_mention`
+  entity (with first_name and without), `@mention` entity (resolved and unresolvable),
+  and no-signal `(None, None)` return. Three additional `_best_name()` paths also added.
+- **`tests/test_bans_db.py`** (+12 tests, now 16): All mutation and statistics
+  functions — `get_ban` (found/missing), `create_ban` (auto-ID and provided-ID),
+  `update_ban` (field update and missing), `deactivate_ban` (success and missing),
+  `set_log_message_id`, `active_ban_count`, `active_ban_user_ids` (projection-only),
+  `user_bans` (all bans for user), `user_ban_count`, `user_appeal_count` (with
+  `appeal_log_msg_id` filter). `FakeBansCollection` extended with `insert_one`,
+  `update_one`, `find_one_and_update`, and `count_documents`.
+- **`tests/test_warns_db.py`** (+5 tests, now 11): `remove_last_warn` no-warns guard,
+  `get_warns` (oldest-first sort, empty, chat-filter), `user_total_warns` (cross-chat
+  count and zero case), `user_warn_groups` (active-count filter), `user_all_warns`
+  (newest-first across chats). `FakeWarnCountsCollection` extended with `find()` for
+  `user_warn_groups` tests.
+
+### Documentation - Remove stale `(new)` labels from AGENTS.md
+
+Removed `(new)` annotations from `users_cache.py` and `users_roles.py` entries in the
+AGENTS.md repository layout — these files have been stable since session 1 and the
+labels were no longer informative.
+
+### Documentation - Test count updated across all docs
+
+Updated test inventory count from `1039 tests / 69 files` to `1078 tests / 69 files`
+in `AGENTS.md`, `PLAN.md`, `README.md`, and `replit.md`.
+
 ## [Unreleased] - 2026-06-02 (session 3)
 
 ### Added - Test coverage for three previously untested modules

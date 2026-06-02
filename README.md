@@ -174,7 +174,7 @@ tgbot/
 
 ## Tests
 
-The current collected inventory is 1039 tests across 69 `tests/test_*.py` files. The suite is designed to run offline without a real Telegram token or MongoDB connection.
+The current collected inventory is 1078 tests across 69 `tests/test_*.py` files. The suite is designed to run offline without a real Telegram token or MongoDB connection.
 
 Run the full suite:
 

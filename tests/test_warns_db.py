@@ -140,6 +140,13 @@ class FakeWarnCountsCollection:
             return SimpleNamespace(deleted_count=1)
         return SimpleNamespace(deleted_count=0)
 
+    def find(self, flt: dict, projection=None, sort: list[tuple[str, int]] | None = None) -> FakeCursor:
+        docs = [doc for doc in self.docs.values() if self._match(doc, flt)]
+        if sort:
+            for key, direction in reversed(sort):
+                docs.sort(key=lambda d: d.get(key, 0), reverse=direction < 0)
+        return FakeCursor(docs)
+
 
 def _patch_collections(
     monkeypatch, warns: FakeWarnsCollection, counts: FakeWarnCountsCollection
@@ -225,3 +232,202 @@ async def test_remove_last_warn_decrements_counter(monkeypatch) -> None:
     assert len(warns.docs) == 1
     assert warns.docs[0]["reason"] == "older"
     assert counts.docs[(300, 30)]["count"] == 1
+
+
+async def test_remove_last_warn_no_warnings_returns_false(monkeypatch) -> None:
+    """remove_last_warn returns False when there are no warns for the user/chat."""
+    warns = FakeWarnsCollection()
+    counts = FakeWarnCountsCollection()
+    _patch_collections(monkeypatch, warns, counts)
+
+    removed = await warns_db.remove_last_warn(999, 99)
+
+    assert removed is False
+
+
+# ──────────────────── get_warns ─────────────────────── #
+
+
+async def test_get_warns_returns_oldest_first(monkeypatch) -> None:
+    """get_warns returns all warnings for the user/chat sorted oldest first."""
+    warns = FakeWarnsCollection(
+        [
+            {
+                "_id": 2,
+                "user_id": 10,
+                "reason": "newer",
+                "admin_id": 1,
+                "chat_id": 50,
+                "timestamp": datetime(2025, 2, 1, tzinfo=timezone.utc),
+            },
+            {
+                "_id": 1,
+                "user_id": 10,
+                "reason": "older",
+                "admin_id": 1,
+                "chat_id": 50,
+                "timestamp": datetime(2025, 1, 1, tzinfo=timezone.utc),
+            },
+        ]
+    )
+    counts = FakeWarnCountsCollection()
+    _patch_collections(monkeypatch, warns, counts)
+
+    result = await warns_db.get_warns(10, 50)
+
+    assert len(result) == 2
+    assert result[0]["reason"] == "older"
+    assert result[1]["reason"] == "newer"
+
+
+async def test_get_warns_empty_returns_empty_list(monkeypatch) -> None:
+    """get_warns returns an empty list when there are no warns."""
+    warns = FakeWarnsCollection()
+    counts = FakeWarnCountsCollection()
+    _patch_collections(monkeypatch, warns, counts)
+
+    result = await warns_db.get_warns(999, 99)
+
+    assert result == []
+
+
+async def test_get_warns_only_returns_for_matching_chat(monkeypatch) -> None:
+    """get_warns filters by both user_id and chat_id."""
+    warns = FakeWarnsCollection(
+        [
+            {
+                "_id": 1,
+                "user_id": 20,
+                "reason": "in chat A",
+                "admin_id": 1,
+                "chat_id": 100,
+                "timestamp": datetime(2025, 1, 1, tzinfo=timezone.utc),
+            },
+            {
+                "_id": 2,
+                "user_id": 20,
+                "reason": "in chat B",
+                "admin_id": 1,
+                "chat_id": 200,
+                "timestamp": datetime(2025, 1, 2, tzinfo=timezone.utc),
+            },
+        ]
+    )
+    counts = FakeWarnCountsCollection()
+    _patch_collections(monkeypatch, warns, counts)
+
+    result = await warns_db.get_warns(20, 100)
+
+    assert len(result) == 1
+    assert result[0]["reason"] == "in chat A"
+
+
+# ──────────────────── Per-user history ─────────────────────── #
+
+
+async def test_user_total_warns_counts_across_all_chats(monkeypatch) -> None:
+    """user_total_warns counts all warn rows for the user regardless of chat."""
+    warns = FakeWarnsCollection(
+        [
+            {
+                "_id": 1,
+                "user_id": 30,
+                "reason": "a",
+                "admin_id": 1,
+                "chat_id": 10,
+                "timestamp": datetime(2025, 1, 1, tzinfo=timezone.utc),
+            },
+            {
+                "_id": 2,
+                "user_id": 30,
+                "reason": "b",
+                "admin_id": 1,
+                "chat_id": 20,
+                "timestamp": datetime(2025, 1, 2, tzinfo=timezone.utc),
+            },
+            {
+                "_id": 3,
+                "user_id": 99,
+                "reason": "other",
+                "admin_id": 1,
+                "chat_id": 10,
+                "timestamp": datetime(2025, 1, 1, tzinfo=timezone.utc),
+            },
+        ]
+    )
+    counts = FakeWarnCountsCollection()
+    _patch_collections(monkeypatch, warns, counts)
+
+    total = await warns_db.user_total_warns(30)
+
+    assert total == 2
+
+
+async def test_user_total_warns_zero_when_no_warns(monkeypatch) -> None:
+    """user_total_warns returns 0 when the user has no warnings."""
+    warns = FakeWarnsCollection()
+    counts = FakeWarnCountsCollection()
+    _patch_collections(monkeypatch, warns, counts)
+
+    total = await warns_db.user_total_warns(555)
+
+    assert total == 0
+
+
+async def test_user_warn_groups_returns_chats_with_active_warns(monkeypatch) -> None:
+    """user_warn_groups returns (chat_id, count) pairs for chats with count > 0."""
+    warns = FakeWarnsCollection()
+    counts = FakeWarnCountsCollection(
+        [
+            {"user_id": 40, "chat_id": 10, "count": 2, "updated_at": datetime(2025, 1, 2, tzinfo=timezone.utc)},
+            {"user_id": 40, "chat_id": 20, "count": 1, "updated_at": datetime(2025, 1, 1, tzinfo=timezone.utc)},
+            {"user_id": 40, "chat_id": 30, "count": 0, "updated_at": datetime(2025, 1, 3, tzinfo=timezone.utc)},
+        ]
+    )
+    _patch_collections(monkeypatch, warns, counts)
+
+    groups = await warns_db.user_warn_groups(40)
+
+    assert len(groups) == 2
+    chat_ids = {g[0] for g in groups}
+    assert chat_ids == {10, 20}
+
+
+async def test_user_all_warns_newest_first(monkeypatch) -> None:
+    """user_all_warns returns all warns for the user across chats, newest first."""
+    warns = FakeWarnsCollection(
+        [
+            {
+                "_id": 1,
+                "user_id": 50,
+                "reason": "oldest",
+                "admin_id": 1,
+                "chat_id": 10,
+                "timestamp": datetime(2025, 1, 1, tzinfo=timezone.utc),
+            },
+            {
+                "_id": 2,
+                "user_id": 50,
+                "reason": "newest",
+                "admin_id": 1,
+                "chat_id": 20,
+                "timestamp": datetime(2025, 3, 1, tzinfo=timezone.utc),
+            },
+            {
+                "_id": 3,
+                "user_id": 99,
+                "reason": "other user",
+                "admin_id": 1,
+                "chat_id": 10,
+                "timestamp": datetime(2025, 2, 1, tzinfo=timezone.utc),
+            },
+        ]
+    )
+    counts = FakeWarnCountsCollection()
+    _patch_collections(monkeypatch, warns, counts)
+
+    all_warns = await warns_db.user_all_warns(50)
+
+    assert len(all_warns) == 2
+    assert all_warns[0]["reason"] == "newest"
+    assert all_warns[1]["reason"] == "oldest"
