@@ -14,7 +14,7 @@ from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import decorators, parse_logmsg
+from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.formatter import code
 from tcbot.utils.dispatch import fan_out
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
@@ -36,11 +36,11 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Who can use",
-        "TC Staff (Admin and above).",
+        replies.PERM_STAFF_ONLY,
     ),
     (
         "Where to use",
-        "Exec group or bot PM.",
+        replies.CONTEXT_EXEC_OR_GROUP,
     ),
     (
         "What it does",

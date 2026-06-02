@@ -28,14 +28,15 @@ __module_name__ = None
 
 _PRIVATE_START_TEXT = (
     "<b>Hey, I'm {botname}.</b>\n\n"
-    f"I am an assistant of {cfg.community_name} to manage the groups connected to me centrally\n"
+    f"Federation management assistant for {cfg.community_name}. "
+    "I coordinate bans, mutes, kicks, and moderation across all connected groups.\n\n"
     "Use the buttons below to explore."
 )
 
 _GROUP_START_TEXT = (
     "<b>Hey, I'm {botname}.</b>\n\n"
-    f"I am an assistant of {cfg.community_name} to manage the groups connected to me centrally\n"
-    "Use /help for all help menu, or open me in PM for the full menu."
+    f"Federation management assistant for {cfg.community_name}. "
+    "Use /help for the full help menu, or open me in PM for all options."
 )
 
 

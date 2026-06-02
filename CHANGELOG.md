@@ -4,6 +4,31 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ## [Unreleased] - 2026-06-02
 
+### Refactored - Permission tier constants and help-text consistency
+
+- **`tcbot/modules/helper/replies.py`**: Added three new permission constants: `PERM_FOUNDER_ONLY = "Founder only."`, `PERM_STAFF_ONLY = "TC Staff (Admin and above)."`, and `PERM_ADMIN_ABOVE = "Admin and above (Founder / Admin)."`. Completes the permission-tier set alongside the existing `PERM_DEV_ABOVE` and `PERM_TESTER_ABOVE`.
+- **`tcbot/modules/admins.py`**: Updated "Who can use" help section for `/transferowner` and the `on_promo_decision` `show_alert` message to use `replies.PERM_FOUNDER_ONLY` instead of the hardcoded literal.
+- **`tcbot/modules/broadcasting.py`**: Updated "Who can use" and "Where to use" help sections to use `replies.PERM_STAFF_ONLY` and `replies.CONTEXT_EXEC_OR_GROUP` respectively; added `replies` import.
+- **`tcbot/modules/maintenance.py`**: Converted flat `__help_text__` block (the only module still using that format) to the standard `__help_text__` one-liner + `__help_sections__` list, using `replies.PERM_FOUNDER_ONLY`, `replies.PERM_STAFF_ONLY`, and `replies.CONTEXT_EXEC_OR_GROUP`. Added `replies` import.
+
+### Fixed - Hardcoded timeout literals in disconnecting.py
+
+- **`tcbot/modules/disconnecting.py`**: Added `_TG_TIMEOUT = 3.0` module-level constant (consistent with `connecting.py` which already had `_TG_TIMEOUT = 3.0`). Replaced the inline `timeout=3.0` in the `asyncio.wait_for(ctx.bot.get_chat_member(...))` call.
+
+### Fixed - Hardcoded timeout literal in maintenance.py
+
+- **`tcbot/modules/maintenance.py`**: Added `_MEMBERSHIP_CHECK_TIMEOUT = 3.0` module-level constant. Replaced the inline `timeout=3.0` in `_should_remove`'s `asyncio.wait_for` call.
+
+### Fixed - Stale entries in docs/mapping.md
+
+- **`docs/mapping.md` helper section**: Added `identity.py` (identity classification, refusal messages, staff notices) and `replies.py` (shared reply string constants) which were implemented but absent from the module map.
+- **`docs/mapping.md` utils section**: Added `pagination.py` (shared `paginate()`, `nav_row()`, `date_or_unknown()` helpers) which was implemented but absent from the module map.
+
+### Fixed - Grammar errors in start.py welcome messages
+
+- **`tcbot/modules/start.py` `_PRIVATE_START_TEXT`**: Replaced "I am an assistant of X to manage the groups connected to me centrally" with "Federation management assistant for X. I coordinate bans, mutes, kicks, and moderation across all connected groups."
+- **`tcbot/modules/start.py` `_GROUP_START_TEXT`**: Replaced "Use /help for all help menu" (grammatically wrong) with "Use /help for the full help menu, or open me in PM for all options."
+
 ### Fixed - Sequential awaits replaced with `asyncio.gather` (parallelism)
 
 - **`tcbot/modules/help.py`**: Added `import asyncio`; converted 6 consecutive `await q.answer()` + `await safe_edit_cb(...)` pairs in `_show_index`, `_show_module`, and `_show_section` to `asyncio.gather(q.answer(), safe_edit_cb(...))`. The callback acknowledgment and message edit are independent and can run concurrently.

@@ -29,5 +29,8 @@ CONTEXT_ANYONE = "Anyone, no special permissions needed."
 
 # ─────────────────────── Permission Tiers ───────────────────────── #
 
+PERM_FOUNDER_ONLY = "Founder only."
+PERM_STAFF_ONLY = "TC Staff (Admin and above)."
+PERM_ADMIN_ABOVE = "Admin and above (Founder / Admin)."
 PERM_DEV_ABOVE = "Developer and above (Founder / Admin / Developer)."
 PERM_TESTER_ABOVE = "Tester and above (Founder / Admin / Developer / Tester)."

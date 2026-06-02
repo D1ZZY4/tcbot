@@ -15,7 +15,7 @@ from telegram.ext import ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import GroupDoc
-from tcbot.modules.helper import decorators, parse_logmsg
+from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.formatter import code
 from tcbot.utils.prefixes import build_prefixed_filters
 
@@ -28,27 +28,45 @@ _MEMBERSHIP_CHECK_TIMEOUT = 3.0
 
 __module_name__ = "Cleanup"
 __help_text__ = (
-    "<b>Commands & Aliases</b>\n"
-    "<code>/leaveall</code> - aliases: <code>/exitall</code>, <code>/tcleave</code>\n"
-    "<code>/cleanup</code> - aliases: <code>/tcclean</code>, <code>/tcc</code>\n\n"
-    "<b>Who can use it</b>\n"
-    "<code>/leaveall</code>: Founder only.\n"
-    "<code>/cleanup</code>: TC Staff (Admin and above).\n\n"
-    "<b>Where to use it</b>\n"
-    "Exec group or bot PM.\n\n"
-    "<b>What it does</b>\n"
-    "<code>/leaveall</code>: makes the bot leave every connected group simultaneously, marks "
-    "them all as disconnected in the database, and posts a log entry for each group. "
-    "This is irreversible - each group must be manually reconnected with <code>/tcconnect</code>. "
-    "Use only in emergencies.\n\n"
-    "<code>/cleanup</code>: scans all groups in the database and attempts to verify the bot "
-    "still has access. Any group where the bot was kicked, removed, or can no longer reach is "
-    "marked as disconnected and removed from the active list. "
-    "Run this periodically to keep the group list accurate.\n\n"
-    "<b>Examples</b>\n"
-    "<code>/cleanup</code> - remove stale or inaccessible groups from the federation.\n"
-    "<code>/leaveall</code> - emergency withdrawal from all connected groups."
+    "Maintenance commands for managing connected groups: clean up inaccessible ones "
+    "or leave all in an emergency."
 )
+
+__help_sections__: list[tuple[str, str]] = [
+    (
+        "Commands & Aliases",
+        "<code>/leaveall</code> (aliases: <code>/exitall</code>, <code>/tcleave</code>)\n"
+        "<code>/cleanup</code> (aliases: <code>/tcclean</code>, <code>/tcc</code>)",
+    ),
+    (
+        "Who can use",
+        f"<b>/leaveall</b>: {replies.PERM_FOUNDER_ONLY}\n"
+        f"<b>/cleanup</b>: {replies.PERM_STAFF_ONLY}",
+    ),
+    (
+        "Where to use",
+        replies.CONTEXT_EXEC_OR_GROUP,
+    ),
+    (
+        "/leaveall",
+        "Makes the bot leave every connected group simultaneously, marks them all as "
+        "disconnected in the database, and posts a log entry for each group. "
+        "This is irreversible - each group must be manually reconnected with "
+        "<code>/tcconnect</code>. Use only in emergencies.",
+    ),
+    (
+        "/cleanup",
+        "Scans all groups in the database and attempts to verify the bot still has access. "
+        "Any group where the bot was kicked, removed, or can no longer reach is marked as "
+        "disconnected and removed from the active list. "
+        "Run this periodically to keep the group list accurate.",
+    ),
+    (
+        "Examples",
+        "<code>/cleanup</code>: remove stale or inaccessible groups.\n"
+        "<code>/leaveall</code>: emergency withdrawal from all connected groups.",
+    ),
+]
 
 
 # ──────────────────────── Helper Functions ──────────────────────── #

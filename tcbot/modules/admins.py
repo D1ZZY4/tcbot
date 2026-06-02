@@ -50,7 +50,7 @@ __help_sections__: list[tuple[str, str]] = [
     (
         "Who can use",
         "<b>/tcpromote</b>, <b>/tcdemote</b>, <b>/tcpromotelist</b>: Founder and Admin.\n"
-        "<b>/transferowner</b>: Founder only.\n"
+        f"<b>/transferowner</b>: {replies.PERM_FOUNDER_ONLY}\n"
         "<b>/tcpromoterequests</b>: anyone (creates a self-request to the Founder).",
     ),
     (
@@ -461,7 +461,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     admin = update.effective_user
     is_owner = await db.users_roles.is_owner(admin.id)
     if not is_owner:
-        await q.answer("Founder only.", show_alert=True)
+        await q.answer(replies.PERM_FOUNDER_ONLY, show_alert=True)
         return
     action, request_id = q.data.split(":", 1)
     # * answer + fetch request in parallel
