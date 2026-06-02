@@ -37,6 +37,24 @@ _LOCK_WINDOW = timedelta(hours=12)
 
 _ID_RE = re.compile(r"^/start\s+appeal_([a-z0-9]{10})$")
 
+# ──────────────── User-facing reply constants ──────────────────── #
+
+_ERR_NOT_PRIVATE = "Please open this link in my private messages."
+_ERR_INVALID_LINK = "This appeal link is invalid or has expired."
+_ERR_WRONG_ACCOUNT = "This appeal link doesn't belong to your account."
+_ERR_PENDING_REVIEW = "You already have a pending appeal under review."
+_MSG_CANCELLED = "Appeal cancelled. Nothing was submitted."
+_MSG_SESSION_ENDED = "Appeal session ended."
+_ERR_SESSION_EXPIRED = "Session expired - please start the appeal again."
+_ERR_INVALID_LOG = "Invalid log link. Please check and try again."
+_ERR_NOT_AUTHORIZED = "You are not authorized."
+_ERR_BAN_NOT_FOUND = "Ban record not found."
+_ERR_ALREADY_RESOLVED = "Appeal already resolved (ban is no longer active)."
+_ERR_REVIEW_LOCKED = (
+    "Only the admin who issued this ban can review it within the first 12 hours."
+)
+_MSG_APPEAL_SUBMITTED = "Your appeal has been submitted. The team will review it shortly - we'll get back to you."
+
 
 # ─────────────────────── Appeal pure helpers ────────────────────── #
 
@@ -140,20 +158,20 @@ class BuildAppeal:
         uid = update.effective_user.id
 
         if update.effective_chat.type != "private":
-            await msg.reply_text("Please open this link in my private messages.")
+            await msg.reply_text(_ERR_NOT_PRIVATE)
             return ConversationHandler.END
 
         ban = await db.bans_db.get_ban(ban_id)
         if not ban or not ban.get("is_active"):
-            await msg.reply_text("This appeal link is invalid or has expired.")
+            await msg.reply_text(_ERR_INVALID_LINK)
             return ConversationHandler.END
 
         if ban["banned_user_id"] != uid:
-            await msg.reply_text("This appeal link doesn't belong to your account.")
+            await msg.reply_text(_ERR_WRONG_ACCOUNT)
             return ConversationHandler.END
 
         if ban.get("review_message_id"):
-            await msg.reply_text("You already have a pending appeal under review.")
+            await msg.reply_text(_ERR_PENDING_REVIEW)
             return ConversationHandler.END
 
         ctx.user_data["appeal_ban_id"] = ban_id
@@ -183,13 +201,13 @@ class BuildAppeal:
             ctx.user_data.pop(key, None)
         await asyncio.gather(
             q.answer(),
-            q.edit_message_text("Appeal cancelled. Nothing was submitted."),
+            q.edit_message_text(_MSG_CANCELLED),
         )
         return ConversationHandler.END
 
     async def _end(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Fallback handler; fires on any unrecognised command during the flow."""
-        await update.effective_message.reply_text("Appeal session ended.")
+        await update.effective_message.reply_text(_MSG_SESSION_ENDED)
         return ConversationHandler.END
 
     async def _on_message(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -204,11 +222,11 @@ class BuildAppeal:
         log_msg_id = ctx.user_data.get("appeal_log_msg_id", 0)
 
         if not ban_id:
-            await msg.reply_text("Session expired - please start the appeal again.")
+            await msg.reply_text(_ERR_SESSION_EXPIRED)
             return ConversationHandler.END
 
         if log_msg_id and not text_references_log_message(text, log_msg_id):
-            await msg.reply_text("Invalid log link. Please check and try again.")
+            await msg.reply_text(_ERR_INVALID_LOG)
             return WAITING_APPEAL
 
         uid = update.effective_user.id
@@ -281,7 +299,7 @@ class BuildAppeal:
         instr_mid = ctx.user_data.get("appeal_instruction_msg_id")
         edit_coro = (
             ctx.bot.edit_message_text(
-                "Your appeal has been submitted. The team will review it shortly - we'll get back to you.",
+                _MSG_APPEAL_SUBMITTED,
                 chat_id=update.effective_chat.id,
                 message_id=instr_mid,
             )
@@ -307,7 +325,7 @@ class BuildAppeal:
         admin = update.effective_user
 
         if not await db.users_roles.is_staff(admin.id):
-            await q.answer("You are not authorized.", show_alert=True)
+            await q.answer(_ERR_NOT_AUTHORIZED, show_alert=True)
             return
 
         data = q.data
@@ -323,22 +341,17 @@ class BuildAppeal:
 
         _, ban = await asyncio.gather(q.answer(), db.bans_db.get_ban(ban_id))
         if not ban:
-            await q.edit_message_text("Ban record not found.", reply_markup=None)
+            await q.edit_message_text(_ERR_BAN_NOT_FOUND, reply_markup=None)
             return
 
         if not ban.get("is_active"):
-            await q.edit_message_text(
-                "Appeal already resolved (ban is no longer active).", reply_markup=None
-            )
+            await q.edit_message_text(_ERR_ALREADY_RESOLVED, reply_markup=None)
             return
 
         review_ts = ban.get("review_timestamp")
         if review_ts:
             if reviewer_locked_out(review_ts, ban.get("admin_user_id"), admin.id):
-                await q.answer(
-                    "Only the admin who issued this ban can review it within the first 12 hours.",
-                    show_alert=True,
-                )
+                await q.answer(_ERR_REVIEW_LOCKED, show_alert=True)
                 return
 
         target_id = ban["banned_user_id"]

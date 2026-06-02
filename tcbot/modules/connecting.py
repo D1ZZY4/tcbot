@@ -25,6 +25,11 @@ from tcbot.utils.prefixes import build_prefixed_filters
 
 log = logging.getLogger(__name__)
 
+# ──────────────── User-facing reply constants ──────────────────── #
+
+_ERR_ADMIN_REQUIRED = "Only group admins can request to connect."
+_ERR_PENDING_REQUEST = "A connect request for this group is already pending."
+
 _TG_TIMEOUT = 3.0
 
 
@@ -87,7 +92,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
 
     if chat.type == "private":
-        await update.effective_message.reply_text("Use this command in a group.")
+        await update.effective_message.reply_text(replies.ERR_GROUP_ONLY)
         return
 
     # * Telegram lookup + DB reads run in parallel; member check is bounded so a
@@ -106,9 +111,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if member.status not in ("administrator", "creator"):
-        await update.effective_message.reply_text(
-            "Only group admins can request to connect."
-        )
+        await update.effective_message.reply_text(_ERR_ADMIN_REQUIRED)
         return
 
     if isinstance(is_connected, BaseException):
@@ -123,9 +126,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if pending:
-        await update.effective_message.reply_text(
-            "A connect request for this group is already pending."
-        )
+        await update.effective_message.reply_text(_ERR_PENDING_REQUEST)
         return
 
     try:
@@ -134,7 +135,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
     except (asyncio.TimeoutError, Exception) as exc:
         log.debug("Could not verify bot permissions for %d: %s", chat.id, exc)
-        await update.effective_message.reply_text("Could not verify bot permissions.")
+        await update.effective_message.reply_text(replies.ERR_ROLE_VERIFY)
         return
 
     if not connection.check_perms(bot_member):

@@ -84,7 +84,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     groups = await db.groups_db.active_groups()
     if not groups:
-        await msg.reply_text("No connected groups.")
+        await msg.reply_text(replies.ERR_NO_CONNECTED_GROUPS)
         return
 
     status = await msg.reply_text(f"Broadcasting to {len(groups)} group(s)...")

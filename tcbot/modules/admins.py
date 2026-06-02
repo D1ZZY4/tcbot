@@ -29,6 +29,20 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
 
+# ──────────────── User-facing reply constants ──────────────────── #
+
+_ERR_NO_ASSIGN_PERMS = "You don't have permission to assign any roles."
+_ERR_PERM_EXPIRED = "You no longer have permission to do this."
+_ERR_UNKNOWN_ROLE = "Unknown role."
+_MSG_PROMOTE_CANCELLED = "Promotion cancelled. No changes were made."
+_ERR_NO_REMOVABLE_ROLE = "That user doesn't hold a role that can be removed."
+_ERR_FOUNDER_DEMOTE_ONLY = "Only the Founder can demote an Admin."
+_ERR_NO_LONGER_REMOVABLE = "That user no longer holds a removable role."
+_ERR_ROLE_CLEAR_FAILED = "Couldn't remove the role - it may have already been cleared."
+_MSG_CANCELLED = "Cancelled. No changes were made."
+_MSG_NO_PENDING = "No pending promotion requests."
+_ERR_REQUEST_NOT_FOUND = "Request not found or already resolved."
+
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -156,7 +170,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * No role arg - show selection buttons
     available = Promote.available_roles_for(executor_role)
     if not available:
-        await msg.reply_text("You don't have permission to assign any roles.")
+        await msg.reply_text(_ERR_NO_ASSIGN_PERMS)
         return
     await msg.reply_text(
         f"Choose a role to assign to {mention(target_id, target_fname or str(target_id), ident.username)}:",
@@ -176,7 +190,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     executor_role = await db.users_roles.get_effective_role(admin.id)
 
     if executor_role not in ("founder", "admin"):
-        await q.answer("You no longer have permission to do this.", show_alert=True)
+        await q.answer(_ERR_PERM_EXPIRED, show_alert=True)
         try:
             await q.edit_message_reply_markup(None)
         except Exception as exc:
@@ -190,7 +204,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     target_id = int(target_id_str)
 
     if role not in ("admin", "developer", "tester"):
-        await q.edit_message_text("Unknown role.", reply_markup=None)
+        await q.edit_message_text(_ERR_UNKNOWN_ROLE, reply_markup=None)
         return
 
     # * answer + fetch name + current role in parallel
@@ -221,9 +235,7 @@ async def on_promote_role_cancel(
     q = update.callback_query
     await asyncio.gather(
         q.answer(),
-        q.edit_message_text(
-            "Promotion cancelled. No changes were made.", reply_markup=None
-        ),
+        q.edit_message_text(_MSG_PROMOTE_CANCELLED, reply_markup=None),
     )
 
 
@@ -259,11 +271,11 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     target_role = await db.users_roles.get_effective_role(target_id)
 
     if not target_role:
-        await msg.reply_text("That user doesn't hold a role that can be removed.")
+        await msg.reply_text(_ERR_NO_REMOVABLE_ROLE)
         return
 
     if target_role == "admin" and executor_role != "founder":
-        await msg.reply_text("Only the Founder can demote an Admin.")
+        await msg.reply_text(_ERR_FOUNDER_DEMOTE_ONLY)
         return
 
     role_label = db.users_roles.ROLE_LABEL.get(target_role, target_role)
@@ -287,7 +299,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     executor_role = await db.users_roles.get_effective_role(admin.id)
 
     if executor_role not in ("founder", "admin"):
-        await q.answer("You no longer have permission to do this.", show_alert=True)
+        await q.answer(_ERR_PERM_EXPIRED, show_alert=True)
         try:
             await q.edit_message_reply_markup(None)
         except Exception as exc:
@@ -302,15 +314,11 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     )
 
     if not target_role or target_role == "founder":
-        await q.edit_message_text(
-            "That user no longer holds a removable role.", reply_markup=None
-        )
+        await q.edit_message_text(_ERR_NO_LONGER_REMOVABLE, reply_markup=None)
         return
 
     if target_role == "admin" and executor_role != "founder":
-        await q.edit_message_text(
-            "Only the Founder can demote an Admin.", reply_markup=None
-        )
+        await q.edit_message_text(_ERR_FOUNDER_DEMOTE_ONLY, reply_markup=None)
         return
 
     removed = await Demote.execute(
@@ -323,10 +331,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         trigger=None,
     )
     if not removed:
-        await q.edit_message_text(
-            "Couldn't remove the role - it may have already been cleared.",
-            reply_markup=None,
-        )
+        await q.edit_message_text(_ERR_ROLE_CLEAR_FAILED, reply_markup=None)
         return
 
     role_label = db.users_roles.ROLE_LABEL.get(target_role, target_role)
@@ -344,7 +349,7 @@ async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     q = update.callback_query
     await asyncio.gather(
         q.answer(),
-        q.edit_message_text("Cancelled. No changes were made.", reply_markup=None),
+        q.edit_message_text(_MSG_CANCELLED, reply_markup=None),
     )
 
 
@@ -439,7 +444,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
 async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     pending = await db.queues_db.all_pending()
     if not pending:
-        await update.effective_message.reply_text("No pending promotion requests.")
+        await update.effective_message.reply_text(_MSG_NO_PENDING)
         return
     lines = [f"<b>Pending Promotion Requests ({len(pending)})</b>\n"]
     for req in pending:
@@ -470,7 +475,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         db.queues_db.get_request_by_id(request_id),
     )
     if not req:
-        await q.edit_message_text("Request not found or already resolved.")
+        await q.edit_message_text(_ERR_REQUEST_NOT_FOUND)
         return
     target_id = req["target_id"]
     target_fname = req.get("first_name", str(target_id))

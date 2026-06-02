@@ -13,6 +13,11 @@ import pytest
 
 from tcbot.database import users_roles
 from tcbot.modules.helper.decorators import (
+    _ERR_BASIC_MOD_ONLY,
+    _ERR_MOD_ONLY,
+    _ERR_OWNER_ONLY,
+    _ERR_RANK_INSUFFICIENT,
+    _ERR_STAFF_ONLY,
     basic_mod_only,
     log_execution,
     mod_only,
@@ -212,6 +217,17 @@ async def test_owner_only_blocks_non_owner(monkeypatch) -> None:
     assert len(replies) == 1
 
 
+async def test_owner_only_error_text(monkeypatch) -> None:
+    """Refusal text must match the module constant so voice edits are centralised."""
+    monkeypatch.setattr(users_roles, "is_owner", lambda uid: _truthy(False))
+    handler, _ = _run_marker()
+    update, replies = _auth_update(uid=99)
+
+    await owner_only(handler)(update, _ctx())
+
+    assert replies == [_ERR_OWNER_ONLY]
+
+
 # ──────────────────────────── staff_only ────────────────────────── #
 
 
@@ -236,6 +252,17 @@ async def test_staff_only_blocks_non_staff(monkeypatch) -> None:
     assert len(replies) == 1
 
 
+async def test_staff_only_error_text(monkeypatch) -> None:
+    """Refusal text must match the module constant so voice edits are centralised."""
+    monkeypatch.setattr(users_roles, "is_staff", lambda uid: _truthy(False))
+    handler, _ = _run_marker()
+    update, replies = _auth_update(uid=99)
+
+    await staff_only(handler)(update, _ctx())
+
+    assert replies == [_ERR_STAFF_ONLY]
+
+
 # ───────────────────── mod_only / basic_mod_only ────────────────── #
 
 
@@ -255,6 +282,21 @@ async def test_mod_only_allows_developer_and_blocks_tester(monkeypatch) -> None:
     assert blocked_called == []
 
 
+async def test_mod_only_error_text(monkeypatch) -> None:
+    """Refusal text must match the module constant so voice edits are centralised."""
+    monkeypatch.setattr(
+        users_roles,
+        "get_effective_role",
+        _roles_from({99: "tester"}),
+    )
+    handler, _ = _run_marker()
+    update, replies = _auth_update(uid=99)
+
+    await mod_only(handler)(update, _ctx())
+
+    assert replies == [_ERR_MOD_ONLY]
+
+
 async def test_basic_mod_only_allows_tester_and_blocks_unranked(monkeypatch) -> None:
     monkeypatch.setattr(
         users_roles,
@@ -269,6 +311,21 @@ async def test_basic_mod_only_allows_tester_and_blocks_unranked(monkeypatch) -> 
     blocked_handler, blocked_called = _run_marker()
     await basic_mod_only(blocked_handler)(_auth_update(uid=2)[0], _ctx())
     assert blocked_called == []
+
+
+async def test_basic_mod_only_error_text(monkeypatch) -> None:
+    """Refusal text must match the module constant so voice edits are centralised."""
+    monkeypatch.setattr(
+        users_roles,
+        "get_effective_role",
+        _roles_from({99: None}),
+    )
+    handler, _ = _run_marker()
+    update, replies = _auth_update(uid=99)
+
+    await basic_mod_only(handler)(update, _ctx())
+
+    assert replies == [_ERR_BASIC_MOD_ONLY]
 
 
 # ─────────────────────────── resolve_and_check ──────────────────── #
@@ -328,3 +385,15 @@ async def test_resolve_and_check_allows_valid_action(monkeypatch) -> None:
 async def _truthy(value: bool) -> bool:
     """Await helper so a patched coroutine function can return a plain bool."""
     return value
+
+
+# ────────────── Error-text pinning for _ERR_RANK_INSUFFICIENT ────── #
+
+
+def test_err_rank_insufficient_is_non_empty_string() -> None:
+    assert isinstance(_ERR_RANK_INSUFFICIENT, str)
+    assert len(_ERR_RANK_INSUFFICIENT) > 0
+
+
+def test_err_rank_insufficient_text_value() -> None:
+    assert _ERR_RANK_INSUFFICIENT == "You don't have the rank for this one."

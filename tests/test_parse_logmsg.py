@@ -1,0 +1,125 @@
+# © Copyright 2024 - 2026 Transsion Core
+# © Copyright 2024 - 2026 Dizzy
+# © Copyright 2026 Aveum Apps
+
+"""Tests for tcbot.modules.helper.parse_logmsg.LogBuilder - fluent log builder."""
+
+from __future__ import annotations
+
+from tcbot.modules.helper.parse_logmsg import LogBuilder
+
+# ───────────────────────── LogBuilder core ──────────────────────── #
+
+
+def test_build_returns_string() -> None:
+    result = LogBuilder("Title").build()
+    assert isinstance(result, str)
+
+
+def test_title_appears_first_line() -> None:
+    result = LogBuilder("My Title").build()
+    assert result.startswith("My Title")
+
+
+def test_str_equals_build() -> None:
+    lb = LogBuilder("T")
+    assert str(lb) == lb.build()
+
+
+def test_field_appends_label_colon_value() -> None:
+    result = LogBuilder("T").field("Reason", "spam").build()
+    assert "Reason: spam" in result
+
+
+def test_field_escapes_html_by_default() -> None:
+    result = LogBuilder("T").field("Note", "<script>").build()
+    assert "<script>" not in result
+    assert "&lt;script&gt;" in result
+
+
+def test_field_escape_false_keeps_raw_markup() -> None:
+    result = LogBuilder("T").field("Link", "<b>bold</b>", escape=False).build()
+    assert "<b>bold</b>" in result
+
+
+def test_code_field_wraps_value_in_code_tag() -> None:
+    result = LogBuilder("T").code_field("ID", "12345").build()
+    assert "<code>12345</code>" in result
+
+
+def test_mention_field_contains_user_id() -> None:
+    result = LogBuilder("T").mention_field("User", 99999, "Alice").build()
+    assert "99999" in result
+
+
+def test_mention_field_contains_name() -> None:
+    result = LogBuilder("T").mention_field("User", 1, "Alice").build()
+    assert "Alice" in result
+
+
+def test_link_field_contains_url() -> None:
+    result = LogBuilder("T").link_field("Proof", "View", "https://t.me/c/1/2").build()
+    assert "https://t.me/c/1/2" in result
+
+
+def test_link_field_contains_text() -> None:
+    result = LogBuilder("T").link_field("Label", "ClickHere", "https://x.com").build()
+    assert "ClickHere" in result
+
+
+def test_raw_appends_text_without_escaping() -> None:
+    result = LogBuilder("T").raw("<b>Bold</b>").build()
+    assert "<b>Bold</b>" in result
+
+
+def test_section_inserts_blank_line() -> None:
+    result = LogBuilder("T").field("A", "1").section().field("B", "2").build()
+    assert "\n\n" in result
+
+
+def test_user_block_contains_user_id() -> None:
+    result = LogBuilder("T").user_block(12345, "Bob").build()
+    assert "12345" in result
+
+
+def test_user_block_contains_name() -> None:
+    result = LogBuilder("T").user_block(1, "Bob").build()
+    assert "Bob" in result
+
+
+def test_actor_block_contains_actor_id() -> None:
+    result = LogBuilder("T").actor_block(67890, "Admin").build()
+    assert "67890" in result
+
+
+def test_actor_block_uses_default_admin_label() -> None:
+    result = LogBuilder("T").actor_block(1, "Charlie").build()
+    assert "Admin:" in result
+
+
+def test_fluent_chain_returns_same_instance() -> None:
+    lb = LogBuilder("T")
+    returned = lb.field("X", "y")
+    assert returned is lb
+
+
+def test_date_field_appends_date_line() -> None:
+    from datetime import datetime, timezone
+
+    ts = datetime(2025, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+    result = LogBuilder("T").date(ts, label="Commit at").build()
+    assert "Commit at:" in result
+    assert "2025" in result or "01" in result
+
+
+def test_multiple_fields_all_present() -> None:
+    result = (
+        LogBuilder("Title")
+        .field("A", "alpha")
+        .field("B", "beta")
+        .field("C", "gamma")
+        .build()
+    )
+    assert "A: alpha" in result
+    assert "B: beta" in result
+    assert "C: gamma" in result

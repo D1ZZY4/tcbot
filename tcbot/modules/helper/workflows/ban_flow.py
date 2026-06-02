@@ -31,6 +31,11 @@ from tcbot.utils.timedate_format import utc_now
 
 log = logging.getLogger(__name__)
 
+# ──────────────── User-facing reply constants ──────────────────── #
+
+_MSG_CANCELLED = "Cancelled. No ban was issued."
+_MSG_TIMEOUT = "Timed out waiting for proof. No ban was issued."
+
 WAITING_PROOF = 0
 
 # * Per-action BuildProof instance; imported by banning.py
@@ -272,16 +277,14 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
     q = update.callback_query
     await asyncio.gather(
         q.answer(),
-        q.edit_message_text("Cancelled. No ban was issued."),
+        q.edit_message_text(_MSG_CANCELLED),
     )
     return ConversationHandler.END
 
 
 async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if update.effective_message:
-        await update.effective_message.reply_text(
-            "Timed out waiting for proof. No ban was issued."
-        )
+        await update.effective_message.reply_text(_MSG_TIMEOUT)
     return ConversationHandler.END
 
 

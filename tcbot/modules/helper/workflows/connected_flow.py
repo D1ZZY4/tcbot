@@ -21,6 +21,14 @@ from tcbot.utils.dispatch import fan_out
 
 log = logging.getLogger(__name__)
 
+# ──────────────── User-facing reply constants ──────────────────── #
+
+_ERR_ROLE_CHECK_FAILED = "Could not verify your role."
+_ERR_OWNER_ONLY = "Only the group owner can decide."
+_ERR_BOT_PERMS_VERIFY = (
+    "Could not verify my own permissions. Please promote me as admin and try again."
+)
+
 _TG_TIMEOUT = 3.0
 
 _REQUIRED_PERMS: tuple[str, ...] = (
@@ -243,11 +251,11 @@ class BuildConnection:
             )
         except (asyncio.TimeoutError, Exception) as exc:
             log.debug("Join decision role check failed: %s", exc)
-            await q.answer("Could not verify your role.", show_alert=True)
+            await q.answer(_ERR_ROLE_CHECK_FAILED, show_alert=True)
             return
 
         if member.status != ChatMemberStatus.OWNER:
-            await q.answer("Only the group owner can decide.", show_alert=True)
+            await q.answer(_ERR_OWNER_ONLY, show_alert=True)
             return
 
         # * Owner verified; ack the callback before any callback-query edits.
@@ -262,10 +270,7 @@ class BuildConnection:
                 )
             except (asyncio.TimeoutError, Exception) as exc:
                 log.debug("Join decision permission check failed: %s", exc)
-                await q.edit_message_text(
-                    "Could not verify my own permissions. Please promote me as admin and try again.",
-                    reply_markup=None,
-                )
+                await q.edit_message_text(_ERR_BOT_PERMS_VERIFY, reply_markup=None)
                 return
 
             if not self.check_perms(bot_member):

@@ -25,6 +25,10 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
 
+# ──────────────── User-facing reply constants ──────────────────── #
+
+_ERR_REASON_REQUIRED = "A reason is required - /tcban <target> <reason>."
+
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -95,7 +99,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     if not ban_reason:
-        await msg.reply_text("A reason is required - /tcban <target> <reason>.")
+        await msg.reply_text(_ERR_REASON_REQUIRED)
         return ConversationHandler.END
 
     # * Identity check + role lookup happen in parallel; both depend only on

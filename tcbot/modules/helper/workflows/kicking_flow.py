@@ -21,6 +21,10 @@ from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modact
 
 log = logging.getLogger(__name__)
 
+# ──────────────── User-facing reply constants ──────────────────── #
+
+_MSG_REJOIN_ALLOWED = "They can rejoin via invite link."
+
 # * Per-action BuildReason and BuildProof instances; imported by kicking.py
 reason = BuildReason("kick")
 proof = BuildProof("kick")
@@ -65,7 +69,7 @@ async def execute_kick(
             msg.reply_text(
                 f"{mention(target_id, target_name)} - {code(str(target_id))} has been kicked.\n"
                 f"Reason: {reason_text}{proof_line}\n"
-                "They can rejoin via invite link.",
+                _MSG_REJOIN_ALLOWED,
                 parse_mode="HTML",
             ),
             return_exceptions=True,

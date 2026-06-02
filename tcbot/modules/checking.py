@@ -21,6 +21,11 @@ from tcbot.modules.helper.workflows.check_flow import Check
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.timedate_format import fmt_dt
 
+# ──────────────── User-facing reply constants ──────────────────── #
+
+_ERR_BAN_INACTIVE = "This ban is no longer active."
+_ERR_BAN_NOT_FOUND = "Ban record not found."
+
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Checking"
@@ -198,7 +203,7 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
     ban = await db.bans_db.get_ban(ban_id)
     if not ban or not ban.get("is_active"):
-        await q.answer("This ban is no longer active.", show_alert=True)
+        await q.answer(_ERR_BAN_INACTIVE, show_alert=True)
         return
 
     from tcbot.modules.helper.ban_info import build_ban_detail
@@ -222,7 +227,7 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
     ban = await db.bans_db.get_ban(ban_id)
     if not ban:
-        await q.answer("Ban record not found.", show_alert=True)
+        await q.answer(_ERR_BAN_NOT_FOUND, show_alert=True)
         return
 
     uid = ban["banned_user_id"]

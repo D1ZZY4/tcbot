@@ -4,6 +4,74 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ## [Unreleased] - 2026-06-02
 
+### Refactored - promote_flow.py: extract 3 return-value strings + pinning tests
+
+Extracted three static return-value strings from `tcbot/modules/helper/workflows/promote_flow.py` into module-level constants: `_MSG_REQUEST_SUBMITTED`, `_ERR_TARGET_IS_FOUNDER`, `_ERR_NO_ASSIGN_PERMS`. Added `_ERR_RANK_INSUFFICIENT` to `decorators.py` and added two pinning tests for it in `test_decorators.py`. Suite grows to 698 tests.
+
+### Refactored - final inline-string extraction (phase 3)
+
+Extracted the last three static user-facing reply strings found by comprehensive grep scan: `banning.py` (`_ERR_REASON_REQUIRED`), `disconnecting.py` (`_MSG_RMTC_USAGE`), `decorators.py` (`_ERR_RANK_INSUFFICIENT` — the `resolve_and_check` rank-gate helper). No more unextracted static user-facing reply strings remain in the module or workflow layer. All 696 tests still pass.
+
+### Refactored - bulk inline-string extraction across 11 files (phase 2)
+
+Extracted every remaining static user-facing reply string across the command-module and workflow layers into named module-level constants (private `_ERR_*` / `_MSG_*`) or shared `replies.*` constants. Files touched: `admins.py` (11 constants), `checking.py` (2), `connecting.py` (2), `disconnecting.py` (uses shared constants), `broadcasting.py` (uses shared constants), `maintenance.py` (uses shared constants), `help.py` (2), `ban_flow.py` (2), `connected_flow.py` (3), `stats_flow.py` (4). Three new shared constants added to `replies.py`: `ERR_GROUP_ONLY`, `ERR_NO_CONNECTED_GROUPS`, `ERR_GROUP_NOT_FOUND`. All 696 tests still pass.
+
+### Refactored - appeal_flow.py: extract 12 inline strings to named constants
+
+Extracted all static user-facing reply strings from `tcbot/modules/helper/workflows/appeal_flow.py` into module-level named constants (`_ERR_NOT_PRIVATE`, `_ERR_INVALID_LINK`, `_ERR_WRONG_ACCOUNT`, `_ERR_PENDING_REVIEW`, `_MSG_CANCELLED`, `_MSG_SESSION_ENDED`, `_ERR_SESSION_EXPIRED`, `_ERR_INVALID_LOG`, `_ERR_NOT_AUTHORIZED`, `_ERR_BAN_NOT_FOUND`, `_ERR_ALREADY_RESOLVED`, `_ERR_REVIEW_LOCKED`). Same pattern as `decorators.py`. Dynamic f-strings with per-call data left in place. All 696 tests still pass.
+
+### Added - test_parse_link.py and test_parse_logmsg.py: pure helper coverage
+
+- **`tests/test_parse_link.py`** (15 tests, new file): Full coverage of three pure URL-builder functions in `parse_link.py`. Tests `chat_id_to_link_id` (supergroup `-100` prefix stripping, plain negative, positive IDs), `message_link` (with/without thread ID, query-string omission for falsy thread), and `appeal_deep_link` (format shape, bot username and ban ID present, HTTPS scheme).
+- **`tests/test_parse_logmsg.py`** (new file): Full coverage of `LogBuilder` fluent builder in `parse_logmsg.py`. Tests `build()` / `__str__`, `field()` with HTML escaping on/off, `code_field()`, `mention_field()`, `link_field()`, `raw()`, `section()` blank-line insertion, `user_block()`, `actor_block()`, `date()`, fluent chaining returns same instance, and multiple-field assembly. Total: 696 tests across 50 files.
+
+### Added - Test files for all remaining command modules (7 new files)
+
+- **`tests/test_appeals.py`** (new file): Module metadata for `appeals.py`. Verifies `__module_name__` ("Appeal"), non-empty `__help_text__`, `Who can use` section references ban, `How it works` section includes `#appeal` format, `What happens next` covers approved/rejected outcomes.
+- **`tests/test_banning.py`** (new file): Module metadata for `banning.py`. Verifies `__module_name__` ("Ban"), commands `/tcban`/`/tcb`, `Target syntax` section, federation-wide language in "What it does".
+- **`tests/test_kicking.py`** (new file): Module metadata for `kicking.py`. Verifies `__module_name__` ("Kick"), commands `/tckick`/`/tck`, `Flow` section present, `Target syntax` present.
+- **`tests/test_muting.py`** (new file): Module metadata for `muting.py`. Verifies `__module_name__` ("Mute"), commands `/tcmute`/`/tcunmute`/`/tcm`, `Time format` section present, duration unit codes (s/m/h/d/w) all listed.
+- **`tests/test_stats.py`** (new file): Module metadata for `stats.py`. Verifies `__module_name__` ("Stats"), commands `/tcstats`/`/tcs`, `Drill-downs` section present with Staff Roster and Connected Chats content, CallbackQueryHandler registered.
+- **`tests/test_unbanning.py`** (new file): Module metadata for `unbanning.py`. Verifies `__module_name__` ("Unban"), commands `/tcunban`/`/tcunb`, `Target syntax` present, "all connected groups" in what-it-does text.
+- **`tests/test_warnings.py`** (new file): Module metadata for `warnings.py`. Verifies `__module_name__` ("Warnings"), all four commands (`tcwarn`/`tcunwarn`/`warns`/`resetwarns`), `Flow (/tcwarn)` and `Target syntax` sections, per-group scoping language, role distinction in who-can-use. Total: 661 tests across 48 files.
+
+### Added - test_checking.py: module metadata and handler structure coverage
+
+- **`tests/test_checking.py`** (new file): Module metadata and handler list validation for `checking.py`. Verifies `__module_name__`, non-empty `__help_text__` with "checkme" and "check" references, `__help_sections__` key set (Commands, Who can use, /checkme, /check sections), alias `/c` and `/cme` present in commands section, appeal reference in the checkme section, no em-dash, unique keys, two `MessageHandler` entries, and at least five `CallbackQueryHandler` entries. Total: 555 tests across 36 files.
+
+### Added - Test files for broadcasting, maintenance, disconnecting, connecting, admins modules
+
+- **`tests/test_broadcasting.py`** (13 tests, new file): Module metadata (`__module_name__`, `__help_text__`, `__help_sections__`) and handler list validation for `broadcasting.py`. Verifies section keys, content, no em-dash, key uniqueness, and that a `MessageHandler` entry is present.
+- **`tests/test_maintenance.py`** (19 tests, new file): Same metadata coverage for `maintenance.py`, plus 5 tests for the `_should_remove` pure helper: administrator status returns False, kicked/left status returns True, exceptions return True, and plain member status returns False.
+- **`tests/test_disconnecting.py`** (17 tests, new file): Module metadata and handler list validation for `disconnecting.py`. Verifies `/tcdisconnect` and `/rmtc` references, Staff access label, no em-dash, and that two `MessageHandler` entries are registered.
+- **`tests/test_connecting.py`** (18 tests, new file): Module metadata and handler list validation for `connecting.py`. Verifies federation reference in help text, required permissions section, ChatMemberHandler and CallbackQueryHandler presence alongside MessageHandler.
+- **`tests/test_admins.py`** (new file): Module metadata and handler list validation for `admins.py`. Verifies all five command references, role hierarchy with four ranks, Founder/Admin access labels, no em-dash, key uniqueness, and correct MessageHandler/CallbackQueryHandler counts. Total: 513 tests across 35 files.
+
+### Added - Tests pinning auth decorator error messages (test_decorators.py)
+
+- **`tests/test_decorators.py`**: Added four error-text coverage tests (`test_owner_only_error_text`, `test_staff_only_error_text`, `test_mod_only_error_text`, `test_basic_mod_only_error_text`). Each test imports the corresponding `_ERR_*` module constant and asserts the decorator sends that exact string, so any future voice change that updates the constant but misses the decorator body becomes an immediate test failure. Imported `_ERR_BASIC_MOD_ONLY`, `_ERR_MOD_ONLY`, `_ERR_OWNER_ONLY`, `_ERR_STAFF_ONLY` at the top of the file. Total: 450 tests.
+
+### Fixed - Auth error strings extracted to named constants in decorators.py
+
+- **`tcbot/modules/helper/decorators.py`**: Replaced four inline string literals in `owner_only`, `staff_only`, `mod_only`, and `basic_mod_only` with module-level named constants (`_ERR_OWNER_ONLY`, `_ERR_STAFF_ONLY`, `_ERR_MOD_ONLY`, `_ERR_BASIC_MOD_ONLY`). Voice changes and translations now require editing one location instead of hunting through decorator closures.
+
+### Fixed - README.md stale test inventory
+
+- **`README.md` Tests section** (line 177): Updated from "332 tests across 26 files" to "446 tests across 30 files".
+- **`README.md` summary section** (line 287): Updated from "332 collected tests across 26 files" to "446 collected tests across 30 files".
+
+### Added - Tests (identity, groups, replies, greeting, start, about, additional, privacy)
+
+- **`tests/test_identity.py`** (28 tests, new file): Full coverage of `refuse_message` and `staff_notice` pure functions. Covers all 11 action verbs against `self`, `this_bot`, `telegram`, `founder`, `admin`, `developer`, `tester`, `user`, and `other_bot` identity kinds. Verifies `{line}` placeholder is resolved in output, `user` identity is always allowed for moderation actions, and `staff_notice` returns `None` for non-staff identities.
+- **`tests/test_groups.py`** (12 tests, new file): Full coverage of `_render` pure function. Tests header presence, count display, simple view (title only, no chat ID), detailed view (title + chat ID), multiple groups, HTML escaping of special-character titles.
+- **`tests/test_replies.py`** (10 tests, new file): Validates all 13 reply constants in `tcbot.modules.helper.replies`. Checks non-empty, distinct, no emoji, no em-dash, permission constants end with period, and known-content spot-checks.
+- **`tests/test_greeting.py`** (8 tests, new file): Covers `_handle_member` ban-on-join logic. Bot accounts skipped silently, unbanned users get a welcome message, banned users trigger `ban_chat_member` + removal notice (no welcome), `upsert_user` always called, ban exceptions are caught and do not propagate.
+- **`tests/test_start.py`** (15 tests, new file): Validates `_PRIVATE_START_TEXT` and `_GROUP_START_TEXT` string content (no emoji, no em-dash, community name, botname, `/help`). Tests `cmd_start` routing: group/supergroup/forum sends group text, PM with no arg sends private text, PM with `about` arg sends about message, PM with `appeal_*` arg falls through to main menu.
+- **`tests/test_about.py`** (9 tests, new file): Validates `__about_msg__` content (no emoji, no em-dash, community name, independence disclaimer, history section). Tests `on_about_menu` callback wires `q.answer()` + `q.edit_message_text()` with HTML parse mode.
+- **`tests/test_additional.py`** (7 tests, new file): Validates `__additional_msg__` content. Tests `on_additional_menu` callback wires correctly with HTML parse mode.
+- **`tests/test_privacy.py`** (14 tests, new file): Validates `_PRIVACY_MSG` and `_PRIVACY_POLICY_MSG` content (no emoji, no em-dash, numbered sections, third-party disclaimer, contact section). Tests both callback handlers answer + edit with HTML parse mode, and graceful fallback when `bot.first_name` is `None`.
+- Total test count: 428 across 30 files (up from 332 across 26 files).
+
 ### Refactored - Permission tier constants and help-text consistency
 
 - **`tcbot/modules/helper/replies.py`**: Added three new permission constants: `PERM_FOUNDER_ONLY = "Founder only."`, `PERM_STAFF_ONLY = "TC Staff (Admin and above)."`, and `PERM_ADMIN_ABOVE = "Admin and above (Founder / Admin)."`. Completes the permission-tier set alongside the existing `PERM_DEV_ABOVE` and `PERM_TESTER_ABOVE`.

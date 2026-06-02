@@ -186,7 +186,7 @@ Repository conventions:
 
 The test suite is designed to run offline without a real Telegram token or MongoDB connection. Add or update tests when changing database helpers, handler behavior, workflow logic, formatting helpers, decorators, or utilities.
 
-Current collected test inventory: 332 tests across 26 `tests/test_*.py` files.
+Current collected test inventory: 698 tests across 50 `tests/test_*.py` files.
 
 Recommended validation after source changes:
 

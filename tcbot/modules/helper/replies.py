@@ -20,6 +20,9 @@ ERR_CANT_FIND_USER = (
 # ─────────────────────── Role / Auth Errors ─────────────────────── #
 
 ERR_ROLE_VERIFY = "Could not verify your group role."
+ERR_GROUP_ONLY = "Use this command in a group."
+ERR_NO_CONNECTED_GROUPS = "No connected groups."
+ERR_GROUP_NOT_FOUND = "Group not found or already removed."
 
 # ──────────────────────── Context / Scope ───────────────────────── #
 

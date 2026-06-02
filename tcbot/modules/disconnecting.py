@@ -20,6 +20,10 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
 
+# ──────────────── User-facing reply constants ──────────────────── #
+
+_MSG_RMTC_USAGE = "Usage: /rmtc <chat_id>"
+
 _TG_TIMEOUT = 3.0
 
 
@@ -73,7 +77,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     user = update.effective_user
 
     if chat.type == "private":
-        await update.effective_message.reply_text("Use this command in a group.")
+        await update.effective_message.reply_text(replies.ERR_GROUP_ONLY)
         return
 
     if not await db.groups_db.is_connected(chat.id):
@@ -134,7 +138,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(update.effective_message.text)
     if not args or not args[0].lstrip("-").isdigit():
-        await update.effective_message.reply_text("Usage: /rmtc <chat_id>")
+        await update.effective_message.reply_text(_MSG_RMTC_USAGE)
         return
 
     chat_id = int(args[0])
@@ -162,7 +166,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             return_exceptions=True,
         )
     else:
-        await update.effective_message.reply_text("Group not found or already removed.")
+        await update.effective_message.reply_text(replies.ERR_GROUP_NOT_FOUND)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

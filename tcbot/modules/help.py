@@ -21,6 +21,11 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
 
+# ──────────────── User-facing reply constants ──────────────────── #
+
+_ERR_TOPIC_NOT_FOUND = "Topic not found."
+_ERR_INVALID_SECTION = "Invalid section."
+
 __module_name__ = None
 
 
@@ -146,7 +151,7 @@ async def _show_module(
             else keyboards.back_to_help_cmd_kb()
         )
         await asyncio.gather(
-            q.answer(), safe_edit_cb(q, "Topic not found.", reply_markup=back_kb)
+            q.answer(), safe_edit_cb(q, _ERR_TOPIC_NOT_FOUND, reply_markup=back_kb)
         )
         return
 
@@ -310,7 +315,7 @@ async def on_help_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         mod_slug, idx_str = body.split(":", 1)
         idx = int(idx_str)
     except (ValueError, IndexError):
-        await q.answer("Invalid section.", show_alert=True)
+        await q.answer(_ERR_INVALID_SECTION, show_alert=True)
         return
     await _show_section(q, mod_slug, idx, is_menu_path=is_menu_path)
 

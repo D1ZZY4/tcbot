@@ -18,6 +18,14 @@ from tcbot.modules.helper.formatter import code, mention
 
 log = logging.getLogger(__name__)
 
+# ──────────────── User-facing reply constants ──────────────────── #
+
+_MSG_REQUEST_SUBMITTED = (
+    "Submitted - the Founder has been notified and will review it shortly."
+)
+_ERR_TARGET_IS_FOUNDER = "That's the Founder - can't assign a role over them."
+_ERR_NO_ASSIGN_PERMS = "You don't have permission to assign this role."
+
 # * Tokenised CLI aliases the /tcpromote command accepts.
 ROLE_ALIASES: dict[str, str] = {
     "admin": "admin",
@@ -176,10 +184,7 @@ class Promote:
                 )
             except Exception as exc:
                 log.error("Promo request notify failed: %s", exc)
-        return (
-            True,
-            "Submitted - the Founder has been notified and will review it shortly.",
-        )
+        return (True, _MSG_REQUEST_SUBMITTED)
 
     @classmethod
     async def execute(
@@ -200,7 +205,7 @@ class Promote:
         * Admin requesting Admin promotion creates a queue entry for the Founder.
         """
         if current_role == "founder":
-            return False, "That's the Founder - can't assign a role over them."
+            return False, _ERR_TARGET_IS_FOUNDER
 
         if db.users_roles.role_rank(current_role) >= db.users_roles.role_rank(role):
             label = db.users_roles.ROLE_LABEL.get(current_role, current_role)
@@ -215,7 +220,7 @@ class Promote:
             return await cls.request_admin(bot, admin_id, target_id, target_fname)
 
         if executor_role not in ("founder", "admin"):
-            return False, "You don't have permission to assign this role."
+            return False, _ERR_NO_ASSIGN_PERMS
 
         return await cls._assign_subrole(
             bot,

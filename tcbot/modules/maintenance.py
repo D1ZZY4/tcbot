@@ -122,7 +122,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
     groups = await db.groups_db.active_groups()
     if not groups:
-        await update.effective_message.reply_text("No connected groups.")
+        await update.effective_message.reply_text(replies.ERR_NO_CONNECTED_GROUPS)
         return
 
     status = await update.effective_message.reply_text(

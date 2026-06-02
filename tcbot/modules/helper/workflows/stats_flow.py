@@ -27,6 +27,13 @@ RESULTS_KEY = "stats_search_results"
 MSG_KEY = "stats_search_msg_id"
 CHAT_KEY = "stats_search_chat_id"
 
+# ──────────────── User-facing reply constants ──────────────────── #
+
+_ERR_USER_NOT_FOUND = "User not found in this page."
+_ERR_GROUP_NOT_FOUND = "Group not found in this page."
+_ERR_BAN_NOT_FOUND = "Ban record not found in this page."
+_ERR_RESULT_UNAVAILABLE = "Result no longer available."
+
 
 def _back_main() -> list[InlineKeyboardButton]:
     return [InlineKeyboardButton("« Back", callback_data="stats_main")]
@@ -237,7 +244,7 @@ class Stats:
         users = await db.users_cache.all_users()
         chunk, _total, page = paginate(users, page, _PAGE_SIZE)
         if idx < 0 or idx >= len(chunk):
-            text = "User not found in this page."
+            text = _ERR_USER_NOT_FOUND
             kb = InlineKeyboardMarkup(
                 [[InlineKeyboardButton("« Back", callback_data=f"stats_users:{page}")]]
             )
@@ -303,7 +310,7 @@ class Stats:
         groups = await db.groups_db.active_groups()
         chunk, _total, page = paginate(groups, page, _PAGE_SIZE)
         if idx < 0 or idx >= len(chunk):
-            text = "Group not found in this page."
+            text = _ERR_GROUP_NOT_FOUND
             kb = InlineKeyboardMarkup(
                 [[InlineKeyboardButton("« Back", callback_data=f"stats_chats:{page}")]]
             )
@@ -373,7 +380,7 @@ class Stats:
         bans = await db.bans_db.active_bans()
         chunk, _total, page = paginate(bans, page, _PAGE_SIZE)
         if idx < 0 or idx >= len(chunk):
-            text = "Ban record not found in this page."
+            text = _ERR_BAN_NOT_FOUND
             kb = InlineKeyboardMarkup(
                 [[InlineKeyboardButton("« Back", callback_data=f"stats_bans:{page}")]]
             )
@@ -490,7 +497,7 @@ class Stats:
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Detail card for a single search hit."""
         if idx < 0 or idx >= len(results):
-            text = "Result no longer available."
+            text = _ERR_RESULT_UNAVAILABLE
             kb = InlineKeyboardMarkup(
                 [[InlineKeyboardButton("« Back", callback_data="stats_search_back")]]
             )
