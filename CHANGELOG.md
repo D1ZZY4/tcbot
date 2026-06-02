@@ -4,6 +4,33 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ## [Unreleased] - 2026-06-02
 
+### Added - Tests (stats_flow and connected_flow coverage)
+
+- **`tests/test_stats_flow.py`** (23 tests, new file): Full coverage for `stats_flow` pure helpers and `Stats` class view builders. `_paginate`: empty list, single page, multi-page (first and second page), out-of-bounds page clamping. `Stats.main`: mocked DB returns with staff/ban/chat counts. `Stats.users_list`: empty state and paginated list with name rendering. `Stats.user_detail`: out-of-range index, valid detail card. `Stats.chats_list`: empty and with groups. `Stats.bans_list`: empty and with bans (batch name resolution). `Stats.search_run`: by numeric ID (hit and miss), by name substring (match and no-match). `Stats.search_results`: empty query and hits. `Stats.open_search`: sets `SEARCH_KEY`, `MSG_KEY`, `CHAT_KEY` in `user_data`. `Stats.clear_search`: removes all four search keys. `Stats.staff_roster`: no owner, no staff.
+- **`tests/test_connected_flow.py`** (15 tests, new file): Full coverage for `connected_flow` pure helpers and PTB event handlers. Text helpers: `join_prompt`, `connected_message`, `declined_message`, `already_connected_message`, `perms_required_message` all non-empty / contain community name. `join_keyboard`: both `join_callback` and `cancel_callback` present. `check_perms`: all perms present (True), one missing (False), all missing (False). `complete_join`: applies federation bans and sends log. `on_bot_added`: no-op on missing cmc, deactivates group on bot removal, skips non-group chats. `on_join_decision`: non-owner tap triggers `show_alert`; cancel path edits prompt and leaves the group.
+
+### Changed - Refactoring (stats_flow cleanup)
+
+- **`stats_flow.py` dead variable removal**: `admin_start`, `dev_start`, and `tester_start` were assigned but never used after removing the `start_idx` parameter from `_section`. All three removed.
+- **`stats_flow.py` import cleanup**: `import asyncio` moved from inside two classmethods (`main`, `staff_roster`) to the module-level import block. Module-level imports are preferred; inline imports inside long-lived async methods offer no benefit.
+- **`stats_flow.py` unused parameter removed**: `_section(label, docs, start_idx)` inner function had a dead `start_idx: int` parameter that was never read. Signature simplified to `_section(label, docs)` and all three call sites updated.
+
+### Changed - Documentation
+
+- **`PLAN.md` test count updated**: 262 → 300 tests across 23 → 25 files.
+- **`README.md`, `AGENTS.md`, `replit.md`, `.agents/skills/docs-maintainer/SKILL.md`**: Test inventory updated from 125/14 to 300/25 (count was stale from before the June 2026 test expansion passes).
+
+### Added - Tests (workflow infrastructure: reason, proof, promote, demote)
+
+- **`tests/test_reason_flow.py`** (14 tests, new file): Full coverage for `reason_flow` pure helpers and `build_modaction_conv` closure handlers. `parse_inline_reason`: explicit-target slicing, no-target full-join, empty-args blank. `BuildReason.keyboard`: skip present (2 buttons with correct labels) and absent (1 button). `BuildReason.prompt`: skip hint included or omitted, extra info appended. Closure handlers via state extraction: `_on_reason_text` saves reason, transitions to `WAITING_PROOF`, edits existing prompt when `prompt_id`/`prompt_chat` are set (vs. `reply_text` fallback); `_on_skip_reason` sets `"No reason provided"` and advances; `_on_proof` records photo description into `user_data` and calls executor, handles missing media without crash; `_on_skip_proof` calls executor and ends; `_on_cancel` answers query and edits message; `_end_conv` fallback replies and ends.
+- **`tests/test_proof_flow.py`** (15 tests, new file): Full coverage for `proof_flow` pure helpers and `upload_proof`. `BuildProof.keyboard`: skip (2 buttons, correct callback data) and no-skip (1 button). `BuildProof.step_prompt`: skip hint present/absent, extra info appended. `BuildProof.noted_prompt`: skip hint present/absent. `BuildProof.record`: photo message returns `"Photo (msg N)"`, video returns `"Video (msg N)"`, no media returns `None`. `upload_proof`: single photo (returns `message_id`), single video (returns `message_id`), album (sends media group, returns first `message_id`, thread ID forwarded), exception swallowed and returns `None`.
+- **`tests/test_promote_flow.py`** (15 tests, new file): Full coverage for `Promote` class. `available_roles_for`: founder (3 roles), admin (2 roles), other (empty). `execute` guards: founder target rejected, same-or-higher role rejected, non-staff cannot assign subrole. `execute` dispatch: admin promoting to admin routes to `request_admin`; founder promoting to admin routes to `_assign_admin`; admin promoting to developer routes to `_assign_subrole`. `_assign_admin`: clears prior subrole via `remove_role` when target holds developer/tester; skips `remove_role` when target has no prior subrole. `_assign_subrole`: rejects existing admin target; happy path calls `set_role`, sends log + DM. `request_admin`: rejects duplicate pending request; happy path enqueues and DMs owner (first `send_message` to `owner_id`).
+- **`tests/test_demote_flow.py`** (6 tests, new file): Full coverage for `Demote` class. `remove_role`: admin target calls `remove_admin` (not `remove_role`); non-admin target calls `remove_role` (not `remove_admin`). `execute`: returns `False` immediately when `remove_role` returns `False` without any `send_message`; manual demote (no trigger) logs and DMs with "removed by" phrasing; `trigger="ban"` DM says "banned"; `trigger="kick"` DM says "kicked"; `send_message` failures swallowed by `return_exceptions=True` and `execute` still returns `True`.
+
+### Changed - Documentation
+
+- **`PLAN.md` test count updated**: 209 → 262 tests across 19 → 23 files.
+
 ### Added - Tests (ConversationHandler state-machine)
 
 - **`tests/test_ban_flow.py`** (7 new tests, 8 total): Extended with new-ban happy path (`_execute_ban` creates record, posts log, calls `set_log_message_id`, enforces fan-out, edits prompt), new-ban log-send failure (log fails, `set_log_message_id` skipped, fan-out still runs), `on_proof_received` single-media (calls executor, returns END), `on_proof_received` first album message (buffered in `_albums`, returns WAITING_PROOF), `on_cancel_proof` (answers query, edits message, returns END), `on_proof_timeout` with message (reply sent, returns END), `on_proof_timeout` without message (no crash, returns END).

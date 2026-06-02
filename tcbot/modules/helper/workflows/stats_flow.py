@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+import asyncio
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
@@ -15,7 +15,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.formatter import bold, code, esc, mention
-from tcbot.utils.timedate_format import fmt_dt
+from tcbot.utils.pagination import date_or_unknown, nav_row, paginate
 
 _PAGE_SIZE = 6
 
@@ -28,40 +28,8 @@ MSG_KEY = "stats_search_msg_id"
 CHAT_KEY = "stats_search_chat_id"
 
 
-# ────────────────────────── Pagination ──────────────────────────── #
-
-
-def _paginate(items: list, page: int) -> tuple[list, int, int]:
-    """Slice ``items`` for ``page`` (0-based). Returns ``(chunk, total_pages, clamped_page)``."""
-    total = len(items)
-    if total == 0:
-        return [], 1, 0
-    total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
-    page = max(0, min(page, total_pages - 1))
-    start = page * _PAGE_SIZE
-    return items[start : start + _PAGE_SIZE], total_pages, page
-
-
-def _nav_row(page: int, total_pages: int, cb_prefix: str) -> list[InlineKeyboardButton]:
-    """Build a prev/next row when there is more than one page."""
-    row: list[InlineKeyboardButton] = []
-    if page > 0:
-        row.append(
-            InlineKeyboardButton("« Prev", callback_data=f"{cb_prefix}:{page - 1}")
-        )
-    if page < total_pages - 1:
-        row.append(
-            InlineKeyboardButton("Next »", callback_data=f"{cb_prefix}:{page + 1}")
-        )
-    return row
-
-
 def _back_main() -> list[InlineKeyboardButton]:
     return [InlineKeyboardButton("« Back", callback_data="stats_main")]
-
-
-def _date(value: Any) -> str:
-    return fmt_dt(value) if value else "Unknown"
 
 
 # ─────────────────────── Keyboard builders ──────────────────────── #
@@ -136,8 +104,6 @@ class Stats:
     @classmethod
     async def main(cls) -> tuple[str, InlineKeyboardMarkup]:
         """Federation overview: Founder, staff total, user cache, bans, chats."""
-        import asyncio
-
         (
             owner_id,
             admin_count,
@@ -185,8 +151,6 @@ class Stats:
     @classmethod
     async def staff_roster(cls) -> tuple[str, InlineKeyboardMarkup]:
         """Full staff breakdown: Founder, Admins, Developers, Testers."""
-        import asyncio
-
         owner_id, admins, developers, testers = await asyncio.gather(
             db.users_roles.get_owner_id(),
             db.users_roles.all_admins(),
@@ -200,11 +164,8 @@ class Stats:
         if owner_id:
             owner_idx = 0
             all_user_ids.append(owner_id)
-        admin_start = len(all_user_ids)
         all_user_ids.extend(a["user_id"] for a in admins)
-        dev_start = len(all_user_ids)
         all_user_ids.extend(d["user_id"] for d in developers)
-        tester_start = len(all_user_ids)
         all_user_ids.extend(t["user_id"] for t in testers)
 
         # Single batch query for all users
@@ -217,10 +178,10 @@ class Stats:
             owner_fname, owner_uname = mention_data_map[owner_id]
             lines.append(f"- {mention(owner_id, owner_fname, owner_uname)}\n")
 
-        def _section(label: str, docs: list, start_idx: int) -> None:
+        def _section(label: str, docs: list) -> None:
             lines.append(bold(f"{label} ({len(docs)})"))
             if docs:
-                for i, doc in enumerate(docs):
+                for doc in docs:
                     uid = doc["user_id"]
                     fname, uname = mention_data_map[uid]
                     lines.append(f"- {mention(uid, fname, uname)}")
@@ -228,9 +189,9 @@ class Stats:
                 lines.append("- None assigned")
             lines.append("")
 
-        _section("Admins", admins, admin_start)
-        _section("Developers", developers, dev_start)
-        _section("Testers", testers, tester_start)
+        _section("Admins", admins)
+        _section("Developers", developers)
+        _section("Testers", testers)
 
         return "\n".join(lines).rstrip(), back_kb()
 

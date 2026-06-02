@@ -14,6 +14,7 @@ from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from tcbot import database as db
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.formatter import bold, code, esc, mention
+from tcbot.utils.pagination import date_or_unknown, nav_row, paginate
 from tcbot.utils.timedate_format import fmt_dt
 
 _PAGE_SIZE = 5
@@ -46,38 +47,6 @@ async def _resolve_user_info(bot: Bot, target_id: int) -> tuple[str, str | None]
     return fname, uname
 
 
-def _date(value: Any) -> str:
-    """Format a datetime field or 'Unknown' if missing."""
-    return fmt_dt(value) if value else "Unknown"
-
-
-def _paginate(items: list, page: int) -> tuple[list, int, int]:
-    """Slice items for `page` (0-based). Returns (chunk, total_pages, clamped_page)."""
-    total = len(items)
-    if total == 0:
-        return [], 1, 0
-    total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
-    page = max(0, min(page, total_pages - 1))
-    start = page * _PAGE_SIZE
-    return items[start : start + _PAGE_SIZE], total_pages, page
-
-
-def _nav_row(
-    page: int,
-    total_pages: int,
-    cb_prefix: str,
-) -> list[InlineKeyboardButton]:
-    """Build a prev/next row when there is more than one page."""
-    row: list[InlineKeyboardButton] = []
-    if page > 0:
-        row.append(
-            InlineKeyboardButton("« Prev", callback_data=f"{cb_prefix}:{page - 1}")
-        )
-    if page < total_pages - 1:
-        row.append(
-            InlineKeyboardButton("Next »", callback_data=f"{cb_prefix}:{page + 1}")
-        )
-    return row
 
 
 def _back_to_check(target_id: int) -> list[InlineKeyboardButton]:

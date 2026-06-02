@@ -1,36 +1,32 @@
 ---
 name: Replit test runner
-description: How to run tests and ruff in the Replit environment for TCF Bot; the normal uv commands fail due to nix Python permission issues.
+description: How to run tests and ruff in this Replit environment; correct uv commands to use.
 ---
 
-## Problem
-
-`uv sync --extra test` fails on Replit NixOS: uv tries to install into the read-only nix store Python at `/nix/store/...python3-3.12.12/lib/python3.12/site-packages/` and gets `Permission denied`.
-
-`python3 -m pytest` resolves to `.pythonlibs/bin/python3` (Python 3.12) but the project packages are installed for Python 3.11 in `.pythonlibs/lib/python3.11/site-packages/`.
-
-## Solution
-
-Run tests using Python 3.11 with an explicit PYTHONPATH:
+## Test runner command
 
 ```bash
-PYTHONPATH=/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages python3.11 -m pytest tests/ -q
+uv run --extra test pytest tests/ -q
 ```
 
-Run ruff using uvx (downloads and caches ruff in an isolated environment):
+`uv run --extra test pytest` is the canonical way. `python3.11` does not exist; bare `pytest` or `python3 -m pytest` fail because pytest is only available as an `--extra test` dependency.
+
+**Why:** Packages install correctly under Python 3.12 via uv. The old workaround (PYTHONPATH + python3.11) was from a stale state and no longer applies.
+
+## Ruff
 
 ```bash
-uvx ruff check .
 uvx ruff format .
+uvx ruff check --fix .
 ```
 
-## Why
-
-- `.pythonlibs/lib/python3.11/site-packages/` contains: `telegram`, `motor`, `dotenv`, `flask`, `pytest`, `pytest_asyncio`, and all other project dependencies.
-- `.pythonlibs/bin/python3.11` is available and uses the correct site-packages via PYTHONPATH.
-- `uvx ruff` works because uv can download and run ruff as a one-shot tool without installing into the project venv.
+`uv run ruff` fails because ruff is in the `dev` optional group, not the default venv. `uvx` always works.
 
 ## Baseline (2026-06-02)
 
-- 176 tests across 18 test files: all pass, zero warnings.
-- `uvx ruff check .` → `All checks passed!`
+- 300 tests across 25 files, all passing.
+- `uvx ruff check .` clean.
+
+## How to apply
+
+Always use `uv run --extra test pytest` for tests and `uvx ruff` for linting. Never use bare `pytest`, `python3.11`, or `uv run ruff`.

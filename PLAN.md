@@ -15,7 +15,7 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 | Health check | Flask app in `tcbot/alive.py`, `GET /` returns `OK` on `PORT` (default `5000`). |
 | Dependency management | `uv` with `uv.lock`; CI installs with frozen lockfile by default. |
 | Formatting/linting | Ruff, configured in `pyproject.toml`. |
-| Tests | 209 collected tests across 19 `tests/test_*.py` files; designed to run offline. |
+| Tests | 300 collected tests across 25 `tests/test_*.py` files; designed to run offline. |
 | Deployment notes | Local `config.env`, Docker Compose, and Replit/hosted environment variables are documented. |
 
 ## Runtime Flow
