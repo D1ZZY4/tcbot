@@ -6,7 +6,10 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock
+
 import tcbot.modules.admins as admins
+from tcbot.modules.helper.identity import Identity
 
 # ───────────────────────── Module metadata ──────────────────────── #
 
@@ -135,3 +138,239 @@ def test_handlers_have_callback_handlers_for_promo_and_demote() -> None:
         h for h in admins.__handlers__ if isinstance(h, CallbackQueryHandler)
     ]
     assert len(cb_handlers) >= 3
+
+
+# ──────────────────── Handler behavior: cmd_promote ─────────────── #
+
+_PROMOTE_ADMIN_ID = 10
+_PROMOTE_TARGET_ID = 42
+_cmd_promote = admins.cmd_promote.__wrapped__.__wrapped__.__wrapped__
+
+
+def _make_promote_ctx(text: str = "/tcpromote 42") -> tuple:
+    user = MagicMock()
+    user.id = _PROMOTE_ADMIN_ID
+    user.first_name = "Admin"
+    msg = MagicMock()
+    msg.text = text
+    msg.reply_text = AsyncMock()
+    update = MagicMock()
+    update.effective_user = user
+    update.effective_message = msg
+    ctx = MagicMock()
+    ctx.bot = MagicMock()
+    ctx.bot.id = 999
+    return update, ctx
+
+
+async def test_cmd_promote_no_target_returns_early(monkeypatch) -> None:
+    update, ctx = _make_promote_ctx()
+    monkeypatch.setattr(
+        admins.db.users_roles,
+        "get_effective_role",
+        AsyncMock(return_value="admin"),
+    )
+    monkeypatch.setattr(
+        admins.extraction,
+        "extract_target",
+        AsyncMock(return_value=(None, None)),
+    )
+    await _cmd_promote(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+    assert "Specify" in update.effective_message.reply_text.call_args[0][0]
+
+
+async def test_cmd_promote_refused_identity_returns_early(monkeypatch) -> None:
+    update, ctx = _make_promote_ctx()
+
+    async def _mock_role(uid: int) -> str:
+        return "admin"
+
+    monkeypatch.setattr(admins.db.users_roles, "get_effective_role", _mock_role)
+    monkeypatch.setattr(
+        admins.extraction,
+        "extract_target",
+        AsyncMock(return_value=(_PROMOTE_TARGET_ID, "Target")),
+    )
+    ident = Identity(kind="user", target_id=_PROMOTE_TARGET_ID, fname="Target")
+    monkeypatch.setattr(admins.identity, "classify", AsyncMock(return_value=ident))
+    monkeypatch.setattr(
+        admins.identity, "refuse_message", MagicMock(return_value="Refused.")
+    )
+    await _cmd_promote(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+
+
+async def test_cmd_promote_with_role_arg_calls_execute(monkeypatch) -> None:
+    update, ctx = _make_promote_ctx("/tcpromote 42 admin")
+
+    async def _mock_role(uid: int) -> str:
+        return "admin"
+
+    monkeypatch.setattr(admins.db.users_roles, "get_effective_role", _mock_role)
+    monkeypatch.setattr(
+        admins.extraction,
+        "extract_target",
+        AsyncMock(return_value=(_PROMOTE_TARGET_ID, "Target")),
+    )
+    ident = Identity(kind="user", target_id=_PROMOTE_TARGET_ID, fname="Target")
+    monkeypatch.setattr(admins.identity, "classify", AsyncMock(return_value=ident))
+    monkeypatch.setattr(admins.identity, "refuse_message", MagicMock(return_value=None))
+    monkeypatch.setattr(admins, "ROLE_ALIASES", {"admin": "admin"})
+    execute_mock = AsyncMock(return_value=(True, "Promoted."))
+    monkeypatch.setattr(admins.Promote, "execute", execute_mock)
+    await _cmd_promote(update, ctx)
+    execute_mock.assert_awaited_once()
+    update.effective_message.reply_text.assert_awaited()
+
+
+async def test_cmd_promote_no_role_arg_shows_keyboard(monkeypatch) -> None:
+    update, ctx = _make_promote_ctx("/tcpromote 42")
+
+    async def _mock_role(uid: int) -> str:
+        return "admin"
+
+    monkeypatch.setattr(admins.db.users_roles, "get_effective_role", _mock_role)
+    monkeypatch.setattr(
+        admins.extraction,
+        "extract_target",
+        AsyncMock(return_value=(_PROMOTE_TARGET_ID, "Target")),
+    )
+    ident = Identity(kind="user", target_id=_PROMOTE_TARGET_ID, fname="Target")
+    monkeypatch.setattr(admins.identity, "classify", AsyncMock(return_value=ident))
+    monkeypatch.setattr(admins.identity, "refuse_message", MagicMock(return_value=None))
+    monkeypatch.setattr(
+        admins.Promote, "available_roles_for", MagicMock(return_value=["tester"])
+    )
+    kb_mock = MagicMock()
+    monkeypatch.setattr(
+        admins.keyboards, "promote_role_kb", MagicMock(return_value=kb_mock)
+    )
+    await _cmd_promote(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+    call_kwargs = update.effective_message.reply_text.call_args[1]
+    assert call_kwargs.get("reply_markup") is kb_mock
+
+
+# ──────────────────── Handler behavior: cmd_demote ──────────────── #
+
+_DEMOTE_ADMIN_ID = 11
+_DEMOTE_TARGET_ID = 55
+_cmd_demote = admins.cmd_demote.__wrapped__.__wrapped__.__wrapped__
+
+
+def _make_demote_ctx(text: str = "/tcdemote 55") -> tuple:
+    user = MagicMock()
+    user.id = _DEMOTE_ADMIN_ID
+    user.first_name = "Admin"
+    msg = MagicMock()
+    msg.text = text
+    msg.reply_text = AsyncMock()
+    update = MagicMock()
+    update.effective_user = user
+    update.effective_message = msg
+    ctx = MagicMock()
+    ctx.bot = MagicMock()
+    ctx.bot.id = 999
+    return update, ctx
+
+
+async def test_cmd_demote_no_target_returns_early(monkeypatch) -> None:
+    update, ctx = _make_demote_ctx()
+    monkeypatch.setattr(
+        admins.db.users_roles,
+        "get_effective_role",
+        AsyncMock(return_value="admin"),
+    )
+    monkeypatch.setattr(
+        admins.extraction,
+        "extract_target",
+        AsyncMock(return_value=(None, None)),
+    )
+    await _cmd_demote(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+    assert "Specify" in update.effective_message.reply_text.call_args[0][0]
+
+
+async def test_cmd_demote_refused_identity_returns_early(monkeypatch) -> None:
+    update, ctx = _make_demote_ctx()
+
+    async def _mock_role(uid: int) -> str:
+        return "admin"
+
+    monkeypatch.setattr(admins.db.users_roles, "get_effective_role", _mock_role)
+    monkeypatch.setattr(
+        admins.extraction,
+        "extract_target",
+        AsyncMock(return_value=(_DEMOTE_TARGET_ID, "Target")),
+    )
+    ident = Identity(kind="user", target_id=_DEMOTE_TARGET_ID, fname="Target")
+    monkeypatch.setattr(admins.identity, "classify", AsyncMock(return_value=ident))
+    monkeypatch.setattr(
+        admins.identity, "refuse_message", MagicMock(return_value="Cannot demote.")
+    )
+    await _cmd_demote(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+
+
+async def test_cmd_demote_no_target_role_returns_early(monkeypatch) -> None:
+    update, ctx = _make_demote_ctx()
+
+    async def _mock_role(uid: int) -> str | None:
+        return "admin" if uid == _DEMOTE_ADMIN_ID else None
+
+    monkeypatch.setattr(admins.db.users_roles, "get_effective_role", _mock_role)
+    monkeypatch.setattr(
+        admins.extraction,
+        "extract_target",
+        AsyncMock(return_value=(_DEMOTE_TARGET_ID, "Target")),
+    )
+    ident = Identity(kind="user", target_id=_DEMOTE_TARGET_ID, fname="Target")
+    monkeypatch.setattr(admins.identity, "classify", AsyncMock(return_value=ident))
+    monkeypatch.setattr(admins.identity, "refuse_message", MagicMock(return_value=None))
+    await _cmd_demote(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+
+
+async def test_cmd_demote_admin_target_non_founder_returns_early(monkeypatch) -> None:
+    update, ctx = _make_demote_ctx()
+
+    async def _mock_role(uid: int) -> str:
+        return "admin"
+
+    monkeypatch.setattr(admins.db.users_roles, "get_effective_role", _mock_role)
+    monkeypatch.setattr(
+        admins.extraction,
+        "extract_target",
+        AsyncMock(return_value=(_DEMOTE_TARGET_ID, "Target")),
+    )
+    ident = Identity(kind="user", target_id=_DEMOTE_TARGET_ID, fname="Target")
+    monkeypatch.setattr(admins.identity, "classify", AsyncMock(return_value=ident))
+    monkeypatch.setattr(admins.identity, "refuse_message", MagicMock(return_value=None))
+    await _cmd_demote(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+
+
+async def test_cmd_demote_valid_shows_confirmation_keyboard(monkeypatch) -> None:
+    update, ctx = _make_demote_ctx()
+
+    async def _mock_role(uid: int) -> str:
+        return "admin" if uid == _DEMOTE_ADMIN_ID else "tester"
+
+    monkeypatch.setattr(admins.db.users_roles, "get_effective_role", _mock_role)
+    monkeypatch.setattr(
+        admins.extraction,
+        "extract_target",
+        AsyncMock(return_value=(_DEMOTE_TARGET_ID, "Target")),
+    )
+    ident = Identity(kind="user", target_id=_DEMOTE_TARGET_ID, fname="Target")
+    monkeypatch.setattr(admins.identity, "classify", AsyncMock(return_value=ident))
+    monkeypatch.setattr(admins.identity, "refuse_message", MagicMock(return_value=None))
+    kb_mock = MagicMock()
+    monkeypatch.setattr(
+        admins.keyboards, "demote_confirm_kb", MagicMock(return_value=kb_mock)
+    )
+    await _cmd_demote(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+    call_kwargs = update.effective_message.reply_text.call_args[1]
+    assert call_kwargs.get("reply_markup") is kb_mock

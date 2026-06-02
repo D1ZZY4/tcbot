@@ -5,13 +5,13 @@ description: Current state of TCF Bot project — what is done, in progress, and
 
 # TCF Bot — Current Context
 
-**Last updated:** 2026-06-02 (session 5)
+**Last updated:** 2026-06-02 (session 5, continued)
 
 ## What is done
 
 - Python 3.12, uv, python-telegram-bot 22.5, Motor/MongoDB stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
-- 1078 tests across 69 test files; full suite passes offline with 0 warnings.
+- 1152 tests across 69 test files; full suite passes offline with 0 warnings.
 - `python -m ruff format .` and `python -m ruff check .` both clean (141 files formatted).
 - All P1/P2/P3 backlog items resolved (ConversationHandler tests, pagination NameError, composite indexes, asyncio.gather conversions, shared replies.py, em-dash removal, cache TTL constants, keyboards.py dead code).
 - `docs/mapping.md` updated: added `identity.py`, `replies.py` to helper section; added `pagination.py` to utils section.
@@ -22,35 +22,29 @@ description: Current state of TCF Bot project — what is done, in progress, and
 - `start.py` welcome messages rewritten to fix broken grammar.
 - Comprehensive source audit: CLEAN — no emoji, em-dash, or emoticons anywhere in tcbot/.
 - Bot restarts cleanly: MongoDB connected, indexes ensured, 75 handlers registered, polling active.
-- `kicking_flow.py` SyntaxError fixed: `_MSG_REJOIN_ALLOWED` was used as implicit string concatenation (only works with string literals); changed to `f"{_MSG_REJOIN_ALLOWED}"`.
-- All inline-string extractions complete across all modules and workflows; no unextracted static user-facing reply strings remain.
-- Comprehensive doc audit complete (2026-06-02): fixed 4 stale references — docs-maintainer SKILL.md test count (300/25 → 698/50), helper.md replies.py table (10 → 15 constants), utils.md mermaid diagram (logging_setup.py → logger.py), structure.md filename + test count.
-- 15 new test files added (2026-06-02): kicks_db, mutes_db, queues_db, users_cache, groups_db, error_reporter, mongos, formatter, extraction, parse_editmsg, ban_info (+ 4 earlier utility files). Bug fix: `_esc()` in error_reporter.py hardened to accept `str | None`. Suite: 698 → 966 tests / 50 → 65 files.
+- `kicking_flow.py` SyntaxError fixed.
+- All inline-string extractions complete across all modules and workflows.
+- Comprehensive doc audit complete (2026-06-02): fixed 4 stale references.
+- 15 new test files added (2026-06-02): full coverage of db helpers, formatter, extraction, etc. Suite: 698 → 966 tests / 50 → 65 files.
+- PTBDeprecationWarning eliminated: `PTB_TIMEDELTA=1` in conftest.py.
+- `tcbot/__main__.py`: module-level `warnings.filterwarnings` added for PTBUserWarning.
+- Docstrings added to all public handler/executor functions (AST audit: 0 missing).
+- Class docstrings on all public classes in documents.py.
+- 3 more test files (test_alive, test_documents, test_types): suite 966 → 1039 / 65 → 69 files.
 
-- PTBDeprecationWarning (`retry_after` type change) eliminated: `PTB_TIMEDELTA=1` added to
-  `tests/conftest.py` test env; belt-and-suspenders filterwarnings entry added to `pyproject.toml`.
-- 8 test files reformatted by `ruff format` (style only).
-- `tcbot/__main__.py`: module-level `warnings.filterwarnings` added to suppress intentional
-  PTBUserWarning about `per_message=False` + ConversationHandler; startup log is now fully clean.
-- Docstrings added to all 20 large public handler/executor functions that had none: 6 in
-  `admins.py`, 2 in `disconnecting.py`, 2 in `warning_flow.py`, plus 1 each in `banning.py`,
-  `broadcasting.py`, `checking.py`, `connecting.py`, `kicking.py`, `maintenance.py`, `muting.py`,
-  `start.py`, `warnings.py`, `unban_flow.py`. AST audit now shows 0 missing docstrings on
-  functions 30+ lines long.
-- Comprehensive source audit (session 2): no emoji, no em-dash, no emoticons; all typing imports
-  are appropriate built-in or stdlib; no blocking I/O; no hardcoded timeouts beyond named constants.
+- Sequential await fixes (session 5):
+  - `identity.classify()`: gather get_user_mention_data + get_effective_role (affects all mod commands)
+  - `stats.py`: refactored `_ack_and_render(q, data_coro)` — 12 handlers fixed
+  - `groups.py _toggle` cache-hit path: gather q.answer() + safe_edit()
+  - `admins.py cmd_promote/cmd_demote`: gather identity.classify + get_effective_role
 
-- 3 more test files added (session 3 continued): `test_alive.py` (5 tests),
-  `test_documents.py` (17 tests), `test_types.py` (12 tests). Suite: 966 → 1039 / 65 → 69 files.
-- Stale test counts (1005/66 → 1039/69) updated in PLAN.md (×2), README.md (×2),
-  replit.md, AGENTS.md.
-- Docstrings batch 1 (14 functions, 10+ lines), batch 2 (22 functions, 5-9 lines),
-  batch 3 (13 functions, 3-4 lines): AST audit now reports 0 public functions of 3+ lines
-  missing a docstring across the entire tcbot/ package.
-- Class docstrings: 10 public TypedDict classes in documents.py now have docstrings.
-  AST audit reports 0 public classes missing a docstring across the entire tcbot/ package.
-- CHANGELOG.md updated with all session 3 work (3 test file entries + 3 docstring batch
-  entries + class docstring entry).
+- Handler-behavior tests added (session 5):
+  - 13 async tests for `classify()` in test_identity.py: all 9 identity kinds + gather-correctness
+  - 21 handler-behavior tests: cmd_ban_start(6), cmd_kick(5), cmd_mute(5), cmd_warn_entry(5)
+  - 21 more handler-behavior tests: cmd_unban(3), cmd_unmute(4), cmd_unwarn(3), cmd_warnlist(2), cmd_resetwarns(3)
+  - Suite: 1039 → 1112 → 1127 → 1141 → 1152 tests; all 69 test files, all green.
+  - Batch 3 (14 tests): cmd_promote(4)+cmd_demote(5) in test_admins.py; cmd_checkme(3)+cmd_check(2) in test_checking.py.
+  - Batch 4 (11 tests): cmd_tcconnect(5) in test_connecting.py; cmd_tcdisconnect(4)+cmd_rmtc(2) in test_disconnecting.py.
 
 ## What is in progress
 
@@ -60,6 +54,8 @@ Nothing. All known items resolved.
 
 - Module-interface types in tcbot/modules/types.py (only if signatures grow ambiguous).
 - Query metrics collection (data-driven; gather Atlas PA data first).
+- Handler-behavior tests for admins.py (cmd_promote, cmd_demote).
+- Handler-behavior tests for checking.py, connecting.py, disconnecting.py.
 
 ## Known runtime notes
 
@@ -68,6 +64,7 @@ Nothing. All known items resolved.
 - Workflows are configured to use `python -m tcbot` and `python -m pytest tests/ -v` (no `uv run`).
 - Flask keep-alive runs on PORT=8080 (mapped by Replit to external port 80).
 - Bot fails fast when BOT_TOKEN/MONGODB_URI/OWNER_ID are not set. Secrets must be in Replit Secrets.
+- Communication with user: Indonesian. Code/docs/commits: English.
 
 ## Blockers
 

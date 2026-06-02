@@ -223,6 +223,151 @@ async def test_cmd_warn_entry_no_inline_reason_returns_waiting_reason(
     assert result == WAITING_REASON
 
 
+# ─────────────────── cmd_unwarn handler logic ────────────────────── #
+
+# Access the unwrapped handler (bypass ratelimiter / basic_mod_only / log_execution).
+_cmd_unwarn = warnings.cmd_unwarn.__wrapped__.__wrapped__.__wrapped__
+
+# cmd_warnlist has only 2 decorators: ratelimiter + log_execution.
+_cmd_warnlist = warnings.cmd_warnlist.__wrapped__.__wrapped__
+
+# cmd_resetwarns has 3 decorators: ratelimiter + basic_mod_only + log_execution.
+_cmd_resetwarns = warnings.cmd_resetwarns.__wrapped__.__wrapped__.__wrapped__
+
+
+def _make_unwarn_context(*, text: str = "/tcunwarn @target") -> tuple:
+    """Return (update, ctx) mocks ready for cmd_unwarn and similar handlers."""
+    msg = AsyncMock()
+    msg.text = text
+    msg.chat = SimpleNamespace(id=100)
+    msg.reply_text = AsyncMock(return_value=SimpleNamespace(message_id=1))
+    admin = SimpleNamespace(id=1, first_name="Admin")
+    update = MagicMock()
+    update.effective_message = msg
+    update.effective_user = admin
+    ctx = MagicMock()
+    ctx.bot = AsyncMock()
+    ctx.bot.id = 9999
+    ctx.user_data = {}
+    return update, ctx
+
+
+async def test_cmd_unwarn_no_target_returns_early(monkeypatch) -> None:
+    """When no target is resolved, handler replies and returns early."""
+    monkeypatch.setattr(
+        warnings.extraction, "extract_target", AsyncMock(return_value=(None, None))
+    )
+    update, ctx = _make_unwarn_context()
+    await _cmd_unwarn(update, ctx)
+    update.effective_message.reply_text.assert_called_once()
+
+
+async def test_cmd_unwarn_refused_identity_returns_early(monkeypatch) -> None:
+    """A refused identity sends the refusal message and returns."""
+    monkeypatch.setattr(
+        warnings.extraction, "extract_target", AsyncMock(return_value=(1, "Me"))
+    )
+    monkeypatch.setattr(
+        warnings.identity,
+        "classify",
+        AsyncMock(return_value=Identity("self", 1, "Me", None)),
+    )
+    update, ctx = _make_unwarn_context(text="/tcunwarn 1")
+    await _cmd_unwarn(update, ctx)
+    update.effective_message.reply_text.assert_called_once()
+
+
+async def test_cmd_unwarn_valid_target_calls_execute_unwarn(monkeypatch) -> None:
+    """With a valid target and no refusal, execute_unwarn is delegated to."""
+    monkeypatch.setattr(
+        warnings.extraction, "extract_target", AsyncMock(return_value=(42, "Target"))
+    )
+    monkeypatch.setattr(
+        warnings.identity,
+        "classify",
+        AsyncMock(return_value=Identity("user", 42, "Target", None)),
+    )
+    execute_mock = AsyncMock()
+    monkeypatch.setattr(warnings, "execute_unwarn", execute_mock)
+    update, ctx = _make_unwarn_context(text="/tcunwarn 42")
+    await _cmd_unwarn(update, ctx)
+    execute_mock.assert_called_once()
+    update.effective_message.reply_text.assert_not_called()
+
+
+# ─────────────────── cmd_warnlist handler logic ──────────────────── #
+
+
+async def test_cmd_warnlist_no_target_returns_early(monkeypatch) -> None:
+    """When no target is resolved, handler replies and returns early."""
+    monkeypatch.setattr(
+        warnings.extraction, "extract_target", AsyncMock(return_value=(None, None))
+    )
+    update, ctx = _make_unwarn_context(text="/warns")
+    await _cmd_warnlist(update, ctx)
+    update.effective_message.reply_text.assert_called_once()
+
+
+async def test_cmd_warnlist_valid_target_calls_execute_warnlist(monkeypatch) -> None:
+    """With a valid target, execute_warnlist is delegated to."""
+    monkeypatch.setattr(
+        warnings.extraction, "extract_target", AsyncMock(return_value=(42, "Target"))
+    )
+    execute_mock = AsyncMock()
+    monkeypatch.setattr(warnings, "execute_warnlist", execute_mock)
+    update, ctx = _make_unwarn_context(text="/warns 42")
+    await _cmd_warnlist(update, ctx)
+    execute_mock.assert_called_once()
+
+
+# ──────────────── cmd_resetwarns handler logic ───────────────────── #
+
+
+async def test_cmd_resetwarns_no_target_returns_early(monkeypatch) -> None:
+    """When no target is resolved, handler replies and returns early."""
+    monkeypatch.setattr(
+        warnings.extraction, "extract_target", AsyncMock(return_value=(None, None))
+    )
+    update, ctx = _make_unwarn_context(text="/resetwarns")
+    await _cmd_resetwarns(update, ctx)
+    update.effective_message.reply_text.assert_called_once()
+
+
+async def test_cmd_resetwarns_refused_identity_returns_early(monkeypatch) -> None:
+    """A refused identity sends the refusal message and returns."""
+    monkeypatch.setattr(
+        warnings.extraction, "extract_target", AsyncMock(return_value=(1, "Me"))
+    )
+    monkeypatch.setattr(
+        warnings.identity,
+        "classify",
+        AsyncMock(return_value=Identity("self", 1, "Me", None)),
+    )
+    update, ctx = _make_unwarn_context(text="/resetwarns 1")
+    await _cmd_resetwarns(update, ctx)
+    update.effective_message.reply_text.assert_called_once()
+
+
+async def test_cmd_resetwarns_valid_target_calls_execute_resetwarns(
+    monkeypatch,
+) -> None:
+    """With a valid target and no refusal, execute_resetwarns is called."""
+    monkeypatch.setattr(
+        warnings.extraction, "extract_target", AsyncMock(return_value=(42, "Target"))
+    )
+    monkeypatch.setattr(
+        warnings.identity,
+        "classify",
+        AsyncMock(return_value=Identity("user", 42, "Target", None)),
+    )
+    execute_mock = AsyncMock()
+    monkeypatch.setattr(warnings, "execute_resetwarns", execute_mock)
+    update, ctx = _make_unwarn_context(text="/resetwarns 42")
+    await _cmd_resetwarns(update, ctx)
+    execute_mock.assert_called_once()
+    update.effective_message.reply_text.assert_not_called()
+
+
 # ───────────────────────────── Handlers ─────────────────────────── #
 
 

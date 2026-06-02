@@ -4,21 +4,54 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ## [Unreleased] - 2026-06-02 (session 5)
 
-### Added - 21 handler-behavior tests across four command modules
+### Added - 61 handler-behavior tests across ten command modules
 
-Handler-level tests added for `cmd_ban_start` (6 tests in `test_banning.py`),
-`cmd_kick` (5 in `test_kicking.py`), `cmd_mute` (5 in `test_muting.py`), and
-`cmd_warn_entry` (5 in `test_warnings.py`).  Each test file gains imports for
-`AsyncMock`, `MagicMock`, `Identity`, and the relevant `WAITING_*` constants,
-plus a `_make_*_context` factory and an unwrapped handler reference via
-`__wrapped__.__wrapped__.__wrapped__`.
+**Batch 4** (11 tests): `cmd_tcconnect` (5 in `test_connecting.py`),
+`cmd_tcdisconnect` (4 in `test_disconnecting.py`), `cmd_rmtc` (2 in
+`test_disconnecting.py`).  Paths covered: private-chat guard, Telegram
+`get_chat_member` exception path (via `return_exceptions=True` gather),
+non-admin/creator member, already-connected group, pending request,
+not-connected group, not-staff-and-not-owner member, no-args usage, and
+group-not-found for force-removal.  Frozen-dataclass guard: avoided
+`monkeypatch.setattr` on `connection` (a frozen dataclass instance); content
+assertions replaced by `assert_awaited_once()` where frozen fields prevent
+patching.
 
-Paths tested per handler: no target → `END`, refused identity → `END`,
-executor_role `None` → `END`, inline reason → `WAITING_PROOF`, no inline
-reason → `WAITING_REASON`.  The ban handler additionally tests `Demote.execute`
-being called when the target holds a DB role.
+All 11 new tests green; suite grows from 1141 → 1152.  Ruff-clean; 69 test
+files unchanged.
 
-All 21 new tests green; suite grows from 1091 → 1112.  Ruff-clean; 141 files
+### Added - 50 handler-behavior tests across eight command modules
+
+**Batch 3** (14 tests): `cmd_promote` (4 in `test_admins.py`), `cmd_demote` (5
+in `test_admins.py`), `cmd_checkme` (3 in `test_checking.py`), `cmd_check` (2
+in `test_checking.py`).  Paths covered: no target, refused identity,
+executor-rank checks (non-founder cannot demote admin), keyboard rendering on
+valid input, and `Check.profile` delegation.  `_ban_summary` and keyboards
+mocked for the banned-user path in `cmd_checkme`.
+
+All 14 new tests green; suite grows from 1127 → 1141.  Ruff-clean; 141 files
+unchanged.
+
+### Added - 36 handler-behavior tests across six command modules
+
+**Batch 1** (21 tests): `cmd_ban_start` (6 in `test_banning.py`), `cmd_kick`
+(5 in `test_kicking.py`), `cmd_mute` (5 in `test_muting.py`), `cmd_warn_entry`
+(5 in `test_warnings.py`).  Paths covered: no target, refused identity,
+executor_role None, inline-reason → WAITING_PROOF, no-reason → WAITING_REASON.
+Ban handler also tests `Demote.execute` invocation when target holds a DB role.
+
+**Batch 2** (15 tests): `cmd_unban` (3 in `test_unbanning.py`), `cmd_unmute`
+(4 in `test_muting.py`), `cmd_unwarn` (3), `cmd_warnlist` (2), `cmd_resetwarns`
+(3) in `test_warnings.py`.  Paths covered: no target, refused identity, and
+happy-path delegation to the `execute_*` function.  The unmute and warnlist
+files also verify that a staff notice is sent before execution when the target
+holds a role.
+
+All test files updated with `AsyncMock`, `MagicMock`, `Identity` imports and
+`_make_*_context` factories.  Unwrapped handlers accessed via
+`__wrapped__` chains (3 layers for decorated handlers, 2 for `cmd_warnlist`).
+
+All 36 new tests green; suite grows from 1091 → 1127.  Ruff-clean; 141 files
 unchanged.
 
 ### Added - 13 async tests for `identity.classify()` in `test_identity.py`

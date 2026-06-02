@@ -14,7 +14,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv sync --extra test` | PASS |
 | `uv run ruff format --check .` | PASS (all files unchanged) |
 | `uv run ruff check .` | PASS (0 errors) |
-| `uv run --extra test pytest tests/ -q` | PASS (1091 tests, 69 files, all green) |
+| `uv run --extra test pytest tests/ -q` | PASS (1152 tests, 69 files, all green) |
 
 ## Completed items
 
@@ -85,6 +85,10 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Sequential await fix: groups.py _toggle cache-hit path | P3 | asyncio.gather(q.answer(), safe_edit(...)) in cache-hit branch | 2026-06-02 (s5) |
 | Sequential await fix: identity.classify() (high-impact) | P3 | get_user_mention_data + get_effective_role now gathered; affects all mod commands | 2026-06-02 (s5) |
 | 13 async tests for classify() in test_identity.py | P3 | All 9 identity kinds + fname fallback + gather-correctness assertion; suite 1078→1091 | 2026-06-02 (s5) |
+| Handler-behavior tests batch 1 (21 tests) | P4 | cmd_ban_start(6), cmd_kick(5), cmd_mute(5), cmd_warn_entry(5); suite 1091→1112 | 2026-06-02 (s5) |
+| Handler-behavior tests batch 2 (15 tests) | P4 | cmd_unban(3), cmd_unmute(4), cmd_unwarn(3), cmd_warnlist(2), cmd_resetwarns(3); suite 1112→1127 | 2026-06-02 (s5) |
+| Handler-behavior tests batch 3 (14 tests) | P4 | cmd_promote(4)+cmd_demote(5) in test_admins.py; cmd_checkme(3)+cmd_check(2) in test_checking.py; suite 1127→1141 | 2026-06-02 (s5) |
+| Handler-behavior tests batch 4 (11 tests) | P4 | cmd_tcconnect(5) in test_connecting.py; cmd_tcdisconnect(4)+cmd_rmtc(2) in test_disconnecting.py; suite 1141→1152 | 2026-06-02 (s5) |
 
 ## Pending (remaining optional)
 

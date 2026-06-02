@@ -206,6 +206,94 @@ async def test_cmd_mute_no_inline_reason_returns_waiting_reason(monkeypatch) -> 
     assert result == WAITING_REASON
 
 
+# ─────────────────── cmd_unmute handler logic ────────────────────── #
+
+# Access the unwrapped handler (bypass ratelimiter / basic_mod_only / log_execution).
+_cmd_unmute = muting.cmd_unmute.__wrapped__.__wrapped__.__wrapped__
+
+
+def _make_unmute_context(*, text: str = "/tcunmute @target") -> tuple:
+    """Return (update, ctx) mocks ready for cmd_unmute."""
+    msg = AsyncMock()
+    msg.text = text
+    msg.chat = SimpleNamespace(id=100)
+    msg.reply_text = AsyncMock(return_value=SimpleNamespace(message_id=1))
+    admin = SimpleNamespace(id=1, first_name="Admin")
+    update = MagicMock()
+    update.effective_message = msg
+    update.effective_user = admin
+    ctx = MagicMock()
+    ctx.bot = AsyncMock()
+    ctx.bot.id = 9999
+    ctx.user_data = {}
+    return update, ctx
+
+
+async def test_cmd_unmute_no_target_returns_early(monkeypatch) -> None:
+    """When no target is resolved, handler replies and returns early."""
+    monkeypatch.setattr(
+        muting.extraction, "extract_target", AsyncMock(return_value=(None, None))
+    )
+    update, ctx = _make_unmute_context()
+    await _cmd_unmute(update, ctx)
+    update.effective_message.reply_text.assert_called_once()
+
+
+async def test_cmd_unmute_refused_identity_returns_early(monkeypatch) -> None:
+    """A refused identity (e.g. self-unmute) sends the refusal and returns."""
+    monkeypatch.setattr(
+        muting.extraction, "extract_target", AsyncMock(return_value=(1, "Me"))
+    )
+    monkeypatch.setattr(
+        muting.identity,
+        "classify",
+        AsyncMock(return_value=Identity("self", 1, "Me", None)),
+    )
+    update, ctx = _make_unmute_context(text="/tcunmute 1")
+    await _cmd_unmute(update, ctx)
+    update.effective_message.reply_text.assert_called_once()
+
+
+async def test_cmd_unmute_valid_user_calls_execute_unmute(monkeypatch) -> None:
+    """With a regular user target, execute_unmute is called without a staff notice."""
+    monkeypatch.setattr(
+        muting.extraction, "extract_target", AsyncMock(return_value=(42, "Target"))
+    )
+    monkeypatch.setattr(
+        muting.identity,
+        "classify",
+        AsyncMock(return_value=Identity("user", 42, "Target", None)),
+    )
+    execute_mock = AsyncMock()
+    monkeypatch.setattr(muting, "execute_unmute", execute_mock)
+    update, ctx = _make_unmute_context(text="/tcunmute 42")
+    await _cmd_unmute(update, ctx)
+    execute_mock.assert_called_once()
+    # No staff notice for a plain user target.
+    update.effective_message.reply_text.assert_not_called()
+
+
+async def test_cmd_unmute_staff_target_emits_notice_before_execute(
+    monkeypatch,
+) -> None:
+    """When the target is a staff member, a notice is sent before executing unmute."""
+    monkeypatch.setattr(
+        muting.extraction, "extract_target", AsyncMock(return_value=(42, "Staff"))
+    )
+    monkeypatch.setattr(
+        muting.identity,
+        "classify",
+        AsyncMock(return_value=Identity("tester", 42, "Staff", None)),
+    )
+    execute_mock = AsyncMock()
+    monkeypatch.setattr(muting, "execute_unmute", execute_mock)
+    update, ctx = _make_unmute_context(text="/tcunmute 42")
+    await _cmd_unmute(update, ctx)
+    # The staff notice reply must precede the execute call.
+    update.effective_message.reply_text.assert_called_once()
+    execute_mock.assert_called_once()
+
+
 # ───────────────────────────── Handlers ─────────────────────────── #
 
 

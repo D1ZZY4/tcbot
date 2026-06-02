@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock
+
 import tcbot.modules.disconnecting as disconnecting
 
 # ───────────────────────── Module metadata ──────────────────────── #
@@ -91,3 +93,111 @@ def test_handlers_are_message_handlers() -> None:
 
     for h in disconnecting.__handlers__:
         assert isinstance(h, MessageHandler)
+
+
+# ─────────────── Handler behavior: cmd_tcdisconnect + cmd_rmtc ──── #
+
+_cmd_tcdisconnect = disconnecting.cmd_tcdisconnect.__wrapped__.__wrapped__
+_cmd_rmtc = disconnecting.cmd_rmtc.__wrapped__.__wrapped__.__wrapped__
+
+
+def _make_disconnect_ctx(chat_type: str = "group") -> tuple:
+    user = MagicMock()
+    user.id = 7
+    user.first_name = "Owner"
+    chat = MagicMock()
+    chat.type = chat_type
+    chat.id = -200
+    chat.title = "DiscoGroup"
+    msg = MagicMock()
+    msg.reply_text = AsyncMock()
+    update = MagicMock()
+    update.effective_user = user
+    update.effective_chat = chat
+    update.effective_message = msg
+    ctx = MagicMock()
+    ctx.bot = MagicMock()
+    ctx.bot.id = 999
+    ctx.bot.get_chat_member = AsyncMock()
+    ctx.bot.send_message = AsyncMock()
+    ctx.bot.leave_chat = AsyncMock()
+    return update, ctx
+
+
+async def test_cmd_tcdisconnect_private_chat_returns_early(monkeypatch) -> None:
+    update, ctx = _make_disconnect_ctx(chat_type="private")
+    await _cmd_tcdisconnect(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+    assert "group" in update.effective_message.reply_text.call_args[0][0].lower()
+
+
+async def test_cmd_tcdisconnect_not_connected_returns_early(monkeypatch) -> None:
+    update, ctx = _make_disconnect_ctx()
+    monkeypatch.setattr(
+        disconnecting.db.groups_db, "is_connected", AsyncMock(return_value=False)
+    )
+    await _cmd_tcdisconnect(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+
+
+async def test_cmd_tcdisconnect_member_lookup_fails_returns_role_err(
+    monkeypatch,
+) -> None:
+    update, ctx = _make_disconnect_ctx()
+    monkeypatch.setattr(
+        disconnecting.db.groups_db, "is_connected", AsyncMock(return_value=True)
+    )
+    monkeypatch.setattr(
+        disconnecting.db.users_roles, "is_staff", AsyncMock(return_value=False)
+    )
+    ctx.bot.get_chat_member = AsyncMock(side_effect=Exception("tg_fail"))
+    await _cmd_tcdisconnect(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+
+
+async def test_cmd_tcdisconnect_not_staff_not_owner_returns_early(monkeypatch) -> None:
+    update, ctx = _make_disconnect_ctx()
+    monkeypatch.setattr(
+        disconnecting.db.groups_db, "is_connected", AsyncMock(return_value=True)
+    )
+    monkeypatch.setattr(
+        disconnecting.db.users_roles, "is_staff", AsyncMock(return_value=False)
+    )
+    member_mock = MagicMock()
+    member_mock.status = "member"
+    ctx.bot.get_chat_member = AsyncMock(return_value=member_mock)
+    await _cmd_tcdisconnect(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+    assert "owner" in update.effective_message.reply_text.call_args[0][0].lower()
+
+
+def _make_rmtc_ctx(text: str = "/rmtc -200") -> tuple:
+    user = MagicMock()
+    user.id = 3
+    user.first_name = "Staff"
+    msg = MagicMock()
+    msg.text = text
+    msg.reply_text = AsyncMock()
+    update = MagicMock()
+    update.effective_user = user
+    update.effective_message = msg
+    ctx = MagicMock()
+    ctx.bot = MagicMock()
+    ctx.bot.send_message = AsyncMock()
+    ctx.bot.leave_chat = AsyncMock()
+    return update, ctx
+
+
+async def test_cmd_rmtc_no_args_returns_usage(monkeypatch) -> None:
+    update, ctx = _make_rmtc_ctx(text="/rmtc")
+    await _cmd_rmtc(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+
+
+async def test_cmd_rmtc_group_not_found_sends_reply(monkeypatch) -> None:
+    update, ctx = _make_rmtc_ctx(text="/rmtc -200")
+    monkeypatch.setattr(
+        disconnecting.db.groups_db, "deactivate_group", AsyncMock(return_value=0)
+    )
+    await _cmd_rmtc(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
