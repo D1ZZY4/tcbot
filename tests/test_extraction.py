@@ -48,6 +48,7 @@ class TestResolvedTarget:
 def _async_get_first_name(return_value: str):
     async def _impl(uid, default=""):
         return return_value
+
     return _impl
 
 

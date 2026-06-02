@@ -83,6 +83,13 @@ __help_sections__: list[tuple[str, str]] = [
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    """Entry point for the kick flow.
+
+    Resolves the target, runs identity and role checks in parallel, auto-demotes
+    any federation role, then either executes an immediate kick (with inline
+    reason) or opens the reason/proof conversation. Returns
+    ``ConversationHandler.END`` on validation failure.
+    """
     msg = update.effective_message
     admin = update.effective_user
 

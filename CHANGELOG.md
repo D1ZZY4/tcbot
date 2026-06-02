@@ -2,7 +2,70 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
-## [Unreleased] - 2026-06-02
+## [Unreleased] - 2026-06-02 (session 2)
+
+### Fixed - Runtime and test warning noise eliminated; 8 test files auto-formatted
+
+- **`tests/conftest.py`**: Added `PTB_TIMEDELTA=1` to the test environment dict. This opts in to
+  the python-telegram-bot v22.2+ timedelta API early, so `RetryAfter.__init__` no longer emits a
+  `PTBDeprecationWarning` about `retry_after` type changes during test collection.
+- **`pyproject.toml`**: Added a belt-and-suspenders `filterwarnings` entry for
+  `telegram.warnings.PTBDeprecationWarning` under `[tool.pytest.ini_options]`. Belt-and-suspenders
+  guard in case another PTB object triggers the same class of warning.
+- **8 test files auto-formatted** with `ruff format .` (whitespace/style only, no logic change):
+  `test_error_reporter.py`, `test_extraction.py`, `test_groups_db.py`, `test_kicks_db.py`,
+  `test_mutes_db.py`, `test_parse_editmsg.py`, `test_prefixes.py`, `test_users_cache.py`.
+
+- **`tcbot/__main__.py`**: Added module-level `warnings.filterwarnings("ignore", ...)` to suppress
+  the known `PTBUserWarning` about `per_message=False` + `CallbackQueryHandler` that fires on every
+  startup when ConversationHandlers are registered. Using `per_message=False` is intentional in all
+  three flows (approval callbacks must be matchable across multiple messages). Silencing at the
+  source instead of per call site keeps the startup log clean without hiding genuine issues.
+
+### Documentation - Docstrings added to 20 large public handler functions
+
+Added docstrings to every public function of 30+ lines that previously had none, eliminating all
+documentation gaps found by the AST-based audit:
+
+- **`tcbot/modules/admins.py`** (6 functions): `cmd_promote`, `on_promote_role_btn`, `cmd_demote`,
+  `on_demote_confirm`, `cmd_transfer`, `on_promo_decision`.
+- **`tcbot/modules/banning.py`**: `cmd_ban_start`.
+- **`tcbot/modules/broadcasting.py`**: `cmd_broadcast`.
+- **`tcbot/modules/checking.py`**: `cmd_checkme`.
+- **`tcbot/modules/connecting.py`**: `cmd_tcconnect`.
+- **`tcbot/modules/disconnecting.py`** (2 functions): `cmd_tcdisconnect`, `cmd_rmtc`.
+- **`tcbot/modules/kicking.py`**: `cmd_kick`.
+- **`tcbot/modules/maintenance.py`**: `cmd_leaveall`.
+- **`tcbot/modules/muting.py`**: `cmd_mute`.
+- **`tcbot/modules/start.py`**: `cmd_start`.
+- **`tcbot/modules/warnings.py`**: `cmd_warn_entry`.
+- **`tcbot/modules/helper/workflows/unban_flow.py`**: `execute_unban`.
+- **`tcbot/modules/helper/workflows/warning_flow.py`** (2 functions): `execute_warn`,
+  `execute_unwarn`.
+
+### Documentation - Docstrings added to 10 medium-sized public handler functions (16-29 lines)
+
+Second pass of the AST-based audit covered functions in the 16-29 line range:
+
+- **`tcbot/modules/admins.py`**: `cmd_promote_request`.
+- **`tcbot/modules/checking.py`** (2 functions): `on_checkme_detail`, `on_checkme_back`.
+- **`tcbot/utils/logger.py`**: `format` (override of `logging.Formatter.format`).
+- **`tcbot/modules/maintenance.py`**: `cmd_cleanup`.
+- **`tcbot/modules/muting.py`**: `cmd_unmute`.
+- **`tcbot/modules/helper/workflows/warning_flow.py`** (2 functions): `execute_warnlist`,
+  `execute_resetwarns`.
+- **`tcbot/modules/warnings.py`** (2 functions): `cmd_unwarn`, `cmd_resetwarns`.
+
+Skipped: inner closure functions `decorator()` / `wrapper()` inside `decorators.py` (defined
+inside a factory function, not part of the public API).
+
+All docstrings follow the project voice: professional, concise, no emoji. Each explains what the
+function does, what runs in parallel, and what it returns / when it exits early.
+
+Result: startup log now shows 0 PTBUserWarning lines (down from 3). Test suite: `1005 passed in
+10.12s` with 0 warnings. Ruff format and lint both clean across all 138 files.
+
+## [Unreleased] - 2026-06-02 (session 1)
 
 ### Added - Tests: 10 new test files covering DB helpers and error reporter (889 tests total)
 

@@ -42,6 +42,11 @@ class BotLogFormatter(logging.Formatter):
         return f"{self._BR}[{self._R}{color}{text}{self._R}{self._BR}]{self._R}"
 
     def format(self, record: logging.LogRecord) -> str:
+        """Format a log record with ANSI-colored time, date, level, module, and message.
+
+        Appends formatted exception and stack-info blocks when present so that
+        ``log.exception()`` and ``exc_info=True`` calls produce fully colored output.
+        """
         now = utc_now()
         level_color, level_label = self._LEVELS.get(record.levelno, ("\033[0m", "???"))
         module = record.name.split(".")[-1]

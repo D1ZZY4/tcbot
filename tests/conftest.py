@@ -18,6 +18,9 @@ import os
 _TEST_ENV: dict[str, str] = {
     "BOT_TOKEN": "test:token",
     "MONGODB_URI": "mongodb://invalid.test:0",
+    # * Opt-in to PTB timedelta API early so RetryAfter.__init__ does not
+    # * emit PTBDeprecationWarning about retry_after becoming datetime.timedelta.
+    "PTB_TIMEDELTA": "1",
     "DB_NAME": "tcbot_test",
     "COMMUNITY_NAME": "Test Federation",
     "OWNER_ID": "123456",

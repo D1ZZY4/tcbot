@@ -63,7 +63,10 @@ class TestSafeEdit:
         exc = BadRequest("Some unexpected error")
         msg = _make_message(side_effect=exc)
         import logging
-        with caplog.at_level(logging.WARNING, logger="tcbot.modules.helper.parse_editmsg"):
+
+        with caplog.at_level(
+            logging.WARNING, logger="tcbot.modules.helper.parse_editmsg"
+        ):
             await safe_edit(msg, "text")
         assert any("edit failed" in r.message for r in caplog.records)
 
@@ -105,6 +108,9 @@ class TestSafeEditCb:
         exc = BadRequest("Completely different error")
         q = _make_callback_query(side_effect=exc)
         import logging
-        with caplog.at_level(logging.WARNING, logger="tcbot.modules.helper.parse_editmsg"):
+
+        with caplog.at_level(
+            logging.WARNING, logger="tcbot.modules.helper.parse_editmsg"
+        ):
             await safe_edit_cb(q, "text")
         assert any("callback edit failed" in r.message for r in caplog.records)

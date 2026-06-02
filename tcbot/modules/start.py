@@ -46,6 +46,12 @@ _GROUP_START_TEXT = (
 @decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Respond to /start in private chats and groups.
+
+    In group context sends a minimal message with a PM deep-link. In private
+    context dispatches to the relevant info handler when a deep-link argument is
+    present (``ban_<id>``), otherwise shows the full welcome message.
+    """
     msg = update.effective_message
     chat = update.effective_chat
     text = (msg.text or "").strip()

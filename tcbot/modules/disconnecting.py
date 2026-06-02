@@ -73,6 +73,12 @@ __help_sections__: list[tuple[str, str]] = [
 @decorators.ratelimiter(limit=3, period=60)
 @decorators.log_execution
 async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Request to disconnect the current group from the federation.
+
+    Group-only command. Confirms the group is connected, checks staff status
+    and group admin membership in parallel (bounded Telegram call), then posts
+    a confirmation card to the main group for founder approval.
+    """
     chat = update.effective_chat
     user = update.effective_user
 
@@ -136,6 +142,12 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Force-remove a group from the federation by chat ID (staff command).
+
+    Parses the numeric chat ID from the command argument, deactivates the group
+    record, then fans out a log message, a bot leave, and a confirmation reply
+    in parallel.
+    """
     args = parse_cmd_args(update.effective_message.text)
     if not args or not args[0].lstrip("-").isdigit():
         await update.effective_message.reply_text(_MSG_RMTC_USAGE)

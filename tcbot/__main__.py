@@ -10,6 +10,7 @@ import asyncio
 import logging
 import sys
 import traceback
+import warnings
 
 from telegram import Update
 from telegram.ext import (
@@ -29,6 +30,17 @@ from tcbot.utils import error_reporter
 from tcbot.utils.logger import setup as setup_logging
 
 log = logging.getLogger(__name__)
+
+# * PTB emits a UserWarning about per_message=False + CallbackQueryHandler when
+# * ConversationHandlers are built. Our flows deliberately use per_message=False
+# * because approval callbacks must be matchable across multiple messages. The
+# * warning is accurate but the behaviour is intentional, so we suppress it here
+# * rather than at every call site.
+warnings.filterwarnings(
+    "ignore",
+    message=r"If 'per_message=False', 'CallbackQueryHandler'.*",
+    category=UserWarning,
+)
 
 
 # ────────────────── Member Cache Update (layer 1) ───────────────── #

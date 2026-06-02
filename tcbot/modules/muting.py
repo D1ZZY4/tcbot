@@ -99,6 +99,14 @@ __help_sections__: list[tuple[str, str]] = [
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    """Entry point for the mute flow.
+
+    Resolves the target, parses an optional duration token from the inline
+    arguments, runs identity and role checks in parallel, auto-demotes any
+    federation role, then either executes an immediate mute (when a duration and
+    inline reason are both provided) or opens the reason/proof conversation.
+    Returns ``ConversationHandler.END`` on validation failure.
+    """
     msg = update.effective_message
     admin = update.effective_user
 
@@ -177,6 +185,11 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Remove the chat restriction from the target and restore messaging rights.
+
+    Resolves the target, checks identity, optionally emits a staff-action notice,
+    then delegates to ``execute_unmute``.
+    """
     msg = update.effective_message
     admin = update.effective_user
     args = parse_cmd_args(msg.text)

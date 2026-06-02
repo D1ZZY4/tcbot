@@ -22,7 +22,7 @@ class FakeSortCursor:
     def sort(self, key: str, direction: int) -> "FakeSortCursor":
         self._docs = sorted(
             self._docs,
-            key=lambda d: (d.get(key) or ""),
+            key=lambda d: d.get(key) or "",
             reverse=direction < 0,
         )
         return self
@@ -36,7 +36,9 @@ class FakeCacheColl:
         self.docs: list[dict] = [dict(d) for d in (docs or [])]
         self._upsert_calls: list[tuple] = []
 
-    async def update_one(self, flt: dict, update: dict, *, upsert: bool = False) -> SimpleNamespace:
+    async def update_one(
+        self, flt: dict, update: dict, *, upsert: bool = False
+    ) -> SimpleNamespace:
         self._upsert_calls.append((flt, update))
         for d in self.docs:
             if _matches(d, flt):

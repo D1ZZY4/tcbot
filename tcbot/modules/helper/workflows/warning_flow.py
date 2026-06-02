@@ -41,6 +41,14 @@ async def execute_warn(
     reason_text: str,
     proof_desc: str | None = None,
 ) -> None:
+    """Issue a warning and auto-ban the target if the warn limit is reached.
+
+    Increments the warn counter via ``db.warns_db.add_warn``. If the new count
+    meets or exceeds ``WARN_LIMIT``, any held federation role is demoted first,
+    then the user is banned from the originating group and their warning record
+    is cleared. Logs and user-facing replies always run in parallel via
+    ``asyncio.gather``.
+    """
     msg = update.effective_message
     chat_id = update.effective_chat.id
     admin_id = update.effective_user.id
@@ -128,6 +136,12 @@ async def execute_unwarn(
     target_id: int,
     target_name: str,
 ) -> None:
+    """Remove one warning from the target in the current group.
+
+    Checks the current warn count; replies and returns early if the target has
+    none. Otherwise decrements by one, logs the action, and sends the log and
+    reply concurrently.
+    """
     msg = update.effective_message
     chat_id = update.effective_chat.id
 
@@ -175,6 +189,11 @@ async def execute_warnlist(
     target_id: int,
     target_name: str,
 ) -> None:
+    """Reply with the numbered list of active warnings for the target in this group.
+
+    Fetches all warnings from ``db.warns_db.get_warns`` and replies with a
+    formatted list. Replies early if no warnings exist.
+    """
     msg = update.effective_message
     chat_id = update.effective_chat.id
 
@@ -205,6 +224,11 @@ async def execute_resetwarns(
     target_id: int,
     target_name: str,
 ) -> None:
+    """Clear all active warnings for the target in the current group.
+
+    Calls ``db.warns_db.clear_warns`` and replies with the number of removed
+    warnings. Replies early if the target has no warnings to clear.
+    """
     msg = update.effective_message
     chat_id = update.effective_chat.id
 

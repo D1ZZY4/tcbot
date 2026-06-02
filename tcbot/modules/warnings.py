@@ -103,6 +103,13 @@ __help_sections__: list[tuple[str, str]] = [
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    """Entry point for the warn flow.
+
+    Resolves the target, runs identity and role checks in parallel, then either
+    skips to the proof step (when an inline reason is provided) or opens the
+    reason-collection step. Returns ``ConversationHandler.END`` on any validation
+    failure.
+    """
     msg = update.effective_message
     admin = update.effective_user
 
@@ -164,6 +171,11 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Remove one warning from the target in the current group.
+
+    Resolves the target, runs the identity check, optionally emits a
+    staff-action notice, then delegates to ``execute_unwarn``.
+    """
     msg = update.effective_message
     admin = update.effective_user
     args = parse_cmd_args(msg.text)
@@ -206,6 +218,11 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Clear all warnings for the target in the current group.
+
+    Resolves the target, runs the identity check, optionally emits a
+    staff-action notice, then delegates to ``execute_resetwarns``.
+    """
     msg = update.effective_message
     admin = update.effective_user
     args = parse_cmd_args(msg.text)

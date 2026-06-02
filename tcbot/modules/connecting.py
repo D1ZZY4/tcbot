@@ -88,6 +88,13 @@ __help_sections__: list[tuple[str, str]] = [
 @decorators.ratelimiter(limit=3, period=60)
 @decorators.log_execution
 async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Request to connect the current group to the federation.
+
+    Group-only command. Checks admin status, existing connection, and pending
+    requests in parallel (Telegram lookup is bounded to avoid stalls). On
+    success, creates a pending request and notifies the main group for founder
+    approval.
+    """
     chat = update.effective_chat
     user = update.effective_user
 

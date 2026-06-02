@@ -5,14 +5,14 @@ description: Current state of TCF Bot project — what is done, in progress, and
 
 # TCF Bot — Current Context
 
-**Last updated:** 2026-06-02
+**Last updated:** 2026-06-02 (session 2)
 
 ## What is done
 
 - Python 3.12, uv, python-telegram-bot 22.5, Motor/MongoDB stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
-- 1005 tests across 66 test files; full suite passes offline.
-- `uv run ruff format .` and `uv run ruff check .` both clean.
+- 1005 tests across 66 test files; full suite passes offline with 0 warnings.
+- `python -m ruff format .` and `python -m ruff check .` both clean (138 files formatted).
 - All P1/P2/P3 backlog items resolved (ConversationHandler tests, pagination NameError, composite indexes, asyncio.gather conversions, shared replies.py, em-dash removal, cache TTL constants, keyboards.py dead code).
 - `docs/mapping.md` updated: added `identity.py`, `replies.py` to helper section; added `pagination.py` to utils section.
 - `maintenance.py` and `disconnecting.py` hardcoded `timeout=3.0` extracted to named constants.
@@ -26,6 +26,19 @@ description: Current state of TCF Bot project — what is done, in progress, and
 - All inline-string extractions complete across all modules and workflows; no unextracted static user-facing reply strings remain.
 - Comprehensive doc audit complete (2026-06-02): fixed 4 stale references — docs-maintainer SKILL.md test count (300/25 → 698/50), helper.md replies.py table (10 → 15 constants), utils.md mermaid diagram (logging_setup.py → logger.py), structure.md filename + test count.
 - 15 new test files added (2026-06-02): kicks_db, mutes_db, queues_db, users_cache, groups_db, error_reporter, mongos, formatter, extraction, parse_editmsg, ban_info (+ 4 earlier utility files). Bug fix: `_esc()` in error_reporter.py hardened to accept `str | None`. Suite: 698 → 966 tests / 50 → 65 files.
+
+- PTBDeprecationWarning (`retry_after` type change) eliminated: `PTB_TIMEDELTA=1` added to
+  `tests/conftest.py` test env; belt-and-suspenders filterwarnings entry added to `pyproject.toml`.
+- 8 test files reformatted by `ruff format` (style only).
+- `tcbot/__main__.py`: module-level `warnings.filterwarnings` added to suppress intentional
+  PTBUserWarning about `per_message=False` + ConversationHandler; startup log is now fully clean.
+- Docstrings added to all 20 large public handler/executor functions that had none: 6 in
+  `admins.py`, 2 in `disconnecting.py`, 2 in `warning_flow.py`, plus 1 each in `banning.py`,
+  `broadcasting.py`, `checking.py`, `connecting.py`, `kicking.py`, `maintenance.py`, `muting.py`,
+  `start.py`, `warnings.py`, `unban_flow.py`. AST audit now shows 0 missing docstrings on
+  functions 30+ lines long.
+- Comprehensive source audit (session 2): no emoji, no em-dash, no emoticons; all typing imports
+  are appropriate built-in or stdlib; no blocking I/O; no hardcoded timeouts beyond named constants.
 
 ## What is in progress
 

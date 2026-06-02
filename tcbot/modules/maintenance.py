@@ -119,6 +119,12 @@ async def _should_remove(bot, grp: GroupDoc) -> bool:
 @decorators.owner_only
 @decorators.log_execution
 async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Leave all active connected groups and deactivate their DB records.
+
+    Fetches active groups, fans out individual leave-and-deactivate coroutines
+    concurrently (``_leave_one``), then edits the status message with the final
+    success/failure counts.
+    """
     admin = update.effective_user
     groups = await db.groups_db.active_groups()
     if not groups:
@@ -159,6 +165,12 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Prune inaccessible groups from the active federation list.
+
+    Checks all groups concurrently via ``_should_remove``, deactivates the
+    identified stale records in parallel, then replies with the count of removed
+    groups.
+    """
     groups = await db.groups_db.active_groups()
 
     # * Check all groups concurrently - one network round-trip per group, all in parallel

@@ -83,6 +83,13 @@ __help_sections__: list[tuple[str, str]] = [
 @decorators.mod_only
 @decorators.log_execution
 async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    """Entry point for the federation ban flow.
+
+    Resolves the target, validates the inline reason, runs identity and role
+    checks in parallel, auto-demotes any federation role held by the target, then
+    stores ban metadata in ``user_data`` and shows the proof prompt. Returns
+    ``WAITING_PROOF`` or ``ConversationHandler.END`` on any failure.
+    """
     msg = update.effective_message
     admin = update.effective_user
     raw_args = parse_cmd_args(msg.text)

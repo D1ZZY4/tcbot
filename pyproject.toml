@@ -28,6 +28,7 @@ testpaths = ["tests"]
 addopts = "-ra -q"
 filterwarnings = [
     "ignore:If 'per_message=False', 'CallbackQueryHandler'.*:UserWarning",
+    "ignore:.*PTB_TIMEDELTA.*:telegram.warnings.PTBDeprecationWarning",
 ]
 
 [tool.ruff]

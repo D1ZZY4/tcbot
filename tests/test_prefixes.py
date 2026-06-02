@@ -194,7 +194,9 @@ class TestDispatchAltPrefix:
         await dispatch_alt_prefix(FakeUpdate(), FakeCtx())
 
     async def test_unregistered_command_skips(self, monkeypatch) -> None:
-        monkeypatch.setattr("tcbot.utils.prefixes.cfg", type("C", (), {"prefixes": ["!"]})())
+        monkeypatch.setattr(
+            "tcbot.utils.prefixes.cfg", type("C", (), {"prefixes": ["!"]})()
+        )
 
         class FakeMsg:
             text = "!unknowncmd123"
@@ -214,7 +216,9 @@ class TestDispatchAltPrefix:
         await dispatch_alt_prefix(FakeUpdate(), FakeCtx())
 
     async def test_registered_command_called(self, monkeypatch) -> None:
-        monkeypatch.setattr("tcbot.utils.prefixes.cfg", type("C", (), {"prefixes": ["!"]})())
+        monkeypatch.setattr(
+            "tcbot.utils.prefixes.cfg", type("C", (), {"prefixes": ["!"]})()
+        )
 
         called_with: list = []
 
@@ -241,8 +245,12 @@ class TestDispatchAltPrefix:
         await dispatch_alt_prefix(FakeUpdate(), FakeCtx())
         assert len(called_with) == 1
 
-    async def test_registered_command_handler_exception_swallowed(self, monkeypatch) -> None:
-        monkeypatch.setattr("tcbot.utils.prefixes.cfg", type("C", (), {"prefixes": ["!"]})())
+    async def test_registered_command_handler_exception_swallowed(
+        self, monkeypatch
+    ) -> None:
+        monkeypatch.setattr(
+            "tcbot.utils.prefixes.cfg", type("C", (), {"prefixes": ["!"]})()
+        )
 
         async def raising_handler(u, c) -> None:
             raise RuntimeError("boom")

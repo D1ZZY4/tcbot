@@ -30,6 +30,12 @@ async def execute_unban(
     target_id: int,
     target_fname: str,
 ) -> None:
+    """Lift a federation ban: deactivate the DB record and unban across all connected groups.
+
+    Fetches the active ban, runs ``deactivate_ban`` and ``active_groups`` in parallel,
+    fans out ``unban_chat_member`` across every group, then sends the log and reply
+    concurrently. Replies inline if no active ban is found.
+    """
     msg = update.effective_message
     admin = update.effective_user
 

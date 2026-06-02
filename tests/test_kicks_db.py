@@ -78,10 +78,20 @@ class TestUserKicks:
 
     async def test_returns_matching_records(self, monkeypatch):
         docs = [
-            {"user_id": 42, "chat_id": 1, "reason": "r", "admin_id": 9,
-             "timestamp": datetime(2024, 6, 2, tzinfo=timezone.utc)},
-            {"user_id": 99, "chat_id": 1, "reason": "r", "admin_id": 9,
-             "timestamp": datetime(2024, 6, 1, tzinfo=timezone.utc)},
+            {
+                "user_id": 42,
+                "chat_id": 1,
+                "reason": "r",
+                "admin_id": 9,
+                "timestamp": datetime(2024, 6, 2, tzinfo=timezone.utc),
+            },
+            {
+                "user_id": 99,
+                "chat_id": 1,
+                "reason": "r",
+                "admin_id": 9,
+                "timestamp": datetime(2024, 6, 1, tzinfo=timezone.utc),
+            },
         ]
         fake = FakeKicksCollection(docs)
         monkeypatch.setattr(kicks_db, "_kicks", lambda: fake)
@@ -91,10 +101,20 @@ class TestUserKicks:
 
     async def test_sorted_newest_first(self, monkeypatch):
         docs = [
-            {"user_id": 42, "chat_id": 1, "reason": "r", "admin_id": 9,
-             "timestamp": datetime(2024, 1, 1, tzinfo=timezone.utc)},
-            {"user_id": 42, "chat_id": 2, "reason": "r", "admin_id": 9,
-             "timestamp": datetime(2024, 6, 1, tzinfo=timezone.utc)},
+            {
+                "user_id": 42,
+                "chat_id": 1,
+                "reason": "r",
+                "admin_id": 9,
+                "timestamp": datetime(2024, 1, 1, tzinfo=timezone.utc),
+            },
+            {
+                "user_id": 42,
+                "chat_id": 2,
+                "reason": "r",
+                "admin_id": 9,
+                "timestamp": datetime(2024, 6, 1, tzinfo=timezone.utc),
+            },
         ]
         fake = FakeKicksCollection(docs)
         monkeypatch.setattr(kicks_db, "_kicks", lambda: fake)
@@ -110,9 +130,27 @@ class TestUserKickCount:
 
     async def test_counts_only_matching_user(self, monkeypatch):
         docs = [
-            {"user_id": 42, "chat_id": 1, "reason": "r", "admin_id": 9, "timestamp": datetime(2024, 1, 1)},
-            {"user_id": 42, "chat_id": 2, "reason": "r", "admin_id": 9, "timestamp": datetime(2024, 2, 1)},
-            {"user_id": 99, "chat_id": 1, "reason": "r", "admin_id": 9, "timestamp": datetime(2024, 1, 1)},
+            {
+                "user_id": 42,
+                "chat_id": 1,
+                "reason": "r",
+                "admin_id": 9,
+                "timestamp": datetime(2024, 1, 1),
+            },
+            {
+                "user_id": 42,
+                "chat_id": 2,
+                "reason": "r",
+                "admin_id": 9,
+                "timestamp": datetime(2024, 2, 1),
+            },
+            {
+                "user_id": 99,
+                "chat_id": 1,
+                "reason": "r",
+                "admin_id": 9,
+                "timestamp": datetime(2024, 1, 1),
+            },
         ]
         fake = FakeKicksCollection(docs)
         monkeypatch.setattr(kicks_db, "_kicks", lambda: fake)

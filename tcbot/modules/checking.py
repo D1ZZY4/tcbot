@@ -141,6 +141,12 @@ async def _safe_edit(q, text: str, reply_markup) -> None:
 @decorators.ratelimiter(limit=8, period=30)
 @decorators.log_execution
 async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the caller's federation status (ban / staff role / clean record).
+
+    Fetches the owner ID, caller role, and active ban in parallel. Returns
+    identity-aware replies for the Founder, staff members, and regular users.
+    Provides an appeal deep-link when the caller is actively banned.
+    """
     user = update.effective_user
     msg = update.effective_message
     fname = user.first_name or str(user.id)
@@ -201,6 +207,11 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show detailed ban information from the /checkme ban card.
+
+    Fetches the ban record, answers the query and builds the detail view in
+    parallel, then edits the message to the full detail card with a back button.
+    """
     q = update.callback_query
     ban_id = q.data.split(":")[1]
 
@@ -225,6 +236,12 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Return to the ban summary card from the detail view.
+
+    Fetches the ban record, answers the query and resolves display names in
+    parallel, then edits the message back to the summary card with the appeal
+    and detail keyboard.
+    """
     q = update.callback_query
     ban_id = q.data.split(":")[1]
 

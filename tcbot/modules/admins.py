@@ -123,6 +123,14 @@ __help_sections__: list[tuple[str, str]] = [
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Assign a federation role to a user (admin / developer / tester).
+
+    Fetches the executor role and resolves the target in parallel. When a role
+    name is given inline, executes the promotion immediately via
+    ``Promote.execute``. When no role is given, shows a role-selection keyboard.
+    Identity and rank checks prevent self-promotion or promoting above one's own
+    rank.
+    """
     admin = update.effective_user
     msg = update.effective_message
     args = parse_cmd_args(msg.text)
@@ -185,6 +193,12 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.ratelimiter(limit=10, period=30)
 @decorators.log_execution
 async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the role-selection inline button from /tcpromote.
+
+    Verifies the executor still holds staff rank; rejects with alert if expired.
+    Fetches the target's name and current role in parallel, then delegates to
+    ``Promote.execute`` and edits the prompt to the result.
+    """
     q = update.callback_query
     admin = update.effective_user
     executor_role = await db.users_roles.get_effective_role(admin.id)
@@ -246,6 +260,12 @@ async def on_promote_role_cancel(
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Remove a user's federation role.
+
+    Fetches the executor role and resolves the target in parallel. Shows a
+    confirmation keyboard for the target's current role. Identity guards prevent
+    demoting the Founder or self without the correct flow.
+    """
     admin = update.effective_user
     msg = update.effective_message
     args = parse_cmd_args(msg.text)
@@ -293,6 +313,12 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.ratelimiter(limit=10, period=30)
 @decorators.log_execution
 async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Confirm the demote action from the inline keyboard.
+
+    Re-validates the executor's rank; rejects with alert if insufficient.
+    Answers the query, fetches the target's current role and mention data in
+    parallel, then executes ``Demote.execute`` and edits the prompt to the result.
+    """
     q = update.callback_query
     admin = update.effective_user
     target_id = int(q.data.split(":", 1)[1])
@@ -360,6 +386,14 @@ async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 @decorators.owner_only
 @decorators.log_execution
 async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Transfer federation ownership to another user.
+
+    Resolves the new owner target, runs identity checks, then sequentially
+    demotes the current owner to Admin (``add_admin``) and promotes the target
+    to Founder (``set_owner``). The two DB writes are intentionally sequential
+    because ``set_owner`` does a ``delete_many`` that must see the owner record
+    before it is replaced. Logs and confirmation reply run in parallel afterward.
+    """
     current_owner = update.effective_user
     msg = update.effective_message
     if current_owner is None or msg is None:
@@ -409,6 +443,12 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.ratelimiter(limit=3, period=300)
 @decorators.log_execution
 async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Submit a promotion request to the Founder.
+
+    Checks identity and any existing pending request in parallel. Rejects if the
+    user is banned or already has an open request, then calls
+    ``Promote.request_admin`` to create a new queue entry and notify the Founder.
+    """
     user = update.effective_user
     msg = update.effective_message
     if user is None or msg is None:
@@ -462,6 +502,12 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 @decorators.ratelimiter(limit=10, period=30)
 @decorators.log_execution
 async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle approve / reject decisions on promotion request cards.
+
+    Owner-only callback. Answers the query and fetches the request record in
+    parallel. On approve, executes ``Promote.execute`` and updates the card. On
+    reject, marks the request resolved and edits the card to show the rejection.
+    """
     q = update.callback_query
     admin = update.effective_user
     is_owner = await db.users_roles.is_owner(admin.id)

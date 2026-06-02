@@ -42,7 +42,9 @@ class FakeGroupsColl:
     async def count_documents(self, flt: dict) -> int:
         return sum(1 for d in self.docs if _matches(d, flt))
 
-    async def update_one(self, flt: dict, update: dict, *, upsert: bool = False) -> SimpleNamespace:
+    async def update_one(
+        self, flt: dict, update: dict, *, upsert: bool = False
+    ) -> SimpleNamespace:
         for d in self.docs:
             if _matches(d, flt):
                 if "$set" in update:

@@ -66,6 +66,12 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | docs/utils/utils.md mermaid filename | docs | Fixed `logging_setup.py` → `logger.py` in Mermaid diagram node | 2026-06-02 |
 | .agents/memory/structure.md filename | docs | Corrected `logging_setup.py` → `logger.py`; updated test count 25+ → 50 files / 698 tests | 2026-06-02 |
 
+| PTBDeprecationWarning fix | maintenance | `PTB_TIMEDELTA=1` in conftest.py + filterwarnings in pyproject.toml; 0 warnings | 2026-06-02 (s2) |
+| ruff format 8 test files | maintenance | test_error_reporter, test_extraction, test_groups_db, test_kicks_db, test_mutes_db, test_parse_editmsg, test_prefixes, test_users_cache | 2026-06-02 (s2) |
+| PTBUserWarning runtime suppression | maintenance | warnings.filterwarnings in __main__.py; startup log now fully clean | 2026-06-02 (s2) |
+| 20 handler docstrings | P4 | All public functions 30+ lines now have docstrings: admins(6), disconnecting(2), warning_flow(2), banning, broadcasting, checking, connecting, kicking, maintenance, muting, start, warnings, unban_flow | 2026-06-02 (s2) |
+| 10 medium handler docstrings | P4 | All public functions 16-29 lines now have docstrings: admins(1), checking(2), logger(1), maintenance(1), muting(1), warning_flow(2), warnings(2) | 2026-06-02 (s2) |
+
 ## Pending (remaining optional)
 
 | Item | Priority | Notes |

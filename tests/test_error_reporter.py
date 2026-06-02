@@ -113,7 +113,9 @@ class TestShortenPath:
         assert result == "tcbot/modules/banning.py"
 
     def test_venv_site_packages_unix(self):
-        result = er._shorten_path("/home/user/.venv/lib/python3.12/site-packages/telegram/bot.py")
+        result = er._shorten_path(
+            "/home/user/.venv/lib/python3.12/site-packages/telegram/bot.py"
+        )
         assert "telegram/bot.py" in result
 
     def test_bare_filename_fallback(self):
@@ -179,7 +181,13 @@ class TestBuildErrorMessage:
 
     def test_record_message_included(self):
         record = logging.LogRecord(
-            "mymodule", logging.ERROR, "file.py", 42, "something went wrong", (), None,
+            "mymodule",
+            logging.ERROR,
+            "file.py",
+            42,
+            "something went wrong",
+            (),
+            None,
             func="test_function",
         )
         result = er.build_error_message(record=record)
@@ -230,7 +238,9 @@ class TestSendToLogErrors:
 class TestReportExc:
     async def test_skips_benign_exception(self):
         exc = _te.BadRequest("Message is not modified")
-        with patch.object(er, "send_to_log_errors", new_callable=AsyncMock) as mock_send:
+        with patch.object(
+            er, "send_to_log_errors", new_callable=AsyncMock
+        ) as mock_send:
             await er.report_exc(exc)
             mock_send.assert_not_awaited()
 
@@ -238,7 +248,9 @@ class TestReportExc:
         try:
             raise ValueError("dup")
         except ValueError as exc:
-            with patch.object(er, "send_to_log_errors", new_callable=AsyncMock) as mock_send:
+            with patch.object(
+                er, "send_to_log_errors", new_callable=AsyncMock
+            ) as mock_send:
                 await er.report_exc(exc)
                 await er.report_exc(exc)
                 mock_send.assert_awaited_once()
@@ -247,7 +259,9 @@ class TestReportExc:
         try:
             raise RuntimeError("boom")
         except RuntimeError as exc:
-            with patch.object(er, "send_to_log_errors", new_callable=AsyncMock) as mock_send:
+            with patch.object(
+                er, "send_to_log_errors", new_callable=AsyncMock
+            ) as mock_send:
                 await er.report_exc(exc)
                 mock_send.assert_awaited_once()
 
@@ -257,15 +271,25 @@ class TestReportRecord:
         record = logging.LogRecord(
             "test", logging.ERROR, "f.py", 1, " raised after handler", (), None
         )
-        with patch.object(er, "send_to_log_errors", new_callable=AsyncMock) as mock_send:
+        with patch.object(
+            er, "send_to_log_errors", new_callable=AsyncMock
+        ) as mock_send:
             await er.report_record(record)
             mock_send.assert_not_awaited()
 
     async def test_sends_normal_records(self):
         record = logging.LogRecord(
-            "test", logging.ERROR, "f.py", 1, "real error", (), None,
+            "test",
+            logging.ERROR,
+            "f.py",
+            1,
+            "real error",
+            (),
+            None,
             func="some_handler",
         )
-        with patch.object(er, "send_to_log_errors", new_callable=AsyncMock) as mock_send:
+        with patch.object(
+            er, "send_to_log_errors", new_callable=AsyncMock
+        ) as mock_send:
             await er.report_record(record)
             mock_send.assert_awaited_once()
