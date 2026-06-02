@@ -4,6 +4,13 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ## [Unreleased] - 2026-06-02
 
+### Fixed - Sequential awaits replaced with `asyncio.gather` (parallelism)
+
+- **`tcbot/modules/help.py`**: Added `import asyncio`; converted 6 consecutive `await q.answer()` + `await safe_edit_cb(...)` pairs in `_show_index`, `_show_module`, and `_show_section` to `asyncio.gather(q.answer(), safe_edit_cb(...))`. The callback acknowledgment and message edit are independent and can run concurrently.
+- **`tcbot/modules/stats.py`**: Converted `_ack_and_render` helper from sequential `await q.answer()` + `await safe_edit_cb(...)` to `await asyncio.gather(...)`.
+- **`tcbot/modules/helper/workflows/reason_flow.py`**: Converted `_on_skip_proof` from sequential `await update.callback_query.answer()` + `await executor(update, ctx)` to `await asyncio.gather(...)`.
+- All 332 tests pass; ruff clean; bot restarts clean.
+
 ### Refactored - Shared reply/help-text constants in `tcbot/modules/helper/replies.py`
 
 - **New module `tcbot/modules/helper/replies.py`**: Extracted 10 string literals that were duplicated across 2-7 module files into named constants: `TARGET_SYNTAX`, `ERR_NO_TARGET`, `ERR_CANNOT_RESOLVE`, `ERR_CANT_FIND_USER`, `ERR_ROLE_VERIFY`, `CONTEXT_BOT_OR_GROUP`, `CONTEXT_EXEC_OR_GROUP`, `CONTEXT_ANYONE`, `PERM_DEV_ABOVE`, `PERM_TESTER_ABOVE`.

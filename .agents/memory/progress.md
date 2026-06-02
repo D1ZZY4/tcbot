@@ -47,6 +47,8 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Em-dash removal (source + docs) | P3 | `mongos.py` comment, `databases.md` table, `CHANGELOG.md` entry — all 3 fixed | 2026-06-02 |
 | Shared reply constants (`replies.py`) | P3 | 10 constants extracted from 11 modules; 0 actionable string dupes remain | 2026-06-02 |
 
+| Sequential awaits → asyncio.gather | P3 | 6 `q.answer()` + `safe_edit_cb()` pairs in `help.py`, `_ack_and_render` in `stats.py`, `_on_skip_proof` in `reason_flow.py`; 2 remaining pairs in `users_roles.py` and `admins.py` are intentionally sequential (documented inline) | 2026-06-02 |
+
 ## Pending (remaining optional)
 
 | Item | Priority | Notes |

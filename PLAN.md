@@ -289,6 +289,7 @@ Priorities, in order:
 | 3 | ~~Covered-query composite index on `member_cache`~~ | `{user_id: 1, first_name: 1, username: 1}` index added to `mongos.ensure_indexes()`. Resolved 2026-06-02. |
 | 4 | Shared module-interface types (`tcbot/modules/types.py`) | Only if module-to-module signatures grow ambiguous. |
 | 5 | Query metrics collection / docstring-format standardization | Data-driven tuning and documentation consistency. |
+| 6 | ~~Sequential awaits in help/stats/reason_flow~~ | 6 consecutive `q.answer()` + `safe_edit_cb()` pairs in `help.py`, `_ack_and_render` in `stats.py`, `_on_skip_proof` in `reason_flow.py` converted to `asyncio.gather`. Resolved 2026-06-02. |
 
 
 

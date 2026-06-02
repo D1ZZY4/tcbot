@@ -12,6 +12,7 @@ flowchart TD
     Helper --> Extraction[extraction.py<br/>extract_target]
     Helper --> Identity[identity.py<br/>role classification]
     Helper --> Keyboards[keyboards.py<br/>InlineKeyboard builders]
+    Helper --> Replies[replies.py<br/>shared reply constants]
     Helper --> Workflows[workflows/<br/>conversation flows]
     Decorators --> DB[tcbot/database/]
     Identity --> DB
@@ -83,7 +84,7 @@ Main groups:
 
 | Factory group | Examples |
 |---|---|
-| Ban/checking | `ban_log_new`, `ban_log_update`, `checkme_ban_kb`, `checkme_detail_back_kb`, `baninfo_proof_kb` |
+| Ban/checking | `ban_log_new`, `ban_log_update`, `checkme_ban_kb`, `checkme_detail_back_kb` |
 | Admin roles | `promote_role_kb`, `demote_confirm_kb`, `promo_decision_kb` |
 | Menus/help | `main_menu_kb`, `group_start_kb`, `help_modules`, `help_topics_menu_kb`, `help_topics_kb`, `back_to_start_kb`, `back_to_help_kb`, `back_to_help_cmd_kb` |
 | Privacy | `privacy_kb`, `back_to_privacy_kb` |
@@ -114,6 +115,25 @@ The `decorators.py` module centralizes both auth-guard decorators and the shared
 | `resolve_and_check(msg, executor_id, target_id, min_role=...)` | Resolves executor and target roles, checks minimum executor rank, checks executor outranks target, and replies on failure. |
 
 Ban and kick entry points pair this with `Demote.execute(..., trigger="ban"/"kick")` from `workflows/demote_flow.py` to remove the target's role before the moderation action.
+
+## `replies.py`
+
+Shared bot-reply string constants used by multiple command modules. Import with `from tcbot.modules.helper import replies`.
+
+| Constant | Purpose |
+|---|---|
+| `TARGET_SYNTAX` | Usage hint for commands that accept a target argument. |
+| `ERR_NO_TARGET` | Error when no target can be resolved. |
+| `ERR_CANNOT_RESOLVE` | Error when the target ID/username cannot be resolved via Telegram. |
+| `ERR_CANT_FIND_USER` | Error when a user is not found in the cache or Telegram. |
+| `ERR_ROLE_VERIFY` | Error when executor or target role cannot be verified. |
+| `CONTEXT_BOT_OR_GROUP` | Context guard: command must be used in a bot DM or group. |
+| `CONTEXT_EXEC_OR_GROUP` | Context guard: command must be used in an executor-owned group or DM. |
+| `CONTEXT_ANYONE` | Context hint shown to regular users. |
+| `PERM_DEV_ABOVE` | Permission hint: Developer or above required. |
+| `PERM_TESTER_ABOVE` | Permission hint: Tester or above required. |
+
+All 11 command modules that had duplicated versions of these strings now import from `replies.py` instead.
 
 ## `ban_info.py`
 

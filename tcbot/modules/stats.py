@@ -84,8 +84,7 @@ async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def _ack_and_render(q, text: str, kb) -> None:
     """Answer the callback then safely edit the card with the rendered view."""
-    await q.answer()
-    await safe_edit_cb(q, text, reply_markup=kb)
+    await asyncio.gather(q.answer(), safe_edit_cb(q, text, reply_markup=kb))
 
 
 @decorators.ratelimiter(limit=15, period=30)
