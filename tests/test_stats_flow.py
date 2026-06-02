@@ -16,14 +16,14 @@ from tcbot.modules.helper.workflows.stats_flow import (
     RESULTS_KEY,
     SEARCH_KEY,
     Stats,
-    _paginate,
 )
+from tcbot.utils.pagination import paginate
 
 # ─────────────────────────── _paginate ──────────────────────────── #
 
 
 def test_paginate_empty_list() -> None:
-    chunk, total_pages, page = _paginate([], 0)
+    chunk, total_pages, page = paginate([], 0, Stats.PAGE_SIZE)
     assert chunk == []
     assert total_pages == 1
     assert page == 0
@@ -31,7 +31,7 @@ def test_paginate_empty_list() -> None:
 
 def test_paginate_single_page() -> None:
     items = list(range(4))
-    chunk, total_pages, page = _paginate(items, 0)
+    chunk, total_pages, page = paginate(items, 0, Stats.PAGE_SIZE)
     assert chunk == [0, 1, 2, 3]
     assert total_pages == 1
     assert page == 0
@@ -39,7 +39,7 @@ def test_paginate_single_page() -> None:
 
 def test_paginate_multi_page_first() -> None:
     items = list(range(10))
-    chunk, total_pages, page = _paginate(items, 0)
+    chunk, total_pages, page = paginate(items, 0, Stats.PAGE_SIZE)
     assert len(chunk) == Stats.PAGE_SIZE
     assert total_pages == 2
     assert page == 0
@@ -47,7 +47,7 @@ def test_paginate_multi_page_first() -> None:
 
 def test_paginate_multi_page_second() -> None:
     items = list(range(10))
-    chunk, total_pages, page = _paginate(items, 1)
+    chunk, total_pages, page = paginate(items, 1, Stats.PAGE_SIZE)
     assert chunk == [6, 7, 8, 9]
     assert total_pages == 2
     assert page == 1
@@ -55,7 +55,7 @@ def test_paginate_multi_page_second() -> None:
 
 def test_paginate_clamps_out_of_bounds_page() -> None:
     items = list(range(6))
-    chunk, total_pages, page = _paginate(items, 99)
+    chunk, total_pages, page = paginate(items, 99, Stats.PAGE_SIZE)
     assert total_pages == 1
     assert page == 0
     assert chunk == items

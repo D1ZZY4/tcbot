@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -45,8 +44,6 @@ async def _resolve_user_info(bot: Bot, target_id: int) -> tuple[str, str | None]
     if not fname:
         fname = f"User {target_id}"
     return fname, uname
-
-
 
 
 def _back_to_check(target_id: int) -> list[InlineKeyboardButton]:
@@ -179,7 +176,7 @@ class Check:
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Paginated list of every ban (active+inactive) with detail buttons per item."""
         bans = await db.bans_db.user_bans(target_id)
-        chunk, total_pages, page = _paginate(bans, page)
+        chunk, total_pages, page = paginate(bans, page, _PAGE_SIZE)
 
         if not bans:
             text = (
@@ -193,7 +190,7 @@ class Check:
         base_idx = page * _PAGE_SIZE
         for i, ban in enumerate(chunk, start=1):
             status = bold("Active") if ban.get("is_active") else "Inactive"
-            ts = _date(ban.get("timestamp"))
+            ts = date_or_unknown(ban.get("timestamp"))
             reason_short = esc(str(ban.get("reason", "(no reason)"))[:60])
             lines.append(
                 f"{base_idx + i}. {status} · {code(ban['ban_id'])} · {ts}\n"
@@ -210,7 +207,7 @@ class Check:
         # * pair item buttons 3 per row
         for i in range(0, len(item_btns), 3):
             rows.append(item_btns[i : i + 3])
-        nav = _nav_row(page, total_pages, f"check_bans:{target_id}")
+        nav = nav_row(page, total_pages, f"check_bans:{target_id}")
         if nav:
             rows.append(nav)
         rows.append(_back_to_check(target_id))
@@ -304,7 +301,7 @@ class Check:
         )
         # * get_warns is oldest-first; reverse to newest-first for consistency
         warns = list(reversed(warns))
-        chunk, total_pages, page = _paginate(warns, page)
+        chunk, total_pages, page = paginate(warns, page, _PAGE_SIZE)
         title = titles.get(chat_id) or str(chat_id)
 
         if not warns:
@@ -331,7 +328,7 @@ class Check:
         ]
         base_idx = page * _PAGE_SIZE
         for i, w in enumerate(chunk, start=1):
-            ts = _date(w.get("timestamp"))
+            ts = date_or_unknown(w.get("timestamp"))
             reason_short = esc(str(w.get("reason", "(no reason)"))[:80])
             admin_id = w.get("admin_id", 0)
             admin_name = admin_name_map.get(admin_id, "Admin") if admin_id else "Admin"
@@ -342,7 +339,7 @@ class Check:
             )
 
         rows = []
-        nav = _nav_row(page, total_pages, f"check_warn_chat:{target_id}:{chat_id}")
+        nav = nav_row(page, total_pages, f"check_warn_chat:{target_id}:{chat_id}")
         if nav:
             rows.append(nav)
         rows.append(
@@ -400,7 +397,7 @@ class Check:
         """Paginated list of every ban that ever had an appeal submitted."""
         all_bans = await db.bans_db.user_bans(target_id)
         bans = [b for b in all_bans if b.get("appeal_log_msg_id") is not None]
-        chunk, total_pages, page = _paginate(bans, page)
+        chunk, total_pages, page = paginate(bans, page, _PAGE_SIZE)
 
         if not bans:
             text = (
@@ -415,7 +412,7 @@ class Check:
         item_btns: list[InlineKeyboardButton] = []
         base_idx = page * _PAGE_SIZE
         for i, ban in enumerate(chunk, start=1):
-            ts = _date(ban.get("appeal_submitted_at") or ban.get("timestamp"))
+            ts = date_or_unknown(ban.get("appeal_submitted_at") or ban.get("timestamp"))
             status = (
                 f"{bold('Approved')} (unbanned)"
                 if not ban.get("is_active")
@@ -434,7 +431,7 @@ class Check:
         rows: list[list[InlineKeyboardButton]] = []
         for i in range(0, len(item_btns), 3):
             rows.append(item_btns[i : i + 3])
-        nav = _nav_row(page, total_pages, f"check_appeals:{target_id}")
+        nav = nav_row(page, total_pages, f"check_appeals:{target_id}")
         if nav:
             rows.append(nav)
         rows.append(_back_to_check(target_id))
@@ -454,7 +451,7 @@ async def _per_chat_event_list(
 ) -> tuple[str, InlineKeyboardMarkup]:
     """Shared renderer for kicks/mutes; both have the same shape."""
     records = await db_call(target_id)
-    chunk, total_pages, page = _paginate(records, page)
+    chunk, total_pages, page = paginate(records, page, _PAGE_SIZE)
 
     if not records:
         text = (
@@ -480,7 +477,7 @@ async def _per_chat_event_list(
     ]
     base_idx = page * _PAGE_SIZE
     for i, rec in enumerate(chunk, start=1):
-        ts = _date(rec.get("timestamp"))
+        ts = date_or_unknown(rec.get("timestamp"))
         reason_short = esc(str(rec.get("reason", "(no reason)"))[:80])
         chat_id = rec.get("chat_id", 0)
         title = titles.get(chat_id) or str(chat_id)
@@ -494,7 +491,7 @@ async def _per_chat_event_list(
         )
 
     rows: list[list[InlineKeyboardButton]] = []
-    nav = _nav_row(page, total_pages, cb_prefix)
+    nav = nav_row(page, total_pages, cb_prefix)
     if nav:
         rows.append(nav)
     rows.append(_back_to_check(target_id))

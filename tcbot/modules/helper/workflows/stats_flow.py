@@ -67,7 +67,7 @@ def _list_kb(
 ) -> InlineKeyboardMarkup:
     """Compose nav + numbered detail buttons + optional extra row + back."""
     rows: list[list[InlineKeyboardButton]] = []
-    nav = _nav_row(page, total_pages, cb_prefix)
+    nav = nav_row(page, total_pages, cb_prefix)
     if nav:
         rows.append(nav)
 
@@ -201,7 +201,7 @@ class Stats:
     async def users_list(cls, page: int) -> tuple[str, InlineKeyboardMarkup]:
         """Paginated list of every cached user."""
         users = await db.users_cache.all_users()
-        chunk, total_pages, page = _paginate(users, page)
+        chunk, total_pages, page = paginate(users, page, _PAGE_SIZE)
 
         if not users:
             text = (
@@ -235,7 +235,7 @@ class Stats:
     async def user_detail(cls, page: int, idx: int) -> tuple[str, InlineKeyboardMarkup]:
         """Detail card for a single cached user, with a link back into the list page."""
         users = await db.users_cache.all_users()
-        chunk, _total, page = _paginate(users, page)
+        chunk, _total, page = paginate(users, page, _PAGE_SIZE)
         if idx < 0 or idx >= len(chunk):
             text = "User not found in this page."
             kb = InlineKeyboardMarkup(
@@ -248,8 +248,8 @@ class Stats:
         fname = u.get("first_name") or f"User {uid}"
         uname = u.get("username")
         last_name = u.get("last_name") or "-"
-        commit = _date(u.get("commit_date"))
-        seen = _date(u.get("last_updated"))
+        commit = date_or_unknown(u.get("commit_date"))
+        seen = date_or_unknown(u.get("last_updated"))
 
         text = (
             f"{bold('User Details')}\n\n"
@@ -272,7 +272,7 @@ class Stats:
     async def chats_list(cls, page: int) -> tuple[str, InlineKeyboardMarkup]:
         """Paginated list of every active connected group."""
         groups = await db.groups_db.active_groups()
-        chunk, total_pages, page = _paginate(groups, page)
+        chunk, total_pages, page = paginate(groups, page, _PAGE_SIZE)
 
         if not groups:
             text = f"{bold('Connected Chats')}\n\nNo connected groups yet."
@@ -301,7 +301,7 @@ class Stats:
     async def chat_detail(cls, page: int, idx: int) -> tuple[str, InlineKeyboardMarkup]:
         """Detail card for a connected group."""
         groups = await db.groups_db.active_groups()
-        chunk, _total, page = _paginate(groups, page)
+        chunk, _total, page = paginate(groups, page, _PAGE_SIZE)
         if idx < 0 or idx >= len(chunk):
             text = "Group not found in this page."
             kb = InlineKeyboardMarkup(
@@ -314,7 +314,7 @@ class Stats:
         title = grp.get("title", "Unknown")
         added_by = grp.get("added_by", 0)
         adder_fname, adder_uname = await db.users_cache.get_user_mention_data(added_by)
-        date_str = _date(grp.get("added_date"))
+        date_str = date_or_unknown(grp.get("added_date"))
 
         text = (
             f"{bold('Group Details')}\n\n"
@@ -335,7 +335,7 @@ class Stats:
         """Paginated list of every active federation ban."""
 
         bans = await db.bans_db.active_bans()
-        chunk, total_pages, page = _paginate(bans, page)
+        chunk, total_pages, page = paginate(bans, page, _PAGE_SIZE)
 
         if not bans:
             text = f"{bold('User Bans')}\n\nNo active federation bans."
@@ -371,7 +371,7 @@ class Stats:
     async def ban_detail(cls, page: int, idx: int) -> tuple[str, InlineKeyboardMarkup]:
         """Detail card for a banned user, reusing ``build_ban_detail``."""
         bans = await db.bans_db.active_bans()
-        chunk, _total, page = _paginate(bans, page)
+        chunk, _total, page = paginate(bans, page, _PAGE_SIZE)
         if idx < 0 or idx >= len(chunk):
             text = "Ban record not found in this page."
             kb = InlineKeyboardMarkup(

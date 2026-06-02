@@ -1,2 +1,3 @@
-- [Replit test runner](replit-test-runner.md) — use `python3.11 -m pytest` with PYTHONPATH; packages in `.pythonlibs/lib/python3.11/site-packages/`; ruff via `uvx ruff check .`
+- [Replit test runner](replit-test-runner.md) — use `uv run --extra test pytest`; ruff via `uvx ruff check .` (not `uv run ruff`)
 - [ConversationHandler test patterns](conv-handler-test-patterns.md) — mocking rules for ban/appeal/warn state-machine tests: album state, `_flush_album`, `asyncio.gather` return shapes
+- [Pagination refactor pattern](pagination-refactor.md) — `paginate`, `nav_row`, `date_or_unknown` live in `tcbot.utils.pagination`; flow files must import and call these directly with `_PAGE_SIZE` as third arg

@@ -4,6 +4,12 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ## [Unreleased] - 2026-06-02
 
+### Fixed - Runtime NameError in stats_flow and check_flow (pagination helpers)
+
+- **`stats_flow.py` undefined name fix**: All internal calls to `_paginate`, `_nav_row`, and `_date` replaced with the correct public names from `tcbot.utils.pagination` (`paginate(..., _PAGE_SIZE)`, `nav_row(...)`, `date_or_unknown(...)`). These were leftover private-name references from before pagination was extracted to `tcbot.utils.pagination`; they caused a `NameError` at runtime the moment any stats drill-down was triggered.
+- **`check_flow.py` undefined name fix**: Same root cause. Added `from tcbot.utils.pagination import date_or_unknown, nav_row, paginate` and replaced all twelve `_paginate`, `_nav_row`, `_date` call sites with the correct public equivalents. Affects `bans_list`, `warns_in_group`, `appeals_list`, and `_per_chat_event_list`.
+- **`tests/test_stats_flow.py` import fix**: Test imported `_paginate` directly from `stats_flow` (which no longer defines it). Updated to import `paginate` from `tcbot.utils.pagination` and pass `Stats.PAGE_SIZE` as the third argument at all five test call sites. All 300 tests now pass and `pytest --collect-only` completes without error.
+
 ### Added - Tests (stats_flow and connected_flow coverage)
 
 - **`tests/test_stats_flow.py`** (23 tests, new file): Full coverage for `stats_flow` pure helpers and `Stats` class view builders. `_paginate`: empty list, single page, multi-page (first and second page), out-of-bounds page clamping. `Stats.main`: mocked DB returns with staff/ban/chat counts. `Stats.users_list`: empty state and paginated list with name rendering. `Stats.user_detail`: out-of-range index, valid detail card. `Stats.chats_list`: empty and with groups. `Stats.bans_list`: empty and with bans (batch name resolution). `Stats.search_run`: by numeric ID (hit and miss), by name substring (match and no-match). `Stats.search_results`: empty query and hits. `Stats.open_search`: sets `SEARCH_KEY`, `MSG_KEY`, `CHAT_KEY` in `user_data`. `Stats.clear_search`: removes all four search keys. `Stats.staff_roster`: no owner, no staff.
