@@ -48,6 +48,8 @@ tcbot/
 │       ├── formatter.py    HTML escaping and formatting
 │       ├── keyboards.py    Inline keyboard factories
 │       ├── ban_info.py     Ban detail renderer
+│       ├── identity.py     Identity classification, refusal messages, staff notices
+│       ├── replies.py      Shared reply string constants (errors, permissions, syntax)
 │       ├── parse_*.py      Link, log, and safe-edit helpers
 │       └── workflows/
 │           └── *_flow.py   Conversation factories, plus Promote / Demote / Check classes
@@ -55,6 +57,7 @@ tcbot/
     ├── dispatch.py         Bounded concurrent fan-out
     ├── error_reporter.py   Telegram error classification and reporting
     ├── logger.py           Console formatter and error log handler
+    ├── pagination.py       Shared paginate(), nav_row(), date_or_unknown() helpers
     ├── prefixes.py         Prefix parsing and command filters
     └── timedate_format.py  UTC datetime helpers
 ```

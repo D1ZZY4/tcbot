@@ -49,6 +49,9 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 | Sequential awaits → asyncio.gather | P3 | 6 `q.answer()` + `safe_edit_cb()` pairs in `help.py`, `_ack_and_render` in `stats.py`, `_on_skip_proof` in `reason_flow.py`; 2 remaining pairs in `users_roles.py` and `admins.py` are intentionally sequential (documented inline) | 2026-06-02 |
 
+| `docs/mapping.md` freshness | docs | Added `identity.py`, `replies.py` (helper section) and `pagination.py` (utils section) — previously missing | 2026-06-02 |
+| `maintenance.py` magic number | P3 | `timeout=3.0` extracted to `_MEMBERSHIP_CHECK_TIMEOUT = 3.0` module-level constant | 2026-06-02 |
+
 ## Pending (remaining optional)
 
 | Item | Priority | Notes |

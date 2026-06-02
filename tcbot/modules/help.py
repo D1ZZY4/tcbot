@@ -145,7 +145,9 @@ async def _show_module(
             if is_menu_path
             else keyboards.back_to_help_cmd_kb()
         )
-        await asyncio.gather(q.answer(), safe_edit_cb(q, "Topic not found.", reply_markup=back_kb))
+        await asyncio.gather(
+            q.answer(), safe_edit_cb(q, "Topic not found.", reply_markup=back_kb)
+        )
         return
 
     name, overview, sections = HELP_CONTENT[menu_key]
@@ -162,7 +164,9 @@ async def _show_module(
             else keyboards.back_to_help_cmd_kb()
         )
 
-    await asyncio.gather(q.answer(), safe_edit_cb(q, _module_text(name, overview), reply_markup=kb))
+    await asyncio.gather(
+        q.answer(), safe_edit_cb(q, _module_text(name, overview), reply_markup=kb)
+    )
 
 
 async def _show_section(
@@ -179,7 +183,11 @@ async def _show_section(
     if menu_key not in HELP_CONTENT:
         await asyncio.gather(
             q.answer(),
-            safe_edit_cb(q, "Topic not found.", reply_markup=keyboards.back_to_module_kb(back_module_cb)),
+            safe_edit_cb(
+                q,
+                "Topic not found.",
+                reply_markup=keyboards.back_to_module_kb(back_module_cb),
+            ),
         )
         return
 
@@ -187,7 +195,11 @@ async def _show_section(
     if idx < 0 or idx >= len(sections):
         await asyncio.gather(
             q.answer(),
-            safe_edit_cb(q, "Section not found.", reply_markup=keyboards.back_to_module_kb(back_module_cb)),
+            safe_edit_cb(
+                q,
+                "Section not found.",
+                reply_markup=keyboards.back_to_module_kb(back_module_cb),
+            ),
         )
         return
 

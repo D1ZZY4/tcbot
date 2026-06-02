@@ -21,6 +21,8 @@ from tcbot.utils.prefixes import build_prefixed_filters
 
 log = logging.getLogger(__name__)
 
+_MEMBERSHIP_CHECK_TIMEOUT = 3.0
+
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -83,7 +85,8 @@ async def _should_remove(bot, grp: GroupDoc) -> bool:
     """Return True if the bot has left or been kicked from the group."""
     try:
         member = await asyncio.wait_for(
-            bot.get_chat_member(grp["chat_id"], bot.id), timeout=3.0
+            bot.get_chat_member(grp["chat_id"], bot.id),
+            timeout=_MEMBERSHIP_CHECK_TIMEOUT,
         )
         return member.status in ("left", "kicked")
     except (asyncio.TimeoutError, Exception) as exc:
