@@ -4,6 +4,10 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ## [Unreleased] - 2026-06-02
 
+### Added - Tests (check_flow full coverage)
+
+- **`tests/test_check_flow.py`** (19 tests, new file): Full coverage for the `Check` class view builders in `check_flow.py`. `Check.profile`: no-ban/no-role card, active-ban ID visible in text, staff role label and "Assigned by" line when `role_meta` returns a role. `Check.bans_list`: empty no-records message, non-empty list with ban ID/status/reason visible. `Check.ban_detail`: `get_ban` returning `None` → not-found message; ban belonging to different user ID → not-found; valid ban with no proof → no proof button in keyboard; valid ban with proof link → proof button present. `Check.warns_by_group`: empty no-records message, non-empty list with group title and warn count visible. `Check.warns_in_group`: empty no-records message, non-empty with reason, group title, and admin name. `Check.kicks_list`: empty no-records message, non-empty with reason/group/pagination header. `Check.mutes_list`: empty no-records message. `Check.appeals_list`: bans without `appeal_log_msg_id` filtered → no-records message; approved appeal (inactive ban) → "Approved" status; active ban with appeal → "Pending" status.
+
 ### Fixed - Runtime NameError in stats_flow and check_flow (pagination helpers)
 
 - **`stats_flow.py` undefined name fix**: All internal calls to `_paginate`, `_nav_row`, and `_date` replaced with the correct public names from `tcbot.utils.pagination` (`paginate(..., _PAGE_SIZE)`, `nav_row(...)`, `date_or_unknown(...)`). These were leftover private-name references from before pagination was extracted to `tcbot.utils.pagination`; they caused a `NameError` at runtime the moment any stats drill-down was triggered.

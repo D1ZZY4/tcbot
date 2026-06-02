@@ -15,7 +15,7 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 | Health check | Flask app in `tcbot/alive.py`, `GET /` returns `OK` on `PORT` (default `5000`). |
 | Dependency management | `uv` with `uv.lock`; CI installs with frozen lockfile by default. |
 | Formatting/linting | Ruff, configured in `pyproject.toml`. |
-| Tests | 300 collected tests across 25 `tests/test_*.py` files; designed to run offline. |
+| Tests | 319 collected tests across 26 `tests/test_*.py` files; designed to run offline. |
 | Deployment notes | Local `config.env`, Docker Compose, and Replit/hosted environment variables are documented. |
 
 ## Runtime Flow
@@ -338,31 +338,32 @@ in.
 
 | # | Finding | Location (`file.py:line`) | Evidence (code quote / observed behavior) | Proposed Fix | Status |
 |--|--|--|--|--|--|
-| 1 | _Short, specific description of the issue_ | `tcbot/path/file.py:NN` | _Quote the exact lines or describe what you observed that proves it_ | _Concrete change to make_ | `Open` |
+| 1 | `_paginate`, `_nav_row`, `_date` undefined at runtime in `stats_flow.py` | `tcbot/modules/helper/workflows/stats_flow.py:1` | All twelve call sites used private names (`_paginate`, `_nav_row`, `_date`) that were never defined in the module; calling any Stats drill-down raised `NameError` immediately | Replace all call sites with `paginate(..., _PAGE_SIZE)`, `nav_row(...)`, `date_or_unknown(...)` imported from `tcbot.utils.pagination` | `Resolved` |
+| 2 | `_paginate`, `_nav_row`, `_date` undefined at runtime in `check_flow.py` | `tcbot/modules/helper/workflows/check_flow.py:1` | Same root cause as stats_flow: twelve call sites used stale private names leftover from before pagination was extracted to utils; any Check drill-down raised `NameError` | Add `from tcbot.utils.pagination import date_or_unknown, nav_row, paginate` and replace all twelve call sites | `Resolved` |
 
 ### P2 (High)
 
 | # | Finding | Location (`file.py:line`) | Evidence (code quote / observed behavior) | Proposed Fix | Status |
 |--|--|--|--|--|--|
-| 1 | _Replace this placeholder row_ | `tcbot/path/file.py:NN` | _Quoted code or observed behavior_ | _Concrete change to make_ | `Open` |
+| 1 | `check_flow.py` had zero test coverage | `tests/` (file absent) | No `tests/test_check_flow.py` existed; all `Check` class view builders (`profile`, `bans_list`, `ban_detail`, `warns_by_group`, `warns_in_group`, `kicks_list`, `mutes_list`, `appeals_list`) were untested | Add `tests/test_check_flow.py` with offline monkeypatched tests for every public method | `Resolved` |
 
 ### P3 (Medium)
 
 | # | Finding | Location (`file.py:line`) | Evidence (code quote / observed behavior) | Proposed Fix | Status |
 |--|--|--|--|--|--|
-| 1 | _Replace this placeholder row_ | `tcbot/path/file.py:NN` | _Quoted code or observed behavior_ | _Concrete change to make_ | `Open` |
+| 1 | `uv run ruff` documented throughout `.agents/` but silently fails on Replit | `.agents/STYLE-CODE.md:17`, `.agents/TEST-RUFF.md:53` | `uv run ruff format .` exits with code 1 on this Replit environment; correct command is `uvx ruff format .` and `uvx ruff check .` | Update all `.agents/` doc command examples from `uv run ruff` to `uvx ruff`; record in `.agents/memory/decisions.md` | `Open` |
 
 ### P4 (Low)
 
 | # | Finding | Location (`file.py:line`) | Evidence (code quote / observed behavior) | Proposed Fix | Status |
 |--|--|--|--|--|--|
-| 1 | _Replace this placeholder row_ | `tcbot/path/file.py:NN` | _Quoted code or observed behavior_ | _Concrete change to make_ | `Open` |
+| 1 | Stale test count in docs (300/25 instead of 319/26) | `README.md:180`, `AGENTS.md:192`, `replit.md:117`, `PLAN.md:21` | After adding `test_check_flow.py` (19 tests), all four docs still referenced the old "300 tests across 25 files" baseline | Update all four docs to "319 tests across 26 files" | `Resolved` |
 
 ### P5 (Optional / Future)
 
 | # | Finding | Location (`file.py:line`) | Evidence (code quote / observed behavior) | Proposed Fix | Status |
 |--|--|--|--|--|--|
-| 1 | _Replace this placeholder row_ | `tcbot/path/file.py:NN` | _Quoted code or observed behavior_ | _Concrete change to make_ | `Open` |
+| 1 | `member_cache` batch queries could benefit from a covered composite index | `tcbot/database/mongos.py:1` | `get_first_names_batch` issues `$in` on `user_id` with a `first_name` projection; existing `user_id` index is not covering | Add `{user_id: 1, first_name: 1, username: 1}` partial index to `ensure_indexes()`; gather Atlas Performance Advisor data first to confirm real-world impact | `Open` |
 
 ## Maintenance Rules
 
