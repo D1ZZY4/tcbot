@@ -19,7 +19,7 @@ from telegram.ext import (
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import decorators
+from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.workflows.connected_flow import connection
 from tcbot.utils.prefixes import build_prefixed_filters
 
@@ -102,7 +102,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
     if isinstance(member, BaseException):
         log.debug("get_chat_member failed for %d/%d: %s", chat.id, user.id, member)
-        await update.effective_message.reply_text("Could not verify your group role.")
+        await update.effective_message.reply_text(replies.ERR_ROLE_VERIFY)
         return
 
     if member.status not in ("administrator", "creator"):

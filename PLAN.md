@@ -15,7 +15,7 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 | Health check | Flask app in `tcbot/alive.py`, `GET /` returns `OK` on `PORT` (default `5000`). |
 | Dependency management | `uv` with `uv.lock`; CI installs with frozen lockfile by default. |
 | Formatting/linting | Ruff, configured in `pyproject.toml`. |
-| Tests | 332 collected tests across 26 `tests/test_*.py` files; designed to run offline. |
+| Tests | 332 collected tests across 26 `tests/test_*.py` files; designed to run offline. All green on 2026-06-02. |
 | Deployment notes | Local `config.env`, Docker Compose, and Replit/hosted environment variables are documented. |
 
 ## Runtime Flow
@@ -340,6 +340,7 @@ in.
 |--|--|--|--|--|--|
 | 1 | `_paginate`, `_nav_row`, `_date` undefined at runtime in `stats_flow.py` | `tcbot/modules/helper/workflows/stats_flow.py:1` | All twelve call sites used private names (`_paginate`, `_nav_row`, `_date`) that were never defined in the module; calling any Stats drill-down raised `NameError` immediately | Replace all call sites with `paginate(..., _PAGE_SIZE)`, `nav_row(...)`, `date_or_unknown(...)` imported from `tcbot.utils.pagination` | `Resolved` |
 | 2 | `_paginate`, `_nav_row`, `_date` undefined at runtime in `check_flow.py` | `tcbot/modules/helper/workflows/check_flow.py:1` | Same root cause as stats_flow: twelve call sites used stale private names leftover from before pagination was extracted to utils; any Check drill-down raised `NameError` | Add `from tcbot.utils.pagination import date_or_unknown, nav_row, paginate` and replace all twelve call sites | `Resolved` |
+| 3 | `_kb` undefined at runtime in `tcbot/modules/groups.py` | `tcbot/modules/groups.py:85,103` | `_kb(False)` and `_kb(detailed)` called but never defined; `/tcgroups` and Detail/Simple toggle both raised `NameError` immediately | Imported `tcgroups_kb` from `tcbot.modules.helper.keyboards` and replaced both `_kb(...)` call sites | `Resolved` |
 
 ### P2 (High)
 

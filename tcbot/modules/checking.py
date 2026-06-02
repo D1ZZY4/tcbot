@@ -14,7 +14,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import decorators, extraction, keyboards
+from tcbot.modules.helper import decorators, extraction, keyboards, replies
 from tcbot.modules.helper.formatter import code, esc, mention
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.check_flow import Check
@@ -37,11 +37,11 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Who can use",
-        "Anyone, no special permissions needed.",
+        replies.CONTEXT_ANYONE,
     ),
     (
         "Where to use",
-        "Bot PM, exec group, or any connected group.",
+        replies.CONTEXT_BOT_OR_GROUP,
     ),
     (
         "/checkme",
@@ -60,7 +60,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Target syntax",
-        "Reply to a message, or provide a user ID / @username after the command.",
+        replies.TARGET_SYNTAX,
     ),
     (
         "Examples",

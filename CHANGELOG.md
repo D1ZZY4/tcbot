@@ -4,6 +4,24 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ## [Unreleased] - 2026-06-02
 
+### Refactored - Shared reply/help-text constants in `tcbot/modules/helper/replies.py`
+
+- **New module `tcbot/modules/helper/replies.py`**: Extracted 10 string literals that were duplicated across 2-7 module files into named constants: `TARGET_SYNTAX`, `ERR_NO_TARGET`, `ERR_CANNOT_RESOLVE`, `ERR_CANT_FIND_USER`, `ERR_ROLE_VERIFY`, `CONTEXT_BOT_OR_GROUP`, `CONTEXT_EXEC_OR_GROUP`, `CONTEXT_ANYONE`, `PERM_DEV_ABOVE`, `PERM_TESTER_ABOVE`.
+- Updated 11 module files (`admins`, `banning`, `checking`, `connecting`, `disconnecting`, `groups`, `kicking`, `muting`, `stats`, `unbanning`, `warnings`) to import `replies` and reference the constants. The most-duplicated string ("Reply to a message, or provide a user ID...") appeared in 7 different files.
+- All 332 tests pass; ruff clean.
+
+### Fixed - Em-dash removal (Python source and docs)
+
+- **`tcbot/database/mongos.py` line 131**: Replaced em-dash (`—`) with semicolon in a code comment.
+- **`docs/databases/databases.md` line 77**: Replaced em-dash with parentheses in the index table.
+- **`CHANGELOG.md` line 42**: Replaced em-dash with colon in a prior changelog entry.
+
+### Fixed - Undefined `_kb` in `tcbot/modules/groups.py` causing runtime NameError
+
+- **`tcbot/modules/groups.py`**: `_kb(detailed)` was called at two call sites (`cmd_tcfgroups` and `_toggle`) but was never defined in the module, causing a `NameError` at runtime whenever `/tcgroups` was used or the Detail/Simple toggle was tapped.
+- Fixed by importing `tcgroups_kb` directly from `tcbot.modules.helper.keyboards` and replacing both `_kb(...)` calls with `tcgroups_kb(...)`.
+- Removed the now-unused `keyboards` import from `from tcbot.modules.helper import decorators, keyboards`; `decorators` stays on that line.
+
 ### Fixed - Replace `type: ignore` with `cast` in `users_roles.get_owner_id`
 
 - **`tcbot/database/users_roles.py` line 60**: `return cached  # type: ignore[return-value]` replaced with `return cast(int | None, cached)`. The `cast` import was already present and used for `get_effective_role` on line 209; the `get_owner_id` function had been missed. Consistent with `groups_db.py` which uses `cast(bool, cached)` and `cast(list[GroupDoc], cached)` for the same `CACHE_MISS`-guard pattern.
@@ -30,7 +48,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Added - Covered-query composite index on `member_cache`
 
-- **`tcbot/database/mongos.py` composite index**: Added `{user_id: 1, first_name: 1, username: 1}` compound index to `ensure_indexes()`. This covers the projection fields used by `get_first_names_batch` and `get_mention_data_batch` — MongoDB can now satisfy `$in` queries on `user_id` with `first_name`/`username` projections entirely from the index without loading the document. All 319 tests pass; `uv run ruff check .` clean.
+- **`tcbot/database/mongos.py` composite index**: Added `{user_id: 1, first_name: 1, username: 1}` compound index to `ensure_indexes()`. This covers the projection fields used by `get_first_names_batch` and `get_mention_data_batch`: MongoDB can now satisfy `$in` queries on `user_id` with `first_name`/`username` projections entirely from the index without loading the document. All 319 tests pass; `uv run ruff check .` clean.
 - **`docs/databases/databases.md` index table**: Added the new composite index row to the startup-indexes reference table.
 - **`PLAN.md` P3.3**: Updated P3 backlog row to reflect the index is resolved.
 

@@ -71,7 +71,7 @@ The `member_cache` collection stores user profile data. For performance, use the
 | `federated_groups` | `(chat_id, is_active)` |
 | `federated_groups` | unique `(chat_id)` |
 | `member_cache` | unique `(user_id)` |
-| `member_cache` | `(user_id, first_name, username)` — covered-query index for batch `$in` projections |
+| `member_cache` | `(user_id, first_name, username)` (covered-query index for batch `$in` projections) |
 | `warns` | `(user_id, chat_id, timestamp desc)` |
 | `warn_counts` | unique `(user_id, chat_id)` |
 | `promotion_requests` | unique `(request_id)` |

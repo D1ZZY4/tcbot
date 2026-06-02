@@ -11,7 +11,7 @@ import asyncio
 from telegram import Update
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
-from tcbot.modules.helper import decorators
+from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.parse_editmsg import safe_edit_cb
 from tcbot.modules.helper.workflows.stats_flow import (
     CHAT_KEY,
@@ -37,11 +37,11 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Who can use",
-        "Anyone, no special permissions needed.",
+        replies.CONTEXT_ANYONE,
     ),
     (
         "Where to use",
-        "Bot PM, exec group, or any connected group.",
+        replies.CONTEXT_BOT_OR_GROUP,
     ),
     (
         "What it does",

@@ -20,6 +20,7 @@ from tcbot.modules.helper import (
     identity,
     keyboards,
     parse_logmsg,
+    replies,
 )
 from tcbot.modules.helper.formatter import code, mention
 from tcbot.modules.helper.workflows.demote_flow import Demote
@@ -54,7 +55,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Where to use",
-        "Bot PM, exec group, or any connected group.",
+        replies.CONTEXT_BOT_OR_GROUP,
     ),
     (
         "Role Hierarchy",
@@ -64,7 +65,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Target syntax",
-        "Reply to a message, or provide a user ID / @username after the command.",
+        replies.TARGET_SYNTAX,
     ),
     (
         "/tcpromote",

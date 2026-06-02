@@ -12,7 +12,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
 
-from tcbot.modules.helper import decorators, extraction, identity
+from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.workflows.ban_flow import (
@@ -41,11 +41,11 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Who can use",
-        "Developer and above (Founder / Admin / Developer).",
+        replies.PERM_DEV_ABOVE,
     ),
     (
         "Where to use",
-        "Exec group, any connected group, or bot PM.",
+        replies.CONTEXT_EXEC_OR_GROUP,
     ),
     (
         "What it does",
@@ -61,7 +61,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Target syntax",
-        "Reply to a message, or provide a user ID / @username after the command.",
+        replies.TARGET_SYNTAX,
     ),
     (
         "Examples",
@@ -91,9 +91,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ban_reason = " ".join(raw_args[1:] if has_explicit_target else raw_args).strip()
 
     if not target_id:
-        await msg.reply_text(
-            "Cannot resolve target. Reply to a message or provide a user ID."
-        )
+        await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
         return ConversationHandler.END
 
     if not ban_reason:

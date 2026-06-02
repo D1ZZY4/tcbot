@@ -12,7 +12,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
 
-from tcbot.modules.helper import decorators, extraction, identity
+from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.workflows.demote_flow import Demote
@@ -42,7 +42,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Who can use",
-        "Tester and above (Founder / Admin / Developer / Tester).",
+        replies.PERM_TESTER_ABOVE,
     ),
     (
         "Where to use",
@@ -65,7 +65,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Target syntax",
-        "Reply to a message, or provide a user ID / @username after the command.",
+        replies.TARGET_SYNTAX,
     ),
     (
         "Examples",
@@ -95,9 +95,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     inline_reason = parse_inline_reason(args, has_explicit_target)
 
     if not target_id:
-        await msg.reply_text(
-            "Can't find that user - reply to their message or send me a user ID."
-        )
+        await msg.reply_text(replies.ERR_CANT_FIND_USER)
         return ConversationHandler.END
 
     ident, (executor_role, target_role) = await asyncio.gather(

@@ -29,8 +29,7 @@ description: Current state of TCF Bot project — what is done, in progress, and
 
 ## What is in progress
 
-Working on broader improvements: named cache TTL constants, BOT_TOKEN/MONGODB_URI format validation,
-dead-code audit, rate-limiter constant extraction.
+All known bugs resolved. Running maintenance pass per new AGENTS.md spec.
 
 ## What is pending (P3 optional hardening + broader improvements)
 
@@ -43,11 +42,11 @@ dead-code audit, rate-limiter constant extraction.
 
 ## Known runtime notes
 
-- `uv run ruff check .` and `uv run ruff format .` are the correct lint/format commands.
-- `uv run --extra test pytest tests/ -q` is the correct test command.
-- `uv run python -c "from tcbot.modules import get_handlers; h = get_handlers(); print(f'smoke OK: {len(h)} handlers')"` is the correct smoke test.
+- `python -m ruff check .` and `python -m ruff format .` are the correct lint/format commands on Replit (packages installed via pip; uv sync fails on nix store).
+- `python -m pytest tests/ -q` is the correct test command on Replit.
+- Workflows are configured to use `python -m tcbot` and `python -m pytest tests/ -v` (no `uv run`).
 - Flask keep-alive runs on PORT=8080 (mapped by Replit to external port 80).
-- Bot starts on `uv run python -m tcbot`.
+- Bot fails fast when BOT_TOKEN/MONGODB_URI/OWNER_ID are not set. Secrets must be in Replit Secrets.
 
 ## Blockers
 

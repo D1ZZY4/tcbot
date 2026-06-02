@@ -13,7 +13,7 @@ from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 
 from tcbot import cfg
-from tcbot.modules.helper import decorators, extraction, identity
+from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.formatter import code, mention
 from tcbot.modules.helper.workflows.muting_flow import (
@@ -51,7 +51,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Who can use",
-        "Tester and above (Founder / Admin / Developer / Tester).",
+        replies.PERM_TESTER_ABOVE,
     ),
     (
         "Where to use",
@@ -80,7 +80,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Target syntax",
-        "Reply to a message, or provide a user ID / @username after the command.",
+        replies.TARGET_SYNTAX,
     ),
     (
         "Examples",
@@ -111,9 +111,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     remaining_args = list(raw_args[1:] if has_explicit_target else raw_args)
 
     if not target_id:
-        await msg.reply_text(
-            "Cannot resolve target. Reply to a message or provide a user ID."
-        )
+        await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
         return ConversationHandler.END
 
     ident, (executor_role, target_role) = await asyncio.gather(
@@ -184,9 +182,7 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        await msg.reply_text(
-            "Specify a target - reply to a message or provide a user ID."
-        )
+        await msg.reply_text(replies.ERR_NO_TARGET)
         return
 
     ident = await identity.classify(ctx.bot, admin.id, target_id, target_name)

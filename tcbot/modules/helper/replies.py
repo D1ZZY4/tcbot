@@ -1,0 +1,33 @@
+# © Copyright 2024 - 2026 Transsion Core
+# © Copyright 2024 - 2026 Dizzy
+# © Copyright 2026 Aveum Apps
+
+"""Shared reply and help-text strings used across multiple command modules."""
+
+from __future__ import annotations
+
+# ──────────────────────── Target Syntax ─────────────────────────── #
+
+TARGET_SYNTAX = (
+    "Reply to a message, or provide a user ID / @username after the command."
+)
+ERR_NO_TARGET = "Specify a target - reply to a message or provide a user ID."
+ERR_CANNOT_RESOLVE = "Cannot resolve target. Reply to a message or provide a user ID."
+ERR_CANT_FIND_USER = (
+    "Can't find that user - reply to their message or send me a user ID."
+)
+
+# ─────────────────────── Role / Auth Errors ─────────────────────── #
+
+ERR_ROLE_VERIFY = "Could not verify your group role."
+
+# ──────────────────────── Context / Scope ───────────────────────── #
+
+CONTEXT_BOT_OR_GROUP = "Bot PM, exec group, or any connected group."
+CONTEXT_EXEC_OR_GROUP = "Exec group, any connected group, or bot PM."
+CONTEXT_ANYONE = "Anyone, no special permissions needed."
+
+# ─────────────────────── Permission Tiers ───────────────────────── #
+
+PERM_DEV_ABOVE = "Developer and above (Founder / Admin / Developer)."
+PERM_TESTER_ABOVE = "Tester and above (Founder / Admin / Developer / Tester)."

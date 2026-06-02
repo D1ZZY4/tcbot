@@ -1,7 +1,8 @@
-- [Replit test runner](replit-test-runner.md) — `uv run --extra test pytest`; ruff via `uv run ruff check .` (ruff in `[dependency-groups]`, installed by `uv sync`)
+- [Replit test runner](replit-test-runner.md) — use `python -m pytest` and `python -m ruff`; uv sync fails on nix store; packages installed via pip
 - [ConversationHandler test patterns](conv-handler-test-patterns.md) — mocking rules for ban/appeal/warn state-machine tests: album state, `_flush_album`, `asyncio.gather` return shapes
 - [Pagination refactor pattern](pagination-refactor.md) — `paginate`, `nav_row`, `date_or_unknown` live in `tcbot.utils.pagination`; flow files must import and call these directly with `_PAGE_SIZE` as third arg
 - [Project context](context.md) — current state, what is done, what is pending, known runtime notes
 - [Progress tracker](progress.md) — item-by-item status with verification baseline
 - [Technical decisions](decisions.md) — non-trivial decisions with why and how-to-apply
 - [Module structure](structure.md) — full repo layout snapshot, cross-cutting constraints
+- [Replit nix store constraint](replit-nix-store.md) — uv sync fails writing to nix store; fix and runtime workaround

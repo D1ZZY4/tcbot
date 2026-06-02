@@ -41,6 +41,11 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `resolve_and_check` type annotation | P3 | `Message` added to `from telegram import ...` in `decorators.py`; `msg` parameter typed as `msg: Message` | 2026-06-02 |
 | `keyboards.py` dead code removal | P3 | Removed `baninfo_proof_kb` (zero callers); section header updated; docstrings added to 6 public functions | 2026-06-02 |
 | `users_roles.get_owner_id` cast fix | P3 | `# type: ignore[return-value]` replaced with `cast(int | None, cached)` — consistent with `get_effective_role` line 209 and `groups_db.py` pattern | 2026-06-02 |
+| `groups.py` NameError bug fix | P1 | `_kb` undefined; replaced both call sites with `tcgroups_kb` imported from `keyboards.py`; removed stale `keyboards` from module-level helper import | 2026-06-02 |
+| Replit workflow commands | infra | Changed `Start Application` and `Run Tests` from `uv run ...` to `python ...`; uv sync fails on nix store (read-only); packages installed via pip | 2026-06-02 |
+
+| Em-dash removal (source + docs) | P3 | `mongos.py` comment, `databases.md` table, `CHANGELOG.md` entry — all 3 fixed | 2026-06-02 |
+| Shared reply constants (`replies.py`) | P3 | 10 constants extracted from 11 modules; 0 actionable string dupes remain | 2026-06-02 |
 
 ## Pending (remaining optional)
 

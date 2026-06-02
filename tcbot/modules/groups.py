@@ -14,8 +14,9 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import GroupDoc
-from tcbot.modules.helper import decorators, keyboards
+from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.formatter import code, esc
+from tcbot.modules.helper.keyboards import tcgroups_kb
 from tcbot.modules.helper.parse_editmsg import safe_edit
 from tcbot.utils.prefixes import build_prefixed_filters
 
@@ -34,11 +35,11 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Who can use",
-        "Anyone, no special permissions needed.",
+        replies.CONTEXT_ANYONE,
     ),
     (
         "Where to use",
-        "Bot PM, exec group, or any connected group.",
+        replies.CONTEXT_BOT_OR_GROUP,
     ),
     (
         "What it does",
@@ -67,7 +68,6 @@ def _render(groups: list[GroupDoc], detailed: bool) -> str:
     return "\n".join(lines)
 
 
-
 # ────────── Command for see Connected Groups </tcgroups> ────────── #
 
 
@@ -82,7 +82,7 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     ctx.user_data["groups_cache"] = groups
     await update.effective_message.reply_text(
-        _render(groups, False), parse_mode="HTML", reply_markup=_kb(False)
+        _render(groups, False), parse_mode="HTML", reply_markup=tcgroups_kb(False)
     )
 
 
@@ -100,7 +100,9 @@ async def _toggle(
         # * q.answer + cache-miss DB fetch run in parallel
         _, groups = await asyncio.gather(q.answer(), db.groups_db.active_groups())
         ctx.user_data["groups_cache"] = groups
-    await safe_edit(q.message, _render(groups, detailed), reply_markup=_kb(detailed))
+    await safe_edit(
+        q.message, _render(groups, detailed), reply_markup=tcgroups_kb(detailed)
+    )
 
 
 @decorators.ratelimiter(limit=15, period=30)

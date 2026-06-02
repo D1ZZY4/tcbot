@@ -11,7 +11,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes, MessageHandler
 
-from tcbot.modules.helper import decorators, extraction, identity
+from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.workflows.unban_flow import execute_unban
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -32,11 +32,11 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Who can use",
-        "Developer and above (Founder / Admin / Developer).",
+        replies.PERM_DEV_ABOVE,
     ),
     (
         "Where to use",
-        "Exec group, any connected group, or bot PM.",
+        replies.CONTEXT_EXEC_OR_GROUP,
     ),
     (
         "What it does",
@@ -49,7 +49,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Target syntax",
-        "Reply to a message, or provide a user ID / @username after the command.",
+        replies.TARGET_SYNTAX,
     ),
     (
         "Examples",
@@ -72,9 +72,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
     target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        await msg.reply_text(
-            "Specify a target - reply to a message or provide a user ID."
-        )
+        await msg.reply_text(replies.ERR_NO_TARGET)
         return
 
     ident = await identity.classify(ctx.bot, admin.id, target_id, target_fname)

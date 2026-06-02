@@ -13,7 +13,7 @@ from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 
 from tcbot import cfg
-from tcbot.modules.helper import decorators, extraction, identity
+from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.workflows.reason_flow import (
@@ -79,7 +79,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Target syntax",
-        "Reply to a message, or provide a user ID / @username after the command.",
+        replies.TARGET_SYNTAX,
     ),
     (
         "Examples",
@@ -115,9 +115,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     inline_reason = parse_inline_reason(args, has_explicit_target)
 
     if not target_id:
-        await msg.reply_text(
-            "Can't find that user - reply to their message or send me a user ID."
-        )
+        await msg.reply_text(replies.ERR_CANT_FIND_USER)
         return ConversationHandler.END
 
     ident, (executor_role, _) = await asyncio.gather(
@@ -171,9 +169,7 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        await msg.reply_text(
-            "Specify a target - reply to a message or provide a user ID."
-        )
+        await msg.reply_text(replies.ERR_NO_TARGET)
         return
 
     ident = await identity.classify(ctx.bot, admin.id, target_id, target_name)
@@ -198,9 +194,7 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(update.effective_message.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        await update.effective_message.reply_text(
-            "Specify a target - reply to a message or provide a user ID."
-        )
+        await update.effective_message.reply_text(replies.ERR_NO_TARGET)
         return
     await execute_warnlist(update, ctx, target_id, target_name or str(target_id))
 
@@ -217,9 +211,7 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        await msg.reply_text(
-            "Specify a target - reply to a message or provide a user ID."
-        )
+        await msg.reply_text(replies.ERR_NO_TARGET)
         return
 
     ident = await identity.classify(ctx.bot, admin.id, target_id, target_name)

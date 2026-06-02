@@ -23,6 +23,10 @@ args = "Start Application"
 task = "workflow.run"
 args = "Run Tests (TDD)"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Run Tests"
+
 [[workflows.workflow]]
 name = "Start Application"
 author = "agent"
@@ -32,18 +36,18 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "uv run python -m tcbot"
+args = "python -m tcbot"
 
 [[workflows.workflow]]
 name = "Run Tests"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "uv run python -m pytest tests/ -v"
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python -m pytest tests/ -v"
 
 [[workflows.workflow]]
 name = "Bash (Don't Delete This)"

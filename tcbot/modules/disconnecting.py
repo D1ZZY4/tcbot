@@ -14,7 +14,7 @@ from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import decorators, parse_logmsg
+from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.formatter import code
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -89,7 +89,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     )
     if isinstance(member, BaseException):
         log.debug("Disconnect: get_chat_member failed for %d: %s", chat.id, member)
-        await update.effective_message.reply_text("Could not verify your group role.")
+        await update.effective_message.reply_text(replies.ERR_ROLE_VERIFY)
         return
     if isinstance(is_tc_staff, BaseException):
         is_tc_staff = False
