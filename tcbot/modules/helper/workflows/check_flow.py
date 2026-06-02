@@ -219,9 +219,7 @@ class Check:
             )
             return text, InlineKeyboardMarkup([_back_to_check(target_id)])
 
-        lines = [
-            f"{bold('Bans')}: {len(bans)} total, page {page + 1}/{total_pages}\n"
-        ]
+        lines = [f"{bold('Bans')}: {len(bans)} total, page {page + 1}/{total_pages}\n"]
         item_btns: list[InlineKeyboardButton] = []
         base_idx = page * _PAGE_SIZE
         for i, ban in enumerate(chunk, start=1):
@@ -509,8 +507,7 @@ async def _per_chat_event_list(
     )
 
     lines = [
-        f"{bold(heading_name)}: {len(records)} total"
-        f", page {page + 1}/{total_pages}\n"
+        f"{bold(heading_name)}: {len(records)} total, page {page + 1}/{total_pages}\n"
     ]
     base_idx = page * _PAGE_SIZE
     for i, rec in enumerate(chunk, start=1):

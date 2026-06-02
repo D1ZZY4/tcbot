@@ -113,7 +113,9 @@ async def test_execute_mute_happy_path(monkeypatch) -> None:
 
     groups = [{"chat_id": -200}, {"chat_id": -300}]
     log_mute = AsyncMock()
-    monkeypatch.setattr(muting_flow.db.groups_db, "active_groups", AsyncMock(return_value=groups))
+    monkeypatch.setattr(
+        muting_flow.db.groups_db, "active_groups", AsyncMock(return_value=groups)
+    )
     monkeypatch.setattr(muting_flow.db.mutes_db, "log_mute", log_mute)
     monkeypatch.setattr(
         muting_flow.parse_logmsg, "mute_log", Mock(return_value="mute log text")
@@ -138,7 +140,10 @@ async def test_execute_mute_happy_path(monkeypatch) -> None:
     bot.send_message.assert_awaited_once()
     bot.edit_message_text.assert_awaited_once()
     edited_text = bot.edit_message_text.await_args.kwargs.get(
-        "text", bot.edit_message_text.await_args.args[0] if bot.edit_message_text.await_args.args else ""
+        "text",
+        bot.edit_message_text.await_args.args[0]
+        if bot.edit_message_text.await_args.args
+        else "",
     )
     assert "has been muted" in edited_text
     assert "flooding" in edited_text
@@ -155,7 +160,9 @@ async def test_execute_mute_with_proof_desc(monkeypatch) -> None:
         edit_message_text=AsyncMock(),
     )
 
-    monkeypatch.setattr(muting_flow.db.groups_db, "active_groups", AsyncMock(return_value=[]))
+    monkeypatch.setattr(
+        muting_flow.db.groups_db, "active_groups", AsyncMock(return_value=[])
+    )
     monkeypatch.setattr(muting_flow.db.mutes_db, "log_mute", AsyncMock())
     monkeypatch.setattr(muting_flow.parse_logmsg, "mute_log", Mock(return_value="log"))
     monkeypatch.setattr(muting_flow, "fan_out", AsyncMock(return_value=[]))
@@ -175,7 +182,10 @@ async def test_execute_mute_with_proof_desc(monkeypatch) -> None:
     await muting_flow._execute_mute(bot, cast(Update, update), meta)
 
     edited_text = bot.edit_message_text.await_args.kwargs.get(
-        "text", bot.edit_message_text.await_args.args[0] if bot.edit_message_text.await_args.args else ""
+        "text",
+        bot.edit_message_text.await_args.args[0]
+        if bot.edit_message_text.await_args.args
+        else "",
     )
     assert "photo:https://t.me/c/1/2" in edited_text
 
@@ -200,7 +210,9 @@ async def test_execute_unmute_happy_path(monkeypatch) -> None:
     )
 
     groups = [{"chat_id": -200}, {"chat_id": -300}]
-    monkeypatch.setattr(muting_flow.db.groups_db, "active_groups", AsyncMock(return_value=groups))
+    monkeypatch.setattr(
+        muting_flow.db.groups_db, "active_groups", AsyncMock(return_value=groups)
+    )
     monkeypatch.setattr(
         muting_flow.parse_logmsg, "unmute_log", Mock(return_value="unmute log text")
     )
@@ -238,12 +250,16 @@ async def test_execute_unmute_partial_failure_reported_in_reply(monkeypatch) -> 
 
     groups = [{"chat_id": -200}, {"chat_id": -300}, {"chat_id": -400}]
     # * Two succeed, one fails
-    monkeypatch.setattr(muting_flow.db.groups_db, "active_groups", AsyncMock(return_value=groups))
+    monkeypatch.setattr(
+        muting_flow.db.groups_db, "active_groups", AsyncMock(return_value=groups)
+    )
     monkeypatch.setattr(
         muting_flow.parse_logmsg, "unmute_log", Mock(return_value="log")
     )
     monkeypatch.setattr(
-        muting_flow, "fan_out", AsyncMock(return_value=[None, RuntimeError("forbidden"), None])
+        muting_flow,
+        "fan_out",
+        AsyncMock(return_value=[None, RuntimeError("forbidden"), None]),
     )
 
     await muting_flow.execute_unmute(

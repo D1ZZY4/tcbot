@@ -15,7 +15,7 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 | Health check | Flask app in `tcbot/alive.py`, `GET /` returns `OK` on `PORT` (default `5000`). |
 | Dependency management | `uv` with `uv.lock`; CI installs with frozen lockfile by default. |
 | Formatting/linting | Ruff, configured in `pyproject.toml`. |
-| Tests | 176 collected tests across 18 `tests/test_*.py` files; designed to run offline. |
+| Tests | 209 collected tests across 19 `tests/test_*.py` files; designed to run offline. |
 | Deployment notes | Local `config.env`, Docker Compose, and Replit/hosted environment variables are documented. |
 
 ## Runtime Flow
@@ -271,7 +271,7 @@ Priorities, in order:
 
 | # | Issue | Location | Fix |
 |--|--|--|--|
-| 1 | No entry-to-completion ConversationHandler state-machine tests | `tcbot/modules/helper/workflows/*.py` | Executor tests for kick/mute/unmute/unban added (see 2026-06-02 pass). Full ConversationHandler simulation (entry → reason → proof → execute) not yet covered for ban/warn/appeal flows. |
+| 1 | No entry-to-completion ConversationHandler state-machine tests | `tcbot/modules/helper/workflows/*.py` | Resolved 2026-06-02: ban flow (8 tests), warning flow (12 tests), appeal flow (17 tests, new file). All step handlers covered: entry, validation guards, cancel, timeout, proof receipt, message submission, and approve/reject decisions. | Resolved |
 
 ### P2: Medium (Documentation and Coverage)
 

@@ -123,12 +123,12 @@ async def test_execute_unban_partial_group_failure_reported(monkeypatch) -> None
     monkeypatch.setattr(
         unban_flow.db.groups_db, "active_groups", AsyncMock(return_value=groups)
     )
-    monkeypatch.setattr(
-        unban_flow.parse_logmsg, "unban_log", Mock(return_value="log")
-    )
+    monkeypatch.setattr(unban_flow.parse_logmsg, "unban_log", Mock(return_value="log"))
     # * One group unban fails
     monkeypatch.setattr(
-        unban_flow, "fan_out", AsyncMock(return_value=[None, RuntimeError("forbidden"), None])
+        unban_flow,
+        "fan_out",
+        AsyncMock(return_value=[None, RuntimeError("forbidden"), None]),
     )
 
     await unban_flow.execute_unban(

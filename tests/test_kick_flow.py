@@ -83,9 +83,7 @@ async def test_execute_kick_with_proof_desc_included_in_reply(monkeypatch) -> No
     ctx = _make_ctx()
 
     monkeypatch.setattr(kicking_flow.db.kicks_db, "log_kick", AsyncMock())
-    monkeypatch.setattr(
-        kicking_flow.parse_logmsg, "kick_log", Mock(return_value="log")
-    )
+    monkeypatch.setattr(kicking_flow.parse_logmsg, "kick_log", Mock(return_value="log"))
 
     await kicking_flow.execute_kick(
         cast(Update, update),
@@ -137,9 +135,7 @@ async def test_execute_kick_log_send_failure_still_reports_kick(monkeypatch) -> 
     )
 
     monkeypatch.setattr(kicking_flow.db.kicks_db, "log_kick", AsyncMock())
-    monkeypatch.setattr(
-        kicking_flow.parse_logmsg, "kick_log", Mock(return_value="log")
-    )
+    monkeypatch.setattr(kicking_flow.parse_logmsg, "kick_log", Mock(return_value="log"))
 
     await kicking_flow.execute_kick(
         cast(Update, update),

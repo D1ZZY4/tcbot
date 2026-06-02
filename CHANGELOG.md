@@ -4,7 +4,13 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ## [Unreleased] - 2026-06-02
 
-### Added - Tests
+### Added - Tests (ConversationHandler state-machine)
+
+- **`tests/test_ban_flow.py`** (7 new tests, 8 total): Extended with new-ban happy path (`_execute_ban` creates record, posts log, calls `set_log_message_id`, enforces fan-out, edits prompt), new-ban log-send failure (log fails, `set_log_message_id` skipped, fan-out still runs), `on_proof_received` single-media (calls executor, returns END), `on_proof_received` first album message (buffered in `_albums`, returns WAITING_PROOF), `on_cancel_proof` (answers query, edits message, returns END), `on_proof_timeout` with message (reply sent, returns END), `on_proof_timeout` without message (no crash, returns END).
+- **`tests/test_warning_flow.py`** (9 new tests, 12 total): Extended with below-limit warn happy path (count reply sent, log dispatched, no ban), below-limit log-send failure (reply still delivered), `proof_desc` appended in reply, `execute_unwarn` with zero warns (notice sent, no DB write), `execute_unwarn` removes one warn (new count in reply), `execute_warnlist` with zero warns, `execute_warnlist` with existing warns (all reasons listed), `execute_resetwarns` with zero warns, `execute_resetwarns` clears all (count + "Clean slate" in reply).
+- **`tests/test_appeal_flow.py`** (17 tests, new file): Full state-machine coverage for `BuildAppeal`. `_on_entry`: bad pattern returns END without touching DB; valid pattern reaches `_start`. `_start`: rejects non-private chat, missing ban, inactive ban, wrong user, already-pending review; happy path sets `user_data` and enters WAITING_APPEAL. `_on_cancel`: clears all state keys, answers query, edits message, returns END. `_on_message`: non-appeal text stays waiting (no reply), missing log reference stays waiting ("Invalid log link"), valid submission ends conversation and dispatches review post plus log in parallel. `on_decision`: non-staff caller denied with `show_alert`; ban not found edits card; already-inactive edits card; approve deactivates ban, runs fan-out unban, notifies user, edits review card; reject notifies user and edits card.
+
+### Added - Tests (executor coverage, prior pass)
 
 - **`tests/test_kick_flow.py`** (4 tests): Offline coverage for `kicking_flow.execute_kick`. Cases: happy path (ban + unban + log + reply all succeed), proof description appended in reply, `ban_chat_member` raises (error reply sent, other ops skipped), audit-log send failure (kick reply still sent via `return_exceptions=True`).
 - **`tests/test_mute_flow.py`** (21 tests): Offline coverage for `muting_flow`. Duration parser (`parse_duration`): valid tokens for all 7 units (s/m/h/d/w/mo/ye), case-insensitive matching, and invalid-input returns `None`. Formatter (`fmt_duration`): all unit tiers from seconds to years, plus `None → "permanently"`. Mute executor (`_execute_mute`): happy path with fan-out across multiple groups, proof description included in edited summary. Unmute executor (`execute_unmute`): all groups restored successfully (2/2 reply), partial fan-out failure reported in reply (2/3). Fan-out is mocked in all executor tests; bot methods that generate list-comprehension coroutines use `Mock()` rather than `AsyncMock()` to avoid `PytestUnraisableExceptionWarning`.
@@ -12,7 +18,8 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Changed - Documentation
 
-- **`PLAN.md` test count updated**: 148 → 176 tests across 15 → 18 files (verified with pytest collect).
+- **`PLAN.md` test count updated**: 176 → 209 tests across 18 → 19 files (verified with pytest collect). P1-1 ConversationHandler state-machine backlog item marked Resolved.
+- **`PLAN.md` test count updated (prior pass)**: 148 → 176 tests across 15 → 18 files (verified with pytest collect).
 - **`PLAN.md` P2 backlog resolved**: P2-1 (method-level docstrings) and P2-2 (workflow file docs) verified against source tree: both already complete. Both rows marked `Resolved`.
 - **`PLAN.md` P1 refined**: Rephrased to distinguish resolved executor tests (kick/mute/unmute/unban) from still-open full ConversationHandler state-machine simulation (ban/warn/appeal entry-to-completion).
 
