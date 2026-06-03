@@ -2,7 +2,7 @@
 name = "tgbot-tcf"
 version = "1.0.0"
 description = "Transsion Core Federation (TCF) Telegram bot"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "python-telegram-bot[job-queue]==22.5",
     "motor>=3.7.1,<4",
