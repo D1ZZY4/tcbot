@@ -670,14 +670,10 @@ async def test_end_sends_session_ended_reply_and_returns_end() -> None:
     """_end replies with the session-ended message and signals END to the handler."""
     ba = _ba()
     reply_text = AsyncMock()
-    update = SimpleNamespace(
-        effective_message=SimpleNamespace(reply_text=reply_text)
-    )
+    update = SimpleNamespace(effective_message=SimpleNamespace(reply_text=reply_text))
     ctx = _ctx()
 
-    result = await ba._end(
-        cast(Update, update), cast(ContextTypes.DEFAULT_TYPE, ctx)
-    )
+    result = await ba._end(cast(Update, update), cast(ContextTypes.DEFAULT_TYPE, ctx))
 
     assert result == ConversationHandler.END
     reply_text.assert_awaited_once()
