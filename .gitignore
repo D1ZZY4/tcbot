@@ -36,3 +36,4 @@ attached_assets/
 # Local
 logs*/
 .pytest_cache/
+nothing.md
