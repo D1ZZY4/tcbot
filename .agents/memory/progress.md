@@ -59,19 +59,16 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | test_additional.py (7 tests) | P3 | `__additional_msg__` content + callback handler | 2026-06-02 |
 | test_privacy.py (14 tests) | P3 | Privacy messages + both callbacks | 2026-06-02 |
 | PLAN.md test count | docs | Updated from 332/26 to 428/30 | 2026-06-02 |
-
 | kicking_flow.py SyntaxError fix | P1 | `_MSG_REJOIN_ALLOWED` used as implicit string concat (variable, not literal); changed to `f"{_MSG_REJOIN_ALLOWED}"` — unblocked test_kick_flow.py + test_kicking.py collection | 2026-06-02 |
 | docs-maintainer SKILL.md staleness | docs | Test count 300/25 → 698/50; date bumped to 2026-06-02 | 2026-06-02 |
 | docs/helper/helper.md replies.py table | docs | Expanded from 10 to 15 constants; added ERR_GROUP_ONLY, ERR_NO_CONNECTED_GROUPS, ERR_GROUP_NOT_FOUND, PERM_FOUNDER_ONLY, PERM_STAFF_ONLY, PERM_ADMIN_ABOVE | 2026-06-02 |
 | docs/utils/utils.md mermaid filename | docs | Fixed `logging_setup.py` → `logger.py` in Mermaid diagram node | 2026-06-02 |
 | .agents/memory/structure.md filename | docs | Corrected `logging_setup.py` → `logger.py`; updated test count 25+ → 50 files / 698 tests | 2026-06-02 |
-
 | PTBDeprecationWarning fix | maintenance | `PTB_TIMEDELTA=1` in conftest.py + filterwarnings in pyproject.toml; 0 warnings | 2026-06-02 (s2) |
 | ruff format 8 test files | maintenance | test_error_reporter, test_extraction, test_groups_db, test_kicks_db, test_mutes_db, test_parse_editmsg, test_prefixes, test_users_cache | 2026-06-02 (s2) |
 | PTBUserWarning runtime suppression | maintenance | warnings.filterwarnings in __main__.py; startup log now fully clean | 2026-06-02 (s2) |
 | 20 handler docstrings | P4 | All public functions 30+ lines now have docstrings: admins(6), disconnecting(2), warning_flow(2), banning, broadcasting, checking, connecting, kicking, maintenance, muting, start, warnings, unban_flow | 2026-06-02 (s2) |
 | 10 medium handler docstrings | P4 | All public functions 16-29 lines now have docstrings: admins(1), checking(2), logger(1), maintenance(1), muting(1), warning_flow(2), warnings(2) | 2026-06-02 (s2) |
-
 | 3 new test files (alive, documents, types) | P4 | test_alive.py (5), test_documents.py (17), test_types.py (12); suite 966→1039 / 65→69 | 2026-06-02 (s3) |
 | Stale test counts updated | docs | PLAN.md(×2), README.md(×2), replit.md, AGENTS.md updated to 1039/69 | 2026-06-02 (s3) |
 | Docstrings batch 1 (14 fns, 10+ lines) | P4 | All public functions 10+ lines now have docstrings: __main__, admins, greeting, groups, decorators(×3), ban_flow, privacy(×2), start, stats, unbanning | 2026-06-02 (s3) |
@@ -79,7 +76,6 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Docstrings batch 3 (13 fns, 3-4 lines) | P4 | checking(×2), parse_link, ban_flow, start, stats(×8). AST audit: 0 public fns 3+ lines missing | 2026-06-02 (s3) |
 | Class docstrings (10 TypedDict classes) | P4 | All public classes in documents.py. AST audit: 0 public classes missing docstrings | 2026-06-02 (s3) |
 | CHANGELOG.md duplicate removed | docs | Removed stale duplicate batch-1 docstring entry from session-3 header | 2026-06-02 (s3) |
-
 | Sequential await fix: admins.py (cmd_promote/cmd_demote) | P3 | asyncio.gather(identity.classify(...), db.users_roles.get_effective_role(...)) | 2026-06-02 (s5) |
 | Sequential await fix: stats.py (12 handlers) | P3 | Refactored _ack_and_render(q, data_coro); q.answer() + DB fetch now parallel | 2026-06-02 (s5) |
 | Sequential await fix: groups.py _toggle cache-hit path | P3 | asyncio.gather(q.answer(), safe_edit(...)) in cache-hit branch | 2026-06-02 (s5) |
@@ -89,7 +85,6 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Handler-behavior tests batch 2 (15 tests) | P4 | cmd_unban(3), cmd_unmute(4), cmd_unwarn(3), cmd_warnlist(2), cmd_resetwarns(3); suite 1112→1127 | 2026-06-02 (s5) |
 | Handler-behavior tests batch 3 (14 tests) | P4 | cmd_promote(4)+cmd_demote(5) in test_admins.py; cmd_checkme(3)+cmd_check(2) in test_checking.py; suite 1127→1141 | 2026-06-02 (s5) |
 | Handler-behavior tests batch 4 (11 tests) | P4 | cmd_tcconnect(5) in test_connecting.py; cmd_tcdisconnect(4)+cmd_rmtc(2) in test_disconnecting.py; suite 1141→1152 | 2026-06-02 (s5) |
-
 | performance.yml: `users_db` → `users_cache` + `import os` | P4 | Both benchmark fns fixed; missing import fixed; 3 bugs total | 2026-06-03 (s6) |
 | 4× "02:00 UTC" → "04:00 UTC" | docs | auto-fix.yml comment + docs/workflows-guide.md ×2 + README.md | 2026-06-03 (s6) |
 | run-bot.yml description | docs | "Manual deployment" → correct schedule summary in docs/workflows-guide.md + README.md | 2026-06-03 (s6) |
