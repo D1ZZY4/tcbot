@@ -11,7 +11,7 @@ description: Current state of TCF Bot project — what is done, in progress, and
 
 - Python 3.12, uv, python-telegram-bot 22.5, Motor/MongoDB stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
-- 1302 tests across 70 test files; full suite passes offline with 1 warning.
+- 1337 tests across 70 test files; full suite passes offline with 1 warning.
 - `python -m ruff format .` and `python -m ruff check .` both clean (141 files formatted).
 - All P1/P2/P3 backlog items resolved (ConversationHandler tests, pagination NameError, composite indexes, asyncio.gather conversions, shared replies.py, em-dash removal, cache TTL constants, keyboards.py dead code).
 - `docs/mapping.md` updated: added `identity.py`, `replies.py` to helper section; added `pagination.py` to utils section.

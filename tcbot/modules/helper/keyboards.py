@@ -183,16 +183,11 @@ def _build_topic_rows(
 ) -> list[list[InlineKeyboardButton]]:
     """Pair topics into two-column rows, with any odd item on its own row."""
     rows: list[list[InlineKeyboardButton]] = []
-    it = iter(topics)
-    for a, b in zip(it, it):
+    for i in range(0, len(topics), 2):
+        chunk = topics[i : i + 2]
         rows.append(
-            [
-                InlineKeyboardButton(a[0], callback_data=a[1]),
-                InlineKeyboardButton(b[0], callback_data=b[1]),
-            ]
+            [InlineKeyboardButton(text, callback_data=cb) for text, cb in chunk]
         )
-    for item in list(it):
-        rows.append([InlineKeyboardButton(item[0], callback_data=item[1])])
     return rows
 
 
@@ -350,16 +345,11 @@ def module_help_kb(
 ) -> InlineKeyboardMarkup:
     """Per-module help view: pair sub-section buttons + Back, with Back last."""
     rows: list[list[InlineKeyboardButton]] = []
-    it = iter(section_buttons)
-    for a, b in zip(it, it):
+    for i in range(0, len(section_buttons), 2):
+        chunk = section_buttons[i : i + 2]
         rows.append(
-            [
-                InlineKeyboardButton(a[0], callback_data=a[1]),
-                InlineKeyboardButton(b[0], callback_data=b[1]),
-            ]
+            [InlineKeyboardButton(text, callback_data=cb) for text, cb in chunk]
         )
-    for item in list(it):
-        rows.append([InlineKeyboardButton(item[0], callback_data=item[1])])
     rows.append([InlineKeyboardButton("« Back", callback_data=back_callback)])
     return InlineKeyboardMarkup(rows)
 

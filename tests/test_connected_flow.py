@@ -227,3 +227,145 @@ async def test_on_join_decision_cancel_leaves_group(monkeypatch) -> None:
 
     bot.leave_chat.assert_awaited_once_with(-100)
     q.edit_message_text.assert_awaited_once()
+
+
+async def test_on_join_decision_connect_bot_perms_check_fails(monkeypatch) -> None:
+    """When get_chat_member for the bot itself raises, show perms-verify error."""
+    bc = _build()
+    owner = SimpleNamespace(status=ChatMemberStatus.OWNER)
+
+    call_count = [0]
+
+    async def _get_chat_member_side_effect(chat_id, user_id):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            return owner
+        raise RuntimeError("timeout")
+
+    bot = _bot(get_chat_member=AsyncMock(side_effect=_get_chat_member_side_effect))
+    q = SimpleNamespace(
+        answer=AsyncMock(),
+        data=bc.join_callback,
+        edit_message_text=AsyncMock(),
+    )
+    update = SimpleNamespace(
+        callback_query=q,
+        effective_chat=SimpleNamespace(id=-100, title="Chat"),
+        effective_user=SimpleNamespace(id=55, first_name="Owner"),
+    )
+    ctx = SimpleNamespace(bot=bot)
+
+    await bc.on_join_decision(update, ctx)
+
+    q.edit_message_text.assert_awaited_once()
+    assert (
+        connected_flow._ERR_BOT_PERMS_VERIFY in q.edit_message_text.await_args.args[0]
+    )
+
+
+async def test_on_join_decision_connect_missing_perms_edits_message(
+    monkeypatch,
+) -> None:
+    """When bot lacks required permissions, save pending and show perms-required message."""
+    monkeypatch.setattr(connected_flow.db.groups_db, "add_pending", AsyncMock())
+
+    bc = _build()
+    owner = SimpleNamespace(status=ChatMemberStatus.OWNER)
+    bot_member = SimpleNamespace(
+        can_delete_messages=False,
+        can_restrict_members=False,
+        can_invite_users=False,
+    )
+
+    call_count = [0]
+
+    async def _gcm(chat_id, user_id):
+        call_count[0] += 1
+        return owner if call_count[0] == 1 else bot_member
+
+    bot = _bot(get_chat_member=AsyncMock(side_effect=_gcm))
+    q = SimpleNamespace(
+        answer=AsyncMock(),
+        data=bc.join_callback,
+        edit_message_text=AsyncMock(),
+        message=SimpleNamespace(message_id=77),
+    )
+    update = SimpleNamespace(
+        callback_query=q,
+        effective_chat=SimpleNamespace(id=-100, title="Chat"),
+        effective_user=SimpleNamespace(id=55, first_name="Owner"),
+    )
+    ctx = SimpleNamespace(bot=bot)
+
+    await bc.on_join_decision(update, ctx)
+
+    connected_flow.db.groups_db.add_pending.assert_awaited_once()
+    q.edit_message_text.assert_awaited_once()
+
+
+async def test_on_join_decision_connect_already_connected_edits_message(
+    monkeypatch,
+) -> None:
+    """When group is already connected, edit the prompt with already-connected message."""
+    monkeypatch.setattr(
+        connected_flow.db.groups_db, "is_connected", AsyncMock(return_value=True)
+    )
+
+    bc = _build()
+    owner = SimpleNamespace(status=ChatMemberStatus.OWNER)
+    bot_member = SimpleNamespace(
+        can_delete_messages=True,
+        can_restrict_members=True,
+        can_invite_users=True,
+    )
+
+    call_count = [0]
+
+    async def _gcm(chat_id, user_id):
+        call_count[0] += 1
+        return owner if call_count[0] == 1 else bot_member
+
+    bot = _bot(get_chat_member=AsyncMock(side_effect=_gcm))
+    q = SimpleNamespace(
+        answer=AsyncMock(),
+        data=bc.join_callback,
+        edit_message_text=AsyncMock(),
+    )
+    update = SimpleNamespace(
+        callback_query=q,
+        effective_chat=SimpleNamespace(id=-100, title="Chat"),
+        effective_user=SimpleNamespace(id=55, first_name="Owner"),
+    )
+    ctx = SimpleNamespace(bot=bot)
+
+    await bc.on_join_decision(update, ctx)
+
+    q.edit_message_text.assert_awaited_once()
+    assert "already connected" in q.edit_message_text.await_args.args[0].lower()
+
+
+async def test_on_bot_added_as_member_sends_join_prompt(monkeypatch) -> None:
+    """When bot joins as MEMBER to an unconnected group with no pending, send join prompt."""
+    monkeypatch.setattr(
+        connected_flow.db.groups_db, "get_pending", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(
+        connected_flow.db.groups_db, "is_connected", AsyncMock(return_value=False)
+    )
+    monkeypatch.setattr(connected_flow.db.groups_db, "add_pending", AsyncMock())
+
+    bc = _build()
+    bot = _bot()
+    chat = SimpleNamespace(id=-200, type="supergroup", title="New Group")
+    new_member = SimpleNamespace(status=ChatMemberStatus.MEMBER)
+    cmc = SimpleNamespace(
+        chat=chat, new_chat_member=new_member, from_user=SimpleNamespace(id=9)
+    )
+    update = SimpleNamespace(my_chat_member=cmc)
+    ctx = SimpleNamespace(bot=bot)
+
+    await bc.on_bot_added(update, ctx)
+
+    bot.send_message.assert_awaited_once()
+    sent_text = bot.send_message.await_args.args[1]
+    assert "Test Federation" in sent_text

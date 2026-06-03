@@ -96,6 +96,55 @@ Files updated: `AGENTS.md`, `README.md` (2 occurrences), `replit.md`, `PLAN.md`
 (2 occurrences), `.agents/memory/MEMORY.md`, `.agents/memory/structure.md`,
 `.agents/memory/context.md`, `.agents/memory/progress.md`.
 
+## [Unreleased] - 2026-06-03 (session 10)
+
+### Fixed - `zip(it, it)` drops odd items in `_build_topic_rows` and `module_help_kb`
+
+Both `_build_topic_rows` and `module_help_kb` in `tcbot/modules/helper/keyboards.py` used
+`zip(it, it)` to pair items into two-column rows. This pattern silently consumes the odd
+trailing item without yielding it — the docstring claimed "odd item on its own row" but
+the implementation did not deliver that. Replaced with a simple `range(0, len, 2)` slice
+loop that correctly places the odd remainder in a single-button row.
+
+### Added - Comprehensive keyboard factory tests in `test_keyboards.py` (13 → 44)
+
+Previously only 13 of ~24 keyboard factories were tested. Added 31 new tests covering:
+- `back_to_privacy_kb`: callback is `privacy_menu`
+- `additional_menu_kb`: 4 rows, URL buttons in first rows, back in last row
+- `groups_menu_kb(True/False)`: toggle callback and label for both modes + back row
+- `tcgroups_kb(True/False)`: single toggle callback and label for both modes
+- `stats_main_kb`: 3 rows with correct callbacks `stats_admins`, `stats_chats:0`, `stats_bans:0`
+- `stats_back_kb`: returns to `stats_main`
+- `group_start_kb`: PM URL uses bot_username, second row is `help_menu_group`
+- `back_to_help_kb`: goes to `help_menu`
+- `back_to_help_cmd_kb`: goes to `helpc_main`
+- `back_to_module_kb`: passes through any callback string
+- `help_topics_menu_kb`: pairs topics in two-column rows + appends `back_to_start`
+- `help_topics_kb`: no `back_to_start` appended
+- `module_help_kb`: even/odd pairing + back row at end
+- `checkme_ban_kb`: with/without proof_link, appeal URL present
+- `checkme_detail_back_kb`: with/without proof_link
+- `promote_role_kb`: cancel always last row, unknown roles filtered out
+
+Test suite: 1302 → 1333 (all 70 files green, 1 warning).
+
+### Added - `on_join_decision` + `on_bot_added` missing path tests in `test_connected_flow.py` (15 → 19)
+
+`test_connected_flow.py` previously covered the non-owner rejection and cancel paths of
+`on_join_decision`, plus three early-return paths of `on_bot_added`, but left the full
+connect branch untested. Added four new tests:
+
+- `test_on_join_decision_connect_bot_perms_check_fails`: `get_chat_member` raises on the
+  bot-self lookup → `_ERR_BOT_PERMS_VERIFY` edited into the prompt.
+- `test_on_join_decision_connect_missing_perms_edits_message`: bot lacks required admin
+  permissions → `add_pending` called, prompt updated with permissions-required message.
+- `test_on_join_decision_connect_already_connected_edits_message`: group already in the
+  federation → `already_connected_message` edited into the prompt.
+- `test_on_bot_added_as_member_sends_join_prompt`: bot joins as MEMBER to an unconnected
+  group with no pending entry → join prompt sent via `bot.send_message`.
+
+Test suite: 1333 → 1337 (all 70 files green, 1 warning).
+
 ## [Unreleased] - 2026-06-03 (session 8)
 
 ### Fixed - .kilo and .trae converted from physical directories to symlinks
