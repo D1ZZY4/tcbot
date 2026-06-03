@@ -374,3 +374,135 @@ async def test_cmd_demote_valid_shows_confirmation_keyboard(monkeypatch) -> None
     update.effective_message.reply_text.assert_awaited_once()
     call_kwargs = update.effective_message.reply_text.call_args[1]
     assert call_kwargs.get("reply_markup") is kb_mock
+
+
+# ──────────── Handler behavior: on_demote_cancel callback ───────── #
+
+_on_demote_cancel = admins.on_demote_cancel.__wrapped__.__wrapped__
+
+
+def _make_cb_ctx(data: str = "demote_cancel:55") -> tuple:
+    user = MagicMock()
+    user.id = _DEMOTE_ADMIN_ID
+    user.first_name = "Admin"
+    q = MagicMock()
+    q.data = data
+    q.answer = AsyncMock()
+    q.edit_message_text = AsyncMock()
+    q.edit_message_reply_markup = AsyncMock()
+    q.message = MagicMock()
+    q.message.text = "some text"
+    update = MagicMock()
+    update.callback_query = q
+    update.effective_user = user
+    ctx = MagicMock()
+    ctx.bot = MagicMock()
+    return update, ctx
+
+
+async def test_on_demote_cancel_answers_and_edits_message() -> None:
+    update, ctx = _make_cb_ctx("demote_cancel:55")
+    await _on_demote_cancel(update, ctx)
+    update.callback_query.answer.assert_awaited_once()
+    update.callback_query.edit_message_text.assert_awaited_once()
+    call_kwargs = update.callback_query.edit_message_text.call_args[1]
+    assert call_kwargs.get("reply_markup") is None
+
+
+# ─────────── Handler behavior: on_promote_role_cancel callback ──── #
+
+_on_promote_role_cancel = admins.on_promote_role_cancel.__wrapped__.__wrapped__
+
+
+async def test_on_promote_role_cancel_answers_and_edits_message() -> None:
+    update, ctx = _make_cb_ctx("promo_role_cancel:42")
+    await _on_promote_role_cancel(update, ctx)
+    update.callback_query.answer.assert_awaited_once()
+    update.callback_query.edit_message_text.assert_awaited_once()
+    call_kwargs = update.callback_query.edit_message_text.call_args[1]
+    assert call_kwargs.get("reply_markup") is None
+
+
+# ─────────── Handler behavior: on_demote_confirm callback ───────── #
+
+_on_demote_confirm = admins.on_demote_confirm.__wrapped__.__wrapped__
+
+
+async def test_on_demote_confirm_perm_expired_answers_alert(monkeypatch) -> None:
+    update, ctx = _make_cb_ctx("demote_confirm:55")
+    monkeypatch.setattr(
+        admins.db.users_roles,
+        "get_effective_role",
+        AsyncMock(return_value="tester"),
+    )
+    await _on_demote_confirm(update, ctx)
+    q = update.callback_query
+    q.answer.assert_awaited_once()
+    call_kwargs = q.answer.call_args[1]
+    assert call_kwargs.get("show_alert") is True
+
+
+async def test_on_demote_confirm_no_longer_removable_edits_text(monkeypatch) -> None:
+    update, ctx = _make_cb_ctx("demote_confirm:55")
+
+    async def _roles(uid: int) -> str:
+        return "founder" if uid == _DEMOTE_ADMIN_ID else None
+
+    monkeypatch.setattr(admins.db.users_roles, "get_effective_role", _roles)
+    monkeypatch.setattr(
+        admins.db.users_cache,
+        "get_user_mention_data",
+        AsyncMock(return_value=("Target", None)),
+    )
+    await _on_demote_confirm(update, ctx)
+    update.callback_query.edit_message_text.assert_awaited_once()
+    call_kwargs = update.callback_query.edit_message_text.call_args[1]
+    assert call_kwargs.get("reply_markup") is None
+
+
+# ─────────── Handler behavior: on_promote_role_btn callback ─────── #
+
+_on_promote_role_btn = admins.on_promote_role_btn.__wrapped__.__wrapped__
+
+
+async def test_on_promote_role_btn_perm_expired_answers_alert(monkeypatch) -> None:
+    update, ctx = _make_cb_ctx("promo_role:admin:42")
+    monkeypatch.setattr(
+        admins.db.users_roles,
+        "get_effective_role",
+        AsyncMock(return_value="developer"),
+    )
+    await _on_promote_role_btn(update, ctx)
+    q = update.callback_query
+    q.answer.assert_awaited_once()
+    call_kwargs = q.answer.call_args[1]
+    assert call_kwargs.get("show_alert") is True
+
+
+# ─────────── Handler behavior: on_promo_decision callback ───────── #
+
+_on_promo_decision = admins.on_promo_decision.__wrapped__.__wrapped__
+
+
+async def test_on_promo_decision_not_owner_answers_alert(monkeypatch) -> None:
+    update, ctx = _make_cb_ctx("promo_approve:req-001")
+    monkeypatch.setattr(
+        admins.db.users_roles, "is_owner", AsyncMock(return_value=False)
+    )
+    await _on_promo_decision(update, ctx)
+    q = update.callback_query
+    q.answer.assert_awaited_once()
+    call_kwargs = q.answer.call_args[1]
+    assert call_kwargs.get("show_alert") is True
+
+
+async def test_on_promo_decision_request_not_found_edits_message(monkeypatch) -> None:
+    update, ctx = _make_cb_ctx("promo_approve:req-999")
+    monkeypatch.setattr(admins.db.users_roles, "is_owner", AsyncMock(return_value=True))
+    monkeypatch.setattr(
+        admins.db.queues_db,
+        "get_request_by_id",
+        AsyncMock(return_value=None),
+    )
+    await _on_promo_decision(update, ctx)
+    update.callback_query.edit_message_text.assert_awaited_once()

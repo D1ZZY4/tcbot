@@ -2,6 +2,100 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-03 (session 9)
+
+### Added - Handler-behavior tests for all stats and help callback handlers
+
+Added 15 new async handler-behavior tests covering callback query handlers that
+had no behavior coverage beyond handler-registration checks.
+
+`tests/test_stats.py` (+8 tests, 19 -> 27 total):
+- `test_on_stats_main_calls_stats_main`: verifies `Stats.main()` is invoked via `_ack_and_render`.
+- `test_on_stats_admins_calls_staff_roster`: verifies `Stats.staff_roster()` is invoked.
+- `test_on_stats_bans_clears_search_before_bans_list`: verifies `Stats.clear_search` runs before `Stats.bans_list`.
+- `test_on_stats_bans_passes_page_to_bans_list`: verifies page number parsed from `q.data` and forwarded.
+- `test_on_stats_bans_search_calls_open_search_and_answers`: verifies `Stats.open_search` and `q.answer` both called.
+- `test_on_stats_search_cancel_clears_and_loads_page_zero`: verifies search state cleared and page 0 rendered.
+- `test_on_bans_search_input_returns_early_without_search_key`: verifies early exit when `SEARCH_KEY` absent.
+- `test_on_bans_search_input_runs_search_and_stores_results`: verifies full search path stores results in `user_data`.
+
+`tests/test_help.py` (+7 tests, 18 -> 25 total):
+- `test_on_help_menu_group_answers_with_show_alert`: verifies alert-only response with no message edit.
+- `test_on_help_menu_answers_callback_query`: verifies `q.answer()` gathered with `safe_edit_cb`.
+- `test_on_helpc_main_answers_callback_query`: verifies `q.answer()` gathered with `safe_edit_cb`.
+- `test_on_help_topic_any_helpc_prefix_routes_to_menu_path_false`: verifies `helpc_` routes to `_show_module` with `is_menu_path=False`.
+- `test_on_help_topic_any_help_prefix_routes_to_menu_path_true`: verifies `help_` routes to `_show_module` with `is_menu_path=True`.
+- `test_on_help_section_malformed_data_answers_alert`: verifies malformed data triggers `show_alert=True` error.
+- `test_on_help_section_valid_data_delegates_to_show_section`: verifies `_show_section` dispatched with correct args.
+
+Test suite after T001+T002: 1259 -> 1274.
+
+### Added - Handler-behavior tests for admins callback handlers
+
+Added 7 new async handler-behavior tests to `tests/test_admins.py` (31 -> 38),
+covering five previously untested callback query handlers in `admins.py`. All
+callbacks share 2 wraps (`__wrapped__.__wrapped__`).
+
+- `test_on_demote_cancel_answers_and_edits_message`: verifies `gather(q.answer, q.edit_message_text)` with `reply_markup=None`.
+- `test_on_promote_role_cancel_answers_and_edits_message`: verifies same gather pattern for promote cancel.
+- `test_on_demote_confirm_perm_expired_answers_alert`: verifies alert shown when executor lost staff rank before confirming.
+- `test_on_demote_confirm_no_longer_removable_edits_text`: verifies message edited when target's role is gone or founder.
+- `test_on_promote_role_btn_perm_expired_answers_alert`: verifies alert shown when executor lacks staff rank during role selection.
+- `test_on_promo_decision_not_owner_answers_alert`: verifies non-owner caller receives `PERM_FOUNDER_ONLY` alert.
+- `test_on_promo_decision_request_not_found_edits_message`: verifies fallback edit when request ID no longer exists.
+
+Test suite after T003: 1274 -> 1281.
+
+### Added - Handler-behavior tests for checking module callbacks
+
+Added 10 new async handler-behavior tests to `tests/test_checking.py` (25 -> 35),
+covering all ten previously untested callback query handlers in `checking.py`.
+All callbacks share 2 wraps (`__wrapped__.__wrapped__`).
+
+Early-exit guard tests:
+- `test_on_checkme_detail_inactive_ban_answers_alert`: verifies `show_alert=True` answer when ban is `None` or inactive.
+- `test_on_checkme_back_ban_not_found_answers_alert`: verifies `show_alert=True` answer when ban record is missing.
+
+Delegate-and-edit pattern tests (each verifies `Check.*` called with correct args, then `_safe_edit` called):
+- `test_on_check_main_calls_profile`: `Check.profile(bot, 55)`.
+- `test_on_check_bans_calls_bans_list`: `Check.bans_list(55, 0)` with page from `q.data`.
+- `test_on_check_ban_item_calls_ban_detail`: `Check.ban_detail(55, "ban-abc")`.
+- `test_on_check_warns_calls_warns_by_group`: `Check.warns_by_group(55)`.
+- `test_on_check_warn_chat_calls_warns_in_group`: `Check.warns_in_group(55, -100123, 1)`.
+- `test_on_check_kicks_calls_kicks_list`: `Check.kicks_list(55, 0)`.
+- `test_on_check_mutes_calls_mutes_list`: `Check.mutes_list(55, 0)`.
+- `test_on_check_appeals_calls_appeals_list`: `Check.appeals_list(55, 0)`.
+
+Test suite after T004: 1281 -> 1291.
+
+### Added - Handler-behavior tests for remaining stats callbacks and start menu callbacks
+
+**test_stats.py** (+7 tests, 27 -> 34):
+- `test_on_stats_users_calls_users_list`: page parsed from `q.data` forwarded to `Stats.users_list`.
+- `test_on_stats_user_item_calls_user_detail`: page + index forwarded to `Stats.user_detail`.
+- `test_on_stats_chats_calls_chats_list`: page forwarded to `Stats.chats_list`.
+- `test_on_stats_chat_item_calls_chat_detail`: page + index forwarded to `Stats.chat_detail`.
+- `test_on_stats_ban_item_calls_ban_detail`: page + index forwarded to `Stats.ban_detail`.
+- `test_on_stats_search_item_calls_search_detail_with_results`: stored results + index from `q.data` forwarded.
+- `test_on_stats_search_back_empty_results_opens_search`: when `RESULTS_KEY` is absent, falls back to `Stats.open_search`.
+
+**test_start.py** (+4 tests, 15 -> 19):
+- `test_on_back_to_start_answers_and_edits_to_main_menu`: `gather(q.answer, edit_message_text)` with `main_menu_kb()`.
+- `test_on_menu_groups_no_groups_edits_empty_message`: no-groups early path edits with "No groups..." text.
+- `test_on_menu_groups_details_renders_with_detailed_true`: `groups_menu_kb(True)` passed as reply_markup.
+- `test_on_menu_groups_simple_renders_with_detailed_false`: `groups_menu_kb(False)` passed as reply_markup.
+
+Test suite after T005: 1291 -> 1302 (all 70 test files green, 1 warning).
+
+### Fixed - Stale test inventory count corrected across all documentation
+
+Previous stale value across many docs: 1251 tests across 71 files.
+Final correct value after session 9: 1302 tests across 70 files.
+
+Files updated: `AGENTS.md`, `README.md` (2 occurrences), `replit.md`, `PLAN.md`
+(2 occurrences), `.agents/memory/MEMORY.md`, `.agents/memory/structure.md`,
+`.agents/memory/context.md`, `.agents/memory/progress.md`.
+
 ## [Unreleased] - 2026-06-03 (session 8)
 
 ### Fixed - .kilo and .trae converted from physical directories to symlinks

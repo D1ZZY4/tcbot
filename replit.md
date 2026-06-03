@@ -111,7 +111,7 @@ Collect tests without executing them:
 uv run --extra test pytest --collect-only -q
 ```
 
-Current collected inventory: 1251 tests across 71 test files. Tests are designed to run without a real bot token or MongoDB connection.
+Current collected inventory: 1302 tests across 70 test files. Tests are designed to run without a real bot token or MongoDB connection.
 
 ## Code Quality Commands
 

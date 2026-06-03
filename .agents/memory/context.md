@@ -5,13 +5,13 @@ description: Current state of TCF Bot project — what is done, in progress, and
 
 # TCF Bot — Current Context
 
-**Last updated:** 2026-06-03 (session 8)
+**Last updated:** 2026-06-03 (session 9)
 
 ## What is done
 
 - Python 3.12, uv, python-telegram-bot 22.5, Motor/MongoDB stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
-- 1259 tests across 70 test files; full suite passes offline with 2 warnings.
+- 1302 tests across 70 test files; full suite passes offline with 1 warning.
 - `python -m ruff format .` and `python -m ruff check .` both clean (141 files formatted).
 - All P1/P2/P3 backlog items resolved (ConversationHandler tests, pagination NameError, composite indexes, asyncio.gather conversions, shared replies.py, em-dash removal, cache TTL constants, keyboards.py dead code).
 - `docs/mapping.md` updated: added `identity.py`, `replies.py` to helper section; added `pagination.py` to utils section.
@@ -69,6 +69,17 @@ description: Current state of TCF Bot project — what is done, in progress, and
   - Test count updated: 1251 -> 1259 (8 new handler-behavior tests).
   - 5 tests in test_maintenance.py: cmd_leaveall (no-groups error, status sent, status edited) + cmd_cleanup (no stale reply-zero, stale deactivated).
   - 3 tests in test_stats.py: cmd_stats (calls Stats.main, HTML parse mode, reply_markup forwarded).
+
+- Session 9 callback handler tests + docs audit (2026-06-03):
+  - 8 new stats callback tests (test_stats.py 19->27): on_stats_main, on_stats_admins, on_stats_bans (2), on_stats_bans_search, on_stats_search_cancel, on_bans_search_input (2).
+  - 7 new help callback tests (test_help.py 18->25): on_help_menu_group, on_help_menu, on_helpc_main, on_help_topic_any (2), on_help_section (2).
+  - 7 new admins callback tests (test_admins.py 31->38): on_demote_cancel, on_promote_role_cancel, on_demote_confirm (2), on_promote_role_btn, on_promo_decision (2).
+  - 10 new checking callback tests (test_checking.py 25->35): on_checkme_detail, on_checkme_back, on_check_main, on_check_bans, on_check_ban_item, on_check_warns, on_check_warn_chat, on_check_kicks, on_check_mutes, on_check_appeals.
+  - 7 new stats remaining callbacks (test_stats.py 27->34): on_stats_users, on_stats_user_item, on_stats_chats, on_stats_chat_item, on_stats_ban_item, on_stats_search_item, on_stats_search_back.
+  - 4 new start callback tests (test_start.py 15->19): on_back_to_start, on_menu_groups, on_menu_groups_details, on_menu_groups_simple.
+  - Test count: 1259 -> 1302 (70 files, 1 warning, all green).
+  - Stale test inventory count fixed across all docs: 1251/71 -> 1302/70.
+  - Full docs audit: all .md files reviewed; all Mermaid diagrams verified accurate; no stale content found beyond test counts.
 
 ## What is in progress
 

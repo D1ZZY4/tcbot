@@ -132,3 +132,112 @@ def test_topics_cmd_keys_derived_from_menu_keys() -> None:
         assert f"help_{slug}" in menu_keys, (
             f"CMD key {cmd_key!r} has no matching menu entry"
         )
+
+
+# ─────────────── callback handler behaviour ─────────────────────── #
+
+import tcbot.modules.help as _help_mod  # noqa: E402
+
+_on_help_menu = _help_mod.on_help_menu.__wrapped__.__wrapped__
+_on_helpc_main = _help_mod.on_helpc_main.__wrapped__.__wrapped__
+_on_help_menu_group = _help_mod.on_help_menu_group.__wrapped__.__wrapped__
+_on_help_topic_any = _help_mod.on_help_topic_any.__wrapped__.__wrapped__
+_on_help_section = _help_mod.on_help_section.__wrapped__.__wrapped__
+
+
+def _make_help_cb(*, data: str = "help_menu", first_name: str = "Bot"):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock
+
+    q = AsyncMock()
+    q.data = data
+    q.answer = AsyncMock(return_value=None)
+
+    update = MagicMock()
+    update.callback_query = q
+
+    ctx = MagicMock()
+    ctx.bot = AsyncMock()
+    ctx.bot.first_name = first_name
+
+    return SimpleNamespace(update=update, ctx=ctx, q=q)
+
+
+async def test_on_help_menu_group_answers_with_show_alert() -> None:
+    """on_help_menu_group must answer with show_alert=True and never edit the message."""
+    from unittest.mock import AsyncMock, patch
+
+    env = _make_help_cb(data="help_menu_group")
+    with patch("tcbot.modules.help.safe_edit_cb", new=AsyncMock()) as mock_edit:
+        await _on_help_menu_group(env.update, env.ctx)
+    env.q.answer.assert_called_once()
+    assert env.q.answer.call_args[1].get("show_alert") is True
+    mock_edit.assert_not_called()
+
+
+async def test_on_help_menu_answers_callback_query() -> None:
+    """on_help_menu must call q.answer() (gathered with safe_edit_cb)."""
+    from unittest.mock import AsyncMock, patch
+
+    env = _make_help_cb(data="help_menu")
+    with patch("tcbot.modules.help.safe_edit_cb", new=AsyncMock()):
+        await _on_help_menu(env.update, env.ctx)
+    env.q.answer.assert_called_once()
+
+
+async def test_on_helpc_main_answers_callback_query() -> None:
+    """on_helpc_main must call q.answer() (gathered with safe_edit_cb)."""
+    from unittest.mock import AsyncMock, patch
+
+    env = _make_help_cb(data="helpc_main")
+    with patch("tcbot.modules.help.safe_edit_cb", new=AsyncMock()):
+        await _on_helpc_main(env.update, env.ctx)
+    env.q.answer.assert_called_once()
+
+
+async def test_on_help_topic_any_helpc_prefix_routes_to_menu_path_false() -> None:
+    """on_help_topic_any with helpc_ data must call _show_module with is_menu_path=False."""
+    from unittest.mock import AsyncMock, patch
+
+    env = _make_help_cb(data="helpc_banning")
+    with patch("tcbot.modules.help._show_module", new=AsyncMock()) as mock_show:
+        await _on_help_topic_any(env.update, env.ctx)
+    mock_show.assert_called_once()
+    args, kwargs = mock_show.call_args
+    assert kwargs.get("is_menu_path") is False
+    assert args[1] == "help_banning"
+
+
+async def test_on_help_topic_any_help_prefix_routes_to_menu_path_true() -> None:
+    """on_help_topic_any with help_ data must call _show_module with is_menu_path=True."""
+    from unittest.mock import AsyncMock, patch
+
+    env = _make_help_cb(data="help_banning")
+    with patch("tcbot.modules.help._show_module", new=AsyncMock()) as mock_show:
+        await _on_help_topic_any(env.update, env.ctx)
+    mock_show.assert_called_once()
+    args, kwargs = mock_show.call_args
+    assert kwargs.get("is_menu_path") is True
+    assert args[1] == "help_banning"
+
+
+async def test_on_help_section_malformed_data_answers_alert() -> None:
+    """on_help_section with data containing no colon must answer with show_alert=True."""
+    env = _make_help_cb(data="helps_NOCOLON")
+    await _on_help_section(env.update, env.ctx)
+    env.q.answer.assert_called_once()
+    assert env.q.answer.call_args[1].get("show_alert") is True
+
+
+async def test_on_help_section_valid_data_delegates_to_show_section() -> None:
+    """on_help_section with valid helps_<mod>:<idx> data must call _show_section."""
+    from unittest.mock import AsyncMock, patch
+
+    env = _make_help_cb(data="helps_banning:0")
+    with patch("tcbot.modules.help._show_section", new=AsyncMock()) as mock_sec:
+        await _on_help_section(env.update, env.ctx)
+    mock_sec.assert_called_once()
+    args, _ = mock_sec.call_args
+    assert args[0] is env.q
+    assert args[1] == "banning"
+    assert args[2] == 0

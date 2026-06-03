@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from unittest.mock import AsyncMock, MagicMock
 
+import tcbot.modules.start as start
 from tcbot.modules.start import (
     _GROUP_START_TEXT,
     _PRIVATE_START_TEXT,
@@ -147,3 +148,81 @@ async def test_cmd_start_forum_type_treated_as_group() -> None:
     update.effective_message.reply_text.assert_called_once()
     call_text: str = update.effective_message.reply_text.call_args[0][0]
     assert "/help" in call_text
+
+
+# ─────── Handler behavior: on_back_to_start / on_menu_groups callbacks ─── #
+
+_on_back_to_start = start.on_back_to_start.__wrapped__.__wrapped__
+_on_menu_groups = start.on_menu_groups.__wrapped__.__wrapped__
+_on_menu_groups_details = start.on_menu_groups_details.__wrapped__.__wrapped__
+_on_menu_groups_simple = start.on_menu_groups_simple.__wrapped__.__wrapped__
+
+
+def _make_start_cb(data: str = "back_to_start") -> tuple:
+    q = MagicMock()
+    q.data = data
+    q.answer = AsyncMock()
+    q.edit_message_text = AsyncMock()
+    update = MagicMock()
+    update.callback_query = q
+    ctx = MagicMock()
+    ctx.bot = MagicMock()
+    ctx.bot.first_name = "TestBot"
+    return update, ctx
+
+
+async def test_on_back_to_start_answers_and_edits_to_main_menu(monkeypatch) -> None:
+    update, ctx = _make_start_cb("back_to_start")
+    kb_mock = MagicMock()
+    monkeypatch.setattr(
+        start.keyboards, "main_menu_kb", MagicMock(return_value=kb_mock)
+    )
+    await _on_back_to_start(update, ctx)
+    q = update.callback_query
+    q.answer.assert_awaited_once()
+    q.edit_message_text.assert_awaited_once()
+    call_kwargs = q.edit_message_text.call_args[1]
+    assert call_kwargs.get("reply_markup") is kb_mock
+
+
+async def test_on_menu_groups_no_groups_edits_empty_message(monkeypatch) -> None:
+    update, ctx = _make_start_cb("menu_groups")
+    monkeypatch.setattr(start.db.groups_db, "active_groups", AsyncMock(return_value=[]))
+    monkeypatch.setattr(
+        start.keyboards, "back_to_start_kb", MagicMock(return_value=None)
+    )
+    await _on_menu_groups(update, ctx)
+    update.callback_query.edit_message_text.assert_awaited_once()
+    assert "No groups" in update.callback_query.edit_message_text.call_args[0][0]
+
+
+async def test_on_menu_groups_details_renders_with_detailed_true(monkeypatch) -> None:
+    update, ctx = _make_start_cb("menu_groups_details")
+    groups = [{"chat_id": -100, "title": "G1", "is_active": True}]
+    monkeypatch.setattr(
+        start.db.groups_db, "active_groups", AsyncMock(return_value=groups)
+    )
+    kb_mock = MagicMock()
+    monkeypatch.setattr(
+        start.keyboards, "groups_menu_kb", MagicMock(return_value=kb_mock)
+    )
+    await _on_menu_groups_details(update, ctx)
+    update.callback_query.edit_message_text.assert_awaited_once()
+    call_kwargs = update.callback_query.edit_message_text.call_args[1]
+    assert call_kwargs.get("reply_markup") is kb_mock
+    start.keyboards.groups_menu_kb.assert_called_once_with(True)
+
+
+async def test_on_menu_groups_simple_renders_with_detailed_false(monkeypatch) -> None:
+    update, ctx = _make_start_cb("menu_groups_simple")
+    groups = [{"chat_id": -100, "title": "G1", "is_active": True}]
+    monkeypatch.setattr(
+        start.db.groups_db, "active_groups", AsyncMock(return_value=groups)
+    )
+    kb_mock = MagicMock()
+    monkeypatch.setattr(
+        start.keyboards, "groups_menu_kb", MagicMock(return_value=kb_mock)
+    )
+    await _on_menu_groups_simple(update, ctx)
+    update.callback_query.edit_message_text.assert_awaited_once()
+    start.keyboards.groups_menu_kb.assert_called_once_with(False)

@@ -254,3 +254,150 @@ async def test_cmd_check_valid_calls_profile(monkeypatch) -> None:
     await _cmd_check(update, ctx)
     checking.Check.profile.assert_awaited_once_with(ctx.bot, _CMD_CHECK_TARGET_ID)
     update.effective_message.reply_text.assert_awaited_once()
+
+
+# ─── Handler behavior: on_checkme_detail / on_checkme_back callbacks ─── #
+
+_on_checkme_detail = checking.on_checkme_detail.__wrapped__.__wrapped__
+_on_checkme_back = checking.on_checkme_back.__wrapped__.__wrapped__
+
+
+def _make_check_cb(data: str = "check_main:42") -> tuple:
+    q = MagicMock()
+    q.data = data
+    q.answer = AsyncMock()
+    q.edit_message_text = AsyncMock()
+    update = MagicMock()
+    update.callback_query = q
+    ctx = MagicMock()
+    ctx.bot = MagicMock()
+    ctx.bot.username = "mybot"
+    return update, ctx
+
+
+async def test_on_checkme_detail_inactive_ban_answers_alert(monkeypatch) -> None:
+    update, ctx = _make_check_cb("checkme_detail:ban-abc")
+    monkeypatch.setattr(checking.db.bans_db, "get_ban", AsyncMock(return_value=None))
+    await _on_checkme_detail(update, ctx)
+    q = update.callback_query
+    q.answer.assert_awaited_once()
+    call_kwargs = q.answer.call_args[1]
+    assert call_kwargs.get("show_alert") is True
+
+
+async def test_on_checkme_back_ban_not_found_answers_alert(monkeypatch) -> None:
+    update, ctx = _make_check_cb("checkme_back:ban-xyz")
+    monkeypatch.setattr(checking.db.bans_db, "get_ban", AsyncMock(return_value=None))
+    await _on_checkme_back(update, ctx)
+    q = update.callback_query
+    q.answer.assert_awaited_once()
+    call_kwargs = q.answer.call_args[1]
+    assert call_kwargs.get("show_alert") is True
+
+
+# ─── Handler behavior: on_check_main / bans / ban_item / warns / etc. ─── #
+
+_on_check_main = checking.on_check_main.__wrapped__.__wrapped__
+_on_check_bans = checking.on_check_bans.__wrapped__.__wrapped__
+_on_check_ban_item = checking.on_check_ban_item.__wrapped__.__wrapped__
+_on_check_warns = checking.on_check_warns.__wrapped__.__wrapped__
+_on_check_warn_chat = checking.on_check_warn_chat.__wrapped__.__wrapped__
+_on_check_kicks = checking.on_check_kicks.__wrapped__.__wrapped__
+_on_check_mutes = checking.on_check_mutes.__wrapped__.__wrapped__
+_on_check_appeals = checking.on_check_appeals.__wrapped__.__wrapped__
+
+
+async def test_on_check_main_calls_profile(monkeypatch) -> None:
+    update, ctx = _make_check_cb("check_main:55")
+    kb_mock = MagicMock()
+    monkeypatch.setattr(
+        checking.Check, "profile", AsyncMock(return_value=("text", kb_mock))
+    )
+    monkeypatch.setattr(checking, "_safe_edit", AsyncMock())
+    await _on_check_main(update, ctx)
+    checking.Check.profile.assert_awaited_once_with(ctx.bot, 55)
+    checking._safe_edit.assert_awaited_once()
+
+
+async def test_on_check_bans_calls_bans_list(monkeypatch) -> None:
+    update, ctx = _make_check_cb("check_bans:55:0")
+    kb_mock = MagicMock()
+    monkeypatch.setattr(
+        checking.Check, "bans_list", AsyncMock(return_value=("text", kb_mock))
+    )
+    monkeypatch.setattr(checking, "_safe_edit", AsyncMock())
+    await _on_check_bans(update, ctx)
+    checking.Check.bans_list.assert_awaited_once_with(55, 0)
+    checking._safe_edit.assert_awaited_once()
+
+
+async def test_on_check_ban_item_calls_ban_detail(monkeypatch) -> None:
+    update, ctx = _make_check_cb("check_ban_item:55:ban-abc")
+    kb_mock = MagicMock()
+    monkeypatch.setattr(
+        checking.Check, "ban_detail", AsyncMock(return_value=("text", kb_mock))
+    )
+    monkeypatch.setattr(checking, "_safe_edit", AsyncMock())
+    await _on_check_ban_item(update, ctx)
+    checking.Check.ban_detail.assert_awaited_once_with(55, "ban-abc")
+    checking._safe_edit.assert_awaited_once()
+
+
+async def test_on_check_warns_calls_warns_by_group(monkeypatch) -> None:
+    update, ctx = _make_check_cb("check_warns:55")
+    kb_mock = MagicMock()
+    monkeypatch.setattr(
+        checking.Check, "warns_by_group", AsyncMock(return_value=("text", kb_mock))
+    )
+    monkeypatch.setattr(checking, "_safe_edit", AsyncMock())
+    await _on_check_warns(update, ctx)
+    checking.Check.warns_by_group.assert_awaited_once_with(55)
+    checking._safe_edit.assert_awaited_once()
+
+
+async def test_on_check_warn_chat_calls_warns_in_group(monkeypatch) -> None:
+    update, ctx = _make_check_cb("check_warn_chat:55:-100123:1")
+    kb_mock = MagicMock()
+    monkeypatch.setattr(
+        checking.Check, "warns_in_group", AsyncMock(return_value=("text", kb_mock))
+    )
+    monkeypatch.setattr(checking, "_safe_edit", AsyncMock())
+    await _on_check_warn_chat(update, ctx)
+    checking.Check.warns_in_group.assert_awaited_once_with(55, -100123, 1)
+    checking._safe_edit.assert_awaited_once()
+
+
+async def test_on_check_kicks_calls_kicks_list(monkeypatch) -> None:
+    update, ctx = _make_check_cb("check_kicks:55:0")
+    kb_mock = MagicMock()
+    monkeypatch.setattr(
+        checking.Check, "kicks_list", AsyncMock(return_value=("text", kb_mock))
+    )
+    monkeypatch.setattr(checking, "_safe_edit", AsyncMock())
+    await _on_check_kicks(update, ctx)
+    checking.Check.kicks_list.assert_awaited_once_with(55, 0)
+    checking._safe_edit.assert_awaited_once()
+
+
+async def test_on_check_mutes_calls_mutes_list(monkeypatch) -> None:
+    update, ctx = _make_check_cb("check_mutes:55:0")
+    kb_mock = MagicMock()
+    monkeypatch.setattr(
+        checking.Check, "mutes_list", AsyncMock(return_value=("text", kb_mock))
+    )
+    monkeypatch.setattr(checking, "_safe_edit", AsyncMock())
+    await _on_check_mutes(update, ctx)
+    checking.Check.mutes_list.assert_awaited_once_with(55, 0)
+    checking._safe_edit.assert_awaited_once()
+
+
+async def test_on_check_appeals_calls_appeals_list(monkeypatch) -> None:
+    update, ctx = _make_check_cb("check_appeals:55:0")
+    kb_mock = MagicMock()
+    monkeypatch.setattr(
+        checking.Check, "appeals_list", AsyncMock(return_value=("text", kb_mock))
+    )
+    monkeypatch.setattr(checking, "_safe_edit", AsyncMock())
+    await _on_check_appeals(update, ctx)
+    checking.Check.appeals_list.assert_awaited_once_with(55, 0)
+    checking._safe_edit.assert_awaited_once()

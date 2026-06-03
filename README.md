@@ -174,7 +174,7 @@ tgbot/
 
 ## Tests
 
-The current collected inventory is 1251 tests across 71 `tests/test_*.py` files. The suite is designed to run offline without a real Telegram token or MongoDB connection.
+The current collected inventory is 1302 tests across 70 `tests/test_*.py` files. The suite is designed to run offline without a real Telegram token or MongoDB connection.
 
 Run the full suite:
 
@@ -284,7 +284,7 @@ Configure in GitHub repository settings → Secrets:
 - Dependency management: `uv` and `uv.lock`.
 - Database: MongoDB/Motor with startup index creation.
 - Health check: Flask `GET /` endpoint on `PORT`.
-- Test inventory: 1251 collected tests across 71 files.
+- Test inventory: 1302 collected tests across 70 files.
 - Secrets policy: use environment variables; never commit real tokens, MongoDB URIs, or private chat IDs.
 
 ## License
