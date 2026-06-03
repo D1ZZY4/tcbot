@@ -7,10 +7,15 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock
 
 from tcbot.modules.helper import extraction
-from tcbot.modules.helper.extraction import ResolvedTarget, _best_name, _safe_get_chat, extract_target
+from tcbot.modules.helper.extraction import (
+    ResolvedTarget,
+    _best_name,
+    _safe_get_chat,
+    extract_target,
+)
 
 
 def test_resolved_target_sets_first_name_to_str_id_when_none() -> None:
@@ -125,8 +130,9 @@ async def test_extract_target_reply_path(monkeypatch) -> None:
 async def test_extract_target_numeric_arg_with_chat(monkeypatch) -> None:
     """Priority 2a: numeric ID in args with successful get_chat."""
     monkeypatch.setattr(
-        extraction, "_safe_get_chat",
-        AsyncMock(return_value=SimpleNamespace(first_name="Carol", username="carol"))
+        extraction,
+        "_safe_get_chat",
+        AsyncMock(return_value=SimpleNamespace(first_name="Carol", username="carol")),
     )
     monkeypatch.setattr(
         extraction.db.users_cache, "get_first_name", AsyncMock(return_value="")
