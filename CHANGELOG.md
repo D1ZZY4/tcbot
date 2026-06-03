@@ -27,6 +27,17 @@ send; no msg_id goes straight to send.
 
 Test suite: 1345 -> 1364 (70 files, 2 pre-existing warnings, all green). Ruff: clean.
 
+## [Unreleased] - 2026-06-03 (session 11run)
+
+### Changed - run-bot.yml for true 24/7 coverage
+
+- Increased scheduling frequency from every 4 hours to hourly (`0 */1 * * *`) for better coverage overlap
+- Reduced window from 3.5 hours to 55 minutes (GitHub Actions limit) to prevent rate limiting
+- Changed `cancel-in-progress: false` to `true` to prevent overlapping runs from stacking
+- Added `git pull origin main` step to fetch latest changes before each run
+- Added `packages: read` permission for uv cache access
+- Updated docs/workflows-guide.md and README.md to reflect new scheduling
+
 ## [Unreleased] - 2026-06-03 (session 11b)
 
 ### Added - _exec_warn adapter tests for warning_flow

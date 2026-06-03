@@ -14,7 +14,7 @@ The project uses 7 automated workflows for continuous integration, code quality,
 4. **Dependency Updates** - Weekly dependency updates with auto-PR
 5. **Performance Regression Detection** - Track performance metrics
 6. **CodeQL** - Security analysis
-7. **Run Bot** - Scheduled 24/7 runner (every 4 hours, 3.5-hour window)
+7. **Run Bot** - Scheduled 24/7 runner (hourly, 55-minute window)
 
 ---
 
@@ -248,11 +248,12 @@ All other metrics within ±10% of baseline.
 **File:** `.github/workflows/run-bot.yml`
 
 **Triggers:**
-- Scheduled every 4 hours (`0 */4 * * *`)
+- Scheduled every hour (`0 */1 * * *`)
 - Manual dispatch
 
 **What it does:**
-- Runs the bot for a 3.5-hour window per execution (3 × 3.5 h ≈ continuous coverage)
+- Runs the bot for a 55-minute window per execution (5 × ~55 min overlaps for continuous coverage)
+- Pulls latest changes before each run to stay current
 - Detects crashes by scanning `bot.log` for `Traceback`, `Error:`, or `CRITICAL`
 - Uploads bot log and crash tail as artifacts (7-day retention) for post-mortem analysis
 

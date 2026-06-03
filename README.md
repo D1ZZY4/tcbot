@@ -252,7 +252,7 @@ Enhanced test result aggregation and notifications:
 ### Other Workflows
 - **TDD Multi-Python Matrix** (`.github/workflows/run-tdd.yml`) - Tests across Python 3.12 and 3.13
 - **CodeQL** (`.github/workflows/codeql.yml`) - Security analysis
-- **Run Bot** (`.github/workflows/run-bot.yml`) - Scheduled 24/7 runner (every 4 hours, 3.5-hour window per execution)
+- **Run Bot** (`.github/workflows/run-bot.yml`) - Scheduled 24/7 runner (hourly, 55-minute window per execution)
 
 ### Full Documentation
 For detailed workflow descriptions, trigger conditions, notification format examples, troubleshooting, and best practices, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For changelog of all CI/CD additions, see [`CHANGELOG.md`](CHANGELOG.md).

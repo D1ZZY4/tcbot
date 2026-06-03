@@ -2,20 +2,21 @@ name: TCF Bot - 24/7 Runner
 
 on:
   schedule:
-    - cron: "0 */4 * * *"
+    - cron: "0 */1 * * *"
   workflow_dispatch:
 
 concurrency:
   group: tcf-bot-runner
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   run:
-    name: Run bot (3.5 h window)
+    name: Run bot (55 min window)
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 55
     permissions:
       contents: write
+      packages: read
 
     env:
       BOT_TOKEN:      ${{ secrets.BOT_TOKEN }}
@@ -42,12 +43,15 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Start bot (3.5 h)
+      - name: Pull latest changes
+        run: git pull origin main
+
+      - name: Start bot (55 min)
         run: |
           uv run python -m tcbot > bot.log 2>&1 &
           BOT_PID=$!
           echo "BOT_PID=$BOT_PID" >> "$GITHUB_ENV"
-          sleep 12600
+          sleep 3300
           kill "$BOT_PID" 2>/dev/null || true
           wait "$BOT_PID" 2>/dev/null || true
 
