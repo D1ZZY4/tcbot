@@ -98,3 +98,67 @@ def test_handlers_include_callback_handler() -> None:
 
     cb_handlers = [h for h in stats.__handlers__ if isinstance(h, CallbackQueryHandler)]
     assert len(cb_handlers) >= 1
+
+
+# ───────────────────── cmd_stats behaviour ──────────────────────── #
+
+_cmd_stats = stats.cmd_stats.__wrapped__.__wrapped__
+
+
+async def test_cmd_stats_calls_stats_main() -> None:
+    """cmd_stats must call Stats.main() and reply with the returned text and keyboard."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    msg = AsyncMock()
+    msg.reply_text = AsyncMock()
+    update = MagicMock()
+    update.effective_message = msg
+    ctx = MagicMock()
+
+    text = "<b>Federation Stats</b>"
+    kb = MagicMock()
+
+    with patch("tcbot.modules.stats.Stats") as MockStats:
+        MockStats.main = AsyncMock(return_value=(text, kb))
+        await _cmd_stats(update, ctx)
+
+    MockStats.main.assert_called_once()
+    msg.reply_text.assert_called_once_with(text, parse_mode="HTML", reply_markup=kb)
+
+
+async def test_cmd_stats_uses_html_parse_mode() -> None:
+    """cmd_stats must always reply with parse_mode='HTML'."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    msg = AsyncMock()
+    msg.reply_text = AsyncMock()
+    update = MagicMock()
+    update.effective_message = msg
+    ctx = MagicMock()
+
+    with patch("tcbot.modules.stats.Stats") as MockStats:
+        MockStats.main = AsyncMock(return_value=("<b>ok</b>", None))
+        await _cmd_stats(update, ctx)
+
+    kwargs = msg.reply_text.call_args[1]
+    assert kwargs.get("parse_mode") == "HTML"
+
+
+async def test_cmd_stats_passes_reply_markup_from_stats_main() -> None:
+    """cmd_stats must forward the keyboard object returned by Stats.main()."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    msg = AsyncMock()
+    msg.reply_text = AsyncMock()
+    update = MagicMock()
+    update.effective_message = msg
+    ctx = MagicMock()
+
+    kb = MagicMock()
+
+    with patch("tcbot.modules.stats.Stats") as MockStats:
+        MockStats.main = AsyncMock(return_value=("text", kb))
+        await _cmd_stats(update, ctx)
+
+    kwargs = msg.reply_text.call_args[1]
+    assert kwargs.get("reply_markup") is kb

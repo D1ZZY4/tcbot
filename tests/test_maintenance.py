@@ -171,3 +171,135 @@ def test_handlers_are_message_handlers() -> None:
 
 async def _coro(value):
     return value
+
+
+# ──────────────── cmd_leaveall / cmd_cleanup behaviour ───────────── #
+
+_cmd_leaveall = maintenance.cmd_leaveall.__wrapped__.__wrapped__.__wrapped__
+_cmd_cleanup = maintenance.cmd_cleanup.__wrapped__.__wrapped__.__wrapped__
+
+
+def _make_env(*, user_id: int = 1, name: str = "Admin") -> object:
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock
+
+    status = AsyncMock()
+    status.edit_text = AsyncMock()
+
+    msg = AsyncMock()
+    msg.reply_text = AsyncMock(return_value=status)
+
+    user = MagicMock()
+    user.id = user_id
+    user.first_name = name
+
+    update = MagicMock()
+    update.effective_message = msg
+    update.effective_user = user
+
+    ctx = MagicMock()
+    ctx.bot = AsyncMock()
+    ctx.bot.leave_chat = AsyncMock()
+
+    return SimpleNamespace(update=update, ctx=ctx, msg=msg, status=status)
+
+
+async def test_cmd_leaveall_no_groups_replies_error() -> None:
+    """No active groups must produce the no-connected-groups error reply."""
+    from unittest.mock import AsyncMock, patch
+
+    env = _make_env()
+    with patch("tcbot.modules.maintenance.db") as mock_db:
+        mock_db.groups_db.active_groups = AsyncMock(return_value=[])
+        await _cmd_leaveall(env.update, env.ctx)
+
+    from tcbot.modules.helper.replies import ERR_NO_CONNECTED_GROUPS
+
+    env.msg.reply_text.assert_called_once_with(ERR_NO_CONNECTED_GROUPS)
+
+
+async def test_cmd_leaveall_sends_status_before_leaving() -> None:
+    """cmd_leaveall must send a status reply before processing any groups."""
+    from unittest.mock import AsyncMock, patch
+
+    grps = [{"chat_id": -100, "title": "Test Group"}]
+    env = _make_env()
+    with (
+        patch("tcbot.modules.maintenance.db") as mock_db,
+        patch("tcbot.modules.maintenance.cfg") as mock_cfg,
+        patch(
+            "tcbot.modules.maintenance._leave_one",
+            new=AsyncMock(return_value=[None, None, None]),
+        ),
+    ):
+        mock_db.groups_db.active_groups = AsyncMock(return_value=grps)
+        mock_cfg.logs = (-10001, None)
+        await _cmd_leaveall(env.update, env.ctx)
+
+    first_reply: str = env.msg.reply_text.call_args_list[0][0][0]
+    assert "1" in first_reply or "group" in first_reply.lower()
+
+
+async def test_cmd_leaveall_edits_status_with_final_count() -> None:
+    """cmd_leaveall must edit the status message once with success/fail counts."""
+    from unittest.mock import AsyncMock, patch
+
+    grps = [{"chat_id": -100, "title": "Group"}]
+    env = _make_env()
+    with (
+        patch("tcbot.modules.maintenance.db") as mock_db,
+        patch("tcbot.modules.maintenance.cfg") as mock_cfg,
+        patch(
+            "tcbot.modules.maintenance._leave_one",
+            new=AsyncMock(return_value=[None, None, None]),
+        ),
+    ):
+        mock_db.groups_db.active_groups = AsyncMock(return_value=grps)
+        mock_cfg.logs = (-10001, None)
+        await _cmd_leaveall(env.update, env.ctx)
+
+    env.status.edit_text.assert_called_once()
+    edit_text: str = env.status.edit_text.call_args[0][0]
+    assert "1" in edit_text
+
+
+async def test_cmd_cleanup_no_stale_replies_zero() -> None:
+    """If no stale groups are found, cleanup must reply with 0 removed."""
+    from unittest.mock import AsyncMock, patch
+
+    grps = [{"chat_id": -100}]
+    env = _make_env()
+    with (
+        patch("tcbot.modules.maintenance.db") as mock_db,
+        patch(
+            "tcbot.modules.maintenance._should_remove",
+            new=AsyncMock(return_value=False),
+        ),
+    ):
+        mock_db.groups_db.active_groups = AsyncMock(return_value=grps)
+        await _cmd_cleanup(env.update, env.ctx)
+
+    reply: str = env.msg.reply_text.call_args[0][0]
+    assert "0" in reply
+
+
+async def test_cmd_cleanup_stale_group_deactivates_and_replies() -> None:
+    """Stale groups must be deactivated and the removed count reported."""
+    from unittest.mock import AsyncMock, patch
+
+    grps = [{"chat_id": -100}, {"chat_id": -200}]
+    env = _make_env()
+    with (
+        patch("tcbot.modules.maintenance.db") as mock_db,
+        patch(
+            "tcbot.modules.maintenance._should_remove",
+            new=AsyncMock(side_effect=[True, False]),
+        ),
+    ):
+        mock_db.groups_db.active_groups = AsyncMock(return_value=grps)
+        mock_db.groups_db.deactivate_group = AsyncMock()
+        await _cmd_cleanup(env.update, env.ctx)
+
+    mock_db.groups_db.deactivate_group.assert_called_once_with(-100)
+    reply: str = env.msg.reply_text.call_args[0][0]
+    assert "1" in reply

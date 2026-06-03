@@ -2,6 +2,51 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-03 (session 8)
+
+### Fixed - .kilo and .trae converted from physical directories to symlinks
+
+`.kilo/` and `.trae/` were real directories consuming extra repo space and
+diverging from `.agents/` over time.
+
+- `.kilo/kilo.json` moved to `.agents/kilo.json` so the Kilo AI tool
+  configuration is preserved at the same relative path after symlinking.
+- `.kilo/` directory removed; symlink `.kilo -> .agents` created.
+- `.trae/skills/` contained stale copies of five skills that differed from
+  `.agents/skills/` (files differed for `async-python-patterns`,
+  `python-code-quality`, `mongodb-query-optimizer` references, and five skills
+  were missing entirely: `docs-maintainer`, `feature-reviewer`,
+  `general-sub-agent`, `project-policy`, `runtime-debugger`).
+- `.trae/` directory removed; symlink `.trae -> .agents` created.
+
+Both tool paths now transparently resolve to `.agents/`, eliminating stale
+duplicate content.
+
+### Fixed - test file count corrected in documentation (71 -> 70)
+
+All documentation references claiming 71 test files were incorrect: the actual
+count is 70 `tests/test_*.py` files. Updated in `PLAN.md` (table row and
+baseline result), `.agents/memory/context.md`, and
+`.agents/memory/progress.md`.
+
+### Added - handler-behavior tests for cmd_leaveall, cmd_cleanup, and cmd_stats
+
+Added 8 new async handler-behavior tests to two existing test files:
+
+`tests/test_maintenance.py` (+5 tests): `cmd_leaveall` and `cmd_cleanup`
+unwrapped via `__wrapped__.__wrapped__.__wrapped__` (3 decorators each:
+`ratelimiter`, `owner_only`/`staff_only`, `log_execution`); tests cover:
+no-groups error reply, status message sent before leaving, status edited with
+final success/fail count, cleanup with no stale groups replies zero, cleanup
+with one stale group deactivates it and reports count.
+
+`tests/test_stats.py` (+3 tests): `cmd_stats` unwrapped via
+`__wrapped__.__wrapped__` (2 decorators: `ratelimiter`, `log_execution`);
+tests cover: `Stats.main()` called exactly once, reply uses `parse_mode='HTML'`,
+reply forwards keyboard returned by `Stats.main()`.
+
+Test suite: 1251 -> 1259 (all 70 test files green, 1 warning).
+
 ## [Unreleased] - 2026-06-03 (session 7)
 
 ### Changed - section-header constants added to replies.py and propagated to all 14 modules

@@ -5,13 +5,13 @@ description: Current state of TCF Bot project — what is done, in progress, and
 
 # TCF Bot — Current Context
 
-**Last updated:** 2026-06-03 (session 7)
+**Last updated:** 2026-06-03 (session 8)
 
 ## What is done
 
 - Python 3.12, uv, python-telegram-bot 22.5, Motor/MongoDB stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
-- 1251 tests across 71 test files; full suite passes offline with 2 warnings.
+- 1259 tests across 70 test files; full suite passes offline with 2 warnings.
 - `python -m ruff format .` and `python -m ruff check .` both clean (141 files formatted).
 - All P1/P2/P3 backlog items resolved (ConversationHandler tests, pagination NameError, composite indexes, asyncio.gather conversions, shared replies.py, em-dash removal, cache TTL constants, keyboards.py dead code).
 - `docs/mapping.md` updated: added `identity.py`, `replies.py` to helper section; added `pagination.py` to utils section.
@@ -61,6 +61,14 @@ description: Current state of TCF Bot project — what is done, in progress, and
   - `test_ban_info.py` and `test_reason_flow.py` updated to use `replies.NO_REASON`.
   - Handler-behavior tests: 15 new tests across `test_broadcasting.py`, `test_greeting.py`, `test_groups.py`.
   - Test suite: 1152 → 1167 (all green, 0 warnings). Ruff clean (141 files).
+
+- Session 8 symlinks + tests (2026-06-03):
+  - `.kilo/kilo.json` moved to `.agents/kilo.json`; `.kilo/` replaced with symlink `.kilo -> .agents`.
+  - `.trae/skills/` (stale duplicate) deleted; `.trae/` replaced with symlink `.trae -> .agents`.
+  - Test file count corrected in all docs: 71 -> 70 (actual ls count).
+  - Test count updated: 1251 -> 1259 (8 new handler-behavior tests).
+  - 5 tests in test_maintenance.py: cmd_leaveall (no-groups error, status sent, status edited) + cmd_cleanup (no stale reply-zero, stale deactivated).
+  - 3 tests in test_stats.py: cmd_stats (calls Stats.main, HTML parse mode, reply_markup forwarded).
 
 ## What is in progress
 
