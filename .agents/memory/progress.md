@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot — Progress
 
-**Last updated:** 2026-06-02
+**Last updated:** 2026-06-03
 
 ## Verification baseline
 
@@ -89,6 +89,14 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Handler-behavior tests batch 2 (15 tests) | P4 | cmd_unban(3), cmd_unmute(4), cmd_unwarn(3), cmd_warnlist(2), cmd_resetwarns(3); suite 1112→1127 | 2026-06-02 (s5) |
 | Handler-behavior tests batch 3 (14 tests) | P4 | cmd_promote(4)+cmd_demote(5) in test_admins.py; cmd_checkme(3)+cmd_check(2) in test_checking.py; suite 1127→1141 | 2026-06-02 (s5) |
 | Handler-behavior tests batch 4 (11 tests) | P4 | cmd_tcconnect(5) in test_connecting.py; cmd_tcdisconnect(4)+cmd_rmtc(2) in test_disconnecting.py; suite 1141→1152 | 2026-06-02 (s5) |
+
+| performance.yml: `users_db` → `users_cache` + `import os` | P4 | Both benchmark fns fixed; missing import fixed; 3 bugs total | 2026-06-03 (s6) |
+| 4× "02:00 UTC" → "04:00 UTC" | docs | auto-fix.yml comment + docs/workflows-guide.md ×2 + README.md | 2026-06-03 (s6) |
+| run-bot.yml description | docs | "Manual deployment" → correct schedule summary in docs/workflows-guide.md + README.md | 2026-06-03 (s6) |
+| config.env.example PORT comment | docs | Removed "auto = pick free port" — actual fallback is 5000 | 2026-06-03 (s6) |
+| config.env.example PROOFS/LOGS/LOGS_ERRORS/APPEALS auto comments | docs | Removed 4 "auto = create forum thread in MAIN_GROUP" blocks (feature never existed) | 2026-06-03 (s6) |
+| 12 public function docstrings | P4 | bold, italic, code, link, esc, on_groups_details, on_groups_simple, on_help_menu, on_helpc_main, appeal_deep_link, on_menu_groups, on_menu_groups_simple | 2026-06-03 (s6) |
+| PLAN.md Code Review Findings | docs | Added P4 rows 2-8 for all session-6 findings; all Resolved | 2026-06-03 (s6) |
 
 ## Pending (remaining optional)
 

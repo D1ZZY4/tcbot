@@ -271,6 +271,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_help_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render the top-level help index from the start-menu help button (includes back-to-start)."""
     await _render_help_index(update, ctx, with_back_to_start=True)
 
 
@@ -288,6 +289,7 @@ async def on_help_menu_group(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_helpc_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render the top-level help index from a /helpc command callback (no back-to-start button)."""
     await _render_help_index(update, ctx, with_back_to_start=False)
 
 

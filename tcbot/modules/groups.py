@@ -115,12 +115,14 @@ async def _toggle(
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_groups_details(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Switch the groups listing to detailed view (shows full chat IDs)."""
     await _toggle(update, ctx, True)
 
 
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Switch the groups listing to simple view (condensed, no full chat IDs)."""
     await _toggle(update, ctx, False)
 
 

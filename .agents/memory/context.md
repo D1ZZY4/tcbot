@@ -5,7 +5,7 @@ description: Current state of TCF Bot project — what is done, in progress, and
 
 # TCF Bot — Current Context
 
-**Last updated:** 2026-06-02 (session 5, continued)
+**Last updated:** 2026-06-03 (session 6)
 
 ## What is done
 
@@ -46,6 +46,14 @@ description: Current state of TCF Bot project — what is done, in progress, and
   - Batch 3 (14 tests): cmd_promote(4)+cmd_demote(5) in test_admins.py; cmd_checkme(3)+cmd_check(2) in test_checking.py.
   - Batch 4 (11 tests): cmd_tcconnect(5) in test_connecting.py; cmd_tcdisconnect(4)+cmd_rmtc(2) in test_disconnecting.py.
 
+- Session 6 doc / workflow accuracy fixes (2026-06-03):
+  - Fixed `performance.yml` benchmark: `users_db` → `users_cache` (both benchmark functions), added `import os` to compare-baseline script.
+  - Fixed 4 occurrences of "02:00 UTC" → "04:00 UTC" (auto-fix.yml comment, docs/workflows-guide.md ×2, README.md).
+  - Fixed "Manual dispatch only / Manual deployment" in docs/workflows-guide.md and README.md for run-bot.yml (actual trigger: cron every 4 hours).
+  - Fixed config.env.example: removed misleading `PORT=auto` "pick free port" comment; removed four `PROOFS/LOGS/LOGS_ERRORS/APPEALS=auto` "create forum thread" comments.
+  - Added docstrings to 12 public functions: `bold`, `italic`, `code`, `link`, `esc`, `on_groups_details`, `on_groups_simple`, `on_help_menu`, `on_helpc_main`, `appeal_deep_link`, `on_menu_groups`, `on_menu_groups_simple`.
+  - Added 8 new P4 findings rows to PLAN.md Code Review Findings; all `Resolved`.
+
 ## What is in progress
 
 Nothing. All known items resolved.
@@ -54,8 +62,6 @@ Nothing. All known items resolved.
 
 - Module-interface types in tcbot/modules/types.py (only if signatures grow ambiguous).
 - Query metrics collection (data-driven; gather Atlas PA data first).
-- Handler-behavior tests for admins.py (cmd_promote, cmd_demote).
-- Handler-behavior tests for checking.py, connecting.py, disconnecting.py.
 
 ## Known runtime notes
 

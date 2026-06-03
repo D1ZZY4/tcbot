@@ -124,6 +124,7 @@ async def _show_groups(q: CallbackQuery, detailed: bool) -> None:
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_menu_groups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the connected-groups list in simple view from the start menu."""
     await _show_groups(update.callback_query, False)
 
 
@@ -139,6 +140,7 @@ async def on_menu_groups_details(
 @decorators.ratelimiter(limit=15, period=30)
 @decorators.log_execution
 async def on_menu_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Return to simple view of the connected-groups list from the start menu."""
     await _show_groups(update.callback_query, False)
 
 

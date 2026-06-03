@@ -46,7 +46,7 @@ jobs:
 
           async def benchmark_batch_queries():
               """Benchmark batch query performance"""
-              from tcbot.database import users_db
+              from tcbot.database import users_cache
               from tcbot.database.mongos import connect
 
               await connect()
@@ -55,7 +55,7 @@ jobs:
 
               # Batch query
               start = time.perf_counter()
-              result = await users_db.get_first_names_batch(user_ids)
+              result = await users_cache.get_first_names_batch(user_ids)
               batch_time = time.perf_counter() - start
 
               return {
@@ -65,7 +65,7 @@ jobs:
 
           async def benchmark_mention_data():
               """Benchmark mention data fetch"""
-              from tcbot.database import users_db
+              from tcbot.database import users_cache
               from tcbot.database.mongos import connect
 
               await connect()
@@ -73,7 +73,7 @@ jobs:
               user_ids = list(range(1, 51))  # 50 users
 
               start = time.perf_counter()
-              result = await users_db.get_mention_data_batch(user_ids)
+              result = await users_cache.get_mention_data_batch(user_ids)
               elapsed = time.perf_counter() - start
 
               return {
@@ -140,6 +140,7 @@ jobs:
         id: compare
         run: |
           python - << 'PYEOF'
+          import os
           import sys
 
           # Read current results

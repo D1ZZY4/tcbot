@@ -10,18 +10,22 @@ import html
 
 
 def bold(text: str) -> str:
+    """Wrap text in HTML bold tags, escaping any HTML special characters."""
     return f"<b>{html.escape(str(text))}</b>"
 
 
 def italic(text: str) -> str:
+    """Wrap text in HTML italic tags, escaping any HTML special characters."""
     return f"<i>{html.escape(str(text))}</i>"
 
 
 def code(text: str) -> str:
+    """Wrap text in HTML code tags, escaping any HTML special characters."""
     return f"<code>{html.escape(str(text))}</code>"
 
 
 def link(text: str, url: str) -> str:
+    """Wrap text in an HTML anchor tag pointing to url, escaping the display text."""
     return f'<a href="{url}">{html.escape(str(text))}</a>'
 
 
@@ -37,4 +41,5 @@ def mention(user_id: int, name: str, username: str | None = None) -> str:
 
 
 def esc(text: str) -> str:
+    """Escape HTML special characters in text for safe inline inclusion in HTML messages."""
     return html.escape(str(text))

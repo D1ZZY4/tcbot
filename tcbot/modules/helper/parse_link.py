@@ -24,4 +24,5 @@ def message_link(chat_id: int, message_id: int, thread_id: int | None = None) ->
 
 
 def appeal_deep_link(bot_username: str, ban_id: str) -> str:
+    """Return a deep link that starts a private chat with the bot and triggers the appeal flow for ban_id."""
     return f"https://t.me/{bot_username}?start=appeal_{ban_id}"

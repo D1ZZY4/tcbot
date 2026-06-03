@@ -2,6 +2,60 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-03 (session 6)
+
+### Fixed - performance.yml benchmark script referenced non-existent module
+
+`performance.yml` benchmark script imported `from tcbot.database import users_db`
+which does not exist; the correct module is `users_cache`.  Both
+`benchmark_batch_queries` and `benchmark_mention_data` functions were updated
+to import and call through `users_cache`.  A second bug in the same file — the
+"Compare with baseline" Python inline script used `os.environ` without
+importing `os` — was fixed by adding `import os` at the top of that script.
+
+### Fixed - config.env.example carried four misleading "auto" forum-thread comments
+
+`PROOFS`, `LOGS`, `LOGS_ERRORS`, and `APPEALS` each claimed that setting the
+value to `"auto"` would automatically create a forum thread inside `MAIN_GROUP`.
+No such feature exists in the bot code.  The four comment blocks were rewritten
+to give accurate format guidance (chat_id or chat_id/thread_id) without
+referencing functionality that was never built.
+
+Additionally, the `PORT` comment incorrectly described `"auto"` as picking a
+port automatically; `parse_port()` actually defaults to 5000 for `"auto"` or
+any invalid value.  The PORT comment now describes the actual fallback behaviour.
+
+### Fixed - auto-fix.yml schedule comment said 02:00 UTC but cron runs at 04:00 UTC
+
+The inline comment on line 10 of `auto-fix.yml` read `# Weekly Monday 02:00 UTC`
+while the actual cron expression `0 4 * * 1` schedules the job at 04:00 UTC.
+The comment was corrected.  Three other places carried the same wrong time:
+`docs/workflows-guide.md` "Triggers" section for Auto-Fix, "Weekly Tasks
+(Automated)" list, and `README.md` "Auto-Fix Code Quality" section.  All four
+now say 04:00 UTC.
+
+Additionally, `README.md` and `docs/workflows-guide.md` described the "Run Bot"
+workflow as "Manual deployment"; the actual workflow runs on a 4-hour schedule
+for continuous coverage.  Both descriptions were updated to reflect reality.
+
+### Changed - added docstrings to 12 public functions missing them
+
+Added one-line docstrings to every public function that lacked one across
+`tcbot/modules/helper/formatter.py` (`bold`, `italic`, `code`, `link`, `esc`),
+`tcbot/modules/groups.py` (`on_groups_details`, `on_groups_simple`),
+`tcbot/modules/help.py` (`on_help_menu`, `on_helpc_main`),
+`tcbot/modules/helper/parse_link.py` (`appeal_deep_link`), and
+`tcbot/modules/start.py` (`on_menu_groups`, `on_menu_groups_simple`).
+Protocol stub `get_bot()` in `prefixes.py` is exempt (interface, not
+implementation).  Ruff stays clean; all 1152 tests pass.
+
+### Fixed - docs/workflows-guide.md misrepresented run-bot.yml triggers
+
+Section 7 ("Run Bot") stated "Manual dispatch only" and "For testing/staging
+purposes".  The actual `run-bot.yml` runs on a 4-hour cron schedule (`0 */4 *
+* *`) for 24/7 continuous coverage, uploading crash logs as artifacts.  The
+overview entry and the section body now reflect the real trigger and behaviour.
+
 ## [Unreleased] - 2026-06-02 (session 5)
 
 ### Added - 61 handler-behavior tests across ten command modules
