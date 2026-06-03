@@ -210,3 +210,62 @@ async def test_execute_kick_rejoin_allowed_message_in_reply(monkeypatch) -> None
 
     reply_text = update.effective_message.reply_text.await_args.args[0]
     assert "rejoin" in reply_text.lower()
+
+
+# ─────────────────────── _exec_kick adapter ─────────────────────── #
+
+
+async def test_exec_kick_pops_user_data_and_calls_execute_kick(monkeypatch) -> None:
+    """_exec_kick reads kick_ keys from user_data, clears them, then calls execute_kick."""
+    execute_kick = AsyncMock()
+    monkeypatch.setattr(kicking_flow, "execute_kick", execute_kick)
+
+    update = _make_update()
+    ctx = SimpleNamespace(
+        bot=SimpleNamespace(ban_chat_member=AsyncMock(), unban_chat_member=AsyncMock()),
+        user_data={
+            "kick_target_id": 77,
+            "kick_target_name": "Alice",
+            "kick_reason": "spam",
+            "kick_proof_desc": "photo:t.me/c/1/2",
+            "kick_extra_info": "extra data",
+        },
+    )
+
+    await kicking_flow._exec_kick(
+        cast(Update, update), cast(ContextTypes.DEFAULT_TYPE, ctx)
+    )
+
+    execute_kick.assert_awaited_once()
+    call_kwargs = execute_kick.await_args
+    assert call_kwargs.kwargs.get("target_id") == 77 or call_kwargs.args[2] == 77
+    # * All kick_ keys must be removed from user_data
+    assert "kick_target_id" not in ctx.user_data
+    assert "kick_target_name" not in ctx.user_data
+    assert "kick_reason" not in ctx.user_data
+    assert "kick_proof_desc" not in ctx.user_data
+    assert "kick_extra_info" not in ctx.user_data
+
+
+async def test_exec_kick_uses_no_reason_default_when_key_absent(monkeypatch) -> None:
+    """When kick_ keys are missing, _exec_kick falls back to NO_REASON defaults."""
+    from tcbot.modules.helper import replies
+
+    execute_kick = AsyncMock()
+    monkeypatch.setattr(kicking_flow, "execute_kick", execute_kick)
+
+    update = _make_update()
+    ctx = SimpleNamespace(
+        bot=SimpleNamespace(ban_chat_member=AsyncMock()),
+        user_data={},
+    )
+
+    await kicking_flow._exec_kick(
+        cast(Update, update), cast(ContextTypes.DEFAULT_TYPE, ctx)
+    )
+
+    execute_kick.assert_awaited_once()
+    args = execute_kick.await_args
+    # * reason_text should default to replies.NO_REASON
+    reason_passed = args.kwargs.get("reason_text") or args.args[4]
+    assert reason_passed == replies.NO_REASON

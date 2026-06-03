@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock, Mock
@@ -14,7 +15,13 @@ from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
 
 from tcbot.modules.helper.workflows import appeal_flow
-from tcbot.modules.helper.workflows.appeal_flow import WAITING_APPEAL, BuildAppeal
+from tcbot.modules.helper.workflows.appeal_flow import (
+    WAITING_APPEAL,
+    BuildAppeal,
+    reviewer_locked_out,
+    starts_with_appeal_tag,
+    text_references_log_message,
+)
 
 # ─────────────────────────── Fixtures / helpers ──────────────────────── #
 
@@ -522,3 +529,156 @@ async def test_on_decision_reject_notifies_user_and_edits_card(monkeypatch) -> N
     assert "rejected" in q.edit_message_text.await_args.args[0].lower()
     # User notified of rejection
     bot.send_message.assert_awaited()
+
+
+# ─────────────── starts_with_appeal_tag ──────────────────────────── #
+
+
+def test_starts_with_appeal_tag_true() -> None:
+    assert starts_with_appeal_tag("#appeal\nHello") is True
+
+
+def test_starts_with_appeal_tag_case_insensitive() -> None:
+    assert starts_with_appeal_tag("  #APPEAL something") is True
+
+
+def test_starts_with_appeal_tag_false() -> None:
+    assert starts_with_appeal_tag("Hello #appeal here") is False
+
+
+def test_starts_with_appeal_tag_empty() -> None:
+    assert starts_with_appeal_tag("") is False
+
+
+# ──────────────── text_references_log_message ────────────────────── #
+
+
+def test_text_references_log_message_exact_match() -> None:
+    assert text_references_log_message("see log 42 for details", 42) is True
+
+
+def test_text_references_log_message_no_match() -> None:
+    assert text_references_log_message("no number here", 42) is False
+
+
+def test_text_references_log_message_partial_not_matched() -> None:
+    """42 embedded in 1420 should not match as a standalone token."""
+    assert text_references_log_message("message 1420 only", 42) is False
+
+
+# ─────────────────── reviewer_locked_out ─────────────────────────── #
+
+
+def test_reviewer_locked_out_no_timestamp_returns_false() -> None:
+    assert reviewer_locked_out(None, 10, 20) is False
+
+
+def test_reviewer_locked_out_no_ban_admin_returns_false() -> None:
+    assert reviewer_locked_out(datetime.now(timezone.utc), None, 20) is False
+
+
+def test_reviewer_locked_out_same_reviewer_as_admin_returns_false() -> None:
+    ts = datetime.now(timezone.utc)
+    # reviewer is the same as the ban admin: no conflict
+    assert reviewer_locked_out(ts, 10, 10) is False
+
+
+def test_reviewer_locked_out_within_window_returns_true(monkeypatch) -> None:
+    recent = datetime.now(timezone.utc) - timedelta(hours=1)
+    monkeypatch.setattr(appeal_flow, "utc_now", lambda: datetime.now(timezone.utc))
+    assert reviewer_locked_out(recent, 10, 20) is True
+
+
+def test_reviewer_locked_out_outside_window_returns_false(monkeypatch) -> None:
+    old = datetime.now(timezone.utc) - timedelta(hours=24)
+    monkeypatch.setattr(appeal_flow, "utc_now", lambda: datetime.now(timezone.utc))
+    assert reviewer_locked_out(old, 10, 20) is False
+
+
+# ────────────────── BuildAppeal pure factories ────────────────────── #
+
+
+def test_instruction_text_contains_community_name() -> None:
+    ba = _ba()
+    text = ba.instruction_text()
+    assert "Test Federation" in text
+
+
+def test_instruction_text_contains_log_channel_handle() -> None:
+    ba = _ba()
+    text = ba.instruction_text()
+    assert "TestLogs" in text
+
+
+def test_cancel_keyboard_has_one_button_with_cancel_label() -> None:
+    ba = BuildAppeal("F", "@L", cancel_label="Stop", cancel_callback="stop_appeal")
+    kb = ba.cancel_keyboard()
+    buttons = kb.inline_keyboard[0]
+    assert len(buttons) == 1
+    assert buttons[0].text == "Stop"
+    assert buttons[0].callback_data == "stop_appeal"
+
+
+def test_review_keyboard_has_approve_and_reject_buttons() -> None:
+    ba = _ba()
+    kb = ba.review_keyboard("ban1234567x")
+    buttons = kb.inline_keyboard[0]
+    labels = {b.text for b in buttons}
+    datas = {b.callback_data for b in buttons}
+    assert "Approve" in labels
+    assert "Reject" in labels
+    assert "appeal_approve_ban1234567x" in datas
+    assert "appeal_reject_ban1234567x" in datas
+
+
+# ─────────────────── _update_or_send_log ─────────────────────────── #
+
+
+async def test_update_or_send_log_edits_existing_message() -> None:
+    bot = SimpleNamespace(
+        edit_message_text=AsyncMock(),
+        send_message=AsyncMock(),
+    )
+    await BuildAppeal._update_or_send_log(bot, -1001, None, 42, "text")
+    bot.edit_message_text.assert_awaited_once()
+    bot.send_message.assert_not_awaited()
+
+
+async def test_update_or_send_log_falls_back_to_send_on_edit_failure() -> None:
+    bot = SimpleNamespace(
+        edit_message_text=AsyncMock(side_effect=RuntimeError("gone")),
+        send_message=AsyncMock(),
+    )
+    await BuildAppeal._update_or_send_log(bot, -1001, None, 42, "text")
+    bot.send_message.assert_awaited_once()
+
+
+async def test_update_or_send_log_sends_when_no_msg_id() -> None:
+    bot = SimpleNamespace(
+        edit_message_text=AsyncMock(),
+        send_message=AsyncMock(),
+    )
+    await BuildAppeal._update_or_send_log(bot, -1001, None, None, "text")
+    bot.edit_message_text.assert_not_awaited()
+    bot.send_message.assert_awaited_once()
+
+
+# ─────────────────────────── _end ───────────────────────────────── #
+
+
+async def test_end_sends_session_ended_reply_and_returns_end() -> None:
+    """_end replies with the session-ended message and signals END to the handler."""
+    ba = _ba()
+    reply_text = AsyncMock()
+    update = SimpleNamespace(
+        effective_message=SimpleNamespace(reply_text=reply_text)
+    )
+    ctx = _ctx()
+
+    result = await ba._end(
+        cast(Update, update), cast(ContextTypes.DEFAULT_TYPE, ctx)
+    )
+
+    assert result == ConversationHandler.END
+    reply_text.assert_awaited_once()
+    assert "ended" in reply_text.await_args.args[0].lower()

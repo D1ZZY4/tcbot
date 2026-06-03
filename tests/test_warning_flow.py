@@ -377,3 +377,66 @@ async def test_execute_resetwarns_clears_all_and_notifies(monkeypatch) -> None:
     reply = update.effective_message.reply_text.await_args.args[0]
     assert "2" in reply
     assert "Clean slate" in reply
+
+
+# ─────────────────────── _exec_warn adapter ─────────────────────── #
+
+
+async def test_exec_warn_pops_user_data_and_calls_execute_warn(monkeypatch) -> None:
+    """_exec_warn reads warn_ keys from user_data, clears them, calls execute_warn."""
+    execute_warn = AsyncMock()
+    monkeypatch.setattr(warning_flow, "execute_warn", execute_warn)
+
+    update = _update()
+    ctx = SimpleNamespace(
+        bot=SimpleNamespace(
+            ban_chat_member=AsyncMock(),
+            send_message=AsyncMock(),
+        ),
+        user_data={
+            "warn_target_id": 33,
+            "warn_target_name": "Carol",
+            "warn_reason": "off-topic",
+            "warn_proof_desc": "https://t.me/proof/7",
+            "warn_extra_info": "extra",
+        },
+    )
+
+    await warning_flow._exec_warn(
+        cast(Update, update), cast(ContextTypes.DEFAULT_TYPE, ctx)
+    )
+
+    execute_warn.assert_awaited_once()
+    # * All warn_ keys must be removed from user_data
+    for key in (
+        "warn_target_id",
+        "warn_target_name",
+        "warn_reason",
+        "warn_proof_desc",
+        "warn_extra_info",
+    ):
+        assert key not in ctx.user_data
+
+
+async def test_exec_warn_empty_user_data_uses_defaults(monkeypatch) -> None:
+    """When warn_ keys are missing, _exec_warn calls execute_warn with zero-value defaults."""
+    execute_warn = AsyncMock()
+    monkeypatch.setattr(warning_flow, "execute_warn", execute_warn)
+
+    update = _update()
+    ctx = SimpleNamespace(
+        bot=SimpleNamespace(ban_chat_member=AsyncMock()),
+        user_data={},
+    )
+
+    await warning_flow._exec_warn(
+        cast(Update, update), cast(ContextTypes.DEFAULT_TYPE, ctx)
+    )
+
+    execute_warn.assert_awaited_once()
+    args = execute_warn.await_args
+    # * target_id defaults to 0, proof_desc defaults to None
+    target_id_passed = args.kwargs.get("target_id") or args.args[2]
+    assert target_id_passed == 0
+    proof_desc_passed = args.kwargs.get("proof_desc")
+    assert proof_desc_passed is None

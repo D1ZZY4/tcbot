@@ -271,3 +271,168 @@ async def test_execute_unmute_partial_failure_reported_in_reply(monkeypatch) -> 
 
     reply_text = msg.reply_text.await_args.args[0]
     assert "2/3" in reply_text
+
+
+async def test_execute_unmute_no_log_channel_sends_reply_only(monkeypatch) -> None:
+    """When cfg.logs returns a falsy chat id, send_message is skipped; reply still sent."""
+    from unittest.mock import patch
+
+    msg = SimpleNamespace(reply_text=AsyncMock())
+    update = SimpleNamespace(
+        effective_message=msg,
+        effective_user=SimpleNamespace(id=10, first_name="Admin"),
+    )
+    ctx = SimpleNamespace(
+        bot=SimpleNamespace(
+            restrict_chat_member=Mock(),
+            send_message=AsyncMock(),
+        )
+    )
+
+    monkeypatch.setattr(
+        muting_flow.db.groups_db, "active_groups", AsyncMock(return_value=[])
+    )
+    monkeypatch.setattr(
+        muting_flow.parse_logmsg, "unmute_log", Mock(return_value="log")
+    )
+    monkeypatch.setattr(muting_flow, "fan_out", AsyncMock(return_value=[]))
+
+    # * Patch the module-level cfg reference to make logs return a falsy chat id
+    fake_cfg = Mock()
+    fake_cfg.logs = (None, None)
+    with patch("tcbot.modules.helper.workflows.muting_flow.cfg", fake_cfg):
+        await muting_flow.execute_unmute(
+            cast(Update, update),
+            cast(ContextTypes.DEFAULT_TYPE, ctx),
+            target_id=99,
+            target_name="Target",
+        )
+
+    # * No log channel: send_message must NOT be called; reply_text must still be sent
+    ctx.bot.send_message.assert_not_awaited()
+    msg.reply_text.assert_awaited_once()
+    reply_text = msg.reply_text.await_args.args[0]
+    assert "has been unmuted" in reply_text
+
+
+# ─────────────────────── _execute_mute fallbacks ────────────────── #
+
+
+async def test_execute_mute_edit_failure_falls_back_to_reply(monkeypatch) -> None:
+    """When edit_message_text raises, _execute_mute falls back to reply_text."""
+    msg = SimpleNamespace(reply_text=AsyncMock())
+    update = SimpleNamespace(
+        effective_chat=SimpleNamespace(id=-100),
+        effective_message=msg,
+    )
+    bot = SimpleNamespace(
+        send_message=AsyncMock(),
+        edit_message_text=AsyncMock(side_effect=RuntimeError("message not found")),
+        restrict_chat_member=Mock(),
+    )
+
+    monkeypatch.setattr(
+        muting_flow.db.groups_db, "active_groups", AsyncMock(return_value=[])
+    )
+    monkeypatch.setattr(muting_flow.db.mutes_db, "log_mute", AsyncMock())
+    monkeypatch.setattr(muting_flow.parse_logmsg, "mute_log", Mock(return_value="log"))
+    monkeypatch.setattr(muting_flow, "fan_out", AsyncMock(return_value=[]))
+
+    meta = {
+        "mute_target_id": 99,
+        "mute_target_fname": "Target",
+        "mute_reason": "spam",
+        "mute_admin_id": 10,
+        "mute_admin_fname": "Admin",
+        "mute_duration": None,
+        "mute_proof_desc": None,
+        "mute_prompt_chat": -100,
+        "mute_prompt_id": 42,
+    }
+
+    await muting_flow._execute_mute(bot, cast(Update, update), meta)
+
+    # * edit failed but reply_text was used as fallback
+    msg.reply_text.assert_awaited_once()
+
+
+async def test_execute_mute_log_send_failure_is_logged_but_does_not_crash(
+    monkeypatch,
+) -> None:
+    """Log send failure is absorbed via return_exceptions; mute still completes."""
+    msg = SimpleNamespace(reply_text=AsyncMock())
+    update = SimpleNamespace(
+        effective_chat=SimpleNamespace(id=-100),
+        effective_message=msg,
+    )
+    bot = SimpleNamespace(
+        send_message=AsyncMock(side_effect=RuntimeError("channel gone")),
+        edit_message_text=AsyncMock(),
+        restrict_chat_member=Mock(),
+    )
+
+    monkeypatch.setattr(
+        muting_flow.db.groups_db, "active_groups", AsyncMock(return_value=[])
+    )
+    monkeypatch.setattr(muting_flow.db.mutes_db, "log_mute", AsyncMock())
+    monkeypatch.setattr(muting_flow.parse_logmsg, "mute_log", Mock(return_value="log"))
+    monkeypatch.setattr(muting_flow, "fan_out", AsyncMock(return_value=[]))
+
+    meta = {
+        "mute_target_id": 99,
+        "mute_target_fname": "Target",
+        "mute_reason": "flooding",
+        "mute_admin_id": 10,
+        "mute_admin_fname": "Admin",
+        "mute_duration": timedelta(hours=1),
+        "mute_proof_desc": None,
+        "mute_prompt_chat": -100,
+        "mute_prompt_id": 42,
+    }
+
+    # * Must not raise even though send_message fails
+    await muting_flow._execute_mute(bot, cast(Update, update), meta)
+
+    # * edit_message_text is still called
+    bot.edit_message_text.assert_awaited_once()
+
+
+# ─────────────────────────── _exec_mute adapter ─────────────────── #
+
+
+async def test_exec_mute_copies_and_clears_user_data_keys(monkeypatch) -> None:
+    """_exec_mute copies mute_ keys from user_data, removes them, then calls _execute_mute."""
+    execute_mute = AsyncMock()
+    monkeypatch.setattr(muting_flow, "_execute_mute", execute_mute)
+
+    msg = SimpleNamespace(reply_text=AsyncMock())
+    update = SimpleNamespace(
+        effective_chat=SimpleNamespace(id=-100),
+        effective_message=msg,
+    )
+    ctx = SimpleNamespace(
+        bot=SimpleNamespace(restrict_chat_member=Mock()),
+        user_data={
+            "mute_target_id": 55,
+            "mute_target_fname": "Bob",
+            "mute_reason": "spam",
+            "mute_admin_id": 10,
+            "mute_admin_fname": "Admin",
+            "mute_duration": timedelta(hours=2),
+            "mute_proof_desc": None,
+            "mute_prompt_chat": -100,
+            "mute_prompt_id": 7,
+            "other_key": "should stay",
+        },
+    )
+
+    await muting_flow._exec_mute(
+        cast(Update, update), cast(ContextTypes.DEFAULT_TYPE, ctx)
+    )
+
+    execute_mute.assert_awaited_once()
+    # * mute_ keys must be removed from user_data
+    remaining = set(ctx.user_data.keys())
+    assert all(not k.startswith("mute_") for k in remaining)
+    # * non-mute_ keys must be preserved
+    assert ctx.user_data.get("other_key") == "should stay"

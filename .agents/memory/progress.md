@@ -14,7 +14,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv sync --extra test` | PASS |
 | `uv run ruff format --check .` | PASS (all files unchanged) |
 | `uv run ruff check .` | PASS (0 errors) |
-| `uv run --extra test pytest tests/ -q` | PASS (1337 tests, 70 files, all green) |
+| `uv run --extra test pytest tests/ -q` | PASS (1364 tests, 70 files, all green; 2 pre-existing warnings in test_broadcasting.py) |
 
 ## Completed items
 
@@ -98,6 +98,11 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | test_ban_info.py + test_reason_flow.py use replies.NO_REASON | P4 | Bare string assertions replaced with constant reference | 2026-06-03 (s7) |
 | Handler-behavior tests: broadcasting (+5), greeting (+7), groups (+8) | P4 | __wrapped__ bypass pattern; cmd_broadcast, on_new_member, on_left_member, cmd_tcfgroups, _toggle callbacks; suite 1152→1167 | 2026-06-03 (s7) |
 | 30 property docstrings in tcbot/__init__.py | P4 | Configs (8) and _CfgAdapter (22) properties; AST audit: 0 public fns missing docstrings across all tcbot/ source | 2026-06-03 (s7) |
+
+| `_exec_kick` adapter tests (+2) | P4 | test_kick_flow.py 7->9: pops user_data keys + default NO_REASON fallback | 2026-06-03 (s11) |
+| `_exec_mute` adapter tests (+1) | P4 | test_mute_flow.py: copies mute_ keys, clears them, preserves other keys | 2026-06-03 (s11) |
+| `execute_unmute` no-log-channel branch (+1) | P4 | test_mute_flow.py: cfg.logs=(None,None) path; send_message not called | 2026-06-03 (s11) |
+| `_execute_mute` fallback paths (+2) | P4 | test_mute_flow.py: edit failure -> reply_text; log failure absorbed silently | 2026-06-03 (s11) |
 
 ## Pending (remaining optional)
 

@@ -2,6 +2,59 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-03 (session 11c)
+
+### Added - Pure-helper and factory tests for appeal_flow
+
+Added 20 new tests to `tests/test_appeal_flow.py` (+20, 17 -> 37 total) covering
+previously untested pure functions, factory methods, and a private static helper:
+
+`starts_with_appeal_tag` (4 tests): case-insensitive prefix match, leading whitespace
+tolerance, mid-string non-match, empty string.
+
+`text_references_log_message` (3 tests): exact token match, no match, partial-embed
+non-match (42 inside 1420).
+
+`reviewer_locked_out` (5 tests): None timestamp, None ban_admin, same reviewer-as-admin
+pass-through, within 12-hour lock window (True), outside window (False).
+
+`BuildAppeal` factory methods (5 tests): `instruction_text` contains community name and
+log handle; `cancel_keyboard` single button with custom label/callback; `review_keyboard`
+has Approve + Reject with correct `callback_data`.
+
+`BuildAppeal._update_or_send_log` (3 tests): edit happy path; edit failure falls back to
+send; no msg_id goes straight to send.
+
+Test suite: 1345 -> 1364 (70 files, 2 pre-existing warnings, all green). Ruff: clean.
+
+## [Unreleased] - 2026-06-03 (session 11b)
+
+### Added - _exec_warn adapter tests for warning_flow
+
+Added 2 new async tests to `tests/test_warning_flow.py` (+2, 12 -> 14 total):
+- `test_exec_warn_pops_user_data_and_calls_execute_warn`: verifies `_exec_warn` pops all `warn_*` keys from `user_data`, passes them to `execute_warn`, and clears them.
+- `test_exec_warn_empty_user_data_uses_defaults`: verifies that absent keys fall back to zero-value defaults (target_id=0, proof_desc=None).
+
+Test suite: 1343 -> 1345 (70 files, 1 warning, all green). Ruff: clean.
+
+## [Unreleased] - 2026-06-03 (session 11)
+
+### Added - Adapter and fallback-path tests for kicking_flow and muting_flow
+
+Added 6 new async tests covering previously untested code paths:
+
+`tests/test_kick_flow.py` (+2 tests, 7 -> 9 total):
+- `test_exec_kick_pops_user_data_and_calls_execute_kick`: verifies `_exec_kick` reads all `kick_` keys from `user_data`, forwards them to `execute_kick`, and removes them from `user_data`.
+- `test_exec_kick_uses_no_reason_default_when_key_absent`: verifies that when keys are missing, `reason_text` falls back to `replies.NO_REASON`.
+
+`tests/test_mute_flow.py` (+4 tests, 21 -> 25 total):
+- `test_execute_unmute_no_log_channel_sends_reply_only`: covers the `if lc:` branch in `execute_unmute` -- when `cfg.logs` returns `(None, None)`, `send_message` is skipped and `reply_text` is called directly.
+- `test_execute_mute_edit_failure_falls_back_to_reply`: when `bot.edit_message_text` raises, `_execute_mute` falls back to `msg.reply_text` with the summary.
+- `test_execute_mute_log_send_failure_is_logged_but_does_not_crash`: when `bot.send_message` raises in `_execute_mute`, the exception is absorbed via `return_exceptions=True` and `edit_message_text` still runs.
+- `test_exec_mute_copies_and_clears_user_data_keys`: verifies `_exec_mute` copies all `mute_` keys into a meta dict, clears them from `user_data`, and non-`mute_` keys are preserved.
+
+Test suite: 1337 -> 1343 (70 files, 1 warning, all green). Ruff: clean.
+
 ## [Unreleased] - 2026-06-03 (session 9)
 
 ### Added - Handler-behavior tests for all stats and help callback handlers
