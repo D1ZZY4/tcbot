@@ -102,3 +102,29 @@ def test_privacy_kb_has_two_rows() -> None:
     rows = _rows(keyboards.privacy_kb())
     assert rows[0][0]["cb"] == "privacy_policy_menu"
     assert rows[1][0]["cb"] == "back_to_start"
+
+
+def test_main_menu_kb_returns_inline_markup() -> None:
+    kb = keyboards.main_menu_kb()
+    assert isinstance(kb, InlineKeyboardMarkup)
+
+
+def test_back_to_start_kb_returns_inline_markup() -> None:
+    kb = keyboards.back_to_start_kb()
+    assert isinstance(kb, InlineKeyboardMarkup)
+
+
+def test_ban_log_new_returns_inline_markup() -> None:
+    kb = keyboards.ban_log_new(99, "https://t.me/c/1/1", "https://t.me/bot?start=x")
+    assert isinstance(kb, InlineKeyboardMarkup)
+
+
+def test_promo_decision_kb_returns_inline_markup() -> None:
+    assert isinstance(keyboards.promo_decision_kb("uuid-x"), InlineKeyboardMarkup)
+
+
+def test_help_modules_with_multiple_rows() -> None:
+    sample = [[("A", "help_a")], [("B", "help_b"), ("C", "help_c")]]
+    rows = _rows(keyboards.help_modules(sample, with_back_to_start=False))
+    assert len(rows) == 2
+    assert len(rows[1]) == 2

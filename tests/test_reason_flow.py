@@ -190,7 +190,9 @@ async def test_on_skip_reason_sets_default_and_advances() -> None:
     )
 
     assert result == WAITING_PROOF
-    assert user_data["ban_reason"] == "No reason provided"
+    from tcbot.modules.helper.replies import NO_REASON
+
+    assert user_data["ban_reason"] == NO_REASON
     q.answer.assert_awaited_once()
     q.edit_message_text.assert_awaited_once()
 

@@ -43,19 +43,19 @@ __help_text__ = (
 
 __help_sections__: list[tuple[str, str]] = [
     (
-        "Commands & Aliases",
+        replies.SEC_COMMANDS,
         "<code>/tcconnect</code> (alias: <code>/tccon</code>)",
     ),
     (
-        "Who can use",
+        replies.SEC_WHO,
         "Group admins and creators only (checked per-group).",
     ),
     (
-        "Where to use",
+        replies.SEC_WHERE,
         f"Inside the group you want to connect to {cfg.community_name}.",
     ),
     (
-        "What it does",
+        replies.SEC_WHAT,
         f"Connects your group to the {cfg.community_name} federation. Once connected:\n"
         f"- Federation bans are automatically enforced: currently banned users are removed, "
         f"and newly banned users are kicked on ban.\n"

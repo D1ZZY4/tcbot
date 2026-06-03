@@ -46,23 +46,23 @@ __help_text__ = (
 
 __help_sections__: list[tuple[str, str]] = [
     (
-        "Commands & Aliases",
+        replies.SEC_COMMANDS,
         "<code>/tcwarn</code> (alias: <code>/tcw</code>)\n"
         "<code>/tcunwarn</code> (alias: <code>/tcunw</code>)\n"
         "<code>/warns</code> (alias: <code>/warnlist</code>)\n"
         "<code>/resetwarns</code> (alias: <code>/clearwarns</code>)",
     ),
     (
-        "Who can use",
+        replies.SEC_WHO,
         "<b>/tcwarn</b>, <b>/tcunwarn</b>, <b>/resetwarns</b>: Tester and above.\n"
         "<b>/warns</b>: anyone.",
     ),
     (
-        "Where to use",
+        replies.SEC_WHERE,
         "Inside any connected group.",
     ),
     (
-        "What it does",
+        replies.SEC_WHAT,
         f"<b>/tcwarn</b>: issues a formal warning. Warnings are tracked <b>per-group</b> and "
         f"do not carry across connected groups. At <b>{WARN_LIMIT} warnings</b>, the user is "
         f"automatically banned from the group and their warning record is cleared.\n\n"
@@ -78,11 +78,11 @@ __help_sections__: list[tuple[str, str]] = [
         "3. The bot asks for proof - send a photo/video or tap <b>Skip</b>.",
     ),
     (
-        "Target syntax",
+        replies.SEC_TARGET,
         replies.TARGET_SYNTAX,
     ),
     (
-        "Examples",
+        replies.SEC_EXAMPLES,
         "<code>/tcwarn @username spamming</code>: reason inline\n"
         "<code>/tcw 123456789</code>: bot will ask for reason\n"
         "<code>/tcunwarn @username</code>\n"

@@ -37,3 +37,16 @@ PERM_STAFF_ONLY = "TC Staff (Admin and above)."
 PERM_ADMIN_ABOVE = "Admin and above (Founder / Admin)."
 PERM_DEV_ABOVE = "Developer and above (Founder / Admin / Developer)."
 PERM_TESTER_ABOVE = "Tester and above (Founder / Admin / Developer / Tester)."
+
+# ─────────────────────── Action Defaults ────────────────────────── #
+
+NO_REASON = "No reason provided"
+
+# ────────────── Help-section header labels ───────────────────────── #
+
+SEC_COMMANDS = "Commands & Aliases"
+SEC_WHO = "Who can use"
+SEC_WHERE = "Where to use"
+SEC_WHAT = "What it does"
+SEC_EXAMPLES = "Examples"
+SEC_TARGET = "Target syntax"

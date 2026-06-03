@@ -10,6 +10,7 @@ import asyncio
 
 from tcbot import cfg
 from tcbot import database as db
+from tcbot.modules.helper import replies
 from tcbot.modules.helper.formatter import code, esc, mention
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.utils.timedate_format import fmt_dt
@@ -50,7 +51,7 @@ async def build_ban_detail(
         f"User ID: {code(str(uid))}\n\n"
         f"Banned by: {mention(aid, admin_fname, admin_uname)}\n"
         f"Admin ID: {code(str(aid))}\n\n"
-        f"Reason: {esc(ban.get('reason', 'No reason provided'))}\n"
+        f"Reason: {esc(ban.get('reason', replies.NO_REASON))}\n"
         f"Ban ID: {code(ban['ban_id'])}\n"
         f"Date: {date_str}"
     )

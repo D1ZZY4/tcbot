@@ -149,3 +149,64 @@ async def test_execute_kick_log_send_failure_still_reports_kick(monkeypatch) -> 
     update.effective_message.reply_text.assert_awaited_once()
     reply_text = update.effective_message.reply_text.await_args.args[0]
     assert "has been kicked" in reply_text
+
+
+async def test_execute_kick_no_proof_no_proof_line_in_reply(monkeypatch) -> None:
+    """When proof_desc is None, the reply must not include a 'Proof:' line."""
+    update = _make_update()
+    ctx = _make_ctx()
+
+    monkeypatch.setattr(kicking_flow.db.kicks_db, "log_kick", AsyncMock())
+    monkeypatch.setattr(kicking_flow.parse_logmsg, "kick_log", Mock(return_value="log"))
+
+    await kicking_flow.execute_kick(
+        cast(Update, update),
+        cast(ContextTypes.DEFAULT_TYPE, ctx),
+        target_id=99,
+        target_name="Target",
+        reason_text="spam",
+        proof_desc=None,
+    )
+
+    reply_text = update.effective_message.reply_text.await_args.args[0]
+    assert "Proof:" not in reply_text
+
+
+async def test_execute_kick_target_id_in_reply(monkeypatch) -> None:
+    """The kick reply must include the target's Telegram user ID."""
+    update = _make_update()
+    ctx = _make_ctx()
+
+    monkeypatch.setattr(kicking_flow.db.kicks_db, "log_kick", AsyncMock())
+    monkeypatch.setattr(kicking_flow.parse_logmsg, "kick_log", Mock(return_value="log"))
+
+    await kicking_flow.execute_kick(
+        cast(Update, update),
+        cast(ContextTypes.DEFAULT_TYPE, ctx),
+        target_id=123456789,
+        target_name="Target",
+        reason_text="spam",
+    )
+
+    reply_text = update.effective_message.reply_text.await_args.args[0]
+    assert "123456789" in reply_text
+
+
+async def test_execute_kick_rejoin_allowed_message_in_reply(monkeypatch) -> None:
+    """The kick reply must include the rejoin notice."""
+    update = _make_update()
+    ctx = _make_ctx()
+
+    monkeypatch.setattr(kicking_flow.db.kicks_db, "log_kick", AsyncMock())
+    monkeypatch.setattr(kicking_flow.parse_logmsg, "kick_log", Mock(return_value="log"))
+
+    await kicking_flow.execute_kick(
+        cast(Update, update),
+        cast(ContextTypes.DEFAULT_TYPE, ctx),
+        target_id=99,
+        target_name="Target",
+        reason_text="spam",
+    )
+
+    reply_text = update.effective_message.reply_text.await_args.args[0]
+    assert "rejoin" in reply_text.lower()

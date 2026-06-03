@@ -156,3 +156,24 @@ class TestUserMuteCount:
         monkeypatch.setattr(mutes_db, "_mutes", lambda: fake)
         assert await mutes_db.user_mute_count(42) == 2
         assert await mutes_db.user_mute_count(99) == 1
+
+
+class TestLogMuteTimestamp:
+    async def test_timestamp_is_datetime(self, monkeypatch):
+        fake = FakeMutesCollection()
+        monkeypatch.setattr(mutes_db, "_mutes", lambda: fake)
+        await mutes_db.log_mute(10, 20, "reason", 99)
+        doc = fake.docs[0]
+        assert isinstance(doc["timestamp"], datetime)
+
+    async def test_admin_id_recorded_correctly(self, monkeypatch):
+        fake = FakeMutesCollection()
+        monkeypatch.setattr(mutes_db, "_mutes", lambda: fake)
+        await mutes_db.log_mute(10, 20, "reason", 777)
+        assert fake.docs[0]["admin_id"] == 777
+
+    async def test_reason_stored_as_is(self, monkeypatch):
+        fake = FakeMutesCollection()
+        monkeypatch.setattr(mutes_db, "_mutes", lambda: fake)
+        await mutes_db.log_mute(10, 20, "custom mute reason", 9)
+        assert fake.docs[0]["reason"] == "custom mute reason"

@@ -34,17 +34,17 @@ __help_text__ = (
 
 __help_sections__: list[tuple[str, str]] = [
     (
-        "Commands & Aliases",
+        replies.SEC_COMMANDS,
         "<code>/leaveall</code> (aliases: <code>/exitall</code>, <code>/tcleave</code>)\n"
         "<code>/cleanup</code> (aliases: <code>/tcclean</code>, <code>/tcc</code>)",
     ),
     (
-        "Who can use",
+        replies.SEC_WHO,
         f"<b>/leaveall</b>: {replies.PERM_FOUNDER_ONLY}\n"
         f"<b>/cleanup</b>: {replies.PERM_STAFF_ONLY}",
     ),
     (
-        "Where to use",
+        replies.SEC_WHERE,
         replies.CONTEXT_EXEC_OR_GROUP,
     ),
     (
@@ -62,7 +62,7 @@ __help_sections__: list[tuple[str, str]] = [
         "Run this periodically to keep the group list accurate.",
     ),
     (
-        "Examples",
+        replies.SEC_EXAMPLES,
         "<code>/cleanup</code>: remove stale or inaccessible groups.\n"
         "<code>/leaveall</code>: emergency withdrawal from all connected groups.",
     ),

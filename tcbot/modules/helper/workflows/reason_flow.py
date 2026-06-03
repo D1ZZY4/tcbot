@@ -20,6 +20,7 @@ from telegram.ext import (
 )
 
 from tcbot import cfg
+from tcbot.modules.helper import replies
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 
@@ -141,10 +142,10 @@ def build_modaction_conv(
 
     async def _on_skip_reason(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         q = update.callback_query
-        ctx.user_data[_reason_key] = "No reason provided"
+        ctx.user_data[_reason_key] = replies.NO_REASON
         extra_info = ctx.user_data.get(_extra_info_key, "")
         prompt_txt = proof.step_prompt(
-            _get_target(ctx), action, "No reason provided", extra_info
+            _get_target(ctx), action, replies.NO_REASON, extra_info
         )
         try:
             await asyncio.gather(

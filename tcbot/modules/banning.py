@@ -40,19 +40,19 @@ __help_text__ = (
 
 __help_sections__: list[tuple[str, str]] = [
     (
-        "Commands & Aliases",
+        replies.SEC_COMMANDS,
         "<code>/tcban</code> (alias: <code>/tcb</code>)",
     ),
     (
-        "Who can use",
+        replies.SEC_WHO,
         replies.PERM_DEV_ABOVE,
     ),
     (
-        "Where to use",
+        replies.SEC_WHERE,
         replies.CONTEXT_EXEC_OR_GROUP,
     ),
     (
-        "What it does",
+        replies.SEC_WHAT,
         "Issues a <b>federation-wide ban</b> on the target, applied across all connected "
         "groups automatically. A reason is required - provide it directly after the target.\n\n"
         "After the command, the bot walks you through the proof step: send one or more "
@@ -64,11 +64,11 @@ __help_sections__: list[tuple[str, str]] = [
         "automatically removed and they are notified by DM before the ban is enforced.",
     ),
     (
-        "Target syntax",
+        replies.SEC_TARGET,
         replies.TARGET_SYNTAX,
     ),
     (
-        "Examples",
+        replies.SEC_EXAMPLES,
         "<code>/tcban @username spamming in connected groups</code>\n"
         "<code>/tcban 123456789 scamming members</code>\n"
         "Or reply to a message and run <code>/tcb reason here</code>.",

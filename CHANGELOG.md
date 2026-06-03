@@ -2,6 +2,101 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-03 (session 7)
+
+### Changed - section-header constants added to replies.py and propagated to all 14 modules
+
+Added six section-header string constants to `tcbot/modules/helper/replies.py`:
+`SEC_COMMANDS`, `SEC_WHO`, `SEC_WHERE`, `SEC_WHAT`, `SEC_EXAMPLES`, `SEC_TARGET`.
+All 14 module files (`admins`, `appeals`, `banning`, `broadcasting`, `checking`,
+`connecting`, `disconnecting`, `greeting`, `groups`, `help`, `kicking`, `maintenance`,
+`muting`, `start`, `stats`, `warnings`) that build `__help_sections__` were updated to
+use `replies.SEC_*` instead of bare string literals.  Missing `replies` import in
+`appeals.py` was added.
+
+### Changed - NO_REASON constant added to replies.py and propagated to 7 callers
+
+Added `replies.NO_REASON = "No reason provided"` to `replies.py`.  Seven call sites
+were updated to reference the constant instead of the bare string:
+`ban_flow.py`, `kicking_flow.py`, `muting_flow.py`, `reason_flow.py` (×2),
+`ban_info.py`, `checking.py`.
+
+### Changed - test_replies.py extended to cover all new constants
+
+`_ALL_CONSTANTS` list in `tests/test_replies.py` updated to include all new constants:
+`ERR_GROUP_ONLY`, `ERR_NO_CONNECTED_GROUPS`, `ERR_GROUP_NOT_FOUND`, `NO_REASON`,
+`SEC_COMMANDS`, `SEC_WHO`, `SEC_WHERE`, `SEC_WHAT`, `SEC_EXAMPLES`, `SEC_TARGET`.
+The existing non-empty, no-emoji, no-em-dash, and distinct-values tests now cover
+the full constant set automatically.
+
+### Changed - test_ban_info.py and test_reason_flow.py updated to reference replies.NO_REASON
+
+Replaced bare `"No reason provided"` assertions in `test_ban_info.py` and
+`test_reason_flow.py` with references to `replies.NO_REASON`.
+
+### Changed - handler-behavior tests added for broadcasting, greeting, and groups
+
+Added 15 new async handler-behavior tests across three test files:
+
+`tests/test_broadcasting.py` (+5 tests): `cmd_broadcast` unwrapped via
+`__wrapped__.__wrapped__.__wrapped__` to bypass `ratelimiter/staff_only/log_execution`;
+tests cover: missing-text-and-no-reply early return, no-connected-groups error,
+fan_out call count equals group count, status message format.
+
+`tests/test_greeting.py` (+7 tests): `on_new_member` and `on_left_member` handler
+coverage; tests cover: unrelated-chat ignore, main-group welcome, no-ban-on-welcome,
+bot-departure skip, `None` left-member skip.
+
+`tests/test_groups.py` (+8 tests): `cmd_tcfgroups`, `on_groups_details`,
+`on_groups_simple` unwrapped via `__wrapped__.__wrapped__`; tests cover: no-groups
+notice, group list content, user_data cache write, cache-hit skips DB, cache-miss
+fetches DB exactly once.
+
+Test suite: 1152 → 1167 (all 70 test files green, 0 warnings).
+
+### Changed - docstrings added to 30 public properties in tcbot/__init__.py
+
+Added one-line docstrings to all 30 public properties in `tcbot/__init__.py` that
+lacked them: 8 type-casting properties on `Configs` (`port_int`, `main_group_id`,
+`main_channel_id`, `extend_group_id`, `logs_tuple`, `proofs_id`, `logs_errors_id`,
+`appeals_id`) and 22 accessor properties on `_CfgAdapter` (`bot_token`,
+`initial_owner_id`, `community_name`, `mongodb_uri`, `db_name`, `prefixes`, `port`,
+`main_group`, `main_channel`, `exec_group`, `logs`, `logs_errors`, `proofs`,
+`appeals`, `appeal_log_handle`, `proof_timeout`, `appeal_timeout`,
+`appeal_discussion_topic`, `album_debounce`, `log_level`, `modules_load`,
+`modules_no_load`).
+
+AST audit result: 0 public functions missing docstrings across all tcbot/ source files.
+
+### Changed - test_init.py added; test_logger.py and test_targets.py expanded
+
+Added `tests/test_init.py` (33 tests) covering:
+- `parse_list`: empty string, whitespace, Python-list format, CSV fallback, single item.
+- `parse_port`: valid int, empty, 'auto' (case-insensitive), non-integer, 0, negative,
+  above 65535, boundary 1, boundary 65535.
+- `parse_chat_id`: empty, plain chat_id, with thread_id, positive ID, thread 0.
+- `_CfgAdapter` via `cfg` singleton: community_name, prefixes, port range, db_name,
+  logs/proofs tuple shape, modules_load/no_load lists, album_debounce, proof_timeout,
+  appeal_timeout, log_level type.
+
+Expanded `tests/test_targets.py` from 3 to 10 tests: `default_raw_is_none`,
+`zero_id_sets_first_name_to_zero_string`, `large_id_preserved`, `negative_id_preserved`,
+`username_none_by_default`, `empty_string_replaced_with_id`.
+
+Expanded `tests/test_logger.py` from 2 to 9 tests: `setup_sets_root_log_level`,
+`BotLogFormatter.format` returns string with message, level-label presence for all 5
+levels, `TelegramErrorHandler` level is ERROR, emit suppresses known prefixes,
+emit does not crash without running event loop.
+
+Test suite: 1167 → 1222 (all 71 test files green, 2 warnings).
+
+Further expansions:
+- test_kick_flow.py: 4 → 7 (`no_proof_no_proof_line`, `target_id_in_reply`, `rejoin_allowed_message`).
+- test_alive.py: 5 → 9 (content-type, DELETE 405, HEAD 200, thread-target check).
+- test_unban_flow.py: 3 → 6 (`reply_includes_target_id`, `log_failure_does_not_prevent_reply`, `zero_groups_reply_shows_zero_of_zero`).
+- test_additional.py: 7 → 10 (html-tag check, string-type, edit-text-matches-msg).
+- test_format.py: 10 → 14 (utc_now_str type, utc timezone check, to_utc naive tzinfo, fmt_dt padding).
+
 ## [Unreleased] - 2026-06-03 (session 6)
 
 ### Fixed - performance.yml benchmark script referenced non-existent module

@@ -32,19 +32,19 @@ __help_text__ = (
 
 __help_sections__: list[tuple[str, str]] = [
     (
-        "Commands & Aliases",
+        replies.SEC_COMMANDS,
         "<code>/tcstats</code> (alias: <code>/tcs</code>)",
     ),
     (
-        "Who can use",
+        replies.SEC_WHO,
         replies.CONTEXT_ANYONE,
     ),
     (
-        "Where to use",
+        replies.SEC_WHERE,
         replies.CONTEXT_BOT_OR_GROUP,
     ),
     (
-        "What it does",
+        replies.SEC_WHAT,
         "Shows a live federation summary: Founder, total staff broken down by "
         "role, the number of cached users, active federation bans, and "
         "connected chats.",
@@ -62,7 +62,7 @@ __help_sections__: list[tuple[str, str]] = [
         "Every view ends with a <b>« Back</b> button to the main summary.",
     ),
     (
-        "Examples",
+        replies.SEC_EXAMPLES,
         "<code>/tcstats</code>\n<code>/tcs</code>",
     ),
 ]

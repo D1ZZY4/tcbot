@@ -37,19 +37,19 @@ __help_text__ = (
 
 __help_sections__: list[tuple[str, str]] = [
     (
-        "Commands & Aliases",
+        replies.SEC_COMMANDS,
         "<code>/tckick</code> (alias: <code>/tck</code>)",
     ),
     (
-        "Who can use",
+        replies.SEC_WHO,
         replies.PERM_TESTER_ABOVE,
     ),
     (
-        "Where to use",
+        replies.SEC_WHERE,
         "Inside any connected group.",
     ),
     (
-        "What it does",
+        replies.SEC_WHAT,
         "Removes a user from the <b>current group only</b>. This is not a federation-wide "
         "action; the user can rejoin via an invite link unless they are separately "
         "federation-banned.\n\n"
@@ -64,11 +64,11 @@ __help_sections__: list[tuple[str, str]] = [
         "3. The bot asks for proof: send a photo/video or tap <b>Skip</b>.",
     ),
     (
-        "Target syntax",
+        replies.SEC_TARGET,
         replies.TARGET_SYNTAX,
     ),
     (
-        "Examples",
+        replies.SEC_EXAMPLES,
         "<code>/tckick @username being disruptive</code>: reason inline\n"
         "<code>/tck 123456789</code>: bot will ask for reason\n"
         "Or reply to a message and run <code>/tck</code>.",

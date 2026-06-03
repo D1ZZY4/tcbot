@@ -16,7 +16,7 @@ from telegram.ext import ContextTypes
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import parse_logmsg
+from tcbot.modules.helper import parse_logmsg, replies
 from tcbot.modules.helper.formatter import code, mention
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
@@ -82,7 +82,7 @@ async def _execute_mute(bot, update: Update, meta: dict) -> None:
     """Apply a federation-wide mute across all connected groups and edit the prompt to a summary."""
     target_id = meta["mute_target_id"]
     target_fname = meta["mute_target_fname"]
-    reason_text = meta.get("mute_reason") or "No reason provided"
+    reason_text = meta.get("mute_reason") or replies.NO_REASON
     admin_id = meta["mute_admin_id"]
     duration = meta.get("mute_duration")
     proof_desc = meta.get("mute_proof_desc")

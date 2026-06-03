@@ -156,3 +156,24 @@ class TestUserKickCount:
         monkeypatch.setattr(kicks_db, "_kicks", lambda: fake)
         assert await kicks_db.user_kick_count(42) == 2
         assert await kicks_db.user_kick_count(99) == 1
+
+
+class TestLogKickTimestamp:
+    async def test_timestamp_is_datetime(self, monkeypatch):
+        fake = FakeKicksCollection()
+        monkeypatch.setattr(kicks_db, "_kicks", lambda: fake)
+        await kicks_db.log_kick(10, 20, "reason", 99)
+        doc = fake.docs[0]
+        assert isinstance(doc["timestamp"], datetime)
+
+    async def test_admin_id_recorded_correctly(self, monkeypatch):
+        fake = FakeKicksCollection()
+        monkeypatch.setattr(kicks_db, "_kicks", lambda: fake)
+        await kicks_db.log_kick(10, 20, "reason", 555)
+        assert fake.docs[0]["admin_id"] == 555
+
+    async def test_reason_stored_as_is(self, monkeypatch):
+        fake = FakeKicksCollection()
+        monkeypatch.setattr(kicks_db, "_kicks", lambda: fake)
+        await kicks_db.log_kick(10, 20, "custom reason text", 9)
+        assert fake.docs[0]["reason"] == "custom reason text"

@@ -39,16 +39,16 @@ __help_text__ = (
 
 __help_sections__: list[tuple[str, str]] = [
     (
-        "Commands & Aliases",
+        replies.SEC_COMMANDS,
         "<code>/checkme</code> (alias: <code>/cme</code>)\n"
         "<code>/check</code> (alias: <code>/c</code>)",
     ),
     (
-        "Who can use",
+        replies.SEC_WHO,
         replies.CONTEXT_ANYONE,
     ),
     (
-        "Where to use",
+        replies.SEC_WHERE,
         replies.CONTEXT_BOT_OR_GROUP,
     ),
     (
@@ -67,11 +67,11 @@ __help_sections__: list[tuple[str, str]] = [
         "record individually.",
     ),
     (
-        "Target syntax",
+        replies.SEC_TARGET,
         replies.TARGET_SYNTAX,
     ),
     (
-        "Examples",
+        replies.SEC_EXAMPLES,
         "<code>/checkme</code>\n"
         "<code>/check @username</code>\n"
         "<code>/c 123456789</code>\n"
@@ -118,7 +118,7 @@ async def _ban_summary(
         f"You are currently banned from {cfg.community_name}.\n\n"
         f"User: {mention(user_id, user_fname, user_uname)}\n"
         f"User ID: {code(str(user_id))}\n"
-        f"Reason: {esc(ban.get('reason', 'No reason provided'))}\n\n"
+        f"Reason: {esc(ban.get('reason', replies.NO_REASON))}\n\n"
         f"Banned by: {mention(aid, admin_fname, admin_uname)}\n\n"
         f"Commit Date: {date_str}\n"
         "Tap a button below for more details."

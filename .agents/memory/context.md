@@ -5,13 +5,13 @@ description: Current state of TCF Bot project — what is done, in progress, and
 
 # TCF Bot — Current Context
 
-**Last updated:** 2026-06-03 (session 6)
+**Last updated:** 2026-06-03 (session 7)
 
 ## What is done
 
 - Python 3.12, uv, python-telegram-bot 22.5, Motor/MongoDB stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
-- 1152 tests across 69 test files; full suite passes offline with 0 warnings.
+- 1251 tests across 71 test files; full suite passes offline with 2 warnings.
 - `python -m ruff format .` and `python -m ruff check .` both clean (141 files formatted).
 - All P1/P2/P3 backlog items resolved (ConversationHandler tests, pagination NameError, composite indexes, asyncio.gather conversions, shared replies.py, em-dash removal, cache TTL constants, keyboards.py dead code).
 - `docs/mapping.md` updated: added `identity.py`, `replies.py` to helper section; added `pagination.py` to utils section.
@@ -53,6 +53,14 @@ description: Current state of TCF Bot project — what is done, in progress, and
   - Fixed config.env.example: removed misleading `PORT=auto` "pick free port" comment; removed four `PROOFS/LOGS/LOGS_ERRORS/APPEALS=auto` "create forum thread" comments.
   - Added docstrings to 12 public functions: `bold`, `italic`, `code`, `link`, `esc`, `on_groups_details`, `on_groups_simple`, `on_help_menu`, `on_helpc_main`, `appeal_deep_link`, `on_menu_groups`, `on_menu_groups_simple`.
   - Added 8 new P4 findings rows to PLAN.md Code Review Findings; all `Resolved`.
+
+- Session 7 constant propagation and tests (2026-06-03):
+  - Added `SEC_COMMANDS`, `SEC_WHO`, `SEC_WHERE`, `SEC_WHAT`, `SEC_EXAMPLES`, `SEC_TARGET` to `replies.py`; all 14 module files updated.
+  - Added `NO_REASON = "No reason provided"` to `replies.py`; 7 callers updated.
+  - `test_replies.py` extended: 10 new constants in `_ALL_CONSTANTS`; all coverage tests pass automatically.
+  - `test_ban_info.py` and `test_reason_flow.py` updated to use `replies.NO_REASON`.
+  - Handler-behavior tests: 15 new tests across `test_broadcasting.py`, `test_greeting.py`, `test_groups.py`.
+  - Test suite: 1152 → 1167 (all green, 0 warnings). Ruff clean (141 files).
 
 ## What is in progress
 

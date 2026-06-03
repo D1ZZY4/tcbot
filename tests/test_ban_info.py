@@ -94,7 +94,9 @@ class TestBuildBanDetail:
             "proof_message_id": None,
         }
         text, _ = await build_ban_detail(ban)
-        assert "No reason provided" in text
+        from tcbot.modules.helper import replies as r
+
+        assert r.NO_REASON in text
 
     async def test_skips_db_fetch_when_target_fname_provided(self, monkeypatch):
         call_count = 0

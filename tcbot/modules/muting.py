@@ -45,20 +45,20 @@ __help_text__ = (
 
 __help_sections__: list[tuple[str, str]] = [
     (
-        "Commands & Aliases",
+        replies.SEC_COMMANDS,
         "<code>/tcmute</code> (alias: <code>/tcm</code>)\n"
         "<code>/tcunmute</code> (aliases: <code>/tcunm</code>, <code>/tcum</code>)",
     ),
     (
-        "Who can use",
+        replies.SEC_WHO,
         replies.PERM_TESTER_ABOVE,
     ),
     (
-        "Where to use",
+        replies.SEC_WHERE,
         "Inside any connected group.",
     ),
     (
-        "What it does",
+        replies.SEC_WHAT,
         "<b>/tcmute</b>: restricts a user from sending messages, media, stickers, and GIFs "
         "across <b>all connected groups</b> simultaneously. After the command, the bot "
         "asks for a reason and optionally proof - both steps can be skipped. If the user "
@@ -79,11 +79,11 @@ __help_sections__: list[tuple[str, str]] = [
         "→ <code>ye</code> Years: <code>2ye</code> = 2 years",
     ),
     (
-        "Target syntax",
+        replies.SEC_TARGET,
         replies.TARGET_SYNTAX,
     ),
     (
-        "Examples",
+        replies.SEC_EXAMPLES,
         "<code>/tcmute @username 3d spamming</code>: 3-day mute, reason inline\n"
         "<code>/tcm @username 1w</code>: 1-week mute, bot will ask for reason\n"
         "<code>/tcm @username</code>: permanent mute, bot walks you through it\n"

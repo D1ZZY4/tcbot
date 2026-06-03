@@ -14,7 +14,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv sync --extra test` | PASS |
 | `uv run ruff format --check .` | PASS (all files unchanged) |
 | `uv run ruff check .` | PASS (0 errors) |
-| `uv run --extra test pytest tests/ -q` | PASS (1152 tests, 69 files, all green) |
+| `uv run --extra test pytest tests/ -q` | PASS (1251 tests, 71 files, all green) |
 
 ## Completed items
 
@@ -92,6 +92,12 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | config.env.example PROOFS/LOGS/LOGS_ERRORS/APPEALS auto comments | docs | Removed 4 "auto = create forum thread in MAIN_GROUP" blocks (feature never existed) | 2026-06-03 (s6) |
 | 12 public function docstrings | P4 | bold, italic, code, link, esc, on_groups_details, on_groups_simple, on_help_menu, on_helpc_main, appeal_deep_link, on_menu_groups, on_menu_groups_simple | 2026-06-03 (s6) |
 | PLAN.md Code Review Findings | docs | Added P4 rows 2-8 for all session-6 findings; all Resolved | 2026-06-03 (s6) |
+| replies.py section-header constants (SEC_*) | P4 | SEC_COMMANDS/WHO/WHERE/WHAT/EXAMPLES/TARGET added; all 14 module files updated | 2026-06-03 (s7) |
+| replies.py NO_REASON constant | P4 | NO_REASON = "No reason provided"; 7 callers (ban_flow, kicking_flow, muting_flow, reason_flow×2, ban_info, checking) updated | 2026-06-03 (s7) |
+| test_replies.py covers all constants | P4 | 10 new constants in _ALL_CONSTANTS; ERR_GROUP_ONLY/NO_CONNECTED_GROUPS/ERR_GROUP_NOT_FOUND/NO_REASON/SEC_* | 2026-06-03 (s7) |
+| test_ban_info.py + test_reason_flow.py use replies.NO_REASON | P4 | Bare string assertions replaced with constant reference | 2026-06-03 (s7) |
+| Handler-behavior tests: broadcasting (+5), greeting (+7), groups (+8) | P4 | __wrapped__ bypass pattern; cmd_broadcast, on_new_member, on_left_member, cmd_tcfgroups, _toggle callbacks; suite 1152→1167 | 2026-06-03 (s7) |
+| 30 property docstrings in tcbot/__init__.py | P4 | Configs (8) and _CfgAdapter (22) properties; AST audit: 0 public fns missing docstrings across all tcbot/ source | 2026-06-03 (s7) |
 
 ## Pending (remaining optional)
 

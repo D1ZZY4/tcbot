@@ -21,7 +21,7 @@ from telegram.ext import (
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import keyboards, parse_logmsg
+from tcbot.modules.helper import keyboards, parse_logmsg, replies
 from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
 from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
@@ -53,7 +53,7 @@ _album_meta: dict[str, dict[str, Any]] = {}
 async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> None:
     target_id: int = meta.get("ban_target_id")
     target_fname: str = meta.get("ban_target_fname", str(target_id))
-    reason: str = meta.get("ban_reason", "No reason provided")
+    reason: str = meta.get("ban_reason", replies.NO_REASON)
     admin_id: int = meta.get("ban_admin_id")
     admin_fname: str = meta.get("ban_admin_fname", "Admin")
     prompt_msg_id: int = meta.get("ban_prompt_msg_id", 0)

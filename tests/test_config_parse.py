@@ -121,3 +121,45 @@ def test_warn_mongodb_uri_fmt_invalid_emits_warning(
     with caplog.at_level(logging.WARNING, logger="tcbot"):
         _warn_mongodb_uri_fmt(uri)
     assert any("MONGODB_URI" in r.message for r in caplog.records)
+
+
+def test_parse_list_single_slash_item() -> None:
+    """A single prefix character parses to a one-element list."""
+    assert parse_list("['/']") == ["/"]
+
+
+def test_parse_list_csv_strips_whitespace() -> None:
+    """CSV fallback must strip whitespace around each item."""
+    result = parse_list(" / , ! , . ")
+    assert "/" in result
+    assert "!" in result
+    assert "." in result
+
+
+def test_configs_load_stores_appeal_discussion_topic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("tcbot.find_dotenv", lambda *args, **kwargs: "")
+    monkeypatch.setattr("tcbot.load_dotenv", lambda *args, **kwargs: None)
+    monkeypatch.setenv("BOT_TOKEN", "test:token")
+    monkeypatch.setenv("OWNER_ID", "999")
+    monkeypatch.setenv("APPEAL_DISCUSSION_TOPIC", "42")
+
+    cfg = Configs.load()
+
+    assert str(cfg.appeal_discussion_topic) == "42"
+
+
+def test_configs_load_default_community_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("tcbot.find_dotenv", lambda *args, **kwargs: "")
+    monkeypatch.setattr("tcbot.load_dotenv", lambda *args, **kwargs: None)
+    monkeypatch.setenv("BOT_TOKEN", "test:token")
+    monkeypatch.setenv("OWNER_ID", "999")
+    monkeypatch.delenv("COMMUNITY_NAME", raising=False)
+
+    cfg = Configs.load()
+
+    assert isinstance(cfg.community_name, str)
+    assert cfg.community_name.strip()

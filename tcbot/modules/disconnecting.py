@@ -37,22 +37,22 @@ __help_text__ = (
 
 __help_sections__: list[tuple[str, str]] = [
     (
-        "Commands & Aliases",
+        replies.SEC_COMMANDS,
         "<code>/tcdisconnect</code> (alias: <code>/tcdiscon</code>)\n"
         "<code>/rmtc</code>",
     ),
     (
-        "Who can use",
+        replies.SEC_WHO,
         "<b>/tcdisconnect</b>: the group owner or TC Staff (Admin and above).\n"
         "<b>/rmtc</b>: TC Staff only.",
     ),
     (
-        "Where to use",
+        replies.SEC_WHERE,
         "<b>/tcdisconnect</b>: inside the group you want to disconnect.\n"
         "<b>/rmtc</b>: exec group or bot PM (works remotely by chat ID).",
     ),
     (
-        "What it does",
+        replies.SEC_WHAT,
         f"<b>/tcdisconnect</b>: removes the current group from {cfg.community_name}, posts a "
         f"disconnection log entry, and causes the bot to leave the group.\n\n"
         f"<b>/rmtc</b>: force-removes a group from the federation by chat ID. Use this for "
@@ -60,7 +60,7 @@ __help_sections__: list[tuple[str, str]] = [
         f"being inside it. A log entry is still posted.",
     ),
     (
-        "Examples",
+        replies.SEC_EXAMPLES,
         "Run <code>/tcdisconnect</code> inside the group to disconnect it.\n"
         "<code>/rmtc -1001234567890</code>: force-remove a group by chat ID.",
     ),

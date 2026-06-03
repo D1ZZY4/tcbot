@@ -54,7 +54,7 @@ __help_text__ = (
 
 __help_sections__: list[tuple[str, str]] = [
     (
-        "Commands & Aliases",
+        replies.SEC_COMMANDS,
         "<code>/tcpromote</code> (alias: <code>/tcp</code>)\n"
         "<code>/tcdemote</code> (alias: <code>/tcd</code>)\n"
         "<code>/transferowner</code> (alias: <code>/tfowner</code>)\n"
@@ -62,13 +62,13 @@ __help_sections__: list[tuple[str, str]] = [
         "<code>/tcpromotelist</code> (alias: <code>/tcplist</code>)",
     ),
     (
-        "Who can use",
+        replies.SEC_WHO,
         "<b>/tcpromote</b>, <b>/tcdemote</b>, <b>/tcpromotelist</b>: Founder and Admin.\n"
         f"<b>/transferowner</b>: {replies.PERM_FOUNDER_ONLY}\n"
         "<b>/tcpromoterequests</b>: anyone (creates a self-request to the Founder).",
     ),
     (
-        "Where to use",
+        replies.SEC_WHERE,
         replies.CONTEXT_BOT_OR_GROUP,
     ),
     (
@@ -78,7 +78,7 @@ __help_sections__: list[tuple[str, str]] = [
         "Admins promoting someone to Admin queues a request for the Founder.",
     ),
     (
-        "Target syntax",
+        replies.SEC_TARGET,
         replies.TARGET_SYNTAX,
     ),
     (
@@ -105,7 +105,7 @@ __help_sections__: list[tuple[str, str]] = [
         "<b>Usage:</b> <code>/transferowner &lt;target&gt;</code>",
     ),
     (
-        "Examples",
+        replies.SEC_EXAMPLES,
         "<code>/tcpromote @username developer</code>\n"
         "<code>/tcpromote 123456789</code> - shows role selection menu\n"
         "<code>/tcdemote @username</code>\n"

@@ -79,3 +79,33 @@ async def test_on_about_menu_passes_html_parse_mode() -> None:
 
     kwargs = q.edit_message_text.call_args[1]
     assert kwargs.get("parse_mode") == "HTML"
+
+
+def test_about_msg_is_string_type() -> None:
+    assert isinstance(__about_msg__, str)
+
+
+async def test_on_about_menu_edit_text_equals_about_msg() -> None:
+    """The text sent to the user must be exactly __about_msg__."""
+    q = AsyncMock()
+    update = MagicMock()
+    update.callback_query = q
+    ctx = MagicMock()
+
+    await on_about_menu(update, ctx)
+
+    call_text: str = q.edit_message_text.call_args[0][0]
+    assert call_text == __about_msg__
+
+
+async def test_on_about_menu_has_reply_markup_kwarg() -> None:
+    """edit_message_text must receive a reply_markup keyword argument."""
+    q = AsyncMock()
+    update = MagicMock()
+    update.callback_query = q
+    ctx = MagicMock()
+
+    await on_about_menu(update, ctx)
+
+    kwargs = q.edit_message_text.call_args[1]
+    assert "reply_markup" in kwargs

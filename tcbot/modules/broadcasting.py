@@ -31,19 +31,19 @@ __help_text__ = (
 
 __help_sections__: list[tuple[str, str]] = [
     (
-        "Commands & Aliases",
+        replies.SEC_COMMANDS,
         "<code>/tcbroadcast</code> (alias: <code>/bc</code>)",
     ),
     (
-        "Who can use",
+        replies.SEC_WHO,
         replies.PERM_STAFF_ONLY,
     ),
     (
-        "Where to use",
+        replies.SEC_WHERE,
         replies.CONTEXT_EXEC_OR_GROUP,
     ),
     (
-        "What it does",
+        replies.SEC_WHAT,
         f"Sends a message to every group currently connected to {cfg.community_name}.\n\n"
         f"You can compose the message in two ways:\n"
         f"- Type the message directly after the command (HTML formatting is supported).\n"
@@ -54,7 +54,7 @@ __help_sections__: list[tuple[str, str]] = [
         f"to the federation logs channel.",
     ),
     (
-        "Examples",
+        replies.SEC_EXAMPLES,
         "<code>/tcbroadcast Reminder: please review the community rules.</code>\n"
         "<code>/bc &lt;b&gt;Event tonight&lt;/b&gt; (join us at 8 PM UTC).</code>\n"
         "Or reply to any message and run <code>/bc</code> to forward it to all groups.",

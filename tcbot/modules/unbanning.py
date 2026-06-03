@@ -27,19 +27,19 @@ __help_text__ = (
 
 __help_sections__: list[tuple[str, str]] = [
     (
-        "Commands & Aliases",
+        replies.SEC_COMMANDS,
         "<code>/tcunban</code> (alias: <code>/tcunb</code>)",
     ),
     (
-        "Who can use",
+        replies.SEC_WHO,
         replies.PERM_DEV_ABOVE,
     ),
     (
-        "Where to use",
+        replies.SEC_WHERE,
         replies.CONTEXT_EXEC_OR_GROUP,
     ),
     (
-        "What it does",
+        replies.SEC_WHAT,
         "Lifts an active federation ban on the target user. The unban is applied across "
         "<b>all connected groups</b> simultaneously so they can rejoin freely. A log entry "
         "is posted to the federation logs channel.\n\n"
@@ -48,11 +48,11 @@ __help_sections__: list[tuple[str, str]] = [
         "If the target's ban was under appeal, the appeal is also resolved as approved.",
     ),
     (
-        "Target syntax",
+        replies.SEC_TARGET,
         replies.TARGET_SYNTAX,
     ),
     (
-        "Examples",
+        replies.SEC_EXAMPLES,
         "<code>/tcunban @username</code>\n"
         "<code>/tcunb 123456789</code>\n"
         "Or reply to a message and run <code>/tcunb</code>.",

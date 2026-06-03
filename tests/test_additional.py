@@ -66,3 +66,25 @@ async def test_on_additional_menu_html_parse_mode() -> None:
 
     kwargs = q.edit_message_text.call_args[1]
     assert kwargs.get("parse_mode") == "HTML"
+
+
+def test_additional_msg_has_html_tag() -> None:
+    """Message must use at least one HTML formatting tag."""
+    assert "<b>" in __additional_msg__ or "<a " in __additional_msg__
+
+
+def test_additional_msg_is_string_type() -> None:
+    assert isinstance(__additional_msg__, str)
+
+
+async def test_on_additional_menu_edit_text_matches_msg() -> None:
+    """Text passed to edit_message_text must equal __additional_msg__."""
+    q = AsyncMock()
+    update = MagicMock()
+    update.callback_query = q
+    ctx = MagicMock()
+
+    await on_additional_menu(update, ctx)
+
+    call_text: str = q.edit_message_text.call_args[0][0]
+    assert call_text == __additional_msg__

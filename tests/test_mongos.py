@@ -54,3 +54,26 @@ class TestDb:
         fake_db = object()
         monkeypatch.setattr(mongos, "_db", fake_db)
         assert mongos.db() is fake_db
+
+
+class TestMakeShortIdExtra:
+    def test_no_uppercase_in_result(self):
+        for _ in range(30):
+            result = mongos.make_short_id()
+            assert result == result.lower(), f"Uppercase found: {result!r}"
+
+    def test_no_special_chars(self):
+        for _ in range(30):
+            result = mongos.make_short_id()
+            assert result.isalnum(), f"Non-alnum character found: {result!r}"
+
+    def test_large_length(self):
+        result = mongos.make_short_id(50)
+        assert len(result) == 50
+        assert result.isalnum()
+
+    def test_results_differ_between_calls(self):
+        """Two consecutive short IDs should (almost certainly) differ."""
+        a = mongos.make_short_id()
+        b = mongos.make_short_id()
+        assert a != b

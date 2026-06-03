@@ -18,6 +18,9 @@ _ALL_CONSTANTS: list[tuple[str, str]] = [
     ("ERR_CANNOT_RESOLVE", replies.ERR_CANNOT_RESOLVE),
     ("ERR_CANT_FIND_USER", replies.ERR_CANT_FIND_USER),
     ("ERR_ROLE_VERIFY", replies.ERR_ROLE_VERIFY),
+    ("ERR_GROUP_ONLY", replies.ERR_GROUP_ONLY),
+    ("ERR_NO_CONNECTED_GROUPS", replies.ERR_NO_CONNECTED_GROUPS),
+    ("ERR_GROUP_NOT_FOUND", replies.ERR_GROUP_NOT_FOUND),
     ("CONTEXT_BOT_OR_GROUP", replies.CONTEXT_BOT_OR_GROUP),
     ("CONTEXT_EXEC_OR_GROUP", replies.CONTEXT_EXEC_OR_GROUP),
     ("CONTEXT_ANYONE", replies.CONTEXT_ANYONE),
@@ -26,6 +29,13 @@ _ALL_CONSTANTS: list[tuple[str, str]] = [
     ("PERM_FOUNDER_ONLY", replies.PERM_FOUNDER_ONLY),
     ("PERM_STAFF_ONLY", replies.PERM_STAFF_ONLY),
     ("PERM_ADMIN_ABOVE", replies.PERM_ADMIN_ABOVE),
+    ("NO_REASON", replies.NO_REASON),
+    ("SEC_COMMANDS", replies.SEC_COMMANDS),
+    ("SEC_WHO", replies.SEC_WHO),
+    ("SEC_WHERE", replies.SEC_WHERE),
+    ("SEC_WHAT", replies.SEC_WHAT),
+    ("SEC_EXAMPLES", replies.SEC_EXAMPLES),
+    ("SEC_TARGET", replies.SEC_TARGET),
 ]
 
 _PERM_CONSTANTS: list[tuple[str, str]] = [

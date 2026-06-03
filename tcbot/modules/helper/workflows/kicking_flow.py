@@ -14,7 +14,7 @@ from telegram.ext import ContextTypes
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import parse_logmsg
+from tcbot.modules.helper import parse_logmsg, replies
 from tcbot.modules.helper.formatter import code, mention
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
@@ -91,7 +91,7 @@ async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Pop kick data from user_data and call execute_kick."""
     target_id = ctx.user_data.pop("kick_target_id", 0)
     target_name = ctx.user_data.pop("kick_target_name", "")
-    reason_text = ctx.user_data.pop("kick_reason", "No reason provided")
+    reason_text = ctx.user_data.pop("kick_reason", replies.NO_REASON)
     proof_desc = ctx.user_data.pop("kick_proof_desc", None)
     ctx.user_data.pop("kick_extra_info", None)
     await execute_kick(

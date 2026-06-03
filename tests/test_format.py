@@ -75,3 +75,32 @@ def test_message_link_without_thread() -> None:
 def test_message_link_with_thread() -> None:
     url = message_link(-1001111111111, 42, thread_id=7)
     assert url == "https://t.me/c/1111111111/42?thread=7"
+
+
+# ───────────────────── utc_now_str extra ────────────────────────── #
+
+
+def test_utc_now_str_is_string() -> None:
+    assert isinstance(utc_now_str(), str)
+
+
+def test_utc_now_is_timezone_aware() -> None:
+    from datetime import timezone
+
+    assert utc_now().tzinfo == timezone.utc
+
+
+def test_to_utc_naive_gets_utc_tzinfo() -> None:
+    from datetime import timezone
+
+    naive = datetime(2025, 3, 15, 9, 30)
+    result = to_utc(naive)
+    assert result.tzinfo == timezone.utc
+    assert result.year == 2025
+    assert result.hour == 9
+
+
+def test_fmt_dt_padding() -> None:
+    """Single-digit day/month must be zero-padded."""
+    dt = datetime(2026, 1, 5, 7, 3, tzinfo=timezone.utc)
+    assert fmt_dt(dt) == "05-01-2026 | 07:03"

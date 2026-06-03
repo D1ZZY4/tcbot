@@ -140,3 +140,113 @@ async def test_execute_unban_partial_group_failure_reported(monkeypatch) -> None
 
     reply_text = msg.reply_text.await_args.args[0]
     assert "2/3" in reply_text
+
+
+async def test_execute_unban_reply_includes_target_id(monkeypatch) -> None:
+    """Happy-path reply must contain the target user ID."""
+    msg = SimpleNamespace(reply_text=AsyncMock())
+    update = SimpleNamespace(
+        effective_message=msg,
+        effective_user=SimpleNamespace(id=10, first_name="Admin"),
+    )
+    ctx = SimpleNamespace(
+        bot=SimpleNamespace(unban_chat_member=Mock(), send_message=AsyncMock())
+    )
+
+    ban = {"ban_id": "ban0000003", "banned_user_id": 77777}
+    groups = [{"chat_id": -200}]
+
+    monkeypatch.setattr(
+        unban_flow.db.bans_db, "get_active_ban", AsyncMock(return_value=ban)
+    )
+    monkeypatch.setattr(unban_flow.db.bans_db, "deactivate_ban", AsyncMock())
+    monkeypatch.setattr(
+        unban_flow.db.groups_db, "active_groups", AsyncMock(return_value=groups)
+    )
+    monkeypatch.setattr(unban_flow.parse_logmsg, "unban_log", Mock(return_value="log"))
+    monkeypatch.setattr(unban_flow, "fan_out", AsyncMock(return_value=[None]))
+
+    await unban_flow.execute_unban(
+        cast(Update, update),
+        cast(ContextTypes.DEFAULT_TYPE, ctx),
+        target_id=77777,
+        target_fname="Target",
+    )
+
+    reply_text = msg.reply_text.await_args.args[0]
+    assert "77777" in reply_text
+
+
+async def test_execute_unban_log_failure_does_not_prevent_reply(monkeypatch) -> None:
+    """A failure sending the audit log must not suppress the reply to the admin."""
+    msg = SimpleNamespace(reply_text=AsyncMock())
+    update = SimpleNamespace(
+        effective_message=msg,
+        effective_user=SimpleNamespace(id=10, first_name="Admin"),
+    )
+    ctx = SimpleNamespace(
+        bot=SimpleNamespace(
+            unban_chat_member=Mock(),
+            send_message=AsyncMock(side_effect=RuntimeError("channel gone")),
+        )
+    )
+
+    ban = {"ban_id": "ban0000004", "banned_user_id": 99}
+    groups = [{"chat_id": -200}]
+
+    monkeypatch.setattr(
+        unban_flow.db.bans_db, "get_active_ban", AsyncMock(return_value=ban)
+    )
+    monkeypatch.setattr(unban_flow.db.bans_db, "deactivate_ban", AsyncMock())
+    monkeypatch.setattr(
+        unban_flow.db.groups_db, "active_groups", AsyncMock(return_value=groups)
+    )
+    monkeypatch.setattr(unban_flow.parse_logmsg, "unban_log", Mock(return_value="log"))
+    monkeypatch.setattr(unban_flow, "fan_out", AsyncMock(return_value=[None]))
+
+    await unban_flow.execute_unban(
+        cast(Update, update),
+        cast(ContextTypes.DEFAULT_TYPE, ctx),
+        target_id=99,
+        target_fname="Target",
+    )
+
+    msg.reply_text.assert_awaited_once()
+    reply_text = msg.reply_text.await_args.args[0]
+    assert "has been unbanned" in reply_text
+
+
+async def test_execute_unban_zero_groups_reply_shows_zero_of_zero(
+    monkeypatch,
+) -> None:
+    """When no groups are connected, ratio in reply must be 0/0."""
+    msg = SimpleNamespace(reply_text=AsyncMock())
+    update = SimpleNamespace(
+        effective_message=msg,
+        effective_user=SimpleNamespace(id=10, first_name="Admin"),
+    )
+    ctx = SimpleNamespace(
+        bot=SimpleNamespace(unban_chat_member=Mock(), send_message=AsyncMock())
+    )
+
+    ban = {"ban_id": "ban0000005", "banned_user_id": 99}
+
+    monkeypatch.setattr(
+        unban_flow.db.bans_db, "get_active_ban", AsyncMock(return_value=ban)
+    )
+    monkeypatch.setattr(unban_flow.db.bans_db, "deactivate_ban", AsyncMock())
+    monkeypatch.setattr(
+        unban_flow.db.groups_db, "active_groups", AsyncMock(return_value=[])
+    )
+    monkeypatch.setattr(unban_flow.parse_logmsg, "unban_log", Mock(return_value="log"))
+    monkeypatch.setattr(unban_flow, "fan_out", AsyncMock(return_value=[]))
+
+    await unban_flow.execute_unban(
+        cast(Update, update),
+        cast(ContextTypes.DEFAULT_TYPE, ctx),
+        target_id=99,
+        target_fname="Target",
+    )
+
+    reply_text = msg.reply_text.await_args.args[0]
+    assert "0/0" in reply_text

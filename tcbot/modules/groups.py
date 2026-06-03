@@ -30,19 +30,19 @@ __help_text__ = (
 
 __help_sections__: list[tuple[str, str]] = [
     (
-        "Commands & Aliases",
+        replies.SEC_COMMANDS,
         "<code>/tcgroups</code> (alias: <code>/tcg</code>)",
     ),
     (
-        "Who can use",
+        replies.SEC_WHO,
         replies.CONTEXT_ANYONE,
     ),
     (
-        "Where to use",
+        replies.SEC_WHERE,
         replies.CONTEXT_BOT_OR_GROUP,
     ),
     (
-        "What it does",
+        replies.SEC_WHAT,
         f"Lists all groups currently connected to {cfg.community_name}, along with the total "
         f"count.\n\n"
         f"The default view shows group names only. Tap <b>Details</b> to expand the list and "

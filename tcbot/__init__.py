@@ -168,34 +168,42 @@ class Configs:
     # * Properties below handle lazy type-casting from raw env strings.
     @property
     def port_int(self) -> int:
+        """Parse the PORT env string into an int, falling back to 5000 on invalid values."""
         return parse_port(self.port)
 
     @property
     def main_group_id(self) -> int:
+        """Return MAIN_GROUP as int, or 0 when the env variable is unset."""
         return int(self.main_group) if self.main_group else 0
 
     @property
     def main_channel_id(self) -> int:
+        """Return MAIN_CHANNEL as int, or 0 when the env variable is unset."""
         return int(self.main_channel) if self.main_channel else 0
 
     @property
     def extend_group_id(self) -> int:
+        """Return EXTEND_GROUP as int, or 0 when the env variable is unset."""
         return int(self.extend_group) if self.extend_group else 0
 
     @property
     def logs_tuple(self) -> tuple[int, int | None]:
+        """Parse the LOGS destination string into a (chat_id, thread_id) tuple."""
         return parse_chat_id(self.logs)
 
     @property
     def proofs_id(self) -> tuple[int, int | None]:
+        """Parse the PROOFS destination string into a (chat_id, thread_id) tuple."""
         return parse_chat_id(self.proofs)
 
     @property
     def logs_errors_id(self) -> tuple[int, int | None]:
+        """Parse the LOGS_ERRORS destination string into a (chat_id, thread_id) tuple."""
         return parse_chat_id(self.logs_errors)
 
     @property
     def appeals_id(self) -> tuple[int, int | None]:
+        """Parse the APPEALS destination string into a (chat_id, thread_id) tuple."""
         return parse_chat_id(self.appeals)
 
     @staticmethod
@@ -263,90 +271,112 @@ class _CfgAdapter:
 
     @property
     def bot_token(self) -> str:
+        """Telegram bot token from BOT_TOKEN."""
         return self._c.bot_token
 
     @property
     def initial_owner_id(self) -> int:
+        """Telegram user ID of the initial Founder seeded on first startup."""
         return self._c.owner_id
 
     @property
     def community_name(self) -> str:
+        """Display name for the community used in bot messages and logs."""
         return self._c.community_name
 
     @property
     def mongodb_uri(self) -> str:
+        """MongoDB connection string from MONGODB_URI."""
         return self._c.mongodb_uri
 
     @property
     def db_name(self) -> str:
+        """MongoDB database name (defaults to 'tcbot')."""
         return self._c.db_name
 
     @property
     def prefixes(self) -> list[str]:
+        """List of command prefix characters (e.g. ['/', '!', '.'])."""
         return self._c.prefixes
 
     @property
     def port(self) -> int:
+        """Flask health-check port as int; falls back to 5000 for invalid values."""
         return self._c.port_int
 
     @property
     def main_group(self) -> int:
+        """Main community group chat ID, or 0 when unset."""
         return self._c.main_group_id
 
     @property
     def main_channel(self) -> int:
+        """Announcement channel chat ID, or 0 when unset."""
         return self._c.main_channel_id
 
     @property
     def exec_group(self) -> int:
+        """Staff/exec group chat ID, or 0 when unset."""
         return self._c.extend_group_id
 
     @property
     def logs(self) -> tuple[int, int | None]:
+        """Moderation log destination as (chat_id, thread_id)."""
         return self._c.logs_tuple
 
     @property
     def logs_errors(self) -> tuple[int, int | None]:
+        """Error report destination as (chat_id, thread_id)."""
         return self._c.logs_errors_id
 
     @property
     def proofs(self) -> tuple[int, int | None]:
+        """Ban proof destination as (chat_id, thread_id)."""
         return self._c.proofs_id
 
     @property
     def appeals(self) -> tuple[int, int | None]:
+        """Appeal record destination as (chat_id, thread_id)."""
         return self._c.appeals_id
 
     @property
     def appeal_log_handle(self) -> str:
+        """Public log handle shown to users in appeal instructions."""
         return self._c.appeal_log_handle
 
     @property
     def proof_timeout(self) -> int:
+        """Ban proof upload timeout in seconds."""
         return self._c.proof_timeout_seconds
 
     @property
     def appeal_timeout(self) -> int:
+        """Appeal conversation inactivity timeout in seconds."""
         return self._c.appeal_timeout_seconds
 
     @property
     def appeal_discussion_topic(self) -> int:
+        """Thread ID inside MAIN_GROUP where appeal review cards are posted."""
         return self._c.appeal_discussion_topic
 
     @property
     def album_debounce(self) -> int:
+        """Album grouping window in seconds for multi-photo ban proofs."""
         return self._c.album_debounce_seconds
 
     @property
     def log_level(self) -> int:
+        """Logging verbosity level as a stdlib logging int constant."""
         return self._c.log_level
 
     @property
     def modules_load(self) -> list[str]:
+        """Optional allowlist of module names to load; empty means load all."""
         return self._c.modules_load
 
     @property
     def modules_no_load(self) -> list[str]:
+        """Optional denylist of module names to skip during loading."""
         return self._c.modules_no_load
 
 

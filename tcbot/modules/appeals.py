@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from telegram.ext import CallbackQueryHandler, filters
 
+from tcbot.modules.helper import replies
 from tcbot.modules.helper.workflows.appeal_flow import (
     appeal,
     reviewer_locked_out,
@@ -40,7 +41,7 @@ __help_sections__: list[tuple[str, str]] = [
         "or use <code>/checkme</code> and tap the appeal button that appears.",
     ),
     (
-        "Who can use",
+        replies.SEC_WHO,
         "Anyone with an active federation ban. You can only have one active appeal at a time.",
     ),
     (
