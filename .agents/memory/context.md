@@ -1,11 +1,11 @@
 ---
 name: Project context
-description: Current state of TCF Bot project — what is done, in progress, and pending. Update before every commit.
+description: Current state of TCF Bot project - what is done, in progress, and pending. Update before every commit.
 ---
 
-# TCF Bot — Current Context
+# TCF Bot - Current Context
 
-**Last updated:** 2026-06-06 (session 16)
+**Last updated:** 2026-06-06 (session 17)
 
 ## What is done
 
@@ -20,7 +20,7 @@ description: Current state of TCF Bot project — what is done, in progress, and
 - `replies.py` now has full permission-tier set: `PERM_TESTER_ABOVE`, `PERM_DEV_ABOVE`, `PERM_ADMIN_ABOVE`, `PERM_STAFF_ONLY`, `PERM_FOUNDER_ONLY`.
 - `admins.py` and `broadcasting.py` updated to use `replies.PERM_FOUNDER_ONLY` / `replies.PERM_STAFF_ONLY` throughout.
 - `start.py` welcome messages rewritten to fix broken grammar.
-- Comprehensive source audit: CLEAN — no emoji, em-dash, or emoticons anywhere in tcbot/.
+- Comprehensive source audit: CLEAN - no emoji, em-dash, or emoticons anywhere in tcbot/.
 - Bot restarts cleanly: MongoDB connected, indexes ensured, 75 handlers registered, polling active.
 - `kicking_flow.py` SyntaxError fixed.
 - All inline-string extractions complete across all modules and workflows.
@@ -34,7 +34,7 @@ description: Current state of TCF Bot project — what is done, in progress, and
 
 - Sequential await fixes (session 5):
   - `identity.classify()`: gather get_user_mention_data + get_effective_role (affects all mod commands)
-  - `stats.py`: refactored `_ack_and_render(q, data_coro)` — 12 handlers fixed
+  - `stats.py`: refactored `_ack_and_render(q, data_coro)` - 12 handlers fixed
   - `groups.py _toggle` cache-hit path: gather q.answer() + safe_edit()
   - `admins.py cmd_promote/cmd_demote`: gather identity.classify + get_effective_role
 
@@ -108,6 +108,8 @@ Nothing. Session 14 checkpoint complete.
 - Agent-rule docs are being re-audited for internal consistency; session 15 fixed a contradiction in `.agents/CLAUDE.md` where one section still allowed emojis even though the canonical bot voice forbids pictograph emoji and text emoticons.
 - Session 15 verification baseline passed end to end: `uv sync --extra test`, editable reinstall, import check, startup check, Ruff, runtime start, full pytest, and stale-rule grep audit.
 - Session 16 re-verified runtime after a transient local bind conflict on port 5000: `PORT=5001 uv run python -m tcbot` started cleanly, so the issue was environmental rather than code-related.
+- Session 17 removed the remaining em dash and en dash characters from authored Markdown so the repository docs now match the no-dash typography rule more closely.
+- Session 17 verification passed after rerunning startup and runtime checks sequentially on isolated ports (`5006` and `5007`), avoiding the self-induced bot-instance conflict from the earlier parallel check attempt.
 
 ## Blockers
 

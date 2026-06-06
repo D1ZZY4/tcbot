@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-06 (session 17)
+
+### Documentation
+
+- Removed remaining em dash and en dash characters from tracked authored Markdown files: `.agents/memory/MEMORY.md`, `.agents/memory/context.md`, `.agents/memory/decisions.md`, `.agents/memory/progress.md`, `.agents/memory/sequential-await-audit.md`, and `CHANGELOG.md`.
+
 ## [Unreleased] - 2026-06-06 (session 16)
 
 ### Documentation
@@ -96,7 +102,7 @@ Additional 5 tests (+5) covering success/happy paths:
 - `test_admins.py`: `on_promo_decision` approve path calls `add_admin` and edits card;
   reject path calls `resolve` and edits card.
 - `test_connecting.py`: `cmd_tcconnect` success path calls `complete_join` and replies.
-  Note: `connection` is a frozen dataclass — patched at module level via
+  Note: `connection` is a frozen dataclass - patched at module level via
   `monkeypatch.setattr(connecting, "connection", MagicMock(...))`.
 - `test_disconnecting.py`: `cmd_tcdisconnect` success path calls `deactivate_group` and
   replies; `cmd_rmtc` success path deactivates and replies.
@@ -105,7 +111,7 @@ Additional 1 test (+1) covering connect success path:
 - `test_connected_flow.py`: `on_join_decision` connect-success path (owner verified, bot
   has all perms, group not yet connected) → `complete_join` runs and prompt is edited
   with the "connected" message. Note: `BuildConnection` is a frozen dataclass; method
-  cannot be patched — all DB/bot dependencies mocked instead.
+  cannot be patched - all DB/bot dependencies mocked instead.
 
 Test suite: 1374 -> 1394 (70 files, 2 pre-existing warnings, all green). Ruff: clean.
 
@@ -977,7 +983,7 @@ Extracted all static user-facing reply strings from `tcbot/modules/helper/workfl
 
 ### Fixed - Em-dash removal (Python source and docs)
 
-- **`tcbot/database/mongos.py` line 131**: Replaced em-dash (`—`) with semicolon in a code comment.
+- **`tcbot/database/mongos.py` line 131**: Replaced em-dash (`-`) with semicolon in a code comment.
 - **`docs/databases/databases.md` line 77**: Replaced em-dash with parentheses in the index table.
 - **`CHANGELOG.md` line 42**: Replaced em-dash with colon in a prior changelog entry.
 
@@ -1082,7 +1088,7 @@ Extracted all static user-facing reply strings from `tcbot/modules/helper/workfl
 
 ### Changed - Refactoring
 
-- **Em-dash and en-dash removal (Python source)**: All em-dashes (`—`) and en-dashes (`–`) removed from every Python source file across `tcbot/`, `tests/`, and all workflow, database, helper, and utility files. Replaced with `:`, `;`, `,`, or parentheses as appropriate for the context. Numeric ranges changed to hyphens (e.g. `1-3`). 176/176 tests pass, ruff clean after the full sweep.
+- **Em-dash and en-dash removal (Python source)**: All em-dashes (`-`) and en-dashes (`-`) removed from every Python source file across `tcbot/`, `tests/`, and all workflow, database, helper, and utility files. Replaced with `:`, `;`, `,`, or parentheses as appropriate for the context. Numeric ranges changed to hyphens (e.g. `1-3`). 176/176 tests pass, ruff clean after the full sweep.
 - **Em-dash and en-dash removal (documentation)**: All em/en-dashes removed from every `.md` file in the repository: `README.md`, `AGENTS.md`, `PLAN.md`, `CHANGELOG.md`, `docs/`, `.agents/CLAUDE.md`, `.agents/RULES.md`, `.agents/STYLE-CODE.md`, `.agents/STYLE-COMMENTS.md`, `.agents/WORKFLOW.md`, `.agents/TEST-RUFF.md`, `.agents/REPLIT.md`, all `.agents/agents/*.md`, all `.agents/skills/**/*.md`, and `.agents/memory/*.md`. Final grep across all project `.md` files (excluding `.git/`, `.trae/`, `.local/`) confirms 0 remaining occurrences.
 - **Text emoticon removal from bot responses**: All text emoticons (`:)`, `:v`, `:')`, `:D`) removed from `tcbot/modules/helper/identity.py`. Agent instruction files (`.agents/CLAUDE.md`, `.agents/RULES.md`) updated to reflect the new policy: the bot expresses dry humor through word choice only, no text emoticons in any reply path.
 - **Bot voice policy updated**: `.agents/CLAUDE.md` and `.agents/RULES.md` now state the canonical voice as professional, friendly, formal, and dry; humor via word choice only. No pictograph emoji, no text emoticons.

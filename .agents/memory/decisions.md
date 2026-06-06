@@ -3,7 +3,7 @@ name: Technical decisions
 description: Non-trivial technical decisions made during development. Format: date + decision + why.
 ---
 
-# TCF Bot — Technical Decisions
+# TCF Bot - Technical Decisions
 
 ## 2026-06-02: Pagination helpers centralized in tcbot.utils.pagination
 

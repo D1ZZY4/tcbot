@@ -3,9 +3,9 @@ name: Progress tracker
 description: Item-by-item status of the improvement plan. Updated at each commit checkpoint.
 ---
 
-# TCF Bot — Progress
+# TCF Bot - Progress
 
-**Last updated:** 2026-06-06 (session 16)
+**Last updated:** 2026-06-06 (session 17)
 
 ## Verification baseline
 
@@ -14,17 +14,18 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv sync --extra test` | PASS |
 | `uv pip install -e .` | PASS |
 | `uv run python -c "import tcbot; print('import OK')"` | PASS |
-| `uv run python -m tcbot --help 2>&1 || uv run python -c "from tcbot import *; print('startup OK')"` | PASS by runtime evidence on initial run; a later rerun hit a transient local port conflict on `5000`, then cleanly passed again with `PORT=5001` |
+| `uv run python -m tcbot --help 2>&1 || uv run python -c "from tcbot import *; print('startup OK')"` | PASS by runtime evidence with `PORT=5002`: bot started cleanly, connected MongoDB, ensured indexes, initialised, and stayed alive until timeout |
 | `uv run ruff format .` | PASS (143 files left unchanged) |
 | `uv run ruff check --fix .` | PASS |
-| `uv run python -m tcbot` | PASS by runtime evidence with `PORT=5001`: bot started cleanly, connected MongoDB, ensured indexes, started scheduler, then timed out because polling stayed alive |
+| `uv run python -m tcbot` | PASS by runtime evidence with `PORT=5003`: bot started cleanly, connected MongoDB, ensured indexes, started scheduler, and stayed alive until timeout |
 | `uv run --extra test pytest --tb=short -q` | PASS (full suite green) |
-| `grep -RIn "1-3 emojis\|emoji only where natural" . --include='*.md' --exclude-dir=.git --exclude-dir=.venv --exclude-dir=.kilo --exclude-dir=.trae` | PASS for stale-rule audit: only expected historical references remain in `CHANGELOG.md` and `progress.md` |
+| `python` Markdown dash audit (authored docs only) | PASS: no authored Markdown files outside excluded mirrors/cache/vendor dirs still contain Unicode em dash or en dash characters |
 
 ## Completed items
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Markdown dash cleanup across authored docs | docs | Removed remaining em dash and en dash characters from tracked memory docs and `CHANGELOG.md`; follow-up audit confirmed no tracked authored Markdown files still contain those Unicode dash characters | 2026-06-06 |
 | `.agents/memory/context.md` Ruff baseline sync | docs | Updated stale Ruff file-count note from 142 to the current 143-file baseline verified in session 16 | 2026-06-06 |
 | `.agents/CLAUDE.md` emoji-policy contradiction fix | docs | Replaced stale "use 1-3 emojis" guidance with the canonical no-emoji, no-emoticon bot-voice rule so agent instructions are internally consistent | 2026-06-06 |
 | Admins callback happy-path tests (+6) | P4 | on_demote_confirm success + admin-block + execute failure; on_promote_role_btn success + unknown role | 2026-06-06 |
@@ -35,7 +36,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Fix "coroutine never awaited" warnings in test_broadcasting.py | fix | `_make_fan_out_mock(n)` helper closes coroutines via side_effect; 0 warnings now | 2026-06-06 |
 | cmd_help + admins handler tests | P3 | +11 tests across test_admins.py and test_help.py; fixed monkeypatch isolation bug (cfg.logs property with no setter) | 2026-06-06 |
 | checking/stats/admins/connecting/disconnecting happy-path tests (+8) | P4 | on_checkme_detail, on_checkme_back, on_stats_search_back, on_promo_decision×2, cmd_tcconnect success, cmd_tcdisconnect success, cmd_rmtc success | 2026-06-06 |
-| on_join_decision connect-success test (+1) | P4 | test_connected_flow.py: BuildConnection frozen-dataclass — patched all DB/bot deps instead of method; verifies complete_join runs and prompt is edited | 2026-06-06 |
+| on_join_decision connect-success test (+1) | P4 | test_connected_flow.py: BuildConnection frozen-dataclass, patched all DB/bot deps instead of method, verifies complete_join runs and prompt is edited | 2026-06-06 |
 | decisions.md: frozen-dataclass monkeypatch lesson | docs | FrozenInstanceError on setattr; patch module-level name with MagicMock instead | 2026-06-06 |
 | Doc test-count sync | housekeeping | All docs updated 1364/1382 -> 1394 (PLAN.md, README.md, AGENTS.md, replit.md, memory files) | 2026-06-06 |
 | Replit migration | infra | Python 3.12, secrets in Replit Secrets, PORT=8080, bot starts and polls | 2026-06-02 |
@@ -77,8 +78,8 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | test_additional.py (7 tests) | P3 | `__additional_msg__` content + callback handler | 2026-06-02 |
 | test_privacy.py (14 tests) | P3 | Privacy messages + both callbacks | 2026-06-02 |
 | PLAN.md test count | docs | Updated from 332/26 to 428/30 | 2026-06-02 |
-| kicking_flow.py SyntaxError fix | P1 | `_MSG_REJOIN_ALLOWED` used as implicit string concat (variable, not literal); changed to `f"{_MSG_REJOIN_ALLOWED}"` — unblocked test_kick_flow.py + test_kicking.py collection | 2026-06-02 |
-| docs-maintainer SKILL.md staleness | docs | Test count 300/25 → 698/50; date bumped to 2026-06-02 | 2026-06-02 |
+| kicking_flow.py SyntaxError fix | P1 | `_MSG_REJOIN_ALLOWED` used as implicit string concat (variable, not literal); changed to `f"{_MSG_REJOIN_ALLOWED}"`, unblocked test_kick_flow.py + test_kicking.py collection | 2026-06-02 |
+| docs-maintainer SKILL.md staleness | docs | Test count 300/25 to 698/50; date bumped to 2026-06-02 | 2026-06-02 |
 | docs/helper/helper.md replies.py table | docs | Expanded from 10 to 15 constants; added ERR_GROUP_ONLY, ERR_NO_CONNECTED_GROUPS, ERR_GROUP_NOT_FOUND, PERM_FOUNDER_ONLY, PERM_STAFF_ONLY, PERM_ADMIN_ABOVE | 2026-06-02 |
 | docs/utils/utils.md mermaid filename | docs | Fixed `logging_setup.py` → `logger.py` in Mermaid diagram node | 2026-06-02 |
 | .agents/memory/structure.md filename | docs | Corrected `logging_setup.py` → `logger.py`; updated test count 25+ → 50 files / 698 tests | 2026-06-02 |
@@ -104,9 +105,9 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Handler-behavior tests batch 3 (14 tests) | P4 | cmd_promote(4)+cmd_demote(5) in test_admins.py; cmd_checkme(3)+cmd_check(2) in test_checking.py; suite 1127→1141 | 2026-06-02 (s5) |
 | Handler-behavior tests batch 4 (11 tests) | P4 | cmd_tcconnect(5) in test_connecting.py; cmd_tcdisconnect(4)+cmd_rmtc(2) in test_disconnecting.py; suite 1141→1152 | 2026-06-02 (s5) |
 | performance.yml: `users_db` → `users_cache` + `import os` | P4 | Both benchmark fns fixed; missing import fixed; 3 bugs total | 2026-06-03 (s6) |
-| 4× "02:00 UTC" → "04:00 UTC" | docs | auto-fix.yml comment + docs/workflows-guide.md ×2 + README.md | 2026-06-03 (s6) |
-| run-bot.yml description | docs | "Manual deployment" → correct schedule summary in docs/workflows-guide.md + README.md | 2026-06-03 (s6) |
-| config.env.example PORT comment | docs | Removed "auto = pick free port" — actual fallback is 5000 | 2026-06-03 (s6) |
+| 4x "02:00 UTC" to "04:00 UTC" | docs | auto-fix.yml comment + docs/workflows-guide.md x2 + README.md | 2026-06-03 (s6) |
+| run-bot.yml description | docs | "Manual deployment" to correct schedule summary in docs/workflows-guide.md + README.md | 2026-06-03 (s6) |
+| config.env.example PORT comment | docs | Removed "auto = pick free port", actual fallback is 5000 | 2026-06-03 (s6) |
 | config.env.example PROOFS/LOGS/LOGS_ERRORS/APPEALS auto comments | docs | Removed 4 "auto = create forum thread in MAIN_GROUP" blocks (feature never existed) | 2026-06-03 (s6) |
 | 12 public function docstrings | P4 | bold, italic, code, link, esc, on_groups_details, on_groups_simple, on_help_menu, on_helpc_main, appeal_deep_link, on_menu_groups, on_menu_groups_simple | 2026-06-03 (s6) |
 | PLAN.md Code Review Findings | docs | Added P4 rows 2-8 for all session-6 findings; all Resolved | 2026-06-03 (s6) |

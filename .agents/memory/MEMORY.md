@@ -1,12 +1,12 @@
-- [Autonomous operating brief](../../nothing.md) — full autonomous agent instructions (Indonesian); baseline test count kept in sync here
-- [Replit test runner](replit-test-runner.md) — `uv run --extra test pytest` and `uv run ruff`; current baseline 1405 tests / 71 files green
-- [Python implicit-string-concat pitfall](decisions.md) — variables cannot participate in implicit string concat; use `f"{var}"` instead of placing a bare variable name adjacent to string literals
-- [ConversationHandler test patterns](conv-handler-test-patterns.md) — mocking rules for ban/appeal/warn state-machine tests: album state, `_flush_album`, `asyncio.gather` return shapes
-- [Pagination refactor pattern](pagination-refactor.md) — `paginate`, `nav_row`, `date_or_unknown` live in `tcbot.utils.pagination`; flow files must import and call these directly with `_PAGE_SIZE` as third arg
-- [Project context](context.md) — current state, what is done, what is pending, known runtime notes
-- [Progress tracker](progress.md) — item-by-item status with verification baseline
-- [Technical decisions](decisions.md) — non-trivial decisions with why and how-to-apply
-- [Module structure](structure.md) — full repo layout snapshot, cross-cutting constraints
-- [Replit nix store constraint](replit-nix-store.md) — uv sync fails writing to nix store; fix and runtime workaround
-- [Sequential await audit complete](sequential-await-audit.md) — all module files audited; key fixes in identity.classify, stats.py, groups._toggle, admins cmd_promote/demote
-- [Frozen dataclass monkeypatch](decisions.md) — frozen dataclass instances (e.g. `connection`) cannot be patched via `patch("module.obj.attr")`; patch the module-level name instead
+- [Autonomous operating brief](../../nothing.md) - full autonomous agent instructions (Indonesian); baseline test count kept in sync here
+- [Replit test runner](replit-test-runner.md) - `uv run --extra test pytest` and `uv run ruff`; current baseline 1405 tests / 71 files green
+- [Python implicit-string-concat pitfall](decisions.md) - variables cannot participate in implicit string concat; use `f"{var}"` instead of placing a bare variable name adjacent to string literals
+- [ConversationHandler test patterns](conv-handler-test-patterns.md) - mocking rules for ban/appeal/warn state-machine tests: album state, `_flush_album`, `asyncio.gather` return shapes
+- [Pagination refactor pattern](pagination-refactor.md) - `paginate`, `nav_row`, `date_or_unknown` live in `tcbot.utils.pagination`; flow files must import and call these directly with `_PAGE_SIZE` as third arg
+- [Project context](context.md) - current state, what is done, what is pending, known runtime notes
+- [Progress tracker](progress.md) - item-by-item status with verification baseline
+- [Technical decisions](decisions.md) - non-trivial decisions with why and how-to-apply
+- [Module structure](structure.md) - full repo layout snapshot, cross-cutting constraints
+- [Replit nix store constraint](replit-nix-store.md) - uv sync fails writing to nix store; fix and runtime workaround
+- [Sequential await audit complete](sequential-await-audit.md) - all module files audited; key fixes in identity.classify, stats.py, groups._toggle, admins cmd_promote/demote
+- [Frozen dataclass monkeypatch](decisions.md) - frozen dataclass instances (e.g. `connection`) cannot be patched via `patch("module.obj.attr")`; patch the module-level name instead

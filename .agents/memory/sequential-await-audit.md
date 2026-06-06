@@ -3,7 +3,7 @@ name: Sequential await audit
 description: Results of the full codebase audit for sequential awaits on independent operations (RULES.md Forbidden Action). Records which modules were fixed and which are correct-by-design.
 ---
 
-# Sequential Await Audit — TCF Bot
+# Sequential Await Audit - TCF Bot
 
 **Why this matters:** RULES.md designates sequential awaits on independent async operations a Forbidden Action. Every moderation handler calls into the same helpers, so fixing a central function (e.g. `identity.classify`) fixes latency for all callers at once.
 
@@ -16,16 +16,16 @@ description: Results of the full codebase audit for sequential awaits on indepen
 | `tcbot/modules/admins.py` | `cmd_promote` and `cmd_demote`: `identity.classify + db.users_roles.get_effective_role` gathered | s5 |
 | `tcbot/modules/stats.py` | Refactored `_ack_and_render(q, data_coro)`: `q.answer()` + heavy DB coroutine now parallel across 12 handlers | s5 |
 | `tcbot/modules/groups.py` | `_toggle` cache-hit branch: `q.answer()` + `safe_edit()` now gathered | s5 |
-| `tcbot/modules/helper/identity.py` | `classify()`: `get_user_mention_data` + `get_effective_role` now gathered (high-impact — affects every moderation command) | s5 |
+| `tcbot/modules/helper/identity.py` | `classify()`: `get_user_mention_data` + `get_effective_role` now gathered (high-impact - affects every moderation command) | s5 |
 
 ## Correct-by-design (sequential intentional)
 
 | Module | Reason sequential is correct |
 |---|---|
 | `broadcasting.py` | Status reply must appear before fan_out begins; status text depends on `len(groups)` |
-| `maintenance.py` | Same pattern as broadcasting — status before fan_out |
+| `maintenance.py` | Same pattern as broadcasting - status before fan_out |
 | `disconnecting.py` | Each guard check (`is_connected`, role verify) must succeed before the next step |
-| `decorators.py` | Auth checks (`is_staff`, `get_effective_role`) guard `func(update, ctx)` — cannot parallelize |
+| `decorators.py` | Auth checks (`is_staff`, `get_effective_role`) guard `func(update, ctx)` - cannot parallelize |
 | `unban_flow.py` | `get_active_ban` result controls early exit; subsequent reply depends on it |
 | `reason_flow.py` | Each state step produces data needed by the next |
 | `warning_flow.py` | `add_warn` result (count) drives the auto-ban threshold check |
@@ -41,7 +41,7 @@ description: Results of the full codebase audit for sequential awaits on indepen
 | `connecting.py` | Already correct |
 | `kick_flow.py` | No sequential await patterns found |
 | `mute_flow.py` | No sequential await patterns found |
-| `demote_flow.py` | if/else branches — single await per branch by necessity |
+| `demote_flow.py` | if/else branches - single await per branch by necessity |
 | `promote_flow.py` | Conditional logic gates each step |
 
 ## Test coverage for classify()
