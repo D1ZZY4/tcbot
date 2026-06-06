@@ -35,6 +35,8 @@ attached_assets/
 
 # Local
 logs*/
+check.log
+format.log
 .pytest_cache/
 nothing.md
 account*

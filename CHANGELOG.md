@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-07 (session 24)
+
+### Fixed
+
+- Removed tracked root log artifacts `check.log` and `format.log`, and added targeted `.gitignore` entries so workflow-generated Ruff logs no longer pollute repository status.
+
 ## [Unreleased] - 2026-06-07 (session 23)
 
 ### Fixed
