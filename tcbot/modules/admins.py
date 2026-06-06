@@ -32,8 +32,6 @@ log = logging.getLogger(__name__)
 # ──────────────── User-facing reply constants ──────────────────── #
 
 _ERR_NO_ASSIGN_PERMS = "You don't have permission to assign any roles."
-_ERR_PERM_EXPIRED = "You no longer have permission to do this."
-_ERR_UNKNOWN_ROLE = "Unknown role."
 _MSG_PROMOTE_CANCELLED = "Promotion cancelled. No changes were made."
 _ERR_NO_REMOVABLE_ROLE = "That user doesn't hold a role that can be removed."
 _ERR_FOUNDER_DEMOTE_ONLY = "Only the Founder can demote an Admin."
@@ -208,7 +206,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     executor_role = await db.users_roles.get_effective_role(admin.id)
 
     if executor_role not in ("founder", "admin"):
-        await q.answer(_ERR_PERM_EXPIRED, show_alert=True)
+        await q.answer(replies.ERR_PERM_EXPIRED, show_alert=True)
         try:
             await q.edit_message_reply_markup(None)
         except Exception as exc:
@@ -222,7 +220,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     target_id = int(target_id_str)
 
     if role not in ("admin", "developer", "tester"):
-        await q.edit_message_text(_ERR_UNKNOWN_ROLE, reply_markup=None)
+        await q.edit_message_text(replies.ERR_UNKNOWN_ROLE, reply_markup=None)
         return
 
     # * answer + fetch name + current role in parallel
@@ -334,7 +332,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     executor_role = await db.users_roles.get_effective_role(admin.id)
 
     if executor_role not in ("founder", "admin"):
-        await q.answer(_ERR_PERM_EXPIRED, show_alert=True)
+        await q.answer(replies.ERR_PERM_EXPIRED, show_alert=True)
         try:
             await q.edit_message_reply_markup(None)
         except Exception as exc:

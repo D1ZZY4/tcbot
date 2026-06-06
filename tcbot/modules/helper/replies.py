@@ -23,6 +23,8 @@ ERR_ROLE_VERIFY = "Could not verify your group role."
 ERR_GROUP_ONLY = "Use this command in a group."
 ERR_NO_CONNECTED_GROUPS = "No connected groups."
 ERR_GROUP_NOT_FOUND = "Group not found or already removed."
+ERR_PERM_EXPIRED = "You no longer have permission to do this."
+ERR_UNKNOWN_ROLE = "Unknown role."
 
 # ──────────────────────── Context / Scope ───────────────────────── #
 
