@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-06 (session 20)
+
+### Documentation
+
+- Added a Mermaid deployment-runtime flowchart to `replit.md` covering secrets and environment setup, `uv sync`, bot startup prerequisites, Telegram polling, and the Flask health check.
+
 ## [Unreleased] - 2026-06-06 (session 19)
 
 ### Documentation

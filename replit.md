@@ -85,6 +85,22 @@ uv run python -m tcbot
 
 The bot fails fast when `BOT_TOKEN`, `MONGODB_URI`, or `OWNER_ID` are missing. It starts polling Telegram after MongoDB connection, index creation, owner seeding, handler registration, and error reporter setup complete.
 
+```mermaid
+flowchart TD
+    Secrets[Configure Replit Secrets] --> Env[Set required environment variables]
+    Env --> Sync[Run uv sync]
+    Sync --> Start[Run uv run python -m tcbot]
+    Start --> Ready[Validate startup prerequisites]
+    Ready --> Mongo[MongoDB connected]
+    Ready --> Indexes[Indexes created]
+    Ready --> Owner[Initial owner ensured]
+    Ready --> Handlers[Handlers registered]
+    Ready --> Reporter[Error reporter attached]
+    Ready --> Polling[Start Telegram polling]
+    Ready --> Health[Expose Flask health check]
+    Health --> Ok[GET slash returns OK]
+```
+
 ## Health Check
 
 `tcbot/alive.py` starts Flask in a daemon thread when `tcbot/__main__.py` calls `start_keepalive()`.

@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-06 (session 19)
+**Last updated:** 2026-06-06 (session 20)
 
 ## Verification baseline
 
@@ -14,17 +14,18 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv sync --extra test` | PASS |
 | `uv pip install -e .` | PASS |
 | `uv run python -c "import tcbot; print('import OK')"` | PASS |
-| `uv run python -m tcbot --help 2>&1 || uv run python -c "from tcbot import *; print('startup OK')"` | PASS by runtime evidence with `PORT=5010`: bot started cleanly, connected MongoDB, ensured indexes, initialised, and stayed alive until timeout |
+| `uv run python -m tcbot --help 2>&1 || uv run python -c "from tcbot import *; print('startup OK')"` | PASS by runtime evidence with `PORT=5012`: bot started cleanly, connected MongoDB, ensured indexes, initialised, and stayed alive until timeout |
 | `uv run ruff format .` | PASS (143 files left unchanged) |
 | `uv run ruff check --fix .` | PASS |
-| `uv run python -m tcbot` | PASS by runtime evidence with `PORT=5011`: bot started cleanly, connected MongoDB, ensured indexes, started scheduler, and stayed alive until timeout |
+| `uv run python -m tcbot` | PASS by runtime evidence with `PORT=5013`: bot started cleanly, connected MongoDB, ensured indexes, started scheduler, and stayed alive until timeout |
 | `uv run --extra test pytest --tb=short -q` | PASS (full suite green) |
-| `python` Mermaid coverage audit for `.agents/WORKFLOW.md` | PASS: `.agents/WORKFLOW.md` contains a Mermaid flowchart after session 19 |
+| `python` Mermaid coverage audit for `replit.md` | PASS: `replit.md` contains a Mermaid flowchart after session 20 |
 
 ## Completed items
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Mermaid deployment-runtime flowchart for Replit doc | docs | Added a compact Mermaid flowchart to `replit.md` covering secrets, env setup, `uv sync`, startup prerequisites, polling, and health check exposure | 2026-06-06 |
 | Mermaid flowchart for agent validation workflow | docs | Added a compact validation-order Mermaid diagram to `.agents/WORKFLOW.md` covering focused checks, Ruff, full tests, runtime verification, and reporting | 2026-06-06 |
 | Mermaid coverage for top-level docs | docs | Added rendered Mermaid diagrams to `README.md` and `PLAN.md` for architecture summary, startup sequence, and request-processing flow | 2026-06-06 |
 | Markdown dash cleanup across authored docs | docs | Removed remaining em dash and en dash characters from tracked memory docs and `CHANGELOG.md`; follow-up audit confirmed no tracked authored Markdown files still contain those Unicode dash characters | 2026-06-06 |
