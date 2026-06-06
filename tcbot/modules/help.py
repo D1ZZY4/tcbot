@@ -300,7 +300,7 @@ async def on_help_topic_any(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     q: CallbackQuery = update.callback_query
     data = q.data
     if data.startswith("helpc_"):
-        await _show_module(q, "help_" + data[6:], is_menu_path=False)
+        await _show_module(q, "help_" + data[len("helpc_") :], is_menu_path=False)
     else:
         await _show_module(q, data, is_menu_path=True)
 
@@ -312,7 +312,7 @@ async def on_help_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     q: CallbackQuery = update.callback_query
     data = q.data
     is_menu_path = data.startswith("helps_")
-    body = data[6:] if is_menu_path else data[7:]
+    body = data[len("helps_") :] if is_menu_path else data[len("helpcs_") :]
     try:
         mod_slug, idx_str = body.split(":", 1)
         idx = int(idx_str)

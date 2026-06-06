@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-07 (session 24)
+**Last updated:** 2026-06-06 (session 26)
 
 ## Verification baseline
 
@@ -15,7 +15,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv pip install -e .` | PASS |
 | `uv run python -c "import tcbot; print('import OK')"` | PASS |
 | `uv run python -m tcbot --help 2>&1 || uv run python -c "from tcbot import *; print('startup OK')"` | PASS by runtime evidence with `PORT=5026`: bot started cleanly, connected MongoDB, ensured indexes, initialised, and stayed alive until timeout |
-| `uv run ruff format .` | PASS (143 files left unchanged) |
+| `uv run ruff format .` | PASS (144 files left unchanged) |
 | `uv run ruff check --fix .` | PASS |
 | `uv run python -m tcbot` | PASS by runtime evidence with `PORT=5027`: bot started cleanly, connected MongoDB, ensured indexes, started scheduler, and stayed alive until timeout |
 | `uv run --extra test pytest --tb=short -q` | PASS (full suite green) |
@@ -129,6 +129,12 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `_exec_mute` adapter tests (+1) | P4 | test_mute_flow.py: copies mute_ keys, clears them, preserves other keys | 2026-06-03 (s11) |
 | `execute_unmute` no-log-channel branch (+1) | P4 | test_mute_flow.py: cfg.logs=(None,None) path; send_message not called | 2026-06-03 (s11) |
 | `_execute_mute` fallback paths (+2) | P4 | test_mute_flow.py: edit failure -> reply_text; log failure absorbed silently | 2026-06-03 (s11) |
+
+| `get_bot()` Protocol stub docstring | housekeeping | Added missing docstring to `_MessageLike.get_bot()` in `tcbot/utils/prefixes.py`; AST audit now reports 0 missing | 2026-06-07 (s25) |
+| Ruff file-count baseline update 143->144 | housekeeping | Updated across CHANGELOG.md, context.md, progress.md, replit-test-runner.md | 2026-06-07 (s25) |
+| `check_flow.py` magic number constants | housekeeping | Extracted `_REASON_PREVIEW_LEN = 80` and `_BUTTON_TITLE_MAX = 24`; replaced 3 bare slice literals | 2026-06-06 (s26) |
+| `help.py` prefix-offset self-documentation | housekeeping | `data[6:]`/`data[7:]` replaced with `data[len("helpc_"):]`/`data[len("helps_"):]`/`data[len("helpcs_"):]` | 2026-06-06 (s26) |
+| MEMORY.md stale link removal | housekeeping | Removed broken `../../nothing.md` index entry; file no longer exists | 2026-06-06 (s26) |
 
 ## Pending (remaining optional)
 

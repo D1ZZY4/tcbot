@@ -2,6 +2,29 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-06 (session 26)
+
+### Refactored
+
+- Extracted `_REASON_PREVIEW_LEN = 80` and `_BUTTON_TITLE_MAX = 24` named constants to `tcbot/modules/helper/workflows/check_flow.py`; replaced two bare `[:80]` slices and one `[:24]` slice with the constant names.
+- Replaced bare string-offset literals `data[6:]` (twice) and `data[7:]` in `tcbot/modules/help.py` with `data[len("helpc_"):]`, `data[len("helps_"):]`, and `data[len("helpcs_"):]` so the slice width is self-documenting and safe against prefix changes.
+
+### Maintenance
+
+- Removed stale `../../nothing.md` link from `.agents/memory/MEMORY.md` index (file no longer exists); merged into updated Replit test runner entry.
+
+Test suite: 1405 tests / 71 files / **0 warnings** / all green. Ruff: clean (144 files).
+
+## [Unreleased] - 2026-06-07 (session 25)
+
+### Fixed
+
+- Added missing docstring to `get_bot()` stub method on `_MessageLike` Protocol in `tcbot/utils/prefixes.py` so the AST audit reports zero public functions without docstrings.
+
+### Documentation
+
+- Updated Ruff file-count baseline from 143 to 144 across `CHANGELOG.md`, `.agents/memory/context.md`, `.agents/memory/progress.md`, and `.agents/memory/replit-test-runner.md`.
+
 ## [Unreleased] - 2026-06-07 (session 24)
 
 ### Fixed

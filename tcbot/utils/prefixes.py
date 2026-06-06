@@ -26,7 +26,9 @@ class _BotLike(Protocol):
 class _MessageLike(Protocol):
     text: str | None
 
-    def get_bot(self) -> _BotLike: ...
+    def get_bot(self) -> _BotLike:
+        """Return the bot instance associated with this message."""
+        ...
 
 
 class _UpdateLike(Protocol):

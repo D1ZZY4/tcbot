@@ -21,6 +21,8 @@ log = logging.getLogger(__name__)
 
 _PAGE_SIZE = 5
 _GET_CHAT_TIMEOUT = 3.0
+_REASON_PREVIEW_LEN = 80
+_BUTTON_TITLE_MAX = 24
 
 
 # ────────────────────────── Small helpers ───────────────────────── #
@@ -281,7 +283,7 @@ class Check:
             rows.append(
                 [
                     InlineKeyboardButton(
-                        f"{title[:24]} ({count})",
+                        f"{title[:_BUTTON_TITLE_MAX]} ({count})",
                         callback_data=f"check_warn_chat:{target_id}:{cid}:0",
                     )
                 ]
@@ -332,7 +334,9 @@ class Check:
         base_idx = page * _PAGE_SIZE
         for i, w in enumerate(chunk, start=1):
             ts = date_or_unknown(w.get("timestamp"))
-            reason_short = esc(str(w.get("reason", "(no reason)"))[:80])
+            reason_short = esc(
+                str(w.get("reason", "(no reason)"))[:_REASON_PREVIEW_LEN]
+            )
             admin_id = w.get("admin_id", 0)
             admin_name = admin_name_map.get(admin_id, "Admin") if admin_id else "Admin"
             lines.append(
@@ -481,7 +485,7 @@ async def _per_chat_event_list(
     base_idx = page * _PAGE_SIZE
     for i, rec in enumerate(chunk, start=1):
         ts = date_or_unknown(rec.get("timestamp"))
-        reason_short = esc(str(rec.get("reason", "(no reason)"))[:80])
+        reason_short = esc(str(rec.get("reason", "(no reason)"))[:_REASON_PREVIEW_LEN])
         chat_id = rec.get("chat_id", 0)
         title = titles.get(chat_id) or str(chat_id)
         admin_id = rec.get("admin_id", 0)
