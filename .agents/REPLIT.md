@@ -149,6 +149,21 @@ After starting the bot, inspect logs for:
 
 Fix startup `ERROR` logs before testing commands in Telegram.
 
+```mermaid
+flowchart TD
+    Start[Start bot on Replit] --> Inspect[Inspect startup logs]
+    Inspect --> Logging[Logging initialized]
+    Logging --> KeepAlive[Keep-alive server started]
+    KeepAlive --> Mongo[MongoDB connected]
+    Mongo --> Indexes[Indexes ensured]
+    Indexes --> Owner[Initial owner ensured]
+    Owner --> Modules[Modules loaded and handlers registered]
+    Modules --> Polling[Polling started]
+    Polling --> Errors{Any startup ERROR logs?}
+    Errors -->|Yes| Fix[Fix startup errors first]
+    Errors -->|No| Telegram[Test commands in Telegram]
+```
+
 ---
 
 ## Safe Replit Operations

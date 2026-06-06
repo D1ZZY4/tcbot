@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-06 (session 21)
+
+### Documentation
+
+- Added a Mermaid startup-log checklist flowchart to `.agents/REPLIT.md` so the Replit runtime verification sequence is visual as well as textual.
+
 ## [Unreleased] - 2026-06-06 (session 20)
 
 ### Documentation
