@@ -401,3 +401,51 @@ async def test_on_check_appeals_calls_appeals_list(monkeypatch) -> None:
     await _on_check_appeals(update, ctx)
     checking.Check.appeals_list.assert_awaited_once_with(55, 0)
     checking._safe_edit.assert_awaited_once()
+
+
+async def test_on_checkme_detail_active_ban_edits_message(monkeypatch) -> None:
+    """on_checkme_detail with an active ban must answer and edit the message with detail."""
+    from unittest.mock import AsyncMock, patch
+
+    update, ctx = _make_check_cb("checkme_detail:ban-active")
+    ban = {"_id": "ban-active", "is_active": True, "banned_user_id": 99}
+    monkeypatch.setattr(checking.db.bans_db, "get_ban", AsyncMock(return_value=ban))
+    with patch(
+        "tcbot.modules.helper.ban_info.build_ban_detail",
+        new=AsyncMock(return_value=("<b>Detail text</b>", None)),
+    ):
+        await _on_checkme_detail(update, ctx)
+    update.callback_query.edit_message_text.assert_awaited_once()
+    call_kwargs = update.callback_query.edit_message_text.call_args[1]
+    assert call_kwargs.get("parse_mode") == "HTML"
+
+
+async def test_on_checkme_back_found_ban_edits_message(monkeypatch) -> None:
+    """on_checkme_back with a found ban must answer and edit the message back to summary."""
+    from unittest.mock import AsyncMock
+
+    update, ctx = _make_check_cb("checkme_back:ban-found")
+    ban = {
+        "_id": "ban-found",
+        "is_active": True,
+        "banned_user_id": 55,
+        "admin_user_id": 7,
+        "reason": "test",
+        "proof_message_id": None,
+        "timestamp": None,
+    }
+    monkeypatch.setattr(checking.db.bans_db, "get_ban", AsyncMock(return_value=ban))
+    monkeypatch.setattr(
+        checking.db.users_cache,
+        "get_first_name",
+        AsyncMock(return_value="User"),
+    )
+    monkeypatch.setattr(
+        checking.db.users_cache,
+        "get_user_mention_data",
+        AsyncMock(return_value=("User", None)),
+    )
+    await _on_checkme_back(update, ctx)
+    update.callback_query.edit_message_text.assert_awaited_once()
+    call_kwargs = update.callback_query.edit_message_text.call_args[1]
+    assert call_kwargs.get("parse_mode") == "HTML"

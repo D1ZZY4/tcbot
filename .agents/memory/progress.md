@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot — Progress
 
-**Last updated:** 2026-06-03 (session 9)
+**Last updated:** 2026-06-06 (session 13)
 
 ## Verification baseline
 
@@ -14,12 +14,18 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv sync --extra test` | PASS |
 | `uv run ruff format --check .` | PASS (all files unchanged) |
 | `uv run ruff check .` | PASS (0 errors) |
-| `uv run --extra test pytest tests/ -q` | PASS (1364 tests, 70 files, all green; 2 pre-existing warnings in test_broadcasting.py) |
+| `uv run --extra test pytest tests/ -q` | PASS (1394 tests, 70 files, **0 warnings**, all green) |
 
 ## Completed items
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Fix "coroutine never awaited" warnings in test_broadcasting.py | fix | `_make_fan_out_mock(n)` helper closes coroutines via side_effect; 0 warnings now | 2026-06-06 |
+| cmd_help + admins handler tests | P3 | +11 tests across test_admins.py and test_help.py; fixed monkeypatch isolation bug (cfg.logs property with no setter) | 2026-06-06 |
+| checking/stats/admins/connecting/disconnecting happy-path tests (+8) | P4 | on_checkme_detail, on_checkme_back, on_stats_search_back, on_promo_decision×2, cmd_tcconnect success, cmd_tcdisconnect success, cmd_rmtc success | 2026-06-06 |
+| on_join_decision connect-success test (+1) | P4 | test_connected_flow.py: BuildConnection frozen-dataclass — patched all DB/bot deps instead of method; verifies complete_join runs and prompt is edited | 2026-06-06 |
+| decisions.md: frozen-dataclass monkeypatch lesson | docs | FrozenInstanceError on setattr; patch module-level name with MagicMock instead | 2026-06-06 |
+| Doc test-count sync | housekeeping | All docs updated 1364/1382 -> 1394 (PLAN.md, README.md, AGENTS.md, replit.md, memory files) | 2026-06-06 |
 | Replit migration | infra | Python 3.12, secrets in Replit Secrets, PORT=8080, bot starts and polls | 2026-06-02 |
 | P1: ConversationHandler tests | P1 | ban_flow (8), warning_flow (12), appeal_flow (17) state-machine tests added | 2026-06-02 |
 | P1: stats_flow NameError fix | P1 | `_paginate`, `_nav_row`, `_date` undefined - replaced from `tcbot.utils.pagination` | 2026-06-02 |

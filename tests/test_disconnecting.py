@@ -201,3 +201,42 @@ async def test_cmd_rmtc_group_not_found_sends_reply(monkeypatch) -> None:
     )
     await _cmd_rmtc(update, ctx)
     update.effective_message.reply_text.assert_awaited_once()
+
+
+async def test_cmd_tcdisconnect_staff_disconnects_group(monkeypatch) -> None:
+    """cmd_tcdisconnect for a connected group with a TC staff member disconnects it."""
+    update, ctx = _make_disconnect_ctx()
+    member_mock = MagicMock()
+    member_mock.status = "member"
+    ctx.bot.get_chat_member = AsyncMock(return_value=member_mock)
+    monkeypatch.setattr(
+        disconnecting.db.groups_db, "is_connected", AsyncMock(return_value=True)
+    )
+    monkeypatch.setattr(
+        disconnecting.db.users_roles, "is_staff", AsyncMock(return_value=True)
+    )
+    monkeypatch.setattr(
+        disconnecting.db.groups_db, "deactivate_group", AsyncMock(return_value=1)
+    )
+    mock_cfg = MagicMock()
+    mock_cfg.logs = (-300, 0)
+    mock_cfg.community_name = "TestCom"
+    monkeypatch.setattr(disconnecting, "cfg", mock_cfg)
+    await _cmd_tcdisconnect(update, ctx)
+    disconnecting.db.groups_db.deactivate_group.assert_awaited_once_with(-200)
+    update.effective_message.reply_text.assert_awaited_once()
+
+
+async def test_cmd_rmtc_success_deactivates_and_replies(monkeypatch) -> None:
+    """cmd_rmtc with a valid chat ID and existing group deactivates and replies."""
+    update, ctx = _make_rmtc_ctx(text="/rmtc -999")
+    monkeypatch.setattr(
+        disconnecting.db.groups_db, "deactivate_group", AsyncMock(return_value=1)
+    )
+    mock_cfg = MagicMock()
+    mock_cfg.logs = (-300, 0)
+    mock_cfg.community_name = "TestCom"
+    monkeypatch.setattr(disconnecting, "cfg", mock_cfg)
+    await _cmd_rmtc(update, ctx)
+    disconnecting.db.groups_db.deactivate_group.assert_awaited_once_with(-999)
+    update.effective_message.reply_text.assert_awaited_once()

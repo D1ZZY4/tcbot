@@ -35,6 +35,16 @@ description: Non-trivial technical decisions made during development. Format: da
 
 ---
 
+## 2026-06-06: Frozen dataclass objects must be patched at module level
+
+**Decision:** When a module-level object is a frozen dataclass (e.g. `connection` in `tcbot.modules.connecting`), its attributes cannot be patched via `patch("module.obj.attr", ...)` because frozen dataclass instances raise `FrozenInstanceError` on attribute assignment. Instead, replace the entire object at the module level.
+
+**Why:** `patch("tcbot.modules.connecting.connection.check_perms", ...)` tries to `setattr(connection, "check_perms", mock)` which raises `dataclasses.FrozenInstanceError`. The cleanup in `__exit__` then also fails (`cannot delete field`), causing the `patch` context manager to raise.
+
+**How to apply:** In tests, use `monkeypatch.setattr(module, "connection", MagicMock(...))` to replace the entire frozen-dataclass instance with a plain `MagicMock` whose methods can be freely configured. Applies to any frozen-dataclass singleton that is imported as a module-level name.
+
+---
+
 ## 2026-06-02: Memory files live in `.agents/memory/`, MEMORY.md is the index
 
 **Decision:** Persistent cross-session memory uses `.agents/memory/MEMORY.md` as a one-line-per-entry index pointing to topic files in the same directory. Context, progress, and decisions each have their own file.

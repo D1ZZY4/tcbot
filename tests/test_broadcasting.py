@@ -149,6 +149,25 @@ async def test_cmd_broadcast_no_connected_groups_returns_error() -> None:
     assert env.msg.reply_text.call_args[0][0] == ERR_NO_CONNECTED_GROUPS
 
 
+def _make_fan_out_mock(n: int):
+    """Return an AsyncMock for fan_out that closes all coroutines it receives.
+
+    Prevents 'coroutine was never awaited' warnings that arise when fan_out is
+    mocked: cmd_broadcast creates real _send_one coroutines and passes them to
+    the mock, which would otherwise never await or close them.
+    """
+    from unittest.mock import AsyncMock
+
+    results = [None] * n
+
+    async def _side_effect(coros):
+        for c in coros:
+            c.close()
+        return results
+
+    return AsyncMock(side_effect=_side_effect)
+
+
 async def test_cmd_broadcast_sends_to_each_group() -> None:
     """cmd_broadcast must send a message to every active group via fan_out."""
     from unittest.mock import AsyncMock, patch
@@ -156,19 +175,17 @@ async def test_cmd_broadcast_sends_to_each_group() -> None:
     groups = [{"chat_id": -100001}, {"chat_id": -100002}]
     env = _make_update(text="/bc Announcement")
 
+    mock_fan = _make_fan_out_mock(2)
     with (
         patch("tcbot.modules.broadcasting.db") as mock_db,
         patch("tcbot.modules.broadcasting.cfg") as mock_cfg,
-        patch(
-            "tcbot.modules.broadcasting.fan_out",
-            new=AsyncMock(return_value=[None, None]),
-        ) as mock_fan,
+        patch("tcbot.modules.broadcasting.fan_out", new=mock_fan),
     ):
         mock_db.groups_db.active_groups = AsyncMock(return_value=groups)
         mock_cfg.logs = (-10001, None)
         await _cmd_broadcast(env.update, env.ctx)
 
-    # fan_out must have been called (one call with a list of coroutines)
+    # fan_out must have been called once with two coroutines
     mock_fan.assert_called_once()
     calls_arg = mock_fan.call_args[0][0]
     assert len(calls_arg) == 2
@@ -184,7 +201,7 @@ async def test_cmd_broadcast_shows_status_message() -> None:
     with (
         patch("tcbot.modules.broadcasting.db") as mock_db,
         patch("tcbot.modules.broadcasting.cfg") as mock_cfg,
-        patch("tcbot.modules.broadcasting.fan_out", new=AsyncMock(return_value=[None])),
+        patch("tcbot.modules.broadcasting.fan_out", new=_make_fan_out_mock(1)),
     ):
         mock_db.groups_db.active_groups = AsyncMock(return_value=groups)
         mock_cfg.logs = (-10001, None)

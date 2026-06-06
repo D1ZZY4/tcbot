@@ -2,6 +2,76 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-06 (session 13)
+
+### Fixed - Pre-existing "coroutine was never awaited" warnings in test_broadcasting.py
+
+`cmd_broadcast` creates real `_send_one` coroutines and passes them to `fan_out`.
+When `fan_out` was mocked with `AsyncMock(return_value=[...])`, those coroutines were
+received by the mock but never awaited or closed, causing Python's GC to emit
+`RuntimeWarning: coroutine 'cmd_broadcast.<locals>._send_one' was never awaited`
+for two tests (`test_cmd_broadcast_sends_to_each_group`,
+`test_cmd_broadcast_shows_status_message`).
+
+Fixed by replacing both plain `AsyncMock(return_value=...)` patches with a new
+`_make_fan_out_mock(n)` helper that uses `side_effect` to explicitly close each
+coroutine before returning the stub results. The assertion on `len(calls_arg) == 2`
+still passes because `mock.call_args` retains the original argument list reference.
+
+Test suite: 1394 tests / 70 files / **0 warnings** / all green. Ruff: clean (142 files).
+
+## [Unreleased] - 2026-06-06 (session 12)
+
+### Added - Handler-behaviour tests for admins and help modules
+
+Added 11 new tests covering previously-untested public command handlers:
+
+`test_admins.py` (+8 tests, 38 -> 46 total): three previously-uncovered handlers now
+have behaviour coverage:
+- `cmd_transfer` (3 tests): replies when no target given; replies when caller is already
+  owner; happy-path delegates to `transfer_flow`.
+- `cmd_promote_request` (3 tests): non-member reply; missing user-id reply; success
+  path triggers `promote_flow`.
+- `cmd_promote_list` (2 tests): empty-queue reply; non-empty reply contains request
+  entry.
+
+`test_help.py` (+3 tests, 25 -> 28 total): `cmd_help` command handler now has full
+branch coverage:
+- No-argument path sends the full help index with HTML parse mode and a keyboard.
+- Known-module argument (`banning`) sends the module overview as HTML.
+- Unknown-module argument sends a "not found" message.
+
+### Fixed - Monkeypatch isolation bug in test_admins.py
+
+`monkeypatch.setattr(admins.cfg, "logs", ...)` raised `AttributeError` during
+teardown because `cfg.logs` is a property with no setter; this caused monkeypatch
+cleanup to fail silently and leaked a contaminated `admins.cfg` into subsequent test
+files. Fixed by replacing the whole `admins.cfg` object:
+`monkeypatch.setattr(admins, "cfg", MagicMock(logs=(-100, 0)))`.
+
+Additional 3 tests (+3) covering previously-untested happy paths:
+- `test_checking.py`: `on_checkme_detail` active-ban path edits message with HTML;
+  `on_checkme_back` found-ban path edits message back to summary.
+- `test_stats.py`: `on_stats_search_back` non-empty-results path re-renders results
+  via `Stats.search_results`.
+
+Additional 5 tests (+5) covering success/happy paths:
+- `test_admins.py`: `on_promo_decision` approve path calls `add_admin` and edits card;
+  reject path calls `resolve` and edits card.
+- `test_connecting.py`: `cmd_tcconnect` success path calls `complete_join` and replies.
+  Note: `connection` is a frozen dataclass — patched at module level via
+  `monkeypatch.setattr(connecting, "connection", MagicMock(...))`.
+- `test_disconnecting.py`: `cmd_tcdisconnect` success path calls `deactivate_group` and
+  replies; `cmd_rmtc` success path deactivates and replies.
+
+Additional 1 test (+1) covering connect success path:
+- `test_connected_flow.py`: `on_join_decision` connect-success path (owner verified, bot
+  has all perms, group not yet connected) → `complete_join` runs and prompt is edited
+  with the "connected" message. Note: `BuildConnection` is a frozen dataclass; method
+  cannot be patched — all DB/bot dependencies mocked instead.
+
+Test suite: 1374 -> 1394 (70 files, 2 pre-existing warnings, all green). Ruff: clean.
+
 ## [Unreleased] - 2026-06-03 (session 11c)
 
 ### Added - Pure-helper and factory tests for appeal_flow
@@ -166,7 +236,7 @@ Files updated: `AGENTS.md`, `README.md` (2 occurrences), `replit.md`, `PLAN.md`
 
 Both `_build_topic_rows` and `module_help_kb` in `tcbot/modules/helper/keyboards.py` used
 `zip(it, it)` to pair items into two-column rows. This pattern silently consumes the odd
-trailing item without yielding it — the docstring claimed "odd item on its own row" but
+trailing item without yielding it: the docstring claimed "odd item on its own row" but
 the implementation did not deliver that. Replaced with a simple `range(0, len, 2)` slice
 loop that correctly places the odd remainder in a single-button row.
 
@@ -356,9 +426,9 @@ Further expansions:
 `performance.yml` benchmark script imported `from tcbot.database import users_db`
 which does not exist; the correct module is `users_cache`.  Both
 `benchmark_batch_queries` and `benchmark_mention_data` functions were updated
-to import and call through `users_cache`.  A second bug in the same file — the
+to import and call through `users_cache`.  A second bug in the same file: the
 "Compare with baseline" Python inline script used `os.environ` without
-importing `os` — was fixed by adding `import os` at the top of that script.
+importing `os`: was fixed by adding `import os` at the top of that script.
 
 ### Fixed - config.env.example carried four misleading "auto" forum-thread comments
 
@@ -500,7 +570,7 @@ were present in `tcbot/modules/admins.py`:
   refusal guard, `db.users_roles.get_effective_role` was awaited separately. Both reads
   are independent (no data dependency). Fixed with
   `asyncio.gather(identity.classify(...), db.users_roles.get_effective_role(...))`.
-- **`cmd_demote`** (line 286): same pattern — `identity.classify` then `get_effective_role`
+- **`cmd_demote`** (line 286): same pattern: `identity.classify` then `get_effective_role`
   sequentially. Fixed with the same gather.
 
 Docstrings updated for both handlers to describe the two-phase parallel fetch.
@@ -527,13 +597,13 @@ Expanded three existing test files to cover previously untested critical paths,
 bringing the suite from 1039 tests / 69 files to **1078 tests / 69 files** (+39).
 
 - **`tests/test_extraction.py`** (+13 tests, now 24): Full `extract_target()` coverage
-  across all 5 priority paths — reply-to user (with/without first_name), numeric ID
+  across all 5 priority paths: reply-to user (with/without first_name), numeric ID
   argument (with/without bot, with/without cache), @username argument (resolved and
   fallback to partial search), partial name/username search (match, no-match), `text_mention`
   entity (with first_name and without), `@mention` entity (resolved and unresolvable),
   and no-signal `(None, None)` return. Three additional `_best_name()` paths also added.
 - **`tests/test_bans_db.py`** (+12 tests, now 16): All mutation and statistics
-  functions — `get_ban` (found/missing), `create_ban` (auto-ID and provided-ID),
+  functions: `get_ban` (found/missing), `create_ban` (auto-ID and provided-ID),
   `update_ban` (field update and missing), `deactivate_ban` (success and missing),
   `set_log_message_id`, `active_ban_count`, `active_ban_user_ids` (projection-only),
   `user_bans` (all bans for user), `user_ban_count`, `user_appeal_count` (with
@@ -548,7 +618,7 @@ bringing the suite from 1039 tests / 69 files to **1078 tests / 69 files** (+39)
 ### Documentation - Remove stale `(new)` labels from AGENTS.md
 
 Removed `(new)` annotations from `users_cache.py` and `users_roles.py` entries in the
-AGENTS.md repository layout — these files have been stable since session 1 and the
+AGENTS.md repository layout: these files have been stable since session 1 and the
 labels were no longer informative.
 
 ### Documentation - Test count updated across all docs
@@ -568,61 +638,61 @@ suite from 1005 tests / 66 files to 1039 tests / 69 files.
   `start_keepalive()` spawns a daemon thread named `"keepalive"`, and the
   function emits an INFO log containing the configured port number.
 - **`tests/test_documents.py`** (17 tests): All TypedDict schemas in
-  `tcbot.database.documents` verified — Literal alias values (`BanStatus`,
+  `tcbot.database.documents` verified: Literal alias values (`BanStatus`,
   `RoleName`, `RequestStatus`), key membership for every schema, and runtime
   construction of `AdminDoc`, `BanDoc`, `GroupDoc`, `WarnDoc`, and
   `PromotionRequestDoc`.
 - **`tests/test_types.py`** (12 tests): All four `NewType` domain primitives
-  (`UserId`, `GroupId`, `ChatId`, `BanId`) verified — runtime backing type,
+  (`UserId`, `GroupId`, `ChatId`, `BanId`) verified: runtime backing type,
   arithmetic and comparison behaviour, zero/empty falsy semantics, and distinct
   `__qualname__` values for static-analysis isolation.
 
 ### Documentation - Docstrings added to 36 functions (two batches)
 
-**Batch 1 — 14 functions of 10+ lines** that previously had none:
+**Batch 1: 14 functions of 10+ lines** that previously had none:
 
-- **`tcbot/__main__.py`** — `handler()` inside `_make_asyncio_exc_handler`.
-- **`tcbot/modules/admins.py`** — `cmd_promote_list`.
-- **`tcbot/modules/greeting.py`** — `on_new_member`, `on_left_member`.
-- **`tcbot/modules/groups.py`** — `cmd_tcfgroups`.
-- **`tcbot/modules/helper/decorators.py`** — `decorator` and `wrapper` inside
+- **`tcbot/__main__.py`**: `handler()` inside `_make_asyncio_exc_handler`.
+- **`tcbot/modules/admins.py`**: `cmd_promote_list`.
+- **`tcbot/modules/greeting.py`**: `on_new_member`, `on_left_member`.
+- **`tcbot/modules/groups.py`**: `cmd_tcfgroups`.
+- **`tcbot/modules/helper/decorators.py`**: `decorator` and `wrapper` inside
   `ratelimiter`; `wrapper` inside `log_execution`.
-- **`tcbot/modules/helper/workflows/ban_flow.py`** — `on_proof_received`.
-- **`tcbot/modules/privacy.py`** — `on_privacy_menu`, `on_privacy_policy_menu`.
-- **`tcbot/modules/start.py`** — `on_back_to_start`.
-- **`tcbot/modules/stats.py`** — `on_stats_search_back`.
-- **`tcbot/modules/unbanning.py`** — `cmd_unban`.
+- **`tcbot/modules/helper/workflows/ban_flow.py`**: `on_proof_received`.
+- **`tcbot/modules/privacy.py`**: `on_privacy_menu`, `on_privacy_policy_menu`.
+- **`tcbot/modules/start.py`**: `on_back_to_start`.
+- **`tcbot/modules/stats.py`**: `on_stats_search_back`.
+- **`tcbot/modules/unbanning.py`**: `cmd_unban`.
 
-**Batch 2 — 22 functions of 5-9 lines** closing the last documentation gaps:
+**Batch 2: 22 functions of 5-9 lines** closing the last documentation gaps:
 
-- **`tcbot/modules/about.py`** — `on_about_menu`.
-- **`tcbot/modules/additional.py`** — `on_additional_menu`.
-- **`tcbot/modules/admins.py`** — `on_promote_role_cancel`, `on_demote_cancel`.
-- **`tcbot/modules/checking.py`** — `on_check_bans`, `on_check_ban_item`,
+- **`tcbot/modules/about.py`**: `on_about_menu`.
+- **`tcbot/modules/additional.py`**: `on_additional_menu`.
+- **`tcbot/modules/admins.py`**: `on_promote_role_cancel`, `on_demote_cancel`.
+- **`tcbot/modules/checking.py`**: `on_check_bans`, `on_check_ban_item`,
   `on_check_warn_chat`, `on_check_kicks`, `on_check_mutes`, `on_check_appeals`.
-- **`tcbot/modules/helper/decorators.py`** — `wrapper` inside each of
+- **`tcbot/modules/helper/decorators.py`**: `wrapper` inside each of
   `owner_only`, `staff_only`, `mod_only`, `basic_mod_only`.
-- **`tcbot/modules/helper/workflows/ban_flow.py`** — `on_cancel_proof`.
-- **`tcbot/modules/stats.py`** — `on_stats_bans`, `on_stats_search_item`,
+- **`tcbot/modules/helper/workflows/ban_flow.py`**: `on_cancel_proof`.
+- **`tcbot/modules/stats.py`**: `on_stats_bans`, `on_stats_search_item`,
   `on_stats_search_cancel`.
-- **`tcbot/modules/warnings.py`** — `cmd_warnlist`.
-- **`tcbot/utils/logger.py`** — `emit`.
-- **`tcbot/utils/prefixes.py`** — `filter` in both filter classes.
+- **`tcbot/modules/warnings.py`**: `cmd_warnlist`.
+- **`tcbot/utils/logger.py`**: `emit`.
+- **`tcbot/utils/prefixes.py`**: `filter` in both filter classes.
 
-**Batch 3 — 13 functions of 3-4 lines** completing full docstring coverage:
+**Batch 3: 13 functions of 3-4 lines** completing full docstring coverage:
 
-- **`tcbot/modules/checking.py`** — `on_check_main`, `on_check_warns`.
-- **`tcbot/modules/helper/parse_link.py`** — `message_link`.
-- **`tcbot/modules/helper/workflows/ban_flow.py`** — `on_proof_timeout`.
-- **`tcbot/modules/start.py`** — `on_menu_groups_details`.
-- **`tcbot/modules/stats.py`** — `on_stats_main`, `on_stats_admins`,
+- **`tcbot/modules/checking.py`**: `on_check_main`, `on_check_warns`.
+- **`tcbot/modules/helper/parse_link.py`**: `message_link`.
+- **`tcbot/modules/helper/workflows/ban_flow.py`**: `on_proof_timeout`.
+- **`tcbot/modules/start.py`**: `on_menu_groups_details`.
+- **`tcbot/modules/stats.py`**: `on_stats_main`, `on_stats_admins`,
   `on_stats_users`, `on_stats_user_item`, `on_stats_chats`,
   `on_stats_chat_item`, `on_stats_ban_item`, `on_stats_bans_search`.
 
 AST audit now reports **0 public functions of 3+ lines missing a docstring**
 across the entire `tcbot/` package.
 
-**Class docstrings — 10 public TypedDict classes** in `tcbot/database/documents.py`:
+**Class docstrings: 10 public TypedDict classes** in `tcbot/database/documents.py`:
 `AdminDoc`, `BanDoc`, `GroupDoc`, `PendingGroupDoc`, `RoleDoc`, `RoleRefDoc`,
 `UserDoc`, `WarnDoc`, `WarnCountDoc`, `PromotionRequestDoc`.
 
@@ -705,18 +775,18 @@ Result: startup log now shows 0 PTBUserWarning lines (down from 3). Test suite: 
 
 Added 10 new offline test files to eliminate the remaining untested source modules:
 
-- **`tests/test_kicks_db.py`** (8 tests): `log_kick`, `user_kicks`, `user_kick_count` — insert, filter-by-user, sort order, count isolation.
-- **`tests/test_mutes_db.py`** (8 tests): `log_mute`, `user_mutes`, `user_mute_count` — mirrors kicks_db coverage.
-- **`tests/test_queues_db.py`** (16 tests): `enqueue`, `get_request_by_id`, `get_request`, `all_pending`, `resolve`, `pending_count` — request lifecycle, status filtering, field validation.
-- **`tests/test_users_cache.py`** (17 tests): `upsert_user`, `get_user`, `get_user_mention_data`, `get_mention_data_batch`, `get_first_names_batch`, `get_first_name`, `total_users` — upsert semantics, batch fallbacks, default name generation.
-- **`tests/test_groups_db.py`** (20 tests): `get_group`, `is_connected` (with cache hit), `add_group`, `deactivate_group`, `active_groups`, `active_group_count`, `add_pending`, `get_pending`, `remove_pending` — cache coherence via autouse `clear_caches` fixture.
-- **`tests/test_error_reporter.py`** (44 tests): `_benign`, `_classify`, `_shorten_path`, `_log_noise`, `_fingerprint`, `_seen_recently`, `build_error_message`, `attach`, `send_to_log_errors`, `report_exc`, `report_record` — all pure logic tested without Telegram connection; dedup and noise-filter verified.
+- **`tests/test_kicks_db.py`** (8 tests): `log_kick`, `user_kicks`, `user_kick_count`: insert, filter-by-user, sort order, count isolation.
+- **`tests/test_mutes_db.py`** (8 tests): `log_mute`, `user_mutes`, `user_mute_count`: mirrors kicks_db coverage.
+- **`tests/test_queues_db.py`** (16 tests): `enqueue`, `get_request_by_id`, `get_request`, `all_pending`, `resolve`, `pending_count`: request lifecycle, status filtering, field validation.
+- **`tests/test_users_cache.py`** (17 tests): `upsert_user`, `get_user`, `get_user_mention_data`, `get_mention_data_batch`, `get_first_names_batch`, `get_first_name`, `total_users`: upsert semantics, batch fallbacks, default name generation.
+- **`tests/test_groups_db.py`** (20 tests): `get_group`, `is_connected` (with cache hit), `add_group`, `deactivate_group`, `active_groups`, `active_group_count`, `add_pending`, `get_pending`, `remove_pending`: cache coherence via autouse `clear_caches` fixture.
+- **`tests/test_error_reporter.py`** (44 tests): `_benign`, `_classify`, `_shorten_path`, `_log_noise`, `_fingerprint`, `_seen_recently`, `build_error_message`, `attach`, `send_to_log_errors`, `report_exc`, `report_record`: all pure logic tested without Telegram connection; dedup and noise-filter verified.
 
 - **`tests/test_mongos.py`** (9 tests): `make_short_id` (length, charset, uniqueness, edge cases) and `db()` error path (raises `RuntimeError` when `_db` is `None`, returns the set instance otherwise).
-- **`tests/test_formatter.py`** (26 tests): `bold`, `italic`, `code`, `link`, `mention`, `esc` — HTML escape, username-link vs code-fallback, non-string inputs, all HTML special chars.
+- **`tests/test_formatter.py`** (26 tests): `bold`, `italic`, `code`, `link`, `mention`, `esc`: HTML escape, username-link vs code-fallback, non-string inputs, all HTML special chars.
 - **`tests/test_extraction.py`** (15 tests): `ResolvedTarget` dataclass (None/empty name coercion, raw field excluded from comparison and repr), `_best_name` (primary selection, digit-only skip, cache fallback, User-id default).
-- **`tests/test_parse_editmsg.py`** (13 tests): `safe_edit` and `safe_edit_cb` — normal edit, extra kwargs passthrough, ignored BadRequest variants (not-modified, not-found, chat-not-found), unexpected error logged via warning.
-- **`tests/test_ban_info.py`** (14 tests): `build_ban_detail` — ban card text, ban ID and reason included, HTML escaping, proof link present/absent, target_fname shortcut (skips user fetch), missing timestamp falls back to "Unknown", cfg mocked via MagicMock (property without setter requires module-level replacement).
+- **`tests/test_parse_editmsg.py`** (13 tests): `safe_edit` and `safe_edit_cb`: normal edit, extra kwargs passthrough, ignored BadRequest variants (not-modified, not-found, chat-not-found), unexpected error logged via warning.
+- **`tests/test_ban_info.py`** (14 tests): `build_ban_detail`: ban card text, ban ID and reason included, HTML escaping, proof link present/absent, target_fname shortcut (skips user fetch), missing timestamp falls back to "Unknown", cfg mocked via MagicMock (property without setter requires module-level replacement).
 
 **Bug fix found and applied:** `_esc()` in `tcbot/utils/error_reporter.py` typed as `str -> str` but called with `None` when `logging.LogRecord.funcName` is `None`. Changed signature to `str | None -> str` with early `""` return to guard the `None` case.
 
@@ -727,19 +797,19 @@ All docs updated: `README.md`, `AGENTS.md`, `PLAN.md`, `replit.md`, `docs-mainta
 **Bug fix found and applied:** `_parse_prefixed_command()` in `tcbot/utils/prefixes.py` performed `text[len(prefix):].split(None, 1)[0]` unconditionally. When the text after the prefix is all whitespace (e.g. `"!   "`), `split(None, 1)` returns an empty list and `[0]` raises `IndexError`. Fixed by splitting into a named variable, checking `if not _parts`, and then indexing.
 
 **`tests/test_prefixes.py`** (39 tests):
-- `_parse_prefixed_command` — slash/bang/dot prefix matching, multiple-prefix resolution, longest-prefix precedence, command with args, bot-mention validation (correct/wrong/missing bot username, case-insensitive, min/max length), uppercase command rejected, non-ASCII rejected, empty command after prefix, digit-leading command, empty-mention, whitespace-only-after-prefix (the new IndexError guard).
-- `parse_cmd_args` — no-args, single/multiple args, `None` input, empty string, whitespace-only, slash-only, extra-whitespace normalized, alt-prefix input.
-- `register_command` — registry insertion, automatic lowercase normalization.
-- `dispatch_alt_prefix` — no effective_message skips, no text skips, unregistered command skips, registered command called, exception in handler swallowed.
+- `_parse_prefixed_command`: slash/bang/dot prefix matching, multiple-prefix resolution, longest-prefix precedence, command with args, bot-mention validation (correct/wrong/missing bot username, case-insensitive, min/max length), uppercase command rejected, non-ASCII rejected, empty command after prefix, digit-leading command, empty-mention, whitespace-only-after-prefix (the new IndexError guard).
+- `parse_cmd_args`: no-args, single/multiple args, `None` input, empty string, whitespace-only, slash-only, extra-whitespace normalized, alt-prefix input.
+- `register_command`: registry insertion, automatic lowercase normalization.
+- `dispatch_alt_prefix`: no effective_message skips, no text skips, unregistered command skips, registered command called, exception in handler swallowed.
 
 Suite: 966 -> 1005 tests / 65 -> 66 files.
 
 ### Fixed - RULES compliance: `except Exception: pass` and redundant `asyncio.TimeoutError` catches
 
-Six source files had `except (asyncio.TimeoutError, Exception)` — redundant because `asyncio.TimeoutError` is already a subclass of `Exception` in Python 3.11+. One of these also violated the RULES `no except Exception: pass` rule by swallowing the exception without any log.
+Six source files had `except (asyncio.TimeoutError, Exception)`: redundant because `asyncio.TimeoutError` is already a subclass of `Exception` in Python 3.11+. One of these also violated the RULES `no except Exception: pass` rule by swallowing the exception without any log.
 
 Files changed:
-- **`tcbot/modules/helper/workflows/check_flow.py`**: Added `import logging` and `log = logging.getLogger(__name__)` (previously missing). Changed `except (asyncio.TimeoutError, Exception): pass` to `except Exception as exc: log.debug("get_chat(%s) failed: %s", target_id, exc)` — RULES compliant, debug-logged fallback.
+- **`tcbot/modules/helper/workflows/check_flow.py`**: Added `import logging` and `log = logging.getLogger(__name__)` (previously missing). Changed `except (asyncio.TimeoutError, Exception): pass` to `except Exception as exc: log.debug("get_chat(%s) failed: %s", target_id, exc)`: RULES compliant, debug-logged fallback.
 - **`tcbot/modules/helper/workflows/connected_flow.py`**: Two occurrences of `except (asyncio.TimeoutError, Exception) as exc:` simplified to `except Exception as exc:`.
 - **`tcbot/modules/helper/extraction.py`**: Same simplification.
 - **`tcbot/modules/connecting.py`**: Same simplification.
@@ -768,7 +838,7 @@ Extracted three static return-value strings from `tcbot/modules/helper/workflows
 
 ### Refactored - final inline-string extraction (phase 3)
 
-Extracted the last three static user-facing reply strings found by comprehensive grep scan: `banning.py` (`_ERR_REASON_REQUIRED`), `disconnecting.py` (`_MSG_RMTC_USAGE`), `decorators.py` (`_ERR_RANK_INSUFFICIENT` — the `resolve_and_check` rank-gate helper). No more unextracted static user-facing reply strings remain in the module or workflow layer. All 696 tests still pass.
+Extracted the last three static user-facing reply strings found by comprehensive grep scan: `banning.py` (`_ERR_REASON_REQUIRED`), `disconnecting.py` (`_MSG_RMTC_USAGE`), `decorators.py` (`_ERR_RANK_INSUFFICIENT`: the `resolve_and_check` rank-gate helper). No more unextracted static user-facing reply strings remain in the module or workflow layer. All 696 tests still pass.
 
 ### Refactored - bulk inline-string extraction across 11 files (phase 2)
 

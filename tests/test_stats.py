@@ -445,3 +445,19 @@ async def test_on_stats_search_back_empty_results_opens_search() -> None:
         MockStats.open_search = MagicMock(return_value=("<b>Search</b>", None))
         await _on_stats_search_back(env.update, env.ctx)
     MockStats.open_search.assert_called_once()
+
+
+async def test_on_stats_search_back_with_results_renders_search_results() -> None:
+    """on_stats_search_back must re-render search results when results are stored."""
+    from unittest.mock import AsyncMock, patch
+
+    env = _make_cb_env(data="stats_search_back")
+    stored = [{"user_id": 1}, {"user_id": 2}]
+    env.ctx.user_data = {RESULTS_KEY: stored, "stats_last_query": "alice"}
+    with (
+        patch("tcbot.modules.stats.Stats") as MockStats,
+        patch("tcbot.modules.stats.safe_edit_cb", new=AsyncMock()),
+    ):
+        MockStats.search_results = AsyncMock(return_value=("<b>Results</b>", None))
+        await _on_stats_search_back(env.update, env.ctx)
+    MockStats.search_results.assert_awaited_once_with("alice", stored)

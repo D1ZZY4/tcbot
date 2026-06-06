@@ -506,3 +506,241 @@ async def test_on_promo_decision_request_not_found_edits_message(monkeypatch) ->
     )
     await _on_promo_decision(update, ctx)
     update.callback_query.edit_message_text.assert_awaited_once()
+
+
+async def test_on_promo_decision_approve_edits_card(monkeypatch) -> None:
+    """on_promo_decision with promo_approve must call add_admin, resolve, and edit the card."""
+    update, ctx = _make_cb_ctx("promo_approve:req-ok")
+    req = {"target_id": 42, "first_name": "Target"}
+    monkeypatch.setattr(admins.db.users_roles, "is_owner", AsyncMock(return_value=True))
+    monkeypatch.setattr(
+        admins.db.queues_db, "get_request_by_id", AsyncMock(return_value=req)
+    )
+    monkeypatch.setattr(
+        admins.db.users_roles, "add_admin", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(admins.db.queues_db, "resolve", AsyncMock(return_value=None))
+    mock_cfg = MagicMock()
+    mock_cfg.logs = (-300, 0)
+    mock_cfg.community_name = "TestCom"
+    monkeypatch.setattr(admins, "cfg", mock_cfg)
+    ctx.bot.send_message = AsyncMock()
+    await _on_promo_decision(update, ctx)
+    update.callback_query.edit_message_text.assert_awaited_once()
+    admins.db.users_roles.add_admin.assert_awaited_once()
+
+
+async def test_on_promo_decision_reject_edits_card(monkeypatch) -> None:
+    """on_promo_decision with promo_reject must resolve as rejected and edit the card."""
+    update, ctx = _make_cb_ctx("promo_reject:req-no")
+    req = {"target_id": 55, "first_name": "Target"}
+    monkeypatch.setattr(admins.db.users_roles, "is_owner", AsyncMock(return_value=True))
+    monkeypatch.setattr(
+        admins.db.queues_db, "get_request_by_id", AsyncMock(return_value=req)
+    )
+    monkeypatch.setattr(admins.db.queues_db, "resolve", AsyncMock(return_value=None))
+    mock_cfg = MagicMock()
+    mock_cfg.logs = (-300, 0)
+    mock_cfg.community_name = "TestCom"
+    monkeypatch.setattr(admins, "cfg", mock_cfg)
+    ctx.bot.send_message = AsyncMock()
+    await _on_promo_decision(update, ctx)
+    update.callback_query.edit_message_text.assert_awaited_once()
+    admins.db.queues_db.resolve.assert_awaited_once()
+
+
+# ─────────────── Handler behavior: cmd_transfer ─────────────────── #
+
+_TRANSFER_OWNER_ID = 1
+_TRANSFER_TARGET_ID = 77
+_cmd_transfer = admins.cmd_transfer.__wrapped__.__wrapped__.__wrapped__
+
+
+def _make_transfer_ctx(text: str = "/transferowner 77") -> tuple:
+    user = MagicMock()
+    user.id = _TRANSFER_OWNER_ID
+    user.first_name = "Owner"
+    msg = MagicMock()
+    msg.text = text
+    msg.reply_text = AsyncMock()
+    update = MagicMock()
+    update.effective_user = user
+    update.effective_message = msg
+    ctx = MagicMock()
+    ctx.bot = MagicMock()
+    ctx.bot.id = 999
+    ctx.bot.send_message = AsyncMock()
+    return update, ctx
+
+
+async def test_cmd_transfer_no_target_returns_early(monkeypatch) -> None:
+    update, ctx = _make_transfer_ctx()
+    monkeypatch.setattr(
+        admins.extraction,
+        "extract_target",
+        AsyncMock(return_value=(None, None)),
+    )
+    await _cmd_transfer(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+    assert "Specify" in update.effective_message.reply_text.call_args[0][0]
+
+
+async def test_cmd_transfer_refused_identity_returns_early(monkeypatch) -> None:
+    update, ctx = _make_transfer_ctx()
+    monkeypatch.setattr(
+        admins.extraction,
+        "extract_target",
+        AsyncMock(return_value=(_TRANSFER_TARGET_ID, "Target")),
+    )
+    ident = Identity(kind="user", target_id=_TRANSFER_TARGET_ID, fname="Target")
+    monkeypatch.setattr(admins.identity, "classify", AsyncMock(return_value=ident))
+    monkeypatch.setattr(
+        admins.identity, "refuse_message", MagicMock(return_value="Refused.")
+    )
+    await _cmd_transfer(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+
+
+async def test_cmd_transfer_valid_calls_db_writes_and_replies(monkeypatch) -> None:
+    update, ctx = _make_transfer_ctx()
+    monkeypatch.setattr(
+        admins.extraction,
+        "extract_target",
+        AsyncMock(return_value=(_TRANSFER_TARGET_ID, "Target")),
+    )
+    ident = Identity(
+        kind="user", target_id=_TRANSFER_TARGET_ID, fname="Target", username="tgt"
+    )
+    monkeypatch.setattr(admins.identity, "classify", AsyncMock(return_value=ident))
+    monkeypatch.setattr(admins.identity, "refuse_message", MagicMock(return_value=None))
+    add_admin_mock = AsyncMock()
+    set_owner_mock = AsyncMock()
+    monkeypatch.setattr(admins.db.users_roles, "add_admin", add_admin_mock)
+    monkeypatch.setattr(admins.db.users_roles, "set_owner", set_owner_mock)
+    monkeypatch.setattr(
+        admins.parse_logmsg, "ownership_transferred", MagicMock(return_value="log text")
+    )
+    mock_cfg = MagicMock()
+    mock_cfg.logs = (-100, 0)
+    monkeypatch.setattr(admins, "cfg", mock_cfg)
+    await _cmd_transfer(update, ctx)
+    add_admin_mock.assert_awaited_once()
+    set_owner_mock.assert_awaited_once_with(_TRANSFER_TARGET_ID)
+    update.effective_message.reply_text.assert_awaited_once()
+
+
+# ──────────── Handler behavior: cmd_promote_request ─────────────── #
+
+_cmd_promote_request = admins.cmd_promote_request.__wrapped__.__wrapped__
+
+
+def _make_promo_request_ctx() -> tuple:
+    user = MagicMock()
+    user.id = 55
+    user.first_name = "Requester"
+    user.username = "req_user"
+    msg = MagicMock()
+    msg.text = "/tcpromoterequests"
+    msg.reply_text = AsyncMock()
+    update = MagicMock()
+    update.effective_user = user
+    update.effective_message = msg
+    ctx = MagicMock()
+    ctx.bot = MagicMock()
+    return update, ctx
+
+
+async def test_cmd_promote_request_refused_identity_returns_early(monkeypatch) -> None:
+    update, ctx = _make_promo_request_ctx()
+    ident = Identity(kind="user", target_id=55, fname="Requester")
+    monkeypatch.setattr(admins.identity, "classify", AsyncMock(return_value=ident))
+    monkeypatch.setattr(
+        admins.db.queues_db, "get_request", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(
+        admins.identity, "refuse_message", MagicMock(return_value="Refused.")
+    )
+    await _cmd_promote_request(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+
+
+async def test_cmd_promote_request_existing_pending_replies_with_id(
+    monkeypatch,
+) -> None:
+    update, ctx = _make_promo_request_ctx()
+    ident = Identity(kind="user", target_id=55, fname="Requester")
+    monkeypatch.setattr(admins.identity, "classify", AsyncMock(return_value=ident))
+    monkeypatch.setattr(
+        admins.db.queues_db,
+        "get_request",
+        AsyncMock(return_value={"request_id": "req-123"}),
+    )
+    monkeypatch.setattr(admins.identity, "refuse_message", MagicMock(return_value=None))
+    await _cmd_promote_request(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+    reply_text = update.effective_message.reply_text.call_args[0][0]
+    assert "req-123" in reply_text
+
+
+async def test_cmd_promote_request_valid_calls_request_admin(monkeypatch) -> None:
+    update, ctx = _make_promo_request_ctx()
+    ident = Identity(kind="user", target_id=55, fname="Requester")
+    monkeypatch.setattr(admins.identity, "classify", AsyncMock(return_value=ident))
+    monkeypatch.setattr(
+        admins.db.queues_db, "get_request", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(admins.identity, "refuse_message", MagicMock(return_value=None))
+    request_mock = AsyncMock(return_value=(True, "Request submitted."))
+    monkeypatch.setattr(admins.Promote, "request_admin", request_mock)
+    await _cmd_promote_request(update, ctx)
+    request_mock.assert_awaited_once()
+    update.effective_message.reply_text.assert_awaited_once()
+    reply_text = update.effective_message.reply_text.call_args[0][0]
+    assert "Request submitted." in reply_text
+
+
+# ────────────── Handler behavior: cmd_promote_list ──────────────── #
+
+_cmd_promote_list = admins.cmd_promote_list.__wrapped__.__wrapped__.__wrapped__
+
+
+def _make_promo_list_ctx() -> tuple:
+    msg = MagicMock()
+    msg.reply_text = AsyncMock()
+    update = MagicMock()
+    update.effective_message = msg
+    ctx = MagicMock()
+    return update, ctx
+
+
+async def test_cmd_promote_list_no_pending_replies_no_pending(monkeypatch) -> None:
+    update, ctx = _make_promo_list_ctx()
+    monkeypatch.setattr(admins.db.queues_db, "all_pending", AsyncMock(return_value=[]))
+    await _cmd_promote_list(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+    reply_text = update.effective_message.reply_text.call_args[0][0]
+    assert "No pending" in reply_text
+
+
+async def test_cmd_promote_list_with_pending_replies_formatted_list(
+    monkeypatch,
+) -> None:
+    update, ctx = _make_promo_list_ctx()
+    pending = [
+        {
+            "target_id": 88,
+            "first_name": "Alice",
+            "username": "alice88",
+            "request_id": "req-999",
+        }
+    ]
+    monkeypatch.setattr(
+        admins.db.queues_db, "all_pending", AsyncMock(return_value=pending)
+    )
+    await _cmd_promote_list(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+    call_kwargs = update.effective_message.reply_text.call_args[1]
+    assert call_kwargs.get("parse_mode") == "HTML"
+    reply_text = update.effective_message.reply_text.call_args[0][0]
+    assert "req-999" in reply_text
+    assert "alice88" in reply_text

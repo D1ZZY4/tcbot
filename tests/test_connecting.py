@@ -195,3 +195,24 @@ async def test_cmd_tcconnect_pending_request_returns_early(monkeypatch) -> None:
     )
     await _cmd_tcconnect(update, ctx)
     update.effective_message.reply_text.assert_awaited_once()
+
+
+async def test_cmd_tcconnect_success_triggers_complete_join(monkeypatch) -> None:
+    """cmd_tcconnect with all checks passing must call complete_join and reply."""
+    update, ctx = _make_connect_ctx()
+    member_mock = MagicMock()
+    member_mock.status = "administrator"
+    ctx.bot.get_chat_member = AsyncMock(return_value=member_mock)
+    monkeypatch.setattr(
+        connecting.db.groups_db, "is_connected", AsyncMock(return_value=False)
+    )
+    monkeypatch.setattr(
+        connecting.db.groups_db, "get_pending", AsyncMock(return_value=None)
+    )
+    mock_conn = MagicMock()
+    mock_conn.check_perms = MagicMock(return_value=True)
+    mock_conn.complete_join = AsyncMock(return_value=None)
+    mock_conn.connected_message = MagicMock(return_value="Connected!")
+    monkeypatch.setattr(connecting, "connection", mock_conn)
+    await _cmd_tcconnect(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()

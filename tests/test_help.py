@@ -241,3 +241,49 @@ async def test_on_help_section_valid_data_delegates_to_show_section() -> None:
     assert args[0] is env.q
     assert args[1] == "banning"
     assert args[2] == 0
+
+
+# ─────────────────── command handler: cmd_help ──────────────────── #
+
+_cmd_help = _help_mod.cmd_help.__wrapped__.__wrapped__
+
+
+def _make_cmd_ctx(text: str = "/help") -> tuple:
+    from unittest.mock import AsyncMock, MagicMock
+
+    msg = MagicMock()
+    msg.text = text
+    msg.reply_text = AsyncMock()
+    update = MagicMock()
+    update.effective_message = msg
+    ctx = MagicMock()
+    ctx.bot.first_name = "TCFBot"
+    return update, ctx
+
+
+async def test_cmd_help_no_args_sends_help_index() -> None:
+    """Calling /help with no argument sends the full help index reply."""
+    update, ctx = _make_cmd_ctx("/help")
+    await _cmd_help(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+    call_kwargs = update.effective_message.reply_text.call_args[1]
+    assert call_kwargs.get("parse_mode") == "HTML"
+    assert call_kwargs.get("reply_markup") is not None
+
+
+async def test_cmd_help_known_module_sends_module_overview() -> None:
+    """Calling /help banning (a known module) sends that module's help text."""
+    update, ctx = _make_cmd_ctx("/help banning")
+    await _cmd_help(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+    reply_text = update.effective_message.reply_text.call_args[0][0]
+    assert "<b>" in reply_text  # HTML module help was sent
+
+
+async def test_cmd_help_unknown_module_sends_not_found() -> None:
+    """Calling /help with an unrecognised argument sends a 'not found' message."""
+    update, ctx = _make_cmd_ctx("/help zzznonsense999")
+    await _cmd_help(update, ctx)
+    update.effective_message.reply_text.assert_awaited_once()
+    reply_text = update.effective_message.reply_text.call_args[0][0]
+    assert "not found" in reply_text

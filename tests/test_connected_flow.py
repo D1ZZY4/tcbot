@@ -344,6 +344,62 @@ async def test_on_join_decision_connect_already_connected_edits_message(
     assert "already connected" in q.edit_message_text.await_args.args[0].lower()
 
 
+async def test_on_join_decision_connect_success_edits_connected_message(
+    monkeypatch,
+) -> None:
+    """Owner verified + bot has all perms + not yet connected → edit prompt with connected message."""
+    monkeypatch.setattr(
+        connected_flow.db.groups_db, "is_connected", AsyncMock(return_value=False)
+    )
+    monkeypatch.setattr(
+        connected_flow.db.bans_db, "active_ban_user_ids", AsyncMock(return_value=[])
+    )
+    monkeypatch.setattr(
+        connected_flow.db.groups_db, "add_group", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(
+        connected_flow.db.groups_db, "remove_pending", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(
+        connected_flow.parse_logmsg,
+        "group_connected_log",
+        Mock(return_value="connected log"),
+    )
+    monkeypatch.setattr(connected_flow, "fan_out", AsyncMock(return_value=[]))
+
+    bc = _build()
+    owner = SimpleNamespace(status=ChatMemberStatus.OWNER)
+    bot_member = SimpleNamespace(
+        can_delete_messages=True,
+        can_restrict_members=True,
+        can_invite_users=True,
+    )
+
+    call_count = [0]
+
+    async def _gcm(chat_id, user_id):
+        call_count[0] += 1
+        return owner if call_count[0] == 1 else bot_member
+
+    bot = _bot(get_chat_member=AsyncMock(side_effect=_gcm))
+    q = SimpleNamespace(
+        answer=AsyncMock(),
+        data=bc.join_callback,
+        edit_message_text=AsyncMock(),
+    )
+    update = SimpleNamespace(
+        callback_query=q,
+        effective_chat=SimpleNamespace(id=-100, title="Good Group"),
+        effective_user=SimpleNamespace(id=55, first_name="Owner"),
+    )
+    ctx = SimpleNamespace(bot=bot)
+
+    await bc.on_join_decision(update, ctx)
+
+    q.edit_message_text.assert_awaited_once()
+    assert "Test Federation" in q.edit_message_text.await_args.args[0]
+
+
 async def test_on_bot_added_as_member_sends_join_prompt(monkeypatch) -> None:
     """When bot joins as MEMBER to an unconnected group with no pending, send join prompt."""
     monkeypatch.setattr(
