@@ -5,13 +5,13 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-06 (session 27)
+**Last updated:** 2026-06-06 (session 28)
 
 ## What is done
 
 - Python 3.12, uv, python-telegram-bot 22.5, Motor/MongoDB stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
-- 1466 tests across 71 test files; full suite passes offline with **0 warnings**.
+- 1486 tests across 71 test files; full suite passes offline with **0 warnings**.
 - `uv run ruff format .` and `uv run ruff check .` both clean (144 files).
 - All P1/P2/P3 backlog items resolved (ConversationHandler tests, pagination NameError, composite indexes, asyncio.gather conversions, shared replies.py, em-dash removal, cache TTL constants, keyboards.py dead code).
 - `docs/mapping.md` updated: added `identity.py`, `replies.py` to helper section; added `pagination.py` to utils section.
@@ -101,9 +101,26 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Removed stale `nothing.md` broken link from MEMORY.md index.
   - 1405 tests / 71 files, 0 warnings, all green. Ruff 144 files clean.
 
+- Session 27 (2026-06-06): added 61 tests for previously-uncovered functions.
+  - global_rate_limit_handler (6), all_roles (2), role_label property (7), parse_logmsg functions (14), Configs properties (12), ensure_indexes (2), get_handlers (4), ConversationHandler factories (14). 
+  - _CfgAdapter property tests (3).
+  - Fixed `_RateLimiter.__slots__` monkeypatch: patch module-level name, not instance attribute.
+  - Renamed 6 inner `wrapper` -> `_wrapper` in decorators.py (false-positive coverage gaps).
+  - 1466 -> 1469 tests / 71 files, 0 warnings. Ruff 144 files clean.
+
+- Session 28 (2026-06-06): named constants cleanup + formatter helper + tests.
+  - Extracted 8 named constants to `__main__.py` (HTTP timeouts, pool sizes, text/border widths).
+  - Extracted `_DEFAULT_PORT` and `_ERR_OWNER_ID` constants to `__init__.py`; eliminated 6 repeated literals.
+  - Added `proof_line(proof_desc)` to `formatter.py`; de-duplicated f-string from 3 flow files.
+  - Extracted `_MAX_CONTEXT_LEN = 120` to `error_reporter.py`; replaced 2 bare `[:120]` slices.
+  - Extracted `_SECS_PER_HOUR`, `_SECS_PER_DAY`, `_DAYS_PER_YEAR` to `muting_flow.py`; replaced all time-math literals.
+  - Added `WHERE_CONNECTED_GROUP` to `replies.py`; replaced literal in kicking/muting/warnings.
+  - Added 12 tests for 6 uncovered `parse_logmsg` functions; 5 tests for `proof_line()` helper.
+  - 1466 -> 1486 tests / 71 files, 0 warnings. Ruff 144 files clean.
+
 ## What is in progress
 
-Nothing. Session 26 checkpoint complete.
+Nothing. Session 28 checkpoint complete.
 
 ## What is pending (optional)
 

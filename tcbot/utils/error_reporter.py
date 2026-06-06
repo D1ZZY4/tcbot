@@ -81,6 +81,9 @@ def _log_noise(record: logging.LogRecord | None) -> bool:
 _DEDUPE_WINDOW = 30.0
 _recent: dict[tuple, float] = {}
 
+# * Maximum characters captured from an exception or log message in a fingerprint.
+_MAX_CONTEXT_LEN: int = 120
+
 
 def _fingerprint(
     exc: BaseException | None,
@@ -100,9 +103,14 @@ def _fingerprint(
                 file_part = last.tb_frame.f_code.co_filename
             except AttributeError:
                 pass
-        return (type(exc).__name__, file_part, line, str(exc)[:120])
+        return (type(exc).__name__, file_part, line, str(exc)[:_MAX_CONTEXT_LEN])
     if record is not None:
-        return ("log", record.name, record.lineno, record.getMessage()[:120])
+        return (
+            "log",
+            record.name,
+            record.lineno,
+            record.getMessage()[:_MAX_CONTEXT_LEN],
+        )
     return ("?",)
 
 

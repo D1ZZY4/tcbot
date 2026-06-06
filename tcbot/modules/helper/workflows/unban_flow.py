@@ -16,7 +16,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.formatter import code, mention
-from tcbot.utils.dispatch import fan_out
+from tcbot.utils.dispatch import count_errors, fan_out
 
 log = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ async def execute_unban(
             for grp in groups
         ]
     )
-    failed = sum(1 for r in results if isinstance(r, BaseException))
+    failed = count_errors(results)
 
     lc, lt = cfg.logs
     log_text = parse_logmsg.unban_log(

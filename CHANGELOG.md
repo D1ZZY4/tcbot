@@ -2,6 +2,27 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-06 (session 28)
+
+### Refactored
+
+- Renamed 6 inner `wrapper` functions to `_wrapper` in `tcbot/modules/helper/decorators.py`; they were false-positive public coverage gaps. `@functools.wraps` still propagates the wrapped function's `__name__` correctly.
+- Extracted `_HTTP_READ_TIMEOUT = 15`, `_HTTP_WRITE_TIMEOUT = 15`, `_HTTP_CONNECT_TIMEOUT = 10`, `_HTTP_POOL_TIMEOUT = 5`, `_API_POOL_SIZE = 8`, `_UPDATES_POOL_SIZE = 4`, `_ERROR_CONTEXT_TEXT_LEN = 120`, `_FATAL_BORDER_WIDTH = 70` named constants to `tcbot/__main__.py`; replaced all bare literals in `_error_handler`, `_print_fatal`, and the `ApplicationBuilder` chain.
+- Extracted `_DEFAULT_PORT = 5000` and `_ERR_OWNER_ID = "OWNER_ID is required..."` named constants to `tcbot/__init__.py`; replaced all three occurrences of each literal (`parse_port` and `_owner_id_from_env`).
+- Added `proof_line(proof_desc)` helper to `tcbot/modules/helper/formatter.py`; replaced the duplicated `f"\nProof: {proof_desc}" if proof_desc else ""` one-liner in `kicking_flow.py`, `muting_flow.py`, and `warning_flow.py` with calls to the shared helper.
+- Extracted `_MAX_CONTEXT_LEN = 120` constant to `tcbot/utils/error_reporter.py`; replaced two bare `[:120]` slice literals in `_fingerprint()`.
+- Extracted `_SECS_PER_HOUR = 3_600`, `_SECS_PER_DAY = 86_400`, `_DAYS_PER_YEAR = 365` to `tcbot/modules/helper/workflows/muting_flow.py`; replaced all time-math literals in `fmt_duration` and `parse_duration`.
+- Added `WHERE_CONNECTED_GROUP = "Inside any connected group."` to `tcbot/modules/helper/replies.py`; replaced the duplicate literal in `kicking.py`, `muting.py`, and `warnings.py`.
+
+### Tests
+
+- Added 3 tests for `_CfgAdapter` delegating properties (`initial_owner_id`, `main_channel`, `logs_errors`) in `tests/test_init.py`. Coverage scan now shows ZERO gaps.
+- Added 12 tests in `tests/test_parse_logmsg.py` covering 6 previously-untested public functions: `ban_update_log` (2), `appeal_approved_edit` (2), `appeal_rejected_edit` (2), `appeal_unban_log` (2), `promote_request_log` (2), `group_connection_rejected_log` (2).
+- Added `WHERE_CONNECTED_GROUP` to `_ALL_CONSTANTS` in `tests/test_replies.py` so it is covered by existing non-empty and policy checks.
+- Added 5 tests for `proof_line()` in `tests/test_formatter.py` (`TestProofLine` class): `None` input, empty-string input, exact output format, newline prefix, and verbatim-desc assertion.
+
+Test suite: 1486 tests / 71 files / **0 warnings** / all green. Ruff: clean (144 files).
+
 ## [Unreleased] - 2026-06-06 (session 27)
 
 ### Tests

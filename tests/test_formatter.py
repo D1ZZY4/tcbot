@@ -125,3 +125,35 @@ class TestEsc:
         assert "<" not in result
         assert ">" not in result
         assert "&amp;" in result
+
+
+class TestProofLine:
+    """Tests for the proof_line() helper."""
+
+    def test_returns_empty_string_when_none(self):
+        from tcbot.modules.helper.formatter import proof_line
+
+        assert proof_line(None) == ""
+
+    def test_returns_empty_string_when_empty_string(self):
+        from tcbot.modules.helper.formatter import proof_line
+
+        assert proof_line("") == ""
+
+    def test_formats_non_empty_desc(self):
+        from tcbot.modules.helper.formatter import proof_line
+
+        result = proof_line("https://t.me/example")
+        assert result == "\nProof: https://t.me/example"
+
+    def test_starts_with_newline_when_desc_given(self):
+        from tcbot.modules.helper.formatter import proof_line
+
+        result = proof_line("some evidence")
+        assert result.startswith("\n")
+
+    def test_contains_desc_verbatim(self):
+        from tcbot.modules.helper.formatter import proof_line
+
+        desc = "evidence link here"
+        assert desc in proof_line(desc)

@@ -283,3 +283,27 @@ def test_configs_appeals_id_empty() -> None:
     chat_id, thread_id = _make_configs(appeals="").appeals_id
     assert chat_id == 0
     assert thread_id is None
+
+
+# ─────────────── _CfgAdapter delegating properties ──────────────── #
+
+
+def test_cfg_initial_owner_id_is_int() -> None:
+    from tcbot import cfg
+
+    assert isinstance(cfg.initial_owner_id, int)
+    assert cfg.initial_owner_id > 0
+
+
+def test_cfg_main_channel_is_int() -> None:
+    from tcbot import cfg
+
+    assert isinstance(cfg.main_channel, int)
+
+
+def test_cfg_logs_errors_is_tuple() -> None:
+    from tcbot import cfg
+
+    result = cfg.logs_errors
+    assert isinstance(result, tuple)
+    assert len(result) == 2

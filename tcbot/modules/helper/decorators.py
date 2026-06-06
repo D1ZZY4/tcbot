@@ -124,7 +124,7 @@ def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
         """Wrap ``func`` with a sliding-window per-user rate check."""
 
         @functools.wraps(func)
-        async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> R | None:
+        async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> R | None:
             """Block the call and notify the user if the rate limit is exceeded."""
             uid = update.effective_user.id if update.effective_user else None
             if uid:
@@ -149,7 +149,7 @@ def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
                         return
             return await func(update, ctx)
 
-        return wrapper
+        return _wrapper
 
     return decorator
 
@@ -163,7 +163,7 @@ def log_execution(
     """Wrap a handler to emit entry / exit / exception traces at DEBUG level."""
 
     @functools.wraps(func)
-    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> R:
+    async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> R:
         """Emit entry, exit, and exception traces at DEBUG level around ``func``."""
         uid = update.effective_user.id if update.effective_user else "?"
         name = func.__name__
@@ -178,7 +178,7 @@ def log_execution(
         log.debug("[%s] uid=%s ok (%.1fms)", name, uid, (time.monotonic() - t0) * 1_000)
         return result
 
-    return wrapper
+    return _wrapper
 
 
 # ───────────────────────── Auth decorators ──────────────────────── #
@@ -196,7 +196,7 @@ def owner_only(func: Callable) -> Callable:
     """Restrict handler to the Founder only."""
 
     @functools.wraps(func)
-    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Allow the call only when the invoking user is the Founder."""
         uid = update.effective_user.id if update.effective_user else None
         if uid and await db.users_roles.is_owner(uid):
@@ -204,14 +204,14 @@ def owner_only(func: Callable) -> Callable:
         if update.effective_message:
             await update.effective_message.reply_text(_ERR_OWNER_ONLY)
 
-    return wrapper
+    return _wrapper
 
 
 def staff_only(func: Callable) -> Callable:
     """Restrict handler to Founder and Admin."""
 
     @functools.wraps(func)
-    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Allow the call only when the invoking user is Founder or Admin."""
         uid = update.effective_user.id if update.effective_user else None
         if uid and await db.users_roles.is_staff(uid):
@@ -219,14 +219,14 @@ def staff_only(func: Callable) -> Callable:
         if update.effective_message:
             await update.effective_message.reply_text(_ERR_STAFF_ONLY)
 
-    return wrapper
+    return _wrapper
 
 
 def mod_only(func: Callable) -> Callable:
     """Restrict handler to Founder, Admin, Developer (ban/unban level)."""
 
     @functools.wraps(func)
-    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Allow the call only when the invoking user holds Developer rank or above."""
         uid = update.effective_user.id if update.effective_user else None
         if uid and db.users_roles.role_rank(
@@ -236,14 +236,14 @@ def mod_only(func: Callable) -> Callable:
         if update.effective_message:
             await update.effective_message.reply_text(_ERR_MOD_ONLY)
 
-    return wrapper
+    return _wrapper
 
 
 def basic_mod_only(func: Callable) -> Callable:
     """Restrict handler to Founder, Admin, Developer, Tester (kick/mute/warn level)."""
 
     @functools.wraps(func)
-    async def wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Allow the call only when the invoking user holds Tester rank or above."""
         uid = update.effective_user.id if update.effective_user else None
         if uid and db.users_roles.role_rank(
@@ -253,7 +253,7 @@ def basic_mod_only(func: Callable) -> Callable:
         if update.effective_message:
             await update.effective_message.reply_text(_ERR_BASIC_MOD_ONLY)
 
-    return wrapper
+    return _wrapper
 
 
 # ────────────────── Shared executor-vs-target check ─────────────── #

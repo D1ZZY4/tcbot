@@ -22,9 +22,9 @@ uv run ruff check --fix .
 
 Ruff is declared in `[dependency-groups] dev = ["ruff"]` in `pyproject.toml`. `uv sync` installs it automatically so `uv run ruff` works without any extra flags or `uvx`. Do NOT use `uvx ruff`.
 
-## Baseline (2026-06-06, session 27)
+## Baseline (2026-06-06, session 28)
 
-- 1466 tests across 71 files, all passing, **0 warnings**.
+- 1486 tests across 71 files, all passing, **0 warnings**.
 - `uv run ruff check .` clean, `uv run ruff format --check .` clean (144 files).
 - Pre-existing "coroutine '_send_one' was never awaited" warnings in test_broadcasting.py resolved
   by replacing `AsyncMock(return_value=...)` with `_make_fan_out_mock(n)` helper that drains coroutines.

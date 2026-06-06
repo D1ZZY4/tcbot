@@ -18,6 +18,13 @@ load_dotenv(find_dotenv("config.env"))
 
 log = logging.getLogger(__name__)
 
+# ─────────────────────── Module-level constants ──────────────────── #
+
+# * Default TCP port for the Flask health-check server.
+_DEFAULT_PORT: int = 5000
+
+# * Error message emitted when OWNER_ID is missing or invalid.
+_ERR_OWNER_ID: str = "OWNER_ID is required and must be a positive integer."
 
 # ───────────────────────── Config Parsing ───────────────────────── #
 
@@ -39,18 +46,20 @@ def parse_list(raw: str) -> list[str]:
 
 
 def parse_port(port_str: str) -> int:
-    """Resolve a port string to a valid TCP port; 'auto' or empty defaults to 5000."""
+    """Resolve a port string to a valid TCP port; 'auto' or empty defaults to _DEFAULT_PORT."""
     if not port_str or port_str.lower() == "auto":
-        return 5000
+        return _DEFAULT_PORT
     try:
         port = int(port_str)
     except ValueError:
-        log.warning("Invalid PORT '%s', defaulting to 5000.", port_str)
-        return 5000
+        log.warning("Invalid PORT '%s', defaulting to %d.", port_str, _DEFAULT_PORT)
+        return _DEFAULT_PORT
     if 1 <= port <= 65_535:
         return port
-    log.warning("PORT '%s' is outside 1-65535, defaulting to 5000.", port_str)
-    return 5000
+    log.warning(
+        "PORT '%s' is outside 1-65535, defaulting to %d.", port_str, _DEFAULT_PORT
+    )
+    return _DEFAULT_PORT
 
 
 def parse_chat_id(raw: str) -> tuple[int, int | None]:
@@ -67,15 +76,13 @@ def _owner_id_from_env() -> int:
     """Read OWNER_ID and require a positive integer."""
     raw = os.getenv("OWNER_ID")
     if raw is None or not raw.strip():
-        raise RuntimeError("OWNER_ID is required and must be a positive integer.")
+        raise RuntimeError(_ERR_OWNER_ID)
     try:
         owner_id = int(raw.strip())
     except ValueError as exc:
-        raise RuntimeError(
-            "OWNER_ID is required and must be a positive integer."
-        ) from exc
+        raise RuntimeError(_ERR_OWNER_ID) from exc
     if owner_id <= 0:
-        raise RuntimeError("OWNER_ID is required and must be a positive integer.")
+        raise RuntimeError(_ERR_OWNER_ID)
     return owner_id
 
 
@@ -231,7 +238,7 @@ class Configs:
             db_name=db_name,
             community_name=os.getenv("COMMUNITY_NAME", "Bot").strip(),
             prefixes=prefixes,
-            port=os.getenv("PORT", "5000").strip(),
+            port=os.getenv("PORT", str(_DEFAULT_PORT)).strip(),
             main_group=os.getenv("MAIN_GROUP", "").strip(),
             main_channel=os.getenv("MAIN_CHANNEL", "").strip(),
             proofs=os.getenv("PROOFS", "").strip(),

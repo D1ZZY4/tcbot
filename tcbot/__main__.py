@@ -31,6 +31,24 @@ from tcbot.utils.logger import setup as setup_logging
 
 log = logging.getLogger(__name__)
 
+# ─────────────────────── Application constants ──────────────────── #
+
+# * HTTP timeout values for the PTB ApplicationBuilder (seconds).
+_HTTP_READ_TIMEOUT: int = 15
+_HTTP_WRITE_TIMEOUT: int = 15
+_HTTP_CONNECT_TIMEOUT: int = 10
+_HTTP_POOL_TIMEOUT: int = 5
+
+# * Connection pool sizes for the underlying httpx client.
+_API_POOL_SIZE: int = 8
+_UPDATES_POOL_SIZE: int = 4
+
+# * Maximum number of characters captured from a message in error-handler context.
+_ERROR_CONTEXT_TEXT_LEN: int = 120
+
+# * Width of the fatal-error border printed to stderr.
+_FATAL_BORDER_WIDTH: int = 70
+
 # * PTB emits a UserWarning about per_message=False + CallbackQueryHandler when
 # * ConversationHandlers are built. Our flows deliberately use per_message=False
 # * because approval callbacks must be matchable across multiple messages. The
@@ -84,7 +102,9 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
             c = update.effective_chat
             context_parts.append(f"Chat: {c.title or 'DM'} ({c.id})")
         if update.effective_message and update.effective_message.text:
-            context_parts.append(f"Text: {update.effective_message.text[:120]}")
+            context_parts.append(
+                f"Text: {update.effective_message.text[:_ERROR_CONTEXT_TEXT_LEN]}"
+            )
         elif update.callback_query:
             context_parts.append(f"CBQ data: {update.callback_query.data}")
 
@@ -164,7 +184,7 @@ async def _post_init(app: Application) -> None:
 
 def _print_fatal(stage: str, exc: BaseException) -> None:
     """Print a fatal startup error with stage label and full traceback to stderr."""
-    border = "═" * 70
+    border = "═" * _FATAL_BORDER_WIDTH
     print(f"\n{border}", file=sys.stderr)
     print(f" FATAL STARTUP ERROR in stage: {stage}", file=sys.stderr)
     print(f" {type(exc).__name__}: {exc}", file=sys.stderr)
@@ -191,14 +211,14 @@ def main() -> None:
             .post_init(_post_init)
             # * Process independent updates in parallel (big latency win)
             .concurrent_updates(True)
-            # * Connection pools - 8 for API calls, 4 dedicated for getUpdates polling
-            .connection_pool_size(8)
-            .get_updates_connection_pool_size(4)
+            # * Connection pools - API calls and dedicated getUpdates polling lane
+            .connection_pool_size(_API_POOL_SIZE)
+            .get_updates_connection_pool_size(_UPDATES_POOL_SIZE)
             # * HTTP timeouts - generous but bounded so hangs never block the loop
-            .read_timeout(15)
-            .write_timeout(15)
-            .connect_timeout(10)
-            .pool_timeout(5)
+            .read_timeout(_HTTP_READ_TIMEOUT)
+            .write_timeout(_HTTP_WRITE_TIMEOUT)
+            .connect_timeout(_HTTP_CONNECT_TIMEOUT)
+            .pool_timeout(_HTTP_POOL_TIMEOUT)
             .build()
         )
 

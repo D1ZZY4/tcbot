@@ -41,3 +41,8 @@ async def fan_out(
                 return exc
 
     return list(await asyncio.gather(*(_slot(c) for c in coros)))
+
+
+def count_errors(results: Sequence[object]) -> int:
+    """Return the number of BaseException items in a fan_out result list."""
+    return sum(1 for r in results if isinstance(r, BaseException))

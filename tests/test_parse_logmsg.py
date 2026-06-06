@@ -251,3 +251,126 @@ def test_group_bot_removed_log_is_string() -> None:
     result = group_bot_removed_log(-1001000000001, "Some Group")
     assert isinstance(result, str)
     assert result.strip()
+
+
+# ─────────────────── ban_update_log ─────────────────────────────── #
+
+
+def test_ban_update_log_contains_ban_id() -> None:
+    """Ban-update log must include the ban ID."""
+    from datetime import datetime, timezone
+
+    from tcbot.modules.helper.parse_logmsg import ban_update_log
+
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    result = ban_update_log(1, "Alice", 2, "Bob", 3, "Carol", "spamming", "ban-001", ts)
+    assert "ban-001" in result
+
+
+def test_ban_update_log_contains_both_admin_names() -> None:
+    """Ban-update log must include both the new and previous admin names."""
+    from datetime import datetime, timezone
+
+    from tcbot.modules.helper.parse_logmsg import ban_update_log
+
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    result = ban_update_log(
+        1, "Alice", 2, "NewAdmin", 3, "OldAdmin", "spam", "ban-002", ts
+    )
+    assert "NewAdmin" in result
+    assert "OldAdmin" in result
+
+
+# ─────────────────── appeal_approved_edit ───────────────────────── #
+
+
+def test_appeal_approved_edit_contains_ban_id() -> None:
+    """Appeal-approved-edit log must contain the ban ID."""
+    from tcbot.modules.helper.parse_logmsg import appeal_approved_edit
+
+    result = appeal_approved_edit(1, "Alice", 2, "Mod", "ban-007")
+    assert "ban-007" in result
+
+
+def test_appeal_approved_edit_contains_admin_name() -> None:
+    """Appeal-approved-edit log must include the approving admin's name."""
+    from tcbot.modules.helper.parse_logmsg import appeal_approved_edit
+
+    result = appeal_approved_edit(1, "Alice", 2, "ApproverName", "ban-008")
+    assert "ApproverName" in result
+
+
+# ─────────────────── appeal_rejected_edit ───────────────────────── #
+
+
+def test_appeal_rejected_edit_contains_ban_id() -> None:
+    """Appeal-rejected-edit log must contain the ban ID."""
+    from tcbot.modules.helper.parse_logmsg import appeal_rejected_edit
+
+    result = appeal_rejected_edit(1, "Alice", 2, "Mod", "ban-009")
+    assert "ban-009" in result
+
+
+def test_appeal_rejected_edit_contains_admin_name() -> None:
+    """Appeal-rejected-edit log must include the rejecting admin's name."""
+    from tcbot.modules.helper.parse_logmsg import appeal_rejected_edit
+
+    result = appeal_rejected_edit(1, "Alice", 2, "RejectorName", "ban-010")
+    assert "RejectorName" in result
+
+
+# ─────────────────── appeal_unban_log ───────────────────────────── #
+
+
+def test_appeal_unban_log_contains_ban_id() -> None:
+    """Appeal-unban log must contain the ban ID."""
+    from tcbot.modules.helper.parse_logmsg import appeal_unban_log
+
+    result = appeal_unban_log(1, "Alice", 2, "Mod", "ban-011")
+    assert "ban-011" in result
+
+
+def test_appeal_unban_log_contains_target_name() -> None:
+    """Appeal-unban log must include the target user's name."""
+    from tcbot.modules.helper.parse_logmsg import appeal_unban_log
+
+    result = appeal_unban_log(1, "TargetUser", 2, "Mod", "ban-012")
+    assert "TargetUser" in result
+
+
+# ─────────────────── promote_request_log ────────────────────────── #
+
+
+def test_promote_request_log_contains_request_id() -> None:
+    """Promote-request log must include the request ID."""
+    from tcbot.modules.helper.parse_logmsg import promote_request_log
+
+    result = promote_request_log(1, "Alice", None, "req-abc-123")
+    assert "req-abc-123" in result
+
+
+def test_promote_request_log_with_username() -> None:
+    """Promote-request log must include the username when provided."""
+    from tcbot.modules.helper.parse_logmsg import promote_request_log
+
+    result = promote_request_log(1, "Alice", "alice_handle", "req-abc-456")
+    assert "alice_handle" in result
+
+
+# ─────────────────── group_connection_rejected_log ──────────────── #
+
+
+def test_group_connection_rejected_log_contains_chat_title() -> None:
+    """Connection-rejected log must include the group title."""
+    from tcbot.modules.helper.parse_logmsg import group_connection_rejected_log
+
+    result = group_connection_rejected_log(-1001234, "My Group", 99, "Owner")
+    assert "My Group" in result
+
+
+def test_group_connection_rejected_log_contains_owner_name() -> None:
+    """Connection-rejected log must include the owner's name."""
+    from tcbot.modules.helper.parse_logmsg import group_connection_rejected_log
+
+    result = group_connection_rejected_log(-1001234, "My Group", 99, "OwnerName")
+    assert "OwnerName" in result

@@ -25,7 +25,7 @@ from tcbot.modules.helper import keyboards, parse_logmsg, replies
 from tcbot.modules.helper.formatter import mention
 from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
 from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
-from tcbot.utils.dispatch import fan_out
+from tcbot.utils.dispatch import count_errors, fan_out
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 from tcbot.utils.timedate_format import utc_now
 
@@ -213,7 +213,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     results = await fan_out(
         [bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
     )
-    failed = sum(1 for r in results if isinstance(r, BaseException))
+    failed = count_errors(results)
     log.info(
         "Ban enforced: target=%s groups=%d/%d",
         target_id,

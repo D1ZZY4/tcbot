@@ -15,7 +15,7 @@ from telegram.ext import ContextTypes
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg, replies
-from tcbot.modules.helper.formatter import code, mention
+from tcbot.modules.helper.formatter import code, mention, proof_line
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
 
@@ -48,7 +48,7 @@ async def execute_kick(
 
     try:
         await ctx.bot.ban_chat_member(chat_id, target_id)
-        proof_line = f"\nProof: {proof_desc}" if proof_desc else ""
+        proof_suffix = proof_line(proof_desc)
         chat_title = update.effective_chat.title or str(chat_id)
         admin_fname = update.effective_user.first_name
         lc, lt = cfg.logs
@@ -68,7 +68,7 @@ async def execute_kick(
             ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             msg.reply_text(
                 f"{mention(target_id, target_name)} - {code(str(target_id))} has been kicked.\n"
-                f"Reason: {reason_text}{proof_line}\n"
+                f"Reason: {reason_text}{proof_suffix}\n"
                 f"{_MSG_REJOIN_ALLOWED}",
                 parse_mode="HTML",
             ),

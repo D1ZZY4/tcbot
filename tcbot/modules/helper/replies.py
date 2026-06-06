@@ -31,6 +31,7 @@ ERR_UNKNOWN_ROLE = "Unknown role."
 CONTEXT_BOT_OR_GROUP = "Bot PM, exec group, or any connected group."
 CONTEXT_EXEC_OR_GROUP = "Exec group, any connected group, or bot PM."
 CONTEXT_ANYONE = "Anyone, no special permissions needed."
+WHERE_CONNECTED_GROUP = "Inside any connected group."
 
 # ─────────────────────── Permission Tiers ───────────────────────── #
 

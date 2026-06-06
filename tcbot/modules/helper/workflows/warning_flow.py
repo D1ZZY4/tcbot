@@ -15,7 +15,7 @@ from telegram.ext import ContextTypes
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
-from tcbot.modules.helper.formatter import code, mention
+from tcbot.modules.helper.formatter import code, mention, proof_line
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
@@ -52,7 +52,7 @@ async def execute_warn(
     msg = update.effective_message
     chat_id = update.effective_chat.id
     admin_id = update.effective_user.id
-    proof_line = f"\nProof: {proof_desc}" if proof_desc else ""
+    proof_suffix = proof_line(proof_desc)
     chat_title = update.effective_chat.title or str(chat_id)
     admin_fname = update.effective_user.first_name
     lc, lt = cfg.logs
@@ -104,7 +104,7 @@ async def execute_warn(
             await msg.reply_text(
                 f"{mention(target_id, target_name)} - {code(str(target_id))} "
                 f"hit {WARN_LIMIT} warnings "
-                f"and has been banned from this group.{proof_line}",
+                f"and has been banned from this group.{proof_suffix}",
                 parse_mode="HTML",
             )
         else:
@@ -112,7 +112,7 @@ async def execute_warn(
             await msg.reply_text(
                 f"{mention(target_id, target_name)} - {code(str(target_id))} "
                 f"hit {WARN_LIMIT} warnings "
-                f"but auto-ban failed - please ban them manually.{proof_line}",
+                f"but auto-ban failed - please ban them manually.{proof_suffix}",
                 parse_mode="HTML",
             )
     else:
@@ -121,7 +121,7 @@ async def execute_warn(
             ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             msg.reply_text(
                 f"{mention(target_id, target_name)} - {code(str(target_id))} has been warned "
-                f"({count}/{WARN_LIMIT}) - {reason_text}{proof_line}",
+                f"({count}/{WARN_LIMIT}) - {reason_text}{proof_suffix}",
                 parse_mode="HTML",
             ),
             return_exceptions=True,

@@ -17,15 +17,20 @@ from telegram.ext import ContextTypes
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg, replies
-from tcbot.modules.helper.formatter import code, mention
+from tcbot.modules.helper.formatter import code, mention, proof_line
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
-from tcbot.utils.dispatch import fan_out
+from tcbot.utils.dispatch import count_errors, fan_out
 from tcbot.utils.timedate_format import utc_now
 
 log = logging.getLogger(__name__)
 
 _DURATION_RE = re.compile(r"^(\d+)(ye|mo|[smhdw])$", re.IGNORECASE)
+
+# * Time-math constants for fmt_duration and parse_duration.
+_SECS_PER_HOUR: int = 3_600
+_SECS_PER_DAY: int = 86_400
+_DAYS_PER_YEAR: int = 365
 
 # * Per-action BuildReason and BuildProof instances; imported by muting.py
 reason = BuildReason("mute")
@@ -49,7 +54,7 @@ def parse_duration(raw: str) -> timedelta | None:
         "d": timedelta(days=value),
         "w": timedelta(weeks=value),
         "mo": timedelta(days=value * 30),
-        "ye": timedelta(days=value * 365),
+        "ye": timedelta(days=value * _DAYS_PER_YEAR),
     }
     return mapping.get(unit)
 
@@ -61,18 +66,18 @@ def fmt_duration(td: timedelta | None) -> str:
     total = int(td.total_seconds())
     if total < 60:
         return f"{total}s"
-    if total < 3600:
+    if total < _SECS_PER_HOUR:
         return f"{total // 60}m"
-    if total < 86400:
-        return f"{total // 3600}h"
-    days = total // 86400
+    if total < _SECS_PER_DAY:
+        return f"{total // _SECS_PER_HOUR}h"
+    days = total // _SECS_PER_DAY
     if days < 7:
         return f"{days}d"
     if days < 30:
         return f"{days // 7}w"
-    if days < 365:
+    if days < _DAYS_PER_YEAR:
         return f"{days // 30}mo"
-    return f"{days // 365}ye"
+    return f"{days // _DAYS_PER_YEAR}ye"
 
 
 # ────────────────────────── Mute executor ───────────────────────── #
@@ -106,14 +111,14 @@ async def _execute_mute(bot, update: Update, meta: dict) -> None:
             for grp in groups
         ]
     )
-    failed = sum(1 for r in results if isinstance(r, BaseException))
+    failed = count_errors(results)
 
-    proof_line = f"\nProof: {proof_desc}" if proof_desc else ""
+    proof_suffix = proof_line(proof_desc)
     summary = (
         f"{mention(target_id, target_fname)} - {code(str(target_id))} "
         f"has been muted <b>{dur_str}</b>.\n"
         f"Reason: {reason_text}"
-        f"{proof_line}\n"
+        f"{proof_suffix}\n"
         f"Applied to {len(groups) - failed}/{len(groups)} groups."
     )
 
@@ -183,7 +188,7 @@ async def execute_unmute(
             for grp in groups
         ]
     )
-    failed = sum(1 for r in results if isinstance(r, BaseException))
+    failed = count_errors(results)
 
     admin = update.effective_user
     lc, lt = cfg.logs

@@ -43,3 +43,12 @@ def mention(user_id: int, name: str, username: str | None = None) -> str:
 def esc(text: str) -> str:
     """Escape HTML special characters in text for safe inline inclusion in HTML messages."""
     return html.escape(str(text))
+
+
+def proof_line(proof_desc: str | None) -> str:
+    """Return a formatted proof line or an empty string when no proof is given.
+
+    Produces ``\\nProof: <desc>`` when *proof_desc* is a non-empty string,
+    or ``""`` otherwise.  Callers embed the result directly in reply text.
+    """
+    return f"\nProof: {proof_desc}" if proof_desc else ""

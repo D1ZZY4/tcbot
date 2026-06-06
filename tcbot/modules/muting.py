@@ -55,7 +55,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         replies.SEC_WHERE,
-        "Inside any connected group.",
+        replies.WHERE_CONNECTED_GROUP,
     ),
     (
         replies.SEC_WHAT,
