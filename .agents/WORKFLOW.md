@@ -63,6 +63,20 @@ uv run python -m tcbot
 If a command cannot run in the current environment, record the exact command and
 error in the final summary.
 
+```mermaid
+flowchart TD
+    Start[Start code change] --> Focused[Run focused test or import check]
+    Focused --> Format[Run Ruff format]
+    Format --> Check[Run Ruff check --fix]
+    Check --> FullTests[Run full offline test suite]
+    FullTests --> Runtime{Affects runtime behavior?}
+    Runtime -->|Yes| StartBot[Start bot locally]
+    StartBot --> Inspect[Inspect startup logs]
+    Runtime -->|No| Report[Record any command that could not run]
+    Inspect --> Report
+    Report --> Summary[Use results in final summary]
+```
+
 ---
 
 ## Adding or Changing Command Modules

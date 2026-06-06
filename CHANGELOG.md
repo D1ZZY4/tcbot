@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-06 (session 19)
+
+### Documentation
+
+- Added a Mermaid validation-flow diagram to `.agents/WORKFLOW.md` so the ordered workflow for focused checks, Ruff, full tests, runtime verification, and final reporting is visible at a glance.
+
 ## [Unreleased] - 2026-06-06 (session 18)
 
 ### Documentation
