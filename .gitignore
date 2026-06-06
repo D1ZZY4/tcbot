@@ -24,7 +24,6 @@ requirements.txt
 Thumbs.db
 
 # Cache and local agent state
-*.egg-info/
 dist/
 build/
 .cache/
