@@ -45,6 +45,16 @@ description: Non-trivial technical decisions made during development. Format: da
 
 ---
 
+## 2026-06-07: Ignore generated `*.egg-info/` metadata at the repo level
+
+**Decision:** Ignore `*.egg-info/` directories in `.gitignore` and delete any generated copy from the working tree after editable installs.
+
+**Why:** The mandatory verification step `uv pip install -e .` creates package metadata such as `tgbot_tcf.egg-info/`. Without an ignore rule, every verification cycle leaves untracked build noise that can be accidentally committed even though it is reproducible local metadata, not source.
+
+**How to apply:** Keep a generic `*.egg-info/` ignore rule instead of a package-specific path so future editable installs stay quiet as well.
+
+---
+
 ## 2026-06-02: Memory files live in `.agents/memory/`, MEMORY.md is the index
 
 **Decision:** Persistent cross-session memory uses `.agents/memory/MEMORY.md` as a one-line-per-entry index pointing to topic files in the same directory. Context, progress, and decisions each have their own file.

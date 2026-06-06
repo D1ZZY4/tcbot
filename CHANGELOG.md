@@ -2,6 +2,18 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-07 (session 23)
+
+### Fixed
+
+- Added `*.egg-info/` to `.gitignore` and removed the generated local `tgbot_tcf.egg-info/` directory so the mandatory editable-install verification step no longer leaves repository noise.
+
+## [Unreleased] - 2026-06-06 (session 22)
+
+### Documentation
+
+- Fixed `docs/setup.md` so the documented Docker runtime command now matches `Dockerfile` (`uv run --frozen python -m tcbot`), and removed a duplicated hosted-start command line in the same guide.
+
 ## [Unreleased] - 2026-06-06 (session 21)
 
 ### Documentation

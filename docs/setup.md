@@ -48,7 +48,7 @@ docker-compose up --build
 The `bot` service reads `config.env`, exposes port `5000`, and waits for the MongoDB health check before startup. The image runs:
 
 ```bash
-uv run --frozen uv run python -m tcbot
+uv run --frozen python -m tcbot
 ```
 
 ## Hosted setup
@@ -57,7 +57,7 @@ For Replit or another hosting platform:
 
 1. Store `BOT_TOKEN` and `MONGODB_URI` in the platform secret manager.
 2. Store non-secret runtime values as environment variables.
-3. Start the bot with `uv run python -m tcbot` or `uv run python -m tcbot`.
+3. Start the bot with `uv run python -m tcbot`.
 4. Make sure the Flask health endpoint port matches `PORT`.
 
 Do not commit a filled `config.env` file.
