@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-06 (session 26)
+**Last updated:** 2026-06-06 (session 27)
 
 ## Verification baseline
 
@@ -39,6 +39,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | test_module_types.py (+6) | P4 | Coverage for tcbot.modules.types aliases | 2026-06-06 |
 | structure.md handlers/ layout fix | docs | Removed stale handlers/ subtree; modules are flat under tcbot/modules/ | 2026-06-06 |
 | modules/types.py docs | docs | mapping.md + modules/modules.md entries | 2026-06-06 |
+| Coverage gap fill — session 27 | tests | 61 new tests across 10 files: global_rate_limit_handler, all_roles, role_label, parse_logmsg funcs, Configs properties, ensure_indexes, get_handlers, ConversationHandler factory funcs (ban/kick/mute/warn/build_handler). Suite: 1405 → 1466 / 71 files | 2026-06-06 |
 | Test inventory sync 1405/71 | housekeeping | PLAN, README, AGENTS, replit, memory, nothing.md | 2026-06-06 |
 | Fix "coroutine never awaited" warnings in test_broadcasting.py | fix | `_make_fan_out_mock(n)` helper closes coroutines via side_effect; 0 warnings now | 2026-06-06 |
 | cmd_help + admins handler tests | P3 | +11 tests across test_admins.py and test_help.py; fixed monkeypatch isolation bug (cfg.logs property with no setter) | 2026-06-06 |

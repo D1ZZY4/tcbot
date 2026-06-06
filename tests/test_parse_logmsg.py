@@ -123,3 +123,131 @@ def test_multiple_fields_all_present() -> None:
     assert "A: alpha" in result
     assert "B: beta" in result
     assert "C: gamma" in result
+
+
+# ─────────────────── proof_caption_update ───────────────────────── #
+
+
+def test_proof_caption_update_contains_target_id() -> None:
+    """Target ID must appear in the caption."""
+    from datetime import datetime, timezone
+
+    from tcbot.modules.helper.parse_logmsg import proof_caption_update
+
+    ts = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    result = proof_caption_update(12345, 67890, "Admin", ts)
+    assert "12345" in result
+
+
+def test_proof_caption_update_contains_admin_name() -> None:
+    """Admin name must appear in the caption."""
+    from datetime import datetime, timezone
+
+    from tcbot.modules.helper.parse_logmsg import proof_caption_update
+
+    ts = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    result = proof_caption_update(1, 2, "SomeAdmin", ts)
+    assert "SomeAdmin" in result
+
+
+def test_proof_caption_update_with_prev_link_includes_previous_section() -> None:
+    """When prev_proof_lnk is provided the caption must contain 'Previous' and the URL."""
+    from datetime import datetime, timezone
+
+    from tcbot.modules.helper.parse_logmsg import proof_caption_update
+
+    ts = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    result = proof_caption_update(
+        1, 2, "Admin", ts, prev_proof_lnk="https://t.me/c/1/2"
+    )
+    assert "Previous" in result
+    assert "https://t.me/c/1/2" in result
+
+
+def test_proof_caption_update_without_prev_link_omits_previous_section() -> None:
+    """When prev_proof_lnk is None the 'Previous' section must not appear."""
+    from datetime import datetime, timezone
+
+    from tcbot.modules.helper.parse_logmsg import proof_caption_update
+
+    ts = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    result = proof_caption_update(1, 2, "Admin", ts)
+    assert "Previous" not in result
+
+
+# ─────────────────── promote_approved_log ───────────────────────── #
+
+
+def test_promote_approved_log_contains_request_id() -> None:
+    """Promotion approval log must include the request ID."""
+    from tcbot.modules.helper.parse_logmsg import promote_approved_log
+
+    result = promote_approved_log(1, "Alice", 2, "Bob", "req-abc-123")
+    assert "req-abc-123" in result
+
+
+def test_promote_approved_log_contains_target_name() -> None:
+    """Promotion approval log must include the promoted user's name."""
+    from tcbot.modules.helper.parse_logmsg import promote_approved_log
+
+    result = promote_approved_log(1, "Alice", 2, "Bob", "req-001")
+    assert "Alice" in result
+
+
+# ─────────────────── promote_rejected_log ───────────────────────── #
+
+
+def test_promote_rejected_log_contains_request_id() -> None:
+    """Promotion rejection log must include the request ID."""
+    from tcbot.modules.helper.parse_logmsg import promote_rejected_log
+
+    result = promote_rejected_log(1, "Alice", 2, "Bob", "req-xyz-456")
+    assert "req-xyz-456" in result
+
+
+def test_promote_rejected_log_contains_target_and_actor() -> None:
+    """Promotion rejection log must include both the rejected user and the actor."""
+    from tcbot.modules.helper.parse_logmsg import promote_rejected_log
+
+    result = promote_rejected_log(1, "Alice", 2, "Moderator", "req-002")
+    assert "Alice" in result
+    assert "Moderator" in result
+
+
+# ─────────────────── group_disconnected_log ─────────────────────── #
+
+
+def test_group_disconnected_log_contains_chat_title() -> None:
+    """Group-disconnected log must contain the group title."""
+    from tcbot.modules.helper.parse_logmsg import group_disconnected_log
+
+    result = group_disconnected_log(-1001234567890, "My Group", 99, "Moderator")
+    assert "My Group" in result
+
+
+def test_group_disconnected_log_contains_actor_name() -> None:
+    """Group-disconnected log must contain the actor's name."""
+    from tcbot.modules.helper.parse_logmsg import group_disconnected_log
+
+    result = group_disconnected_log(-1001234567890, "My Group", 99, "Moderator")
+    assert "Moderator" in result
+
+
+# ─────────────────── group_bot_removed_log ──────────────────────── #
+
+
+def test_group_bot_removed_log_contains_chat_title() -> None:
+    """Bot-removed log must contain the group title."""
+    from tcbot.modules.helper.parse_logmsg import group_bot_removed_log
+
+    result = group_bot_removed_log(-1001234567890, "Test Group")
+    assert "Test Group" in result
+
+
+def test_group_bot_removed_log_is_string() -> None:
+    """Bot-removed log must return a non-empty string."""
+    from tcbot.modules.helper.parse_logmsg import group_bot_removed_log
+
+    result = group_bot_removed_log(-1001000000001, "Some Group")
+    assert isinstance(result, str)
+    assert result.strip()

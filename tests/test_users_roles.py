@@ -276,3 +276,28 @@ async def test_effective_role_cache_refreshes_after_promotion(monkeypatch) -> No
     # add_admin must invalidate the cache so the next read reflects the new rank.
     await users_roles.add_admin(50, promoted_by=1)
     assert await users_roles.get_effective_role(50) == "admin"
+
+
+# ─────────────────────────── all_roles ──────────────────────────── #
+
+
+async def test_all_roles_returns_all_docs(monkeypatch) -> None:
+    """all_roles() returns every document in tc_roles."""
+    db = FakeDB(
+        roles=[
+            {"user_id": 1, "role": "developer"},
+            {"user_id": 2, "role": "tester"},
+        ]
+    )
+    _install(monkeypatch, db)
+    result = await users_roles.all_roles()
+    assert len(result) == 2
+    role_values = {doc["role"] for doc in result}
+    assert role_values == {"developer", "tester"}
+
+
+async def test_all_roles_empty_db_returns_empty_list(monkeypatch) -> None:
+    """all_roles() returns an empty list when tc_roles has no documents."""
+    _install(monkeypatch, FakeDB(roles=[]))
+    result = await users_roles.all_roles()
+    assert result == []

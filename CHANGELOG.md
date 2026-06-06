@@ -2,6 +2,25 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-06 (session 27)
+
+### Tests
+
+- Added 6 tests for `global_rate_limit_handler` in `test_decorators.py` (no-user guard, CBQ under/over limit, command under/over limit, plain-message bypass). Fixed `_RateLimiter.__slots__` read-only issue by patching the module-level limiter name instead of the instance attribute.
+- Added 2 tests for `all_roles()` in `test_users_roles.py`.
+- Added 7 tests for `role_label` property in `test_identity.py`.
+- Added 14 tests for uncovered `parse_logmsg` functions in `test_parse_logmsg.py` (`proof_caption_update`, `promote_approved_log`, `promote_rejected_log`, `group_disconnected_log`, `group_bot_removed_log`).
+- Added 12 tests for `Configs` dataclass properties (`port_int`, `main_group_id`, `main_channel_id`, `extend_group_id`, `logs_tuple`, `proofs_id`, `logs_errors_id`, `appeals_id`) in `test_init.py`.
+- Added 2 async tests for `ensure_indexes` in `test_mongos.py` (mocking `col()` at module level).
+- Added 4 tests for `get_handlers` in `test_module_types.py` (happy path, empty modules, missing `__handlers__`, import failure → `SystemExit`).
+- Added 3 tests for `ban_conversation` factory in `test_ban_flow.py`.
+- Added 3 tests for `kick_conversation` factory in `test_kick_flow.py`.
+- Added 3 tests for `mute_conversation` factory (including `escape_filter` variant) in `test_mute_flow.py`.
+- Added 3 tests for `warn_conversation` factory (including `escape_filter` variant) in `test_warning_flow.py`.
+- Added 4 tests for `BuildAppeal.build_handler` factory in `test_appeal_flow.py`.
+
+Test suite: 1466 tests / 71 files / **0 warnings** / all green. Ruff: clean (144 files).
+
 ## [Unreleased] - 2026-06-06 (session 26)
 
 ### Refactored

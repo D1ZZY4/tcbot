@@ -269,3 +269,36 @@ async def test_exec_kick_uses_no_reason_default_when_key_absent(monkeypatch) -> 
     # * reason_text should default to replies.NO_REASON
     reason_passed = args.kwargs.get("reason_text") or args.args[4]
     assert reason_passed == replies.NO_REASON
+
+
+# ──────────────── kick_conversation factory ──────────────────────── #
+
+
+def test_kick_conversation_returns_conversation_handler() -> None:
+    """kick_conversation must return a ConversationHandler instance."""
+    from telegram.ext import ConversationHandler, filters
+
+    async def _entry(update, context): ...
+
+    handler = kicking_flow.kick_conversation(_entry, filters.TEXT)
+    assert isinstance(handler, ConversationHandler)
+
+
+def test_kick_conversation_has_entry_point() -> None:
+    """The returned ConversationHandler must have exactly one entry point."""
+    from telegram.ext import filters
+
+    async def _entry(update, context): ...
+
+    handler = kicking_flow.kick_conversation(_entry, filters.TEXT)
+    assert len(handler.entry_points) == 1
+
+
+def test_kick_conversation_has_states() -> None:
+    """The returned ConversationHandler must define at least one state."""
+    from telegram.ext import filters
+
+    async def _entry(update, context): ...
+
+    handler = kicking_flow.kick_conversation(_entry, filters.TEXT)
+    assert len(handler.states) >= 1

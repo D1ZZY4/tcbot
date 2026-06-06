@@ -65,6 +65,16 @@ description: Non-trivial technical decisions made during development. Format: da
 
 ---
 
+## 2026-06-06: `__slots__` classes — patch the module-level name, not the instance attribute
+
+**Decision:** When a class uses `__slots__`, its methods are read-only descriptors on the class object. `monkeypatch.setattr(instance, "method", ...)` raises `AttributeError: ... is read-only` both during the set and during teardown. Patch the module-level variable that holds the instance instead.
+
+**Why:** `_RateLimiter` uses `__slots__ = ("max_calls", "window", "_buckets")`, so `check` is a class-level descriptor. Monkeypatching it on the instance fails. Replacing the entire module-level `_cbq_limiter` / `_cmd_limiter` name via `monkeypatch.setattr(module, "_cbq_limiter", SimpleNamespace(check=...))` works cleanly and is fully undone by monkeypatch teardown.
+
+**How to apply:** Any time `monkeypatch.setattr(obj, "method", ...)` fails with `read-only`, check whether the class defines `__slots__`. If so, replace the module-level reference with a `SimpleNamespace` fake or a `MagicMock`.
+
+---
+
 ## 2026-06-02: Memory files live in `.agents/memory/`, MEMORY.md is the index
 
 **Decision:** Persistent cross-session memory uses `.agents/memory/MEMORY.md` as a one-line-per-entry index pointing to topic files in the same directory. Context, progress, and decisions each have their own file.

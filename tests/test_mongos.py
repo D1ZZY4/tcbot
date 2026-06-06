@@ -77,3 +77,46 @@ class TestMakeShortIdExtra:
         a = mongos.make_short_id()
         b = mongos.make_short_id()
         assert a != b
+
+
+# ─────────────────────── ensure_indexes ─────────────────────────── #
+
+
+class TestEnsureIndexes:
+    async def test_ensure_indexes_calls_create_index_on_collections(
+        self, monkeypatch
+    ) -> None:
+        """ensure_indexes must await create_index on each expected collection."""
+        from unittest.mock import AsyncMock
+
+        created: list[str] = []
+
+        def _fake_col(name: str):
+            m = AsyncMock()
+            m.create_index = AsyncMock(
+                side_effect=lambda spec, **kw: created.append(name) or None
+            )
+            return m
+
+        monkeypatch.setattr(mongos, "col", _fake_col)
+        await mongos.ensure_indexes()
+
+        assert "bans" in created
+        assert "tc_owners" in created
+        assert "tc_admins" in created
+        assert "tc_roles" in created
+        assert "federated_groups" in created
+        assert "member_cache" in created
+        assert "warns" in created
+
+    async def test_ensure_indexes_is_idempotent_on_second_call(
+        self, monkeypatch
+    ) -> None:
+        """Calling ensure_indexes twice must not raise."""
+        from unittest.mock import AsyncMock
+
+        monkeypatch.setattr(
+            mongos, "col", lambda name: AsyncMock(create_index=AsyncMock())
+        )
+        await mongos.ensure_indexes()
+        await mongos.ensure_indexes()

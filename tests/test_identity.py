@@ -343,3 +343,48 @@ async def test_classify_gather_invokes_both_db_calls(monkeypatch) -> None:
     await classify(_make_bot(), executor_id=1, target_id=7)
     mention_mock.assert_called_once_with(7)
     role_mock.assert_called_once_with(7)
+
+
+# ─────────────────────────── role_label ──────────────────────────── #
+
+
+def test_role_label_founder_returns_correct_label() -> None:
+    """Founder identity returns the public-facing 'Founder' label."""
+    ident = Identity("founder", 1, "Alice", None)
+    assert ident.role_label == "Founder"
+
+
+def test_role_label_admin_returns_correct_label() -> None:
+    """Admin identity returns the public-facing 'Admin' label."""
+    ident = Identity("admin", 2, "Bob", None)
+    assert ident.role_label == "Admin"
+
+
+def test_role_label_developer_returns_correct_label() -> None:
+    """Developer identity returns the public-facing 'Developer' label."""
+    ident = Identity("developer", 3, "Carol", None)
+    assert ident.role_label == "Developer"
+
+
+def test_role_label_tester_returns_correct_label() -> None:
+    """Tester identity returns the public-facing 'Tester' label."""
+    ident = Identity("tester", 4, "Dave", None)
+    assert ident.role_label == "Tester"
+
+
+def test_role_label_regular_user_returns_none() -> None:
+    """Non-staff identity returns None - users have no public role label."""
+    ident = Identity("user", 5, "Eve", None)
+    assert ident.role_label is None
+
+
+def test_role_label_telegram_service_returns_none() -> None:
+    """Telegram service account has no public role label."""
+    ident = Identity("telegram", 777000, "Telegram", None)
+    assert ident.role_label is None
+
+
+def test_role_label_self_kind_returns_none() -> None:
+    """'self' identity (executor targeting themselves) has no public role label."""
+    ident = Identity("self", 1, "Alice", None)
+    assert ident.role_label is None

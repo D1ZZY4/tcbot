@@ -678,3 +678,42 @@ async def test_end_sends_session_ended_reply_and_returns_end() -> None:
     assert result == ConversationHandler.END
     reply_text.assert_awaited_once()
     assert "ended" in reply_text.await_args.args[0].lower()
+
+
+# ──────────────── build_handler factory ──────────────────────────── #
+
+
+def test_build_handler_returns_conversation_handler() -> None:
+    """build_handler must return a ConversationHandler instance."""
+    from telegram.ext import filters
+
+    ba = _ba()
+    handler = ba.build_handler(filters.TEXT)
+    assert isinstance(handler, ConversationHandler)
+
+
+def test_build_handler_has_single_entry_point() -> None:
+    """The returned ConversationHandler must have exactly one entry point."""
+    from telegram.ext import filters
+
+    ba = _ba()
+    handler = ba.build_handler(filters.TEXT)
+    assert len(handler.entry_points) == 1
+
+
+def test_build_handler_has_waiting_appeal_state() -> None:
+    """The returned handler must expose the WAITING_APPEAL state."""
+    from telegram.ext import filters
+
+    ba = _ba()
+    handler = ba.build_handler(filters.TEXT)
+    assert WAITING_APPEAL in handler.states
+
+
+def test_build_handler_has_fallbacks() -> None:
+    """The returned handler must define at least one fallback."""
+    from telegram.ext import filters
+
+    ba = _ba()
+    handler = ba.build_handler(filters.TEXT)
+    assert len(handler.fallbacks) >= 1

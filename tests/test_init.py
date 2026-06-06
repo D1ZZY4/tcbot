@@ -193,3 +193,93 @@ def test_cfg_log_level_is_int() -> None:
     from tcbot import cfg
 
     assert isinstance(cfg.log_level, int)
+
+
+# ─────────────────── Configs dataclass properties ───────────────── #
+
+
+def _make_configs(**overrides):
+    from tcbot import Configs
+
+    defaults = dict(
+        bot_token="123:abc",
+        owner_id=1,
+        mongodb_uri="mongodb://localhost",
+        db_name="tcbot",
+        community_name="Test",
+        prefixes=["/"],
+        port="8080",
+        main_group="-100100",
+        main_channel="-100200",
+        proofs="-100300/5",
+        logs="-100400",
+        logs_errors="-100500/7",
+        appeals="-100600",
+        appeal_log_handle="@test",
+        proof_timeout_seconds=100,
+        appeal_timeout_seconds=600,
+        appeal_discussion_topic=3,
+        extend_group="-100700",
+        album_debounce_seconds=2,
+        log_level=20,
+        modules_load=[],
+        modules_no_load=[],
+    )
+    defaults.update(overrides)
+    return Configs(**defaults)
+
+
+def test_configs_port_int_valid() -> None:
+    assert _make_configs(port="9000").port_int == 9000
+
+
+def test_configs_port_int_invalid_falls_back() -> None:
+    assert _make_configs(port="notaport").port_int == 5000
+
+
+def test_configs_main_group_id_set() -> None:
+    assert _make_configs(main_group="-100999").main_group_id == -100999
+
+
+def test_configs_main_group_id_empty() -> None:
+    assert _make_configs(main_group="").main_group_id == 0
+
+
+def test_configs_main_channel_id_set() -> None:
+    assert _make_configs(main_channel="-100888").main_channel_id == -100888
+
+
+def test_configs_main_channel_id_empty() -> None:
+    assert _make_configs(main_channel="").main_channel_id == 0
+
+
+def test_configs_extend_group_id_set() -> None:
+    assert _make_configs(extend_group="-100777").extend_group_id == -100777
+
+
+def test_configs_extend_group_id_empty() -> None:
+    assert _make_configs(extend_group="").extend_group_id == 0
+
+
+def test_configs_logs_tuple_plain() -> None:
+    chat_id, thread_id = _make_configs(logs="-100400").logs_tuple
+    assert chat_id == -100400
+    assert thread_id is None
+
+
+def test_configs_proofs_id_with_thread() -> None:
+    chat_id, thread_id = _make_configs(proofs="-100300/5").proofs_id
+    assert chat_id == -100300
+    assert thread_id == 5
+
+
+def test_configs_logs_errors_id_with_thread() -> None:
+    chat_id, thread_id = _make_configs(logs_errors="-100500/7").logs_errors_id
+    assert chat_id == -100500
+    assert thread_id == 7
+
+
+def test_configs_appeals_id_empty() -> None:
+    chat_id, thread_id = _make_configs(appeals="").appeals_id
+    assert chat_id == 0
+    assert thread_id is None

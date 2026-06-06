@@ -436,3 +436,38 @@ async def test_exec_mute_copies_and_clears_user_data_keys(monkeypatch) -> None:
     assert all(not k.startswith("mute_") for k in remaining)
     # * non-mute_ keys must be preserved
     assert ctx.user_data.get("other_key") == "should stay"
+
+
+# ──────────────── mute_conversation factory ──────────────────────── #
+
+
+def test_mute_conversation_returns_conversation_handler() -> None:
+    """mute_conversation must return a ConversationHandler instance."""
+    from telegram.ext import ConversationHandler, filters
+
+    async def _entry(update, context): ...
+
+    handler = muting_flow.mute_conversation(_entry, filters.TEXT)
+    assert isinstance(handler, ConversationHandler)
+
+
+def test_mute_conversation_has_entry_point() -> None:
+    """The returned ConversationHandler must have exactly one entry point."""
+    from telegram.ext import filters
+
+    async def _entry(update, context): ...
+
+    handler = muting_flow.mute_conversation(_entry, filters.TEXT)
+    assert len(handler.entry_points) == 1
+
+
+def test_mute_conversation_with_escape_filter() -> None:
+    """mute_conversation with escape_filter must still return a ConversationHandler."""
+    from telegram.ext import ConversationHandler, filters
+
+    async def _entry(update, context): ...
+
+    handler = muting_flow.mute_conversation(
+        _entry, filters.TEXT, escape_filter=filters.COMMAND
+    )
+    assert isinstance(handler, ConversationHandler)

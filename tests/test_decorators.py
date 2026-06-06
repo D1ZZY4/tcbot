@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import logging
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
+from telegram.ext import ApplicationHandlerStop
 
+import tcbot.modules.helper.decorators as _dec_mod
 from tcbot.database import users_roles
 from tcbot.modules.helper.decorators import (
     _ERR_BASIC_MOD_ONLY,
@@ -19,6 +22,7 @@ from tcbot.modules.helper.decorators import (
     _ERR_RANK_INSUFFICIENT,
     _ERR_STAFF_ONLY,
     basic_mod_only,
+    global_rate_limit_handler,
     log_execution,
     mod_only,
     owner_only,
@@ -397,3 +401,87 @@ def test_err_rank_insufficient_is_non_empty_string() -> None:
 
 def test_err_rank_insufficient_text_value() -> None:
     assert _ERR_RANK_INSUFFICIENT == "You don't have the rank for this one."
+
+
+# ───────────────── global_rate_limit_handler ────────────────────── #
+
+
+def _rate_update(
+    uid: int | None = 1,
+    *,
+    has_cbq: bool = False,
+    text: str = "/start",
+) -> SimpleNamespace:
+    """Build a minimal Update-like namespace for rate-limit tests."""
+    user = SimpleNamespace(id=uid) if uid is not None else None
+    cbq = SimpleNamespace(answer=AsyncMock()) if has_cbq else None
+    msg = SimpleNamespace(text=text, reply_text=AsyncMock())
+    return SimpleNamespace(
+        effective_user=user,
+        callback_query=cbq,
+        effective_message=msg,
+    )
+
+
+async def test_global_rate_limit_no_user_returns_none() -> None:
+    """Handler returns immediately when effective_user is None."""
+    update = _rate_update(uid=None)
+    result = await global_rate_limit_handler(update, SimpleNamespace())
+    assert result is None
+
+
+async def test_global_rate_limit_cbq_under_limit_returns_none(monkeypatch) -> None:
+    """Callback query under the rate limit - handler returns without raising."""
+    monkeypatch.setattr(
+        _dec_mod, "_cbq_limiter", SimpleNamespace(check=lambda uid: 0.0)
+    )
+    update = _rate_update(has_cbq=True)
+    result = await global_rate_limit_handler(update, SimpleNamespace())
+    assert result is None
+    update.callback_query.answer.assert_not_called()
+
+
+async def test_global_rate_limit_cbq_over_limit_raises(monkeypatch) -> None:
+    """Callback query over the rate limit raises ApplicationHandlerStop."""
+    monkeypatch.setattr(
+        _dec_mod, "_cbq_limiter", SimpleNamespace(check=lambda uid: 5.0)
+    )
+    update = _rate_update(has_cbq=True)
+    with pytest.raises(ApplicationHandlerStop):
+        await global_rate_limit_handler(update, SimpleNamespace())
+    update.callback_query.answer.assert_awaited_once()
+
+
+async def test_global_rate_limit_command_under_limit_returns_none(monkeypatch) -> None:
+    """Command message under the rate limit - handler returns without raising."""
+    monkeypatch.setattr(
+        _dec_mod, "_cmd_limiter", SimpleNamespace(check=lambda uid: 0.0)
+    )
+    update = _rate_update(text="/ban")
+    result = await global_rate_limit_handler(update, SimpleNamespace())
+    assert result is None
+
+
+async def test_global_rate_limit_command_over_limit_raises(monkeypatch) -> None:
+    """Command message over the rate limit raises ApplicationHandlerStop."""
+    monkeypatch.setattr(
+        _dec_mod, "_cmd_limiter", SimpleNamespace(check=lambda uid: 3.0)
+    )
+    update = _rate_update(text="/warn")
+    with pytest.raises(ApplicationHandlerStop):
+        await global_rate_limit_handler(update, SimpleNamespace())
+
+
+async def test_global_rate_limit_plain_message_never_rate_checked(monkeypatch) -> None:
+    """Plain chat messages (not starting with a prefix) bypass the rate limiter entirely."""
+    check_called: list[int] = []
+
+    def _record_check(uid: int) -> float:
+        check_called.append(uid)
+        return 999.0
+
+    monkeypatch.setattr(_dec_mod, "_cmd_limiter", SimpleNamespace(check=_record_check))
+    update = _rate_update(text="Hello world")
+    result = await global_rate_limit_handler(update, SimpleNamespace())
+    assert result is None
+    assert check_called == []

@@ -319,3 +319,36 @@ async def test_on_proof_timeout_without_message_ends_silently() -> None:
     )
 
     assert result == ConversationHandler.END
+
+
+# ─────────────────── ban_conversation factory ───────────────────── #
+
+
+def test_ban_conversation_returns_conversation_handler() -> None:
+    """ban_conversation must return a ConversationHandler instance."""
+    from telegram.ext import filters
+
+    async def _entry(update, context): ...
+
+    handler = ban_flow.ban_conversation(_entry, filters.TEXT)
+    assert isinstance(handler, ConversationHandler)
+
+
+def test_ban_conversation_has_entry_point() -> None:
+    """The returned handler must have exactly one entry point."""
+    from telegram.ext import filters
+
+    async def _entry(update, context): ...
+
+    handler = ban_flow.ban_conversation(_entry, filters.TEXT)
+    assert len(handler.entry_points) == 1
+
+
+def test_ban_conversation_has_fallbacks() -> None:
+    """The returned handler must have at least one fallback."""
+    from telegram.ext import filters
+
+    async def _entry(update, context): ...
+
+    handler = ban_flow.ban_conversation(_entry, filters.TEXT)
+    assert len(handler.fallbacks) >= 1

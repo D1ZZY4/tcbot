@@ -440,3 +440,38 @@ async def test_exec_warn_empty_user_data_uses_defaults(monkeypatch) -> None:
     assert target_id_passed == 0
     proof_desc_passed = args.kwargs.get("proof_desc")
     assert proof_desc_passed is None
+
+
+# ──────────────── warn_conversation factory ──────────────────────── #
+
+
+def test_warn_conversation_returns_conversation_handler() -> None:
+    """warn_conversation must return a ConversationHandler instance."""
+    from telegram.ext import ConversationHandler, filters
+
+    async def _entry(update, context): ...
+
+    handler = warning_flow.warn_conversation(_entry, filters.TEXT)
+    assert isinstance(handler, ConversationHandler)
+
+
+def test_warn_conversation_has_entry_point() -> None:
+    """The returned ConversationHandler must have exactly one entry point."""
+    from telegram.ext import filters
+
+    async def _entry(update, context): ...
+
+    handler = warning_flow.warn_conversation(_entry, filters.TEXT)
+    assert len(handler.entry_points) == 1
+
+
+def test_warn_conversation_with_escape_filter() -> None:
+    """warn_conversation with escape_filter must still return a ConversationHandler."""
+    from telegram.ext import ConversationHandler, filters
+
+    async def _entry(update, context): ...
+
+    handler = warning_flow.warn_conversation(
+        _entry, filters.TEXT, escape_filter=filters.COMMAND
+    )
+    assert isinstance(handler, ConversationHandler)
