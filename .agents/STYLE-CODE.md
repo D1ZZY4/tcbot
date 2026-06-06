@@ -28,7 +28,7 @@ Every Python module starts with this structure:
 ```python
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
-# © Copyright 2026 Aveum Apps
+# © Copyright 2026 Ave Studio
 
 """One-line description of what this module does."""
 
@@ -222,7 +222,7 @@ Use this template for `tcbot/modules/*.py` files:
 ```python
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
-# © Copyright 2026 Aveum Apps
+# © Copyright 2026 Ave Studio
 
 """One-line description of this command module."""
 

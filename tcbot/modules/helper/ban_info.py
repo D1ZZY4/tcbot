@@ -1,6 +1,6 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
-# © Copyright 2026 Aveum Apps
+# © Copyright 2026 Ave Studio
 
 """Shared ban-detail formatter: builds the rich ban information card from a ban document."""
 

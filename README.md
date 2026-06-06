@@ -289,6 +289,6 @@ Configure in GitHub repository settings → Secrets:
 
 ## License
 
-Copyright © 2024-2026 Transsion Core, Dizzy, Aveum Apps. All rights reserved.
+Copyright © 2024-2026 Transsion Core, Dizzy, Ave Studio. All rights reserved.
 
 See `LICENSE` for details.

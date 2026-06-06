@@ -1,6 +1,6 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
-# © Copyright 2026 Aveum Apps
+# © Copyright 2026 Ave Studio
 
 """Telegram deep-link builders (chat/message links and bot deep links)."""
 

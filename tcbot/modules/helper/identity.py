@@ -1,6 +1,6 @@
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
-# © Copyright 2026 Aveum Apps
+# © Copyright 2026 Ave Studio
 
 """Identity helpers: classify a user (self / bot / Telegram / Founder / staff / regular)
 and produce friendly, identity-aware replies for moderation commands.

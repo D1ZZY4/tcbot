@@ -37,3 +37,4 @@ attached_assets/
 logs*/
 .pytest_cache/
 nothing.md
+account*

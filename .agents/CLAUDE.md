@@ -229,7 +229,7 @@ Required Python module header:
 ```python
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
-# © Copyright 2026 Aveum Apps
+# © Copyright 2026 Ave Studio
 
 """One-line description of what this module does."""
 
@@ -262,7 +262,7 @@ Every `tcbot/modules/*.py` file must expose help metadata and handlers:
 ```python
 # © Copyright 2024 - 2026 Transsion Core
 # © Copyright 2024 - 2026 Dizzy
-# © Copyright 2026 Aveum Apps
+# © Copyright 2026 Ave Studio
 
 """One-line description of the command module."""
 
