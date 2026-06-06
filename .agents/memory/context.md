@@ -5,7 +5,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-06 (session 29)
+**Last updated:** 2026-06-06 (session 30)
 
 ## What is done
 
@@ -117,6 +117,11 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Added `WHERE_CONNECTED_GROUP` to `replies.py`; replaced literal in kicking/muting/warnings.
   - Added 12 tests for 6 uncovered `parse_logmsg` functions; 5 tests for `proof_line()` helper.
   - 1466 -> 1486 tests / 71 files, 0 warnings. Ruff 144 files clean.
+
+- Session 30 (2026-06-06): magic number extraction — MongoDB pool params + all ratelimiter constants across all 16 module files.
+  - Extracted 7 named MongoDB constants to `mongos.py`; replaced all 7 bare literals in `connect()`.
+  - Extracted `_RL_*` named constants to all 16 `tcbot/modules/*.py` files with `@ratelimiter` decorators; replaced every bare `limit=` and `period=` literal. Every `@ratelimiter` call-site in `tcbot/modules/` now uses named constants.
+  - 1492 tests / 71 files, 0 warnings. Ruff 144 files clean.
 
 - Session 29 (2026-06-06): full doc audit + coverage gap fill.
   - Fixed stale test counts in all 8 docs and memory files (1405/1466/1481 -> 1492).

@@ -29,6 +29,10 @@ log = logging.getLogger(__name__)
 
 _ERR_REASON_REQUIRED = "A reason is required - /tcban <target> <reason>."
 
+# ─────────────────────── Rate-limiter constants ──────────────────── #
+_RL_PERIOD_S: int = 60
+_RL_LIMIT: int = 3
+
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -79,7 +83,7 @@ __help_sections__: list[tuple[str, str]] = [
 # ────────────────────── Command Ban </tcban> ────────────────────── #
 
 
-@decorators.ratelimiter(limit=3, period=60)
+@decorators.ratelimiter(limit=_RL_LIMIT, period=_RL_PERIOD_S)
 @decorators.mod_only
 @decorators.log_execution
 async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:

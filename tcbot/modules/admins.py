@@ -41,6 +41,14 @@ _MSG_CANCELLED = "Cancelled. No changes were made."
 _MSG_NO_PENDING = "No pending promotion requests."
 _ERR_REQUEST_NOT_FOUND = "Request not found or already resolved."
 
+# ─────────────────────── Rate-limiter constants ──────────────────── #
+_RL_PERIOD_S: int = 30
+_RL_PERIOD_LONG_S: int = 60
+_RL_PERIOD_BULK_S: int = 300
+_RL_CMD_LIMIT: int = 10
+_RL_QUERY_LIMIT: int = 5
+_RL_BULK_LIMIT: int = 3
+
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -117,7 +125,7 @@ __help_sections__: list[tuple[str, str]] = [
 # ────────────────── Command Promote </tcpromote> ────────────────── #
 
 
-@decorators.ratelimiter(limit=5, period=60)
+@decorators.ratelimiter(limit=_RL_QUERY_LIMIT, period=_RL_PERIOD_LONG_S)
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -192,7 +200,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ──────────────────────── Callback Handlers ─────────────────────── #
 
 
-@decorators.ratelimiter(limit=10, period=30)
+@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the role-selection inline button from /tcpromote.
@@ -243,7 +251,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     await q.edit_message_text(text, parse_mode="HTML", reply_markup=None)
 
 
-@decorators.ratelimiter(limit=10, period=30)
+@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_promote_role_cancel(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE
@@ -259,7 +267,7 @@ async def on_promote_role_cancel(
 # ─────────────────── Command Demote </tcdemote> ─────────────────── #
 
 
-@decorators.ratelimiter(limit=5, period=60)
+@decorators.ratelimiter(limit=_RL_QUERY_LIMIT, period=_RL_PERIOD_LONG_S)
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -317,7 +325,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ──────────────────────── Callback Handlers ─────────────────────── #
 
 
-@decorators.ratelimiter(limit=10, period=30)
+@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Confirm the demote action from the inline keyboard.
@@ -376,7 +384,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     )
 
 
-@decorators.ratelimiter(limit=10, period=30)
+@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Acknowledge the cancel button and collapse the demotion confirmation prompt."""
@@ -390,7 +398,7 @@ async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 # ───────────── Command Transfer Owner </transferowner> ──────────── #
 
 
-@decorators.ratelimiter(limit=3, period=300)
+@decorators.ratelimiter(limit=_RL_BULK_LIMIT, period=_RL_PERIOD_BULK_S)
 @decorators.owner_only
 @decorators.log_execution
 async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -448,7 +456,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ───────── Command Promotion Requests </tcpromoterequests> ──────── #
 
 
-@decorators.ratelimiter(limit=3, period=300)
+@decorators.ratelimiter(limit=_RL_BULK_LIMIT, period=_RL_PERIOD_BULK_S)
 @decorators.log_execution
 async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Submit a promotion request to the Founder.
@@ -486,7 +494,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
 # ──────── Command Promotion Requests List </tcpromotelist> ──────── #
 
 
-@decorators.ratelimiter(limit=5, period=60)
+@decorators.ratelimiter(limit=_RL_QUERY_LIMIT, period=_RL_PERIOD_LONG_S)
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -508,7 +516,7 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 # ──────────────────────── Callback Handlers ─────────────────────── #
 
 
-@decorators.ratelimiter(limit=10, period=30)
+@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle approve / reject decisions on promotion request cards.

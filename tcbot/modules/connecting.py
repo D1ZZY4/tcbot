@@ -32,6 +32,10 @@ _ERR_PENDING_REQUEST = "A connect request for this group is already pending."
 
 _TG_TIMEOUT = 3.0
 
+# ─────────────────────── Rate-limiter constants ──────────────────── #
+_RL_PERIOD_S: int = 60
+_RL_LIMIT: int = 3
+
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -85,7 +89,7 @@ __help_sections__: list[tuple[str, str]] = [
 # ───────────── Command to Connect a Group </tcconnect> ──────────── #
 
 
-@decorators.ratelimiter(limit=3, period=60)
+@decorators.ratelimiter(limit=_RL_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Request to connect the current group to the federation.

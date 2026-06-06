@@ -26,6 +26,11 @@ log = logging.getLogger(__name__)
 _ERR_TOPIC_NOT_FOUND = "Topic not found."
 _ERR_INVALID_SECTION = "Invalid section."
 
+# ─────────────────────── Rate-limiter constants ──────────────────── #
+_RL_PERIOD_S: int = 30
+_RL_CMD_LIMIT: int = 8
+_RL_CB_LIMIT: int = 15
+
 __module_name__ = None
 
 
@@ -219,7 +224,7 @@ async def _show_section(
 # ──────────────────────── Command Handlers ──────────────────────── #
 
 
-@decorators.ratelimiter(limit=8, period=30)
+@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Show the help index, or a specific topic when an argument is given."""
@@ -268,14 +273,14 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ──────────────────────── Callback Handlers ─────────────────────── #
 
 
-@decorators.ratelimiter(limit=15, period=30)
+@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_help_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the top-level help index from the start-menu help button (includes back-to-start)."""
     await _render_help_index(update, ctx, with_back_to_start=True)
 
 
-@decorators.ratelimiter(limit=15, period=30)
+@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_help_menu_group(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Help tapped from group /start inline; answer with alert, no edit."""
@@ -286,14 +291,14 @@ async def on_help_menu_group(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     )
 
 
-@decorators.ratelimiter(limit=15, period=30)
+@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_helpc_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the top-level help index from a /helpc command callback (no back-to-start button)."""
     await _render_help_index(update, ctx, with_back_to_start=False)
 
 
-@decorators.ratelimiter(limit=15, period=30)
+@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_help_topic_any(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle help_<mod> and helpc_<mod> module overview callbacks."""
@@ -305,7 +310,7 @@ async def on_help_topic_any(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         await _show_module(q, data, is_menu_path=True)
 
 
-@decorators.ratelimiter(limit=15, period=30)
+@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_help_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle helps_<mod>:<idx> and helpcs_<mod>:<idx> section callbacks."""

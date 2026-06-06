@@ -16,6 +16,10 @@ from tcbot.modules.helper import decorators, keyboards
 
 __module_name__ = None
 
+# ─────────────────────── Rate-limiter constants ──────────────────── #
+_RL_PERIOD_S: int = 30
+_RL_CB_LIMIT: int = 15
+
 
 # ─────────────────────── Additional Message ─────────────────────── #
 
@@ -30,7 +34,7 @@ __additional_msg__ = (
 # ──────────────────────── Callback Handler ──────────────────────── #
 
 
-@decorators.ratelimiter(limit=15, period=30)
+@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_additional_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the Additional Info page when the button is tapped."""

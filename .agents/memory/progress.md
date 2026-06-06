@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-06 (session 29)
+**Last updated:** 2026-06-06 (session 30)
 
 ## Verification baseline
 
@@ -136,6 +136,8 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `check_flow.py` magic number constants | housekeeping | Extracted `_REASON_PREVIEW_LEN = 80` and `_BUTTON_TITLE_MAX = 24`; replaced 3 bare slice literals | 2026-06-06 (s26) |
 | `help.py` prefix-offset self-documentation | housekeeping | `data[6:]`/`data[7:]` replaced with `data[len("helpc_"):]`/`data[len("helps_"):]`/`data[len("helpcs_"):]` | 2026-06-06 (s26) |
 | MEMORY.md stale link removal | housekeeping | Removed broken `../../nothing.md` index entry; file no longer exists | 2026-06-06 (s26) |
+| MongoDB connection-pool named constants | housekeeping | Extracted 7 constants to `mongos.py`; replaced all bare literals in `AsyncIOMotorClient()` call | 2026-06-06 (s30) |
+| Ratelimiter constants — all 16 modules | housekeeping | `_RL_*` constants extracted to all 16 modules with `@ratelimiter` decorators; every bare `limit=`/`period=` literal in `tcbot/modules/` replaced | 2026-06-06 (s30) |
 | Full doc audit + stale count fixes | housekeeping | Fixed 1405/1466/1481 -> 1492 in README(×2), PLAN(×2), AGENTS, replit.md, memory files. Updated replies.py table in helper.md (+9 missing constants). All 10 developer docs verified accurate. | 2026-06-06 (s29) |
 | count_errors coverage (+6 tests) | tests | `TestCountErrors` class in test_dispatch.py; was the only public tcbot/ function with no test mention. Suite: 1486 -> 1492 / 71 files | 2026-06-06 (s29) |
 

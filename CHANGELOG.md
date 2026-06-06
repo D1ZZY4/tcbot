@@ -2,6 +2,15 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-06 (session 30)
+
+### Refactored
+
+- Extracted 7 MongoDB connection-pool named constants to `tcbot/database/mongos.py`: `_MONGO_SERVER_SELECTION_MS`, `_MONGO_CONNECT_TIMEOUT_MS`, `_MONGO_SOCKET_TIMEOUT_MS`, `_MONGO_MAX_POOL_SIZE`, `_MONGO_MIN_POOL_SIZE`, `_MONGO_MAX_IDLE_MS`, `_MONGO_HEARTBEAT_MS`. Replaced all 7 bare literals in the `AsyncIOMotorClient` call.
+- Extracted rate-limiter named constants (`_RL_PERIOD_S`, `_RL_CMD_LIMIT`, `_RL_CB_LIMIT`, and tier-specific variants) across all 16 module files that contained bare numeric literals in `@decorators.ratelimiter` decorators: `checking.py` (12 call-sites), `stats.py` (14), `admins.py` (10), `help.py` (6), `start.py` (5), `groups.py` (3), `privacy.py` (2), `maintenance.py` (2), `warnings.py` (4), `about.py` (1), `additional.py` (1), `banning.py` (1), `broadcasting.py` (1), `connecting.py` (1), `disconnecting.py` (2), `kicking.py` (1), `muting.py` (2), `unbanning.py` (1). Every `@ratelimiter` call-site in `tcbot/modules/` now uses named constants.
+
+Test suite: 1492 tests / 71 files / **0 warnings** / all green. Ruff: clean (144 files).
+
 ## [Unreleased] - 2026-06-06 (session 29)
 
 ### Documentation

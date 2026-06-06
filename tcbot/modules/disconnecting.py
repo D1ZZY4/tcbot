@@ -26,6 +26,11 @@ _MSG_RMTC_USAGE = "Usage: /rmtc <chat_id>"
 
 _TG_TIMEOUT = 3.0
 
+# ─────────────────────── Rate-limiter constants ──────────────────── #
+_RL_PERIOD_S: int = 60
+_RL_DISCONNECT_LIMIT: int = 3
+_RL_RMTC_LIMIT: int = 5
+
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -70,7 +75,7 @@ __help_sections__: list[tuple[str, str]] = [
 # ────────── Command to Disconnect a Group </tcdisconnect> ───────── #
 
 
-@decorators.ratelimiter(limit=3, period=60)
+@decorators.ratelimiter(limit=_RL_DISCONNECT_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Request to disconnect the current group from the federation.
@@ -138,7 +143,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 # ───────────── Command to Force-Remove a Group </rmtc> ──────────── #
 
 
-@decorators.ratelimiter(limit=5, period=60)
+@decorators.ratelimiter(limit=_RL_RMTC_LIMIT, period=_RL_PERIOD_S)
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

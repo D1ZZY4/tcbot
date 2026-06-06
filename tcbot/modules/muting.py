@@ -34,6 +34,10 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
 
+# ─────────────────────── Rate-limiter constants ──────────────────── #
+_RL_PERIOD_S: int = 60
+_RL_LIMIT: int = 5
+
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -95,7 +99,7 @@ __help_sections__: list[tuple[str, str]] = [
 # ───────────────────── Command Mute </tcmute> ───────────────────── #
 
 
-@decorators.ratelimiter(limit=5, period=60)
+@decorators.ratelimiter(limit=_RL_LIMIT, period=_RL_PERIOD_S)
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -181,7 +185,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 # ─────────────────── Command Unmute </tcunmute> ─────────────────── #
 
 
-@decorators.ratelimiter(limit=5, period=60)
+@decorators.ratelimiter(limit=_RL_LIMIT, period=_RL_PERIOD_S)
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

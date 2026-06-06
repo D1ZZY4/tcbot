@@ -14,6 +14,10 @@ from telegram.ext import CallbackQueryHandler, ContextTypes
 from tcbot import cfg
 from tcbot.modules.helper import decorators, keyboards
 
+# ─────────────────────── Rate-limiter constants ──────────────────── #
+_RL_PERIOD_S: int = 30
+_RL_CB_LIMIT: int = 15
+
 __module_name__ = None
 
 
@@ -60,7 +64,7 @@ _PRIVACY_POLICY_MSG = (
 # ──────────────────────── Callback Handlers ─────────────────────── #
 
 
-@decorators.ratelimiter(limit=15, period=30)
+@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_privacy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the data-collection privacy notice when the Privacy button is tapped."""
@@ -76,7 +80,7 @@ async def on_privacy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     )
 
 
-@decorators.ratelimiter(limit=15, period=30)
+@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_privacy_policy_menu(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE

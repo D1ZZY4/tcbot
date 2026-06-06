@@ -20,6 +20,11 @@ from tcbot.modules.helper.keyboards import tcgroups_kb
 from tcbot.modules.helper.parse_editmsg import safe_edit
 from tcbot.utils.prefixes import build_prefixed_filters
 
+# ─────────────────────── Rate-limiter constants ──────────────────── #
+_RL_PERIOD_S: int = 30
+_RL_CMD_LIMIT: int = 8
+_RL_CB_LIMIT: int = 15
+
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Groups"
@@ -71,7 +76,7 @@ def _render(groups: list[GroupDoc], detailed: bool) -> str:
 # ────────── Command for see Connected Groups </tcgroups> ────────── #
 
 
-@decorators.ratelimiter(limit=8, period=30)
+@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Reply with a paginated list of all currently active connected groups."""
@@ -112,14 +117,14 @@ async def _toggle(
         )
 
 
-@decorators.ratelimiter(limit=15, period=30)
+@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_groups_details(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Switch the groups listing to detailed view (shows full chat IDs)."""
     await _toggle(update, ctx, True)
 
 
-@decorators.ratelimiter(limit=15, period=30)
+@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Switch the groups listing to simple view (condensed, no full chat IDs)."""

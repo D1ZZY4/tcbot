@@ -24,6 +24,12 @@ from tcbot.utils.timedate_format import fmt_dt
 
 log = logging.getLogger(__name__)
 
+# ─────────────────────── Rate-limiter constants ──────────────────── #
+_RL_PERIOD_S: int = 30
+_RL_CMD_LIMIT: int = 8
+_RL_CHECKME_CB_LIMIT: int = 15
+_RL_CHECK_CB_LIMIT: int = 20
+
 # ──────────────── User-facing reply constants ──────────────────── #
 
 _ERR_BAN_INACTIVE = "This ban is no longer active."
@@ -138,7 +144,7 @@ async def _safe_edit(q, text: str, reply_markup) -> None:
 # ─────────── Command Check Ban for User Self </checkme> ─────────── #
 
 
-@decorators.ratelimiter(limit=8, period=30)
+@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Show the caller's federation status (ban / staff role / clean record).
@@ -204,7 +210,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ──────────────────────── Callback Handlers ─────────────────────── #
 
 
-@decorators.ratelimiter(limit=15, period=30)
+@decorators.ratelimiter(limit=_RL_CHECKME_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Show detailed ban information from the /checkme ban card.
@@ -233,7 +239,7 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     )
 
 
-@decorators.ratelimiter(limit=15, period=30)
+@decorators.ratelimiter(limit=_RL_CHECKME_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Return to the ban summary card from the detail view.
@@ -271,7 +277,7 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 # ───────────── Command Comprehensive Check </check> ────────────── #
 
 
-@decorators.ratelimiter(limit=8, period=30)
+@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Show a comprehensive profile (identity + bans + warns + kicks + mutes + appeals)."""
@@ -297,7 +303,7 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ─────────────── Callback Handlers for /check views ─────────────── #
 
 
-@decorators.ratelimiter(limit=20, period=30)
+@decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the top-level profile summary for the checked user."""
@@ -307,7 +313,7 @@ async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _safe_edit(q, text, kb)
 
 
-@decorators.ratelimiter(limit=20, period=30)
+@decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of federation bans for the checked user."""
@@ -319,7 +325,7 @@ async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await _safe_edit(q, text, kb)
 
 
-@decorators.ratelimiter(limit=20, period=30)
+@decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the full detail view for a single federation ban record."""
@@ -332,7 +338,7 @@ async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     await _safe_edit(q, text, kb)
 
 
-@decorators.ratelimiter(limit=20, period=30)
+@decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the per-group warning summary for the checked user."""
@@ -342,7 +348,7 @@ async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await _safe_edit(q, text, kb)
 
 
-@decorators.ratelimiter(limit=20, period=30)
+@decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of warnings for the checked user in a specific group."""
@@ -357,7 +363,7 @@ async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     await _safe_edit(q, text, kb)
 
 
-@decorators.ratelimiter(limit=20, period=30)
+@decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of kick records for the checked user."""
@@ -369,7 +375,7 @@ async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await _safe_edit(q, text, kb)
 
 
-@decorators.ratelimiter(limit=20, period=30)
+@decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of mute records for the checked user."""
@@ -381,7 +387,7 @@ async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await _safe_edit(q, text, kb)
 
 
-@decorators.ratelimiter(limit=20, period=30)
+@decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_check_appeals(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of appeal records for the checked user."""

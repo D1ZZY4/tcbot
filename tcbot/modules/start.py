@@ -21,6 +21,11 @@ from tcbot.utils.prefixes import build_prefixed_filters
 
 log = logging.getLogger(__name__)
 
+# ─────────────────────── Rate-limiter constants ──────────────────── #
+_RL_PERIOD_S: int = 30
+_RL_CMD_LIMIT: int = 8
+_RL_CB_LIMIT: int = 15
+
 __module_name__ = None
 
 
@@ -43,7 +48,7 @@ _GROUP_START_TEXT = (
 # ──────────────────────── Command Handlers ──────────────────────── #
 
 
-@decorators.ratelimiter(limit=8, period=30)
+@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Respond to /start in private chats and groups.
@@ -89,7 +94,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ──────────────────────── Callback Handlers ─────────────────────── #
 
 
-@decorators.ratelimiter(limit=15, period=30)
+@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_back_to_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Return to the main menu when the Back button is tapped in a sub-menu."""
@@ -121,14 +126,14 @@ async def _show_groups(q: CallbackQuery, detailed: bool) -> None:
     )
 
 
-@decorators.ratelimiter(limit=15, period=30)
+@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_menu_groups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Show the connected-groups list in simple view from the start menu."""
     await _show_groups(update.callback_query, False)
 
 
-@decorators.ratelimiter(limit=15, period=30)
+@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_menu_groups_details(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE
@@ -137,7 +142,7 @@ async def on_menu_groups_details(
     await _show_groups(update.callback_query, True)
 
 
-@decorators.ratelimiter(limit=15, period=30)
+@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_menu_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Return to simple view of the connected-groups list from the start menu."""

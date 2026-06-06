@@ -34,6 +34,12 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 log = logging.getLogger(__name__)
 
+# ─────────────────────── Rate-limiter constants ──────────────────── #
+_RL_PERIOD_S: int = 30
+_RL_CMD_PERIOD_S: int = 60
+_RL_WARN_LIMIT: int = 5
+_RL_READ_LIMIT: int = 8
+
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -99,7 +105,7 @@ __help_sections__: list[tuple[str, str]] = [
 # ───────────────────── Command Warn </tcwarn> ───────────────────── #
 
 
-@decorators.ratelimiter(limit=5, period=60)
+@decorators.ratelimiter(limit=_RL_WARN_LIMIT, period=_RL_CMD_PERIOD_S)
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -167,7 +173,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 # ─────────────────── Command Unwarn </tcunwarn> ─────────────────── #
 
 
-@decorators.ratelimiter(limit=5, period=60)
+@decorators.ratelimiter(limit=_RL_WARN_LIMIT, period=_RL_CMD_PERIOD_S)
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -200,7 +206,7 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ─────────────────── Command Warn List </warns> ─────────────────── #
 
 
-@decorators.ratelimiter(limit=8, period=30)
+@decorators.ratelimiter(limit=_RL_READ_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Reply with a paginated warning history for the specified target user."""
@@ -215,7 +221,7 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ──────────────── Command Reset Warns </resetwarns> ─────────────── #
 
 
-@decorators.ratelimiter(limit=5, period=60)
+@decorators.ratelimiter(limit=_RL_WARN_LIMIT, period=_RL_CMD_PERIOD_S)
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

@@ -48,6 +48,15 @@ _db: AsyncIOMotorDatabase | None = None
 
 _ID_ALPHABET: str = string.ascii_lowercase + string.digits
 
+# ──────────────── MongoDB Connection Pool Parameters ────────────── #
+_MONGO_SERVER_SELECTION_MS: int = 10_000
+_MONGO_CONNECT_TIMEOUT_MS: int = 10_000
+_MONGO_SOCKET_TIMEOUT_MS: int = 45_000
+_MONGO_MAX_POOL_SIZE: int = 20
+_MONGO_MIN_POOL_SIZE: int = 2
+_MONGO_MAX_IDLE_MS: int = 60_000
+_MONGO_HEARTBEAT_MS: int = 30_000
+
 
 # ────────────────────────── ID Generator ────────────────────────── #
 # * Creates unique, URL-safe IDs for database records
@@ -83,13 +92,13 @@ async def connect() -> None:
     _patch_dns_if_needed()
     client = AsyncIOMotorClient(
         cfg.mongodb_uri,
-        serverSelectionTimeoutMS=10_000,
-        connectTimeoutMS=10_000,
-        socketTimeoutMS=45_000,
-        maxPoolSize=20,
-        minPoolSize=2,
-        maxIdleTimeMS=60_000,
-        heartbeatFrequencyMS=30_000,
+        serverSelectionTimeoutMS=_MONGO_SERVER_SELECTION_MS,
+        connectTimeoutMS=_MONGO_CONNECT_TIMEOUT_MS,
+        socketTimeoutMS=_MONGO_SOCKET_TIMEOUT_MS,
+        maxPoolSize=_MONGO_MAX_POOL_SIZE,
+        minPoolSize=_MONGO_MIN_POOL_SIZE,
+        maxIdleTimeMS=_MONGO_MAX_IDLE_MS,
+        heartbeatFrequencyMS=_MONGO_HEARTBEAT_MS,
         compressors=["zlib"],
         retryWrites=True,
         retryReads=True,

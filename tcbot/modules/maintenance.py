@@ -21,6 +21,12 @@ from tcbot.utils.prefixes import build_prefixed_filters
 
 log = logging.getLogger(__name__)
 
+# ─────────────────────── Rate-limiter constants ──────────────────── #
+_RL_PERIOD_LONG_S: int = 60
+_RL_PERIOD_BULK_S: int = 300
+_RL_CLEANUP_LIMIT: int = 3
+_RL_LEAVEALL_LIMIT: int = 1
+
 _MEMBERSHIP_CHECK_TIMEOUT = 3.0
 
 
@@ -115,7 +121,7 @@ async def _should_remove(bot, grp: GroupDoc) -> bool:
 # ────────────────── Command Leave All </leaveall> ───────────────── #
 
 
-@decorators.ratelimiter(limit=1, period=300)
+@decorators.ratelimiter(limit=_RL_LEAVEALL_LIMIT, period=_RL_PERIOD_BULK_S)
 @decorators.owner_only
 @decorators.log_execution
 async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -161,7 +167,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ─────────────────── Command CleanUp </cleanup> ─────────────────── #
 
 
-@decorators.ratelimiter(limit=3, period=60)
+@decorators.ratelimiter(limit=_RL_CLEANUP_LIMIT, period=_RL_PERIOD_LONG_S)
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
