@@ -2,6 +2,31 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-06 (session 14)
+
+### Added - Admins callback happy-path tests and module type-alias coverage
+
+Added 6 handler-behavior tests to `tests/test_admins.py` (46 -> 52) covering previously
+missing success and guard branches in `on_demote_confirm` and `on_promote_role_btn`:
+- `test_on_demote_confirm_admin_target_blocked_for_non_founder`: admin executor cannot demote admin.
+- `test_on_demote_confirm_success_edits_done_message`: founder demotes developer, edits HTML result.
+- `test_on_demote_confirm_execute_failure_edits_error`: `Demote.execute` returning False edits error.
+- `test_on_promote_role_btn_unknown_role_edits_error`: invalid role token edits `ERR_UNKNOWN_ROLE`.
+- `test_on_promote_role_btn_success_edits_result`: founder assigns developer via `Promote.execute`.
+
+Added `tests/test_module_types.py` (6 tests) for `tcbot.modules.types` aliases
+(`CommandHandlerFn`, `CallbackHandlerFn`, `DataCoroutine`, `TargetId`, `TargetFirstName`).
+
+### Documentation
+
+- Fixed stale `handlers/` subtree in `.agents/memory/structure.md`; modules live directly under
+  `tcbot/modules/*.py` with `types.py` listed.
+- Documented `tcbot/modules/types.py` in `docs/mapping.md` and `docs/modules/modules.md`.
+- Synced test inventory baseline to 1405 tests / 71 files across memory files, root docs, and
+  `nothing.md`.
+
+Test suite: 1405 tests / 71 files / **0 warnings** / all green. Ruff: clean (143 files).
+
 ## [Unreleased] - 2026-06-06 (session 13)
 
 ### Fixed - Pre-existing "coroutine was never awaited" warnings in test_broadcasting.py

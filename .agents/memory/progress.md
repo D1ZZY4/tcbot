@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot — Progress
 
-**Last updated:** 2026-06-06 (session 13)
+**Last updated:** 2026-06-06 (session 14)
 
 ## Verification baseline
 
@@ -14,12 +14,17 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv sync --extra test` | PASS |
 | `uv run ruff format --check .` | PASS (all files unchanged) |
 | `uv run ruff check .` | PASS (0 errors) |
-| `uv run --extra test pytest tests/ -q` | PASS (1394 tests, 70 files, **0 warnings**, all green) |
+| `uv run --extra test pytest tests/ -q` | PASS (1405 tests, 71 files, **0 warnings**, all green) |
 
 ## Completed items
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Admins callback happy-path tests (+6) | P4 | on_demote_confirm success + admin-block + execute failure; on_promote_role_btn success + unknown role | 2026-06-06 |
+| test_module_types.py (+6) | P4 | Coverage for tcbot.modules.types aliases | 2026-06-06 |
+| structure.md handlers/ layout fix | docs | Removed stale handlers/ subtree; modules are flat under tcbot/modules/ | 2026-06-06 |
+| modules/types.py docs | docs | mapping.md + modules/modules.md entries | 2026-06-06 |
+| Test inventory sync 1405/71 | housekeeping | PLAN, README, AGENTS, replit, memory, nothing.md | 2026-06-06 |
 | Fix "coroutine never awaited" warnings in test_broadcasting.py | fix | `_make_fan_out_mock(n)` helper closes coroutines via side_effect; 0 warnings now | 2026-06-06 |
 | cmd_help + admins handler tests | P3 | +11 tests across test_admins.py and test_help.py; fixed monkeypatch isolation bug (cfg.logs property with no setter) | 2026-06-06 |
 | checking/stats/admins/connecting/disconnecting happy-path tests (+8) | P4 | on_checkme_detail, on_checkme_back, on_stats_search_back, on_promo_decision×2, cmd_tcconnect success, cmd_tcdisconnect success, cmd_rmtc success | 2026-06-06 |

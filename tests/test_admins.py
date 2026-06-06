@@ -460,6 +460,74 @@ async def test_on_demote_confirm_no_longer_removable_edits_text(monkeypatch) -> 
     assert call_kwargs.get("reply_markup") is None
 
 
+async def test_on_demote_confirm_admin_target_blocked_for_non_founder(
+    monkeypatch,
+) -> None:
+    update, ctx = _make_cb_ctx(f"demote_confirm:{_DEMOTE_TARGET_ID}")
+
+    async def _roles(uid: int) -> str:
+        if uid == _DEMOTE_ADMIN_ID:
+            return "admin"
+        return "admin"
+
+    monkeypatch.setattr(admins.db.users_roles, "get_effective_role", _roles)
+    monkeypatch.setattr(
+        admins.db.users_cache,
+        "get_user_mention_data",
+        AsyncMock(return_value=("Target", None)),
+    )
+    await _on_demote_confirm(update, ctx)
+    update.callback_query.edit_message_text.assert_awaited_once()
+    reply_text = update.callback_query.edit_message_text.call_args[0][0]
+    assert "Founder" in reply_text
+
+
+async def test_on_demote_confirm_success_edits_done_message(monkeypatch) -> None:
+    update, ctx = _make_cb_ctx(f"demote_confirm:{_DEMOTE_TARGET_ID}")
+
+    async def _roles(uid: int) -> str:
+        if uid == _DEMOTE_ADMIN_ID:
+            return "founder"
+        return "developer"
+
+    monkeypatch.setattr(admins.db.users_roles, "get_effective_role", _roles)
+    monkeypatch.setattr(
+        admins.db.users_cache,
+        "get_user_mention_data",
+        AsyncMock(return_value=("Target", "target_user")),
+    )
+    monkeypatch.setattr(admins.Demote, "execute", AsyncMock(return_value=True))
+    await _on_demote_confirm(update, ctx)
+    update.callback_query.edit_message_text.assert_awaited_once()
+    call_kwargs = update.callback_query.edit_message_text.call_args[1]
+    assert call_kwargs.get("parse_mode") == "HTML"
+    assert call_kwargs.get("reply_markup") is None
+    reply_text = update.callback_query.edit_message_text.call_args[0][0]
+    assert "Done." in reply_text
+    assert "Developer" in reply_text
+
+
+async def test_on_demote_confirm_execute_failure_edits_error(monkeypatch) -> None:
+    update, ctx = _make_cb_ctx(f"demote_confirm:{_DEMOTE_TARGET_ID}")
+
+    async def _roles(uid: int) -> str:
+        if uid == _DEMOTE_ADMIN_ID:
+            return "founder"
+        return "tester"
+
+    monkeypatch.setattr(admins.db.users_roles, "get_effective_role", _roles)
+    monkeypatch.setattr(
+        admins.db.users_cache,
+        "get_user_mention_data",
+        AsyncMock(return_value=("Target", None)),
+    )
+    monkeypatch.setattr(admins.Demote, "execute", AsyncMock(return_value=False))
+    await _on_demote_confirm(update, ctx)
+    update.callback_query.edit_message_text.assert_awaited_once()
+    reply_text = update.callback_query.edit_message_text.call_args[0][0]
+    assert "Couldn't remove" in reply_text
+
+
 # ─────────── Handler behavior: on_promote_role_btn callback ─────── #
 
 _on_promote_role_btn = admins.on_promote_role_btn.__wrapped__.__wrapped__
@@ -477,6 +545,48 @@ async def test_on_promote_role_btn_perm_expired_answers_alert(monkeypatch) -> No
     q.answer.assert_awaited_once()
     call_kwargs = q.answer.call_args[1]
     assert call_kwargs.get("show_alert") is True
+
+
+async def test_on_promote_role_btn_unknown_role_edits_error(monkeypatch) -> None:
+    update, ctx = _make_cb_ctx("promo_role:superuser:42")
+    monkeypatch.setattr(
+        admins.db.users_roles,
+        "get_effective_role",
+        AsyncMock(return_value="founder"),
+    )
+    await _on_promote_role_btn(update, ctx)
+    update.callback_query.edit_message_text.assert_awaited_once()
+    reply_text = update.callback_query.edit_message_text.call_args[0][0]
+    assert reply_text == admins.replies.ERR_UNKNOWN_ROLE
+
+
+async def test_on_promote_role_btn_success_edits_result(monkeypatch) -> None:
+    update, ctx = _make_cb_ctx(f"promo_role:developer:{_PROMOTE_TARGET_ID}")
+    update.effective_user.id = _PROMOTE_ADMIN_ID
+
+    async def _roles(uid: int) -> str:
+        if uid == _PROMOTE_ADMIN_ID:
+            return "founder"
+        return None
+
+    monkeypatch.setattr(admins.db.users_roles, "get_effective_role", _roles)
+    monkeypatch.setattr(
+        admins.db.users_cache,
+        "get_first_name",
+        AsyncMock(return_value="Target"),
+    )
+    monkeypatch.setattr(
+        admins.Promote,
+        "execute",
+        AsyncMock(return_value=(True, "Done. Target is now a Developer.")),
+    )
+    await _on_promote_role_btn(update, ctx)
+    update.callback_query.edit_message_text.assert_awaited_once()
+    call_kwargs = update.callback_query.edit_message_text.call_args[1]
+    assert call_kwargs.get("parse_mode") == "HTML"
+    assert call_kwargs.get("reply_markup") is None
+    reply_text = update.callback_query.edit_message_text.call_args[0][0]
+    assert "Developer" in reply_text
 
 
 # ─────────── Handler behavior: on_promo_decision callback ───────── #

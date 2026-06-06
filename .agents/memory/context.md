@@ -5,13 +5,13 @@ description: Current state of TCF Bot project — what is done, in progress, and
 
 # TCF Bot — Current Context
 
-**Last updated:** 2026-06-06 (session 12 continued)
+**Last updated:** 2026-06-06 (session 14)
 
 ## What is done
 
 - Python 3.12, uv, python-telegram-bot 22.5, Motor/MongoDB stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
-- 1394 tests across 70 test files; full suite passes offline with **0 warnings** (pre-existing broadcasting warning fixed in session 13).
+- 1405 tests across 71 test files; full suite passes offline with **0 warnings**.
 - `uv run ruff format .` and `uv run ruff check .` both clean (142 files).
 - All P1/P2/P3 backlog items resolved (ConversationHandler tests, pagination NameError, composite indexes, asyncio.gather conversions, shared replies.py, em-dash removal, cache TTL constants, keyboards.py dead code).
 - `docs/mapping.md` updated: added `identity.py`, `replies.py` to helper section; added `pagination.py` to utils section.
@@ -81,13 +81,20 @@ description: Current state of TCF Bot project — what is done, in progress, and
   - Stale test inventory count fixed across all docs: 1251/71 -> 1302/70.
   - Full docs audit: all .md files reviewed; all Mermaid diagrams verified accurate; no stale content found beyond test counts.
 
+- Session 14 (2026-06-06): docs + tests
+  - Fixed stale `handlers/` layout in `.agents/memory/structure.md`.
+  - Added 6 admins callback happy-path/guard tests (`on_demote_confirm`, `on_promote_role_btn`).
+  - Added `tests/test_module_types.py` (6 tests) for `tcbot.modules.types`.
+  - Documented `modules/types.py` in docs/mapping.md and docs/modules/modules.md.
+  - Synced test inventory 1394/70 -> 1405/71 across root docs and memory files.
+  - Updated `nothing.md` operating brief baseline.
+
 ## What is in progress
 
-Nothing. All known items resolved.
+Nothing. Session 14 checkpoint complete.
 
 ## What is pending (optional)
 
-- Module-interface types in tcbot/modules/types.py (only if signatures grow ambiguous).
 - Query metrics collection (data-driven; gather Atlas PA data first).
 
 ## Known runtime notes

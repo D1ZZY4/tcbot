@@ -43,6 +43,10 @@ __handlers__ = [ ... ]
 
 Set `__module_name__ = None` for internal/menu modules hidden from `/help`.
 
+`types.py` is not a command module. It holds shared `typing` aliases such as
+`CommandHandlerFn`, `CallbackHandlerFn`, and `DataCoroutine` for cross-module handler
+signatures.
+
 ## Command modules
 
 | Module | Visible help topic | Main handlers/commands | Notes |

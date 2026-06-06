@@ -42,26 +42,27 @@ tcbot/
 │   │       ├── stats_flow.py      Stats class: overview, staff, users, chats, bans, search
 │   │       ├── unban_flow.py      execute_unban()
 │   │       └── warning_flow.py    execute_warn(), execute_unwarn(), execute_warnlist(), etc.
-│   └── handlers/            ConversationHandler and callback registrations
-│       ├── banning.py       /ban, /unban entry points and callback wiring
-│       ├── kicking.py       /kick entry point and callback wiring
-│       ├── muting.py        /mute entry point and callback wiring
-│       ├── warnings.py      /warn, /unwarn, /warnlist, /resetwarns entry points
-│       ├── appeals.py       /appeal entry point and callback wiring
-│       ├── stats.py         /tcstats entry point and callback wiring
-│       ├── checking.py      /check, /checkme entry points and callback wiring
-│       ├── groups.py        /tcgroups - connected group list
-│       ├── admins.py        /tcpromote, /tcdemote, /transferowner, /tcpromoterequests
-│       ├── connecting.py    Group connection management callbacks
-│       ├── disconnecting.py Group disconnection callbacks
-│       ├── greeting.py      New-member welcome handler
-│       ├── start.py         /start and menu callbacks
-│       ├── help.py          /help, /start help text and topic callbacks
-│       ├── about.py         /tcabout
-│       ├── additional.py    Additional utility commands
-│       ├── maintenance.py   Maintenance/admin commands
-│       ├── broadcasting.py  /broadcast command
-│       └── privacy.py       /privacy command
+│   ├── types.py             Shared handler type aliases (CommandHandlerFn, etc.)
+│   ├── banning.py           /ban, /unban entry points and callback wiring
+│   ├── kicking.py           /kick entry point and callback wiring
+│   ├── muting.py            /mute entry point and callback wiring
+│   ├── warnings.py          /warn, /unwarn, /warnlist, /resetwarns entry points
+│   ├── appeals.py           Appeal callback wiring (flow in appeal_flow.py)
+│   ├── stats.py             /tcstats entry point and callback wiring
+│   ├── checking.py          /check, /checkme entry points and callback wiring
+│   ├── groups.py            /tcgroups connected group list
+│   ├── admins.py            /tcpromote, /tcdemote, /transferowner, /tcpromoterequests
+│   ├── connecting.py        Group connection management
+│   ├── disconnecting.py     Group disconnection
+│   ├── greeting.py          New-member welcome handler
+│   ├── start.py             /start and menu callbacks
+│   ├── help.py              /help and topic callbacks
+│   ├── about.py             Start-menu About callback
+│   ├── additional.py        Start-menu Additional callback
+│   ├── maintenance.py       Maintenance/admin commands
+│   ├── broadcasting.py      /broadcast command
+│   ├── privacy.py           Privacy menu callbacks
+│   └── unbanning.py         /unban command entry
 ├── database/
 │   ├── bans_db.py           Federation bans (active_bans, get_ban, add_ban, etc.)
 │   ├── cache.py             In-memory TTL cache (RoleCache, UserCache)
@@ -83,7 +84,7 @@ tcbot/
     ├── prefixes.py          build_prefixed_filters() - command filter builder
     └── timedate_format.py   utc_now(), fmt_dt(), to_utc(), utc_now_str()
 
-tests/                       70 offline pytest files, 1394 tests (asyncio_mode=auto, no real Telegram/MongoDB)
+tests/                       71 offline pytest files, 1405 tests (asyncio_mode=auto, no real Telegram/MongoDB)
 docs/                        Architecture docs, feature guides, module references
 .agents/                     Agent policy, style, workflow, skills, memory
 ```

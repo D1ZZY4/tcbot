@@ -41,6 +41,7 @@ tcbot/
 │   └── types.py            NewType ID primitives
 ├── modules/
 │   ├── __init__.py         Dynamic module discovery and handler collection
+│   ├── types.py            Shared handler type aliases (CommandHandlerFn, etc.)
 │   ├── *.py                Command and callback modules
 │   └── helper/
 │       ├── decorators.py   Auth, per-handler rate limits, tracing, resolve_and_check
