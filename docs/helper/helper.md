@@ -134,10 +134,20 @@ Shared bot-reply string constants used by multiple command modules. Import with 
 | `CONTEXT_EXEC_OR_GROUP` | Context guard: command must be used in an executor-owned group or DM. |
 | `CONTEXT_ANYONE` | Context hint shown to regular users. |
 | `PERM_FOUNDER_ONLY` | Permission hint: Founder only. |
-| `PERM_STAFF_ONLY` | Permission hint: Admin and above required. |
+| `PERM_STAFF_ONLY` | Permission hint: TC Staff (Admin and above). |
 | `PERM_ADMIN_ABOVE` | Permission hint: Admin and above (Founder / Admin). |
 | `PERM_DEV_ABOVE` | Permission hint: Developer or above required. |
 | `PERM_TESTER_ABOVE` | Permission hint: Tester or above required. |
+| `ERR_PERM_EXPIRED` | Error when the caller no longer has permission (e.g. after a role change mid-flow). |
+| `ERR_UNKNOWN_ROLE` | Error for an unrecognised role string. |
+| `WHERE_CONNECTED_GROUP` | Context hint: inside any connected group. |
+| `NO_REASON` | Default fallback text when no moderation reason is supplied. |
+| `SEC_COMMANDS` | Help-text section header: `Commands & Aliases`. |
+| `SEC_WHO` | Help-text section header: `Who can use`. |
+| `SEC_WHERE` | Help-text section header: `Where to use`. |
+| `SEC_WHAT` | Help-text section header: `What it does`. |
+| `SEC_EXAMPLES` | Help-text section header: `Examples`. |
+| `SEC_TARGET` | Help-text section header: `Target syntax`. |
 
 Command modules import from `replies.py` instead of inlining these strings.
 

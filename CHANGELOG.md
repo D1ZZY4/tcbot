@@ -2,6 +2,21 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-06 (session 29)
+
+### Documentation
+
+- Fixed stale test counts across all root and memory docs (1405/1466/1481 → 1492): `README.md` (×2), `PLAN.md` (×2), `AGENTS.md`, `replit.md`, `.agents/memory/MEMORY.md`, `.agents/memory/structure.md`.
+- Updated `docs/helper/helper.md` replies.py constants table: added 9 missing entries (`ERR_PERM_EXPIRED`, `ERR_UNKNOWN_ROLE`, `WHERE_CONNECTED_GROUP`, `NO_REASON`, `SEC_COMMANDS`, `SEC_WHO`, `SEC_WHERE`, `SEC_WHAT`, `SEC_EXAMPLES`, `SEC_TARGET`).
+- Completed full doc audit: `docs/README.md`, `docs/mapping.md`, `docs/modules/modules.md`, `docs/helper/helper.md`, `docs/databases/databases.md`, `docs/utils/utils.md`, `docs/workflows/workflows.md`, `docs/performance.md`, `docs/setup.md`, `.agents/REPLIT.md` — all accurate.
+
+### Tests
+
+- Added `TestCountErrors` class (6 tests) to `tests/test_dispatch.py`: covers `count_errors()` for empty list, no-exceptions list, all-exceptions list, mixed list, single exception, and `BaseException` subtype. This was the only remaining public function in `tcbot/` with no test coverage mention.
+- Updated import line in `test_dispatch.py` to import `count_errors` alongside `fan_out`.
+
+Test suite: 1492 tests / 71 files / **0 warnings** / all green. Ruff: clean (144 files).
+
 ## [Unreleased] - 2026-06-06 (session 28)
 
 ### Refactored

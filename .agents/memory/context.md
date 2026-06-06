@@ -5,7 +5,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-06 (session 28)
+**Last updated:** 2026-06-06 (session 29)
 
 ## What is done
 
@@ -118,9 +118,14 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Added 12 tests for 6 uncovered `parse_logmsg` functions; 5 tests for `proof_line()` helper.
   - 1466 -> 1486 tests / 71 files, 0 warnings. Ruff 144 files clean.
 
+- Session 29 (2026-06-06): full doc audit + coverage gap fill.
+  - Fixed stale test counts in all 8 docs and memory files (1405/1466/1481 -> 1492).
+  - Updated `docs/helper/helper.md` replies.py table: added 9 missing constants (ERR_PERM_EXPIRED, ERR_UNKNOWN_ROLE, WHERE_CONNECTED_GROUP, NO_REASON, SEC_* ×6).
+  - Added 6 `TestCountErrors` tests to `test_dispatch.py`: `count_errors()` was the only public function in `tcbot/` with no test mention. Suite: 1486 -> 1492 / 71 files, 0 warnings. Ruff 144 files clean.
+
 ## What is in progress
 
-Nothing. Session 28 checkpoint complete.
+Nothing. Session 29 checkpoint complete.
 
 ## What is pending (optional)
 

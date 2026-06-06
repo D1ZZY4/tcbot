@@ -2,13 +2,13 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Studio
 
-"""Tests for tcbot.utils.dispatch.fan_out."""
+"""Tests for tcbot.utils.dispatch.fan_out and count_errors."""
 
 from __future__ import annotations
 
 import asyncio
 
-from tcbot.utils.dispatch import fan_out
+from tcbot.utils.dispatch import count_errors, fan_out
 
 
 class TestFanOutEmpty:
@@ -131,3 +131,25 @@ class TestFanOutConcurrency:
         result = await fan_out([coro(i) for i in range(100)])
         assert len(result) == 100
         assert result == list(range(100))
+
+
+class TestCountErrors:
+    def test_empty_list_returns_zero(self):
+        assert count_errors([]) == 0
+
+    def test_no_exceptions_returns_zero(self):
+        assert count_errors([1, "ok", None, 42]) == 0
+
+    def test_all_exceptions_returns_full_count(self):
+        errs = [ValueError("a"), RuntimeError("b"), Exception("c")]
+        assert count_errors(errs) == 3
+
+    def test_mixed_returns_exception_count(self):
+        result = [1, ValueError("x"), "ok", RuntimeError("y"), 99]
+        assert count_errors(result) == 2
+
+    def test_single_exception(self):
+        assert count_errors([OSError("boom")]) == 1
+
+    def test_base_exception_counted(self):
+        assert count_errors([BaseException("base")]) == 1
