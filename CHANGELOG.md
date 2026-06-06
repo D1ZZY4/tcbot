@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-06 (session 16)
+
+### Documentation
+
+- Synced `.agents/memory/context.md` with the current Ruff validation baseline: the docs now record 143 checked files instead of the stale 142-file count.
+
 ## [Unreleased] - 2026-06-06 (session 15)
 
 ### Documentation

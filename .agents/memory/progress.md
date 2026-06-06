@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot — Progress
 
-**Last updated:** 2026-06-06 (session 15)
+**Last updated:** 2026-06-06 (session 16)
 
 ## Verification baseline
 
@@ -14,10 +14,10 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv sync --extra test` | PASS |
 | `uv pip install -e .` | PASS |
 | `uv run python -c "import tcbot; print('import OK')"` | PASS |
-| `uv run python -m tcbot --help 2>&1 || uv run python -c "from tcbot import *; print('startup OK')"` | PASS by runtime evidence: command reached startup, connected MongoDB, ensured indexes, initialised bot, then timed out because polling stayed alive |
+| `uv run python -m tcbot --help 2>&1 || uv run python -c "from tcbot import *; print('startup OK')"` | PASS by runtime evidence on initial run; a later rerun hit a transient local port conflict on `5000`, then cleanly passed again with `PORT=5001` |
 | `uv run ruff format .` | PASS (143 files left unchanged) |
 | `uv run ruff check --fix .` | PASS |
-| `uv run python -m tcbot` | PASS by runtime evidence: bot started cleanly, connected MongoDB, ensured indexes, started scheduler, then timed out because polling stayed alive |
+| `uv run python -m tcbot` | PASS by runtime evidence with `PORT=5001`: bot started cleanly, connected MongoDB, ensured indexes, started scheduler, then timed out because polling stayed alive |
 | `uv run --extra test pytest --tb=short -q` | PASS (full suite green) |
 | `grep -RIn "1-3 emojis\|emoji only where natural" . --include='*.md' --exclude-dir=.git --exclude-dir=.venv --exclude-dir=.kilo --exclude-dir=.trae` | PASS for stale-rule audit: only expected historical references remain in `CHANGELOG.md` and `progress.md` |
 
@@ -25,6 +25,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| `.agents/memory/context.md` Ruff baseline sync | docs | Updated stale Ruff file-count note from 142 to the current 143-file baseline verified in session 16 | 2026-06-06 |
 | `.agents/CLAUDE.md` emoji-policy contradiction fix | docs | Replaced stale "use 1-3 emojis" guidance with the canonical no-emoji, no-emoticon bot-voice rule so agent instructions are internally consistent | 2026-06-06 |
 | Admins callback happy-path tests (+6) | P4 | on_demote_confirm success + admin-block + execute failure; on_promote_role_btn success + unknown role | 2026-06-06 |
 | test_module_types.py (+6) | P4 | Coverage for tcbot.modules.types aliases | 2026-06-06 |

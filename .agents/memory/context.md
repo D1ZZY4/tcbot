@@ -5,14 +5,14 @@ description: Current state of TCF Bot project — what is done, in progress, and
 
 # TCF Bot — Current Context
 
-**Last updated:** 2026-06-06 (session 15)
+**Last updated:** 2026-06-06 (session 16)
 
 ## What is done
 
 - Python 3.12, uv, python-telegram-bot 22.5, Motor/MongoDB stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
 - 1405 tests across 71 test files; full suite passes offline with **0 warnings**.
-- `uv run ruff format .` and `uv run ruff check .` both clean (142 files).
+- `uv run ruff format .` and `uv run ruff check .` both clean (143 files).
 - All P1/P2/P3 backlog items resolved (ConversationHandler tests, pagination NameError, composite indexes, asyncio.gather conversions, shared replies.py, em-dash removal, cache TTL constants, keyboards.py dead code).
 - `docs/mapping.md` updated: added `identity.py`, `replies.py` to helper section; added `pagination.py` to utils section.
 - `maintenance.py` and `disconnecting.py` hardcoded `timeout=3.0` extracted to named constants.
@@ -107,6 +107,7 @@ Nothing. Session 14 checkpoint complete.
 - Communication with user: Indonesian. Code/docs/commits: English.
 - Agent-rule docs are being re-audited for internal consistency; session 15 fixed a contradiction in `.agents/CLAUDE.md` where one section still allowed emojis even though the canonical bot voice forbids pictograph emoji and text emoticons.
 - Session 15 verification baseline passed end to end: `uv sync --extra test`, editable reinstall, import check, startup check, Ruff, runtime start, full pytest, and stale-rule grep audit.
+- Session 16 re-verified runtime after a transient local bind conflict on port 5000: `PORT=5001 uv run python -m tcbot` started cleanly, so the issue was environmental rather than code-related.
 
 ## Blockers
 
