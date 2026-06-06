@@ -14,6 +14,14 @@ from tcbot.database.documents import UserDoc
 from tcbot.database.mongos import col
 from tcbot.utils.timedate_format import utc_now
 
+# ─────────────────────── Collection Helpers ─────────────────────── #
+# * Internal collection access utilities for the member_cache database
+
+
+def _members():
+    return col("member_cache")
+
+
 # ────────── Member cache mutations ─────────
 
 
@@ -25,7 +33,7 @@ async def upsert_user(
 ) -> None:
     """Update or insert a user's profile information into the cache."""
     now = utc_now()
-    await col("member_cache").update_one(
+    await _members().update_one(
         {"user_id": user_id},
         {
             "$set": {
@@ -48,7 +56,7 @@ async def upsert_user(
 
 async def get_user(user_id: int) -> UserDoc | None:
     """Get the full cached profile for a specific user."""
-    return await col("member_cache").find_one({"user_id": user_id})
+    return await _members().find_one({"user_id": user_id})
 
 
 async def get_user_mention_data(user_id: int) -> tuple[str, str | None]:
@@ -57,7 +65,7 @@ async def get_user_mention_data(user_id: int) -> tuple[str, str | None]:
     Optimized query that fetches only the fields needed for mentions,
     avoiding full document retrieval.
     """
-    doc = await col("member_cache").find_one(
+    doc = await _members().find_one(
         {"user_id": user_id}, {"first_name": 1, "username": 1}
     )
     if doc:
@@ -76,7 +84,7 @@ async def get_mention_data_batch(
     if not user_ids:
         return {}
     docs = (
-        await col("member_cache")
+        await _members()
         .find(
             {"user_id": {"$in": user_ids}},
             {"user_id": 1, "first_name": 1, "username": 1},
@@ -106,7 +114,7 @@ async def get_first_names_batch(user_ids: list[int]) -> dict[int, str]:
     if not user_ids:
         return {}
     docs = (
-        await col("member_cache")
+        await _members()
         .find({"user_id": {"$in": user_ids}}, {"user_id": 1, "first_name": 1})
         .to_list(None)
     )
@@ -123,7 +131,7 @@ async def get_first_names_batch(user_ids: list[int]) -> dict[int, str]:
 
 async def get_first_name(user_id: int, fallback: str = "") -> str:
     """Return cached first_name or fallback string."""
-    doc = await col("member_cache").find_one({"user_id": user_id}, {"first_name": 1})
+    doc = await _members().find_one({"user_id": user_id}, {"first_name": 1})
     if doc:
         return doc.get("first_name") or fallback
     return fallback
@@ -131,7 +139,7 @@ async def get_first_name(user_id: int, fallback: str = "") -> str:
 
 async def total_users() -> int:
     """Get the total number of unique users in the cache."""
-    return await col("member_cache").count_documents({})
+    return await _members().count_documents({})
 
 
 async def all_users(*, sort_by: str = "first_name") -> list[UserDoc]:
@@ -142,7 +150,7 @@ async def all_users(*, sort_by: str = "first_name") -> list[UserDoc]:
     """
     sort_dir = 1 if sort_by != "last_updated" else -1
     return (
-        await col("member_cache")
+        await _members()
         .find({}, {"_id": 0})
         .sort(sort_by, sort_dir)
         .to_list(length=None)
