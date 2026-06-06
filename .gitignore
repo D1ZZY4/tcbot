@@ -39,4 +39,5 @@ check.log
 format.log
 .pytest_cache/
 nothing.md
+nothing-*.md
 account*
