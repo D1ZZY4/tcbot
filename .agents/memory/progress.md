@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-06 (session 17)
+**Last updated:** 2026-06-06 (session 18)
 
 ## Verification baseline
 
@@ -14,17 +14,18 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv sync --extra test` | PASS |
 | `uv pip install -e .` | PASS |
 | `uv run python -c "import tcbot; print('import OK')"` | PASS |
-| `uv run python -m tcbot --help 2>&1 || uv run python -c "from tcbot import *; print('startup OK')"` | PASS by runtime evidence with `PORT=5002`: bot started cleanly, connected MongoDB, ensured indexes, initialised, and stayed alive until timeout |
+| `uv run python -m tcbot --help 2>&1 || uv run python -c "from tcbot import *; print('startup OK')"` | PASS by runtime evidence with `PORT=5008`: bot started cleanly, connected MongoDB, ensured indexes, initialised, and stayed alive until timeout |
 | `uv run ruff format .` | PASS (143 files left unchanged) |
 | `uv run ruff check --fix .` | PASS |
-| `uv run python -m tcbot` | PASS by runtime evidence with `PORT=5003`: bot started cleanly, connected MongoDB, ensured indexes, started scheduler, and stayed alive until timeout |
+| `uv run python -m tcbot` | PASS by runtime evidence with `PORT=5009`: bot started cleanly, connected MongoDB, ensured indexes, started scheduler, and stayed alive until timeout |
 | `uv run --extra test pytest --tb=short -q` | PASS (full suite green) |
-| `python` Markdown dash audit (authored docs only) | PASS: no authored Markdown files outside excluded mirrors/cache/vendor dirs still contain Unicode em dash or en dash characters |
+| `python` Mermaid coverage audit for top-level docs | PASS: `README.md` and `PLAN.md` both contain Mermaid diagrams after session 18 |
 
 ## Completed items
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Mermaid coverage for top-level docs | docs | Added rendered Mermaid diagrams to `README.md` and `PLAN.md` for architecture summary, startup sequence, and request-processing flow | 2026-06-06 |
 | Markdown dash cleanup across authored docs | docs | Removed remaining em dash and en dash characters from tracked memory docs and `CHANGELOG.md`; follow-up audit confirmed no tracked authored Markdown files still contain those Unicode dash characters | 2026-06-06 |
 | `.agents/memory/context.md` Ruff baseline sync | docs | Updated stale Ruff file-count note from 142 to the current 143-file baseline verified in session 16 | 2026-06-06 |
 | `.agents/CLAUDE.md` emoji-policy contradiction fix | docs | Replaced stale "use 1-3 emojis" guidance with the canonical no-emoji, no-emoticon bot-voice rule so agent instructions are internally consistent | 2026-06-06 |

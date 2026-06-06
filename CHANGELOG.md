@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-06 (session 18)
+
+### Documentation
+
+- Added Mermaid diagrams to `README.md` and `PLAN.md` so the top-level architecture summary, startup sequence, and request-processing pipeline are rendered visually instead of relying only on ASCII flow blocks.
+
 ## [Unreleased] - 2026-06-06 (session 17)
 
 ### Documentation

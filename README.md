@@ -123,20 +123,14 @@ Destination variables such as `LOGS`, `PROOFS`, and `APPEALS` accept either a ch
 
 ## Architecture Summary
 
-```text
-Telegram updates
-  ↓
-python-telegram-bot Application (`tcbot/__main__.py`)
-  ↓
-Global rate limiter (group -1)
-  ↓
-Dynamically discovered command modules (`tcbot/modules/*.py`)
-  ↓
-Shared helpers and workflows (`tcbot/modules/helper/`)
-  ↓
-Database helpers (`tcbot/database/*_db.py`)
-  ↓
-MongoDB via Motor
+```mermaid
+flowchart TD
+    Updates[Telegram updates] --> App[PTB application in tcbot.__main__]
+    App --> RateLimit[Global rate limiter group -1]
+    RateLimit --> Modules[Dynamic command modules tcbot.modules]
+    Modules --> Helpers[Shared helpers and workflows]
+    Helpers --> DbHelpers[Database helper modules]
+    DbHelpers --> Mongo[(MongoDB via Motor)]
 ```
 
 Key runtime pieces:

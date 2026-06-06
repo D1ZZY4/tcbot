@@ -22,35 +22,17 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 
 ### Startup Sequence
 
-```text
-uv run python -m tcbot
-  │
-  ├── tcbot/__init__.py
-  │     Loads environment variables.
-  │     Loads local config.env through python-dotenv when present.
-  │     Builds immutable Configs dataclass.
-  │     Exposes cfg adapter used by the rest of the project.
-  │
-  └── tcbot/__main__.py: main()
-        ├── setup_logging(level=cfg.log_level)
-        ├── start_keepalive()
-        │     Starts Flask in a daemon thread on 0.0.0.0:cfg.port.
-        │
-        ├── ApplicationBuilder()
-        │     token(cfg.bot_token)
-        │     post_init(_post_init)
-        │     concurrent_updates(True)
-        │     connection_pool_size(8)
-        │     get_updates_connection_pool_size(4)
-        │     read/write/connect/pool timeouts
-        │
-        ├── Handler registration
-        │     group -1: TypeHandler(Update, global_rate_limit_handler)
-        │     group  0: handlers discovered from tcbot/modules/*.py
-        │     group 10: member-cache update for non-command group text
-        │     errors: _error_handler
-        │
-        └── run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+```mermaid
+flowchart TD
+    Entry[uv run python -m tcbot] --> Init[tcbot.__init__]
+    Init --> LoadEnv[Load environment and config.env]
+    LoadEnv --> Config[Build Configs and cfg adapter]
+    Config --> Main[tcbot.__main__.main]
+    Main --> Logging[setup_logging]
+    Main --> KeepAlive[start_keepalive on cfg.port]
+    Main --> Builder[ApplicationBuilder]
+    Builder --> Handlers[Register handlers and error handler]
+    Handlers --> Polling[run_polling Update.ALL_TYPES]
 ```
 
 ### `post_init` Sequence
@@ -67,18 +49,13 @@ uv run python -m tcbot
 
 ### Request Processing Pipeline
 
-```text
-Telegram update
-  │
-  ├── group -1: global per-user rate limiter
-  │     Callback queries and commands are throttled before module handlers.
-  │
-  ├── group 0: command/module handlers
-  │     Modules are dynamically discovered from tcbot/modules/*.py.
-  │     Handlers apply auth decorators and per-handler rate limits where needed.
-  │
-  └── group 10: member cache updater
-        Stores user profile snapshots for text messages in connected groups.
+```mermaid
+flowchart TD
+    Update[Telegram update] --> GlobalLimit[group -1 global rate limiter]
+    GlobalLimit --> ModuleHandlers[group 0 command and callback handlers]
+    ModuleHandlers --> Helpers[Shared helpers and workflows]
+    Helpers --> DbHelpers[Async database helpers]
+    ModuleHandlers --> CacheUpdater[group 10 member cache updater]
 ```
 
 ## Architecture Summary
