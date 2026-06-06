@@ -5,21 +5,27 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot — Progress
 
-**Last updated:** 2026-06-06 (session 14)
+**Last updated:** 2026-06-06 (session 15)
 
 ## Verification baseline
 
 | Check | Result |
 |---|---|
 | `uv sync --extra test` | PASS |
-| `uv run ruff format --check .` | PASS (all files unchanged) |
-| `uv run ruff check .` | PASS (0 errors) |
-| `uv run --extra test pytest tests/ -q` | PASS (1405 tests, 71 files, **0 warnings**, all green) |
+| `uv pip install -e .` | PASS |
+| `uv run python -c "import tcbot; print('import OK')"` | PASS |
+| `uv run python -m tcbot --help 2>&1 || uv run python -c "from tcbot import *; print('startup OK')"` | PASS by runtime evidence: command reached startup, connected MongoDB, ensured indexes, initialised bot, then timed out because polling stayed alive |
+| `uv run ruff format .` | PASS (143 files left unchanged) |
+| `uv run ruff check --fix .` | PASS |
+| `uv run python -m tcbot` | PASS by runtime evidence: bot started cleanly, connected MongoDB, ensured indexes, started scheduler, then timed out because polling stayed alive |
+| `uv run --extra test pytest --tb=short -q` | PASS (full suite green) |
+| `grep -RIn "1-3 emojis\|emoji only where natural" . --include='*.md' --exclude-dir=.git --exclude-dir=.venv --exclude-dir=.kilo --exclude-dir=.trae` | PASS for stale-rule audit: only expected historical references remain in `CHANGELOG.md` and `progress.md` |
 
 ## Completed items
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| `.agents/CLAUDE.md` emoji-policy contradiction fix | docs | Replaced stale "use 1-3 emojis" guidance with the canonical no-emoji, no-emoticon bot-voice rule so agent instructions are internally consistent | 2026-06-06 |
 | Admins callback happy-path tests (+6) | P4 | on_demote_confirm success + admin-block + execute failure; on_promote_role_btn success + unknown role | 2026-06-06 |
 | test_module_types.py (+6) | P4 | Coverage for tcbot.modules.types aliases | 2026-06-06 |
 | structure.md handlers/ layout fix | docs | Removed stale handlers/ subtree; modules are flat under tcbot/modules/ | 2026-06-06 |

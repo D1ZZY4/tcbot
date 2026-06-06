@@ -490,7 +490,7 @@ Rules:
 - Use `mention()` for user display and `code()` for IDs; do not concatenate both
   for the same value.
 - Use parenthesized multi-line strings, not backslash continuation.
-- Tone is friendly-formal, short, and direct; use 1-3 emojis only where natural.
+- Tone is friendly-formal, short, and direct; do not use pictograph emoji or text emoticons.
 - All bot responses must be in English.
 
 ---

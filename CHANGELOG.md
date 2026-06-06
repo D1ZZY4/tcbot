@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-06 (session 15)
+
+### Documentation
+
+- Fixed a contradictory bot-voice rule in `.agents/CLAUDE.md`: the Telegram message formatting section no longer allows "1-3 emojis" and now matches the canonical no-emoji, no-emoticon policy documented later in the same file and in `.agents/RULES.md`.
+
 ## [Unreleased] - 2026-06-06 (session 14)
 
 ### Added - Admins callback happy-path tests and module type-alias coverage

@@ -5,7 +5,7 @@ description: Current state of TCF Bot project — what is done, in progress, and
 
 # TCF Bot — Current Context
 
-**Last updated:** 2026-06-06 (session 14)
+**Last updated:** 2026-06-06 (session 15)
 
 ## What is done
 
@@ -105,6 +105,8 @@ Nothing. Session 14 checkpoint complete.
 - Flask keep-alive runs on PORT=8080 (mapped by Replit to external port 80).
 - Bot fails fast when BOT_TOKEN/MONGODB_URI/OWNER_ID are not set. Secrets must be in Replit Secrets.
 - Communication with user: Indonesian. Code/docs/commits: English.
+- Agent-rule docs are being re-audited for internal consistency; session 15 fixed a contradiction in `.agents/CLAUDE.md` where one section still allowed emojis even though the canonical bot voice forbids pictograph emoji and text emoticons.
+- Session 15 verification baseline passed end to end: `uv sync --extra test`, editable reinstall, import check, startup check, Ruff, runtime start, full pytest, and stale-rule grep audit.
 
 ## Blockers
 
