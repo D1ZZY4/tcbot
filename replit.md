@@ -6,7 +6,7 @@ This file describes how to run TCF Bot on Replit or a similar hosted environment
 
 - Entry point: `uv run python -m tcbot`
 - Python project target: 3.12 (`pyproject.toml` requires `>=3.12`)
-- Bot framework: `python-telegram-bot[job-queue] == 22.5`
+- Bot framework: `python-telegram-bot` (with the `[job-queue]` extra), tracking the latest compatible release
 - Database: MongoDB through Motor
 - Health check: Flask app on `0.0.0.0:${PORT}` with `GET /` returning `OK`
 - Dependency manager: `uv`

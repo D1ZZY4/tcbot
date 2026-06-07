@@ -4,10 +4,10 @@ version = "1.0.0"
 description = "Transsion Core Federation (TCF) Telegram bot"
 requires-python = ">=3.12"
 dependencies = [
-    "python-telegram-bot",  # Migrate to latest channel version
-    "motor",                # Migrate to latest channel version
-    "flask",                # Migrate to latest channel version
-    "python-dotenv",        # Migrate to latest channel version
+    "python-telegram-bot[job-queue]",  # Migrate to latest channel version
+    "motor",                           # Migrate to latest channel version
+    "flask",                           # Migrate to latest channel version
+    "python-dotenv",                   # Migrate to latest channel version
     "ruff",
 ]
 

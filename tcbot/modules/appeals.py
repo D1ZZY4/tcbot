@@ -16,7 +16,7 @@ from tcbot.modules.helper.workflows.appeal_flow import (
     text_references_log_message,
 )
 
-# * Re-exported for backward-compatible test imports.
+# * Re-exported for backward-compatible imports.
 __all__ = (
     "appeal",
     "reviewer_locked_out",

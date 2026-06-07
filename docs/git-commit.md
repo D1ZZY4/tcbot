@@ -60,7 +60,7 @@ feat(ban): Add auto-demote on ban for federation role holders
 fix(appeal): Handle missing review timestamp
 refactor(database): Extract all mongo queries from handlers
 docs(architecture): Update Mermaid diagrams to reflect new structure
-chore(deps): Bump python-telegram-bot to 22.5
+chore(deps): Bump python-telegram-bot to latest
 security(auth): Enforce resolve_and_check on unguarded handler
 perf(fan-out): Replace sequential broadcast loop with bounded gather
 ```

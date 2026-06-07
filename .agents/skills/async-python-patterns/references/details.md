@@ -4,7 +4,7 @@ For the parent skill instructions, see [`../SKILL.md`](../SKILL.md). For the can
 
 Updated: 2026-05-29
 
-This reference expands the `async-python-patterns` skill with practical examples for TCBot's Python 3.12, `python-telegram-bot` 22.5, and Motor/MongoDB stack.
+This reference expands the `async-python-patterns` skill with practical examples for TCBot's Python 3.12, `python-telegram-bot` (latest), and Motor/MongoDB stack.
 
 ## Choosing the Right Async Pattern
 

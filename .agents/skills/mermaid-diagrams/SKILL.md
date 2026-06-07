@@ -13,7 +13,7 @@ Last refreshed for this project: 2026-05-29.
 
 ## Project Context
 
-TCF Bot is a Python 3.12 Telegram bot built with `python-telegram-bot` 22.5, Motor async MongoDB helpers, a Flask keep-alive endpoint, and Ruff.
+TCF Bot is a Python 3.12 Telegram bot built with `python-telegram-bot` (latest), Motor async MongoDB helpers, a Flask keep-alive endpoint, and Ruff.
 
 Relevant project structure:
 

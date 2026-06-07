@@ -80,8 +80,8 @@ Body:
 This PR updates project dependencies to their latest compatible versions.
 
 ### Changes
-- python-telegram-bot: 22.5 → 22.6
-- motor: 3.7.1 → 3.8.0
+- python-telegram-bot: <old> → <new>
+- motor: <old> → <new>
 
 Safe to merge with new versions.
 ```

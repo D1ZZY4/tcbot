@@ -19,14 +19,6 @@ author = "agent"
 task = "workflow.run"
 args = "Start Application"
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Run Tests (TDD)"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Run Tests"
-
 [[workflows.workflow]]
 name = "Start Application"
 author = "agent"
@@ -38,17 +30,6 @@ outputType = "console"
 task = "shell.exec"
 args = "uv run python -m tcbot"
 waitForPort = 8080
-
-[[workflows.workflow]]
-name = "Run Tests"
-author = "agent"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "uv run --extra test pytest tests/ -v"
 
 [[workflows.workflow]]
 name = "Bash (Don't Delete This)"

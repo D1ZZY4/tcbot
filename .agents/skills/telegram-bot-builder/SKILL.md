@@ -1,6 +1,6 @@
 ---
 name: telegram-bot-builder
-description: Use when designing, implementing, reviewing, or debugging TCBot Telegram bot features with python-telegram-bot 22.5, async handlers, ConversationHandler flows, Motor/MongoDB persistence, moderation UX, and safe deployment practices.
+description: Use when designing, implementing, reviewing, or debugging TCBot Telegram bot features with python-telegram-bot (latest), async handlers, ConversationHandler flows, Motor/MongoDB persistence, moderation UX, and safe deployment practices.
 ---
 Last updated: 2026-05-29
 
@@ -9,7 +9,7 @@ Last updated: 2026-05-29
 
 Before invoking this skill, confirm the read/update rules in [`.agents/CLAUDE.md`](../../CLAUDE.md#mandatory-read-these-files-before-any-work). After any handler or workflow change, update [`CHANGELOG.md`](../../../CHANGELOG.md), [`PLAN.md`](../../../PLAN.md) (if state changes), and the matching `docs/<feature>-detailed.md` plus [`docs/modules/modules.md`](../../../docs/modules/modules.md) or [`docs/workflows/workflows.md`](../../../docs/workflows/workflows.md) in the same turn.
 
-Use this skill for Telegram bot product and engineering work in the TCF Bot repository. The project is a Python 3.12 community moderation bot built with `python-telegram-bot[job-queue] == 22.5`, Motor/MongoDB, Flask keepalive, `uv`, and Ruff.
+Use this skill for Telegram bot product and engineering work in the TCF Bot repository. The project is a Python 3.12 community moderation bot built with `python-telegram-bot` (with the `[job-queue]` extra, tracking the latest compatible release), Motor/MongoDB, Flask keepalive, `uv`, and Ruff.
 
 The goal is to build reliable moderation workflows that feel clear, respectful, and fast for staff and users.
 
@@ -30,7 +30,7 @@ Do not use generic Node.js, Telegraf, or webhook-only patterns for this project 
 ## Current Project Stack
 
 - Python: 3.12.
-- Bot framework: `python-telegram-bot` 22.5.
+- Bot framework: `python-telegram-bot` (latest).
 - Persistence: MongoDB via Motor.
 - Runtime: long polling from `tcbot/__main__.py`.
 - Keepalive: Flask health endpoint.

@@ -24,4 +24,4 @@ This affects any package not already present in the nix store, including `ruff`,
 2. Run commands directly: `python -m ruff check .`, `python -m tcbot`.
 3. Never use `uv run` or `uv sync` in Replit workflows. Configure workflows to use `python ...` directly.
 4. The `pyproject.toml` and `uv.lock` stay as-is for local/Docker development where `uv` works normally.
-5. When new sessions start on Replit, re-run `pip install "python-telegram-bot[job-queue]==22.5" "motor>=3.7.1,<4" "flask>=3.1.0,<4" "python-dotenv>=1.0.0,<2" "ruff"` if packages are missing.
+5. When new sessions start on Replit, re-run `pip install "python-telegram-bot[job-queue]" "motor" "flask" "python-dotenv" "ruff"` if packages are missing.

@@ -10,7 +10,7 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 |---|---|
 | Runtime | Long-polling Telegram bot started with `uv run python -m tcbot`. |
 | Python target | Python 3.12 project target (`pyproject.toml` requires `>=3.12`). |
-| Bot framework | `python-telegram-bot[job-queue] == 22.5`. |
+| Bot framework | `python-telegram-bot` (with the `[job-queue]` extra), tracking the latest compatible release. |
 | Database | MongoDB through Motor, connected during PTB `post_init`. |
 | Health check | Flask app in `tcbot/alive.py`, `GET /` returns `OK` on `PORT` (default `5000`). |
 | Dependency management | `uv` with `uv.lock`; CI installs with frozen lockfile by default. |

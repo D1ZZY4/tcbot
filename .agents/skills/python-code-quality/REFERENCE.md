@@ -4,7 +4,7 @@ For the parent skill instructions, see [`SKILL.md`](SKILL.md). For the canonical
 
 Updated: 2026-05-29
 
-This reference supports the `python-code-quality` skill for the TCF Bot repository. It reflects the current project stack: Python 3.12, `uv`, Ruff, `python-telegram-bot` 22.5, Motor/MongoDB, and Flask keepalive.
+This reference supports the `python-code-quality` skill for the TCF Bot repository. It reflects the current project stack: Python 3.12, `uv`, Ruff, `python-telegram-bot` (latest), Motor/MongoDB, and Flask keepalive.
 
 ## Tooling Snapshot
 

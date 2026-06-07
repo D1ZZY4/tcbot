@@ -31,14 +31,12 @@ From `pyproject.toml` as of 2026-06-02:
 [project]
 requires-python = ">=3.12"
 dependencies = [
-    "python-telegram-bot[job-queue]==22.5",
-    "motor>=3.7.1,<4",
-    "flask>=3.1.0,<4",
-    "python-dotenv>=1.0.0,<2",
+    "python-telegram-bot[job-queue]",  # Migrate to latest channel version
+    "motor",                           # Migrate to latest channel version
+    "flask",                           # Migrate to latest channel version
+    "python-dotenv",                   # Migrate to latest channel version
+    "ruff",
 ]
-
-[dependency-groups]
-dev = ["ruff"]
 
 [tool.ruff]
 line-length = 88

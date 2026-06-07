@@ -9,7 +9,7 @@ Last updated: 2026-05-29
 
 Before invoking this skill, confirm the read/update rules in [`.agents/CLAUDE.md`](../../CLAUDE.md#mandatory-read-these-files-before-any-work). After any async-code change, update [`CHANGELOG.md`](../../../CHANGELOG.md) and the matching `docs/*.md` whose behavior changed in the same turn.
 
-Use this skill for asynchronous Python work in the TCF Bot codebase. The project runs on Python 3.12 with `python-telegram-bot[job-queue] == 22.5`, Motor/MongoDB, Flask keepalive, `uv`, and Ruff.
+Use this skill for asynchronous Python work in the TCF Bot codebase. The project runs on Python 3.12 with `python-telegram-bot` (with the `[job-queue]` extra, tracking the latest compatible release), Motor/MongoDB, Flask keepalive, `uv`, and Ruff.
 
 This skill is intentionally project-specific. Prefer the conventions below over generic asyncio examples.
 
@@ -29,8 +29,8 @@ Do not use this skill for CPU-bound optimization unless the async code is direct
 ## Project Baseline
 
 - Python target: `>=3.12`.
-- Telegram framework: `python-telegram-bot` 22.5, async-first API.
-- Database driver: Motor (`motor >= 3.7.1`).
+- Telegram framework: `python-telegram-bot` (latest), async-first API.
+- Database driver: Motor (latest).
 - Runtime entry point: `uv run python -m tcbot` on Windows, `uv run python -m tcbot` elsewhere.
 - Keepalive: Flask runs alongside the bot; do not add blocking work to keepalive routes.
 - Dependency workflow: `uv sync`, `uv run ...`.

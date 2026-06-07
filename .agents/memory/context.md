@@ -9,7 +9,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## What is done
 
-- Python 3.12, uv, python-telegram-bot 22.5, Motor/MongoDB stack fully configured on Replit.
+- Python 3.12, uv, python-telegram-bot (latest), Motor/MongoDB stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
 - `uv run ruff format .` and `uv run ruff check .` both clean (144 files).
 - All P1/P2/P3 backlog items resolved (pagination NameError, composite indexes, asyncio.gather conversions, shared replies.py, em-dash removal, cache TTL constants, keyboards.py dead code).
@@ -50,6 +50,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 - Session 8 symlinks (2026-06-03):
   - `.kilo/kilo.json` moved to `.agents/kilo.json`; `.kilo/` replaced with symlink `.kilo -> .agents`.
   - `.trae/skills/` (stale duplicate) deleted; `.trae/` replaced with symlink `.trae -> .agents`.
+  - `.claude/` added as a symlink mirror `.claude -> .agents` (`ln -s .agents .claude`), same as `.kilo` and `.trae`.
 
 - Session 9 docs audit (2026-06-03):
   - Full docs audit: all .md files reviewed; all Mermaid diagrams verified accurate; no stale content found.

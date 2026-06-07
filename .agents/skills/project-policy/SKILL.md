@@ -26,7 +26,7 @@ Skipping the doc sweep is a defect.
 
 - Project: TCF Bot, a Telegram moderation and federation management bot.
 - Runtime: Python 3.12.
-- Telegram framework: `python-telegram-bot[job-queue] == 22.5`.
+- Telegram framework: `python-telegram-bot` (with the `[job-queue]` extra), tracking the latest compatible release.
 - Database: MongoDB through async Motor helpers.
 - Keepalive: Flask health/keep-alive server.
 - Tooling: `uv` for dependency management, Ruff for format/lint.
