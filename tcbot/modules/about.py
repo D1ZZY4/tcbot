@@ -49,6 +49,7 @@ async def on_about_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             parse_mode="HTML",
             reply_markup=keyboards.back_to_start_kb(),
         ),
+        return_exceptions=True,
     )
 
 

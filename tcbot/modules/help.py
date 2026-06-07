@@ -139,6 +139,7 @@ async def _render_help_index(
             _HELP_INDEX_TEXT.format(botname=botname),
             reply_markup=kb,
         ),
+        return_exceptions=True,
     )
 
 
@@ -156,7 +157,9 @@ async def _show_module(
             else keyboards.back_to_help_cmd_kb()
         )
         await asyncio.gather(
-            q.answer(), safe_edit_cb(q, _ERR_TOPIC_NOT_FOUND, reply_markup=back_kb)
+            q.answer(),
+            safe_edit_cb(q, _ERR_TOPIC_NOT_FOUND, reply_markup=back_kb),
+            return_exceptions=True,
         )
         return
 
@@ -175,7 +178,9 @@ async def _show_module(
         )
 
     await asyncio.gather(
-        q.answer(), safe_edit_cb(q, _module_text(name, overview), reply_markup=kb)
+        q.answer(),
+        safe_edit_cb(q, _module_text(name, overview), reply_markup=kb),
+        return_exceptions=True,
     )
 
 
@@ -198,6 +203,7 @@ async def _show_section(
                 "Topic not found.",
                 reply_markup=keyboards.back_to_module_kb(back_module_cb),
             ),
+            return_exceptions=True,
         )
         return
 
@@ -210,6 +216,7 @@ async def _show_section(
                 "Section not found.",
                 reply_markup=keyboards.back_to_module_kb(back_module_cb),
             ),
+            return_exceptions=True,
         )
         return
 
@@ -218,6 +225,7 @@ async def _show_section(
     await asyncio.gather(
         q.answer(),
         safe_edit_cb(q, body, reply_markup=keyboards.back_to_module_kb(back_module_cb)),
+        return_exceptions=True,
     )
 
 

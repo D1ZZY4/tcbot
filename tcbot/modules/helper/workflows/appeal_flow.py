@@ -202,6 +202,7 @@ class BuildAppeal:
         await asyncio.gather(
             q.answer(),
             q.edit_message_text(_MSG_CANCELLED),
+            return_exceptions=True,
         )
         return ConversationHandler.END
 

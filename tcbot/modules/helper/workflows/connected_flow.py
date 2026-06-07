@@ -296,6 +296,7 @@ class BuildConnection:
                     chat.id, chat.title or "", user.id, user.first_name, ctx.bot
                 ),
                 q.edit_message_text(self.connected_message(), reply_markup=None),
+                return_exceptions=True,
             )
 
         elif action == self.cancel_callback:

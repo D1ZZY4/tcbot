@@ -2,6 +2,17 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-07 (session 33)
+
+### Fixed
+
+- Added `return_exceptions=True` to all pure side-effect `asyncio.gather` calls across the codebase: previously, if any Telegram API call inside a gather failed (rate-limited, message deleted, query expired), the exception would propagate and crash the handler instead of being absorbed gracefully.
+  - Module callbacks: `about.py`, `additional.py`, `privacy.py` (both handlers), `start.py` (`on_back_to_start`), `groups.py` (`_toggle` cached branch), `connecting.py` (`cmd_tcconnect`), `greeting.py` (`on_new_member` fan-out), `stats.py` (`on_stats_bans_search`, `on_stats_search_back`), `maintenance.py` (batch deactivations)
+  - Help system: all six `asyncio.gather` calls inside `_show_index`, `_show_module`, and `_show_section` (including error/fallback branches)
+  - Admin callbacks: `on_promote_role_cancel`, `on_demote_cancel`
+  - Workflow helpers: `appeal_flow._on_cancel`, `connected_flow.on_join_decision` (approve branch), `reason_flow._on_skip_proof`, `reason_flow._on_cancel`, `ban_flow.on_cancel_proof`
+- Data-fetching gathers that unpack results (e.g. `ident, role = await asyncio.gather(...)`, `_, (text, kb) = await asyncio.gather(...)`) are intentionally left without `return_exceptions=True` so failures propagate to the error handler as expected.
+
 ## [Unreleased] - 2026-06-08 (session 32)
 
 ### Changed

@@ -95,9 +95,14 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Updated `docs/helper/helper.md` replies.py table: added 9 missing constants (ERR_PERM_EXPIRED, ERR_UNKNOWN_ROLE, WHERE_CONNECTED_GROUP, NO_REASON, SEC_* ×6).
   - Ruff 144 files clean.
 
+- Session 33 (2026-06-07): pure side-effect `asyncio.gather` hardening.
+  - Added `return_exceptions=True` to 20 pure side-effect gather calls across 12 files: `about.py`, `additional.py`, `privacy.py` (×2), `start.py`, `groups.py`, `connecting.py`, `greeting.py`, `stats.py` (×2), `maintenance.py`, `help.py` (×6), `admins.py` (×2), `appeal_flow.py`, `connected_flow.py`, `reason_flow.py` (×2), `ban_flow.py`.
+  - Data-fetching gathers (those that unpack results) intentionally kept without `return_exceptions=True`.
+  - Ruff 71 files clean.
+
 ## What is in progress
 
-Nothing. Session 29 checkpoint complete.
+Nothing. Session 33 checkpoint complete.
 
 ## What is pending (optional)
 

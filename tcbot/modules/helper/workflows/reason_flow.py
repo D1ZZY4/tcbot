@@ -168,7 +168,11 @@ def build_modaction_conv(
         return ConversationHandler.END
 
     async def _on_skip_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        await asyncio.gather(update.callback_query.answer(), executor(update, ctx))
+        await asyncio.gather(
+            update.callback_query.answer(),
+            executor(update, ctx),
+            return_exceptions=True,
+        )
         return ConversationHandler.END
 
     # ── Cancel / fallback ────────────────────────────────────────── #
@@ -178,6 +182,7 @@ def build_modaction_conv(
         await asyncio.gather(
             q.answer(),
             q.edit_message_text(f"Got it, {action} cancelled. No action was taken."),
+            return_exceptions=True,
         )
         return ConversationHandler.END
 

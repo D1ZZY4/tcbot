@@ -70,7 +70,8 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     # * Process all new members concurrently; handles batch joins via invite links
     await asyncio.gather(
-        *[_handle_member(m, msg, chat, ctx.bot) for m in msg.new_chat_members]
+        *[_handle_member(m, msg, chat, ctx.bot) for m in msg.new_chat_members],
+        return_exceptions=True,
     )
 
 

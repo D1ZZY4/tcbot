@@ -46,6 +46,7 @@ async def on_additional_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
             parse_mode="HTML",
             reply_markup=keyboards.additional_menu_kb(),
         ),
+        return_exceptions=True,
     )
 
 

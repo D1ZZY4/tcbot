@@ -261,6 +261,7 @@ async def on_promote_role_cancel(
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(_MSG_PROMOTE_CANCELLED, reply_markup=None),
+        return_exceptions=True,
     )
 
 
@@ -392,6 +393,7 @@ async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(_MSG_CANCELLED, reply_markup=None),
+        return_exceptions=True,
     )
 
 

@@ -77,6 +77,7 @@ async def on_privacy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
             parse_mode="HTML",
             reply_markup=keyboards.privacy_kb(),
         ),
+        return_exceptions=True,
     )
 
 
@@ -95,6 +96,7 @@ async def on_privacy_policy_menu(
             parse_mode="HTML",
             reply_markup=keyboards.back_to_privacy_kb(),
         ),
+        return_exceptions=True,
     )
 
 

@@ -280,6 +280,7 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(_MSG_CANCELLED),
+        return_exceptions=True,
     )
     return ConversationHandler.END
 

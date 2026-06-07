@@ -107,6 +107,7 @@ async def _toggle(
             safe_edit(
                 q.message, _render(groups, detailed), reply_markup=tcgroups_kb(detailed)
             ),
+            return_exceptions=True,
         )
     else:
         # * Cache miss: q.answer + DB fetch run in parallel.

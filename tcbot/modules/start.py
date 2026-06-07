@@ -107,6 +107,7 @@ async def on_back_to_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             parse_mode="HTML",
             reply_markup=keyboards.main_menu_kb(),
         ),
+        return_exceptions=True,
     )
 
 

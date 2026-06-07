@@ -190,6 +190,7 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if to_remove:
         await asyncio.gather(
             *(db.groups_db.deactivate_group(g["chat_id"]) for g in to_remove),
+            return_exceptions=True,
         )
 
     await update.effective_message.reply_text(

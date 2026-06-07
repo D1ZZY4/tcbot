@@ -184,7 +184,9 @@ async def on_stats_bans_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     q = update.callback_query
     # * Stats.open_search is synchronous; gather q.answer() with the edit directly.
     text, kb = Stats.open_search(ctx, q)
-    await asyncio.gather(q.answer(), safe_edit_cb(q, text, reply_markup=kb))
+    await asyncio.gather(
+        q.answer(), safe_edit_cb(q, text, reply_markup=kb), return_exceptions=True
+    )
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -241,7 +243,9 @@ async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     if not results:
         # * open_search is synchronous; gather q.answer() with the edit directly.
         text, kb = Stats.open_search(ctx, q)
-        await asyncio.gather(q.answer(), safe_edit_cb(q, text, reply_markup=kb))
+        await asyncio.gather(
+            q.answer(), safe_edit_cb(q, text, reply_markup=kb), return_exceptions=True
+        )
     else:
         # * Re-render the previous results without re-running the query.
         previous_query = (

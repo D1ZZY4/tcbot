@@ -6,5 +6,6 @@
 - [Module structure](structure.md) - full repo layout snapshot, cross-cutting constraints
 - [Replit nix store constraint](replit-nix-store.md) - uv sync fails writing to nix store; fix and runtime workaround
 - [Sequential await audit complete](sequential-await-audit.md) - all module files audited; key fixes in identity.classify, stats.py, groups._toggle, admins cmd_promote/demote
+- [asyncio.gather return_exceptions rule](decisions.md) — pure side-effect gathers need `return_exceptions=True`; data-fetching gathers that unpack results must NOT have it
 - [Frozen dataclass monkeypatch](decisions.md) — frozen dataclass instances (e.g. `connection`) cannot be patched via `patch("module.obj.attr")`; patch the module-level name instead
 - [Slots class monkeypatch](decisions.md) — `__slots__` makes instance methods read-only; replace the module-level limiter name with a `SimpleNamespace` fake instead of patching the instance

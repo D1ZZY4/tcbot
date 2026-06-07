@@ -45,6 +45,16 @@ description: Non-trivial technical decisions made during development. Format: da
 
 ---
 
+## 2026-06-07: asyncio.gather return_exceptions rule
+
+**Decision:** `return_exceptions=True` must be added to every `asyncio.gather` call whose coroutines are pure side-effects (Telegram API calls, DB fire-and-forget writes) where no result is unpacked. Data-fetching gathers that unpack results (e.g. `ident, role = await asyncio.gather(...)`) must NOT have `return_exceptions=True`.
+
+**Why:** Without it, a single failed Telegram API call inside a gather (rate-limited, message deleted, query expired) propagates an exception that crashes the handler. With it, failures are absorbed and the other coroutines still complete.
+
+**How to apply:** Before writing any `asyncio.gather(...)`, ask: are any results unpacked? If yes — no `return_exceptions`. If it's all side-effects (answer/edit/reply/send) with no result capture — add `return_exceptions=True`. Exception: if the gather is already inside `try/except Exception`, the outer handler already absorbs errors; adding `return_exceptions=True` would prevent the except-clause from firing.
+
+---
+
 ## 2026-06-02: Memory files live in `.agents/memory/`, MEMORY.md is the index
 
 **Decision:** Persistent cross-session memory uses `.agents/memory/MEMORY.md` as a one-line-per-entry index pointing to topic files in the same directory. Context, progress, and decisions each have their own file.

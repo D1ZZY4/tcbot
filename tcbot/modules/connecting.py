@@ -159,6 +159,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             chat.id, chat.title or "", user.id, user.first_name, ctx.bot
         ),
         update.effective_message.reply_text(connection.connected_message()),
+        return_exceptions=True,
     )
 
 
