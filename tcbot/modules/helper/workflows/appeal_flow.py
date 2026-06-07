@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     CallbackQueryHandler,
     ContextTypes,
@@ -20,6 +20,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from telegram.ext.filters import BaseFilter
 
 from tcbot import cfg
 from tcbot import database as db
@@ -128,7 +129,7 @@ class BuildAppeal:
 
     @staticmethod
     async def _update_or_send_log(
-        bot,
+        bot: Bot,
         lc: int,
         lt: int | None,
         msg_id: int | None,
@@ -468,7 +469,7 @@ class BuildAppeal:
 
     # ── ConversationHandler factory ────────────────────────────────────────
 
-    def build_handler(self, entry_filter) -> ConversationHandler:
+    def build_handler(self, entry_filter: BaseFilter) -> ConversationHandler:
         """Assemble and return the appeal ConversationHandler."""
         return ConversationHandler(
             entry_points=[MessageHandler(entry_filter, self._on_entry)],

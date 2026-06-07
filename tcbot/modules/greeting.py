@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from telegram import Update
+from telegram import Bot, Chat, Message, Update, User
 from telegram.ext import ContextTypes, MessageHandler, filters
 
 from tcbot import cfg
@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 # ───────────────────────── Member Handlers ──────────────────────── #
 
 
-async def _handle_member(member, msg, chat, bot) -> None:
+async def _handle_member(member: User, msg: Message, chat: Chat, bot: Bot) -> None:
     """Process a single new member: cache, ban-check, then greet or remove."""
     if member.is_bot:
         return

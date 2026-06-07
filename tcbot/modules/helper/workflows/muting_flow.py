@@ -9,10 +9,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from collections.abc import Callable
 from datetime import timedelta
+from typing import Any
 
-from telegram import ChatPermissions, Update
+from telegram import Bot, ChatPermissions, Update
 from telegram.ext import ContextTypes
+from telegram.ext.filters import BaseFilter
 
 from tcbot import cfg
 from tcbot import database as db
@@ -83,7 +86,7 @@ def fmt_duration(td: timedelta | None) -> str:
 # ────────────────────────── Mute executor ───────────────────────── #
 
 
-async def _execute_mute(bot, update: Update, meta: dict) -> None:
+async def _execute_mute(bot: Bot, update: Update, meta: dict) -> None:
     """Apply a federation-wide mute across all connected groups and edit the prompt to a summary."""
     target_id = meta["mute_target_id"]
     target_fname = meta["mute_target_fname"]
@@ -232,10 +235,10 @@ async def _exec_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 def mute_conversation(
-    entry_fn,
-    entry_filter,
+    entry_fn: Callable[..., Any],
+    entry_filter: BaseFilter,
     *,
-    escape_filter=None,
+    escape_filter: BaseFilter | None = None,
 ) -> object:
     """Return the mute ConversationHandler via the central reason_flow factory."""
     return build_modaction_conv(

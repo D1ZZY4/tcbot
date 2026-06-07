@@ -7,8 +7,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable
 
-from telegram import Update
+from telegram import CallbackQuery, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
 from tcbot.modules.helper import decorators, replies
@@ -87,7 +88,9 @@ async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ──────────────────────── Callback Helpers ──────────────────────── #
 
 
-async def _ack_and_render(q, data_coro) -> None:
+async def _ack_and_render(
+    q: CallbackQuery, data_coro: Awaitable[tuple[str, InlineKeyboardMarkup | None]]
+) -> None:
     """Acknowledge the callback in parallel with the data coroutine, then edit.
 
     ``data_coro`` must be a coroutine that returns ``(text, kb)``.  Running

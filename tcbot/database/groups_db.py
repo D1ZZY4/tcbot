@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import cast
 
+from motor.motor_asyncio import AsyncIOMotorCollection
+
 from tcbot.database.cache import (
     _ALL_GROUPS_KEY,
     CACHE_MISS,
@@ -22,11 +24,11 @@ from tcbot.utils.timedate_format import utc_now
 # * Internal collection access utilities for groups database
 
 
-def _groups():
+def _groups() -> AsyncIOMotorCollection:
     return col("federated_groups")
 
 
-def _pending():
+def _pending() -> AsyncIOMotorCollection:
     return col("pending_joins")
 
 

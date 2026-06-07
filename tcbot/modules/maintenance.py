@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from telegram import Update
+from telegram import Bot, Update
 from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot import cfg
@@ -79,7 +79,7 @@ __help_sections__: list[tuple[str, str]] = [
 
 
 async def _leave_one(
-    bot,
+    bot: Bot,
     grp: dict,
     lc: int,
     lt: int | None,
@@ -105,7 +105,7 @@ async def _leave_one(
     )
 
 
-async def _should_remove(bot, grp: GroupDoc) -> bool:
+async def _should_remove(bot: Bot, grp: GroupDoc) -> bool:
     """Return True if the bot has left or been kicked from the group."""
     try:
         member = await asyncio.wait_for(

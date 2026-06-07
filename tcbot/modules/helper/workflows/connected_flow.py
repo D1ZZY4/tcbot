@@ -10,7 +10,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Bot, ChatMember, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatMemberStatus
 from telegram.ext import ContextTypes
 
@@ -96,7 +96,7 @@ class BuildConnection:
 
     # ── Permission check ───────────────────────────────────────────────────
 
-    def check_perms(self, member) -> bool:
+    def check_perms(self, member: ChatMember) -> bool:
         """Return True when member holds every permission in required_perms."""
         return all(getattr(member, p, False) for p in self.required_perms)
 
@@ -108,7 +108,7 @@ class BuildConnection:
         chat_title: str,
         owner_id: int,
         owner_fname: str,
-        bot,
+        bot: Bot,
     ) -> None:
         """Connect the group, apply all active federation bans, and notify LOG_CHANNEL."""
         # * Fetch chat info + active ban IDs + register group + clear pending - all in parallel.

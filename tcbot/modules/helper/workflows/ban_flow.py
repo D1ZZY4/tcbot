@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from telegram import Bot, Message, Update
@@ -18,6 +19,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from telegram.ext.filters import BaseFilter
 
 from tcbot import cfg
 from tcbot import database as db
@@ -295,7 +297,9 @@ async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
 # ─────────────────── ConversationHandler factory ────────────────── #
 
 
-def ban_conversation(entry_fn, entry_filter) -> ConversationHandler:
+def ban_conversation(
+    entry_fn: Callable[..., Any], entry_filter: BaseFilter
+) -> ConversationHandler:
     """Return the ban ConversationHandler with the given entry-point function."""
     return ConversationHandler(
         entry_points=[MessageHandler(entry_filter, entry_fn)],

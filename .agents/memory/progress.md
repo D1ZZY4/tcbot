@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-06 (session 30)
+**Last updated:** 2026-06-07 (session 34)
 
 ## Verification baseline
 
@@ -14,11 +14,11 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv sync` | PASS |
 | `uv pip install -e .` | PASS |
 | `uv run python -c "import tcbot; print('import OK')"` | PASS |
-| `uv run python -m tcbot --help 2>&1 || uv run python -c "from tcbot import *; print('startup OK')"` | PASS by runtime evidence with `PORT=5026`: bot started cleanly, connected MongoDB, ensured indexes, initialised, and stayed alive until timeout |
-| `uv run ruff format .` | PASS (144 files left unchanged) |
-| `uv run ruff check --fix .` | PASS |
-| `uv run python -m tcbot` | PASS by runtime evidence with `PORT=5027`: bot started cleanly, connected MongoDB, ensured indexes, started scheduler, and stayed alive until timeout |
-| `python` repo-hygiene audit | PASS: `.gitignore` now ignores `check.log`, `format.log`, and `*.egg-info/`; tracked root log files were removed and did not reappear during validation |
+| `uv run python -m tcbot --help 2>&1 || uv run python -c "from tcbot import *; print('startup OK')"` | PASS by runtime evidence: bot started cleanly, connected MongoDB, ensured indexes, initialised, 75 handlers registered, polling active |
+| `uv run ruff format .` | PASS (71 files already formatted) |
+| `uv run ruff check --fix .` | PASS (All checks passed) |
+| `uv run python -m tcbot` | PASS by runtime evidence: MongoDB connected, indexes ensured, scheduler started, bot polling active |
+| annotation AST audit | PASS: 0 non-dunder function parameters missing type annotations (was 31 before session 34) |
 
 ## Completed items
 
@@ -97,6 +97,10 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | MongoDB connection-pool named constants | housekeeping | Extracted 7 constants to `mongos.py`; replaced all bare literals in `AsyncIOMotorClient()` call | 2026-06-06 (s30) |
 | Ratelimiter constants — all 16 modules | housekeeping | `_RL_*` constants extracted to all 16 modules with `@ratelimiter` decorators; every bare `limit=`/`period=` literal in `tcbot/modules/` replaced | 2026-06-06 (s30) |
 | Full doc audit | housekeeping | Updated replies.py table in helper.md (+9 missing constants). All 10 developer docs verified accurate. | 2026-06-06 (s29) |
+
+| Parameter type annotation coverage | housekeeping | Fixed 31 unannotated parameters across 13 files; AST audit now reports 0 missing in all non-dunder functions | 2026-06-07 (s34) |
+| BaseFilter import location discovery | housekeeping | BaseFilter is in telegram.ext.filters, not telegram.ext; corrected imports across 6 workflow files after ImportError at startup | 2026-06-07 (s34) |
+| Return type annotation coverage | housekeeping | Fixed 12 functions missing return types across 9 files (7 DB accessors, __main__, extraction.py); AST audit now reports 0 missing | 2026-06-07 (s35) |
 
 ## Pending (remaining optional)
 

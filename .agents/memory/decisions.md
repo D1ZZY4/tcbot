@@ -55,6 +55,16 @@ description: Non-trivial technical decisions made during development. Format: da
 
 ---
 
+## 2026-06-07: BaseFilter must be imported from telegram.ext.filters, not telegram.ext
+
+**Decision:** When annotating parameters or variables with `BaseFilter`, always import it as `from telegram.ext.filters import BaseFilter`. Do not attempt `from telegram.ext import BaseFilter`.
+
+**Why:** PTB 22.7 does not re-export `BaseFilter` from `telegram.ext.__init__`; it lives only in `telegram.ext.filters`. Importing from `telegram.ext` directly raises `ImportError` at startup.
+
+**How to apply:** In any file that needs the `BaseFilter` type for annotations or isinstance checks, add the explicit line `from telegram.ext.filters import BaseFilter` as a standalone import. Do not add it to the `from telegram.ext import (...)` block.
+
+---
+
 ## 2026-06-02: Memory files live in `.agents/memory/`, MEMORY.md is the index
 
 **Decision:** Persistent cross-session memory uses `.agents/memory/MEMORY.md` as a one-line-per-entry index pointing to topic files in the same directory. Context, progress, and decisions each have their own file.

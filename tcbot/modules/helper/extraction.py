@@ -10,7 +10,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 
-from telegram import Bot, Message, Update, User
+from telegram import Bot, Chat, Message, Update, User
 
 from tcbot import database as db
 
@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 _GET_CHAT_TIMEOUT = 3.0
 
 
-async def _safe_get_chat(bot: Bot, ident: str | int):
+async def _safe_get_chat(bot: Bot, ident: str | int) -> Chat | None:
     """Call ``bot.get_chat`` with a bounded timeout; returns ``None`` on failure."""
     try:
         return await asyncio.wait_for(bot.get_chat(ident), timeout=_GET_CHAT_TIMEOUT)

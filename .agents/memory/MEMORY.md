@@ -9,3 +9,4 @@
 - [asyncio.gather return_exceptions rule](decisions.md) — pure side-effect gathers need `return_exceptions=True`; data-fetching gathers that unpack results must NOT have it
 - [Frozen dataclass monkeypatch](decisions.md) — frozen dataclass instances (e.g. `connection`) cannot be patched via `patch("module.obj.attr")`; patch the module-level name instead
 - [Slots class monkeypatch](decisions.md) — `__slots__` makes instance methods read-only; replace the module-level limiter name with a `SimpleNamespace` fake instead of patching the instance
+- [BaseFilter import location](decisions.md) — import `BaseFilter` from `telegram.ext.filters`, not `telegram.ext`; PTB 22.7 does not re-export it at the top level

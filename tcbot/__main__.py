@@ -11,6 +11,7 @@ import logging
 import sys
 import traceback
 import warnings
+from collections.abc import Callable
 
 from telegram import Update
 from telegram.ext import (
@@ -126,7 +127,9 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
 # * Layer 3 of 3 error handling system - last line of defense for errors
 
 
-def _make_asyncio_exc_handler(loop: asyncio.AbstractEventLoop):
+def _make_asyncio_exc_handler(
+    loop: asyncio.AbstractEventLoop,
+) -> Callable[[asyncio.AbstractEventLoop, dict], None]:
     """Return a synchronous asyncio exception handler that mirrors errors to the error reporter."""
 
     def handler(lp: asyncio.AbstractEventLoop, context: dict) -> None:

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -453,7 +455,7 @@ async def _per_chat_event_list(
     page: int,
     *,
     heading_name: str,
-    db_call,
+    db_call: Callable[[int], Awaitable[list[Any]]],
     cb_prefix: str,
 ) -> tuple[str, InlineKeyboardMarkup]:
     """Shared renderer for kicks/mutes; both have the same shape."""

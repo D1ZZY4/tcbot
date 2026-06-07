@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
+from typing import Any
 
 from telegram import Update
 from telegram.ext import ContextTypes
+from telegram.ext.filters import BaseFilter
 
 from tcbot import cfg
 from tcbot import database as db
@@ -266,7 +269,12 @@ async def _exec_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ─────────────────── ConversationHandler factory ────────────────── #
 
 
-def warn_conversation(entry_fn, entry_filter, *, escape_filter=None) -> object:
+def warn_conversation(
+    entry_fn: Callable[..., Any],
+    entry_filter: BaseFilter,
+    *,
+    escape_filter: BaseFilter | None = None,
+) -> object:
     """Return the warn ConversationHandler via the central reason_flow factory."""
     return build_modaction_conv(
         reason,

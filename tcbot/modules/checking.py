@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from telegram import Update
+from telegram import CallbackQuery, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
@@ -132,7 +132,9 @@ async def _ban_summary(
     return text, proof_link
 
 
-async def _safe_edit(q, text: str, reply_markup) -> None:
+async def _safe_edit(
+    q: CallbackQuery, text: str, reply_markup: InlineKeyboardMarkup | None
+) -> None:
     """Edit message text; ignore 'message is not modified' errors."""
     try:
         await q.edit_message_text(text, parse_mode="HTML", reply_markup=reply_markup)

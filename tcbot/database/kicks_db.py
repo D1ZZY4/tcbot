@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from motor.motor_asyncio import AsyncIOMotorCollection
+
 from tcbot.database.mongos import col
 from tcbot.utils.timedate_format import utc_now
 
@@ -13,7 +15,7 @@ from tcbot.utils.timedate_format import utc_now
 # * Internal collection access utilities for the kicks database
 
 
-def _kicks():
+def _kicks() -> AsyncIOMotorCollection:
     return col("kicks")
 
 

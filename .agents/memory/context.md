@@ -5,7 +5,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-06 (session 30)
+**Last updated:** 2026-06-07 (session 35)
 
 ## What is done
 
@@ -95,6 +95,16 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Updated `docs/helper/helper.md` replies.py table: added 9 missing constants (ERR_PERM_EXPIRED, ERR_UNKNOWN_ROLE, WHERE_CONNECTED_GROUP, NO_REASON, SEC_* ×6).
   - Ruff 144 files clean.
 
+- Session 35 (2026-06-07): complete return type annotations across all non-dunder functions.
+  - Fixed 12 functions missing return type across 9 files: `__main__.py`, all 7 database accessor files, `extraction.py`.
+  - All DB collection accessor functions annotated `-> AsyncIOMotorCollection`; `extraction._safe_get_chat` annotated `-> Chat | None`.
+  - Return type AST audit: 0 missing. Ruff 71 files clean.
+
+- Session 34 (2026-06-07): complete parameter type annotations across all private/non-dunder functions.
+  - Fixed 31 unannotated parameters across 13 files; all now have correct types.
+  - Discovered: `BaseFilter` must be imported from `telegram.ext.filters`, not `telegram.ext` (not re-exported at top level in PTB 22.7).
+  - Ruff 71 files clean; import check + bot startup clean.
+
 - Session 33 (2026-06-07): pure side-effect `asyncio.gather` hardening.
   - Added `return_exceptions=True` to 20 pure side-effect gather calls across 12 files: `about.py`, `additional.py`, `privacy.py` (×2), `start.py`, `groups.py`, `connecting.py`, `greeting.py`, `stats.py` (×2), `maintenance.py`, `help.py` (×6), `admins.py` (×2), `appeal_flow.py`, `connected_flow.py`, `reason_flow.py` (×2), `ban_flow.py`.
   - Data-fetching gathers (those that unpack results) intentionally kept without `return_exceptions=True`.
@@ -102,7 +112,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## What is in progress
 
-Nothing. Session 33 checkpoint complete.
+Nothing. Session 35 checkpoint complete.
 
 ## What is pending (optional)
 

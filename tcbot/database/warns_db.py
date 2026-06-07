@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 
+from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo import ReturnDocument
 
 from tcbot.database.documents import WarnCountDoc, WarnDoc
@@ -18,11 +19,11 @@ from tcbot.utils.timedate_format import utc_now
 # * Internal collection access utilities for the warns database
 
 
-def _warns():
+def _warns() -> AsyncIOMotorCollection:
     return col("warns")
 
 
-def _warn_counts():
+def _warn_counts() -> AsyncIOMotorCollection:
     return col("warn_counts")
 
 

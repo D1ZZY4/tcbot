@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from motor.motor_asyncio import AsyncIOMotorCollection
+
 from tcbot.database.documents import PromotionRequestDoc
 from tcbot.database.mongos import col, make_short_id
 from tcbot.utils.timedate_format import utc_now
@@ -14,7 +16,7 @@ from tcbot.utils.timedate_format import utc_now
 # * Internal collection access and ID generation utilities
 
 
-def _requests():
+def _requests() -> AsyncIOMotorCollection:
     return col("promotion_requests")
 
 

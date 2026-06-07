@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from tcbot import cfg
@@ -430,7 +430,7 @@ class Stats:
 
     @classmethod
     def open_search(
-        cls, ctx: ContextTypes.DEFAULT_TYPE, q
+        cls, ctx: ContextTypes.DEFAULT_TYPE, q: CallbackQuery
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Open the search prompt; remember chat/message so input edits the right card."""
         ctx.user_data[SEARCH_KEY] = True

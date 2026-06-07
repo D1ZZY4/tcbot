@@ -2,6 +2,44 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-07 (session 35)
+
+### Changed
+
+- Added complete return type annotations to all non-dunder functions across `tcbot/`: 12 functions in 9 files previously had no return type specified. All are now fully annotated.
+  - `tcbot/__main__.py`: `_make_asyncio_exc_handler` → `Callable[[asyncio.AbstractEventLoop, dict], None]`; added `from collections.abc import Callable` import.
+  - `tcbot/database/bans_db.py`: `_bans() -> AsyncIOMotorCollection`
+  - `tcbot/database/groups_db.py`: `_groups() -> AsyncIOMotorCollection`, `_pending() -> AsyncIOMotorCollection`
+  - `tcbot/database/kicks_db.py`: `_kicks() -> AsyncIOMotorCollection`
+  - `tcbot/database/mutes_db.py`: `_mutes() -> AsyncIOMotorCollection`
+  - `tcbot/database/queues_db.py`: `_requests() -> AsyncIOMotorCollection`
+  - `tcbot/database/users_cache.py`: `_members() -> AsyncIOMotorCollection`
+  - `tcbot/database/warns_db.py`: `_warns() -> AsyncIOMotorCollection`, `_warn_counts() -> AsyncIOMotorCollection`
+  - `tcbot/modules/helper/extraction.py`: `_safe_get_chat() -> Chat | None`; added `Chat` to telegram imports.
+- All 9 database files that added `AsyncIOMotorCollection` now import it directly from `motor.motor_asyncio`.
+- Return type annotation AST audit: 0 non-dunder functions missing return type (was 12 before this session).
+- `ruff format` + `ruff check --fix`: 71 files clean, 5 auto-fixed import ordering issues.
+
+## [Unreleased] - 2026-06-07 (session 34)
+
+### Changed
+
+- Added complete parameter type annotations to all private and non-dunder function parameters across `tcbot/`: 31 functions in 13 files previously had one or more unannotated parameters. All are now fully annotated with correct types from `telegram`, `telegram.ext`, `telegram.ext.filters`, and `collections.abc`.
+  - `tcbot/modules/stats.py`: `_ack_and_render(q: CallbackQuery, data_coro: Awaitable[...])`
+  - `tcbot/modules/checking.py`: `_safe_edit(q: CallbackQuery, ..., reply_markup: InlineKeyboardMarkup | None)`
+  - `tcbot/modules/greeting.py`: `_handle_member(member: User, msg: Message, chat: Chat, bot: Bot)`
+  - `tcbot/modules/maintenance.py`: `_leave_one(bot: Bot, ...)`, `_should_remove(bot: Bot, ...)`
+  - `tcbot/modules/helper/workflows/kicking_flow.py`: `kick_conversation(entry_fn: Callable[..., Any], entry_filter: BaseFilter)`
+  - `tcbot/modules/helper/workflows/muting_flow.py`: `_execute_mute(bot: Bot, ...)`, `mute_conversation(entry_fn: Callable[..., Any], entry_filter: BaseFilter, *, escape_filter: BaseFilter | None = None)`
+  - `tcbot/modules/helper/workflows/warning_flow.py`: `warn_conversation(entry_fn: Callable[..., Any], entry_filter: BaseFilter, *, escape_filter: BaseFilter | None = None)`
+  - `tcbot/modules/helper/workflows/check_flow.py`: `_per_chat_event_list(..., db_call: Callable[[int], Awaitable[list[Any]]], ...)`
+  - `tcbot/modules/helper/workflows/stats_flow.py`: `open_search(cls, ctx: ContextTypes.DEFAULT_TYPE, q: CallbackQuery)`
+  - `tcbot/modules/helper/workflows/appeal_flow.py`: `_update_or_send_log(bot: Bot, ...)`, `build_handler(self, entry_filter: BaseFilter)`
+  - `tcbot/modules/helper/workflows/connected_flow.py`: `check_perms(self, member: ChatMember)`, `complete_join(..., bot: Bot)`
+  - `tcbot/modules/helper/workflows/reason_flow.py`: `build_modaction_conv(..., entry_fn: Callable[..., Any], executor: Callable[..., Any], entry_filter: BaseFilter, escape_filter: BaseFilter | None = None)`
+  - `tcbot/modules/helper/workflows/ban_flow.py`: `ban_conversation(entry_fn: Callable[..., Any], entry_filter: BaseFilter)`
+- `BaseFilter` must be imported from `telegram.ext.filters`, not from `telegram.ext` directly (PTB 22.7 does not re-export it from the top-level `telegram.ext` namespace).
+
 ## [Unreleased] - 2026-06-07 (session 33)
 
 ### Fixed

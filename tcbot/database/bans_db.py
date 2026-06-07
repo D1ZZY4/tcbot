@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo import ReturnDocument
 
 from tcbot.database.documents import BanDoc
@@ -19,7 +20,7 @@ from tcbot.utils.timedate_format import utc_now
 # * These are only used within this module for database interactions
 
 
-def _bans():
+def _bans() -> AsyncIOMotorCollection:
     return col("bans")
 
 
