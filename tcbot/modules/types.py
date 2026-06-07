@@ -6,8 +6,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable
-from typing import Callable
+from collections.abc import Awaitable, Callable
 
 from telegram import Update
 from telegram.ext import ContextTypes

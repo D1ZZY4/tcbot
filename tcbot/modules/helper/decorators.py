@@ -11,8 +11,8 @@ import functools
 import logging
 import time
 from collections import deque
-from collections.abc import Callable
-from typing import Awaitable, TypeVar
+from collections.abc import Awaitable, Callable
+from typing import TypeVar
 
 from telegram import Message, Update
 from telegram.ext import ApplicationHandlerStop, ContextTypes
@@ -138,7 +138,7 @@ def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
                             )
                         except Exception as exc:
                             log.debug("Callback rate-limit answer failed: %s", exc)
-                        return
+                        return None
                     if update.effective_message:
                         try:
                             await update.effective_message.reply_text(
@@ -146,7 +146,7 @@ def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
                             )
                         except Exception as exc:
                             log.debug("Message rate-limit reply failed: %s", exc)
-                        return
+                        return None
             return await func(update, ctx)
 
         return _wrapper
@@ -157,7 +157,7 @@ def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
 # ──────────────────────── Execution tracer ──────────────────────── #
 
 
-def log_execution(
+def log_execution(  # noqa: UP047
     func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R]],
 ) -> Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R]]:
     """Wrap a handler to emit entry / exit / exception traces at DEBUG level."""
@@ -203,6 +203,7 @@ def owner_only(func: Callable) -> Callable:
             return await func(update, ctx)
         if update.effective_message:
             await update.effective_message.reply_text(_ERR_OWNER_ONLY)
+        return None
 
     return _wrapper
 
@@ -218,6 +219,7 @@ def staff_only(func: Callable) -> Callable:
             return await func(update, ctx)
         if update.effective_message:
             await update.effective_message.reply_text(_ERR_STAFF_ONLY)
+        return None
 
     return _wrapper
 
@@ -235,6 +237,7 @@ def mod_only(func: Callable) -> Callable:
             return await func(update, ctx)
         if update.effective_message:
             await update.effective_message.reply_text(_ERR_MOD_ONLY)
+        return None
 
     return _wrapper
 
@@ -252,6 +255,7 @@ def basic_mod_only(func: Callable) -> Callable:
             return await func(update, ctx)
         if update.effective_message:
             await update.effective_message.reply_text(_ERR_BASIC_MOD_ONLY)
+        return None
 
     return _wrapper
 

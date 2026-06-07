@@ -185,7 +185,7 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return_exceptions=True,
     )
 
-    to_remove = [g for g, remove in zip(groups, checks) if remove is True]
+    to_remove = [g for g, remove in zip(groups, checks, strict=False) if remove is True]
 
     if to_remove:
         await asyncio.gather(

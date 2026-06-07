@@ -351,10 +351,11 @@ class BuildAppeal:
             return
 
         review_ts = ban.get("review_timestamp")
-        if review_ts:
-            if reviewer_locked_out(review_ts, ban.get("admin_user_id"), admin.id):
-                await q.answer(_ERR_REVIEW_LOCKED, show_alert=True)
-                return
+        if review_ts and reviewer_locked_out(
+            review_ts, ban.get("admin_user_id"), admin.id
+        ):
+            await q.answer(_ERR_REVIEW_LOCKED, show_alert=True)
+            return
 
         target_id = ban["banned_user_id"]
         lc, lt = cfg.logs

@@ -95,6 +95,18 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Updated `docs/helper/helper.md` replies.py table: added 9 missing constants (ERR_PERM_EXPIRED, ERR_UNKNOWN_ROLE, WHERE_CONNECTED_GROUP, NO_REASON, SEC_* ×6).
   - Ruff 144 files clean.
 
+- Session 38 (2026-06-07): Ruff rule expansion + 23 code quality fixes.
+  - Expanded ruff select: added B, C4, RET, SIM, UP, W; added ignore=["UP047"].
+  - Fixed UP017 (datetime.UTC), UP035 (collections.abc), UP037 (no quotes), UP046/UP047 (PEP 695 generics).
+  - Fixed RET502/RET503/RET505 (explicit return None), SIM102 (merged if-and), SIM105 (contextlib.suppress).
+  - Fixed B905 (zip strict=False in broadcasting.py and maintenance.py).
+  - All checks pass: ruff check, ruff format, import OK, bot started cleanly.
+
+- Session 37 (2026-06-07): pyproject.toml cleanup.
+  - Removed duplicate `ruff` from `[project] dependencies` (kept only in `[dependency-groups] dev`).
+  - Removed stale `# Migrate to latest channel version` comments from runtime deps.
+  - Full verification sequence passed: uv sync, import OK, Ruff 71 files clean, bot started cleanly.
+
 - Session 36 (2026-06-07): comprehensive docs audit.
   - Verified all 20+ docs files against current source; all accurate.
   - Fixed stale "144 files" reference in context.md current-state header (71 files).

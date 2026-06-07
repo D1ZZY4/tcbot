@@ -2,6 +2,30 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-07 (session 38)
+
+### Changed
+
+- **`tcbot/utils/timedate_format.py`** — replaced `timezone.utc` with the `datetime.UTC` alias (UP017); removed now-unused `timezone` import.
+- **`tcbot/modules/types.py`** — moved `Callable` from `typing` to `collections.abc` (UP035).
+- **`tcbot/utils/error_reporter.py`** — removed quoted forward references `"Bot | None"` and `"Bot"` (UP037); added `import contextlib` and replaced `try/except AttributeError: pass` with `contextlib.suppress(AttributeError)` (SIM105).
+- **`tcbot/__init__.py`** — removed quoted forward reference `"Configs"` from `load()` return type (UP037).
+- **`tcbot/modules/helper/decorators.py`** — moved `Awaitable` from `typing` to `collections.abc` (UP035); added explicit `return None` to all four auth `_wrapper` functions to silence RET502/RET503; added `# noqa: UP047` to `log_execution` (refactor would conflict with `ratelimiter` inner TypeVar usage).
+- **`tcbot/database/cache.py`** — migrated `TTLCache` from `Generic[T]` to Python 3.12 type-parameter syntax `class TTLCache[T]` (UP046); removed `TypeVar` and `Generic` from imports.
+- **`tcbot/utils/dispatch.py`** — migrated `fan_out` to Python 3.12 type-parameter syntax `async def fan_out[T]` (UP047); removed module-level `T = TypeVar("T")` and `TypeVar` import.
+- **`tcbot/modules/broadcasting.py`** — added `strict=False` to `zip()` call (B905).
+- **`tcbot/modules/maintenance.py`** — added `strict=False` to `zip()` call (B905).
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** — merged nested `if review_ts: if reviewer_locked_out(...)` into single `and`-condition (SIM102); reformatted by Ruff.
+- **`tcbot/modules/helper/workflows/proof_flow.py`** — replaced unnecessary `elif` after `return` with `if` (RET505, twice).
+- **`pyproject.toml`** — expanded `[tool.ruff.lint] select` from `["E4","E7","E9","F","I"]` to `["B","C4","E4","E7","E9","F","I","RET","SIM","UP","W"]`; added `ignore = ["UP047"]` for the ratelimiter-constrained generic function case.
+
+## [Unreleased] - 2026-06-07 (session 37)
+
+### Changed
+
+- Removed duplicate `ruff` entry from `[project] dependencies` in `pyproject.toml`; ruff is correctly kept only in `[dependency-groups] dev`. Having it in both groups caused redundant installation in production environments.
+- Removed stale `# Migrate to latest channel version` trailing comments from `pyproject.toml` runtime dependencies (they were leftover scaffolding text).
+
 ## [Unreleased] - 2026-06-07 (session 36)
 
 ### Documentation

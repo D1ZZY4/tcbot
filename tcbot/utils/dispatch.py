@@ -9,19 +9,17 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Sequence
-from typing import TypeVar
 
 log = logging.getLogger(__name__)
 
 # * Telegram allows 30 msg/s globally; 10 concurrent is safe and fast.
 _MAX_CONCURRENT: int = 10
-T = TypeVar("T")
 
 
 # ──────────────── Throttled Multi-Group Dispatcher ──────────────── #
 
 
-async def fan_out(
+async def fan_out[T](
     coros: Sequence[Awaitable[T]],
     *,
     max_concurrent: int = _MAX_CONCURRENT,

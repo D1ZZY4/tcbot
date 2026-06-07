@@ -214,7 +214,7 @@ class Configs:
         return parse_chat_id(self.appeals)
 
     @staticmethod
-    def load(env_file: str = "config.env") -> "Configs":
+    def load(env_file: str = "config.env") -> Configs:
         """Load all configuration from environment variables and return a Configs instance."""
         load_dotenv(find_dotenv(env_file))
 

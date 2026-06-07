@@ -6,27 +6,27 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 # ──────────────────────── Datetime Helpers ──────────────────────── #
 
 
 def utc_now() -> datetime:
     """Return the current UTC datetime (tz-aware)."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def to_utc(dt: datetime) -> datetime:
     """Normalise dt to UTC; naive datetimes are assumed UTC."""
     if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 def fmt_dt(dt: datetime) -> str:
     """Format dt as DD-MM-YYYY | HH:MM in UTC."""
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt.strftime("%d-%m-%Y | %H:%M")
 
 

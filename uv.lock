@@ -350,7 +350,6 @@ dependencies = [
     { name = "motor" },
     { name = "python-dotenv" },
     { name = "python-telegram-bot", extra = ["job-queue"] },
-    { name = "ruff" },
 ]
 
 [package.dev-dependencies]
@@ -364,7 +363,6 @@ requires-dist = [
     { name = "motor" },
     { name = "python-dotenv" },
     { name = "python-telegram-bot", extras = ["job-queue"] },
-    { name = "ruff" },
 ]
 
 [package.metadata.requires-dev]

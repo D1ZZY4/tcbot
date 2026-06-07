@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import platform
 import sys
@@ -27,12 +28,12 @@ log = logging.getLogger(__name__)
 # ─────────────────────── Module-Level State ─────────────────────── #
 # * Set once during bot post-init via attach(); never mutated after that
 
-_bot: "Bot | None" = None
+_bot: Bot | None = None
 _chat_id: int = 0
 _thread_id: int | None = None
 
 
-def attach(bot: "Bot", chat_id: int, thread_id: int | None) -> None:
+def attach(bot: Bot, chat_id: int, thread_id: int | None) -> None:
     """Inject live bot instance and log channel config."""
     global _bot, _chat_id, _thread_id
     _bot = bot
@@ -99,10 +100,8 @@ def _fingerprint(
         line = last.tb_lineno if last else 0
         file_part = ""
         if last is not None:
-            try:
+            with contextlib.suppress(AttributeError):
                 file_part = last.tb_frame.f_code.co_filename
-            except AttributeError:
-                pass
         return (type(exc).__name__, file_part, line, str(exc)[:_MAX_CONTEXT_LEN])
     if record is not None:
         return (

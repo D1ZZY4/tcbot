@@ -4,11 +4,10 @@ version = "1.0.0"
 description = "Transsion Core Federation (TCF) Telegram bot"
 requires-python = ">=3.12"
 dependencies = [
-    "python-telegram-bot[job-queue]",  # Migrate to latest channel version
-    "motor",                           # Migrate to latest channel version
-    "flask",                           # Migrate to latest channel version
-    "python-dotenv",                   # Migrate to latest channel version
-    "ruff",
+    "python-telegram-bot[job-queue]",
+    "motor",
+    "flask",
+    "python-dotenv",
 ]
 
 [dependency-groups]
@@ -19,4 +18,7 @@ line-length = 88
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I"]
+select = ["B", "C4", "E4", "E7", "E9", "F", "I", "RET", "SIM", "UP", "W"]
+ignore = [
+    "UP047",  # Generic functions: TypeVar-based style kept for ratelimiter compatibility
+]

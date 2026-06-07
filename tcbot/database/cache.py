@@ -8,14 +8,12 @@ from __future__ import annotations
 
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any, Generic, TypeVar, cast
+from typing import Any, cast
 
 from tcbot.database.documents import GroupDoc
 
 # * Public sentinel; compare using is CACHE_MISS to detect a cache miss.
 # * Distinct from None because None is a valid cache value (e.g. user has no role).
-T = TypeVar("T")
-
 CACHE_MISS: object = object()
 
 
@@ -24,7 +22,7 @@ CACHE_MISS: object = object()
 # * Designed specifically for asyncio applications - no locks needed
 
 
-class TTLCache(Generic[T]):
+class TTLCache[T]:
     """Single-process in-memory TTL cache for asyncio-based code."""
 
     __slots__ = ("_ttl", "_store")

@@ -133,7 +133,7 @@ async def upload_proof(
                 "Proof album uploaded: %d items, message_id=%s", len(sent), proof_msg_id
             )
             return proof_msg_id
-        elif msgs[0].photo:
+        if msgs[0].photo:
             sent = await bot.send_photo(
                 proof_chat,
                 msgs[0].photo[-1].file_id,
@@ -143,7 +143,7 @@ async def upload_proof(
             )
             log.info("Proof photo uploaded: message_id=%s", sent.message_id)
             return sent.message_id
-        elif msgs[0].video:
+        if msgs[0].video:
             sent = await bot.send_video(
                 proof_chat,
                 msgs[0].video.file_id,
