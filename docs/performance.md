@@ -1,6 +1,6 @@
 # Performance Optimization Guide
 
-For database batch query helpers and indexes, see [`databases/databases.md`](databases/databases.md). For the performance regression workflow that benchmarks these patterns, see [`workflows-guide.md`](workflows-guide.md). For check command which is the main consumer of batch queries, see [`check-detailed.md`](check-detailed.md).
+For database batch query helpers and indexes, see [`databases/databases.md`](databases/databases.md). For check command which is the main consumer of batch queries, see [`check-detailed.md`](check-detailed.md).
 
 This document outlines the performance optimizations implemented in the tcbot codebase and best practices for maintaining fast response times.
 

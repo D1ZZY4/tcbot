@@ -6,13 +6,12 @@ For user-facing overview of CI/CD, see [`../README.md`](../README.md#cicd--autom
 
 ## Overview
 
-The project uses 5 automated workflows for continuous integration, code quality, and maintenance:
+The project uses 4 automated workflows for continuous integration, code quality, and maintenance:
 
 1. **Auto-Fix Code Quality** - Automatically fix linting issues
 2. **Dependency Updates** - Weekly dependency updates with auto-PR
-3. **Performance Regression Detection** - Track performance metrics
-4. **CodeQL** - Security analysis
-5. **Run Bot** - Scheduled 24/7 runner (hourly, 55-minute window)
+3. **CodeQL** - Security analysis
+4. **Run Bot** - Self-chaining 24/7 long-polling runner
 
 ---
 
@@ -88,50 +87,7 @@ Safe to merge with new versions.
 
 ---
 
-## 3. Performance Regression Detection
-
-**File:** `.github/workflows/performance.yml`
-
-**Triggers:**
-- Push to `main`
-- Pull requests to `main`
-- Manual dispatch
-
-**What it does:**
-- Runs performance benchmarks:
-  - Batch query performance (100 users)
-  - Mention data fetch (50 users)
-  - Per-user operation time
-- Compares with baseline from `main` branch
-- Detects regressions (>10% slower)
-- Detects improvements (>10% faster)
-- **Comments on PR** with performance comparison
-- **Creates issue** if regression detected on `main`
-- **Auto-updates baseline** on `main` branch
-
-**Benchmark Metrics:**
-- `batch_query_100_users_ms` - Time to fetch 100 user names
-- `batch_query_per_user_ms` - Average time per user
-- `mention_data_50_users_ms` - Time to fetch mention data for 50 users
-- `mention_data_per_user_ms` - Average time per user
-
-**Example PR Comment:**
-```
-## 📊 Performance Benchmark Results
-
-## ✅ Performance Improvements
-
-- batch_query_100_users_ms: 45.23ms → 28.15ms (-37.8%)
-- mention_data_50_users_ms: 23.45ms → 18.92ms (-19.3%)
-
-## ✅ No significant performance changes
-
-All other metrics within ±10% of baseline.
-```
-
----
-
-## 4. CodeQL
+## 3. CodeQL
 
 **File:** `.github/workflows/codeql.yml`
 
@@ -147,19 +103,20 @@ All other metrics within ±10% of baseline.
 
 ---
 
-## 5. Run Bot
+## 4. Run Bot
 
 **File:** `.github/workflows/run-bot.yml`
 
 **Triggers:**
-- Scheduled every hour (`0 */1 * * *`)
-- Manual dispatch
+- Self-dispatch (`workflow_dispatch`) from the previous run, for seamless chaining
+- Cron schedule every 30 minutes as a resurrection fallback if the chain breaks
 
 **What it does:**
-- Runs the bot for a 55-minute window per execution (5 × ~55 min overlaps for continuous coverage)
-- Pulls latest changes before each run to stay current
-- Detects crashes by scanning `bot.log` for `Traceback`, `Error:`, or `CRITICAL`
-- Uploads bot log and crash tail as artifacts (7-day retention) for post-mortem analysis
+- Runs the bot via long polling for a ~5 hour window per run (GitHub caps a job at 6h)
+- **Self-chains:** roughly 15 minutes before the window ends, it dispatches the next run so coverage is continuous. This requires a repository secret `BOT_PAT` (a Personal Access Token with the `workflow` scope), because the built-in `GITHUB_TOKEN` cannot trigger workflows
+- The cron schedule acts as a resurrection fallback that restarts the bot if the chain ever breaks or no PAT is configured
+- A `concurrency` group (`tcf-bot-runner`, `cancel-in-progress: false`) ensures only one bot instance runs at a time, with at most one queued to take over seamlessly. Long polling allows only one active instance — a second would make Telegram return `409 Conflict`
+- Bot configuration comes from repository secrets (`BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`, etc.), plus the optional `BOT_PAT` for self-chaining
 
 ---
 
@@ -176,11 +133,11 @@ Auto-create PR
     ↓
 Telegram Notification
 
-Performance Regression
+Run Bot
     ↓
-Compare with baseline
+Self-dispatch next run (~15 min before window ends)
     ↓
-PR Comment OR Issue (regression)
+Cron fallback restarts if the chain breaks
 ```
 
 ---
@@ -191,9 +148,13 @@ Configure these in GitHub repository settings → Secrets:
 
 | Secret | Purpose | Required |
 |--------|---------|----------|
-| `BOT_TOKEN` | Telegram bot token for notifications | Yes |
-| `OWNER_ID` | Your Telegram user ID for notifications | Yes |
+| `BOT_TOKEN` | Telegram bot token (bot runtime + notifications) | Yes |
+| `MONGODB_URI` | MongoDB connection string for the bot runtime | Yes |
+| `OWNER_ID` | Your Telegram user ID (initial owner + notifications) | Yes |
+| `BOT_PAT` | Personal Access Token with `workflow` scope, used by Run Bot to self-chain into the next run for seamless 24/7 coverage | Optional (recommended) |
 | `GITHUB_TOKEN` | Auto-provided by GitHub Actions | Auto |
+
+Without `BOT_PAT`, the Run Bot workflow cannot dispatch its own next run; it falls back to the every-30-minute cron resurrection schedule.
 
 ---
 
@@ -217,14 +178,13 @@ View workflow
 
 1. **Let auto-fix handle style** - Don't manually format, the workflow will do it
 2. **Review dependency PRs weekly** - Auto-created PRs are safe to merge
-3. **Watch for performance regressions** - Check PR comments for benchmark results
-4. **Read Telegram notifications** - Get instant feedback
+3. **Read Telegram notifications** - Get instant feedback
 
 ### For Maintainers
 
 1. **Monitor GitHub issues** - Auto-created issues need triage
 2. **Review auto-fix commits** - Verify changes are correct
-3. **Update baselines** - Performance baselines auto-update on `main`
+3. **Keep `BOT_PAT` valid** - An expired token breaks Run Bot self-chaining; the cron fallback still resurrects the bot, but with brief gaps
 4. **Check workflow runs** - Weekly scheduled runs keep dependencies fresh
 
 ---
@@ -242,10 +202,10 @@ View workflow
 ### Dependency PR not created
 - Verify `pull-requests: write` permission
 
-### Performance benchmarks failing
-- Ensure MongoDB is available
-- Check benchmark script for errors
-- Verify baseline file exists on `main` branch
+### Bot not staying online (Run Bot)
+- Verify `BOT_TOKEN`, `MONGODB_URI`, and `OWNER_ID` secrets are set
+- For seamless 24/7, set `BOT_PAT` (a PAT with the `workflow` scope) so the run can dispatch its successor; otherwise only the 30-minute cron fallback restarts it
+- A `409 Conflict` from Telegram means two instances are polling at once; the `tcf-bot-runner` concurrency group should prevent this, so check for a stray manual run
 
 ---
 
@@ -258,7 +218,7 @@ View workflow
 ### Manual Tasks
 - Review and merge dependency update PRs
 - Triage auto-created issues
-- Monitor performance regression issues
+- Keep `BOT_PAT` valid so Run Bot self-chaining stays seamless
 
 ---
 

@@ -169,7 +169,7 @@ Ruff targets Python 3.12 and line length 88. GitHub Actions install dependencies
 
 ## CI/CD & Automation
 
-The project uses **5 automated GitHub Actions workflows** for continuous integration, code quality, and maintenance:
+The project uses **4 automated GitHub Actions workflows** for continuous integration, code quality, and maintenance:
 
 ### Auto-Fix Code Quality
 **File:** `.github/workflows/auto-fix.yml`
@@ -191,27 +191,19 @@ Weekly automated dependency updates:
 - **Telegram notifications** with results
 - Zero manual work for routine updates
 
-### Performance Regression Detection
-**File:** `.github/workflows/performance.yml`
-
-Tracks performance metrics and detects regressions:
-- Benchmarks batch queries and mention data operations
-- Compares against baseline (>10% threshold)
-- **Comments on PRs** with performance comparison
-- **Creates issues** on regressions in main branch
-- **Auto-updates baseline** on main branch pushes
-
 ### Other Workflows
 - **CodeQL** (`.github/workflows/codeql.yml`) - Security analysis
-- **Run Bot** (`.github/workflows/run-bot.yml`) - Scheduled 24/7 runner (hourly, 55-minute window per execution)
+- **Run Bot** (`.github/workflows/run-bot.yml`) - Self-chaining 24/7 long-polling runner. Each run polls for a ~5 hour window (GitHub caps a job at 6h), then dispatches its successor ~15 minutes before the window ends for continuous coverage. A `concurrency` group keeps a single instance polling (a second would hit Telegram's `409 Conflict`), and an every-30-minute cron acts as a resurrection fallback.
 
 ### Full Documentation
 For detailed workflow descriptions, trigger conditions, notification format examples, troubleshooting, and best practices, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For changelog of all CI/CD additions, see [`CHANGELOG.md`](CHANGELOG.md).
 
 ### Required Secrets
 Configure in GitHub repository settings → Secrets:
-- `BOT_TOKEN` - Telegram bot token for notifications
-- `OWNER_ID` - Your Telegram user ID for notifications
+- `BOT_TOKEN` - Telegram bot token (bot runtime and notifications)
+- `MONGODB_URI` - MongoDB connection string for the bot runtime
+- `OWNER_ID` - Your Telegram user ID (initial owner and notifications)
+- `BOT_PAT` - Optional Personal Access Token with the `workflow` scope, used by Run Bot to self-chain into the next run for seamless 24/7 coverage
 - `GITHUB_TOKEN` - Auto-provided by GitHub Actions
 
 ## Where to look next

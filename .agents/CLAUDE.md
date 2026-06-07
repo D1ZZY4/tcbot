@@ -30,7 +30,7 @@ Every new conversation **must start by reading** the following files. The user s
 |---|---|
 | [`.agents/`](.) | Any code or doc work; see siblings: STYLE-CODE, STYLE-COMMENTS, WORKFLOW, RUFF, REPLIT |
 | [`docs/`](../docs/) | Architecture, modules, helpers, databases, utils, workflows, detailed feature guides |
-| [`docs/workflows-guide.md`](../docs/workflows-guide.md) | CI/CD automation: auto-fix PR, dependency updates, performance |
+| [`docs/workflows-guide.md`](../docs/workflows-guide.md) | CI/CD automation: auto-fix PR, dependency updates, CodeQL, self-chaining 24/7 bot runner |
 | [`README.md`](../README.md) | User-facing setup and feature list |
 | [`replit.md`](../replit.md) | Replit/hosted deployment |
 

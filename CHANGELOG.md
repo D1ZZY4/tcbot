@@ -2,6 +2,22 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-08 (session 32)
+
+### Changed
+
+- Rewrote `.github/workflows/run-bot.yml` into a 24/7 self-chaining long-polling runner: each run hosts the bot for a ~5 hour window (under the 6 hour job cap) with a watchdog that restarts the process if it dies mid-window, then dispatches the next run ~15 minutes before the window ends so the successor is queued and takes over with minimal gap. Self-dispatch uses an optional `BOT_PAT` secret (a Personal Access Token with the `workflow` scope, required because the built-in `GITHUB_TOKEN` cannot trigger workflows); without it the workflow falls back to a 30-minute cron resurrection schedule. A `tcf-bot-runner` concurrency group with `cancel-in-progress: false` keeps exactly one bot instance active (long polling returns 409 Conflict on overlap) plus at most one queued.
+- Renamed the CodeQL workflow display name from `CodeQL Advanced` to `CodeQL`.
+
+### Removed
+
+- Removed `.github/workflows/performance.yml` (performance regression benchmarking): overkill for a single-maintainer bot and lower value after the test suite was removed.
+- Removed the leftover test artifacts the previous pass missed: the `Run Tests` and `Run Tests (TDD)` workflows in `.replit`, the pytest configuration in `.vscode/settings.json`, and a stale "test imports" comment in `tcbot/modules/appeals.py`.
+
+### Documentation
+
+- Updated all workflow documentation (`README.md`, `docs/README.md`, `docs/workflows-guide.md`, `docs/performance.md`, `.agents/CLAUDE.md`, `.agents/skills/docs-maintainer/SKILL.md`) to reflect 4 workflows (was 5), the new self-chaining `run-bot.yml` behavior and its required secrets, and the removal of `performance.yml`.
+
 ## [Unreleased] - 2026-06-08 (session 31)
 
 ### Removed

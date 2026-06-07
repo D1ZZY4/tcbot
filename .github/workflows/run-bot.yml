@@ -1,35 +1,67 @@
 name: TCF Bot - 24/7 Runner
 
+# 24/7 long-polling runner for GitHub Actions.
+#
+# How it stays alive:
+#   1. Watchdog       : the bot runs in the background; if it dies mid-window
+#                       it is restarted in the same job.
+#   2. Self-chain     : 15 minutes before the window ends, this run dispatches
+#                       the NEXT run (requires a PAT secret named BOT_PAT with
+#                       the `workflow` scope, because the built-in GITHUB_TOKEN
+#                       is not allowed to trigger another workflow run).
+#   3. Cron fallback  : if the whole runner dies, or no PAT is configured, the
+#                       schedule below resurrects the bot.
+#
+# Anti-collision: long polling allows only ONE active instance per bot token
+# (Telegram returns 409 Conflict otherwise). The concurrency block below keeps
+# at most one run active plus one queued, so the next run only starts once the
+# current one has stopped.
+
 on:
-  schedule:
-    - cron: "0 */1 * * *"
   workflow_dispatch:
+  schedule:
+    # Resurrection backup. Fires every 30 minutes; if a run is already active
+    # the new one queues (and replaces any older queued run), so a healthy bot
+    # is never interrupted, only restarted when it is actually down.
+    - cron: "*/30 * * * *"
 
 concurrency:
   group: tcf-bot-runner
-  cancel-in-progress: true
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
   run:
-    name: Run bot (55 min window)
+    name: Run bot (5h window, self-chaining)
     runs-on: ubuntu-latest
-    timeout-minutes: 55
-    permissions:
-      contents: write
-      packages: read
+    # 5h window + 30m buffer. GitHub hard-caps a single job at 6 hours.
+    timeout-minutes: 330
 
     env:
+      # ── Window timing (seconds) ──────────────────────────────────────────
+      WINDOW_SECONDS: "18000"   # 5 hours of actual bot runtime
+      HANDOVER_LEAD: "900"      # dispatch the next run 15 min before the end
+
+      # ── Bot configuration (set these as repository secrets) ──────────────
       BOT_TOKEN:      ${{ secrets.BOT_TOKEN }}
       MONGODB_URI:    ${{ secrets.MONGODB_URI }}
+      OWNER_ID:       ${{ secrets.OWNER_ID }}
       DB_NAME:        ${{ secrets.DB_NAME }}
       COMMUNITY_NAME: ${{ secrets.COMMUNITY_NAME }}
-      OWNER_ID:       ${{ secrets.OWNER_ID }}
+      PREFIXES:       ${{ secrets.PREFIXES }}
+      MAIN_GROUP:     ${{ secrets.MAIN_GROUP }}
+      MAIN_CHANNEL:   ${{ secrets.MAIN_CHANNEL }}
+      EXTEND_GROUP:   ${{ secrets.EXTEND_GROUP }}
+      PROOFS:         ${{ secrets.PROOFS }}
+      LOGS:           ${{ secrets.LOGS }}
+      LOGS_ERRORS:    ${{ secrets.LOGS_ERRORS }}
+      APPEALS:        ${{ secrets.APPEALS }}
+      LOG_LEVEL:      ${{ secrets.LOG_LEVEL }}
 
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-python@v6
         with:
@@ -41,29 +73,81 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync
 
-      - name: Pull latest changes
-        run: git pull origin main
-
-      - name: Start bot (55 min)
+      - name: Detect self-chain capability
+        id: pat
+        env:
+          BOT_PAT: ${{ secrets.BOT_PAT }}
         run: |
-          uv run python -m tcbot > bot.log 2>&1 &
-          BOT_PID=$!
-          echo "BOT_PID=$BOT_PID" >> "$GITHUB_ENV"
-          sleep 3300
+          if [ -n "$BOT_PAT" ]; then
+            echo "has_pat=true" >> "$GITHUB_OUTPUT"
+            echo "PAT detected: self-chaining is enabled."
+          else
+            echo "has_pat=false" >> "$GITHUB_OUTPUT"
+            echo "No BOT_PAT secret: relying on the cron schedule for restarts."
+          fi
+
+      - name: Run bot with watchdog and self-chain
+        env:
+          BOT_PAT: ${{ secrets.BOT_PAT }}
+          HAS_PAT: ${{ steps.pat.outputs.has_pat }}
+        run: |
+          set -uo pipefail
+
+          start_bot() {
+            uv run python -m tcbot > bot.log 2>&1 &
+            echo $!
+          }
+
+          echo "Starting bot..."
+          BOT_PID="$(start_bot)"
+          echo "Bot started with PID $BOT_PID"
+
+          deadline=$(( $(date +%s) + WINDOW_SECONDS ))
+          handover_at=$(( deadline - HANDOVER_LEAD ))
+          handover_done=false
+
+          # ── Supervisory loop ────────────────────────────────────────────
+          while :; do
+            now=$(date +%s)
+            [ "$now" -ge "$deadline" ] && break
+
+            # Watchdog: restart the bot if the process has exited.
+            if ! kill -0 "$BOT_PID" 2>/dev/null; then
+              echo "::warning::Bot process $BOT_PID died. Restarting."
+              tail -n 40 bot.log || true
+              BOT_PID="$(start_bot)"
+              echo "Bot restarted with PID $BOT_PID"
+            fi
+
+            # Self-chain: queue the next run shortly before the window ends.
+            if [ "$handover_done" = "false" ] && [ "$now" -ge "$handover_at" ]; then
+              if [ "$HAS_PAT" = "true" ]; then
+                echo "Dispatching the next run (handover)..."
+                if GH_TOKEN="$BOT_PAT" gh workflow run run-bot.yml --ref "${GITHUB_REF_NAME}"; then
+                  echo "Next run queued; it will start when this one stops."
+                else
+                  echo "::warning::Handover dispatch failed; cron will cover the restart."
+                fi
+              fi
+              handover_done=true
+            fi
+
+            sleep 30
+          done
+
+          echo "Window elapsed. Stopping bot gracefully..."
           kill "$BOT_PID" 2>/dev/null || true
           wait "$BOT_PID" 2>/dev/null || true
+          echo "Bot stopped."
 
-      - name: Detect crash
+      - name: Detect crash in log
         if: always()
         run: |
           if [[ -f bot.log ]] && grep -qiE "(Traceback|^\w+Error:|CRITICAL)" bot.log; then
-            echo "CRASH=true" >> "$GITHUB_ENV"
+            echo "::warning::Crash signature found in bot.log (last 120 lines saved)."
             grep -n "" bot.log | tail -120 > crash_tail.log
-            echo "Crash detected - last 120 lines saved."
-          else
-            echo "CRASH=false" >> "$GITHUB_ENV"
           fi
 
       - name: Upload bot log
@@ -75,3 +159,4 @@ jobs:
             bot.log
             crash_tail.log
           retention-days: 7
+          if-no-files-found: ignore

@@ -65,7 +65,7 @@ Recent project additions to keep accurate when editing docs:
 - Batch query helpers in `tcbot/database/users_cache.py` (`get_user_mention_data`, `get_mention_data_batch`, `get_first_names_batch`).
 - Partial-name search in `tcbot.modules.helper.extraction.extract_target`; resolution order is reply → args (full ID/username) → args (partial DB search) → text mention → @mention.
 - Username field on `Identity` and `member_cache` indexes on `username` and `first_name`.
-- CI/CD workflows: `.github/workflows/auto-fix.yml` (auto-PR for Ruff fixes on the fixed `auto-fix/ruff` branch), `.github/workflows/dependency-update.yml` (weekly auto-PR like dependabot), `.github/workflows/performance.yml` (regression detection), `.github/workflows/run-bot.yml` (scheduled 24/7 runner), `.github/workflows/codeql.yml` (security scanning). All workflows are documented in [`docs/workflows-guide.md`](../../../docs/workflows-guide.md).
+- CI/CD workflows: `.github/workflows/auto-fix.yml` (auto-PR for Ruff fixes on the fixed `auto-fix/ruff` branch), `.github/workflows/dependency-update.yml` (weekly auto-PR like dependabot), `.github/workflows/run-bot.yml` (self-chaining 24/7 long-polling runner), `.github/workflows/codeql.yml` (security scanning). All workflows are documented in [`docs/workflows-guide.md`](../../../docs/workflows-guide.md).
 
 Core commands:
 
