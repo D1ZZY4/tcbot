@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-07 (session 34)
+**Last updated:** 2026-06-07 (session 36)
 
 ## Verification baseline
 
@@ -19,6 +19,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv run ruff check --fix .` | PASS (All checks passed) |
 | `uv run python -m tcbot` | PASS by runtime evidence: MongoDB connected, indexes ensured, scheduler started, bot polling active |
 | annotation AST audit | PASS: 0 non-dunder function parameters missing type annotations (was 31 before session 34) |
+| docs audit (session 36) | PASS: all 20+ docs files verified accurate; 0 code quality violations; 0 stale Mermaid diagrams |
 
 ## Completed items
 

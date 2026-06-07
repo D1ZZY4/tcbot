@@ -2,6 +2,18 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-07 (session 36)
+
+### Documentation
+
+- Comprehensive docs audit across all 20+ documentation files: all content verified accurate against current source code.
+- Fixed stale "144 files" reference in `.agents/memory/context.md` current-state header (correct count: 71 files).
+- Removed duplicate `types.py` entry from `.agents/memory/structure.md` (was listed twice in `modules/` section).
+- Code quality scans passed: 0 bare `except`/`except Exception: pass`, 0 wildcard imports, 0 direct `datetime.utcnow()` calls, 0 `col()` calls outside `database/`, 0 `print()` calls in production code (5 in `_print_fatal()` writing to stderr are intentional startup-fatal handlers).
+- Verified all docs cross-references are accurate: `docs/mapping.md`, `docs/modules/modules.md`, `docs/helper/helper.md`, `docs/workflows/workflows.md`, `docs/databases/databases.md`, `docs/utils/utils.md`, `docs/banning-detailed.md`, `docs/appeal-detailed.md`, `docs/check-detailed.md`, `docs/promote-detailed.md`, `docs/demote-detailed.md`, `docs/role-detailed.md`, `docs/stats-detailed.md`, `docs/warnings-detailed.md`, `docs/performance.md`, `docs/setup.md`, `docs/button-styles.md`, `docs/git-commit.md`, `docs/workflows-guide.md`, `docs/workflows.md`, `docs/README.md`, `README.md`, `AGENTS.md`, `PLAN.md`, `replit.md`.
+- Verified all Mermaid diagrams in docs are accurate against current implementation.
+- Confirmed `.agents/memory/decisions.md` is accurate and up to date.
+
 ## [Unreleased] - 2026-06-07 (session 35)
 
 ### Changed

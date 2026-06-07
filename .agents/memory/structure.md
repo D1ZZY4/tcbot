@@ -42,7 +42,6 @@ tcbot/
 │   │       ├── stats_flow.py      Stats class: overview, staff, users, chats, bans, search
 │   │       ├── unban_flow.py      execute_unban()
 │   │       └── warning_flow.py    execute_warn(), execute_unwarn(), execute_warnlist(), etc.
-│   ├── types.py             Shared handler type aliases (CommandHandlerFn, etc.)
 │   ├── banning.py           /ban, /unban entry points and callback wiring
 │   ├── kicking.py           /kick entry point and callback wiring
 │   ├── muting.py            /mute entry point and callback wiring

@@ -5,13 +5,13 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-07 (session 35)
+**Last updated:** 2026-06-07 (session 36)
 
 ## What is done
 
 - Python 3.12, uv, python-telegram-bot (latest), Motor/MongoDB stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
-- `uv run ruff format .` and `uv run ruff check .` both clean (144 files).
+- `uv run ruff format .` and `uv run ruff check .` both clean (71 files).
 - All P1/P2/P3 backlog items resolved (pagination NameError, composite indexes, asyncio.gather conversions, shared replies.py, em-dash removal, cache TTL constants, keyboards.py dead code).
 - `docs/mapping.md` updated: added `identity.py`, `replies.py` to helper section; added `pagination.py` to utils section.
 - `maintenance.py` and `disconnecting.py` hardcoded `timeout=3.0` extracted to named constants.
@@ -95,6 +95,13 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Updated `docs/helper/helper.md` replies.py table: added 9 missing constants (ERR_PERM_EXPIRED, ERR_UNKNOWN_ROLE, WHERE_CONNECTED_GROUP, NO_REASON, SEC_* ×6).
   - Ruff 144 files clean.
 
+- Session 36 (2026-06-07): comprehensive docs audit.
+  - Verified all 20+ docs files against current source; all accurate.
+  - Fixed stale "144 files" reference in context.md current-state header (71 files).
+  - Removed duplicate `types.py` entry from structure.md (was listed twice in modules/ section).
+  - Code quality scans: 0 bare except, 0 wildcard imports, 0 direct utcnow(), 0 col() outside database/, 0 print() in production code.
+  - All Mermaid diagrams in docs verified accurate. CHANGELOG and memory updated.
+
 - Session 35 (2026-06-07): complete return type annotations across all non-dunder functions.
   - Fixed 12 functions missing return type across 9 files: `__main__.py`, all 7 database accessor files, `extraction.py`.
   - All DB collection accessor functions annotated `-> AsyncIOMotorCollection`; `extraction._safe_get_chat` annotated `-> Chat | None`.
@@ -112,7 +119,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## What is in progress
 
-Nothing. Session 35 checkpoint complete.
+Nothing. Session 36 checkpoint complete.
 
 ## What is pending (optional)
 
