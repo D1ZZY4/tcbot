@@ -1,6 +1,6 @@
 # Development Workflow: TCF Bot
 
-Read [`CLAUDE.md`](CLAUDE.md) first. This file describes the safe working process for changes in TCF Bot. For project rules, see [`RULES.md`](RULES.md). For testing and validation, see [`TEST-RUFF.md`](TEST-RUFF.md). For commit conventions, see [`../docs/git-commit.md`](../docs/git-commit.md). For CI/CD automation, see [`../docs/workflows-guide.md`](../docs/workflows-guide.md).
+Read [`CLAUDE.md`](CLAUDE.md) first. This file describes the safe working process for changes in TCF Bot. For project rules, see [`RULES.md`](RULES.md). For Ruff and validation, see [`RUFF.md`](RUFF.md). For commit conventions, see [`../docs/git-commit.md`](../docs/git-commit.md). For CI/CD automation, see [`../docs/workflows-guide.md`](../docs/workflows-guide.md).
 
 ---
 
@@ -28,12 +28,6 @@ Install dependencies:
 uv sync
 ```
 
-Install test dependencies:
-
-```bash
-uv sync --extra test
-```
-
 Run the bot locally:
 
 ```bash
@@ -46,17 +40,15 @@ uv run python -m tcbot
 
 For code changes, prefer this order:
 
-1. Run a focused test or import check for the changed area.
+1. Run an import check for the changed area.
 2. Run Ruff formatting and linting.
-3. Run the full offline test suite.
-4. If the task affects runtime behavior, start the bot and inspect startup logs.
+3. If the task affects runtime behavior, start the bot and inspect startup logs.
 
 Commands:
 
 ```bash
 uv run ruff format .
 uv run ruff check --fix .
-uv run --extra test pytest tests/ -v
 uv run python -m tcbot
 ```
 
@@ -65,11 +57,10 @@ error in the final summary.
 
 ```mermaid
 flowchart TD
-    Start[Start code change] --> Focused[Run focused test or import check]
+    Start[Start code change] --> Focused[Run import check]
     Focused --> Format[Run Ruff format]
     Format --> Check[Run Ruff check --fix]
-    Check --> FullTests[Run full offline test suite]
-    FullTests --> Runtime{Affects runtime behavior?}
+    Check --> Runtime{Affects runtime behavior?}
     Runtime -->|Yes| StartBot[Start bot locally]
     StartBot --> Inspect[Inspect startup logs]
     Runtime -->|No| Report[Record any command that could not run]
@@ -90,7 +81,6 @@ flowchart TD
 6. Use shared helpers for formatting, target extraction, roles, keyboards, and DB
    access.
 7. Export handlers through `__handlers__` at the bottom.
-8. Add or update tests when logic changes.
 
 ---
 
@@ -107,7 +97,6 @@ flowchart TD
 7. Add indexes to `mongos.ensure_indexes()` for new indexed queries.
 8. Invalidate caches after writes when relevant.
 9. Update every read path if a stored field changes.
-10. Add or update offline tests.
 
 Do not rename or delete MongoDB fields without a migration plan.
 
@@ -133,7 +122,6 @@ For a new standalone flow:
 4. Include a cancel fallback.
 5. Use `cfg.proof_timeout` or `cfg.appeal_timeout` for timeouts.
 6. Keep Telegram messages HTML-only and escaped.
-7. Add tests for state transitions and pure helpers.
 
 ---
 
@@ -150,7 +138,6 @@ Before adding a dependency, confirm:
 
 - The project does not already provide the needed functionality.
 - The package is maintained and compatible with Python 3.12.
-- The package does not require secrets or network access during tests.
 - The dependency is justified by the feature scope.
 
 ---
@@ -165,7 +152,6 @@ Suggested branch names:
 | `fix/` | Bug fixes |
 | `refactor/` | Behavior-preserving code changes |
 | `docs/` | Documentation-only work |
-| `test/` | Test-only changes |
 | `chore/` | Maintenance |
 
 Commit messages should be short, imperative, and focused. Conventional prefixes
@@ -175,7 +161,6 @@ are welcome when helpful:
 feat: add federation sweep command
 fix: guard appeal review callbacks
 docs: refresh agent project rules
-test: cover warning reset flow
 ```
 
 Do not commit unless the user explicitly asks.
@@ -188,7 +173,6 @@ Before deploying or merging runtime changes:
 
 - [ ] Ruff format completed.
 - [ ] Ruff lint completed.
-- [ ] Full offline tests passed.
 - [ ] Bot starts without import errors.
 - [ ] MongoDB connection succeeds in startup logs.
 - [ ] Keep-alive server starts on the configured port.

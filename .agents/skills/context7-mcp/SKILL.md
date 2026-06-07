@@ -1,6 +1,6 @@
 ---
 name: context7-mcp
-description: Use this skill when writing code that calls any library API, configuring tools, debugging AttributeError/TypeError on library objects, or needing accurate method signatures. Activates for python-telegram-bot, motor, pymongo, ruff, pytest-asyncio, pydantic, uv, and any other dependency in pyproject.toml. Use even when you think you know the answer -- training data may not reflect the installed version.
+description: Use this skill when writing code that calls any library API, configuring tools, debugging AttributeError/TypeError on library objects, or needing accurate method signatures. Activates for python-telegram-bot, motor, pymongo, ruff, pydantic, uv, and any other dependency in pyproject.toml. Use even when you think you know the answer -- training data may not reflect the installed version.
 ---
 
 When writing code that touches any library in this project, use Context7 to
@@ -14,8 +14,8 @@ Activate this skill when you need to:
 - Write or review code that calls a library method or constructor
   ("How does `ApplicationBuilder` work in PTB 22.x?")
 - Configure a tool via `pyproject.toml` or CLI
-  ("What is the correct `asyncio_mode` key for pytest-asyncio 0.23+?")
-- Debug a runtime or test error involving a library object
+  ("What is the correct line-length key for ruff?")
+- Debug a runtime error involving a library object
   (`AttributeError`, `TypeError`, `ImportError` on any external class)
 - Verify async API behavior in Motor or python-telegram-bot
   ("Does `AsyncIOMotorCollection.find` return a cursor or a coroutine?")
@@ -93,7 +93,6 @@ Always verify via Context7 before writing code that uses these:
 | `motor` | `motor` | Async cursor API differs from sync pymongo; method names and return types are not identical |
 | `pymongo` | `pymongo` | Index syntax, aggregation pipeline operators, and session API evolve across versions |
 | `ruff` | `ruff` | Rule codes and `pyproject.toml` config keys change between releases |
-| `pytest-asyncio` | `pytest-asyncio` | `asyncio_mode` config key and fixture scoping changed significantly in 0.21+ |
 | `pydantic` | `pydantic` | v1 and v2 APIs are completely different; validators, field types, and model config all changed |
 
 ## MCP Server Configuration

@@ -181,7 +181,7 @@ Every list view that needs more than one read parallelises with `asyncio.gather`
 - The search input handler is private-chat only and gated by `SEARCH_KEY`; it never absorbs unrelated group messages.
 - `Stats.clear_search(ctx)` is called whenever the user navigates away from the bans panel so stale results never leak into a new search.
 
-## Testable scenarios
+## Behavior reference
 
 - `/tcstats` and `/tcs` both reach `cmd_stats` regardless of prefix (`/`, `!`, `.`).
 - `Staff Roster` page shows the Founder mention exactly once, then each role section, even when a role list is empty.

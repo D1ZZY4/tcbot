@@ -9,7 +9,7 @@ Last updated: 2026-05-29
 
 Before invoking this skill, confirm the read/update rules in [`.agents/CLAUDE.md`](../../CLAUDE.md#mandatory-read-these-files-before-any-work). After any handler or workflow change, update [`CHANGELOG.md`](../../../CHANGELOG.md), [`PLAN.md`](../../../PLAN.md) (if state changes), and the matching `docs/<feature>-detailed.md` plus [`docs/modules/modules.md`](../../../docs/modules/modules.md) or [`docs/workflows/workflows.md`](../../../docs/workflows/workflows.md) in the same turn.
 
-Use this skill for Telegram bot product and engineering work in the TCF Bot repository. The project is a Python 3.12 community moderation bot built with `python-telegram-bot[job-queue] == 22.5`, Motor/MongoDB, Flask keepalive, `uv`, Ruff, and offline pytest tests.
+Use this skill for Telegram bot product and engineering work in the TCF Bot repository. The project is a Python 3.12 community moderation bot built with `python-telegram-bot[job-queue] == 22.5`, Motor/MongoDB, Flask keepalive, `uv`, and Ruff.
 
 The goal is to build reliable moderation workflows that feel clear, respectful, and fast for staff and users.
 
@@ -35,7 +35,7 @@ Do not use generic Node.js, Telegraf, or webhook-only patterns for this project 
 - Runtime: long polling from `tcbot/__main__.py`.
 - Keepalive: Flask health endpoint.
 - Dependency manager: `uv`.
-- Quality tools: Ruff, pytest, pytest-asyncio.
+- Quality tools: Ruff.
 - Configuration: environment variables loaded by `tcbot/__init__.py`, with `config.env.example` as the template.
 
 ## Repository Boundaries
@@ -49,7 +49,6 @@ Place work in the owning layer:
 | Conversation flows | `tcbot/modules/helper/workflows/*_flow.py` |
 | Database helpers | `tcbot/database/*_db.py` |
 | Runtime utilities | `tcbot/utils/` |
-| Offline tests | `tests/` |
 
 Do not put MongoDB writes directly in command handlers. Do not create `*_conv.py` files; new conversation logic belongs in `*_flow.py` files.
 
@@ -241,7 +240,6 @@ Persistence rules:
 - Helper modules own collection access and query details.
 - New query patterns should be supported by indexes.
 - Schema changes must be backward-compatible or include a migration plan.
-- Tests should cover database helper behavior offline.
 
 ## Error Handling
 
@@ -285,19 +283,18 @@ Before finishing a bot feature, verify:
 - Database writes are in helper modules.
 - Multi-group Telegram calls are bounded.
 - Audit/log destinations are used where required.
-- Tests or focused validation were run, or the reason for skipping is clear.
+- Focused validation was run, or the reason for skipping is clear.
 
 ## Validation Commands
 
 For source changes:
 
 ```bash
-uv run --extra test pytest tests/ -v
 uv run ruff format .
 uv run ruff check --fix .
 ```
 
-For focused workflow changes, run the nearest test file first, then broaden to the full suite.
+Confirm the bot still starts cleanly after workflow changes.
 
 ## References
 

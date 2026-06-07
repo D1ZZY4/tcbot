@@ -15,7 +15,6 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 | Health check | Flask app in `tcbot/alive.py`, `GET /` returns `OK` on `PORT` (default `5000`). |
 | Dependency management | `uv` with `uv.lock`; CI installs with frozen lockfile by default. |
 | Formatting/linting | Ruff, configured in `pyproject.toml`. |
-| Tests | 1492 collected tests across 71 `tests/test_*.py` files; designed to run offline. All green on 2026-06-06. |
 | Deployment notes | Local `config.env`, Docker Compose, and Replit/hosted environment variables are documented. |
 
 ## Runtime Flow
@@ -72,7 +71,6 @@ flowchart TD
 | `tcbot/modules/helper/workflows/` | ConversationHandler flows, all named `*_flow.py`. |
 | `tcbot/database/` | Async MongoDB access helpers and document/type definitions. |
 | `tcbot/utils/` | Logging, bounded fan-out dispatch, prefix filters, datetime helpers, error reporting. |
-| `tests/` | Offline pytest suite. |
 
 ### Module Discovery
 
@@ -150,28 +148,10 @@ Install dependencies:
 uv sync
 ```
 
-Install test extras:
-
-```bash
-uv sync --extra test
-```
-
 Run the bot:
 
 ```bash
 uv run python -m tcbot
-```
-
-Run tests:
-
-```bash
-uv run --extra test pytest tests/ -v
-```
-
-Collect tests only:
-
-```bash
-uv run --extra test pytest --collect-only -q
 ```
 
 Format and lint:
@@ -192,10 +172,9 @@ docker-compose up --build
 Priorities, in order:
 
 1. **Correctness and safety:** preserve federation moderation behavior, secrets safety, and database compatibility.
-2. **Offline test coverage:** keep tests independent of Telegram and MongoDB services.
-3. **Clear module boundaries:** handlers call helpers; database writes stay in `tcbot/database/`; shared flows stay in `workflows/`.
-4. **Operational visibility:** errors and important moderation events should be logged to configured destinations.
-5. **Performance:** use bounded fan-out for group-wide operations and avoid sequential I/O where safe.
+2. **Clear module boundaries:** handlers call helpers; database writes stay in `tcbot/database/`; shared flows stay in `workflows/`.
+3. **Operational visibility:** errors and important moderation events should be logged to configured destinations.
+4. **Performance:** use bounded fan-out for group-wide operations and avoid sequential I/O where safe.
 
 ## Current Priority Backlog
 
@@ -227,7 +206,7 @@ in.
 - **Do not overstate severity.** Already-validated input, idiomatic framework
   usage, and marginal micro-optimizations are not P1 or P2.
 - **Status** uses the values below. Use `Resolved` only when a fix has landed and
-  tests pass. Use `Dismissed` (with a reason) when verification shows the finding
+  validation passes. Use `Dismissed` (with a reason) when verification shows the finding
   is not a real issue.
 
 **Status values:**
@@ -235,14 +214,14 @@ in.
 - `Open`: logged, not started.
 - `Verified`: confirmed against the code.
 - `In Progress`: being worked on.
-- `Resolved`: fixed and tests pass.
+- `Resolved`: fixed and validated.
 - `Dismissed`: checked and not a real issue, with the reason in Evidence.
 
 **Priority tiers:**
 
 - **P1 (Critical):** security holes, data loss, crashes, or broken core moderation; fix before the next release.
-- **P2 (High):** incorrect behavior or untested critical logic such as auth and federation actions.
-- **P3 (Medium):** maintainability, partial test coverage, and non-hot-path performance.
+- **P2 (High):** incorrect behavior in critical logic such as auth and federation actions.
+- **P3 (Medium):** maintainability and non-hot-path performance.
 - **P4 (Low):** documentation gaps, minor cleanups, and naming.
 - **P5 (Optional / Future):** speculative or nice-to-have ideas; gather evidence before promoting them.
 
@@ -258,26 +237,25 @@ in.
 
 | # | Finding | Location (`file.py:line`) | Evidence (code quote / observed behavior) | Proposed Fix | Status |
 |--|--|--|--|--|--|
-| 1 | `check_flow.py` had zero test coverage | `tests/` (file absent) | No `tests/test_check_flow.py` existed; all `Check` class view builders (`profile`, `bans_list`, `ban_detail`, `warns_by_group`, `warns_in_group`, `kicks_list`, `mutes_list`, `appeals_list`) were untested | Add `tests/test_check_flow.py` with offline monkeypatched tests for every public method | `Resolved` |
+| _1_ | _Example finding_ | _`file.py:line`_ | _Quoted code or observed behavior_ | _Proposed fix_ | _Open_ |
 
 ### P3 (Medium)
 
 | # | Finding | Location (`file.py:line`) | Evidence (code quote / observed behavior) | Proposed Fix | Status |
 |--|--|--|--|--|--|
-| 1 | `uv run ruff` documented throughout `.agents/` but silently failed on Replit | `.agents/STYLE-CODE.md:17`, `.agents/TEST-RUFF.md:53` | `uv run ruff format .` exited with code 1 because ruff was in `[project.optional-dependencies.dev]`, which `uv run` does not install by default | Moved ruff to `[dependency-groups] dev = ["ruff"]` in `pyproject.toml`; `uv sync` now installs it automatically; `uv run ruff check .` and `uv run ruff format .` both pass clean | `Resolved` |
+| 1 | `uv run ruff` documented throughout `.agents/` but silently failed on Replit | `.agents/STYLE-CODE.md:17`, `.agents/RUFF.md:53` | `uv run ruff format .` exited with code 1 because ruff was in `[project.optional-dependencies.dev]`, which `uv run` does not install by default | Moved ruff to `[dependency-groups] dev = ["ruff"]` in `pyproject.toml`; `uv sync` now installs it automatically; `uv run ruff check .` and `uv run ruff format .` both pass clean | `Resolved` |
 
 ### P4 (Low)
 
 | # | Finding | Location (`file.py:line`) | Evidence (code quote / observed behavior) | Proposed Fix | Status |
 |--|--|--|--|--|--|
-| 1 | Stale test count in docs (300/25 instead of 319/26) | `README.md:180`, `AGENTS.md:192`, `replit.md:117`, `PLAN.md:21` | After adding `test_check_flow.py` (19 tests), all four docs still referenced the old "300 tests across 25 files" baseline | Update all four docs to "319 tests across 26 files" | `Resolved` |
-| 2 | `performance.yml` benchmark imported non-existent module `users_db` | `.github/workflows/performance.yml:49,68` | `from tcbot.database import users_db`: module was split and removed; correct module is `users_cache`; calls to `users_db.get_first_names_batch` and `users_db.get_mention_data_batch` would fail at import time | Replace both imports with `users_cache`; rename all call sites | `Resolved` |
-| 3 | `performance.yml` Compare-baseline script used `os.environ` without `import os` | `.github/workflows/performance.yml:207` | Python inline script imported only `sys`; `os.environ["GITHUB_OUTPUT"]` on regression would raise `NameError: os is not defined` | Add `import os` at top of script | `Resolved` |
-| 4 | `auto-fix.yml` schedule cron `0 4 * * 1` annotated as "02:00 UTC" | `.github/workflows/auto-fix.yml:10` | Comment read `# Weekly Monday 02:00 UTC` but cron fires at 04:00 UTC; same wrong time propagated to `README.md` and two places in `docs/workflows-guide.md` | Fix comment in YAML; update four documentation references | `Resolved` |
-| 5 | `docs/workflows-guide.md` and `README.md` described run-bot.yml as "Manual deployment" | `docs/workflows-guide.md:251`, `README.md:255` | `run-bot.yml` has `schedule: cron: "0 */4 * * *"`: it runs every 4 hours automatically; "Manual dispatch only" was wrong | Update overview line, section body, and README entry | `Resolved` |
-| 6 | `config.env.example` claimed `PORT=auto` lets system pick a free port | `config.env.example:31` | `parse_port()` returns 5000 for "auto"; no OS port discovery exists | Rewrite PORT comment to describe actual fallback behavior | `Resolved` |
-| 7 | `config.env.example` claimed `PROOFS/LOGS/LOGS_ERRORS/APPEALS=auto` creates forum threads | `config.env.example:57,65,73,81` | No forum-thread auto-creation code exists anywhere in `tcbot/`; these comments described non-existent functionality | Remove the four "auto" comment blocks; replace with accurate format guidance | `Resolved` |
-| 8 | 12 public functions had no docstrings | multiple files | `bold()`, `italic()`, `code()`, `link()`, `esc()`, `on_groups_details()`, `on_groups_simple()`, `on_help_menu()`, `on_helpc_main()`, `appeal_deep_link()`, `on_menu_groups()`, `on_menu_groups_simple()` had empty docstring slots | Add one-line docstrings to each | `Resolved` |
+| 1 | `performance.yml` benchmark imported non-existent module `users_db` | `.github/workflows/performance.yml:49,68` | `from tcbot.database import users_db`: module was split and removed; correct module is `users_cache`; calls to `users_db.get_first_names_batch` and `users_db.get_mention_data_batch` would fail at import time | Replace both imports with `users_cache`; rename all call sites | `Resolved` |
+| 2 | `performance.yml` Compare-baseline script used `os.environ` without `import os` | `.github/workflows/performance.yml:207` | Python inline script imported only `sys`; `os.environ["GITHUB_OUTPUT"]` on regression would raise `NameError: os is not defined` | Add `import os` at top of script | `Resolved` |
+| 3 | `auto-fix.yml` schedule cron `0 4 * * 1` annotated as "02:00 UTC" | `.github/workflows/auto-fix.yml:10` | Comment read `# Weekly Monday 02:00 UTC` but cron fires at 04:00 UTC; same wrong time propagated to `README.md` and two places in `docs/workflows-guide.md` | Fix comment in YAML; update four documentation references | `Resolved` |
+| 4 | `docs/workflows-guide.md` and `README.md` described run-bot.yml as "Manual deployment" | `docs/workflows-guide.md:251`, `README.md:255` | `run-bot.yml` has `schedule: cron: "0 */4 * * *"`: it runs every 4 hours automatically; "Manual dispatch only" was wrong | Update overview line, section body, and README entry | `Resolved` |
+| 5 | `config.env.example` claimed `PORT=auto` lets system pick a free port | `config.env.example:31` | `parse_port()` returns 5000 for "auto"; no OS port discovery exists | Rewrite PORT comment to describe actual fallback behavior | `Resolved` |
+| 6 | `config.env.example` claimed `PROOFS/LOGS/LOGS_ERRORS/APPEALS=auto` creates forum threads | `config.env.example:57,65,73,81` | No forum-thread auto-creation code exists anywhere in `tcbot/`; these comments described non-existent functionality | Remove the four "auto" comment blocks; replace with accurate format guidance | `Resolved` |
+| 7 | 12 public functions had no docstrings | multiple files | `bold()`, `italic()`, `code()`, `link()`, `esc()`, `on_groups_details()`, `on_groups_simple()`, `on_help_menu()`, `on_helpc_main()`, `appeal_deep_link()`, `on_menu_groups()`, `on_menu_groups_simple()` had empty docstring slots | Add one-line docstrings to each | `Resolved` |
 
 ### P5 (Optional / Future)
 
@@ -293,21 +271,12 @@ in.
 - Keep database schema changes backward-compatible unless a migration plan is included.
 - Keep bot messages HTML-only and escape user-provided text through formatter helpers.
 - Keep conversation files named `*_flow.py`.
-- Keep tests offline and deterministic.
 
 ## Recent Documentation Baseline
 
-This documentation pass updates the root Markdown files to reflect the current project stack, runtime flow, configuration model, test inventory, and deployment guidance:
+This documentation pass updates the root Markdown files to reflect the current project stack, runtime flow, configuration model, and deployment guidance:
 
 - `AGENTS.md`
 - `README.md`
 - `PLAN.md`
 - `replit.md`
-
-Validation used for this baseline:
-
-```bash
-uv run --extra test pytest --collect-only -q
-```
-
-Result: 1492 tests collected across 71 test files.

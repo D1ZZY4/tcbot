@@ -19,7 +19,7 @@ For user-facing setup, see [`../README.md`](../README.md). For contributor rules
 | [Button styles](button-styles.md) | Inline keyboard layout and callback-data naming conventions. |
 | [Git commit style](git-commit.md) | Commit message conventions for this repository. |
 | [Performance notes](performance.md) | Batch query patterns, optimization rules, and benchmarking. |
-| [GitHub Actions workflows](workflows-guide.md) | All 7 CI/CD workflows: auto-fix PR, dependency updates, performance regression, TDD verification, CodeQL, and bot deployment. |
+| [GitHub Actions workflows](workflows-guide.md) | All 5 CI/CD workflows: auto-fix PR, dependency updates, performance regression, CodeQL, and bot deployment. |
 
 ## Detailed feature guides
 
@@ -69,7 +69,6 @@ Runtime starts with `uv run python -m tcbot` (or `uv run python -m tcbot`). The 
 
 ```bash
 uv sync
-uv run --extra test pytest tests/ -v
 uv run ruff format .
 uv run ruff check --fix .
 uv run python -m tcbot

@@ -1,6 +1,6 @@
 ---
 name: debug-investigator
-description: Broad debugging sub-agent for test failures, runtime errors, bad logs, broken workflows, and unexpected behavior. Use when the main agent needs root-cause analysis before editing.
+description: Broad debugging sub-agent for runtime errors, bad logs, broken workflows, and unexpected behavior. Use when the main agent needs root-cause analysis before editing.
 ---
 
 # Debug Investigator

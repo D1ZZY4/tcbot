@@ -22,9 +22,8 @@ TCF Bot is a Python 3.12 Telegram moderation bot built with:
 - Flask for the keep-alive health endpoint
 - `uv` for dependency management
 - Ruff for formatting and linting
-- pytest + pytest-asyncio for offline tests
 
-Main source code lives in `tcbot/`, offline tests live in `tests/`, developer docs live in `docs/`, and agent/contributor rules live in `.agents/`.
+Main source code lives in `tcbot/`, developer docs live in `docs/`, and agent/contributor rules live in `.agents/`.
 
 ## When To Use
 
@@ -40,9 +39,9 @@ Prefer a more specific local skill when available:
 
 - Use `project-policy` before editing TCBot source code.
 - Use `telegram-bot-builder` for PTB handlers and Telegram UX.
-- Use `async-python-patterns` for async handlers, cancellation, fan-out, and pytest-asyncio tests.
+- Use `async-python-patterns` for async handlers, cancellation, and fan-out.
 - Use `mongodb-query-optimizer` for database query/index performance.
-- Use `python-code-quality` for Ruff, pytest, typing, and quality gates.
+- Use `python-code-quality` for Ruff, typing, and quality gates.
 - Use `mermaid-diagrams` for diagrams.
 - Use `docs-maintainer` for any Markdown documentation update or reorganization.
 - Use `runtime-debugger` for startup, polling, MongoDB, or keep-alive runtime issues.
@@ -50,11 +49,11 @@ Prefer a more specific local skill when available:
 
 ## Workflow
 
-1. Inspect relevant files, symbols, tests, and configuration before making changes.
+1. Inspect relevant files, symbols, and configuration before making changes.
 2. Check `git status` and avoid overwriting user work.
 3. Form a small plan that targets the root cause instead of symptoms.
 4. Make minimal, focused edits consistent with the surrounding style.
-5. Update directly related tests or docs when behavior changes.
+5. Update directly related docs when behavior changes.
 6. Validate with the most specific command first, then broader checks when practical.
 7. Summarize changed files, validation results, and any remaining risks.
 
@@ -70,7 +69,6 @@ Prefer a more specific local skill when available:
   - workflows: `tcbot/modules/helper/workflows/*_flow.py`
   - database helpers: `tcbot/database/*_db.py`
   - utilities: `tcbot/utils/`
-  - tests: `tests/`
 - Keep bot messages HTML-only and escape user-controlled text with formatter helpers.
 - Use `tcbot.utils.dispatch.fan_out()` for multi-group Telegram API fan-out.
 - Use `tcbot.utils.timedate_format` helpers for UTC time.
@@ -82,8 +80,6 @@ Choose commands based on the scope:
 ```bash
 uv run ruff check .
 uv run ruff format .
-uv run --extra test pytest tests/ -q
-uv run --extra test pytest --collect-only -q
 uv run python -m tcbot
 ```
 
@@ -91,7 +87,6 @@ Notes:
 
 - On Windows, `python` may be available when `python3` is not.
 - Long-running bot startup should be run with a timeout during agent validation.
-- If `uv sync` is run without `--extra test`, pytest dependencies may be removed from the environment.
 
 ## Communication Style
 

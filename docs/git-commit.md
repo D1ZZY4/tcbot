@@ -48,7 +48,6 @@ the subject, lowercase, followed by a colon and a space.
 | `fix:` | Bug fixes |
 | `refactor:` | Behavior-preserving code restructuring |
 | `docs:` | Documentation-only changes |
-| `test:` | Test-only changes |
 | `chore:` | Maintenance, tooling, dependency updates |
 | `perf:` | Performance improvements with no behavior change |
 | `security:` | Security fixes or hardening |
@@ -60,7 +59,6 @@ You may add a scope in parentheses to narrow context:
 feat(ban): Add auto-demote on ban for federation role holders
 fix(appeal): Handle missing review timestamp
 refactor(database): Extract all mongo queries from handlers
-test(warn): Add edge cases for concurrent warn flow
 docs(architecture): Update Mermaid diagrams to reflect new structure
 chore(deps): Bump python-telegram-bot to 22.5
 security(auth): Enforce resolve_and_check on unguarded handler
@@ -142,25 +140,18 @@ Signed-off-by: Dizzy <176969112+D1ZZY4@users.noreply.github.com>
 
 ## Before Committing
 
-For code changes, run targeted validation first, then broader checks:
+For code changes, run formatting and lint checks first:
 
 ```bash
 uv run ruff format .
 uv run ruff check --fix .
-uv run --extra test pytest --tb=short -q
-```
-
-For documentation-only changes, a collection check is usually enough:
-
-```bash
-uv run --extra test pytest --collect-only -q
 ```
 
 When the change touches `pyproject.toml`, module structure, or entry points,
 also run:
 
 ```bash
-uv sync --extra test
+uv sync
 uv pip install -e .
 uv run python -c "import tcbot; print('import OK')"
 ```

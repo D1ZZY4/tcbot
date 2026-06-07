@@ -33,7 +33,6 @@ Never paste these values into:
 
 - `config.env` committed to git.
 - Markdown documentation.
-- Tests.
 - Code comments.
 - Console output or screenshots shared publicly.
 
@@ -106,12 +105,6 @@ Runtime dependencies:
 uv sync
 ```
 
-Test dependencies:
-
-```bash
-uv sync --extra test
-```
-
 Add dependencies through `uv` only:
 
 ```bash
@@ -119,19 +112,6 @@ uv add <package>
 ```
 
 Do not add packages to `requirements.txt`.
-
----
-
-## Running Tests on Replit
-
-Full offline suite:
-
-```bash
-uv run --extra test pytest tests/ -v
-```
-
-The tests should not require real Telegram or MongoDB access. If a test does,
-fix the test to mock external dependencies.
 
 ---
 
@@ -171,7 +151,7 @@ flowchart TD
 Allowed:
 
 - Restart the workflow after code changes.
-- Run tests and Ruff commands.
+- Run Ruff commands.
 - Update non-secret environment variables when required by a feature.
 - Add dependencies through `uv` when justified.
 

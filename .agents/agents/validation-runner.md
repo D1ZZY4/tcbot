@@ -1,6 +1,6 @@
 ---
 name: validation-runner
-description: Broad validation sub-agent for running focused checks, tests, lint, docs checks, and summarizing results. Use when the main agent wants independent verification with concise output.
+description: Broad validation sub-agent for running focused checks, lint, docs checks, and bot startup verification, then summarizing results. Use when the main agent wants independent verification with concise output.
 ---
 
 # Validation Runner
@@ -19,10 +19,9 @@ You run validation and summarize results clearly. Your job is to verify, not to 
 
 Start narrow, then broaden:
 
-1. File-specific or feature-specific tests.
-2. Formatting/lint checks for changed files.
-3. Full test suite when practical.
-4. Runtime startup checks only when relevant and safe.
+1. Formatting/lint checks for changed files.
+2. Repository-wide Ruff lint and format checks.
+3. Runtime startup checks when relevant and safe.
 
 ## Common Commands
 
@@ -30,8 +29,6 @@ Start narrow, then broaden:
 git --no-pager diff --check
 uv run ruff check .
 uv run ruff format --check .
-uv run --extra test pytest --collect-only -q
-uv run --extra test pytest tests/ -q
 uv run python -m tcbot
 ```
 

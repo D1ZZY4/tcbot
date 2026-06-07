@@ -2,6 +2,25 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-08 (session 31)
+
+### Removed
+
+- Removed all tests: deleted the entire `tests/` directory (70 `test_*.py` files plus `conftest.py`, `__init__.py`, `__pycache__/`) and the `.pytest_cache/` directory.
+- Removed the test CI workflows `.github/workflows/run-tdd.yml` and `.github/workflows/verification.yml`.
+- Removed `pytest` and `pytest-asyncio` dependencies, the `[project.optional-dependencies] test` group, and the `[tool.pytest.ini_options]` block from `pyproject.toml`. Ruff is kept as the linter.
+- Removed the `.pytest_cache/` entry from `.gitignore`.
+- Deleted the test-only memory files `.agents/memory/conv-handler-test-patterns.md` and `.agents/memory/replit-test-runner.md` (and their index rows in `.agents/memory/MEMORY.md`).
+
+### Changed
+
+- Removed test steps from mixed CI workflows while keeping their other functionality: `dependency-update.yml` (kept dependency update + auto-PR + Telegram notification, dropped the test run and the "issue on test failure" path) and `performance.yml` (`uv sync --extra test` → `uv sync`).
+
+### Documentation
+
+- Removed test-related content from the prompt files `nothing.md` and `nothing-2.md` (dropped the test verification step and renumbered the sequence, removed the testing-guidelines section, and cleaned scattered test references) while keeping the rest of each prompt intact.
+- Removed test-related content from all documentation across `docs/`, the repo root (`README.md`, `PLAN.md`, `AGENTS.md`, `replit.md`), and `.agents/` (rules, skills, sub-agents, memory) without deleting any files. Ruff/lint/validation content was preserved throughout. `.agents/TEST-RUFF.md` was kept and renamed to `.agents/RUFF.md` (now a Ruff/validation reference); all references were updated.
+
 ## [Unreleased] - 2026-06-06 (session 30)
 
 ### Refactored

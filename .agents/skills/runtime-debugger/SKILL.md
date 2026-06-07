@@ -38,12 +38,6 @@ Install runtime dependencies:
 uv sync
 ```
 
-Install test dependencies too:
-
-```bash
-uv sync --extra test
-```
-
 Start the bot through uv:
 
 ```bash
@@ -85,7 +79,7 @@ Interpret common failures:
 | `InvalidToken` / token `xx` | `BOT_TOKEN` placeholder or revoked token | Check `config.env` active `BOT_TOKEN` line, masked. |
 | `BOT_TOKEN is required` | env var missing | Confirm `config.env` path and variable name. |
 | MongoDB auth/network error | bad URI, IP allowlist, cluster down | Check masked `MONGODB_URI`, Atlas network access. |
-| import error while loading module | syntax/import issue in module | Run Ruff/tests and inspect module loader logs. |
+| import error while loading module | syntax/import issue in module | Run Ruff and inspect module loader logs. |
 | address already in use | Flask port conflict | Change `PORT` or stop existing process. |
 
 ## Config Loading Checks
@@ -116,7 +110,7 @@ Do not paste real secrets into final output.
 3. Separate harmless warnings from fatal errors.
 4. Check config shape without leaking values.
 5. If the issue is code-related, inspect the relevant module before editing.
-6. Validate after changes with startup, Ruff, and focused tests when practical.
+6. Validate after changes with startup and Ruff when practical.
 
 ## Notes About Warnings
 

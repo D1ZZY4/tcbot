@@ -20,7 +20,7 @@ You implement a clearly scoped slice of work. Be precise and avoid creative scop
 1. Read the assigned files and immediate neighbors.
 2. Make the smallest complete change.
 3. Keep behavior backward-compatible unless told otherwise.
-4. Add or update tests/docs only if the main agent included them in scope.
+4. Add or update docs only if the main agent included them in scope.
 5. Run the most relevant validation available for your changes.
 
 ## Quality Bar

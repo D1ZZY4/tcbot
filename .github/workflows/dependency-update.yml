@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   update-dependencies:
-    name: Update and test dependencies
+    name: Update dependencies
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -54,27 +54,10 @@ jobs:
 
       - name: Install updated dependencies
         if: steps.update.outputs.has_updates == 'true'
-        run: uv sync --extra test --frozen
+        run: uv sync --frozen
 
-      - name: Run tests with updated deps
+      - name: Create PR
         if: steps.update.outputs.has_updates == 'true'
-        id: test
-        env:
-          BOT_TOKEN: "test:token"
-          MONGODB_URI: "mongodb://localhost:27017"
-          DB_NAME: "tcbot_test"
-          COMMUNITY_NAME: "TCF"
-          OWNER_ID: "123456"
-          LOGS: "-1001000000001"
-          PROOFS: "-1001000000002"
-          APPEALS: "-1001000000003"
-        run: |
-          uv run --extra test pytest tests/ -q 2>&1 | tee test.log
-          echo "test_exit=$?" >> "$GITHUB_OUTPUT"
-        continue-on-error: true
-
-      - name: Create PR if tests pass
-        if: steps.update.outputs.has_updates == 'true' && steps.test.outputs.test_exit == '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -88,7 +71,6 @@ jobs:
           git commit -m "chore: Update dependencies
 
           Auto-updated by GitHub Actions
-          All tests passing with new versions
 
           $(cat changes.md)"
 
@@ -101,48 +83,13 @@ jobs:
 
           This PR updates project dependencies to their latest compatible versions.
 
-          ### Test Results
-          ✅ All tests passing with updated dependencies
-
           ### Changes
           $(cat changes.md)
-
-          ### Test Log
-          \`\`\`
-          $(cat test.log | tail -50)
-          \`\`\`
-
-          **Safe to merge** - all tests pass with new versions.
           EOF
           )" \
             --label "dependencies" \
             --base main \
             --head "$BRANCH"
-
-      - name: Create issue if tests fail
-        if: steps.update.outputs.has_updates == 'true' && steps.test.outputs.test_exit != '0'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh issue create \
-            --title "Dependency update failed tests" \
-            --body "$(cat <<EOF
-          ## ⚠️ Dependency Update Failed
-
-          Attempted to update dependencies but tests failed with new versions.
-
-          ### Changes
-          $(cat changes.md)
-
-          ### Test Failures
-          \`\`\`
-          $(cat test.log | tail -100)
-          \`\`\`
-
-          **Action needed:** Review the test failures and update dependencies manually.
-          EOF
-          )" \
-            --label "dependencies,bug"
 
       - name: Telegram notification
         if: always() && steps.update.outputs.has_updates == 'true'
@@ -159,14 +106,10 @@ jobs:
           if not token or not owner_id or token.startswith("test:"):
               sys.exit(0)
 
-          test_exit = "${{ steps.test.outputs.test_exit }}"
-          status = "✅ PASS" if test_exit == "0" else "❌ FAIL"
-          action = "PR created" if test_exit == "0" else "Issue created"
-
           text = (
-              f"<b>🔄 Dependency Update - {status}</b>\n\n"
-              f"Dependencies updated and tested\n"
-              f"Result: {action}\n\n"
+              "<b>🔄 Dependency Update</b>\n\n"
+              "Dependencies updated\n"
+              "Result: PR created\n\n"
               f'<a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View workflow</a>'
           )
 

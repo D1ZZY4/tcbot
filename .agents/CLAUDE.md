@@ -2,7 +2,7 @@
 
 Read this file completely before making any change to this repository. It is the canonical project reference for AI coding agents. The other files in `.agents/` expand specific topics and must stay consistent with this file.
 
-For project rules and hard constraints, see [`RULES.md`](RULES.md). For code style, see [`STYLE-CODE.md`](STYLE-CODE.md). For comment conventions, see [`STYLE-COMMENTS.md`](STYLE-COMMENTS.md). For development workflow, see [`WORKFLOW.md`](WORKFLOW.md). For testing and Ruff commands, see [`TEST-RUFF.md`](TEST-RUFF.md). For Replit deployment, see [`REPLIT.md`](REPLIT.md). For top-level project guide, see [`../AGENTS.md`](../AGENTS.md). For developer documentation, see [`../docs/README.md`](../docs/README.md).
+For project rules and hard constraints, see [`RULES.md`](RULES.md). For code style, see [`STYLE-CODE.md`](STYLE-CODE.md). For comment conventions, see [`STYLE-COMMENTS.md`](STYLE-COMMENTS.md). For development workflow, see [`WORKFLOW.md`](WORKFLOW.md). For Ruff commands and validation, see [`RUFF.md`](RUFF.md). For Replit deployment, see [`REPLIT.md`](REPLIT.md). For top-level project guide, see [`../AGENTS.md`](../AGENTS.md). For developer documentation, see [`../docs/README.md`](../docs/README.md).
 
 Compatible with: Claude, Replit AI, Gemini, Qwen, GitHub Copilot, and any AI coding agent.
 
@@ -28,9 +28,9 @@ Every new conversation **must start by reading** the following files. The user s
 
 | Folder | Read when |
 |---|---|
-| [`.agents/`](.) | Any code or doc work; see siblings: STYLE-CODE, STYLE-COMMENTS, WORKFLOW, TEST-RUFF, REPLIT |
+| [`.agents/`](.) | Any code or doc work; see siblings: STYLE-CODE, STYLE-COMMENTS, WORKFLOW, RUFF, REPLIT |
 | [`docs/`](../docs/) | Architecture, modules, helpers, databases, utils, workflows, detailed feature guides |
-| [`docs/workflows-guide.md`](../docs/workflows-guide.md) | CI/CD automation: auto-fix PR, dependency updates, performance, TDD verification |
+| [`docs/workflows-guide.md`](../docs/workflows-guide.md) | CI/CD automation: auto-fix PR, dependency updates, performance |
 | [`README.md`](../README.md) | User-facing setup and feature list |
 | [`replit.md`](../replit.md) | Replit/hosted deployment |
 
@@ -48,7 +48,7 @@ The user does not want to type "use the X skill" every time. If a task matches a
 
 | Skill | Auto-trigger when |
 |---|---|
-| [`project-policy`](skills/project-policy/SKILL.md) | About to write, edit, or generate ANY code under `tcbot/` (handlers, db helpers, workflows, utilities, tests, config) |
+| [`project-policy`](skills/project-policy/SKILL.md) | About to write, edit, or generate ANY code under `tcbot/` (handlers, db helpers, workflows, utilities, config) |
 | [`docs-maintainer`](skills/docs-maintainer/SKILL.md) | About to update, fill in, review, or reorganize any Markdown in this repo |
 | [`telegram-bot-builder`](skills/telegram-bot-builder/SKILL.md) | About to add or modify a Telegram handler, ConversationHandler, or PTB-specific code |
 | [`mongodb-query-optimizer`](skills/mongodb-query-optimizer/SKILL.md) | About to write a MongoDB query, index, aggregation, or modify `tcbot/database/*_db.py` |
@@ -80,7 +80,7 @@ Sub-agent quick guide (read prompt before delegating):
 | [`implementation-helper`](agents/implementation-helper.md) | A clearly-spec'd feature implementation that can run independently |
 | [`project-explorer`](agents/project-explorer.md) | Open-ended codebase research where the answer needs many file reads |
 | [`review-guardian`](agents/review-guardian.md) | Independent review of a finished change before commit |
-| [`validation-runner`](agents/validation-runner.md) | Running and parsing tests / Ruff / build for a finished change |
+| [`validation-runner`](agents/validation-runner.md) | Running and parsing Ruff / build for a finished change |
 
 For anything that one focused agent can finish in a few tool calls, **do not spawn a sub-agent**. The user prefers a slightly slower main agent to a fast-but-noisy sub-agent fleet.
 
@@ -97,7 +97,7 @@ Every change (code, docs, workflows, refactors, bug fixes) **must update the rel
 | File | Update with |
 |---|---|
 | [`CHANGELOG.md`](../CHANGELOG.md) | An entry under `[Unreleased]` describing what changed and why. Group under Added / Changed / Fixed / Removed / Documentation as appropriate. Be specific about file paths and behavior. |
-| [`PLAN.md`](../PLAN.md) | If the change affects runtime, project state, priorities, or known risks. Update test inventory counts when tests are added/removed. |
+| [`PLAN.md`](../PLAN.md) | If the change affects runtime, project state, priorities, or known risks. |
 
 **Update when relevant:**
 
@@ -120,10 +120,10 @@ Every change (code, docs, workflows, refactors, bug fixes) **must update the rel
 ## [Unreleased] - YYYY-MM-DD
 
 ### Fixed
-- **Short title** (`path/to/file.py`): What changed, why it matters, and the user-visible effect. Include the symptom (e.g. "caused NameError in 4 tests") so future readers understand the impact.
+- **Short title** (`path/to/file.py`): What changed, why it matters, and the user-visible effect. Include the symptom (e.g. "caused NameError in `stats_flow.py` drill-downs") so future readers understand the impact.
 ```
 
-Skipping the doc sweep is a defect of the same severity as a failing test. The user should not have to ask "did you update the CHANGELOG?"; that question is a sign you failed.
+Skipping the doc sweep is a serious defect. The user should not have to ask "did you update the CHANGELOG?"; that question is a sign you failed.
 
 ---
 
@@ -143,7 +143,6 @@ connected groups, per-group moderation, and audit logging.
 | Entry point | `uv run python -m tcbot` |
 | Dependencies | `uv`, `pyproject.toml`, `uv.lock` |
 | Formatter/linter | Ruff (`uv run ruff format .`, `uv run ruff check --fix .`) |
-| Tests | `uv run --extra test pytest tests/ -v`, offline tests |
 
 Secrets are never committed. On Replit, put `BOT_TOKEN` and `MONGODB_URI` in
 Replit Secrets. For local development, use a gitignored `config.env` copied from
@@ -157,7 +156,6 @@ Replit Secrets. For local development, use a gitignored `config.env` copied from
 tgbot/
 ├── .agents/                         AI-agent policy and workflow docs
 ├── docs/                           Human-facing architecture and module docs
-├── tests/                          Offline pytest suite
 ├── tcbot/
 │   ├── __init__.py                 Configs dataclass + global cfg adapter
 │   ├── __main__.py                 Startup, handlers, polling, error handling
@@ -182,7 +180,7 @@ tgbot/
 │   │   └── *.py                    Dynamic modules exposing `__handlers__`
 │   └── utils/                      Dispatch, logging, prefixes, datetime helpers
 ├── config.env.example              Environment template; no real secrets
-├── pyproject.toml                  Python metadata, Ruff, pytest config
+├── pyproject.toml                  Python metadata, Ruff config
 └── uv.lock                         Locked dependencies
 ```
 
@@ -195,7 +193,6 @@ tgbot/
 3. Search for existing helpers before adding new logic.
 4. Preserve backward compatibility with existing MongoDB data.
 5. Never expose, move, or hardcode secrets.
-6. For code changes, run the most relevant tests before and after when possible.
 
 For documentation-only work, do not edit code to make docs match old behavior.
 Instead, document the current canonical policy and note validation limitations.
@@ -560,18 +557,12 @@ Keep responses clear, English-only, HTML formatted, and short.
 
 ---
 
-## Testing and Quality Commands
+## Quality Commands
 
 Install dependencies:
 
 ```bash
 uv sync
-```
-
-Run tests:
-
-```bash
-uv run --extra test pytest tests/ -v
 ```
 
 Format and lint:
@@ -587,7 +578,7 @@ uv run ruff check --fix .
 
 - Never commit `config.env` or real credentials.
 - Never paste bot tokens, MongoDB URIs, passwords, API keys, or webhook secrets
-  into docs, code, tests, logs, or comments.
+  into docs, code, logs, or comments.
 - Use environment variables for all secrets.
 - On Replit, store production secrets in Replit Secrets.
 - `config.env.example` may contain placeholder values only.
@@ -674,7 +665,7 @@ Whenever you rename, move, or replace an internal API, **update every reference 
 Steps every refactor must perform:
 
 1. Rename / move / replace the API.
-2. Run `uv run ruff check --fix . && uv run ruff format . && uv run --extra test pytest tests/ -q` and fix anything that breaks.
+2. Run `uv run ruff check --fix . && uv run ruff format .` and fix anything that breaks.
 3. Grep the entire repo for the **old** name (and any obvious aliases): every match is a doc to update or delete:
    ```bash
    grep -RIn 'old_name\|old.module\|old/path' agents docs PLAN.md AGENTS.md README.md .agents
@@ -683,7 +674,7 @@ Steps every refactor must perform:
 5. When you delete an API, remove every doc reference to it. Do not leave "see also" stubs pointing at vanished symbols.
 6. Restart the bot and confirm clean startup before declaring done.
 
-Skipping the doc sweep is a defect of the same severity as a failing test.
+Skipping the doc sweep is a serious defect.
 
 ---
 
@@ -694,6 +685,6 @@ Skipping the doc sweep is a defect of the same severity as a failing test.
 | `.agents/RULES.md` | Hard constraints and forbidden actions |
 | `.agents/STYLE-CODE.md` | Python style, imports, typing, handlers |
 | `.agents/STYLE-COMMENTS.md` | Comments, docstrings, section dividers |
-| `.agents/TEST-RUFF.md` | Test, Ruff, and validation workflow |
+| `.agents/RUFF.md` | Ruff and validation workflow |
 | `.agents/WORKFLOW.md` | Development process, commits, deployment checks |
 | `.agents/REPLIT.md` | Replit-specific run, secrets, and port guidance |

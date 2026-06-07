@@ -26,7 +26,6 @@ TCF Bot is a Telegram federation management bot for the Transsion Core Federatio
 | Configuration | Environment variables, with `python-dotenv` loading local `config.env` |
 | Dependency manager | `uv` with `uv.lock` |
 | Formatting/linting | Ruff |
-| Tests | pytest + pytest-asyncio offline suite |
 
 ## Quick Start
 
@@ -34,12 +33,6 @@ TCF Bot is a Telegram federation management bot for the Transsion Core Federatio
 
 ```bash
 uv sync
-```
-
-For tests, include the optional test dependencies:
-
-```bash
-uv sync --extra test
 ```
 
 ### 2. Configure environment
@@ -154,35 +147,16 @@ tgbot/
 │   │   └── helper/           Formatters, decorators, keyboards, workflows
 │   │       └── workflows/    Conversation flows (`*_flow.py`)
 │   └── utils/                Logging, prefixes, dispatch, datetime helpers
-├── tests/                    Offline pytest tests
 ├── docs/                     Developer subsystem documentation
 ├── .agents/                   Detailed agent and contributor rules
 ├── config.env.example        Environment template
 ├── docker-compose.yml        Bot + MongoDB local compose setup
-├── pyproject.toml            Project metadata, dependencies, pytest, Ruff
+├── pyproject.toml            Project metadata, dependencies, Ruff
 ├── uv.lock                   Locked dependency graph
 ├── AGENTS.md                 Project guide for .agents/contributors
 ├── PLAN.md                   Current project state and improvement plan
 └── replit.md                 Replit deployment notes
 ```
-
-## Tests
-
-The current collected inventory is 1492 tests across 71 `tests/test_*.py` files. The suite is designed to run offline without a real Telegram token or MongoDB connection.
-
-Run the full suite:
-
-```bash
-uv run --extra test pytest tests/ -v
-```
-
-Collect tests only:
-
-```bash
-uv run --extra test pytest --collect-only -q
-```
-
-The pytest configuration lives in `pyproject.toml`. For testing guidelines, see [`AGENTS.md`](AGENTS.md#testing-guidelines). For TDD workflow, see [`docs/workflows-guide.md`](docs/workflows-guide.md).
 
 ## Code Quality
 
@@ -191,11 +165,11 @@ uv run ruff format .
 uv run ruff check --fix .
 ```
 
-Ruff targets Python 3.12 and line length 88. GitHub Actions install dependencies through `uv sync --frozen` / `uv sync --extra test --frozen` so CI follows `pyproject.toml` and `uv.lock`. Project code should follow the detailed rules in [`.agents/CLAUDE.md`](.agents/CLAUDE.md), [`.agents/RULES.md`](.agents/RULES.md), [`.agents/STYLE-CODE.md`](.agents/STYLE-CODE.md), and [`.agents/STYLE-COMMENTS.md`](.agents/STYLE-COMMENTS.md).
+Ruff targets Python 3.12 and line length 88. GitHub Actions install dependencies through `uv sync --frozen` so CI follows `pyproject.toml` and `uv.lock`. Project code should follow the detailed rules in [`.agents/CLAUDE.md`](.agents/CLAUDE.md), [`.agents/RULES.md`](.agents/RULES.md), [`.agents/STYLE-CODE.md`](.agents/STYLE-CODE.md), and [`.agents/STYLE-COMMENTS.md`](.agents/STYLE-COMMENTS.md).
 
 ## CI/CD & Automation
 
-The project uses **7 automated GitHub Actions workflows** for continuous integration, code quality, and maintenance:
+The project uses **5 automated GitHub Actions workflows** for continuous integration, code quality, and maintenance:
 
 ### Auto-Fix Code Quality
 **File:** `.github/workflows/auto-fix.yml`
@@ -210,12 +184,10 @@ Automatically fixes code style and linting issues with Ruff:
 ### Dependency Updates (Like Dependabot)
 **File:** `.github/workflows/dependency-update.yml`
 
-Weekly automated dependency updates with testing:
+Weekly automated dependency updates:
 - Runs every Monday 04:00 UTC
 - Executes `uv lock --upgrade` to update all dependencies
-- **Runs full test suite** with new versions
-- **Auto-creates PR** if tests pass
-- **Auto-creates issue** if tests fail
+- **Auto-creates PR** with the updated lockfile
 - **Telegram notifications** with results
 - Zero manual work for routine updates
 
@@ -229,22 +201,7 @@ Tracks performance metrics and detects regressions:
 - **Creates issues** on regressions in main branch
 - **Auto-updates baseline** on main branch pushes
 
-### TDD Verification & Reporting
-**File:** `.github/workflows/verification.yml`
-
-Enhanced test result aggregation and notifications:
-- Parses JUnit XML from multi-Python test matrix
-- Creates detailed GitHub summary with pass/fail/skip counts
-- **Auto-creates GitHub issues** on test failures
-- **Enhanced Telegram notifications** with:
-  - Pass/fail status indicators
-  - Commit SHA and branch name
-  - Detailed test counts
-  - Top 3 failing tests (on failure)
-  - Direct link to full report
-
 ### Other Workflows
-- **TDD Multi-Python Matrix** (`.github/workflows/run-tdd.yml`) - Tests across Python 3.12 and 3.13
 - **CodeQL** (`.github/workflows/codeql.yml`) - Security analysis
 - **Run Bot** (`.github/workflows/run-bot.yml`) - Scheduled 24/7 runner (hourly, 55-minute window per execution)
 
@@ -278,7 +235,6 @@ Configure in GitHub repository settings → Secrets:
 - Dependency management: `uv` and `uv.lock`.
 - Database: MongoDB/Motor with startup index creation.
 - Health check: Flask `GET /` endpoint on `PORT`.
-- Test inventory: 1492 collected tests across 71 files.
 - Secrets policy: use environment variables; never commit real tokens, MongoDB URIs, or private chat IDs.
 
 ## License

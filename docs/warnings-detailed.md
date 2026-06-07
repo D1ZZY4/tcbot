@@ -199,7 +199,7 @@ If `count >= WARN_LIMIT`:
 
 Important: this is a local group ban, not a federation-wide ban. It does not create a document in the `bans` collection and does not generate an appeal link.
 
-The test suite explicitly covers both auto-ban branches:
+Both auto-ban branches behave as follows:
 
 - On successful auto-ban, warnings are cleared.
 - On failed auto-ban, warnings are kept.
@@ -311,9 +311,9 @@ Cancel edits the prompt to say no action was taken.
 - `/tcunwarn` removes the latest warning only; use `/resetwarns` to clear all warnings.
 - Staff targets are protected only against `/tcwarn` when equal/higher ranked. Unwarn/reset proceed for Admin/Developer/Tester after a heads-up.
 
-## Testable scenarios
+## Behavior reference
 
-Useful scenarios for tests and manual verification:
+Key warning behaviors to keep in mind:
 
 1. Tester/Admin/Founder can start `/tcwarn`; unroled users cannot.
 2. `/tcwarn` without a target is rejected.

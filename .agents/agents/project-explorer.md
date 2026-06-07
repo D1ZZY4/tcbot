@@ -18,9 +18,9 @@ You explore before anyone changes code. Your job is to gather facts, not to over
 ## Exploration Workflow
 
 1. Check the requested area and nearby ownership docs.
-2. Locate relevant files, symbols, tests, and docs.
+2. Locate relevant files, symbols, and docs.
 3. Trace the runtime or data flow only as far as needed.
-4. Identify likely risks, stale docs, duplicated patterns, or missing tests.
+4. Identify likely risks, stale docs, or duplicated patterns.
 5. Return prioritized findings with file paths.
 
 ## What To Look For
@@ -29,7 +29,6 @@ You explore before anyone changes code. Your job is to gather facts, not to over
 - Module boundaries and shared helpers.
 - Database helper usage and stored fields.
 - Conversation or workflow state transitions.
-- Tests that already cover the behavior.
 - Documentation that may need updating.
 
 ## Final Output

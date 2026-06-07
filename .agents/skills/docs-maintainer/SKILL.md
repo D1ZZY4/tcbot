@@ -58,7 +58,6 @@ As of 2026-06-02, TCF Bot uses:
 - Flask keep-alive server
 - `uv` and `uv.lock`
 - Ruff
-- pytest + pytest-asyncio offline tests, currently 1078 tests across 69 files
 
 Recent project additions to keep accurate when editing docs:
 
@@ -66,15 +65,12 @@ Recent project additions to keep accurate when editing docs:
 - Batch query helpers in `tcbot/database/users_cache.py` (`get_user_mention_data`, `get_mention_data_batch`, `get_first_names_batch`).
 - Partial-name search in `tcbot.modules.helper.extraction.extract_target`; resolution order is reply → args (full ID/username) → args (partial DB search) → text mention → @mention.
 - Username field on `Identity` and `member_cache` indexes on `username` and `first_name`.
-- CI/CD workflows: `.github/workflows/auto-fix.yml` (auto-PR for Ruff fixes on the fixed `auto-fix/ruff` branch), `.github/workflows/dependency-update.yml` (weekly auto-PR like dependabot), `.github/workflows/performance.yml` (regression detection), enhanced `.github/workflows/verification.yml` (TDD verification with detailed failure output and Telegram notifications). All workflows are documented in [`docs/workflows-guide.md`](../../../docs/workflows-guide.md).
+- CI/CD workflows: `.github/workflows/auto-fix.yml` (auto-PR for Ruff fixes on the fixed `auto-fix/ruff` branch), `.github/workflows/dependency-update.yml` (weekly auto-PR like dependabot), `.github/workflows/performance.yml` (regression detection), `.github/workflows/run-bot.yml` (scheduled 24/7 runner), `.github/workflows/codeql.yml` (security scanning). All workflows are documented in [`docs/workflows-guide.md`](../../../docs/workflows-guide.md).
 
 Core commands:
 
 ```bash
 uv sync
-uv sync --extra test
-uv run --extra test pytest tests/ -q
-uv run --extra test pytest --collect-only -q
 uv run ruff check .
 uv run ruff format .
 uv run python -m tcbot
@@ -94,10 +90,9 @@ Suggested validation:
 
 ```bash
 git --no-pager diff --check
-uv run --extra test pytest --collect-only -q
 ```
 
-For docs-only changes, full test execution is usually not required unless documentation examples depend on generated code or test inventory.
+For docs-only changes, runtime validation is usually not required unless documentation examples depend on generated code.
 
 ## Detailed Guides
 
@@ -109,7 +104,7 @@ When updating `docs/*-detailed.md`, include:
 - database impact,
 - logging behavior,
 - edge cases,
-- test scenarios or validation hints.
+- validation hints.
 
 For current detailed feature docs, keep these topics accurate:
 

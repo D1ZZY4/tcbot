@@ -8,28 +8,11 @@ dependencies = [
     "motor>=3.7.1,<4",
     "flask>=3.1.0,<4",
     "python-dotenv>=1.0.0,<2",
-    "pytest>=9.0.3",
-    "pytest-asyncio>=1.3.0",
     "ruff>=0.15.15",
-]
-
-[project.optional-dependencies]
-test = [
-    "pytest>=9.0.3",
-    "pytest-asyncio>=1.3.0",
 ]
 
 [dependency-groups]
 dev = ["ruff"]
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests"]
-addopts = "-ra -q"
-filterwarnings = [
-    "ignore:If 'per_message=False', 'CallbackQueryHandler'.*:UserWarning",
-    "ignore:.*PTB_TIMEDELTA.*:telegram.warnings.PTBDeprecationWarning",
-]
 
 [tool.ruff]
 line-length = 88

@@ -20,10 +20,10 @@ Every new conversation in this repository must start by reading the canonical re
 **Update in the same turn after every change:**
 
 - [`CHANGELOG.md`](CHANGELOG.md): entry under `[Unreleased]` (Added / Changed / Fixed / Removed / Documentation)
-- [`PLAN.md`](PLAN.md): when runtime, project state, priorities, or test counts change
+- [`PLAN.md`](PLAN.md): when runtime, project state, or priorities change
 - Every related `docs/*.md`, `.agents/*.md`, [`README.md`](README.md), [`replit.md`](replit.md) whose content is now stale
 
-See [`.agents/CLAUDE.md`](.agents/CLAUDE.md#mandatory-read-these-files-before-any-work) for the complete read/update tables. Skipping either step is a defect of the same severity as a failing test.
+See [`.agents/CLAUDE.md`](.agents/CLAUDE.md#mandatory-read-these-files-before-any-work) for the complete read/update tables. Skipping either step is a serious defect.
 
 ## Skills and Sub-Agents Policy
 
@@ -43,7 +43,6 @@ Current stack:
 - Flask keep-alive / health-check server
 - `uv` for dependency management and lockfile-based installs
 - Ruff for formatting and lint checks
-- pytest + pytest-asyncio for offline tests
 
 ## Repository Layout
 
@@ -70,13 +69,12 @@ tgbot/
 │   │   └── helper/           Shared helper code and conversation workflows
 │   │       └── workflows/    ConversationHandler flows (`*_flow.py` only)
 │   └── utils/                Logging, dispatch, prefixes, datetime helpers
-├── tests/                    Offline pytest suite
 ├── docs/                     Developer documentation by subsystem
 ├── .agents/                   Detailed coding, workflow, and style rules
 ├── config.env.example        Environment variable template
 ├── docker-compose.yml        Local bot + MongoDB compose setup
 ├── Dockerfile                Container image definition
-├── pyproject.toml            Dependencies, pytest, and Ruff settings
+├── pyproject.toml            Dependencies and Ruff settings
 ├── uv.lock                   Locked dependency graph
 ├── README.md                 User-facing setup and architecture overview
 ├── PLAN.md                   Current project state and improvement plan
@@ -90,7 +88,6 @@ Core ownership rules:
 - Conversation flows live in `tcbot/modules/helper/workflows/` and must be named `*_flow.py`. See [`docs/workflows/workflows.md`](docs/workflows/workflows.md) for conversation internals.
 - MongoDB access lives in `tcbot/database/`; keep new database helpers in `*_db.py` files. See [`docs/databases/databases.md`](docs/databases/databases.md) for database layer notes.
 - Runtime utilities live in `tcbot/utils/`. See [`docs/utils/utils.md`](docs/utils/utils.md) for utility docs.
-- Tests live in `tests/` and should remain fully offline.
 
 ## Development Commands
 
@@ -100,22 +97,10 @@ Install dependencies from the lockfile:
 uv sync --frozen
 ```
 
-Install test extras when needed:
-
-```bash
-uv sync --extra test --frozen
-```
-
 Run the bot locally:
 
 ```bash
 uv run python -m tcbot
-```
-
-Run tests:
-
-```bash
-uv run --extra test pytest tests/ -v
 ```
 
 Format and lint:
@@ -182,26 +167,6 @@ Repository conventions:
 - Ban/kick flows must auto-demote users who currently hold a federation role.
 - New conversation logic belongs in `tcbot/modules/helper/workflows/*_flow.py`.
 
-## Testing Guidelines
-
-The test suite is designed to run offline without a real Telegram token or MongoDB connection. Add or update tests when changing database helpers, handler behavior, workflow logic, formatting helpers, decorators, or utilities.
-
-Current collected test inventory: 1492 tests across 71 `tests/test_*.py` files.
-
-Recommended validation after source changes:
-
-```bash
-uv run --extra test pytest tests/ -v
-uv run ruff format .
-uv run ruff check --fix .
-```
-
-For documentation-only changes, a test collection check is usually enough:
-
-```bash
-uv run --extra test pytest --collect-only -q
-```
-
 ## Commit and Pull Request Guidance
 
 For commit message conventions, see [`docs/git-commit.md`](docs/git-commit.md) for more details. For automated CI/CD and auto-PR workflows, see [`docs/workflows-guide.md`](docs/workflows-guide.md) for more details.
@@ -212,14 +177,13 @@ Use focused commits and conventional prefixes when appropriate:
 - `fix:` for bug fixes
 - `refactor:` for behavior-preserving code changes
 - `docs:` for documentation changes
-- `test:` for test-only changes
 - `chore:` for maintenance work
 
 Pull requests should include:
 
 - A short summary of the change.
 - For a long or detailed or short description submit to [`CHANGELOG.md`](CHANGELOG.md).
-- Test or validation commands run.
+- Validation commands run (e.g. Ruff format and lint).
 - Any configuration, database, or deployment impact.
 - Screenshots or log excerpts only when user-visible behavior changed.
 

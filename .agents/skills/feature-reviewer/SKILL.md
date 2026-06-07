@@ -1,6 +1,6 @@
 ---
 name: feature-reviewer
-description: Review project feature changes for correctness, security, tests, documentation, Telegram UX, database impact, and convention compliance.
+description: Review project feature changes for correctness, security, documentation, Telegram UX, database impact, and convention compliance.
 ---
 Last updated: 2026-05-29
 
@@ -23,7 +23,6 @@ Look for issues that matter in production:
 - unescaped HTML/user input,
 - unbounded multi-group API fan-out,
 - secrets or private IDs accidentally committed,
-- missing tests for changed behavior,
 - stale docs after behavior changes.
 
 Keep feedback practical. Prioritize actionable issues over style preferences.
@@ -58,20 +57,17 @@ Keep feedback practical. Prioritize actionable issues over style preferences.
 - Fan-out across groups uses `tcbot.utils.dispatch.fan_out()`.
 - Parallel `asyncio.gather()` calls are safe and do not hide required ordering.
 - Background tasks do not leave conversations in confusing states.
-- Tests use `AsyncMock` and offline fakes instead of real Telegram/MongoDB.
 
-### Documentation and Tests
+### Documentation
 
 - Behavior changes update related docs in `docs/`, `README.md`, or `.agents/` when appropriate.
-- New database helpers, formatters, decorators, workflows, or critical branches have tests.
-- Test commands use `uv run --extra test pytest ...` when pytest extras are needed.
-- The change adds an entry to [`CHANGELOG.md`](../../../CHANGELOG.md) under `[Unreleased]` and updates [`PLAN.md`](../../../PLAN.md) when project state, runtime, priorities, or test counts changed.
+- The change adds an entry to [`CHANGELOG.md`](../../../CHANGELOG.md) under `[Unreleased]` and updates [`PLAN.md`](../../../PLAN.md) when project state, runtime, or priorities changed.
 
 ### CI/CD and Workflows
 
 - Changes to `.github/workflows/*.yml` are documented in [`docs/workflows-guide.md`](../../../docs/workflows-guide.md).
 - Auto-fix workflow still creates a PR (does not commit directly to main) and uses the fixed `auto-fix/ruff` branch.
-- Dependency-update, performance, and verification workflows still gate on tests before opening a PR or issue.
+- Dependency-update, performance, and verification workflows still gate on validation before opening a PR or issue.
 - Telegram notifications still use `BOT_TOKEN`/`OWNER_ID` secrets and skip cleanly when absent.
 
 ## Review Workflow
@@ -89,7 +85,6 @@ Suggested commands:
 git --no-pager diff --stat
 git --no-pager diff --check
 uv run ruff check .
-uv run --extra test pytest tests/ -q
 ```
 
 ## Finding Format

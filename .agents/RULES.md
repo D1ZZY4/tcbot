@@ -1,8 +1,8 @@
 # Project Rules: TCF Bot
 
-Read [`CLAUDE.md`](CLAUDE.md) first. This file lists hard constraints for all AI agents and maintainers. These rules apply to code, tests, documentation, and configuration unless a task explicitly narrows the allowed scope.
+Read [`CLAUDE.md`](CLAUDE.md) first. This file lists hard constraints for all AI agents and maintainers. These rules apply to code, documentation, and configuration unless a task explicitly narrows the allowed scope.
 
-For code style enforcement, see [`STYLE-CODE.md`](STYLE-CODE.md). For comment conventions, see [`STYLE-COMMENTS.md`](STYLE-COMMENTS.md). For development workflow, see [`WORKFLOW.md`](WORKFLOW.md). For testing and validation commands, see [`TEST-RUFF.md`](TEST-RUFF.md).
+For code style enforcement, see [`STYLE-CODE.md`](STYLE-CODE.md). For comment conventions, see [`STYLE-COMMENTS.md`](STYLE-COMMENTS.md). For development workflow, see [`WORKFLOW.md`](WORKFLOW.md). For Ruff and validation commands, see [`RUFF.md`](RUFF.md).
 
 ---
 
@@ -19,12 +19,12 @@ These two rules are non-negotiable and apply to every task. The user should NEVE
 **After any work**, in the same turn:
 
 - Add an entry to [`CHANGELOG.md`](../CHANGELOG.md) under `[Unreleased]` (Added / Changed / Fixed / Removed / Documentation).
-- Update [`PLAN.md`](../PLAN.md) when the change affects runtime, project state, priorities, or test counts.
+- Update [`PLAN.md`](../PLAN.md) when the change affects runtime, project state, or priorities.
 - Update every related `docs/*.md`, `.agents/*.md`, `README.md`, or `replit.md` whose content is now stale.
 
 See the **MANDATORY** sections at the top of [`CLAUDE.md`](CLAUDE.md#mandatory-read-these-files-before-any-work) for the full read/update tables.
 
-Skipping either step is a defect of the same severity as a failing test.
+Skipping either step is a serious defect.
 
 ---
 
@@ -205,24 +205,16 @@ Rules:
 
 ---
 
-## Testing and Validation
+## Validation
 
-1. Run focused tests for changed behavior when possible.
-2. Run the full suite before merging code changes:
-
-   ```bash
-   uv run --extra test pytest tests/ -v
-   ```
-
-3. Run Ruff before finalizing code changes:
+1. Run Ruff before finalizing code changes:
 
    ```bash
    uv run ruff format .
    uv run ruff check --fix .
    ```
 
-4. Do not claim validation passed unless the command actually ran and passed.
-5. Tests must be offline and must mock Telegram/MongoDB/network dependencies.
+2. Do not claim validation passed unless the command actually ran and passed.
 
 ---
 
@@ -230,7 +222,7 @@ Rules:
 
 1. Never hardcode bot tokens, MongoDB URIs, passwords, API keys, or webhook
    secrets.
-2. Never add real secrets to docs, tests, code comments, examples, or logs.
+2. Never add real secrets to docs, code comments, examples, or logs.
 3. Never commit `config.env`.
 4. Do not expose internal IDs or links in public messages beyond what the feature
    requires.

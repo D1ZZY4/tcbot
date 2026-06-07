@@ -207,9 +207,9 @@ If editing the existing appeal log fails, the bot attempts to send a new log mes
 - If user DM notification fails during approval or rejection, the review/log operations still proceed because those calls use `asyncio.gather(..., return_exceptions=True)`.
 - If a ban was already deactivated before a decision, the review message is edited to show that the appeal is already resolved.
 
-## Testable scenarios
+## Behavior reference
 
-The current test suite includes pure appeal behavior checks in `tests/test_appeals_pure.py`. Important scenarios to keep covered are:
+Important appeal behaviors to keep in mind:
 
 1. `#appeal`, `#APPEAL`, and mixed-case tags are accepted.
 2. Text without a leading hash tag is rejected.

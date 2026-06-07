@@ -183,7 +183,7 @@ The unified `promoted` builder places the role as a field below the user (`Role:
 - DM notification failures are tolerated through `asyncio.gather(..., return_exceptions=True)` or explicit fallback logging; promotion still completes.
 - Pending requests are not deleted after approval/rejection; they are flagged with `status`, `resolved_date`, and `resolved_by`.
 
-## Testable scenarios
+## Behavior reference
 
 - Founder can promote any role directly.
 - Admin can promote Developer / Tester directly.

@@ -9,10 +9,9 @@ This page maps the repository structure and the service boundaries between packa
 ```text
 tgbot/
 ├── tcbot/                  Main Python package
-├── tests/                  Offline pytest suite
 ├── docs/                   Developer documentation
 ├── .agents/                 Contributor and agent rules
-├── pyproject.toml          Dependencies, pytest config, Ruff config
+├── pyproject.toml          Dependencies and Ruff config
 ├── uv.lock                 Locked dependency graph
 ├── config.env.example      Environment variable template
 ├── docker-compose.yml      Bot + MongoDB local stack

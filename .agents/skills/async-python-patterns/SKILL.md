@@ -1,6 +1,6 @@
 ---
 name: async-python-patterns
-description: Use when designing, reviewing, or debugging async Python code in TCBot, especially python-telegram-bot handlers, Motor/MongoDB helpers, bounded fan-out, cancellation, timeouts, and pytest-asyncio tests.
+description: Use when designing, reviewing, or debugging async Python code in TCBot, especially python-telegram-bot handlers, Motor/MongoDB helpers, bounded fan-out, cancellation, and timeouts.
 ---
 Last updated: 2026-05-29
 
@@ -9,7 +9,7 @@ Last updated: 2026-05-29
 
 Before invoking this skill, confirm the read/update rules in [`.agents/CLAUDE.md`](../../CLAUDE.md#mandatory-read-these-files-before-any-work). After any async-code change, update [`CHANGELOG.md`](../../../CHANGELOG.md) and the matching `docs/*.md` whose behavior changed in the same turn.
 
-Use this skill for asynchronous Python work in the TCF Bot codebase. The project runs on Python 3.12 with `python-telegram-bot[job-queue] == 22.5`, Motor/MongoDB, Flask keepalive, `uv`, Ruff, and offline `pytest` + `pytest-asyncio` tests.
+Use this skill for asynchronous Python work in the TCF Bot codebase. The project runs on Python 3.12 with `python-telegram-bot[job-queue] == 22.5`, Motor/MongoDB, Flask keepalive, `uv`, and Ruff.
 
 This skill is intentionally project-specific. Prefer the conventions below over generic asyncio examples.
 
@@ -22,7 +22,6 @@ Use this skill when the task involves:
 - Parallel Telegram API calls across connected groups.
 - Background jobs through `python-telegram-bot` job queue.
 - Conversation timeouts, cancellation, album debounce logic, or appeal/proof workflows.
-- Async unit tests using `pytest-asyncio`.
 - Debugging slow handlers, blocked polling, leaked tasks, or unawaited coroutine warnings.
 
 Do not use this skill for CPU-bound optimization unless the async code is directly affected. CPU-heavy work should be isolated or offloaded instead of running on the bot event loop.
@@ -35,7 +34,6 @@ Do not use this skill for CPU-bound optimization unless the async code is direct
 - Runtime entry point: `uv run python -m tcbot` on Windows, `uv run python -m tcbot` elsewhere.
 - Keepalive: Flask runs alongside the bot; do not add blocking work to keepalive routes.
 - Dependency workflow: `uv sync`, `uv run ...`.
-- Tests: offline `pytest` with `asyncio_mode = "auto"`.
 
 ## Core Rules
 
@@ -46,7 +44,6 @@ Do not use this skill for CPU-bound optimization unless the async code is direct
 5. Use `tcbot.utils.dispatch.fan_out()` for multi-group Telegram API operations.
 6. Preserve cancellation semantics: catch `asyncio.CancelledError` only to clean up, then re-raise.
 7. Use configured timeout values from `cfg` for workflows; do not hardcode proof or appeal timeouts.
-8. Test async behavior offline with fakes/mocks; never require a real bot token or MongoDB connection.
 
 ## Async Handler Pattern
 
@@ -240,36 +237,12 @@ await query.edit_message_text("Processing complete.", parse_mode="HTML")
 
 This avoids Telegram client spinners and keeps UX responsive.
 
-## Async Testing
-
-The project config enables `pytest-asyncio` auto mode, so async tests can be plain `async def` tests.
-
-```python
-async def test_get_group_returns_document(fake_groups_collection) -> None:
-    await fake_groups_collection.insert_one({"chat_id": -100123, "active": True})
-
-    group = await groups_db.get_group(-100123)
-
-    assert group is not None
-    assert group["active"] is True
-```
-
-Testing rules:
-
-- Keep tests offline: no real Telegram token, no real MongoDB, no network calls.
-- Fake PTB objects or call helper functions directly when possible.
-- Assert side effects and sent messages through mocks/fakes.
-- Include cancellation, timeout, or partial-failure cases when the change depends on them.
-
-Validation commands:
+## Validation
 
 ```bash
-uv run --extra test pytest tests/ -v
 uv run ruff format .
 uv run ruff check --fix .
 ```
-
-For focused changes, run the nearest test file first, then broaden.
 
 ## Review Checklist
 
@@ -282,7 +255,6 @@ Before finishing async work, verify:
 - Multi-group Telegram operations use `fan_out()`.
 - Exceptions are logged or reported where they affect moderation outcomes.
 - Cancellation is not swallowed.
-- Tests remain offline and deterministic.
 
 ## References
 

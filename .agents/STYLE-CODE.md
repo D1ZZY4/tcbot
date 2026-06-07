@@ -1,6 +1,6 @@
 # Code Style: TCF Bot
 
-Read [`CLAUDE.md`](CLAUDE.md) first. This file defines Python code style for TCF Bot. Use it together with [`RULES.md`](RULES.md) and [`STYLE-COMMENTS.md`](STYLE-COMMENTS.md). For development workflow, see [`WORKFLOW.md`](WORKFLOW.md). For testing and Ruff commands, see [`TEST-RUFF.md`](TEST-RUFF.md).
+Read [`CLAUDE.md`](CLAUDE.md) first. This file defines Python code style for TCF Bot. Use it together with [`RULES.md`](RULES.md) and [`STYLE-COMMENTS.md`](STYLE-COMMENTS.md). For development workflow, see [`WORKFLOW.md`](WORKFLOW.md). For Ruff commands and validation, see [`RUFF.md`](RUFF.md).
 
 ---
 
@@ -16,7 +16,6 @@ Commands:
 ```bash
 uv run ruff format .
 uv run ruff check --fix .
-uv run --extra test pytest tests/ -v
 ```
 
 ---

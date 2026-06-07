@@ -34,7 +34,6 @@ TCF Bot stores all MongoDB access behind domain helper modules:
 - Index changes should be made in `tcbot/database/mongos.py` inside `ensure_indexes()` so startup creates required indexes consistently.
 - Keep index creation idempotent. `ensure_indexes()` is called during application post-init after `connect()` and before handlers run.
 - Do not add direct collection calls to command modules as an optimization shortcut.
-- Keep tests offline; do not require a live MongoDB service for normal test validation.
 
 Current critical indexes in `ensure_indexes()` (verify against `tcbot/database/mongos.py` before recommending):
 
@@ -128,7 +127,7 @@ Use these rules when reviewing or proposing indexes:
 - Keep unique indexes for identity fields such as `user_id`, `chat_id`, `ban_id`, and request IDs when uniqueness is required.
 - For descending history views, include timestamp as `-1` after equality predicates.
 - Do not index low-cardinality fields alone, such as `status` or `is_active`, unless combined with selective fields.
-- Avoid direct module-level database calls to bypass helper overhead; the architecture cost is negligible compared with MongoDB I/O and keeps behavior testable.
+- Avoid direct module-level database calls to bypass helper overhead; the architecture cost is negligible compared with MongoDB I/O and keeps behavior predictable.
 - Consider cache invalidation and role-cache behavior when optimizing role, owner, admin, or group helpers.
 
 ## Motor Async Patterns

@@ -1,6 +1,6 @@
 ---
 name: python-code-quality
-description: Use when formatting, linting, typing, testing, or reviewing Python quality in TCBot with Python 3.12, Ruff, uv, pytest, pytest-asyncio, and the project's handler/database conventions.
+description: Use when formatting, linting, typing, or reviewing Python quality in TCBot with Python 3.12, Ruff, uv, and the project's handler/database conventions.
 ---
 Last updated: 2026-05-29
 
@@ -9,7 +9,7 @@ Last updated: 2026-05-29
 
 Before invoking this skill, confirm the read/update rules in [`.agents/CLAUDE.md`](../../CLAUDE.md#mandatory-read-these-files-before-any-work). After any code change, update [`CHANGELOG.md`](../../../CHANGELOG.md) and the matching `docs/*.md` in the same turn.
 
-Use this skill when improving or validating Python code quality in the TCF Bot repository. The project uses Python 3.12, `uv`, Ruff, `pytest`, and `pytest-asyncio`. It does not currently configure a separate type checker in `pyproject.toml`, so type-quality guidance should focus on clear annotations, Ruff-compatible style, and practical review rather than inventing a type-check command.
+Use this skill when improving or validating Python code quality in the TCF Bot repository. The project uses Python 3.12, `uv`, and Ruff. It does not currently configure a separate type checker in `pyproject.toml`, so type-quality guidance should focus on clear annotations, Ruff-compatible style, and practical review rather than inventing a type-check command.
 
 ## When to Use This Skill
 
@@ -17,7 +17,6 @@ Use this skill when the task mentions or involves:
 
 - Ruff formatting or lint diagnostics.
 - Python import sorting, unused imports, unused variables, or syntax modernization.
-- Test failures, test structure, fixtures, or async tests.
 - Type annotations, `TypedDict`, `NewType`, or handler signatures.
 - Code review for maintainability, duplication, or project convention compliance.
 - Preparing validation commands after a code change.
@@ -38,22 +37,8 @@ dependencies = [
     "python-dotenv>=1.0.0,<2",
 ]
 
-[project.optional-dependencies]
-test = [
-    "pytest>=9.0.3",
-    "pytest-asyncio>=1.3.0",
-]
-
 [dependency-groups]
 dev = ["ruff"]
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests"]
-addopts = "-ra -q"
-filterwarnings = [
-    "ignore:If 'per_message=False', 'CallbackQueryHandler'.*:UserWarning",
-]
 
 [tool.ruff]
 line-length = 88
@@ -73,24 +58,6 @@ Install dependencies:
 
 ```bash
 uv sync
-```
-
-Install test extras:
-
-```bash
-uv sync --extra test
-```
-
-Run the test suite:
-
-```bash
-uv run --extra test pytest tests/ -v
-```
-
-Run a focused test file:
-
-```bash
-uv run --extra test pytest tests/test_decorators.py -v
 ```
 
 Format:
@@ -114,7 +81,6 @@ uv run ruff check --fix .
 Recommended source-change validation order:
 
 ```bash
-uv run --extra test pytest tests/ -v
 uv run ruff format .
 uv run ruff check --fix .
 ```
@@ -217,26 +183,6 @@ For `tcbot/database/*_db.py` helpers:
 - Queries match existing indexes, or index setup is updated with the new access pattern.
 - MongoDB field additions are backward-compatible.
 - Callers do not receive raw Motor cursor objects unless there is a deliberate streaming need.
-- Tests cover insert/update/read behavior using offline fakes or mocks.
-
-## Async Test Quality
-
-`pytest-asyncio` is configured with `asyncio_mode = "auto"`, so async tests can be simple.
-
-```python
-async def test_helper_returns_none_when_missing(fake_collection) -> None:
-    result = await helper_db.get_item(123)
-
-    assert result is None
-```
-
-Testing expectations:
-
-- Tests stay offline.
-- No real bot token, MongoDB server, Telegram API, or network.
-- Prefer small fake objects over broad integration setup.
-- Test the behavior changed, not framework internals.
-- Include regression tests for fixed bugs when practical.
 
 ## Ruff Diagnostics Triage
 
@@ -281,7 +227,5 @@ Avoid stale generic references, outdated Python versions, unrelated frameworks, 
 ## References
 
 - Ruff documentation: https://docs.astral.sh/ruff/
-- pytest documentation: https://docs.pytest.org/
-- pytest-asyncio documentation: https://pytest-asyncio.readthedocs.io/
 - Python typing documentation: https://docs.python.org/3/library/typing.html
 - Project-specific reference: `tgbot/.agents/skills/python-code-quality/REFERENCE.md`

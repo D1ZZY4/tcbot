@@ -43,12 +43,3 @@ description: Results of the full codebase audit for sequential awaits on indepen
 | `mute_flow.py` | No sequential await patterns found |
 | `demote_flow.py` | if/else branches - single await per branch by necessity |
 | `promote_flow.py` | Conditional logic gates each step |
-
-## Test coverage for classify()
-
-13 new async tests added to `tests/test_identity.py` covering:
-- Self / this_bot / Telegram / other_bot early returns
-- All four role-based identity kinds (founder, admin, developer, tester)
-- No-role → user
-- fname fallback (None, "User <id>", explicit)
-- Assertion that both DB calls are invoked (validates the gather)

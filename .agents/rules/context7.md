@@ -38,7 +38,6 @@ Always run a Context7 lookup before writing any code for these:
   lifecycle, ConversationHandler states, JobQueue API.
 - `motor`: AsyncIOMotorClient, AsyncIOMotorCollection, cursor methods, session
   handling.
-- `pytest-asyncio`: asyncio_mode config in pyproject.toml, fixture scoping.
 - `pydantic`: model validators, field types, model_config (v1 vs v2 differ
   completely).
 - `ruff`: rule codes, pyproject.toml config keys, per-file ignores syntax.

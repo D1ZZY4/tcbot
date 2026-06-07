@@ -197,7 +197,7 @@ Per-record renderers in `kicks_list`, `mutes_list`, and `warns_in_group` also ga
 - The warnings-by-group view shows only groups with a non-zero counter row; an old empty counter is cleaned by `clear_warns`.
 - All inline edits go through `safe_edit_cb`, so re-tapping a button you are already on no longer reports a `Message is not modified` error.
 
-## Testable scenarios
+## Behavior reference
 
 - A user with no records shows zero counts and friendly empty-state messages in each drill-down.
 - Pagination clamps to the last page when the page index exceeds the available pages.

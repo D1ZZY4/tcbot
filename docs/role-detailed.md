@@ -340,9 +340,9 @@ Role and promotion logs are built in `parse_logmsg.py`:
 - Pending promotion requests are not deleted after approval/rejection; they are marked with `status`, `resolved_date`, and `resolved_by`.
 - DM notification failures are tolerated in most role flows through `asyncio.gather(..., return_exceptions=True)` or explicit fallback logging.
 
-## Testable scenarios
+## Behavior reference
 
-Useful scenarios for tests and manual verification:
+Key role-system behaviors to keep in mind:
 
 1. `get_effective_role` returns Founder over Admin/custom role, Admin over custom role, then custom role.
 2. `role_rank(None)` returns `0`.

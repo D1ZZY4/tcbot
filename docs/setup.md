@@ -24,12 +24,6 @@ uv run python -m tcbot
 
 Use `uv run python -m tcbot` if your platform exposes Python as `python3`.
 
-Run the offline test suite:
-
-```bash
-uv run --extra test pytest tests/ -v
-```
-
 Format and lint after edits:
 
 ```bash

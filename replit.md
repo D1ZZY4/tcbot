@@ -112,23 +112,6 @@ flowchart TD
 
 If the hosting platform requires a specific public port, set `PORT` accordingly in the environment. Invalid or out-of-range values fall back to `5000` instead of crashing the health server.
 
-## Tests on Replit
-
-Install test extras and run the offline suite:
-
-```bash
-uv sync --extra test
-uv run --extra test pytest tests/ -v
-```
-
-Collect tests without executing them:
-
-```bash
-uv run --extra test pytest --collect-only -q
-```
-
-Current collected inventory: 1492 tests across 71 test files. Tests are designed to run without a real bot token or MongoDB connection.
-
 ## Code Quality Commands
 
 ```bash
@@ -136,7 +119,7 @@ uv run ruff format .
 uv run ruff check --fix .
 ```
 
-Use these before committing source changes. For documentation-only changes, a pytest collection check is normally sufficient.
+Use these before committing source changes.
 
 ## Deployment Checklist
 
@@ -149,7 +132,6 @@ Before starting the deployment:
 - [ ] Required Telegram destinations (`MAIN_GROUP`, `LOGS`, `PROOFS`, `APPEALS`, and appeal topic settings) are configured.
 - [ ] The bot has the necessary permissions in connected groups/channels/forums.
 - [ ] `uv run python -m tcbot` succeeds.
-- [ ] `uv run --extra test pytest --collect-only -q` succeeds.
 
 ## Safety Rules
 

@@ -134,8 +134,6 @@ The update flow:
 7. Uses a keyboard with current proof, previous proof, and submit-appeal buttons when both proof links exist.
 8. Enforces the Telegram ban across connected groups again.
 
-The current tests verify that ban updates preserve previous IDs and use the `TCFBot` username fallback when the bot username is missing.
-
 ## Connected-group enforcement
 
 Federation enforcement uses `groups_db.active_groups()` and then calls `ban_chat_member` for each group through `fan_out(...)`. `fan_out` caps concurrency and returns exceptions instead of raising them.
@@ -305,9 +303,9 @@ Manual unban does not currently edit any pending appeal review card. It deactiva
 - The proof conversation is per-chat and per-user, so simultaneous ban flows are isolated by moderator/chat.
 - The ban proof timeout uses `cfg.proof_timeout` (`PROOF_TIMEOUT_SECONDS`, default `100`).
 
-## Testable scenarios
+## Behavior reference
 
-Useful scenarios for tests and manual verification:
+Key behaviors to keep in mind:
 
 1. Developer/Admin/Founder can start `/tcban`; Tester and unroled users cannot.
 2. `/tcban` without a target is rejected.

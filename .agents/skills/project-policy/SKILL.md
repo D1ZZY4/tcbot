@@ -1,6 +1,6 @@
 ---
 name: project-policy
-description: Enforces project-local conventions for the TCF Bot Python Telegram bot. Use before writing, editing, or generating code in tcbot/, including handlers, database helpers, workflows, imports, utilities, tests, and configuration-related changes.
+description: Enforces project-local conventions for the TCF Bot Python Telegram bot. Use before writing, editing, or generating code in tcbot/, including handlers, database helpers, workflows, imports, utilities, and configuration-related changes.
 ---
 
 # TCF Bot Project Policy
@@ -17,11 +17,10 @@ Before invoking this skill, you must already have read [`.agents/CLAUDE.md`](../
 After any code change in `tcbot/`, in the same turn:
 
 - Add an entry to [`CHANGELOG.md`](../../../CHANGELOG.md) under `[Unreleased]`.
-- Update [`PLAN.md`](../../../PLAN.md) when the change affects runtime, project state, priorities, or test counts.
+- Update [`PLAN.md`](../../../PLAN.md) when the change affects runtime, project state, or priorities.
 - Update the matching `docs/<area>/<area>.md` and `docs/<feature>-detailed.md` if the area or feature changed.
-- Update the matching `tests/test_*.py` if behavior changed.
 
-Skipping the doc sweep is a defect of the same severity as a failing test.
+Skipping the doc sweep is a defect.
 
 ## Project Snapshot
 
@@ -30,8 +29,7 @@ Skipping the doc sweep is a defect of the same severity as a failing test.
 - Telegram framework: `python-telegram-bot[job-queue] == 22.5`.
 - Database: MongoDB through async Motor helpers.
 - Keepalive: Flask health/keep-alive server.
-- Tooling: `uv` for dependency management, Ruff for format/lint, pytest + pytest-asyncio for
-  offline tests.
+- Tooling: `uv` for dependency management, Ruff for format/lint.
 - Entry point: `uv run python -m tcbot` on Windows, `uv run python -m tcbot` elsewhere.
 
 ## Repository Boundaries
@@ -42,7 +40,6 @@ Skipping the doc sweep is a defect of the same severity as a failing test.
 - Conversation workflows: `tcbot/modules/helper/workflows/`.
 - Database helpers: `tcbot/database/`.
 - Runtime utilities: `tcbot/utils/`.
-- Offline tests: `tests/`.
 
 Do not place Telegram handlers, MongoDB access, workflows, or utility functions outside their
 owning area.
@@ -90,7 +87,6 @@ owning area.
   domain-specific pattern.
 - Keep MongoDB schema changes backward-compatible unless a migration plan is included.
 - When adding a collection or index-sensitive query, update index creation logic accordingly.
-- Tests for database helpers must remain offline and mock external services.
 
 ## Telegram Message Rules
 
@@ -135,7 +131,7 @@ owning area.
 - Read secrets from environment/config mechanisms already used by the project.
 - Do not edit `config.env` during normal code changes.
 - Keep `config.env.example` as a template only when configuration documentation genuinely changes.
-- Do not log secrets or include them in errors, tests, fixtures, or examples.
+- Do not log secrets or include them in errors, fixtures, or examples.
 
 ## Dependencies and Tooling
 
@@ -145,16 +141,14 @@ owning area.
 - If dependencies change, update both `pyproject.toml` and `uv.lock` through the proper `uv`
   workflow.
 
-## Testing and Validation
+## Validation
 
 Choose the narrowest useful validation first, then broaden when appropriate.
 
-- Source changes: run relevant pytest tests, then consider `uv run --extra test pytest tests/ -v`.
+- Source changes: run `uv run ruff format .` and `uv run ruff check --fix .`, then confirm the bot still starts cleanly.
 - Formatting/lint changes: run `uv run ruff format .` and `uv run ruff check --fix .` when safe.
-- Documentation or skill-only changes: tests are usually unnecessary; state that no runtime
+- Documentation or skill-only changes: runtime validation is usually unnecessary; state that no runtime
   validation was run.
-- New or changed helpers, workflows, decorators, database functions, or formatting behavior should
-  include or update offline tests.
 - Do not claim validation passed unless the command was run and succeeded.
 
 ## Pre-Edit Checklist

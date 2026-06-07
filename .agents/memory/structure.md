@@ -84,7 +84,6 @@ tcbot/
     ├── prefixes.py          build_prefixed_filters() - command filter builder
     └── timedate_format.py   utc_now(), fmt_dt(), to_utc(), utc_now_str()
 
-tests/                       71 offline pytest files, 1492 tests (asyncio_mode=auto, no real Telegram/MongoDB)
 docs/                        Architecture docs, feature guides, module references
 .agents/                     Agent policy, style, workflow, skills, memory
 ```

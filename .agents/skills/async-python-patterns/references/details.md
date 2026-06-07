@@ -4,7 +4,7 @@ For the parent skill instructions, see [`../SKILL.md`](../SKILL.md). For the can
 
 Updated: 2026-05-29
 
-This reference expands the `async-python-patterns` skill with practical examples for TCBot's Python 3.12, `python-telegram-bot` 22.5, Motor/MongoDB, and pytest-asyncio stack.
+This reference expands the `async-python-patterns` skill with practical examples for TCBot's Python 3.12, `python-telegram-bot` 22.5, and Motor/MongoDB stack.
 
 ## Choosing the Right Async Pattern
 
@@ -180,27 +180,6 @@ result = await asyncio.to_thread(render_report_sync, report_data)
 
 For recurring heavy work, design a bounded worker or external process instead of using unbounded threads.
 
-## Async Test Patterns
-
-With `asyncio_mode = "auto"`, async tests do not need explicit markers unless the local test style prefers them.
-
-```python
-async def test_marks_appeal_expired(fake_appeals_db) -> None:
-    await fake_appeals_db.insert_one({"appeal_id": "a1", "status": "pending"})
-
-    await appeals_db.mark_expired("a1")
-
-    appeal = await fake_appeals_db.find_one({"appeal_id": "a1"})
-    assert appeal["status"] == "expired"
-```
-
-Keep tests deterministic:
-
-- Mock Telegram API calls.
-- Use fake collections or monkeypatch database helpers.
-- Avoid real sleeps; prefer short configured intervals or direct helper calls.
-- Assert timeout and cancellation paths when they are part of the feature.
-
 ## Review Prompts
 
 When reviewing async code, ask:
@@ -211,4 +190,3 @@ When reviewing async code, ask:
 4. Are partial Telegram failures visible to staff?
 5. Can shutdown cancel this task cleanly?
 6. Is durable state in MongoDB instead of only context memory?
-7. Does the test avoid network, Telegram, and real MongoDB?

@@ -4,7 +4,7 @@ For the parent skill instructions, see [`SKILL.md`](SKILL.md). For the canonical
 
 Updated: 2026-05-29
 
-This reference supports the `python-code-quality` skill for the TCF Bot repository. It reflects the current project stack: Python 3.12, `uv`, Ruff, pytest, pytest-asyncio, `python-telegram-bot` 22.5, Motor/MongoDB, and Flask keepalive.
+This reference supports the `python-code-quality` skill for the TCF Bot repository. It reflects the current project stack: Python 3.12, `uv`, Ruff, `python-telegram-bot` 22.5, Motor/MongoDB, and Flask keepalive.
 
 ## Tooling Snapshot
 
@@ -20,11 +20,6 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I"]
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests"]
-addopts = "-ra -q"
 ```
 
 Ruff currently enforces syntax/pyflakes/import-order rules, not a full strict style suite. Apply project conventions manually during review.
@@ -35,30 +30,6 @@ Install dependencies:
 
 ```bash
 uv sync
-```
-
-Install test extras:
-
-```bash
-uv sync --extra test
-```
-
-Run all tests:
-
-```bash
-uv run --extra test pytest tests/ -v
-```
-
-Run one test file:
-
-```bash
-uv run --extra test pytest tests/test_decorators.py -v
-```
-
-Collect tests only:
-
-```bash
-uv run --extra test pytest --collect-only -q
 ```
 
 Format:
@@ -146,51 +117,16 @@ Common fixes:
 - `F841`: remove unused locals or use the value meaningfully.
 - `I001`: run `uv run ruff check --fix .`.
 
-## Test Quality
-
-Tests should remain offline and deterministic.
-
-Good test targets:
-
-- Database helper behavior.
-- Formatter escaping and message construction.
-- Decorator authorization behavior.
-- Conversation state transitions.
-- Callback data parsing.
-- Partial failure handling for fan-out.
-- Datetime helper behavior.
-
-Avoid tests that require:
-
-- A real Telegram bot token.
-- A real MongoDB server.
-- Network access.
-- Wall-clock sleeps longer than necessary.
-- Test ordering assumptions.
-
-## Async Test Example
-
-```python
-async def test_callback_answers_query(fake_update, fake_context) -> None:
-    query = fake_update.callback_query
-
-    await handler.on_decision(fake_update, fake_context)
-
-    query.answer.assert_awaited_once()
-```
-
-Prefer assertions against observable behavior: database helper calls, Telegram API mock calls, returned state constants, and message text.
-
 ## Review Strategy
 
 For a code-quality pass:
 
 1. Read the owning module and nearby helpers first.
-2. Run the most focused test or diagnostic available.
+2. Run the most focused diagnostic available.
 3. Fix root causes, not only symptoms.
 4. Run Ruff formatting/import cleanup after code edits.
 5. Re-run focused validation, then broader validation if the change touches shared behavior.
-6. Report any unrelated pre-existing failures separately.
+6. Report any unrelated pre-existing issues separately.
 
 ## Skill and Markdown Quality
 
@@ -206,7 +142,5 @@ For `.agents/skills/*/SKILL.md` files:
 ## References
 
 - Ruff: https://docs.astral.sh/ruff/
-- pytest: https://docs.pytest.org/
-- pytest-asyncio: https://pytest-asyncio.readthedocs.io/
 - Python typing: https://docs.python.org/3/library/typing.html
 - uv: https://docs.astral.sh/uv/

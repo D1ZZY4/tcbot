@@ -159,7 +159,7 @@ Both helpers invalidate the affected user's entry in `effective_role_cache` so t
 - Founder demotion is rejected at the role check (`That user doesn't hold a role that can be removed.`).
 - Auto-demote is best-effort: a failure inside `warning_flow.execute_warn` is logged via `log.error` but never aborts the surrounding action.
 
-## Testable scenarios
+## Behavior reference
 
 - `/tcdemote` blocks self-demotion and Founder demotion.
 - Admin cannot demote Admin; Founder is required.
