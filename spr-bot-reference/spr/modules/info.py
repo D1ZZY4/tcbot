@@ -1,15 +1,26 @@
 from time import ctime
 
 from pyrogram import filters
-from pyrogram.types import (InlineQuery, InlineQueryResultArticle,
-                            InputTextMessageContent, Message)
+from pyrogram.types import (
+    InlineQuery,
+    InlineQueryResultArticle,
+    InputTextMessageContent,
+    Message,
+)
 
 from spr import SUDOERS, spr
-from spr.utils.db import (add_chat, add_user, chat_exists,
-                          get_blacklist_event, get_nsfw_count,
-                          get_reputation, get_user_trust,
-                          is_chat_blacklisted, is_user_blacklisted,
-                          user_exists)
+from spr.utils.db import (
+    add_chat,
+    add_user,
+    chat_exists,
+    get_blacklist_event,
+    get_nsfw_count,
+    get_reputation,
+    get_user_trust,
+    is_chat_blacklisted,
+    is_user_blacklisted,
+    user_exists,
+)
 
 __MODULE__ = "Info"
 __HELP__ = """
@@ -26,7 +37,7 @@ async def get_user_info(user):
     try:
         user = await spr.get_users(user)
     except Exception:
-        return
+        return None
     if not user_exists(user.id):
         add_user(user.id)
     trust = get_user_trust(user.id)
@@ -48,11 +59,7 @@ async def get_user_info(user):
 **Potential Spammer:** {True if trust < 70 else False}
 **Blacklisted:** {blacklisted}
 """
-    data += (
-        f"**Blacklist Reason:** {reason} | {ctime(time)}"
-        if reason
-        else ""
-    )
+    data += f"**Blacklist Reason:** {reason} | {ctime(time)}" if reason else ""
     return data
 
 
@@ -60,7 +67,7 @@ async def get_chat_info(chat):
     try:
         chat = await spr.get_chat(chat)
     except Exception:
-        return
+        return None
     if not chat_exists(chat.id):
         add_chat(chat.id)
     blacklisted = is_chat_blacklisted(chat.id)
@@ -76,11 +83,7 @@ async def get_chat_info(chat):
 **Restricted:** {chat.is_restricted}
 **Blacklisted:** {blacklisted}
 """
-    data += (
-        f"**Blacklist Reason:** {reason} | {ctime(time)}"
-        if reason
-        else ""
-    )
+    data += f"**Blacklist Reason:** {reason} | {ctime(time)}" if reason else ""
     return data
 
 

@@ -3,15 +3,21 @@ from pyrogram.types import Message
 
 from spr import SPAM_LOG_CHANNEL, SUDOERS, spr
 from spr.modules.info import get_info
-from spr.utils.db import (add_chat, add_user, blacklist_chat,
-                          blacklist_user, chat_exists,
-                          is_chat_blacklisted, is_user_blacklisted,
-                          user_exists, whitelist_chat, whitelist_user)
-
-
-@spr.on_message(
-    filters.command("blacklist") & filters.user(SUDOERS), group=3
+from spr.utils.db import (
+    add_chat,
+    add_user,
+    blacklist_chat,
+    blacklist_user,
+    chat_exists,
+    is_chat_blacklisted,
+    is_user_blacklisted,
+    user_exists,
+    whitelist_chat,
+    whitelist_user,
 )
+
+
+@spr.on_message(filters.command("blacklist") & filters.user(SUDOERS), group=3)
 async def blacklist_func(_, message: Message):
     err = "Enter a user/chat's id and give a reason."
     if len(message.command) < 3:
@@ -37,9 +43,7 @@ async def blacklist_func(_, message: Message):
         if not chat_exists(id):
             add_chat(id)
         if is_chat_blacklisted(id):
-            return await message.reply_text(
-                "This chat is already blacklisted."
-            )
+            return await message.reply_text("This chat is already blacklisted.")
         blacklist_chat(id, reason)
         await message.reply_text(f"Blacklisted chat {chat.title}")
         msg = f"**BLACKLIST EVENT**\n{await get_info(id)}"
@@ -57,18 +61,14 @@ async def blacklist_func(_, message: Message):
     if not user_exists(id):
         add_user(id)
     if is_user_blacklisted(id):
-        return await message.reply_text(
-            "This user is already blacklisted."
-        )
+        return await message.reply_text("This user is already blacklisted.")
     blacklist_user(id, reason)
     await message.reply_text(f"Blacklisted user {user.mention}")
     msg = f"**BLACKLIST EVENT**\n{await get_info(id)}"
     await spr.send_message(SPAM_LOG_CHANNEL, text=msg)
 
 
-@spr.on_message(
-    filters.command("whitelist") & filters.user(SUDOERS), group=3
-)
+@spr.on_message(filters.command("whitelist") & filters.user(SUDOERS), group=3)
 async def whitelist_func(_, message: Message):
     err = "Enter a user/chat's id."
     if len(message.command) != 2:
@@ -89,9 +89,7 @@ async def whitelist_func(_, message: Message):
         if not chat_exists(id):
             add_chat(id)
         if not is_chat_blacklisted(id):
-            return await message.reply_text(
-                "This chat is already whitelisted."
-            )
+            return await message.reply_text("This chat is already whitelisted.")
         whitelist_chat(id)
         return await message.reply_text(f"Whitelisted {chat.title}")
 
@@ -103,8 +101,6 @@ async def whitelist_func(_, message: Message):
     if not user_exists(id):
         add_user(id)
     if not is_user_blacklisted(id):
-        return await message.reply_text(
-            "This user is already whitelisted."
-        )
+        return await message.reply_text("This user is already whitelisted.")
     whitelist_user(id)
     return await message.reply_text(f"Whitelisted {user.mention}")

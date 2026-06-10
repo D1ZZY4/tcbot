@@ -1,14 +1,14 @@
 from asyncio import gather, sleep
 from datetime import datetime
 from math import ceil
-from time import time, ctime
+from time import ctime, time
 
 from pyrogram import enums
-from pyrogram.types import InlineKeyboardButton, ChatMemberUpdated
-
+from pyrogram.types import ChatMemberUpdated, InlineKeyboardButton
 
 from spr import DB_NAME, SESSION_NAME, SUDOERS, spr
 from spr.utils.db import conn
+
 
 async def backup():
     for user in SUDOERS:
@@ -19,6 +19,7 @@ async def backup():
             )
         except Exception:
             pass
+
 
 admins_in_chat = {}
 
@@ -72,13 +73,11 @@ async def once_a_day():
     await backup()
     dt = datetime.now()
     seconds_till_twelve = (
-        ((24 - dt.hour - 1) * 60 * 60)
-        + ((60 - dt.minute - 1) * 60)
-        + (60 - dt.second)
+        ((24 - dt.hour - 1) * 60 * 60) + ((60 - dt.minute - 1) * 60) + (60 - dt.second)
     )
     print(
         "BACKED UP, NEXT BACKUP WILL HAPPEN AFTER "
-        + f"{round(seconds_till_twelve/60/60, 4)} HOUR(S)"
+        + f"{round(seconds_till_twelve / 60 / 60, 4)} HOUR(S)"
     )
     await sleep(int(seconds_till_twelve))  # Sleep till 12 AM
     while True:
@@ -90,16 +89,16 @@ async def once_a_day():
 def get_file_id(message):
     if message.document:
         if int(message.document.file_size) > 3145728:
-            return
+            return None
         mime_type = message.document.mime_type
         if mime_type != "image/png" and mime_type != "image/jpeg":
-            return
+            return None
         return message.document.file_id
 
     if message.sticker:
         if message.sticker.is_animated:
             if not message.sticker.thumbs:
-                return
+                return None
             return message.sticker.thumbs[0].file_id
         return message.sticker.file_id
 
@@ -108,12 +107,12 @@ def get_file_id(message):
 
     if message.animation:
         if not message.animation.thumbs:
-            return
+            return None
         return message.animation.thumbs[0].file_id
 
     if message.video:
         if not message.video.thumbs:
-            return
+            return None
         return message.video.thumbs[0].file_id
 
 
@@ -121,7 +120,7 @@ def get_file_unique_id(message):
     m = message
     m = m.sticker or m.video or m.document or m.animation or m.photo
     if not m:
-        return
+        return None
     return m.file_unique_id
 
 
@@ -142,9 +141,7 @@ def paginate_modules(page_n, module_dict, prefix, chat=None):
             [
                 EqInlineKeyboardButton(
                     x.__MODULE__,
-                    callback_data="{}_module({})".format(
-                        prefix, x.__MODULE__.lower()
-                    ),
+                    callback_data=f"{prefix}_module({x.__MODULE__.lower()})",
                 )
                 for x in module_dict.values()
             ]
@@ -154,9 +151,7 @@ def paginate_modules(page_n, module_dict, prefix, chat=None):
             [
                 EqInlineKeyboardButton(
                     x.__MODULE__,
-                    callback_data="{}_module({},{})".format(
-                        prefix, chat, x.__MODULE__.lower()
-                    ),
+                    callback_data=f"{prefix}_module({chat},{x.__MODULE__.lower()})",
                 )
                 for x in module_dict.values()
             ]
@@ -186,15 +181,11 @@ def paginate_modules(page_n, module_dict, prefix, chat=None):
             (
                 EqInlineKeyboardButton(
                     "<",
-                    callback_data="{}_prev({})".format(
-                        prefix, modulo_page
-                    ),
+                    callback_data=f"{prefix}_prev({modulo_page})",
                 ),
                 EqInlineKeyboardButton(
                     ">",
-                    callback_data="{}_next({})".format(
-                        prefix, modulo_page
-                    ),
+                    callback_data=f"{prefix}_next({modulo_page})",
                 ),
             )
         ]
@@ -203,6 +194,4 @@ def paginate_modules(page_n, module_dict, prefix, chat=None):
 
 
 """ TO GET UPVOTES/DOWNVOTES FROM MESSAGE """
-clean = lambda x: int(
-    x.text.split()[1].replace("(", "").replace(")", "")
-)
+clean = lambda x: int(x.text.split()[1].replace("(", "").replace(")", ""))

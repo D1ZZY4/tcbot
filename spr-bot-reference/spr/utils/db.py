@@ -142,9 +142,7 @@ def update_spam_data(user_id: int, spam_value: float):
     if len(data) >= 50:
         data = data[1:50]
     data.append(spam_value)
-    data = [
-        i for i in data if isinstance(i, float) or isinstance(i, int)
-    ]
+    data = [i for i in data if isinstance(i, float) or isinstance(i, int)]
     data = dumps(data)
     c.execute(
         """
@@ -170,9 +168,7 @@ def get_user_trust(user_id: int) -> float:
         (user_id,),
     ).fetchone()[0]
     data = loads(data)
-    return (
-        100 if not data else round((100 - (sum(data) / len(data))), 4)
-    )
+    return 100 if not data else round((100 - (sum(data) / len(data))), 4)
 
 
 # Each nsfw media user sends, adds 2 spam count and

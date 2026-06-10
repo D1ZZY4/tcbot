@@ -4,25 +4,31 @@ from pyrogram import filters
 from pyrogram.types import Message
 
 from spr import SUDOERS, arq, spr
-from spr.utils.db import (add_chat, add_user, chat_exists,
-                          is_chat_blacklisted, is_nsfw_downvoted,
-                          is_nsfw_enabled, is_spam_enabled,
-                          is_user_blacklisted, update_spam_data,
-                          user_exists)
-from spr.utils.functions import (delete_nsfw_notify,
-                                 delete_spam_notify, kick_user_notify)
+from spr.utils.db import (
+    add_chat,
+    add_user,
+    chat_exists,
+    is_chat_blacklisted,
+    is_nsfw_downvoted,
+    is_nsfw_enabled,
+    is_spam_enabled,
+    is_user_blacklisted,
+    update_spam_data,
+    user_exists,
+)
+from spr.utils.functions import delete_nsfw_notify, delete_spam_notify, kick_user_notify
 from spr.utils.misc import admins, get_file_id, get_file_unique_id
 
 
 @spr.on_message(
-    (
+
         filters.document
         | filters.photo
         | filters.sticker
         | filters.animation
         | filters.video
         | filters.text
-    )
+
 )
 async def message_watcher(_, message: Message):
     user_id = None
@@ -45,15 +51,15 @@ async def message_watcher(_, message: Message):
                     await kick_user_notify(message)
 
     if not chat_id or not user_id:
-        return
+        return None
 
     file_id = get_file_id(message)
     file_unique_id = get_file_unique_id(message)
     if file_id and file_unique_id:
         if user_id in SUDOERS or user_id in (await admins(chat_id)):
-            return
+            return None
         if is_nsfw_downvoted(file_unique_id):
-            return
+            return None
         file = await spr.download_media(file_id)
         try:
             resp = await arq.nsfw_scan(file=file)
@@ -61,27 +67,25 @@ async def message_watcher(_, message: Message):
             try:
                 return os.remove(file)
             except Exception:
-                return
+                return None
         os.remove(file)
         if resp.ok:
             if resp.result.is_nsfw:
                 if is_nsfw_enabled(chat_id):
-                    return await delete_nsfw_notify(
-                        message, resp.result
-                    )
+                    return await delete_nsfw_notify(message, resp.result)
 
     text = message.text or message.caption
     if not text:
-        return
+        return None
     resp = await arq.nlp(text)
     if not resp.ok:
-        return
+        return None
     result = resp.result[0]
     update_spam_data(user_id, result.spam)
     if not result.is_spam:
-        return
+        return None
     if not is_spam_enabled(chat_id):
-        return
+        return None
     if user_id in SUDOERS or user_id in (await admins(chat_id)):
-        return
+        return None
     await delete_spam_notify(message, result.spam_probability)

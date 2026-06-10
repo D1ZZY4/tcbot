@@ -1,14 +1,18 @@
 from time import ctime
 
-from pyrogram.errors import (ChatAdminRequired, ChatWriteForbidden,
-                             UserAdminInvalid)
+from pyrogram.errors import ChatAdminRequired, ChatWriteForbidden, UserAdminInvalid
 from pyrogram.types import Message
 
 from spr import NSFW_LOG_CHANNEL, SPAM_LOG_CHANNEL, spr
 from spr.core import ikb
-from spr.utils.db import (get_blacklist_event, get_nsfw_count,
-                          get_reputation, get_user_trust,
-                          increment_nsfw_count, is_user_blacklisted)
+from spr.utils.db import (
+    get_blacklist_event,
+    get_nsfw_count,
+    get_reputation,
+    get_user_trust,
+    increment_nsfw_count,
+    is_user_blacklisted,
+)
 
 
 async def get_user_info(message):
@@ -29,11 +33,7 @@ async def get_user_info(message):
     **Potential Spammer:** {True if trust < 70 else False}
     **Blacklisted:** {is_user_blacklisted(user.id)}
 """
-    data += (
-        f"    **Blacklist Reason:** {reason} | {ctime(time)}"
-        if reason
-        else ""
-    )
+    data += f"    **Blacklist Reason:** {reason} | {ctime(time)}" if reason else ""
     return data
 
 
@@ -57,9 +57,7 @@ async def delete_nsfw_notify(
 ):
     await message.copy(
         NSFW_LOG_CHANNEL,
-        reply_markup=ikb(
-            {"Correct": "upvote_nsfw", "Incorrect": "downvote_nsfw"}
-        ),
+        reply_markup=ikb({"Correct": "upvote_nsfw", "Incorrect": "downvote_nsfw"}),
     )
     info = await delete_get_info(message)
     if not info:
@@ -107,7 +105,7 @@ __Message has been deleted__
             "Incorrect (0)": "downvote_spam",
             "Chat": "https://t.me/" + (message.chat.username or "SpamProtectionLog/93"),
         },
-        2
+        2,
     )
     m = await spr.send_message(
         SPAM_LOG_CHANNEL,
@@ -117,16 +115,12 @@ __Message has been deleted__
     )
 
     keyb = ikb({"View Message": m.link})
-    await spr.send_message(
-        message.chat.id, text=msg, reply_markup=keyb
-    )
+    await spr.send_message(message.chat.id, text=msg, reply_markup=keyb)
 
 
 async def kick_user_notify(message: Message):
     try:
-        await spr.ban_chat_member(
-            message.chat.id, message.from_user.id
-        )
+        await spr.ban_chat_member(message.chat.id, message.from_user.id)
     except (ChatAdminRequired, UserAdminInvalid):
         try:
             return await message.reply_text(

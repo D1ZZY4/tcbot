@@ -4,9 +4,14 @@ from pyrogram import filters
 from pyrogram.types import Message
 
 from spr import SUDOERS, arq, spr
-from spr.utils.db import (disable_nsfw, disable_spam, enable_nsfw,
-                          enable_spam, is_nsfw_enabled,
-                          is_spam_enabled)
+from spr.utils.db import (
+    disable_nsfw,
+    disable_spam,
+    enable_nsfw,
+    enable_spam,
+    is_nsfw_enabled,
+    is_spam_enabled,
+)
 from spr.utils.misc import admins, get_file_id
 
 __MODULE__ = "Manage"
@@ -19,23 +24,15 @@ __HELP__ = """
 """
 
 
-@spr.on_message(
-    filters.command("anti_nsfw") & ~filters.private, group=3
-)
+@spr.on_message(filters.command("anti_nsfw") & ~filters.private, group=3)
 async def nsfw_toggle_func(_, message: Message):
     if len(message.command) != 2:
-        return await message.reply_text(
-            "Usage: /anti_nsfw [ENABLE|DISABLE]"
-        )
+        return await message.reply_text("Usage: /anti_nsfw [ENABLE|DISABLE]")
     if message.from_user:
         user = message.from_user
         chat_id = message.chat.id
-        if user.id not in SUDOERS and user.id not in (
-            await admins(chat_id)
-        ):
-            return await message.reply_text(
-                "You don't have enough permissions"
-            )
+        if user.id not in SUDOERS and user.id not in (await admins(chat_id)):
+            return await message.reply_text("You don't have enough permissions")
     status = message.text.split(None, 1)[1].strip()
     status = status.lower()
     chat_id = message.chat.id
@@ -50,28 +47,18 @@ async def nsfw_toggle_func(_, message: Message):
         disable_nsfw(chat_id)
         await message.reply_text("Disabled NSFW Detection.")
     else:
-        await message.reply_text(
-            "Unknown Suffix, Use /anti_nsfw [ENABLE|DISABLE]"
-        )
+        await message.reply_text("Unknown Suffix, Use /anti_nsfw [ENABLE|DISABLE]")
 
 
-@spr.on_message(
-    filters.command("anti_spam") & ~filters.private, group=3
-)
+@spr.on_message(filters.command("anti_spam") & ~filters.private, group=3)
 async def spam_toggle_func(_, message: Message):
     if len(message.command) != 2:
-        return await message.reply_text(
-            "Usage: /anti_spam [ENABLE|DISABLE]"
-        )
+        return await message.reply_text("Usage: /anti_spam [ENABLE|DISABLE]")
     if message.from_user:
         user = message.from_user
         chat_id = message.chat.id
-        if user.id not in SUDOERS and user.id not in (
-            await admins(chat_id)
-        ):
-            return await message.reply_text(
-                "You don't have enough permissions"
-            )
+        if user.id not in SUDOERS and user.id not in (await admins(chat_id)):
+            return await message.reply_text("You don't have enough permissions")
     status = message.text.split(None, 1)[1].strip()
     status = status.lower()
     chat_id = message.chat.id
@@ -86,9 +73,7 @@ async def spam_toggle_func(_, message: Message):
         disable_spam(chat_id)
         await message.reply_text("Disabled Spam Detection.")
     else:
-        await message.reply_text(
-            "Unknown Suffix, Use /anti_spam [ENABLE|DISABLE]"
-        )
+        await message.reply_text("Unknown Suffix, Use /anti_spam [ENABLE|DISABLE]")
 
 
 @spr.on_message(filters.command("nsfw_scan"), group=3)
@@ -96,7 +81,7 @@ async def nsfw_scan_command(_, message: Message):
     err = "Reply to an image/document/sticker/animation to scan it."
     if not message.reply_to_message:
         await message.reply_text(err)
-        return
+        return None
     reply = message.reply_to_message
     if (
         not reply.document
@@ -106,7 +91,7 @@ async def nsfw_scan_command(_, message: Message):
         and not reply.video
     ):
         await message.reply_text(err)
-        return
+        return None
     m = await message.reply_text("Scanning")
     file_id = get_file_id(reply)
     if not file_id:

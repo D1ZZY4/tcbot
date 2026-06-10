@@ -3,9 +3,13 @@ import re
 from importlib import import_module as import_
 
 from pyrogram import filters, idle
-from pyrogram.types import (CallbackQuery, InlineKeyboardButton,
-                            InlineKeyboardMarkup, Message)
 from pyrogram.enums import ChatType
+from pyrogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 
 from spr import BOT_USERNAME, conn, session, spr
 from spr.core import ikb
@@ -20,18 +24,10 @@ async def main():
     # Load all the modules.
     for module in MODULES:
         imported_module = import_(module)
-        if (
-            hasattr(imported_module, "__MODULE__")
-            and imported_module.__MODULE__
-        ):
+        if hasattr(imported_module, "__MODULE__") and imported_module.__MODULE__:
             imported_module.__MODULE__ = imported_module.__MODULE__
-            if (
-                hasattr(imported_module, "__HELP__")
-                and imported_module.__HELP__
-            ):
-                HELPABLE[
-                    imported_module.__MODULE__.lower()
-                ] = imported_module
+            if hasattr(imported_module, "__HELP__") and imported_module.__HELP__:
+                HELPABLE[imported_module.__MODULE__.lower()] = imported_module
     print("STARTED !")
     loop = asyncio.get_running_loop()
     loop.create_task(once_a_day())
@@ -81,9 +77,7 @@ async def commands_callbacc(_, cq: CallbackQuery):
 
 async def help_parser(name, keyboard=None):
     if not keyboard:
-        keyboard = InlineKeyboardMarkup(
-            paginate_modules(0, HELPABLE, "help")
-        )
+        keyboard = InlineKeyboardMarkup(paginate_modules(0, HELPABLE, "help"))
     return (
         f"Hello {name}, I'm SpamProtectionRobot, I can protect "
         + "your group from Spam and NSFW media using "
@@ -108,22 +102,14 @@ async def help_button(client, query: CallbackQuery):
     if mod_match:
         module = mod_match.group(1)
         text = (
-            "{} **{}**:\n".format(
-                "Here is the help for", HELPABLE[module].__MODULE__
-            )
+            "{} **{}**:\n".format("Here is the help for", HELPABLE[module].__MODULE__)
             + HELPABLE[module].__HELP__
         )
 
         await query.message.edit(
             text=text,
             reply_markup=InlineKeyboardMarkup(
-                [
-                    [
-                        InlineKeyboardButton(
-                            "back", callback_data="help_back"
-                        )
-                    ]
-                ]
+                [[InlineKeyboardButton("back", callback_data="help_back")]]
             ),
             disable_web_page_preview=True,
         )
@@ -151,9 +137,7 @@ async def help_button(client, query: CallbackQuery):
     elif back_match:
         await query.message.edit(
             text=top_text,
-            reply_markup=InlineKeyboardMarkup(
-                paginate_modules(0, HELPABLE, "help")
-            ),
+            reply_markup=InlineKeyboardMarkup(paginate_modules(0, HELPABLE, "help")),
             disable_web_page_preview=True,
         )
 
