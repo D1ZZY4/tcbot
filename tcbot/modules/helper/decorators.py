@@ -11,14 +11,17 @@ import functools
 import logging
 import time
 from collections import deque
-from collections.abc import Awaitable, Callable
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
-from telegram import Message, Update
 from telegram.ext import ApplicationHandlerStop, ContextTypes
 
 from tcbot import cfg
 from tcbot import database as db
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from telegram import Message, Update
 
 log = logging.getLogger(__name__)
 R = TypeVar("R")

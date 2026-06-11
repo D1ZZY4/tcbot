@@ -2,6 +2,18 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-11 (session 39)
+
+### Changed
+
+- **`pyproject.toml`** — expanded `[tool.ruff.lint] select` to include `TC` (type-checking import rules); added `TC001` to ignore (internal TypedDicts kept as runtime imports for safety); added `TC001` ignore comment.
+- **50 source files** — moved annotation-only imports into `if TYPE_CHECKING:` blocks throughout the codebase using `ruff check --unsafe-fixes`:
+  - stdlib: `datetime.datetime`, `collections.abc.Callable`, `collections.abc.Awaitable`
+  - third-party: `motor.motor_asyncio.AsyncIOMotorCollection`
+  - All affected files already had `from __future__ import annotations`, making the moves safe (annotations are lazy strings at runtime).
+  - `from typing import TYPE_CHECKING` added to each affected file.
+  - Runtime import overhead reduced for the database layer, modules, and utilities.
+
 ## [Unreleased] - 2026-06-07 (session 38)
 
 ### Changed

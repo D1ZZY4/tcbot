@@ -6,12 +6,15 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from typing import TYPE_CHECKING
 
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper.formatter import code, esc, link, mention
 from tcbot.utils.timedate_format import fmt_dt, utc_now
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 # ─────────────────────────── LogBuilder ─────────────────────────── #
 # * Fluent builder for HTML audit-log messages with consistent layout.

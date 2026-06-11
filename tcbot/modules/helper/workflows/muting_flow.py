@@ -9,13 +9,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from collections.abc import Callable
 from datetime import timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from telegram import Bot, ChatPermissions, Update
-from telegram.ext import ContextTypes
-from telegram.ext.filters import BaseFilter
 
 from tcbot import cfg
 from tcbot import database as db
@@ -25,6 +22,12 @@ from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
 from tcbot.utils.dispatch import count_errors, fan_out
 from tcbot.utils.timedate_format import utc_now
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from telegram.ext import ContextTypes
+    from telegram.ext.filters import BaseFilter
 
 log = logging.getLogger(__name__)
 

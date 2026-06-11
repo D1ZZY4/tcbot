@@ -11,6 +11,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
@@ -20,7 +21,6 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-from telegram.ext.filters import BaseFilter
 
 from tcbot import cfg
 from tcbot import database as db
@@ -30,6 +30,9 @@ from tcbot.modules.helper.parse_link import message_link
 from tcbot.utils.dispatch import fan_out
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 from tcbot.utils.timedate_format import to_utc, utc_now
+
+if TYPE_CHECKING:
+    from telegram.ext.filters import BaseFilter
 
 log = logging.getLogger(__name__)
 

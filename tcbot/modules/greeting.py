@@ -8,14 +8,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import TYPE_CHECKING
 
-from telegram import Bot, Chat, Message, Update, User
 from telegram.ext import ContextTypes, MessageHandler, filters
 
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.formatter import mention
+
+if TYPE_CHECKING:
+    from telegram import Bot, Chat, Message, Update, User
 
 log = logging.getLogger(__name__)
 

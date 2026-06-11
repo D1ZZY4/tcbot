@@ -7,12 +7,15 @@
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 
-from telegram import CallbackQuery, Update
 from telegram.ext import CallbackQueryHandler, ContextTypes
 
 from tcbot import cfg
 from tcbot.modules.helper import decorators, keyboards
+
+if TYPE_CHECKING:
+    from telegram import CallbackQuery, Update
 
 __module_name__ = None
 

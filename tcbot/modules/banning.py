@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import TYPE_CHECKING
 
-from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
 
 from tcbot.modules.helper import decorators, extraction, identity, replies
@@ -22,6 +22,9 @@ from tcbot.modules.helper.workflows.ban_flow import (
 )
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
+
+if TYPE_CHECKING:
+    from telegram import Update
 
 log = logging.getLogger(__name__)
 

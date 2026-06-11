@@ -5,7 +5,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-07 (session 36)
+**Last updated:** 2026-06-11 (session 39)
 
 ## What is done
 
@@ -129,9 +129,16 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Data-fetching gathers (those that unpack results) intentionally kept without `return_exceptions=True`.
   - Ruff 71 files clean.
 
+- Session 39 (2026-06-11): TYPE_CHECKING import refactor across 50 files.
+  - Added `TC` rule set to `pyproject.toml` (ignoring TC001 for internal TypedDicts).
+  - Ran `ruff check --unsafe-fixes` to move 151 annotation-only imports into `if TYPE_CHECKING:` blocks.
+  - Affected: stdlib (`datetime.datetime`, `collections.abc.Callable/Awaitable`), third-party (`AsyncIOMotorCollection`).
+  - All files had `from __future__ import annotations` so moves are safe (lazy string annotations).
+  - Bot restarted cleanly after fix; ruff 71 files clean; import OK.
+
 ## What is in progress
 
-Nothing. Session 36 checkpoint complete.
+Nothing. Session 39 checkpoint complete.
 
 ## What is pending (optional)
 

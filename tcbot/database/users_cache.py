@@ -10,11 +10,14 @@ Do not mix with users_roles.py which handles tc_owners, tc_admins, and tc_roles.
 
 from __future__ import annotations
 
-from motor.motor_asyncio import AsyncIOMotorCollection
+from typing import TYPE_CHECKING
 
 from tcbot.database.documents import UserDoc
 from tcbot.database.mongos import col
 from tcbot.utils.timedate_format import utc_now
+
+if TYPE_CHECKING:
+    from motor.motor_asyncio import AsyncIOMotorCollection
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
 # * Internal collection access utilities for the member_cache database

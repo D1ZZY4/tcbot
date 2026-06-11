@@ -7,9 +7,8 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable
+from typing import TYPE_CHECKING
 
-from telegram import CallbackQuery, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
 from tcbot.modules.helper import decorators, replies
@@ -22,6 +21,11 @@ from tcbot.modules.helper.workflows.stats_flow import (
     Stats,
 )
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
+    from telegram import CallbackQuery, InlineKeyboardMarkup, Update
 
 # ────────────────────── Module & Help Message ───────────────────── #
 

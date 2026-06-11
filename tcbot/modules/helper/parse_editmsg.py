@@ -7,9 +7,12 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
-from telegram import CallbackQuery, Message
 from telegram.error import BadRequest
+
+if TYPE_CHECKING:
+    from telegram import CallbackQuery, Message
 
 log = logging.getLogger(__name__)
 

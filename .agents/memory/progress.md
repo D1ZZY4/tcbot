@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-07 (session 36)
+**Last updated:** 2026-06-11 (session 39)
 
 ## Verification baseline
 
@@ -102,6 +102,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Parameter type annotation coverage | housekeeping | Fixed 31 unannotated parameters across 13 files; AST audit now reports 0 missing in all non-dunder functions | 2026-06-07 (s34) |
 | BaseFilter import location discovery | housekeeping | BaseFilter is in telegram.ext.filters, not telegram.ext; corrected imports across 6 workflow files after ImportError at startup | 2026-06-07 (s34) |
 | Return type annotation coverage | housekeeping | Fixed 12 functions missing return types across 9 files (7 DB accessors, __main__, extraction.py); AST audit now reports 0 missing | 2026-06-07 (s35) |
+| TC (TYPE_CHECKING) import refactor | code quality | Added TC ruleset to pyproject.toml; fixed 151 violations across 50 files with --unsafe-fixes; stdlib and motor imports moved to TYPE_CHECKING blocks; bot startup clean | 2026-06-11 (s39) |
 
 ## Pending (remaining optional)
 

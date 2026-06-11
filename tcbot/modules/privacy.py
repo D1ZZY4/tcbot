@@ -7,12 +7,15 @@
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 
-from telegram import CallbackQuery, Update
 from telegram.ext import CallbackQueryHandler, ContextTypes
 
 from tcbot import cfg
 from tcbot.modules.helper import decorators, keyboards
+
+if TYPE_CHECKING:
+    from telegram import CallbackQuery, Update
 
 # ─────────────────────── Rate-limiter constants ──────────────────── #
 _RL_PERIOD_S: int = 30

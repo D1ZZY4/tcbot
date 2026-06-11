@@ -8,12 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
-from typing import Any
-
-from telegram import Update
-from telegram.ext import ContextTypes
-from telegram.ext.filters import BaseFilter
+from typing import TYPE_CHECKING, Any
 
 from tcbot import cfg
 from tcbot import database as db
@@ -22,6 +17,13 @@ from tcbot.modules.helper.formatter import code, mention, proof_line
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from telegram import Update
+    from telegram.ext import ContextTypes
+    from telegram.ext.filters import BaseFilter
 
 log = logging.getLogger(__name__)
 

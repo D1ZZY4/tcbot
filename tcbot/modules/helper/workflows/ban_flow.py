@@ -8,10 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from telegram import Bot, Message, Update
 from telegram.ext import (
     CallbackQueryHandler,
     ContextTypes,
@@ -19,7 +17,6 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-from telegram.ext.filters import BaseFilter
 
 from tcbot import cfg
 from tcbot import database as db
@@ -30,6 +27,12 @@ from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
 from tcbot.utils.dispatch import count_errors, fan_out
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 from tcbot.utils.timedate_format import utc_now
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from telegram import Bot, Message, Update
+    from telegram.ext.filters import BaseFilter
 
 log = logging.getLogger(__name__)
 

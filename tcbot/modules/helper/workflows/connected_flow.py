@@ -9,15 +9,18 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from telegram import Bot, ChatMember, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatMemberStatus
-from telegram.ext import ContextTypes
 
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
 from tcbot.utils.dispatch import fan_out
+
+if TYPE_CHECKING:
+    from telegram.ext import ContextTypes
 
 log = logging.getLogger(__name__)
 

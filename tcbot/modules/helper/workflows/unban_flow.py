@@ -8,15 +8,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
-
-from telegram import Update
-from telegram.ext import ContextTypes
+from typing import TYPE_CHECKING
 
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.formatter import code, mention
 from tcbot.utils.dispatch import count_errors, fan_out
+
+if TYPE_CHECKING:
+    from telegram import Update
+    from telegram.ext import ContextTypes
 
 log = logging.getLogger(__name__)
 

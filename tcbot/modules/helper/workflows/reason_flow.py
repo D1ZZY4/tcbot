@@ -8,9 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
@@ -20,12 +19,16 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-from telegram.ext.filters import BaseFilter
 
 from tcbot import cfg
 from tcbot.modules.helper import replies
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from telegram.ext.filters import BaseFilter
 
 log = logging.getLogger(__name__)
 

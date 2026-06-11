@@ -7,8 +7,8 @@
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 
-from telegram import Update
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
@@ -19,6 +19,9 @@ from tcbot.modules.helper.formatter import code, esc
 from tcbot.modules.helper.keyboards import tcgroups_kb
 from tcbot.modules.helper.parse_editmsg import safe_edit
 from tcbot.utils.prefixes import build_prefixed_filters
+
+if TYPE_CHECKING:
+    from telegram import Update
 
 # ─────────────────────── Rate-limiter constants ──────────────────── #
 _RL_PERIOD_S: int = 30

@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import TYPE_CHECKING
 
-from telegram import CallbackQuery, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
@@ -21,6 +21,9 @@ from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.check_flow import Check
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.timedate_format import fmt_dt
+
+if TYPE_CHECKING:
+    from telegram import CallbackQuery, InlineKeyboardMarkup, Update
 
 log = logging.getLogger(__name__)
 

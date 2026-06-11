@@ -14,12 +14,13 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Literal
-
-from telegram import Bot
+from typing import TYPE_CHECKING, Literal
 
 from tcbot import database as db
 from tcbot.modules.helper.formatter import code, mention
+
+if TYPE_CHECKING:
+    from telegram import Bot
 
 # ───────────────────────────── Constants ────────────────────────────── #
 

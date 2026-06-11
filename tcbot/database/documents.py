@@ -6,10 +6,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Literal, TypedDict
+from typing import TYPE_CHECKING, Literal, TypedDict
 
 from tcbot.database.types import BanId, ChatId, GroupId, UserId
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 BanStatus = Literal["active", "expired", "revoked"]
 RoleName = Literal["founder", "admin", "developer", "tester"]

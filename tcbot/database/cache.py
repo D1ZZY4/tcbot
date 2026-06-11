@@ -7,10 +7,12 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Awaitable, Callable
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from tcbot.database.documents import GroupDoc
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 # * Public sentinel; compare using is CACHE_MISS to detect a cache miss.
 # * Distinct from None because None is a valid cache value (e.g. user has no role).
@@ -62,7 +64,7 @@ class TTLCache[T]:
         """Return cached value, or call *fetch()*, cache the result, and return it."""
         val = self.get(key)
         if val is not CACHE_MISS:
-            return cast(T, val)
+            return cast("T", val)
         val = await fetch()
         self.put(key, val)
         return val

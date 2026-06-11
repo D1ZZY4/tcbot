@@ -9,8 +9,8 @@ from __future__ import annotations
 import asyncio
 import importlib
 import logging
+from typing import TYPE_CHECKING
 
-from telegram import CallbackQuery, Update
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
@@ -18,6 +18,9 @@ from tcbot.modules import ALL_MODULES
 from tcbot.modules.helper import decorators, keyboards
 from tcbot.modules.helper.parse_editmsg import safe_edit_cb
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
+
+if TYPE_CHECKING:
+    from telegram import CallbackQuery, Update
 
 log = logging.getLogger(__name__)
 

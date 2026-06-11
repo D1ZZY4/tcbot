@@ -11,7 +11,7 @@ import logging
 import sys
 import traceback
 import warnings
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from telegram import Update
 from telegram.ext import (
@@ -29,6 +29,9 @@ from tcbot.modules import get_handlers
 from tcbot.modules.helper.decorators import global_rate_limit_handler
 from tcbot.utils import error_reporter
 from tcbot.utils.logger import setup as setup_logging
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 log = logging.getLogger(__name__)
 

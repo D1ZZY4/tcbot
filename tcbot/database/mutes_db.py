@@ -6,10 +6,13 @@
 
 from __future__ import annotations
 
-from motor.motor_asyncio import AsyncIOMotorCollection
+from typing import TYPE_CHECKING
 
 from tcbot.database.mongos import col
 from tcbot.utils.timedate_format import utc_now
+
+if TYPE_CHECKING:
+    from motor.motor_asyncio import AsyncIOMotorCollection
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
 # * Internal collection access utilities for the mutes database

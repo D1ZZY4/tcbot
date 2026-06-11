@@ -65,6 +65,16 @@ description: Non-trivial technical decisions made during development. Format: da
 
 ---
 
+## 2026-06-11: TC (TYPE_CHECKING) imports - safe to autofix with `--unsafe-fixes`
+
+**Decision:** Add `TC` to `pyproject.toml` ruff select and fix all violations with `ruff check --unsafe-fixes`. Ignore `TC001` (internal application TypedDicts) as a conservative choice since TypedDicts could theoretically be used at runtime.
+
+**Why:** With `from __future__ import annotations` on every module, all annotations are lazy strings at runtime. Moving annotation-only imports to `if TYPE_CHECKING:` blocks reduces import overhead and is idiomatic Python. Ruff marks TC fixes as "unsafe" because it requires cross-file semantic analysis to guarantee annotation-only use; with `from __future__ import annotations` this analysis is unnecessary.
+
+**How to apply:** When adding TC rules, always run `ruff check --unsafe-fixes` (not just `--fix`). Verify bot startup after applying. Never run `--unsafe-fixes` without first confirming all modules use `from __future__ import annotations`.
+
+---
+
 ## 2026-06-02: Memory files live in `.agents/memory/`, MEMORY.md is the index
 
 **Decision:** Persistent cross-session memory uses `.agents/memory/MEMORY.md` as a one-line-per-entry index pointing to topic files in the same directory. Context, progress, and decisions each have their own file.

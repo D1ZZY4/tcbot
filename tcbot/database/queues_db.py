@@ -6,11 +6,14 @@
 
 from __future__ import annotations
 
-from motor.motor_asyncio import AsyncIOMotorCollection
+from typing import TYPE_CHECKING
 
 from tcbot.database.documents import PromotionRequestDoc
 from tcbot.database.mongos import col, make_short_id
 from tcbot.utils.timedate_format import utc_now
+
+if TYPE_CHECKING:
+    from motor.motor_asyncio import AsyncIOMotorCollection
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
 # * Internal collection access and ID generation utilities

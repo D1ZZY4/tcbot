@@ -9,10 +9,12 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-
-from telegram import Bot, Chat, Message, Update, User
+from typing import TYPE_CHECKING
 
 from tcbot import database as db
+
+if TYPE_CHECKING:
+    from telegram import Bot, Chat, Message, Update, User
 
 log = logging.getLogger(__name__)
 

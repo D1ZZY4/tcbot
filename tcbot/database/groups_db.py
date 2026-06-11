@@ -6,9 +6,7 @@
 
 from __future__ import annotations
 
-from typing import cast
-
-from motor.motor_asyncio import AsyncIOMotorCollection
+from typing import TYPE_CHECKING, cast
 
 from tcbot.database.cache import (
     _ALL_GROUPS_KEY,
@@ -19,6 +17,9 @@ from tcbot.database.cache import (
 from tcbot.database.documents import GroupDoc, PendingGroupDoc
 from tcbot.database.mongos import col
 from tcbot.utils.timedate_format import utc_now
+
+if TYPE_CHECKING:
+    from motor.motor_asyncio import AsyncIOMotorCollection
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
 # * Internal collection access utilities for groups database
@@ -59,7 +60,7 @@ async def is_connected(chat_id: int) -> bool:
     """Check if a group is currently active and connected to the federation."""
     cached = connected_cache.get(chat_id)
     if cached is not CACHE_MISS:
-        return cast(bool, cached)
+        return cast("bool", cached)
     result = (
         await _groups().find_one({"chat_id": chat_id, "is_active": True}, {"_id": 1})
         is not None
@@ -99,7 +100,7 @@ async def active_groups() -> list[GroupDoc]:
     """Get all currently active and connected groups."""
     cached = active_groups_cache.get(_ALL_GROUPS_KEY)
     if cached is not CACHE_MISS:
-        return cast(list[GroupDoc], cached)
+        return cast("list[GroupDoc]", cached)
     result: list[GroupDoc] = await _groups().find({"is_active": True}).to_list(None)
     active_groups_cache.put(_ALL_GROUPS_KEY, result)
     return result

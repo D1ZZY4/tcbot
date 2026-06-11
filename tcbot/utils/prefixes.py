@@ -8,13 +8,16 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Callable, Coroutine
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
-from telegram import Message
 from telegram.ext import filters
 
 from tcbot import cfg
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Coroutine
+
+    from telegram import Message
 
 log = logging.getLogger(__name__)
 
