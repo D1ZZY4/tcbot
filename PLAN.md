@@ -237,7 +237,7 @@ in.
 
 | # | Finding | Location (`file.py:line`) | Evidence (code quote / observed behavior) | Proposed Fix | Status |
 |--|--|--|--|--|--|
-| _1_ | _Example finding_ | _`file.py:line`_ | _Quoted code or observed behavior_ | _Proposed fix_ | _Open_ |
+| 1 | Layer 3 asyncio exception handler scheduled a fire-and-forget report task without a strong reference | `tcbot/__main__.py:150` | `lp.create_task(error_reporter.report_exc(...))` discarded the returned task; Python may garbage collect the task before it runs, dropping the error report from the last-resort handler | Store each task in a module-level `set` and register a `discard` done-callback (mirrors `logger._tg_tasks`). RUF006 missed it because the task is created through the `lp` parameter, which ruff cannot statically identify as an event loop | `Resolved` |
 
 ### P3 (Medium)
 

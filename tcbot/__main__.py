@@ -129,6 +129,11 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
 # * Catches unhandled asyncio exceptions from background tasks
 # * Layer 3 of 3 error handling system - last line of defense for errors
 
+# * Strong references to in-flight async error-report tasks. Without this, the
+# * fire-and-forget task scheduled in the handler below can be garbage collected
+# * before it runs, silently dropping the report (mirrors logger._tg_tasks).
+_asyncio_report_tasks: set[asyncio.Task[None]] = set()
+
 
 def _make_asyncio_exc_handler(
     loop: asyncio.AbstractEventLoop,
@@ -145,11 +150,14 @@ def _make_asyncio_exc_handler(
         # * Mirror to module logger so nothing is silently swallowed.
         log.error("[asyncio] %s%s", detail, f" - {exc}" if exc else "")
 
-        # * Schedule async report on the running loop
+        # * Schedule async report on the running loop, keeping a strong reference
+        # * until the task completes so it cannot be garbage collected mid-flight.
         try:
-            lp.create_task(
+            task = lp.create_task(
                 error_reporter.report_exc(exc or RuntimeError(detail), context=detail)
             )
+            _asyncio_report_tasks.add(task)
+            task.add_done_callback(_asyncio_report_tasks.discard)
         except Exception as err:
             log.debug("Failed to schedule async error report: %s", err)
 

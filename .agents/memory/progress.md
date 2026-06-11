@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-11 (session 39)
+**Last updated:** 2026-06-11 (session 43)
 
 ## Verification baseline
 
@@ -13,10 +13,11 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 |---|---|
 | `uv sync` | PASS |
 | `uv pip install -e .` | PASS |
-| `uv run python -c "import tcbot; print('import OK')"` | PASS |
+| `uv run python -c "import tcbot; print('import OK')"` | PASS (session 43: re-verified after `__main__.py` edit) |
 | `uv run python -m tcbot --help 2>&1 || uv run python -c "from tcbot import *; print('startup OK')"` | PASS by runtime evidence: bot started cleanly, connected MongoDB, ensured indexes, initialised, 75 handlers registered, polling active |
-| `uv run ruff format .` | PASS (71 files already formatted) |
+| `uv run ruff format .` | PASS (70 files already formatted) |
 | `uv run ruff check --fix .` | PASS (All checks passed) |
+| asyncio task-GC fix isolated test (session 43) | PASS: task registered on schedule, discarded on completion, report coroutine ran |
 | `uv run python -m tcbot` | PASS by runtime evidence: MongoDB connected, indexes ensured, scheduler started, bot polling active |
 | annotation AST audit | PASS: 0 non-dunder function parameters missing type annotations (was 31 before session 34) |
 | docs audit (session 36) | PASS: all 20+ docs files verified accurate; 0 code quality violations; 0 stale Mermaid diagrams |
@@ -106,6 +107,9 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | PERF + PIE rulesets | code quality | Added PERF and PIE to pyproject.toml select; fixed 4 PERF401 (for-loop→comprehension/extend in check_flow, stats_flow) and 1 PIE810 (startswith tuple in __init__); ruff 71 files clean | 2026-06-11 (s39) |
 | TRY400 + TRY401 rulesets | code quality | Added TRY400+TRY401 to pyproject.toml; 15 files: log.error→log.exception in except blocks; removed redundant exc args; auto-fixed 14 unused exc vars to bare except Exception: | 2026-06-11 (s39) |
 | ANN003 kwargs annotation | code quality | Annotated **kwargs: Any in safe_edit/safe_edit_cb (parse_editmsg.py) | 2026-06-11 (s39) |
+| PLE + PLC rulesets | code quality | Added PLE+PLC to pyproject.toml select; PLE0604 noqa on __all__ spread; PLC0415 noqa on 3 intentional lazy imports (dns.resolver, ban_info, error_reporter); PLR intentionally not added | 2026-06-11 (s42) |
+| Dangling asyncio error-report task fix | P2 (correctness) | `__main__.py` Layer 3 asyncio handler created `lp.create_task(...)` without a strong ref; could be GC'd before running and drop the report. Added module-level `_asyncio_report_tasks` set + `discard` done-callback; verified in isolation. RUF006 missed it (task via `lp` parameter) | 2026-06-11 (s43) |
+| Memory drift reconciliation | docs | context.md/progress.md were stale at s41 while CHANGELOG/decisions/pyproject were at s42; brought both current and corrected file-count note 71 -> 70 | 2026-06-11 (s43) |
 
 ## Pending (remaining optional)
 

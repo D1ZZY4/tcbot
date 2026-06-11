@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-11 (session 43)
+
+### Fixed
+
+- **Dangling asyncio error-report task** (`tcbot/__main__.py`): the Layer 3 asyncio exception handler scheduled `lp.create_task(error_reporter.report_exc(...))` without keeping a strong reference, so the fire-and-forget report task could be garbage collected before it ran and silently drop the error report from the last-resort handler. Added a module-level `_asyncio_report_tasks: set[asyncio.Task[None]]`, store each scheduled task in it, and register `task.add_done_callback(_asyncio_report_tasks.discard)` to release the reference on completion. This mirrors the existing `logger._tg_tasks` pattern from session 40. Ruff RUF006 did not flag this because the task is created through the `lp` event-loop parameter, which the linter cannot statically identify as an event loop.
+
 ## [Unreleased] - 2026-06-11 (session 42)
 
 ### Changed

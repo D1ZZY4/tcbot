@@ -5,13 +5,13 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-11 (session 39)
+**Last updated:** 2026-06-11 (session 43)
 
 ## What is done
 
 - Python 3.12, uv, python-telegram-bot (latest), Motor/MongoDB stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
-- `uv run ruff format .` and `uv run ruff check .` both clean (71 files).
+- `uv run ruff format .` and `uv run ruff check .` both clean (70 files).
 - All P1/P2/P3 backlog items resolved (pagination NameError, composite indexes, asyncio.gather conversions, shared replies.py, em-dash removal, cache TTL constants, keyboards.py dead code).
 - `docs/mapping.md` updated: added `identity.py`, `replies.py` to helper section; added `pagination.py` to utils section.
 - `maintenance.py` and `disconnecting.py` hardcoded `timeout=3.0` extracted to named constants.
@@ -160,9 +160,23 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Excluded `.local/`, `.agents/`, `.kilo/`, `.trae/`, `.claude/` from ruff scan (skills/symlinks not our code).
   - pyproject.toml select now: `["B", "C4", "D", "E4", "E7", "E9", "F", "FBT", "I", "PERF", "PIE", "PTH", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]`.
 
+- Session 42 (2026-06-11): PLE + PLC rulesets.
+  - Added `PLC` (Pylint-convention) and `PLE` (Pylint-error) to `pyproject.toml` ruff select.
+  - `# noqa: PLE0604` on `__all__` spread in `modules/__init__.py` (false positive; `ALL_MODULES` is `list[str]` at runtime).
+  - `# noqa: PLC0415` on three intentional lazy imports: `dns.resolver` in `mongos.py` (optional dep), `ban_info.build_ban_detail` in `checking.py` (circular break), `error_reporter` in `logger.py` (circular break).
+  - Did NOT add `PLR` (refactoring): fires on large handler functions without benefit.
+  - pyproject.toml select now: `["B", "C4", "D", "E4", "E7", "E9", "F", "FBT", "I", "PERF", "PIE", "PLC", "PLE", "PTH", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]`.
+
+- Session 43 (2026-06-11): real correctness bug fix in Layer 3 error handling.
+  - Fixed a dangling fire-and-forget task in `__main__.py`'s asyncio exception handler: `lp.create_task(error_reporter.report_exc(...))` discarded the task, so it could be garbage collected before running and silently drop the last-resort error report.
+  - Added module-level `_asyncio_report_tasks: set[asyncio.Task[None]]`; task is stored and released via a `discard` done-callback (mirrors `logger._tg_tasks`).
+  - RUF006 did not catch it because the task is created through the `lp` event-loop parameter, which ruff cannot statically identify as an event loop.
+  - Verified the fix in isolation (task registered on schedule, discarded on completion, report coroutine ran). Ruff clean (70 files); import OK.
+  - Reconciled memory drift: `context.md` and `progress.md` were stale at session 41 while CHANGELOG/`decisions.md`/`pyproject.toml` were already at session 42; file-count note corrected 71 -> 70.
+
 ## What is in progress
 
-Nothing. Session 41 checkpoint complete.
+Nothing. Session 43 checkpoint complete.
 
 ## What is pending (optional)
 

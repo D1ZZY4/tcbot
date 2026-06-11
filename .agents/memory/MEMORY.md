@@ -10,3 +10,4 @@
 - [Frozen dataclass monkeypatch](decisions.md) — frozen dataclass instances (e.g. `connection`) cannot be patched via `patch("module.obj.attr")`; patch the module-level name instead
 - [Slots class monkeypatch](decisions.md) — `__slots__` makes instance methods read-only; replace the module-level limiter name with a `SimpleNamespace` fake instead of patching the instance
 - [BaseFilter import location](decisions.md) — import `BaseFilter` from `telegram.ext.filters`, not `telegram.ext`; PTB 22.7 does not re-export it at the top level
+- [RUF006 blind spot](decisions.md) — RUF006 misses `loop.create_task` scheduled via a parameter; manually guard fire-and-forget tasks with a module-level set + `discard` done-callback (sets: `logger._tg_tasks`, `ban_flow._album_tasks`, `__main__._asyncio_report_tasks`)

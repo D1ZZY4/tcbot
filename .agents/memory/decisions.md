@@ -95,6 +95,16 @@ description: Non-trivial technical decisions made during development. Format: da
 
 ---
 
+## 2026-06-11: RUF006 does not catch `loop.create_task` scheduled via a parameter
+
+**Decision:** Manually guard every fire-and-forget task with a module-level strong-reference `set` plus a `discard` done-callback, even when ruff RUF006 reports no violation. Do not rely on RUF006 alone to find dangling tasks.
+
+**Why:** RUF006 (asyncio-dangling-task) only recognises the `asyncio.create_task` / `asyncio.ensure_future` call shapes (and `asyncio.get_event_loop().create_task`). The Layer 3 asyncio exception handler in `__main__.py` schedules its report through the `lp` event-loop *parameter* (`lp.create_task(...)`), which ruff cannot statically prove is an event loop, so it stayed silent through the session-40 RUF006 sweep. The discarded task could be garbage collected before running, silently dropping the error report from the last-resort handler.
+
+**How to apply:** Whenever you write `<loop>.create_task(...)` or `asyncio.create_task(...)` for fire-and-forget work, assign the result to a variable, `add()` it to a module-level `set[asyncio.Task[None]]`, and call `task.add_done_callback(<that_set>.discard)`. The established sets are `logger._tg_tasks`, `ban_flow._album_tasks`, and `__main__._asyncio_report_tasks`. Tasks that are awaited within the same function (held by a local variable until the await) do not need this.
+
+---
+
 ## 2026-06-02: Memory files live in `.agents/memory/`, MEMORY.md is the index
 
 **Decision:** Persistent cross-session memory uses `.agents/memory/MEMORY.md` as a one-line-per-entry index pointing to topic files in the same directory. Context, progress, and decisions each have their own file.
