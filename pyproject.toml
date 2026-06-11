@@ -18,8 +18,9 @@ line-length = 88
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["B", "C4", "E4", "E7", "E9", "F", "I", "RET", "SIM", "TC", "UP", "W"]
+select = ["B", "C4", "E4", "E7", "E9", "F", "I", "PERF", "PIE", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]
 ignore = [
-    "TC001",  # Application imports in TYPE_CHECKING: internal TypedDicts used in runtime dict ops
-    "UP047",  # Generic functions: TypeVar-based style kept for ratelimiter compatibility
+    "RUF001",  # Ambiguous unicode: › intentionally used as breadcrumb separator in bot UI text
+    "TC001",   # Application imports in TYPE_CHECKING: internal TypedDicts used in runtime dict ops
+    "UP047",   # Generic functions: TypeVar-based style kept for ratelimiter compatibility
 ]

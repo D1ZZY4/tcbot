@@ -90,8 +90,8 @@ async def execute_warn(
                     admin_fname,
                     trigger="ban",
                 )
-            except Exception as exc:
-                log.error("Auto-demote on warn limit failed: %s", exc)
+            except Exception:
+                log.exception("Auto-demote on warn limit failed")
 
         # * Ban + federation log run in parallel; clear warns only after ban succeeds.
         ban_result, log_result = await asyncio.gather(
@@ -104,8 +104,8 @@ async def execute_warn(
         if not isinstance(ban_result, BaseException):
             try:
                 await db.warns_db.clear_warns(target_id, chat_id)
-            except Exception as exc:
-                log.error("Warn clear after auto-ban failed: %s", exc)
+            except Exception:
+                log.exception("Warn clear after auto-ban failed")
             await msg.reply_text(
                 f"{mention(target_id, target_name)} - {code(str(target_id))} "
                 f"hit {WARN_LIMIT} warnings "

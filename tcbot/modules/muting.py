@@ -129,7 +129,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
         return ConversationHandler.END
 
-    ident, (executor_role, target_role) = await asyncio.gather(
+    ident, (executor_role, _) = await asyncio.gather(
         identity.classify(ctx.bot, admin.id, target_id, target_fname),
         resolve_and_check(msg, admin.id, target_id, min_role="tester"),
     )

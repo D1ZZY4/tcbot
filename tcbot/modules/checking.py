@@ -103,7 +103,7 @@ async def _ban_summary(
 
     # Fetch mention data for both users in parallel
     (
-        (user_fname_cached, user_uname),
+        (_, user_uname),
         (admin_fname_cached, admin_uname),
     ) = await asyncio.gather(
         db.users_cache.get_user_mention_data(user_id),

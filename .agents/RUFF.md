@@ -41,6 +41,25 @@ uv run ruff check .
 Ruff settings live in `pyproject.toml`. Keep source compatible with that file
 rather than relying on editor-specific settings.
 
+Current active ruleset (from `pyproject.toml`):
+
+```
+select = ["B", "C4", "E4", "E7", "E9", "F", "I", "PERF", "PIE", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]
+ignore  = [
+    "RUF001",  # Ambiguous unicode: › intentionally used as breadcrumb separator in bot UI text
+    "TC001",   # Application imports in TYPE_CHECKING: internal TypedDicts used in runtime dict ops
+    "UP047",   # Generic functions: TypeVar-based style kept for ratelimiter compatibility
+]
+```
+
+Rules intentionally not added:
+- `T20` (flake8-print): `__main__._print_fatal` uses `print(..., file=sys.stderr)` intentionally.
+- `ANN` (annotations): `ANN401` fires on legitimate `Any` in generic cache/date helpers; too noisy to enable globally.
+- `TRY` (full suite): `TRY003` (long exception messages) and `TRY300` (else-after-try) are pedantic; only `TRY400` and `TRY401` are selected.
+- `ARG` (unused arguments): PTB handlers must accept `(update, ctx)` regardless of whether `ctx` is used; 43+ intentional unused `ctx` args.
+- `EM` (error message strings): `EM102` (f-string in exceptions) is pedantic for `SystemExit` cases; exceptions are non-critical `SystemExit`, not raised exception classes.
+- `S104` (bind to all interfaces): `alive.py` binds to `0.0.0.0` intentionally for the Flask keep-alive server required by Replit.
+
 ---
 
 ## Recommended Validation by Change Type

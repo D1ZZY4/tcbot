@@ -145,8 +145,8 @@ class BuildConnection:
                 parse_mode="HTML",
                 message_thread_id=lt,
             )
-        except Exception as exc:
-            log.error("Group connect log failed: %s", exc)
+        except Exception:
+            log.exception("Group connect log failed")
 
         log.info(
             "Group %d ('%s') connected. %d bans applied.", chat_id, chat_title, applied
@@ -187,8 +187,8 @@ class BuildConnection:
                         parse_mode="HTML",
                         message_thread_id=lt,
                     )
-                except Exception as exc:
-                    log.error("Bot removed log failed for %d: %s", chat.id, exc)
+                except Exception:
+                    log.exception("Bot removed log failed for %d", chat.id)
             log.info("Bot removed from %d; group deactivated", chat.id)
             return
 
@@ -236,8 +236,8 @@ class BuildConnection:
                     by_user.id,
                     prompt.message_id,
                 )
-            except Exception as exc:
-                log.error("Join prompt send failed for %d: %s", chat.id, exc)
+            except Exception:
+                log.exception("Join prompt send failed for %d", chat.id)
 
     async def on_join_decision(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE

@@ -50,8 +50,8 @@ async def _handle_member(member: User, msg: Message, chat: Chat, bot: Bot) -> No
                     parse_mode="HTML",
                 ),
             )
-        except Exception as exc:
-            log.error("Auto-ban on join failed: %s", exc)
+        except Exception:
+            log.exception("Auto-ban on join failed")
         return
 
     await msg.reply_text(

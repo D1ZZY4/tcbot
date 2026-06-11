@@ -175,7 +175,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     role = ROLE_ALIASES.get(role_arg)
 
     if role:
-        ok, text = await Promote.execute(
+        _, text = await Promote.execute(
             ctx.bot,
             admin.id,
             admin.first_name,
@@ -241,7 +241,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         db.users_roles.get_effective_role(target_id),
     )
 
-    ok, text = await Promote.execute(
+    _, text = await Promote.execute(
         ctx.bot,
         admin.id,
         admin.first_name,
@@ -490,7 +490,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
             parse_mode="HTML",
         )
         return
-    ok, reply = await Promote.request_admin(
+    _, reply = await Promote.request_admin(
         ctx.bot, user.id, user.id, user.first_name, user.username
     )
     await msg.reply_text(reply, parse_mode="HTML")

@@ -212,10 +212,10 @@ class Check:
                 )
             )
 
-        rows: list[list[InlineKeyboardButton]] = []
         # * pair item buttons 3 per row
-        for i in range(0, len(item_btns), 3):
-            rows.append(item_btns[i : i + 3])
+        rows: list[list[InlineKeyboardButton]] = [
+            item_btns[i : i + 3] for i in range(0, len(item_btns), 3)
+        ]
         nav = nav_row(page, total_pages, f"check_bans:{target_id}")
         if nav:
             rows.append(nav)
@@ -439,9 +439,9 @@ class Check:
                 )
             )
 
-        rows: list[list[InlineKeyboardButton]] = []
-        for i in range(0, len(item_btns), 3):
-            rows.append(item_btns[i : i + 3])
+        rows: list[list[InlineKeyboardButton]] = [
+            item_btns[i : i + 3] for i in range(0, len(item_btns), 3)
+        ]
         nav = nav_row(page, total_pages, f"check_appeals:{target_id}")
         if nav:
             rows.append(nav)

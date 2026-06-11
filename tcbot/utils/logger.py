@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import ClassVar
 
 from tcbot.utils.timedate_format import utc_now
 
@@ -29,14 +30,14 @@ class BotLogFormatter(logging.Formatter):
     _AW = "\033[38;5;242m"  # arrow →
     _MS = "\033[38;5;253m"  # default message
 
-    _LEVELS = {
+    _LEVELS: ClassVar[dict[int, tuple[str, str]]] = {
         logging.DEBUG: ("\033[38;5;246m", "DEBUG"),
         logging.INFO: ("\033[38;5;114m", "INFO"),
         logging.WARNING: ("\033[38;5;178m", "WARN"),
         logging.ERROR: ("\033[38;5;203m", "ERROR"),
         logging.CRITICAL: ("\033[38;5;177m", "CRIT"),
     }
-    _COLORED_MSG = {logging.WARNING, logging.ERROR, logging.CRITICAL}
+    _COLORED_MSG: ClassVar[set[int]] = {logging.WARNING, logging.ERROR, logging.CRITICAL}
 
     def _bracket(self, color: str, text: str) -> str:
         return f"{self._BR}[{self._R}{color}{text}{self._R}{self._BR}]{self._R}"
@@ -79,6 +80,9 @@ class BotLogFormatter(logging.Formatter):
 # * Zero blocking; schedules coroutine on the running asyncio event loop
 # * Suppression list prevents infinite loops and network noise
 
+# * Strong references to in-flight Telegram error report tasks (prevents GC)
+_tg_tasks: set[asyncio.Task[None]] = set()
+
 _SUPPRESS_PREFIXES: tuple[str, ...] = (
     "tcbot.utils.error_reporter",
     "httpcore",
@@ -102,7 +106,9 @@ class TelegramErrorHandler(logging.Handler):
             return
         from tcbot.utils import error_reporter
 
-        loop.create_task(error_reporter.report_record(record))
+        task = loop.create_task(error_reporter.report_record(record))
+        _tg_tasks.add(task)
+        task.add_done_callback(_tg_tasks.discard)
 
 
 # ─────────────────────── Logging Setup Entry ────────────────────── #

@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from telegram.error import BadRequest
 
@@ -26,7 +26,7 @@ _IGNORED = {
 # ──────────────────────── safe_edit helper ──────────────────────── #
 
 
-async def safe_edit(msg: Message, text: str, **kwargs) -> None:
+async def safe_edit(msg: Message, text: str, **kwargs: Any) -> None:
     """Edit a message via msg.edit_text; swallow harmless not-modified errors."""
     try:
         await msg.edit_text(text, parse_mode="HTML", **kwargs)
@@ -36,7 +36,7 @@ async def safe_edit(msg: Message, text: str, **kwargs) -> None:
         log.warning("edit failed: %s", e)
 
 
-async def safe_edit_cb(q: CallbackQuery, text: str, **kwargs) -> None:
+async def safe_edit_cb(q: CallbackQuery, text: str, **kwargs: Any) -> None:
     """Edit a callback-query message; swallow harmless not-modified errors.
 
     Use this whenever a user can re-tap a button that lands them on the same

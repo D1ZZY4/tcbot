@@ -136,8 +136,8 @@ def build_modaction_conv(
                     parse_mode="HTML",
                     reply_markup=proof.keyboard(),
                 )
-            except Exception as exc:
-                log.error("%s prompt edit failed (reason step): %s", action, exc)
+            except Exception:
+                log.exception("%s prompt edit failed (reason step)", action)
         else:
             await update.effective_message.reply_text(
                 prompt_txt,
@@ -160,8 +160,8 @@ def build_modaction_conv(
                     prompt_txt, parse_mode="HTML", reply_markup=proof.keyboard()
                 ),
             )
-        except Exception as exc:
-            log.error("%s prompt edit failed (skip-reason step): %s", action, exc)
+        except Exception:
+            log.exception("%s prompt edit failed (skip-reason step)", action)
         return WAITING_PROOF
 
     # ── WAITING_PROOF handlers ───────────────────────────────────── #

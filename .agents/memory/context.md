@@ -129,16 +129,33 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Data-fetching gathers (those that unpack results) intentionally kept without `return_exceptions=True`.
   - Ruff 71 files clean.
 
-- Session 39 (2026-06-11): TYPE_CHECKING import refactor across 50 files.
+- Session 39 (2026-06-11): TYPE_CHECKING import refactor + PERF/PIE cleanup.
   - Added `TC` rule set to `pyproject.toml` (ignoring TC001 for internal TypedDicts).
   - Ran `ruff check --unsafe-fixes` to move 151 annotation-only imports into `if TYPE_CHECKING:` blocks.
   - Affected: stdlib (`datetime.datetime`, `collections.abc.Callable/Awaitable`), third-party (`AsyncIOMotorCollection`).
   - All files had `from __future__ import annotations` so moves are safe (lazy string annotations).
   - Bot restarted cleanly after fix; ruff 71 files clean; import OK.
+  - Also added PERF, PIE, TRY400, TRY401 rulesets and fixed all violations:
+    - 4 PERF401 (list comprehension/extend), 1 PIE810 (startswith tuple)
+    - 15 files: log.error→log.exception in except blocks; removed redundant exc args (TRY401); auto-fixed 14 unused `exc` vars (F841→`except Exception:`)
+    - 2 ANN003 (safe_edit/safe_edit_cb **kwargs: Any)
+  - pyproject.toml select now: `["B", "C4", "E4", "E7", "E9", "F", "I", "PERF", "PIE", "RET", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]`.
+
+- Session 40 (2026-06-11): RUF ruleset + real bug fix.
+  - Added `RUF` to pyproject.toml select; ignored `RUF001` (intentional `›` breadcrumb char).
+  - Fixed RUF023 ×2: sorted `__slots__` in `cache.py` and `decorators.py`.
+  - Fixed RUF022: sorted `__all__` in `stats_flow.py`.
+  - Fixed RUF005: list-concat → unpacking in `modules/__init__.py`.
+  - Fixed RUF059 ×4: unused unpacked vars → `_` in `admins.py` ×3, `checking.py`, `muting.py`.
+  - Fixed RUF100 ×2: removed unused noqa directives in `decorators.py` and `parse_logmsg.py`.
+  - Fixed RUF012 ×2: added `ClassVar` annotations to `BotLogFormatter._LEVELS` and `._COLORED_MSG` in `logger.py`.
+  - Fixed RUF006 ×2 (real bug): `asyncio.create_task` / `loop.create_task` references now stored in module-level sets with `discard` done-callbacks in `ban_flow.py` and `logger.py` — prevents GC of in-flight tasks.
+  - pyproject.toml select now: `["B", "C4", "E4", "E7", "E9", "F", "I", "PERF", "PIE", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]`.
+  - Bot restarted cleanly; ruff all checks passed.
 
 ## What is in progress
 
-Nothing. Session 39 checkpoint complete.
+Nothing. Session 40 checkpoint complete.
 
 ## What is pending (optional)
 

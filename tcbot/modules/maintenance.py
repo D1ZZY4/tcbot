@@ -163,8 +163,8 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             f"Left {code(str(left))} groups. Failed: {code(str(failed))}.",
             parse_mode="HTML",
         )
-    except Exception as exc:
-        log.error("Leaveall status edit failed: %s", exc)
+    except Exception:
+        log.exception("Leaveall status edit failed")
 
 
 # ─────────────────── Command CleanUp </cleanup> ─────────────────── #

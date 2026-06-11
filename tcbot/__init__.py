@@ -105,7 +105,7 @@ def _warn_bot_token_fmt(token: str) -> None:
 
 def _warn_mongodb_uri_fmt(uri: str) -> None:
     """Log a WARNING if the MongoDB URI does not start with a recognised scheme."""
-    if not (uri.startswith("mongodb://") or uri.startswith("mongodb+srv://")):
+    if not uri.startswith(("mongodb://", "mongodb+srv://")):
         log.warning(
             "MONGODB_URI does not start with 'mongodb://' or 'mongodb+srv://'. "
             "Motor will fail at connect time if the value is wrong."

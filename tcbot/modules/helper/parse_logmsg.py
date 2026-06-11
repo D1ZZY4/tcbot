@@ -551,7 +551,7 @@ def demoted(
     by_id: int,
     by_fname: str,
     *,
-    trigger: str | None = None,  # noqa: ARG001  (kept for caller API compatibility)
+    trigger: str | None = None,  # kept for caller API compatibility
 ) -> str:
     """Unified demotion audit-log: manual demote and ban/kick auto-demote share one format."""
     role_label = _role_title(role)

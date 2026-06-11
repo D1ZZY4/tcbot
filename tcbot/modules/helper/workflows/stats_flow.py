@@ -85,8 +85,7 @@ def _list_kb(
         InlineKeyboardButton(str(i + 1), callback_data=f"{item_cb_prefix}:{page}:{i}")
         for i in range(n_items)
     ]
-    for i in range(0, len(num_btns), 3):
-        rows.append(num_btns[i : i + 3])
+    rows.extend(num_btns[i : i + 3] for i in range(0, len(num_btns), 3))
 
     if extra_row:
         rows.append(extra_row)
@@ -408,13 +407,13 @@ class Stats:
 
     @staticmethod
     def _search_results_kb(n: int) -> InlineKeyboardMarkup:
-        rows: list[list[InlineKeyboardButton]] = []
         num_btns = [
             InlineKeyboardButton(str(i + 1), callback_data=f"stats_search_item:{i}")
             for i in range(n)
         ]
-        for i in range(0, len(num_btns), 3):
-            rows.append(num_btns[i : i + 3])
+        rows: list[list[InlineKeyboardButton]] = [
+            num_btns[i : i + 3] for i in range(0, len(num_btns), 3)
+        ]
         rows.append(
             [InlineKeyboardButton("New Search", callback_data="stats_bans_search")]
         )
@@ -511,4 +510,4 @@ class Stats:
 
 ROLE_LABEL = db.users_roles.ROLE_LABEL
 
-__all__ = ("Stats", "ROLE_LABEL", "SEARCH_KEY", "RESULTS_KEY", "MSG_KEY", "CHAT_KEY")
+__all__ = ("CHAT_KEY", "MSG_KEY", "RESULTS_KEY", "ROLE_LABEL", "SEARCH_KEY", "Stats")

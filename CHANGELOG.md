@@ -2,11 +2,34 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-11 (session 40)
+
+### Changed
+
+- **`pyproject.toml`** — added `RUF` (Ruff-specific rules) to `[tool.ruff.lint] select`; added `RUF001` to ignore (`›` SINGLE RIGHT-POINTING ANGLE QUOTATION MARK is an intentional breadcrumb separator in bot UI text).
+- **`tcbot/database/cache.py`** — sorted `TTLCache.__slots__` alphabetically (`_store`, `_ttl`) to satisfy RUF023.
+- **`tcbot/modules/helper/decorators.py`** — sorted `_RateLimiter.__slots__` alphabetically (`_buckets`, `max_calls`, `window`) to satisfy RUF023; removed unused `# noqa: UP047` directive on `log_execution` (UP047 is globally ignored, RUF100).
+- **`tcbot/modules/helper/parse_logmsg.py`** — removed unused `# noqa: ARG001` directive; replaced with plain comment `# kept for caller API compatibility` (RUF100; ARG001 not in select).
+- **`tcbot/modules/__init__.py`** — replaced `ALL_MODULES + ["ALL_MODULES"]` with `[*ALL_MODULES, "ALL_MODULES"]` (RUF005: prefer unpacking over concatenation).
+- **`tcbot/modules/helper/workflows/stats_flow.py`** — sorted `__all__` tuple alphabetically (RUF022).
+- **`tcbot/modules/admins.py`** — replaced unused `ok` with `_` in three `Promote.execute` / `Promote.request_admin` unpacks (RUF059).
+- **`tcbot/modules/checking.py`** — replaced unused `user_fname_cached` with `_` in nested gather unpack (RUF059).
+- **`tcbot/modules/muting.py`** — replaced unused `target_role` with `_` in gather unpack (RUF059).
+- **`tcbot/modules/helper/workflows/ban_flow.py`** — added module-level `_album_tasks: set[asyncio.Task[None]]` set; stored `asyncio.create_task` return value and registered `discard` done-callback to prevent GC of in-flight album flush tasks (RUF006).
+- **`tcbot/utils/logger.py`** — added `ClassVar` annotation to `BotLogFormatter._LEVELS` and `._COLORED_MSG` (RUF012); added `from typing import ClassVar` import; added module-level `_tg_tasks` set and stored `loop.create_task` return value with `discard` done-callback to prevent GC of in-flight Telegram error report tasks (RUF006).
+
 ## [Unreleased] - 2026-06-11 (session 39)
 
 ### Changed
 
 - **`pyproject.toml`** — expanded `[tool.ruff.lint] select` to include `TC` (type-checking import rules); added `TC001` to ignore (internal TypedDicts kept as runtime imports for safety); added `TC001` ignore comment.
+- **`pyproject.toml`** — expanded `[tool.ruff.lint] select` to also include `PERF` (Perflint) and `PIE` (miscellaneous improvements).
+- **`pyproject.toml`** — added `TRY400` and `TRY401` to `[tool.ruff.lint] select` (targeted TRY rules for logging correctness; full TRY suite not added due to pedantic TRY003/TRY300).
+- **15 files** — replaced `log.error(...)` with `log.exception(...)` inside `except` blocks so tracebacks are automatically captured (`__init__.py`, `greeting.py`, `maintenance.py`, `appeal_flow.py` ×2, `connected_flow.py` ×3, `kicking_flow.py`, `promote_flow.py`, `proof_flow.py`, `reason_flow.py` ×2, `warning_flow.py` ×2); removed redundant `exc` argument from all `log.exception` calls (TRY401); `except Exception as exc:` simplified to `except Exception:` where `exc` became unused (F841, auto-fixed).
+- **`tcbot/modules/helper/parse_editmsg.py`** — annotated `**kwargs` as `**kwargs: Any` in `safe_edit` and `safe_edit_cb` (ANN003).
+- **`tcbot/__init__.py`** — merged two `startswith` calls into a single tuple form (PIE810).
+- **`tcbot/modules/helper/workflows/check_flow.py`** — converted two `for i in range(0, len(...), 3): rows.append(...)` loops to list comprehensions (PERF401).
+- **`tcbot/modules/helper/workflows/stats_flow.py`** — converted one loop to `rows.extend(...)` (PERF401, list already pre-populated) and one to a list comprehension (PERF401).
 - **50 source files** — moved annotation-only imports into `if TYPE_CHECKING:` blocks throughout the codebase using `ruff check --unsafe-fixes`:
   - stdlib: `datetime.datetime`, `collections.abc.Callable`, `collections.abc.Awaitable`
   - third-party: `motor.motor_asyncio.AsyncIOMotorCollection`

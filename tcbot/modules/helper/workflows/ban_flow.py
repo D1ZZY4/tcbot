@@ -51,6 +51,9 @@ proof = BuildProof("ban", skip_allowed=False)
 _albums: dict[str, list[Message]] = {}
 _album_meta: dict[str, dict[str, Any]] = {}
 
+# * Strong references to in-flight album flush tasks (prevents GC)
+_album_tasks: set[asyncio.Task[None]] = set()
+
 
 # ────────────────────────── Ban executor ────────────────────────── #
 
@@ -260,7 +263,9 @@ async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
         if mgid not in _albums:
             _albums[mgid] = []
             _album_meta[mgid] = dict(ctx.user_data)
-            asyncio.create_task(_flush_album(mgid, ctx.bot))
+            task = asyncio.create_task(_flush_album(mgid, ctx.bot))
+            _album_tasks.add(task)
+            task.add_done_callback(_album_tasks.discard)
         _albums[mgid].append(msg)
         return WAITING_PROOF
 

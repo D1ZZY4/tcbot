@@ -184,8 +184,8 @@ class Promote:
                     message_thread_id=lt,
                     reply_markup=keyboards.promo_decision_kb(request_id),
                 )
-            except Exception as exc:
-                log.error("Promo request notify failed: %s", exc)
+            except Exception:
+                log.exception("Promo request notify failed")
         return (True, _MSG_REQUEST_SUBMITTED)
 
     @classmethod

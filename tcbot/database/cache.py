@@ -27,7 +27,7 @@ CACHE_MISS: object = object()
 class TTLCache[T]:
     """Single-process in-memory TTL cache for asyncio-based code."""
 
-    __slots__ = ("_ttl", "_store")
+    __slots__ = ("_store", "_ttl")
 
     def __init__(self, ttl: float) -> None:
         self._ttl: float = ttl

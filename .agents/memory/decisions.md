@@ -65,6 +65,16 @@ description: Non-trivial technical decisions made during development. Format: da
 
 ---
 
+## 2026-06-11: PERF and PIE rulesets - safe to add; T20 must stay off globally
+
+**Decision:** Add `PERF` (Perflint) and `PIE` (misc improvements) to pyproject.toml ruff select. Do NOT add `T20` (flake8-print) globally; the `_print_fatal()` function in `__main__.py` intentionally uses `print(..., file=sys.stderr)` for fatal startup error display — these are legitimate stderr outputs, not debug leakage.
+
+**Why:** PERF401 (for-loop to comprehension/extend) and PIE810 (startswith tuple) are unambiguously correct improvements with no behaviour change. T20 would force noqa comments on intentional code, which is noisier than not enabling the rule.
+
+**How to apply:** When a new PERF or PIE violation appears, fix it before committing. If a legitimate print-to-stderr is ever added, use `# noqa: T201` on that line only; do not add T20 to the global ignore list unless there are many such sites.
+
+---
+
 ## 2026-06-11: TC (TYPE_CHECKING) imports - safe to autofix with `--unsafe-fixes`
 
 **Decision:** Add `TC` to `pyproject.toml` ruff select and fix all violations with `ruff check --unsafe-fixes`. Ignore `TC001` (internal application TypedDicts) as a conservative choice since TypedDicts could theoretically be used at runtime.

@@ -242,8 +242,8 @@ class BuildAppeal:
         try:
             fwd = await msg.forward(appeal_chat, message_thread_id=appeal_thread)
             appeal_msg_id = fwd.message_id
-        except Exception as exc:
-            log.error("Appeal forward failed: %s", exc)
+        except Exception:
+            log.exception("Appeal forward failed")
 
         appeal_link = (
             message_link(appeal_chat, appeal_msg_id, appeal_thread)
@@ -428,8 +428,8 @@ class BuildAppeal:
                     parse_mode="HTML",
                     message_thread_id=lt,
                 )
-            except Exception as exc:
-                log.error("Appeal unban log failed: %s", exc)
+            except Exception:
+                log.exception("Appeal unban log failed")
 
         elif action == "reject":
             # * Fetch target name + notify user + edit review message - all in parallel

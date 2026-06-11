@@ -153,6 +153,6 @@ async def upload_proof(
             )
             log.info("Proof video uploaded: message_id=%s", sent.message_id)
             return sent.message_id
-    except Exception as exc:
-        log.error("Proof upload failed: %s", exc)
+    except Exception:
+        log.exception("Proof upload failed")
     return None

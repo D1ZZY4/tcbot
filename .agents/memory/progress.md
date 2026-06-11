@@ -103,6 +103,9 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | BaseFilter import location discovery | housekeeping | BaseFilter is in telegram.ext.filters, not telegram.ext; corrected imports across 6 workflow files after ImportError at startup | 2026-06-07 (s34) |
 | Return type annotation coverage | housekeeping | Fixed 12 functions missing return types across 9 files (7 DB accessors, __main__, extraction.py); AST audit now reports 0 missing | 2026-06-07 (s35) |
 | TC (TYPE_CHECKING) import refactor | code quality | Added TC ruleset to pyproject.toml; fixed 151 violations across 50 files with --unsafe-fixes; stdlib and motor imports moved to TYPE_CHECKING blocks; bot startup clean | 2026-06-11 (s39) |
+| PERF + PIE rulesets | code quality | Added PERF and PIE to pyproject.toml select; fixed 4 PERF401 (for-loop→comprehension/extend in check_flow, stats_flow) and 1 PIE810 (startswith tuple in __init__); ruff 71 files clean | 2026-06-11 (s39) |
+| TRY400 + TRY401 rulesets | code quality | Added TRY400+TRY401 to pyproject.toml; 15 files: log.error→log.exception in except blocks; removed redundant exc args; auto-fixed 14 unused exc vars to bare except Exception: | 2026-06-11 (s39) |
+| ANN003 kwargs annotation | code quality | Annotated **kwargs: Any in safe_edit/safe_edit_cb (parse_editmsg.py) | 2026-06-11 (s39) |
 
 ## Pending (remaining optional)
 

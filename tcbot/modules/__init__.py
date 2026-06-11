@@ -51,7 +51,7 @@ def _filter_modules(modules: list[str]) -> list[str]:
 ALL_MODULES = _filter_modules(_discover_modules())
 log.info("Modules to load: %s", ALL_MODULES)
 
-__all__ = ALL_MODULES + ["ALL_MODULES"]
+__all__ = [*ALL_MODULES, "ALL_MODULES"]
 
 
 # ─────────────────────── Handler Collection ─────────────────────── #
@@ -67,9 +67,9 @@ def get_handlers() -> list[Any]:
         try:
             mod = importlib.import_module(f"tcbot.modules.{mod_name}")
             mods_found[mod_name] = mod
-        except Exception as exc:
+        except Exception:
             failed.append(mod_name)
-            log.exception("Failed to import tcbot.modules.%s: %s", mod_name, exc)
+            log.exception("Failed to import tcbot.modules.%s", mod_name)
 
     if failed:
         raise SystemExit(f"Module import failed for: {', '.join(failed)}")

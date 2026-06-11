@@ -33,7 +33,7 @@ R = TypeVar("R")
 class _RateLimiter:
     """Sliding-window per-user rate limiter."""
 
-    __slots__ = ("max_calls", "window", "_buckets")
+    __slots__ = ("_buckets", "max_calls", "window")
 
     def __init__(self, max_calls: int, window: float) -> None:
         self.max_calls = max_calls
@@ -160,7 +160,7 @@ def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
 # ──────────────────────── Execution tracer ──────────────────────── #
 
 
-def log_execution(  # noqa: UP047
+def log_execution(
     func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R]],
 ) -> Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R]]:
     """Wrap a handler to emit entry / exit / exception traces at DEBUG level."""
