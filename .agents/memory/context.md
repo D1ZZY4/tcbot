@@ -185,9 +185,15 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Updated `.agents/RUFF.md`, `python-code-quality/SKILL.md`, `python-code-quality/REFERENCE.md` to reflect new exclude list.
   - Full verification sequence PASS: uv sync, editable install, import check, ruff format, ruff check, bot restart (MongoDB connected, 75 handlers, polling active).
 
+- Session 46 (2026-06-11): docs gap fixes in helper.md.
+  - Added `proof_line(proof_desc)` to formatter.py table (was missing; function added session 28, used by kicking/muting/warning flows).
+  - Added 7 missing keyboards.py factories to table: `groups_menu_kb`, `tcgroups_kb`, `stats_main_kb`, `stats_back_kb`, `module_help_kb`, `back_to_module_kb`, `additional_menu_kb` across new Groups/Stats rows and Menus/help row.
+  - Table now covers all 25 public keyboard factories in keyboards.py.
+  - Full 7-step verification PASS: uv sync, editable install, import OK, ruff format (70 files), ruff check, bot start (handlers registered, polling), docs audit.
+
 ## What is in progress
 
-Nothing. Session 45 checkpoint complete.
+Nothing. Session 46 checkpoint complete.
 
 ## What is pending (optional)
 

@@ -2,6 +2,13 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-11 (session 46)
+
+### Documentation
+
+- **`docs/helper/helper.md`** — `proof_line(proof_desc)` was missing from the `formatter.py` table. Added an entry: "Returns `\nProof: <desc>` when proof_desc is a non-empty string, or `""` otherwise. Embed directly in reply text for kick/mute/warn action messages." The function is used by `kicking_flow.py`, `muting_flow.py`, and `warning_flow.py` and was added in session 28.
+- **`docs/helper/helper.md`** — seven `keyboards.py` factory functions were absent from the table: `groups_menu_kb`, `tcgroups_kb`, `stats_main_kb`, `stats_back_kb`, `module_help_kb`, `back_to_module_kb`, and `additional_menu_kb`. Added two new factory-group rows ("Groups" and "Stats") and moved the three menu/help functions into the existing "Menus/help" row. The table now covers all 25 public keyboard factories in `keyboards.py`.
+
 ## [Unreleased] - 2026-06-11 (session 45)
 
 ### Fixed

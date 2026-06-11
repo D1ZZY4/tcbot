@@ -55,6 +55,7 @@ All bot messages use Telegram HTML parse mode.
 | `code(text)` | `<code>...</code>` with escaped content. |
 | `link(text, url)` | HTML link. Escape or validate URLs before passing untrusted values. |
 | `mention(user_id, name, username=None)` | Smart mention with username fallback. If username is provided, creates a global `https://t.me/username` link that works across all groups. Otherwise, falls back to plain text name with copyable user ID. |
+| `proof_line(proof_desc)` | Returns `\nProof: <desc>` when proof_desc is a non-empty string, or `""` otherwise. Embed directly in reply text for kick/mute/warn action messages. |
 
 Use `esc()`, `code()`, or `mention()` for any user-provided value in HTML messages.
 
@@ -86,8 +87,10 @@ Main groups:
 |---|---|
 | Ban/checking | `ban_log_new`, `ban_log_update`, `checkme_ban_kb`, `checkme_detail_back_kb` |
 | Admin roles | `promote_role_kb`, `demote_confirm_kb`, `promo_decision_kb` |
-| Menus/help | `main_menu_kb`, `group_start_kb`, `help_modules`, `help_topics_menu_kb`, `help_topics_kb`, `back_to_start_kb`, `back_to_help_kb`, `back_to_help_cmd_kb` |
+| Menus/help | `main_menu_kb`, `group_start_kb`, `help_modules`, `help_topics_menu_kb`, `help_topics_kb`, `back_to_start_kb`, `back_to_help_kb`, `back_to_help_cmd_kb`, `module_help_kb`, `back_to_module_kb`, `additional_menu_kb` |
 | Privacy | `privacy_kb`, `back_to_privacy_kb` |
+| Groups | `groups_menu_kb`, `tcgroups_kb` |
+| Stats | `stats_main_kb`, `stats_back_kb` |
 
 See [button styles](../button-styles.md) for layout and callback-data conventions.
 
