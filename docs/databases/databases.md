@@ -51,11 +51,15 @@ The `member_cache` collection stores user profile data. For performance, use the
 
 | Function | Fields fetched | Use case |
 |---|---|---|
-| `get_user(user_id)` | All fields | When you need complete user profile |
-| `get_first_name(user_id, fallback)` | `first_name` only | When you only need the name |
-| `get_user_mention_data(user_id)` | `first_name`, `username` | Optimized for mention formatting (returns tuple) |
+| `get_user(user_id)` | All fields | When you need a complete user profile |
+| `get_first_name(user_id, fallback)` | `first_name` only | When you only need the display name for one user |
+| `get_user_mention_data(user_id)` | `first_name`, `username` | Single-user mention formatting (returns tuple) |
+| `get_first_names_batch(user_ids)` | `first_name` only | Display names for many users in one query (returns `dict[int, str]`) |
+| `get_mention_data_batch(user_ids)` | `first_name`, `username` | Mention data for many users in one query (returns `dict[int, tuple]`) |
 
-**Performance tip:** Always use `get_user_mention_data()` when building mentions to avoid fetching unnecessary fields like `last_name`, `commit_date`, and `last_updated`.
+For group title lookups across multiple chat IDs, use `groups_db.get_group_titles(chat_ids)` which returns `dict[int, str]` in a single query.
+
+**Performance tip:** Use batch functions whenever you need data for more than one user in a list view or fan-out result. Calling single-user functions inside a loop is an N+1 anti-pattern. Both batch functions rely on the `(user_id, first_name, username)` covered-query index in `member_cache`.
 
 ## Startup indexes
 
@@ -74,6 +78,8 @@ The `member_cache` collection stores user profile data. For performance, use the
 | `member_cache` | `(user_id, first_name, username)` (covered-query index for batch `$in` projections) |
 | `warns` | `(user_id, chat_id, timestamp desc)` |
 | `warn_counts` | unique `(user_id, chat_id)` |
+| `kicks` | `(user_id, timestamp desc)` |
+| `mutes` | `(user_id, timestamp desc)` |
 | `promotion_requests` | unique `(request_id)` |
 | `promotion_requests` | `(target_id, status)` |
 
@@ -96,7 +102,7 @@ founder = 4 > admin = 3 > developer = 2 > tester = 1 > none = 0
 
 Use `users_roles.role_rank()` and `users_roles.can_act_on()` instead of hand-written comparisons.
 
-## Ban document fields
+## Ban model
 
 `bans` documents are represented by `BanDoc` and may contain:
 
@@ -116,14 +122,49 @@ Use `users_roles.role_rank()` and `users_roles.can_act_on()` instead of hand-wri
 | `review_message_id` / `review_timestamp` | Appeal review card metadata. |
 | `appeal_log_msg_id` / `appeal_submitted_at` / `appeal_link` | Submitted appeal metadata. |
 
+Key helper functions:
+
+- `bans_db.get_active_ban(user_id)`: returns the currently active ban for a user, or `None`.
+- `bans_db.get_ban(ban_id)`: fetches a single ban record by its short ID.
+- `bans_db.create_ban(...)` / `bans_db.update_ban(...)`: write a new ban or update an existing one.
+- `bans_db.deactivate_ban(ban_id)`: marks a ban inactive (used by unban flow).
+- `bans_db.set_review(...)` / `bans_db.set_appeal_log_msg(...)`: store appeal/review metadata on an existing ban.
+- `bans_db.active_bans()` / `bans_db.active_ban_count()` / `bans_db.active_ban_user_ids()`: federation-wide active ban queries.
+- `bans_db.user_bans(user_id)` / `bans_db.user_ban_count(user_id)`: per-user ban history (all records, active and inactive).
+- `bans_db.user_appeal_count(user_id)`: count of submitted appeals for a user.
+
 ## Warning model
 
 Warnings are stored per user and chat:
 
 - `warns` stores each warning event.
-- `warn_counts` stores a counter document for fast limit checks.
-- `warns_db._sync_warn_count()` backfills counters from warning history when needed.
+- `warn_counts` stores a counter document for fast limit checks with `unique (user_id, chat_id)` index.
 - `warning_flow.WARN_LIMIT` is currently `3`.
+
+Key helper functions:
+
+- `warns_db.add_warn(user_id, reason, admin_id, chat_id)`: records a warning and returns the new warn count.
+- `warns_db.warn_count(user_id, chat_id)` / `warns_db.get_warns(user_id, chat_id)`: current count and full list for a user in a group.
+- `warns_db.remove_last_warn(user_id, chat_id)` / `warns_db.clear_warns(user_id, chat_id)`: undo latest warning or reset all.
+- `warns_db.user_total_warns(user_id)` / `warns_db.user_warn_groups(user_id)` / `warns_db.user_all_warns(user_id)`: federation-wide warn aggregates used by `/check`.
+
+## Kick model
+
+Kicks are append-only audit records:
+
+- `kicks` stores one document per kick event with fields `user_id`, `chat_id`, `reason`, `admin_id`, and `timestamp`.
+- `kicks_db.user_kicks(user_id)` returns all kick records for a user, newest first.
+- `kicks_db.user_kick_count(user_id)` returns the total count.
+- Records are never deleted; the collection is a permanent audit trail.
+
+## Mute model
+
+Mutes follow the same append-only pattern as kicks:
+
+- `mutes` stores one document per mute event with fields `user_id`, `chat_id`, `reason`, `admin_id`, and `timestamp`.
+- `mutes_db.user_mutes(user_id)` returns all mute records for a user, newest first.
+- `mutes_db.user_mute_count(user_id)` returns the total count.
+- Records are never deleted; the collection is a permanent audit trail.
 
 ## Group model
 

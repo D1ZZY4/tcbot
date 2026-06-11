@@ -2,6 +2,29 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-11 (session 47)
+
+### Changed
+
+- **`tcbot/modules/broadcasting.py`** — replaced `sum(1 for r in results if not isinstance(r, BaseException))` with `count_errors(results)`; added `count_errors` to the `tcbot.utils.dispatch` import. `failed` is now computed by `count_errors`, `success` by `len(results) - failed`.
+- **`tcbot/modules/helper/workflows/connected_flow.py`** — same substitution for the `applied` count after `fan_out`; added `count_errors` to the dispatch import.
+
+### Documentation
+
+- **`docs/helper/helper.md`** (`parse_editmsg.py` section) — expanded from a prose sentence to a two-row table covering both `safe_edit` and `safe_edit_cb`. The second function was missing entirely; it is used by callback-query handlers across multiple workflow files.
+- **`docs/utils/utils.md`** (`dispatch.py` section) — added `count_errors` to the exports table; updated the code example to use `count_errors(results)` instead of the inline `sum(isinstance...)` pattern.
+- **`docs/utils/utils.md`** (`prefixes.py` section) — split the vague `ANY_CMD_FILTER / related filters` row into two explicit rows: `ANY_CMD_FILTER` (custom-prefix only, used in member-cache guard) and `ALL_PREFIXES_CMD_FILTER` (all prefixes including `/`, used in `ConversationHandler` fallbacks).
+- **`docs/utils/utils.md`** — added a new `pagination.py` section documenting `paginate`, `nav_row`, and `date_or_unknown`; added `pagination.py` node to the Mermaid flowchart. `pagination.py` had no documentation entry at all despite being used by `stats_flow.py` and `check_flow.py`.
+- **`docs/workflows/workflows.md`** — added `## Demotion: demote_flow.py` section with a three-row trigger table (`None`, `"ban"`, `"kick"`) and a note on `Demote.remove_role`. Previously `demote_flow.py` was only mentioned inline inside the Promotion section with no dedicated entry.
+- **`docs/workflows/workflows.md`** — added `## Check: check_flow.py` section with a full method table covering all eight classmethods (`profile`, `bans_list`, `ban_detail`, `warns_by_group`, `warns_in_group`, `kicks_list`, `mutes_list`, `appeals_list`) and their callback prefixes. `check_flow.py` had no section at all despite being one of the largest workflow files.
+- **`docs/helper/helper.md`** (`parse_logmsg.py` section) — replaced the vague "appeal decision edit messages" phrase with the explicit function names `appeal_approved_edit` and `appeal_rejected_edit` so the full public surface (26 functions) is named.
+- **`docs/workflows-guide.md`** — removed 4 prohibited characters: em-dash in prose (replaced with semicolon), `🤖` in fenced PR body example, `🔄` and `✅` in notification example, and bare `✅` bullets in Maintenance section checklist.
+- **`docs/workflows/workflows.md`** — replaced 3 em-dashes (introduced in this session for the Demotion trigger table) with colons.
+- **`docs/databases/databases.md`** — added `kicks` and `mutes` rows to the Startup indexes table (`(user_id, timestamp desc)` for each); both collections had indexes in `ensure_indexes()` that were not listed in the docs. Added new `## Kick model` and `## Mute model` sections (parallel to the existing `## Warning model` section) documenting the document shape, public helper functions, and append-only audit-trail behaviour.
+- **`docs/databases/databases.md`** (Member cache optimization section) — expanded from 3 single-user rows to a 5-row table adding `get_first_names_batch(user_ids)` and `get_mention_data_batch(user_ids)`; added a note on `groups_db.get_group_titles(chat_ids)` and updated the performance tip to name the covered-query index explicitly. Both batch functions are actively used by `check_flow.py` and `stats_flow.py` but were not listed anywhere in the database docs.
+- **`docs/databases/databases.md`** (`## Ban document fields` section renamed to `## Ban model`) — added a "Key helper functions" bullet list after the field table documenting all 14 public `bans_db` functions (`get_active_ban`, `get_ban`, `create_ban`, `update_ban`, `deactivate_ban`, `set_review`, `set_appeal_log_msg`, `active_bans`, `active_ban_count`, `active_ban_user_ids`, `user_bans`, `user_ban_count`, `user_appeal_count`, `set_log_message_id`). These were undocumented in the database layer docs despite being heavily used across ban, check, and stats flows.
+- **`docs/databases/databases.md`** (`## Warning model` section) — removed reference to private `_sync_warn_count()` and added a "Key helper functions" bullet list documenting the 8 public `warns_db` functions (`add_warn`, `warn_count`, `get_warns`, `remove_last_warn`, `clear_warns`, `user_total_warns`, `user_warn_groups`, `user_all_warns`). Makes the section consistent with the new Ban/Kick/Mute model sections.
+
 ## [Unreleased] - 2026-06-11 (session 46)
 
 ### Documentation

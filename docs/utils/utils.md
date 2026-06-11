@@ -12,17 +12,22 @@ flowchart TD
     Utils --> Logging[logger.py<br/>logger config]
     Utils --> ErrorReporter[error_reporter.py<br/>error sink]
     Utils --> TimeDate[timedate_format.py<br/>UTC + display]
+    Utils --> Pagination[pagination.py<br/>paginate, nav_row, date_or_unknown]
     Modules[tcbot/modules/] --> Dispatch
     Modules --> Prefixes
     Modules --> TimeDate
+    Modules --> Pagination
     Logging --> ErrorReporter
 ```
 
 ## `dispatch.py`
 
-`fan_out(coros, max_concurrent=10)` runs awaitables concurrently with a semaphore.
+| Export | Purpose |
+|---|---|
+| `fan_out(coros, max_concurrent=10)` | Run awaitables concurrently up to `max_concurrent` at once; never raises; returns exceptions as list elements. |
+| `count_errors(results)` | Count `BaseException` items in a `fan_out` result list. Replaces the inline `sum(1 for r in results if isinstance(r, BaseException))` pattern. |
 
-Behavior:
+`fan_out` behavior:
 
 - preserves input order in the returned list;
 - returns exceptions as list elements instead of raising;
@@ -36,7 +41,7 @@ results = await fan_out([
     ctx.bot.ban_chat_member(group["chat_id"], target_id)
     for group in groups
 ])
-errors = sum(1 for item in results if isinstance(item, BaseException))
+errors = count_errors(results)
 ```
 
 ## `prefixes.py`
@@ -49,7 +54,8 @@ Command prefix support is centralized here.
 | `parse_cmd_args(text)` | Returns command arguments after the first whitespace. |
 | `register_command(name, callback)` | Registers an async callback for alternate-prefix dispatch. |
 | `dispatch_alt_prefix(update, context)` | Dispatches configured non-slash prefix commands from the registry. |
-| `ANY_CMD_FILTER` / related filters | Shared command-detection filters used to avoid treating commands as plain text. |
+| `ANY_CMD_FILTER` | Matches any custom-prefix command (e.g. `!`, `.`); excludes Telegram-native `/` commands. Used in `__main__.py` member-cache guard. |
+| `ALL_PREFIXES_CMD_FILTER` | Matches any prefixed command across all configured prefixes including `/`. Used in `ConversationHandler` fallbacks to catch all commands and cancel conversations. |
 
 `PREFIXES` supports a Python-style list such as `["/", "!", "."]` and falls back to common prefixes when unset. Prefix filters are case-sensitive, accept lowercase ASCII command names, and only accept `@BotName` suffixes that target the current bot.
 
@@ -96,6 +102,18 @@ This module is the single source of truth for UTC datetime handling.
 | `utc_now_str()` | Display the current UTC time using `fmt_dt()`. |
 
 Do not call `datetime.utcnow()` or `datetime.now(timezone.utc)` outside this utility.
+
+## `pagination.py`
+
+Shared pagination helpers used by `stats_flow.py` and `check_flow.py` drill-down pages.
+
+| Export | Purpose |
+|---|---|
+| `paginate(items, page, page_size)` | Slice a list for a 0-based page number. Returns `(chunk, total_pages, clamped_page)`. |
+| `nav_row(page, total_pages, cb_prefix)` | Build a `[« Prev]` / `[Next »]` inline keyboard row when there is more than one page. Buttons use `cb_prefix:<page>` callback data. |
+| `date_or_unknown(value)` | Format a datetime field via `fmt_dt` or return `"Unknown"` if the value is falsy. |
+
+Always import these from `tcbot.utils.pagination`; do not reimplement pagination logic inside individual flow files.
 
 ## Utility boundaries
 

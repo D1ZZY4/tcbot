@@ -17,7 +17,7 @@ from telegram.constants import ChatMemberStatus
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
-from tcbot.utils.dispatch import fan_out
+from tcbot.utils.dispatch import count_errors, fan_out
 
 if TYPE_CHECKING:
     from telegram.ext import ContextTypes
@@ -133,7 +133,7 @@ class BuildConnection:
 
         # * Apply all existing federation bans concurrently - semaphore-bounded
         results = await fan_out([bot.ban_chat_member(chat_id, uid) for uid in ban_uids])
-        applied = sum(1 for r in results if not isinstance(r, BaseException))
+        applied = len(results) - count_errors(results)
 
         lc, lt = cfg.logs
         try:

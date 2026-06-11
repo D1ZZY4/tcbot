@@ -174,7 +174,7 @@ Common families:
 
 - `ban_log`, `ban_update_log`, `proof_caption_new`, `proof_caption_update`;
 - `mute_log`, `unmute_log`, `kick_log`, `warn_log`, `unwarn_log`, `unban_log`;
-- `appeal_received_log`, `appeal_submitted_log`, appeal decision edit messages, `appeal_unban_log`;
+- `appeal_received_log`, `appeal_submitted_log`, `appeal_approved_edit`, `appeal_rejected_edit`, `appeal_unban_log`;
 - `promoted`, `demoted`, `ownership_transferred`, promotion request logs (`promote_request_log`, `promote_approved_log`, `promote_rejected_log`);
 - `group_connected_log`, `group_connection_rejected_log`, `group_disconnected_log`, `group_bot_removed_log`;
 - `broadcast_log`.
@@ -183,9 +183,10 @@ Use the `LogBuilder` class in this module to compose new audit-log messages; avo
 
 ## `parse_editmsg.py`
 
-`safe_edit(msg, text, **kwargs)` edits a message with `parse_mode="HTML"` and ignores expected Telegram `BadRequest` cases such as `message is not modified`, `message to edit not found`, and `chat not found`.
-
-Unexpected edit failures are logged as warnings.
+| Function | Purpose |
+|---|---|
+| `safe_edit(msg, text, **kwargs)` | Edit a `Message` object with `parse_mode="HTML"`; swallows harmless `BadRequest` cases such as `message is not modified`, `message to edit not found`, and `chat not found`. Unexpected failures are logged as warnings. |
+| `safe_edit_cb(q, text, **kwargs)` | Edit a `CallbackQuery` message via `q.edit_message_text`; same error-swallow policy as `safe_edit`. Use when a user can re-tap a button that lands them on the same content to avoid `BadRequest: message is not modified` noise. |
 
 ## Helper usage rules
 

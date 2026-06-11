@@ -154,8 +154,37 @@ Appeal flow requirements:
 
 ## Promotion: `promote_flow.py`
 
-Promotion is not a conversation. `Promote.execute(...)` in `workflows/promote_flow.py` performs direct role assignment or creates a promotion request for Founder approval when required. `admins.py` registers the command and callback handlers. Manual demotion uses `Demote.execute(...)` in `workflows/demote_flow.py` (also called with `trigger="ban"`/`"kick"` by the ban and kick entry points to auto-remove a role before the moderation action).
+Promotion is not a conversation. `Promote.execute(...)` in `workflows/promote_flow.py` performs direct role assignment or creates a promotion request for Founder approval when required. `admins.py` registers the command and callback handlers.
+
+## Demotion: `demote_flow.py`
+
+Demotion is not a conversation. `Demote.execute(...)` in `workflows/demote_flow.py` handles two distinct paths controlled by the optional `trigger` argument:
+
+| Call | Trigger | Path |
+|---|---|---|
+| `Demote.execute(...)` | `None` | Manual `/tcdemote`: sends a confirmation prompt with `Confirm` / `Cancel` buttons, then removes the role and logs it. |
+| `Demote.execute(..., trigger="ban")` | `"ban"` | Auto-demote before a federation ban: silently removes the role and notes the trigger in the log. |
+| `Demote.execute(..., trigger="kick")` | `"kick"` | Auto-demote before a current-group kick: same silent path as `"ban"`. |
+
+`Demote.remove_role(target_id, target_role)` is the shared DB write used by all three paths. It delegates to `users_roles` and returns `True` if a role was actually removed.
 
 ## Stats: `stats_flow.py`
 
 `stats_flow.py` exposes the unified `Stats` class used by `/tcstats`. Every drill-down (overview, staff roster, users, connected chats, active bans, and the search panel) is a classmethod on `Stats` returning `(text, InlineKeyboardMarkup)`. Callbacks pair `q.answer()` with `safe_edit_cb` so the same view can be re-tapped without raising `Message is not modified`. See `docs/stats-detailed.md` for the full method list and callback namespaces.
+
+## Check: `check_flow.py`
+
+`check_flow.py` exposes the `Check` class used by `/check`. It is not a conversation; every method is a classmethod returning `(text, InlineKeyboardMarkup)` that `checking.py` sends or edits directly.
+
+| Method | Callback prefix | Purpose |
+|---|---|---|
+| `Check.profile(bot, target_id)` | `check_main:<uid>` | Top-level profile card: identity, role, active ban, total ban count, warn counts, kick count, mute count, and drill-down buttons. |
+| `Check.bans_list(target_id, page)` | `check_bans:<uid>:<page>` | Paginated list of all bans (active + inactive), newest first. Each row shows status, Ban ID, timestamp, reason snippet, and a numbered button. |
+| `Check.ban_detail(target_id, ban_id)` | `check_ban_item:<uid>:<ban_id>` | Full ban card via `ban_info.build_ban_detail`; exposes `View Proof` and `View Appeal` URL buttons when available. |
+| `Check.warns_by_group(target_id)` | `check_warns:<uid>` | Lists groups where the user has active warnings, with count and a drill-in button per group. |
+| `Check.warns_in_group(target_id, chat_id, page)` | `check_warn_chat:<uid>:<chat>:<page>` | Paginated per-group warning list: timestamp, reason snippet, admin. |
+| `Check.kicks_list(target_id, page)` | `check_kicks:<uid>:<page>` | Paginated kick records: timestamp, group, reason snippet, admin. |
+| `Check.mutes_list(target_id, page)` | `check_mutes:<uid>:<page>` | Paginated mute records: same shape as kicks. |
+| `Check.appeals_list(target_id, page)` | `check_appeals:<uid>:<page>` | Paginated list of bans that have an associated appeal; items drill into `Check.ban_detail`. |
+
+All drill-down views include a `« Back` button that returns to `Check.profile` via `check_main:<uid>`. See `docs/check-detailed.md` for the full behavior reference.

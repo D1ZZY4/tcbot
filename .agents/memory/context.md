@@ -185,6 +185,18 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Updated `.agents/RUFF.md`, `python-code-quality/SKILL.md`, `python-code-quality/REFERENCE.md` to reflect new exclude list.
   - Full verification sequence PASS: uv sync, editable install, import check, ruff format, ruff check, bot restart (MongoDB connected, 75 handlers, polling active).
 
+- Session 47 (2026-06-11): code quality + docs gaps.
+  - broadcasting.py and connected_flow.py: replaced inline `sum(isinstance...)` patterns with `count_errors(results)`; added import.
+  - docs/helper/helper.md: expanded parse_editmsg section to table covering safe_edit + safe_edit_cb (safe_edit_cb was entirely missing).
+  - docs/utils/utils.md: added count_errors to dispatch table; split ANY_CMD_FILTER row into 2 explicit rows; added full pagination.py section + Mermaid node.
+  - docs/workflows/workflows.md: added Demotion: demote_flow.py section (with trigger table); added Check: check_flow.py section (full 8-method table with callback prefixes). Both were missing entirely.
+  - docs/workflows-guide.md: removed 4 prohibited characters (em-dash, emoji).
+  - docs/databases/databases.md: added `kicks` and `mutes` rows to Startup indexes table; added Kick model and Mute model sections (parallel to Warning model).
+  - docs/databases/databases.md (Member cache optimization): expanded to 5-row table adding get_first_names_batch and get_mention_data_batch; added get_group_titles note; updated performance tip.
+  - docs/databases/databases.md: renamed "Ban document fields" to "Ban model"; added Key helper functions bullet list for all 14 public bans_db functions. Consistent with kick/mute model sections.
+  - docs/databases/databases.md: Warning model section updated: removed private _sync_warn_count reference; added Key helper functions for all 8 public warns_db functions.
+  - Ruff 70 files clean; import OK.
+
 - Session 46 (2026-06-11): docs gap fixes in helper.md.
   - Added `proof_line(proof_desc)` to formatter.py table (was missing; function added session 28, used by kicking/muting/warning flows).
   - Added 7 missing keyboards.py factories to table: `groups_menu_kb`, `tcgroups_kb`, `stats_main_kb`, `stats_back_kb`, `module_help_kb`, `back_to_module_kb`, `additional_menu_kb` across new Groups/Stats rows and Menus/help row.
@@ -193,7 +205,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## What is in progress
 
-Nothing. Session 46 checkpoint complete.
+Nothing. Session 47 checkpoint complete.
 
 ## What is pending (optional)
 

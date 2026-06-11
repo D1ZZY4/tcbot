@@ -16,7 +16,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.formatter import code
-from tcbot.utils.dispatch import fan_out
+from tcbot.utils.dispatch import count_errors, fan_out
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -112,8 +112,8 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             )
 
     results = await fan_out([_send_one(grp) for grp in groups])
-    success = sum(1 for r in results if not isinstance(r, BaseException))
-    failed = len(results) - success
+    failed = count_errors(results)
+    success = len(results) - failed
 
     for grp, r in zip(groups, results, strict=False):
         if isinstance(r, BaseException):

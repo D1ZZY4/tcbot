@@ -74,7 +74,7 @@ Auto-applied by GitHub Actions
 Title: chore: Auto-update dependencies
 
 Body:
-## 🤖 Automated Dependency Update
+## Automated Dependency Update
 
 This PR updates project dependencies to their latest compatible versions.
 
@@ -115,7 +115,7 @@ Safe to merge with new versions.
 - Runs the bot via long polling for a ~5 hour window per run (GitHub caps a job at 6h)
 - **Self-chains:** roughly 15 minutes before the window ends, it dispatches the next run so coverage is continuous. This requires a repository secret `BOT_PAT` (a Personal Access Token with the `workflow` scope), because the built-in `GITHUB_TOKEN` cannot trigger workflows
 - The cron schedule acts as a resurrection fallback that restarts the bot if the chain ever breaks or no PAT is configured
-- A `concurrency` group (`tcf-bot-runner`, `cancel-in-progress: false`) ensures only one bot instance runs at a time, with at most one queued to take over seamlessly. Long polling allows only one active instance — a second would make Telegram return `409 Conflict`
+- A `concurrency` group (`tcf-bot-runner`, `cancel-in-progress: false`) ensures only one bot instance runs at a time, with at most one queued to take over seamlessly. Long polling allows only one active instance; a second would make Telegram return `409 Conflict`
 - Bot configuration comes from repository secrets (`BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`, etc.), plus the optional `BOT_PAT` for self-chaining
 
 ---
@@ -162,7 +162,7 @@ Without `BOT_PAT`, the Run Bot workflow cannot dispatch its own next run; it fal
 
 ### Dependency Update
 ```
-🔄 Dependency Update - ✅ PASS
+Dependency Update - PASS
 
 Dependencies updated
 Result: PR created
@@ -212,8 +212,8 @@ View workflow
 ## Maintenance
 
 ### Weekly Tasks (Automated)
-- ✅ Dependency updates (Monday 04:00 UTC)
-- ✅ Code quality fixes (Monday 04:00 UTC)
+- Dependency updates (Monday 04:00 UTC)
+- Code quality fixes (Monday 04:00 UTC)
 
 ### Manual Tasks
 - Review and merge dependency update PRs
