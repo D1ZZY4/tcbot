@@ -98,6 +98,7 @@ class TelegramErrorHandler(logging.Handler):
     """Async logging handler that ships errors to Telegram."""
 
     def __init__(self) -> None:
+        """Register the handler at ERROR level."""
         super().__init__(logging.ERROR)
 
     def emit(self, record: logging.LogRecord) -> None:
@@ -108,7 +109,9 @@ class TelegramErrorHandler(logging.Handler):
             loop = asyncio.get_running_loop()
         except RuntimeError:
             return
-        from tcbot.utils import error_reporter
+        from tcbot.utils import (  # noqa: PLC0415
+            error_reporter,
+        )
 
         task = loop.create_task(error_reporter.report_record(record))
         _tg_tasks.add(task)

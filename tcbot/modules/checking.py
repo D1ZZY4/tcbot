@@ -231,7 +231,9 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         await q.answer(_ERR_BAN_INACTIVE, show_alert=True)
         return
 
-    from tcbot.modules.helper.ban_info import build_ban_detail
+    from tcbot.modules.helper.ban_info import (  # noqa: PLC0415
+        build_ban_detail,
+    )
 
     _, (text, proof_link) = await asyncio.gather(
         q.answer(),

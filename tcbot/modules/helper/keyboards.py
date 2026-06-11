@@ -33,7 +33,7 @@ def ban_log_update(
     previous_proof_link: str,
     appeal_url: str,
 ) -> InlineKeyboardMarkup:
-    """Updated ban-log keyboard with previous-proof button and explicit appeal URL."""
+    """Return the ban-log keyboard with a previous-proof button and explicit appeal URL."""
     return InlineKeyboardMarkup(
         [
             [
@@ -265,7 +265,7 @@ def back_to_privacy_kb() -> InlineKeyboardMarkup:
 
 
 def additional_menu_kb() -> InlineKeyboardMarkup:
-    """Static links menu shown from the start menu: channels, groups, TRAVEL."""
+    """Return the static links menu shown from the start menu: channels, groups, TRAVEL."""
     return InlineKeyboardMarkup(
         [
             [

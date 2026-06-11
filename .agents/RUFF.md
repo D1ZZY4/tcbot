@@ -44,15 +44,19 @@ rather than relying on editor-specific settings.
 Current active ruleset (from `pyproject.toml`):
 
 ```
-select = ["B", "C4", "E4", "E7", "E9", "F", "FBT", "I", "PERF", "PIE", "PTH", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]
+select = ["B", "C4", "D", "E4", "E7", "E9", "F", "FBT", "I", "PERF", "PIE", "PLC", "PLE", "PTH", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]
 ignore  = [
+    "D203",    # Conflicts with D211 (no-blank-line-before-class); D211 is preferred
+    "D213",    # Conflicts with D212 (multi-line-summary-first-line); D212 is preferred
     "RUF001",  # Ambiguous unicode: › intentionally used as breadcrumb separator in bot UI text
     "TC001",   # Application imports in TYPE_CHECKING: internal TypedDicts used in runtime dict ops
     "UP047",   # Generic functions: TypeVar-based style kept for ratelimiter compatibility
 ]
+exclude = [".local/", ".agents/", ".kilo/", ".trae/", ".claude/"]
 ```
 
 Rules intentionally not added:
+- `PLR` (Pylint-refactoring): `PLR0912` (too-many-branches) and `PLR0915` (too-many-statements) fire on large flow functions that are already logically decomposed; too noisy for conversation-heavy handlers.
 - `T20` (flake8-print): `__main__._print_fatal` uses `print(..., file=sys.stderr)` intentionally.
 - `ANN` (annotations): `ANN401` fires on legitimate `Any` in generic cache/date helpers; too noisy to enable globally.
 - `TRY` (full suite): `TRY003` (long exception messages) and `TRY300` (else-after-try) are pedantic; only `TRY400` and `TRY401` are selected.

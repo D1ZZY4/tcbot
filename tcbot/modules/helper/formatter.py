@@ -46,9 +46,9 @@ def esc(text: str) -> str:
 
 
 def proof_line(proof_desc: str | None) -> str:
-    """Return a formatted proof line or an empty string when no proof is given.
+    r"""Return a formatted proof line or an empty string when no proof is given.
 
-    Produces ``\\nProof: <desc>`` when *proof_desc* is a non-empty string,
+    Produces ``\nProof: <desc>`` when *proof_desc* is a non-empty string,
     or ``""`` otherwise.  Callers embed the result directly in reply text.
     """
     return f"\nProof: {proof_desc}" if proof_desc else ""

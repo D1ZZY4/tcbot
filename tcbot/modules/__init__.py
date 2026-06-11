@@ -51,7 +51,7 @@ def _filter_modules(modules: list[str]) -> list[str]:
 ALL_MODULES = _filter_modules(_discover_modules())
 log.info("Modules to load: %s", ALL_MODULES)
 
-__all__ = [*ALL_MODULES, "ALL_MODULES"]
+__all__ = [*ALL_MODULES, "ALL_MODULES"]  # noqa: PLE0604 — ALL_MODULES is list[str] at runtime; static checker cannot verify
 
 
 # ─────────────────────── Handler Collection ─────────────────────── #

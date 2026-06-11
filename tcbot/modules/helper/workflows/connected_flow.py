@@ -55,7 +55,7 @@ class BuildConnection:
     # ── Text factories ─────────────────────────────────────────────────────
 
     def join_prompt(self) -> str:
-        """Initial prompt sent when the bot is first added to a group."""
+        """Return the initial prompt to send when the bot is first added to a group."""
         return f"Want to connect this group to {self.community_name}?"
 
     def connected_message(self) -> str:
@@ -157,7 +157,7 @@ class BuildConnection:
     async def on_bot_added(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        """Fired on every change to the bot's own member status in any chat."""
+        """Handle every change to the bot's own member status in any chat."""
         cmc = update.my_chat_member
         if not cmc:
             return
@@ -242,7 +242,7 @@ class BuildConnection:
     async def on_join_decision(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        """Callback handler for Connect / Cancel buttons on the join prompt."""
+        """Handle Connect / Cancel button callbacks on the join prompt."""
         q = update.callback_query
         chat = update.effective_chat
         user = update.effective_user

@@ -2,8 +2,10 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Studio
 
-"""Identity helpers: classify a user (self / bot / Telegram / Founder / staff / regular)
-and produce friendly, identity-aware replies for moderation commands.
+"""Identity helpers: classify users and produce identity-aware moderation replies.
+
+Classify a user (self / bot / Telegram / Founder / staff / regular) and produce
+friendly, identity-aware replies for moderation commands.
 
 The bot voice is professional, friendly, and formal with light dry humour. Plain text
 only; no pictograph emoji, no text emoticons. One short witty line per identity is
@@ -94,6 +96,7 @@ async def classify(
     they run in parallel via :func:`asyncio.gather` so the total latency is one
     round-trip rather than two, even when the role is ultimately unused (e.g.
     self / bot / Telegram early-returns).
+
     """
     # * Both are independent cached reads; run in parallel.
     (cached_fname, target_username), role = await asyncio.gather(

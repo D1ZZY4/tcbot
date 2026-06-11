@@ -2,11 +2,21 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-11 (session 42)
+
+### Changed
+
+- **`pyproject.toml`** — added `PLC` (Pylint-convention) and `PLE` (Pylint-error) to `[tool.ruff.lint] select`.
+- **`tcbot/modules/__init__.py`** — added `# noqa: PLE0604` to `__all__` spread (`[*ALL_MODULES, "ALL_MODULES"]`): false positive — `ALL_MODULES` is `list[str]` at runtime; static checker cannot verify.
+- **`tcbot/database/mongos.py`** — added `# noqa: PLC0415` to `import dns.resolver` inside `_patch_dns_if_needed`: intentional lazy import to avoid `ImportError` when `dnspython` is absent.
+- **`tcbot/modules/checking.py`** — added `# noqa: PLC0415` to lazy `from tcbot.modules.helper.ban_info import build_ban_detail`: intentional to break circular dependency.
+- **`tcbot/utils/logger.py`** — added `# noqa: PLC0415` to lazy `from tcbot.utils import error_reporter`: intentional to break circular dependency (`logger` ← `error_reporter`).
+
 ## [Unreleased] - 2026-06-11 (session 41)
 
 ### Changed
 
-- **`pyproject.toml`** — added `PTH` (flake8-use-pathlib) and `FBT` (flake8-boolean-trap) to `[tool.ruff.lint] select`.
+- **`pyproject.toml`** — added `PTH`, `FBT`, and `D` (pydocstyle) to `[tool.ruff.lint] select`; added `D203`/`D213` to ignore (incompatible with chosen `D211`/`D212` convention); excluded `.local/`, `.agents/`, `.kilo/`, `.trae/`, `.claude/` from ruff scan.
 - **`tcbot/database/mongos.py`** — replaced `os.path.exists(_RESOLV_CONF)` with `Path(_RESOLV_CONF).exists()` (PTH110); replaced `import os` with `from pathlib import Path`.
 - **`tcbot/modules/groups.py`** — made `detailed` keyword-only in `_render` and `_toggle` (FBT001); updated all internal call sites to use `detailed=...` form (FBT003).
 - **`tcbot/modules/helper/keyboards.py`** — made `detailed` keyword-only in `groups_menu_kb` and `tcgroups_kb` (FBT001).
@@ -16,6 +26,15 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 - **`tcbot/modules/warnings.py`** — updated `parse_inline_reason` call to keyword form (FBT003).
 - **`tcbot/__main__.py`** — added `# noqa: FBT003` to `.concurrent_updates(True)` (PTB builder method — keyword arg not available).
 - **`tcbot/database/groups_db.py`** — added `# noqa: FBT003` to two `connected_cache.put(chat_id, True/False)` calls (generic cache API — changing to keyword-only would affect all callers).
+- **`tcbot/database/cache.py`** — added docstring to `TTLCache.__init__` (D107).
+- **`tcbot/modules/helper/extraction.py`** — added docstring to `TargetInfo.__post_init__` (D105).
+- **`tcbot/modules/helper/formatter.py`** — changed `"""` to `r"""` in `proof_line` to avoid D301 backslash warning.
+- **`tcbot/modules/helper/identity.py`** — restructured module docstring so the summary fits on one line (D205); extended description follows the blank line.
+- **`tcbot/modules/helper/keyboards.py`** — rephrased two docstrings to imperative mood (D401): `ban_log_prev_proof_kb`, `additional_menu_kb`.
+- **`tcbot/modules/helper/parse_logmsg.py`** — added docstrings to `LogBuilder.__init__` and `LogBuilder.__str__` (D107, D105); rephrased three module-level function docstrings to imperative mood (D401).
+- **`tcbot/modules/helper/workflows/connected_flow.py`** — rephrased three method docstrings to imperative mood (D401): `join_prompt`, `on_bot_added`, `on_join_decision`.
+- **`tcbot/modules/helper/workflows/stats_flow.py`** — removed stray blank line after `bans_list` docstring (D202, auto-fixed).
+- **`tcbot/utils/logger.py`** — added docstring to `TelegramErrorHandler.__init__` (D107).
 
 ## [Unreleased] - 2026-06-11 (session 40)
 

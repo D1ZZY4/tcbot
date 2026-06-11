@@ -30,6 +30,7 @@ class TTLCache[T]:
     __slots__ = ("_store", "_ttl")
 
     def __init__(self, ttl: float) -> None:
+        """Initialise the cache with a time-to-live in seconds."""
         self._ttl: float = ttl
         self._store: dict[Any, tuple[T, float]] = {}
 

@@ -30,6 +30,7 @@ class LogBuilder:
     __slots__ = ("_lines",)
 
     def __init__(self, title: str) -> None:
+        """Start a new log message with the given title header."""
         self._lines: list[str] = [str(title), ""]
 
     def field(
@@ -111,6 +112,7 @@ class LogBuilder:
         return "\n".join(self._lines)
 
     def __str__(self) -> str:
+        """Delegate to build so str(builder) works naturally."""
         return self.build()
 
 
@@ -127,7 +129,7 @@ def ban_log(
     proof_lnk: str | None = None,
     timestamp: datetime | None = None,
 ) -> str:
-    """New federation-ban audit-log message."""
+    """Return a new federation-ban audit-log message."""
     # * Note: proof_lnk is passed through for the inline Proof button in the
     # * accompanying keyboard. The text intentionally has no hyperlink; the
     # * button avoids the visual noise of a redundant 'View Proof' link.
@@ -397,7 +399,7 @@ def appeal_submitted_log(
     ban_id: str,
     appeal_link: str,
 ) -> str:
-    """Initial log posted to LOG_CHANNEL when an appeal is submitted."""
+    """Return the initial log message to post to LOG_CHANNEL when an appeal is submitted."""
     b = (
         LogBuilder(f"New {cfg.community_name} Appeal Submitted")
         .mention_field("User", target_id, target_fname)
@@ -666,7 +668,7 @@ def group_connected_log(
     owner_fname: str,
     chat_username: str | None = None,
 ) -> str:
-    """New federation-connected-group audit-log message."""
+    """Return a new federation-connected-group audit-log message."""
     if chat_username:
         group_display = (
             f'<a href="https://t.me/{esc(chat_username)}">{esc(chat_title)}</a>'

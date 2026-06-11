@@ -85,6 +85,16 @@ description: Non-trivial technical decisions made during development. Format: da
 
 ---
 
+## 2026-06-11: PLE/PLC rulesets - safe to add; PLE0604 and PLC0415 suppressed with noqa
+
+**Decision:** Add `PLE` (Pylint-error) and `PLC` (Pylint-convention) to pyproject.toml ruff select. Suppress `PLE0604` false positive on `[*ALL_MODULES, "ALL_MODULES"]` in `__init__.py` with `# noqa: PLE0604`. Suppress `PLC0415` on three intentional lazy imports with per-line noqa. Do NOT add `PLR` (refactoring): fires on large handler functions without benefit.
+
+**Why:** PLE0604 fires on `__all__ = [*ALL_MODULES, "ALL_MODULES"]` — `ALL_MODULES` is `list[str]` at runtime but ruff cannot verify this statically. PLC0415 fires on three correct lazy imports: `dns.resolver` (optional dep), `ban_info.build_ban_detail` (circular break), `error_reporter` (circular break logger↔reporter).
+
+**How to apply:** When adding a new lazy import, add `# noqa: PLC0415` to the `from … import (` line. When spreading a list in `__all__`, verify the list is guaranteed to be `list[str]` at runtime; if so, add `# noqa: PLE0604`. Never add these to the global ignore — only use per-line suppression.
+
+---
+
 ## 2026-06-02: Memory files live in `.agents/memory/`, MEMORY.md is the index
 
 **Decision:** Persistent cross-session memory uses `.agents/memory/MEMORY.md` as a one-line-per-entry index pointing to topic files in the same directory. Context, progress, and decisions each have their own file.

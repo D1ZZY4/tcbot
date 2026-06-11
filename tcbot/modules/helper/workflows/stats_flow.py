@@ -342,7 +342,6 @@ class Stats:
     @classmethod
     async def bans_list(cls, page: int) -> tuple[str, InlineKeyboardMarkup]:
         """Paginated list of every active federation ban."""
-
         bans = await db.bans_db.active_bans()
         chunk, total_pages, page = paginate(bans, page, _PAGE_SIZE)
 

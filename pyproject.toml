@@ -16,10 +16,13 @@ dev = ["ruff"]
 [tool.ruff]
 line-length = 88
 target-version = "py312"
+exclude = [".local/", ".agents/", ".kilo/", ".trae/", ".claude/"]
 
 [tool.ruff.lint]
-select = ["B", "C4", "E4", "E7", "E9", "F", "FBT", "I", "PERF", "PIE", "PTH", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]
+select = ["B", "C4", "D", "E4", "E7", "E9", "F", "FBT", "I", "PERF", "PIE", "PLC", "PLE", "PTH", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]
 ignore = [
+    "D203",    # Conflicts with D211 (no-blank-line-before-class); D211 is preferred
+    "D213",    # Conflicts with D212 (multi-line-summary-first-line); D212 is preferred
     "RUF001",  # Ambiguous unicode: › intentionally used as breadcrumb separator in bot UI text
     "TC001",   # Application imports in TYPE_CHECKING: internal TypedDicts used in runtime dict ops
     "UP047",   # Generic functions: TypeVar-based style kept for ratelimiter compatibility

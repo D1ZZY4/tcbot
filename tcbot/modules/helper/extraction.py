@@ -45,6 +45,7 @@ class ResolvedTarget:
     raw: object = field(default=None, compare=False, repr=False)
 
     def __post_init__(self) -> None:
+        """Fall back to a string representation of id when first_name is empty."""
         if not self.first_name:
             self.first_name = str(self.id)
 
