@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-11 (session 44)
+
+### Documentation
+
+- **`.agents/skills/python-code-quality/SKILL.md`** and **`.agents/skills/python-code-quality/REFERENCE.md`** — synced the embedded `pyproject.toml` snapshot with the real file. Both showed a stale 5-group ruff `select` (`["E4", "E7", "E9", "F", "I"]`); corrected to the current 22-group set (matching `.agents/RUFF.md`). In SKILL.md, moved `ruff` out of `[project] dependencies` into `[dependency-groups] dev` (resolving an internal contradiction with its own following prose) and removed the four stale `# Migrate to latest channel version` comments that were deleted from `pyproject.toml` in session 37. Added the `[tool.ruff] exclude` list to both. Replaced REFERENCE.md's now-false "enforces syntax/pyflakes/import-order rules, not a full strict style suite" line with an accurate per-rule summary that points to the canonical `.agents/RUFF.md`. Bumped the embedded "as of"/"Updated" dates to 2026-06-11.
+
 ## [Unreleased] - 2026-06-11 (session 43)
 
 ### Fixed

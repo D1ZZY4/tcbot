@@ -25,25 +25,28 @@ If the task edits bot runtime code, also apply the project policy skill before c
 
 ## Current Project Tooling
 
-From `pyproject.toml` as of 2026-06-02:
+From `pyproject.toml` as of 2026-06-11:
 
 ```toml
 [project]
 requires-python = ">=3.12"
 dependencies = [
-    "python-telegram-bot[job-queue]",  # Migrate to latest channel version
-    "motor",                           # Migrate to latest channel version
-    "flask",                           # Migrate to latest channel version
-    "python-dotenv",                   # Migrate to latest channel version
-    "ruff",
+    "python-telegram-bot[job-queue]",
+    "motor",
+    "flask",
+    "python-dotenv",
 ]
+
+[dependency-groups]
+dev = ["ruff"]
 
 [tool.ruff]
 line-length = 88
 target-version = "py312"
+exclude = [".local/", ".agents/", ".kilo/", ".trae/", ".claude/"]
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I"]
+select = ["B", "C4", "D", "E4", "E7", "E9", "F", "FBT", "I", "PERF", "PIE", "PLC", "PLE", "PTH", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]
 ```
 
 Ruff is in `[dependency-groups] dev` (PEP 735), installed automatically by `uv sync`. Use `uv run ruff format .` and `uv run ruff check .` directly; `uvx ruff` is not needed.

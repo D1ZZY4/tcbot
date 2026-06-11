@@ -5,7 +5,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-11 (session 43)
+**Last updated:** 2026-06-11 (session 44)
 
 ## What is done
 
@@ -174,9 +174,14 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Verified the fix in isolation (task registered on schedule, discarded on completion, report coroutine ran). Ruff clean (70 files); import OK.
   - Reconciled memory drift: `context.md` and `progress.md` were stale at session 41 while CHANGELOG/`decisions.md`/`pyproject.toml` were already at session 42; file-count note corrected 71 -> 70.
 
+- Session 44 (2026-06-11): skill-doc drift fix.
+  - Synced the embedded `pyproject.toml` snapshot in `.agents/skills/python-code-quality/SKILL.md` and `REFERENCE.md` with the real file: stale 5-group ruff select -> current 22-group set; `ruff` moved to `[dependency-groups] dev`; removed 4 stale `# Migrate to latest channel version` comments; added `[tool.ruff] exclude`; fixed REFERENCE.md's false "not a full strict style suite" line.
+  - `.agents/RUFF.md` confirmed canonical and already accurate (select + ignore + exclude match pyproject.toml exactly).
+  - Confirmed there is no JobQueue usage anywhere in `tcbot/`: temporary mutes use Telegram's native `until_date` in `muting_flow.py` (restart-safe; Telegram lifts the restriction on expiry). The `[job-queue]` extra stays declared per project policy. Repo docs only describe it as a declared extra, which is accurate, so no doc drift there.
+
 ## What is in progress
 
-Nothing. Session 43 checkpoint complete.
+Nothing. Session 44 checkpoint complete.
 
 ## What is pending (optional)
 

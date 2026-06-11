@@ -2,7 +2,7 @@
 
 For the parent skill instructions, see [`SKILL.md`](SKILL.md). For the canonical project rules this reference enforces, see [`../../CLAUDE.md`](../../CLAUDE.md) and [`../../RULES.md`](../../RULES.md).
 
-Updated: 2026-05-29
+Updated: 2026-06-11
 
 This reference supports the `python-code-quality` skill for the TCF Bot repository. It reflects the current project stack: Python 3.12, `uv`, Ruff, `python-telegram-bot` (latest), Motor/MongoDB, and Flask keepalive.
 
@@ -17,12 +17,13 @@ requires-python = ">=3.12"
 [tool.ruff]
 line-length = 88
 target-version = "py312"
+exclude = [".local/", ".agents/", ".kilo/", ".trae/", ".claude/"]
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I"]
+select = ["B", "C4", "D", "E4", "E7", "E9", "F", "FBT", "I", "PERF", "PIE", "PLC", "PLE", "PTH", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]
 ```
 
-Ruff currently enforces syntax/pyflakes/import-order rules, not a full strict style suite. Apply project conventions manually during review.
+Ruff enforces a broad suite: pyflakes/syntax (`E`, `F`), import order (`I`), bugbear (`B`), comprehensions (`C4`), pydocstyle (`D`), boolean-trap (`FBT`), performance (`PERF`), misc (`PIE`), Pylint error/convention (`PLE`, `PLC`), pathlib (`PTH`), returns (`RET`), Ruff-specific (`RUF`), simplify (`SIM`), type-checking imports (`TC`), targeted try rules (`TRY400`, `TRY401`), pyupgrade (`UP`), and warnings (`W`). See `.agents/RUFF.md` for the canonical list and per-rule ignores. Apply remaining project conventions manually during review.
 
 ## Commands
 
