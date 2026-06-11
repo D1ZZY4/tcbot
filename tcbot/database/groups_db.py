@@ -84,14 +84,14 @@ async def add_group(chat_id: int, title: str, added_by: int) -> None:
         },
         upsert=True,
     )
-    connected_cache.put(chat_id, True)
+    connected_cache.put(chat_id, True)  # noqa: FBT003
     active_groups_cache.clear()
 
 
 async def deactivate_group(chat_id: int) -> bool:
     """Mark a group as inactive (disconnect from federation)."""
     r = await _groups().update_one({"chat_id": chat_id}, {"$set": {"is_active": False}})
-    connected_cache.put(chat_id, False)
+    connected_cache.put(chat_id, False)  # noqa: FBT003
     active_groups_cache.clear()
     return r.matched_count > 0
 

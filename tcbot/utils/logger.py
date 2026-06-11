@@ -37,7 +37,11 @@ class BotLogFormatter(logging.Formatter):
         logging.ERROR: ("\033[38;5;203m", "ERROR"),
         logging.CRITICAL: ("\033[38;5;177m", "CRIT"),
     }
-    _COLORED_MSG: ClassVar[set[int]] = {logging.WARNING, logging.ERROR, logging.CRITICAL}
+    _COLORED_MSG: ClassVar[set[int]] = {
+        logging.WARNING,
+        logging.ERROR,
+        logging.CRITICAL,
+    }
 
     def _bracket(self, color: str, text: str) -> str:
         return f"{self._BR}[{self._R}{color}{text}{self._R}{self._BR}]{self._R}"

@@ -2,6 +2,21 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-11 (session 41)
+
+### Changed
+
+- **`pyproject.toml`** — added `PTH` (flake8-use-pathlib) and `FBT` (flake8-boolean-trap) to `[tool.ruff.lint] select`.
+- **`tcbot/database/mongos.py`** — replaced `os.path.exists(_RESOLV_CONF)` with `Path(_RESOLV_CONF).exists()` (PTH110); replaced `import os` with `from pathlib import Path`.
+- **`tcbot/modules/groups.py`** — made `detailed` keyword-only in `_render` and `_toggle` (FBT001); updated all internal call sites to use `detailed=...` form (FBT003).
+- **`tcbot/modules/helper/keyboards.py`** — made `detailed` keyword-only in `groups_menu_kb` and `tcgroups_kb` (FBT001).
+- **`tcbot/modules/helper/workflows/reason_flow.py`** — made `has_explicit_target` keyword-only in `parse_inline_reason` (FBT001).
+- **`tcbot/modules/start.py`** — made `detailed` keyword-only in `_show_groups` (FBT001); updated three callback call sites to `detailed=True/False` form (FBT003).
+- **`tcbot/modules/kicking.py`** — updated `parse_inline_reason` call to keyword form (FBT003).
+- **`tcbot/modules/warnings.py`** — updated `parse_inline_reason` call to keyword form (FBT003).
+- **`tcbot/__main__.py`** — added `# noqa: FBT003` to `.concurrent_updates(True)` (PTB builder method — keyword arg not available).
+- **`tcbot/database/groups_db.py`** — added `# noqa: FBT003` to two `connected_cache.put(chat_id, True/False)` calls (generic cache API — changing to keyword-only would affect all callers).
+
 ## [Unreleased] - 2026-06-11 (session 40)
 
 ### Changed

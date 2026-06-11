@@ -106,7 +106,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     )
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
 
-    inline_reason = parse_inline_reason(args, has_explicit_target)
+    inline_reason = parse_inline_reason(args, has_explicit_target=has_explicit_target)
 
     if not target_id:
         await msg.reply_text(replies.ERR_CANT_FIND_USER)

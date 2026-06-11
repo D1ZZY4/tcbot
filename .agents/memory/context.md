@@ -153,9 +153,15 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - pyproject.toml select now: `["B", "C4", "E4", "E7", "E9", "F", "I", "PERF", "PIE", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]`.
   - Bot restarted cleanly; ruff all checks passed.
 
+- Session 41 (2026-06-11): PTH + FBT rulesets + comprehensive audit.
+  - Added `PTH` to pyproject.toml select; fixed PTH110: `os.path.exists` → `Path.exists` in `mongos.py`.
+  - Added `FBT` to pyproject.toml select; fixed all 16 violations: made bool params keyword-only (FBT001) in `_render`, `_toggle` (groups.py), `groups_menu_kb`, `tcgroups_kb` (keyboards.py), `parse_inline_reason` (reason_flow.py), `_show_groups` (start.py); updated all call sites to keyword form (FBT003); suppressed FBT003 with noqa in PTB builder and generic cache methods.
+  - Verified all gather calls: all pure side-effect gathers have `return_exceptions=True`; data-fetching gathers and crash-critical DB ops intentionally without it.
+  - pyproject.toml select now: `["B", "C4", "E4", "E7", "E9", "F", "FBT", "I", "PERF", "PIE", "PTH", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]`.
+
 ## What is in progress
 
-Nothing. Session 40 checkpoint complete.
+Nothing. Session 41 checkpoint complete.
 
 ## What is pending (optional)
 

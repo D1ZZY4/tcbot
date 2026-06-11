@@ -114,7 +114,7 @@ async def on_back_to_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 
-async def _show_groups(q: CallbackQuery, detailed: bool) -> None:
+async def _show_groups(q: CallbackQuery, *, detailed: bool) -> None:
     """Shared renderer for all group-menu callbacks."""
     _, groups = await asyncio.gather(q.answer(), db.groups_db.active_groups())
     if not groups:
@@ -124,9 +124,9 @@ async def _show_groups(q: CallbackQuery, detailed: bool) -> None:
         )
         return
     await q.edit_message_text(
-        _render(groups, detailed),
+        _render(groups, detailed=detailed),
         parse_mode="HTML",
-        reply_markup=keyboards.groups_menu_kb(detailed),
+        reply_markup=keyboards.groups_menu_kb(detailed=detailed),
     )
 
 
@@ -134,7 +134,7 @@ async def _show_groups(q: CallbackQuery, detailed: bool) -> None:
 @decorators.log_execution
 async def on_menu_groups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Show the connected-groups list in simple view from the start menu."""
-    await _show_groups(update.callback_query, False)
+    await _show_groups(update.callback_query, detailed=False)
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -143,14 +143,14 @@ async def on_menu_groups_details(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE
 ) -> None:
     """Show the connected-groups list with full group IDs visible."""
-    await _show_groups(update.callback_query, True)
+    await _show_groups(update.callback_query, detailed=True)
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_menu_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Return to simple view of the connected-groups list from the start menu."""
-    await _show_groups(update.callback_query, False)
+    await _show_groups(update.callback_query, detailed=False)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

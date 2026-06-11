@@ -66,7 +66,7 @@ __help_sections__: list[tuple[str, str]] = [
 # ──────────────────────── Helper Functions ──────────────────────── #
 
 
-def _render(groups: list[GroupDoc], detailed: bool) -> str:
+def _render(groups: list[GroupDoc], *, detailed: bool) -> str:
     lines = [f"<b>Connected Groups</b>\n\nCount: {len(groups)}\n"]
     for g in groups:
         if detailed:
@@ -91,7 +91,9 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     ctx.user_data["groups_cache"] = groups
     await update.effective_message.reply_text(
-        _render(groups, False), parse_mode="HTML", reply_markup=tcgroups_kb(False)
+        _render(groups, detailed=False),
+        parse_mode="HTML",
+        reply_markup=tcgroups_kb(detailed=False),
     )
 
 
@@ -99,7 +101,7 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def _toggle(
-    update: Update, ctx: ContextTypes.DEFAULT_TYPE, detailed: bool
+    update: Update, ctx: ContextTypes.DEFAULT_TYPE, *, detailed: bool
 ) -> None:
     q = update.callback_query
     groups = ctx.user_data.get("groups_cache")
@@ -108,7 +110,9 @@ async def _toggle(
         await asyncio.gather(
             q.answer(),
             safe_edit(
-                q.message, _render(groups, detailed), reply_markup=tcgroups_kb(detailed)
+                q.message,
+                _render(groups, detailed=detailed),
+                reply_markup=tcgroups_kb(detailed=detailed),
             ),
             return_exceptions=True,
         )
@@ -117,7 +121,9 @@ async def _toggle(
         _, groups = await asyncio.gather(q.answer(), db.groups_db.active_groups())
         ctx.user_data["groups_cache"] = groups
         await safe_edit(
-            q.message, _render(groups, detailed), reply_markup=tcgroups_kb(detailed)
+            q.message,
+            _render(groups, detailed=detailed),
+            reply_markup=tcgroups_kb(detailed=detailed),
         )
 
 
@@ -125,14 +131,14 @@ async def _toggle(
 @decorators.log_execution
 async def on_groups_details(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Switch the groups listing to detailed view (shows full chat IDs)."""
-    await _toggle(update, ctx, True)
+    await _toggle(update, ctx, detailed=True)
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Switch the groups listing to simple view (condensed, no full chat IDs)."""
-    await _toggle(update, ctx, False)
+    await _toggle(update, ctx, detailed=False)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

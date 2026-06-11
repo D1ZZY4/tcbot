@@ -296,7 +296,7 @@ def additional_menu_kb() -> InlineKeyboardMarkup:
     )
 
 
-def groups_menu_kb(detailed: bool) -> InlineKeyboardMarkup:
+def groups_menu_kb(*, detailed: bool) -> InlineKeyboardMarkup:
     """Detailed/Simple toggle keyboard for the start-menu groups list."""
     toggle = InlineKeyboardButton(
         "Simple" if detailed else "Details",
@@ -306,7 +306,7 @@ def groups_menu_kb(detailed: bool) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[toggle], [back]])
 
 
-def tcgroups_kb(detailed: bool) -> InlineKeyboardMarkup:
+def tcgroups_kb(*, detailed: bool) -> InlineKeyboardMarkup:
     """Toggle keyboard for the /tcgroups command: Simple/Details switch."""
     label = "Simple" if detailed else "Details"
     callback = "groups_simple" if detailed else "groups_details"

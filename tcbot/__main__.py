@@ -216,7 +216,7 @@ def main() -> None:
             .token(cfg.bot_token)
             .post_init(_post_init)
             # * Process independent updates in parallel (big latency win)
-            .concurrent_updates(True)
+            .concurrent_updates(True)  # noqa: FBT003
             # * Connection pools - API calls and dedicated getUpdates polling lane
             .connection_pool_size(_API_POOL_SIZE)
             .get_updates_connection_pool_size(_UPDATES_POOL_SIZE)

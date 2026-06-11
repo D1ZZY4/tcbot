@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import secrets
 import string
+from pathlib import Path
 
 from motor.motor_asyncio import (
     AsyncIOMotorClient,
@@ -31,7 +31,7 @@ _RESOLV_CONF = "/etc/resolv.conf"
 
 def _patch_dns_if_needed() -> None:
     """Write a fallback nameserver config when /etc/resolv.conf is absent."""
-    if not os.path.exists(_RESOLV_CONF):
+    if not Path(_RESOLV_CONF).exists():
         try:
             import dns.resolver
 

@@ -42,6 +42,7 @@ WAITING_PROOF = 1
 
 def parse_inline_reason(
     args: list[str],
+    *,
     has_explicit_target: bool,
 ) -> str:
     """Extract any inline reason text from command arguments."""

@@ -44,7 +44,7 @@ rather than relying on editor-specific settings.
 Current active ruleset (from `pyproject.toml`):
 
 ```
-select = ["B", "C4", "E4", "E7", "E9", "F", "I", "PERF", "PIE", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]
+select = ["B", "C4", "E4", "E7", "E9", "F", "FBT", "I", "PERF", "PIE", "PTH", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]
 ignore  = [
     "RUF001",  # Ambiguous unicode: › intentionally used as breadcrumb separator in bot UI text
     "TC001",   # Application imports in TYPE_CHECKING: internal TypedDicts used in runtime dict ops
@@ -59,6 +59,7 @@ Rules intentionally not added:
 - `ARG` (unused arguments): PTB handlers must accept `(update, ctx)` regardless of whether `ctx` is used; 43+ intentional unused `ctx` args.
 - `EM` (error message strings): `EM102` (f-string in exceptions) is pedantic for `SystemExit` cases; exceptions are non-critical `SystemExit`, not raised exception classes.
 - `S104` (bind to all interfaces): `alive.py` binds to `0.0.0.0` intentionally for the Flask keep-alive server required by Replit.
+- `FBT002` (boolean default positional): already covered by making params keyword-only (FBT001); no separate default-value violations remain.
 
 ---
 
