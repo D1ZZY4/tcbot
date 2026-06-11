@@ -969,33 +969,6 @@ The AI pipeline checks: `if user.id in await admin_cache.get_admin_ids(ctx.bot, 
 
 ---
 
-## Feature 8 — Developer Tools
-
-### What the reference does
-
-`spr/modules/devs.py` provides `/eval` (Python exec) and `/sh` (shell command) restricted to SUDOERS.
-
-### How it works in TCF Bot
-
-These are dangerous commands and should be restricted to the Founder only. They are useful for live debugging and are already a common feature in moderation bots.
-
-**New file: `tcbot/modules/devtools.py`**
-
-Two commands, both decorated `@owner_only` and `@log_execution`:
-
-- `/tceval <python code>` — exec the code in an async context. Captures stdout/stderr. Replies with the output or uploads it as a document if >3000 chars.
-- `/tcsh <shell command>` — runs via `asyncio.create_subprocess_shell`, captures stdout/stderr with a 10 s timeout. Replies with output or uploads as a document.
-
-Security constraints:
-- `@owner_only` is enforced by the existing decorator from `tcbot/modules/helper/decorators.py` — no additional auth check needed.
-- Both commands are NOT added to the help text (no `__help_text__` or `__help_sections__`); they should not appear in `/tchelp`.
-- Only usable in private DM with the bot (filter: `filters.ChatType.PRIVATE`).
-- `/tcsh` has a hard 10 s timeout; exceeded timeout replies with "Timed out." and kills the subprocess.
-
-**Help entry:** none (intentionally omitted from public help).
-
----
-
 ## Integration Summary: New Files
 
 ```
@@ -1010,7 +983,6 @@ tcbot/
 │   ├── ai_settings.py      # F5: /tcai, /tcaispam, /tcainsfw commands
 │   ├── reporting.py        # F3: /tcreport command + action callbacks
 │   ├── rules.py            # F4: /tcrules view command
-│   └── devtools.py         # F8: /tceval, /tcsh (Founder only, private only)
 │   └── helper/
 │       └── workflows/
 │           └── rules_flow.py   # F4: /tcsetrule interactive flow
@@ -1088,19 +1060,17 @@ F7 (Admin Cache) → F1 (AI Pipeline) → F2 (Feedback Loop) → F6 (Trust/Reput
                                      → F5 (AI Toggles)
                  → F3 (Report System)
 F4 (Rules) — independent
-F8 (Dev Tools) — independent
 ```
 
 Recommended build order:
 
 1. **F7** — Admin cache (`admin_cache.py`). No dependencies. Zero user-facing changes. Enables F1.
 2. **F4** — Rules system. Fully independent. Clean standalone feature.
-3. **F8** — Dev tools. Fully independent. Safe to ship any time.
-4. **F1** — AI pipeline (Ollama client + watcher). Depends on F7. Core new feature.
-5. **F5** — AI toggles. Depends on F1 (needs `ai_settings` collection). Small command module.
-6. **F2** — Feedback loop. Depends on F1 (needs `ai_feedback` collection and log cards).
-7. **F6** — Trust/reputation. Depends on F1 (needs spam score updates) and F2 (confirmed verdicts).
-8. **F3** — Report system. Depends on F1 (for AI triage). Can share `ollama.py` from F1.
+3. **F1** — AI pipeline (Ollama client + watcher). Depends on F7. Core new feature.
+4. **F5** — AI toggles. Depends on F1 (needs `ai_settings` collection). Small command module.
+5. **F2** — Feedback loop. Depends on F1 (needs `ai_feedback` collection and log cards).
+6. **F6** — Trust/reputation. Depends on F1 (needs spam score updates) and F2 (confirmed verdicts).
+7. **F3** — Report system. Depends on F1 (for AI triage). Can share `ollama.py` from F1.
 
 Each feature in this order is independently deployable and testable before the next one is started.
 
@@ -1137,11 +1107,6 @@ Each feature in this order is independently deployable and testable before the n
 - [ ] Rules with > 4096 chars are paginated with `‹ ›` navigation.
 - [ ] `/tcdelrule` requires confirmation before deleting.
 
-### F5 AI Toggles
-- [ ] `/tcai disable` suppresses all AI detection in that group.
-- [ ] Toggle commands reject non-staff with the standard `_ERR_STAFF_ONLY` message.
-- [ ] Toggle in exec group with `<chat_id>` argument works for a non-current group.
-
 ### F6 Trust/Reputation
 - [ ] Trust score of a new user is 100.0.
 - [ ] After 10 spam-confidence values of 0.9, trust score is approximately 10.
@@ -1153,8 +1118,3 @@ Each feature in this order is independently deployable and testable before the n
 - [ ] `invalidate(chat_id)` causes next call to fetch fresh data.
 - [ ] Group admins sending any message do not trigger AI actions.
 
-### F8 Dev Tools
-- [ ] `/tceval` is unavailable to non-Founder users.
-- [ ] `/tceval` works in private chat only.
-- [ ] Output longer than 3000 chars is sent as a file attachment.
-- [ ] `/tcsh` kills subprocess after 10 s and replies "Timed out."
