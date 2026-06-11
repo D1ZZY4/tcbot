@@ -5,7 +5,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-11 (session 44)
+**Last updated:** 2026-06-11 (session 45)
 
 ## What is done
 
@@ -179,9 +179,15 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - `.agents/RUFF.md` confirmed canonical and already accurate (select + ignore + exclude match pyproject.toml exactly).
   - Confirmed there is no JobQueue usage anywhere in `tcbot/`: temporary mutes use Telegram's native `until_date` in `muting_flow.py` (restart-safe; Telegram lifts the restriction on expiry). The `[job-queue]` extra stays declared per project policy. Repo docs only describe it as a declared extra, which is accurate, so no doc drift there.
 
+- Session 45 (2026-06-11): pyproject.toml editable-install fix.
+  - Added `[tool.setuptools.packages.find] include = ["tcbot*"]` to fix `uv pip install -e .` failure caused by Replit's `attached_assets/` folder being discovered as a second top-level package.
+  - Added `attached_assets/` to `[tool.ruff] exclude` so Ruff does not scan uploaded task files.
+  - Updated `.agents/RUFF.md`, `python-code-quality/SKILL.md`, `python-code-quality/REFERENCE.md` to reflect new exclude list.
+  - Full verification sequence PASS: uv sync, editable install, import check, ruff format, ruff check, bot restart (MongoDB connected, 75 handlers, polling active).
+
 ## What is in progress
 
-Nothing. Session 44 checkpoint complete.
+Nothing. Session 45 checkpoint complete.
 
 ## What is pending (optional)
 

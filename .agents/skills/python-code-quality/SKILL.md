@@ -43,7 +43,7 @@ dev = ["ruff"]
 [tool.ruff]
 line-length = 88
 target-version = "py312"
-exclude = [".local/", ".agents/", ".kilo/", ".trae/", ".claude/"]
+exclude = [".local/", ".agents/", ".kilo/", ".trae/", ".claude/", "attached_assets/"]
 
 [tool.ruff.lint]
 select = ["B", "C4", "D", "E4", "E7", "E9", "F", "FBT", "I", "PERF", "PIE", "PLC", "PLE", "PTH", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]

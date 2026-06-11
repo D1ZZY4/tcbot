@@ -96,7 +96,7 @@ For detailed environment variable formats and validation, see [`docs/setup.md`](
 | `COMMUNITY_NAME` | No | Display name used in bot messages and logs. |
 | `PREFIXES` | No | Python-style list of command prefixes, default `["/", "!", "."]`. |
 | `PORT` | No | Flask keep-alive port, default `5000`; invalid or out-of-range values fall back to `5000`. |
-| `MAIN_GROUP` | Usually | Main community group/forum chat ID. |
+| `MAIN_GROUP` | Usually | Main community group/forum chat ID. Required for appeal review cards and promotion-flow messages. |
 | `MAIN_CHANNEL` | No | Main announcement channel chat ID. |
 | `EXTEND_GROUP` | No | Optional secondary/staff group watched by selected handlers. |
 | `PROOFS` | Usually | Proof destination as `chat_id` or `chat_id/thread_id`. |

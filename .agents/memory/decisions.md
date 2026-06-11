@@ -105,6 +105,16 @@ description: Non-trivial technical decisions made during development. Format: da
 
 ---
 
+## 2026-06-11: Constrain setuptools package discovery to tcbot only
+
+**Decision:** Add `[tool.setuptools.packages.find] include = ["tcbot*"]` to `pyproject.toml` to prevent setuptools auto-discovery from picking up unexpected top-level directories.
+
+**Why:** The Replit environment creates an `attached_assets/` folder at the workspace root when the user uploads files through the chat interface. Without explicit package discovery constraints, `uv pip install -e .` fails because setuptools finds two top-level packages (`tcbot` and `attached_assets`) and refuses to build. The same class of failure would occur for any other top-level folder added to the repo root by tools or automation.
+
+**How to apply:** Keep `include = ["tcbot*"]` in `[tool.setuptools.packages.find]`. If the project ever gets a second installable package under the repo root, update this list explicitly rather than relying on auto-discovery. Also add any non-source top-level directory to the `[tool.ruff] exclude` list so Ruff does not scan it.
+
+---
+
 ## 2026-06-02: Memory files live in `.agents/memory/`, MEMORY.md is the index
 
 **Decision:** Persistent cross-session memory uses `.agents/memory/MEMORY.md` as a one-line-per-entry index pointing to topic files in the same directory. Context, progress, and decisions each have their own file.

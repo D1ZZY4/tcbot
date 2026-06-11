@@ -44,6 +44,7 @@ class BotLogFormatter(logging.Formatter):
     }
 
     def _bracket(self, color: str, text: str) -> str:
+        """Wrap *text* in ANSI-coloured square brackets using the given *color* code."""
         return f"{self._BR}[{self._R}{color}{text}{self._R}{self._BR}]{self._R}"
 
     def format(self, record: logging.LogRecord) -> str:

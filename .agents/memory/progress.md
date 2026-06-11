@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-11 (session 44)
+**Last updated:** 2026-06-11 (session 45)
 
 ## Verification baseline
 
@@ -111,6 +111,8 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Dangling asyncio error-report task fix | P2 (correctness) | `__main__.py` Layer 3 asyncio handler created `lp.create_task(...)` without a strong ref; could be GC'd before running and drop the report. Added module-level `_asyncio_report_tasks` set + `discard` done-callback; verified in isolation. RUF006 missed it (task via `lp` parameter) | 2026-06-11 (s43) |
 | Memory drift reconciliation | docs | context.md/progress.md were stale at s41 while CHANGELOG/decisions/pyproject were at s42; brought both current and corrected file-count note 71 -> 70 | 2026-06-11 (s43) |
 | python-code-quality skill doc sync | docs | SKILL.md + REFERENCE.md embedded pyproject.toml snapshot was stale (5-group ruff select, ruff in [project] deps, 4 stale Migrate comments, false "not a full strict style suite" line); synced to actual 22-group config matching .agents/RUFF.md | 2026-06-11 (s44) |
+
+| `pyproject.toml` setuptools package discovery fix | infra | Added `[tool.setuptools.packages.find] include = ["tcbot*"]` to prevent `attached_assets/` from being discovered as a second top-level package during `uv pip install -e .`; added `attached_assets/` to ruff exclude | 2026-06-11 (s45) |
 
 ## Pending (remaining optional)
 

@@ -2,6 +2,21 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-11 (session 45)
+
+### Fixed
+
+- **`pyproject.toml`** — editable install (`uv pip install -e .`) failed after the Replit migration added an `attached_assets/` directory to the workspace root. Setuptools discovered two top-level packages (`tcbot` and `attached_assets`) and refused to build. Added `[tool.setuptools.packages.find] include = ["tcbot*"]` to constrain package discovery to the bot package only. Also added `attached_assets/` to the `[tool.ruff] exclude` list so Ruff does not scan uploaded task files. `attached_assets/` was already in `.gitignore` from a prior session.
+
+### Documentation
+
+- **`README.md`** — `MAIN_GROUP` description was too vague ("Main community group/forum chat ID"); added a note that it is required for appeal review cards and promotion-flow messages to accurately reflect its usage in `appeal_flow.py` and `promote_flow.py`.
+- **`.agents/RUFF.md`**, **`.agents/skills/python-code-quality/SKILL.md`**, **`.agents/skills/python-code-quality/REFERENCE.md`** — updated the embedded `[tool.ruff] exclude` list to include `attached_assets/`, mirroring the `pyproject.toml` change above.
+
+### Code quality
+
+- **`tcbot/utils/logger.py`** — `BotLogFormatter._bracket` was the only undocumented non-dunder method in the class. Added a one-line docstring: "Wrap *text* in ANSI-coloured square brackets using the given *color* code."
+
 ## [Unreleased] - 2026-06-11 (session 44)
 
 ### Documentation

@@ -52,7 +52,7 @@ ignore  = [
     "TC001",   # Application imports in TYPE_CHECKING: internal TypedDicts used in runtime dict ops
     "UP047",   # Generic functions: TypeVar-based style kept for ratelimiter compatibility
 ]
-exclude = [".local/", ".agents/", ".kilo/", ".trae/", ".claude/"]
+exclude = [".local/", ".agents/", ".kilo/", ".trae/", ".claude/", "attached_assets/"]
 ```
 
 Rules intentionally not added:
