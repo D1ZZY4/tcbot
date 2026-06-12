@@ -5,7 +5,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-12 (session 70)
+**Last updated:** 2026-06-12 (session 72)
 
 ## What is done
 
@@ -382,6 +382,18 @@ Nothing. Session 68 checkpoint complete. Audit is dry across multiple waves.
 - Session 23 verification passed end to end with isolated runtime ports `5022` and `5023`; docs audit reconfirmed `docs/setup.md` and `Dockerfile` stay in sync.
 - Session 24 removed tracked workflow log artifacts from the repository root: `check.log` and `format.log` are gone, and `.gitignore` now ignores those exact filenames so auto-fix runs stay quiet.
 - Session 24 verification passed end to end with isolated runtime ports `5026` and `5027`; repository-status audit confirmed the tracked log files are removed and no new untracked log files appeared after validation.
+
+- Session 71 (2026-06-12): autonomous audit wave 5 - 4 bugs fixed.
+  - Bug #72b: `reason_flow.py` `_on_skip_reason` - gather inside try/except → `return_exceptions=True` not effective; refactored to bare gather + isinstance check.
+  - Bug #73b: `reason_flow.py` `_on_cancel` - same pattern; fixed identically.
+  - Bug #74b: `disconnecting.py` `cmd_rmtc` - `update.effective_user` / `update.effective_message` accessed inline multiple times; extracted to locals `admin`, `msg`.
+  - Bug #75b: `warnings.py` `cmd_warnlist` - `update.effective_message` accessed inline multiple times; extracted to `msg` local.
+  - Ruff 70 files clean; bot running (MongoDB connected, 75 handlers, polling active).
+
+- Session 72 (2026-06-12): autonomous audit wave 6 - 2 quality fixes.
+  - Bug #79: `parse_logmsg.py` `broadcast_log` - hardcoded `[:100]` slice → named constant `_MAX_BROADCAST_PREVIEW_LEN = 100`.
+  - Bug #80: `keyboards.py` `module_help_kb` - duplicated `_build_topic_rows` loop verbatim; refactored to call the existing helper.
+  - Ruff 70 files clean.
 
 ## Blockers
 

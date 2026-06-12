@@ -344,12 +344,7 @@ def module_help_kb(
     back_callback: str,
 ) -> InlineKeyboardMarkup:
     """Per-module help view: pair sub-section buttons + Back, with Back last."""
-    rows: list[list[InlineKeyboardButton]] = []
-    for i in range(0, len(section_buttons), 2):
-        chunk = section_buttons[i : i + 2]
-        rows.append(
-            [InlineKeyboardButton(text, callback_data=cb) for text, cb in chunk]
-        )
+    rows = _build_topic_rows(section_buttons)
     rows.append([InlineKeyboardButton("« Back", callback_data=back_callback)])
     return InlineKeyboardMarkup(rows)
 

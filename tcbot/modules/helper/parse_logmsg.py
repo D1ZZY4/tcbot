@@ -16,6 +16,10 @@ from tcbot.utils.timedate_format import fmt_dt, utc_now
 if TYPE_CHECKING:
     from datetime import datetime
 
+# ──────────────────────────── Constants ─────────────────────────── #
+
+_MAX_BROADCAST_PREVIEW_LEN: int = 100
+
 # ─────────────────────────── LogBuilder ─────────────────────────── #
 # * Fluent builder for HTML audit-log messages with consistent layout.
 # * Title is rendered on its own line, separated from fields by a blank line.
@@ -752,7 +756,7 @@ def broadcast_log(
     failed: int,
 ) -> str:
     """Broadcast audit-log message."""
-    preview = message_preview[:100]
+    preview = message_preview[:_MAX_BROADCAST_PREVIEW_LEN]
     return (
         LogBuilder(f"{cfg.community_name} Broadcast Sent")
         .mention_field("Admin", admin_id, admin_fname)

@@ -2,6 +2,22 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-12 (session 72)
+
+### Fixed
+
+- **`tcbot/modules/helper/parse_logmsg.py`** (`broadcast_log`): Hardcoded `[:100]` slice for broadcast message preview replaced with named constant `_MAX_BROADCAST_PREVIEW_LEN = 100`. Follows the same pattern as `_MAX_CONTEXT_LEN` in `error_reporter.py`. (Bug #79)
+- **`tcbot/modules/helper/keyboards.py`** (`module_help_kb`): Function duplicated the `_build_topic_rows` loop verbatim (7 lines) instead of calling the already-defined private helper. Refactored to call `_build_topic_rows(section_buttons)` directly, eliminating the duplication. (Bug #80)
+
+## [Unreleased] - 2026-06-12 (session 71)
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/reason_flow.py`** (`_on_skip_reason`): `asyncio.gather(q.answer(), q.edit_message_text(...), return_exceptions=True)` was inside a `try/except Exception` block, so `return_exceptions=True` was not applied (gather raised instead of returning exceptions). Refactored: removed try/except; added `return_exceptions=True` to gather; added `isinstance` check on result to log failures. (Bug #72b)
+- **`tcbot/modules/helper/workflows/reason_flow.py`** (`_on_cancel`): Same `try/except`-vs-`return_exceptions` pattern as above. Refactored identically. (Bug #73b)
+- **`tcbot/modules/disconnecting.py`** (`cmd_rmtc`): `update.effective_user` and `update.effective_message` accessed multiple times inline without local variable assignment, reducing clarity and adding repeated attribute lookup. Extracted to `admin = update.effective_user` and `msg = update.effective_message` locals. (Bug #74b)
+- **`tcbot/modules/warnings.py`** (`cmd_warnlist`): Same inline `update.effective_message` repeated access pattern. Extracted to `msg = update.effective_message` local. (Bug #75b)
+
 ## [Unreleased] - 2026-06-12 (session 70)
 
 ### Fixed
