@@ -87,6 +87,10 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     now = utc_now()
     proof_chat, proof_thread = cfg.proofs
 
+    # * Pre-fetch active groups immediately so DB round-trip overlaps with the
+    # * get_active_ban call and the proof-upload I/O that follows.
+    _groups_task: asyncio.Task[list] = asyncio.create_task(db.groups_db.active_groups())
+
     existing = await db.bans_db.get_active_ban(target_id)
     is_update = existing is not None
 
@@ -225,18 +229,24 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     else:
         log.error("Ban log send failed: %s", log_result)
 
-    # * set_log_message_id and active_groups fetched in parallel
+    # * set_log_message_id and pre-fetched active_groups in parallel.
+    # * _groups_task was started at the top of this function and has been
+    # * running concurrently through get_active_ban, upload_proof, and log send.
     if log_msg_id:
         _, groups = await asyncio.gather(
             db.bans_db.set_log_message_id(ban_id, log_msg_id),
-            db.groups_db.active_groups(),
+            _groups_task,
             return_exceptions=True,
         )
         if isinstance(groups, BaseException):
             log.error("active_groups failed during ban of %d: %s", target_id, groups)
             groups = []
     else:
-        groups = await db.groups_db.active_groups()
+        try:
+            groups = await _groups_task
+        except Exception:
+            log.exception("active_groups failed during ban of %d", target_id)
+            groups = []
 
     # * Enforce across all connected groups - semaphore-bounded for rate safety
     results = await fan_out(

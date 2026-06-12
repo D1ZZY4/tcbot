@@ -56,10 +56,11 @@ The `member_cache` collection stores user profile data. For performance, use the
 | `get_user_mention_data(user_id)` | `first_name`, `username` | Single-user mention formatting (returns tuple) |
 | `get_first_names_batch(user_ids)` | `first_name` only | Display names for many users in one query (returns `dict[int, str]`) |
 | `get_mention_data_batch(user_ids)` | `first_name`, `username` | Mention data for many users in one query (returns `dict[int, tuple]`) |
+| `search_by_name(needle, limit)` | `user_id`, `first_name`, `username` | Partial name or username search: server-side regex, max `limit` results (default 5). Used by target resolution in `extraction.py` to avoid loading the full user cache. |
 
 For group title lookups across multiple chat IDs, use `groups_db.get_group_titles(chat_ids)` which returns `dict[int, str]` in a single query.
 
-**Performance tip:** Use batch functions whenever you need data for more than one user in a list view or fan-out result. Calling single-user functions inside a loop is an N+1 anti-pattern. Both batch functions rely on the `(user_id, first_name, username)` covered-query index in `member_cache`.
+**Performance tip:** Use batch functions whenever you need data for more than one user in a list view or fan-out result. Calling single-user functions inside a loop is an N+1 anti-pattern. Both batch functions rely on the `(user_id, first_name, username)` covered-query index in `member_cache`. For partial-name target resolution, always use `search_by_name` instead of `all_users` to avoid a full collection transfer.
 
 ## Startup indexes
 

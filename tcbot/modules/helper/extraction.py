@@ -122,16 +122,15 @@ async def extract_target(
                 )
 
         # * Priority 3: Partial name search in users_cache
+        # * Uses a server-side regex query capped at 5 results; avoids loading
+        # * the entire user cache into Python for a linear scan.
         if arg:
-            all_users = await db.users_cache.all_users()
-            needle = arg.lower()
-            for user in all_users:
-                fname = (user.get("first_name") or "").lower()
-                uname = (user.get("username") or "").lower()
-                if needle in fname or needle in uname:
-                    uid = user.get("user_id")
-                    if uid:
-                        return uid, user.get("first_name") or await _best_name(uid)
+            matches = await db.users_cache.search_by_name(arg)
+            if matches:
+                user = matches[0]
+                uid = user.get("user_id")
+                if uid:
+                    return uid, user.get("first_name") or await _best_name(uid)
 
     # * Priority 4: Text mention entity
     for ent in msg.entities or []:

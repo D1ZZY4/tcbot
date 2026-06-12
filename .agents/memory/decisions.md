@@ -125,6 +125,23 @@ description: Non-trivial technical decisions made during development. Format: da
 
 ---
 
+## 2026-06-12: v4 performance targets and achievability notes
+
+**Decision:** All v4 performance targets are treated as binding. Where a target cannot be measured directly (e.g., "< 5 ms single DB query"), the architectural guarantee is that the code does not add avoidable overhead: indexed queries, server-side projections, no full-collection loads, no sequential independent awaits. Targets that depend on network latency to MongoDB Atlas (< 5 ms single query) are hardware-bound and noted as such; code-side latency is minimised.
+
+Key approaches adopted to meet v4 targets:
+- `asyncio.gather` on all independent I/O pairs (eliminates sequential wait times).
+- `asyncio.create_task` pre-fetch for `active_groups()` at the start of `_execute_ban` so the DB round-trip overlaps proof upload and log posting.
+- Server-side `$regex` with `limit` for partial-name search in `extraction.py` (`search_by_name`): replaces a full collection load + Python linear scan. Wire transfer drops from O(N users) to O(min(matches, 5)).
+- Fan-out uses `tcbot.utils.dispatch.fan_out` with bounded concurrency (semaphore) to maximise throughput without rate-limit storms.
+- In-memory role/group cache in `cache.py` with named TTL constants keeps hot-path DB calls near 0 ms.
+
+**Why:** Target v4 is deliberately aggressive to drive architecture-level changes, not just micro-optimisation. Treating them as binding forces pre-fetch, parallelism, and server-side filtering rather than "good enough" sequential code.
+
+**How to apply:** Before writing any new handler that fetches data, ask: can any fetch start earlier? Can independent fetches be parallelised? Can filtering happen on the server rather than in Python?
+
+---
+
 ## 2026-06-02: Memory files live in `.agents/memory/`, MEMORY.md is the index
 
 **Decision:** Persistent cross-session memory uses `.agents/memory/MEMORY.md` as a one-line-per-entry index pointing to topic files in the same directory. Context, progress, and decisions each have their own file.

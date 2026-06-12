@@ -10,6 +10,7 @@ Do not mix with users_roles.py which handles tc_owners, tc_admins, and tc_roles.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from tcbot.database.documents import UserDoc
@@ -159,4 +160,26 @@ async def all_users(*, sort_by: str = "first_name") -> list[UserDoc]:
         .find({}, {"_id": 0})
         .sort(sort_by, sort_dir)
         .to_list(length=None)
+    )
+
+
+async def search_by_name(needle: str, limit: int = 5) -> list[UserDoc]:
+    """Return up to ``limit`` cached users whose name or username contains ``needle``.
+
+    Runs a server-side case-insensitive regex query with a result cap so only
+    matching documents (and only the fields needed for target resolution) travel
+    over the wire, regardless of cache size. This replaces the old pattern of
+    loading all users into Python and scanning linearly.
+    """
+    if not needle:
+        return []
+    pattern = {"$regex": re.escape(needle), "$options": "i"}
+    return (
+        await _members()
+        .find(
+            {"$or": [{"first_name": pattern}, {"username": pattern}]},
+            {"user_id": 1, "first_name": 1, "username": 1, "_id": 0},
+        )
+        .limit(limit)
+        .to_list(length=limit)
     )

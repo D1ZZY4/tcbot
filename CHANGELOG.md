@@ -2,6 +2,14 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-12 (session 64)
+
+### Performance
+
+- **`tcbot/database/users_cache.py`**: Added `search_by_name(needle, limit)` function. Runs a server-side case-insensitive `$regex` query on `first_name` and `username` with a result cap (default 5), returning only the three fields needed for target resolution. Replaces the previous pattern of loading every cached user into Python memory for a linear scan.
+- **`tcbot/modules/helper/extraction.py`** (Priority 3 path): Replaced the `all_users()` full-table load with `search_by_name(arg)`. For communities with thousands of cached members, wire transfer drops from O(N) full documents to O(min(matches, 5)) projected documents.
+- **`tcbot/modules/helper/workflows/ban_flow.py`** (`_execute_ban`): Started `active_groups()` as an `asyncio.Task` at the very top of the function, before `get_active_ban()`. The groups list now fetches concurrently with the ban-record lookup, proof upload, and log send, instead of waiting for all three to complete. Awaited via the existing `asyncio.gather(set_log_message_id, _groups_task)` pair; the `else` branch (no log message) now also handles the exception case with `log.exception` and an empty-list fallback.
+
 ## [Unreleased] - 2026-06-12 (session 61)
 
 ### Fixed
