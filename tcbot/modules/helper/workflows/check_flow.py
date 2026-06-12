@@ -89,9 +89,10 @@ class Check:
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Build the top-level profile view: identity + counts + drill-down keyboard."""
         # * All 9 reads are independent; fire them in parallel for a single round-trip.
+        # * return_exceptions=True prevents a single DB failure from crashing the whole view.
         (
-            (fname, uname),
-            (role, role_by_id, role_at),
+            r_user_info,
+            r_role_meta,
             active_ban,
             ban_total,
             appeal_total,
@@ -109,7 +110,32 @@ class Check:
             db.warns_db.user_warn_groups(target_id),
             db.kicks_db.user_kick_count(target_id),
             db.mutes_db.user_mute_count(target_id),
+            return_exceptions=True,
         )
+        if isinstance(r_user_info, BaseException):
+            log.error("_resolve_user_info failed for %d: %s", target_id, r_user_info)
+            fname, uname = f"User {target_id}", None
+        else:
+            fname, uname = r_user_info
+        if isinstance(r_role_meta, BaseException):
+            log.error("role_meta failed for %d: %s", target_id, r_role_meta)
+            role, role_by_id, role_at = None, None, None
+        else:
+            role, role_by_id, role_at = r_role_meta
+        if isinstance(active_ban, BaseException):
+            active_ban = None
+        if isinstance(ban_total, BaseException):
+            ban_total = 0
+        if isinstance(appeal_total, BaseException):
+            appeal_total = 0
+        if isinstance(warn_total, BaseException):
+            warn_total = 0
+        if isinstance(warn_groups, BaseException):
+            warn_groups = []
+        if isinstance(kick_total, BaseException):
+            kick_total = 0
+        if isinstance(mute_total, BaseException):
+            mute_total = 0
 
         role_label = (
             db.users_roles.ROLE_LABEL.get(role, "Regular user")
@@ -334,7 +360,12 @@ class Check:
         warns, titles = await asyncio.gather(
             db.warns_db.get_warns(target_id, chat_id),
             db.groups_db.get_group_titles([chat_id]),
+            return_exceptions=True,
         )
+        if isinstance(warns, BaseException):
+            warns = []
+        if isinstance(titles, BaseException):
+            titles = {}
         # * get_warns is oldest-first; reverse to newest-first for consistency
         warns = list(reversed(warns))
         chunk, total_pages, page = paginate(warns, page, _PAGE_SIZE)
@@ -525,7 +556,12 @@ async def _per_chat_event_list(
         db.users_cache.get_first_names_batch(admin_ids)
         if admin_ids
         else _async_const({}),
+        return_exceptions=True,
     )
+    if isinstance(titles, BaseException):
+        titles = {}
+    if isinstance(admin_name_map, BaseException):
+        admin_name_map = {}
 
     lines = [
         f"{bold(heading_name)}: {len(records)} total, page {page + 1}/{total_pages}\n"

@@ -196,6 +196,16 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 | Session 75 - Bug #90-99: cfg.community_name HTML escaping (comprehensive sweep) | HTML safety | 10 modules had `cfg.community_name` interpolated raw into HTML strings sent with `parse_mode="HTML"`: `about.py` (×4), `additional.py` (×1), `start.py` (×2), `help.py` (×1), `groups.py` (×2), `broadcasting.py` (×2), `connecting.py` (×3), `disconnecting.py` (×2), `privacy.py` (×5). Root fix: `LogBuilder.__init__` now calls `esc(str(title))` so all 20+ log titles are safe. Each module extracted `_CNAME = esc(cfg.community_name)` at module level. Ruff 70 files clean, bot running (75 handlers). | 2026-06-12 (s75) |
 
+| Session 76 - Bug #100: cache.py fire-and-forget tasks RUF006 | correctness | Redis bg tasks missing strong references; could be GC'd before completing. Added `_redis_bg_tasks` set with discard callbacks. | 2026-06-12 (s76) |
+
+| Session 78 - Bug #101: check_flow.py Check.profile gather no return_exceptions | correctness | 9-coro gather with nested tuple unpack - any DB failure crashes entire /check profile. Refactored to flat intermediaries with individual isinstance fallbacks. | 2026-06-12 (s78) |
+| Session 78 - Bug #102: check_flow.py Check.warns_in_group gather no return_exceptions | correctness | get_warns+get_group_titles gather without return_exceptions. Added fallbacks warns=[]/titles={}. | 2026-06-12 (s78) |
+| Session 78 - Bug #103: check_flow.py _per_chat_event_list gather no return_exceptions | correctness | get_group_titles+get_first_names_batch gather without return_exceptions. Added empty-dict fallbacks. | 2026-06-12 (s78) |
+| Session 78 - Bug #104: admins.py cmd_promote two gathers no return_exceptions | correctness | (1) extract_target tuple unpack crash on exception; (2) classify exception passed as ident to refuse_message -> AttributeError. Refactored both. | 2026-06-12 (s78) |
+| Session 78 - Bug #105: admins.py cmd_demote two gathers no return_exceptions | correctness | Identical pattern to Bug #104 in cmd_demote. Fixed with same pattern. | 2026-06-12 (s78) |
+| Session 78 - Bug #106: admins.py cmd_promote_request gather no return_exceptions | correctness | get_effective_role+get_request gather without return_exceptions. Added None fallbacks. | 2026-06-12 (s78) |
+| Session 78 - Ruff clean (72 files), bot running clean (75 handlers) | audit | All 6 bugs fixed, ruff check passes, bot restarted with MongoDB+Redis+APScheduler. | 2026-06-12 (s78) |
+
 ## Pending (remaining optional)
 
 | Item | Priority | Notes |

@@ -5,13 +5,21 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-12 (session 77)
+**Last updated:** 2026-06-12 (session 78)
 
 ## What is done
 
 - Python 3.12, uv, python-telegram-bot (latest), Motor/MongoDB + Redis (optional L2) + APScheduler 4 stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
 - `uv run ruff format .` and `uv run ruff check .` both clean (72 files).
+- Session 78 (2026-06-12): Comprehensive audit wave - 6 correctness bugs fixed.
+  - Bug #101: `check_flow.py Check.profile` - 9-coro gather without `return_exceptions=True` + nested tuple unpack. Any DB failure crashed the entire `/check` profile. Refactored to flat intermediaries with individual fallbacks.
+  - Bug #102: `check_flow.py Check.warns_in_group` - gather without `return_exceptions=True`. Added fallbacks.
+  - Bug #103: `check_flow.py _per_chat_event_list` - gather without `return_exceptions=True`. Added fallbacks.
+  - Bug #104: `admins.py cmd_promote` - 2 gathers without `return_exceptions=True`: (1) extract_target tuple unpack crash; (2) identity.classify failure passed as ident object to refuse_message (AttributeError). Fixed both.
+  - Bug #105: `admins.py cmd_demote` - identical pattern as Bug #104. Fixed.
+  - Bug #106: `admins.py cmd_promote_request` - gather without `return_exceptions=True`. Fixed.
+  - Ruff clean (72 files), bot restarted clean.
 - Session 77 (2026-06-12): Documentation audit and correction pass for v4.1.1 requirements.
   - PLAN.md: removed stale `[job-queue]`, added Cache + Scheduler rows, updated post_init sequence (9 steps) and startup Mermaid.
   - docs/databases/databases.md: updated Mermaid, added redis_client.py + scheduler.py entries, rewrote Caches section, added Scheduler section.

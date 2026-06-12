@@ -2,6 +2,17 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-12 (session 78)
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/check_flow.py`** (`Check.profile`): 9-coroutine `asyncio.gather` lacked `return_exceptions=True`. With nested tuple unpacking `((fname, uname), (role, role_by_id, role_at), ...)`, a single DB failure would propagate as a `BaseException` value that cannot be unpacked, crashing the entire `/check` profile view for any user. Refactored to use flat variable names `r_user_info` / `r_role_meta` with individual `isinstance` guards and safe fallbacks (`fname="User N"`, `role/role_by_id/role_at=None`, counts=0, lists=[]). (Bug #101)
+- **`tcbot/modules/helper/workflows/check_flow.py`** (`Check.warns_in_group`): `asyncio.gather(get_warns, get_group_titles)` lacked `return_exceptions=True`. Either DB call failing would crash the warns-in-group drill-down. Added `return_exceptions=True` with `warns=[]` / `titles={}` fallbacks. (Bug #102)
+- **`tcbot/modules/helper/workflows/check_flow.py`** (`_per_chat_event_list`): `asyncio.gather(get_group_titles, get_first_names_batch)` lacked `return_exceptions=True`. Failure in either title or admin-name batch lookup would crash kicks/mutes list drill-downs. Added `return_exceptions=True` with empty-dict fallbacks. (Bug #103)
+- **`tcbot/modules/admins.py`** (`cmd_promote`): Two gathers lacked `return_exceptions=True`. (1) `asyncio.gather(get_effective_role, extract_target)` - if `extract_target` raised, the nested tuple unpack `(target_id, target_fname)` would crash. Refactored with `_exec_r` / `_target_r` intermediaries and explicit fallbacks. (2) `asyncio.gather(identity.classify, get_effective_role)` - if `classify` raised, `ident` would be an exception object passed to `refuse_message`, causing an AttributeError. Added `return_exceptions=True` and early return on classify failure. (Bug #104)
+- **`tcbot/modules/admins.py`** (`cmd_demote`): Identical pattern as Bug #104 in `cmd_demote` - same two gather sites, same crash scenarios. Fixed with same pattern: `_exec_r` / `_target_r` unpack guard + classify failure early return. (Bug #105)
+- **`tcbot/modules/admins.py`** (`cmd_promote_request`): `asyncio.gather(get_effective_role, get_request)` lacked `return_exceptions=True`. Either DB error would propagate uncaught. Added `return_exceptions=True` with `None` fallbacks for both results. (Bug #106)
+
 ## [Unreleased] - 2026-06-12 (session 77)
 
 ### Documentation

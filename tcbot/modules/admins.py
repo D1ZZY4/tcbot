@@ -149,10 +149,17 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         args[0].lstrip("-").isdigit() or args[0].startswith("@")
     )
     # * Executor role (founder/admin guaranteed by @staff_only) + target run in parallel
-    executor_role, (target_id, target_fname) = await asyncio.gather(
+    _exec_r, _target_r = await asyncio.gather(
         db.users_roles.get_effective_role(admin.id),
         extraction.extract_target(update, args, ctx.bot),
+        return_exceptions=True,
     )
+    executor_role = None if isinstance(_exec_r, BaseException) else _exec_r
+    if isinstance(_target_r, BaseException):
+        log.error("extract_target failed during promote: %s", _target_r)
+        await msg.reply_text(replies.ERR_NO_TARGET)
+        return
+    target_id, target_fname = _target_r
     remaining_args = args[1:] if has_explicit_target else args
     role_arg = remaining_args[0].lower() if remaining_args else ""
 
@@ -166,7 +173,14 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ident, current_role = await asyncio.gather(
         identity.classify(ctx.bot, admin.id, target_id, target_fname),
         db.users_roles.get_effective_role(target_id),
+        return_exceptions=True,
     )
+    if isinstance(ident, BaseException):
+        log.error("identity.classify failed during promote for target=%d: %s", target_id, ident)
+        await msg.reply_text("Classification check failed - please try again.")
+        return
+    if isinstance(current_role, BaseException):
+        current_role = None
     refusal = identity.refuse_message("promote", ident)
     if refusal is not None:
         await msg.reply_text(refusal, parse_mode="HTML")
@@ -295,10 +309,17 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
 
     # * Executor role (founder/admin guaranteed by @staff_only) + target run in parallel
-    executor_role, (target_id, target_fname) = await asyncio.gather(
+    _exec_r, _target_r = await asyncio.gather(
         db.users_roles.get_effective_role(admin.id),
         extraction.extract_target(update, args, ctx.bot),
+        return_exceptions=True,
     )
+    executor_role = None if isinstance(_exec_r, BaseException) else _exec_r
+    if isinstance(_target_r, BaseException):
+        log.error("extract_target failed during demote: %s", _target_r)
+        await msg.reply_text(replies.ERR_NO_TARGET)
+        return
+    target_id, target_fname = _target_r
 
     if not target_id:
         await msg.reply_text(
@@ -310,7 +331,14 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ident, target_role = await asyncio.gather(
         identity.classify(ctx.bot, admin.id, target_id, target_fname),
         db.users_roles.get_effective_role(target_id),
+        return_exceptions=True,
     )
+    if isinstance(ident, BaseException):
+        log.error("identity.classify failed during demote for target=%d: %s", target_id, ident)
+        await msg.reply_text("Classification check failed - please try again.")
+        return
+    if isinstance(target_role, BaseException):
+        target_role = None
     refusal = identity.refuse_message("demote", ident)
     if refusal is not None:
         await msg.reply_text(refusal, parse_mode="HTML")
@@ -501,7 +529,12 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     existing_role, existing = await asyncio.gather(
         db.users_roles.get_effective_role(user.id),
         db.queues_db.get_request(user.id),
+        return_exceptions=True,
     )
+    if isinstance(existing_role, BaseException):
+        existing_role = None
+    if isinstance(existing, BaseException):
+        existing = None
     if existing_role:
         label = db.users_roles.ROLE_LABEL.get(existing_role, existing_role.capitalize())
         await msg.reply_text(f"You're already a {label} - no request needed.")
