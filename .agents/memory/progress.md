@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-12 (session 67)
+**Last updated:** 2026-06-12 (session 68)
 
 ## Verification baseline
 
@@ -162,6 +162,8 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Session 67 - Bug #55/56 (HIGH): promo_decision DB writes not checked | correctness | approve: `add_admin` fail = approved in queue but not promoted. reject: `resolve` fail = request stays pending. Both now log.error. | 2026-06-12 (s67) |
 | Session 67 - Bug #57: proof_line() unescaped HTML | correctness | `proof_desc` embedded raw in HTML messages in 3 flows (kicking, muting, warning). Fixed with `esc()` in `formatter.py` at source. | 2026-06-12 (s67) |
 | Session 67 - DB perf: estimated_document_count | performance | `total_users()` and `admin_count()` switched to `estimated_document_count()`; `ensure_initial_owner` left exact. | 2026-06-12 (s67) |
+
+| Session 68 - Full audit verification pass | audit | All critical files re-read; no new bugs found; bot running cleanly (75 handlers, MongoDB connected, 70 files ruff-clean) | 2026-06-12 (s68) |
 
 ## Pending (remaining optional)
 
