@@ -1,27 +1,18 @@
 ---
 name: Replit nix store constraint
-description: uv sync fails on Replit because the nix-managed Python site-packages directory is read-only. Fix and runtime workaround.
+description: uv sync and uv run work correctly on this Replit environment (nix channel stable-25_05 with python-3.12 module).
 ---
 
-# Replit Nix Store: Read-Only Constraint
+# Replit Nix Store: Status
 
 ## The rule
 
-On Replit, the nix-managed Python interpreter at `/nix/store/.../python3.12/` has a read-only `site-packages` directory. `uv sync` (and `uv run`, which triggers sync) will fail with:
+`uv sync` and `uv run` work correctly on this Replit environment (nix channel `stable-25_05`, module `python-3.12`). The previous read-only nix store constraint no longer applies.
 
-```
-Failed to install: <package>.whl
-Caused by: failed to create directory `/nix/store/.../lib/python3.12/site-packages/<pkg>`: Permission denied (os error 13)
-```
-
-This affects any package not already present in the nix store, including `ruff`, `flask`, `blinker`, and others.
-
-**Why:** Replit's nix environment is immutable. The system Python is managed by Nix, not pip. `uv` tries to install into the active Python's site-packages, which is the nix store. Pip installs to `.pythonlibs/` instead (writable).
+**Why:** As of the migration to Replit in June 2026, `uv sync` completed successfully and all packages were importable. `uv run python -m tcbot` starts the bot without errors.
 
 **How to apply:**
 
-1. Install dependencies via `pip install ...` in Replit (packages land in `.pythonlibs/`).
-2. Run commands directly: `python -m ruff check .`, `python -m tcbot`.
-3. Never use `uv run` or `uv sync` in Replit workflows. Configure workflows to use `python ...` directly.
-4. The `pyproject.toml` and `uv.lock` stay as-is for local/Docker development where `uv` works normally.
-5. When new sessions start on Replit, re-run `pip install "python-telegram-bot[job-queue]" "motor" "flask" "python-dotenv" "ruff"` if packages are missing.
+- Use `uv run python -m tcbot` as the workflow command (already configured).
+- Use `uv sync` to install/update dependencies.
+- Do NOT switch to raw `pip install` or `python -m tcbot` directly — `uv run` handles the venv correctly.
