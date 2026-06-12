@@ -5,7 +5,7 @@ description: Snapshot of the TCF Bot source layout after refactoring. Use this t
 
 # TCF Bot - Module Structure
 
-**Last updated:** 2026-06-06
+**Last updated:** 2026-06-12 (session 76)
 
 ## Repository layout
 
@@ -64,13 +64,15 @@ tcbot/
 │   └── unbanning.py         /unban command entry
 ├── database/
 │   ├── bans_db.py           Federation bans (active_bans, get_ban, add_ban, etc.)
-│   ├── cache.py             In-memory TTL cache (RoleCache, UserCache)
+│   ├── cache.py             TTLCache (in-memory) + TwoLevelCache (L1 in-memory + L2 Redis optional)
 │   ├── documents.py         TypedDict document shapes and Literal aliases
 │   ├── groups_db.py         Connected groups, join queue, active_groups
 │   ├── kicks_db.py          Kick log (log_kick, user_kicks, user_kick_count)
 │   ├── mongos.py            Motor client, connect(), ensure_indexes(), col()
 │   ├── mutes_db.py          Mute log (log_mute, user_mutes, user_mute_count)
 │   ├── queues_db.py         Promotion request queue
+│   ├── redis_client.py      Async Redis client (connect/close/client); hiredis verified at import
+│   ├── scheduler.py         APScheduler 4 + MongoDBDataStore + CBORSerializer; schedule_unban, cancel_schedule
 │   ├── types.py             NewType domain primitives
 │   ├── users_cache.py       Member profile cache (get_user, get_mention_data_batch, etc.)
 │   ├── users_roles.py       Roles: owner, admin, developer, tester; role_meta, can_act_on

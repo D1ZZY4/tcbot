@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-12 (session 75)
+**Last updated:** 2026-06-12 (session 76)
 
 ## Verification baseline
 
@@ -15,7 +15,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv pip install -e .` | PASS |
 | `uv run python -c "import tcbot; print('import OK')"` | PASS (session 43: re-verified after `__main__.py` edit) |
 | `uv run python -m tcbot --help 2>&1 || uv run python -c "from tcbot import *; print('startup OK')"` | PASS by runtime evidence: bot started cleanly, connected MongoDB, ensured indexes, initialised, 75 handlers registered, polling active |
-| `uv run ruff format .` | PASS (70 files already formatted) |
+| `uv run ruff format .` | PASS (72 files — includes redis_client.py, scheduler.py) |
 | `uv run ruff check --fix .` | PASS (All checks passed) |
 | asyncio task-GC fix isolated test (session 43) | PASS: task registered on schedule, discarded on completion, report coroutine ran |
 | `uv run python -m tcbot` | PASS by runtime evidence: MongoDB connected, indexes ensured, scheduler started, bot polling active |

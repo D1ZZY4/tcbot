@@ -5,13 +5,21 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-12 (session 75)
+**Last updated:** 2026-06-12 (session 76)
 
 ## What is done
 
-- Python 3.12, uv, python-telegram-bot (latest), Motor/MongoDB stack fully configured on Replit.
+- Python 3.12, uv, python-telegram-bot (latest), Motor/MongoDB + Redis (optional L2) + APScheduler 4 stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
-- `uv run ruff format .` and `uv run ruff check .` both clean (70 files).
+- `uv run ruff format .` and `uv run ruff check .` both clean (72 files).
+- Session 76 (2026-06-12): Post-session-75 code quality audit on new Redis/APScheduler files.
+  - Bug #100: `cache.py` `TwoLevelCache._redis_put_background` and `_redis_del_background` used `loop.create_task()` without strong-reference set. Added module-level `_redis_bg_tasks: set[asyncio.Task[None]]`; all fire-and-forget tasks now tracked with `discard` done-callback (same pattern as `__main__._asyncio_report_tasks`).
+  - hiredis verification: `redis_client.py` now verifies `hiredis` is importable at module-load time (`try/except ImportError → RuntimeError`). Logs version on connect. hiredis 3.4.0 confirmed present.
+  - `structure.md` updated: added `redis_client.py`, `scheduler.py`, updated `cache.py` description.
+  - `decisions.md` updated: added APScheduler 4 CBORSerializer/dedicated-task decision, Redis optional L2 decision, TwoLevelCache fire-and-forget strong-ref decision.
+  - Bot restart verified: MongoDB connected, APScheduler ready (MongoDBDataStore + CBORSerializer → tcbot), 22 log lines, polling active.
+
+- Python 3.12, uv, python-telegram-bot (latest), Motor/MongoDB stack fully configured on Replit.
 - HTML escaping audit fully complete (session 75): all `cfg.community_name` interpolations in HTML-context strings are now wrapped with `esc()`. `LogBuilder.__init__` now escapes the title at construction time (fixes 20+ audit-log callers in one place). Bug counter: #99.
 - All P1/P2/P3 backlog items resolved (pagination NameError, composite indexes, asyncio.gather conversions, shared replies.py, em-dash removal, cache TTL constants, keyboards.py dead code).
 - `docs/mapping.md` updated: added `identity.py`, `replies.py` to helper section; added `pagination.py` to utils section.

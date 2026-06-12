@@ -41,6 +41,10 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+# * Strong references to in-flight Redis background tasks; prevents GC before completion.
+# * Mirrors the pattern used in __main__._asyncio_report_tasks and ban_flow._album_tasks.
+_redis_bg_tasks: set[asyncio.Task[None]] = set()
+
 # * Public sentinel; compare using ``is CACHE_MISS`` to detect a cache miss.
 # * Distinct from None because None is a valid cache value (e.g. user has no role).
 CACHE_MISS: object = object()
@@ -198,6 +202,8 @@ class TwoLevelCache[T]:
         try:
             loop = asyncio.get_running_loop()
             task = loop.create_task(rc.set(rkey, json.dumps(val), ex=self._redis_ttl))
+            _redis_bg_tasks.add(task)
+            task.add_done_callback(_redis_bg_tasks.discard)
             task.add_done_callback(_log_redis_task_error)
         except RuntimeError:
             pass  # No running loop during shutdown
@@ -211,6 +217,8 @@ class TwoLevelCache[T]:
         try:
             loop = asyncio.get_running_loop()
             task = loop.create_task(rc.delete(rkey))
+            _redis_bg_tasks.add(task)
+            task.add_done_callback(_redis_bg_tasks.discard)
             task.add_done_callback(_log_redis_task_error)
         except RuntimeError:
             pass  # No running loop during shutdown

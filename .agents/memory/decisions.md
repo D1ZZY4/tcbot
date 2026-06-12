@@ -142,6 +142,36 @@ Key approaches adopted to meet v4 targets:
 
 ---
 
+## 2026-06-12: APScheduler 4 + MongoDBDataStore requires CBORSerializer and dedicated task
+
+**Decision:** Use `CBORSerializer` (not default pickle) for APScheduler 4's `MongoDBDataStore`. Run the `async with AsyncScheduler()` lifecycle inside a dedicated `asyncio.create_task(...)` background task.
+
+**Why:** (1) Pickle cannot serialize `ZoneInfo` objects that APScheduler 4 uses internally; `CBORSerializer` handles them correctly. (2) AnyIO cancel-scope semantics require that the scope created by `async with AsyncScheduler()` is both entered and exited in the same asyncio task; `run_polling()` creates its own tasks, so the scheduler's context manager must live in a separate dedicated task.
+
+**How to apply:** Always instantiate `CBORSerializer()` and pass it to `MongoDBDataStore`. Always spawn `asyncio.create_task(_scheduler_background(...), name="tcbot.scheduler")` from `start()`. Never `await sched.__aenter__()` directly from the PTB post_init callback.
+
+---
+
+## 2026-06-12: Redis optional L2 cache; hiredis verified at import of redis_client
+
+**Decision:** Redis is an optional L2 cache layer. When `REDIS_URL` is unset the bot degrades to in-memory (`TTLCache`) only. However, `hiredis` must always be importable at module-load time: `redis_client.py` verifies this at import via a `try/except ImportError` block that raises `RuntimeError` if hiredis is missing.
+
+**Why:** Without hiredis, the Python-only parser significantly limits Redis throughput. Since `redis[hiredis]` is a declared project dependency, the import check acts as a safety net against inadvertent environment degradation rather than a hard startup requirement on Redis connectivity itself.
+
+**How to apply:** Keep `hiredis` in `pyproject.toml` under `[project] dependencies` as part of `redis[hiredis]`. Never split `redis` and `hiredis` into separate entries. The check in `redis_client.py` (module-level try/except) is the single enforcement point; do not add a second check elsewhere.
+
+---
+
+## 2026-06-12: fire-and-forget loop.create_task in TwoLevelCache needs strong-ref set
+
+**Decision:** `TwoLevelCache._redis_put_background` and `_redis_del_background` use `loop.create_task()` for fire-and-forget Redis writes/deletes. Each task is added to the module-level `_redis_bg_tasks` set and removed via a `discard` done-callback (same pattern as `__main__._asyncio_report_tasks`).
+
+**Why:** RUF006 does not catch `loop.create_task()` scheduled through a local variable (only catches `asyncio.create_task` and `asyncio.get_event_loop().create_task` shapes statically). Without a strong reference the task can be GC-collected before completion, silently dropping the Redis write.
+
+**How to apply:** Whenever adding a new `loop.create_task(...)` fire-and-forget in `cache.py`, add the task to `_redis_bg_tasks` and register `_redis_bg_tasks.discard` as the done-callback. The `_log_redis_task_error` callback must also be registered as a second done-callback so errors are surfaced to the log.
+
+---
+
 ## 2026-06-02: Memory files live in `.agents/memory/`, MEMORY.md is the index
 
 **Decision:** Persistent cross-session memory uses `.agents/memory/MEMORY.md` as a one-line-per-entry index pointing to topic files in the same directory. Context, progress, and decisions each have their own file.

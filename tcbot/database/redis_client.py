@@ -14,6 +14,17 @@ import logging
 
 import redis.asyncio as aioredis
 
+try:
+    import hiredis as _hiredis_mod
+
+    _HIREDIS_VERSION: str = getattr(_hiredis_mod, "__version__", "unknown")
+    del _hiredis_mod
+except ImportError as exc:
+    raise RuntimeError(
+        "hiredis C extension is required for Redis support. "
+        "Install with: pip install 'redis[hiredis]'"
+    ) from exc
+
 log = logging.getLogger(__name__)
 
 # ────────────────────── Module-level state ──────────────────────── #
@@ -51,7 +62,7 @@ async def connect(url: str) -> None:
     c = aioredis.Redis.from_pool(pool)
     await c.ping()
     _client = c
-    log.info("Redis connected.")
+    log.info("Redis connected (hiredis %s).", _HIREDIS_VERSION)
 
 
 async def close() -> None:

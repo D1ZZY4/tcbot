@@ -11,7 +11,7 @@
 - [Slots class monkeypatch](decisions.md): `__slots__` makes instance methods read-only; replace the module-level limiter name with a `SimpleNamespace` fake instead of patching the instance
 - [Setuptools package discovery](decisions.md): `include = ["tcbot*"]` in `pyproject.toml` prevents Replit attached_assets/ from breaking editable install
 - [BaseFilter import location](decisions.md): import `BaseFilter` from `telegram.ext.filters`, not `telegram.ext`; PTB 22.7 does not re-export it at the top level
-- [RUF006 blind spot](decisions.md): RUF006 misses `loop.create_task` scheduled via a parameter; manually guard fire-and-forget tasks with a module-level set + `discard` done-callback (sets: `logger._tg_tasks`, `ban_flow._album_tasks`, `__main__._asyncio_report_tasks`)
+- [RUF006 blind spot](decisions.md): RUF006 misses `loop.create_task` scheduled via a parameter; manually guard fire-and-forget tasks with a module-level set + `discard` done-callback (sets: `logger._tg_tasks`, `ban_flow._album_tasks`, `__main__._asyncio_report_tasks`, `cache._redis_bg_tasks`)
 - [Anonymous admin edge cases](decisions.md): GroupAnonymousBot (id 1087968824) appears as `from_user` on replies and `cmc.from_user` may be None on bot-add; both guarded in extraction.py and connected_flow.py
 - [Context7 CLI setup](context7-setup.md) — npm package is `ctx7` (not `@context7/cli`); binary auto-reads `CONTEXT7_API_KEY` from env; MCP config uses `${CONTEXT7_API_KEY}` placeholder
 - [APScheduler 4 integration](apscheduler4-integration.md) — pickle serializer fails on ZoneInfo; use CBORSerializer + background asyncio task for cancel-scope safety
