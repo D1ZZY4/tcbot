@@ -214,27 +214,30 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     """
     q = update.callback_query
     admin = update.effective_user
-    executor_role = await db.users_roles.get_effective_role(admin.id)
-
-    if executor_role not in ("founder", "admin"):
-        await q.answer(replies.ERR_PERM_EXPIRED, show_alert=True)
-        try:
-            await q.edit_message_reply_markup(None)
-        except Exception as exc:
-            log.debug("Failed to clear promote reply markup: %s", exc)
-        return
-
     parts = q.data.split(":", 2)
     if len(parts) != 3:
+        await q.answer()
         return
     _, role, target_id_str = parts
     target_id = int(target_id_str)
 
+    # * Gather role check + q.answer() in parallel so the spinner disappears
+    # * immediately, regardless of DB latency.
+    executor_role, _ = await asyncio.gather(
+        db.users_roles.get_effective_role(admin.id),
+        q.answer(),
+        return_exceptions=True,
+    )
+    if isinstance(executor_role, BaseException) or executor_role not in (
+        "founder",
+        "admin",
+    ):
+        await q.edit_message_text(replies.ERR_PERM_EXPIRED, reply_markup=None)
+        return
+
     if role not in ("admin", "developer", "tester"):
         await q.edit_message_text(replies.ERR_UNKNOWN_ROLE, reply_markup=None)
         return
-
-    await q.answer()
     target_fname, current_role = await asyncio.gather(
         db.users_cache.get_first_name(target_id, str(target_id)),
         db.users_roles.get_effective_role(target_id),
@@ -342,17 +345,20 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     q = update.callback_query
     admin = update.effective_user
     target_id = int(q.data.split(":", 1)[1])
-    executor_role = await db.users_roles.get_effective_role(admin.id)
-
-    if executor_role not in ("founder", "admin"):
-        await q.answer(replies.ERR_PERM_EXPIRED, show_alert=True)
-        try:
-            await q.edit_message_reply_markup(None)
-        except Exception as exc:
-            log.debug("Failed to clear demote reply markup: %s", exc)
+    # * Gather role check + q.answer() in parallel so the spinner disappears
+    # * immediately, regardless of DB latency.
+    executor_role, _ = await asyncio.gather(
+        db.users_roles.get_effective_role(admin.id),
+        q.answer(),
+        return_exceptions=True,
+    )
+    if isinstance(executor_role, BaseException) or executor_role not in (
+        "founder",
+        "admin",
+    ):
+        await q.edit_message_text(replies.ERR_PERM_EXPIRED, reply_markup=None)
         return
 
-    await q.answer()
     target_role, mention_data = await asyncio.gather(
         db.users_roles.get_effective_role(target_id),
         db.users_cache.get_user_mention_data(target_id),
@@ -539,12 +545,17 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     """
     q = update.callback_query
     admin = update.effective_user
-    is_owner = await db.users_roles.is_owner(admin.id)
-    if not is_owner:
-        await q.answer(replies.PERM_FOUNDER_ONLY, show_alert=True)
-        return
     action, request_id = q.data.split(":", 1)
-    await q.answer()
+    # * Gather ownership check + q.answer() in parallel so the spinner disappears
+    # * immediately, regardless of DB latency.
+    is_owner, _ = await asyncio.gather(
+        db.users_roles.is_owner(admin.id),
+        q.answer(),
+        return_exceptions=True,
+    )
+    if isinstance(is_owner, BaseException) or not is_owner:
+        await q.edit_message_text(replies.PERM_FOUNDER_ONLY)
+        return
     try:
         req = await db.queues_db.get_request_by_id(request_id)
     except Exception:

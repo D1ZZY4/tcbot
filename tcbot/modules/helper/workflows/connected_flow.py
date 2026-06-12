@@ -265,21 +265,25 @@ class BuildConnection:
         user = update.effective_user
         lc, lt = cfg.logs
 
-        try:
-            member = await asyncio.wait_for(
+        # * Gather q.answer() + member check in parallel so the spinner
+        # * disappears immediately regardless of Telegram API latency.
+        member_res, _ = await asyncio.gather(
+            asyncio.wait_for(
                 ctx.bot.get_chat_member(chat.id, user.id), timeout=_TG_TIMEOUT
-            )
-        except Exception as exc:
-            log.debug("Join decision role check failed: %s", exc)
-            await q.answer(_ERR_ROLE_CHECK_FAILED, show_alert=True)
+            ),
+            q.answer(),
+            return_exceptions=True,
+        )
+        if isinstance(member_res, BaseException):
+            log.debug("Join decision role check failed: %s", member_res)
+            await q.edit_message_reply_markup(None)
+            await update.effective_message.reply_text(_ERR_ROLE_CHECK_FAILED)
             return
 
-        if member.status != ChatMemberStatus.OWNER:
-            await q.answer(_ERR_OWNER_ONLY, show_alert=True)
+        if member_res.status != ChatMemberStatus.OWNER:
+            await q.edit_message_reply_markup(None)
+            await update.effective_message.reply_text(_ERR_OWNER_ONLY)
             return
-
-        # * Owner verified; ack the callback before any callback-query edits.
-        await q.answer()
 
         action = q.data
 

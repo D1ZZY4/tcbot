@@ -51,7 +51,7 @@ description: Non-trivial technical decisions made during development. Format: da
 
 **Why:** Without it, a single failed Telegram API call inside a gather (rate-limited, message deleted, query expired) propagates an exception that crashes the handler. With it, failures are absorbed and the other coroutines still complete.
 
-**How to apply:** Before writing any `asyncio.gather(...)`, ask: are any results unpacked? If yes — no `return_exceptions`. If it's all side-effects (answer/edit/reply/send) with no result capture — add `return_exceptions=True`. Exception: if the gather is already inside `try/except Exception`, the outer handler already absorbs errors; adding `return_exceptions=True` would prevent the except-clause from firing.
+**How to apply:** Before writing any `asyncio.gather(...)`, ask: are any results unpacked? If yes: no `return_exceptions`. If it's all side-effects (answer/edit/reply/send) with no result capture: add `return_exceptions=True`. Exception: if the gather is already inside `try/except Exception`, the outer handler already absorbs errors; adding `return_exceptions=True` would prevent the except-clause from firing.
 
 ---
 
@@ -67,7 +67,7 @@ description: Non-trivial technical decisions made during development. Format: da
 
 ## 2026-06-11: PERF and PIE rulesets - safe to add; T20 must stay off globally
 
-**Decision:** Add `PERF` (Perflint) and `PIE` (misc improvements) to pyproject.toml ruff select. Do NOT add `T20` (flake8-print) globally; the `_print_fatal()` function in `__main__.py` intentionally uses `print(..., file=sys.stderr)` for fatal startup error display — these are legitimate stderr outputs, not debug leakage.
+**Decision:** Add `PERF` (Perflint) and `PIE` (misc improvements) to pyproject.toml ruff select. Do NOT add `T20` (flake8-print) globally; the `_print_fatal()` function in `__main__.py` intentionally uses `print(..., file=sys.stderr)` for fatal startup error display: these are legitimate stderr outputs, not debug leakage.
 
 **Why:** PERF401 (for-loop to comprehension/extend) and PIE810 (startswith tuple) are unambiguously correct improvements with no behaviour change. T20 would force noqa comments on intentional code, which is noisier than not enabling the rule.
 
@@ -89,9 +89,9 @@ description: Non-trivial technical decisions made during development. Format: da
 
 **Decision:** Add `PLE` (Pylint-error) and `PLC` (Pylint-convention) to pyproject.toml ruff select. Suppress `PLE0604` false positive on `[*ALL_MODULES, "ALL_MODULES"]` in `__init__.py` with `# noqa: PLE0604`. Suppress `PLC0415` on three intentional lazy imports with per-line noqa. Do NOT add `PLR` (refactoring): fires on large handler functions without benefit.
 
-**Why:** PLE0604 fires on `__all__ = [*ALL_MODULES, "ALL_MODULES"]` — `ALL_MODULES` is `list[str]` at runtime but ruff cannot verify this statically. PLC0415 fires on three correct lazy imports: `dns.resolver` (optional dep), `ban_info.build_ban_detail` (circular break), `error_reporter` (circular break logger↔reporter).
+**Why:** PLE0604 fires on `__all__ = [*ALL_MODULES, "ALL_MODULES"]`: `ALL_MODULES` is `list[str]` at runtime but ruff cannot verify this statically. PLC0415 fires on three correct lazy imports: `dns.resolver` (optional dep), `ban_info.build_ban_detail` (circular break), `error_reporter` (circular break logger↔reporter).
 
-**How to apply:** When adding a new lazy import, add `# noqa: PLC0415` to the `from … import (` line. When spreading a list in `__all__`, verify the list is guaranteed to be `list[str]` at runtime; if so, add `# noqa: PLE0604`. Never add these to the global ignore — only use per-line suppression.
+**How to apply:** When adding a new lazy import, add `# noqa: PLC0415` to the `from … import (` line. When spreading a list in `__all__`, verify the list is guaranteed to be `list[str]` at runtime; if so, add `# noqa: PLE0604`. Never add these to the global ignore: only use per-line suppression.
 
 ---
 

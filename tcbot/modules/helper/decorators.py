@@ -314,7 +314,12 @@ async def resolve_and_check(
     executor_role, target_role = await asyncio.gather(
         db.users_roles.get_effective_role(executor_id),
         db.users_roles.get_effective_role(target_id),
+        return_exceptions=True,
     )
+    if isinstance(executor_role, BaseException):
+        executor_role = None
+    if isinstance(target_role, BaseException):
+        target_role = None
     if db.users_roles.role_rank(executor_role) < db.users_roles.role_rank(min_role):
         await msg.reply_text(_ERR_RANK_INSUFFICIENT)
         return None, None

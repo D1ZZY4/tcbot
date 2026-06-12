@@ -5,7 +5,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-12 (session 60)
+**Last updated:** 2026-06-12 (session 62)
 
 ## What is done
 
@@ -19,7 +19,17 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 - `replies.py` now has full permission-tier set: `PERM_TESTER_ABOVE`, `PERM_DEV_ABOVE`, `PERM_ADMIN_ABOVE`, `PERM_STAFF_ONLY`, `PERM_FOUNDER_ONLY`.
 - `admins.py` and `broadcasting.py` updated to use `replies.PERM_FOUNDER_ONLY` / `replies.PERM_STAFF_ONLY` throughout.
 - `start.py` welcome messages rewritten to fix broken grammar.
-- Comprehensive source audit: CLEAN - no emoji, em-dash, or emoticons anywhere in tcbot/.
+- Comprehensive source audit: CLEAN - no emoji, no emoticons anywhere in tcbot/.
+- Em-dash cleanup (session 61): 2 remaining em-dash chars in noqa comments (mongos.py, modules/__init__.py) replaced with parenthetical form.
+- Em-dash/en-dash FULL cleanup (session 62): 141 remaining em-dashes across 100 markdown files replaced with `: ` equivalents. Zero remaining in all project docs.
+- Bug #44 (session 61): 4 callbacks (admins.py x3, appeal_flow.py on_decision) did DB await before q.answer(). Fixed with asyncio.gather pattern. Also fixed double-answer bug in appeal_flow.py:on_decision.
+- Bug #45 (session 61): connected_flow.py on_join_decision did Telegram API call before q.answer(). Fixed.
+- Perf (session 61): start.py _show_groups gathered q.answer + db.active_groups in parallel.
+- Bug #46 (session 62): users_roles.py is_staff/can_act_on/get_effective_role asyncio.gather without return_exceptions. All auth checks now fault-tolerant with conservative-deny fallbacks. Added logging.
+- Bug #46p2 (session 62): promote_flow.py request_admin enqueue+get_owner_id gather without return_exceptions; enqueue failure now returns user-facing error.
+- Bug #47 (session 62): decorators.py resolve_and_check gather without return_exceptions. Fixed with None fallbacks.
+- Perf (session 62): check_flow.py bans_list/warns_by_group/appeals_list/_per_chat_event_list: sequential _name(target_id) after main DB fetch replaced with asyncio.gather. All 5 check drill-down list views now fetch DB+name in one round-trip.
+- Perf (session 62): appeal_flow.py on_decision approve path: _update_or_send_log + send_message(unban log) gathered in parallel.
 - Bot restarts cleanly: MongoDB connected, indexes ensured, 75 handlers registered, polling active.
 - `kicking_flow.py` SyntaxError fixed.
 - All inline-string extractions complete across all modules and workflows.
@@ -86,7 +96,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Added `WHERE_CONNECTED_GROUP` to `replies.py`; replaced literal in kicking/muting/warnings.
   - Ruff 144 files clean.
 
-- Session 30 (2026-06-06): magic number extraction — MongoDB pool params + all ratelimiter constants across all 16 module files.
+- Session 30 (2026-06-06): magic number extraction: MongoDB pool params + all ratelimiter constants across all 16 module files.
   - Extracted 7 named MongoDB constants to `mongos.py`; replaced all 7 bare literals in `connect()`.
   - Extracted `_RL_*` named constants to all 16 `tcbot/modules/*.py` files with `@ratelimiter` decorators; replaced every bare `limit=` and `period=` literal. Every `@ratelimiter` call-site in `tcbot/modules/` now uses named constants.
   - Ruff 144 files clean.
@@ -149,14 +159,14 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Fixed RUF059 ×4: unused unpacked vars → `_` in `admins.py` ×3, `checking.py`, `muting.py`.
   - Fixed RUF100 ×2: removed unused noqa directives in `decorators.py` and `parse_logmsg.py`.
   - Fixed RUF012 ×2: added `ClassVar` annotations to `BotLogFormatter._LEVELS` and `._COLORED_MSG` in `logger.py`.
-  - Fixed RUF006 ×2 (real bug): `asyncio.create_task` / `loop.create_task` references now stored in module-level sets with `discard` done-callbacks in `ban_flow.py` and `logger.py` — prevents GC of in-flight tasks.
+  - Fixed RUF006 ×2 (real bug): `asyncio.create_task` / `loop.create_task` references now stored in module-level sets with `discard` done-callbacks in `ban_flow.py` and `logger.py`: prevents GC of in-flight tasks.
   - pyproject.toml select now: `["B", "C4", "E4", "E7", "E9", "F", "I", "PERF", "PIE", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]`.
   - Bot restarted cleanly; ruff all checks passed.
 
 - Session 41 (2026-06-11): PTH + FBT + D rulesets + comprehensive audit.
   - Added `PTH`: fixed PTH110 in `mongos.py`.
-  - Added `FBT`: 16 violations fixed — keyword-only bool params in 6 functions; call sites updated; noqa on 3 third-party call sites.
-  - Added `D` (pydocstyle): fixed 18 violations — D107/D105 docstrings added, D301 r-string, D205 module docstring, D401 imperative mood rephrases, D202/D413 auto-fixed; D203/D213 in ignore (incompatible with D211/D212).
+  - Added `FBT`: 16 violations fixed: keyword-only bool params in 6 functions; call sites updated; noqa on 3 third-party call sites.
+  - Added `D` (pydocstyle): fixed 18 violations: D107/D105 docstrings added, D301 r-string, D205 module docstring, D401 imperative mood rephrases, D202/D413 auto-fixed; D203/D213 in ignore (incompatible with D211/D212).
   - Excluded `.local/`, `.agents/`, `.kilo/`, `.trae/`, `.claude/` from ruff scan (skills/symlinks not our code).
   - pyproject.toml select now: `["B", "C4", "D", "E4", "E7", "E9", "F", "FBT", "I", "PERF", "PIE", "PTH", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]`.
 
@@ -204,7 +214,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Full 7-step verification PASS: uv sync, editable install, import OK, ruff format (70 files), ruff check, bot start (handlers registered, polling), docs audit.
 
 - Session 48 (2026-06-12): real correctness bug fix in greeting.py.
-  - Bug #3: `greeting.py` `_handle_member` — replaced bare `asyncio.gather(ban_chat_member, reply_text)` in `try/except` with `return_exceptions=True` gather. Previously if reply failed after ban succeeded, logged "Auto-ban on join failed" (misleading). Now ban failure logs ERROR; reply failure logs DEBUG.
+  - Bug #3: `greeting.py` `_handle_member`: replaced bare `asyncio.gather(ban_chat_member, reply_text)` in `try/except` with `return_exceptions=True` gather. Previously if reply failed after ban succeeded, logged "Auto-ban on join failed" (misleading). Now ban failure logs ERROR; reply failure logs DEBUG.
   - Full asyncio.gather audit across all 50+ gather calls: all pure side-effect gathers have `return_exceptions=True`; data-fetching gathers correctly omit it.
 
 - Session 49 (2026-06-12): HTML escaping bug fix in moderation flows.
@@ -215,19 +225,19 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 - Session 50 (2026-06-12): Two correctness bug fixes.
   - Bug #5: `proof_flow.py` `step_prompt`/`noted_prompt` embedded `reason`/`inline_reason` in HTML `<b>` tags without `esc()`. Added `esc` import and wrapped both strings. Circular import risk confirmed absent.
   - Bug #6: `admins.py` `cmd_promote_request` always rejected all promotion requests with "Promoting yourself? Nice try..." because `identity.classify(user.id, user.id, ...)` always returns `Identity("self")` in self-submission flows. Removed identity check; replaced with parallel `get_effective_role` + `get_request` check. Users with existing roles get clear rejection; duplicate-request guard retained.
-  - Comprehensive audit of all remaining critical files completed: `checking.py`, `parse_logmsg.py` (full 767 lines), `check_flow.py` (full 513 lines), `stats.py`, `appeals.py`, `groups.py`, `demote_flow.py` — all clean.
+  - Comprehensive audit of all remaining critical files completed: `checking.py`, `parse_logmsg.py` (full 767 lines), `check_flow.py` (full 513 lines), `stats.py`, `appeals.py`, `groups.py`, `demote_flow.py`: all clean.
   - Ruff 70 files clean; bot running (MongoDB connected, 75 handlers, polling active).
 
 - Session 51 (2026-06-12): disable link preview globally.
   - Added `Defaults(link_preview_options=LinkPreviewOptions(is_disabled=True))` to `ApplicationBuilder` chain in `__main__.py`. All 205+ reply_text/send_message/edit_message_text calls now suppress Telegram link-preview cards without touching individual call sites.
-  - Audit completed: `about.py`, `additional.py`, `unbanning.py`, `privacy.py`, `error_reporter.py`, `unban_flow.py`, `promote_flow.py`, `connected_flow.py`, `broadcasting.py`, `maintenance.py`, `decorators.py` — all clean.
+  - Audit completed: `about.py`, `additional.py`, `unbanning.py`, `privacy.py`, `error_reporter.py`, `unban_flow.py`, `promote_flow.py`, `connected_flow.py`, `broadcasting.py`, `maintenance.py`, `decorators.py`: all clean.
   - Bot restart verified: Defaults active, MongoDB connected, 75 handlers, polling active.
 
-- Session 52 (2026-06-12): audit wave 2 — found and fixed stats search query bug.
-  - Bug #7: `stats.py` `on_bans_search_input` never stored `query` to `ctx.user_data["stats_last_query"]`. When user tapped "« Back" from a search-detail card, `on_stats_search_back` rendered `Search: "" (N found)` — query string always blank.
+- Session 52 (2026-06-12): audit wave 2: found and fixed stats search query bug.
+  - Bug #7: `stats.py` `on_bans_search_input` never stored `query` to `ctx.user_data["stats_last_query"]`. When user tapped "« Back" from a search-detail card, `on_stats_search_back` rendered `Search: "" (N found)`: query string always blank.
   - Fix: added `ctx.user_data["stats_last_query"] = query` after RESULTS_KEY is set in `on_bans_search_input`.
-  - Also: `Stats.clear_search` did not clear `"stats_last_query"` — stale data would survive to next search session. Added it to the clear loop in `stats_flow.py`.
-  - Full audit wave 2 complete: all 50+ files read (greeting, appeals, broadcasting, additional, maintenance, privacy, check_flow, proof_flow, connecting, disconnecting, promote_flow, demote_flow, __main__, groups_db, warns_db, kicks_db, mutes_db, queues_db, users_roles, users_cache, mongos, dispatch, prefixes, parse_logmsg, error_reporter, pagination, stats_flow, stats) — all clean except the above two-line fix.
+  - Also: `Stats.clear_search` did not clear `"stats_last_query"`: stale data would survive to next search session. Added it to the clear loop in `stats_flow.py`.
+  - Full audit wave 2 complete: all 50+ files read (greeting, appeals, broadcasting, additional, maintenance, privacy, check_flow, proof_flow, connecting, disconnecting, promote_flow, demote_flow, __main__, groups_db, warns_db, kicks_db, mutes_db, queues_db, users_roles, users_cache, mongos, dispatch, prefixes, parse_logmsg, error_reporter, pagination, stats_flow, stats): all clean except the above two-line fix.
   - Ruff 70 files clean; bot running (MongoDB connected, 75 handlers, polling active).
 
 - Session 55 (2026-06-12): ConversationHandler TIMEOUT state fix (Bug #9).
@@ -239,17 +249,17 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 - Session 56 (2026-06-12): asyncio.gather return_exceptions systematic audit + critical bug fix.
   - Audited all asyncio.gather calls codebase-wide. Found pattern: gathers that use results (groups, ban, req, etc.) without return_exceptions, so BaseException values flowed into the code as if they were real data → crashes or false behavior.
-  - Bug #10: connected_flow.py on_bot_added — was_connected could be BaseException → truthy → spurious disconnect log sent.
-  - Bug #11: unban_flow.py execute_unban — groups could be BaseException → fan_out list comprehension crash.
-  - Bug #12: ban_flow.py _execute_ban — same groups crash in ban enforcement path.
-  - Bug #13: appeal_flow.py on_review_decision — ban could be BaseException → ban.get() AttributeError crash.
-  - Bug #14: appeal_flow.py on_review_decision approve branch — groups/target_fname BaseException crashes.
-  - Bug #15: promote_flow.py — 3 pure DB-write gathers without return_exceptions (add_admin, set_role, upsert_user combinations).
-  - Bug #16: admins.py on_promo_decision — req could be BaseException → req["target_id"] crash.
-  - Bug #17: admins.py on_demote_confirm — tuple unpacking (target_fname, target_uname) from BaseException crash.
-  - Bug #18: admins.py on_promote_role_select — target_fname/current_role BaseException passed directly to Promote.execute().
-  - Bug #19 (CRITICAL): greeting.py _handle_member — ban could be BaseException (truthy) → auto-ban issued for user who was NOT federation-banned. False ban of innocent user.
-  - Bug #20: warns_db.py clear_warns + remove_last_warn — DB result access without return_exceptions protection.
+  - Bug #10: connected_flow.py on_bot_added: was_connected could be BaseException → truthy → spurious disconnect log sent.
+  - Bug #11: unban_flow.py execute_unban: groups could be BaseException → fan_out list comprehension crash.
+  - Bug #12: ban_flow.py _execute_ban: same groups crash in ban enforcement path.
+  - Bug #13: appeal_flow.py on_review_decision: ban could be BaseException → ban.get() AttributeError crash.
+  - Bug #14: appeal_flow.py on_review_decision approve branch: groups/target_fname BaseException crashes.
+  - Bug #15: promote_flow.py: 3 pure DB-write gathers without return_exceptions (add_admin, set_role, upsert_user combinations).
+  - Bug #16: admins.py on_promo_decision: req could be BaseException → req["target_id"] crash.
+  - Bug #17: admins.py on_demote_confirm: tuple unpacking (target_fname, target_uname) from BaseException crash.
+  - Bug #18: admins.py on_promote_role_select: target_fname/current_role BaseException passed directly to Promote.execute().
+  - Bug #19 (CRITICAL): greeting.py _handle_member: ban could be BaseException (truthy) → auto-ban issued for user who was NOT federation-banned. False ban of innocent user.
+  - Bug #20: warns_db.py clear_warns + remove_last_warn: DB result access without return_exceptions protection.
   - All 10 bugs fixed. Ruff 70 files clean; bot restarted clean (MongoDB connected, 75 handlers, polling active).
 
 - Session 54 (2026-06-12): dependency upgrade.
@@ -260,22 +270,22 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 - Session 53 (2026-06-12): audit wave 4 + bug fix.
   - DRY fix in `help.py`: added `_ERR_SECTION_NOT_FOUND` constant; replaced two inline literals in `_show_section()` with named constants. (`_ERR_TOPIC_NOT_FOUND` was already extracted; now `_ERR_SECTION_NOT_FOUND` joins it.)
-  - Audit wave 4 completed: `decorators.py`, `kicking_flow.py`, `warning_flow.py`, `reason_flow.py`, `connected_flow.py`, `unban_flow.py`, `parse_editmsg.py`, `parse_link.py`, `replies.py`, `keyboards.py`, `muting_flow.py` — all clean.
-  - Explorer audited `banning.py`, `kicking.py`, `muting.py`, `warnings.py` — all clean; confirmed `WARN_LIMIT=3` is correct (explorer false-positive about `_RL_WARN_LIMIT=5` which is rate-limiter constant, not warn limit).
-  - Explorer audited `unbanning.py`, `groups.py`, `admins.py` — false positives on `@mod_only`-guarded functions; one real bug found.
-  - Bug #8: `admins.py` `on_promo_decision` promo_approve branch — `asyncio.gather(add_admin, resolve)` missing `return_exceptions=True`. Counterpart `promo_reject` branch already had it. Fixed: consistent with project convention for pure side-effect gathers.
+  - Audit wave 4 completed: `decorators.py`, `kicking_flow.py`, `warning_flow.py`, `reason_flow.py`, `connected_flow.py`, `unban_flow.py`, `parse_editmsg.py`, `parse_link.py`, `replies.py`, `keyboards.py`, `muting_flow.py`: all clean.
+  - Explorer audited `banning.py`, `kicking.py`, `muting.py`, `warnings.py`: all clean; confirmed `WARN_LIMIT=3` is correct (explorer false-positive about `_RL_WARN_LIMIT=5` which is rate-limiter constant, not warn limit).
+  - Explorer audited `unbanning.py`, `groups.py`, `admins.py`: false positives on `@mod_only`-guarded functions; one real bug found.
+  - Bug #8: `admins.py` `on_promo_decision` promo_approve branch: `asyncio.gather(add_admin, resolve)` missing `return_exceptions=True`. Counterpart `promo_reject` branch already had it. Fixed: consistent with project convention for pure side-effect gathers.
   - Full audit now covers all 30+ module and helper files; no remaining unaudited files.
   - Ruff 70 files clean; bot running (MongoDB connected, 75 handlers, polling active).
 
 - Session 57 (2026-06-12): systematic HTML-escaping audit across all modules.
-  - Bug #28: `privacy.py` `on_privacy_menu`/`on_privacy_policy_menu` — `ctx.bot.first_name` raw in HTML format strings. Wrapped with `esc()`.
-  - Bug #29: `start.py` `cmd_start`/`on_back_to_start` — same pattern. Wrapped with `esc()`.
-  - Bug #30: `appeal_flow.py` `_on_approve` — `self.community_name` raw in HTML DM to user. Wrapped with `esc()`.
-  - Bug #31: `demote_flow.py` `Demote.execute` — `role_label` (inside `<b>` tags) and `cfg.community_name` unescaped in DM. Wrapped both with `esc()`.
-  - Bug #32: `help.py` `_show_help_index`/`cmd_help` — `ctx.bot.first_name` raw in HTML format strings. Wrapped with `esc()`.
-  - Bug #33: `help.py` `cmd_help` — `query` (lowercased user input) raw in `f"Module <b>{query}</b> not found."` with `parse_mode="HTML"`. Wrapped with `esc(query)`.
-  - Bug #34: `warning_flow.py` `execute_warnlist` — `w.get('reason', 'No reason')` (admin-typed warn reason from DB) raw in HTML list. Wrapped with `esc()`.
-  - Comprehensive audit completed: `keyboards.py`, `parse_logmsg.py`, `parse_editmsg.py`, `extraction.py`, `bans_db.py`, `warns_db.py`, `queues_db.py`, `dispatch.py`, `timedate_format.py`, `unban_flow.py`, `promote_flow.py`, `reason_flow.py`, `admins.py`, `banning.py`, `kicking.py`, `warns.py` — all clean.
+  - Bug #28: `privacy.py` `on_privacy_menu`/`on_privacy_policy_menu`: `ctx.bot.first_name` raw in HTML format strings. Wrapped with `esc()`.
+  - Bug #29: `start.py` `cmd_start`/`on_back_to_start`: same pattern. Wrapped with `esc()`.
+  - Bug #30: `appeal_flow.py` `_on_approve`: `self.community_name` raw in HTML DM to user. Wrapped with `esc()`.
+  - Bug #31: `demote_flow.py` `Demote.execute`: `role_label` (inside `<b>` tags) and `cfg.community_name` unescaped in DM. Wrapped both with `esc()`.
+  - Bug #32: `help.py` `_show_help_index`/`cmd_help`: `ctx.bot.first_name` raw in HTML format strings. Wrapped with `esc()`.
+  - Bug #33: `help.py` `cmd_help`: `query` (lowercased user input) raw in `f"Module <b>{query}</b> not found."` with `parse_mode="HTML"`. Wrapped with `esc(query)`.
+  - Bug #34: `warning_flow.py` `execute_warnlist`: `w.get('reason', 'No reason')` (admin-typed warn reason from DB) raw in HTML list. Wrapped with `esc()`.
+  - Comprehensive audit completed: `keyboards.py`, `parse_logmsg.py`, `parse_editmsg.py`, `extraction.py`, `bans_db.py`, `warns_db.py`, `queues_db.py`, `dispatch.py`, `timedate_format.py`, `unban_flow.py`, `promote_flow.py`, `reason_flow.py`, `admins.py`, `banning.py`, `kicking.py`, `warns.py`: all clean.
   - All false positives resolved: `staff_only`/`mod_only`/`owner_only` decorators guard `effective_user is None`; `promote_flow.py:161` gather without `return_exceptions=True` is correct for data-fetching gather; `admins.py:542` early-reject pattern is correct.
   - Ruff 70 files clean; bot running (MongoDB connected, scheduler started, polling active).
 
@@ -288,7 +298,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Ruff 70 files clean; bot running (MongoDB connected, scheduler started, polling active).
 
 - Session 59 (2026-06-12): checking.py q.answer race, stats_flow gathers, ban_info gather, warnings.py gather, groups._toggle serial awaits.
-  - Bug #39: `checking.py` `on_checkme_detail`/`on_checkme_back` — DB before `q.answer()`. Fixed with `asyncio.gather(q.answer(), get_ban(), return_exceptions=True)`.
+  - Bug #39: `checking.py` `on_checkme_detail`/`on_checkme_back`: DB before `q.answer()`. Fixed with `asyncio.gather(q.answer(), get_ban(), return_exceptions=True)`.
   - Perf: all 8 `on_check_*` handlers serial q.answer+method → gathered with `return_exceptions=True` and isinstance guards.
   - Bug #40: `stats_flow.py` `Stats.main` (7-coro) and `Stats.staff_roster` (4-coro) gathers lacked `return_exceptions=True`. Fixed with per-field fallbacks.
   - Bug #41: `ban_info.py` `build_ban_detail` gather lacked `return_exceptions=True`. Fixed with r_target/r_admin unpack guards.
@@ -296,7 +306,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Perf: `groups.py` `_toggle` cache-hit and cache-miss serial awaits → gathered.
   - Ruff 70 files clean; bot running (MongoDB connected, scheduler started, polling active).
 
-- Session 60 (2026-06-12): Bug #43 — banning/muting/kicking ConversationHandler entry gathers.
+- Session 60 (2026-06-12): Bug #43: banning/muting/kicking ConversationHandler entry gathers.
   - Bug #43: `banning.py` `cmd_ban_start`, `muting.py` `cmd_mute`, `kicking.py` `cmd_kick` all had `asyncio.gather(identity.classify, resolve_and_check)` without `return_exceptions=True`. DB failure left ConversationHandler open (identical pattern to Bug #42 in warnings.py, missed in that session). Fixed all three with individual isinstance guards + ConversationHandler.END on failure.
   - AST audit confirms no remaining ConversationHandler entry points with unguarded classify/resolve_and_check gathers.
   - Ruff 70 files clean; bot running (MongoDB connected, scheduler started, polling active).

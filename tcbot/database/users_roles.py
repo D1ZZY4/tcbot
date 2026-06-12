@@ -11,6 +11,7 @@ Do not mix with users_cache.py which handles member_cache collection.
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any, cast
 
 from pymongo.errors import DuplicateKeyError
@@ -24,6 +25,8 @@ from tcbot.database.cache import (
 from tcbot.database.documents import AdminDoc, RoleDoc, RoleRefDoc
 from tcbot.database.mongos import col
 from tcbot.utils.timedate_format import utc_now
+
+log = logging.getLogger(__name__)
 
 # ────────────────────── Role hierarchy tables ───────────────────── #
 # * Numeric ranks compare executor vs target; labels render to humans.
@@ -106,7 +109,15 @@ async def is_admin(user_id: int) -> bool:
 
 async def is_staff(user_id: int) -> bool:
     """Return True if user_id is owner or admin."""
-    owner, admin = await asyncio.gather(is_owner(user_id), is_admin(user_id))
+    owner, admin = await asyncio.gather(
+        is_owner(user_id), is_admin(user_id), return_exceptions=True
+    )
+    if isinstance(owner, BaseException):
+        log.warning("is_staff owner check failed for %d: %s", user_id, owner)
+        owner = False
+    if isinstance(admin, BaseException):
+        log.warning("is_staff admin check failed for %d: %s", user_id, admin)
+        admin = False
     return owner or admin
 
 
@@ -198,7 +209,16 @@ async def can_act_on(executor_id: int, target_id: int) -> bool:
     executor_role, target_role = await asyncio.gather(
         get_effective_role(executor_id),
         get_effective_role(target_id),
+        return_exceptions=True,
     )
+    if isinstance(executor_role, BaseException):
+        log.warning(
+            "can_act_on executor role failed for %d: %s", executor_id, executor_role
+        )
+        executor_role = None
+    if isinstance(target_role, BaseException):
+        log.warning("can_act_on target role failed for %d: %s", target_id, target_role)
+        target_role = None
     return role_rank(executor_role) > role_rank(target_role)
 
 
@@ -212,7 +232,17 @@ async def get_effective_role(user_id: int) -> str | None:
         is_owner(user_id),
         is_admin(user_id),
         get_role(user_id),
+        return_exceptions=True,
     )
+    if isinstance(owner, BaseException):
+        log.warning("get_effective_role owner check failed for %d: %s", user_id, owner)
+        owner = False
+    if isinstance(admin, BaseException):
+        log.warning("get_effective_role admin check failed for %d: %s", user_id, admin)
+        admin = False
+    if isinstance(role, BaseException):
+        log.warning("get_effective_role role fetch failed for %d: %s", user_id, role)
+        role = None
     result: str | None = "founder" if owner else "admin" if admin else role
     effective_role_cache.put(user_id, result)
     return result

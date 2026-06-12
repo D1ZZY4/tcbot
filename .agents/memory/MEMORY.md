@@ -5,11 +5,11 @@
 - [Technical decisions](decisions.md) - non-trivial decisions with why and how-to-apply
 - [Module structure](structure.md) - full repo layout snapshot, cross-cutting constraints
 - [Replit nix store constraint](replit-nix-store.md) - uv sync fails writing to nix store; fix and runtime workaround
-- [Sequential await audit complete](sequential-await-audit.md) - all module files audited; key fixes in identity.classify, stats.py, groups._toggle, admins cmd_promote/demote
-- [asyncio.gather return_exceptions rule](decisions.md) — pure side-effect gathers need `return_exceptions=True`; data-fetching gathers that unpack results must NOT have it
-- [Frozen dataclass monkeypatch](decisions.md) — frozen dataclass instances (e.g. `connection`) cannot be patched via `patch("module.obj.attr")`; patch the module-level name instead
-- [Slots class monkeypatch](decisions.md) — `__slots__` makes instance methods read-only; replace the module-level limiter name with a `SimpleNamespace` fake instead of patching the instance
-- [Setuptools package discovery](decisions.md) — `include = ["tcbot*"]` in `pyproject.toml` prevents Replit attached_assets/ from breaking editable install
-- [BaseFilter import location](decisions.md) — import `BaseFilter` from `telegram.ext.filters`, not `telegram.ext`; PTB 22.7 does not re-export it at the top level
-- [RUF006 blind spot](decisions.md) — RUF006 misses `loop.create_task` scheduled via a parameter; manually guard fire-and-forget tasks with a module-level set + `discard` done-callback (sets: `logger._tg_tasks`, `ban_flow._album_tasks`, `__main__._asyncio_report_tasks`)
-- [Anonymous admin edge cases](decisions.md) — GroupAnonymousBot (id 1087968824) appears as `from_user` on replies and `cmc.from_user` may be None on bot-add; both guarded in extraction.py and connected_flow.py
+- [Sequential await audit complete](sequential-await-audit.md) - all module files audited; key fixes through session 62 (users_roles, promote_flow, check_flow, appeal_flow, decorators)
+- [asyncio.gather return_exceptions rule](decisions.md): pure side-effect gathers need `return_exceptions=True`; data-fetching gathers that unpack results must also use it with per-field fallbacks
+- [Frozen dataclass monkeypatch](decisions.md): frozen dataclass instances (e.g. `connection`) cannot be patched via `patch("module.obj.attr")`; patch the module-level name instead
+- [Slots class monkeypatch](decisions.md): `__slots__` makes instance methods read-only; replace the module-level limiter name with a `SimpleNamespace` fake instead of patching the instance
+- [Setuptools package discovery](decisions.md): `include = ["tcbot*"]` in `pyproject.toml` prevents Replit attached_assets/ from breaking editable install
+- [BaseFilter import location](decisions.md): import `BaseFilter` from `telegram.ext.filters`, not `telegram.ext`; PTB 22.7 does not re-export it at the top level
+- [RUF006 blind spot](decisions.md): RUF006 misses `loop.create_task` scheduled via a parameter; manually guard fire-and-forget tasks with a module-level set + `discard` done-callback (sets: `logger._tg_tasks`, `ban_flow._album_tasks`, `__main__._asyncio_report_tasks`)
+- [Anonymous admin edge cases](decisions.md): GroupAnonymousBot (id 1087968824) appears as `from_user` on replies and `cmc.from_user` may be None on bot-add; both guarded in extraction.py and connected_flow.py

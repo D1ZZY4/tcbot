@@ -15,4 +15,4 @@ description: uv sync and uv run work correctly on this Replit environment (nix c
 
 - Use `uv run python -m tcbot` as the workflow command (already configured).
 - Use `uv sync` to install/update dependencies.
-- Do NOT switch to raw `pip install` or `python -m tcbot` directly — `uv run` handles the venv correctly.
+- Do NOT switch to raw `pip install` or `python -m tcbot` directly: `uv run` handles the venv correctly.

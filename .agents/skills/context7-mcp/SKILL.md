@@ -33,7 +33,7 @@ general Python concepts.
 On Replit, MCP tools are not available in the agent sandbox. Use the `ctx7`
 CLI instead. The `CONTEXT7_API_KEY` secret is already set in the environment.
 
-**Step 1 — Resolve the library ID:**
+**Step 1: Resolve the library ID:**
 
 ```bash
 ctx7 library "python-telegram-bot" "your question here"
@@ -42,7 +42,7 @@ ctx7 library "python-telegram-bot" "your question here"
 Pick the result with the highest Benchmark Score and closest name match.
 Prefer version-specific IDs when available (e.g. a v22.x entry over generic).
 
-**Step 2 — Fetch the docs:**
+**Step 2: Fetch the docs:**
 
 ```bash
 ctx7 docs "/python-telegram-bot/python-telegram-bot" "your specific question"
@@ -50,7 +50,7 @@ ctx7 docs "/python-telegram-bot/python-telegram-bot" "your specific question"
 
 Use the library ID from Step 1. Ask a specific question, not just keywords.
 
-**Step 3 — Apply and record:**
+**Step 3: Apply and record:**
 
 Use the fetched docs to write or fix code. If you find a significant
 non-obvious API detail, record it in `.agents/memory/decisions.md`.
@@ -61,13 +61,13 @@ non-obvious API detail, record it in `.agents/memory/decisions.md`.
 |---|---|---|
 | `python-telegram-bot` | `/python-telegram-bot/python-telegram-bot` | 86.2 |
 | `python-telegram-bot` (alt, more snippets) | `/websites/python-telegram-bot_en_stable` | 67.7 |
-| `motor` | resolve via `ctx7 library "motor" "..."` | — |
-| `pymongo` | resolve via `ctx7 library "pymongo" "..."` | — |
-| `ruff` | resolve via `ctx7 library "ruff" "..."` | — |
+| `motor` | resolve via `ctx7 library "motor" "..."` |: |
+| `pymongo` | resolve via `ctx7 library "pymongo" "..."` |: |
+| `ruff` | resolve via `ctx7 library "ruff" "..."` |: |
 
 ### External AI Tools (Roo, Claude Desktop, Cursor)
 
-These tools connect via MCP directly — config is in `.agents/mcp.json` and
+These tools connect via MCP directly: config is in `.agents/mcp.json` and
 `.roo/mcp.json`. No CLI needed for these agents.
 
 ## Selection Rules

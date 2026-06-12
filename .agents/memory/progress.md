@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-12 (session 60)
+**Last updated:** 2026-06-12 (session 61)
 
 ## Verification baseline
 
@@ -97,7 +97,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `help.py` prefix-offset self-documentation | housekeeping | `data[6:]`/`data[7:]` replaced with `data[len("helpc_"):]`/`data[len("helps_"):]`/`data[len("helpcs_"):]` | 2026-06-06 (s26) |
 | MEMORY.md stale link removal | housekeeping | Removed broken `../../nothing.md` index entry; file no longer exists | 2026-06-06 (s26) |
 | MongoDB connection-pool named constants | housekeeping | Extracted 7 constants to `mongos.py`; replaced all bare literals in `AsyncIOMotorClient()` call | 2026-06-06 (s30) |
-| Ratelimiter constants — all 16 modules | housekeeping | `_RL_*` constants extracted to all 16 modules with `@ratelimiter` decorators; every bare `limit=`/`period=` literal in `tcbot/modules/` replaced | 2026-06-06 (s30) |
+| Ratelimiter constants: all 16 modules | housekeeping | `_RL_*` constants extracted to all 16 modules with `@ratelimiter` decorators; every bare `limit=`/`period=` literal in `tcbot/modules/` replaced | 2026-06-06 (s30) |
 | Full doc audit | housekeeping | Updated replies.py table in helper.md (+9 missing constants). All 10 developer docs verified accurate. | 2026-06-06 (s29) |
 
 | Parameter type annotation coverage | housekeeping | Fixed 31 unannotated parameters across 13 files; AST audit now reports 0 missing in all non-dunder functions | 2026-06-07 (s34) |
@@ -139,6 +139,13 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Bug #39: checking.py q.answer() after DB call | P2 (correctness/UX) | `on_checkme_detail` and `on_checkme_back` awaited `get_ban()` before `q.answer()`. Fixed: `asyncio.gather(q.answer(), get_ban(), return_exceptions=True)` + edit_message on error (not show_alert, since query already answered). Also: all 8 `on_check_*` handlers had sequential `q.answer()` + `Check.method()` -- refactored to gather with `return_exceptions=True` and isinstance guard. | 2026-06-12 (s59) |
 | Bug #38: chat migration handler absent | P2 (correctness) | No handler for migrate_to/migrate_from. When basic group migrates to supergroup, old chat_id in DB causes ban enforcement and group ops to silently fail. Added `migrate_group()` in groups_db.py + `on_chat_migration` handler in greeting.py with `filters.StatusUpdate.MIGRATE`. | 2026-06-12 (s58) |
 | Bug #43: banning/muting/kicking ConversationHandler entry gathers no return_exceptions | P2 (correctness) | `cmd_ban_start`, `cmd_mute`, `cmd_kick` all used `asyncio.gather(identity.classify, resolve_and_check)` without `return_exceptions=True`. DB failure would propagate out of the entry point, leaving the ConversationHandler open. Identical to Bug #42 (warnings.py). Refactored all three with individual isinstance guards + ConversationHandler.END on failure. | 2026-06-12 (s60) |
+
+| Bug #46: users_roles.py auth gather no return_exceptions | P2 (correctness) | `is_staff`, `can_act_on`, `get_effective_role`: all three had `asyncio.gather` without `return_exceptions=True`. Any DB timeout during an auth check would crash the command handler. Added `return_exceptions=True` + conservative-deny fallbacks (False/None). Added `import logging` + `log`. | 2026-06-12 (s62) |
+| Bug #46p2: promote_flow.py request_admin gather no return_exceptions | P2 (correctness) | `asyncio.gather(enqueue, get_owner_id)` lacked `return_exceptions=True`. If enqueue raised, request_id was undefined. If get_owner_id raised, silent skip. Fixed with individual fallbacks. | 2026-06-12 (s62) |
+| Bug #47: decorators.py resolve_and_check gather no return_exceptions | P2 (correctness) | `asyncio.gather(get_effective_role x2)` lacked `return_exceptions=True`. Fixed with None fallbacks (conservative deny). | 2026-06-12 (s62) |
+| check_flow.py bans_list/warns_by_group/appeals_list/_per_chat_event_list serial awaits | perf | Main DB fetch + _name(target_id) were sequential. Now gathered in parallel for all 5 check drill-down list views. BaseException fallbacks added for both results. | 2026-06-12 (s62) |
+| appeal_flow.py on_decision approve log sends serial | perf | _update_or_send_log + send_message(unban log) to same channel were sequential with no data dependency. Combined into asyncio.gather. | 2026-06-12 (s62) |
+| Em-dash/en-dash full cleanup | docs | Python script replaced all remaining U+2014/U+2013 in 100 markdown files. Zero remaining anywhere in project. | 2026-06-12 (s62) |
 
 ## Pending (remaining optional)
 

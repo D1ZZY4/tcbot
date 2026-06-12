@@ -184,13 +184,23 @@ class Check:
         page: int,
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Paginated list of every ban (active+inactive) with detail buttons per item."""
-        bans = await db.bans_db.user_bans(target_id)
+        # * Fetch ban history and resolve display name in parallel; the name is
+        # * needed for the empty-list message and the list header alike.
+        bans, display_name = await asyncio.gather(
+            db.bans_db.user_bans(target_id),
+            _name(target_id),
+            return_exceptions=True,
+        )
+        if isinstance(bans, BaseException):
+            bans = []
+        if isinstance(display_name, BaseException):
+            display_name = str(target_id)
         chunk, total_pages, page = paginate(bans, page, _PAGE_SIZE)
 
         if not bans:
             text = (
                 f"{bold('Bans')}\n\n"
-                f"No ban records for {mention(target_id, await _name(target_id))}."
+                f"No ban records for {mention(target_id, display_name)}."
             )
             return text, InlineKeyboardMarkup([_back_to_check(target_id)])
 
@@ -268,11 +278,19 @@ class Check:
         target_id: int,
     ) -> tuple[str, InlineKeyboardMarkup]:
         """List groups where the user has warnings + count per group + drill-in buttons."""
-        groups = await db.warns_db.user_warn_groups(target_id)
+        groups, display_name = await asyncio.gather(
+            db.warns_db.user_warn_groups(target_id),
+            _name(target_id),
+            return_exceptions=True,
+        )
+        if isinstance(groups, BaseException):
+            groups = []
+        if isinstance(display_name, BaseException):
+            display_name = str(target_id)
         if not groups:
             text = (
                 f"{bold('Warnings')}\n\n"
-                f"No warning records for {mention(target_id, await _name(target_id))}."
+                f"No warning records for {mention(target_id, display_name)}."
             )
             return text, InlineKeyboardMarkup([_back_to_check(target_id)])
 
@@ -406,14 +424,22 @@ class Check:
         page: int,
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Paginated list of every ban that ever had an appeal submitted."""
-        all_bans = await db.bans_db.user_bans(target_id)
+        all_bans, display_name = await asyncio.gather(
+            db.bans_db.user_bans(target_id),
+            _name(target_id),
+            return_exceptions=True,
+        )
+        if isinstance(all_bans, BaseException):
+            all_bans = []
+        if isinstance(display_name, BaseException):
+            display_name = str(target_id)
         bans = [b for b in all_bans if b.get("appeal_log_msg_id") is not None]
         chunk, total_pages, page = paginate(bans, page, _PAGE_SIZE)
 
         if not bans:
             text = (
                 f"{bold('Appeals')}\n\n"
-                f"No appeal records for {mention(target_id, await _name(target_id))}."
+                f"No appeal records for {mention(target_id, display_name)}."
             )
             return text, InlineKeyboardMarkup([_back_to_check(target_id)])
 
@@ -461,14 +487,22 @@ async def _per_chat_event_list(
     cb_prefix: str,
 ) -> tuple[str, InlineKeyboardMarkup]:
     """Shared renderer for kicks/mutes; both have the same shape."""
-    records = await db_call(target_id)
+    records, display_name = await asyncio.gather(
+        db_call(target_id),
+        _name(target_id),
+        return_exceptions=True,
+    )
+    if isinstance(records, BaseException):
+        records = []
+    if isinstance(display_name, BaseException):
+        display_name = str(target_id)
     chunk, total_pages, page = paginate(records, page, _PAGE_SIZE)
 
     if not records:
         text = (
             f"{bold(heading_name)}\n\n"
             f"No {heading_name.lower()} records for "
-            f"{mention(target_id, await _name(target_id))}."
+            f"{mention(target_id, display_name)}."
         )
         return text, InlineKeyboardMarkup([_back_to_check(target_id)])
 

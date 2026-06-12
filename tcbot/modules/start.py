@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -113,8 +114,14 @@ async def on_back_to_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
 async def _show_groups(q: CallbackQuery, *, detailed: bool) -> None:
     """Shared renderer for all group-menu callbacks."""
-    await q.answer()
-    groups = await db.groups_db.active_groups()
+    # * Gather q.answer() + DB fetch in parallel; both are independent.
+    _, groups = await asyncio.gather(
+        q.answer(),
+        db.groups_db.active_groups(),
+        return_exceptions=True,
+    )
+    if isinstance(groups, BaseException):
+        groups = []
     if not groups:
         await q.edit_message_text(
             f"No groups are currently connected to {cfg.community_name}.",

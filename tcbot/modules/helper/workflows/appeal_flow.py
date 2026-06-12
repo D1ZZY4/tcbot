@@ -339,10 +339,6 @@ class BuildAppeal:
         q = update.callback_query
         admin = update.effective_user
 
-        if not await db.users_roles.is_staff(admin.id):
-            await q.answer(_ERR_NOT_AUTHORIZED, show_alert=True)
-            return
-
         data = q.data
         if data.startswith("appeal_approve_"):
             action = "approve"
@@ -354,7 +350,16 @@ class BuildAppeal:
             await q.answer()
             return
 
-        await q.answer()
+        # * Gather staff check + q.answer() in parallel so the spinner
+        # * disappears immediately, regardless of DB latency.
+        is_staff, _ = await asyncio.gather(
+            db.users_roles.is_staff(admin.id),
+            q.answer(),
+            return_exceptions=True,
+        )
+        if isinstance(is_staff, BaseException) or not is_staff:
+            await q.edit_message_text(_ERR_NOT_AUTHORIZED)
+            return
         try:
             ban = await db.bans_db.get_ban(ban_id)
         except Exception:
@@ -373,7 +378,9 @@ class BuildAppeal:
         if review_ts and reviewer_locked_out(
             review_ts, ban.get("admin_user_id"), admin.id
         ):
-            await q.answer(_ERR_REVIEW_LOCKED, show_alert=True)
+            # * q.answer() was already called in the gather above; use
+            # * edit_message_text to surface the lock message instead.
+            await q.edit_message_text(_ERR_REVIEW_LOCKED)
             return
 
         target_id = ban["banned_user_id"]
@@ -423,26 +430,24 @@ class BuildAppeal:
                 return_exceptions=True,
             )
 
-            # * Edit the submitted appeal log message in LOG_CHANNEL
-            await self._update_or_send_log(
-                ctx.bot,
-                lc,
-                lt,
-                ban.get("appeal_log_msg_id"),
-                parse_logmsg.appeal_approved_edit(
-                    target_id,
-                    target_fname,
-                    admin.id,
-                    admin.first_name,
-                    ban_id,
-                    ban.get("appeal_link", ""),
-                    ban.get("appeal_submitted_at"),
+            # * Edit appeal log + send unban log to the same channel in parallel
+            await asyncio.gather(
+                self._update_or_send_log(
+                    ctx.bot,
+                    lc,
+                    lt,
+                    ban.get("appeal_log_msg_id"),
+                    parse_logmsg.appeal_approved_edit(
+                        target_id,
+                        target_fname,
+                        admin.id,
+                        admin.first_name,
+                        ban_id,
+                        ban.get("appeal_link", ""),
+                        ban.get("appeal_submitted_at"),
+                    ),
                 ),
-            )
-
-            # * Send separate unban log
-            try:
-                await ctx.bot.send_message(
+                ctx.bot.send_message(
                     lc,
                     parse_logmsg.appeal_unban_log(
                         target_id,
@@ -453,9 +458,9 @@ class BuildAppeal:
                     ),
                     parse_mode="HTML",
                     message_thread_id=lt,
-                )
-            except Exception:
-                log.exception("Appeal unban log failed")
+                ),
+                return_exceptions=True,
+            )
 
         elif action == "reject":
             # * Fetch target name + notify user + edit review message - all in parallel

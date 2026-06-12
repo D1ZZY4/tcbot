@@ -161,7 +161,14 @@ class Promote:
         request_id, owner_id = await asyncio.gather(
             db.queues_db.enqueue(target_id, target_username, target_fname, admin_id),
             db.users_roles.get_owner_id(),
+            return_exceptions=True,
         )
+        if isinstance(request_id, BaseException):
+            log.error("Failed to enqueue promotion request: %s", request_id)
+            return False, "Failed to queue the promotion request. Please try again."
+        if isinstance(owner_id, BaseException):
+            log.warning("Failed to fetch owner id for promo notify: %s", owner_id)
+            owner_id = None
         req_text = parse_logmsg.promote_request_log(
             target_id, target_fname, target_username, request_id
         )

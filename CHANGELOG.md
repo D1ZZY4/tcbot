@@ -2,38 +2,58 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-12 (session 61)
+
+### Fixed
+
+- **`tcbot/modules/admins.py`** (`on_promote_role_btn`, `on_demote_confirm`, `on_promo_decision`): all three callback handlers performed an async DB role/ownership check (`db.users_roles.get_effective_role` or `db.users_roles.is_owner`) before calling `q.answer()`. The callback spinner remained visible for the full DB round-trip before Telegram acked the button tap. Refactored to `asyncio.gather(db_check, q.answer(), return_exceptions=True)` so the spinner disappears immediately. Auth-failure paths changed from `q.answer(msg, show_alert=True)` to `q.edit_message_text(msg)` since the query is already answered. (Bug #44 part 1)
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** (`on_decision`): same pattern: `await db.users_roles.is_staff(admin.id)` before `q.answer()`. Moved data parsing before the gather, then gathered `is_staff + q.answer()`. Auth-failure path changed to `q.edit_message_text`. Also fixed a pre-existing double-answer bug at the `_ERR_REVIEW_LOCKED` path: the original code called `q.answer()` at the normal path and then tried to call `q.answer(show_alert=True)` again for the lockout check; Telegram only allows one `answerCallbackQuery` per query ID, so the second call was silently dropped. Replaced with `q.edit_message_text(_ERR_REVIEW_LOCKED)`. (Bug #44 part 2)
+- **`tcbot/modules/helper/workflows/connected_flow.py`** (`on_join_decision`): `await asyncio.wait_for(ctx.bot.get_chat_member(...))` was called before `q.answer()`. Refactored to `asyncio.gather(wait_for(get_chat_member), q.answer(), return_exceptions=True)`. Error and non-owner paths now use `q.edit_message_reply_markup(None)` plus a reply text since the query is already answered. (Bug #45)
+- **`tcbot/database/mongos.py`**, **`tcbot/modules/__init__.py`**: em-dash characters (U+2014) in `# noqa:` comments replaced with parenthetical equivalents, per the project no-dash rule.
+
+- **`tcbot/database/users_roles.py`** (`is_staff`, `can_act_on`, `get_effective_role`): all three role-resolution functions used `asyncio.gather` without `return_exceptions=True`. If any underlying MongoDB call timed out or raised during an auth check, the exception would propagate unhandled and crash the command handler, bypassing the decorator error reporter and producing no user-facing feedback. All three functions now use `return_exceptions=True` with individual `isinstance(x, BaseException)` guards: `is_staff` and `get_effective_role` fall back to `False`/`None` (conservative deny) while logging a warning; `can_act_on` falls back to `None` roles (deny by default). Added `import logging` and `log = logging.getLogger(__name__)`. (Bug #46)
+- **`tcbot/modules/helper/workflows/promote_flow.py`** (`request_admin`): `asyncio.gather(db.queues_db.enqueue(...), db.users_roles.get_owner_id())` lacked `return_exceptions=True`. If `enqueue` raised, `request_id` was never assigned and `parse_logmsg.promote_request_log` received an undefined binding. If `get_owner_id` raised, notification fell through silently. Now uses `return_exceptions=True`; if `enqueue` is an exception, returns a user-facing failure message; if `get_owner_id` is an exception, logs a warning and falls back to log-channel notification. (Bug #46 part 2)
+- **`tcbot/modules/helper/workflows/check_flow.py`** (`Check.bans_list`): the `_name(target_id)` cache lookup was called sequentially after `db.bans_db.user_bans(target_id)` completed, adding a second round-trip on the critical path of every bans-list view (including the empty-state branch). Both fetches are independent; refactored to `asyncio.gather(user_bans, _name, return_exceptions=True)` with individual fallbacks (`[]` for bans, `str(target_id)` for name). (Perf fix)
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** (`on_decision` approve path): `_update_or_send_log` (edit the existing appeal log entry) and `ctx.bot.send_message` (send a separate unban log) were two sequential awaits targeting the same log channel with no data dependency between them. Combined into a single `asyncio.gather(..., return_exceptions=True)`. (Perf fix)
+- **`tcbot/modules/helper/workflows/check_flow.py`** (`warns_by_group`, `appeals_list`, `_per_chat_event_list`): all three methods followed the same sequential pattern as `bans_list` (Bug fixed above): the main DB fetch was awaited first, then `_name(target_id)` was awaited separately in the empty-state branch. Refactored all three to `asyncio.gather(db_call, _name, return_exceptions=True)` with individual fallbacks. `_per_chat_event_list` is the shared renderer for both kicks and mutes list views, so the fix covers four distinct drill-down views. (Perf fix)
+- **`tcbot/modules/helper/decorators.py`** (`resolve_and_check`): `asyncio.gather(get_effective_role(executor_id), get_effective_role(target_id))` lacked `return_exceptions=True`. If either role resolution raised, the exception would propagate out of `resolve_and_check`, bypassing the rank-check logic entirely and crashing the calling command. Added `return_exceptions=True` with `None` fallbacks for both results (conservative: None role = rank 0, so executor cannot act). (Bug #47)
+
+### Changed
+
+- **`tcbot/modules/start.py`** (`_show_groups`): `await q.answer()` then `await db.groups_db.active_groups()` were two sequential awaits for independent operations. Refactored to `asyncio.gather(q.answer(), db.groups_db.active_groups(), return_exceptions=True)` with a `[]` fallback on DB error.
+
 ## [Unreleased] - 2026-06-12 (session 60)
 
 ### Fixed
 
-- **`tcbot/modules/banning.py`**, **`tcbot/modules/muting.py`**, **`tcbot/modules/kicking.py`** — each `cmd_ban_start`, `cmd_mute`, and `cmd_kick` entry point used `asyncio.gather(identity.classify(...), resolve_and_check(...))` without `return_exceptions=True`. If either coroutine raised a DB exception, the tuple unpack would propagate the exception out of the entry point, leaving the ConversationHandler open (the user is stuck in an invisible conversation state) and producing no user-facing feedback. The identical bug was fixed for `cmd_warn` in session 59 (Bug #42) but the same three command entry points were missed. Refactored all three: `ident, role_result = await asyncio.gather(..., return_exceptions=True)` with individual `isinstance(ident/role_result, BaseException)` guards and `ConversationHandler.END` returns on failure. (Bug #43)
+- **`tcbot/modules/banning.py`**, **`tcbot/modules/muting.py`**, **`tcbot/modules/kicking.py`**: each `cmd_ban_start`, `cmd_mute`, and `cmd_kick` entry point used `asyncio.gather(identity.classify(...), resolve_and_check(...))` without `return_exceptions=True`. If either coroutine raised a DB exception, the tuple unpack would propagate the exception out of the entry point, leaving the ConversationHandler open (the user is stuck in an invisible conversation state) and producing no user-facing feedback. The identical bug was fixed for `cmd_warn` in session 59 (Bug #42) but the same three command entry points were missed. Refactored all three: `ident, role_result = await asyncio.gather(..., return_exceptions=True)` with individual `isinstance(ident/role_result, BaseException)` guards and `ConversationHandler.END` returns on failure. (Bug #43)
 
 ## [Unreleased] - 2026-06-12 (session 58)
 
 ### Fixed
 
-- **`tcbot/modules/helper/decorators.py`** — anonymous admin (GroupAnonymousBot, id `1087968824`) was silently treated as a regular user with no federation role, so every `@owner_only`, `@staff_only`, `@mod_only`, and `@basic_mod_only` command would reject the action with a generic "you don't have the rank" message. Since the bot cannot resolve the true identity behind an anonymous admin post, it now detects the placeholder ID via the new `_is_anon_admin()` helper and returns a clear refusal: "Anonymous admin mode is not supported for federation commands. Please send this command from your personal account." Added `_ANON_BOT_ID = 1087968824` constant and `_ERR_ANON_ADMIN` message constant. Applied to all four auth decorators as the first check before any DB lookup. (Bug #37)
-- **`tcbot/modules/helper/workflows/ban_flow.py`** — two album-buffering edge cases:
+- **`tcbot/modules/helper/decorators.py`**: anonymous admin (GroupAnonymousBot, id `1087968824`) was silently treated as a regular user with no federation role, so every `@owner_only`, `@staff_only`, `@mod_only`, and `@basic_mod_only` command would reject the action with a generic "you don't have the rank" message. Since the bot cannot resolve the true identity behind an anonymous admin post, it now detects the placeholder ID via the new `_is_anon_admin()` helper and returns a clear refusal: "Anonymous admin mode is not supported for federation commands. Please send this command from your personal account." Added `_ANON_BOT_ID = 1087968824` constant and `_ERR_ANON_ADMIN` message constant. Applied to all four auth decorators as the first check before any DB lookup. (Bug #37)
+- **`tcbot/modules/helper/workflows/ban_flow.py`**: two album-buffering edge cases:
   1. After `_flush_album` executed the ban via `_execute_ban`, the live `ctx.user_data` dictionary was not cleared. If a second album (different `media_group_id`) arrived before the conversation timed out, `dict(ctx.user_data)` still contained the previous ban keys, and `_execute_ban` would be called again for the same target. Added `_album_userdata: dict[str, dict]` accumulator (stores a reference to `ctx.user_data`, not a copy) and post-flush cleanup: clears all `_BAN_USER_DATA_KEYS` after `_execute_ban` completes. (Bug #35)
   2. `_flush_album` only guarded `if not msgs or not meta` but not for required keys inside `meta`. If the conversation was interrupted before `ban_target_id` or `ban_admin_id` were set in `ctx.user_data`, the function would call `_execute_ban` with `target_id = None`, corrupting the ban record. Added an explicit guard: if `meta.get("ban_target_id")` or `meta.get("ban_admin_id")` is falsy, log a warning and return early. (Bug #36)
-- **`tcbot/modules/greeting.py`** and **`tcbot/database/groups_db.py`** — no chat migration handler existed. When a basic group migrates to a supergroup, Telegram reassigns the `chat_id`. The federated groups record kept the old ID, causing ban enforcement, group listing, and connection checks to fail silently for that group from that point on. Added `migrate_group(old_chat_id, new_chat_id)` to `groups_db.py` (updates both `federated_groups` and `pending_joins`, invalidates `connected_cache` and `active_groups_cache`). Added `on_chat_migration` handler to `greeting.py` using `filters.StatusUpdate.MIGRATE`, registered in `__handlers__`. The handler acts on the `migrate_from_chat_id` field (received in the new supergroup) where both IDs are known; the `migrate_to_chat_id` event (old basic group) is logged only for observability. (Bug #38)
+- **`tcbot/modules/greeting.py`** and **`tcbot/database/groups_db.py`**: no chat migration handler existed. When a basic group migrates to a supergroup, Telegram reassigns the `chat_id`. The federated groups record kept the old ID, causing ban enforcement, group listing, and connection checks to fail silently for that group from that point on. Added `migrate_group(old_chat_id, new_chat_id)` to `groups_db.py` (updates both `federated_groups` and `pending_joins`, invalidates `connected_cache` and `active_groups_cache`). Added `on_chat_migration` handler to `greeting.py` using `filters.StatusUpdate.MIGRATE`, registered in `__handlers__`. The handler acts on the `migrate_from_chat_id` field (received in the new supergroup) where both IDs are known; the `migrate_to_chat_id` event (old basic group) is logged only for observability. (Bug #38)
 
 ## [Unreleased] - 2026-06-12 (session 59)
 
 ### Fixed
 
-- **`tcbot/modules/checking.py`** (`on_checkme_detail`, `on_checkme_back`) — DB lookup (`bans_db.get_ban`) was awaited before `q.answer()`. The callback spinner would remain visible for the full DB round-trip before Telegram registered the button tap, and if the network call timed out, the button would never ack. Refactored both handlers to `asyncio.gather(q.answer(), db.bans_db.get_ban(ban_id), return_exceptions=True)`. The previous `show_alert=True` error path was replaced with `q.edit_message_text(error)` since the query is already answered by this point. Added `isinstance(ban, BaseException)` guard with `ban = None` fallback. (Bug #39)
-- **`tcbot/modules/checking.py`** (all `on_check_*` callback handlers) — all eight `/check` drill-down callbacks (`on_check_main`, `on_check_bans`, `on_check_ban_item`, `on_check_warns`, `on_check_warn_chat`, `on_check_kicks`, `on_check_mutes`, `on_check_appeals`) followed the pattern `await q.answer()` then `await Check.<method>(...)` — two sequential awaits for independent coroutines. Per project rules all independent I/O must be combined with `asyncio.gather`. Refactored all eight to `_, result = await asyncio.gather(q.answer(), Check.<method>(...), return_exceptions=True)` with `isinstance(result, BaseException)` guard and `log.debug` on failure. (Perf fix, session 59)
+- **`tcbot/modules/checking.py`** (`on_checkme_detail`, `on_checkme_back`): DB lookup (`bans_db.get_ban`) was awaited before `q.answer()`. The callback spinner would remain visible for the full DB round-trip before Telegram registered the button tap, and if the network call timed out, the button would never ack. Refactored both handlers to `asyncio.gather(q.answer(), db.bans_db.get_ban(ban_id), return_exceptions=True)`. The previous `show_alert=True` error path was replaced with `q.edit_message_text(error)` since the query is already answered by this point. Added `isinstance(ban, BaseException)` guard with `ban = None` fallback. (Bug #39)
+- **`tcbot/modules/checking.py`** (all `on_check_*` callback handlers): all eight `/check` drill-down callbacks (`on_check_main`, `on_check_bans`, `on_check_ban_item`, `on_check_warns`, `on_check_warn_chat`, `on_check_kicks`, `on_check_mutes`, `on_check_appeals`) followed the pattern `await q.answer()` then `await Check.<method>(...)`: two sequential awaits for independent coroutines. Per project rules all independent I/O must be combined with `asyncio.gather`. Refactored all eight to `_, result = await asyncio.gather(q.answer(), Check.<method>(...), return_exceptions=True)` with `isinstance(result, BaseException)` guard and `log.debug` on failure. (Perf fix, session 59)
 
 ## [Unreleased] - 2026-06-12 (session 59 continued)
 
 ### Fixed
 
-- **`tcbot/modules/helper/workflows/stats_flow.py`** (`Stats.main`) — 7-coroutine `asyncio.gather` (owner id, admin count, developer list, tester list, ban count, group count, user count) had no `return_exceptions=True`. If any single DB call raised (e.g. network timeout during the federation stats overview), Python would re-raise the exception from the gather and crash the entire `/tcstats` command. Added `return_exceptions=True` and `isinstance(x, BaseException)` fallbacks for each field (owner→None, counts→0, lists→[]). (Bug #40)
-- **`tcbot/modules/helper/workflows/stats_flow.py`** (`Stats.staff_roster`) — same pattern: 4-coroutine gather for owner/admins/developers/testers lacked `return_exceptions=True`. Added it with the same individual fallbacks. (Bug #40 part 2)
-- **`tcbot/modules/helper/ban_info.py`** (`build_ban_detail`) — the parallel gather for banned-user and admin mention data lacked `return_exceptions=True`. If either `get_user_mention_data` raised, the tuple unpacking `(target_fname, target_uname), (admin_fname, admin_uname) = ...` would crash with `TypeError`. Refactored to `r_target, r_admin = await asyncio.gather(..., return_exceptions=True)` with per-result fallbacks `(str(uid), None)` and `("Admin", None)`. Also fixed the sequential `else` branch to guard the single await the same way. (Bug #41)
-- **`tcbot/modules/warnings.py`** (`cmd_warn`) — `asyncio.gather(identity.classify(...), resolve_and_check(...))` lacked `return_exceptions=True`. If either coroutine raised, `ident, (executor_role, _)` unpacking would crash the command silently (ConversationHandler would be left open). Refactored to `ident, role_result = await asyncio.gather(..., return_exceptions=True)` with individual `isinstance` guards and `ConversationHandler.END` returns on failure. (Bug #42)
-- **`tcbot/modules/groups.py`** (`_toggle`) — two sequential-await defects:
+- **`tcbot/modules/helper/workflows/stats_flow.py`** (`Stats.main`): 7-coroutine `asyncio.gather` (owner id, admin count, developer list, tester list, ban count, group count, user count) had no `return_exceptions=True`. If any single DB call raised (e.g. network timeout during the federation stats overview), Python would re-raise the exception from the gather and crash the entire `/tcstats` command. Added `return_exceptions=True` and `isinstance(x, BaseException)` fallbacks for each field (owner→None, counts→0, lists→[]). (Bug #40)
+- **`tcbot/modules/helper/workflows/stats_flow.py`** (`Stats.staff_roster`): same pattern: 4-coroutine gather for owner/admins/developers/testers lacked `return_exceptions=True`. Added it with the same individual fallbacks. (Bug #40 part 2)
+- **`tcbot/modules/helper/ban_info.py`** (`build_ban_detail`): the parallel gather for banned-user and admin mention data lacked `return_exceptions=True`. If either `get_user_mention_data` raised, the tuple unpacking `(target_fname, target_uname), (admin_fname, admin_uname) = ...` would crash with `TypeError`. Refactored to `r_target, r_admin = await asyncio.gather(..., return_exceptions=True)` with per-result fallbacks `(str(uid), None)` and `("Admin", None)`. Also fixed the sequential `else` branch to guard the single await the same way. (Bug #41)
+- **`tcbot/modules/warnings.py`** (`cmd_warn`): `asyncio.gather(identity.classify(...), resolve_and_check(...))` lacked `return_exceptions=True`. If either coroutine raised, `ident, (executor_role, _)` unpacking would crash the command silently (ConversationHandler would be left open). Refactored to `ident, role_result = await asyncio.gather(..., return_exceptions=True)` with individual `isinstance` guards and `ConversationHandler.END` returns on failure. (Bug #42)
+- **`tcbot/modules/groups.py`** (`_toggle`): two sequential-await defects:
   1. Cache-hit path: `await q.answer()` then `await safe_edit(...)` were independent; refactored to `asyncio.gather(q.answer(), safe_edit(...), return_exceptions=True)`.
   2. Cache-miss path: `await q.answer()` then `await db.groups_db.active_groups()` were independent; refactored to `groups, _ = await asyncio.gather(active_groups(), q.answer(), return_exceptions=True)` with `groups = []` fallback on DB error. (Perf fix, session 59)
 
@@ -41,21 +61,21 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Fixed
 
-- **`tcbot/modules/helper/workflows/appeal_flow.py`** (`_on_approve`) — `self.community_name` interpolated raw into an HTML `send_message` in the appeal-approved DM to the user (e.g. `you're now unbanned from {self.community_name}`). If `COMMUNITY_NAME` contains `&`, `<`, or `>`, the message HTML would be corrupted. Wrapped with `esc()`. Added `esc` to the formatter import. (Bug #30)
-- **`tcbot/modules/helper/workflows/demote_flow.py`** (`Demote.execute`) — `role_label` (inside `<b>` tags) and `cfg.community_name` used unescaped in the HTML DM sent to the demoted user in both `trigger is None` and `trigger is not None` branches. Wrapped both with `esc()`. (Bug #31)
-- **`tcbot/modules/help.py`** (`_show_help_index` callback helper and `cmd_help` command handler) — `ctx.bot.first_name` used raw in `_HELP_INDEX_TEXT.format(botname=...)` with `parse_mode="HTML"` in two places. Wrapped with `esc()` in both. Added `from tcbot.modules.helper.formatter import esc`. (Bug #32)
-- **`tcbot/modules/help.py`** (`cmd_help`) — `query` (lowercased user-provided command argument) interpolated raw in `f"Module <b>{query}</b> not found."` with `parse_mode="HTML"`. A user sending `/help <script>alert(1)</script>` would corrupt the message. Wrapped with `esc(query)`. (Bug #33)
-- **`tcbot/modules/helper/workflows/warning_flow.py`** (`execute_warnlist`) — `w.get('reason', 'No reason')` (admin-typed warn reason stored in DB) appended raw to a list rendered with `parse_mode="HTML"` at line 226. If a reason contained `<`, `>`, or `&`, the rendered warn list would be malformed. Wrapped with `esc()`. (Bug #34)
-- **`tcbot/modules/privacy.py`** — `ctx.bot.first_name` used raw inside `_PRIVACY_MSG.format(botname=...)` and `_PRIVACY_POLICY_MSG.format(botname=...)` with `parse_mode="HTML"`. If the bot is ever renamed to include `<`, `>`, or `&`, both messages would silently corrupt. Wrapped with `esc()` in `on_privacy_menu` and `on_privacy_policy_menu`. Added `from tcbot.modules.helper.formatter import esc`. (Bug #28)
-- **`tcbot/modules/start.py`** — Same pattern: `ctx.bot.first_name` interpolated into HTML format strings in `cmd_start` and `on_back_to_start` without escaping. Wrapped with `esc()` in both handlers. Added `from tcbot.modules.helper.formatter import esc`. (Bug #29)
-- **`tcbot/modules/muting.py`** — `cmd_mute` checked `target_role` via `resolve_and_check` but then discarded it (unpacked as `_`). A staff member who was muted kept their federation role. Added `from tcbot.modules.helper.workflows.demote_flow import Demote` import and `if target_role: await Demote.execute(...)` block (trigger="kick") mirroring the identical guard in `banning.py` (line 134) and `kicking.py` (line 128). (Bug #21)
-- **`tcbot/modules/helper/workflows/demote_flow.py`** — `user_msg` sent via `bot.send_message(..., parse_mode="HTML")` embedded `executor_fname` (admin first name) without HTML escaping. A name containing `<`, `>`, or `&` would corrupt the DM sent to the demoted user. Added `from tcbot.modules.helper.formatter import esc` import and wrapped `executor_fname` with `esc()`. (Bug #22)
-- **`tcbot/modules/helper/workflows/appeal_flow.py`** (`_on_timeout`) — the timeout handler sent the timeout message but left `appeal_ban_id`, `appeal_log_msg_id`, and `appeal_instruction_msg_id` in `ctx.user_data`. If the user re-entered the appeal flow after a timeout, the stale keys would be picked up, skipping the proper initialisation path. Added the same `pop` loop that `_on_cancel` already performs. (Bug #23)
-- **`tcbot/modules/helper/workflows/ban_flow.py`** — three improvements:
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** (`_on_approve`): `self.community_name` interpolated raw into an HTML `send_message` in the appeal-approved DM to the user (e.g. `you're now unbanned from {self.community_name}`). If `COMMUNITY_NAME` contains `&`, `<`, or `>`, the message HTML would be corrupted. Wrapped with `esc()`. Added `esc` to the formatter import. (Bug #30)
+- **`tcbot/modules/helper/workflows/demote_flow.py`** (`Demote.execute`): `role_label` (inside `<b>` tags) and `cfg.community_name` used unescaped in the HTML DM sent to the demoted user in both `trigger is None` and `trigger is not None` branches. Wrapped both with `esc()`. (Bug #31)
+- **`tcbot/modules/help.py`** (`_show_help_index` callback helper and `cmd_help` command handler): `ctx.bot.first_name` used raw in `_HELP_INDEX_TEXT.format(botname=...)` with `parse_mode="HTML"` in two places. Wrapped with `esc()` in both. Added `from tcbot.modules.helper.formatter import esc`. (Bug #32)
+- **`tcbot/modules/help.py`** (`cmd_help`): `query` (lowercased user-provided command argument) interpolated raw in `f"Module <b>{query}</b> not found."` with `parse_mode="HTML"`. A user sending `/help <script>alert(1)</script>` would corrupt the message. Wrapped with `esc(query)`. (Bug #33)
+- **`tcbot/modules/helper/workflows/warning_flow.py`** (`execute_warnlist`): `w.get('reason', 'No reason')` (admin-typed warn reason stored in DB) appended raw to a list rendered with `parse_mode="HTML"` at line 226. If a reason contained `<`, `>`, or `&`, the rendered warn list would be malformed. Wrapped with `esc()`. (Bug #34)
+- **`tcbot/modules/privacy.py`**: `ctx.bot.first_name` used raw inside `_PRIVACY_MSG.format(botname=...)` and `_PRIVACY_POLICY_MSG.format(botname=...)` with `parse_mode="HTML"`. If the bot is ever renamed to include `<`, `>`, or `&`, both messages would silently corrupt. Wrapped with `esc()` in `on_privacy_menu` and `on_privacy_policy_menu`. Added `from tcbot.modules.helper.formatter import esc`. (Bug #28)
+- **`tcbot/modules/start.py`**: Same pattern: `ctx.bot.first_name` interpolated into HTML format strings in `cmd_start` and `on_back_to_start` without escaping. Wrapped with `esc()` in both handlers. Added `from tcbot.modules.helper.formatter import esc`. (Bug #29)
+- **`tcbot/modules/muting.py`**: `cmd_mute` checked `target_role` via `resolve_and_check` but then discarded it (unpacked as `_`). A staff member who was muted kept their federation role. Added `from tcbot.modules.helper.workflows.demote_flow import Demote` import and `if target_role: await Demote.execute(...)` block (trigger="kick") mirroring the identical guard in `banning.py` (line 134) and `kicking.py` (line 128). (Bug #21)
+- **`tcbot/modules/helper/workflows/demote_flow.py`**: `user_msg` sent via `bot.send_message(..., parse_mode="HTML")` embedded `executor_fname` (admin first name) without HTML escaping. A name containing `<`, `>`, or `&` would corrupt the DM sent to the demoted user. Added `from tcbot.modules.helper.formatter import esc` import and wrapped `executor_fname` with `esc()`. (Bug #22)
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** (`_on_timeout`): the timeout handler sent the timeout message but left `appeal_ban_id`, `appeal_log_msg_id`, and `appeal_instruction_msg_id` in `ctx.user_data`. If the user re-entered the appeal flow after a timeout, the stale keys would be picked up, skipping the proper initialisation path. Added the same `pop` loop that `_on_cancel` already performs. (Bug #23)
+- **`tcbot/modules/helper/workflows/ban_flow.py`**: three improvements:
   1. `on_cancel_proof` and `on_proof_timeout` left all `ban_*` keys in `ctx.user_data` after ending the conversation. Added `_BAN_USER_DATA_KEYS` tuple constant and `pop` loop in both handlers to clear stale state. (Bug #24)
   2. Added `on_proof_unexpected` handler and `_MSG_PROOF_EXPECTED` constant. When a user sends a non-photo/video message (text, document, sticker, etc.) during `WAITING_PROOF`, the bot was silent. Now replies "Please send a photo or video as proof, or press Cancel." and stays in `WAITING_PROOF`. (Bug #25)
   3. Registered `on_proof_unexpected` in the `WAITING_PROOF` state as `MessageHandler(~filters.PHOTO & ~filters.VIDEO & ~ALL_PREFIXES_CMD_FILTER, on_proof_unexpected)`.
-- **`tcbot/modules/helper/workflows/reason_flow.py`** — four improvements:
+- **`tcbot/modules/helper/workflows/reason_flow.py`**: four improvements:
   1. `_on_cancel`, `_end_conv`, and `_on_timeout` left all `{action}_*` keys (target, admin, duration, extra_info, prompt_chat, prompt_id, etc.) in `ctx.user_data`. Added `_clear_user_data` inner helper that pops all keys starting with `{action}_`, called from all three exit paths. (Bug #26)
   2. Added `_on_reason_unexpected` handler: when a user sends media during `WAITING_REASON`, the bot was silent. Now replies "Please type your {action} reason as text, or press Skip / Cancel." and stays in `WAITING_REASON`. (Bug #27, part 1)
   3. Added `_on_proof_unexpected` handler: when a user sends an unexpected message type during `WAITING_PROOF`, the bot was silent. Now replies "Please send a photo or video as proof, or press Skip / Cancel." and stays in `WAITING_PROOF`. (Bug #27, part 2)
@@ -65,36 +85,36 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Fixed
 
-- **`tcbot/modules/helper/workflows/connected_flow.py`** — `on_bot_added`: when bot is removed from a group, three DB writes ran in `asyncio.gather` without `return_exceptions=True`. If `is_connected()` raised (e.g. MongoDB timeout), `was_connected` received a `BaseException` object, which is truthy, so the "group bot removed" log was erroneously sent even when connection status was unknown. Added `return_exceptions=True` and an explicit `isinstance(was_connected, BaseException)` guard with `was_connected = False` fallback. (Bug #10)
-- **`tcbot/modules/helper/workflows/unban_flow.py`** — `execute_unban`: `_, groups = await asyncio.gather(deactivate_ban, active_groups)` missing `return_exceptions=True`. If `active_groups()` raised, `groups` held a `BaseException`, causing `for grp in groups` (fan_out list comprehension) to crash with `TypeError`. Added `return_exceptions=True` and `groups = []` fallback. (Bug #11)
-- **`tcbot/modules/helper/workflows/ban_flow.py`** — same pattern in `_execute_ban`: `_, groups = await asyncio.gather(set_log_message_id, active_groups)` in the `if log_msg_id:` branch lacked `return_exceptions=True`. If `active_groups()` failed, `groups` held a `BaseException` → fan_out list comprehension crash. Added `return_exceptions=True` and `groups = []` fallback. (Bug #12)
-- **`tcbot/modules/helper/workflows/appeal_flow.py`** — two bugs in the `on_review_decision` callback handler:
+- **`tcbot/modules/helper/workflows/connected_flow.py`**: `on_bot_added`: when bot is removed from a group, three DB writes ran in `asyncio.gather` without `return_exceptions=True`. If `is_connected()` raised (e.g. MongoDB timeout), `was_connected` received a `BaseException` object, which is truthy, so the "group bot removed" log was erroneously sent even when connection status was unknown. Added `return_exceptions=True` and an explicit `isinstance(was_connected, BaseException)` guard with `was_connected = False` fallback. (Bug #10)
+- **`tcbot/modules/helper/workflows/unban_flow.py`**: `execute_unban`: `_, groups = await asyncio.gather(deactivate_ban, active_groups)` missing `return_exceptions=True`. If `active_groups()` raised, `groups` held a `BaseException`, causing `for grp in groups` (fan_out list comprehension) to crash with `TypeError`. Added `return_exceptions=True` and `groups = []` fallback. (Bug #11)
+- **`tcbot/modules/helper/workflows/ban_flow.py`**: same pattern in `_execute_ban`: `_, groups = await asyncio.gather(set_log_message_id, active_groups)` in the `if log_msg_id:` branch lacked `return_exceptions=True`. If `active_groups()` failed, `groups` held a `BaseException` → fan_out list comprehension crash. Added `return_exceptions=True` and `groups = []` fallback. (Bug #12)
+- **`tcbot/modules/helper/workflows/appeal_flow.py`**: two bugs in the `on_review_decision` callback handler:
   1. `_, ban = await asyncio.gather(q.answer(), db.bans_db.get_ban(ban_id))` lacked `return_exceptions=True`. If `get_ban` raised, `ban` = `BaseException` → `if not ban:` evaluates False (exception is truthy) → `ban.get("is_active")` crashes with `AttributeError`. Added `return_exceptions=True`, `isinstance(ban, BaseException)` guard, and `return` on DB failure. (Bug #13)
   2. `_, groups, target_fname = await asyncio.gather(deactivate_ban, active_groups, get_first_name)` lacked `return_exceptions=True`. If `active_groups()` raised, `groups` → fan_out crash; if `get_first_name()` raised, `target_fname` used as string → crash. Added `return_exceptions=True` and individual fallbacks for `groups` and `target_fname`. (Bug #14)
-- **`tcbot/modules/helper/workflows/promote_flow.py`** — three pure DB-write gathers (`add_admin`+`remove_role`+`upsert_user`, `add_admin`+`upsert_user`, `set_role`+`upsert_user`) lacked `return_exceptions=True`. Per project convention all pure side-effect gathers must have it. Added to all three. (Bug #15)
-- **`tcbot/modules/admins.py`** — three gather bugs:
+- **`tcbot/modules/helper/workflows/promote_flow.py`**: three pure DB-write gathers (`add_admin`+`remove_role`+`upsert_user`, `add_admin`+`upsert_user`, `set_role`+`upsert_user`) lacked `return_exceptions=True`. Per project convention all pure side-effect gathers must have it. Added to all three. (Bug #15)
+- **`tcbot/modules/admins.py`**: three gather bugs:
   1. `on_promo_decision`: `_, req = await asyncio.gather(q.answer(), db.queues_db.get_request_by_id(...))` lacked `return_exceptions=True`. If `get_request_by_id` raised, `req` = `BaseException` → `if not req:` False → `req["target_id"]` crashes. Added `return_exceptions=True`, `isinstance` guard, and `return` on failure. (Bug #16)
   2. `on_demote_confirm`: `_, target_role, (target_fname, target_uname) = await asyncio.gather(q.answer(), get_effective_role, get_user_mention_data)` lacked `return_exceptions=True`. If `get_user_mention_data` raised, tuple unpacking `(target_fname, target_uname) = BaseException` crashes with `TypeError`. Refactored to unpack `mention_data` separately with `isinstance` guard. (Bug #17)
   3. `on_promote_role_select`: `_, target_fname, current_role = await asyncio.gather(q.answer(), get_first_name, get_effective_role)` lacked `return_exceptions=True`. If either DB call raised, the result passed directly to `Promote.execute()` as a `BaseException` → crash. Added `return_exceptions=True` and per-field `isinstance` fallbacks. (Bug #18)
-- **`tcbot/modules/greeting.py`** — `_handle_member` (Critical): `_, ban = await asyncio.gather(upsert_user, get_active_ban)` lacked `return_exceptions=True`. If `get_active_ban()` raised a DB exception, `ban` received the `BaseException` object → `if ban:` evaluated True → bot called `ban_chat_member` on the newly joined user, issuing a **false federation ban**. Added `return_exceptions=True`, `isinstance` guard, and `ban = None` fallback with `log.error`. (Bug #19 — Critical)
-- **`tcbot/database/warns_db.py`** — two gather fixes:
+- **`tcbot/modules/greeting.py`**: `_handle_member` (Critical): `_, ban = await asyncio.gather(upsert_user, get_active_ban)` lacked `return_exceptions=True`. If `get_active_ban()` raised a DB exception, `ban` received the `BaseException` object → `if ban:` evaluated True → bot called `ban_chat_member` on the newly joined user, issuing a **false federation ban**. Added `return_exceptions=True`, `isinstance` guard, and `ban = None` fallback with `log.error`. (Bug #19: Critical)
+- **`tcbot/database/warns_db.py`**: two gather fixes:
   1. `clear_warns`: `asyncio.gather(delete_many, delete_one)` lacked `return_exceptions=True`. Added it; result access guarded with `isinstance`. (Bug #20, part 1)
   2. `remove_last_warn`: `_, counter = await asyncio.gather(delete_one, find_one_and_update)` lacked `return_exceptions=True`. If `find_one_and_update` raised, `counter` held a `BaseException`; the `if counter is None:` fallback would not trigger, leaving the warn counter inconsistent. Added `return_exceptions=True`; extended guard to `isinstance(counter, BaseException) or counter is None`. (Bug #20, part 2)
 
 ### Documentation
 
-- **`docs/appeal-detailed.md`** (Timeouts and fallbacks) — added explicit note that when the appeal timeout expires naturally, PTB's scheduler fires `BuildAppeal._on_timeout` via `ConversationHandler.TIMEOUT` and the user receives `"Appeal session timed out. Nothing was submitted."`. Previously only described command-triggered cancellation.
-- **`docs/banning-detailed.md`** (proof timeout bullet) — expanded to describe the proactive TIMEOUT state handler; noted that `on_proof_timeout` also fires as a fallback for commands during the proof window.
-- **`docs/warnings-detailed.md`** (Timeouts and fallbacks) — same update: added TIMEOUT state handler description for the kick/mute/warn `reason_flow` timeout.
-- **`docs/workflows/workflows.md`** (timeout rules) — added rule: all timed conversations must register a `ConversationHandler.TIMEOUT` state with `TypeHandler(Update, handler)` so PTB's scheduler notifies the user when the window expires naturally.
+- **`docs/appeal-detailed.md`** (Timeouts and fallbacks): added explicit note that when the appeal timeout expires naturally, PTB's scheduler fires `BuildAppeal._on_timeout` via `ConversationHandler.TIMEOUT` and the user receives `"Appeal session timed out. Nothing was submitted."`. Previously only described command-triggered cancellation.
+- **`docs/banning-detailed.md`** (proof timeout bullet): expanded to describe the proactive TIMEOUT state handler; noted that `on_proof_timeout` also fires as a fallback for commands during the proof window.
+- **`docs/warnings-detailed.md`** (Timeouts and fallbacks): same update: added TIMEOUT state handler description for the kick/mute/warn `reason_flow` timeout.
+- **`docs/workflows/workflows.md`** (timeout rules): added rule: all timed conversations must register a `ConversationHandler.TIMEOUT` state with `TypeHandler(Update, handler)` so PTB's scheduler notifies the user when the window expires naturally.
 
 ## [Unreleased] - 2026-06-12 (session 55)
 
 ### Fixed
 
-- **`tcbot/modules/helper/workflows/ban_flow.py`** — `ban_conversation()` had `conversation_timeout=cfg.proof_timeout` but no `ConversationHandler.TIMEOUT` state handler. When the proof window expired naturally (user inactive, not sending a command), PTB's scheduler called `_trigger_timeout` which found no TIMEOUT handlers and silently ended the conversation without notifying the user. The existing `on_proof_timeout` handler was only reachable via `fallbacks` (triggered by a new command, not by expiry). Fixed: added `ConversationHandler.TIMEOUT: [TypeHandler(Update, on_proof_timeout)]` to `states`; moved `Update` from `TYPE_CHECKING` to runtime import; added `TypeHandler` to `telegram.ext` import block. (Bug #9, part 1)
-- **`tcbot/modules/helper/workflows/reason_flow.py`** — same pattern: `conversation_timeout=cfg.proof_timeout` set but no TIMEOUT state, so expiry was silent. Added inner `_on_timeout` handler (mirrors `_end_conv` but guards `if update.effective_message:`) and `ConversationHandler.TIMEOUT: [TypeHandler(Update, _on_timeout)]` to `states`; added `TypeHandler` to import. (Bug #9, part 2)
-- **`tcbot/modules/helper/workflows/appeal_flow.py`** — same pattern: `conversation_timeout=cfg.appeal_timeout` set but no TIMEOUT state. Added `_MSG_TIMEOUT = "Appeal session timed out. Nothing was submitted."` constant, `BuildAppeal._on_timeout` method with `if update.effective_message:` guard, and `ConversationHandler.TIMEOUT: [TypeHandler(Update, self._on_timeout)]` to `states`; added `TypeHandler` to import. (Bug #9, part 3)
+- **`tcbot/modules/helper/workflows/ban_flow.py`**: `ban_conversation()` had `conversation_timeout=cfg.proof_timeout` but no `ConversationHandler.TIMEOUT` state handler. When the proof window expired naturally (user inactive, not sending a command), PTB's scheduler called `_trigger_timeout` which found no TIMEOUT handlers and silently ended the conversation without notifying the user. The existing `on_proof_timeout` handler was only reachable via `fallbacks` (triggered by a new command, not by expiry). Fixed: added `ConversationHandler.TIMEOUT: [TypeHandler(Update, on_proof_timeout)]` to `states`; moved `Update` from `TYPE_CHECKING` to runtime import; added `TypeHandler` to `telegram.ext` import block. (Bug #9, part 1)
+- **`tcbot/modules/helper/workflows/reason_flow.py`**: same pattern: `conversation_timeout=cfg.proof_timeout` set but no TIMEOUT state, so expiry was silent. Added inner `_on_timeout` handler (mirrors `_end_conv` but guards `if update.effective_message:`) and `ConversationHandler.TIMEOUT: [TypeHandler(Update, _on_timeout)]` to `states`; added `TypeHandler` to import. (Bug #9, part 2)
+- **`tcbot/modules/helper/workflows/appeal_flow.py`**: same pattern: `conversation_timeout=cfg.appeal_timeout` set but no TIMEOUT state. Added `_MSG_TIMEOUT = "Appeal session timed out. Nothing was submitted."` constant, `BuildAppeal._on_timeout` method with `if update.effective_message:` guard, and `ConversationHandler.TIMEOUT: [TypeHandler(Update, self._on_timeout)]` to `states`; added `TypeHandler` to import. (Bug #9, part 3)
 
 ### Documentation (session 55 docs updates)
 
@@ -102,105 +122,105 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Changed
 
-- **`python-telegram-bot`** `22.7` -> `22.8` (released 2026-06-12). `uv lock --upgrade` applied; `uv sync` installed the new wheel. Verified: `Defaults` was already imported from `telegram.ext` (correct location in 22.8 — it is no longer re-exported from `telegram` top-level); `LinkPreviewOptions` remains in `telegram`. All critical PTB API imports verified clean; ruff 70 files unchanged; bot restarted (MongoDB connected, indexes ensured, scheduler started, polling active).
+- **`python-telegram-bot`** `22.7` -> `22.8` (released 2026-06-12). `uv lock --upgrade` applied; `uv sync` installed the new wheel. Verified: `Defaults` was already imported from `telegram.ext` (correct location in 22.8: it is no longer re-exported from `telegram` top-level); `LinkPreviewOptions` remains in `telegram`. All critical PTB API imports verified clean; ruff 70 files unchanged; bot restarted (MongoDB connected, indexes ensured, scheduler started, polling active).
 - **`ruff`** `0.15.16` -> `0.15.17` (released 2026-06-11). No rule changes affecting the project; 70 files left unchanged by `ruff format .`; all checks pass.
 
 ## [Unreleased] - 2026-06-12 (session 53)
 
 ### Fixed
 
-- **`tcbot/modules/admins.py`** (`on_promo_decision`) — `promo_approve` branch called `asyncio.gather(add_admin, resolve)` without `return_exceptions=True`. If either coroutine raised an exception the exception would propagate out of `on_promo_decision` and trigger the global error reporter instead of being handled locally. The `promo_reject` branch directly below already had `return_exceptions=True`; this branch was inconsistent. Fixed by adding `return_exceptions=True` to match project convention for pure side-effect gathers. (Bug #8)
+- **`tcbot/modules/admins.py`** (`on_promo_decision`): `promo_approve` branch called `asyncio.gather(add_admin, resolve)` without `return_exceptions=True`. If either coroutine raised an exception the exception would propagate out of `on_promo_decision` and trigger the global error reporter instead of being handled locally. The `promo_reject` branch directly below already had `return_exceptions=True`; this branch was inconsistent. Fixed by adding `return_exceptions=True` to match project convention for pure side-effect gathers. (Bug #8)
 
 ### Changed
 
-- **`tcbot/modules/help.py`** — extracted `_ERR_SECTION_NOT_FOUND` module-level constant and replaced two duplicated inline string literals in `_show_section()` with it. `_ERR_TOPIC_NOT_FOUND` was already a named constant; `_ERR_SECTION_NOT_FOUND` now matches the same DRY pattern.
+- **`tcbot/modules/help.py`**: extracted `_ERR_SECTION_NOT_FOUND` module-level constant and replaced two duplicated inline string literals in `_show_section()` with it. `_ERR_TOPIC_NOT_FOUND` was already a named constant; `_ERR_SECTION_NOT_FOUND` now matches the same DRY pattern.
 
 ## [Unreleased] - 2026-06-12 (session 52)
 
 ### Fixed
 
-- **`tcbot/modules/stats.py`** (`on_bans_search_input`) — `ctx.user_data["stats_last_query"]` was never set after a search completed. When a user tapped "Back" from a search-detail card, `on_stats_search_back` called `Stats.render_search` which displayed `Search: "" (N found)` — the query string was always blank because the key was never written. Fixed: added `ctx.user_data["stats_last_query"] = query` immediately after `RESULTS_KEY` is set. (Bug #7, part 1)
-- **`tcbot/modules/helper/workflows/stats_flow.py`** (`Stats.clear_search`) — the clear loop that pops `RESULTS_KEY`, `PAGE_KEY`, and `DETAIL_KEY` did not pop `"stats_last_query"`, so stale query text from a previous search session survived into the next one. Fixed: added `ctx.user_data.pop("stats_last_query", None)` to the clear loop. (Bug #7, part 2)
+- **`tcbot/modules/stats.py`** (`on_bans_search_input`): `ctx.user_data["stats_last_query"]` was never set after a search completed. When a user tapped "Back" from a search-detail card, `on_stats_search_back` called `Stats.render_search` which displayed `Search: "" (N found)`: the query string was always blank because the key was never written. Fixed: added `ctx.user_data["stats_last_query"] = query` immediately after `RESULTS_KEY` is set. (Bug #7, part 1)
+- **`tcbot/modules/helper/workflows/stats_flow.py`** (`Stats.clear_search`): the clear loop that pops `RESULTS_KEY`, `PAGE_KEY`, and `DETAIL_KEY` did not pop `"stats_last_query"`, so stale query text from a previous search session survived into the next one. Fixed: added `ctx.user_data.pop("stats_last_query", None)` to the clear loop. (Bug #7, part 2)
 
 ## [Unreleased] - 2026-06-12 (session 51)
 
 ### Changed
 
-- **`tcbot/__main__.py`** — Added `Defaults(link_preview_options=LinkPreviewOptions(is_disabled=True))` to the `ApplicationBuilder` chain. Every bot message (reply, send, edit) now suppresses Telegram link-preview cards globally, without touching any of the 205+ individual call sites. Added `_LINK_PREVIEW_DISABLED: LinkPreviewOptions` as a named module-level constant. Imported `LinkPreviewOptions` from `telegram` and `Defaults` from `telegram.ext`.
+- **`tcbot/__main__.py`**: Added `Defaults(link_preview_options=LinkPreviewOptions(is_disabled=True))` to the `ApplicationBuilder` chain. Every bot message (reply, send, edit) now suppresses Telegram link-preview cards globally, without touching any of the 205+ individual call sites. Added `_LINK_PREVIEW_DISABLED: LinkPreviewOptions` as a named module-level constant. Imported `LinkPreviewOptions` from `telegram` and `Defaults` from `telegram.ext`.
 
 ## [Unreleased] - 2026-06-12 (session 50)
 
 ### Fixed
 
-- **`tcbot/modules/helper/workflows/proof_flow.py`** (`step_prompt`, `noted_prompt`) — `reason` and `inline_reason` were embedded directly into HTML `<b>` tags without escaping: `<b>{reason}</b>`. A user-typed reason containing `<`, `>`, or `&` would break Telegram's HTML parse mode, causing the message to fail or render incorrectly. Added `from tcbot.modules.helper.formatter import esc` import and wrapped both strings with `esc()`. Confirmed no circular import risk (`formatter.py` only imports stdlib `html`). (Bug #5)
-- **`tcbot/modules/admins.py`** (`cmd_promote_request`) — command always rejected every promotion request with "Promoting yourself? Nice try..." regardless of who ran it. Root cause: `identity.classify(user.id, user.id, ...)` always resolves as `Identity("self")` when executor ID equals target ID, which is unavoidable in a self-submission flow. `_PROMOTE_REFUSE["self"]` maps to that refusal string, so the command was permanently broken for all users. Fixed by removing the identity check entirely and replacing it with a parallel fetch of `existing_role` (via `db.users_roles.get_effective_role`) and `existing_request` (via `db.queues_db.get_request`). Users who already hold a federation role receive a clear "You're already a <Role> - no request needed." reply; duplicate-request protection remains via the existing `existing` guard. Docstring explains why `identity.classify` is intentionally omitted. (Bug #6)
+- **`tcbot/modules/helper/workflows/proof_flow.py`** (`step_prompt`, `noted_prompt`): `reason` and `inline_reason` were embedded directly into HTML `<b>` tags without escaping: `<b>{reason}</b>`. A user-typed reason containing `<`, `>`, or `&` would break Telegram's HTML parse mode, causing the message to fail or render incorrectly. Added `from tcbot.modules.helper.formatter import esc` import and wrapped both strings with `esc()`. Confirmed no circular import risk (`formatter.py` only imports stdlib `html`). (Bug #5)
+- **`tcbot/modules/admins.py`** (`cmd_promote_request`): command always rejected every promotion request with "Promoting yourself? Nice try..." regardless of who ran it. Root cause: `identity.classify(user.id, user.id, ...)` always resolves as `Identity("self")` when executor ID equals target ID, which is unavoidable in a self-submission flow. `_PROMOTE_REFUSE["self"]` maps to that refusal string, so the command was permanently broken for all users. Fixed by removing the identity check entirely and replacing it with a parallel fetch of `existing_role` (via `db.users_roles.get_effective_role`) and `existing_request` (via `db.queues_db.get_request`). Users who already hold a federation role receive a clear "You're already a <Role> - no request needed." reply; duplicate-request protection remains via the existing `existing` guard. Docstring explains why `identity.classify` is intentionally omitted. (Bug #6)
 
 ## [Unreleased] - 2026-06-12 (session 49)
 
 ### Fixed
 
-- **`tcbot/modules/helper/workflows/ban_flow.py`** — `reason` embedded unescaped in HTML summary message (`f"Reason: {reason}\n"`); wrapped with `esc(reason)`. Added `esc` to formatter import.
-- **`tcbot/modules/helper/workflows/muting_flow.py`** — `reason_text` embedded unescaped in HTML summary message; wrapped with `esc(reason_text)`. Added `esc` to formatter import.
-- **`tcbot/modules/helper/workflows/kicking_flow.py`** — `reason_text` embedded unescaped in HTML reply message; wrapped with `esc(reason_text)`. Added `esc` to formatter import.
-- **`tcbot/modules/helper/workflows/warning_flow.py`** — `reason_text` embedded unescaped in HTML warn-count reply message; wrapped with `esc(reason_text)`. Added `esc` to formatter import.
+- **`tcbot/modules/helper/workflows/ban_flow.py`**: `reason` embedded unescaped in HTML summary message (`f"Reason: {reason}\n"`); wrapped with `esc(reason)`. Added `esc` to formatter import.
+- **`tcbot/modules/helper/workflows/muting_flow.py`**: `reason_text` embedded unescaped in HTML summary message; wrapped with `esc(reason_text)`. Added `esc` to formatter import.
+- **`tcbot/modules/helper/workflows/kicking_flow.py`**: `reason_text` embedded unescaped in HTML reply message; wrapped with `esc(reason_text)`. Added `esc` to formatter import.
+- **`tcbot/modules/helper/workflows/warning_flow.py`**: `reason_text` embedded unescaped in HTML warn-count reply message; wrapped with `esc(reason_text)`. Added `esc` to formatter import.
 - All four cases: user-typed reason text is stored verbatim in `ctx.user_data` and passed through the flow without sanitization. A reason containing `<`, `>`, or `&` (e.g. `<script>` or `A&B`) would break Telegram's HTML parse mode, causing the message to fail or render incorrectly. Fix applies `html.escape()` (via `esc()`) to the reason at the point of display, keeping stored data unchanged.
 
 ## [Unreleased] - 2026-06-12 (session 48)
 
 ### Fixed
 
-- **`tcbot/modules/greeting.py`** (`_handle_member`) — replaced bare `asyncio.gather(ban_chat_member, reply_text)` wrapped in `try/except Exception` with a gather that uses `return_exceptions=True` and unpacks the two results individually. Previously, if `reply_text` failed after `ban_chat_member` succeeded the outer except block logged "Auto-ban on join failed" even though the ban had taken effect, misleading operators into thinking the action did not happen. Now: ban failure logs at ERROR level with the uid; reply failure logs at DEBUG level (transient, non-critical). Both operations are still run concurrently.
+- **`tcbot/modules/greeting.py`** (`_handle_member`): replaced bare `asyncio.gather(ban_chat_member, reply_text)` wrapped in `try/except Exception` with a gather that uses `return_exceptions=True` and unpacks the two results individually. Previously, if `reply_text` failed after `ban_chat_member` succeeded the outer except block logged "Auto-ban on join failed" even though the ban had taken effect, misleading operators into thinking the action did not happen. Now: ban failure logs at ERROR level with the uid; reply failure logs at DEBUG level (transient, non-critical). Both operations are still run concurrently.
 
 ## [Unreleased] - 2026-06-11 (session 47)
 
 ### Changed
 
-- **`tcbot/modules/broadcasting.py`** — replaced `sum(1 for r in results if not isinstance(r, BaseException))` with `count_errors(results)`; added `count_errors` to the `tcbot.utils.dispatch` import. `failed` is now computed by `count_errors`, `success` by `len(results) - failed`.
-- **`tcbot/modules/helper/workflows/connected_flow.py`** — same substitution for the `applied` count after `fan_out`; added `count_errors` to the dispatch import.
+- **`tcbot/modules/broadcasting.py`**: replaced `sum(1 for r in results if not isinstance(r, BaseException))` with `count_errors(results)`; added `count_errors` to the `tcbot.utils.dispatch` import. `failed` is now computed by `count_errors`, `success` by `len(results) - failed`.
+- **`tcbot/modules/helper/workflows/connected_flow.py`**: same substitution for the `applied` count after `fan_out`; added `count_errors` to the dispatch import.
 
 ### Documentation
 
-- **`docs/helper/helper.md`** (`parse_editmsg.py` section) — expanded from a prose sentence to a two-row table covering both `safe_edit` and `safe_edit_cb`. The second function was missing entirely; it is used by callback-query handlers across multiple workflow files.
-- **`docs/utils/utils.md`** (`dispatch.py` section) — added `count_errors` to the exports table; updated the code example to use `count_errors(results)` instead of the inline `sum(isinstance...)` pattern.
-- **`docs/utils/utils.md`** (`prefixes.py` section) — split the vague `ANY_CMD_FILTER / related filters` row into two explicit rows: `ANY_CMD_FILTER` (custom-prefix only, used in member-cache guard) and `ALL_PREFIXES_CMD_FILTER` (all prefixes including `/`, used in `ConversationHandler` fallbacks).
-- **`docs/utils/utils.md`** — added a new `pagination.py` section documenting `paginate`, `nav_row`, and `date_or_unknown`; added `pagination.py` node to the Mermaid flowchart. `pagination.py` had no documentation entry at all despite being used by `stats_flow.py` and `check_flow.py`.
-- **`docs/workflows/workflows.md`** — added `## Demotion: demote_flow.py` section with a three-row trigger table (`None`, `"ban"`, `"kick"`) and a note on `Demote.remove_role`. Previously `demote_flow.py` was only mentioned inline inside the Promotion section with no dedicated entry.
-- **`docs/workflows/workflows.md`** — added `## Check: check_flow.py` section with a full method table covering all eight classmethods (`profile`, `bans_list`, `ban_detail`, `warns_by_group`, `warns_in_group`, `kicks_list`, `mutes_list`, `appeals_list`) and their callback prefixes. `check_flow.py` had no section at all despite being one of the largest workflow files.
-- **`docs/helper/helper.md`** (`parse_logmsg.py` section) — replaced the vague "appeal decision edit messages" phrase with the explicit function names `appeal_approved_edit` and `appeal_rejected_edit` so the full public surface (26 functions) is named.
-- **`docs/workflows-guide.md`** — removed 4 prohibited characters: em-dash in prose (replaced with semicolon), `🤖` in fenced PR body example, `🔄` and `✅` in notification example, and bare `✅` bullets in Maintenance section checklist.
-- **`docs/workflows/workflows.md`** — replaced 3 em-dashes (introduced in this session for the Demotion trigger table) with colons.
-- **`docs/databases/databases.md`** — added `kicks` and `mutes` rows to the Startup indexes table (`(user_id, timestamp desc)` for each); both collections had indexes in `ensure_indexes()` that were not listed in the docs. Added new `## Kick model` and `## Mute model` sections (parallel to the existing `## Warning model` section) documenting the document shape, public helper functions, and append-only audit-trail behaviour.
-- **`docs/databases/databases.md`** (Member cache optimization section) — expanded from 3 single-user rows to a 5-row table adding `get_first_names_batch(user_ids)` and `get_mention_data_batch(user_ids)`; added a note on `groups_db.get_group_titles(chat_ids)` and updated the performance tip to name the covered-query index explicitly. Both batch functions are actively used by `check_flow.py` and `stats_flow.py` but were not listed anywhere in the database docs.
-- **`docs/databases/databases.md`** (`## Ban document fields` section renamed to `## Ban model`) — added a "Key helper functions" bullet list after the field table documenting all 14 public `bans_db` functions (`get_active_ban`, `get_ban`, `create_ban`, `update_ban`, `deactivate_ban`, `set_review`, `set_appeal_log_msg`, `active_bans`, `active_ban_count`, `active_ban_user_ids`, `user_bans`, `user_ban_count`, `user_appeal_count`, `set_log_message_id`). These were undocumented in the database layer docs despite being heavily used across ban, check, and stats flows.
-- **`docs/databases/databases.md`** (`## Warning model` section) — removed reference to private `_sync_warn_count()` and added a "Key helper functions" bullet list documenting the 8 public `warns_db` functions (`add_warn`, `warn_count`, `get_warns`, `remove_last_warn`, `clear_warns`, `user_total_warns`, `user_warn_groups`, `user_all_warns`). Makes the section consistent with the new Ban/Kick/Mute model sections.
+- **`docs/helper/helper.md`** (`parse_editmsg.py` section): expanded from a prose sentence to a two-row table covering both `safe_edit` and `safe_edit_cb`. The second function was missing entirely; it is used by callback-query handlers across multiple workflow files.
+- **`docs/utils/utils.md`** (`dispatch.py` section): added `count_errors` to the exports table; updated the code example to use `count_errors(results)` instead of the inline `sum(isinstance...)` pattern.
+- **`docs/utils/utils.md`** (`prefixes.py` section): split the vague `ANY_CMD_FILTER / related filters` row into two explicit rows: `ANY_CMD_FILTER` (custom-prefix only, used in member-cache guard) and `ALL_PREFIXES_CMD_FILTER` (all prefixes including `/`, used in `ConversationHandler` fallbacks).
+- **`docs/utils/utils.md`**: added a new `pagination.py` section documenting `paginate`, `nav_row`, and `date_or_unknown`; added `pagination.py` node to the Mermaid flowchart. `pagination.py` had no documentation entry at all despite being used by `stats_flow.py` and `check_flow.py`.
+- **`docs/workflows/workflows.md`**: added `## Demotion: demote_flow.py` section with a three-row trigger table (`None`, `"ban"`, `"kick"`) and a note on `Demote.remove_role`. Previously `demote_flow.py` was only mentioned inline inside the Promotion section with no dedicated entry.
+- **`docs/workflows/workflows.md`**: added `## Check: check_flow.py` section with a full method table covering all eight classmethods (`profile`, `bans_list`, `ban_detail`, `warns_by_group`, `warns_in_group`, `kicks_list`, `mutes_list`, `appeals_list`) and their callback prefixes. `check_flow.py` had no section at all despite being one of the largest workflow files.
+- **`docs/helper/helper.md`** (`parse_logmsg.py` section): replaced the vague "appeal decision edit messages" phrase with the explicit function names `appeal_approved_edit` and `appeal_rejected_edit` so the full public surface (26 functions) is named.
+- **`docs/workflows-guide.md`**: removed 4 prohibited characters: em-dash in prose (replaced with semicolon), `🤖` in fenced PR body example, `🔄` and `✅` in notification example, and bare `✅` bullets in Maintenance section checklist.
+- **`docs/workflows/workflows.md`**: replaced 3 em-dashes (introduced in this session for the Demotion trigger table) with colons.
+- **`docs/databases/databases.md`**: added `kicks` and `mutes` rows to the Startup indexes table (`(user_id, timestamp desc)` for each); both collections had indexes in `ensure_indexes()` that were not listed in the docs. Added new `## Kick model` and `## Mute model` sections (parallel to the existing `## Warning model` section) documenting the document shape, public helper functions, and append-only audit-trail behaviour.
+- **`docs/databases/databases.md`** (Member cache optimization section): expanded from 3 single-user rows to a 5-row table adding `get_first_names_batch(user_ids)` and `get_mention_data_batch(user_ids)`; added a note on `groups_db.get_group_titles(chat_ids)` and updated the performance tip to name the covered-query index explicitly. Both batch functions are actively used by `check_flow.py` and `stats_flow.py` but were not listed anywhere in the database docs.
+- **`docs/databases/databases.md`** (`## Ban document fields` section renamed to `## Ban model`): added a "Key helper functions" bullet list after the field table documenting all 14 public `bans_db` functions (`get_active_ban`, `get_ban`, `create_ban`, `update_ban`, `deactivate_ban`, `set_review`, `set_appeal_log_msg`, `active_bans`, `active_ban_count`, `active_ban_user_ids`, `user_bans`, `user_ban_count`, `user_appeal_count`, `set_log_message_id`). These were undocumented in the database layer docs despite being heavily used across ban, check, and stats flows.
+- **`docs/databases/databases.md`** (`## Warning model` section): removed reference to private `_sync_warn_count()` and added a "Key helper functions" bullet list documenting the 8 public `warns_db` functions (`add_warn`, `warn_count`, `get_warns`, `remove_last_warn`, `clear_warns`, `user_total_warns`, `user_warn_groups`, `user_all_warns`). Makes the section consistent with the new Ban/Kick/Mute model sections.
 
 ## [Unreleased] - 2026-06-11 (session 46)
 
 ### Documentation
 
-- **`docs/helper/helper.md`** — `proof_line(proof_desc)` was missing from the `formatter.py` table. Added an entry: "Returns `\nProof: <desc>` when proof_desc is a non-empty string, or `""` otherwise. Embed directly in reply text for kick/mute/warn action messages." The function is used by `kicking_flow.py`, `muting_flow.py`, and `warning_flow.py` and was added in session 28.
-- **`docs/helper/helper.md`** — seven `keyboards.py` factory functions were absent from the table: `groups_menu_kb`, `tcgroups_kb`, `stats_main_kb`, `stats_back_kb`, `module_help_kb`, `back_to_module_kb`, and `additional_menu_kb`. Added two new factory-group rows ("Groups" and "Stats") and moved the three menu/help functions into the existing "Menus/help" row. The table now covers all 25 public keyboard factories in `keyboards.py`.
+- **`docs/helper/helper.md`**: `proof_line(proof_desc)` was missing from the `formatter.py` table. Added an entry: "Returns `\nProof: <desc>` when proof_desc is a non-empty string, or `""` otherwise. Embed directly in reply text for kick/mute/warn action messages." The function is used by `kicking_flow.py`, `muting_flow.py`, and `warning_flow.py` and was added in session 28.
+- **`docs/helper/helper.md`**: seven `keyboards.py` factory functions were absent from the table: `groups_menu_kb`, `tcgroups_kb`, `stats_main_kb`, `stats_back_kb`, `module_help_kb`, `back_to_module_kb`, and `additional_menu_kb`. Added two new factory-group rows ("Groups" and "Stats") and moved the three menu/help functions into the existing "Menus/help" row. The table now covers all 25 public keyboard factories in `keyboards.py`.
 
 ## [Unreleased] - 2026-06-11 (session 45)
 
 ### Fixed
 
-- **`pyproject.toml`** — editable install (`uv pip install -e .`) failed after the Replit migration added an `attached_assets/` directory to the workspace root. Setuptools discovered two top-level packages (`tcbot` and `attached_assets`) and refused to build. Added `[tool.setuptools.packages.find] include = ["tcbot*"]` to constrain package discovery to the bot package only. Also added `attached_assets/` to the `[tool.ruff] exclude` list so Ruff does not scan uploaded task files. `attached_assets/` was already in `.gitignore` from a prior session.
+- **`pyproject.toml`**: editable install (`uv pip install -e .`) failed after the Replit migration added an `attached_assets/` directory to the workspace root. Setuptools discovered two top-level packages (`tcbot` and `attached_assets`) and refused to build. Added `[tool.setuptools.packages.find] include = ["tcbot*"]` to constrain package discovery to the bot package only. Also added `attached_assets/` to the `[tool.ruff] exclude` list so Ruff does not scan uploaded task files. `attached_assets/` was already in `.gitignore` from a prior session.
 
 ### Documentation
 
-- **`README.md`** — `MAIN_GROUP` description was too vague ("Main community group/forum chat ID"); added a note that it is required for appeal review cards and promotion-flow messages to accurately reflect its usage in `appeal_flow.py` and `promote_flow.py`.
-- **`.agents/RUFF.md`**, **`.agents/skills/python-code-quality/SKILL.md`**, **`.agents/skills/python-code-quality/REFERENCE.md`** — updated the embedded `[tool.ruff] exclude` list to include `attached_assets/`, mirroring the `pyproject.toml` change above.
+- **`README.md`**: `MAIN_GROUP` description was too vague ("Main community group/forum chat ID"); added a note that it is required for appeal review cards and promotion-flow messages to accurately reflect its usage in `appeal_flow.py` and `promote_flow.py`.
+- **`.agents/RUFF.md`**, **`.agents/skills/python-code-quality/SKILL.md`**, **`.agents/skills/python-code-quality/REFERENCE.md`**: updated the embedded `[tool.ruff] exclude` list to include `attached_assets/`, mirroring the `pyproject.toml` change above.
 
 ### Code quality
 
-- **`tcbot/utils/logger.py`** — `BotLogFormatter._bracket` was the only undocumented non-dunder method in the class. Added a one-line docstring: "Wrap *text* in ANSI-coloured square brackets using the given *color* code."
+- **`tcbot/utils/logger.py`**: `BotLogFormatter._bracket` was the only undocumented non-dunder method in the class. Added a one-line docstring: "Wrap *text* in ANSI-coloured square brackets using the given *color* code."
 
 ## [Unreleased] - 2026-06-11 (session 44)
 
 ### Documentation
 
-- **`.agents/skills/python-code-quality/SKILL.md`** and **`.agents/skills/python-code-quality/REFERENCE.md`** — synced the embedded `pyproject.toml` snapshot with the real file. Both showed a stale 5-group ruff `select` (`["E4", "E7", "E9", "F", "I"]`); corrected to the current 22-group set (matching `.agents/RUFF.md`). In SKILL.md, moved `ruff` out of `[project] dependencies` into `[dependency-groups] dev` (resolving an internal contradiction with its own following prose) and removed the four stale `# Migrate to latest channel version` comments that were deleted from `pyproject.toml` in session 37. Added the `[tool.ruff] exclude` list to both. Replaced REFERENCE.md's now-false "enforces syntax/pyflakes/import-order rules, not a full strict style suite" line with an accurate per-rule summary that points to the canonical `.agents/RUFF.md`. Bumped the embedded "as of"/"Updated" dates to 2026-06-11.
+- **`.agents/skills/python-code-quality/SKILL.md`** and **`.agents/skills/python-code-quality/REFERENCE.md`**: synced the embedded `pyproject.toml` snapshot with the real file. Both showed a stale 5-group ruff `select` (`["E4", "E7", "E9", "F", "I"]`); corrected to the current 22-group set (matching `.agents/RUFF.md`). In SKILL.md, moved `ruff` out of `[project] dependencies` into `[dependency-groups] dev` (resolving an internal contradiction with its own following prose) and removed the four stale `# Migrate to latest channel version` comments that were deleted from `pyproject.toml` in session 37. Added the `[tool.ruff] exclude` list to both. Replaced REFERENCE.md's now-false "enforces syntax/pyflakes/import-order rules, not a full strict style suite" line with an accurate per-rule summary that points to the canonical `.agents/RUFF.md`. Bumped the embedded "as of"/"Updated" dates to 2026-06-11.
 
 ## [Unreleased] - 2026-06-11 (session 43)
 
@@ -212,65 +232,65 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Changed
 
-- **`pyproject.toml`** — added `PLC` (Pylint-convention) and `PLE` (Pylint-error) to `[tool.ruff.lint] select`.
-- **`tcbot/modules/__init__.py`** — added `# noqa: PLE0604` to `__all__` spread (`[*ALL_MODULES, "ALL_MODULES"]`): false positive — `ALL_MODULES` is `list[str]` at runtime; static checker cannot verify.
-- **`tcbot/database/mongos.py`** — added `# noqa: PLC0415` to `import dns.resolver` inside `_patch_dns_if_needed`: intentional lazy import to avoid `ImportError` when `dnspython` is absent.
-- **`tcbot/modules/checking.py`** — added `# noqa: PLC0415` to lazy `from tcbot.modules.helper.ban_info import build_ban_detail`: intentional to break circular dependency.
-- **`tcbot/utils/logger.py`** — added `# noqa: PLC0415` to lazy `from tcbot.utils import error_reporter`: intentional to break circular dependency (`logger` ← `error_reporter`).
+- **`pyproject.toml`**: added `PLC` (Pylint-convention) and `PLE` (Pylint-error) to `[tool.ruff.lint] select`.
+- **`tcbot/modules/__init__.py`**: added `# noqa: PLE0604` to `__all__` spread (`[*ALL_MODULES, "ALL_MODULES"]`): false positive: `ALL_MODULES` is `list[str]` at runtime; static checker cannot verify.
+- **`tcbot/database/mongos.py`**: added `# noqa: PLC0415` to `import dns.resolver` inside `_patch_dns_if_needed`: intentional lazy import to avoid `ImportError` when `dnspython` is absent.
+- **`tcbot/modules/checking.py`**: added `# noqa: PLC0415` to lazy `from tcbot.modules.helper.ban_info import build_ban_detail`: intentional to break circular dependency.
+- **`tcbot/utils/logger.py`**: added `# noqa: PLC0415` to lazy `from tcbot.utils import error_reporter`: intentional to break circular dependency (`logger` ← `error_reporter`).
 
 ## [Unreleased] - 2026-06-11 (session 41)
 
 ### Changed
 
-- **`pyproject.toml`** — added `PTH`, `FBT`, and `D` (pydocstyle) to `[tool.ruff.lint] select`; added `D203`/`D213` to ignore (incompatible with chosen `D211`/`D212` convention); excluded `.local/`, `.agents/`, `.kilo/`, `.trae/`, `.claude/` from ruff scan.
-- **`tcbot/database/mongos.py`** — replaced `os.path.exists(_RESOLV_CONF)` with `Path(_RESOLV_CONF).exists()` (PTH110); replaced `import os` with `from pathlib import Path`.
-- **`tcbot/modules/groups.py`** — made `detailed` keyword-only in `_render` and `_toggle` (FBT001); updated all internal call sites to use `detailed=...` form (FBT003).
-- **`tcbot/modules/helper/keyboards.py`** — made `detailed` keyword-only in `groups_menu_kb` and `tcgroups_kb` (FBT001).
-- **`tcbot/modules/helper/workflows/reason_flow.py`** — made `has_explicit_target` keyword-only in `parse_inline_reason` (FBT001).
-- **`tcbot/modules/start.py`** — made `detailed` keyword-only in `_show_groups` (FBT001); updated three callback call sites to `detailed=True/False` form (FBT003).
-- **`tcbot/modules/kicking.py`** — updated `parse_inline_reason` call to keyword form (FBT003).
-- **`tcbot/modules/warnings.py`** — updated `parse_inline_reason` call to keyword form (FBT003).
-- **`tcbot/__main__.py`** — added `# noqa: FBT003` to `.concurrent_updates(True)` (PTB builder method — keyword arg not available).
-- **`tcbot/database/groups_db.py`** — added `# noqa: FBT003` to two `connected_cache.put(chat_id, True/False)` calls (generic cache API — changing to keyword-only would affect all callers).
-- **`tcbot/database/cache.py`** — added docstring to `TTLCache.__init__` (D107).
-- **`tcbot/modules/helper/extraction.py`** — added docstring to `TargetInfo.__post_init__` (D105).
-- **`tcbot/modules/helper/formatter.py`** — changed `"""` to `r"""` in `proof_line` to avoid D301 backslash warning.
-- **`tcbot/modules/helper/identity.py`** — restructured module docstring so the summary fits on one line (D205); extended description follows the blank line.
-- **`tcbot/modules/helper/keyboards.py`** — rephrased two docstrings to imperative mood (D401): `ban_log_prev_proof_kb`, `additional_menu_kb`.
-- **`tcbot/modules/helper/parse_logmsg.py`** — added docstrings to `LogBuilder.__init__` and `LogBuilder.__str__` (D107, D105); rephrased three module-level function docstrings to imperative mood (D401).
-- **`tcbot/modules/helper/workflows/connected_flow.py`** — rephrased three method docstrings to imperative mood (D401): `join_prompt`, `on_bot_added`, `on_join_decision`.
-- **`tcbot/modules/helper/workflows/stats_flow.py`** — removed stray blank line after `bans_list` docstring (D202, auto-fixed).
-- **`tcbot/utils/logger.py`** — added docstring to `TelegramErrorHandler.__init__` (D107).
+- **`pyproject.toml`**: added `PTH`, `FBT`, and `D` (pydocstyle) to `[tool.ruff.lint] select`; added `D203`/`D213` to ignore (incompatible with chosen `D211`/`D212` convention); excluded `.local/`, `.agents/`, `.kilo/`, `.trae/`, `.claude/` from ruff scan.
+- **`tcbot/database/mongos.py`**: replaced `os.path.exists(_RESOLV_CONF)` with `Path(_RESOLV_CONF).exists()` (PTH110); replaced `import os` with `from pathlib import Path`.
+- **`tcbot/modules/groups.py`**: made `detailed` keyword-only in `_render` and `_toggle` (FBT001); updated all internal call sites to use `detailed=...` form (FBT003).
+- **`tcbot/modules/helper/keyboards.py`**: made `detailed` keyword-only in `groups_menu_kb` and `tcgroups_kb` (FBT001).
+- **`tcbot/modules/helper/workflows/reason_flow.py`**: made `has_explicit_target` keyword-only in `parse_inline_reason` (FBT001).
+- **`tcbot/modules/start.py`**: made `detailed` keyword-only in `_show_groups` (FBT001); updated three callback call sites to `detailed=True/False` form (FBT003).
+- **`tcbot/modules/kicking.py`**: updated `parse_inline_reason` call to keyword form (FBT003).
+- **`tcbot/modules/warnings.py`**: updated `parse_inline_reason` call to keyword form (FBT003).
+- **`tcbot/__main__.py`**: added `# noqa: FBT003` to `.concurrent_updates(True)` (PTB builder method: keyword arg not available).
+- **`tcbot/database/groups_db.py`**: added `# noqa: FBT003` to two `connected_cache.put(chat_id, True/False)` calls (generic cache API: changing to keyword-only would affect all callers).
+- **`tcbot/database/cache.py`**: added docstring to `TTLCache.__init__` (D107).
+- **`tcbot/modules/helper/extraction.py`**: added docstring to `TargetInfo.__post_init__` (D105).
+- **`tcbot/modules/helper/formatter.py`**: changed `"""` to `r"""` in `proof_line` to avoid D301 backslash warning.
+- **`tcbot/modules/helper/identity.py`**: restructured module docstring so the summary fits on one line (D205); extended description follows the blank line.
+- **`tcbot/modules/helper/keyboards.py`**: rephrased two docstrings to imperative mood (D401): `ban_log_prev_proof_kb`, `additional_menu_kb`.
+- **`tcbot/modules/helper/parse_logmsg.py`**: added docstrings to `LogBuilder.__init__` and `LogBuilder.__str__` (D107, D105); rephrased three module-level function docstrings to imperative mood (D401).
+- **`tcbot/modules/helper/workflows/connected_flow.py`**: rephrased three method docstrings to imperative mood (D401): `join_prompt`, `on_bot_added`, `on_join_decision`.
+- **`tcbot/modules/helper/workflows/stats_flow.py`**: removed stray blank line after `bans_list` docstring (D202, auto-fixed).
+- **`tcbot/utils/logger.py`**: added docstring to `TelegramErrorHandler.__init__` (D107).
 
 ## [Unreleased] - 2026-06-11 (session 40)
 
 ### Changed
 
-- **`pyproject.toml`** — added `RUF` (Ruff-specific rules) to `[tool.ruff.lint] select`; added `RUF001` to ignore (`›` SINGLE RIGHT-POINTING ANGLE QUOTATION MARK is an intentional breadcrumb separator in bot UI text).
-- **`tcbot/database/cache.py`** — sorted `TTLCache.__slots__` alphabetically (`_store`, `_ttl`) to satisfy RUF023.
-- **`tcbot/modules/helper/decorators.py`** — sorted `_RateLimiter.__slots__` alphabetically (`_buckets`, `max_calls`, `window`) to satisfy RUF023; removed unused `# noqa: UP047` directive on `log_execution` (UP047 is globally ignored, RUF100).
-- **`tcbot/modules/helper/parse_logmsg.py`** — removed unused `# noqa: ARG001` directive; replaced with plain comment `# kept for caller API compatibility` (RUF100; ARG001 not in select).
-- **`tcbot/modules/__init__.py`** — replaced `ALL_MODULES + ["ALL_MODULES"]` with `[*ALL_MODULES, "ALL_MODULES"]` (RUF005: prefer unpacking over concatenation).
-- **`tcbot/modules/helper/workflows/stats_flow.py`** — sorted `__all__` tuple alphabetically (RUF022).
-- **`tcbot/modules/admins.py`** — replaced unused `ok` with `_` in three `Promote.execute` / `Promote.request_admin` unpacks (RUF059).
-- **`tcbot/modules/checking.py`** — replaced unused `user_fname_cached` with `_` in nested gather unpack (RUF059).
-- **`tcbot/modules/muting.py`** — replaced unused `target_role` with `_` in gather unpack (RUF059).
-- **`tcbot/modules/helper/workflows/ban_flow.py`** — added module-level `_album_tasks: set[asyncio.Task[None]]` set; stored `asyncio.create_task` return value and registered `discard` done-callback to prevent GC of in-flight album flush tasks (RUF006).
-- **`tcbot/utils/logger.py`** — added `ClassVar` annotation to `BotLogFormatter._LEVELS` and `._COLORED_MSG` (RUF012); added `from typing import ClassVar` import; added module-level `_tg_tasks` set and stored `loop.create_task` return value with `discard` done-callback to prevent GC of in-flight Telegram error report tasks (RUF006).
+- **`pyproject.toml`**: added `RUF` (Ruff-specific rules) to `[tool.ruff.lint] select`; added `RUF001` to ignore (`›` SINGLE RIGHT-POINTING ANGLE QUOTATION MARK is an intentional breadcrumb separator in bot UI text).
+- **`tcbot/database/cache.py`**: sorted `TTLCache.__slots__` alphabetically (`_store`, `_ttl`) to satisfy RUF023.
+- **`tcbot/modules/helper/decorators.py`**: sorted `_RateLimiter.__slots__` alphabetically (`_buckets`, `max_calls`, `window`) to satisfy RUF023; removed unused `# noqa: UP047` directive on `log_execution` (UP047 is globally ignored, RUF100).
+- **`tcbot/modules/helper/parse_logmsg.py`**: removed unused `# noqa: ARG001` directive; replaced with plain comment `# kept for caller API compatibility` (RUF100; ARG001 not in select).
+- **`tcbot/modules/__init__.py`**: replaced `ALL_MODULES + ["ALL_MODULES"]` with `[*ALL_MODULES, "ALL_MODULES"]` (RUF005: prefer unpacking over concatenation).
+- **`tcbot/modules/helper/workflows/stats_flow.py`**: sorted `__all__` tuple alphabetically (RUF022).
+- **`tcbot/modules/admins.py`**: replaced unused `ok` with `_` in three `Promote.execute` / `Promote.request_admin` unpacks (RUF059).
+- **`tcbot/modules/checking.py`**: replaced unused `user_fname_cached` with `_` in nested gather unpack (RUF059).
+- **`tcbot/modules/muting.py`**: replaced unused `target_role` with `_` in gather unpack (RUF059).
+- **`tcbot/modules/helper/workflows/ban_flow.py`**: added module-level `_album_tasks: set[asyncio.Task[None]]` set; stored `asyncio.create_task` return value and registered `discard` done-callback to prevent GC of in-flight album flush tasks (RUF006).
+- **`tcbot/utils/logger.py`**: added `ClassVar` annotation to `BotLogFormatter._LEVELS` and `._COLORED_MSG` (RUF012); added `from typing import ClassVar` import; added module-level `_tg_tasks` set and stored `loop.create_task` return value with `discard` done-callback to prevent GC of in-flight Telegram error report tasks (RUF006).
 
 ## [Unreleased] - 2026-06-11 (session 39)
 
 ### Changed
 
-- **`pyproject.toml`** — expanded `[tool.ruff.lint] select` to include `TC` (type-checking import rules); added `TC001` to ignore (internal TypedDicts kept as runtime imports for safety); added `TC001` ignore comment.
-- **`pyproject.toml`** — expanded `[tool.ruff.lint] select` to also include `PERF` (Perflint) and `PIE` (miscellaneous improvements).
-- **`pyproject.toml`** — added `TRY400` and `TRY401` to `[tool.ruff.lint] select` (targeted TRY rules for logging correctness; full TRY suite not added due to pedantic TRY003/TRY300).
-- **15 files** — replaced `log.error(...)` with `log.exception(...)` inside `except` blocks so tracebacks are automatically captured (`__init__.py`, `greeting.py`, `maintenance.py`, `appeal_flow.py` ×2, `connected_flow.py` ×3, `kicking_flow.py`, `promote_flow.py`, `proof_flow.py`, `reason_flow.py` ×2, `warning_flow.py` ×2); removed redundant `exc` argument from all `log.exception` calls (TRY401); `except Exception as exc:` simplified to `except Exception:` where `exc` became unused (F841, auto-fixed).
-- **`tcbot/modules/helper/parse_editmsg.py`** — annotated `**kwargs` as `**kwargs: Any` in `safe_edit` and `safe_edit_cb` (ANN003).
-- **`tcbot/__init__.py`** — merged two `startswith` calls into a single tuple form (PIE810).
-- **`tcbot/modules/helper/workflows/check_flow.py`** — converted two `for i in range(0, len(...), 3): rows.append(...)` loops to list comprehensions (PERF401).
-- **`tcbot/modules/helper/workflows/stats_flow.py`** — converted one loop to `rows.extend(...)` (PERF401, list already pre-populated) and one to a list comprehension (PERF401).
-- **50 source files** — moved annotation-only imports into `if TYPE_CHECKING:` blocks throughout the codebase using `ruff check --unsafe-fixes`:
+- **`pyproject.toml`**: expanded `[tool.ruff.lint] select` to include `TC` (type-checking import rules); added `TC001` to ignore (internal TypedDicts kept as runtime imports for safety); added `TC001` ignore comment.
+- **`pyproject.toml`**: expanded `[tool.ruff.lint] select` to also include `PERF` (Perflint) and `PIE` (miscellaneous improvements).
+- **`pyproject.toml`**: added `TRY400` and `TRY401` to `[tool.ruff.lint] select` (targeted TRY rules for logging correctness; full TRY suite not added due to pedantic TRY003/TRY300).
+- **15 files**: replaced `log.error(...)` with `log.exception(...)` inside `except` blocks so tracebacks are automatically captured (`__init__.py`, `greeting.py`, `maintenance.py`, `appeal_flow.py` ×2, `connected_flow.py` ×3, `kicking_flow.py`, `promote_flow.py`, `proof_flow.py`, `reason_flow.py` ×2, `warning_flow.py` ×2); removed redundant `exc` argument from all `log.exception` calls (TRY401); `except Exception as exc:` simplified to `except Exception:` where `exc` became unused (F841, auto-fixed).
+- **`tcbot/modules/helper/parse_editmsg.py`**: annotated `**kwargs` as `**kwargs: Any` in `safe_edit` and `safe_edit_cb` (ANN003).
+- **`tcbot/__init__.py`**: merged two `startswith` calls into a single tuple form (PIE810).
+- **`tcbot/modules/helper/workflows/check_flow.py`**: converted two `for i in range(0, len(...), 3): rows.append(...)` loops to list comprehensions (PERF401).
+- **`tcbot/modules/helper/workflows/stats_flow.py`**: converted one loop to `rows.extend(...)` (PERF401, list already pre-populated) and one to a list comprehension (PERF401).
+- **50 source files**: moved annotation-only imports into `if TYPE_CHECKING:` blocks throughout the codebase using `ruff check --unsafe-fixes`:
   - stdlib: `datetime.datetime`, `collections.abc.Callable`, `collections.abc.Awaitable`
   - third-party: `motor.motor_asyncio.AsyncIOMotorCollection`
   - All affected files already had `from __future__ import annotations`, making the moves safe (annotations are lazy strings at runtime).
@@ -281,18 +301,18 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Changed
 
-- **`tcbot/utils/timedate_format.py`** — replaced `timezone.utc` with the `datetime.UTC` alias (UP017); removed now-unused `timezone` import.
-- **`tcbot/modules/types.py`** — moved `Callable` from `typing` to `collections.abc` (UP035).
-- **`tcbot/utils/error_reporter.py`** — removed quoted forward references `"Bot | None"` and `"Bot"` (UP037); added `import contextlib` and replaced `try/except AttributeError: pass` with `contextlib.suppress(AttributeError)` (SIM105).
-- **`tcbot/__init__.py`** — removed quoted forward reference `"Configs"` from `load()` return type (UP037).
-- **`tcbot/modules/helper/decorators.py`** — moved `Awaitable` from `typing` to `collections.abc` (UP035); added explicit `return None` to all four auth `_wrapper` functions to silence RET502/RET503; added `# noqa: UP047` to `log_execution` (refactor would conflict with `ratelimiter` inner TypeVar usage).
-- **`tcbot/database/cache.py`** — migrated `TTLCache` from `Generic[T]` to Python 3.12 type-parameter syntax `class TTLCache[T]` (UP046); removed `TypeVar` and `Generic` from imports.
-- **`tcbot/utils/dispatch.py`** — migrated `fan_out` to Python 3.12 type-parameter syntax `async def fan_out[T]` (UP047); removed module-level `T = TypeVar("T")` and `TypeVar` import.
-- **`tcbot/modules/broadcasting.py`** — added `strict=False` to `zip()` call (B905).
-- **`tcbot/modules/maintenance.py`** — added `strict=False` to `zip()` call (B905).
-- **`tcbot/modules/helper/workflows/appeal_flow.py`** — merged nested `if review_ts: if reviewer_locked_out(...)` into single `and`-condition (SIM102); reformatted by Ruff.
-- **`tcbot/modules/helper/workflows/proof_flow.py`** — replaced unnecessary `elif` after `return` with `if` (RET505, twice).
-- **`pyproject.toml`** — expanded `[tool.ruff.lint] select` from `["E4","E7","E9","F","I"]` to `["B","C4","E4","E7","E9","F","I","RET","SIM","UP","W"]`; added `ignore = ["UP047"]` for the ratelimiter-constrained generic function case.
+- **`tcbot/utils/timedate_format.py`**: replaced `timezone.utc` with the `datetime.UTC` alias (UP017); removed now-unused `timezone` import.
+- **`tcbot/modules/types.py`**: moved `Callable` from `typing` to `collections.abc` (UP035).
+- **`tcbot/utils/error_reporter.py`**: removed quoted forward references `"Bot | None"` and `"Bot"` (UP037); added `import contextlib` and replaced `try/except AttributeError: pass` with `contextlib.suppress(AttributeError)` (SIM105).
+- **`tcbot/__init__.py`**: removed quoted forward reference `"Configs"` from `load()` return type (UP037).
+- **`tcbot/modules/helper/decorators.py`**: moved `Awaitable` from `typing` to `collections.abc` (UP035); added explicit `return None` to all four auth `_wrapper` functions to silence RET502/RET503; added `# noqa: UP047` to `log_execution` (refactor would conflict with `ratelimiter` inner TypeVar usage).
+- **`tcbot/database/cache.py`**: migrated `TTLCache` from `Generic[T]` to Python 3.12 type-parameter syntax `class TTLCache[T]` (UP046); removed `TypeVar` and `Generic` from imports.
+- **`tcbot/utils/dispatch.py`**: migrated `fan_out` to Python 3.12 type-parameter syntax `async def fan_out[T]` (UP047); removed module-level `T = TypeVar("T")` and `TypeVar` import.
+- **`tcbot/modules/broadcasting.py`**: added `strict=False` to `zip()` call (B905).
+- **`tcbot/modules/maintenance.py`**: added `strict=False` to `zip()` call (B905).
+- **`tcbot/modules/helper/workflows/appeal_flow.py`**: merged nested `if review_ts: if reviewer_locked_out(...)` into single `and`-condition (SIM102); reformatted by Ruff.
+- **`tcbot/modules/helper/workflows/proof_flow.py`**: replaced unnecessary `elif` after `return` with `if` (RET505, twice).
+- **`pyproject.toml`**: expanded `[tool.ruff.lint] select` from `["E4","E7","E9","F","I"]` to `["B","C4","E4","E7","E9","F","I","RET","SIM","UP","W"]`; added `ignore = ["UP047"]` for the ratelimiter-constrained generic function case.
 
 ## [Unreleased] - 2026-06-07 (session 37)
 
@@ -412,7 +432,7 @@ Test suite: 1492 tests / 71 files / **0 warnings** / all green. Ruff: clean (144
 
 - Fixed stale test counts across all root and memory docs (1405/1466/1481 → 1492): `README.md` (×2), `PLAN.md` (×2), `AGENTS.md`, `replit.md`, `.agents/memory/MEMORY.md`, `.agents/memory/structure.md`.
 - Updated `docs/helper/helper.md` replies.py constants table: added 9 missing entries (`ERR_PERM_EXPIRED`, `ERR_UNKNOWN_ROLE`, `WHERE_CONNECTED_GROUP`, `NO_REASON`, `SEC_COMMANDS`, `SEC_WHO`, `SEC_WHERE`, `SEC_WHAT`, `SEC_EXAMPLES`, `SEC_TARGET`).
-- Completed full doc audit: `docs/README.md`, `docs/mapping.md`, `docs/modules/modules.md`, `docs/helper/helper.md`, `docs/databases/databases.md`, `docs/utils/utils.md`, `docs/workflows/workflows.md`, `docs/performance.md`, `docs/setup.md`, `.agents/REPLIT.md` — all accurate.
+- Completed full doc audit: `docs/README.md`, `docs/mapping.md`, `docs/modules/modules.md`, `docs/helper/helper.md`, `docs/databases/databases.md`, `docs/utils/utils.md`, `docs/workflows/workflows.md`, `docs/performance.md`, `docs/setup.md`, `.agents/REPLIT.md`: all accurate.
 
 ### Tests
 
