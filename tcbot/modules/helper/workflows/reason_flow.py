@@ -23,6 +23,7 @@ from telegram.ext import (
 
 from tcbot import cfg
 from tcbot.modules.helper import replies
+from tcbot.modules.helper.formatter import esc, mention
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 
@@ -114,11 +115,15 @@ def build_modaction_conv(
     _prompt_id_key = f"{action}_prompt_id"
 
     def _get_target(ctx: ContextTypes.DEFAULT_TYPE) -> str:
-        return (
+        raw: str = (
             ctx.user_data.get(f"{action}_target_name")
             or ctx.user_data.get(f"{action}_target_fname")
             or "target"
         )
+        tid: int | None = ctx.user_data.get(f"{action}_target_id")
+        if tid:
+            return mention(tid, raw)
+        return esc(raw)
 
     # ── WAITING_REASON handlers ──────────────────────────────────── #
 

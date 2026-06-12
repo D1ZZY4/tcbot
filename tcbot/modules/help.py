@@ -103,7 +103,7 @@ _HELP_INDEX_TEXT = (
 
 def _prefix_note() -> str:
     """Return an HTML footer listing every configured command prefix."""
-    codes = " ".join(f"<code>{p}</code>" for p in cfg.prefixes)
+    codes = " ".join(f"<code>{esc(p)}</code>" for p in cfg.prefixes)
     return f"\n<b>Note:</b> All commands also work with {codes}"
 
 
