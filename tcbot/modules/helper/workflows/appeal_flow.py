@@ -19,6 +19,7 @@ from telegram.ext import (
     ContextTypes,
     ConversationHandler,
     MessageHandler,
+    TypeHandler,
     filters,
 )
 
@@ -49,6 +50,7 @@ _ERR_WRONG_ACCOUNT = "This appeal link doesn't belong to your account."
 _ERR_PENDING_REVIEW = "You already have a pending appeal under review."
 _MSG_CANCELLED = "Appeal cancelled. Nothing was submitted."
 _MSG_SESSION_ENDED = "Appeal session ended."
+_MSG_TIMEOUT = "Appeal session timed out. Nothing was submitted."
 _ERR_SESSION_EXPIRED = "Session expired - please start the appeal again."
 _ERR_INVALID_LOG = "Invalid log link. Please check and try again."
 _ERR_NOT_AUTHORIZED = "You are not authorized."
@@ -215,6 +217,12 @@ class BuildAppeal:
         await update.effective_message.reply_text(_MSG_SESSION_ENDED)
         return ConversationHandler.END
 
+    async def _on_timeout(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+        """Timeout handler; fires when ``conversation_timeout`` expires."""
+        if update.effective_message:
+            await update.effective_message.reply_text(_MSG_TIMEOUT)
+        return ConversationHandler.END
+
     async def _on_message(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Text message handler; validates and submits a #appeal message."""
         msg = update.effective_message
@@ -344,7 +352,13 @@ class BuildAppeal:
             await q.answer()
             return
 
-        _, ban = await asyncio.gather(q.answer(), db.bans_db.get_ban(ban_id))
+        _, ban = await asyncio.gather(
+            q.answer(), db.bans_db.get_ban(ban_id), return_exceptions=True
+        )
+        if isinstance(ban, BaseException):
+            log.error("get_ban failed in appeal review for %s: %s", ban_id, ban)
+            await q.edit_message_text(_ERR_BAN_NOT_FOUND, reply_markup=None)
+            return
         if not ban:
             await q.edit_message_text(_ERR_BAN_NOT_FOUND, reply_markup=None)
             return
@@ -369,7 +383,17 @@ class BuildAppeal:
                 db.bans_db.deactivate_ban(ban_id),
                 db.groups_db.active_groups(),
                 db.users_cache.get_first_name(target_id, str(target_id)),
+                return_exceptions=True,
             )
+            if isinstance(groups, BaseException):
+                log.error(
+                    "active_groups failed during appeal unban of %d: %s",
+                    target_id,
+                    groups,
+                )
+                groups = []
+            if isinstance(target_fname, BaseException):
+                target_fname = str(target_id)
 
             # * Unban from all groups - semaphore-bounded for rate safety
             await fan_out(
@@ -490,6 +514,7 @@ class BuildAppeal:
                         self._on_message,
                     ),
                 ],
+                ConversationHandler.TIMEOUT: [TypeHandler(Update, self._on_timeout)],
             },
             fallbacks=[
                 MessageHandler(ALL_PREFIXES_CMD_FILTER, self._end),

@@ -2,6 +2,67 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-12 (session 56)
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/connected_flow.py`** — `on_bot_added`: when bot is removed from a group, three DB writes ran in `asyncio.gather` without `return_exceptions=True`. If `is_connected()` raised (e.g. MongoDB timeout), `was_connected` received a `BaseException` object, which is truthy, so the "group bot removed" log was erroneously sent even when connection status was unknown. Added `return_exceptions=True` and an explicit `isinstance(was_connected, BaseException)` guard with `was_connected = False` fallback. (Bug #10)
+- **`tcbot/modules/helper/workflows/unban_flow.py`** — `execute_unban`: `_, groups = await asyncio.gather(deactivate_ban, active_groups)` missing `return_exceptions=True`. If `active_groups()` raised, `groups` held a `BaseException`, causing `for grp in groups` (fan_out list comprehension) to crash with `TypeError`. Added `return_exceptions=True` and `groups = []` fallback. (Bug #11)
+- **`tcbot/modules/helper/workflows/ban_flow.py`** — same pattern in `_execute_ban`: `_, groups = await asyncio.gather(set_log_message_id, active_groups)` in the `if log_msg_id:` branch lacked `return_exceptions=True`. If `active_groups()` failed, `groups` held a `BaseException` → fan_out list comprehension crash. Added `return_exceptions=True` and `groups = []` fallback. (Bug #12)
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** — two bugs in the `on_review_decision` callback handler:
+  1. `_, ban = await asyncio.gather(q.answer(), db.bans_db.get_ban(ban_id))` lacked `return_exceptions=True`. If `get_ban` raised, `ban` = `BaseException` → `if not ban:` evaluates False (exception is truthy) → `ban.get("is_active")` crashes with `AttributeError`. Added `return_exceptions=True`, `isinstance(ban, BaseException)` guard, and `return` on DB failure. (Bug #13)
+  2. `_, groups, target_fname = await asyncio.gather(deactivate_ban, active_groups, get_first_name)` lacked `return_exceptions=True`. If `active_groups()` raised, `groups` → fan_out crash; if `get_first_name()` raised, `target_fname` used as string → crash. Added `return_exceptions=True` and individual fallbacks for `groups` and `target_fname`. (Bug #14)
+- **`tcbot/modules/helper/workflows/promote_flow.py`** — three pure DB-write gathers (`add_admin`+`remove_role`+`upsert_user`, `add_admin`+`upsert_user`, `set_role`+`upsert_user`) lacked `return_exceptions=True`. Per project convention all pure side-effect gathers must have it. Added to all three. (Bug #15)
+- **`tcbot/modules/admins.py`** — three gather bugs:
+  1. `on_promo_decision`: `_, req = await asyncio.gather(q.answer(), db.queues_db.get_request_by_id(...))` lacked `return_exceptions=True`. If `get_request_by_id` raised, `req` = `BaseException` → `if not req:` False → `req["target_id"]` crashes. Added `return_exceptions=True`, `isinstance` guard, and `return` on failure. (Bug #16)
+  2. `on_demote_confirm`: `_, target_role, (target_fname, target_uname) = await asyncio.gather(q.answer(), get_effective_role, get_user_mention_data)` lacked `return_exceptions=True`. If `get_user_mention_data` raised, tuple unpacking `(target_fname, target_uname) = BaseException` crashes with `TypeError`. Refactored to unpack `mention_data` separately with `isinstance` guard. (Bug #17)
+  3. `on_promote_role_select`: `_, target_fname, current_role = await asyncio.gather(q.answer(), get_first_name, get_effective_role)` lacked `return_exceptions=True`. If either DB call raised, the result passed directly to `Promote.execute()` as a `BaseException` → crash. Added `return_exceptions=True` and per-field `isinstance` fallbacks. (Bug #18)
+- **`tcbot/modules/greeting.py`** — `_handle_member` (Critical): `_, ban = await asyncio.gather(upsert_user, get_active_ban)` lacked `return_exceptions=True`. If `get_active_ban()` raised a DB exception, `ban` received the `BaseException` object → `if ban:` evaluated True → bot called `ban_chat_member` on the newly joined user, issuing a **false federation ban**. Added `return_exceptions=True`, `isinstance` guard, and `ban = None` fallback with `log.error`. (Bug #19 — Critical)
+- **`tcbot/database/warns_db.py`** — two gather fixes:
+  1. `clear_warns`: `asyncio.gather(delete_many, delete_one)` lacked `return_exceptions=True`. Added it; result access guarded with `isinstance`. (Bug #20, part 1)
+  2. `remove_last_warn`: `_, counter = await asyncio.gather(delete_one, find_one_and_update)` lacked `return_exceptions=True`. If `find_one_and_update` raised, `counter` held a `BaseException`; the `if counter is None:` fallback would not trigger, leaving the warn counter inconsistent. Added `return_exceptions=True`; extended guard to `isinstance(counter, BaseException) or counter is None`. (Bug #20, part 2)
+
+### Documentation
+
+- **`docs/appeal-detailed.md`** (Timeouts and fallbacks) — added explicit note that when the appeal timeout expires naturally, PTB's scheduler fires `BuildAppeal._on_timeout` via `ConversationHandler.TIMEOUT` and the user receives `"Appeal session timed out. Nothing was submitted."`. Previously only described command-triggered cancellation.
+- **`docs/banning-detailed.md`** (proof timeout bullet) — expanded to describe the proactive TIMEOUT state handler; noted that `on_proof_timeout` also fires as a fallback for commands during the proof window.
+- **`docs/warnings-detailed.md`** (Timeouts and fallbacks) — same update: added TIMEOUT state handler description for the kick/mute/warn `reason_flow` timeout.
+- **`docs/workflows/workflows.md`** (timeout rules) — added rule: all timed conversations must register a `ConversationHandler.TIMEOUT` state with `TypeHandler(Update, handler)` so PTB's scheduler notifies the user when the window expires naturally.
+
+## [Unreleased] - 2026-06-12 (session 55)
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/ban_flow.py`** — `ban_conversation()` had `conversation_timeout=cfg.proof_timeout` but no `ConversationHandler.TIMEOUT` state handler. When the proof window expired naturally (user inactive, not sending a command), PTB's scheduler called `_trigger_timeout` which found no TIMEOUT handlers and silently ended the conversation without notifying the user. The existing `on_proof_timeout` handler was only reachable via `fallbacks` (triggered by a new command, not by expiry). Fixed: added `ConversationHandler.TIMEOUT: [TypeHandler(Update, on_proof_timeout)]` to `states`; moved `Update` from `TYPE_CHECKING` to runtime import; added `TypeHandler` to `telegram.ext` import block. (Bug #9, part 1)
+- **`tcbot/modules/helper/workflows/reason_flow.py`** — same pattern: `conversation_timeout=cfg.proof_timeout` set but no TIMEOUT state, so expiry was silent. Added inner `_on_timeout` handler (mirrors `_end_conv` but guards `if update.effective_message:`) and `ConversationHandler.TIMEOUT: [TypeHandler(Update, _on_timeout)]` to `states`; added `TypeHandler` to import. (Bug #9, part 2)
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** — same pattern: `conversation_timeout=cfg.appeal_timeout` set but no TIMEOUT state. Added `_MSG_TIMEOUT = "Appeal session timed out. Nothing was submitted."` constant, `BuildAppeal._on_timeout` method with `if update.effective_message:` guard, and `ConversationHandler.TIMEOUT: [TypeHandler(Update, self._on_timeout)]` to `states`; added `TypeHandler` to import. (Bug #9, part 3)
+
+### Documentation (session 55 docs updates)
+
+## [Unreleased] - 2026-06-12 (session 54)
+
+### Changed
+
+- **`python-telegram-bot`** `22.7` -> `22.8` (released 2026-06-12). `uv lock --upgrade` applied; `uv sync` installed the new wheel. Verified: `Defaults` was already imported from `telegram.ext` (correct location in 22.8 — it is no longer re-exported from `telegram` top-level); `LinkPreviewOptions` remains in `telegram`. All critical PTB API imports verified clean; ruff 70 files unchanged; bot restarted (MongoDB connected, indexes ensured, scheduler started, polling active).
+- **`ruff`** `0.15.16` -> `0.15.17` (released 2026-06-11). No rule changes affecting the project; 70 files left unchanged by `ruff format .`; all checks pass.
+
+## [Unreleased] - 2026-06-12 (session 53)
+
+### Fixed
+
+- **`tcbot/modules/admins.py`** (`on_promo_decision`) — `promo_approve` branch called `asyncio.gather(add_admin, resolve)` without `return_exceptions=True`. If either coroutine raised an exception the exception would propagate out of `on_promo_decision` and trigger the global error reporter instead of being handled locally. The `promo_reject` branch directly below already had `return_exceptions=True`; this branch was inconsistent. Fixed by adding `return_exceptions=True` to match project convention for pure side-effect gathers. (Bug #8)
+
+### Changed
+
+- **`tcbot/modules/help.py`** — extracted `_ERR_SECTION_NOT_FOUND` module-level constant and replaced two duplicated inline string literals in `_show_section()` with it. `_ERR_TOPIC_NOT_FOUND` was already a named constant; `_ERR_SECTION_NOT_FOUND` now matches the same DRY pattern.
+
+## [Unreleased] - 2026-06-12 (session 52)
+
+### Fixed
+
+- **`tcbot/modules/stats.py`** (`on_bans_search_input`) — `ctx.user_data["stats_last_query"]` was never set after a search completed. When a user tapped "Back" from a search-detail card, `on_stats_search_back` called `Stats.render_search` which displayed `Search: "" (N found)` — the query string was always blank because the key was never written. Fixed: added `ctx.user_data["stats_last_query"] = query` immediately after `RESULTS_KEY` is set. (Bug #7, part 1)
+- **`tcbot/modules/helper/workflows/stats_flow.py`** (`Stats.clear_search`) — the clear loop that pops `RESULTS_KEY`, `PAGE_KEY`, and `DETAIL_KEY` did not pop `"stats_last_query"`, so stale query text from a previous search session survived into the next one. Fixed: added `ctx.user_data.pop("stats_last_query", None)` to the clear loop. (Bug #7, part 2)
+
 ## [Unreleased] - 2026-06-12 (session 51)
 
 ### Changed

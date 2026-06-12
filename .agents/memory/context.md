@@ -5,7 +5,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-12 (session 53)
+**Last updated:** 2026-06-12 (session 54)
 
 ## What is done
 
@@ -230,6 +230,34 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Full audit wave 2 complete: all 50+ files read (greeting, appeals, broadcasting, additional, maintenance, privacy, check_flow, proof_flow, connecting, disconnecting, promote_flow, demote_flow, __main__, groups_db, warns_db, kicks_db, mutes_db, queues_db, users_roles, users_cache, mongos, dispatch, prefixes, parse_logmsg, error_reporter, pagination, stats_flow, stats) — all clean except the above two-line fix.
   - Ruff 70 files clean; bot running (MongoDB connected, 75 handlers, polling active).
 
+- Session 55 (2026-06-12): ConversationHandler TIMEOUT state fix (Bug #9).
+  - All three ConversationHandlers (ban_flow, reason_flow, appeal_flow) had `conversation_timeout` set but no `ConversationHandler.TIMEOUT` state. PTB's scheduler proactively calls `_trigger_timeout`, which runs TIMEOUT handlers -- without them, conversation silently ends with no user notification.
+  - ban_flow: added `ConversationHandler.TIMEOUT: [TypeHandler(Update, on_proof_timeout)]`; moved Update to runtime import; added TypeHandler.
+  - reason_flow: added inner `_on_timeout` handler (None-guarded) and TIMEOUT state; added TypeHandler.
+  - appeal_flow: added `_MSG_TIMEOUT` constant, `BuildAppeal._on_timeout` method (None-guarded), and TIMEOUT state; added TypeHandler.
+  - Ruff 70 files clean; all imports OK; bot restarted (MongoDB connected, 75 handlers, polling active).
+
+- Session 56 (2026-06-12): asyncio.gather return_exceptions systematic audit + critical bug fix.
+  - Audited all asyncio.gather calls codebase-wide. Found pattern: gathers that use results (groups, ban, req, etc.) without return_exceptions, so BaseException values flowed into the code as if they were real data → crashes or false behavior.
+  - Bug #10: connected_flow.py on_bot_added — was_connected could be BaseException → truthy → spurious disconnect log sent.
+  - Bug #11: unban_flow.py execute_unban — groups could be BaseException → fan_out list comprehension crash.
+  - Bug #12: ban_flow.py _execute_ban — same groups crash in ban enforcement path.
+  - Bug #13: appeal_flow.py on_review_decision — ban could be BaseException → ban.get() AttributeError crash.
+  - Bug #14: appeal_flow.py on_review_decision approve branch — groups/target_fname BaseException crashes.
+  - Bug #15: promote_flow.py — 3 pure DB-write gathers without return_exceptions (add_admin, set_role, upsert_user combinations).
+  - Bug #16: admins.py on_promo_decision — req could be BaseException → req["target_id"] crash.
+  - Bug #17: admins.py on_demote_confirm — tuple unpacking (target_fname, target_uname) from BaseException crash.
+  - Bug #18: admins.py on_promote_role_select — target_fname/current_role BaseException passed directly to Promote.execute().
+  - Bug #19 (CRITICAL): greeting.py _handle_member — ban could be BaseException (truthy) → auto-ban issued for user who was NOT federation-banned. False ban of innocent user.
+  - Bug #20: warns_db.py clear_warns + remove_last_warn — DB result access without return_exceptions protection.
+  - All 10 bugs fixed. Ruff 70 files clean; bot restarted clean (MongoDB connected, 75 handlers, polling active).
+
+- Session 54 (2026-06-12): dependency upgrade.
+  - PTB 22.7 -> 22.8 (released 2026-06-12). `Defaults` was already imported from `telegram.ext` (correct); `LinkPreviewOptions` still in `telegram`. No breaking changes in codebase.
+  - ruff 0.15.16 -> 0.15.17. No new rule violations (70 files unchanged).
+  - CHANGELOG.md updated with entries for sessions 52, 53, and 54.
+  - Bot restarted clean: MongoDB connected, indexes ensured, scheduler started, 75 handlers, polling active.
+
 - Session 53 (2026-06-12): audit wave 4 + bug fix.
   - DRY fix in `help.py`: added `_ERR_SECTION_NOT_FOUND` constant; replaced two inline literals in `_show_section()` with named constants. (`_ERR_TOPIC_NOT_FOUND` was already extracted; now `_ERR_SECTION_NOT_FOUND` joins it.)
   - Audit wave 4 completed: `decorators.py`, `kicking_flow.py`, `warning_flow.py`, `reason_flow.py`, `connected_flow.py`, `unban_flow.py`, `parse_editmsg.py`, `parse_link.py`, `replies.py`, `keyboards.py`, `muting_flow.py` — all clean.
@@ -241,7 +269,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## What is in progress
 
-Nothing. Session 53 checkpoint complete.
+Nothing. Session 56 checkpoint complete.
 
 ## What is pending (optional)
 

@@ -39,7 +39,11 @@ async def _handle_member(member: User, msg: Message, chat: Chat, bot: Bot) -> No
             member.last_name,
         ),
         db.bans_db.get_active_ban(member.id),
+        return_exceptions=True,
     )
+    if isinstance(ban, BaseException):
+        log.error("get_active_ban failed on join for uid=%d: %s", member.id, ban)
+        ban = None
 
     if ban:
         ban_exc, reply_exc = await asyncio.gather(

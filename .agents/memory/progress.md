@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-12 (session 51)
+**Last updated:** 2026-06-12 (session 56)
 
 ## Verification baseline
 
@@ -113,6 +113,18 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | python-code-quality skill doc sync | docs | SKILL.md + REFERENCE.md embedded pyproject.toml snapshot was stale (5-group ruff select, ruff in [project] deps, 4 stale Migrate comments, false "not a full strict style suite" line); synced to actual 22-group config matching .agents/RUFF.md | 2026-06-11 (s44) |
 
 | `pyproject.toml` setuptools package discovery fix | infra | Added `[tool.setuptools.packages.find] include = ["tcbot*"]` to prevent `attached_assets/` from being discovered as a second top-level package during `uv pip install -e .`; added `attached_assets/` to ruff exclude | 2026-06-11 (s45) |
+| Bug #9: ConversationHandler TIMEOUT silent end | P2 (UX/correctness) | All 3 ConversationHandlers (ban_flow, reason_flow, appeal_flow) had `conversation_timeout` but no TIMEOUT state. PTB `_trigger_timeout` is called proactively by scheduler; without TIMEOUT handlers conversation silently ends with no notification. Fixed in all 3: ban_flow (`TypeHandler(Update, on_proof_timeout)`); reason_flow (inner `_on_timeout` handler); appeal_flow (`BuildAppeal._on_timeout` method + `_MSG_TIMEOUT`). | 2026-06-12 (s55) |
+| Bug #10: connected_flow spurious disconnect log | P2 (correctness) | `on_bot_added` gather: `was_connected` could be BaseException (truthy) on DB error → false "bot removed" log. Added `return_exceptions=True` and `isinstance` guard with `was_connected = False` fallback. | 2026-06-12 (s56) |
+| Bug #11: unban_flow fan-out crash | P1 (correctness) | `execute_unban`: `groups` could be BaseException → `for grp in groups` TypeError. Added `return_exceptions=True` and `groups = []` fallback. | 2026-06-12 (s56) |
+| Bug #12: ban_flow fan-out crash | P1 (correctness) | `_execute_ban`: same pattern as Bug #11 in ban enforcement path. Added `return_exceptions=True` and `groups = []` fallback. | 2026-06-12 (s56) |
+| Bug #13: appeal_flow review ban.get() AttributeError | P1 (correctness) | `on_review_decision`: `ban` could be BaseException (truthy) → `if not ban:` False → `ban.get("is_active")` AttributeError. Added `return_exceptions=True`, `isinstance` guard, and `return` on DB failure. | 2026-06-12 (s56) |
+| Bug #14: appeal_flow approve branch crash | P1 (correctness) | `on_review_decision` approve: `groups`/`target_fname` could be BaseException → fan-out crash / string crash. Added `return_exceptions=True` and individual fallbacks. | 2026-06-12 (s56) |
+| Bug #15: promote_flow pure-side-effect gathers | P2 (correctness) | 3 DB-write gathers in `promote_flow.py` lacked `return_exceptions=True`. Added per project convention. | 2026-06-12 (s56) |
+| Bug #16: admins on_promo_decision req subscript | P1 (correctness) | `req` could be BaseException → `if not req:` False → `req["target_id"]` crash. Added `return_exceptions=True`, `isinstance` guard, and `return` on failure. | 2026-06-12 (s56) |
+| Bug #17: admins on_demote_confirm tuple unpack | P1 (correctness) | `(target_fname, target_uname) = BaseException` TypeError. Refactored to unpack `mention_data` separately with `isinstance` guard. | 2026-06-12 (s56) |
+| Bug #18: admins on_promote_role_select Promote.execute crash | P1 (correctness) | `target_fname`/`current_role` could be BaseException passed directly to `Promote.execute()`. Added `return_exceptions=True` and per-field fallbacks. | 2026-06-12 (s56) |
+| Bug #19: greeting.py CRITICAL false federation ban | P0 (critical) | `ban` could be BaseException (truthy on DB error) → `bot.ban_chat_member()` called on innocent user. Added `return_exceptions=True`, `isinstance` guard, `ban = None`, and `log.error`. | 2026-06-12 (s56) |
+| Bug #20: warns_db gather result access | P2 (correctness) | `clear_warns` and `remove_last_warn` gathers lacked `return_exceptions=True`. DB result accessed without BaseException guard. Fixed both. | 2026-06-12 (s56) |
 | Bug #5: proof_flow reason HTML injection | P1 (correctness) | `step_prompt`/`noted_prompt` embedded `reason`/`inline_reason` in `<b>` tags without `esc()`. Fixed: added esc import and wrapped both strings. Any `<>&` in user-typed reason would break HTML parse mode. | 2026-06-12 (s50) |
 | Bug #6: cmd_promote_request always rejected | P1 (correctness) | `identity.classify(user.id, user.id, ...)` always returns `Identity("self")` in self-submission flows, causing every request to be rejected. Removed identity check; replaced with parallel `get_effective_role` + `get_request` guard. | 2026-06-12 (s50) |
 | Global link preview disable | UX | Added `Defaults(link_preview_options=LinkPreviewOptions(is_disabled=True))` to `ApplicationBuilder` chain in `__main__.py`; all 205+ message send/edit/reply calls now suppress link-preview cards with one change. | 2026-06-12 (s51) |

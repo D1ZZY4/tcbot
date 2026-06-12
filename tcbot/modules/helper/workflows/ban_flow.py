@@ -10,11 +10,13 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from telegram import Update
 from telegram.ext import (
     CallbackQueryHandler,
     ContextTypes,
     ConversationHandler,
     MessageHandler,
+    TypeHandler,
     filters,
 )
 
@@ -31,7 +33,7 @@ from tcbot.utils.timedate_format import utc_now
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from telegram import Bot, Message, Update
+    from telegram import Bot, Message
     from telegram.ext.filters import BaseFilter
 
 log = logging.getLogger(__name__)
@@ -213,7 +215,11 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         _, groups = await asyncio.gather(
             db.bans_db.set_log_message_id(ban_id, log_msg_id),
             db.groups_db.active_groups(),
+            return_exceptions=True,
         )
+        if isinstance(groups, BaseException):
+            log.error("active_groups failed during ban of %d: %s", target_id, groups)
+            groups = []
     else:
         groups = await db.groups_db.active_groups()
 
@@ -318,6 +324,7 @@ def ban_conversation(
                 ),
                 MessageHandler(filters.PHOTO | filters.VIDEO, on_proof_received),
             ],
+            ConversationHandler.TIMEOUT: [TypeHandler(Update, on_proof_timeout)],
         },
         fallbacks=[MessageHandler(ALL_PREFIXES_CMD_FILTER, on_proof_timeout)],
         conversation_timeout=cfg.proof_timeout,

@@ -140,8 +140,10 @@ async def clear_warns(user_id: int, chat_id: int) -> int:
     results = await asyncio.gather(
         _warns().delete_many(_warn_key(user_id, chat_id)),
         _warn_counts().delete_one(_warn_key(user_id, chat_id)),
+        return_exceptions=True,
     )
-    return results[0].deleted_count
+    r0 = results[0]
+    return r0.deleted_count if not isinstance(r0, BaseException) else 0
 
 
 async def get_warns(user_id: int, chat_id: int) -> list[WarnDoc]:
@@ -174,9 +176,10 @@ async def remove_last_warn(user_id: int, chat_id: int) -> bool:
             return_document=ReturnDocument.AFTER,
             projection={"_id": 0, "count": 1},
         ),
+        return_exceptions=True,
     )
 
-    if counter is None:
+    if isinstance(counter, BaseException) or counter is None:
         count = await _warns().count_documents(_warn_key(user_id, chat_id))
         await _store_warn_count(user_id, chat_id, count)
     return True

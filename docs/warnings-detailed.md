@@ -294,7 +294,7 @@ The conversation fallback excludes `/tcunwarn`, `/warns`, `/warnlist`, `/resetwa
 
 ## Timeouts and fallbacks
 
-The warning conversation uses `cfg.proof_timeout` (`PROOF_TIMEOUT_SECONDS`, default `100`) for the reason/proof conversation timeout.
+The warning conversation uses `cfg.proof_timeout` (`PROOF_TIMEOUT_SECONDS`, default `100`) for the reason/proof conversation timeout. When the timeout expires naturally (user inactive), PTB's scheduler fires the `_on_timeout` handler via `ConversationHandler.TIMEOUT`; the user receives `"Warn operation timed out. No action was taken."` and the conversation ends.
 
 A recognized command during the conversation cancels the warning operation unless it is one of the configured escape commands listed above.
 

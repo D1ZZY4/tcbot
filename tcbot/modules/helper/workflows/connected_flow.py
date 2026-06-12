@@ -176,7 +176,15 @@ class BuildConnection:
                 db.groups_db.is_connected(chat.id),
                 db.groups_db.deactivate_group(chat.id),
                 db.groups_db.remove_pending(chat.id),
+                return_exceptions=True,
             )
+            if isinstance(was_connected, BaseException):
+                log.debug(
+                    "is_connected check failed on bot removal from %d: %s",
+                    chat.id,
+                    was_connected,
+                )
+                was_connected = False
             if was_connected:
                 try:
                     await ctx.bot.send_message(

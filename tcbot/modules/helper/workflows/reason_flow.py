@@ -17,6 +17,7 @@ from telegram.ext import (
     ContextTypes,
     ConversationHandler,
     MessageHandler,
+    TypeHandler,
     filters,
 )
 
@@ -199,6 +200,13 @@ def build_modaction_conv(
         )
         return ConversationHandler.END
 
+    async def _on_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+        if update.effective_message:
+            await update.effective_message.reply_text(
+                f"{action.capitalize()} operation timed out. No action was taken."
+            )
+        return ConversationHandler.END
+
     # ── Build states ─────────────────────────────────────────────── #
 
     reason_state: list = [
@@ -229,6 +237,7 @@ def build_modaction_conv(
         states={
             WAITING_REASON: reason_state,
             WAITING_PROOF: proof_state,
+            ConversationHandler.TIMEOUT: [TypeHandler(Update, _on_timeout)],
         },
         fallbacks=[
             CallbackQueryHandler(_on_cancel, pattern=rf"^{action}_cancel$"),

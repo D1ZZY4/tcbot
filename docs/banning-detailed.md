@@ -301,7 +301,7 @@ Manual unban does not currently edit any pending appeal review card. It deactiva
 - Same-rank and higher-rank staff targets are protected.
 - Self-ban and bot-ban attempts are rejected before database writes.
 - The proof conversation is per-chat and per-user, so simultaneous ban flows are isolated by moderator/chat.
-- The ban proof timeout uses `cfg.proof_timeout` (`PROOF_TIMEOUT_SECONDS`, default `100`).
+- The ban proof timeout uses `cfg.proof_timeout` (`PROOF_TIMEOUT_SECONDS`, default `100`). When the timeout expires naturally (user inactive), PTB's scheduler fires `on_proof_timeout` via `ConversationHandler.TIMEOUT`; the user receives `"Timed out waiting for proof. No ban was issued."` and the conversation ends. The same handler also fires as a fallback when the user sends any command during the proof window.
 
 ## Behavior reference
 

@@ -56,7 +56,11 @@ async def execute_unban(
     _, groups = await asyncio.gather(
         db.bans_db.deactivate_ban(ban_id),
         db.groups_db.active_groups(),
+        return_exceptions=True,
     )
+    if isinstance(groups, BaseException):
+        log.error("active_groups failed during unban of %d: %s", target_id, groups)
+        groups = []
 
     # * unban from all groups - semaphore-bounded for rate safety
     results = await fan_out(

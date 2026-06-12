@@ -10,7 +10,7 @@ Conversation and multi-step logic lives in `tcbot/modules/helper/workflows/`. Ne
 - Workflow files own state constants, `ConversationHandler` factories, and execution adapters.
 - Shared reason/proof logic belongs in `reason_flow.py` and `proof_flow.py`.
 - Callback handlers must call `await q.answer()` before doing further work.
-- Timeouts use configuration values such as `cfg.proof_timeout`, `cfg.appeal_timeout`, and `cfg.album_debounce`.
+- Timeouts use configuration values such as `cfg.proof_timeout`, `cfg.appeal_timeout`, and `cfg.album_debounce`. All timed conversations must register a `ConversationHandler.TIMEOUT` state with a `TypeHandler(Update, handler)` so PTB's scheduler notifies the user when the window expires naturally.
 
 ## Shared proof builder: `proof_flow.py`
 

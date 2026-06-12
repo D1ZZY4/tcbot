@@ -192,6 +192,7 @@ If editing the existing appeal log fails, the bot attempts to send a new log mes
 ## Timeouts and fallbacks
 
 - The appeal conversation timeout is `cfg.appeal_timeout` (`APPEAL_TIMEOUT_SECONDS`, default `600`).
+- When the timeout expires naturally (user inactive), PTB's scheduler fires `BuildAppeal._on_timeout` via `ConversationHandler.TIMEOUT`; the user receives `"Appeal session timed out. Nothing was submitted."` and the conversation ends.
 - Any recognized command during the waiting state ends the session with `Appeal session ended.`
 - Cancel ends the session without writing appeal metadata.
 - If the user sends `#appeal` after the session state has expired or the ban ID is missing from `ctx.user_data`, the bot asks them to start the appeal again.

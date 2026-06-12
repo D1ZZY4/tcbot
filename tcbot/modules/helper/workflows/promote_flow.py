@@ -74,11 +74,13 @@ class Promote:
                 db.users_roles.add_admin(target_id, admin_id),
                 db.users_roles.remove_role(target_id),
                 db.users_cache.upsert_user(target_id, None, target_fname),
+                return_exceptions=True,
             )
         else:
             await asyncio.gather(
                 db.users_roles.add_admin(target_id, admin_id),
                 db.users_cache.upsert_user(target_id, None, target_fname),
+                return_exceptions=True,
             )
         lc, lt = cfg.logs
         log_text = parse_logmsg.promoted(
@@ -119,6 +121,7 @@ class Promote:
         await asyncio.gather(
             db.users_roles.set_role(target_id, role, admin_id),
             db.users_cache.upsert_user(target_id, None, target_fname),
+            return_exceptions=True,
         )
         role_label = db.users_roles.ROLE_LABEL.get(role, role)
         lc, lt = cfg.logs

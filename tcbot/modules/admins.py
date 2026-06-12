@@ -239,7 +239,12 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         q.answer(),
         db.users_cache.get_first_name(target_id, str(target_id)),
         db.users_roles.get_effective_role(target_id),
+        return_exceptions=True,
     )
+    if isinstance(target_fname, BaseException):
+        target_fname = str(target_id)
+    if isinstance(current_role, BaseException):
+        current_role = None
 
     _, text = await Promote.execute(
         ctx.bot,
@@ -352,11 +357,16 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         return
 
     # * answer + fetch target role + mention data in parallel
-    _, target_role, (target_fname, target_uname) = await asyncio.gather(
+    _, target_role, mention_data = await asyncio.gather(
         q.answer(),
         db.users_roles.get_effective_role(target_id),
         db.users_cache.get_user_mention_data(target_id),
+        return_exceptions=True,
     )
+    if isinstance(mention_data, BaseException):
+        target_fname, target_uname = str(target_id), None
+    else:
+        target_fname, target_uname = mention_data
 
     if not target_role or target_role == "founder":
         await q.edit_message_text(_ERR_NO_LONGER_REMOVABLE, reply_markup=None)
@@ -546,7 +556,12 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     _, req = await asyncio.gather(
         q.answer(),
         db.queues_db.get_request_by_id(request_id),
+        return_exceptions=True,
     )
+    if isinstance(req, BaseException):
+        log.error("get_request_by_id failed for %s: %s", request_id, req)
+        await q.edit_message_text(_ERR_REQUEST_NOT_FOUND)
+        return
     if not req:
         await q.edit_message_text(_ERR_REQUEST_NOT_FOUND)
         return
