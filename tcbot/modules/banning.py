@@ -118,10 +118,19 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     # * Identity check + role lookup happen in parallel; both depend only on
     # * already-resolved IDs so there is no need to wait for them sequentially.
-    ident, (executor_role, target_role) = await asyncio.gather(
+    # * return_exceptions=True prevents a DB failure from leaving the ConversationHandler open.
+    ident, role_result = await asyncio.gather(
         identity.classify(ctx.bot, admin.id, target_id, target_fname),
         resolve_and_check(msg, admin.id, target_id, min_role="developer"),
+        return_exceptions=True,
     )
+    if isinstance(ident, BaseException):
+        log.exception("identity.classify failed in cmd_ban_start: %s", ident)
+        return ConversationHandler.END
+    if isinstance(role_result, BaseException):
+        log.exception("resolve_and_check failed in cmd_ban_start: %s", role_result)
+        return ConversationHandler.END
+    executor_role, target_role = role_result
     refusal = identity.refuse_message("ban", ident)
     if refusal is not None:
         await msg.reply_text(refusal, parse_mode="HTML")

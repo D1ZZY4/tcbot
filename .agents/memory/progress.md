@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-12 (session 56)
+**Last updated:** 2026-06-12 (session 60)
 
 ## Verification baseline
 
@@ -138,6 +138,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | groups.py _toggle serial awaits | perf | Cache-hit: q.answer+safe_edit sequential → gathered. Cache-miss: q.answer+active_groups sequential → gathered with groups=[] fallback. | 2026-06-12 (s59) |
 | Bug #39: checking.py q.answer() after DB call | P2 (correctness/UX) | `on_checkme_detail` and `on_checkme_back` awaited `get_ban()` before `q.answer()`. Fixed: `asyncio.gather(q.answer(), get_ban(), return_exceptions=True)` + edit_message on error (not show_alert, since query already answered). Also: all 8 `on_check_*` handlers had sequential `q.answer()` + `Check.method()` -- refactored to gather with `return_exceptions=True` and isinstance guard. | 2026-06-12 (s59) |
 | Bug #38: chat migration handler absent | P2 (correctness) | No handler for migrate_to/migrate_from. When basic group migrates to supergroup, old chat_id in DB causes ban enforcement and group ops to silently fail. Added `migrate_group()` in groups_db.py + `on_chat_migration` handler in greeting.py with `filters.StatusUpdate.MIGRATE`. | 2026-06-12 (s58) |
+| Bug #43: banning/muting/kicking ConversationHandler entry gathers no return_exceptions | P2 (correctness) | `cmd_ban_start`, `cmd_mute`, `cmd_kick` all used `asyncio.gather(identity.classify, resolve_and_check)` without `return_exceptions=True`. DB failure would propagate out of the entry point, leaving the ConversationHandler open. Identical to Bug #42 (warnings.py). Refactored all three with individual isinstance guards + ConversationHandler.END on failure. | 2026-06-12 (s60) |
 
 ## Pending (remaining optional)
 

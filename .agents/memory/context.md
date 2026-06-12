@@ -5,7 +5,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-12 (session 54)
+**Last updated:** 2026-06-12 (session 60)
 
 ## What is done
 
@@ -287,9 +287,23 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Discovered PTB 22.8 uses `filters.StatusUpdate.MIGRATE` (not `MIGRATE_FROM_CHAT_ID`/`MIGRATE_TO_CHAT_ID`). Saved to decisions.md.
   - Ruff 70 files clean; bot running (MongoDB connected, scheduler started, polling active).
 
+- Session 59 (2026-06-12): checking.py q.answer race, stats_flow gathers, ban_info gather, warnings.py gather, groups._toggle serial awaits.
+  - Bug #39: `checking.py` `on_checkme_detail`/`on_checkme_back` — DB before `q.answer()`. Fixed with `asyncio.gather(q.answer(), get_ban(), return_exceptions=True)`.
+  - Perf: all 8 `on_check_*` handlers serial q.answer+method → gathered with `return_exceptions=True` and isinstance guards.
+  - Bug #40: `stats_flow.py` `Stats.main` (7-coro) and `Stats.staff_roster` (4-coro) gathers lacked `return_exceptions=True`. Fixed with per-field fallbacks.
+  - Bug #41: `ban_info.py` `build_ban_detail` gather lacked `return_exceptions=True`. Fixed with r_target/r_admin unpack guards.
+  - Bug #42: `warnings.py` `cmd_warn` gather (classify + resolve_and_check) lacked `return_exceptions=True` in ConversationHandler entry. Fixed with isinstance guards + END on failure.
+  - Perf: `groups.py` `_toggle` cache-hit and cache-miss serial awaits → gathered.
+  - Ruff 70 files clean; bot running (MongoDB connected, scheduler started, polling active).
+
+- Session 60 (2026-06-12): Bug #43 — banning/muting/kicking ConversationHandler entry gathers.
+  - Bug #43: `banning.py` `cmd_ban_start`, `muting.py` `cmd_mute`, `kicking.py` `cmd_kick` all had `asyncio.gather(identity.classify, resolve_and_check)` without `return_exceptions=True`. DB failure left ConversationHandler open (identical pattern to Bug #42 in warnings.py, missed in that session). Fixed all three with individual isinstance guards + ConversationHandler.END on failure.
+  - AST audit confirms no remaining ConversationHandler entry points with unguarded classify/resolve_and_check gathers.
+  - Ruff 70 files clean; bot running (MongoDB connected, scheduler started, polling active).
+
 ## What is in progress
 
-Nothing. Session 58 checkpoint complete.
+Nothing. Session 60 checkpoint complete.
 
 ## What is pending (optional)
 

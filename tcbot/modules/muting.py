@@ -130,10 +130,19 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
         return ConversationHandler.END
 
-    ident, (executor_role, target_role) = await asyncio.gather(
+    # * return_exceptions=True prevents a DB failure from leaving the ConversationHandler open.
+    ident, role_result = await asyncio.gather(
         identity.classify(ctx.bot, admin.id, target_id, target_fname),
         resolve_and_check(msg, admin.id, target_id, min_role="tester"),
+        return_exceptions=True,
     )
+    if isinstance(ident, BaseException):
+        log.exception("identity.classify failed in cmd_mute: %s", ident)
+        return ConversationHandler.END
+    if isinstance(role_result, BaseException):
+        log.exception("resolve_and_check failed in cmd_mute: %s", role_result)
+        return ConversationHandler.END
+    executor_role, target_role = role_result
     refusal = identity.refuse_message("mute", ident)
     if refusal is not None:
         await msg.reply_text(refusal, parse_mode="HTML")

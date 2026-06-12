@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-12 (session 60)
+
+### Fixed
+
+- **`tcbot/modules/banning.py`**, **`tcbot/modules/muting.py`**, **`tcbot/modules/kicking.py`** — each `cmd_ban_start`, `cmd_mute`, and `cmd_kick` entry point used `asyncio.gather(identity.classify(...), resolve_and_check(...))` without `return_exceptions=True`. If either coroutine raised a DB exception, the tuple unpack would propagate the exception out of the entry point, leaving the ConversationHandler open (the user is stuck in an invisible conversation state) and producing no user-facing feedback. The identical bug was fixed for `cmd_warn` in session 59 (Bug #42) but the same three command entry points were missed. Refactored all three: `ident, role_result = await asyncio.gather(..., return_exceptions=True)` with individual `isinstance(ident/role_result, BaseException)` guards and `ConversationHandler.END` returns on failure. (Bug #43)
+
 ## [Unreleased] - 2026-06-12 (session 58)
 
 ### Fixed
