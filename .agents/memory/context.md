@@ -5,7 +5,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-12 (session 51)
+**Last updated:** 2026-06-12 (session 53)
 
 ## What is done
 
@@ -230,9 +230,18 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Full audit wave 2 complete: all 50+ files read (greeting, appeals, broadcasting, additional, maintenance, privacy, check_flow, proof_flow, connecting, disconnecting, promote_flow, demote_flow, __main__, groups_db, warns_db, kicks_db, mutes_db, queues_db, users_roles, users_cache, mongos, dispatch, prefixes, parse_logmsg, error_reporter, pagination, stats_flow, stats) — all clean except the above two-line fix.
   - Ruff 70 files clean; bot running (MongoDB connected, 75 handlers, polling active).
 
+- Session 53 (2026-06-12): audit wave 4 + bug fix.
+  - DRY fix in `help.py`: added `_ERR_SECTION_NOT_FOUND` constant; replaced two inline literals in `_show_section()` with named constants. (`_ERR_TOPIC_NOT_FOUND` was already extracted; now `_ERR_SECTION_NOT_FOUND` joins it.)
+  - Audit wave 4 completed: `decorators.py`, `kicking_flow.py`, `warning_flow.py`, `reason_flow.py`, `connected_flow.py`, `unban_flow.py`, `parse_editmsg.py`, `parse_link.py`, `replies.py`, `keyboards.py`, `muting_flow.py` — all clean.
+  - Explorer audited `banning.py`, `kicking.py`, `muting.py`, `warnings.py` — all clean; confirmed `WARN_LIMIT=3` is correct (explorer false-positive about `_RL_WARN_LIMIT=5` which is rate-limiter constant, not warn limit).
+  - Explorer audited `unbanning.py`, `groups.py`, `admins.py` — false positives on `@mod_only`-guarded functions; one real bug found.
+  - Bug #8: `admins.py` `on_promo_decision` promo_approve branch — `asyncio.gather(add_admin, resolve)` missing `return_exceptions=True`. Counterpart `promo_reject` branch already had it. Fixed: consistent with project convention for pure side-effect gathers.
+  - Full audit now covers all 30+ module and helper files; no remaining unaudited files.
+  - Ruff 70 files clean; bot running (MongoDB connected, 75 handlers, polling active).
+
 ## What is in progress
 
-Nothing. Session 52 checkpoint complete.
+Nothing. Session 53 checkpoint complete.
 
 ## What is pending (optional)
 

@@ -559,6 +559,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         await asyncio.gather(
             db.users_roles.add_admin(target_id, admin.id),
             db.queues_db.resolve(request_id, "approved", admin.id),
+            return_exceptions=True,
         )
         log_text = parse_logmsg.promote_approved_log(
             target_id,

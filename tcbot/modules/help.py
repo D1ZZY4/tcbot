@@ -27,6 +27,7 @@ log = logging.getLogger(__name__)
 # ──────────────── User-facing reply constants ──────────────────── #
 
 _ERR_TOPIC_NOT_FOUND = "Topic not found."
+_ERR_SECTION_NOT_FOUND = "Section not found."
 _ERR_INVALID_SECTION = "Invalid section."
 
 # ─────────────────────── Rate-limiter constants ──────────────────── #
@@ -203,7 +204,7 @@ async def _show_section(
             q.answer(),
             safe_edit_cb(
                 q,
-                "Topic not found.",
+                _ERR_TOPIC_NOT_FOUND,
                 reply_markup=keyboards.back_to_module_kb(back_module_cb),
             ),
             return_exceptions=True,
@@ -216,7 +217,7 @@ async def _show_section(
             q.answer(),
             safe_edit_cb(
                 q,
-                "Section not found.",
+                _ERR_SECTION_NOT_FOUND,
                 reply_markup=keyboards.back_to_module_kb(back_module_cb),
             ),
             return_exceptions=True,
