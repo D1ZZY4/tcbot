@@ -81,7 +81,7 @@ async def execute_unban(
     )
 
     # * send log and reply in parallel
-    await asyncio.gather(
+    log_r, reply_r = await asyncio.gather(
         ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
         msg.reply_text(
             f"{mention(target_id, target_fname)} - {code(str(target_id))} "
@@ -91,3 +91,7 @@ async def execute_unban(
         ),
         return_exceptions=True,
     )
+    if isinstance(log_r, BaseException):
+        log.error("Unban log send failed for user %d: %s", target_id, log_r)
+    if isinstance(reply_r, BaseException):
+        log.debug("Unban reply failed for user %d: %s", target_id, reply_r)

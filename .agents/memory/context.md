@@ -5,7 +5,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-12 (session 66)
+**Last updated:** 2026-06-12 (session 67)
 
 ## What is done
 
@@ -38,6 +38,18 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - stats_flow.py: "- None assigned" -> "- No staff assigned" in staff roster.
   - mongos.py: 5 new indexes (federated_groups is_active, member_cache last_updated, kicks/mutes/bans chat_id).
   - broadcasting.py, admins.py: gather order optimized for responsiveness.
+- Session 67 (2026-06-12): autonomous audit wave 3 continuation - 8 bugs fixed, 2 DB perf improvements.
+  - Bug #50: `appeal_flow.py:93` `instruction_text()` - `community_name` embedded raw in HTML parse_mode reply. Fixed with `esc()`.
+  - Bug #51: `connecting.py` `cmd_connect` - `complete_join`/`reply_text` gather results not checked. Silent failure. Added `log.error`/`log.debug`.
+  - Bug #52: `connected_flow.py` `on_join_decision` approve branch - same silent-discard pattern. Fixed.
+  - Bug #53: `unban_flow.py` `execute_unban` - final log+reply gather results not checked. Fixed.
+  - Bug #54: `admins.py` `cmd_transfer` - ownership transfer log gather results not checked. Fixed.
+  - Bug #55 (HIGH): `admins.py` `on_promo_decision` approve - `add_admin`+`resolve` results not checked. If `add_admin` fails, user approved in queue but not promoted (inconsistent state). Fixed with `log.error`.
+  - Bug #56 (HIGH): `admins.py` `on_promo_decision` reject - `resolve` result not checked. If fails, request stays pending while UI shows "Rejected". Fixed with `log.error`.
+  - Bug #57: `formatter.py` `proof_line()` - `proof_desc` embedded raw in returned string used in HTML messages in 3 flow files. Fixed with `esc()` at source; single fix covers all callers.
+  - Perf: `users_cache.total_users()` and `users_roles.admin_count()` switched to `estimated_document_count()` for O(1) collection count.
+  - `users_roles.ensure_initial_owner()` left as `count_documents({})` (startup critical path, correctness over perf).
+- Final wave audit (session 67): extraction.py, identity.py, checking.py, decorators.py, __main__.py, alive.py, database/ -- all CLEAN. Audit is DRY.
 - Bot restarts cleanly: MongoDB connected, indexes ensured, 75 handlers registered, polling active.
 - `kicking_flow.py` SyntaxError fixed.
 - All inline-string extractions complete across all modules and workflows.

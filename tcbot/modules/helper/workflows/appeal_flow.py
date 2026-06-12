@@ -90,7 +90,7 @@ class BuildAppeal:
         """Multi-line HTML instruction prompt sent when the user opens an appeal."""
         log_handle = self.log_channel.lstrip("@")
         return (
-            f"{self.community_name} Ban Appeal\n\n"
+            f"{esc(self.community_name)} Ban Appeal\n\n"
             "To submit your appeal, reply with a message starting with <code>#appeal</code>, containing:\n"
             "- <b>Log link:</b> (the link to your ban log from the log channel)\n"
             "- <b>Clarification:</b> (your honest explanation of what happened)\n"

@@ -151,7 +151,7 @@ async def all_admins() -> list[AdminDoc]:
 
 async def admin_count() -> int:
     """Return the total count of registered admins."""
-    return await col("tc_admins").count_documents({})
+    return await col("tc_admins").estimated_document_count()
 
 
 # ───────────────── Custom role CRUD (dev / tester) ─────────────── #

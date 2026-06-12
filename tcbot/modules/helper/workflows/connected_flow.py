@@ -315,13 +315,17 @@ class BuildConnection:
                 )
                 return
 
-            await asyncio.gather(
+            join_r, edit_r = await asyncio.gather(
                 self.complete_join(
                     chat.id, chat.title or "", user.id, user.first_name, ctx.bot
                 ),
                 q.edit_message_text(self.connected_message(), reply_markup=None),
                 return_exceptions=True,
             )
+            if isinstance(join_r, BaseException):
+                log.error("complete_join failed for chat %d: %s", chat.id, join_r)
+            if isinstance(edit_r, BaseException):
+                log.debug("connected edit failed for chat %d: %s", chat.id, edit_r)
 
         elif action == self.cancel_callback:
             await asyncio.gather(

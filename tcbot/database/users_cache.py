@@ -145,7 +145,7 @@ async def get_first_name(user_id: int, fallback: str = "") -> str:
 
 async def total_users() -> int:
     """Get the total number of unique users in the cache."""
-    return await _members().count_documents({})
+    return await _members().estimated_document_count()
 
 
 async def all_users(*, sort_by: str = "first_name") -> list[UserDoc]:

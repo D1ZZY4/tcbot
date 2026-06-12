@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-12 (session 66)
+**Last updated:** 2026-06-12 (session 67)
 
 ## Verification baseline
 
@@ -156,6 +156,12 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Session 65 - stats_flow "No staff assigned" | voice | `"- None assigned"` -> `"- No staff assigned"` in staff roster empty state | 2026-06-12 (s65) |
 | Session 65 - mongos.py 5 new indexes | performance | `federated_groups.is_active`, `member_cache.last_updated`, `kicks/mutes/bans.chat_id` indexes added | 2026-06-12 (s65) |
 | Session 65 - broadcasting/admins gather order | performance | Reordered gather calls to prioritize user-facing edits before log sends | 2026-06-12 (s65) |
+
+| Session 67 - Bug #50: appeal_flow instruction_text HTML injection | correctness | `community_name` unescaped in HTML reply; fixed with `esc()` | 2026-06-12 (s67) |
+| Session 67 - Bug #51/52/53/54: gather results not checked (4 locations) | correctness | `connecting.py`, `connected_flow.py`, `unban_flow.py`, `admins.cmd_transfer` - silent failure on log/reply send. Added `log.error`/`log.debug` checks. | 2026-06-12 (s67) |
+| Session 67 - Bug #55/56 (HIGH): promo_decision DB writes not checked | correctness | approve: `add_admin` fail = approved in queue but not promoted. reject: `resolve` fail = request stays pending. Both now log.error. | 2026-06-12 (s67) |
+| Session 67 - Bug #57: proof_line() unescaped HTML | correctness | `proof_desc` embedded raw in HTML messages in 3 flows (kicking, muting, warning). Fixed with `esc()` in `formatter.py` at source. | 2026-06-12 (s67) |
+| Session 67 - DB perf: estimated_document_count | performance | `total_users()` and `admin_count()` switched to `estimated_document_count()`; `ensure_initial_owner` left exact. | 2026-06-12 (s67) |
 
 ## Pending (remaining optional)
 

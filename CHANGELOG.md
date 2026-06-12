@@ -2,6 +2,30 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-12 (session 67)
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** (`instruction_text`): `self.community_name` was embedded raw in an HTML-parsed `reply_text` call without `esc()`. If the admin-configured `COMMUNITY_NAME` contains `<`, `>`, or `&`, the instruction prompt HTML would silently break. Wrapped with `esc(self.community_name)`. (`esc` was already imported; no new dependency.) (Bug #50)
+- **`tcbot/modules/connecting.py`** (`cmd_connect`): The final `asyncio.gather(complete_join, reply_text, return_exceptions=True)` discarded both results. If `complete_join` raised unexpectedly (e.g., unforeseen DB error) or `reply_text` failed (rate limit, bot kicked), the failures were silently swallowed with no log entry. Captured results into named variables and added `log.error` for `complete_join` failure and `log.debug` for reply failure. (Bug #51)
+- **`tcbot/modules/helper/workflows/connected_flow.py`** (`on_join_decision` approve branch): Same silent-discard pattern as connecting.py. `asyncio.gather(complete_join, edit_message_text)` results were not checked. Added `log.error` for `complete_join` failure and `log.debug` for edit failure. (Bug #52)
+- **`tcbot/modules/helper/workflows/unban_flow.py`** (`execute_unban`): The final `asyncio.gather(send_message, reply_text, return_exceptions=True)` discarded both results. A log-channel send failure (e.g., bot kicked) would leave no trace. Captured into `log_r`/`reply_r` and added `log.error`/`log.debug` as appropriate. (Bug #53)
+- **`tcbot/modules/admins.py`** (`cmd_transfer`): Same silent-discard pattern for ownership-transfer log. If `send_message` to the log channel fails, the audit trail is lost with no log entry. Captured results and added `log.error`/`log.debug`. (Bug #54)
+- **`tcbot/modules/admins.py`** (`on_promo_decision` approve branch): `asyncio.gather(add_admin, resolve, return_exceptions=True)` results were not checked. If `add_admin` fails but `resolve` succeeds, the promotion request is marked "approved" in the queue while the user never actually receives the role — leaving the system in an inconsistent state. Captured into `db_add_r`/`db_resolve_r` and added `log.error` for each failure. (Bug #55)
+- **`tcbot/modules/admins.py`** (`on_promo_decision` reject branch): `asyncio.gather(edit_message_text, resolve, ..., return_exceptions=True)` results were not checked. If `resolve` fails, the request remains "pending" in the DB while the UI already shows "Rejected" and the user is notified. Captured into `reject_results` list and added `log.error` for the `resolve` result and `log.debug` for notify failures. (Bug #56)
+- **`tcbot/modules/helper/formatter.py`** (`proof_line`): `proof_desc` (user-provided reason/proof text) was embedded raw into the returned string, which callers then embed directly into HTML `reply_text` / `send_message` calls. If the reason contains `<`, `>`, or `&`, the rendered message HTML would break. Wrapped with `esc()` at the source so all three callers (`kicking_flow`, `warning_flow`, `muting_flow`) are fixed in one change. (Bug #57)
+
+## [Unreleased] - 2026-06-12 (session 66)
+
+### Performance
+
+- **`tcbot/modules/helper/workflows/reason_flow.py`** (`_on_skip_reason`, `_on_cancel`): two remaining sequential `q.answer()` + `q.edit_message_text(...)` pairs inside `try/except` blocks were gathered into single `asyncio.gather(q.answer(), q.edit_message_text(...))` calls. In `_on_cancel`, `_clear_user_data(ctx)` was moved before the gather so cleanup is not gated on the network result. Both callers keep their outer `try/except Exception` handler; the gather intentionally omits `return_exceptions=True` because the surrounding catch is the correct recovery boundary.
+
+### Documentation
+
+- **`CHANGELOG.md`**: Added this session 66 entry.
+- **`.agents/memory/context.md`**, **`.agents/memory/progress.md`**: Updated to session 66 checkpoint; noted audit is dry across multiple waves.
+
 ## [Unreleased] - 2026-06-12 (session 65)
 
 ### Added

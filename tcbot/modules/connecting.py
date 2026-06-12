@@ -157,13 +157,17 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     # * complete_join returns None - reply can be sent in parallel
-    await asyncio.gather(
+    join_result, reply_result = await asyncio.gather(
         connection.complete_join(
             chat.id, chat.title or "", user.id, user.first_name, ctx.bot
         ),
         update.effective_message.reply_text(connection.connected_message()),
         return_exceptions=True,
     )
+    if isinstance(join_result, BaseException):
+        log.error("complete_join failed for chat %d: %s", chat.id, join_result)
+    if isinstance(reply_result, BaseException):
+        log.debug("connected reply failed for chat %d: %s", chat.id, reply_result)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

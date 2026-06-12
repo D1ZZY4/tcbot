@@ -461,7 +461,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         current_owner.first_name,
     )
     # * log and reply in parallel
-    await asyncio.gather(
+    transfer_log_r, transfer_reply_r = await asyncio.gather(
         ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
         msg.reply_text(
             f"Done. Ownership has been transferred to "
@@ -470,6 +470,10 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         ),
         return_exceptions=True,
     )
+    if isinstance(transfer_log_r, BaseException):
+        log.error("Ownership transfer log send failed: %s", transfer_log_r)
+    if isinstance(transfer_reply_r, BaseException):
+        log.debug("Ownership transfer reply failed: %s", transfer_reply_r)
 
 
 # ───────── Command Promotion Requests </tcpromoterequests> ──────── #
@@ -576,12 +580,24 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     lc, lt = cfg.logs
 
     if action == "promo_approve":
-        # * DB writes in parallel
-        await asyncio.gather(
+        # * DB writes in parallel; check results — if add_admin fails the user is
+        # * approved in the queue but never actually gains the role.
+        db_add_r, db_resolve_r = await asyncio.gather(
             db.users_roles.add_admin(target_id, admin.id),
             db.queues_db.resolve(request_id, "approved", admin.id),
             return_exceptions=True,
         )
+        if isinstance(db_add_r, BaseException):
+            log.error(
+                "add_admin failed for %d (request %s): %s",
+                target_id,
+                request_id,
+                db_add_r,
+            )
+        if isinstance(db_resolve_r, BaseException):
+            log.error(
+                "resolve(approved) failed for request %s: %s", request_id, db_resolve_r
+            )
         log_text = parse_logmsg.promote_approved_log(
             target_id,
             target_fname,
@@ -590,7 +606,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             request_id,
         )
         # * notify target, send log, and edit review message all in parallel
-        await asyncio.gather(
+        notify_results = await asyncio.gather(
             q.edit_message_text(
                 (q.message.text or "") + f"\n\n- Approved by {admin.first_name}",
                 reply_markup=None,
@@ -602,6 +618,9 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             return_exceptions=True,
         )
+        for i, r in enumerate(notify_results):
+            if isinstance(r, BaseException):
+                log.debug("promo_approve notify[%d] failed: %s", i, r)
 
     elif action == "promo_reject":
         log_text = parse_logmsg.promote_rejected_log(
@@ -612,7 +631,9 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             request_id,
         )
         # * resolve DB + notify + send log + edit review message all in parallel
-        await asyncio.gather(
+        # * check results — if resolve fails the request stays pending while the UI
+        # * already shows "Rejected", which would leave the queue in an inconsistent state.
+        reject_results = await asyncio.gather(
             q.edit_message_text(
                 (q.message.text or "") + f"\n\n- Rejected by {admin.first_name}",
                 reply_markup=None,
@@ -625,6 +646,15 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             return_exceptions=True,
         )
+        if isinstance(reject_results[1], BaseException):
+            log.error(
+                "resolve(rejected) failed for request %s: %s",
+                request_id,
+                reject_results[1],
+            )
+        for i, r in enumerate(reject_results):
+            if i != 1 and isinstance(r, BaseException):
+                log.debug("promo_reject notify[%d] failed: %s", i, r)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #
