@@ -128,7 +128,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     lc, lt = cfg.logs
 
     # * send log and update status message in parallel
-    await asyncio.gather(
+    edit_r, log_r = await asyncio.gather(
         status.edit_text(
             f"Broadcast sent to {code(str(success))} groups. Failed: {code(str(failed))}.",
             parse_mode="HTML",
@@ -143,6 +143,10 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         ),
         return_exceptions=True,
     )
+    if isinstance(edit_r, BaseException):
+        log.debug("Broadcast status edit failed: %s", edit_r)
+    if isinstance(log_r, BaseException):
+        log.error("Broadcast log send failed: %s", log_r)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

@@ -79,6 +79,10 @@ async def execute_kick(
             ),
             return_exceptions=True,
         )
+        if isinstance(results[1], BaseException):
+            log.error(
+                "log_kick DB write failed for target=%d: %s", target_id, results[1]
+            )
         if isinstance(results[2], BaseException):
             log.error("Kick log send failed: %s", results[2])
     except Exception as exc:

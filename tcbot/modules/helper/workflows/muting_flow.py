@@ -153,6 +153,8 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict) -> None:
         ),
         return_exceptions=True,
     )
+    if isinstance(results2[0], BaseException):
+        log.error("log_mute DB write failed for target=%d: %s", target_id, results2[0])
     if isinstance(results2[1], BaseException):
         log.error("Mute log send failed: %s", results2[1])
     if isinstance(results2[2], BaseException):

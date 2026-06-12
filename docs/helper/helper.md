@@ -65,8 +65,8 @@ Target resolution for moderation commands.
 
 | Export | Purpose |
 |---|---|
-| `ResolvedTarget` | Dataclass-like resolved target with ID, first name, optional username, and raw object. |
-| `extract_target(update, args, bot=None)` | Resolves targets with priority: reply → args (ID/username) → args (partial name search in DB) → text mentions → @mentions. |
+| `ResolvedTarget` | Dataclass: resolved target with `user_id`, `fname`, optional `username`, and raw `user` object. Used internally; not returned by `extract_target`. |
+| `extract_target(update, args, bot=None)` | Resolves targets; returns `tuple[int, str]` (user_id, fname) on success or `tuple[None, None]` on failure. Priority: reply to sender_chat-aware → args (ID/username) → args (partial name search in DB) → text mentions → @mentions. |
 
 **Resolution priority for `extract_target()`:**
 1. **Reply** - Most common use case, checked first
@@ -96,7 +96,7 @@ See [button styles](../button-styles.md) for layout and callback-data convention
 
 ## `identity.py`
 
-`identity.classify(bot, executor_id, target_id, target_fname)` returns an `Identity` dataclass that classifies a moderation target as one of: `self`, `this_bot`, `other_bot`, `telegram`, `founder`, `admin`, `developer`, `tester`, `user`. 
+`identity.classify(bot, executor_id, target_id, target_fname, *, target_is_bot=None)` returns an `Identity` dataclass that classifies a moderation target as one of: `self`, `this_bot`, `other_bot`, `telegram`, `founder`, `admin`, `developer`, `tester`, `user`. Pass `target_is_bot=True` to skip the Telegram bot lookup when the caller already knows the target is a bot.
 
 The `Identity` dataclass now includes:
 - `kind`: The identity type

@@ -173,7 +173,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         send_kwargs: dict = {"parse_mode": "HTML", "message_thread_id": logs_thread}
         if kb:
             send_kwargs["reply_markup"] = kb
-        _, log_result = await asyncio.gather(
+        db_result, log_result = await asyncio.gather(
             db.bans_db.update_ban(
                 ban_id,
                 reason,
@@ -186,6 +186,8 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             bot.send_message(logs_chat, log_text, **send_kwargs),
             return_exceptions=True,
         )
+        if isinstance(db_result, BaseException):
+            log.error("update_ban failed for ban_id=%s: %s", ban_id, db_result)
     else:
         ban_id = db.bans_db.make_ban_id()
         bot_username = bot.username or "TCFBot"
@@ -213,13 +215,15 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         send_kwargs = {"parse_mode": "HTML", "message_thread_id": logs_thread}
         if kb:
             send_kwargs["reply_markup"] = kb
-        _, log_result = await asyncio.gather(
+        db_result, log_result = await asyncio.gather(
             db.bans_db.create_ban(
                 target_id, reason, admin_id, proof_msg_id or 0, 0, ban_id
             ),
             bot.send_message(logs_chat, log_text, **send_kwargs),
             return_exceptions=True,
         )
+        if isinstance(db_result, BaseException):
+            log.error("create_ban failed for ban_id=%s: %s", ban_id, db_result)
 
     # * Extract log_msg_id from parallel result
     log_msg_id: int = 0
@@ -233,11 +237,15 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     # * _groups_task was started at the top of this function and has been
     # * running concurrently through get_active_ban, upload_proof, and log send.
     if log_msg_id:
-        _, groups = await asyncio.gather(
+        set_log_result, groups = await asyncio.gather(
             db.bans_db.set_log_message_id(ban_id, log_msg_id),
             _groups_task,
             return_exceptions=True,
         )
+        if isinstance(set_log_result, BaseException):
+            log.error(
+                "set_log_message_id failed for ban_id=%s: %s", ban_id, set_log_result
+            )
         if isinstance(groups, BaseException):
             log.error("active_groups failed during ban of %d: %s", target_id, groups)
             groups = []
@@ -267,7 +275,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         f"Applied to {len(groups) - failed}/{len(groups)} groups."
     )
     if prompt_msg_id and prompt_chat_id:
-        await asyncio.gather(
+        _, upsert_result = await asyncio.gather(
             bot.edit_message_text(
                 summary,
                 chat_id=prompt_chat_id,
@@ -278,6 +286,8 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             db.users_cache.upsert_user(target_id, None, target_fname),
             return_exceptions=True,
         )
+        if isinstance(upsert_result, BaseException):
+            log.error("upsert_user failed for target=%d: %s", target_id, upsert_result)
     else:
         await db.users_cache.upsert_user(target_id, None, target_fname)
 
@@ -343,15 +353,13 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
     if q is None:
         return ConversationHandler.END
 
-    await q.answer()
     if ctx.user_data is not None:
         for key in _BAN_USER_DATA_KEYS:
             ctx.user_data.pop(key, None)
 
-    try:
-        await q.edit_message_text(_MSG_CANCELLED)
-    except Exception:
-        log.debug("ban cancel edit failed (message may already be gone)")
+    await asyncio.gather(
+        q.answer(), q.edit_message_text(_MSG_CANCELLED), return_exceptions=True
+    )
     return ConversationHandler.END
 
 

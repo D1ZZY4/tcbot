@@ -184,6 +184,13 @@ async def execute_unwarn(
         ),
         return_exceptions=True,
     )
+    if isinstance(results[0], BaseException):
+        log.error(
+            "remove_last_warn DB write failed for target=%d chat=%d: %s",
+            target_id,
+            chat_id,
+            results[0],
+        )
     if isinstance(results[1], BaseException):
         log.error("Unwarn log send failed: %s", results[1])
 

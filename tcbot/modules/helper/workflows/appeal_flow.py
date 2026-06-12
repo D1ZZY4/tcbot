@@ -347,7 +347,10 @@ class BuildAppeal:
                 )
             )
         if db_tasks:
-            await asyncio.gather(*db_tasks, return_exceptions=True)
+            db_results = await asyncio.gather(*db_tasks, return_exceptions=True)
+            for r in db_results:
+                if isinstance(r, BaseException):
+                    log.error("Appeal DB write failed for ban_id=%s: %s", ban_id, r)
 
         # * Edit instruction message + cache user in parallel
         instr_mid = ctx.user_data.get("appeal_instruction_msg_id")
@@ -433,12 +436,19 @@ class BuildAppeal:
 
         if action == "approve":
             # * Deactivate ban + fetch active groups + fetch target name - all in parallel
-            _, groups, target_fname = await asyncio.gather(
+            deactivate_result, groups, target_fname = await asyncio.gather(
                 db.bans_db.deactivate_ban(ban_id),
                 db.groups_db.active_groups(),
                 db.users_cache.get_first_name(target_id, str(target_id)),
                 return_exceptions=True,
             )
+            if isinstance(deactivate_result, BaseException):
+                log.error(
+                    "deactivate_ban failed for ban_id=%s: user may remain marked"
+                    " banned in DB despite being unbanned in groups: %s",
+                    ban_id,
+                    deactivate_result,
+                )
             if isinstance(groups, BaseException):
                 log.error(
                     "active_groups failed during appeal unban of %d: %s",

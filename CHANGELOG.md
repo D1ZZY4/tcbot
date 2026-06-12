@@ -2,6 +2,22 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-12 (session 68)
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/ban_flow.py`** (`_execute_ban` update path): `asyncio.gather(update_ban, send_message, ...)` captured the `update_ban` result as `_` without checking. If `update_ban` raises (e.g., DB timeout), the failure was silently discarded with no log entry. Renamed to `db_result` and added `log.error` on `isinstance(db_result, BaseException)`. (Bug #58)
+- **`tcbot/modules/helper/workflows/ban_flow.py`** (`_execute_ban` create path): Same silent-discard pattern for `create_ban`. The new-ban DB write failure was not logged. Fixed with same pattern as above. (Bug #59)
+- **`tcbot/modules/helper/workflows/ban_flow.py`** (`_execute_ban` set_log_message_id): `asyncio.gather(set_log_message_id, _groups_task, ...)` assigned the `set_log_message_id` result to `_` without checking. If the log-message-ID update fails, subsequent operations cannot locate the log message for editing, yet no error was emitted. Renamed to `set_log_result` and added `log.error`. (Bug #60)
+- **`tcbot/modules/helper/workflows/ban_flow.py`** (`_execute_ban` final gather): `asyncio.gather(edit_message_text, upsert_user, ...)` discarded both results. `edit_message_text` failure is tolerable (prompt already served its purpose), but `upsert_user` failure means the banned user's cache entry is never updated. Now unpacked as `_, upsert_result` with `log.error` on `upsert_user` failure. (Bug #60b)
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** (`_on_message` DB writes): `asyncio.gather(*db_tasks, return_exceptions=True)` for `set_review`/`set_appeal_log_msg` discarded all results. If either DB write fails, the appeal record has no review message link but the system proceeds as though it succeeded. Now captured into `db_results` with a loop that logs any `BaseException`. (Bug #61)
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** (`on_decision` approve): `asyncio.gather(deactivate_ban, active_groups, get_first_name, ...)` discarded `deactivate_ban` result as `_`. If `deactivate_ban` fails but `active_groups` succeeds, the user is removed from all groups while the DB still marks them as banned -- an inconsistent state. Renamed to `deactivate_result` and added `log.error` with an explicit message describing the DB/state mismatch risk. (Bug #62, HIGH)
+
+### Documentation
+
+- **`docs/helper/helper.md`** (`extraction.py` section): Fixed stale return-type description. `extract_target()` was documented as returning `ResolvedTarget` (a dataclass defined in the same file), but the actual implementation returns `tuple[int, str] | tuple[None, None]`. The `ResolvedTarget` dataclass is used internally by resolution helpers, not as the public return type.
+- **`docs/helper/helper.md`** (`identity.py` section): Added missing `target_is_bot: bool | None = None` keyword-only parameter to `identity.classify()` signature and documented its purpose (skip bot-detection lookup when the caller already knows).
+
 ## [Unreleased] - 2026-06-12 (session 67)
 
 ### Fixed
