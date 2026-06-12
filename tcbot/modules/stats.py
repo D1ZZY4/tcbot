@@ -89,7 +89,12 @@ __help_sections__: list[tuple[str, str]] = [
 async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Send the federation overview message."""
     text, kb = await Stats.main()
-    await update.effective_message.reply_text(text, parse_mode="HTML", reply_markup=kb)
+    try:
+        await update.effective_message.reply_text(
+            text, parse_mode="HTML", reply_markup=kb
+        )
+    except Exception as exc:
+        log.debug("cmd_stats reply failed: %s", exc)
 
 
 # ──────────────────────── Callback Helpers ──────────────────────── #
@@ -231,13 +236,16 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     msg_id = ctx.user_data.get(MSG_KEY)
     text, kb = await Stats.search_results(query, results)
     if chat_id is not None and msg_id is not None:
-        await ctx.bot.edit_message_text(
-            text,
-            chat_id=chat_id,
-            message_id=msg_id,
-            parse_mode="HTML",
-            reply_markup=kb,
-        )
+        try:
+            await ctx.bot.edit_message_text(
+                text,
+                chat_id=chat_id,
+                message_id=msg_id,
+                parse_mode="HTML",
+                reply_markup=kb,
+            )
+        except Exception as exc:
+            log.debug("Stats search result edit failed: %s", exc)
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)

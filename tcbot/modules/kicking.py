@@ -109,7 +109,10 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     inline_reason = parse_inline_reason(args, has_explicit_target=has_explicit_target)
 
     if not target_id:
-        await msg.reply_text(replies.ERR_CANT_FIND_USER)
+        try:
+            await msg.reply_text(replies.ERR_CANT_FIND_USER)
+        except Exception as exc:
+            log.debug("cmd_kick no-target reply failed: %s", exc)
         return ConversationHandler.END
 
     # * return_exceptions=True prevents a DB failure from leaving the ConversationHandler open.
@@ -127,7 +130,10 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     executor_role, target_role = role_result
     refusal = identity.refuse_message("kick", ident)
     if refusal is not None:
-        await msg.reply_text(refusal, parse_mode="HTML")
+        try:
+            await msg.reply_text(refusal, parse_mode="HTML")
+        except Exception as exc:
+            log.debug("cmd_kick refusal reply failed: %s", exc)
         return ConversationHandler.END
 
     if executor_role is None:
@@ -156,18 +162,24 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     if inline_reason:
         ctx.user_data["kick_reason"] = inline_reason
-        await msg.reply_text(
-            proof.noted_prompt("kick", inline_reason, target_mention),
-            parse_mode="HTML",
-            reply_markup=proof.keyboard(),
-        )
+        try:
+            await msg.reply_text(
+                proof.noted_prompt("kick", inline_reason, target_mention),
+                parse_mode="HTML",
+                reply_markup=proof.keyboard(),
+            )
+        except Exception as exc:
+            log.debug("cmd_kick proof-prompt reply failed: %s", exc)
         return WAITING_PROOF
 
-    await msg.reply_text(
-        reason.prompt(target_mention, "kick"),
-        parse_mode="HTML",
-        reply_markup=reason.keyboard(),
-    )
+    try:
+        await msg.reply_text(
+            reason.prompt(target_mention, "kick"),
+            parse_mode="HTML",
+            reply_markup=reason.keyboard(),
+        )
+    except Exception as exc:
+        log.debug("cmd_kick reason-prompt reply failed: %s", exc)
     return WAITING_REASON
 
 

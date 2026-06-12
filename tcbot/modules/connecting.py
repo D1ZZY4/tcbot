@@ -109,7 +109,10 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
 
     if chat.type == "private":
-        await update.effective_message.reply_text(replies.ERR_GROUP_ONLY)
+        try:
+            await update.effective_message.reply_text(replies.ERR_GROUP_ONLY)
+        except Exception as exc:
+            log.debug("cmd_tctc group-only reply failed: %s", exc)
         return
 
     # * Telegram lookup + DB reads run in parallel; member check is bounded so a
@@ -124,11 +127,17 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
     if isinstance(member, BaseException):
         log.debug("get_chat_member failed for %d/%d: %s", chat.id, user.id, member)
-        await update.effective_message.reply_text(replies.ERR_ROLE_VERIFY)
+        try:
+            await update.effective_message.reply_text(replies.ERR_ROLE_VERIFY)
+        except Exception as exc:
+            log.debug("cmd_tctc role-verify reply failed: %s", exc)
         return
 
     if member.status not in ("administrator", "creator"):
-        await update.effective_message.reply_text(_ERR_ADMIN_REQUIRED)
+        try:
+            await update.effective_message.reply_text(_ERR_ADMIN_REQUIRED)
+        except Exception as exc:
+            log.debug("cmd_tctc admin-required reply failed: %s", exc)
         return
 
     if isinstance(is_connected, BaseException):
@@ -137,13 +146,19 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         pending = None
 
     if is_connected:
-        await update.effective_message.reply_text(
-            connection.already_connected_message()
-        )
+        try:
+            await update.effective_message.reply_text(
+                connection.already_connected_message()
+            )
+        except Exception as exc:
+            log.debug("cmd_tctc already-connected reply failed: %s", exc)
         return
 
     if pending:
-        await update.effective_message.reply_text(_ERR_PENDING_REQUEST)
+        try:
+            await update.effective_message.reply_text(_ERR_PENDING_REQUEST)
+        except Exception as exc:
+            log.debug("cmd_tctc pending-request reply failed: %s", exc)
         return
 
     try:
@@ -152,11 +167,19 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
     except Exception as exc:
         log.debug("Could not verify bot permissions for %d: %s", chat.id, exc)
-        await update.effective_message.reply_text(replies.ERR_ROLE_VERIFY)
+        try:
+            await update.effective_message.reply_text(replies.ERR_ROLE_VERIFY)
+        except Exception as exc2:
+            log.debug("cmd_tctc perms-verify reply failed: %s", exc2)
         return
 
     if not connection.check_perms(bot_member):
-        await update.effective_message.reply_text(connection.perms_required_message())
+        try:
+            await update.effective_message.reply_text(
+                connection.perms_required_message()
+            )
+        except Exception as exc:
+            log.debug("cmd_tctc perms-required reply failed: %s", exc)
         return
 
     # * complete_join returns None - reply can be sent in parallel

@@ -93,13 +93,19 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     user = update.effective_user
 
     if chat.type == "private":
-        await update.effective_message.reply_text(replies.ERR_GROUP_ONLY)
+        try:
+            await update.effective_message.reply_text(replies.ERR_GROUP_ONLY)
+        except Exception as exc:
+            log.debug("cmd_tcleave group-only reply failed: %s", exc)
         return
 
     if not await db.groups_db.is_connected(chat.id):
-        await update.effective_message.reply_text(
-            f"This group is not connected to {cfg.community_name}."
-        )
+        try:
+            await update.effective_message.reply_text(
+                f"This group is not connected to {cfg.community_name}."
+            )
+        except Exception as exc:
+            log.debug("cmd_tcleave not-connected reply failed: %s", exc)
         return
 
     # * Staff check + group membership check + Telegram lookup run in parallel.
@@ -113,16 +119,22 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     )
     if isinstance(member, BaseException):
         log.debug("Disconnect: get_chat_member failed for %d: %s", chat.id, member)
-        await update.effective_message.reply_text(replies.ERR_ROLE_VERIFY)
+        try:
+            await update.effective_message.reply_text(replies.ERR_ROLE_VERIFY)
+        except Exception as exc:
+            log.debug("cmd_tcleave role-verify reply failed: %s", exc)
         return
     if isinstance(is_tc_staff, BaseException):
         is_tc_staff = False
     is_group_owner = member.status == "creator"
 
     if not is_tc_staff and not is_group_owner:
-        await update.effective_message.reply_text(
-            "Only the group owner or TC admins can disconnect this group."
-        )
+        try:
+            await update.effective_message.reply_text(
+                "Only the group owner or TC admins can disconnect this group."
+            )
+        except Exception as exc:
+            log.debug("cmd_tcleave not-authorized reply failed: %s", exc)
         return
 
     lc, lt = cfg.logs
@@ -162,7 +174,10 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
     args = parse_cmd_args(msg.text)
     if not args or not args[0].lstrip("-").isdigit():
-        await msg.reply_text(_MSG_RMTC_USAGE)
+        try:
+            await msg.reply_text(_MSG_RMTC_USAGE)
+        except Exception as exc:
+            log.debug("cmd_rmtc usage reply failed: %s", exc)
         return
 
     chat_id = int(args[0])
@@ -190,7 +205,10 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             return_exceptions=True,
         )
     else:
-        await msg.reply_text(replies.ERR_GROUP_NOT_FOUND)
+        try:
+            await msg.reply_text(replies.ERR_GROUP_NOT_FOUND)
+        except Exception as exc:
+            log.debug("cmd_rmtc not-found reply failed: %s", exc)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

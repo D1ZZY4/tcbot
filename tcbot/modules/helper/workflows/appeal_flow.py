@@ -190,12 +190,15 @@ class BuildAppeal:
         ctx.user_data["appeal_ban_id"] = ban_id
         ctx.user_data["appeal_log_msg_id"] = ban.get("log_message_id", 0)
 
-        instr = await msg.reply_text(
-            self.instruction_text(),
-            parse_mode="HTML",
-            reply_markup=self.cancel_keyboard(),
-        )
-        ctx.user_data["appeal_instruction_msg_id"] = instr.message_id
+        try:
+            instr = await msg.reply_text(
+                self.instruction_text(),
+                parse_mode="HTML",
+                reply_markup=self.cancel_keyboard(),
+            )
+            ctx.user_data["appeal_instruction_msg_id"] = instr.message_id
+        except Exception as exc:
+            log.debug("Appeal instruction send failed for user %d: %s", uid, exc)
 
         return WAITING_APPEAL
 
@@ -238,7 +241,10 @@ class BuildAppeal:
         """Fallback handler; fires on any unrecognised command during the flow."""
         msg = update.effective_message
         if msg:
-            await msg.reply_text(_MSG_SESSION_ENDED)
+            try:
+                await msg.reply_text(_MSG_SESSION_ENDED)
+            except Exception as exc:
+                log.debug("Appeal _end reply failed: %s", exc)
         return ConversationHandler.END
 
     async def _on_timeout(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -252,7 +258,10 @@ class BuildAppeal:
                 ctx.user_data.pop(key, None)
 
         if update.effective_message:
-            await update.effective_message.reply_text(_MSG_TIMEOUT)
+            try:
+                await update.effective_message.reply_text(_MSG_TIMEOUT)
+            except Exception as exc:
+                log.debug("Appeal _on_timeout reply failed: %s", exc)
         return ConversationHandler.END
 
     async def _on_message(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -274,11 +283,17 @@ class BuildAppeal:
         log_msg_id = ctx.user_data.get("appeal_log_msg_id", 0)
 
         if not ban_id:
-            await msg.reply_text(_ERR_SESSION_EXPIRED)
+            try:
+                await msg.reply_text(_ERR_SESSION_EXPIRED)
+            except Exception as exc:
+                log.debug("Appeal _on_message session-expired reply failed: %s", exc)
             return ConversationHandler.END
 
         if log_msg_id and not text_references_log_message(text, log_msg_id):
-            await msg.reply_text(_ERR_INVALID_LOG)
+            try:
+                await msg.reply_text(_ERR_INVALID_LOG)
+            except Exception as exc:
+                log.debug("Appeal _on_message invalid-log reply failed: %s", exc)
             return WAITING_APPEAL
 
         user = update.effective_user
@@ -407,20 +422,32 @@ class BuildAppeal:
             return_exceptions=True,
         )
         if isinstance(is_staff, BaseException) or not is_staff:
-            await q.edit_message_text(_ERR_NOT_AUTHORIZED)
+            try:
+                await q.edit_message_text(_ERR_NOT_AUTHORIZED)
+            except Exception as exc:
+                log.debug("Appeal not-authorized edit failed: %s", exc)
             return
         try:
             ban = await db.bans_db.get_ban(ban_id)
         except Exception:
             log.exception("get_ban failed in appeal review for %s", ban_id)
-            await q.edit_message_text(_ERR_BAN_NOT_FOUND, reply_markup=None)
+            try:
+                await q.edit_message_text(_ERR_BAN_NOT_FOUND, reply_markup=None)
+            except Exception as exc:
+                log.debug("Appeal ban-not-found edit failed: %s", exc)
             return
         if not ban:
-            await q.edit_message_text(_ERR_BAN_NOT_FOUND, reply_markup=None)
+            try:
+                await q.edit_message_text(_ERR_BAN_NOT_FOUND, reply_markup=None)
+            except Exception as exc:
+                log.debug("Appeal ban-not-found (empty) edit failed: %s", exc)
             return
 
         if not ban.get("is_active"):
-            await q.edit_message_text(_ERR_ALREADY_RESOLVED, reply_markup=None)
+            try:
+                await q.edit_message_text(_ERR_ALREADY_RESOLVED, reply_markup=None)
+            except Exception as exc:
+                log.debug("Appeal already-resolved edit failed: %s", exc)
             return
 
         review_ts = ban.get("review_timestamp")
@@ -429,7 +456,10 @@ class BuildAppeal:
         ):
             # * q.answer() was already called in the gather above; use
             # * edit_message_text to surface the lock message instead.
-            await q.edit_message_text(_ERR_REVIEW_LOCKED)
+            try:
+                await q.edit_message_text(_ERR_REVIEW_LOCKED)
+            except Exception as exc:
+                log.debug("Appeal review-locked edit failed: %s", exc)
             return
 
         target_id = ban["banned_user_id"]

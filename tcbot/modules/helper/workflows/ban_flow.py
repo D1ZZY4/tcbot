@@ -343,7 +343,10 @@ async def _flush_album(mgid: str, bot: Bot) -> None:
 async def on_proof_unexpected(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Reject unexpected message types during proof collection."""
     if update.effective_message:
-        await update.effective_message.reply_text(_MSG_PROOF_EXPECTED)
+        try:
+            await update.effective_message.reply_text(_MSG_PROOF_EXPECTED)
+        except Exception as exc:
+            log.debug("Ban proof-unexpected reply failed: %s", exc)
     return WAITING_PROOF
 
 
@@ -370,7 +373,10 @@ async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
             ctx.user_data.pop(key, None)
 
     if update.effective_message:
-        await update.effective_message.reply_text(_MSG_TIMEOUT)
+        try:
+            await update.effective_message.reply_text(_MSG_TIMEOUT)
+        except Exception as exc:
+            log.debug("Ban proof-timeout reply failed: %s", exc)
     return ConversationHandler.END
 
 

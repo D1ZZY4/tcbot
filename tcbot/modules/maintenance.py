@@ -137,12 +137,19 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
     groups = await db.groups_db.active_groups()
     if not groups:
-        await update.effective_message.reply_text(replies.ERR_NO_CONNECTED_GROUPS)
+        try:
+            await update.effective_message.reply_text(replies.ERR_NO_CONNECTED_GROUPS)
+        except Exception as exc:
+            log.debug("leaveall no-groups reply failed: %s", exc)
         return
 
-    status = await update.effective_message.reply_text(
-        f"Leaving {len(groups)} groups..."
-    )
+    try:
+        status = await update.effective_message.reply_text(
+            f"Leaving {len(groups)} groups..."
+        )
+    except Exception as exc:
+        log.debug("leaveall status reply failed: %s", exc)
+        status = None
     lc, lt = cfg.logs
 
     # * All groups processed concurrently - no sequential sleep between them
@@ -158,13 +165,14 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
     failed = len(groups) - left
 
-    try:
-        await status.edit_text(
-            f"Left {code(str(left))} groups. Failed: {code(str(failed))}.",
-            parse_mode="HTML",
-        )
-    except Exception:
-        log.exception("Leaveall status edit failed")
+    if status is not None:
+        try:
+            await status.edit_text(
+                f"Left {code(str(left))} groups. Failed: {code(str(failed))}.",
+                parse_mode="HTML",
+            )
+        except Exception:
+            log.exception("Leaveall status edit failed")
 
 
 # ─────────────────── Command CleanUp </cleanup> ─────────────────── #
@@ -196,10 +204,13 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             return_exceptions=True,
         )
 
-    await update.effective_message.reply_text(
-        f"Cleaned up {code(str(len(to_remove)))} inaccessible group(s).",
-        parse_mode="HTML",
-    )
+    try:
+        await update.effective_message.reply_text(
+            f"Cleaned up {code(str(len(to_remove)))} inaccessible group(s).",
+            parse_mode="HTML",
+        )
+    except Exception as exc:
+        log.debug("cleanup reply failed: %s", exc)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

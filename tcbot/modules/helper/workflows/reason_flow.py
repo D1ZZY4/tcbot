@@ -150,11 +150,14 @@ def build_modaction_conv(
             except Exception:
                 log.exception("%s prompt edit failed (reason step)", action)
         else:
-            await update.effective_message.reply_text(
-                prompt_txt,
-                parse_mode="HTML",
-                reply_markup=proof.keyboard(),
-            )
+            try:
+                await update.effective_message.reply_text(
+                    prompt_txt,
+                    parse_mode="HTML",
+                    reply_markup=proof.keyboard(),
+                )
+            except Exception as exc:
+                log.debug("%s reason-text fallback reply failed: %s", action, exc)
         return WAITING_PROOF
 
     async def _on_skip_reason(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -250,17 +253,24 @@ def build_modaction_conv(
 
     async def _end_conv(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         _clear_user_data(ctx)
-        await update.effective_message.reply_text(
-            f"{action.capitalize()} operation cancelled."
-        )
+        if update.effective_message:
+            try:
+                await update.effective_message.reply_text(
+                    f"{action.capitalize()} operation cancelled."
+                )
+            except Exception as exc:
+                log.debug("%s cancel-via-command reply failed: %s", action, exc)
         return ConversationHandler.END
 
     async def _on_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         _clear_user_data(ctx)
         if update.effective_message:
-            await update.effective_message.reply_text(
-                f"{action.capitalize()} operation timed out. No action was taken."
-            )
+            try:
+                await update.effective_message.reply_text(
+                    f"{action.capitalize()} operation timed out. No action was taken."
+                )
+            except Exception as exc:
+                log.debug("%s timeout reply failed: %s", action, exc)
         return ConversationHandler.END
 
     # ── Build states ─────────────────────────────────────────────── #

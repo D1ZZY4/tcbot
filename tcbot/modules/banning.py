@@ -109,11 +109,17 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ban_reason = " ".join(raw_args[1:] if has_explicit_target else raw_args).strip()
 
     if not target_id:
-        await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
+        try:
+            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
+        except Exception as exc:
+            log.debug("cmd_ban_start no-target reply failed: %s", exc)
         return ConversationHandler.END
 
     if not ban_reason:
-        await msg.reply_text(_ERR_REASON_REQUIRED)
+        try:
+            await msg.reply_text(_ERR_REASON_REQUIRED)
+        except Exception as exc:
+            log.debug("cmd_ban_start no-reason reply failed: %s", exc)
         return ConversationHandler.END
 
     # * Identity check + role lookup happen in parallel; both depend only on
@@ -133,7 +139,10 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     executor_role, target_role = role_result
     refusal = identity.refuse_message("ban", ident)
     if refusal is not None:
-        await msg.reply_text(refusal, parse_mode="HTML")
+        try:
+            await msg.reply_text(refusal, parse_mode="HTML")
+        except Exception as exc:
+            log.debug("cmd_ban_start refusal reply failed: %s", exc)
         return ConversationHandler.END
 
     if executor_role is None:
@@ -157,13 +166,16 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ctx.user_data["ban_admin_fname"] = admin.first_name
 
     target_mention = mention(target_id, target_fname or str(target_id))
-    prompt = await msg.reply_text(
-        proof.noted_prompt("ban", ban_reason, target_mention),
-        parse_mode="HTML",
-        reply_markup=proof.keyboard(),
-    )
-    ctx.user_data["ban_prompt_msg_id"] = prompt.message_id
-    ctx.user_data["ban_prompt_chat_id"] = msg.chat.id
+    try:
+        prompt = await msg.reply_text(
+            proof.noted_prompt("ban", ban_reason, target_mention),
+            parse_mode="HTML",
+            reply_markup=proof.keyboard(),
+        )
+        ctx.user_data["ban_prompt_msg_id"] = prompt.message_id
+        ctx.user_data["ban_prompt_chat_id"] = msg.chat.id
+    except Exception as exc:
+        log.debug("cmd_ban_start proof-prompt reply failed: %s", exc)
 
     return WAITING_PROOF
 

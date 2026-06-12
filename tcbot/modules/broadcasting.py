@@ -90,17 +90,27 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     has_reply = bool(msg.reply_to_message)
     if not broadcast_text and not has_reply:
-        await msg.reply_text(
-            "Please provide a message to broadcast, or reply to a message."
-        )
+        try:
+            await msg.reply_text(
+                "Please provide a message to broadcast, or reply to a message."
+            )
+        except Exception as exc:
+            log.debug("cmd_broadcast no-content reply failed: %s", exc)
         return
 
     groups = await db.groups_db.active_groups()
     if not groups:
-        await msg.reply_text(replies.ERR_NO_CONNECTED_GROUPS)
+        try:
+            await msg.reply_text(replies.ERR_NO_CONNECTED_GROUPS)
+        except Exception as exc:
+            log.debug("cmd_broadcast no-groups reply failed: %s", exc)
         return
 
-    status = await msg.reply_text(f"Broadcasting to {len(groups)} group(s)...")
+    status = None
+    try:
+        status = await msg.reply_text(f"Broadcasting to {len(groups)} group(s)...")
+    except Exception as exc:
+        log.debug("cmd_broadcast status reply failed: %s", exc)
 
     # * Build per-group send coroutines, then fan out with semaphore limiting
     async def _send_one(grp: dict) -> None:
@@ -128,11 +138,16 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     lc, lt = cfg.logs
 
     # * send log and update status message in parallel
-    edit_r, log_r = await asyncio.gather(
+    edit_coro = (
         status.edit_text(
             f"Broadcast sent to {code(str(success))} groups. Failed: {code(str(failed))}.",
             parse_mode="HTML",
-        ),
+        )
+        if status is not None
+        else asyncio.sleep(0)
+    )
+    edit_r, log_r = await asyncio.gather(
+        edit_coro,
         ctx.bot.send_message(
             lc,
             parse_logmsg.broadcast_log(

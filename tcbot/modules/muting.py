@@ -127,7 +127,10 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     remaining_args = list(raw_args[1:] if has_explicit_target else raw_args)
 
     if not target_id:
-        await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
+        try:
+            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
+        except Exception as exc:
+            log.debug("cmd_mute no-target reply failed: %s", exc)
         return ConversationHandler.END
 
     # * return_exceptions=True prevents a DB failure from leaving the ConversationHandler open.
@@ -145,7 +148,10 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     executor_role, target_role = role_result
     refusal = identity.refuse_message("mute", ident)
     if refusal is not None:
-        await msg.reply_text(refusal, parse_mode="HTML")
+        try:
+            await msg.reply_text(refusal, parse_mode="HTML")
+        except Exception as exc:
+            log.debug("cmd_mute refusal reply failed: %s", exc)
         return ConversationHandler.END
 
     if executor_role is None:
@@ -187,22 +193,28 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     if inline_reason:
         ctx.user_data["mute_reason"] = inline_reason
-        prompt = await msg.reply_text(
-            proof.noted_prompt(
-                "mute", inline_reason, target_mention, extra_info=extra_info
-            ),
-            parse_mode="HTML",
-            reply_markup=proof.keyboard(),
-        )
-        ctx.user_data["mute_prompt_id"] = prompt.message_id
+        try:
+            prompt = await msg.reply_text(
+                proof.noted_prompt(
+                    "mute", inline_reason, target_mention, extra_info=extra_info
+                ),
+                parse_mode="HTML",
+                reply_markup=proof.keyboard(),
+            )
+            ctx.user_data["mute_prompt_id"] = prompt.message_id
+        except Exception as exc:
+            log.debug("cmd_mute proof-prompt send failed: %s", exc)
         return WAITING_PROOF
 
-    prompt = await msg.reply_text(
-        reason.prompt(target_mention, "mute", extra_info=extra_info),
-        parse_mode="HTML",
-        reply_markup=reason.keyboard(),
-    )
-    ctx.user_data["mute_prompt_id"] = prompt.message_id
+    try:
+        prompt = await msg.reply_text(
+            reason.prompt(target_mention, "mute", extra_info=extra_info),
+            parse_mode="HTML",
+            reply_markup=reason.keyboard(),
+        )
+        ctx.user_data["mute_prompt_id"] = prompt.message_id
+    except Exception as exc:
+        log.debug("cmd_mute reason-prompt send failed: %s", exc)
     return WAITING_REASON
 
 
@@ -223,18 +235,27 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        await msg.reply_text(replies.ERR_NO_TARGET)
+        try:
+            await msg.reply_text(replies.ERR_NO_TARGET)
+        except Exception as exc:
+            log.debug("cmd_unmute no-target reply failed: %s", exc)
         return
 
     ident = await identity.classify(ctx.bot, admin.id, target_id, target_name)
     refusal = identity.refuse_message("unmute", ident)
     if refusal is not None:
-        await msg.reply_text(refusal, parse_mode="HTML")
+        try:
+            await msg.reply_text(refusal, parse_mode="HTML")
+        except Exception as exc:
+            log.debug("cmd_unmute refusal reply failed: %s", exc)
         return
 
     notice = identity.staff_notice("unmute", ident, cfg.community_name)
     if notice is not None:
-        await msg.reply_text(notice, parse_mode="HTML")
+        try:
+            await msg.reply_text(notice, parse_mode="HTML")
+        except Exception as exc:
+            log.debug("cmd_unmute notice reply failed: %s", exc)
 
     await execute_unmute(update, ctx, target_id, target_name or str(target_id))
 

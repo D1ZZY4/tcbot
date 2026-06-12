@@ -5,13 +5,14 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-12 (session 80)
+**Last updated:** 2026-06-12 (session 82)
 
 ## What is done
 
 - Python 3.12, uv, python-telegram-bot (latest), Motor/MongoDB + Redis (optional L2) + APScheduler 4 stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
 - `uv run ruff format .` and `uv run ruff check .` both clean (72 files).
+- Session 82 (2026-06-12): COMPREHENSIVE UNGUARDED TELEGRAM API CALL AUDIT COMPLETE - all tcbot/modules/ files audited. Bugs #136-165 fixed across 11 files: appeal_flow.py (3), decorators.py (8), muting.py (7), start.py (5), help.py (3), kicking.py (4), admins.py (22), banning.py (4), broadcasting.py (4), connecting.py (6), disconnecting.py (6), connected_flow.py (2). All CRITICAL assignment patterns fixed (instr=await, prompt=await, status=await where result is used afterward). ALL tcbot/modules/ files now hardened.
 - Session 80 (2026-06-12): Comprehensive audit wave - em-dash fix, Mermaid accuracy, unguarded await hardening.
   - Bug #109: `scheduler.py` 3 em-dash in docstring/comments replaced.
   - Bug #110: `appeal_flow.py` _ERR_REVIEW_LOCKED hardcoded "12" -> `_LOCK_HOURS` constant.

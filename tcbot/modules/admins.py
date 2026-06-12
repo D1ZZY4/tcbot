@@ -157,16 +157,22 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     executor_role = None if isinstance(_exec_r, BaseException) else _exec_r
     if isinstance(_target_r, BaseException):
         log.error("extract_target failed during promote: %s", _target_r)
-        await msg.reply_text(replies.ERR_NO_TARGET)
+        try:
+            await msg.reply_text(replies.ERR_NO_TARGET)
+        except Exception as exc:
+            log.debug("cmd_promote no-target reply failed: %s", exc)
         return
     target_id, target_fname = _target_r
     remaining_args = args[1:] if has_explicit_target else args
     role_arg = remaining_args[0].lower() if remaining_args else ""
 
     if not target_id:
-        await msg.reply_text(
-            "Specify a target - reply to a message, or provide a user ID / @username."
-        )
+        try:
+            await msg.reply_text(
+                "Specify a target - reply to a message, or provide a user ID / @username."
+            )
+        except Exception as exc:
+            log.debug("cmd_promote no-target-id reply failed: %s", exc)
         return
 
     # * identity classify and current-role fetch are independent reads; run in parallel.
@@ -181,13 +187,19 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             target_id,
             ident,
         )
-        await msg.reply_text("Classification check failed - please try again.")
+        try:
+            await msg.reply_text("Classification check failed - please try again.")
+        except Exception as exc:
+            log.debug("cmd_promote classify-failed reply failed: %s", exc)
         return
     if isinstance(current_role, BaseException):
         current_role = None
     refusal = identity.refuse_message("promote", ident)
     if refusal is not None:
-        await msg.reply_text(refusal, parse_mode="HTML")
+        try:
+            await msg.reply_text(refusal, parse_mode="HTML")
+        except Exception as exc:
+            log.debug("cmd_promote refusal reply failed: %s", exc)
         return
 
     role = ROLE_ALIASES.get(role_arg)
@@ -203,19 +215,28 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             current_role,
             role,
         )
-        await msg.reply_text(text, parse_mode="HTML")
+        try:
+            await msg.reply_text(text, parse_mode="HTML")
+        except Exception as exc:
+            log.debug("cmd_promote result reply failed: %s", exc)
         return
 
     # * No role arg - show selection buttons
     available = Promote.available_roles_for(executor_role)
     if not available:
-        await msg.reply_text(_ERR_NO_ASSIGN_PERMS)
+        try:
+            await msg.reply_text(_ERR_NO_ASSIGN_PERMS)
+        except Exception as exc:
+            log.debug("cmd_promote no-perms reply failed: %s", exc)
         return
-    await msg.reply_text(
-        f"Choose a role to assign to {mention(target_id, target_fname or str(target_id), ident.username)}:",
-        parse_mode="HTML",
-        reply_markup=keyboards.promote_role_kb(target_id, available),
-    )
+    try:
+        await msg.reply_text(
+            f"Choose a role to assign to {mention(target_id, target_fname or str(target_id), ident.username)}:",
+            parse_mode="HTML",
+            reply_markup=keyboards.promote_role_kb(target_id, available),
+        )
+    except Exception as exc:
+        log.debug("cmd_promote role-picker reply failed: %s", exc)
 
 
 # ──────────────────────── Callback Handlers ─────────────────────── #
@@ -250,11 +271,17 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         "founder",
         "admin",
     ):
-        await q.edit_message_text(replies.ERR_PERM_EXPIRED, reply_markup=None)
+        try:
+            await q.edit_message_text(replies.ERR_PERM_EXPIRED, reply_markup=None)
+        except Exception as exc:
+            log.debug("admins promote perm-expired edit failed: %s", exc)
         return
 
     if role not in ("admin", "developer", "tester"):
-        await q.edit_message_text(replies.ERR_UNKNOWN_ROLE, reply_markup=None)
+        try:
+            await q.edit_message_text(replies.ERR_UNKNOWN_ROLE, reply_markup=None)
+        except Exception as exc:
+            log.debug("admins promote unknown-role edit failed: %s", exc)
         return
     target_fname, current_role = await asyncio.gather(
         db.users_cache.get_first_name(target_id, str(target_id)),
@@ -276,7 +303,10 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         current_role,
         role,
     )
-    await q.edit_message_text(text, parse_mode="HTML", reply_markup=None)
+    try:
+        await q.edit_message_text(text, parse_mode="HTML", reply_markup=None)
+    except Exception as exc:
+        log.debug("on_promote_role_btn result edit failed: %s", exc)
 
 
 @decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
@@ -321,14 +351,20 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     executor_role = None if isinstance(_exec_r, BaseException) else _exec_r
     if isinstance(_target_r, BaseException):
         log.error("extract_target failed during demote: %s", _target_r)
-        await msg.reply_text(replies.ERR_NO_TARGET)
+        try:
+            await msg.reply_text(replies.ERR_NO_TARGET)
+        except Exception as exc:
+            log.debug("cmd_demote no-target reply failed: %s", exc)
         return
     target_id, target_fname = _target_r
 
     if not target_id:
-        await msg.reply_text(
-            "Specify a target - reply to a message, or provide a user ID / @username."
-        )
+        try:
+            await msg.reply_text(
+                "Specify a target - reply to a message, or provide a user ID / @username."
+            )
+        except Exception as exc:
+            log.debug("cmd_demote no-target-id reply failed: %s", exc)
         return
 
     # * identity classify and target-role fetch are independent reads; run in parallel.
@@ -341,30 +377,45 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.error(
             "identity.classify failed during demote for target=%d: %s", target_id, ident
         )
-        await msg.reply_text("Classification check failed - please try again.")
+        try:
+            await msg.reply_text("Classification check failed - please try again.")
+        except Exception as exc:
+            log.debug("cmd_demote classify-failed reply failed: %s", exc)
         return
     if isinstance(target_role, BaseException):
         target_role = None
     refusal = identity.refuse_message("demote", ident)
     if refusal is not None:
-        await msg.reply_text(refusal, parse_mode="HTML")
+        try:
+            await msg.reply_text(refusal, parse_mode="HTML")
+        except Exception as exc:
+            log.debug("cmd_demote refusal reply failed: %s", exc)
         return
 
     if not target_role:
-        await msg.reply_text(_ERR_NO_REMOVABLE_ROLE)
+        try:
+            await msg.reply_text(_ERR_NO_REMOVABLE_ROLE)
+        except Exception as exc:
+            log.debug("cmd_demote no-role reply failed: %s", exc)
         return
 
     if target_role == "admin" and executor_role != "founder":
-        await msg.reply_text(_ERR_FOUNDER_DEMOTE_ONLY)
+        try:
+            await msg.reply_text(_ERR_FOUNDER_DEMOTE_ONLY)
+        except Exception as exc:
+            log.debug("cmd_demote founder-only reply failed: %s", exc)
         return
 
     role_label = db.users_roles.ROLE_LABEL.get(target_role, target_role)
-    await msg.reply_text(
-        f"{mention(target_id, target_fname or str(target_id), ident.username)} is currently a "
-        f"<b>{esc(role_label)}</b>.\nConfirm to remove their role.",
-        parse_mode="HTML",
-        reply_markup=keyboards.demote_confirm_kb(target_id),
-    )
+    try:
+        await msg.reply_text(
+            f"{mention(target_id, target_fname or str(target_id), ident.username)} is currently a "
+            f"<b>{esc(role_label)}</b>.\nConfirm to remove their role.",
+            parse_mode="HTML",
+            reply_markup=keyboards.demote_confirm_kb(target_id),
+        )
+    except Exception as exc:
+        log.debug("cmd_demote confirm-prompt reply failed: %s", exc)
 
 
 # ──────────────────────── Callback Handlers ─────────────────────── #
@@ -393,7 +444,10 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         "founder",
         "admin",
     ):
-        await q.edit_message_text(replies.ERR_PERM_EXPIRED, reply_markup=None)
+        try:
+            await q.edit_message_text(replies.ERR_PERM_EXPIRED, reply_markup=None)
+        except Exception as exc:
+            log.debug("on_demote_confirm perm-expired edit failed: %s", exc)
         return
 
     target_role, mention_data = await asyncio.gather(
@@ -407,11 +461,17 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         target_fname, target_uname = mention_data
 
     if not target_role or target_role == "founder":
-        await q.edit_message_text(_ERR_NO_LONGER_REMOVABLE, reply_markup=None)
+        try:
+            await q.edit_message_text(_ERR_NO_LONGER_REMOVABLE, reply_markup=None)
+        except Exception as exc:
+            log.debug("on_demote_confirm no-longer-removable edit failed: %s", exc)
         return
 
     if target_role == "admin" and executor_role != "founder":
-        await q.edit_message_text(_ERR_FOUNDER_DEMOTE_ONLY, reply_markup=None)
+        try:
+            await q.edit_message_text(_ERR_FOUNDER_DEMOTE_ONLY, reply_markup=None)
+        except Exception as exc:
+            log.debug("on_demote_confirm founder-only edit failed: %s", exc)
         return
 
     removed = await Demote.execute(
@@ -424,16 +484,22 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         trigger=None,
     )
     if not removed:
-        await q.edit_message_text(_ERR_ROLE_CLEAR_FAILED, reply_markup=None)
+        try:
+            await q.edit_message_text(_ERR_ROLE_CLEAR_FAILED, reply_markup=None)
+        except Exception as exc:
+            log.debug("on_demote_confirm role-clear-failed edit failed: %s", exc)
         return
 
     role_label = db.users_roles.ROLE_LABEL.get(target_role, target_role)
-    await q.edit_message_text(
-        f"Done. {mention(target_id, target_fname, target_uname)} - {code(str(target_id))} "
-        f"has been removed from {esc(role_label)}.",
-        parse_mode="HTML",
-        reply_markup=None,
-    )
+    try:
+        await q.edit_message_text(
+            f"Done. {mention(target_id, target_fname, target_uname)} - {code(str(target_id))} "
+            f"has been removed from {esc(role_label)}.",
+            parse_mode="HTML",
+            reply_markup=None,
+        )
+    except Exception as exc:
+        log.debug("on_demote_confirm success edit failed: %s", exc)
 
 
 @decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
@@ -471,15 +537,21 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
     target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        await msg.reply_text(
-            "Specify the new owner - reply to a message, or provide a user ID / @username."
-        )
+        try:
+            await msg.reply_text(
+                "Specify the new owner - reply to a message, or provide a user ID / @username."
+            )
+        except Exception as exc:
+            log.debug("cmd_transfer no-target reply failed: %s", exc)
         return
 
     ident = await identity.classify(ctx.bot, current_owner.id, target_id, target_fname)
     refusal = identity.refuse_message("transfer", ident)
     if refusal is not None:
-        await msg.reply_text(refusal, parse_mode="HTML")
+        try:
+            await msg.reply_text(refusal, parse_mode="HTML")
+        except Exception as exc:
+            log.debug("cmd_transfer refusal reply failed: %s", exc)
         return
 
     target_uname = ident.username
@@ -543,19 +615,28 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         existing = None
     if existing_role:
         label = db.users_roles.ROLE_LABEL.get(existing_role, existing_role.capitalize())
-        await msg.reply_text(f"You're already a {label} - no request needed.")
+        try:
+            await msg.reply_text(f"You're already a {label} - no request needed.")
+        except Exception as exc:
+            log.debug("cmd_promote_request already-role reply failed: %s", exc)
         return
 
     if existing:
-        await msg.reply_text(
-            f"You already have a pending request (ID: <code>{existing['request_id']}</code>).",
-            parse_mode="HTML",
-        )
+        try:
+            await msg.reply_text(
+                f"You already have a pending request (ID: <code>{existing['request_id']}</code>).",
+                parse_mode="HTML",
+            )
+        except Exception as exc:
+            log.debug("cmd_promote_request existing-request reply failed: %s", exc)
         return
     _, reply = await Promote.request_admin(
         ctx.bot, user.id, user.id, user.first_name, user.username
     )
-    await msg.reply_text(reply, parse_mode="HTML")
+    try:
+        await msg.reply_text(reply, parse_mode="HTML")
+    except Exception as exc:
+        log.debug("cmd_promote_request result reply failed: %s", exc)
 
 
 # ──────── Command Promotion Requests List </tcpromotelist> ──────── #
@@ -568,7 +649,10 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     """Reply with a formatted list of all pending promotion requests."""
     pending = await db.queues_db.all_pending()
     if not pending:
-        await update.effective_message.reply_text(_MSG_NO_PENDING)
+        try:
+            await update.effective_message.reply_text(_MSG_NO_PENDING)
+        except Exception as exc:
+            log.debug("cmd_promote_list no-pending reply failed: %s", exc)
         return
     lines = [f"<b>Pending Promotion Requests ({len(pending)})</b>\n"]
     for req in pending:
@@ -577,7 +661,10 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             f"- {mention(req['target_id'], req['first_name'], req.get('username'))} "
             f"{code(str(req['target_id']))} | {esc(uname)} | ID: <code>{req['request_id']}</code>"
         )
-    await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
+    try:
+        await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
+    except Exception as exc:
+        log.debug("cmd_promote_list result reply failed: %s", exc)
 
 
 # ──────────────────────── Callback Handlers ─────────────────────── #
@@ -603,16 +690,25 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         return_exceptions=True,
     )
     if isinstance(is_owner, BaseException) or not is_owner:
-        await q.edit_message_text(replies.PERM_FOUNDER_ONLY)
+        try:
+            await q.edit_message_text(replies.PERM_FOUNDER_ONLY)
+        except Exception as exc:
+            log.debug("on_promo_decision perm-denied edit failed: %s", exc)
         return
     try:
         req = await db.queues_db.get_request_by_id(request_id)
     except Exception:
         log.exception("get_request_by_id failed for %s", request_id)
-        await q.edit_message_text(_ERR_REQUEST_NOT_FOUND)
+        try:
+            await q.edit_message_text(_ERR_REQUEST_NOT_FOUND)
+        except Exception as exc:
+            log.debug("on_promo_decision db-error edit failed: %s", exc)
         return
     if not req:
-        await q.edit_message_text(_ERR_REQUEST_NOT_FOUND)
+        try:
+            await q.edit_message_text(_ERR_REQUEST_NOT_FOUND)
+        except Exception as exc:
+            log.debug("on_promo_decision not-found edit failed: %s", exc)
         return
     target_id = req["target_id"]
     target_fname = req.get("first_name", str(target_id))

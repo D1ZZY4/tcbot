@@ -258,11 +258,14 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 kb = keyboards.module_help_kb(section_btns, back_callback="helpc_main")
             else:
                 kb = keyboards.back_to_help_cmd_kb()
-            await update.effective_message.reply_text(
-                _module_text(name, overview),
-                parse_mode="HTML",
-                reply_markup=kb,
-            )
+            try:
+                await update.effective_message.reply_text(
+                    _module_text(name, overview),
+                    parse_mode="HTML",
+                    reply_markup=kb,
+                )
+            except Exception as exc:
+                log.debug("cmd_help module reply failed: %s", exc)
             return
 
         candidates = sorted(
@@ -271,18 +274,24 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )[:3]
         suggestion = ", ".join(f"<code>/help {c}</code>" for c in candidates if c)
         hint = f"\n\nDid you mean: {suggestion}?" if suggestion else ""
+        try:
+            await update.effective_message.reply_text(
+                f"Module <b>{esc(query)}</b> not found.{hint}",
+                parse_mode="HTML",
+                reply_markup=keyboards.help_topics_kb(HELP_TOPICS_CMD),
+            )
+        except Exception as exc:
+            log.debug("cmd_help not-found reply failed: %s", exc)
+        return
+
+    try:
         await update.effective_message.reply_text(
-            f"Module <b>{esc(query)}</b> not found.{hint}",
+            _HELP_INDEX_TEXT.format(botname=botname),
             parse_mode="HTML",
             reply_markup=keyboards.help_topics_kb(HELP_TOPICS_CMD),
         )
-        return
-
-    await update.effective_message.reply_text(
-        _HELP_INDEX_TEXT.format(botname=botname),
-        parse_mode="HTML",
-        reply_markup=keyboards.help_topics_kb(HELP_TOPICS_CMD),
-    )
+    except Exception as exc:
+        log.debug("cmd_help index reply failed: %s", exc)
 
 
 # ──────────────────────── Callback Handlers ─────────────────────── #

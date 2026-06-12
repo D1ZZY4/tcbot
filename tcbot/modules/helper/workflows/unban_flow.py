@@ -43,21 +43,31 @@ async def execute_unban(
 
     ban = await db.bans_db.get_active_ban(target_id)
     if not ban:
-        await msg.reply_text(
-            f"{mention(target_id, target_fname)} - {code(str(target_id))} "
-            f"has no active federation ban.",
-            parse_mode="HTML",
-        )
+        try:
+            await msg.reply_text(
+                f"{mention(target_id, target_fname)} - {code(str(target_id))} "
+                f"has no active federation ban.",
+                parse_mode="HTML",
+            )
+        except Exception as exc:
+            log.debug("Unban no-record reply failed for user %d: %s", target_id, exc)
         return
 
     ban_id = ban["ban_id"]
 
     # * deactivate ban and fetch active groups in parallel
-    _, groups = await asyncio.gather(
+    deactivate_r, groups = await asyncio.gather(
         db.bans_db.deactivate_ban(ban_id),
         db.groups_db.active_groups(),
         return_exceptions=True,
     )
+    if isinstance(deactivate_r, BaseException):
+        log.error(
+            "deactivate_ban failed for ban_id=%s user=%d: %s",
+            ban_id,
+            target_id,
+            deactivate_r,
+        )
     if isinstance(groups, BaseException):
         log.error("active_groups failed during unban of %d: %s", target_id, groups)
         groups = []

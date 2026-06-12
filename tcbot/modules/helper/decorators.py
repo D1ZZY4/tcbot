@@ -218,13 +218,19 @@ def owner_only(func: Callable) -> Callable:
         """Allow the call only when the invoking user is the Founder."""
         if _is_anon_admin(update):
             if update.effective_message:
-                await update.effective_message.reply_text(_ERR_ANON_ADMIN)
+                try:
+                    await update.effective_message.reply_text(_ERR_ANON_ADMIN)
+                except Exception as exc:
+                    log.debug("owner_only anon-admin reply failed: %s", exc)
             return None
         uid = update.effective_user.id if update.effective_user else None
         if uid and await db.users_roles.is_owner(uid):
             return await func(update, ctx)
         if update.effective_message:
-            await update.effective_message.reply_text(_ERR_OWNER_ONLY)
+            try:
+                await update.effective_message.reply_text(_ERR_OWNER_ONLY)
+            except Exception as exc:
+                log.debug("owner_only refusal reply failed: %s", exc)
         return None
 
     return _wrapper
@@ -238,13 +244,19 @@ def staff_only(func: Callable) -> Callable:
         """Allow the call only when the invoking user is Founder or Admin."""
         if _is_anon_admin(update):
             if update.effective_message:
-                await update.effective_message.reply_text(_ERR_ANON_ADMIN)
+                try:
+                    await update.effective_message.reply_text(_ERR_ANON_ADMIN)
+                except Exception as exc:
+                    log.debug("staff_only anon-admin reply failed: %s", exc)
             return None
         uid = update.effective_user.id if update.effective_user else None
         if uid and await db.users_roles.is_staff(uid):
             return await func(update, ctx)
         if update.effective_message:
-            await update.effective_message.reply_text(_ERR_STAFF_ONLY)
+            try:
+                await update.effective_message.reply_text(_ERR_STAFF_ONLY)
+            except Exception as exc:
+                log.debug("staff_only refusal reply failed: %s", exc)
         return None
 
     return _wrapper
@@ -258,7 +270,10 @@ def mod_only(func: Callable) -> Callable:
         """Allow the call only when the invoking user holds Developer rank or above."""
         if _is_anon_admin(update):
             if update.effective_message:
-                await update.effective_message.reply_text(_ERR_ANON_ADMIN)
+                try:
+                    await update.effective_message.reply_text(_ERR_ANON_ADMIN)
+                except Exception as exc:
+                    log.debug("mod_only anon-admin reply failed: %s", exc)
             return None
         uid = update.effective_user.id if update.effective_user else None
         if uid and db.users_roles.role_rank(
@@ -266,7 +281,10 @@ def mod_only(func: Callable) -> Callable:
         ) >= db.users_roles.role_rank("developer"):
             return await func(update, ctx)
         if update.effective_message:
-            await update.effective_message.reply_text(_ERR_MOD_ONLY)
+            try:
+                await update.effective_message.reply_text(_ERR_MOD_ONLY)
+            except Exception as exc:
+                log.debug("mod_only refusal reply failed: %s", exc)
         return None
 
     return _wrapper
@@ -280,7 +298,10 @@ def basic_mod_only(func: Callable) -> Callable:
         """Allow the call only when the invoking user holds Tester rank or above."""
         if _is_anon_admin(update):
             if update.effective_message:
-                await update.effective_message.reply_text(_ERR_ANON_ADMIN)
+                try:
+                    await update.effective_message.reply_text(_ERR_ANON_ADMIN)
+                except Exception as exc:
+                    log.debug("basic_mod_only anon-admin reply failed: %s", exc)
             return None
         uid = update.effective_user.id if update.effective_user else None
         if uid and db.users_roles.role_rank(
@@ -288,7 +309,10 @@ def basic_mod_only(func: Callable) -> Callable:
         ) >= db.users_roles.role_rank("tester"):
             return await func(update, ctx)
         if update.effective_message:
-            await update.effective_message.reply_text(_ERR_BASIC_MOD_ONLY)
+            try:
+                await update.effective_message.reply_text(_ERR_BASIC_MOD_ONLY)
+            except Exception as exc:
+                log.debug("basic_mod_only refusal reply failed: %s", exc)
         return None
 
     return _wrapper
@@ -321,16 +345,22 @@ async def resolve_and_check(
     if isinstance(target_role, BaseException):
         target_role = None
     if db.users_roles.role_rank(executor_role) < db.users_roles.role_rank(min_role):
-        await msg.reply_text(_ERR_RANK_INSUFFICIENT)
+        try:
+            await msg.reply_text(_ERR_RANK_INSUFFICIENT)
+        except Exception as exc:
+            log.debug("resolve_and_check rank-insufficient reply failed: %s", exc)
         return None, None
 
     if target_role and db.users_roles.role_rank(
         executor_role
     ) <= db.users_roles.role_rank(target_role):
         label = db.users_roles.ROLE_LABEL.get(target_role, target_role.capitalize())
-        await msg.reply_text(
-            f"That's a {label} - they outrank you here, can't take action on them."
-        )
+        try:
+            await msg.reply_text(
+                f"That's a {label} - they outrank you here, can't take action on them."
+            )
+        except Exception as exc:
+            log.debug("resolve_and_check outrank reply failed: %s", exc)
         return None, None
 
     return executor_role, target_role

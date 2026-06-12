@@ -300,7 +300,10 @@ class BuildConnection:
                 )
             except Exception as exc:
                 log.debug("Join decision permission check failed: %s", exc)
-                await q.edit_message_text(_ERR_BOT_PERMS_VERIFY, reply_markup=None)
+                try:
+                    await q.edit_message_text(_ERR_BOT_PERMS_VERIFY, reply_markup=None)
+                except Exception as exc2:
+                    log.debug("Join decision perms-verify edit failed: %s", exc2)
                 return
 
             if not self.check_perms(bot_member):
@@ -319,9 +322,12 @@ class BuildConnection:
                 return
 
             if await db.groups_db.is_connected(chat.id):
-                await q.edit_message_text(
-                    self.already_connected_message(), reply_markup=None
-                )
+                try:
+                    await q.edit_message_text(
+                        self.already_connected_message(), reply_markup=None
+                    )
+                except Exception as exc:
+                    log.debug("Join decision already-connected edit failed: %s", exc)
                 return
 
             join_r, edit_r = await asyncio.gather(

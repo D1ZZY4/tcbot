@@ -73,28 +73,37 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * Group / supergroup context - send a minimal message with PM link
     if chat.type in ("group", "supergroup", "forum"):
         bot_username = ctx.bot.username or ""
-        await msg.reply_text(
-            _GROUP_START_TEXT.format(botname=botname),
-            parse_mode="HTML",
-            reply_markup=keyboards.group_start_kb(bot_username),
-        )
+        try:
+            await msg.reply_text(
+                _GROUP_START_TEXT.format(botname=botname),
+                parse_mode="HTML",
+                reply_markup=keyboards.group_start_kb(bot_username),
+            )
+        except Exception as exc:
+            log.debug("cmd_start group reply failed: %s", exc)
         return
 
     # * PM context below
     if arg == "about":
-        await msg.reply_text(
-            __about_msg__,
-            parse_mode="HTML",
-            reply_markup=keyboards.back_to_start_kb(),
-        )
+        try:
+            await msg.reply_text(
+                __about_msg__,
+                parse_mode="HTML",
+                reply_markup=keyboards.back_to_start_kb(),
+            )
+        except Exception as exc:
+            log.debug("cmd_start about reply failed: %s", exc)
         return
 
     # * appeal<ban_id> deep links are handled by the ConversationHandler in appeals.py
-    await msg.reply_text(
-        _PRIVATE_START_TEXT.format(botname=botname),
-        parse_mode="HTML",
-        reply_markup=keyboards.main_menu_kb(),
-    )
+    try:
+        await msg.reply_text(
+            _PRIVATE_START_TEXT.format(botname=botname),
+            parse_mode="HTML",
+            reply_markup=keyboards.main_menu_kb(),
+        )
+    except Exception as exc:
+        log.debug("cmd_start PM reply failed: %s", exc)
 
 
 # ──────────────────────── Callback Handlers ─────────────────────── #
@@ -128,16 +137,22 @@ async def _show_groups(q: CallbackQuery, *, detailed: bool) -> None:
     if isinstance(groups, BaseException):
         groups = []
     if not groups:
-        await q.edit_message_text(
-            f"No groups are currently connected to {cfg.community_name}.",
-            reply_markup=keyboards.back_to_start_kb(),
-        )
+        try:
+            await q.edit_message_text(
+                f"No groups are currently connected to {cfg.community_name}.",
+                reply_markup=keyboards.back_to_start_kb(),
+            )
+        except Exception as exc:
+            log.debug("_show_groups no-groups edit failed: %s", exc)
         return
-    await q.edit_message_text(
-        _render(groups, detailed=detailed),
-        parse_mode="HTML",
-        reply_markup=keyboards.groups_menu_kb(detailed=detailed),
-    )
+    try:
+        await q.edit_message_text(
+            _render(groups, detailed=detailed),
+            parse_mode="HTML",
+            reply_markup=keyboards.groups_menu_kb(detailed=detailed),
+        )
+    except Exception as exc:
+        log.debug("_show_groups list edit failed: %s", exc)
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import TYPE_CHECKING
 
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
@@ -22,6 +23,8 @@ from tcbot.utils.prefixes import build_prefixed_filters
 
 if TYPE_CHECKING:
     from telegram import Update
+
+log = logging.getLogger(__name__)
 
 # ─────────────────────── Rate-limiter constants ──────────────────── #
 _RL_PERIOD_S: int = 30
@@ -86,16 +89,22 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Reply with a paginated list of all currently active connected groups."""
     groups = await db.groups_db.active_groups()
     if not groups:
-        await update.effective_message.reply_text(
-            f"No groups are currently connected to {cfg.community_name}."
-        )
+        try:
+            await update.effective_message.reply_text(
+                f"No groups are currently connected to {cfg.community_name}."
+            )
+        except Exception as exc:
+            log.debug("tcgroups no-groups reply failed: %s", exc)
         return
     ctx.user_data["groups_cache"] = groups
-    await update.effective_message.reply_text(
-        _render(groups, detailed=False),
-        parse_mode="HTML",
-        reply_markup=tcgroups_kb(detailed=False),
-    )
+    try:
+        await update.effective_message.reply_text(
+            _render(groups, detailed=False),
+            parse_mode="HTML",
+            reply_markup=tcgroups_kb(detailed=False),
+        )
+    except Exception as exc:
+        log.debug("tcgroups list reply failed: %s", exc)
 
 
 # ────────────── Callback Handlers (Details & Simple) ────────────── #
