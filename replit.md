@@ -19,6 +19,7 @@ Store credentials in Replit Secrets or the equivalent platform secret manager. D
 |---|---|
 | `BOT_TOKEN` | Telegram bot token from BotFather. |
 | `MONGODB_URI` | MongoDB connection string, for example MongoDB Atlas. |
+| `CONTEXT7_API_KEY` | Context7 API key for the `ctx7` CLI used by AI coding agents to fetch live library docs. Get one at https://context7.com/settings. |
 
 `OWNER_ID` is also required for startup. It is not a credential, but it identifies the initial Founder account and should be set as an environment variable or secret according to your deployment policy.
 
@@ -112,6 +113,40 @@ flowchart TD
 
 If the hosting platform requires a specific public port, set `PORT` accordingly in the environment. Invalid or out-of-range values fall back to `5000` instead of crashing the health server.
 
+## Context7 CLI (AI Agent Tooling)
+
+AI coding agents (Replit Agent, Roo, etc.) use the `ctx7` CLI to fetch live,
+version-accurate library documentation instead of relying on potentially stale
+training data. This is mandatory for this project — see `.agents/skills/context7-mcp/SKILL.md`.
+
+### First-time setup on a new Replit account
+
+1. Add `CONTEXT7_API_KEY` to Replit Secrets (get key at https://context7.com/settings).
+2. Install the CLI:
+   ```bash
+   npm install -g ctx7
+   ```
+3. Verify it works:
+   ```bash
+   ctx7 library "python-telegram-bot" "ConversationHandler"
+   ```
+
+The CLI auto-reads `CONTEXT7_API_KEY` from the environment — no extra config needed.
+
+### MCP config (external tools: Roo, Cursor, Claude Desktop)
+
+Both `.agents/mcp.json` and `.roo/mcp.json` are pre-configured. Note that `.roo`
+is a symlink to `.agents` — do not convert it to a real directory. The same
+applies to `.claude`, `.kilo`, and `.trae`.
+
+### Preferred library IDs
+
+| Library | Context7 ID | Benchmark |
+|---|---|---|
+| `python-telegram-bot` | `/python-telegram-bot/python-telegram-bot` | 86.8 |
+| `motor` | `/mongodb/motor` | 85.86 |
+| `python-telegram-bot` (alt) | `/websites/python-telegram-bot_en_stable` | 71.3 |
+
 ## Code Quality Commands
 
 ```bash
@@ -127,6 +162,7 @@ Before starting the deployment:
 
 - [ ] `BOT_TOKEN` is set in Replit Secrets or the platform secret manager.
 - [ ] `MONGODB_URI` is set and reachable from Replit.
+- [ ] `CONTEXT7_API_KEY` is set in Replit Secrets and `ctx7` CLI is installed (`npm install -g ctx7`).
 - [ ] `OWNER_ID` is set to the correct Telegram user ID.
 - [ ] `PORT` matches the hosting platform expectation.
 - [ ] Required Telegram destinations (`MAIN_GROUP`, `LOGS`, `PROOFS`, `APPEALS`, and appeal topic settings) are configured.
