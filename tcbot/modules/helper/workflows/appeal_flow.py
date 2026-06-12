@@ -38,7 +38,8 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 WAITING_APPEAL = 0
-_LOCK_WINDOW = timedelta(hours=12)
+_LOCK_HOURS: int = 12
+_LOCK_WINDOW = timedelta(hours=_LOCK_HOURS)
 
 _ID_RE = re.compile(r"^/start\s+appeal_([a-z0-9]{10})$")
 
@@ -56,9 +57,7 @@ _ERR_INVALID_LOG = "Invalid log link. Please check and try again."
 _ERR_NOT_AUTHORIZED = "You are not authorized."
 _ERR_BAN_NOT_FOUND = "Ban record not found."
 _ERR_ALREADY_RESOLVED = "Appeal already resolved (ban is no longer active)."
-_ERR_REVIEW_LOCKED = (
-    "Only the admin who issued this ban can review it within the first 12 hours."
-)
+_ERR_REVIEW_LOCKED = f"Only the admin who issued this ban can review it within the first {_LOCK_HOURS} hours."
 _MSG_APPEAL_SUBMITTED = "Your appeal has been submitted. The team will review it shortly - we'll get back to you."
 
 

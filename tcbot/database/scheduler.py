@@ -9,7 +9,7 @@ because APScheduler stores its schedule state in MongoDB via MongoDBDataStore.
 
 The scheduler runs inside a dedicated asyncio background task so that the
 ``async with AsyncScheduler()`` context manager is entered *and* exited in the
-same task — a requirement imposed by AnyIO cancel-scope semantics.
+same task (AnyIO cancel-scope semantics requires this).
 
 Usage pattern (lifecycle managed by ``tcbot/__main__.py``)::
 
@@ -124,7 +124,7 @@ async def _execute_scheduled_unban(ban_id: str, user_id: int) -> None:
 
 
 # ══════════════════════════════════════════════════════════════════ #
-#  Background task — keeps async-with context alive
+#  Background task: keeps async-with context alive
 # ══════════════════════════════════════════════════════════════════ #
 
 
@@ -182,7 +182,7 @@ async def _register_periodic_schedules(
             await sched.remove_schedule(_WARN_EXPIRY_SCHEDULE_ID)
             log.info("Warn expiry schedule removed (WARN_EXPIRY_DAYS=0).")
         except Exception:
-            pass  # Schedule did not exist — no-op
+            pass  # Schedule did not exist: no-op
 
     await sched.add_schedule(
         _cleanup_old_records,

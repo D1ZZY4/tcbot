@@ -176,7 +176,11 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return_exceptions=True,
     )
     if isinstance(ident, BaseException):
-        log.error("identity.classify failed during promote for target=%d: %s", target_id, ident)
+        log.error(
+            "identity.classify failed during promote for target=%d: %s",
+            target_id,
+            ident,
+        )
         await msg.reply_text("Classification check failed - please try again.")
         return
     if isinstance(current_role, BaseException):
@@ -334,7 +338,9 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return_exceptions=True,
     )
     if isinstance(ident, BaseException):
-        log.error("identity.classify failed during demote for target=%d: %s", target_id, ident)
+        log.error(
+            "identity.classify failed during demote for target=%d: %s", target_id, ident
+        )
         await msg.reply_text("Classification check failed - please try again.")
         return
     if isinstance(target_role, BaseException):

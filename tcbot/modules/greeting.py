@@ -60,12 +60,15 @@ async def _handle_member(member: User, msg: Message, chat: Chat, bot: Bot) -> No
             log.debug("Auto-ban reply failed for uid=%d: %s", member.id, reply_exc)
         return
 
-    await msg.reply_text(
-        f"Welcome, {mention(member.id, member.first_name, member.username)}. "
-        f"This is an official {esc(cfg.community_name)} group. "
-        "Please go through the group rules before participating.",
-        parse_mode="HTML",
-    )
+    try:
+        await msg.reply_text(
+            f"Welcome, {mention(member.id, member.first_name, member.username)}. "
+            f"This is an official {esc(cfg.community_name)} group. "
+            "Please go through the group rules before participating.",
+            parse_mode="HTML",
+        )
+    except Exception as exc:
+        log.debug("Welcome reply failed for uid=%d: %s", member.id, exc)
 
 
 @decorators.log_execution

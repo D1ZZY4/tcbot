@@ -106,20 +106,26 @@ async def execute_warn(
                 await db.warns_db.clear_warns(target_id, chat_id)
             except Exception:
                 log.exception("Warn clear after auto-ban failed")
-            await msg.reply_text(
-                f"{mention(target_id, target_name)} - {code(str(target_id))} "
-                f"hit {WARN_LIMIT} warnings "
-                f"and has been banned from this group.{proof_suffix}",
-                parse_mode="HTML",
-            )
+            try:
+                await msg.reply_text(
+                    f"{mention(target_id, target_name)} - {code(str(target_id))} "
+                    f"hit {WARN_LIMIT} warnings "
+                    f"and has been banned from this group.{proof_suffix}",
+                    parse_mode="HTML",
+                )
+            except Exception as exc:
+                log.debug("Auto-ban notification reply failed: %s", exc)
         else:
             log.error("Auto-ban on warn limit failed: %s", ban_result)
-            await msg.reply_text(
-                f"{mention(target_id, target_name)} - {code(str(target_id))} "
-                f"hit {WARN_LIMIT} warnings "
-                f"but auto-ban failed - please ban them manually.{proof_suffix}",
-                parse_mode="HTML",
-            )
+            try:
+                await msg.reply_text(
+                    f"{mention(target_id, target_name)} - {code(str(target_id))} "
+                    f"hit {WARN_LIMIT} warnings "
+                    f"but auto-ban failed - please ban them manually.{proof_suffix}",
+                    parse_mode="HTML",
+                )
+            except Exception as exc:
+                log.debug("Auto-ban failure notice reply failed: %s", exc)
     else:
         # * federation log + reply in parallel
         results2 = await asyncio.gather(

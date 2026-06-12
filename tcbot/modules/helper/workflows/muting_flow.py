@@ -160,7 +160,10 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict) -> None:
     if isinstance(results2[2], BaseException):
         msg = update.effective_message
         if msg:
-            await msg.reply_text(summary, parse_mode="HTML")
+            try:
+                await msg.reply_text(summary, parse_mode="HTML")
+            except Exception as exc:
+                log.debug("Mute summary fallback reply failed: %s", exc)
 
 
 # ───────────────────────── Unmute executor ──────────────────────── #

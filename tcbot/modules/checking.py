@@ -102,13 +102,19 @@ async def _ban_summary(
     aid = ban.get("admin_user_id", 0)
 
     # Fetch mention data for both users in parallel
-    (
-        (_, user_uname),
-        (admin_fname_cached, admin_uname),
-    ) = await asyncio.gather(
+    _user_r, _admin_r = await asyncio.gather(
         db.users_cache.get_user_mention_data(user_id),
         db.users_cache.get_user_mention_data(aid),
+        return_exceptions=True,
     )
+    if isinstance(_user_r, BaseException):
+        user_uname = None
+    else:
+        _, user_uname = _user_r
+    if isinstance(_admin_r, BaseException):
+        admin_fname_cached, admin_uname = None, None
+    else:
+        admin_fname_cached, admin_uname = _admin_r
 
     if admin_fname is None:
         admin_fname = admin_fname_cached
@@ -167,7 +173,14 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         db.users_roles.get_owner_id(),
         db.users_roles.get_effective_role(user.id),
         db.bans_db.get_active_ban(user.id),
+        return_exceptions=True,
     )
+    if isinstance(owner_id, BaseException):
+        owner_id = None
+    if isinstance(user_role, BaseException):
+        user_role = None
+    if isinstance(ban, BaseException):
+        ban = None
 
     if user.id == owner_id:
         await msg.reply_text(

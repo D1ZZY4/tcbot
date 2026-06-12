@@ -108,15 +108,19 @@ sequenceDiagram
     Proc->>Main: call main()
     Main->>Main: setup logging
     Main->>Alive: start Flask health thread
-    Main->>PTB: build Application
-    PTB->>Main: run post_init
-    Main->>DB: connect() and ensure_indexes()
-    Main->>DB: ensure_initial_owner()
+    Main->>PTB: build Application (post_init registered as callback)
     Main->>Mods: get_handlers()
     Mods->>Mods: discover, filter, import modules
     Mods-->>Main: handlers
     Main->>PTB: add handlers and error handler
     Main->>PTB: run_polling()
+    PTB->>Main: run post_init (before polling starts)
+    Main->>DB: connect() and ensure_indexes()
+    Main->>DB: ensure_initial_owner()
+    Main->>Main: connect Redis (optional)
+    Main->>Main: start APScheduler
+    Main->>Main: attach error_reporter + asyncio handler
+    PTB->>PTB: start polling loop
 ```
 
 ## Dynamic module discovery

@@ -87,10 +87,13 @@ async def execute_kick(
             log.error("Kick log send failed: %s", results[2])
     except Exception as exc:
         log.exception("Kick failed for %s in %s", target_id, chat_id)
-        await msg.reply_text(
-            f"Couldn't kick {mention(target_id, target_name)}: {esc(exc)}",
-            parse_mode="HTML",
-        )
+        try:
+            await msg.reply_text(
+                f"Couldn't kick {mention(target_id, target_name)}: {esc(exc)}",
+                parse_mode="HTML",
+            )
+        except Exception as reply_exc:
+            log.debug("Kick error reply failed: %s", reply_exc)
 
 
 # ──────────────────────── Executor adapter ──────────────────────── #

@@ -6,7 +6,7 @@ This file describes how to run TCF Bot on Replit or a similar hosted environment
 
 - Entry point: `uv run python -m tcbot`
 - Python project target: 3.12 (`pyproject.toml` requires `>=3.12`)
-- Bot framework: `python-telegram-bot` (plain, no `[job-queue]` extra — APScheduler 4.x handles scheduling), tracking the latest compatible release
+- Bot framework: `python-telegram-bot` (plain, no `[job-queue]` extra; APScheduler 4.x handles scheduling), tracking the latest compatible release
 - Database: MongoDB through Motor
 - Cache: in-memory `TwoLevelCache` (L1) + optional Redis L2 (`REDIS_URL`)
 - Scheduler: APScheduler 4.x `AsyncScheduler` with `MongoDBDataStore` + `CBORSerializer` (persistent across restarts)
@@ -21,7 +21,7 @@ Store credentials in Replit Secrets or the equivalent platform secret manager. D
 |---|---|---|
 | `BOT_TOKEN` | Yes | Telegram bot token from BotFather. Format: `1234567890:AAFxxxxxxxx` |
 | `MONGODB_URI` | Yes | MongoDB connection string, for example MongoDB Atlas. Format: `mongodb+srv://user:pass@cluster.mongodb.net/` |
-| `CONTEXT7_API_KEY` | Yes (for AI agents) | Context7 API key for the `ctx7` CLI. AI coding agents (Replit Agent, Roo, etc.) use this to fetch live, version-accurate library docs. Get one at https://context7.com/settings — then run `npm install -g ctx7` in the Shell to finish setup. |
+| `CONTEXT7_API_KEY` | Yes (for AI agents) | Context7 API key for the `ctx7` CLI. AI coding agents (Replit Agent, Roo, etc.) use this to fetch live, version-accurate library docs. Get one at https://context7.com/settings, then run `npm install -g ctx7` in the Shell to finish setup. |
 | `REDIS_URL` | ⚡ Recommended | Redis connection URL for L2 cache (persists cache across restarts). Without this the bot uses in-memory cache only. Format: `redis://localhost:6379/0` or a managed Redis URL (Upstash, Redis Cloud, etc.). |
 
 `OWNER_ID` is also required for startup. It is not a credential, but it identifies the initial Founder account and should be set as an environment variable or secret according to your deployment policy.
@@ -122,7 +122,7 @@ If the hosting platform requires a specific public port, set `PORT` accordingly 
 
 AI coding agents (Replit Agent, Roo, etc.) use the `ctx7` CLI to fetch live,
 version-accurate library documentation instead of relying on potentially stale
-training data. This is mandatory for this project — see `.agents/skills/context7-mcp/SKILL.md`.
+training data. This is mandatory for this project. See `.agents/skills/context7-mcp/SKILL.md`.
 
 ### First-time setup on a new Replit account
 
@@ -136,12 +136,12 @@ training data. This is mandatory for this project — see `.agents/skills/contex
    ctx7 library "python-telegram-bot" "ConversationHandler"
    ```
 
-The CLI auto-reads `CONTEXT7_API_KEY` from the environment — no extra config needed.
+The CLI auto-reads `CONTEXT7_API_KEY` from the environment; no extra config needed.
 
 ### MCP config (external tools: Roo, Cursor, Claude Desktop)
 
 Both `.agents/mcp.json` and `.roo/mcp.json` are pre-configured. Note that `.roo`
-is a symlink to `.agents` — do not convert it to a real directory. The same
+is a symlink to `.agents`: do not convert it to a real directory. The same
 applies to `.claude`, `.kilo`, and `.trae`.
 
 ### Preferred library IDs

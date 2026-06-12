@@ -5,13 +5,27 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-12 (session 78)
+**Last updated:** 2026-06-12 (session 80)
 
 ## What is done
 
 - Python 3.12, uv, python-telegram-bot (latest), Motor/MongoDB + Redis (optional L2) + APScheduler 4 stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
 - `uv run ruff format .` and `uv run ruff check .` both clean (72 files).
+- Session 80 (2026-06-12): Comprehensive audit wave - em-dash fix, Mermaid accuracy, unguarded await hardening.
+  - Bug #109: `scheduler.py` 3 em-dash in docstring/comments replaced.
+  - Bug #110: `appeal_flow.py` _ERR_REVIEW_LOCKED hardcoded "12" -> `_LOCK_HOURS` constant.
+  - Mermaid fix: PLAN.md startup flowchart corrected (get_handlers before run_polling, post_init shown as pre-polling step).
+  - Mermaid fix: docs/mapping.md startup sequenceDiagram corrected (get_handlers before run_polling; post_init inside run_polling; added Redis, APScheduler, error_reporter steps).
+  - Bug #111: `greeting.py` welcome reply unguarded - wrapped try/except log.debug.
+  - Bug #112: `muting_flow.py` fallback reply unguarded - wrapped try/except log.debug.
+  - Bug #113: `kicking_flow.py` error reply unguarded - wrapped try/except log.debug.
+  - Bug #114: `warning_flow.py` auto-ban notification replies (2 paths) unguarded - wrapped try/except log.debug.
+  - Em-dash: replit.md (5), CHANGELOG.md (4), .agents/memory/ files - all replaced.
+  - Ruff clean 72 files, bot running (MongoDB+Redis+APScheduler).
+- Session 79 (2026-06-12): Comprehensive audit wave - 2 correctness bugs fixed.
+  - Bug #107: `checking.py _ban_summary` gather without `return_exceptions=True`.
+  - Bug #108: `checking.py cmd_checkme` gather without `return_exceptions=True`.
 - Session 78 (2026-06-12): Comprehensive audit wave - 6 correctness bugs fixed.
   - Bug #101: `check_flow.py Check.profile` - 9-coro gather without `return_exceptions=True` + nested tuple unpack. Any DB failure crashed the entire `/check` profile. Refactored to flat intermediaries with individual fallbacks.
   - Bug #102: `check_flow.py Check.warns_in_group` - gather without `return_exceptions=True`. Added fallbacks.

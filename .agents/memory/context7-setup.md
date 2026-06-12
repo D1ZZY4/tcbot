@@ -4,7 +4,7 @@ description: How ctx7 CLI is installed and configured in this Replit project
 ---
 
 ## Rule
-Use `ctx7` CLI (npm package `ctx7`) to fetch live library docs. The binary auto-reads `CONTEXT7_API_KEY` from the environment — no prefix or manual export needed.
+Use `ctx7` CLI (npm package `ctx7`) to fetch live library docs. The binary auto-reads `CONTEXT7_API_KEY` from the environment; no prefix or manual export needed.
 
 **Why:** The `@context7/cli` package does not exist on npm. The `context7` package (v1.0.3) installs as `c7` and hits a dead API (404). Only the `ctx7` package has the correct `library` and `docs` subcommands.
 

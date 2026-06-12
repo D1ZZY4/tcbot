@@ -15,7 +15,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv pip install -e .` | PASS |
 | `uv run python -c "import tcbot; print('import OK')"` | PASS (session 43: re-verified after `__main__.py` edit) |
 | `uv run python -m tcbot --help 2>&1 || uv run python -c "from tcbot import *; print('startup OK')"` | PASS by runtime evidence: bot started cleanly, connected MongoDB, ensured indexes, initialised, 75 handlers registered, polling active |
-| `uv run ruff format .` | PASS (72 files — includes redis_client.py, scheduler.py) |
+| `uv run ruff format .` | PASS (72 files; includes redis_client.py, scheduler.py) |
 | `uv run ruff check --fix .` | PASS (All checks passed) |
 | asyncio task-GC fix isolated test (session 43) | PASS: task registered on schedule, discarded on completion, report coroutine ran |
 | `uv run python -m tcbot` | PASS by runtime evidence: MongoDB connected, indexes ensured, scheduler started, bot polling active |
@@ -197,6 +197,21 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Session 75 - Bug #90-99: cfg.community_name HTML escaping (comprehensive sweep) | HTML safety | 10 modules had `cfg.community_name` interpolated raw into HTML strings sent with `parse_mode="HTML"`: `about.py` (×4), `additional.py` (×1), `start.py` (×2), `help.py` (×1), `groups.py` (×2), `broadcasting.py` (×2), `connecting.py` (×3), `disconnecting.py` (×2), `privacy.py` (×5). Root fix: `LogBuilder.__init__` now calls `esc(str(title))` so all 20+ log titles are safe. Each module extracted `_CNAME = esc(cfg.community_name)` at module level. Ruff 70 files clean, bot running (75 handlers). | 2026-06-12 (s75) |
 
 | Session 76 - Bug #100: cache.py fire-and-forget tasks RUF006 | correctness | Redis bg tasks missing strong references; could be GC'd before completing. Added `_redis_bg_tasks` set with discard callbacks. | 2026-06-12 (s76) |
+
+| Session 80 - Bug #109: scheduler.py 3 em-dash in docstring/comments | style | Em-dash chars in docstring "same task -- requirement..." and comments "Background task --" and "Schedule did not exist --". Replaced with parens/colons. | 2026-06-12 (s80) |
+| Session 80 - Bug #110: appeal_flow.py hardcoded "12" in _ERR_REVIEW_LOCKED | DRY | "12 hours" literal in error string despite _LOCK_WINDOW = timedelta(hours=12) existing. Added _LOCK_HOURS: int = 12 constant, used it in both _LOCK_WINDOW and _ERR_REVIEW_LOCKED. | 2026-06-12 (s80) |
+| Session 80 - Mermaid fix: PLAN.md startup flowchart | docs | get_handlers/add_handler now shown before run_polling; post_init shown as pre-polling step triggered by run_polling. | 2026-06-12 (s80) |
+| Session 80 - Mermaid fix: docs/mapping.md startup sequenceDiagram | docs | Corrected order: get_handlers before run_polling; post_init inside run_polling; added Redis/APScheduler/error_reporter steps. | 2026-06-12 (s80) |
+| Session 80 - Bug #111: greeting.py unguarded welcome reply | robustness | await msg.reply_text welcome message unguarded; if bot muted every join generates error report. Wrapped try/except log.debug. | 2026-06-12 (s80) |
+| Session 80 - Bug #112: muting_flow.py unguarded fallback reply | robustness | fallback await msg.reply_text(summary) unguarded; wrapped try/except log.debug. | 2026-06-12 (s80) |
+| Session 80 - Bug #113: kicking_flow.py unguarded error reply | robustness | error notification reply in except block unguarded; wrapped try/except log.debug. | 2026-06-12 (s80) |
+| Session 80 - Bug #114: warning_flow.py auto-ban notification replies unguarded | robustness | Two reply_text in auto-ban branch (success + failure notices) unguarded; wrapped both try/except log.debug. | 2026-06-12 (s80) |
+| Session 80 - Em-dash fixes: replit.md (5), CHANGELOG.md (4), .agents/memory/ files | style | All em-dash in project docs and memory files eliminated. | 2026-06-12 (s80) |
+| Session 80 - Ruff clean (72 files), bot running | audit | All session 80 fixes done; ruff check passes; bot restarted with MongoDB+Redis+APScheduler+75 handlers. | 2026-06-12 (s80) |
+
+| Session 79 - Bug #107: checking.py _ban_summary nested tuple unpack gather no return_exceptions | correctness | Nested tuple unpack ((_, user_uname), (admin_fname_cached, admin_uname)) from gather - DB failure cannot be destructured, crashes /checkme ban detail. Refactored to flat _user_r/_admin_r with isinstance guards. | 2026-06-12 (s79) |
+| Session 79 - Bug #108: checking.py cmd_checkme gather no return_exceptions | correctness | 3-item gather (get_owner_id, get_effective_role, get_active_ban) without return_exceptions. Any DB failure crashes /checkme command. Added return_exceptions=True with None fallbacks. | 2026-06-12 (s79) |
+| Session 79 - Ruff clean (72 files), bot running clean (75 handlers) | audit | All 2 bugs fixed, ruff check passes, bot restarted with MongoDB+Redis+APScheduler. | 2026-06-12 (s79) |
 
 | Session 78 - Bug #101: check_flow.py Check.profile gather no return_exceptions | correctness | 9-coro gather with nested tuple unpack - any DB failure crashes entire /check profile. Refactored to flat intermediaries with individual isinstance fallbacks. | 2026-06-12 (s78) |
 | Session 78 - Bug #102: check_flow.py Check.warns_in_group gather no return_exceptions | correctness | get_warns+get_group_titles gather without return_exceptions. Added fallbacks warns=[]/titles={}. | 2026-06-12 (s78) |
