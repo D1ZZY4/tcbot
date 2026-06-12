@@ -129,7 +129,22 @@ class Stats:
             db.bans_db.active_ban_count(),
             db.groups_db.active_group_count(),
             db.users_cache.total_users(),
+            return_exceptions=True,
         )
+        if isinstance(owner_id, BaseException):
+            owner_id = None
+        if isinstance(admin_count, BaseException):
+            admin_count = 0
+        if isinstance(developers, BaseException):
+            developers = []
+        if isinstance(testers, BaseException):
+            testers = []
+        if isinstance(ban_count, BaseException):
+            ban_count = 0
+        if isinstance(group_count, BaseException):
+            group_count = 0
+        if isinstance(user_count, BaseException):
+            user_count = 0
 
         # Fetch owner mention data in parallel with building the response
         if owner_id:
@@ -165,7 +180,16 @@ class Stats:
             db.users_roles.all_admins(),
             db.users_roles.all_by_role("developer"),
             db.users_roles.all_by_role("tester"),
+            return_exceptions=True,
         )
+        if isinstance(owner_id, BaseException):
+            owner_id = None
+        if isinstance(admins, BaseException):
+            admins = []
+        if isinstance(developers, BaseException):
+            developers = []
+        if isinstance(testers, BaseException):
+            testers = []
 
         # * Resolve user mention data in one batch query instead of individual queries
         all_user_ids = []

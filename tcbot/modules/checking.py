@@ -226,16 +226,22 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     q = update.callback_query
     ban_id = q.data.split(":")[1]
 
-    ban = await db.bans_db.get_ban(ban_id)
+    _, ban = await asyncio.gather(
+        q.answer(), db.bans_db.get_ban(ban_id), return_exceptions=True
+    )
+    if isinstance(ban, BaseException):
+        ban = None
     if not ban or not ban.get("is_active"):
-        await q.answer(_ERR_BAN_INACTIVE, show_alert=True)
+        try:
+            await q.edit_message_text(_ERR_BAN_INACTIVE, reply_markup=None)
+        except Exception as exc:
+            log.debug("checkme_detail error edit failed: %s", exc)
         return
 
     from tcbot.modules.helper.ban_info import (  # noqa: PLC0415
         build_ban_detail,
     )
 
-    await q.answer()
     text, proof_link = await build_ban_detail(ban)
     await q.edit_message_text(
         text,
@@ -256,14 +262,20 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     q = update.callback_query
     ban_id = q.data.split(":")[1]
 
-    ban = await db.bans_db.get_ban(ban_id)
+    _, ban = await asyncio.gather(
+        q.answer(), db.bans_db.get_ban(ban_id), return_exceptions=True
+    )
+    if isinstance(ban, BaseException):
+        ban = None
     if not ban:
-        await q.answer(_ERR_BAN_NOT_FOUND, show_alert=True)
+        try:
+            await q.edit_message_text(_ERR_BAN_NOT_FOUND, reply_markup=None)
+        except Exception as exc:
+            log.debug("checkme_back error edit failed: %s", exc)
         return
 
     uid = ban["banned_user_id"]
     aid = ban.get("admin_user_id", 0)
-    await q.answer()
     fname, admin_fname = await asyncio.gather(
         db.users_cache.get_first_name(uid, str(uid)),
         db.users_cache.get_first_name(aid, "Admin"),
@@ -312,8 +324,13 @@ async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the top-level profile summary for the checked user."""
     q = update.callback_query
     target_id = int(q.data.split(":", 1)[1])
-    await q.answer()
-    text, kb = await Check.profile(ctx.bot, target_id)
+    _, result = await asyncio.gather(
+        q.answer(), Check.profile(ctx.bot, target_id), return_exceptions=True
+    )
+    if isinstance(result, BaseException):
+        log.debug("on_check_main failed: %s", result)
+        return
+    text, kb = result
     await _safe_edit(q, text, kb)
 
 
@@ -325,8 +342,13 @@ async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     _, target_id_str, page_str = q.data.split(":")
     target_id = int(target_id_str)
     page = int(page_str)
-    await q.answer()
-    text, kb = await Check.bans_list(target_id, page)
+    _, result = await asyncio.gather(
+        q.answer(), Check.bans_list(target_id, page), return_exceptions=True
+    )
+    if isinstance(result, BaseException):
+        log.debug("on_check_bans failed: %s", result)
+        return
+    text, kb = result
     await _safe_edit(q, text, kb)
 
 
@@ -337,8 +359,13 @@ async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     q = update.callback_query
     _, target_id_str, ban_id = q.data.split(":", 2)
     target_id = int(target_id_str)
-    await q.answer()
-    text, kb = await Check.ban_detail(target_id, ban_id)
+    _, result = await asyncio.gather(
+        q.answer(), Check.ban_detail(target_id, ban_id), return_exceptions=True
+    )
+    if isinstance(result, BaseException):
+        log.debug("on_check_ban_item failed: %s", result)
+        return
+    text, kb = result
     await _safe_edit(q, text, kb)
 
 
@@ -348,8 +375,13 @@ async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     """Render the per-group warning summary for the checked user."""
     q = update.callback_query
     target_id = int(q.data.split(":", 1)[1])
-    await q.answer()
-    text, kb = await Check.warns_by_group(target_id)
+    _, result = await asyncio.gather(
+        q.answer(), Check.warns_by_group(target_id), return_exceptions=True
+    )
+    if isinstance(result, BaseException):
+        log.debug("on_check_warns failed: %s", result)
+        return
+    text, kb = result
     await _safe_edit(q, text, kb)
 
 
@@ -362,8 +394,15 @@ async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     target_id = int(target_id_str)
     chat_id = int(chat_id_str)
     page = int(page_str)
-    await q.answer()
-    text, kb = await Check.warns_in_group(target_id, chat_id, page)
+    _, result = await asyncio.gather(
+        q.answer(),
+        Check.warns_in_group(target_id, chat_id, page),
+        return_exceptions=True,
+    )
+    if isinstance(result, BaseException):
+        log.debug("on_check_warn_chat failed: %s", result)
+        return
+    text, kb = result
     await _safe_edit(q, text, kb)
 
 
@@ -375,8 +414,13 @@ async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     _, target_id_str, page_str = q.data.split(":")
     target_id = int(target_id_str)
     page = int(page_str)
-    await q.answer()
-    text, kb = await Check.kicks_list(target_id, page)
+    _, result = await asyncio.gather(
+        q.answer(), Check.kicks_list(target_id, page), return_exceptions=True
+    )
+    if isinstance(result, BaseException):
+        log.debug("on_check_kicks failed: %s", result)
+        return
+    text, kb = result
     await _safe_edit(q, text, kb)
 
 
@@ -388,8 +432,13 @@ async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     _, target_id_str, page_str = q.data.split(":")
     target_id = int(target_id_str)
     page = int(page_str)
-    await q.answer()
-    text, kb = await Check.mutes_list(target_id, page)
+    _, result = await asyncio.gather(
+        q.answer(), Check.mutes_list(target_id, page), return_exceptions=True
+    )
+    if isinstance(result, BaseException):
+        log.debug("on_check_mutes failed: %s", result)
+        return
+    text, kb = result
     await _safe_edit(q, text, kb)
 
 
@@ -401,8 +450,13 @@ async def on_check_appeals(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     _, target_id_str, page_str = q.data.split(":")
     target_id = int(target_id_str)
     page = int(page_str)
-    await q.answer()
-    text, kb = await Check.appeals_list(target_id, page)
+    _, result = await asyncio.gather(
+        q.answer(), Check.appeals_list(target_id, page), return_exceptions=True
+    )
+    if isinstance(result, BaseException):
+        log.debug("on_check_appeals failed: %s", result)
+        return
+    text, kb = result
     await _safe_edit(q, text, kb)
 
 

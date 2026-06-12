@@ -279,9 +279,17 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - All false positives resolved: `staff_only`/`mod_only`/`owner_only` decorators guard `effective_user is None`; `promote_flow.py:161` gather without `return_exceptions=True` is correct for data-fetching gather; `admins.py:542` early-reject pattern is correct.
   - Ruff 70 files clean; bot running (MongoDB connected, scheduler started, polling active).
 
+- Session 58 (2026-06-12): anonymous admin, album flush, chat migration.
+  - Bug #37: `decorators.py` all 4 auth decorators (owner/staff/mod/basic_mod) -- GroupAnonymousBot (1087968824) silently failed as "no rank". Added `_is_anon_admin()` + `_ERR_ANON_ADMIN`, applied first in all decorators.
+  - Bug #35: `ban_flow.py` `_flush_album` -- user_data not cleared after ban execute; second album could re-fire ban. Added `_album_userdata` reference dict and post-flush cleanup.
+  - Bug #36: `ban_flow.py` `_flush_album` -- no guard for required meta keys (target_id, admin_id). Added early-return warning.
+  - Bug #38: `greeting.py` / `groups_db.py` -- no chat migration handler. Added `migrate_group()` in groups_db + `on_chat_migration` handler using `filters.StatusUpdate.MIGRATE`.
+  - Discovered PTB 22.8 uses `filters.StatusUpdate.MIGRATE` (not `MIGRATE_FROM_CHAT_ID`/`MIGRATE_TO_CHAT_ID`). Saved to decisions.md.
+  - Ruff 70 files clean; bot running (MongoDB connected, scheduler started, polling active).
+
 ## What is in progress
 
-Nothing. Session 57 checkpoint complete.
+Nothing. Session 58 checkpoint complete.
 
 ## What is pending (optional)
 

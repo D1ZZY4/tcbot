@@ -2,6 +2,35 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-12 (session 58)
+
+### Fixed
+
+- **`tcbot/modules/helper/decorators.py`** — anonymous admin (GroupAnonymousBot, id `1087968824`) was silently treated as a regular user with no federation role, so every `@owner_only`, `@staff_only`, `@mod_only`, and `@basic_mod_only` command would reject the action with a generic "you don't have the rank" message. Since the bot cannot resolve the true identity behind an anonymous admin post, it now detects the placeholder ID via the new `_is_anon_admin()` helper and returns a clear refusal: "Anonymous admin mode is not supported for federation commands. Please send this command from your personal account." Added `_ANON_BOT_ID = 1087968824` constant and `_ERR_ANON_ADMIN` message constant. Applied to all four auth decorators as the first check before any DB lookup. (Bug #37)
+- **`tcbot/modules/helper/workflows/ban_flow.py`** — two album-buffering edge cases:
+  1. After `_flush_album` executed the ban via `_execute_ban`, the live `ctx.user_data` dictionary was not cleared. If a second album (different `media_group_id`) arrived before the conversation timed out, `dict(ctx.user_data)` still contained the previous ban keys, and `_execute_ban` would be called again for the same target. Added `_album_userdata: dict[str, dict]` accumulator (stores a reference to `ctx.user_data`, not a copy) and post-flush cleanup: clears all `_BAN_USER_DATA_KEYS` after `_execute_ban` completes. (Bug #35)
+  2. `_flush_album` only guarded `if not msgs or not meta` but not for required keys inside `meta`. If the conversation was interrupted before `ban_target_id` or `ban_admin_id` were set in `ctx.user_data`, the function would call `_execute_ban` with `target_id = None`, corrupting the ban record. Added an explicit guard: if `meta.get("ban_target_id")` or `meta.get("ban_admin_id")` is falsy, log a warning and return early. (Bug #36)
+- **`tcbot/modules/greeting.py`** and **`tcbot/database/groups_db.py`** — no chat migration handler existed. When a basic group migrates to a supergroup, Telegram reassigns the `chat_id`. The federated groups record kept the old ID, causing ban enforcement, group listing, and connection checks to fail silently for that group from that point on. Added `migrate_group(old_chat_id, new_chat_id)` to `groups_db.py` (updates both `federated_groups` and `pending_joins`, invalidates `connected_cache` and `active_groups_cache`). Added `on_chat_migration` handler to `greeting.py` using `filters.StatusUpdate.MIGRATE`, registered in `__handlers__`. The handler acts on the `migrate_from_chat_id` field (received in the new supergroup) where both IDs are known; the `migrate_to_chat_id` event (old basic group) is logged only for observability. (Bug #38)
+
+## [Unreleased] - 2026-06-12 (session 59)
+
+### Fixed
+
+- **`tcbot/modules/checking.py`** (`on_checkme_detail`, `on_checkme_back`) — DB lookup (`bans_db.get_ban`) was awaited before `q.answer()`. The callback spinner would remain visible for the full DB round-trip before Telegram registered the button tap, and if the network call timed out, the button would never ack. Refactored both handlers to `asyncio.gather(q.answer(), db.bans_db.get_ban(ban_id), return_exceptions=True)`. The previous `show_alert=True` error path was replaced with `q.edit_message_text(error)` since the query is already answered by this point. Added `isinstance(ban, BaseException)` guard with `ban = None` fallback. (Bug #39)
+- **`tcbot/modules/checking.py`** (all `on_check_*` callback handlers) — all eight `/check` drill-down callbacks (`on_check_main`, `on_check_bans`, `on_check_ban_item`, `on_check_warns`, `on_check_warn_chat`, `on_check_kicks`, `on_check_mutes`, `on_check_appeals`) followed the pattern `await q.answer()` then `await Check.<method>(...)` — two sequential awaits for independent coroutines. Per project rules all independent I/O must be combined with `asyncio.gather`. Refactored all eight to `_, result = await asyncio.gather(q.answer(), Check.<method>(...), return_exceptions=True)` with `isinstance(result, BaseException)` guard and `log.debug` on failure. (Perf fix, session 59)
+
+## [Unreleased] - 2026-06-12 (session 59 continued)
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/stats_flow.py`** (`Stats.main`) — 7-coroutine `asyncio.gather` (owner id, admin count, developer list, tester list, ban count, group count, user count) had no `return_exceptions=True`. If any single DB call raised (e.g. network timeout during the federation stats overview), Python would re-raise the exception from the gather and crash the entire `/tcstats` command. Added `return_exceptions=True` and `isinstance(x, BaseException)` fallbacks for each field (owner→None, counts→0, lists→[]). (Bug #40)
+- **`tcbot/modules/helper/workflows/stats_flow.py`** (`Stats.staff_roster`) — same pattern: 4-coroutine gather for owner/admins/developers/testers lacked `return_exceptions=True`. Added it with the same individual fallbacks. (Bug #40 part 2)
+- **`tcbot/modules/helper/ban_info.py`** (`build_ban_detail`) — the parallel gather for banned-user and admin mention data lacked `return_exceptions=True`. If either `get_user_mention_data` raised, the tuple unpacking `(target_fname, target_uname), (admin_fname, admin_uname) = ...` would crash with `TypeError`. Refactored to `r_target, r_admin = await asyncio.gather(..., return_exceptions=True)` with per-result fallbacks `(str(uid), None)` and `("Admin", None)`. Also fixed the sequential `else` branch to guard the single await the same way. (Bug #41)
+- **`tcbot/modules/warnings.py`** (`cmd_warn`) — `asyncio.gather(identity.classify(...), resolve_and_check(...))` lacked `return_exceptions=True`. If either coroutine raised, `ident, (executor_role, _)` unpacking would crash the command silently (ConversationHandler would be left open). Refactored to `ident, role_result = await asyncio.gather(..., return_exceptions=True)` with individual `isinstance` guards and `ConversationHandler.END` returns on failure. (Bug #42)
+- **`tcbot/modules/groups.py`** (`_toggle`) — two sequential-await defects:
+  1. Cache-hit path: `await q.answer()` then `await safe_edit(...)` were independent; refactored to `asyncio.gather(q.answer(), safe_edit(...), return_exceptions=True)`.
+  2. Cache-miss path: `await q.answer()` then `await db.groups_db.active_groups()` were independent; refactored to `groups, _ = await asyncio.gather(active_groups(), q.answer(), return_exceptions=True)` with `groups = []` fallback on DB error. (Perf fix, session 59)
+
 ## [Unreleased] - 2026-06-12 (session 57)
 
 ### Fixed

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
@@ -105,15 +106,23 @@ async def _toggle(
     q = update.callback_query
     groups = ctx.user_data.get("groups_cache")
     if groups:
-        await q.answer()
-        await safe_edit(
-            q.message,
-            _render(groups, detailed=detailed),
-            reply_markup=tcgroups_kb(detailed=detailed),
+        await asyncio.gather(
+            q.answer(),
+            safe_edit(
+                q.message,
+                _render(groups, detailed=detailed),
+                reply_markup=tcgroups_kb(detailed=detailed),
+            ),
+            return_exceptions=True,
         )
     else:
-        await q.answer()
-        groups = await db.groups_db.active_groups()
+        groups, _ = await asyncio.gather(
+            db.groups_db.active_groups(),
+            q.answer(),
+            return_exceptions=True,
+        )
+        if isinstance(groups, BaseException):
+            groups = []
         ctx.user_data["groups_cache"] = groups
         await safe_edit(
             q.message,

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, cast
 
 from tcbot.database.cache import (
@@ -109,6 +110,35 @@ async def active_groups() -> list[GroupDoc]:
 async def active_group_count() -> int:
     """Count the number of currently active connected groups."""
     return await _groups().count_documents({"is_active": True})
+
+
+async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
+    """Update all group records from ``old_chat_id`` to ``new_chat_id`` after migration.
+
+    Called when a basic group migrates to a supergroup. Updates both the
+    ``federated_groups`` and ``pending_joins`` collections and invalidates
+    the relevant cache entries. Returns ``True`` if any record was updated.
+    """
+    results = await asyncio.gather(
+        _groups().update_one(
+            {"chat_id": old_chat_id},
+            {"$set": {"chat_id": new_chat_id}},
+        ),
+        _pending().update_one(
+            {"chat_id": old_chat_id},
+            {"$set": {"chat_id": new_chat_id}},
+        ),
+        return_exceptions=True,
+    )
+    matched_any = False
+    for r in results:
+        if not isinstance(r, BaseException) and r.matched_count > 0:
+            matched_any = True
+    if matched_any:
+        connected_cache.put(old_chat_id, False)  # noqa: FBT003
+        connected_cache.put(new_chat_id, True)  # noqa: FBT003
+        active_groups_cache.clear()
+    return matched_any
 
 
 # ──────────────────── Pending Joins Management ──────────────────── #

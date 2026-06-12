@@ -186,6 +186,11 @@ def log_execution(
 
 # ───────────────────────── Auth decorators ──────────────────────── #
 
+# * Telegram internal ID for the GroupAnonymousBot placeholder, which appears as
+# * the sender when a real admin posts using "send message as group" mode.
+# * The true identity is unknown to the bot, so federation commands are refused.
+_ANON_BOT_ID = 1087968824
+
 # * User-facing refusal messages for each auth tier. Centralised here so voice
 # * changes and translations only need to happen in one place.
 _ERR_OWNER_ONLY = "This command is reserved for the Founder - you're not authorized."
@@ -193,6 +198,16 @@ _ERR_STAFF_ONLY = "Staff and Founder only for this one - you don't have the rank
 _ERR_MOD_ONLY = "You need Developer rank or above for this - not your call."
 _ERR_BASIC_MOD_ONLY = "You need at least a Tester role for this - not your call."
 _ERR_RANK_INSUFFICIENT = "You don't have the rank for this one."
+_ERR_ANON_ADMIN = (
+    "Anonymous admin mode is not supported for federation commands. "
+    "Please send this command from your personal account."
+)
+
+
+def _is_anon_admin(update: Update) -> bool:
+    """Return True when the effective user is the anonymous admin placeholder bot."""
+    u = update.effective_user
+    return u is not None and u.id == _ANON_BOT_ID
 
 
 def owner_only(func: Callable) -> Callable:
@@ -201,6 +216,10 @@ def owner_only(func: Callable) -> Callable:
     @functools.wraps(func)
     async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Allow the call only when the invoking user is the Founder."""
+        if _is_anon_admin(update):
+            if update.effective_message:
+                await update.effective_message.reply_text(_ERR_ANON_ADMIN)
+            return None
         uid = update.effective_user.id if update.effective_user else None
         if uid and await db.users_roles.is_owner(uid):
             return await func(update, ctx)
@@ -217,6 +236,10 @@ def staff_only(func: Callable) -> Callable:
     @functools.wraps(func)
     async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Allow the call only when the invoking user is Founder or Admin."""
+        if _is_anon_admin(update):
+            if update.effective_message:
+                await update.effective_message.reply_text(_ERR_ANON_ADMIN)
+            return None
         uid = update.effective_user.id if update.effective_user else None
         if uid and await db.users_roles.is_staff(uid):
             return await func(update, ctx)
@@ -233,6 +256,10 @@ def mod_only(func: Callable) -> Callable:
     @functools.wraps(func)
     async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Allow the call only when the invoking user holds Developer rank or above."""
+        if _is_anon_admin(update):
+            if update.effective_message:
+                await update.effective_message.reply_text(_ERR_ANON_ADMIN)
+            return None
         uid = update.effective_user.id if update.effective_user else None
         if uid and db.users_roles.role_rank(
             await db.users_roles.get_effective_role(uid)
@@ -251,6 +278,10 @@ def basic_mod_only(func: Callable) -> Callable:
     @functools.wraps(func)
     async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Allow the call only when the invoking user holds Tester rank or above."""
+        if _is_anon_admin(update):
+            if update.effective_message:
+                await update.effective_message.reply_text(_ERR_ANON_ADMIN)
+            return None
         uid = update.effective_user.id if update.effective_user else None
         if uid and db.users_roles.role_rank(
             await db.users_roles.get_effective_role(uid)

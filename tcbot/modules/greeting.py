@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Studio
 
-"""New and left member event handlers: greets users and enforces bans on join."""
+"""New and left member event handlers, plus chat migration tracking."""
 
 from __future__ import annotations
 
@@ -101,9 +101,53 @@ async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         )
 
 
+@decorators.log_execution
+async def on_chat_migration(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Update group records when a basic group migrates to a supergroup.
+
+    Telegram delivers two status updates on migration:
+    - ``migrate_to_chat_id`` in the old basic group (bot may no longer have
+      write access at that point, so we only log it).
+    - ``migrate_from_chat_id`` in the new supergroup, which carries both IDs;
+      this is where we perform the DB update.
+    """
+    msg = update.effective_message
+    if not msg:
+        return
+
+    if msg.migrate_from_chat_id:
+        old_id = msg.migrate_from_chat_id
+        new_id = update.effective_chat.id if update.effective_chat else None
+        if old_id and new_id and old_id != new_id:
+            migrated = await db.groups_db.migrate_group(old_id, new_id)
+            if migrated:
+                log.info(
+                    "Federation group migrated: old_chat_id=%d new_chat_id=%d",
+                    old_id,
+                    new_id,
+                )
+            else:
+                log.debug(
+                    "Chat migration received but group was not in federation: "
+                    "old_chat_id=%d new_chat_id=%d",
+                    old_id,
+                    new_id,
+                )
+        return
+
+    if msg.migrate_to_chat_id:
+        log.info(
+            "Chat migrate_to received: chat_id=%d -> %d "
+            "(will be recorded via migrate_from in the supergroup)",
+            update.effective_chat.id if update.effective_chat else 0,
+            msg.migrate_to_chat_id,
+        )
+
+
 # ──────────────────────────── Handlers ──────────────────────────── #
 
 __handlers__ = [
     MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, on_new_member),
     MessageHandler(filters.StatusUpdate.LEFT_CHAT_MEMBER, on_left_member),
+    MessageHandler(filters.StatusUpdate.MIGRATE, on_chat_migration),
 ]

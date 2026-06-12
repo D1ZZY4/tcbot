@@ -115,6 +115,16 @@ description: Non-trivial technical decisions made during development. Format: da
 
 ---
 
+## 2026-06-12: PTB 22.8 chat migration filter is `StatusUpdate.MIGRATE`, not per-direction
+
+**Decision:** Use `filters.StatusUpdate.MIGRATE` for chat migration handlers. PTB 22.8 does not expose `MIGRATE_FROM_CHAT_ID` or `MIGRATE_TO_CHAT_ID` as separate attributes; `StatusUpdate.MIGRATE` covers both directions (`message.migrate_from_chat_id or message.migrate_to_chat_id`).
+
+**Why:** An attempt to use `filters.StatusUpdate.MIGRATE_FROM_CHAT_ID` caused `AttributeError: type object 'StatusUpdate' has no attribute 'MIGRATE_FROM_CHAT_ID'` at module import time and crashed the bot. The single `MIGRATE` filter is the correct PTB 22.x API.
+
+**How to apply:** In any handler that needs to react to group-to-supergroup migration, use `MessageHandler(filters.StatusUpdate.MIGRATE, handler_fn)` and inspect `msg.migrate_from_chat_id` / `msg.migrate_to_chat_id` inside the handler.
+
+---
+
 ## 2026-06-02: Memory files live in `.agents/memory/`, MEMORY.md is the index
 
 **Decision:** Persistent cross-session memory uses `.agents/memory/MEMORY.md` as a one-line-per-entry index pointing to topic files in the same directory. Context, progress, and decisions each have their own file.

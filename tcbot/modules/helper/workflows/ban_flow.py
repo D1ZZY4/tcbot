@@ -64,6 +64,10 @@ proof = BuildProof("ban", skip_allowed=False)
 _albums: dict[str, list[Message]] = {}
 _album_meta: dict[str, dict[str, Any]] = {}
 
+# * Weak references to user_data dicts for post-flush cleanup (keyed by media_group_id).
+# * Stored as a reference (not a copy) so we can clear ban keys after execution.
+_album_userdata: dict[str, dict[str, Any]] = {}
+
 # * Strong references to in-flight album flush tasks (prevents GC)
 _album_tasks: set[asyncio.Task[None]] = set()
 
@@ -280,6 +284,7 @@ async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
         if mgid not in _albums:
             _albums[mgid] = []
             _album_meta[mgid] = dict(ctx.user_data)
+            _album_userdata[mgid] = ctx.user_data
             task = asyncio.create_task(_flush_album(mgid, ctx.bot))
             _album_tasks.add(task)
             task.add_done_callback(_album_tasks.discard)
@@ -295,10 +300,22 @@ async def _flush_album(mgid: str, bot: Bot) -> None:
     await asyncio.sleep(cfg.album_debounce)
     msgs = _albums.pop(mgid, [])
     meta = _album_meta.pop(mgid, {})
+    user_data = _album_userdata.pop(mgid, None)
     if not msgs or not meta:
+        return
+    if not meta.get("ban_target_id") or not meta.get("ban_admin_id"):
+        log.warning(
+            "Album flush aborted for %s: meta missing target_id or admin_id", mgid
+        )
         return
     log.info("Flushing album %s with %d media items", mgid, len(msgs))
     await _execute_ban(bot, msgs, meta)
+    # * Clear ban keys from the live user_data so the ConversationHandler does
+    # * not re-fire _execute_ban if a second album arrives before the conversation
+    # * naturally times out or ends.
+    if user_data is not None:
+        for key in _BAN_USER_DATA_KEYS:
+            user_data.pop(key, None)
 
 
 async def on_proof_unexpected(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
