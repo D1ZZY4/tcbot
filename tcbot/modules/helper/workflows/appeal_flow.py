@@ -167,20 +167,36 @@ class BuildAppeal:
         uid = user.id
 
         if update.effective_chat is None or update.effective_chat.type != "private":
-            await msg.reply_text(_ERR_NOT_PRIVATE)
+            try:
+                await msg.reply_text(_ERR_NOT_PRIVATE)
+            except Exception as exc:
+                log.debug("Appeal not-private reply failed: %s", exc)
             return ConversationHandler.END
 
         ban = await db.bans_db.get_ban(ban_id)
         if not ban or not ban.get("is_active"):
-            await msg.reply_text(_ERR_INVALID_LINK)
+            try:
+                await msg.reply_text(_ERR_INVALID_LINK)
+            except Exception as exc:
+                log.debug(
+                    "Appeal invalid-link reply failed for ban_id=%s: %s", ban_id, exc
+                )
             return ConversationHandler.END
 
         if ban["banned_user_id"] != uid:
-            await msg.reply_text(_ERR_WRONG_ACCOUNT)
+            try:
+                await msg.reply_text(_ERR_WRONG_ACCOUNT)
+            except Exception as exc:
+                log.debug("Appeal wrong-account reply failed for user %d: %s", uid, exc)
             return ConversationHandler.END
 
         if ban.get("review_message_id"):
-            await msg.reply_text(_ERR_PENDING_REVIEW)
+            try:
+                await msg.reply_text(_ERR_PENDING_REVIEW)
+            except Exception as exc:
+                log.debug(
+                    "Appeal pending-review reply failed for user %d: %s", uid, exc
+                )
             return ConversationHandler.END
 
         if ctx.user_data is None:

@@ -183,46 +183,63 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         ban = None
 
     if user.id == owner_id:
-        await msg.reply_text(
-            f"Bro, {mention(user.id, fname, user.username)}... seriously?\n\n"
-            "You're the Founder - you built this whole place. "
-            "The ban list doesn't apply to you, you run it. "
-            "Go touch grass, you're fine.",
-            parse_mode="HTML",
-        )
+        try:
+            await msg.reply_text(
+                f"Bro, {mention(user.id, fname, user.username)}... seriously?\n\n"
+                "You're the Founder - you built this whole place. "
+                "The ban list doesn't apply to you, you run it. "
+                "Go touch grass, you're fine.",
+                parse_mode="HTML",
+            )
+        except Exception as exc:
+            log.debug("checkme founder reply failed for user %d: %s", user.id, exc)
         return
 
     if user_role == "admin":
-        await msg.reply_text(
-            f"Hey {mention(user.id, fname, user.username)}, checking yourself?\n\n"
-            "You're on the staff team - you handle bans, not receive them. "
-            "No active ban on your end. You're good.",
-            parse_mode="HTML",
-        )
+        try:
+            await msg.reply_text(
+                f"Hey {mention(user.id, fname, user.username)}, checking yourself?\n\n"
+                "You're on the staff team - you handle bans, not receive them. "
+                "No active ban on your end. You're good.",
+                parse_mode="HTML",
+            )
+        except Exception as exc:
+            log.debug("checkme admin reply failed for user %d: %s", user.id, exc)
         return
     if user_role in ("developer", "tester"):
         role_label = db.users_roles.ROLE_LABEL.get(user_role, user_role)
-        await msg.reply_text(
-            f"Hey {mention(user.id, fname, user.username)}, all good.\n\n"
-            f"You're a {esc(cfg.community_name)} {esc(role_label)} - on the team, not on the ban list. "
-            "Nothing to worry about.",
-            parse_mode="HTML",
-        )
+        try:
+            await msg.reply_text(
+                f"Hey {mention(user.id, fname, user.username)}, all good.\n\n"
+                f"You're a {esc(cfg.community_name)} {esc(role_label)} - on the team, not on the ban list. "
+                "Nothing to worry about.",
+                parse_mode="HTML",
+            )
+        except Exception as exc:
+            log.debug("checkme subrole reply failed for user %d: %s", user.id, exc)
         return
 
     if not ban:
-        await msg.reply_text(f"You're clean - no active ban in {cfg.community_name}.")
+        try:
+            await msg.reply_text(
+                f"You're clean - no active ban in {cfg.community_name}."
+            )
+        except Exception as exc:
+            log.debug("checkme clean reply failed for user %d: %s", user.id, exc)
         return
 
     ban_id = ban["ban_id"]
 
     text, proof_link = await _ban_summary(ban, user.id, fname)
 
-    await msg.reply_text(
-        text,
-        parse_mode="HTML",
-        reply_markup=keyboards.checkme_ban_kb(ctx.bot.username, ban_id, proof_link),
-    )
+    try:
+        await msg.reply_text(
+            text,
+            parse_mode="HTML",
+            reply_markup=keyboards.checkme_ban_kb(ctx.bot.username, ban_id, proof_link),
+        )
+    except Exception as exc:
+        log.debug("checkme ban-detail reply failed for user %d: %s", user.id, exc)
 
 
 # ──────────────────────── Callback Handlers ─────────────────────── #
@@ -312,9 +329,12 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(update.effective_message.text)
     target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        await update.effective_message.reply_text(
-            "Couldn't resolve that user. Reply to a message or provide a valid ID / @username."
-        )
+        try:
+            await update.effective_message.reply_text(
+                "Couldn't resolve that user. Reply to a message or provide a valid ID / @username."
+            )
+        except Exception as exc:
+            log.debug("check resolve-fail reply failed: %s", exc)
         return
 
     # * Refresh cache with whatever we just resolved so future renders have a real name.

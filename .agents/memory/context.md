@@ -5,9 +5,18 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-12 (session 85c)
+**Last updated:** 2026-06-12 (session 86)
 
 ## What is done
+
+- Session 86 (2026-06-12): Fresh audit wave on new task file (v4.1.1). 10 unguarded Telegram API call sites found and fixed.
+  - appeal_flow.py _start: 4 unguarded reply_text (ERR_NOT_PRIVATE, ERR_INVALID_LINK, ERR_WRONG_ACCOUNT, ERR_PENDING_REVIEW) wrapped in individual try/except + log.debug.
+  - checking.py cmd_checkme: 5 unguarded reply_text (founder/admin/subrole/clean/ban-detail branches) all wrapped in try/except + log.debug.
+  - checking.py cmd_check: 1 unguarded reply_text (resolve-fail early exit) wrapped in try/except + log.debug.
+  - Final scan: 0 remaining unguarded msg.reply_text / effective_message.reply_text across all 72 tcbot/ files.
+  - False positive verification: promote_flow.py all gather calls have return_exceptions=True (CLEAN), cache.py TwoLevelCache.clear() L1-only is documented intentional behavior (TTL handles L2), connected_flow.py on_bot_added try/except exists (CLEAN), unban_flow.py execute_unban try/except exists (CLEAN).
+  - Ruff: All checks passed (72 files), 72 files already formatted.
+  - Bot running cleanly: MongoDB, Redis hiredis 3.4.0, APScheduler CBORSerializer, 28/28 indexes, polling active.
 
 - Session 85c (2026-06-12): Final DRY confirmation sweep. No new bugs found.
   - dispatch.py fan_out: semaphore + except Exception (intentional, propagates CancelledError), count_errors uses BaseException. CLEAN.
