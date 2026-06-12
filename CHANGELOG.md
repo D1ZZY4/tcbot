@@ -2,6 +2,13 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-12 (session 50)
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/proof_flow.py`** (`step_prompt`, `noted_prompt`) — `reason` and `inline_reason` were embedded directly into HTML `<b>` tags without escaping: `<b>{reason}</b>`. A user-typed reason containing `<`, `>`, or `&` would break Telegram's HTML parse mode, causing the message to fail or render incorrectly. Added `from tcbot.modules.helper.formatter import esc` import and wrapped both strings with `esc()`. Confirmed no circular import risk (`formatter.py` only imports stdlib `html`). (Bug #5)
+- **`tcbot/modules/admins.py`** (`cmd_promote_request`) — command always rejected every promotion request with "Promoting yourself? Nice try..." regardless of who ran it. Root cause: `identity.classify(user.id, user.id, ...)` always resolves as `Identity("self")` when executor ID equals target ID, which is unavoidable in a self-submission flow. `_PROMOTE_REFUSE["self"]` maps to that refusal string, so the command was permanently broken for all users. Fixed by removing the identity check entirely and replacing it with a parallel fetch of `existing_role` (via `db.users_roles.get_effective_role`) and `existing_request` (via `db.queues_db.get_request`). Users who already hold a federation role receive a clear "You're already a <Role> - no request needed." reply; duplicate-request protection remains via the existing `existing` guard. Docstring explains why `identity.classify` is intentionally omitted. (Bug #6)
+
 ## [Unreleased] - 2026-06-12 (session 49)
 
 ### Fixed

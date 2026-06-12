@@ -466,22 +466,27 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Submit a promotion request to the Founder.
 
-    Checks identity and any existing pending request in parallel. Rejects if the
-    user is banned or already has an open request, then calls
-    ``Promote.request_admin`` to create a new queue entry and notify the Founder.
+    Checks the caller's existing role and any pending request in parallel.
+    Rejects if the user already holds a federation role (no request needed) or
+    already has an open request, then calls ``Promote.request_admin`` to create
+    a new queue entry and notify the Founder.
+
+    Note: identity.classify is intentionally not used here because the caller is
+    the subject of the request (executor_id == target_id), which would always
+    produce an ``Identity("self")`` refusal - incorrect for a self-submission flow.
     """
     user = update.effective_user
     msg = update.effective_message
     if user is None or msg is None:
         return
 
-    ident, existing = await asyncio.gather(
-        identity.classify(ctx.bot, user.id, user.id, user.first_name),
+    existing_role, existing = await asyncio.gather(
+        db.users_roles.get_effective_role(user.id),
         db.queues_db.get_request(user.id),
     )
-    refusal = identity.refuse_message("promote", ident)
-    if refusal is not None:
-        await msg.reply_text(refusal, parse_mode="HTML")
+    if existing_role:
+        label = db.users_roles.ROLE_LABEL.get(existing_role, existing_role.capitalize())
+        await msg.reply_text(f"You're already a {label} - no request needed.")
         return
 
     if existing:

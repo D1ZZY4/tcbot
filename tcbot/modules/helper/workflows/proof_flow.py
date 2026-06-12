@@ -18,6 +18,8 @@ from telegram import (
     Message,
 )
 
+from tcbot.modules.helper.formatter import esc
+
 log = logging.getLogger(__name__)
 
 
@@ -63,7 +65,7 @@ class BuildProof:
         )
         return (
             f"Reason noted; {action_label.lower()}ing {target_mention}{suffix}.\n"
-            f"Reason: <b>{reason}</b>\n\n"
+            f"Reason: <b>{esc(reason)}</b>\n\n"
             f"Got any proof? Send a photo or video{skip_hint}."
         )
 
@@ -81,7 +83,7 @@ class BuildProof:
         )
         return (
             f"{action_label.capitalize()}ing {target_mention}{suffix}.\n"
-            f"Reason: <b>{inline_reason}</b>\n\n"
+            f"Reason: <b>{esc(inline_reason)}</b>\n\n"
             f"Got any proof? Send a photo or video{skip_hint}."
         )
 

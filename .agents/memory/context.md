@@ -5,7 +5,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-11 (session 45)
+**Last updated:** 2026-06-12 (session 50)
 
 ## What is done
 
@@ -212,9 +212,15 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Full HTML escaping audit: `LogBuilder.field()` already escapes by default; `code()` and `mention()` escape internally; `proof_line()` safe (only "Photo/Video (msg N)" strings); `cfg.community_name` is admin-controlled config (not user-provided).
   - Ruff 70 files clean after all fixes.
 
+- Session 50 (2026-06-12): Two correctness bug fixes.
+  - Bug #5: `proof_flow.py` `step_prompt`/`noted_prompt` embedded `reason`/`inline_reason` in HTML `<b>` tags without `esc()`. Added `esc` import and wrapped both strings. Circular import risk confirmed absent.
+  - Bug #6: `admins.py` `cmd_promote_request` always rejected all promotion requests with "Promoting yourself? Nice try..." because `identity.classify(user.id, user.id, ...)` always returns `Identity("self")` in self-submission flows. Removed identity check; replaced with parallel `get_effective_role` + `get_request` check. Users with existing roles get clear rejection; duplicate-request guard retained.
+  - Comprehensive audit of all remaining critical files completed: `checking.py`, `parse_logmsg.py` (full 767 lines), `check_flow.py` (full 513 lines), `stats.py`, `appeals.py`, `groups.py`, `demote_flow.py` — all clean.
+  - Ruff 70 files clean; bot running (MongoDB connected, 75 handlers, polling active).
+
 ## What is in progress
 
-Nothing. Session 49 checkpoint complete.
+Nothing. Session 50 checkpoint complete.
 
 ## What is pending (optional)
 
