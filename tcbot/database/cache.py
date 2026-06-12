@@ -294,3 +294,15 @@ owner_id_cache: TwoLevelCache[int | None] = TwoLevelCache(
     redis_prefix="owner",
 )
 _OWNER_KEY: str = "__owner__"
+
+# Per-user mention data cache (list [first_name, username] per user_id)
+# Populated by users_cache.get_user_mention_data; invalidated on upsert_user
+# JSON round-trip: tuple stored as list, caller casts back to tuple on read.
+_USER_MENTION_CACHE_TTL_S: float = 300.0
+_USER_MENTION_REDIS_TTL_S: float = 600.0
+
+user_mention_cache: TwoLevelCache[list[str | None]] = TwoLevelCache(
+    memory_ttl=_USER_MENTION_CACHE_TTL_S,
+    redis_ttl=_USER_MENTION_REDIS_TTL_S,
+    redis_prefix="umention",
+)

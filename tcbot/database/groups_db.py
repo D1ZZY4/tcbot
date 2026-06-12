@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, cast
 
 from tcbot.database.cache import (
     _ALL_GROUPS_KEY,
-    CACHE_MISS,
     active_groups_cache,
     connected_cache,
 )
@@ -58,16 +57,14 @@ async def get_group_titles(chat_ids: list[int]) -> dict[int, str]:
 
 
 async def is_connected(chat_id: int) -> bool:
-    """Check if a group is currently active and connected to the federation."""
-    cached = connected_cache.get(chat_id)
-    if cached is not CACHE_MISS:
-        return cast("bool", cached)
-    result = (
-        await _groups().find_one({"chat_id": chat_id, "is_active": True}, {"_id": 1})
-        is not None
-    )
-    connected_cache.put(chat_id, result)
-    return result
+    """Check if a group is currently active and connected to the federation (L1→L2→DB cached)."""
+    async def _fetch() -> bool:
+        return (
+            await _groups().find_one({"chat_id": chat_id, "is_active": True}, {"_id": 1})
+            is not None
+        )
+
+    return cast("bool", await connected_cache.get_or_fetch(chat_id, _fetch))
 
 
 async def add_group(chat_id: int, title: str, added_by: int) -> None:
@@ -86,25 +83,26 @@ async def add_group(chat_id: int, title: str, added_by: int) -> None:
         upsert=True,
     )
     connected_cache.put(chat_id, True)  # noqa: FBT003
-    active_groups_cache.clear()
+    active_groups_cache.invalidate(_ALL_GROUPS_KEY)
 
 
 async def deactivate_group(chat_id: int) -> bool:
     """Mark a group as inactive (disconnect from federation)."""
     r = await _groups().update_one({"chat_id": chat_id}, {"$set": {"is_active": False}})
     connected_cache.put(chat_id, False)  # noqa: FBT003
-    active_groups_cache.clear()
+    active_groups_cache.invalidate(_ALL_GROUPS_KEY)
     return r.matched_count > 0
 
 
 async def active_groups() -> list[GroupDoc]:
-    """Get all currently active and connected groups."""
-    cached = active_groups_cache.get(_ALL_GROUPS_KEY)
-    if cached is not CACHE_MISS:
-        return cast("list[GroupDoc]", cached)
-    result: list[GroupDoc] = await _groups().find({"is_active": True}).to_list(None)
-    active_groups_cache.put(_ALL_GROUPS_KEY, result)
-    return result
+    """Get all currently active and connected groups (L1→L2→DB cached)."""
+    async def _fetch() -> list[GroupDoc]:
+        return await _groups().find({"is_active": True}).to_list(None)
+
+    return cast(
+        "list[GroupDoc]",
+        await active_groups_cache.get_or_fetch(_ALL_GROUPS_KEY, _fetch),
+    )
 
 
 async def active_group_count() -> int:
@@ -137,7 +135,7 @@ async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
     if matched_any:
         connected_cache.put(old_chat_id, False)  # noqa: FBT003
         connected_cache.put(new_chat_id, True)  # noqa: FBT003
-        active_groups_cache.clear()
+        active_groups_cache.invalidate(_ALL_GROUPS_KEY)
     return matched_any
 
 

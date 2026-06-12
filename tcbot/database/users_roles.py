@@ -18,7 +18,6 @@ from pymongo.errors import DuplicateKeyError
 
 from tcbot.database.cache import (
     _OWNER_KEY,
-    CACHE_MISS,
     effective_role_cache,
     owner_id_cache,
 )
@@ -57,14 +56,12 @@ def role_rank(role: str | None) -> int:
 
 
 async def get_owner_id() -> int | None:
-    """Return the current owner's user ID (cached)."""
-    cached = owner_id_cache.get(_OWNER_KEY)
-    if cached is not CACHE_MISS:
-        return cast("int | None", cached)
-    doc: AdminDoc | None = await col("tc_owners").find_one({}, {"_id": 0, "user_id": 1})
-    result = doc["user_id"] if doc else None
-    owner_id_cache.put(_OWNER_KEY, result)
-    return result
+    """Return the current owner's user ID (L1→L2→DB cached)."""
+    async def _fetch() -> int | None:
+        doc: AdminDoc | None = await col("tc_owners").find_one({}, {"_id": 0, "user_id": 1})
+        return doc["user_id"] if doc else None
+
+    return cast("int | None", await owner_id_cache.get_or_fetch(_OWNER_KEY, _fetch))
 
 
 async def is_owner(user_id: int) -> bool:
@@ -223,29 +220,32 @@ async def can_act_on(executor_id: int, target_id: int) -> bool:
 
 
 async def get_effective_role(user_id: int) -> str | None:
-    """Resolve a user's full effective role including owner/admin status."""
-    cached = effective_role_cache.get(user_id)
-    if cached is not CACHE_MISS:
-        return cast("str | None", cached)
+    """Resolve a user's full effective role including owner/admin status (L1→L2→DB cached)."""
+    async def _fetch() -> str | None:
+        owner, admin, role = await asyncio.gather(
+            is_owner(user_id),
+            is_admin(user_id),
+            get_role(user_id),
+            return_exceptions=True,
+        )
+        if isinstance(owner, BaseException):
+            log.warning(
+                "get_effective_role owner check failed for %d: %s", user_id, owner
+            )
+            owner = False
+        if isinstance(admin, BaseException):
+            log.warning(
+                "get_effective_role admin check failed for %d: %s", user_id, admin
+            )
+            admin = False
+        if isinstance(role, BaseException):
+            log.warning(
+                "get_effective_role role fetch failed for %d: %s", user_id, role
+            )
+            role = None
+        return "founder" if owner else "admin" if admin else role
 
-    owner, admin, role = await asyncio.gather(
-        is_owner(user_id),
-        is_admin(user_id),
-        get_role(user_id),
-        return_exceptions=True,
-    )
-    if isinstance(owner, BaseException):
-        log.warning("get_effective_role owner check failed for %d: %s", user_id, owner)
-        owner = False
-    if isinstance(admin, BaseException):
-        log.warning("get_effective_role admin check failed for %d: %s", user_id, admin)
-        admin = False
-    if isinstance(role, BaseException):
-        log.warning("get_effective_role role fetch failed for %d: %s", user_id, role)
-        role = None
-    result: str | None = "founder" if owner else "admin" if admin else role
-    effective_role_cache.put(user_id, result)
-    return result
+    return cast("str | None", await effective_role_cache.get_or_fetch(user_id, _fetch))
 
 
 async def role_meta(user_id: int) -> tuple[str | None, int | None, Any]:

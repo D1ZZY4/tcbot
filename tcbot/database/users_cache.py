@@ -11,8 +11,9 @@ Do not mix with users_roles.py which handles tc_owners, tc_admins, and tc_roles.
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
+from tcbot.database.cache import CACHE_MISS, user_mention_cache
 from tcbot.database.documents import UserDoc
 from tcbot.database.mongos import col
 from tcbot.utils.timedate_format import utc_now
@@ -55,6 +56,8 @@ async def upsert_user(
         },
         upsert=True,
     )
+    # * Invalidate mention cache so the next read reflects the updated profile.
+    user_mention_cache.invalidate(user_id)
 
 
 # ───────── Member cache queries ─────────
@@ -66,48 +69,71 @@ async def get_user(user_id: int) -> UserDoc | None:
 
 
 async def get_user_mention_data(user_id: int) -> tuple[str, str | None]:
-    """Return (first_name, username) for mention formatting.
+    """Return (first_name, username) for mention formatting (L1→L2→DB cached).
 
-    Optimized query that fetches only the fields needed for mentions,
-    avoiding full document retrieval.
+    Uses ``user_mention_cache`` (Redis-backed TwoLevelCache) to avoid MongoDB
+    round-trips on repeated lookups.  Cache is invalidated on every ``upsert_user``.
     """
-    doc = await _members().find_one(
-        {"user_id": user_id}, {"first_name": 1, "username": 1}
-    )
-    if doc:
-        return doc.get("first_name") or f"User {user_id}", doc.get("username")
-    return f"User {user_id}", None
+    async def _fetch() -> list[str | None]:
+        doc = await _members().find_one(
+            {"user_id": user_id}, {"first_name": 1, "username": 1}
+        )
+        if doc:
+            return [doc.get("first_name") or f"User {user_id}", doc.get("username")]
+        return [f"User {user_id}", None]
+
+    data = await user_mention_cache.get_or_fetch(user_id, _fetch)
+    return cast("tuple[str, str | None]", (data[0], data[1]))
 
 
 async def get_mention_data_batch(
     user_ids: list[int],
 ) -> dict[int, tuple[str, str | None]]:
-    """Fetch (first_name, username) for multiple users in a single query.
+    """Fetch (first_name, username) for multiple users, checking cache for each ID first.
 
-    Optimized batch query that replaces multiple individual get_user_mention_data()
-    calls with a single database roundtrip.
+    Cache-aware: IDs found in L1 are returned immediately; only uncached IDs trigger
+    a batch MongoDB query.  Newly fetched data is populated into the mention cache.
     """
     if not user_ids:
         return {}
+
+    result: dict[int, tuple[str, str | None]] = {}
+    missing: list[int] = []
+
+    # * Check L1 in-memory cache for each user_id before hitting MongoDB.
+    for uid in user_ids:
+        cached = user_mention_cache.get(uid)
+        if cached is not CACHE_MISS:
+            data = cast("list[str | None]", cached)
+            result[uid] = (cast("str", data[0]), cast("str | None", data[1]))
+        else:
+            missing.append(uid)
+
+    if not missing:
+        return result
+
+    # * Batch-fetch only uncached users from MongoDB in a single round-trip.
     docs = (
         await _members()
         .find(
-            {"user_id": {"$in": user_ids}},
+            {"user_id": {"$in": missing}},
             {"user_id": 1, "first_name": 1, "username": 1},
         )
         .to_list(None)
     )
-    result = {
-        doc["user_id"]: (
-            doc.get("first_name") or f"User {doc['user_id']}",
-            doc.get("username"),
-        )
-        for doc in docs
-    }
-    # Fill in missing users with defaults
-    for uid in user_ids:
+    for doc in docs:
+        uid = doc["user_id"]
+        fname = doc.get("first_name") or f"User {uid}"
+        uname = doc.get("username")
+        # * Populate L1 (and fire-and-forget L2 Redis write) for next lookup.
+        user_mention_cache.put(uid, [fname, uname])
+        result[uid] = (fname, uname)
+
+    # * Fill fallback for users not found in DB either.
+    for uid in missing:
         if uid not in result:
             result[uid] = (f"User {uid}", None)
+
     return result
 
 
