@@ -24,6 +24,9 @@ log = logging.getLogger(__name__)
 # * not the real human behind the anonymous admin title.
 _ANONYMOUS_BOT_ID = 1087968824
 
+# * Telegram's official service / system account ID.
+_TELEGRAM_USER_ID = 777000
+
 # * Telegram lookups are wrapped in wait_for so a stalled API call never blocks
 # * the user-facing reply. Three seconds is the standard project-wide budget.
 _GET_CHAT_TIMEOUT = 3.0
@@ -92,10 +95,17 @@ async def extract_target(
     # * Skip GroupAnonymousBot (id 1087968824): it is a Telegram pseudo-user
     # * that appears as `from_user` when an anonymous admin sends a message.
     # * Targeting it would attempt to act on the placeholder, not a real user.
-    if msg.reply_to_message and msg.reply_to_message.from_user:
-        u: User = msg.reply_to_message.from_user
-        if u.id != _ANONYMOUS_BOT_ID:
-            return u.id, u.first_name or await _best_name(u.id)
+    # * Similarly skip the Telegram service account (777000) and channel posts.
+    if msg.reply_to_message:
+        target_msg = msg.reply_to_message
+        if target_msg.from_user:
+            u: User = target_msg.from_user
+            if u.id not in (_ANONYMOUS_BOT_ID, _TELEGRAM_USER_ID):
+                return u.id, u.first_name or await _best_name(u.id)
+
+        if target_msg.sender_chat:
+            c: Chat = target_msg.sender_chat
+            return c.id, c.title or await _best_name(c.id)
 
     # * Priority 2 & 3: Explicit args (full ID/username or partial name search)
     if args:

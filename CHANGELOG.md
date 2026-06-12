@@ -2,6 +2,28 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-12 (session 65)
+
+### Added
+
+- **`tcbot/database/mongos.py`** (`ensure_indexes`): 5 new compound/single-field indexes for previously unindexed query paths: `col("federated_groups").create_index([("is_active", 1)])` (serves `active_groups()`/`active_group_count()`); `col("member_cache").create_index([("last_updated", -1)])` (serves sorted user view in `/tcstats` users list); `col("kicks").create_index([("chat_id", 1)])`, `col("mutes").create_index([("chat_id", 1)])`, `col("bans").create_index([("chat_id", 1)])` (serves per-chat moderation log lookups).
+
+### Fixed
+
+- **`tcbot/modules/helper/identity.py`** (`classify`, refusal tables): `IdentityKind` extended with `"anon_admin"`. `classify()` now detects `ANONYMOUS_BOT_ID` (1087968824) and returns `Identity("anon_admin", ...)` before the role lookup block. All 11 per-action refusal tables (`_BAN_REFUSE` through `_RESETWARNS_REFUSE`) given `"anon_admin"` entries with clear professional messages. Previously if a moderator targeted the GroupAnonymousBot placeholder ID via explicit arguments, `classify()` returned `Identity("user")` and the action proceeded against the placeholder - an incoherent operation. Now all moderation commands refuse gracefully.
+- **`tcbot/modules/helper/extraction.py`** (`extract_target`): Added `_TELEGRAM_USER_ID = 777000` constant. Reply-target path now skips both `_ANONYMOUS_BOT_ID` and `_TELEGRAM_USER_ID` when `from_user` matches. Added `sender_chat` branch: when a reply targets a channel post (no `from_user`, but `sender_chat` present), returns `(sender_chat.id, sender_chat.title)` so linked-channel auto-forwards resolve to the channel entity instead of falling through to `(None, None)`.
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** (`_start`, `_on_cancel`, `_on_timeout`, `_on_message`, `on_decision`): Added `None` guards for `update.effective_message`, `update.effective_user`, and `update.callback_query` throughout. Added `if ctx.user_data is not None:` checks before popping session keys in `_on_cancel` and `_on_timeout`. `on_decision` callback now gathers `is_staff` + `q.answer()` in parallel. Non-text input in `WAITING_APPEAL` state returns `WAITING_APPEAL` instead of falling through.
+- **`tcbot/modules/helper/workflows/ban_flow.py`** (`on_proof_received`, `on_cancel_proof`, `on_proof_timeout`): Added `if msg is None: return WAITING_PROOF` guard at top of `on_proof_received`. Added `if q is None: return` in `on_cancel_proof`. Added `if ctx.user_data is not None:` guard in `on_cancel_proof` and `on_proof_timeout` before clearing `_BAN_USER_DATA_KEYS`.
+- **`tcbot/modules/helper/workflows/reason_flow.py`** (`_on_reason_text`, `_on_skip_reason`, `_on_skip_proof`, `_on_cancel`): Added `if msg is None or msg.text is None: return WAITING_REASON` in `_on_reason_text`. Added `if q is None: return WAITING_REASON` and `if q is None: return WAITING_PROOF` guards. Ensured `_clear_user_data` called only when `ctx.user_data` is not None.
+- **`tcbot/modules/helper/workflows/check_flow.py`** (profile main view): Role label fallback that was `None` (from `ROLE_LABEL.get(role)` on a non-staff role) now renders as `"Regular user"` instead of the bare Python `None` string. Prevented a visible "None" in the `/check` profile for users without a federation role.
+- **`tcbot/modules/helper/workflows/stats_flow.py`** (staff roster): The empty-state message for sections with no assigned staff changed from `"- None assigned"` to `"- No staff assigned"` to avoid user-facing `None` text.
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** (PIE810): Fixed a `str.startswith()` single-element tuple call to a plain string argument per PIE810.
+
+### Changed
+
+- **`tcbot/modules/admins.py`** (`on_promo_decision`): Reordered `asyncio.gather` in the approve/reject paths to edit the admin's review card before sending notifications and log messages (better perceived responsiveness for the approving admin).
+- **`tcbot/modules/broadcasting.py`**: Reordered `asyncio.gather` to update the user-facing status message before posting to the log channel.
+
 ## [Unreleased] - 2026-06-12 (session 64)
 
 ### Performance

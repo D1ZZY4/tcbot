@@ -129,6 +129,10 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     # * send log and update status message in parallel
     await asyncio.gather(
+        status.edit_text(
+            f"Broadcast sent to {code(str(success))} groups. Failed: {code(str(failed))}.",
+            parse_mode="HTML",
+        ),
         ctx.bot.send_message(
             lc,
             parse_logmsg.broadcast_log(
@@ -136,10 +140,6 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             ),
             parse_mode="HTML",
             message_thread_id=lt,
-        ),
-        status.edit_text(
-            f"Broadcast sent to {code(str(success))} groups. Failed: {code(str(failed))}.",
-            parse_mode="HTML",
         ),
         return_exceptions=True,
     )

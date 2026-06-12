@@ -30,11 +30,17 @@ if TYPE_CHECKING:
 # * also surfaces on forwarded service messages but never as an action target.
 TELEGRAM_USER_ID = 777000
 
+# * Telegram's internal ID for the GroupAnonymousBot placeholder, which appears
+# * as the sender when a real admin posts using "send message as group" mode.
+# * The true identity is unknown to the bot, so federation commands are refused.
+ANONYMOUS_BOT_ID = 1087968824
+
 IdentityKind = Literal[
     "self",  # the executor targeted themselves
     "this_bot",  # this bot is the target
     "other_bot",  # any other Telegram bot
     "telegram",  # Telegram service account
+    "anon_admin",  # GroupAnonymousBot
     "founder",  # the federation Founder
     "admin",  # federation Admin (staff)
     "developer",  # federation Developer (custom role)
@@ -116,6 +122,10 @@ async def classify(
         return Identity(
             "telegram", target_id, target_fname, target_username, is_bot=False
         )
+    if target_id == ANONYMOUS_BOT_ID:
+        return Identity(
+            "anon_admin", target_id, target_fname, target_username, is_bot=True
+        )
     if target_is_bot:
         return Identity(
             "other_bot", target_id, target_fname, target_username, is_bot=True
@@ -146,6 +156,7 @@ _BAN_REFUSE: dict[IdentityKind, str] = {
     "self": "Self-ban? Creative, but no. Federation needs you here.",
     "this_bot": "I keep this place running. Banning me is a no-go.",
     "telegram": "Telegram itself? Bold move. Not happening.",
+    "anon_admin": "Cannot ban the anonymous admin placeholder.",
     "founder": "{line} runs the place, can't ban them through here.",
     "admin": "{line} is an Admin. Demote them first if you really mean it.",
     "developer": "{line} is a Developer. Demote them before you ban.",
@@ -156,6 +167,7 @@ _KICK_REFUSE: dict[IdentityKind, str] = {
     "self": "Kicking yourself? Just leave the group instead.",
     "this_bot": "Kick me? I run this place.",
     "telegram": "Pretty sure I can't kick Telegram from its own group.",
+    "anon_admin": "Cannot kick the anonymous admin placeholder.",
     "founder": "{line} runs the place, not getting kicked here.",
     "admin": "{line} is an Admin. Demote them first if you really mean it.",
     "developer": "{line} is a Developer. Demote them before you kick.",
@@ -166,6 +178,7 @@ _MUTE_REFUSE: dict[IdentityKind, str] = {
     "self": "Mute yourself? That's not how this works.",
     "this_bot": "Muting me won't do much - I don't message on my own anyway.",
     "telegram": "Telegram service messages aren't muteable from here.",
+    "anon_admin": "Cannot mute the anonymous admin placeholder.",
     "founder": "{line} runs the place, mute button doesn't apply.",
     "admin": "{line} is an Admin. Demote them first if you really mean it.",
     "developer": "{line} is a Developer. Demote them before you mute.",
@@ -176,12 +189,14 @@ _WARN_REFUSE: dict[IdentityKind, str] = {
     "self": "Self-warning is just journaling. Ask a mod if needed.",
     "this_bot": "Warn me? I'm the one tracking warnings around here.",
     "telegram": "Telegram doesn't take warnings, sorry.",
+    "anon_admin": "Cannot warn the anonymous admin placeholder.",
 }
 
 _UNBAN_REFUSE: dict[IdentityKind, str] = {
     "self": "Can't unban yourself. Use /checkme and submit an appeal instead.",
     "this_bot": "{line} - I manage the bans, not collect them.",
     "telegram": "Telegram was never on the ban list anyway.",
+    "anon_admin": "Anonymous admin was never on the ban list.",
     "founder": "{line} - never been banned, nothing to undo.",
     "admin": "{line} is an Admin. Staff aren't federation-bannable, nothing to undo.",
     "developer": "{line} is a Developer. Staff aren't federation-bannable, nothing to undo.",
@@ -192,6 +207,7 @@ _UNMUTE_REFUSE: dict[IdentityKind, str] = {
     "self": "Can't unmute yourself - ask a mod.",
     "this_bot": "{line} - bots aren't muteable, nothing to undo.",
     "telegram": "Telegram service was never muted.",
+    "anon_admin": "Anonymous admin was never muted.",
     "founder": "{line} - definitely not muted.",
 }
 
@@ -200,6 +216,7 @@ _PROMOTE_REFUSE: dict[IdentityKind, str] = {
     "this_bot": "Already running things, no role needed.",
     "telegram": "Telegram doing fine without a role here.",
     "other_bot": "Other bots can't hold federation roles - humans only.",
+    "anon_admin": "Anonymous admin cannot hold a federation role.",
     "founder": "{line} already runs the place, promoting them is a circular move.",
     "admin": "{line} is already an Admin. Use /tcpromote for a different role.",
 }
@@ -208,6 +225,7 @@ _DEMOTE_REFUSE: dict[IdentityKind, str] = {
     "self": "Demoting yourself? Bold. Ask a higher-up if you really mean it.",
     "this_bot": "No role to lose here.",
     "telegram": "Telegram has no role to take.",
+    "anon_admin": "Anonymous admin has no role to take.",
     "founder": "{line} is the Founder - try /transferowner if you really mean it.",
 }
 
@@ -216,6 +234,7 @@ _TRANSFER_REFUSE: dict[IdentityKind, str] = {
     "this_bot": "Tempting, but I'm not running the place under my own name.",
     "telegram": "Telegram doesn't want my keys, sorry.",
     "other_bot": "Other bots can't hold the keys - humans only.",
+    "anon_admin": "Cannot transfer ownership to the anonymous admin.",
 }
 
 _UNWARN_REFUSE: dict[IdentityKind, str] = {
@@ -223,6 +242,7 @@ _UNWARN_REFUSE: dict[IdentityKind, str] = {
     "this_bot": "{line} - zero warnings, ever. Nothing to undo.",
     "telegram": "Telegram doesn't get warned here.",
     "other_bot": "{line} - bots don't pile up warnings, nothing to remove.",
+    "anon_admin": "Anonymous admin doesn't get warned here.",
     "founder": "{line} - clean record, nothing to undo.",
 }
 
@@ -231,6 +251,7 @@ _RESETWARNS_REFUSE: dict[IdentityKind, str] = {
     "this_bot": "{line} - already at zero, always was.",
     "telegram": "Nothing on Telegram to clear.",
     "other_bot": "{line} - bots stay at zero by default.",
+    "anon_admin": "Nothing on anonymous admin to clear.",
     "founder": "{line} - nothing on the record to clear.",
 }
 

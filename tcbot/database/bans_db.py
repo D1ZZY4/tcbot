@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from pymongo import ReturnDocument
 
@@ -85,7 +85,7 @@ async def create_ban(
         "review_timestamp": None,
     }
     await _bans().insert_one(doc)
-    return doc
+    return cast("BanDoc", doc)
 
 
 async def update_ban(

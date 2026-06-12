@@ -288,6 +288,8 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
 async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Handle incoming proof media: buffer albums or execute the ban immediately."""
     msg = update.effective_message
+    if msg is None:
+        return WAITING_PROOF
 
     if msg.media_group_id:
         mgid = msg.media_group_id
@@ -338,9 +340,14 @@ async def on_proof_unexpected(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
 async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Acknowledge the cancel button and end the proof-collection conversation."""
     q = update.callback_query
+    if q is None:
+        return ConversationHandler.END
+
     await q.answer()
-    for key in _BAN_USER_DATA_KEYS:
-        ctx.user_data.pop(key, None)
+    if ctx.user_data is not None:
+        for key in _BAN_USER_DATA_KEYS:
+            ctx.user_data.pop(key, None)
+
     try:
         await q.edit_message_text(_MSG_CANCELLED)
     except Exception:
@@ -350,8 +357,10 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
 
 async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Notify the user that the proof window expired and end the conversation."""
-    for key in _BAN_USER_DATA_KEYS:
-        ctx.user_data.pop(key, None)
+    if ctx.user_data is not None:
+        for key in _BAN_USER_DATA_KEYS:
+            ctx.user_data.pop(key, None)
+
     if update.effective_message:
         await update.effective_message.reply_text(_MSG_TIMEOUT)
     return ConversationHandler.END

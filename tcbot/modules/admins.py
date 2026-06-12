@@ -585,15 +585,15 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         )
         # * notify target, send log, and edit review message all in parallel
         await asyncio.gather(
+            q.edit_message_text(
+                (q.message.text or "") + f"\n\n- Approved by {admin.first_name}",
+                reply_markup=None,
+            ),
             ctx.bot.send_message(
                 target_id,
                 f"Your promotion request has been approved - welcome to the {cfg.community_name} staff team, Admin.",
             ),
             ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
-            q.edit_message_text(
-                (q.message.text or "") + f"\n\n- Approved by {admin.first_name}",
-                reply_markup=None,
-            ),
             return_exceptions=True,
         )
 
@@ -607,16 +607,16 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         )
         # * resolve DB + notify + send log + edit review message all in parallel
         await asyncio.gather(
+            q.edit_message_text(
+                (q.message.text or "") + f"\n\n- Rejected by {admin.first_name}",
+                reply_markup=None,
+            ),
             db.queues_db.resolve(request_id, "rejected", admin.id),
             ctx.bot.send_message(
                 target_id,
                 "Your request was reviewed but wasn't approved this time. You're free to apply again later.",
             ),
             ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
-            q.edit_message_text(
-                (q.message.text or "") + f"\n\n- Rejected by {admin.first_name}",
-                reply_markup=None,
-            ),
             return_exceptions=True,
         )
 

@@ -219,7 +219,7 @@ class Stats:
                     fname, uname = mention_data_map[uid]
                     lines.append(f"- {mention(uid, fname, uname)}")
             else:
-                lines.append("- None assigned")
+                lines.append("- No staff assigned")
             lines.append("")
 
         _section("Admins", admins)

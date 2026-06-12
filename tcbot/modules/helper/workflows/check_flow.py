@@ -109,7 +109,11 @@ class Check:
             db.mutes_db.user_mute_count(target_id),
         )
 
-        role_label = db.users_roles.ROLE_LABEL.get(role, "None") if role else "None"
+        role_label = (
+            db.users_roles.ROLE_LABEL.get(role, "Regular user")
+            if role
+            else "Regular user"
+        )
         uname_part = f"@{esc(uname)}" if uname else "(none)"
         active_part = f"Yes ({code(active_ban['ban_id'])})" if active_ban else "No"
 

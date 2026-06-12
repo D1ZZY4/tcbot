@@ -161,9 +161,13 @@ class BuildAppeal:
     ) -> int:
         """Validate the deep-link and open the WAITING_APPEAL state."""
         msg = update.effective_message
-        uid = update.effective_user.id
+        user = update.effective_user
+        if msg is None or user is None:
+            return ConversationHandler.END
 
-        if update.effective_chat.type != "private":
+        uid = user.id
+
+        if update.effective_chat is None or update.effective_chat.type != "private":
             await msg.reply_text(_ERR_NOT_PRIVATE)
             return ConversationHandler.END
 
@@ -180,6 +184,10 @@ class BuildAppeal:
             await msg.reply_text(_ERR_PENDING_REVIEW)
             return ConversationHandler.END
 
+        if ctx.user_data is None:
+            log.error("ctx.user_data is None in appeal_flow _start")
+            return ConversationHandler.END
+
         ctx.user_data["appeal_ban_id"] = ban_id
         ctx.user_data["appeal_log_msg_id"] = ban.get("log_message_id", 0)
 
@@ -194,7 +202,11 @@ class BuildAppeal:
 
     async def _on_entry(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Entry-point handler; parses the /start appeal_<id> deep link."""
-        text = (update.effective_message.text or "").strip()
+        msg = update.effective_message
+        if msg is None or msg.text is None:
+            return ConversationHandler.END
+
+        text = msg.text.strip()
         m = _ID_RE.match(text)
         if not m:
             return ConversationHandler.END
@@ -203,8 +215,17 @@ class BuildAppeal:
     async def _on_cancel(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Cancel button handler; clears state and ends the conversation."""
         q = update.callback_query
-        for key in ("appeal_ban_id", "appeal_log_msg_id", "appeal_instruction_msg_id"):
-            ctx.user_data.pop(key, None)
+        if q is None:
+            return ConversationHandler.END
+
+        if ctx.user_data is not None:
+            for key in (
+                "appeal_ban_id",
+                "appeal_log_msg_id",
+                "appeal_instruction_msg_id",
+            ):
+                ctx.user_data.pop(key, None)
+
         await q.answer()
         try:
             await q.edit_message_text(_MSG_CANCELLED)
@@ -214,13 +235,21 @@ class BuildAppeal:
 
     async def _end(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Fallback handler; fires on any unrecognised command during the flow."""
-        await update.effective_message.reply_text(_MSG_SESSION_ENDED)
+        msg = update.effective_message
+        if msg:
+            await msg.reply_text(_MSG_SESSION_ENDED)
         return ConversationHandler.END
 
     async def _on_timeout(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Timeout handler; fires when ``conversation_timeout`` expires."""
-        for key in ("appeal_ban_id", "appeal_log_msg_id", "appeal_instruction_msg_id"):
-            ctx.user_data.pop(key, None)
+        if ctx.user_data is not None:
+            for key in (
+                "appeal_ban_id",
+                "appeal_log_msg_id",
+                "appeal_instruction_msg_id",
+            ):
+                ctx.user_data.pop(key, None)
+
         if update.effective_message:
             await update.effective_message.reply_text(_MSG_TIMEOUT)
         return ConversationHandler.END
@@ -228,10 +257,17 @@ class BuildAppeal:
     async def _on_message(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Text message handler; validates and submits a #appeal message."""
         msg = update.effective_message
-        text = (msg.text or "").strip()
+        if msg is None or msg.text is None:
+            return WAITING_APPEAL
+
+        text = msg.text.strip()
 
         if not starts_with_appeal_tag(text):
             return WAITING_APPEAL
+
+        if ctx.user_data is None:
+            log.error("ctx.user_data is None in appeal_flow _on_message")
+            return ConversationHandler.END
 
         ban_id = ctx.user_data.get("appeal_ban_id")
         log_msg_id = ctx.user_data.get("appeal_log_msg_id", 0)
@@ -244,8 +280,11 @@ class BuildAppeal:
             await msg.reply_text(_ERR_INVALID_LOG)
             return WAITING_APPEAL
 
-        uid = update.effective_user.id
         user = update.effective_user
+        if user is None:
+            return ConversationHandler.END
+
+        uid = user.id
 
         appeal_chat, appeal_thread = cfg.appeals
         appeal_msg_id: int | None = None
@@ -315,10 +354,10 @@ class BuildAppeal:
         edit_coro = (
             ctx.bot.edit_message_text(
                 _MSG_APPEAL_SUBMITTED,
-                chat_id=update.effective_chat.id,
+                chat_id=update.effective_chat.id if update.effective_chat else None,
                 message_id=instr_mid,
             )
-            if instr_mid
+            if instr_mid and update.effective_chat
             else None
         )
         upsert_coro = db.users_cache.upsert_user(
@@ -337,18 +376,24 @@ class BuildAppeal:
     async def on_decision(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Approve / Reject callback for the staff review card in the main group."""
         q = update.callback_query
+        if q is None:
+            return
+
         admin = update.effective_user
+        if admin is None:
+            return
 
         data = q.data
+        if not data or not data.startswith(("appeal_approve_", "appeal_reject_")):
+            await q.answer()
+            return
+
         if data.startswith("appeal_approve_"):
             action = "approve"
             ban_id = data[len("appeal_approve_") :]
-        elif data.startswith("appeal_reject_"):
+        else:
             action = "reject"
             ban_id = data[len("appeal_reject_") :]
-        else:
-            await q.answer()
-            return
 
         # * Gather staff check + q.answer() in parallel so the spinner
         # * disappears immediately, regardless of DB latency.

@@ -5,7 +5,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-12 (session 64)
+**Last updated:** 2026-06-12 (session 65)
 
 ## What is done
 
@@ -30,6 +30,14 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 - Bug #47 (session 62): decorators.py resolve_and_check gather without return_exceptions. Fixed with None fallbacks.
 - Perf (session 62): check_flow.py bans_list/warns_by_group/appeals_list/_per_chat_event_list: sequential _name(target_id) after main DB fetch replaced with asyncio.gather. All 5 check drill-down list views now fetch DB+name in one round-trip.
 - Perf (session 62): appeal_flow.py on_decision approve path: _update_or_send_log + send_message(unban log) gathered in parallel.
+- Session 65 (2026-06-12): v4 autonomous audit pass - extraction/identity/flows/DB hardening.
+  - extraction.py: added _TELEGRAM_USER_ID skip on reply, sender_chat branch for linked-channel forwards.
+  - identity.py: anon_admin kind added to classify() and all 11 refusal tables.
+  - appeal_flow.py / ban_flow.py / reason_flow.py: None guards for effective_message/effective_user/callback_query, ctx.user_data guards in cancel/timeout, non-text input handling in WAITING states.
+  - check_flow.py: role label None fallback -> "Regular user".
+  - stats_flow.py: "- None assigned" -> "- No staff assigned" in staff roster.
+  - mongos.py: 5 new indexes (federated_groups is_active, member_cache last_updated, kicks/mutes/bans chat_id).
+  - broadcasting.py, admins.py: gather order optimized for responsiveness.
 - Bot restarts cleanly: MongoDB connected, indexes ensured, 75 handlers registered, polling active.
 - `kicking_flow.py` SyntaxError fixed.
 - All inline-string extractions complete across all modules and workflows.

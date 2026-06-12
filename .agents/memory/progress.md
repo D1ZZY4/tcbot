@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-12 (session 64)
+**Last updated:** 2026-06-12 (session 65)
 
 ## Verification baseline
 
@@ -146,6 +146,16 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | check_flow.py bans_list/warns_by_group/appeals_list/_per_chat_event_list serial awaits | perf | Main DB fetch + _name(target_id) were sequential. Now gathered in parallel for all 5 check drill-down list views. BaseException fallbacks added for both results. | 2026-06-12 (s62) |
 | appeal_flow.py on_decision approve log sends serial | perf | _update_or_send_log + send_message(unban log) to same channel were sequential with no data dependency. Combined into asyncio.gather. | 2026-06-12 (s62) |
 | Em-dash/en-dash full cleanup | docs | Python script replaced all remaining U+2014/U+2013 in 100 markdown files. Zero remaining anywhere in project. | 2026-06-12 (s62) |
+
+| Session 65 - extraction.py sender_chat + Telegram skip | correctness | Added `_TELEGRAM_USER_ID` skip in reply path; added `sender_chat` branch so linked-channel auto-forwards resolve to channel entity | 2026-06-12 (s65) |
+| Session 65 - identity.py anon_admin kind | correctness | Added `"anon_admin"` to `IdentityKind`, `classify()` detection, and all 11 per-action refusal tables | 2026-06-12 (s65) |
+| Session 65 - appeal_flow None guards | correctness | Guards for `update.effective_message/user/callback_query` and `ctx.user_data` throughout; non-text input returns `WAITING_APPEAL` | 2026-06-12 (s65) |
+| Session 65 - ban_flow None guards | correctness | Guards for `update.effective_message`, `update.callback_query`, `ctx.user_data` in cancel/timeout handlers | 2026-06-12 (s65) |
+| Session 65 - reason_flow None guards | correctness | Guards for `msg is None or msg.text is None`, `q is None` in all step handlers | 2026-06-12 (s65) |
+| Session 65 - check_flow "Regular user" label | voice | Role label fallback `None` -> `"Regular user"` in main profile view | 2026-06-12 (s65) |
+| Session 65 - stats_flow "No staff assigned" | voice | `"- None assigned"` -> `"- No staff assigned"` in staff roster empty state | 2026-06-12 (s65) |
+| Session 65 - mongos.py 5 new indexes | performance | `federated_groups.is_active`, `member_cache.last_updated`, `kicks/mutes/bans.chat_id` indexes added | 2026-06-12 (s65) |
+| Session 65 - broadcasting/admins gather order | performance | Reordered gather calls to prioritize user-facing edits before log sends | 2026-06-12 (s65) |
 
 ## Pending (remaining optional)
 

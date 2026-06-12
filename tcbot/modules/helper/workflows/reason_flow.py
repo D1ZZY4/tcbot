@@ -122,7 +122,11 @@ def build_modaction_conv(
     # ── WAITING_REASON handlers ──────────────────────────────────── #
 
     async def _on_reason_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        text = update.effective_message.text.strip()
+        msg = update.effective_message
+        if msg is None or msg.text is None:
+            return WAITING_REASON
+
+        text = msg.text.strip()
         ctx.user_data[_reason_key] = text
         extra_info = ctx.user_data.get(_extra_info_key, "")
         prompt_txt = proof.step_prompt(_get_target(ctx), action, text, extra_info)
@@ -149,6 +153,9 @@ def build_modaction_conv(
 
     async def _on_skip_reason(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         q = update.callback_query
+        if q is None:
+            return WAITING_REASON
+
         ctx.user_data[_reason_key] = replies.NO_REASON
         extra_info = ctx.user_data.get(_extra_info_key, "")
         prompt_txt = proof.step_prompt(
@@ -173,7 +180,11 @@ def build_modaction_conv(
         return ConversationHandler.END
 
     async def _on_skip_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        await update.callback_query.answer()
+        q = update.callback_query
+        if q is None:
+            return WAITING_PROOF
+
+        await q.answer()
         await executor(update, ctx)
         return ConversationHandler.END
 
@@ -207,6 +218,9 @@ def build_modaction_conv(
 
     async def _on_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         q = update.callback_query
+        if q is None:
+            return ConversationHandler.END
+
         await q.answer()
         _clear_user_data(ctx)
         try:

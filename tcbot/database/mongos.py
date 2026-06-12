@@ -153,6 +153,11 @@ async def ensure_indexes() -> None:
         col("promotion_requests").create_index([("target_id", 1), ("status", 1)]),
         # * Serves queues_db.all_pending() / pending_count() which filter on status only
         col("promotion_requests").create_index([("status", 1)]),
+        col("kicks").create_index([("chat_id", 1)]),
+        col("mutes").create_index([("chat_id", 1)]),
+        col("bans").create_index([("chat_id", 1)]),
+        col("federated_groups").create_index([("is_active", 1)]),
+        col("member_cache").create_index([("last_updated", -1)]),
     )
     log.info("MongoDB indexes ensured.")
 
