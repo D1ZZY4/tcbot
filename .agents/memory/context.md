@@ -223,9 +223,16 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Audit completed: `about.py`, `additional.py`, `unbanning.py`, `privacy.py`, `error_reporter.py`, `unban_flow.py`, `promote_flow.py`, `connected_flow.py`, `broadcasting.py`, `maintenance.py`, `decorators.py` — all clean.
   - Bot restart verified: Defaults active, MongoDB connected, 75 handlers, polling active.
 
+- Session 52 (2026-06-12): audit wave 2 — found and fixed stats search query bug.
+  - Bug #7: `stats.py` `on_bans_search_input` never stored `query` to `ctx.user_data["stats_last_query"]`. When user tapped "« Back" from a search-detail card, `on_stats_search_back` rendered `Search: "" (N found)` — query string always blank.
+  - Fix: added `ctx.user_data["stats_last_query"] = query` after RESULTS_KEY is set in `on_bans_search_input`.
+  - Also: `Stats.clear_search` did not clear `"stats_last_query"` — stale data would survive to next search session. Added it to the clear loop in `stats_flow.py`.
+  - Full audit wave 2 complete: all 50+ files read (greeting, appeals, broadcasting, additional, maintenance, privacy, check_flow, proof_flow, connecting, disconnecting, promote_flow, demote_flow, __main__, groups_db, warns_db, kicks_db, mutes_db, queues_db, users_roles, users_cache, mongos, dispatch, prefixes, parse_logmsg, error_reporter, pagination, stats_flow, stats) — all clean except the above two-line fix.
+  - Ruff 70 files clean; bot running (MongoDB connected, 75 handlers, polling active).
+
 ## What is in progress
 
-Nothing. Session 51 checkpoint complete.
+Nothing. Session 52 checkpoint complete.
 
 ## What is pending (optional)
 

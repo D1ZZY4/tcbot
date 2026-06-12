@@ -443,7 +443,7 @@ class Stats:
     @staticmethod
     def clear_search(ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Forget any in-flight search context."""
-        for key in (SEARCH_KEY, RESULTS_KEY, MSG_KEY, CHAT_KEY):
+        for key in (SEARCH_KEY, RESULTS_KEY, MSG_KEY, CHAT_KEY, "stats_last_query"):
             ctx.user_data.pop(key, None)
 
     @classmethod

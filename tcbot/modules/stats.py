@@ -217,6 +217,7 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         results = []
 
     ctx.user_data[RESULTS_KEY] = results
+    ctx.user_data["stats_last_query"] = query
 
     chat_id = ctx.user_data.get(CHAT_KEY)
     msg_id = ctx.user_data.get(MSG_KEY)
