@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-12 (session 72)
+**Last updated:** 2026-06-12 (session 73)
 
 ## Verification baseline
 
@@ -180,6 +180,18 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Session 71 - Bug #70: disconnecting.py cmd_rmtc bare update.effective_user | correctness | `update.effective_user.id/.first_name` accessed directly inside asyncio.gather args without local var. Extracted `admin = update.effective_user` and `msg = update.effective_message` at function top. | 2026-06-12 (s71) |
 | Session 71 - Bug #71: warnings.py cmd_warnlist bare update.effective_message | code quality | `update.effective_message.text` without local var. Extracted `msg = update.effective_message` for consistency. | 2026-06-12 (s71) |
 | Session 71 - Explorer-assisted audit | audit | Full modules/ + database/ explored by subagent. All 4 findings fixed. Ruff 70 files clean, bot running (75 handlers). | 2026-06-12 (s71) |
+
+| Session 73 - uv lock --upgrade | maintenance | All 25 packages at latest compatible (PTB 22.8, Motor 3.7.1, PyMongo 4.17.0). No version changes from prior lock. | 2026-06-12 (s73) |
+| Session 73 - Bug #81: error_reporter.py `[:100]` | code quality | Hardcoded slice in `_condensed_tb` → `_MAX_LINE_CONTENT = 100`. | 2026-06-12 (s73) |
+| Session 73 - Bug #82: error_reporter.py `"━" * 30` | code quality | Hardcoded separator length → `_REPORT_SEP_LEN = 30`. | 2026-06-12 (s73) |
+| Session 73 - Bug #83: identity.py `community_name` unescaped | HTML safety | `staff_notice` interpolates `community_name` raw into HTML string sent with parse_mode="HTML". Wrapped with `esc()`. | 2026-06-12 (s73) |
+| Session 73 - Bug #84: checking.py `community_name` unescaped | HTML safety | `_ban_summary` interpolates `cfg.community_name` raw into HTML string returned for parse_mode="HTML" caller. Wrapped with `esc()`. | 2026-06-12 (s73) |
+| Session 73 - Bug #85: check_flow.py `[:60]` hardcoded | code quality | Ban list reason truncation → `_BAN_LIST_REASON_LEN = 60`. Intentionally different from `_REASON_PREVIEW_LEN = 80`. | 2026-06-12 (s73) |
+| Session 73 - Bug #86: check_flow.py `3` buttons-per-row × 2 | code quality | Hardcoded `3` in `Check.bans` and `Check.appeals` → `_BTNS_PER_ROW = 3`. | 2026-06-12 (s73) |
+| Session 73 - Bug #87: stats_flow.py `3` buttons-per-row × 2 | code quality | Hardcoded `3` in `_item_list_kb` and `Stats._search_results_kb` → `_BTNS_PER_ROW = 3`. | 2026-06-12 (s73) |
+| Session 73 - Bug #88: appeal_flow.py `log_channel` unescaped | HTML safety | `AppealConfig.instruction_text` sends `self.log_channel` raw in HTML string. Wrapped with `esc()`. | 2026-06-12 (s73) |
+| Session 73 - Bug #89: __main__.py handler group literals | code quality | `group=-1` and `group=10` → `_HANDLER_GROUP_RATE_LIMITER = -1` and `_HANDLER_GROUP_CACHE = 10`. | 2026-06-12 (s73) |
+| Session 73 - Sub-agent audit waves A-F | audit | 6 sub-agent waves covering all modules, flows, utils, __main__. 7/9 bugs were HTML safety or named-constant fixes; 2 were esc(). Ruff 70 files clean, bot running (75 handlers, MongoDB, polling). | 2026-06-12 (s73) |
 
 ## Pending (remaining optional)
 

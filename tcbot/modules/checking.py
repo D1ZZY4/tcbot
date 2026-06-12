@@ -124,7 +124,7 @@ async def _ban_summary(
     date_str = fmt_dt(ts) if ts else "Unknown"
 
     text = (
-        f"You are currently banned from {cfg.community_name}.\n\n"
+        f"You are currently banned from {esc(cfg.community_name)}.\n\n"
         f"User: {mention(user_id, user_fname, user_uname)}\n"
         f"User ID: {code(str(user_id))}\n"
         f"Reason: {esc(ban.get('reason', replies.NO_REASON))}\n\n"

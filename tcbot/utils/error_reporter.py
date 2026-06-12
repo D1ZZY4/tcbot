@@ -201,6 +201,8 @@ _MAX_TB = 2200
 _MAX_MSG = 250
 _MAX_CTX = 250
 _TB_FRAMES = 8
+_MAX_LINE_CONTENT: int = 100
+_REPORT_SEP_LEN: int = 30
 
 
 def _esc(s: str | None) -> str:
@@ -232,7 +234,7 @@ def _condensed_tb(exc: BaseException) -> str:
         path = _shorten_path(f.filename or "?")
         lines.append(f"  {path}:{f.lineno} in {f.name}")
         if f.line:
-            lines.append(f"      {f.line.strip()[:100]}")
+            lines.append(f"      {f.line.strip()[:_MAX_LINE_CONTENT]}")
     lines.append(f"{type(exc).__name__}: {exc}")
     out = "\n".join(lines)
     if len(out) > _MAX_TB:
@@ -290,7 +292,7 @@ def build_error_message(
 
     py_ver = sys.version.split()[0]
     host = platform.node() or "?"
-    sep = "━" * 30
+    sep = "━" * _REPORT_SEP_LEN
 
     return (
         f"<b>Error Report</b>\n"

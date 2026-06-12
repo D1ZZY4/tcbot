@@ -26,7 +26,9 @@ log = logging.getLogger(__name__)
 _PAGE_SIZE = 5
 _GET_CHAT_TIMEOUT = 3.0
 _REASON_PREVIEW_LEN = 80
+_BAN_LIST_REASON_LEN = 60
 _BUTTON_TITLE_MAX = 24
+_BTNS_PER_ROW = 3
 
 
 # ────────────────────────── Small helpers ───────────────────────── #
@@ -214,7 +216,9 @@ class Check:
         for i, ban in enumerate(chunk, start=1):
             status = bold("Active") if ban.get("is_active") else "Inactive"
             ts = date_or_unknown(ban.get("timestamp"))
-            reason_short = esc(str(ban.get("reason", "(no reason)"))[:60])
+            reason_short = esc(
+                str(ban.get("reason", "(no reason)"))[:_BAN_LIST_REASON_LEN]
+            )
             lines.append(
                 f"{base_idx + i}. {status} · {code(ban['ban_id'])} · {ts}\n"
                 f"   <i>{reason_short}</i>"
@@ -226,9 +230,10 @@ class Check:
                 )
             )
 
-        # * pair item buttons 3 per row
+        # * pair item buttons _BTNS_PER_ROW per row
         rows: list[list[InlineKeyboardButton]] = [
-            item_btns[i : i + 3] for i in range(0, len(item_btns), 3)
+            item_btns[i : i + _BTNS_PER_ROW]
+            for i in range(0, len(item_btns), _BTNS_PER_ROW)
         ]
         nav = nav_row(page, total_pages, f"check_bans:{target_id}")
         if nav:
@@ -470,7 +475,8 @@ class Check:
             )
 
         rows: list[list[InlineKeyboardButton]] = [
-            item_btns[i : i + 3] for i in range(0, len(item_btns), 3)
+            item_btns[i : i + _BTNS_PER_ROW]
+            for i in range(0, len(item_btns), _BTNS_PER_ROW)
         ]
         nav = nav_row(page, total_pages, f"check_appeals:{target_id}")
         if nav:

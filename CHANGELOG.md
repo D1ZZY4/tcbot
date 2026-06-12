@@ -2,6 +2,24 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-12 (session 73)
+
+### Fixed
+
+- **`tcbot/utils/error_reporter.py`** (`_condensed_tb`): Hardcoded `[:100]` slice on traceback source lines replaced with named constant `_MAX_LINE_CONTENT = 100`. Consistent with `_MAX_TB`, `_MAX_MSG`, `_MAX_CTX`, and `_TB_FRAMES` already extracted in the same file. (Bug #81)
+- **`tcbot/utils/error_reporter.py`** (`_format_report`): Hardcoded `"━" * 30` separator replaced with named constant `_REPORT_SEP_LEN = 30`. (Bug #82)
+- **`tcbot/modules/helper/identity.py`** (`staff_notice`): `community_name` config value interpolated directly into an HTML string that callers send with `parse_mode="HTML"`. Wrapped with `esc()` to prevent broken markup if the operator sets a `COMMUNITY_NAME` containing `&`, `<`, or `>`. (Bug #83)
+- **`tcbot/modules/checking.py`** (`_ban_summary`): `cfg.community_name` unescaped inside an f-string returned as HTML — sent by `cmd_checkme` with `parse_mode="HTML"`. Wrapped with `esc()` to match the existing pattern in the same module (line 194 already used `esc(cfg.community_name)` correctly). (Bug #84)
+- **`tcbot/modules/helper/workflows/check_flow.py`** (`Check.bans`): Hardcoded `[:60]` reason truncation replaced with named constant `_BAN_LIST_REASON_LEN = 60`. This is intentionally shorter than `_REASON_PREVIEW_LEN = 80` used for warns/mutes, as ban list rows carry more fields per line. (Bug #85)
+- **`tcbot/modules/helper/workflows/check_flow.py`** (`Check.bans`, `Check.appeals`): Hardcoded `3` buttons-per-row replaced with named constant `_BTNS_PER_ROW = 3`. (Bug #86)
+- **`tcbot/modules/helper/workflows/stats_flow.py`** (`_item_list_kb`, `Stats._search_results_kb`): Hardcoded `3` buttons-per-row replaced with named constant `_BTNS_PER_ROW = 3`. (Bug #87)
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** (`AppealConfig.instruction_text`): `self.log_channel` interpolated raw into an HTML string sent with `parse_mode="HTML"`. Wrapped with `esc()` to prevent markup breakage if the channel handle contains `&`, `<`, or `>`. (Bug #88)
+- **`tcbot/__main__.py`**: PTB handler group integers `group=-1` and `group=10` replaced with named constants `_HANDLER_GROUP_RATE_LIMITER = -1` and `_HANDLER_GROUP_CACHE = 10`, consistent with the existing `_HTTP_*` and `_API_*` constants in the same file. (Bug #89)
+
+### Maintenance
+
+- Ran `uv lock --upgrade`: all 25 packages resolved at latest compatible versions. No version changes from previous lock (python-telegram-bot 22.8, Motor 3.7.1, PyMongo 4.17.0, APScheduler 3.11.2, httpx 0.28.1, ruff 0.15.17). Full verification sequence PASS.
+
 ## [Unreleased] - 2026-06-12 (session 72)
 
 ### Fixed

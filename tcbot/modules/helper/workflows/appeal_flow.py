@@ -100,7 +100,7 @@ class BuildAppeal:
             f"Log link: https://t.me/{log_handle}/1\n"
             "Clarification: I spammed unintentionally due to an auto-clicker.\n"
             "Agreement: I will not use any automation tools in the group again.</pre>\n\n"
-            f"Log Channel: {self.log_channel}"
+            f"Log Channel: {esc(self.log_channel)}"
         )
 
     def cancel_keyboard(self) -> InlineKeyboardMarkup:

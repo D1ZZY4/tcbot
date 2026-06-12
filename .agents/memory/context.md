@@ -5,7 +5,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-12 (session 72)
+**Last updated:** 2026-06-12 (session 73)
 
 ## What is done
 
@@ -394,6 +394,26 @@ Nothing. Session 68 checkpoint complete. Audit is dry across multiple waves.
   - Bug #79: `parse_logmsg.py` `broadcast_log` - hardcoded `[:100]` slice → named constant `_MAX_BROADCAST_PREVIEW_LEN = 100`.
   - Bug #80: `keyboards.py` `module_help_kb` - duplicated `_build_topic_rows` loop verbatim; refactored to call the existing helper.
   - Ruff 70 files clean.
+
+- Session 73 (2026-06-12): autonomous audit wave 7 - 3 fixes + dependency check.
+  - Bug #81: `error_reporter.py` `_condensed_tb` - hardcoded `[:100]` → `_MAX_LINE_CONTENT = 100`.
+  - Bug #82: `error_reporter.py` `_format_report` - hardcoded `"━" * 30` → `_REPORT_SEP_LEN = 30`.
+  - Bug #83: `identity.py` `staff_notice` - `community_name` config value unescaped in HTML string → wrapped with `esc()`. Callers in `warnings.py` and `muting.py` send result with `parse_mode="HTML"`.
+  - `uv lock --upgrade`: all 25 packages at latest compatible (no version changes from prior lock).
+  - Sub-agent A (banning/kicking/muting/warnings/unbanning): ALL false positives.
+  - Sub-agent B (database/ + utils/): only error_reporter.py magic numbers were valid; sequential `set_owner` intentional.
+  - Sub-agent C (helper modules): unban_flow.py/appeal_flow.py gathers already have return_exceptions=True (false positives); identity.py:298 community_name was the one valid finding.
+  - Sub-agent D (stats/reason/proof/ban_flow): ALL gathers already clean; sequential awaits all dependent (false positives); stats_flow.py `3` buttons-per-row found valid.
+  - Sub-agent E (connected/broadcast/check/promote/disconnecting): promote_flow.py gathers already have return_exceptions=True; community_name issues found in checking.py; check_flow.py magic numbers found.
+  - Bug #84: checking.py `_ban_summary` - `cfg.community_name` unescaped in HTML f-string → `esc(cfg.community_name)`.
+  - Bug #85: check_flow.py ban list `[:60]` → `_BAN_LIST_REASON_LEN = 60`.
+  - Bug #86: check_flow.py `3` buttons-per-row hardcoded twice → `_BTNS_PER_ROW = 3`.
+  - Bug #87: stats_flow.py `3` buttons-per-row hardcoded twice → `_BTNS_PER_ROW = 3`.
+  - Bug #88: appeal_flow.py `AppealConfig.instruction_text` - `self.log_channel` unescaped in HTML string sent with parse_mode="HTML" → `esc(self.log_channel)`.
+  - Bug #89: `__main__.py` - PTB handler group literals `-1` and `10` → named constants `_HANDLER_GROUP_RATE_LIMITER = -1` and `_HANDLER_GROUP_CACHE = 10`.
+  - Bot restart post-fix (all 9 bugs): MongoDB connected, indexes ensured, handlers registered, polling active.
+  - Ruff 70 files clean (reformatted).
+  - Sub-agent F (appeals/admins/about/additional/broadcasting/appeal_flow/utils/__main__): all gathers already have return_exceptions=True; only log_channel escaping and group number constants were valid.
 
 ## Blockers
 

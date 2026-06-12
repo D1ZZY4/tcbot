@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from telegram.ext import ContextTypes
 
 _PAGE_SIZE = 6
+_BTNS_PER_ROW = 3
 
 # * Search panel state lives on ``ctx.user_data`` while the user composes a
 # * query. Kept here so the runtime callback handlers and the message-input
@@ -85,7 +86,9 @@ def _list_kb(
         InlineKeyboardButton(str(i + 1), callback_data=f"{item_cb_prefix}:{page}:{i}")
         for i in range(n_items)
     ]
-    rows.extend(num_btns[i : i + 3] for i in range(0, len(num_btns), 3))
+    rows.extend(
+        num_btns[i : i + _BTNS_PER_ROW] for i in range(0, len(num_btns), _BTNS_PER_ROW)
+    )
 
     if extra_row:
         rows.append(extra_row)
@@ -435,7 +438,8 @@ class Stats:
             for i in range(n)
         ]
         rows: list[list[InlineKeyboardButton]] = [
-            num_btns[i : i + 3] for i in range(0, len(num_btns), 3)
+            num_btns[i : i + _BTNS_PER_ROW]
+            for i in range(0, len(num_btns), _BTNS_PER_ROW)
         ]
         rows.append(
             [InlineKeyboardButton("New Search", callback_data="stats_bans_search")]

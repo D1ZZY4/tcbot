@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from tcbot import database as db
-from tcbot.modules.helper.formatter import code, mention
+from tcbot.modules.helper.formatter import code, esc, mention
 
 if TYPE_CHECKING:
     from telegram import Bot
@@ -295,6 +295,6 @@ def staff_notice(action: str, ident: Identity, community_name: str) -> str | Non
     if ident.kind not in ("admin", "developer", "tester"):
         return None
     return (
-        f"Heads up - {_line(ident)} is a {community_name} {ident.role_label}. "
+        f"Heads up - {_line(ident)} is a {esc(community_name)} {ident.role_label}. "
         f"Proceeding with {action} anyway."
     )

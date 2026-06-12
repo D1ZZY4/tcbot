@@ -57,6 +57,10 @@ _LINK_PREVIEW_DISABLED: LinkPreviewOptions = LinkPreviewOptions(is_disabled=True
 # * Width of the fatal-error border printed to stderr.
 _FATAL_BORDER_WIDTH: int = 70
 
+# * PTB handler group IDs: lower number = higher priority.
+_HANDLER_GROUP_RATE_LIMITER: int = -1
+_HANDLER_GROUP_CACHE: int = 10
+
 # * PTB emits a UserWarning about per_message=False + CallbackQueryHandler when
 # * ConversationHandlers are built. Our flows deliberately use per_message=False
 # * because approval callbacks must be matchable across multiple messages. The
@@ -246,7 +250,10 @@ def main() -> None:
 
         # * Layer 1: Global per-user rate limiter - runs before every handler (group -1)
         stage = "handler registration"
-        app.add_handler(TypeHandler(Update, global_rate_limit_handler), group=-1)
+        app.add_handler(
+            TypeHandler(Update, global_rate_limit_handler),
+            group=_HANDLER_GROUP_RATE_LIMITER,
+        )
 
         # * Register all module handlers via tcbot.modules
         for handler in get_handlers():
@@ -255,7 +262,9 @@ def main() -> None:
         # * Low-priority handler: cache every effective_user we observe.
         # * Runs on every update (messages, callback queries, my_chat_member)
         # * so future log messages and mention links resolve to real names.
-        app.add_handler(TypeHandler(Update, _update_member_cache), group=10)
+        app.add_handler(
+            TypeHandler(Update, _update_member_cache), group=_HANDLER_GROUP_CACHE
+        )
 
         # * Layer 2: PTB global error handler - catches all unhandled handler exceptions
         app.add_error_handler(_error_handler)
