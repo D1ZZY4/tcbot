@@ -191,7 +191,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         role_label = db.users_roles.ROLE_LABEL.get(user_role, user_role)
         await msg.reply_text(
             f"Hey {mention(user.id, fname, user.username)}, all good.\n\n"
-            f"You're a {cfg.community_name} {role_label} - on the team, not on the ban list. "
+            f"You're a {esc(cfg.community_name)} {esc(role_label)} - on the team, not on the ban list. "
             "Nothing to worry about.",
             parse_mode="HTML",
         )

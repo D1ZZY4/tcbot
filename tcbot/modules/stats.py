@@ -257,10 +257,14 @@ async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     q = update.callback_query
     results = ctx.user_data.get(RESULTS_KEY, []) if ctx.user_data else []
     if not results:
-        # * open_search is synchronous; answer first then edit.
+        # * open_search is synchronous; data is already available, so answer + edit
+        # * run in parallel.
         text, kb = Stats.open_search(ctx, q)
-        await q.answer()
-        await safe_edit_cb(q, text, reply_markup=kb)
+        await asyncio.gather(
+            q.answer(),
+            safe_edit_cb(q, text, reply_markup=kb),
+            return_exceptions=True,
+        )
     else:
         # * Re-render the previous results without re-running the query.
         previous_query = (

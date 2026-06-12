@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg
-from tcbot.modules.helper.formatter import code, mention
+from tcbot.modules.helper.formatter import code, esc, mention
 
 if TYPE_CHECKING:
     from telegram import Bot
@@ -96,7 +96,7 @@ class Promote:
         )
         return True, (
             f"Done. {mention(target_id, target_fname)} - {code(str(target_id))} "
-            f"is now a {cfg.community_name} Admin."
+            f"is now a {esc(cfg.community_name)} Admin."
         )
 
     @staticmethod
@@ -114,7 +114,7 @@ class Promote:
             label = db.users_roles.ROLE_LABEL.get(role, role)
             return (
                 False,
-                f"That user is already an Admin. Demote them first before assigning {label}.",
+                f"That user is already an Admin. Demote them first before assigning {esc(label)}.",
             )
         if current_role in ("developer", "tester"):
             await db.users_roles.remove_role(target_id)
@@ -139,7 +139,7 @@ class Promote:
         return (
             True,
             f"Done. {mention(target_id, target_fname)} - {code(str(target_id))} "
-            f"is now a {cfg.community_name} {role_label}.",
+            f"is now a {esc(cfg.community_name)} {esc(role_label)}.",
         )
 
     @classmethod
@@ -221,7 +221,7 @@ class Promote:
 
         if db.users_roles.role_rank(current_role) >= db.users_roles.role_rank(role):
             label = db.users_roles.ROLE_LABEL.get(current_role, current_role)
-            return False, f"That user already holds the {label} role or higher."
+            return False, f"That user already holds the {esc(label)} role or higher."
 
         if role == "admin":
             if executor_role == "founder":

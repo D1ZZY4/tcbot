@@ -276,13 +276,19 @@ class BuildConnection:
         )
         if isinstance(member_res, BaseException):
             log.debug("Join decision role check failed: %s", member_res)
-            await q.edit_message_reply_markup(None)
-            await update.effective_message.reply_text(_ERR_ROLE_CHECK_FAILED)
+            await asyncio.gather(
+                q.edit_message_reply_markup(None),
+                update.effective_message.reply_text(_ERR_ROLE_CHECK_FAILED),
+                return_exceptions=True,
+            )
             return
 
         if member_res.status != ChatMemberStatus.OWNER:
-            await q.edit_message_reply_markup(None)
-            await update.effective_message.reply_text(_ERR_OWNER_ONLY)
+            await asyncio.gather(
+                q.edit_message_reply_markup(None),
+                update.effective_message.reply_text(_ERR_OWNER_ONLY),
+                return_exceptions=True,
+            )
             return
 
         action = q.data
@@ -298,14 +304,17 @@ class BuildConnection:
                 return
 
             if not self.check_perms(bot_member):
-                await db.groups_db.add_pending(
-                    chat.id,
-                    chat.title or "",
-                    user.id,
-                    q.message.message_id,
-                )
-                await q.edit_message_text(
-                    self.perms_required_message(), reply_markup=None
+                await asyncio.gather(
+                    db.groups_db.add_pending(
+                        chat.id,
+                        chat.title or "",
+                        user.id,
+                        q.message.message_id,
+                    ),
+                    q.edit_message_text(
+                        self.perms_required_message(), reply_markup=None
+                    ),
+                    return_exceptions=True,
                 )
                 return
 

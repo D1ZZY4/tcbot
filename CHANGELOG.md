@@ -2,6 +2,37 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-12 (session 70)
+
+### Fixed
+
+- **`tcbot/modules/admins.py`** (lines 583, 634): Two Unicode em-dashes (`—`) in block comments replaced with ASCII hyphens (`-`). Per project style rules, em-dashes are banned from all source files. (Bug #63)
+- **`tcbot/modules/stats.py`** (`on_stats_search_back` no-results path): `q.answer()` and `safe_edit_cb(...)` were called sequentially despite `Stats.open_search()` being synchronous -- data was already available before the first await, making both API calls fully independent. Replaced with `asyncio.gather(q.answer(), safe_edit_cb(...), return_exceptions=True)`. (Bug #64)
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** (`_on_cancel`): `q.answer()` followed by `q.edit_message_text(_MSG_CANCELLED)` in a try/except were called sequentially. Both are independent Telegram API calls. Replaced with `asyncio.gather(q.answer(), q.edit_message_text(...), return_exceptions=True)` and check `isinstance(edit_r, BaseException)` for the debug log. (Bug #65)
+- **`tcbot/modules/helper/workflows/connected_flow.py`** (`on_join_decision` error paths): Two error branches both called `q.edit_message_reply_markup(None)` followed by `update.effective_message.reply_text(...)` sequentially. Both are independent Telegram API calls (remove keyboard + send error text). Replaced each with `asyncio.gather(..., return_exceptions=True)`. (Bug #66, #66b)
+- **`tcbot/modules/helper/workflows/connected_flow.py`** (`on_join_decision` perms-required path): `db.groups_db.add_pending(...)` (DB write) and `q.edit_message_text(self.perms_required_message(), ...)` (Telegram API) were called sequentially despite having no data dependency. Replaced with `asyncio.gather(..., return_exceptions=True)`. (Bug #67)
+- **`tcbot/modules/checking.py`** (staff-role early-return path): `cfg.community_name` and `role_label` embedded directly in HTML reply without `esc()`. If either value contains `&`, `<`, or `>`, the message would render broken HTML or create injection risk. Wrapped both with `esc()`. (Bug #68)
+- **`tcbot/modules/disconnecting.py`** (`cmd_disconnect` success reply): `cfg.community_name` embedded directly in HTML reply without `esc()`. Wrapped with `esc()`. Added `esc` to the formatter import. (Bug #69)
+- **`tcbot/modules/greeting.py`** (welcome message on join): `cfg.community_name` embedded directly in HTML reply without `esc()`. Wrapped with `esc()`. Added `esc` to the formatter import. (Bug #70)
+- **`tcbot/modules/admins.py`** (`cmd_demote` confirmation reply): `role_label` embedded in `<b>` HTML tag without `esc()`. Role labels come from `ROLE_LABEL` dict fallback and could contain HTML special chars. Wrapped with `esc()`. (Bug #71)
+- **`tcbot/modules/admins.py`** (`promo_demote_confirm` edit-message path): `role_label` embedded in HTML `edit_message_text` without `esc()`. Wrapped with `esc()`. Added `esc` to the formatter import. (Bug #72)
+- **`tcbot/modules/helper/workflows/promote_flow.py`** (`_assign_admin` return string): `cfg.community_name` in `f"...is now a {cfg.community_name} Admin."` — this string is returned to callers that render it with `parse_mode="HTML"`. Wrapped with `esc()`. (Bug #73)
+- **`tcbot/modules/helper/workflows/promote_flow.py`** (`_assign_subrole` already-admin guard): `label` from `ROLE_LABEL.get(role, role)` in `f"...before assigning {label}."` sent via HTML caller. Wrapped with `esc(label)`. (Bug #74)
+- **`tcbot/modules/helper/workflows/promote_flow.py`** (`_assign_subrole` return string): `cfg.community_name` and `role_label` in `f"...is now a {cfg.community_name} {role_label}."` rendered via HTML caller. Wrapped both with `esc()`. Added `esc` to formatter import. (Bug #75)
+- **`tcbot/modules/helper/workflows/promote_flow.py`** (`execute` role-rank guard): `label` from `ROLE_LABEL.get(current_role, current_role)` in `f"...holds the {label} role or higher."` sent via HTML caller. Wrapped with `esc(label)`. (Bug #76)
+- **`tcbot/modules/helper/workflows/kicking_flow.py`** (`execute_kick` exception handler): `exc` (a Python exception object) embedded directly in HTML reply `f"Couldn't kick ...: {exc}"`. Exception messages can contain `<`, `>`, or `&`. Wrapped with `esc(exc)`. (Bug #77)
+- **`tcbot/modules/admins.py`** (`cmd_list_requests` pending list): `uname` (`@username` or `"no username"`) embedded in HTML reply without `esc()`. Although Telegram usernames are alphanumeric+underscore, defensive escaping applied for consistency. Wrapped with `esc(uname)`. (Bug #78)
+
+### Documentation
+
+- **`docs/performance.md`** (Overview, Button Handlers, Performance Checklist): Updated all performance targets from v3 stale values to mandatory v4 targets. Added v4 target table (single DB query < 5 ms, batch < 15 ms, fan-out 100 groups < 800 ms, command handler p95 < 150 ms, `q.answer()` < 30 ms, in-memory cache < 0.1 ms, identity/role cached < 1 ms, startup < 3 s). Replaced old "< 100ms button" / "< 1 second command" checklist items with v4-accurate thresholds.
+
+## [Unreleased] - 2026-06-12 (session 69)
+
+### Documentation
+
+- **`.agents/memory/`** (context.md, progress.md): Updated to session 69 with DRY confirmation results: new task file v4 (1781284726574) read in full, comprehensive targeted audit passes, no new findings.
+
 ## [Unreleased] - 2026-06-12 (session 68)
 
 ### Fixed

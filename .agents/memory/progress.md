@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-12 (session 68)
+**Last updated:** 2026-06-12 (session 70)
 
 ## Verification baseline
 
@@ -164,6 +164,16 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Session 67 - DB perf: estimated_document_count | performance | `total_users()` and `admin_count()` switched to `estimated_document_count()`; `ensure_initial_owner` left exact. | 2026-06-12 (s67) |
 
 | Session 68 - Full audit verification pass | audit | All critical files re-read; no new bugs found; bot running cleanly (75 handlers, MongoDB connected, 70 files ruff-clean) | 2026-06-12 (s68) |
+
+| Session 69 - New task file v4 (1781284726574) full read + DRY confirm | audit | Read all 1097 lines of new task file; all agent rules re-read; comprehensive targeted audit: identity.py (no emoji/emoticons), callback q.answer() patterns (all correct via gather), all sequential awaits (verified data-dependent), symlinks (.kilo/.trae/.claude), em-dash sweep (clean). No new bugs found. Audit remains DRY. Full 7-step verification PASS. | 2026-06-12 (s69) |
+
+| Session 70 - Bug #63: em-dash in admins.py (2 locations) | correctness | Em-dashes in block comments replaced with ASCII hyphens. | 2026-06-12 (s70) |
+| Session 70 - Bug #64: stats.py on_stats_search_back sequential awaits | performance | q.answer()+safe_edit_cb() sequential despite synchronous data source. Fixed with gather. | 2026-06-12 (s70) |
+| Session 70 - Bug #65: appeal_flow._on_cancel sequential awaits | performance | q.answer()+q.edit_message_text() sequential. Fixed with gather+return_exceptions. | 2026-06-12 (s70) |
+| Session 70 - Bug #66/#66b: connected_flow on_join_decision error paths | performance | edit_message_reply_markup+reply_text sequential (2 locations). Fixed with gather. | 2026-06-12 (s70) |
+| Session 70 - Bug #67: connected_flow add_pending+edit_message_text | performance | DB write+TG call sequential. Fixed with gather. | 2026-06-12 (s70) |
+| Session 70 - docs/performance.md v4 targets | documentation | Updated all performance targets to mandatory v4 values (table added). | 2026-06-12 (s70) |
+| Session 70 - Ultra-comprehensive audit pass | audit | 70 files, 14077 lines, 0 em-dash, 0 curly-quotes, 0 bare-except. Ruff clean. All consecutive-await pairs verified. DB+TG sequential scan: 0 remaining. q.answer()-in-gather scan: all correct. | 2026-06-12 (s70) |
 
 ## Pending (remaining optional)
 

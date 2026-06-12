@@ -7,10 +7,26 @@ This document outlines the performance optimizations implemented in the tcbot co
 ## Overview
 
 The bot is optimized for **zero-delay, instant response** across all operations:
-- Button handlers: < 100ms typical response
-- Command handlers: < 1 second for most operations
-- List views: Fast pagination even with 1000+ records
-- Database queries: Batch operations and parallel execution throughout
+
+### v4 Performance Targets (Mandatory)
+
+| Operation | Target |
+|---|---|
+| Single DB query (indexed) | < 5 ms |
+| DB batch query (up to 100 docs) | < 15 ms |
+| Fan-out to 100 groups | < 800 ms |
+| Command handler response (p95) | < 150 ms |
+| Callback query acknowledgment (`q.answer()`) | < 30 ms |
+| In-memory cache read | < 0.1 ms |
+| Identity/role resolution (cached) | < 1 ms |
+| Startup time | < 3 s |
+
+These targets are achieved via:
+- Batch database queries (no N+1 patterns)
+- `asyncio.gather()` for all independent async operations
+- Composite MongoDB indexes on all high-frequency query patterns
+- `estimated_document_count()` for collection-size metrics
+- `q.answer()` parallelised with the first DB/API call in every callback handler
 
 ## Key Optimization Strategies
 
@@ -157,10 +173,9 @@ def mention(user_id: int, name: str, username: str | None = None) -> str:
 - Ban list: 0.3-0.5 seconds (75% faster)
 - Staff roster: 0.4-0.6 seconds (70% faster)
 
-### Button Handlers
-- All button handlers: < 100ms typical
-- Callback query answer: < 50ms
-- Message edit: < 100ms
+### Button Handlers (v4 Targets)
+- Callback query acknowledgment (`q.answer()`): < 30 ms
+- Full callback round-trip (answer + edit): < 150 ms
 
 ---
 
@@ -302,8 +317,9 @@ Before merging new code, verify:
 - [ ] Database queries use projections when possible
 - [ ] New query patterns have appropriate indexes
 - [ ] No loops with `await` inside (use gather instead)
-- [ ] Button handlers respond in < 100ms
-- [ ] Command handlers respond in < 1 second
+- [ ] Callback query `q.answer()` responds in < 30 ms
+- [ ] Command handlers respond (p95) in < 150 ms
+- [ ] Single indexed DB query < 5 ms; batch (up to 100 docs) < 15 ms
 - [ ] List views paginate efficiently
 
 ---

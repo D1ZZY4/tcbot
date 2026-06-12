@@ -226,10 +226,12 @@ class BuildAppeal:
             ):
                 ctx.user_data.pop(key, None)
 
-        await q.answer()
-        try:
-            await q.edit_message_text(_MSG_CANCELLED)
-        except Exception:
+        _, edit_r = await asyncio.gather(
+            q.answer(),
+            q.edit_message_text(_MSG_CANCELLED),
+            return_exceptions=True,
+        )
+        if isinstance(edit_r, BaseException):
             log.debug("appeal cancel edit failed (message may already be gone)")
         return ConversationHandler.END
 

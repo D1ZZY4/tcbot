@@ -15,7 +15,7 @@ from telegram.ext import ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, parse_logmsg, replies
-from tcbot.modules.helper.formatter import code
+from tcbot.modules.helper.formatter import code, esc
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -180,7 +180,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             ),
             ctx.bot.leave_chat(chat_id),
             update.effective_message.reply_text(
-                f"Group {code(str(chat_id))} has been disconnected from {cfg.community_name}.",
+                f"Group {code(str(chat_id))} has been disconnected from {esc(cfg.community_name)}.",
                 parse_mode="HTML",
             ),
             return_exceptions=True,

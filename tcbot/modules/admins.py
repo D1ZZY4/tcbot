@@ -22,7 +22,7 @@ from tcbot.modules.helper import (
     parse_logmsg,
     replies,
 )
-from tcbot.modules.helper.formatter import code, mention
+from tcbot.modules.helper.formatter import code, esc, mention
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.promote_flow import ROLE_ALIASES, Promote
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
@@ -327,7 +327,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     role_label = db.users_roles.ROLE_LABEL.get(target_role, target_role)
     await msg.reply_text(
         f"{mention(target_id, target_fname or str(target_id), ident.username)} is currently a "
-        f"<b>{role_label}</b>.\nConfirm to remove their role.",
+        f"<b>{esc(role_label)}</b>.\nConfirm to remove their role.",
         parse_mode="HTML",
         reply_markup=keyboards.demote_confirm_kb(target_id),
     )
@@ -396,7 +396,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     role_label = db.users_roles.ROLE_LABEL.get(target_role, target_role)
     await q.edit_message_text(
         f"Done. {mention(target_id, target_fname, target_uname)} - {code(str(target_id))} "
-        f"has been removed from {role_label}.",
+        f"has been removed from {esc(role_label)}.",
         parse_mode="HTML",
         reply_markup=None,
     )
@@ -536,7 +536,7 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         uname = f"@{req['username']}" if req.get("username") else "no username"
         lines.append(
             f"- {mention(req['target_id'], req['first_name'], req.get('username'))} "
-            f"{code(str(req['target_id']))} | {uname} | ID: <code>{req['request_id']}</code>"
+            f"{code(str(req['target_id']))} | {esc(uname)} | ID: <code>{req['request_id']}</code>"
         )
     await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
 
@@ -580,7 +580,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     lc, lt = cfg.logs
 
     if action == "promo_approve":
-        # * DB writes in parallel; check results — if add_admin fails the user is
+        # * DB writes in parallel; check results - if add_admin fails the user is
         # * approved in the queue but never actually gains the role.
         db_add_r, db_resolve_r = await asyncio.gather(
             db.users_roles.add_admin(target_id, admin.id),
@@ -631,7 +631,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             request_id,
         )
         # * resolve DB + notify + send log + edit review message all in parallel
-        # * check results — if resolve fails the request stays pending while the UI
+        # * check results - if resolve fails the request stays pending while the UI
         # * already shows "Rejected", which would leave the queue in an inconsistent state.
         reject_results = await asyncio.gather(
             q.edit_message_text(
