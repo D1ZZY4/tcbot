@@ -1,7 +1,7 @@
 [project]
-name = "tgbot-tcf"
-version = "1.0.0"
-description = "Transsion Core Federation (TCF) Telegram bot"
+name = "tcbot"
+version = "4.1.0"
+description = "TCF | Transsion Core Federation - Telegram Bot"
 requires-python = ">=3.12"
 dependencies = [
     "python-telegram-bot[job-queue]",
