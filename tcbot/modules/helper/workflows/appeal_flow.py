@@ -26,7 +26,7 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
-from tcbot.modules.helper.formatter import mention
+from tcbot.modules.helper.formatter import esc, mention
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.utils.dispatch import fan_out
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
@@ -205,11 +205,11 @@ class BuildAppeal:
         q = update.callback_query
         for key in ("appeal_ban_id", "appeal_log_msg_id", "appeal_instruction_msg_id"):
             ctx.user_data.pop(key, None)
-        await asyncio.gather(
-            q.answer(),
-            q.edit_message_text(_MSG_CANCELLED),
-            return_exceptions=True,
-        )
+        await q.answer()
+        try:
+            await q.edit_message_text(_MSG_CANCELLED)
+        except Exception:
+            log.debug("appeal cancel edit failed (message may already be gone)")
         return ConversationHandler.END
 
     async def _end(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -219,6 +219,8 @@ class BuildAppeal:
 
     async def _on_timeout(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Timeout handler; fires when ``conversation_timeout`` expires."""
+        for key in ("appeal_ban_id", "appeal_log_msg_id", "appeal_instruction_msg_id"):
+            ctx.user_data.pop(key, None)
         if update.effective_message:
             await update.effective_message.reply_text(_MSG_TIMEOUT)
         return ConversationHandler.END
@@ -352,11 +354,11 @@ class BuildAppeal:
             await q.answer()
             return
 
-        _, ban = await asyncio.gather(
-            q.answer(), db.bans_db.get_ban(ban_id), return_exceptions=True
-        )
-        if isinstance(ban, BaseException):
-            log.error("get_ban failed in appeal review for %s: %s", ban_id, ban)
+        await q.answer()
+        try:
+            ban = await db.bans_db.get_ban(ban_id)
+        except Exception:
+            log.exception("get_ban failed in appeal review for %s", ban_id)
             await q.edit_message_text(_ERR_BAN_NOT_FOUND, reply_markup=None)
             return
         if not ban:
@@ -410,7 +412,7 @@ class BuildAppeal:
                 ctx.bot.send_message(
                     target_id,
                     f"Your appeal for ban <code>{ban_id}</code> has been approved - "
-                    f"you're now unbanned from {self.community_name}. Welcome back.",
+                    f"you're now unbanned from {esc(self.community_name)}. Welcome back.",
                     parse_mode="HTML",
                 ),
                 q.edit_message_text(

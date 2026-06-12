@@ -234,9 +234,8 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         await q.edit_message_text(replies.ERR_UNKNOWN_ROLE, reply_markup=None)
         return
 
-    # * answer + fetch name + current role in parallel
-    _, target_fname, current_role = await asyncio.gather(
-        q.answer(),
+    await q.answer()
+    target_fname, current_role = await asyncio.gather(
         db.users_cache.get_first_name(target_id, str(target_id)),
         db.users_roles.get_effective_role(target_id),
         return_exceptions=True,
@@ -266,11 +265,8 @@ async def on_promote_role_cancel(
 ) -> None:
     """Acknowledge the cancel button and replace the role-selection prompt with a cancellation notice."""
     q = update.callback_query
-    await asyncio.gather(
-        q.answer(),
-        q.edit_message_text(_MSG_PROMOTE_CANCELLED, reply_markup=None),
-        return_exceptions=True,
-    )
+    await q.answer()
+    await q.edit_message_text(_MSG_PROMOTE_CANCELLED, reply_markup=None)
 
 
 # ─────────────────── Command Demote </tcdemote> ─────────────────── #
@@ -356,9 +352,8 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             log.debug("Failed to clear demote reply markup: %s", exc)
         return
 
-    # * answer + fetch target role + mention data in parallel
-    _, target_role, mention_data = await asyncio.gather(
-        q.answer(),
+    await q.answer()
+    target_role, mention_data = await asyncio.gather(
         db.users_roles.get_effective_role(target_id),
         db.users_cache.get_user_mention_data(target_id),
         return_exceptions=True,
@@ -403,11 +398,8 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Acknowledge the cancel button and collapse the demotion confirmation prompt."""
     q = update.callback_query
-    await asyncio.gather(
-        q.answer(),
-        q.edit_message_text(_MSG_CANCELLED, reply_markup=None),
-        return_exceptions=True,
-    )
+    await q.answer()
+    await q.edit_message_text(_MSG_CANCELLED, reply_markup=None)
 
 
 # ───────────── Command Transfer Owner </transferowner> ──────────── #
@@ -552,14 +544,11 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         await q.answer(replies.PERM_FOUNDER_ONLY, show_alert=True)
         return
     action, request_id = q.data.split(":", 1)
-    # * answer + fetch request in parallel
-    _, req = await asyncio.gather(
-        q.answer(),
-        db.queues_db.get_request_by_id(request_id),
-        return_exceptions=True,
-    )
-    if isinstance(req, BaseException):
-        log.error("get_request_by_id failed for %s: %s", request_id, req)
+    await q.answer()
+    try:
+        req = await db.queues_db.get_request_by_id(request_id)
+    except Exception:
+        log.exception("get_request_by_id failed for %s", request_id)
         await q.edit_message_text(_ERR_REQUEST_NOT_FOUND)
         return
     if not req:

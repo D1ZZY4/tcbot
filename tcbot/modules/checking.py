@@ -235,10 +235,8 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         build_ban_detail,
     )
 
-    _, (text, proof_link) = await asyncio.gather(
-        q.answer(),
-        build_ban_detail(ban),
-    )
+    await q.answer()
+    text, proof_link = await build_ban_detail(ban)
     await q.edit_message_text(
         text,
         parse_mode="HTML",
@@ -265,12 +263,10 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
     uid = ban["banned_user_id"]
     aid = ban.get("admin_user_id", 0)
-    _, (fname, admin_fname) = await asyncio.gather(
-        q.answer(),
-        asyncio.gather(
-            db.users_cache.get_first_name(uid, str(uid)),
-            db.users_cache.get_first_name(aid, "Admin"),
-        ),
+    await q.answer()
+    fname, admin_fname = await asyncio.gather(
+        db.users_cache.get_first_name(uid, str(uid)),
+        db.users_cache.get_first_name(aid, "Admin"),
     )
     text, proof_link = await _ban_summary(ban, uid, fname, admin_fname)
 
@@ -316,7 +312,8 @@ async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the top-level profile summary for the checked user."""
     q = update.callback_query
     target_id = int(q.data.split(":", 1)[1])
-    _, (text, kb) = await asyncio.gather(q.answer(), Check.profile(ctx.bot, target_id))
+    await q.answer()
+    text, kb = await Check.profile(ctx.bot, target_id)
     await _safe_edit(q, text, kb)
 
 
@@ -328,7 +325,8 @@ async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     _, target_id_str, page_str = q.data.split(":")
     target_id = int(target_id_str)
     page = int(page_str)
-    _, (text, kb) = await asyncio.gather(q.answer(), Check.bans_list(target_id, page))
+    await q.answer()
+    text, kb = await Check.bans_list(target_id, page)
     await _safe_edit(q, text, kb)
 
 
@@ -339,9 +337,8 @@ async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     q = update.callback_query
     _, target_id_str, ban_id = q.data.split(":", 2)
     target_id = int(target_id_str)
-    _, (text, kb) = await asyncio.gather(
-        q.answer(), Check.ban_detail(target_id, ban_id)
-    )
+    await q.answer()
+    text, kb = await Check.ban_detail(target_id, ban_id)
     await _safe_edit(q, text, kb)
 
 
@@ -351,7 +348,8 @@ async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     """Render the per-group warning summary for the checked user."""
     q = update.callback_query
     target_id = int(q.data.split(":", 1)[1])
-    _, (text, kb) = await asyncio.gather(q.answer(), Check.warns_by_group(target_id))
+    await q.answer()
+    text, kb = await Check.warns_by_group(target_id)
     await _safe_edit(q, text, kb)
 
 
@@ -364,9 +362,8 @@ async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     target_id = int(target_id_str)
     chat_id = int(chat_id_str)
     page = int(page_str)
-    _, (text, kb) = await asyncio.gather(
-        q.answer(), Check.warns_in_group(target_id, chat_id, page)
-    )
+    await q.answer()
+    text, kb = await Check.warns_in_group(target_id, chat_id, page)
     await _safe_edit(q, text, kb)
 
 
@@ -378,7 +375,8 @@ async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     _, target_id_str, page_str = q.data.split(":")
     target_id = int(target_id_str)
     page = int(page_str)
-    _, (text, kb) = await asyncio.gather(q.answer(), Check.kicks_list(target_id, page))
+    await q.answer()
+    text, kb = await Check.kicks_list(target_id, page)
     await _safe_edit(q, text, kb)
 
 
@@ -390,7 +388,8 @@ async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     _, target_id_str, page_str = q.data.split(":")
     target_id = int(target_id_str)
     page = int(page_str)
-    _, (text, kb) = await asyncio.gather(q.answer(), Check.mutes_list(target_id, page))
+    await q.answer()
+    text, kb = await Check.mutes_list(target_id, page)
     await _safe_edit(q, text, kb)
 
 
@@ -402,9 +401,8 @@ async def on_check_appeals(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     _, target_id_str, page_str = q.data.split(":")
     target_id = int(target_id_str)
     page = int(page_str)
-    _, (text, kb) = await asyncio.gather(
-        q.answer(), Check.appeals_list(target_id, page)
-    )
+    await q.answer()
+    text, kb = await Check.appeals_list(target_id, page)
     await _safe_edit(q, text, kb)
 
 

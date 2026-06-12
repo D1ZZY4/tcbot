@@ -31,14 +31,22 @@ log = logging.getLogger(__name__)
 _bot: Bot | None = None
 _chat_id: int = 0
 _thread_id: int | None = None
+_owner_id: int = 0
 
 
-def attach(bot: Bot, chat_id: int, thread_id: int | None) -> None:
-    """Inject live bot instance and log channel config."""
-    global _bot, _chat_id, _thread_id
+def attach(
+    bot: Bot,
+    chat_id: int,
+    thread_id: int | None,
+    *,
+    owner_id: int = 0,
+) -> None:
+    """Inject live bot instance, log channel config, and owner DM target."""
+    global _bot, _chat_id, _thread_id, _owner_id
     _bot = bot
     _chat_id = chat_id
     _thread_id = thread_id
+    _owner_id = owner_id
 
 
 # ────────────── Filter benign + noisy log records ───────────────── #
@@ -58,6 +66,16 @@ _LOG_NOISE_PATTERNS: tuple[str, ...] = (
     " raised after ",  # log_execution's per-handler exception summary
 )
 
+# * Owner-only errors: infra-level issues that should reach the owner
+# * privately via DM, but must NOT be posted to the shared logs_errors
+# * channel. Conflict arises when two bot instances poll simultaneously;
+# * InvalidToken means the token was revoked or is wrong -- both are
+# * operator concerns, not bugs the on-call moderator needs to see.
+_OWNER_ONLY_TYPES: tuple[type[BaseException], ...] = (
+    _te.Conflict,
+    _te.InvalidToken,
+)
+
 
 def _benign(exc: BaseException | None) -> bool:
     """Return True when the exception is a recoverable, well-known no-op."""
@@ -73,6 +91,13 @@ def _log_noise(record: logging.LogRecord | None) -> bool:
         return False
     msg = record.getMessage()
     return any(p in msg for p in _LOG_NOISE_PATTERNS)
+
+
+def _owner_only(exc: BaseException | None) -> bool:
+    """Return True when the error is an infra/operator issue that goes to owner DM only."""
+    if exc is None:
+        return False
+    return isinstance(exc, _OWNER_ONLY_TYPES)
 
 
 # ─────────────────── Dedupe within a short window ────────────────── #
@@ -138,6 +163,8 @@ def _classify(exc: BaseException | None) -> str:
         return "[~] Rate Limit: Flood Wait"
     if isinstance(exc, _te.TimedOut):
         return "[~] Telegram Timed Out"
+    if isinstance(exc, _te.Conflict):
+        return "[~] Polling Conflict"
     if isinstance(exc, _te.BadRequest):
         return "[!] Telegram Bad Request"
     if isinstance(exc, _te.Forbidden):
@@ -209,7 +236,7 @@ def _condensed_tb(exc: BaseException) -> str:
     lines.append(f"{type(exc).__name__}: {exc}")
     out = "\n".join(lines)
     if len(out) > _MAX_TB:
-        out = "…(trimmed)\n" + out[-_MAX_TB:]
+        out = "...(trimmed)\n" + out[-_MAX_TB:]
     return out
 
 
@@ -300,6 +327,22 @@ async def send_to_log_errors(text: str) -> None:
         )
 
 
+async def send_to_owner(text: str) -> None:
+    """Fire-and-forget DM to the bot owner; used for infra/operator-only errors."""
+    if not _bot or not _owner_id:
+        return
+    try:
+        await _bot.send_message(
+            _owner_id,
+            text,
+            parse_mode="HTML",
+        )
+    except Exception as exc:
+        logging.getLogger("tcbot.utils.error_reporter").warning(
+            "Failed to send owner DM: %s", exc
+        )
+
+
 # ────────────────────── Convenience Wrappers ────────────────────── #
 
 
@@ -307,13 +350,16 @@ async def report_exc(
     exc: BaseException,
     context: str | None = None,
 ) -> None:
-    """Report an exception with optional context string; benign / duplicate reports are skipped."""
+    """Report an exception; owner-only errors go to owner DM, others to log channel."""
     if _benign(exc):
         return
     if _seen_recently(_fingerprint(exc, None)):
         return
     text = build_error_message(exc=exc, context=context)
-    await send_to_log_errors(text)
+    if _owner_only(exc):
+        await send_to_owner(text)
+    else:
+        await send_to_log_errors(text)
 
 
 async def report_record(record: logging.LogRecord) -> None:
@@ -328,4 +374,7 @@ async def report_record(record: logging.LogRecord) -> None:
     if _seen_recently(_fingerprint(exc, record)):
         return
     text = build_error_message(record=record)
-    await send_to_log_errors(text)
+    if _owner_only(exc):
+        await send_to_owner(text)
+    else:
+        await send_to_log_errors(text)

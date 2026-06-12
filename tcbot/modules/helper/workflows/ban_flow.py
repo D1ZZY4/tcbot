@@ -42,6 +42,17 @@ log = logging.getLogger(__name__)
 
 _MSG_CANCELLED = "Cancelled. No ban was issued."
 _MSG_TIMEOUT = "Timed out waiting for proof. No ban was issued."
+_MSG_PROOF_EXPECTED = "Please send a photo or video as proof, or press Cancel."
+
+_BAN_USER_DATA_KEYS = (
+    "ban_target_id",
+    "ban_target_fname",
+    "ban_reason",
+    "ban_admin_id",
+    "ban_admin_fname",
+    "ban_prompt_msg_id",
+    "ban_prompt_chat_id",
+)
 
 WAITING_PROOF = 0
 
@@ -290,19 +301,30 @@ async def _flush_album(mgid: str, bot: Bot) -> None:
     await _execute_ban(bot, msgs, meta)
 
 
+async def on_proof_unexpected(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    """Reject unexpected message types during proof collection."""
+    if update.effective_message:
+        await update.effective_message.reply_text(_MSG_PROOF_EXPECTED)
+    return WAITING_PROOF
+
+
 async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Acknowledge the cancel button and end the proof-collection conversation."""
     q = update.callback_query
-    await asyncio.gather(
-        q.answer(),
-        q.edit_message_text(_MSG_CANCELLED),
-        return_exceptions=True,
-    )
+    await q.answer()
+    for key in _BAN_USER_DATA_KEYS:
+        ctx.user_data.pop(key, None)
+    try:
+        await q.edit_message_text(_MSG_CANCELLED)
+    except Exception:
+        log.debug("ban cancel edit failed (message may already be gone)")
     return ConversationHandler.END
 
 
 async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Notify the user that the proof window expired and end the conversation."""
+    for key in _BAN_USER_DATA_KEYS:
+        ctx.user_data.pop(key, None)
     if update.effective_message:
         await update.effective_message.reply_text(_MSG_TIMEOUT)
     return ConversationHandler.END
@@ -323,6 +345,10 @@ def ban_conversation(
                     on_cancel_proof, pattern=rf"^{proof.action}_cancel$"
                 ),
                 MessageHandler(filters.PHOTO | filters.VIDEO, on_proof_received),
+                MessageHandler(
+                    ~filters.PHOTO & ~filters.VIDEO & ~ALL_PREFIXES_CMD_FILTER,
+                    on_proof_unexpected,
+                ),
             ],
             ConversationHandler.TIMEOUT: [TypeHandler(Update, on_proof_timeout)],
         },

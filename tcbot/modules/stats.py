@@ -95,14 +95,14 @@ async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def _ack_and_render(
     q: CallbackQuery, data_coro: Awaitable[tuple[str, InlineKeyboardMarkup | None]]
 ) -> None:
-    """Acknowledge the callback in parallel with the data coroutine, then edit.
+    """Acknowledge the callback query, then await the data coroutine and edit.
 
-    ``data_coro`` must be a coroutine that returns ``(text, kb)``.  Running
-    ``q.answer()`` concurrently with the DB-heavy data fetch removes one
-    sequential await per callback handler, matching the pattern used in
-    checking.py.
+    ``data_coro`` must be a coroutine that returns ``(text, kb)``.  Answering
+    the callback first ensures the button loading indicator is dismissed before
+    the DB fetch runs.
     """
-    _, (text, kb) = await asyncio.gather(q.answer(), data_coro)
+    await q.answer()
+    text, kb = await data_coro
     await safe_edit_cb(q, text, reply_markup=kb)
 
 
@@ -189,11 +189,10 @@ async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 async def on_stats_bans_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Open the user search prompt within the stats ban view."""
     q = update.callback_query
-    # * Stats.open_search is synchronous; gather q.answer() with the edit directly.
+    # * Stats.open_search is synchronous; answer first then edit.
     text, kb = Stats.open_search(ctx, q)
-    await asyncio.gather(
-        q.answer(), safe_edit_cb(q, text, reply_markup=kb), return_exceptions=True
-    )
+    await q.answer()
+    await safe_edit_cb(q, text, reply_markup=kb)
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -249,11 +248,10 @@ async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     q = update.callback_query
     results = ctx.user_data.get(RESULTS_KEY, []) if ctx.user_data else []
     if not results:
-        # * open_search is synchronous; gather q.answer() with the edit directly.
+        # * open_search is synchronous; answer first then edit.
         text, kb = Stats.open_search(ctx, q)
-        await asyncio.gather(
-            q.answer(), safe_edit_cb(q, text, reply_markup=kb), return_exceptions=True
-        )
+        await q.answer()
+        await safe_edit_cb(q, text, reply_markup=kb)
     else:
         # * Re-render the previous results without re-running the query.
         previous_query = (

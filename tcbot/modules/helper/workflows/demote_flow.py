@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
+from tcbot.modules.helper.formatter import esc
 
 if TYPE_CHECKING:
     from telegram import Bot
@@ -73,13 +74,13 @@ class Demote:
         )
         if trigger is None:
             user_msg = (
-                f"Your {role_label} role in {cfg.community_name} has been removed by "
-                f"{executor_fname}."
+                f"Your {esc(role_label)} role in {esc(cfg.community_name)} has been removed by "
+                f"{esc(executor_fname)}."
             )
         else:
             verb = "banned" if trigger == "ban" else "kicked"
             user_msg = (
-                f"Your <b>{role_label}</b> role in {cfg.community_name} has been removed - "
+                f"Your <b>{esc(role_label)}</b> role in {esc(cfg.community_name)} has been removed - "
                 f"you were {verb} from the federation."
             )
 

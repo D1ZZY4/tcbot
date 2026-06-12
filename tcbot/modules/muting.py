@@ -16,6 +16,7 @@ from tcbot import cfg
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.formatter import code, mention
+from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.muting_flow import (
     _DURATION_RE,
     execute_unmute,
@@ -129,7 +130,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
         return ConversationHandler.END
 
-    ident, (executor_role, _) = await asyncio.gather(
+    ident, (executor_role, target_role) = await asyncio.gather(
         identity.classify(ctx.bot, admin.id, target_id, target_fname),
         resolve_and_check(msg, admin.id, target_id, min_role="tester"),
     )
@@ -140,6 +141,17 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     if executor_role is None:
         return ConversationHandler.END
+
+    if target_role:
+        await Demote.execute(
+            ctx.bot,
+            target_id,
+            target_fname or str(target_id),
+            target_role,
+            admin.id,
+            admin.first_name,
+            trigger="kick",
+        )
 
     duration = None
     if remaining_args and _DURATION_RE.match(remaining_args[0]):

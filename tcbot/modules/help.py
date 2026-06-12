@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import importlib
 import logging
 from typing import TYPE_CHECKING
@@ -16,6 +15,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot.modules import ALL_MODULES
 from tcbot.modules.helper import decorators, keyboards
+from tcbot.modules.helper.formatter import esc
 from tcbot.modules.helper.parse_editmsg import safe_edit_cb
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -130,20 +130,17 @@ async def _render_help_index(
 ) -> None:
     """Edit the help index message on the appropriate callback query."""
     q: CallbackQuery = update.callback_query
-    botname = ctx.bot.first_name
+    botname = esc(ctx.bot.first_name or "")
     kb = (
         keyboards.help_topics_menu_kb(HELP_TOPICS_MENU)
         if with_back_to_start
         else keyboards.help_topics_kb(HELP_TOPICS_CMD)
     )
-    await asyncio.gather(
-        q.answer(),
-        safe_edit_cb(
-            q,
-            _HELP_INDEX_TEXT.format(botname=botname),
-            reply_markup=kb,
-        ),
-        return_exceptions=True,
+    await q.answer()
+    await safe_edit_cb(
+        q,
+        _HELP_INDEX_TEXT.format(botname=botname),
+        reply_markup=kb,
     )
 
 
@@ -160,11 +157,8 @@ async def _show_module(
             if is_menu_path
             else keyboards.back_to_help_cmd_kb()
         )
-        await asyncio.gather(
-            q.answer(),
-            safe_edit_cb(q, _ERR_TOPIC_NOT_FOUND, reply_markup=back_kb),
-            return_exceptions=True,
-        )
+        await q.answer()
+        await safe_edit_cb(q, _ERR_TOPIC_NOT_FOUND, reply_markup=back_kb)
         return
 
     name, overview, sections = HELP_CONTENT[menu_key]
@@ -181,11 +175,8 @@ async def _show_module(
             else keyboards.back_to_help_cmd_kb()
         )
 
-    await asyncio.gather(
-        q.answer(),
-        safe_edit_cb(q, _module_text(name, overview), reply_markup=kb),
-        return_exceptions=True,
-    )
+    await q.answer()
+    await safe_edit_cb(q, _module_text(name, overview), reply_markup=kb)
 
 
 async def _show_section(
@@ -200,36 +191,29 @@ async def _show_section(
     back_module_cb = ("help_" if is_menu_path else "helpc_") + mod_slug
 
     if menu_key not in HELP_CONTENT:
-        await asyncio.gather(
-            q.answer(),
-            safe_edit_cb(
-                q,
-                _ERR_TOPIC_NOT_FOUND,
-                reply_markup=keyboards.back_to_module_kb(back_module_cb),
-            ),
-            return_exceptions=True,
+        await q.answer()
+        await safe_edit_cb(
+            q,
+            _ERR_TOPIC_NOT_FOUND,
+            reply_markup=keyboards.back_to_module_kb(back_module_cb),
         )
         return
 
     name, _, sections = HELP_CONTENT[menu_key]
     if idx < 0 or idx >= len(sections):
-        await asyncio.gather(
-            q.answer(),
-            safe_edit_cb(
-                q,
-                _ERR_SECTION_NOT_FOUND,
-                reply_markup=keyboards.back_to_module_kb(back_module_cb),
-            ),
-            return_exceptions=True,
+        await q.answer()
+        await safe_edit_cb(
+            q,
+            _ERR_SECTION_NOT_FOUND,
+            reply_markup=keyboards.back_to_module_kb(back_module_cb),
         )
         return
 
     label, content = sections[idx]
     body = f"<b>{name} › {label}</b>\n\n{content}"
-    await asyncio.gather(
-        q.answer(),
-        safe_edit_cb(q, body, reply_markup=keyboards.back_to_module_kb(back_module_cb)),
-        return_exceptions=True,
+    await q.answer()
+    await safe_edit_cb(
+        q, body, reply_markup=keyboards.back_to_module_kb(back_module_cb)
     )
 
 
@@ -240,7 +224,7 @@ async def _show_section(
 @decorators.log_execution
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Show the help index, or a specific topic when an argument is given."""
-    botname = ctx.bot.first_name
+    botname = esc(ctx.bot.first_name or "")
     args = parse_cmd_args(update.effective_message.text)
 
     if args:
@@ -269,7 +253,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         suggestion = ", ".join(f"<code>/help {c}</code>" for c in candidates if c)
         hint = f"\n\nDid you mean: {suggestion}?" if suggestion else ""
         await update.effective_message.reply_text(
-            f"Module <b>{query}</b> not found.{hint}",
+            f"Module <b>{esc(query)}</b> not found.{hint}",
             parse_mode="HTML",
             reply_markup=keyboards.help_topics_kb(HELP_TOPICS_CMD),
         )

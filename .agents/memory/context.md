@@ -267,9 +267,21 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Full audit now covers all 30+ module and helper files; no remaining unaudited files.
   - Ruff 70 files clean; bot running (MongoDB connected, 75 handlers, polling active).
 
+- Session 57 (2026-06-12): systematic HTML-escaping audit across all modules.
+  - Bug #28: `privacy.py` `on_privacy_menu`/`on_privacy_policy_menu` — `ctx.bot.first_name` raw in HTML format strings. Wrapped with `esc()`.
+  - Bug #29: `start.py` `cmd_start`/`on_back_to_start` — same pattern. Wrapped with `esc()`.
+  - Bug #30: `appeal_flow.py` `_on_approve` — `self.community_name` raw in HTML DM to user. Wrapped with `esc()`.
+  - Bug #31: `demote_flow.py` `Demote.execute` — `role_label` (inside `<b>` tags) and `cfg.community_name` unescaped in DM. Wrapped both with `esc()`.
+  - Bug #32: `help.py` `_show_help_index`/`cmd_help` — `ctx.bot.first_name` raw in HTML format strings. Wrapped with `esc()`.
+  - Bug #33: `help.py` `cmd_help` — `query` (lowercased user input) raw in `f"Module <b>{query}</b> not found."` with `parse_mode="HTML"`. Wrapped with `esc(query)`.
+  - Bug #34: `warning_flow.py` `execute_warnlist` — `w.get('reason', 'No reason')` (admin-typed warn reason from DB) raw in HTML list. Wrapped with `esc()`.
+  - Comprehensive audit completed: `keyboards.py`, `parse_logmsg.py`, `parse_editmsg.py`, `extraction.py`, `bans_db.py`, `warns_db.py`, `queues_db.py`, `dispatch.py`, `timedate_format.py`, `unban_flow.py`, `promote_flow.py`, `reason_flow.py`, `admins.py`, `banning.py`, `kicking.py`, `warns.py` — all clean.
+  - All false positives resolved: `staff_only`/`mod_only`/`owner_only` decorators guard `effective_user is None`; `promote_flow.py:161` gather without `return_exceptions=True` is correct for data-fetching gather; `admins.py:542` early-reject pattern is correct.
+  - Ruff 70 files clean; bot running (MongoDB connected, scheduler started, polling active).
+
 ## What is in progress
 
-Nothing. Session 56 checkpoint complete.
+Nothing. Session 57 checkpoint complete.
 
 ## What is pending (optional)
 

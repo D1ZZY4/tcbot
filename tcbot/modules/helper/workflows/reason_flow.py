@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -156,11 +155,9 @@ def build_modaction_conv(
             _get_target(ctx), action, replies.NO_REASON, extra_info
         )
         try:
-            await asyncio.gather(
-                q.answer(),
-                q.edit_message_text(
-                    prompt_txt, parse_mode="HTML", reply_markup=proof.keyboard()
-                ),
+            await q.answer()
+            await q.edit_message_text(
+                prompt_txt, parse_mode="HTML", reply_markup=proof.keyboard()
             )
         except Exception:
             log.exception("%s prompt edit failed (skip-reason step)", action)
@@ -176,31 +173,59 @@ def build_modaction_conv(
         return ConversationHandler.END
 
     async def _on_skip_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        await asyncio.gather(
-            update.callback_query.answer(),
-            executor(update, ctx),
-            return_exceptions=True,
-        )
+        await update.callback_query.answer()
+        await executor(update, ctx)
         return ConversationHandler.END
 
     # ── Cancel / fallback ────────────────────────────────────────── #
 
+    def _clear_user_data(ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Remove all ``{action}_*`` keys from user_data on cancel / timeout."""
+        prefix = f"{action}_"
+        for key in [k for k in ctx.user_data if k.startswith(prefix)]:
+            ctx.user_data.pop(key, None)
+
+    async def _on_reason_unexpected(
+        update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> int:
+        """Reject non-text messages during reason collection."""
+        if update.effective_message:
+            await update.effective_message.reply_text(
+                f"Please type your {action} reason as text, or press Skip / Cancel."
+            )
+        return WAITING_REASON
+
+    async def _on_proof_unexpected(
+        update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> int:
+        """Reject unexpected message types during proof collection."""
+        if update.effective_message:
+            await update.effective_message.reply_text(
+                "Please send a photo or video as proof, or press Skip / Cancel."
+            )
+        return WAITING_PROOF
+
     async def _on_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         q = update.callback_query
-        await asyncio.gather(
-            q.answer(),
-            q.edit_message_text(f"Got it, {action} cancelled. No action was taken."),
-            return_exceptions=True,
-        )
+        await q.answer()
+        _clear_user_data(ctx)
+        try:
+            await q.edit_message_text(
+                f"Got it, {action} cancelled. No action was taken."
+            )
+        except Exception:
+            log.debug("%s cancel edit failed (message may already be gone)", action)
         return ConversationHandler.END
 
     async def _end_conv(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+        _clear_user_data(ctx)
         await update.effective_message.reply_text(
             f"{action.capitalize()} operation cancelled."
         )
         return ConversationHandler.END
 
     async def _on_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+        _clear_user_data(ctx)
         if update.effective_message:
             await update.effective_message.reply_text(
                 f"{action.capitalize()} operation timed out. No action was taken."
@@ -212,6 +237,10 @@ def build_modaction_conv(
     reason_state: list = [
         MessageHandler(filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, _on_reason_text),
         CallbackQueryHandler(_on_cancel, pattern=rf"^{action}_cancel$"),
+        MessageHandler(
+            ~filters.TEXT & ~ALL_PREFIXES_CMD_FILTER,
+            _on_reason_unexpected,
+        ),
     ]
     if reason.skip_allowed:
         reason_state.insert(
@@ -226,6 +255,10 @@ def build_modaction_conv(
         MessageHandler(filters.PHOTO | filters.VIDEO, _on_proof),
         CallbackQueryHandler(_on_skip_proof, pattern=rf"^{action}_skip_proof$"),
         CallbackQueryHandler(_on_cancel, pattern=rf"^{action}_cancel$"),
+        MessageHandler(
+            ~filters.PHOTO & ~filters.VIDEO & ~ALL_PREFIXES_CMD_FILTER,
+            _on_proof_unexpected,
+        ),
     ]
 
     fallback_filter = ALL_PREFIXES_CMD_FILTER

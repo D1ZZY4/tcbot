@@ -218,7 +218,7 @@ async def execute_warnlist(
         f"has {count}/{WARN_LIMIT} warnings:\n"
     ]
     for i, w in enumerate(warns, 1):
-        lines.append(f"  {i}. {w.get('reason', 'No reason')}")
+        lines.append(f"  {i}. {esc(w.get('reason', 'No reason'))}")
 
     await msg.reply_text("\n".join(lines), parse_mode="HTML")
 

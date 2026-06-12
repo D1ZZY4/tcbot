@@ -183,8 +183,10 @@ async def _post_init(app: Application) -> None:
     await db.users_roles.ensure_initial_owner(cfg.initial_owner_id)
 
     # * Attach live bot to the error reporter (enables Layers 1 + 3)
+    # * Owner ID is passed so infra-level errors (Conflict, InvalidToken)
+    # * go to the owner's DM instead of the shared logs_errors channel.
     lec, let = cfg.logs_errors
-    error_reporter.attach(app.bot, lec, let)
+    error_reporter.attach(app.bot, lec, let, owner_id=cfg.initial_owner_id)
 
     # * Register asyncio-level exception handler (Layer 3)
     loop = asyncio.get_running_loop()

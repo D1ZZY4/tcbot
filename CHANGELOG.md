@@ -2,6 +2,30 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-12 (session 57)
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** (`_on_approve`) — `self.community_name` interpolated raw into an HTML `send_message` in the appeal-approved DM to the user (e.g. `you're now unbanned from {self.community_name}`). If `COMMUNITY_NAME` contains `&`, `<`, or `>`, the message HTML would be corrupted. Wrapped with `esc()`. Added `esc` to the formatter import. (Bug #30)
+- **`tcbot/modules/helper/workflows/demote_flow.py`** (`Demote.execute`) — `role_label` (inside `<b>` tags) and `cfg.community_name` used unescaped in the HTML DM sent to the demoted user in both `trigger is None` and `trigger is not None` branches. Wrapped both with `esc()`. (Bug #31)
+- **`tcbot/modules/help.py`** (`_show_help_index` callback helper and `cmd_help` command handler) — `ctx.bot.first_name` used raw in `_HELP_INDEX_TEXT.format(botname=...)` with `parse_mode="HTML"` in two places. Wrapped with `esc()` in both. Added `from tcbot.modules.helper.formatter import esc`. (Bug #32)
+- **`tcbot/modules/help.py`** (`cmd_help`) — `query` (lowercased user-provided command argument) interpolated raw in `f"Module <b>{query}</b> not found."` with `parse_mode="HTML"`. A user sending `/help <script>alert(1)</script>` would corrupt the message. Wrapped with `esc(query)`. (Bug #33)
+- **`tcbot/modules/helper/workflows/warning_flow.py`** (`execute_warnlist`) — `w.get('reason', 'No reason')` (admin-typed warn reason stored in DB) appended raw to a list rendered with `parse_mode="HTML"` at line 226. If a reason contained `<`, `>`, or `&`, the rendered warn list would be malformed. Wrapped with `esc()`. (Bug #34)
+- **`tcbot/modules/privacy.py`** — `ctx.bot.first_name` used raw inside `_PRIVACY_MSG.format(botname=...)` and `_PRIVACY_POLICY_MSG.format(botname=...)` with `parse_mode="HTML"`. If the bot is ever renamed to include `<`, `>`, or `&`, both messages would silently corrupt. Wrapped with `esc()` in `on_privacy_menu` and `on_privacy_policy_menu`. Added `from tcbot.modules.helper.formatter import esc`. (Bug #28)
+- **`tcbot/modules/start.py`** — Same pattern: `ctx.bot.first_name` interpolated into HTML format strings in `cmd_start` and `on_back_to_start` without escaping. Wrapped with `esc()` in both handlers. Added `from tcbot.modules.helper.formatter import esc`. (Bug #29)
+- **`tcbot/modules/muting.py`** — `cmd_mute` checked `target_role` via `resolve_and_check` but then discarded it (unpacked as `_`). A staff member who was muted kept their federation role. Added `from tcbot.modules.helper.workflows.demote_flow import Demote` import and `if target_role: await Demote.execute(...)` block (trigger="kick") mirroring the identical guard in `banning.py` (line 134) and `kicking.py` (line 128). (Bug #21)
+- **`tcbot/modules/helper/workflows/demote_flow.py`** — `user_msg` sent via `bot.send_message(..., parse_mode="HTML")` embedded `executor_fname` (admin first name) without HTML escaping. A name containing `<`, `>`, or `&` would corrupt the DM sent to the demoted user. Added `from tcbot.modules.helper.formatter import esc` import and wrapped `executor_fname` with `esc()`. (Bug #22)
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** (`_on_timeout`) — the timeout handler sent the timeout message but left `appeal_ban_id`, `appeal_log_msg_id`, and `appeal_instruction_msg_id` in `ctx.user_data`. If the user re-entered the appeal flow after a timeout, the stale keys would be picked up, skipping the proper initialisation path. Added the same `pop` loop that `_on_cancel` already performs. (Bug #23)
+- **`tcbot/modules/helper/workflows/ban_flow.py`** — three improvements:
+  1. `on_cancel_proof` and `on_proof_timeout` left all `ban_*` keys in `ctx.user_data` after ending the conversation. Added `_BAN_USER_DATA_KEYS` tuple constant and `pop` loop in both handlers to clear stale state. (Bug #24)
+  2. Added `on_proof_unexpected` handler and `_MSG_PROOF_EXPECTED` constant. When a user sends a non-photo/video message (text, document, sticker, etc.) during `WAITING_PROOF`, the bot was silent. Now replies "Please send a photo or video as proof, or press Cancel." and stays in `WAITING_PROOF`. (Bug #25)
+  3. Registered `on_proof_unexpected` in the `WAITING_PROOF` state as `MessageHandler(~filters.PHOTO & ~filters.VIDEO & ~ALL_PREFIXES_CMD_FILTER, on_proof_unexpected)`.
+- **`tcbot/modules/helper/workflows/reason_flow.py`** — four improvements:
+  1. `_on_cancel`, `_end_conv`, and `_on_timeout` left all `{action}_*` keys (target, admin, duration, extra_info, prompt_chat, prompt_id, etc.) in `ctx.user_data`. Added `_clear_user_data` inner helper that pops all keys starting with `{action}_`, called from all three exit paths. (Bug #26)
+  2. Added `_on_reason_unexpected` handler: when a user sends media during `WAITING_REASON`, the bot was silent. Now replies "Please type your {action} reason as text, or press Skip / Cancel." and stays in `WAITING_REASON`. (Bug #27, part 1)
+  3. Added `_on_proof_unexpected` handler: when a user sends an unexpected message type during `WAITING_PROOF`, the bot was silent. Now replies "Please send a photo or video as proof, or press Skip / Cancel." and stays in `WAITING_PROOF`. (Bug #27, part 2)
+  4. Both unexpected-input handlers registered at the end of their respective state lists so `TEXT`, `PHOTO`, `VIDEO`, and cancel button handlers always take priority.
+
 ## [Unreleased] - 2026-06-12 (session 56)
 
 ### Fixed

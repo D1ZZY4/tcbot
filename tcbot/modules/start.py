@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -17,6 +16,7 @@ from tcbot import database as db
 from tcbot.modules.about import __about_msg__
 from tcbot.modules.groups import _render
 from tcbot.modules.helper import decorators, keyboards
+from tcbot.modules.helper.formatter import esc
 from tcbot.utils.prefixes import build_prefixed_filters
 
 if TYPE_CHECKING:
@@ -65,7 +65,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     text = (msg.text or "").strip()
     parts = text.split(None, 1)
     arg = parts[1].strip() if len(parts) > 1 else ""
-    botname = ctx.bot.first_name
+    botname = esc(ctx.bot.first_name or "")
 
     # * Group / supergroup context - send a minimal message with PM link
     if chat.type in ("group", "supergroup", "forum"):
@@ -102,21 +102,19 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_back_to_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Return to the main menu when the Back button is tapped in a sub-menu."""
     q: CallbackQuery = update.callback_query
-    botname = ctx.bot.first_name
-    await asyncio.gather(
-        q.answer(),
-        q.edit_message_text(
-            _PRIVATE_START_TEXT.format(botname=botname),
-            parse_mode="HTML",
-            reply_markup=keyboards.main_menu_kb(),
-        ),
-        return_exceptions=True,
+    botname = esc(ctx.bot.first_name or "")
+    await q.answer()
+    await q.edit_message_text(
+        _PRIVATE_START_TEXT.format(botname=botname),
+        parse_mode="HTML",
+        reply_markup=keyboards.main_menu_kb(),
     )
 
 
 async def _show_groups(q: CallbackQuery, *, detailed: bool) -> None:
     """Shared renderer for all group-menu callbacks."""
-    _, groups = await asyncio.gather(q.answer(), db.groups_db.active_groups())
+    await q.answer()
+    groups = await db.groups_db.active_groups()
     if not groups:
         await q.edit_message_text(
             f"No groups are currently connected to {cfg.community_name}.",
