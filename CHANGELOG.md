@@ -2,6 +2,26 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-12 (session 84)
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** (`_start`): Invisible-state bug — `_start` wrapped `msg.reply_text(instruction_text)` in try/except but the except block fell through to `return WAITING_APPEAL`, leaving the user in an invisible WAITING_APPEAL conversation with no prompt visible. Any subsequent text from the user would be silently consumed by the ConversationHandler. Fixed: added `return ConversationHandler.END` in the except branch so a failed instruction send cleanly ends the conversation. (Bug #166)
+- **`tcbot/modules/helper/workflows/promote_flow.py`** (`_assign_admin`, `_assign_subrole`): Two `bot.send_message` calls in admin-assignment and subrole-assignment paths were unguarded. If Telegram is temporarily unavailable during a promotion, the unhandled exception would propagate. Wrapped inside `asyncio.gather` with `return_exceptions=True`. Missing HTML escaping on `cfg.community_name` in promotion notification messages also fixed via `esc(cfg.community_name)`. (Bug #167)
+- **`tcbot/modules/helper/workflows/reason_flow.py`** (`_on_reason_text`): ConversationHandler invisible-state bug — exception in prompt handling fell through to returning a WAITING state instead of `ConversationHandler.END`. Four unguarded `reply_text` calls also hardened with `try/except log.debug`. (Bug #168)
+- **`tcbot/modules/helper/workflows/unban_flow.py`**: Missing `None` checks for `effective_message` and `effective_user` at handler entry. Two unguarded `reply_text` calls in early-return paths wrapped with `try/except log.debug`. (Bug #169)
+- **`tcbot/modules/helper/workflows/demote_flow.py`** (`execute`): Unguarded `bot.send_message` calls in demotion notification paths. Wrapped inside `asyncio.gather` with `return_exceptions=True`. (Bug #170)
+- **`tcbot/modules/helper/workflows/check_flow.py`**: `active_ban` dict access lacked `isinstance(active_ban, dict)` guard before key lookup; if DB returned a non-dict value the key access would raise `TypeError`. Added guard with safe fallback. (Bug #171)
+- **`tcbot/modules/helper/workflows/stats_flow.py`**: `int(q)` conversion for search query lacked bounds check — overly long query strings can produce integers too large for MongoDB. Wrapped in `try/except` with graceful fallback. (Bug #172)
+- **`tcbot/database/bans_db.py`**, **`tcbot/database/groups_db.py`**, **`tcbot/database/users_cache.py`**, **`tcbot/database/users_roles.py`**, **`tcbot/database/warns_db.py`**, **`tcbot/database/kicks_db.py`**, **`tcbot/database/mutes_db.py`**, **`tcbot/database/queues_db.py`**: Database layer hardening across all eight Motor helper files. (1) Motor `insert_one`, `update_one`, `find_one`, `to_list`, and aggregation calls lacked exception guards — unhandled `ServerSelectionTimeoutError` or `OperationFailure` would propagate to command handlers and trigger global error reports. All Motor calls wrapped with `try/except`. (2) `asyncio.gather` calls missing `return_exceptions=True` identified and fixed; result tuples now checked for `BaseException`. (3) Cache invalidation moved into `try/finally` blocks so cache consistency is maintained even if the DB write raises after a partial success. (4) `None` checks added on MongoDB query results before key access. (5) `remove_last_warn` race condition in `warns_db.py` — find-then-delete pattern now uses `find_one_and_delete` with `matched_count` verification to avoid stale counter updates under concurrent admin operations. (Bug #173)
+
+## [Unreleased] - 2026-06-12 (session 84b)
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/reason_flow.py`** (`_on_reason_text`): Invisible-state bug — when both the `edit_message_text` (primary path) and the fallback `reply_text` failed, the function fell through to `return WAITING_PROOF` leaving the user in WAITING_PROOF state with no proof prompt visible. Fixed: added `prompt_sent` flag; if neither send succeeded, returns `ConversationHandler.END` so the conversation terminates cleanly. (Bug #174)
+- **`tcbot/modules/helper/workflows/reason_flow.py`** (`_on_reason_unexpected`, `_on_proof_unexpected`): Two unguarded `reply_text` calls in the type-rejection handlers. If the bot loses send permission between the message event and the reply, the exception propagated to the global error handler on every unexpected file/photo. Both wrapped with `try/except log.debug`. (Bug #175)
+
 ## [Unreleased] - 2026-06-12 (session 82)
 
 ### Fixed

@@ -138,6 +138,7 @@ def build_modaction_conv(
         prompt_txt = proof.step_prompt(_get_target(ctx), action, text, extra_info)
         prompt_chat = ctx.user_data.get(_prompt_chat_key)
         prompt_id = ctx.user_data.get(_prompt_id_key)
+        prompt_sent = False
         if prompt_id and prompt_chat:
             try:
                 await ctx.bot.edit_message_text(
@@ -147,6 +148,7 @@ def build_modaction_conv(
                     parse_mode="HTML",
                     reply_markup=proof.keyboard(),
                 )
+                prompt_sent = True
             except Exception:
                 log.exception("%s prompt edit failed (reason step)", action)
         else:
@@ -156,8 +158,11 @@ def build_modaction_conv(
                     parse_mode="HTML",
                     reply_markup=proof.keyboard(),
                 )
+                prompt_sent = True
             except Exception as exc:
                 log.debug("%s reason-text fallback reply failed: %s", action, exc)
+        if not prompt_sent:
+            return ConversationHandler.END
         return WAITING_PROOF
 
     async def _on_skip_reason(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -217,9 +222,12 @@ def build_modaction_conv(
     ) -> int:
         """Reject non-text messages during reason collection."""
         if update.effective_message:
-            await update.effective_message.reply_text(
-                f"Please type your {action} reason as text, or press Skip / Cancel."
-            )
+            try:
+                await update.effective_message.reply_text(
+                    f"Please type your {action} reason as text, or press Skip / Cancel."
+                )
+            except Exception as exc:
+                log.debug("%s reason-unexpected reply failed: %s", action, exc)
         return WAITING_REASON
 
     async def _on_proof_unexpected(
@@ -227,9 +235,12 @@ def build_modaction_conv(
     ) -> int:
         """Reject unexpected message types during proof collection."""
         if update.effective_message:
-            await update.effective_message.reply_text(
-                "Please send a photo or video as proof, or press Skip / Cancel."
-            )
+            try:
+                await update.effective_message.reply_text(
+                    "Please send a photo or video as proof, or press Skip / Cancel."
+                )
+            except Exception as exc:
+                log.debug("%s proof-unexpected reply failed: %s", action, exc)
         return WAITING_PROOF
 
     async def _on_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:

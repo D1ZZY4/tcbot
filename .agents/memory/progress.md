@@ -234,6 +234,22 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Session 78 - Bug #105: admins.py cmd_demote two gathers no return_exceptions | correctness | Identical pattern to Bug #104 in cmd_demote. Fixed with same pattern. | 2026-06-12 (s78) |
 | Session 78 - Bug #106: admins.py cmd_promote_request gather no return_exceptions | correctness | get_effective_role+get_request gather without return_exceptions. Added None fallbacks. | 2026-06-12 (s78) |
 | Session 78 - Ruff clean (72 files), bot running clean (75 handlers) | audit | All 6 bugs fixed, ruff check passes, bot restarted with MongoDB+Redis+APScheduler. | 2026-06-12 (s78) |
+| Session 83 - Bug #135a-c: banning/kicking/muting ConversationHandler invisible-state | correctness | try/except swallowed prompt send failure but still returned WAITING_PROOF/WAITING_REASON; user stuck in invisible conversation. All three now return ConversationHandler.END in except block. | 2026-06-12 (s83) |
+| Session 83 - mongos.py asyncio.gather return_exceptions | correctness | ensure_indexes gather lacked return_exceptions=True. Fixed with per-result isinstance checks. | 2026-06-12 (s83) |
+| Session 83 - cache.py cachetools TTLCache migration | correctness | LRU+TTL eviction now consistent across all caches; maxsize-aware eviction prevents unbounded growth. | 2026-06-12 (s83) |
+| Session 83 - warnings.py notice-before-execute | correctness | Admin feedback sent before execute path to prevent silent hangs on slow DB. | 2026-06-12 (s83) |
+| Session 84 - Bug #166: appeal_flow.py _start invisible-state | correctness | Instruction send wrapped in try/except but fell through to return WAITING_APPEAL; user stuck invisible. Added return ConversationHandler.END in except. | 2026-06-12 (s84) |
+| Session 84 - Bug #167: promote_flow.py unguarded send_message + HTML escaping | robustness/HTML safety | _assign_admin and _assign_subrole send_message calls unguarded; cfg.community_name not escaped. Wrapped gather + return_exceptions; added esc(). | 2026-06-12 (s84) |
+| Session 84 - Bug #168: reason_flow.py ConversationHandler invisible-state + 4 unguarded | correctness/robustness | _on_reason_text fell through to WAITING state on prompt fail; 4 unguarded reply_text wrapped. | 2026-06-12 (s84) |
+| Session 84 - Bug #169: unban_flow.py None checks + 2 unguarded | correctness/robustness | Missing None guards for effective_message/user at entry; 2 reply_text in early-return paths wrapped. | 2026-06-12 (s84) |
+| Session 84 - Bug #170: demote_flow.py unguarded send_message | robustness | execute() send_message calls unguarded; wrapped gather+return_exceptions. | 2026-06-12 (s84) |
+| Session 84 - Bug #171: check_flow.py active_ban dict isinstance guard | correctness | Key access on active_ban without isinstance(active_ban, dict) guard; TypeError possible. Added guard. | 2026-06-12 (s84) |
+| Session 84 - Bug #172: stats_flow.py int(q) overflow | correctness | Overly long search query produces ints too large for MongoDB int32/int64. Wrapped in try/except with fallback. | 2026-06-12 (s84) |
+| Session 84 - Bug #173: database layer hardening (all 8 Motor helpers) | correctness/robustness | Exception handling on all Motor calls; return_exceptions on all gathers; cache invalidation in try/finally; None checks on query results; find_one_and_delete for atomic remove_last_warn. | 2026-06-12 (s84) |
+| Session 84 - Ruff clean (72 files), bot running (MongoDB+Redis+APScheduler+28 indexes) | audit | All session 84 bugs fixed; ruff check passes; bot running clean. | 2026-06-12 (s84) |
+| Session 84b - Bug #174: reason_flow.py _on_reason_text invisible-state | correctness | Both edit+reply branches could fail independently; fell through to return WAITING_PROOF with no prompt visible. Added prompt_sent flag; return ConversationHandler.END if neither succeeded. | 2026-06-12 (s84b) |
+| Session 84b - Bug #175: reason_flow.py _on_reason_unexpected + _on_proof_unexpected unguarded | robustness | Two reply_text calls in type-rejection handlers unguarded; wrapped try/except log.debug. | 2026-06-12 (s84b) |
+| Session 84b - error_reporter.py + dispatch.py full audit | audit | error_reporter.py all TG calls guarded; dispatch.py _slot wrapper handles all exceptions correctly; no bugs found. | 2026-06-12 (s84b) |
 
 ## Pending (remaining optional)
 

@@ -199,6 +199,7 @@ class BuildAppeal:
             ctx.user_data["appeal_instruction_msg_id"] = instr.message_id
         except Exception as exc:
             log.debug("Appeal instruction send failed for user %d: %s", uid, exc)
+            return ConversationHandler.END
 
         return WAITING_APPEAL
 
