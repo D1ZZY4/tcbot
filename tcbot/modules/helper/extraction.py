@@ -18,6 +18,12 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+# * Telegram's pseudo-user that represents an anonymous group admin.
+# * Its user_id is fixed and well-known. We must skip it as a reply target
+# * because acting on it would attempt to ban/kick/mute the bot placeholder,
+# * not the real human behind the anonymous admin title.
+_ANONYMOUS_BOT_ID = 1087968824
+
 # * Telegram lookups are wrapped in wait_for so a stalled API call never blocks
 # * the user-facing reply. Three seconds is the standard project-wide budget.
 _GET_CHAT_TIMEOUT = 3.0
@@ -83,9 +89,13 @@ async def extract_target(
     msg: Message = update.effective_message
 
     # * Priority 1: Reply target (most common use case)
+    # * Skip GroupAnonymousBot (id 1087968824): it is a Telegram pseudo-user
+    # * that appears as `from_user` when an anonymous admin sends a message.
+    # * Targeting it would attempt to act on the placeholder, not a real user.
     if msg.reply_to_message and msg.reply_to_message.from_user:
         u: User = msg.reply_to_message.from_user
-        return u.id, u.first_name or await _best_name(u.id)
+        if u.id != _ANONYMOUS_BOT_ID:
+            return u.id, u.first_name or await _best_name(u.id)
 
     # * Priority 2 & 3: Explicit args (full ID/username or partial name search)
     if args:

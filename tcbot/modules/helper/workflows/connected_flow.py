@@ -224,6 +224,15 @@ class BuildConnection:
             if pending:
                 return
 
+            # * from_user is None when an anonymous admin adds the bot.
+            # * We cannot store a valid owner_id in that case, so skip silently.
+            if not by_user:
+                log.info(
+                    "Bot added to %d by anonymous admin; skipping join prompt",
+                    chat.id,
+                )
+                return
+
             try:
                 prompt = await ctx.bot.send_message(
                     chat.id,
