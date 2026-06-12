@@ -171,6 +171,8 @@ class Configs:
     log_level: int
     modules_load: list[str]
     modules_no_load: list[str]
+    redis_url: str | None
+    warn_expiry_days: int
 
     # * Properties below handle lazy type-casting from raw env strings.
     @property
@@ -263,6 +265,8 @@ class Configs:
             log_level=_parse_log_level(os.getenv("LOG_LEVEL", "INFO")),
             modules_load=_env_list("MODULES_LOAD"),
             modules_no_load=_env_list("MODULES_NO_LOAD"),
+            redis_url=os.getenv("REDIS_URL", "").strip() or None,
+            warn_expiry_days=_int_from_env("WARN_EXPIRY_DAYS", 0, minimum=0),
         )
 
 
@@ -385,6 +389,16 @@ class _CfgAdapter:
     def modules_no_load(self) -> list[str]:
         """Optional denylist of module names to skip during loading."""
         return self._c.modules_no_load
+
+    @property
+    def redis_url(self) -> str | None:
+        """Redis connection URL from REDIS_URL (None when not configured)."""
+        return self._c.redis_url
+
+    @property
+    def warn_expiry_days(self) -> int:
+        """Days after which warn_counts expire; 0 = disabled."""
+        return self._c.warn_expiry_days
 
 
 # * This adapter instance is the single global 'cfg' used by every module.

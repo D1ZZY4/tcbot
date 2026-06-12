@@ -25,6 +25,8 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.alive import start_keepalive
+from tcbot.database import redis_client
+from tcbot.database import scheduler as sched_mod
 from tcbot.database.mongos import connect, ensure_indexes
 from tcbot.modules import get_handlers
 from tcbot.modules.helper.decorators import global_rate_limit_handler
@@ -178,13 +180,27 @@ def _make_asyncio_exc_handler(
 
 
 async def _post_init(app: Application) -> None:
-    """Connect to MongoDB, ensure indexes, seed owner, and attach the error reporter."""
+    """Connect to MongoDB, ensure indexes, seed owner, start scheduler, and attach error reporter."""
     log.info("post_init: connecting to MongoDB...")
     await connect()
     log.info("post_init: ensuring indexes...")
     await ensure_indexes()
     log.info("post_init: ensuring initial owner...")
     await db.users_roles.ensure_initial_owner(cfg.initial_owner_id)
+
+    # * Optional Redis - degrade gracefully when REDIS_URL is not set or unreachable.
+    if cfg.redis_url:
+        try:
+            await redis_client.connect(cfg.redis_url)
+        except Exception as exc:
+            log.warning(
+                "Redis connection failed; running with in-memory cache only: %s", exc
+            )
+    else:
+        log.info("REDIS_URL not set; in-memory cache only.")
+
+    # * APScheduler 4 with MongoDBDataStore - persistent scheduled moderation jobs.
+    await sched_mod.start(cfg.mongodb_uri, cfg.db_name, cfg.warn_expiry_days)
 
     # * Attach live bot to the error reporter (enables Layers 1 + 3)
     # * Owner ID is passed so infra-level errors (Conflict, InvalidToken)
@@ -199,6 +215,12 @@ async def _post_init(app: Application) -> None:
     log.info("Bot initialised.")
     # * Internal IDs go to DEBUG so they do not appear in default INFO logs.
     log.debug("Owner: %d | LOG_ERRORS: %d", cfg.initial_owner_id, lec)
+
+
+async def _post_shutdown(app: Application) -> None:
+    """Stop APScheduler and close Redis after the application fully shuts down."""
+    await sched_mod.stop()
+    await redis_client.close()
 
 
 # ──────────────────────── Main Entry Point ──────────────────────── #
@@ -233,6 +255,7 @@ def main() -> None:
             ApplicationBuilder()
             .token(cfg.bot_token)
             .post_init(_post_init)
+            .post_shutdown(_post_shutdown)
             # * Disable link preview on all bot messages globally.
             .defaults(Defaults(link_preview_options=_LINK_PREVIEW_DISABLED))
             # * Process independent updates in parallel (big latency win)

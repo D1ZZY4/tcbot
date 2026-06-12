@@ -1,13 +1,16 @@
 [project]
 name = "tcbot"
-version = "4.1.0"
+version = "4.1.1"
 description = "TCF | Transsion Core Federation - Telegram Bot"
 requires-python = ">=3.12"
 dependencies = [
-    "python-telegram-bot[job-queue]",
+    "python-telegram-bot",
     "motor",
     "flask",
     "python-dotenv",
+    "redis[hiredis]",
+    "apscheduler[mongodb]>=4.0.0a1",
+    "cbor2",
 ]
 
 [dependency-groups]
