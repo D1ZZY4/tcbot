@@ -136,7 +136,7 @@ connected groups, per-group moderation, and audit logging.
 | Area | Current standard |
 |---|---|
 | Language | Python 3.12 |
-| Bot framework | `python-telegram-bot` (with the `[job-queue]` extra), tracking the latest compatible release, async, long polling |
+| Bot framework | `python-telegram-bot` (plain, no `[job-queue]` extra), tracking the latest compatible release, async, long polling |
 | Database | MongoDB through Motor async |
 | Keep-alive | Flask health endpoint, default local port 5000 |
 | Replit port | `PORT=8080` |

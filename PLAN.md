@@ -10,8 +10,10 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 |---|---|
 | Runtime | Long-polling Telegram bot started with `uv run python -m tcbot`. |
 | Python target | Python 3.12 project target (`pyproject.toml` requires `>=3.12`). |
-| Bot framework | `python-telegram-bot` (with the `[job-queue]` extra), tracking the latest compatible release. |
+| Bot framework | `python-telegram-bot` (plain, no `[job-queue]` extra), tracking the latest compatible release. |
 | Database | MongoDB through Motor, connected during PTB `post_init`. |
+| Cache | In-process `TTLCache` L1 + optional Redis L2 via `TwoLevelCache`. `hiredis` C extension required when Redis is active. Configured via `REDIS_URL`. |
+| Scheduler | APScheduler 4.x `AsyncScheduler` with `MongoDBDataStore` and `CBORSerializer`. Persistent scheduled moderation jobs survive bot restarts. |
 | Health check | Flask app in `tcbot/alive.py`, `GET /` returns `OK` on `PORT` (default `5000`). |
 | Dependency management | `uv` with `uv.lock`; CI installs with frozen lockfile by default. |
 | Formatting/linting | Ruff, configured in `pyproject.toml`. |
@@ -31,7 +33,12 @@ flowchart TD
     Main --> KeepAlive[start_keepalive on cfg.port]
     Main --> Builder[ApplicationBuilder]
     Builder --> Handlers[Register handlers and error handler]
-    Handlers --> Polling[run_polling Update.ALL_TYPES]
+    Handlers --> Polling[run_polling calls post_init then polls]
+    Polling --> MongoDB[connect MongoDB + ensure indexes + seed owner]
+    Polling --> Redis[connect Redis if REDIS_URL set - optional]
+    Polling --> APSched[start APScheduler MongoDBDataStore + CBORSerializer]
+    Polling --> Reporter[attach error_reporter + asyncio handler]
+    Reporter --> Updates[accept Telegram updates]
 ```
 
 ### `post_init` Sequence
@@ -43,8 +50,10 @@ flowchart TD
 3. `connect()` creates the Motor client and verifies MongoDB with `ping`.
 4. `ensure_indexes()` creates required MongoDB indexes in parallel.
 5. `ensure_initial_owner(cfg.initial_owner_id)` seeds the first owner when needed.
-6. `error_reporter.attach(...)` stores the bot and error destination for async reports.
-7. The asyncio loop exception handler is registered.
+6. `redis_client.connect(cfg.redis_url)` connects to Redis when `REDIS_URL` is set. On failure, logs a warning and continues with in-memory cache only (Redis is optional).
+7. `sched_mod.start()` starts APScheduler 4.x with `MongoDBDataStore` and `CBORSerializer`. Blocks until the scheduler background task is ready. Registers recurring warn-expiry and DB-cleanup jobs.
+8. `error_reporter.attach(...)` stores the bot and error destination for async reports.
+9. The asyncio loop exception handler is registered.
 
 ### Request Processing Pipeline
 
@@ -93,7 +102,9 @@ Current collection/domain owners include:
 | Mutes | `mutes_db.py` |
 | Promotion requests | `queues_db.py` |
 | MongoDB client/indexes | `mongos.py` |
-| In-memory caches | `cache.py` |
+| In-memory + Redis caches | `cache.py` |
+| Redis client and connection pool | `redis_client.py` |
+| Persistent moderation scheduler | `scheduler.py` |
 | Typed document shapes | `documents.py` |
 | Domain primitive types | `types.py` |
 

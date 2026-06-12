@@ -5,7 +5,6 @@
 - [Technical decisions](decisions.md) - non-trivial decisions with why and how-to-apply
 - [Module structure](structure.md) - full repo layout snapshot, cross-cutting constraints
 - [Replit nix store constraint](replit-nix-store.md) - uv sync fails writing to nix store; fix and runtime workaround
-- [Sequential await audit complete](sequential-await-audit.md) - all module files audited; key fixes through session 62 (users_roles, promote_flow, check_flow, appeal_flow, decorators)
 - [asyncio.gather return_exceptions rule](decisions.md): pure side-effect gathers need `return_exceptions=True`; data-fetching gathers that unpack results must also use it with per-field fallbacks
 - [Frozen dataclass monkeypatch](decisions.md): frozen dataclass instances (e.g. `connection`) cannot be patched via `patch("module.obj.attr")`; patch the module-level name instead
 - [Slots class monkeypatch](decisions.md): `__slots__` makes instance methods read-only; replace the module-level limiter name with a `SimpleNamespace` fake instead of patching the instance

@@ -20,7 +20,7 @@ TCF Bot is a Telegram federation management bot for the Transsion Core Federatio
 | Component | Current project setting |
 |---|---|
 | Python | 3.12 project target (`requires-python = ">=3.12"`) |
-| Bot framework | `python-telegram-bot` (with the `[job-queue]` extra), tracking the latest compatible release |
+| Bot framework | `python-telegram-bot` (plain, no `[job-queue]` extra), tracking the latest compatible release |
 | Database | MongoDB through Motor (latest) |
 | Health server | Flask (latest) |
 | Configuration | Environment variables, with `python-dotenv` loading local `config.env` |

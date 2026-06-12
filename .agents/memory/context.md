@@ -5,13 +5,19 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-12 (session 76)
+**Last updated:** 2026-06-12 (session 77)
 
 ## What is done
 
 - Python 3.12, uv, python-telegram-bot (latest), Motor/MongoDB + Redis (optional L2) + APScheduler 4 stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
 - `uv run ruff format .` and `uv run ruff check .` both clean (72 files).
+- Session 77 (2026-06-12): Documentation audit and correction pass for v4.1.1 requirements.
+  - PLAN.md: removed stale `[job-queue]`, added Cache + Scheduler rows, updated post_init sequence (9 steps) and startup Mermaid.
+  - docs/databases/databases.md: updated Mermaid, added redis_client.py + scheduler.py entries, rewrote Caches section, added Scheduler section.
+  - docs/performance.md: updated to v4.1.1 targets (Redis read < 0.3 ms, command p95 < 80 ms, etc.).
+  - AGENTS.md, README.md, .agents/CLAUDE.md: removed `[job-queue]` reference.
+  - CHANGELOG.md: added session 77 (docs) and session 76 (Redis/APScheduler initial + Bug #100) entries.
 - Session 76 (2026-06-12): Post-session-75 code quality audit on new Redis/APScheduler files.
   - Bug #100: `cache.py` `TwoLevelCache._redis_put_background` and `_redis_del_background` used `loop.create_task()` without strong-reference set. Added module-level `_redis_bg_tasks: set[asyncio.Task[None]]`; all fire-and-forget tasks now tracked with `discard` done-callback (same pattern as `__main__._asyncio_report_tasks`).
   - hiredis verification: `redis_client.py` now verifies `hiredis` is importable at module-load time (`try/except ImportError → RuntimeError`). Logs version on connect. hiredis 3.4.0 confirmed present.

@@ -10,11 +10,17 @@ flowchart TD
     Helpers[tcbot/modules/helper/] --> DBHelpers
     Workflows[tcbot/modules/helper/workflows/] --> DBHelpers
     DBHelpers --> Mongos[mongos.py<br/>connection + col]
+    DBHelpers --> Cache[cache.py<br/>TwoLevelCache]
     DBHelpers --> Documents[documents.py<br/>TypedDicts]
     Mongos --> Motor[Motor AsyncIOMotorClient]
     Motor --> MongoDB[(MongoDB)]
     DBHelpers --> Indexes[Index setup<br/>on startup]
     Indexes --> MongoDB
+    Cache --> L1[TTLCache L1<br/>in-memory]
+    Cache --> L2[Redis L2<br/>optional]
+    L2 --> Redis[(Redis)]
+    Scheduler[scheduler.py<br/>APScheduler 4] --> MongoDB
+    Scheduler --> DBHelpers
 ```
 
 ## Connection manager
@@ -40,7 +46,9 @@ flowchart TD
 | `kicks_db.py` | `kicks` | Kick audit records. |
 | `mutes_db.py` | `mutes` | Mute audit records. |
 | `queues_db.py` | `promotion_requests` | Queued Admin promotion requests and resolution status. |
-| `cache.py` | in-memory only | TTL caches for owner, roles, connection status, and active groups. |
+| `cache.py` | in-process + Redis | `TTLCache[T]` (L1 in-process) and `TwoLevelCache[T]` (L1 in-process + L2 Redis). Four public singletons: `effective_role_cache`, `connected_cache`, `active_groups_cache`, `owner_id_cache`. |
+| `redis_client.py` | Redis (optional) | Async Redis client singleton via `redis.asyncio.ConnectionPool`. `connect(url)` creates the pool and runs `PING`. `client()` returns the active client or `None` when Redis is not configured. `hiredis` C extension required. |
+| `scheduler.py` | MongoDB (APScheduler) | APScheduler 4.x `AsyncScheduler` backed by `MongoDBDataStore` and `CBORSerializer`. Persistent scheduled jobs (unban, warn expiry, DB cleanup) survive bot restarts. Background asyncio task owns the cancel scope. |
 | `documents.py` | type-only | `TypedDict` document shapes and `Literal` aliases. |
 | `types.py` | type-only | `NewType` primitives such as `UserId`, `GroupId`, `ChatId`, and `BanId`. |
 | `groups_db.py` | `federated_groups`, `pending_joins` | Connected group state, pending connection requests, group cache invalidation. |
@@ -173,16 +181,45 @@ Mutes follow the same append-only pattern as kicks:
 
 ## Caches
 
-`cache.py` provides `TTLCache` plus public cache instances:
+`cache.py` provides two cache types and four public singletons.
 
-| Cache | Typical key | Used by |
+### Cache types
+
+`TTLCache[T]`: pure in-process TTL cache. All operations are synchronous and sub-microsecond (no I/O). Suitable for caches that do not need Redis distribution.
+
+`TwoLevelCache[T]`: wraps `TTLCache[T]` and adds an optional Redis L2 layer. When Redis is available, `get_or_fetch` checks L1, then L2 (single Redis GET), then calls the DB fetch coroutine and populates both layers. `put` and `invalidate` operate on L1 synchronously and fire-and-forget a Redis write/delete for eventual L2 consistency. When Redis is not configured, degrades transparently to pure in-process behaviour.
+
+`CACHE_MISS` sentinel: compare with `is CACHE_MISS` to detect a miss. Distinct from `None` because `None` is a valid cached value (for example, a user with no role).
+
+### Public singletons
+
+| Cache | Type | L1 TTL | L2 TTL | Typical key | Populated by |
+|---|---|---|---|---|---|
+| `effective_role_cache` | `TwoLevelCache[str \| None]` | 60 s | 90 s | `user_id` | `users_roles.get_effective_role()` |
+| `connected_cache` | `TwoLevelCache[bool]` | 120 s | 180 s | `chat_id` | `groups_db.is_connected()` |
+| `active_groups_cache` | `TwoLevelCache[list[GroupDoc]]` | 30 s | 45 s | fixed key | `groups_db.active_groups()` |
+| `owner_id_cache` | `TwoLevelCache[int \| None]` | 300 s | 360 s | fixed key | `users_roles.get_owner_id()` |
+
+Write helpers must invalidate or refresh related cache entries. Role writes invalidate the target user's effective role cache; group writes clear or update the groups and connected caches.
+
+## Scheduler
+
+`scheduler.py` owns the APScheduler 4.x lifecycle.
+
+| Export | Purpose |
+|---|---|
+| `start(mongodb_uri, db_name, warn_expiry_days)` | Spawns the background asyncio task, waits until the scheduler is ready. |
+| `stop()` | Sets the stop event; waits up to 10 s for graceful shutdown. |
+| `schedule_unban(ban_id, user_id, run_at)` | Registers a persistent one-off `DateTrigger` unban job. Returns the schedule ID. |
+| `cancel_schedule(schedule_id)` | Removes a schedule by ID. Returns `True` if found, `False` if already fired or never created. |
+| `run_now(func, *, args, kwargs)` | Queues a one-shot immediate execution via the scheduler. |
+
+Recurring jobs registered on every startup (idempotent via `ConflictPolicy.replace`):
+
+| Job | Trigger | Purpose |
 |---|---|---|
-| `effective_role_cache` | `user_id` | `users_roles.get_effective_role()` |
-| `connected_cache` | `chat_id` | `groups_db.is_connected()` |
-| `active_groups_cache` | fixed key | `groups_db.active_groups()` |
-| `owner_id_cache` | fixed key | `users_roles.get_owner_id()` |
-
-Write helpers must invalidate or refresh related cache entries. For example, role writes invalidate the target user's effective role cache, and group writes clear or update group caches.
+| `_expire_old_warns` | every 24 h | Deletes `warn_count` records older than `WARN_EXPIRY_DAYS` days. Only registered when `WARN_EXPIRY_DAYS > 0`. |
+| `_cleanup_old_records` | Monday 03:00 UTC | Deletes `member_cache` entries not updated for 90 days. |
 
 ## Document typing
 

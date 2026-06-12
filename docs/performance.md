@@ -8,25 +8,30 @@ This document outlines the performance optimizations implemented in the tcbot co
 
 The bot is optimized for **zero-delay, instant response** across all operations:
 
-### v4 Performance Targets (Mandatory)
+### v4.1.1 Performance Targets (Mandatory)
 
 | Operation | Target |
 |---|---|
-| Single DB query (indexed) | < 5 ms |
-| DB batch query (up to 100 docs) | < 15 ms |
-| Fan-out to 100 groups | < 800 ms |
-| Command handler response (p95) | < 150 ms |
-| Callback query acknowledgment (`q.answer()`) | < 30 ms |
+| Single DB query (indexed) | < 3 ms |
+| DB batch query (up to 100 docs) | < 8 ms |
+| Redis read (single key, hiredis) | < 0.3 ms |
+| Redis pipeline (multi-key batch) | < 1 ms |
+| Fan-out to 100 groups | < 500 ms |
+| Command handler response (p95) | < 80 ms |
+| Callback query acknowledgment (`q.answer()`) | < 15 ms |
 | In-memory cache read | < 0.1 ms |
-| Identity/role resolution (cached) | < 1 ms |
-| Startup time | < 3 s |
+| Identity/role resolution (Redis cached) | < 0.5 ms |
+| Job queue task execution start | < 100 ms after due time |
+| Startup time | < 2 s |
 
 These targets are achieved via:
+- `TwoLevelCache`: in-process L1 + Redis L2 (hiredis C extension required for < 0.3 ms reads)
 - Batch database queries (no N+1 patterns)
 - `asyncio.gather()` for all independent async operations
 - Composite MongoDB indexes on all high-frequency query patterns
 - `estimated_document_count()` for collection-size metrics
 - `q.answer()` parallelised with the first DB/API call in every callback handler
+- APScheduler 4.x with `MongoDBDataStore` for persistent sub-100 ms job execution
 
 ## Key Optimization Strategies
 
@@ -317,9 +322,11 @@ Before merging new code, verify:
 - [ ] Database queries use projections when possible
 - [ ] New query patterns have appropriate indexes
 - [ ] No loops with `await` inside (use gather instead)
-- [ ] Callback query `q.answer()` responds in < 30 ms
-- [ ] Command handlers respond (p95) in < 150 ms
-- [ ] Single indexed DB query < 5 ms; batch (up to 100 docs) < 15 ms
+- [ ] Callback query `q.answer()` responds in < 15 ms
+- [ ] Command handlers respond (p95) in < 80 ms
+- [ ] Single indexed DB query < 3 ms; batch (up to 100 docs) < 8 ms
+- [ ] Redis single-key read < 0.3 ms (requires hiredis C extension)
+- [ ] Identity/role resolution < 0.5 ms (requires Redis L2 cache active)
 - [ ] List views paginate efficiently
 
 ---

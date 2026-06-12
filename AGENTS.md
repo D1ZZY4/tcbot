@@ -38,7 +38,7 @@ TCF Bot is a Python Telegram bot for the Transsion Core Federation community. It
 Current stack:
 
 - Python 3.12 project target (`pyproject.toml` requires `>=3.12`)
-- `python-telegram-bot` (with the `[job-queue]` extra), tracking the latest compatible release
+- `python-telegram-bot` (plain, no `[job-queue]` extra), tracking the latest compatible release
 - MongoDB through Motor (latest)
 - Flask keep-alive / health-check server
 - `uv` for dependency management and lockfile-based installs

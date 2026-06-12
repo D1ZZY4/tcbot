@@ -2,6 +2,36 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-12 (session 77)
+
+### Documentation
+
+- **`PLAN.md`** (Current Project State table): Removed stale `[job-queue]` extra from bot framework row. Added `Cache` row (in-process TTLCache L1 + optional Redis L2 via TwoLevelCache, hiredis required) and `Scheduler` row (APScheduler 4.x AsyncScheduler with MongoDBDataStore and CBORSerializer).
+- **`PLAN.md`** (Startup Sequence Mermaid): Added `Redis` and `APScheduler` nodes to the startup flowchart. Replaced the flat `Handlers --> Polling` edge with a sequence showing `post_init` steps: MongoDB connect, Redis connect (optional), APScheduler start, error reporter attach.
+- **`PLAN.md`** (`post_init` Sequence): Extended from 7 steps to 9 steps. Added step 6 (Redis connect, optional, graceful degrade on failure) and step 7 (APScheduler start via `sched_mod.start()`).
+- **`PLAN.md`** (Database Layer table): Added `redis_client.py` (Redis client and connection pool) and `scheduler.py` (persistent moderation scheduler) rows.
+- **`docs/databases/databases.md`** (architecture Mermaid): Added `cache.py`, L1/L2 nodes, Redis datastore, and APScheduler scheduler nodes to the architecture flowchart.
+- **`docs/databases/databases.md`** (Collections table): Updated `cache.py` row to describe `TwoLevelCache`. Added `redis_client.py` and `scheduler.py` entries.
+- **`docs/databases/databases.md`** (Caches section): Rewrote to document `TTLCache[T]` vs `TwoLevelCache[T]` architecture, the `CACHE_MISS` sentinel, and all four public singletons with L1 and L2 TTLs.
+- **`docs/databases/databases.md`** (Scheduler section): New section documenting `scheduler.py` public API (`start`, `stop`, `schedule_unban`, `cancel_schedule`, `run_now`) and recurring jobs table.
+- **`docs/performance.md`** (Performance Targets): Updated from v4 to v4.1.1 mandatory targets. Single DB query < 3 ms (was 5 ms), batch < 8 ms (was 15 ms), fan-out < 500 ms (was 800 ms), command p95 < 80 ms (was 150 ms), `q.answer()` < 15 ms (was 30 ms), startup < 2 s (was 3 s). Added Redis read < 0.3 ms, Redis pipeline < 1 ms, identity/role < 0.5 ms, job task start < 100 ms. Updated Performance Checklist with v4.1.1 thresholds.
+- **`AGENTS.md`**, **`README.md`**, **`.agents/CLAUDE.md`**: Removed stale `[job-queue]` extra references from all three bot framework descriptions. APScheduler 4.x `[mongodb]` is incompatible with `[job-queue]`'s APScheduler ~3.x; the extra was removed from `pyproject.toml` when APScheduler 4 was added.
+
+## [Unreleased] - 2026-06-12 (session 76)
+
+### Added
+
+- **`tcbot/database/redis_client.py`**: New async Redis client module. Async connection pool via `redis.asyncio.ConnectionPool` (`max_connections=20`, `socket_connect_timeout=5 s`, `socket_timeout=10 s`, `health_check_interval=30 s`). `connect(url)` creates the pool, runs `PING` to verify connectivity, and logs the hiredis version on success. `close()` drains all pooled connections. `client()` returns the active singleton or `None` when Redis is not configured. Module-level `_HIREDIS_VERSION` constant captured on import. Raises `RuntimeError` on import if the `hiredis` C extension is not installed, preventing silent fallback to the slower pure-Python parser.
+- **`tcbot/database/scheduler.py`**: New persistent moderation scheduler backed by APScheduler 4.x with `MongoDBDataStore` and `CBORSerializer`. All scheduled moderation jobs (unban, warn expiry, DB cleanup) survive bot restarts because APScheduler stores state in MongoDB. Background asyncio task owns the `async with AsyncScheduler()` cancel scope (AnyIO requirement). Public API: `start()` / `stop()` lifecycle, `schedule_unban(ban_id, user_id, run_at)`, `cancel_schedule(schedule_id)`, `run_now(func, *, args, kwargs)`. Recurring jobs registered idempotently via `ConflictPolicy.replace`: daily warn expiry (when `WARN_EXPIRY_DAYS > 0`) and weekly Monday 03:00 UTC `member_cache` cleanup (entries older than 90 days).
+- **`tcbot/database/cache.py`**: Extended `TTLCache[T]` to `TwoLevelCache[T]` (L1 in-process + L2 Redis via `redis_client`). `get_or_fetch` checks L1, then L2 (Redis GET), then calls the DB fetch coroutine, populating both layers on a miss. `put` and `invalidate` operate on L1 synchronously and fire-and-forget L2 writes/deletes. Four public singletons with named TTL constants: `effective_role_cache` (60 s / 90 s), `connected_cache` (120 s / 180 s), `active_groups_cache` (30 s / 45 s), `owner_id_cache` (300 s / 360 s). `CACHE_MISS` sentinel added for explicit miss detection.
+- **`tcbot/__main__.py`** (`_post_init`, `_post_shutdown`): `_post_init` connects to Redis (optional, logs warning and continues on failure) and starts APScheduler via `sched_mod.start()`. `_post_shutdown` calls `sched_mod.stop()` and `redis_client.close()` for graceful teardown.
+- **`pyproject.toml`**: Added `redis[hiredis]`, `apscheduler[mongodb]>=4.0.0a1`, and `cbor2` to project dependencies. Removed `python-telegram-bot[job-queue]` extra (incompatible with APScheduler 4.x which requires APScheduler >= 4.0, while `[job-queue]` depends on APScheduler ~3.x). Version bumped to `4.1.1`.
+
+### Fixed
+
+- **`tcbot/database/cache.py`** (`TwoLevelCache._redis_put_background`, `_redis_del_background`): Fire-and-forget `loop.create_task()` calls lacked strong references; tasks could be garbage-collected before completing, silently dropping Redis writes. Added module-level `_redis_bg_tasks: set[asyncio.Task[None]]`; all fire-and-forget Redis background tasks are tracked with `discard` done-callbacks. Same RUF006-guard pattern as `__main__._asyncio_report_tasks` and `ban_flow._album_tasks`. (Bug #100)
+- **`tcbot/database/redis_client.py`**: `hiredis` C-extension import now verified at module-load time with `try/except ImportError` raising `RuntimeError` immediately. Prevents silent fallback to the pure-Python Redis parser and catches misconfigured environments at startup rather than at the first Redis operation.
+
 ## [Unreleased] - 2026-06-12 (session 75)
 
 ### Fixed
