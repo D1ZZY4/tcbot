@@ -5,10 +5,46 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-12 (session 83)
+**Last updated:** 2026-06-12 (session 85c)
 
 ## What is done
 
+- Session 85c (2026-06-12): Final DRY confirmation sweep. No new bugs found.
+  - dispatch.py fan_out: semaphore + except Exception (intentional, propagates CancelledError), count_errors uses BaseException. CLEAN.
+  - connected_flow.py: all Telegram API calls inside try/except or gather. CLEAN.
+  - __init__.py: config loading, _int_from_env with minimum, parse_port, parse_chat_id all solid. CLEAN.
+  - __main__.py: PTB setup, strong-ref set _asyncio_report_tasks, asyncio exception handler, post_init/post_shutdown. CLEAN.
+  - All 20 bare `except Exception:` sites verified - all have log/action in following line. CLEAN.
+  - Emoji sweep: 0 Unicode emoji across all 72 tcbot/ .py files. CLEAN.
+  - identity.py refusal tables: 11 actions (ban/kick/mute/warn/unban/unmute/promote/demote/transfer/unwarn/resetwarns), witty-professional voice, no emoji. CLEAN.
+  - appeal_flow.py message constants: all informative (describe what went wrong + what to do). CLEAN.
+  - button-styles.md: all callback namespaces verified accurate against implementation. CLEAN.
+  - docs/workflows/workflows.md: warning_flow section accurate. CLEAN.
+  - docs/helper/helper.md: ban_info.py entry accurate. CLEAN.
+  - Ruff: All checks passed (72 files), 72 files already formatted.
+  - Bot running cleanly: MongoDB, Redis hiredis 3.4.0, APScheduler CBORSerializer, 28/28 indexes, polling active.
+  - AUDIT STATUS: FULLY DRY - all tcbot/ files, GitHub workflows, Dockerfile, docker-compose, docs, voice/UX, security guards all verified.
+
+- Session 85b (2026-06-12): Comprehensive spot-check audit continuation.
+  - admins.py: 2 duplicate inline strings extracted to _ERR_CLASSIFY_FAILED constant.
+  - ban_info.py: Bug #176 - isinstance(r_admin, Exception) → BaseException (CancelledError miss).
+  - warning_flow.py: Bug #177 - 4 unguarded reply_text in execute_unwarn/warnlist/resetwarns.
+  - muting_flow.py: Bug #178 - execute_unmute else-branch unguarded reply_text.
+  - Verified: about.py, additional.py, privacy.py, types.py, groups.py, maintenance.py, ban_info.py, parse_editmsg.py, parse_link.py, parse_logmsg.py, warning_flow.py, kicking_flow.py, proof_flow.py, ban_flow.py, promote_flow.py, unban_flow.py all audited and clean.
+  - Verified: prefixes.py, timedate_format.py, mongos.py (connect/ensure_indexes with return_exceptions=True), formatter.py, identity.py, replies.py, keyboards.py all clean.
+  - Verified: stats.py + checking.py callback patterns guarded by PTB regex (pattern=r"^name:\d+$") — split() cannot IndexError.
+  - Verified: parse_logmsg.py (774 lines) — pure LogBuilder templates, all user strings escaped via esc(). 100% clean.
+  - Ruff clean (72 files), bot running.
+- Session 85 (2026-06-12): GitHub workflow + Dockerfile + docker-compose audit.
+  - All 4 GitHub Actions workflow files had invalid action versions (checkout@v6, setup-python@v6, setup-uv@v7, upload-artifact@v7, github-script@v9 -- none exist). Fixed to v4/v5/v4/v4/v7.
+  - codeql.yml: removed dead 'actions' language matrix; removed unused placeholder manual-build step.
+  - dependency-update.yml: removed emoji from PR body title (voice rule violation).
+  - Dockerfile: uv sync --no-install-project left tcbot package uninstalled; added second uv sync after COPY tcbot/.
+  - docker-compose.yml: no network isolation (MongoDB+Redis reachable from any container on default bridge); added internal:true network.
+  - Sequential awaits audit: all 7 candidates verified -- set_owner and cmd_transfer are order-dependent; others already optimized with gather or depend on prior result. No perf bug found.
+  - Ruff clean (72 files), bot running.
+- Session 84b (2026-06-12): reason_flow.py Bug #174 (invisible-state: prompt_sent flag) + Bug #175 (2 unguarded type-rejection replies). error_reporter.py + dispatch.py fully audited and confirmed clean.
+- Session 84 (2026-06-12): v4.1.1 audit - bugs #166-173 fixed (appeal_flow, promote_flow, reason_flow, unban_flow, demote_flow, check_flow, stats_flow, all 8 database helpers).
 - Python 3.12, uv, python-telegram-bot (latest), Motor/MongoDB + Redis (optional L2) + APScheduler 4 stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
 - `uv run ruff format .` and `uv run ruff check .` both clean (72 files).

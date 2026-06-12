@@ -41,7 +41,7 @@ async def build_ban_detail(
     else:
         r_admin = await db.users_cache.get_user_mention_data(aid)
         admin_fname, admin_uname = (
-            r_admin if not isinstance(r_admin, Exception) else ("Admin", None)
+            r_admin if not isinstance(r_admin, BaseException) else ("Admin", None)
         )
         target_uname = None
 

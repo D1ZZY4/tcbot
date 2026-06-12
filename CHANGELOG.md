@@ -15,6 +15,29 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 - **`tcbot/modules/helper/workflows/stats_flow.py`**: `int(q)` conversion for search query lacked bounds check — overly long query strings can produce integers too large for MongoDB. Wrapped in `try/except` with graceful fallback. (Bug #172)
 - **`tcbot/database/bans_db.py`**, **`tcbot/database/groups_db.py`**, **`tcbot/database/users_cache.py`**, **`tcbot/database/users_roles.py`**, **`tcbot/database/warns_db.py`**, **`tcbot/database/kicks_db.py`**, **`tcbot/database/mutes_db.py`**, **`tcbot/database/queues_db.py`**: Database layer hardening across all eight Motor helper files. (1) Motor `insert_one`, `update_one`, `find_one`, `to_list`, and aggregation calls lacked exception guards — unhandled `ServerSelectionTimeoutError` or `OperationFailure` would propagate to command handlers and trigger global error reports. All Motor calls wrapped with `try/except`. (2) `asyncio.gather` calls missing `return_exceptions=True` identified and fixed; result tuples now checked for `BaseException`. (3) Cache invalidation moved into `try/finally` blocks so cache consistency is maintained even if the DB write raises after a partial success. (4) `None` checks added on MongoDB query results before key access. (5) `remove_last_warn` race condition in `warns_db.py` — find-then-delete pattern now uses `find_one_and_delete` with `matched_count` verification to avoid stale counter updates under concurrent admin operations. (Bug #173)
 
+## [Unreleased] - 2026-06-12 (session 85b)
+
+### Refactored
+
+- **`tcbot/modules/admins.py`**: Two inline user-facing strings (`"Classification check failed - please try again."`) in `cmd_promote` and `cmd_demote` extracted into named constant `_ERR_CLASSIFY_FAILED` to eliminate duplication and allow centralized wording changes.
+
+### Fixed
+
+- **`tcbot/modules/helper/ban_info.py`**: `build_ban_detail` single-user path used `isinstance(r_admin, Exception)` instead of `isinstance(r_admin, BaseException)` — `asyncio.CancelledError` (a `BaseException` subclass, not `Exception`) would not be caught, causing a tuple-unpack crash. Corrected to `BaseException` for consistency with all other gather-result checks. (Bug #176)
+- **`tcbot/modules/helper/workflows/warning_flow.py`**: Four unguarded `reply_text` calls in `execute_unwarn`, `execute_warnlist`, and `execute_resetwarns` (early-exit no-warns paths and success reply). If Telegram rejected the send, `log_execution` would re-raise and trigger an unnecessary error report. Wrapped all four with `try/except Exception as exc: log.debug(...)`. (Bug #177)
+- **`tcbot/modules/helper/workflows/muting_flow.py`**: `execute_unmute` — the `else` branch (when no log channel is configured) issued a bare `await msg.reply_text(reply)` without a guard. Wrapped with `try/except Exception as exc: log.debug(...)`. (Bug #178)
+
+## [Unreleased] - 2026-06-12 (session 85)
+
+### Fixed
+
+- **`.github/workflows/auto-fix.yml`**: All GitHub Actions pinned to non-existent versions (`checkout@v6`, `setup-python@v6`, `setup-uv@v7`, `github-script@v9`). Updated to current stable releases: `checkout@v4`, `setup-python@v5`, `setup-uv@v4`, `github-script@v7`.
+- **`.github/workflows/codeql.yml`**: Same invalid action versions fixed. Removed dead `actions` language matrix (CodeQL Actions analysis is not useful). Updated `codeql-action/init@v4` and `analyze@v4` to `@v3` (stable). Removed unused placeholder `run manual build steps` section.
+- **`.github/workflows/dependency-update.yml`**: Fixed invalid action versions (`checkout@v6`, `setup-python@v6`, `setup-uv@v7`). Removed emoji from PR body (`## Automated Dependency Update` replacing `## Dependency Update` with emoji prefix).
+- **`.github/workflows/run-bot.yml`**: Fixed invalid action versions (`checkout@v6`, `setup-python@v6`, `setup-uv@v7`, `upload-artifact@v7` to `@v4`). Removed inline comment syntax from env block (`# ──` style) that can confuse parsers.
+- **`Dockerfile`**: Missing project install after source copy. `uv sync --frozen --no-dev --no-install-project` installed dependencies only but did not install the `tcbot` package itself. Added second `uv sync --frozen --no-dev` (without `--no-install-project`) after `COPY tcbot/` so the project is properly installed and importable.
+- **`docker-compose.yml`**: MongoDB and Redis services had no network isolation -- any container on the default bridge could reach them. Added explicit `internal: true` Docker network `internal`; all three services moved onto it. MongoDB and Redis ports are no longer exposed to the host.
+
 ## [Unreleased] - 2026-06-12 (session 84b)
 
 ### Fixed

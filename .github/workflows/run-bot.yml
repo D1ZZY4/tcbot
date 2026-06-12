@@ -40,11 +40,11 @@ jobs:
     timeout-minutes: 330
 
     env:
-      # ── Window timing (seconds) ──────────────────────────────────────────
+      # Window timing (seconds)
       WINDOW_SECONDS: "18000"   # 5 hours of actual bot runtime
       HANDOVER_LEAD: "900"      # dispatch the next run 15 min before the end
 
-      # ── Bot configuration (set these as repository secrets) ──────────────
+      # Bot configuration (set these as repository secrets)
       BOT_TOKEN:      ${{ secrets.BOT_TOKEN }}
       MONGODB_URI:    ${{ secrets.MONGODB_URI }}
       OWNER_ID:       ${{ secrets.OWNER_ID }}
@@ -61,14 +61,14 @@ jobs:
       LOG_LEVEL:      ${{ secrets.LOG_LEVEL }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
 
@@ -108,7 +108,7 @@ jobs:
           handover_at=$(( deadline - HANDOVER_LEAD ))
           handover_done=false
 
-          # ── Supervisory loop ────────────────────────────────────────────
+          # Supervisory loop
           while :; do
             now=$(date +%s)
             [ "$now" -ge "$deadline" ] && break
@@ -152,7 +152,7 @@ jobs:
 
       - name: Upload bot log
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: bot-log-${{ github.run_id }}
           path: |

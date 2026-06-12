@@ -250,6 +250,16 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Session 84b - Bug #174: reason_flow.py _on_reason_text invisible-state | correctness | Both edit+reply branches could fail independently; fell through to return WAITING_PROOF with no prompt visible. Added prompt_sent flag; return ConversationHandler.END if neither succeeded. | 2026-06-12 (s84b) |
 | Session 84b - Bug #175: reason_flow.py _on_reason_unexpected + _on_proof_unexpected unguarded | robustness | Two reply_text calls in type-rejection handlers unguarded; wrapped try/except log.debug. | 2026-06-12 (s84b) |
 | Session 84b - error_reporter.py + dispatch.py full audit | audit | error_reporter.py all TG calls guarded; dispatch.py _slot wrapper handles all exceptions correctly; no bugs found. | 2026-06-12 (s84b) |
+| Session 85 - GitHub workflow action versions (all 4 files) | correctness | checkout@v6/setup-python@v6/setup-uv@v7/upload-artifact@v7/github-script@v9 do not exist; updated to v4/v5/v4/v4/v7. | 2026-06-12 (s85) |
+| Session 85 - codeql.yml dead matrix + placeholder step removed | cleanup | Removed 'actions' language matrix and unused placeholder manual-build step from codeql.yml. | 2026-06-12 (s85) |
+| Session 85 - dependency-update.yml emoji removed | cleanup | Emoji in PR body title violates voice rules; replaced with plain text. | 2026-06-12 (s85) |
+| Session 85 - Dockerfile missing project install | correctness | uv sync --no-install-project left tcbot package un-installed; added second uv sync after COPY tcbot/. | 2026-06-12 (s85) |
+| Session 85 - docker-compose network isolation | security | MongoDB and Redis accessible on default bridge; added internal:true network so no external container can reach them. | 2026-06-12 (s85) |
+| Session 85 - sequential awaits audit | audit | All 7 candidates verified: set_owner order-dependent, cmd_transfer order-dependent, others already gathered or depend. No performance bug found. | 2026-06-12 (s85) |
+| Session 85b - admins.py inline string → constant | refactor | Two duplicate inline strings extracted to _ERR_CLASSIFY_FAILED constant. | 2026-06-12 (s85b) |
+| Session 85b - ban_info.py Exception→BaseException | fix | Bug #176: isinstance(r_admin, Exception) → BaseException; CancelledError not caught = tuple-unpack crash. | 2026-06-12 (s85b) |
+| Session 85b - warning_flow.py unguarded replies | fix | Bug #177: 4 unguarded reply_text in execute_unwarn/warnlist/resetwarns wrapped try/except. | 2026-06-12 (s85b) |
+| Session 85b - muting_flow.py unguarded reply | fix | Bug #178: execute_unmute else-branch (no log channel) bare reply_text wrapped try/except. | 2026-06-12 (s85b) |
 
 ## Pending (remaining optional)
 

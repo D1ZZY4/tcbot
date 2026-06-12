@@ -10,6 +10,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - internal
 
   mongo:
     image: mongo:7
@@ -21,6 +23,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - internal
 
   redis:
     image: redis:7-alpine
@@ -32,7 +36,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - internal
 
 volumes:
   mongo_data:
   redis_data:
+
+networks:
+  internal:
+    driver: bridge
+    internal: true

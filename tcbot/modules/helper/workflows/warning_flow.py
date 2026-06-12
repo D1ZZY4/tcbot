@@ -158,11 +158,14 @@ async def execute_unwarn(
 
     count = await db.warns_db.warn_count(target_id, chat_id)
     if count == 0:
-        await msg.reply_text(
-            f"{mention(target_id, target_name)} - {code(str(target_id))} "
-            f"has no warnings in this group.",
-            parse_mode="HTML",
-        )
+        try:
+            await msg.reply_text(
+                f"{mention(target_id, target_name)} - {code(str(target_id))} "
+                f"has no warnings in this group.",
+                parse_mode="HTML",
+            )
+        except Exception as exc:
+            log.debug("execute_unwarn no-warns reply failed: %s", exc)
         return
 
     new_count = max(count - 1, 0)
@@ -219,11 +222,14 @@ async def execute_warnlist(
     count = len(warns)
 
     if count == 0:
-        await msg.reply_text(
-            f"{mention(target_id, target_name)} - {code(str(target_id))} "
-            f"has no warnings in this group.",
-            parse_mode="HTML",
-        )
+        try:
+            await msg.reply_text(
+                f"{mention(target_id, target_name)} - {code(str(target_id))} "
+                f"has no warnings in this group.",
+                parse_mode="HTML",
+            )
+        except Exception as exc:
+            log.debug("execute_warnlist no-warns reply failed: %s", exc)
         return
 
     lines = [
@@ -233,7 +239,10 @@ async def execute_warnlist(
     for i, w in enumerate(warns, 1):
         lines.append(f"  {i}. {esc(w.get('reason', 'No reason'))}")
 
-    await msg.reply_text("\n".join(lines), parse_mode="HTML")
+    try:
+        await msg.reply_text("\n".join(lines), parse_mode="HTML")
+    except Exception as exc:
+        log.debug("execute_warnlist reply failed: %s", exc)
 
 
 async def execute_resetwarns(
@@ -252,18 +261,24 @@ async def execute_resetwarns(
 
     removed = await db.warns_db.clear_warns(target_id, chat_id)
     if removed == 0:
-        await msg.reply_text(
-            f"{mention(target_id, target_name)} - {code(str(target_id))} "
-            f"has no warnings to clear.",
-            parse_mode="HTML",
-        )
+        try:
+            await msg.reply_text(
+                f"{mention(target_id, target_name)} - {code(str(target_id))} "
+                f"has no warnings to clear.",
+                parse_mode="HTML",
+            )
+        except Exception as exc:
+            log.debug("execute_resetwarns no-warns reply failed: %s", exc)
         return
 
-    await msg.reply_text(
-        f"All {removed} warning(s) cleared for {mention(target_id, target_name)} - "
-        f"{code(str(target_id))}. Clean slate.",
-        parse_mode="HTML",
-    )
+    try:
+        await msg.reply_text(
+            f"All {removed} warning(s) cleared for {mention(target_id, target_name)} - "
+            f"{code(str(target_id))}. Clean slate.",
+            parse_mode="HTML",
+        )
+    except Exception as exc:
+        log.debug("execute_resetwarns success reply failed: %s", exc)
 
 
 # ──────────────────────── Executor adapter ──────────────────────── #

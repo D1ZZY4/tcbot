@@ -17,14 +17,14 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v4
 
       - name: Backup current lock
         run: cp uv.lock uv.lock.backup
@@ -79,7 +79,7 @@ jobs:
           gh pr create \
             --title "chore: Auto-update dependencies" \
             --body "$(cat <<EOF
-          ## 🤖 Automated Dependency Update
+          ## Automated Dependency Update
 
           This PR updates project dependencies to their latest compatible versions.
 
@@ -107,7 +107,7 @@ jobs:
               sys.exit(0)
 
           text = (
-              "<b>🔄 Dependency Update</b>\n\n"
+              "<b>Dependency Update</b>\n\n"
               "Dependencies updated\n"
               "Result: PR created\n\n"
               f'<a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View workflow</a>'

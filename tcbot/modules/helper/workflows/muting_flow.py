@@ -225,7 +225,10 @@ async def execute_unmute(
         if isinstance(results2[0], BaseException):
             log.error("Unmute log send failed: %s", results2[0])
     else:
-        await msg.reply_text(reply, parse_mode="HTML")
+        try:
+            await msg.reply_text(reply, parse_mode="HTML")
+        except Exception as exc:
+            log.debug("execute_unmute no-log reply failed: %s", exc)
 
 
 # ──────────────────────── Executor adapter ──────────────────────── #

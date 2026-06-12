@@ -43,6 +43,7 @@ _ERR_ROLE_CLEAR_FAILED = "Couldn't remove the role - it may have already been cl
 _MSG_CANCELLED = "Cancelled. No changes were made."
 _MSG_NO_PENDING = "No pending promotion requests."
 _ERR_REQUEST_NOT_FOUND = "Request not found or already resolved."
+_ERR_CLASSIFY_FAILED = "Classification check failed - please try again."
 
 # ─────────────────────── Rate-limiter constants ──────────────────── #
 _RL_PERIOD_S: int = 30
@@ -188,7 +189,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             ident,
         )
         try:
-            await msg.reply_text("Classification check failed - please try again.")
+            await msg.reply_text(_ERR_CLASSIFY_FAILED)
         except Exception as exc:
             log.debug("cmd_promote classify-failed reply failed: %s", exc)
         return
@@ -378,7 +379,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             "identity.classify failed during demote for target=%d: %s", target_id, ident
         )
         try:
-            await msg.reply_text("Classification check failed - please try again.")
+            await msg.reply_text(_ERR_CLASSIFY_FAILED)
         except Exception as exc:
             log.debug("cmd_demote classify-failed reply failed: %s", exc)
         return
