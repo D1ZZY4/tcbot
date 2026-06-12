@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 from telegram.ext import CallbackQueryHandler, ContextTypes
@@ -44,11 +45,14 @@ __about_msg__ = (
 async def on_about_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the About page when the About button is tapped."""
     q: CallbackQuery = update.callback_query
-    await q.answer()
-    await q.edit_message_text(
-        __about_msg__,
-        parse_mode="HTML",
-        reply_markup=keyboards.back_to_start_kb(),
+    await asyncio.gather(
+        q.answer(),
+        q.edit_message_text(
+            __about_msg__,
+            parse_mode="HTML",
+            reply_markup=keyboards.back_to_start_kb(),
+        ),
+        return_exceptions=True,
     )
 
 

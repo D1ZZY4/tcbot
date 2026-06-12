@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import TYPE_CHECKING
 
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, filters
@@ -26,6 +27,8 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable
 
     from telegram import CallbackQuery, InlineKeyboardMarkup, Update
+
+log = logging.getLogger(__name__)
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -95,14 +98,17 @@ async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def _ack_and_render(
     q: CallbackQuery, data_coro: Awaitable[tuple[str, InlineKeyboardMarkup | None]]
 ) -> None:
-    """Acknowledge the callback query, then await the data coroutine and edit.
+    """Acknowledge the callback query and run the data coroutine in parallel, then edit.
 
-    ``data_coro`` must be a coroutine that returns ``(text, kb)``.  Answering
-    the callback first ensures the button loading indicator is dismissed before
-    the DB fetch runs.
+    ``data_coro`` must be a coroutine that returns ``(text, kb)``. Gathering
+    ``q.answer()`` with the DB fetch starts both simultaneously, cutting latency
+    versus the old sequential pattern.
     """
-    await q.answer()
-    text, kb = await data_coro
+    _, result = await asyncio.gather(q.answer(), data_coro, return_exceptions=True)
+    if isinstance(result, BaseException):
+        log.error("_ack_and_render data fetch failed: %s", result)
+        return
+    text, kb = result
     await safe_edit_cb(q, text, reply_markup=kb)
 
 
@@ -189,10 +195,13 @@ async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 async def on_stats_bans_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Open the user search prompt within the stats ban view."""
     q = update.callback_query
-    # * Stats.open_search is synchronous; answer first then edit.
+    # * Stats.open_search is synchronous; answer and edit run in parallel.
     text, kb = Stats.open_search(ctx, q)
-    await q.answer()
-    await safe_edit_cb(q, text, reply_markup=kb)
+    await asyncio.gather(
+        q.answer(),
+        safe_edit_cb(q, text, reply_markup=kb),
+        return_exceptions=True,
+    )
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)

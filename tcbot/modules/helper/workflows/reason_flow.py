@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -162,9 +163,11 @@ def build_modaction_conv(
             _get_target(ctx), action, replies.NO_REASON, extra_info
         )
         try:
-            await q.answer()
-            await q.edit_message_text(
-                prompt_txt, parse_mode="HTML", reply_markup=proof.keyboard()
+            await asyncio.gather(
+                q.answer(),
+                q.edit_message_text(
+                    prompt_txt, parse_mode="HTML", reply_markup=proof.keyboard()
+                ),
             )
         except Exception:
             log.exception("%s prompt edit failed (skip-reason step)", action)
@@ -184,8 +187,11 @@ def build_modaction_conv(
         if q is None:
             return WAITING_PROOF
 
-        await q.answer()
-        await executor(update, ctx)
+        await asyncio.gather(
+            q.answer(),
+            executor(update, ctx),
+            return_exceptions=True,
+        )
         return ConversationHandler.END
 
     # ── Cancel / fallback ────────────────────────────────────────── #
@@ -221,11 +227,13 @@ def build_modaction_conv(
         if q is None:
             return ConversationHandler.END
 
-        await q.answer()
         _clear_user_data(ctx)
         try:
-            await q.edit_message_text(
-                f"Got it, {action} cancelled. No action was taken."
+            await asyncio.gather(
+                q.answer(),
+                q.edit_message_text(
+                    f"Got it, {action} cancelled. No action was taken."
+                ),
             )
         except Exception:
             log.debug("%s cancel edit failed (message may already be gone)", action)

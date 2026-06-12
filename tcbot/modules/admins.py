@@ -268,8 +268,11 @@ async def on_promote_role_cancel(
 ) -> None:
     """Acknowledge the cancel button and replace the role-selection prompt with a cancellation notice."""
     q = update.callback_query
-    await q.answer()
-    await q.edit_message_text(_MSG_PROMOTE_CANCELLED, reply_markup=None)
+    await asyncio.gather(
+        q.answer(),
+        q.edit_message_text(_MSG_PROMOTE_CANCELLED, reply_markup=None),
+        return_exceptions=True,
+    )
 
 
 # ─────────────────── Command Demote </tcdemote> ─────────────────── #
@@ -404,8 +407,11 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Acknowledge the cancel button and collapse the demotion confirmation prompt."""
     q = update.callback_query
-    await q.answer()
-    await q.edit_message_text(_MSG_CANCELLED, reply_markup=None)
+    await asyncio.gather(
+        q.answer(),
+        q.edit_message_text(_MSG_CANCELLED, reply_markup=None),
+        return_exceptions=True,
+    )
 
 
 # ───────────── Command Transfer Owner </transferowner> ──────────── #

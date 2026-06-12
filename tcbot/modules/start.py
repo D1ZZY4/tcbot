@@ -104,11 +104,14 @@ async def on_back_to_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     """Return to the main menu when the Back button is tapped in a sub-menu."""
     q: CallbackQuery = update.callback_query
     botname = esc(ctx.bot.first_name or "")
-    await q.answer()
-    await q.edit_message_text(
-        _PRIVATE_START_TEXT.format(botname=botname),
-        parse_mode="HTML",
-        reply_markup=keyboards.main_menu_kb(),
+    await asyncio.gather(
+        q.answer(),
+        q.edit_message_text(
+            _PRIVATE_START_TEXT.format(botname=botname),
+            parse_mode="HTML",
+            reply_markup=keyboards.main_menu_kb(),
+        ),
+        return_exceptions=True,
     )
 
 

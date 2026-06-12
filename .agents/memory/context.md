@@ -5,7 +5,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-12 (session 65)
+**Last updated:** 2026-06-12 (session 66)
 
 ## What is done
 
@@ -319,9 +319,19 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - AST audit confirms no remaining ConversationHandler entry points with unguarded classify/resolve_and_check gathers.
   - Ruff 70 files clean; bot running (MongoDB connected, scheduler started, polling active).
 
+- Session 61-65 (2026-06-12): wave 2 autonomous audit - sequential await fixes across 10+ files.
+  - `stats.py`: `_ack_and_render` gathers q.answer()+data_coro in parallel; `on_stats_bans_search` gathers q.answer()+safe_edit_cb.
+  - `admins.py`: `on_promote_role_cancel`, `on_demote_cancel` serial awaits gathered.
+  - `about.py`, `additional.py`, `privacy.py`, `start.py`, `help.py`: all serial q.answer+edit gathered.
+  - `reason_flow.py`: `_on_skip_proof`, `_on_skip_reason`, `_on_cancel` serial awaits gathered (latter two inside try/except without `return_exceptions=True` -- intentional).
+  - Added missing `import asyncio` to `about.py`, `additional.py`, `privacy.py`, `reason_flow.py`; added `import logging` + `log` to `stats.py`.
+  - AST scan confirmed all remaining gather calls without `return_exceptions=True` are intentional: data-dependent chains, startup gather, fan_out internal gather, or try/except-wrapped gathers.
+  - Full codebase scans confirmed: no stray `print()` in production code, no TODO/FIXME, no bare `except:` without logging/raise.
+  - Ruff 70 files clean; bot running (MongoDB connected, scheduler started, polling active).
+
 ## What is in progress
 
-Nothing. Session 60 checkpoint complete.
+Nothing. Session 66 checkpoint complete. Audit is dry across multiple waves.
 
 ## What is pending (optional)
 
