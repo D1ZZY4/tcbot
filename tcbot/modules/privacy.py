@@ -27,6 +27,8 @@ __module_name__ = None
 
 # ──────────────────────── Privacy Messages ──────────────────────── #
 
+_CNAME = esc(cfg.community_name)
+
 _PRIVACY_MSG = (
     "<b>Privacy & Data</b>\n\n"
     "We keep things simple. Here's what {botname} stores about you:\n\n"
@@ -35,7 +37,7 @@ _PRIVACY_MSG = (
     "- <b>Warn & mute records</b> - logged per group for moderation tracking.\n"
     "- <b>Kick logs</b> - recorded for staff reference.\n"
     "- <b>Appeal submissions</b> - your messages and any attachments you send through the appeal system.\n\n"
-    f"All data is stored securely and is only accessible to {cfg.community_name} staff. "
+    f"All data is stored securely and is only accessible to {_CNAME} staff. "
     "We don't share anything with third parties - ever.\n\n"
     "Tap <b>Privacy Policy</b> below for the full policy."
 )
@@ -48,20 +50,20 @@ _PRIVACY_POLICY_MSG = (
     "or any connected group. We also store ban records, appeal submissions, warn records, "
     "mute records, and kick logs.\n\n"
     "<b>2. Why we collect it</b>\n"
-    f"Everything we store is used solely for federation moderation - keeping {cfg.community_name} groups safe "
+    f"Everything we store is used solely for federation moderation - keeping {_CNAME} groups safe "
     "and well-managed. Nothing more.\n\n"
     "<b>3. Who can access it</b>\n"
-    f"Only {cfg.community_name} staff (admins and the owner) have access to stored data. "
+    f"Only {_CNAME} staff (admins and the owner) have access to stored data. "
     "No data is shared with third parties under any circumstances.\n\n"
     "<b>4. How long we keep it</b>\n"
     "Ban records are kept indefinitely as part of the federation log. "
     "Cached user data (names, IDs) may be pruned periodically. "
     "Appeal records are kept for reference.\n\n"
     "<b>5. Your rights</b>\n"
-    f"You can request a review or deletion of your data by reaching out to a {cfg.community_name} admin directly. "
+    f"You can request a review or deletion of your data by reaching out to a {_CNAME} admin directly. "
     "We'll handle it as soon as we can.\n\n"
     "<b>6. Contact</b>\n"
-    f"Reach {cfg.community_name} staff through the main {cfg.community_name} group or via this bot's appeal system."
+    f"Reach {_CNAME} staff through the main {_CNAME} group or via this bot's appeal system."
 )
 
 

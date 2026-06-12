@@ -10,10 +10,15 @@ This page maps the repository structure and the service boundaries between packa
 tgbot/
 ├── tcbot/                  Main Python package
 ├── docs/                   Developer documentation
-├── .agents/                 Contributor and agent rules
+├── .agents/                Contributor and agent rules
 ├── pyproject.toml          Dependencies and Ruff config
 ├── uv.lock                 Locked dependency graph
 ├── config.env.example      Environment variable template
+├── AGENTS.md               Contributor and agent guidelines
+├── PLAN.md                 Project plan and backlog
+├── README.md               Project overview
+├── replit.md               Replit deployment notes
+├── CHANGELOG.md            Version history
 ├── docker-compose.yml      Bot + MongoDB local stack
 └── Dockerfile              Container image
 ```
@@ -72,6 +77,20 @@ tcbot/
 | `tcbot/modules/helper/workflows/*_flow.py` | Conversation factories, state transitions, flow executors | Module discovery or `__handlers__` exports |
 | `tcbot/database/*_db.py` | Collection-specific DB operations | Telegram API calls |
 | `tcbot/utils/` | Runtime infrastructure utilities | Feature-specific moderation policy |
+
+```mermaid
+graph TD
+    Main[__main__.py] -->|registers handlers from| Mods[modules/*.py]
+    Main -->|initialises| DB[database/]
+    Main -->|starts| Alive[alive.py]
+    Mods -->|calls helpers from| Helper[modules/helper/]
+    Mods -->|calls flows from| Flows[helper/workflows/*_flow.py]
+    Helper -->|reads/writes via| DB
+    Flows -->|reads/writes via| DB
+    Flows -->|fan-out via| Utils[utils/dispatch.py]
+    Utils -->|Telegram API| TG[Telegram]
+    Mods -->|Telegram API| TG
+```
 
 ## Startup flow
 

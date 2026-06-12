@@ -34,8 +34,12 @@ class LogBuilder:
     __slots__ = ("_lines",)
 
     def __init__(self, title: str) -> None:
-        """Start a new log message with the given title header."""
-        self._lines: list[str] = [str(title), ""]
+        """Start a new log message with the given title header.
+
+        The title is HTML-escaped so callers can pass raw config or user-facing
+        strings without risk of breaking the HTML markup sent to the log channel.
+        """
+        self._lines: list[str] = [esc(str(title)), ""]
 
     def field(
         self,

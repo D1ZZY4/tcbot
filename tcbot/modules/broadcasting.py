@@ -15,7 +15,7 @@ from telegram.ext import ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, parse_logmsg, replies
-from tcbot.modules.helper.formatter import code
+from tcbot.modules.helper.formatter import code, esc
 from tcbot.utils.dispatch import count_errors, fan_out
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -31,10 +31,10 @@ _RL_LIMIT: int = 3
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
+_CNAME = esc(cfg.community_name)
+
 __module_name__ = "Broadcast"
-__help_text__ = (
-    f"Sends a message to every group currently connected to {cfg.community_name}."
-)
+__help_text__ = f"Sends a message to every group currently connected to {_CNAME}."
 
 __help_sections__: list[tuple[str, str]] = [
     (
@@ -51,7 +51,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         replies.SEC_WHAT,
-        f"Sends a message to every group currently connected to {cfg.community_name}.\n\n"
+        f"Sends a message to every group currently connected to {_CNAME}.\n\n"
         f"You can compose the message in two ways:\n"
         f"- Type the message directly after the command (HTML formatting is supported).\n"
         f"- Reply to an existing message with <code>/bc</code> to forward that message "

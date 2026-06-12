@@ -35,16 +35,18 @@ __module_name__ = None
 
 # ────────────────────────── Start Message ───────────────────────── #
 
+_CNAME = esc(cfg.community_name)
+
 _PRIVATE_START_TEXT = (
     "<b>Hey, I'm {botname}.</b>\n\n"
-    f"Federation management assistant for {cfg.community_name}. "
+    f"Federation management assistant for {_CNAME}. "
     "I coordinate bans, mutes, kicks, and moderation across all connected groups.\n\n"
     "Use the buttons below to explore."
 )
 
 _GROUP_START_TEXT = (
     "<b>Hey, I'm {botname}.</b>\n\n"
-    f"Federation management assistant for {cfg.community_name}. "
+    f"Federation management assistant for {_CNAME}. "
     "Use /help for the full help menu, or open me in PM for all options."
 )
 

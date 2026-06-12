@@ -73,6 +73,19 @@ Ban differs from the shared reason flow:
 - Photo/video albums are buffered by `media_group_id` and flushed after `cfg.album_debounce`.
 - `_execute_ban()` creates or updates the `bans` document, uploads proof, applies bans to active groups with `fan_out()`, and posts the audit log.
 
+```mermaid
+flowchart TD
+    Entry[entry_fn - reason inline] --> Proof[WAITING_PROOF]
+    Proof -->|photo/video/album| Exec[_execute_ban]
+    Proof -->|cancel| End[ConversationHandler.END]
+    Proof -->|timeout| Timeout[on_proof_timeout]
+    Timeout --> End
+    Exec -->|fan_out to all groups| Groups[Active connected groups]
+    Exec -->|upload proof| ProofChat[Proof channel/chat]
+    Exec -->|post audit log| LogChat[Log channel]
+    Exec --> End
+```
+
 ## Kick: `kicking_flow.py`
 
 | Item | Value |
@@ -107,6 +120,22 @@ Duration tokens are parsed before entering the conversation.
 
 Mute applies restrictions across all connected groups with `fan_out()`.
 
+```mermaid
+flowchart TD
+    Entry[entry_fn - duration parsed] --> Reason[WAITING_REASON]
+    Entry --> Proof[WAITING_PROOF]
+    Reason -->|text reason| Proof
+    Reason -->|skip| Proof
+    Reason -->|cancel| End[ConversationHandler.END]
+    Proof -->|photo/video| Exec[_execute_mute]
+    Proof -->|skip| Exec
+    Proof -->|cancel| End
+    Exec -->|fan_out restrict to all groups| Groups[Active connected groups]
+    Exec -->|upload proof if any| ProofChat[Proof channel/chat]
+    Exec -->|post audit log| LogChat[Log channel]
+    Exec --> End
+```
+
 ## Warn: `warning_flow.py`
 
 | Item | Value |
@@ -138,6 +167,21 @@ Appeal flow requirements:
 - The appeal text must start with `#appeal` and include `Log link:`, `Clarification:`, and `Agreement:`.
 - A review card is posted to `APPEAL_DISCUSSION_TOPIC` in `MAIN_GROUP`.
 - Approve calls unban logic and notifies the user; reject marks the appeal reviewed and notifies the user.
+
+```mermaid
+flowchart TD
+    Start["/start appeal_<ban_id> in private chat"] --> Check{Active ban\nfor user?}
+    Check -->|no| Deny[Deny - no active ban]
+    Check -->|yes| Wait[WAITING_APPEAL]
+    Wait -->|appeal text with required fields| Post[Post review card to APPEAL_DISCUSSION_TOPIC]
+    Wait -->|cancel or timeout| End[ConversationHandler.END]
+    Post --> End
+    Post --> Review[Staff reviewer sees card]
+    Review -->|Approve| Unban[execute_unban + DM user]
+    Review -->|Reject| Reject[Mark reviewed + DM user]
+    Unban --> LogChat[Post audit log]
+    Reject --> LogChat
+```
 
 ## Connection: `connected_flow.py`
 

@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-12 (session 73)
+**Last updated:** 2026-06-12 (session 75)
 
 ## Verification baseline
 
@@ -21,6 +21,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv run python -m tcbot` | PASS by runtime evidence: MongoDB connected, indexes ensured, scheduler started, bot polling active |
 | annotation AST audit | PASS: 0 non-dunder function parameters missing type annotations (was 31 before session 34) |
 | docs audit (session 36) | PASS: all 20+ docs files verified accurate; 0 code quality violations; 0 stale Mermaid diagrams |
+| docs audit (session 74) | PASS: mapping.md top-level layout completed; 3 new Mermaid diagrams added (ownership boundaries, ban flow, mute flow, appeal flow); all code files audited clean |
 
 ## Completed items
 
@@ -192,6 +193,8 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Session 73 - Bug #88: appeal_flow.py `log_channel` unescaped | HTML safety | `AppealConfig.instruction_text` sends `self.log_channel` raw in HTML string. Wrapped with `esc()`. | 2026-06-12 (s73) |
 | Session 73 - Bug #89: __main__.py handler group literals | code quality | `group=-1` and `group=10` → `_HANDLER_GROUP_RATE_LIMITER = -1` and `_HANDLER_GROUP_CACHE = 10`. | 2026-06-12 (s73) |
 | Session 73 - Sub-agent audit waves A-F | audit | 6 sub-agent waves covering all modules, flows, utils, __main__. 7/9 bugs were HTML safety or named-constant fixes; 2 were esc(). Ruff 70 files clean, bot running (75 handlers, MongoDB, polling). | 2026-06-12 (s73) |
+
+| Session 75 - Bug #90-99: cfg.community_name HTML escaping (comprehensive sweep) | HTML safety | 10 modules had `cfg.community_name` interpolated raw into HTML strings sent with `parse_mode="HTML"`: `about.py` (×4), `additional.py` (×1), `start.py` (×2), `help.py` (×1), `groups.py` (×2), `broadcasting.py` (×2), `connecting.py` (×3), `disconnecting.py` (×2), `privacy.py` (×5). Root fix: `LogBuilder.__init__` now calls `esc(str(title))` so all 20+ log titles are safe. Each module extracted `_CNAME = esc(cfg.community_name)` at module level. Ruff 70 files clean, bot running (75 handlers). | 2026-06-12 (s75) |
 
 ## Pending (remaining optional)
 

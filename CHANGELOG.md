@@ -2,6 +2,31 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-12 (session 75)
+
+### Fixed
+
+- **`tcbot/modules/about.py`**: `cfg.community_name` interpolated four times into `__about_msg__` which is sent with `parse_mode="HTML"`. Added `from tcbot.modules.helper.formatter import esc`; extracted `_CNAME = esc(cfg.community_name)` at module level; replaced all four raw interpolations. (Bug #90)
+- **`tcbot/modules/additional.py`**: `cfg.community_name` interpolated raw into `__additional_msg__` (HTML context). Added `esc` import; wrapped with `esc()`. (Bug #91)
+- **`tcbot/modules/start.py`**: `cfg.community_name` interpolated raw into `_PRIVATE_START_TEXT` and `_GROUP_START_TEXT` (both HTML). `esc` was already imported; extracted `_CNAME = esc(cfg.community_name)` and replaced both occurrences. (Bug #92)
+- **`tcbot/modules/helper/parse_logmsg.py`** (`LogBuilder.__init__`): The title string was stored verbatim via `str(title)` without HTML-escaping. Since every `LogBuilder`-based audit log is sent with `parse_mode="HTML"`, a community name or any caller-supplied title containing `&`, `<`, or `>` would break the markup. Added `esc(str(title))` in the constructor, covering all 20+ `LogBuilder(...)` call sites in a single change. (Bug #93)
+- **`tcbot/modules/help.py`** (`_HELP_INDEX_TEXT`): `cfg.community_name` interpolated raw into an HTML string sent with `parse_mode="HTML"`. `esc` was already imported; extracted `_CNAME = esc(cfg.community_name)` and replaced the one occurrence. (Bug #94)
+- **`tcbot/modules/groups.py`** (`__help_text__`, `__help_sections__`): Two raw `cfg.community_name` interpolations in the HTML help sections. `esc` was already imported; extracted `_CNAME` and replaced both. (Bug #95)
+- **`tcbot/modules/broadcasting.py`** (`__help_text__`, `__help_sections__`): Two raw `cfg.community_name` interpolations. Added `esc` to the existing `formatter` import; extracted `_CNAME` and replaced both. (Bug #96)
+- **`tcbot/modules/connecting.py`** (`__help_text__`, `__help_sections__`): Three raw `cfg.community_name` interpolations. Added `from tcbot.modules.helper.formatter import esc`; extracted `_CNAME` and replaced all three. (Bug #97)
+- **`tcbot/modules/disconnecting.py`** (`__help_text__`, `__help_sections__`): Two raw `cfg.community_name` interpolations in the HTML help sections. `esc` was already imported; extracted `_CNAME` and replaced both. (Bug #98)
+- **`tcbot/modules/privacy.py`** (`_PRIVACY_MSG`, `_PRIVACY_POLICY_MSG`): Five raw `cfg.community_name` interpolations across two HTML template strings sent with `parse_mode="HTML"`. `esc` was already imported; extracted `_CNAME = esc(cfg.community_name)` and replaced all five. (Bug #99)
+
+## [Unreleased] - 2026-06-12 (session 74)
+
+### Documentation
+
+- **`docs/mapping.md`** (Top-level layout): Added missing root-level files `AGENTS.md`, `PLAN.md`, `README.md`, `replit.md`, and `CHANGELOG.md` to the layout tree.
+- **`docs/mapping.md`** (Ownership boundaries): Added Mermaid `graph TD` component diagram showing call-direction and ownership boundaries across `__main__.py`, `modules/`, `helper/`, `workflows/`, `database/`, `utils/dispatch.py`, and Telegram API.
+- **`docs/workflows/workflows.md`** (Ban flow): Added Mermaid flowchart showing `entry_fn -> WAITING_PROOF -> _execute_ban -> fan_out / proof upload / audit log` path, including `on_proof_timeout` on natural expiry.
+- **`docs/workflows/workflows.md`** (Mute flow): Added Mermaid flowchart showing full `entry_fn -> WAITING_REASON -> WAITING_PROOF -> _execute_mute -> fan_out` path with all exit branches.
+- **`docs/workflows/workflows.md`** (Appeal flow): Added Mermaid flowchart showing `/start appeal_<ban_id>` entry, active-ban guard, `WAITING_APPEAL`, review card post, and Approve/Reject branches with audit log.
+
 ## [Unreleased] - 2026-06-12 (session 73)
 
 ### Fixed

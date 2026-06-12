@@ -37,9 +37,11 @@ _RL_RMTC_LIMIT: int = 5
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
+_CNAME = esc(cfg.community_name)
+
 __module_name__ = "Disconnect"
 __help_text__ = (
-    f"Removes a group from {cfg.community_name}. Use <code>/tcdisconnect</code> from "
+    f"Removes a group from {_CNAME}. Use <code>/tcdisconnect</code> from "
     f"inside the group, or <code>/rmtc</code> remotely with a chat ID."
 )
 
@@ -61,7 +63,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         replies.SEC_WHAT,
-        f"<b>/tcdisconnect</b>: removes the current group from {cfg.community_name}, posts a "
+        f"<b>/tcdisconnect</b>: removes the current group from {_CNAME}, posts a "
         f"disconnection log entry, and causes the bot to leave the group.\n\n"
         f"<b>/rmtc</b>: force-removes a group from the federation by chat ID. Use this for "
         f"groups the bot has already been kicked from, or to remove a group remotely without "

@@ -5,13 +5,14 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-12 (session 73)
+**Last updated:** 2026-06-12 (session 75)
 
 ## What is done
 
 - Python 3.12, uv, python-telegram-bot (latest), Motor/MongoDB stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
 - `uv run ruff format .` and `uv run ruff check .` both clean (70 files).
+- HTML escaping audit fully complete (session 75): all `cfg.community_name` interpolations in HTML-context strings are now wrapped with `esc()`. `LogBuilder.__init__` now escapes the title at construction time (fixes 20+ audit-log callers in one place). Bug counter: #99.
 - All P1/P2/P3 backlog items resolved (pagination NameError, composite indexes, asyncio.gather conversions, shared replies.py, em-dash removal, cache TTL constants, keyboards.py dead code).
 - `docs/mapping.md` updated: added `identity.py`, `replies.py` to helper section; added `pagination.py` to utils section.
 - `maintenance.py` and `disconnecting.py` hardcoded `timeout=3.0` extracted to named constants.
@@ -348,9 +349,18 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - 70 files: ruff format + ruff check both pass with no changes.
   - Audit confirmed DRY (no new issues). All previously fixed patterns hold.
 
+- Session 74 (2026-06-12): docs completeness audit + Mermaid diagram additions.
+  - New task file v4 (1781287668365) read in full (1097 lines). Same content as prior version.
+  - Ran 2 parallel sub-agents: sub-agent B (code audit: greeting.py, demote_flow.py, unban_flow.py, reason_flow.py, proof_flow.py, bans_db.py) = ALL CLEAN. Sub-agent A (docs audit) found 3 valid doc gaps.
+  - Fixed docs/mapping.md: Top-level layout now includes AGENTS.md, PLAN.md, README.md, replit.md, CHANGELOG.md.
+  - Fixed docs/mapping.md: Added Mermaid component diagram for Ownership boundaries section.
+  - Fixed docs/workflows/workflows.md: Added Mermaid flowcharts for Ban flow, Mute flow, and Appeal flow (previously text-only).
+  - Verification: uv sync PASS, uv pip install -e . PASS, import OK, config OK, ruff 70 files clean (unchanged), bot running (Start Application workflow active).
+  - Audit confirmed DRY: multiple gelombang sub-agent berturut-turut hanya menemukan doc gaps, bukan code bugs.
+
 ## What is in progress
 
-Nothing. Session 68 checkpoint complete. Audit is dry across multiple waves.
+Nothing. Session 74 checkpoint complete. Audit is dry across multiple waves.
 
 ## What is pending (optional)
 

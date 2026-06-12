@@ -89,9 +89,11 @@ for _key, (_dname, _, _) in HELP_CONTENT.items():
     _MODULE_NAME_MAP[_module_slug.lower()] = _key
     _MODULE_NAME_MAP[_dname.lower()] = _key
 
+_CNAME = esc(cfg.community_name)
+
 _HELP_INDEX_TEXT = (
     "<b>{botname} Help</b>\n"
-    f"I manage groups connected on {cfg.community_name}.\n\n"
+    f"I manage groups connected on {_CNAME}.\n\n"
     "Select a topic below, or use <code>/help &lt;module&gt;</code> for direct access."
 )
 

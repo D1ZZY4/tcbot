@@ -30,10 +30,11 @@ _RL_CB_LIMIT: int = 15
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
+_CNAME = esc(cfg.community_name)
+
 __module_name__ = "Groups"
 __help_text__ = (
-    f"Lists every group currently connected to {cfg.community_name}, with optional "
-    "details view."
+    f"Lists every group currently connected to {_CNAME}, with optional details view."
 )
 
 __help_sections__: list[tuple[str, str]] = [
@@ -51,7 +52,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         replies.SEC_WHAT,
-        f"Lists all groups currently connected to {cfg.community_name}, along with the total "
+        f"Lists all groups currently connected to {_CNAME}, along with the total "
         f"count.\n\n"
         f"The default view shows group names only. Tap <b>Details</b> to expand the list and "
         f"show each group's chat ID alongside its name. Tap <b>Simple</b> to collapse back.",

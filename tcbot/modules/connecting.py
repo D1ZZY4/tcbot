@@ -20,6 +20,7 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, replies
+from tcbot.modules.helper.formatter import esc
 from tcbot.modules.helper.workflows.connected_flow import connection
 from tcbot.utils.prefixes import build_prefixed_filters
 
@@ -42,9 +43,11 @@ _RL_LIMIT: int = 3
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
+_CNAME = esc(cfg.community_name)
+
 __module_name__ = "Connect"
 __help_text__ = (
-    f"Connects your group to the {cfg.community_name} federation so federation bans, "
+    f"Connects your group to the {_CNAME} federation so federation bans, "
     f"mutes, and broadcasts are applied automatically."
 )
 
@@ -59,11 +62,11 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         replies.SEC_WHERE,
-        f"Inside the group you want to connect to {cfg.community_name}.",
+        f"Inside the group you want to connect to {_CNAME}.",
     ),
     (
         replies.SEC_WHAT,
-        f"Connects your group to the {cfg.community_name} federation. Once connected:\n"
+        f"Connects your group to the {_CNAME} federation. Once connected:\n"
         f"- Federation bans are automatically enforced: currently banned users are removed, "
         f"and newly banned users are kicked on ban.\n"
         f"- Federation mutes are applied when issued.\n"
