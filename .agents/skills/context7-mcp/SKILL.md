@@ -59,11 +59,11 @@ non-obvious API detail, record it in `.agents/memory/decisions.md`.
 
 | Library | Best Context7 ID | Benchmark |
 |---|---|---|
-| `python-telegram-bot` | `/python-telegram-bot/python-telegram-bot` | 86.2 |
-| `python-telegram-bot` (alt, more snippets) | `/websites/python-telegram-bot_en_stable` | 67.7 |
-| `motor` | resolve via `ctx7 library "motor" "..."` |: |
-| `pymongo` | resolve via `ctx7 library "pymongo" "..."` |: |
-| `ruff` | resolve via `ctx7 library "ruff" "..."` |: |
+| `python-telegram-bot` | `/python-telegram-bot/python-telegram-bot` | 86.8 |
+| `python-telegram-bot` (alt, more snippets) | `/websites/python-telegram-bot_en_stable` | 71.3 |
+| `motor` | `/mongodb/motor` | 85.86 |
+| `pymongo` | resolve via `ctx7 library "pymongo" "..."` | — |
+| `ruff` | resolve via `ctx7 library "ruff" "..."` | — |
 
 ### External AI Tools (Roo, Claude Desktop, Cursor)
 
@@ -114,14 +114,29 @@ Always verify via Context7 before writing code that uses these:
 
 ## MCP Server Configuration (for external tools only)
 
+Config lives in `.agents/mcp.json` and `.roo/mcp.json`. Uses `CONTEXT7_API_KEY`
+from Replit Secrets — no hardcoded value needed.
+
 ```json
 "mcpServers": {
   "context7": {
     "type": "http",
     "url": "https://mcp.context7.com/mcp",
     "headers": {
-      "CONTEXT7_API_KEY": "ctx7sk-402fb223-6ea3-4559-bfaa-8b55298ecd01"
+      "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
     }
   }
 }
+```
+
+## Installation Notes (Replit)
+
+The `ctx7` CLI is installed globally via `npm install -g ctx7`. Binary path:
+`/home/runner/workspace/.config/npm/node_global/bin/ctx7`
+
+The CLI auto-picks `CONTEXT7_API_KEY` from the environment — no prefix needed:
+
+```bash
+ctx7 library "python-telegram-bot" "your question"
+ctx7 docs "/python-telegram-bot/python-telegram-bot" "your question"
 ```
