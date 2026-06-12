@@ -58,9 +58,12 @@ async def get_group_titles(chat_ids: list[int]) -> dict[int, str]:
 
 async def is_connected(chat_id: int) -> bool:
     """Check if a group is currently active and connected to the federation (L1→L2→DB cached)."""
+
     async def _fetch() -> bool:
         return (
-            await _groups().find_one({"chat_id": chat_id, "is_active": True}, {"_id": 1})
+            await _groups().find_one(
+                {"chat_id": chat_id, "is_active": True}, {"_id": 1}
+            )
             is not None
         )
 
@@ -96,6 +99,7 @@ async def deactivate_group(chat_id: int) -> bool:
 
 async def active_groups() -> list[GroupDoc]:
     """Get all currently active and connected groups (L1→L2→DB cached)."""
+
     async def _fetch() -> list[GroupDoc]:
         return await _groups().find({"is_active": True}).to_list(None)
 

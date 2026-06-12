@@ -74,6 +74,7 @@ async def get_user_mention_data(user_id: int) -> tuple[str, str | None]:
     Uses ``user_mention_cache`` (Redis-backed TwoLevelCache) to avoid MongoDB
     round-trips on repeated lookups.  Cache is invalidated on every ``upsert_user``.
     """
+
     async def _fetch() -> list[str | None]:
         doc = await _members().find_one(
             {"user_id": user_id}, {"first_name": 1, "username": 1}

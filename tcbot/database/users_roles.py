@@ -57,8 +57,11 @@ def role_rank(role: str | None) -> int:
 
 async def get_owner_id() -> int | None:
     """Return the current owner's user ID (L1→L2→DB cached)."""
+
     async def _fetch() -> int | None:
-        doc: AdminDoc | None = await col("tc_owners").find_one({}, {"_id": 0, "user_id": 1})
+        doc: AdminDoc | None = await col("tc_owners").find_one(
+            {}, {"_id": 0, "user_id": 1}
+        )
         return doc["user_id"] if doc else None
 
     return cast("int | None", await owner_id_cache.get_or_fetch(_OWNER_KEY, _fetch))
@@ -221,6 +224,7 @@ async def can_act_on(executor_id: int, target_id: int) -> bool:
 
 async def get_effective_role(user_id: int) -> str | None:
     """Resolve a user's full effective role including owner/admin status (L1→L2→DB cached)."""
+
     async def _fetch() -> str | None:
         owner, admin, role = await asyncio.gather(
             is_owner(user_id),
