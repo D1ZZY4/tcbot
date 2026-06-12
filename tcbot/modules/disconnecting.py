@@ -156,9 +156,11 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     record, then fans out a log message, a bot leave, and a confirmation reply
     in parallel.
     """
-    args = parse_cmd_args(update.effective_message.text)
+    msg = update.effective_message
+    admin = update.effective_user
+    args = parse_cmd_args(msg.text)
     if not args or not args[0].lstrip("-").isdigit():
-        await update.effective_message.reply_text(_MSG_RMTC_USAGE)
+        await msg.reply_text(_MSG_RMTC_USAGE)
         return
 
     chat_id = int(args[0])
@@ -172,21 +174,21 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 parse_logmsg.group_disconnected_log(
                     chat_id,
                     str(chat_id),
-                    update.effective_user.id,
-                    update.effective_user.first_name,
+                    admin.id,
+                    admin.first_name,
                 ),
                 parse_mode="HTML",
                 message_thread_id=lt,
             ),
             ctx.bot.leave_chat(chat_id),
-            update.effective_message.reply_text(
+            msg.reply_text(
                 f"Group {code(str(chat_id))} has been disconnected from {esc(cfg.community_name)}.",
                 parse_mode="HTML",
             ),
             return_exceptions=True,
         )
     else:
-        await update.effective_message.reply_text(replies.ERR_GROUP_NOT_FOUND)
+        await msg.reply_text(replies.ERR_GROUP_NOT_FOUND)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

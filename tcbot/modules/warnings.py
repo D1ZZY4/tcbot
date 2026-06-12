@@ -221,10 +221,11 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.log_execution
 async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Reply with a paginated warning history for the specified target user."""
-    args = parse_cmd_args(update.effective_message.text)
+    msg = update.effective_message
+    args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        await update.effective_message.reply_text(replies.ERR_NO_TARGET)
+        await msg.reply_text(replies.ERR_NO_TARGET)
         return
     await execute_warnlist(update, ctx, target_id, target_name or str(target_id))
 

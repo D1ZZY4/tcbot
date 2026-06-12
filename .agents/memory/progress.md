@@ -175,6 +175,12 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Session 70 - docs/performance.md v4 targets | documentation | Updated all performance targets to mandatory v4 values (table added). | 2026-06-12 (s70) |
 | Session 70 - Ultra-comprehensive audit pass | audit | 70 files, 14077 lines, 0 em-dash, 0 curly-quotes, 0 bare-except. Ruff clean. All consecutive-await pairs verified. DB+TG sequential scan: 0 remaining. q.answer()-in-gather scan: all correct. | 2026-06-12 (s70) |
 
+| Session 71 - Bug #68: reason_flow _on_skip_reason gather no return_exceptions | correctness | `asyncio.gather(q.answer(), q.edit_message_text())` inside try/except but no `return_exceptions=True`. Refactored to standard pattern with isinstance check and log.debug. | 2026-06-12 (s71) |
+| Session 71 - Bug #69: reason_flow _on_cancel gather no return_exceptions | correctness | Same pattern as #68 in `_on_cancel`. Refactored to standard pattern. | 2026-06-12 (s71) |
+| Session 71 - Bug #70: disconnecting.py cmd_rmtc bare update.effective_user | correctness | `update.effective_user.id/.first_name` accessed directly inside asyncio.gather args without local var. Extracted `admin = update.effective_user` and `msg = update.effective_message` at function top. | 2026-06-12 (s71) |
+| Session 71 - Bug #71: warnings.py cmd_warnlist bare update.effective_message | code quality | `update.effective_message.text` without local var. Extracted `msg = update.effective_message` for consistency. | 2026-06-12 (s71) |
+| Session 71 - Explorer-assisted audit | audit | Full modules/ + database/ explored by subagent. All 4 findings fixed. Ruff 70 files clean, bot running (75 handlers). | 2026-06-12 (s71) |
+
 ## Pending (remaining optional)
 
 | Item | Priority | Notes |

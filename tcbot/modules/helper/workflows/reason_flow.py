@@ -162,15 +162,17 @@ def build_modaction_conv(
         prompt_txt = proof.step_prompt(
             _get_target(ctx), action, replies.NO_REASON, extra_info
         )
-        try:
-            await asyncio.gather(
-                q.answer(),
-                q.edit_message_text(
-                    prompt_txt, parse_mode="HTML", reply_markup=proof.keyboard()
-                ),
+        results = await asyncio.gather(
+            q.answer(),
+            q.edit_message_text(
+                prompt_txt, parse_mode="HTML", reply_markup=proof.keyboard()
+            ),
+            return_exceptions=True,
+        )
+        if isinstance(results[1], BaseException):
+            log.debug(
+                "%s prompt edit failed (skip-reason step): %s", action, results[1]
             )
-        except Exception:
-            log.exception("%s prompt edit failed (skip-reason step)", action)
         return WAITING_PROOF
 
     # ── WAITING_PROOF handlers ───────────────────────────────────── #
@@ -228,15 +230,17 @@ def build_modaction_conv(
             return ConversationHandler.END
 
         _clear_user_data(ctx)
-        try:
-            await asyncio.gather(
-                q.answer(),
-                q.edit_message_text(
-                    f"Got it, {action} cancelled. No action was taken."
-                ),
+        results = await asyncio.gather(
+            q.answer(),
+            q.edit_message_text(f"Got it, {action} cancelled. No action was taken."),
+            return_exceptions=True,
+        )
+        if isinstance(results[1], BaseException):
+            log.debug(
+                "%s cancel edit failed (message may already be gone): %s",
+                action,
+                results[1],
             )
-        except Exception:
-            log.debug("%s cancel edit failed (message may already be gone)", action)
         return ConversationHandler.END
 
     async def _end_conv(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
