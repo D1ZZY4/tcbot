@@ -11,6 +11,7 @@ dependencies = [
     "redis[hiredis]",
     "apscheduler[mongodb]>=4.0.0a1",
     "cbor2",
+    "cachetools>=7.1.4",
 ]
 
 [dependency-groups]

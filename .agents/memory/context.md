@@ -5,13 +5,21 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-12 (session 82)
+**Last updated:** 2026-06-12 (session 83)
 
 ## What is done
 
 - Python 3.12, uv, python-telegram-bot (latest), Motor/MongoDB + Redis (optional L2) + APScheduler 4 stack fully configured on Replit.
 - BOT_TOKEN and MONGODB_URI in Replit Secrets; PORT=8080 in environment.
 - `uv run ruff format .` and `uv run ruff check .` both clean (72 files).
+- Session 83 (2026-06-12): v4.1.1 audit continuation - cachetools migration + ConversationHandler invisible-state bug found in banning/kicking/muting.
+  - cache.py: Migrated TTLCache to cachetools.TTLCache (maxsize-aware LRU eviction; prevents unbounded memory growth). 5 singletons with distinct maxsizes.
+  - mongos.py: Added return_exceptions=True to ensure_indexes gather; per-index failure logging.
+  - warnings.py: All 11 reply_text calls guarded; critical notice-before-execute pattern fixed (cmd_unwarn, cmd_resetwarns).
+  - checking.py, greeting.py, unbanning.py: Remaining unguarded calls wrapped.
+  - banning.py, kicking.py, muting.py: CRITICAL BUG FIXED - try/except swallowed prompt failure but still returned WAITING_PROOF/WAITING_REASON, leaving users in invisible ConversationHandler state. Fixed: return ConversationHandler.END in each except block for conversation-initiating prompts.
+  - Ruff clean (72 files unchanged), all checks passed.
+  - AUDIT STATUS: ALL tcbot/modules/ files fully audited and hardened. Audit is DRY.
 - Session 82 (2026-06-12): COMPREHENSIVE UNGUARDED TELEGRAM API CALL AUDIT COMPLETE - all tcbot/modules/ files audited. Bugs #136-165 fixed across 11 files: appeal_flow.py (3), decorators.py (8), muting.py (7), start.py (5), help.py (3), kicking.py (4), admins.py (22), banning.py (4), broadcasting.py (4), connecting.py (6), disconnecting.py (6), connected_flow.py (2). All CRITICAL assignment patterns fixed (instr=await, prompt=await, status=await where result is used afterward). ALL tcbot/modules/ files now hardened.
 - Session 80 (2026-06-12): Comprehensive audit wave - em-dash fix, Mermaid accuracy, unguarded await hardening.
   - Bug #109: `scheduler.py` 3 em-dash in docstring/comments replaced.

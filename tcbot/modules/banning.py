@@ -176,6 +176,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         ctx.user_data["ban_prompt_chat_id"] = msg.chat.id
     except Exception as exc:
         log.debug("cmd_ban_start proof-prompt reply failed: %s", exc)
+        return ConversationHandler.END
 
     return WAITING_PROOF
 

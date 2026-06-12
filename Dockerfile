@@ -10,6 +10,8 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY tcbot/ ./tcbot/
 
+RUN uv run --frozen python -c "import hiredis"
+
 EXPOSE 5000
 
 CMD ["uv", "run", "--frozen", "python", "-m", "tcbot"]

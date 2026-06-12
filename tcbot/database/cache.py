@@ -28,10 +28,12 @@ Redis is optional.  When ``REDIS_URL`` is not set (or Redis is unreachable),
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
-import time
 from typing import TYPE_CHECKING, Any, cast
+
+import cachetools as _cachetools
 
 import tcbot.database.redis_client as _redis_mod
 from tcbot.database.documents import GroupDoc
@@ -56,33 +58,35 @@ CACHE_MISS: object = object()
 
 
 class TTLCache[T]:
-    """Single-process in-memory TTL cache for asyncio-based code."""
+    """Single-process in-memory TTL cache backed by cachetools.TTLCache.
 
-    __slots__ = ("_store", "_ttl")
+    Uses cachetools for automatic TTL expiry AND LRU eviction when *maxsize* is
+    reached, preventing unbounded memory growth that would occur with a plain dict.
+    """
 
-    def __init__(self, ttl: float) -> None:
-        """Initialise the cache with a time-to-live in seconds."""
-        self._ttl: float = ttl
-        self._store: dict[Any, tuple[T, float]] = {}
+    __slots__ = ("_store",)
+
+    def __init__(self, ttl: float, maxsize: int = 512) -> None:
+        """Initialise the cache with a time-to-live in seconds and a maximum size."""
+        self._store: _cachetools.TTLCache = _cachetools.TTLCache(
+            maxsize=maxsize, ttl=ttl
+        )
 
     def get(self, key: Any) -> T | object:
         """Return the cached value, or CACHE_MISS if absent or expired."""
-        entry = self._store.get(key, CACHE_MISS)
-        if entry is CACHE_MISS:
+        try:
+            return self._store[key]
+        except KeyError:
             return CACHE_MISS
-        val, exp = entry
-        if time.monotonic() > exp:
-            del self._store[key]
-            return CACHE_MISS
-        return val
 
     def put(self, key: Any, val: T) -> None:
-        """Store *val* under *key* for ttl seconds."""
-        self._store[key] = (val, time.monotonic() + self._ttl)
+        """Store *val* under *key*; evicts LRU entry when maxsize is reached."""
+        self._store[key] = val
 
     def invalidate(self, key: Any) -> None:
         """Remove *key* from the cache (no-op if absent or already expired)."""
-        self._store.pop(key, None)
+        with contextlib.suppress(KeyError):
+            del self._store[key]
 
     def clear(self) -> None:
         """Remove all entries immediately."""
@@ -117,9 +121,15 @@ class TwoLevelCache[T]:
 
     __slots__ = ("_mem", "_redis_prefix", "_redis_ttl")
 
-    def __init__(self, memory_ttl: float, redis_ttl: float, redis_prefix: str) -> None:
-        """Initialise with separate TTLs for each layer and a Redis key prefix."""
-        self._mem: TTLCache[T] = TTLCache(ttl=memory_ttl)
+    def __init__(
+        self,
+        memory_ttl: float,
+        redis_ttl: float,
+        redis_prefix: str,
+        maxsize: int = 512,
+    ) -> None:
+        """Initialise with separate TTLs for each layer, a Redis key prefix, and maxsize."""
+        self._mem: TTLCache[T] = TTLCache(ttl=memory_ttl, maxsize=maxsize)
         self._redis_ttl: int = max(1, int(redis_ttl))
         self._redis_prefix: str = redis_prefix
 
@@ -267,6 +277,7 @@ effective_role_cache: TwoLevelCache[str | None] = TwoLevelCache(
     memory_ttl=_ROLE_CACHE_TTL_S,
     redis_ttl=_ROLE_REDIS_TTL_S,
     redis_prefix="role",
+    maxsize=2048,
 )
 
 # Per-chat connection cache (bool per chat_id)
@@ -275,6 +286,7 @@ connected_cache: TwoLevelCache[bool] = TwoLevelCache(
     memory_ttl=_CONNECTION_CACHE_TTL_S,
     redis_ttl=_CONNECTION_REDIS_TTL_S,
     redis_prefix="conn",
+    maxsize=512,
 )
 
 # Whole-list active-groups cache (list[dict], single entry keyed by _ALL_GROUPS_KEY)
@@ -283,6 +295,7 @@ active_groups_cache: TwoLevelCache[list[GroupDoc]] = TwoLevelCache(
     memory_ttl=_GROUPS_LIST_CACHE_TTL_S,
     redis_ttl=_GROUPS_LIST_REDIS_TTL_S,
     redis_prefix="groups",
+    maxsize=4,
 )
 _ALL_GROUPS_KEY: str = "__all__"
 
@@ -292,6 +305,7 @@ owner_id_cache: TwoLevelCache[int | None] = TwoLevelCache(
     memory_ttl=_OWNER_CACHE_TTL_S,
     redis_ttl=_OWNER_REDIS_TTL_S,
     redis_prefix="owner",
+    maxsize=4,
 )
 _OWNER_KEY: str = "__owner__"
 
@@ -305,4 +319,5 @@ user_mention_cache: TwoLevelCache[list[str | None]] = TwoLevelCache(
     memory_ttl=_USER_MENTION_CACHE_TTL_S,
     redis_ttl=_USER_MENTION_REDIS_TTL_S,
     redis_prefix="umention",
+    maxsize=4096,
 )

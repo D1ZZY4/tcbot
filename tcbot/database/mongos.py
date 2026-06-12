@@ -116,7 +116,7 @@ async def connect() -> None:
 
 async def ensure_indexes() -> None:
     """Create all critical collection indexes in parallel. No-op if they already exist."""
-    await asyncio.gather(
+    results = await asyncio.gather(
         col("bans").create_index([("banned_user_id", 1), ("is_active", 1)]),
         col("bans").create_index([("ban_id", 1)], unique=True),
         # * Serves active_bans()/active_ban_count() which filter on is_active only
@@ -158,8 +158,17 @@ async def ensure_indexes() -> None:
         col("bans").create_index([("chat_id", 1)]),
         col("federated_groups").create_index([("is_active", 1)]),
         col("member_cache").create_index([("last_updated", -1)]),
+        return_exceptions=True,
     )
-    log.info("MongoDB indexes ensured.")
+    failed = [r for r in results if isinstance(r, BaseException)]
+    if failed:
+        for exc in failed:
+            log.error("Index creation failed: %s", exc)
+    log.info(
+        "MongoDB indexes ensured (%d/%d succeeded).",
+        len(results) - len(failed),
+        len(results),
+    )
 
 
 # ─────────────────────── Collection Shortcut ────────────────────── #

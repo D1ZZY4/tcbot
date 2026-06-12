@@ -204,6 +204,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             ctx.user_data["mute_prompt_id"] = prompt.message_id
         except Exception as exc:
             log.debug("cmd_mute proof-prompt send failed: %s", exc)
+            return ConversationHandler.END
         return WAITING_PROOF
 
     try:
@@ -215,6 +216,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         ctx.user_data["mute_prompt_id"] = prompt.message_id
     except Exception as exc:
         log.debug("cmd_mute reason-prompt send failed: %s", exc)
+        return ConversationHandler.END
     return WAITING_REASON
 
 

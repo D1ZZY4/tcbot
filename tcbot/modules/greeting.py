@@ -98,10 +98,13 @@ async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
     member = msg.left_chat_member
     if member and not member.is_bot:
-        await msg.reply_text(
-            f"{mention(member.id, member.first_name, member.username)} has left.",
-            parse_mode="HTML",
-        )
+        try:
+            await msg.reply_text(
+                f"{mention(member.id, member.first_name, member.username)} has left.",
+                parse_mode="HTML",
+            )
+        except Exception as exc:
+            log.debug("left-member reply_text failed: %s", exc)
 
 
 @decorators.log_execution

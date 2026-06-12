@@ -80,16 +80,25 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
     target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        await msg.reply_text(replies.ERR_NO_TARGET)
+        try:
+            await msg.reply_text(replies.ERR_NO_TARGET)
+        except Exception as exc:
+            log.debug("unban no-target reply failed: %s", exc)
         return
 
     ident = await identity.classify(ctx.bot, admin.id, target_id, target_fname)
     refusal = identity.refuse_message("unban", ident)
     if refusal is not None:
-        await msg.reply_text(refusal, parse_mode="HTML")
+        try:
+            await msg.reply_text(refusal, parse_mode="HTML")
+        except Exception as exc:
+            log.debug("unban refusal reply failed: %s", exc)
         return
 
-    await execute_unban(update, ctx, target_id, target_fname)
+    try:
+        await execute_unban(update, ctx, target_id, target_fname)
+    except Exception:
+        log.exception("execute_unban failed for target=%s", target_id)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

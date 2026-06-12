@@ -170,6 +170,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             )
         except Exception as exc:
             log.debug("cmd_kick proof-prompt reply failed: %s", exc)
+            return ConversationHandler.END
         return WAITING_PROOF
 
     try:
@@ -180,6 +181,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         )
     except Exception as exc:
         log.debug("cmd_kick reason-prompt reply failed: %s", exc)
+        return ConversationHandler.END
     return WAITING_REASON
 
 

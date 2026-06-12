@@ -325,7 +325,12 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.debug("users_cache upsert failed for %d: %s", target_id, exc)
 
     text, kb = await Check.profile(ctx.bot, target_id)
-    await update.effective_message.reply_text(text, parse_mode="HTML", reply_markup=kb)
+    try:
+        await update.effective_message.reply_text(
+            text, parse_mode="HTML", reply_markup=kb
+        )
+    except Exception as exc:
+        log.debug("check reply_text failed for target=%d: %s", target_id, exc)
 
 
 # ─────────────── Callback Handlers for /check views ─────────────── #

@@ -131,7 +131,10 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     inline_reason = parse_inline_reason(args, has_explicit_target=has_explicit_target)
 
     if not target_id:
-        await msg.reply_text(replies.ERR_CANT_FIND_USER)
+        try:
+            await msg.reply_text(replies.ERR_CANT_FIND_USER)
+        except Exception as exc:
+            log.debug("cmd_warn_entry no-target reply failed: %s", exc)
         return ConversationHandler.END
 
     ident, role_result = await asyncio.gather(
@@ -148,7 +151,10 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     executor_role, _ = role_result
     refusal = identity.refuse_message("warn", ident)
     if refusal is not None:
-        await msg.reply_text(refusal, parse_mode="HTML")
+        try:
+            await msg.reply_text(refusal, parse_mode="HTML")
+        except Exception as exc:
+            log.debug("cmd_warn_entry refusal reply failed: %s", exc)
         return ConversationHandler.END
 
     if executor_role is None:
@@ -166,18 +172,26 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     if inline_reason:
         ctx.user_data["warn_reason"] = inline_reason
-        await msg.reply_text(
-            proof.noted_prompt("warn", inline_reason, target_mention),
-            parse_mode="HTML",
-            reply_markup=proof.keyboard(),
-        )
+        try:
+            await msg.reply_text(
+                proof.noted_prompt("warn", inline_reason, target_mention),
+                parse_mode="HTML",
+                reply_markup=proof.keyboard(),
+            )
+        except Exception as exc:
+            log.debug("cmd_warn_entry proof-prompt reply failed: %s", exc)
+            return ConversationHandler.END
         return WAITING_PROOF
 
-    await msg.reply_text(
-        reason.prompt(target_mention, "warn"),
-        parse_mode="HTML",
-        reply_markup=reason.keyboard(),
-    )
+    try:
+        await msg.reply_text(
+            reason.prompt(target_mention, "warn"),
+            parse_mode="HTML",
+            reply_markup=reason.keyboard(),
+        )
+    except Exception as exc:
+        log.debug("cmd_warn_entry reason-prompt reply failed: %s", exc)
+        return ConversationHandler.END
     return WAITING_REASON
 
 
@@ -198,18 +212,27 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        await msg.reply_text(replies.ERR_NO_TARGET)
+        try:
+            await msg.reply_text(replies.ERR_NO_TARGET)
+        except Exception as exc:
+            log.debug("cmd_unwarn no-target reply failed: %s", exc)
         return
 
     ident = await identity.classify(ctx.bot, admin.id, target_id, target_name)
     refusal = identity.refuse_message("unwarn", ident)
     if refusal is not None:
-        await msg.reply_text(refusal, parse_mode="HTML")
+        try:
+            await msg.reply_text(refusal, parse_mode="HTML")
+        except Exception as exc:
+            log.debug("cmd_unwarn refusal reply failed: %s", exc)
         return
 
     notice = identity.staff_notice("unwarn", ident, cfg.community_name)
     if notice is not None:
-        await msg.reply_text(notice, parse_mode="HTML")
+        try:
+            await msg.reply_text(notice, parse_mode="HTML")
+        except Exception as exc:
+            log.debug("cmd_unwarn notice reply failed: %s", exc)
 
     await execute_unwarn(update, ctx, target_id, target_name or str(target_id))
 
@@ -225,7 +248,10 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        await msg.reply_text(replies.ERR_NO_TARGET)
+        try:
+            await msg.reply_text(replies.ERR_NO_TARGET)
+        except Exception as exc:
+            log.debug("cmd_warnlist no-target reply failed: %s", exc)
         return
     await execute_warnlist(update, ctx, target_id, target_name or str(target_id))
 
@@ -247,18 +273,27 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        await msg.reply_text(replies.ERR_NO_TARGET)
+        try:
+            await msg.reply_text(replies.ERR_NO_TARGET)
+        except Exception as exc:
+            log.debug("cmd_resetwarns no-target reply failed: %s", exc)
         return
 
     ident = await identity.classify(ctx.bot, admin.id, target_id, target_name)
     refusal = identity.refuse_message("resetwarns", ident)
     if refusal is not None:
-        await msg.reply_text(refusal, parse_mode="HTML")
+        try:
+            await msg.reply_text(refusal, parse_mode="HTML")
+        except Exception as exc:
+            log.debug("cmd_resetwarns refusal reply failed: %s", exc)
         return
 
     notice = identity.staff_notice("resetwarns", ident, cfg.community_name)
     if notice is not None:
-        await msg.reply_text(notice, parse_mode="HTML")
+        try:
+            await msg.reply_text(notice, parse_mode="HTML")
+        except Exception as exc:
+            log.debug("cmd_resetwarns notice reply failed: %s", exc)
 
     await execute_resetwarns(update, ctx, target_id, target_name or str(target_id))
 
