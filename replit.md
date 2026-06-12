@@ -19,9 +19,9 @@ Store credentials in Replit Secrets or the equivalent platform secret manager. D
 
 | Secret | Required | Description |
 |---|---|---|
-| `BOT_TOKEN` | ✅ Yes | Telegram bot token from BotFather. Format: `1234567890:AAFxxxxxxxx` |
-| `MONGODB_URI` | ✅ Yes | MongoDB connection string, for example MongoDB Atlas. Format: `mongodb+srv://user:pass@cluster.mongodb.net/` |
-| `CONTEXT7_API_KEY` | ✅ Yes (for AI agents) | Context7 API key for the `ctx7` CLI. AI coding agents (Replit Agent, Roo, etc.) use this to fetch live, version-accurate library docs. Get one at https://context7.com/settings — then run `npm install -g ctx7` in the Shell to finish setup. |
+| `BOT_TOKEN` | Yes | Telegram bot token from BotFather. Format: `1234567890:AAFxxxxxxxx` |
+| `MONGODB_URI` | Yes | MongoDB connection string, for example MongoDB Atlas. Format: `mongodb+srv://user:pass@cluster.mongodb.net/` |
+| `CONTEXT7_API_KEY` | Yes (for AI agents) | Context7 API key for the `ctx7` CLI. AI coding agents (Replit Agent, Roo, etc.) use this to fetch live, version-accurate library docs. Get one at https://context7.com/settings — then run `npm install -g ctx7` in the Shell to finish setup. |
 | `REDIS_URL` | ⚡ Recommended | Redis connection URL for L2 cache (persists cache across restarts). Without this the bot uses in-memory cache only. Format: `redis://localhost:6379/0` or a managed Redis URL (Upstash, Redis Cloud, etc.). |
 
 `OWNER_ID` is also required for startup. It is not a credential, but it identifies the initial Founder account and should be set as an environment variable or secret according to your deployment policy.
