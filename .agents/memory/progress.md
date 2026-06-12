@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-12 (session 50)
+**Last updated:** 2026-06-12 (session 51)
 
 ## Verification baseline
 
@@ -115,6 +115,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `pyproject.toml` setuptools package discovery fix | infra | Added `[tool.setuptools.packages.find] include = ["tcbot*"]` to prevent `attached_assets/` from being discovered as a second top-level package during `uv pip install -e .`; added `attached_assets/` to ruff exclude | 2026-06-11 (s45) |
 | Bug #5: proof_flow reason HTML injection | P1 (correctness) | `step_prompt`/`noted_prompt` embedded `reason`/`inline_reason` in `<b>` tags without `esc()`. Fixed: added esc import and wrapped both strings. Any `<>&` in user-typed reason would break HTML parse mode. | 2026-06-12 (s50) |
 | Bug #6: cmd_promote_request always rejected | P1 (correctness) | `identity.classify(user.id, user.id, ...)` always returns `Identity("self")` in self-submission flows, causing every request to be rejected. Removed identity check; replaced with parallel `get_effective_role` + `get_request` guard. | 2026-06-12 (s50) |
+| Global link preview disable | UX | Added `Defaults(link_preview_options=LinkPreviewOptions(is_disabled=True))` to `ApplicationBuilder` chain in `__main__.py`; all 205+ message send/edit/reply calls now suppress link-preview cards with one change. | 2026-06-12 (s51) |
 
 ## Pending (remaining optional)
 

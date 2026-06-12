@@ -13,11 +13,12 @@ import traceback
 import warnings
 from typing import TYPE_CHECKING
 
-from telegram import Update
+from telegram import LinkPreviewOptions, Update
 from telegram.ext import (
     Application,
     ApplicationBuilder,
     ContextTypes,
+    Defaults,
     TypeHandler,
 )
 
@@ -49,6 +50,9 @@ _UPDATES_POOL_SIZE: int = 4
 
 # * Maximum number of characters captured from a message in error-handler context.
 _ERROR_CONTEXT_TEXT_LEN: int = 120
+
+# * Applied globally via Defaults so every bot message suppresses link preview cards.
+_LINK_PREVIEW_DISABLED: LinkPreviewOptions = LinkPreviewOptions(is_disabled=True)
 
 # * Width of the fatal-error border printed to stderr.
 _FATAL_BORDER_WIDTH: int = 70
@@ -223,6 +227,8 @@ def main() -> None:
             ApplicationBuilder()
             .token(cfg.bot_token)
             .post_init(_post_init)
+            # * Disable link preview on all bot messages globally.
+            .defaults(Defaults(link_preview_options=_LINK_PREVIEW_DISABLED))
             # * Process independent updates in parallel (big latency win)
             .concurrent_updates(True)  # noqa: FBT003
             # * Connection pools - API calls and dedicated getUpdates polling lane

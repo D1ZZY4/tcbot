@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-12 (session 51)
+
+### Changed
+
+- **`tcbot/__main__.py`** — Added `Defaults(link_preview_options=LinkPreviewOptions(is_disabled=True))` to the `ApplicationBuilder` chain. Every bot message (reply, send, edit) now suppresses Telegram link-preview cards globally, without touching any of the 205+ individual call sites. Added `_LINK_PREVIEW_DISABLED: LinkPreviewOptions` as a named module-level constant. Imported `LinkPreviewOptions` from `telegram` and `Defaults` from `telegram.ext`.
+
 ## [Unreleased] - 2026-06-12 (session 50)
 
 ### Fixed

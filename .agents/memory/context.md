@@ -5,7 +5,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-12 (session 50)
+**Last updated:** 2026-06-12 (session 51)
 
 ## What is done
 
@@ -218,9 +218,14 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Comprehensive audit of all remaining critical files completed: `checking.py`, `parse_logmsg.py` (full 767 lines), `check_flow.py` (full 513 lines), `stats.py`, `appeals.py`, `groups.py`, `demote_flow.py` — all clean.
   - Ruff 70 files clean; bot running (MongoDB connected, 75 handlers, polling active).
 
+- Session 51 (2026-06-12): disable link preview globally.
+  - Added `Defaults(link_preview_options=LinkPreviewOptions(is_disabled=True))` to `ApplicationBuilder` chain in `__main__.py`. All 205+ reply_text/send_message/edit_message_text calls now suppress Telegram link-preview cards without touching individual call sites.
+  - Audit completed: `about.py`, `additional.py`, `unbanning.py`, `privacy.py`, `error_reporter.py`, `unban_flow.py`, `promote_flow.py`, `connected_flow.py`, `broadcasting.py`, `maintenance.py`, `decorators.py` — all clean.
+  - Bot restart verified: Defaults active, MongoDB connected, 75 handlers, polling active.
+
 ## What is in progress
 
-Nothing. Session 50 checkpoint complete.
+Nothing. Session 51 checkpoint complete.
 
 ## What is pending (optional)
 
