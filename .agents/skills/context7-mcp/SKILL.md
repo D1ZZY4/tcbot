@@ -28,17 +28,51 @@ general Python concepts.
 
 ## How to Fetch Documentation
 
-### Step 1: Resolve the Library ID
+### Replit Agent: Use the ctx7 CLI (MANDATORY)
 
-Call `resolve-library-id` with:
+On Replit, MCP tools are not available in the agent sandbox. Use the `ctx7`
+CLI instead. The `CONTEXT7_API_KEY` secret is already set in the environment.
 
-- `libraryName`: the library name as it appears in `pyproject.toml`
-  (e.g., `"python-telegram-bot"`, `"motor"`, `"ruff"`)
-- `query`: your specific question (improves relevance ranking)
+**Step 1 — Resolve the library ID:**
 
-### Step 2: Select the Best Match
+```bash
+ctx7 library "python-telegram-bot" "your question here"
+```
 
-From the resolution results, choose based on:
+Pick the result with the highest Benchmark Score and closest name match.
+Prefer version-specific IDs when available (e.g. a v22.x entry over generic).
+
+**Step 2 — Fetch the docs:**
+
+```bash
+ctx7 docs "/python-telegram-bot/python-telegram-bot" "your specific question"
+```
+
+Use the library ID from Step 1. Ask a specific question, not just keywords.
+
+**Step 3 — Apply and record:**
+
+Use the fetched docs to write or fix code. If you find a significant
+non-obvious API detail, record it in `.agents/memory/decisions.md`.
+
+### Preferred Library IDs for This Project
+
+| Library | Best Context7 ID | Benchmark |
+|---|---|---|
+| `python-telegram-bot` | `/python-telegram-bot/python-telegram-bot` | 86.2 |
+| `python-telegram-bot` (alt, more snippets) | `/websites/python-telegram-bot_en_stable` | 67.7 |
+| `motor` | resolve via `ctx7 library "motor" "..."` | — |
+| `pymongo` | resolve via `ctx7 library "pymongo" "..."` | — |
+| `ruff` | resolve via `ctx7 library "ruff" "..."` | — |
+
+### External AI Tools (Roo, Claude Desktop, Cursor)
+
+These tools connect via MCP directly — config is in `.agents/mcp.json` and
+`.roo/mcp.json`. No CLI needed for these agents.
+
+## Selection Rules
+
+From resolution results, choose based on:
 
 - Exact or closest name match to the installed package
 - Higher benchmark scores indicate better documentation quality
@@ -49,23 +83,6 @@ From the resolution results, choose based on:
 If results do not look right, try alternate names (e.g., `"telegram"` instead
 of `"python-telegram-bot"`, or `"pymongo"` for Motor internals) or rephrase
 the query.
-
-### Step 3: Fetch the Documentation
-
-Call `query-docs` with:
-
-- `libraryId`: the selected Context7 library ID (format: `/org/project`)
-- `query`: your specific question, not just single keywords
-
-### Step 4: Apply the Documentation
-
-Use the fetched documentation to write or fix the code:
-
-- Verify method signatures against the installed version in `uv.lock`
-- If the fetched docs describe a different version than what is installed,
-  note the discrepancy and fall back to inspecting the installed source
-- Record significant findings in `.agents/memory/decisions.md` so future
-  sessions skip the lookup
 
 ## Fallback When Context7 Has No Result
 
@@ -95,7 +112,7 @@ Always verify via Context7 before writing code that uses these:
 | `ruff` | `ruff` | Rule codes and `pyproject.toml` config keys change between releases |
 | `pydantic` | `pydantic` | v1 and v2 APIs are completely different; validators, field types, and model config all changed |
 
-## MCP Server Configuration
+## MCP Server Configuration (for external tools only)
 
 ```json
 "mcpServers": {
