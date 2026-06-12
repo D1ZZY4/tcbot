@@ -203,9 +203,18 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Table now covers all 25 public keyboard factories in keyboards.py.
   - Full 7-step verification PASS: uv sync, editable install, import OK, ruff format (70 files), ruff check, bot start (handlers registered, polling), docs audit.
 
+- Session 48 (2026-06-12): real correctness bug fix in greeting.py.
+  - Bug #3: `greeting.py` `_handle_member` — replaced bare `asyncio.gather(ban_chat_member, reply_text)` in `try/except` with `return_exceptions=True` gather. Previously if reply failed after ban succeeded, logged "Auto-ban on join failed" (misleading). Now ban failure logs ERROR; reply failure logs DEBUG.
+  - Full asyncio.gather audit across all 50+ gather calls: all pure side-effect gathers have `return_exceptions=True`; data-fetching gathers correctly omit it.
+
+- Session 49 (2026-06-12): HTML escaping bug fix in moderation flows.
+  - Bug #4: `reason` / `reason_text` (user-provided input) was embedded unescaped in HTML messages in ban_flow.py, muting_flow.py, kicking_flow.py, warning_flow.py. Fixed all four: added `esc` to formatter import and wrapped reason with `esc()` at display point. Stored data unchanged.
+  - Full HTML escaping audit: `LogBuilder.field()` already escapes by default; `code()` and `mention()` escape internally; `proof_line()` safe (only "Photo/Video (msg N)" strings); `cfg.community_name` is admin-controlled config (not user-provided).
+  - Ruff 70 files clean after all fixes.
+
 ## What is in progress
 
-Nothing. Session 47 checkpoint complete.
+Nothing. Session 49 checkpoint complete.
 
 ## What is pending (optional)
 

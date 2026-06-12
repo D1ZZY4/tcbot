@@ -17,7 +17,7 @@ from telegram import Bot, ChatPermissions, Update
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg, replies
-from tcbot.modules.helper.formatter import code, mention, proof_line
+from tcbot.modules.helper.formatter import code, esc, mention, proof_line
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
 from tcbot.utils.dispatch import count_errors, fan_out
@@ -123,7 +123,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict) -> None:
     summary = (
         f"{mention(target_id, target_fname)} - {code(str(target_id))} "
         f"has been muted <b>{dur_str}</b>.\n"
-        f"Reason: {reason_text}"
+        f"Reason: {esc(reason_text)}"
         f"{proof_suffix}\n"
         f"Applied to {len(groups) - failed}/{len(groups)} groups."
     )

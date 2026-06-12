@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
-from tcbot.modules.helper.formatter import code, mention, proof_line
+from tcbot.modules.helper.formatter import code, esc, mention, proof_line
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
@@ -126,7 +126,7 @@ async def execute_warn(
             ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             msg.reply_text(
                 f"{mention(target_id, target_name)} - {code(str(target_id))} has been warned "
-                f"({count}/{WARN_LIMIT}) - {reason_text}{proof_suffix}",
+                f"({count}/{WARN_LIMIT}) - {esc(reason_text)}{proof_suffix}",
                 parse_mode="HTML",
             ),
             return_exceptions=True,

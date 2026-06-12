@@ -2,6 +2,22 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-12 (session 49)
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/ban_flow.py`** — `reason` embedded unescaped in HTML summary message (`f"Reason: {reason}\n"`); wrapped with `esc(reason)`. Added `esc` to formatter import.
+- **`tcbot/modules/helper/workflows/muting_flow.py`** — `reason_text` embedded unescaped in HTML summary message; wrapped with `esc(reason_text)`. Added `esc` to formatter import.
+- **`tcbot/modules/helper/workflows/kicking_flow.py`** — `reason_text` embedded unescaped in HTML reply message; wrapped with `esc(reason_text)`. Added `esc` to formatter import.
+- **`tcbot/modules/helper/workflows/warning_flow.py`** — `reason_text` embedded unescaped in HTML warn-count reply message; wrapped with `esc(reason_text)`. Added `esc` to formatter import.
+- All four cases: user-typed reason text is stored verbatim in `ctx.user_data` and passed through the flow without sanitization. A reason containing `<`, `>`, or `&` (e.g. `<script>` or `A&B`) would break Telegram's HTML parse mode, causing the message to fail or render incorrectly. Fix applies `html.escape()` (via `esc()`) to the reason at the point of display, keeping stored data unchanged.
+
+## [Unreleased] - 2026-06-12 (session 48)
+
+### Fixed
+
+- **`tcbot/modules/greeting.py`** (`_handle_member`) — replaced bare `asyncio.gather(ban_chat_member, reply_text)` wrapped in `try/except Exception` with a gather that uses `return_exceptions=True` and unpacks the two results individually. Previously, if `reply_text` failed after `ban_chat_member` succeeded the outer except block logged "Auto-ban on join failed" even though the ban had taken effect, misleading operators into thinking the action did not happen. Now: ban failure logs at ERROR level with the uid; reply failure logs at DEBUG level (transient, non-critical). Both operations are still run concurrently.
+
 ## [Unreleased] - 2026-06-11 (session 47)
 
 ### Changed

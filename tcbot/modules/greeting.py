@@ -42,16 +42,18 @@ async def _handle_member(member: User, msg: Message, chat: Chat, bot: Bot) -> No
     )
 
     if ban:
-        try:
-            await asyncio.gather(
-                bot.ban_chat_member(chat.id, member.id),
-                msg.reply_text(
-                    f"{mention(member.id, member.first_name, member.username)} is federation-banned and was removed.",
-                    parse_mode="HTML",
-                ),
-            )
-        except Exception:
-            log.exception("Auto-ban on join failed")
+        ban_exc, reply_exc = await asyncio.gather(
+            bot.ban_chat_member(chat.id, member.id),
+            msg.reply_text(
+                f"{mention(member.id, member.first_name, member.username)} is federation-banned and was removed.",
+                parse_mode="HTML",
+            ),
+            return_exceptions=True,
+        )
+        if isinstance(ban_exc, BaseException):
+            log.error("Auto-ban on join failed for uid=%d: %s", member.id, ban_exc)
+        elif isinstance(reply_exc, BaseException):
+            log.debug("Auto-ban reply failed for uid=%d: %s", member.id, reply_exc)
         return
 
     await msg.reply_text(

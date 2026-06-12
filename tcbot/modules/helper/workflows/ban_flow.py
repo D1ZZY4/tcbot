@@ -21,7 +21,7 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg, replies
-from tcbot.modules.helper.formatter import mention
+from tcbot.modules.helper.formatter import esc, mention
 from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
 from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
 from tcbot.utils.dispatch import count_errors, fan_out
@@ -232,7 +232,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     # * Edit the original prompt to a summary + cache user in parallel
     summary = (
         f"{mention(target_id, target_fname)} - <code>{target_id}</code> has been banned.\n"
-        f"Reason: {reason}\n"
+        f"Reason: {esc(reason)}\n"
         f"Applied to {len(groups) - failed}/{len(groups)} groups."
     )
     if prompt_msg_id and prompt_chat_id:
