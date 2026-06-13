@@ -168,5 +168,5 @@ Both helpers invalidate the affected user's entry in `effective_role_cache` so t
 - Confirmation callback re-checks executor permission at click time.
 - Confirm removes the correct collection record (`tc_admins` for Admin, `tc_roles` for Developer/Tester).
 - Ban / kick on a role-holding target removes the role before the destructive action.
-- The auto-demote DM mentions the trigger verb (banned/kicked); the federation log does not.
+- The auto-demote DM mentions the trigger verb (banned/kicked/muted); the federation log does not.
 - A pre-existing role record that is missing causes `Demote.execute` to return False without raising.

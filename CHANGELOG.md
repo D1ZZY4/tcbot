@@ -2,6 +2,26 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 119)
+
+### Fixed
+
+- **`docs/demote-detailed.md`** (behavior reference, line 174): The auto-demote trigger verb list read "banned/kicked" but omitted "muted". `demote_flow.Demote.execute` handles `trigger="mute"` (verb "muted") in addition to "ban" and "kick", and `muting_flow._execute_mute` calls it with `trigger="mute"` before every federation mute. Corrected to "banned/kicked/muted". (Bug #321)
+- **`docs/banning-detailed.md`** (ban log keyboards table): Row `baninfo_proof_kb | View Proof` referenced a keyboard builder that no longer exists in `keyboards.py`. The function was removed as dead code in a prior session. Deleted the stale row from the table. (Bug #322)
+- **`docs/warnings-detailed.md`** (Mermaid flowchart, line 19): Node label `AutoBan[Auto-ban via ban flow]` implied the warning-limit action uses the federation `ban_flow.py` path. The actual implementation in `warning_flow.execute_warn` calls `ctx.bot.ban_chat_member(chat_id, target_id)` directly -- a single-group local ban, not a federation-wide action. Corrected label to `AutoBan[Auto-ban from current group only]`. (Bug #323)
+
+- **`docs/modules/modules.md`** (Mermaid diagram, line 13): Node label `modules.__init__.discover` referenced a function `discover` that does not exist. The actual private function is `_discover_modules`. Corrected to `modules.__init__._discover_modules`. (Bug #324)
+- **`docs/modules/modules.md`** (line 35): "get_handlers() imports active modules and **appends** each module's `__handlers__` to the PTB application" was inaccurate. `get_handlers()` only **returns** the combined handler list; the caller (`tcbot/__main__.py`) registers the handlers on the PTB application. Corrected to match actual behavior. (Bug #325)
+- **`docs/mapping.md`** (top-level layout code block, line 10): Top-level directory label was `tgbot/` — a legacy repo artifact. The project root has no special name; the main package is `tcbot/`. Corrected to `<project root>/`. (Bug #326)
+- **`docs/stats-detailed.md`** (Mermaid diagram, line 15): Node edge `Staff & Users & Bans --> SearchPanel[Search panel]` implied that the Staff list and Users list also expose a Search panel. Only the Bans list has a Search button (`stats_bans_search` callback, `stats_flow.py` line 394). The prose on line 22 already correctly states "a search panel for active bans". Corrected the diagram edge to `Bans --> SearchPanel[Search panel]`. (Bug #327)
+- **`README.md`** (Repository Layout code block, line 143): Top-level directory label was `tgbot/` — same legacy artifact as `docs/mapping.md` (Bug #326). Corrected to `<project root>/`. (Bug #328)
+- **`AGENTS.md`** (Repository Layout code block, line 50): Top-level directory label was `tgbot/` — same legacy artifact as Bugs #326 and #328. Corrected to `<project root>/`. (Bug #329)
+- **`.agents/CLAUDE.md`** (Repository Map code block, line 156): Top-level directory label was `tgbot/` — same legacy artifact as Bugs #326-329. Corrected to `<project root>/`. (Bug #330)
+
+### Audit
+
+- **Pass 10 (session 119)**: `.agents/RULES.md`, project-policy skill, async-python-patterns skill read. `PLAN.md`, `identity.py`, `docs/button-styles.md` verified CLEAN. Unicode scan of all tcbot/ Python files: zero em-dash/en-dash in string literals. Docs scan: zero em-dash/en-dash in docs/ and root .md files. AST scans CLEAN: sequential awaits (2 valid), q.answer() first (0), gather() return_exceptions (0), hardcoded chat IDs (1 valid placeholder), TODO/FIXME (0), unescaped HTML f-strings (0 new), silent except handlers (4 valid RuntimeError/shutdown guards), raise-from-None (0), type()==Y (0), mutable defaults (0). Ruff check + format check: All checks passed, 73 files formatted. Ten doc accuracy bugs found and fixed (#321-#330). Docs audited CLEAN: docs/utils/utils.md, docs/workflows/workflows.md, docs/helper/helper.md, docs/databases/databases.md, docs/appeal-detailed.md, docs/promote-detailed.md, docs/role-detailed.md, docs/check-detailed.md, docs/performance.md, docs/setup.md, docs/workflows-guide.md, docs/workflows.md, docs/git-commit.md, PLAN.md, README.md, AGENTS.md (after fixes), .agents/CLAUDE.md (after fix), GitHub workflows (5 YAMLs). Bot running: MongoDB 27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling active.
+
 ## [Unreleased] - 2026-06-13 (session 118)
 
 ### Fixed

@@ -10,7 +10,7 @@ For shared helpers consumed by these modules, see [`../helper/helper.md`](../hel
 
 ```mermaid
 flowchart TD
-    Start[tcbot.__main__] --> Discover[modules.__init__.discover]
+    Start[tcbot.__main__] --> Discover[modules.__init__._discover_modules]
     Discover --> Filter{MODULES_LOAD<br/>or MODULES_NO_LOAD?}
     Filter -->|filter applied| Active[Active module list]
     Filter -->|no filter| Active
@@ -29,7 +29,7 @@ Environment filters:
 
 A module name is the filename without `.py`, for example `banning` or `stats`.
 
-`get_handlers()` imports active modules and appends each module's `__handlers__` to the PTB application.
+`get_handlers()` imports active modules and returns the combined list of each module's `__handlers__`. The caller (`tcbot/__main__.py`) registers the returned handlers on the PTB application.
 
 ## Module contract
 

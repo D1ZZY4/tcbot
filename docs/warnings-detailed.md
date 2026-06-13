@@ -13,7 +13,7 @@ flowchart TD
     Proof --> AddWarn[warns_db.add_warn<br/>atomic counter]
     AddWarn --> Check{count >= limit?}
     Check -->|no| Notify[Send warn notice]
-    Check -->|yes| AutoBan[Auto-ban via ban flow]
+    Check -->|yes| AutoBan[Auto-ban from current group only]
     Notify --> Log[Log entry]
     AutoBan --> Log
 ```

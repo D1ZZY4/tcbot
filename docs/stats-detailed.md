@@ -12,7 +12,7 @@ flowchart TD
     Buttons --> Users[Users list<br/>batch query]
     Buttons --> Chats[Connected chats]
     Buttons --> Bans[Active bans<br/>batch query]
-    Staff & Users & Bans --> SearchPanel[Search panel]
+    Bans --> SearchPanel[Search panel]
     Staff & Users & Chats & Bans --> Detail[Detail callback]
     Detail --> Profile[/check user profile/]
 ```

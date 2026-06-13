@@ -140,7 +140,7 @@ For detailed architecture, see [`docs/mapping.md`](docs/mapping.md) and [`PLAN.m
 ## Repository Layout
 
 ```text
-tgbot/
+<project root>/
 ├── tcbot/                    Bot package
 │   ├── database/             Async MongoDB helper modules
 │   ├── modules/              Command modules and Telegram handlers

@@ -7,7 +7,7 @@ This page maps the repository structure and the service boundaries between packa
 ## Top-level layout
 
 ```text
-tgbot/
+<project root>/
 ├── tcbot/                  Main Python package
 ├── docs/                   Developer documentation
 ├── .agents/                Contributor and agent rules

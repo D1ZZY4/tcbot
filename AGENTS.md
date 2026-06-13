@@ -47,7 +47,7 @@ Current stack:
 ## Repository Layout
 
 ```text
-tgbot/
+<project root>/
 ├── tcbot/                    Main bot package
 │   ├── __init__.py           Environment config loader and `cfg` adapter
 │   ├── __main__.py           Runtime entry point, handler registration, polling

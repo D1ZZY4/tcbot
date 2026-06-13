@@ -224,7 +224,6 @@ Ban log keyboards are defined in `keyboards.py`:
 |---|---|
 | `ban_log_new` | `Proof <target_id>`, `Submit Appeal` |
 | `ban_log_update` | `Proof <target_id>`, `Previous Proof <target_id>`, `Submit Appeal` |
-| `baninfo_proof_kb` | `View Proof` |
 | `checkme_ban_kb` | `Details`, optional `Proof`, `Appeal` |
 | `checkme_detail_back_kb` | optional `Proof`, `« Back` |
 

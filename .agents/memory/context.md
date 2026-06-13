@@ -5,9 +5,25 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 118 pass 9)
+**Last updated:** 2026-06-13 (session 119 pass 10)
 
 ## What is done
+
+- Session 119 pass 10 (2026-06-13): Docs accuracy audit pass. 6 doc bugs found and fixed.
+  - Bug #321: docs/demote-detailed.md line 174 — trigger verb list "banned/kicked" omitted "muted". Corrected to "banned/kicked/muted".
+  - Bug #322: docs/banning-detailed.md — stale `baninfo_proof_kb | View Proof` row (function deleted from keyboards.py). Row deleted.
+  - Bug #323: docs/warnings-detailed.md Mermaid — `AutoBan[Auto-ban via ban flow]` misleading (local group ban). Corrected to "Auto-ban from current group only".
+  - Bug #324: docs/modules/modules.md Mermaid line 13 — `modules.__init__.discover` nonexistent; actual function is `_discover_modules`. Corrected.
+  - Bug #325: docs/modules/modules.md line 35 — "get_handlers() appends handlers" inaccurate; it only returns; __main__.py registers. Corrected.
+  - Bug #326: docs/mapping.md top-level layout — `tgbot/` legacy label. Corrected to `<project root>/`.
+  - Bug #327: docs/stats-detailed.md Mermaid line 15 — `Staff & Users & Bans --> SearchPanel` wrong; only Bans has search button. Corrected to `Bans --> SearchPanel`.
+  - Bug #328: README.md Repository Layout line 143 — same `tgbot/` legacy label as Bug #326. Corrected to `<project root>/`.
+  - Bug #329: AGENTS.md Repository Layout line 50 — same `tgbot/` legacy label. Corrected to `<project root>/`.
+  - Bug #330: .agents/CLAUDE.md Repository Map line 156 — same `tgbot/` legacy label. Corrected to `<project root>/`.
+  - Verified CLEAN: RULES.md, project-policy skill, async-python-patterns skill, PLAN.md, identity.py, button-styles.md.
+  - AST scans CLEAN: sequential awaits (2 valid), q.answer() first (0 issues), gather() without return_exceptions (0 issues).
+  - Hardcoded chat ID scan: 1 match (valid placeholder). TODO/FIXME scan: 0. Ruff: All checks passed (73 files).
+  - Total bugs fixed: #1-#330.
 
 - Session 118 pass 9 (2026-06-13): Entry point + config layer audit + Unicode pictograph scan. 3 bugs found and fixed.
   - Bug #318: keyboards.py `group_start_kb` — `↗` (U+2197) in user-facing button label "Open in PM ↗". Removed symbol.
@@ -181,8 +197,8 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## AUDIT STATUS
 
-**COMPLETE** as of session 118 (pass 9). All 73 tcbot/ Python files audited and ruff-clean (nine full passes).
-Total bugs fixed: **#1-#320** (Bugs #306-#309, #311-#314 docs-only; Bug #310 is a code comment). Code logic/UX bugs: #1-#305, #315-#320. Perf improvements: **#292-#294, Perf #4**.
+**ONGOING** — pass 10 in progress (session 119). All 73 tcbot/ Python files audited and ruff-clean (nine full passes + pass 10 docs sweep).
+Total bugs fixed: **#1-#330** (Bugs #306-#309, #311-#314, #321-#330 docs-only; Bug #310 is a code comment). Code logic/UX bugs: #1-#305, #315-#320. Perf improvements: **#292-#294, Perf #4**.
 
 ### All files fully audited across all sessions:
 ban_flow.py, greeting.py, bans_db.py, unban_flow.py, appeal_flow.py, banning.py, muting.py, muting_flow.py, kicking.py, kicking_flow.py, warnings.py, warning_flow.py, demote_flow.py, connected_flow.py, proof_flow.py, reason_flow.py, parse_logmsg.py, decorators.py, admins.py, users_cache.py, users_roles.py, promote_flow.py, connecting.py, disconnecting.py, groups_db.py, unbanning.py, appeals.py, check_flow.py, broadcasting.py, mongos.py, mutes_db.py, warns_db.py, kicks_db.py, queues_db.py, pagination.py, error_reporter.py, keyboards.py, parse_editmsg.py, documents.py, replies.py, timedate_format.py, parse_link.py, prefixes.py, redis_client.py, alive.py, checking.py, stats.py, stats_flow.py, maintenance.py, additional.py, netspeed.py, formatter.py, identity.py, cache.py, scheduler.py, __init__.py, __main__.py, ban_info.py, extraction.py, start.py, help.py, about.py, privacy.py, groups.py, modules/__init__.py, modules/types.py, dispatch.py, logger.py, utils/__init__.py, database/__init__.py, database/types.py, modules/helper/__init__.py, modules/helper/workflows/__init__.py

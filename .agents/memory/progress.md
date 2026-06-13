@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-13 (session 118)
+**Last updated:** 2026-06-13 (session 119)
 
 ## Verification baseline
 
@@ -36,6 +36,17 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Bug #330 (session 119) | docs/accuracy | .agents/CLAUDE.md Repository Map line 156: `tgbot/` legacy label (same as Bugs #326-329). Corrected to `<project root>/`. | 2026-06-13 (s119) |
+| Bug #329 (session 119) | docs/accuracy | AGENTS.md Repository Layout line 50: `tgbot/` legacy label (same as Bugs #326-328). Corrected to `<project root>/`. | 2026-06-13 (s119) |
+| Bug #328 (session 119) | docs/accuracy | README.md Repository Layout line 143: `tgbot/` legacy label. Corrected to `<project root>/`. | 2026-06-13 (s119) |
+| Bug #327 (session 119) | docs/accuracy | docs/stats-detailed.md Mermaid line 15: `Staff & Users & Bans --> SearchPanel` wrong — only Bans list has Search button (stats_bans_search callback). Prose on line 22 already correct. Corrected diagram edge to `Bans --> SearchPanel`. | 2026-06-13 (s119) |
+| Bug #326 (session 119) | docs/accuracy | docs/mapping.md top-level layout code block: `tgbot/` is a legacy repo artifact — project root has no special name. Corrected to `<project root>/`. | 2026-06-13 (s119) |
+| Bug #325 (session 119) | docs/accuracy | docs/modules/modules.md line 35: "get_handlers() appends handlers to the PTB application" inaccurate — function only returns the list; __main__.py does the actual registration. Corrected. | 2026-06-13 (s119) |
+| Bug #324 (session 119) | docs/accuracy | docs/modules/modules.md Mermaid line 13: `modules.__init__.discover` references nonexistent function; actual function is `_discover_modules` (private). Corrected. | 2026-06-13 (s119) |
+| Bug #323 (session 119) | docs/accuracy | docs/warnings-detailed.md Mermaid node `AutoBan[Auto-ban via ban flow]` misleading — actual code uses bot.ban_chat_member directly (local group ban, not federation ban_flow). Corrected label to "Auto-ban from current group only". | 2026-06-13 (s119) |
+| Bug #322 (session 119) | docs/accuracy | docs/banning-detailed.md ban log keyboards table: row `baninfo_proof_kb | View Proof` references deleted function (removed as dead code in prior session; grep confirms absent from keyboards.py). Stale row deleted. | 2026-06-13 (s119) |
+| Bug #321 (session 119) | docs/accuracy | docs/demote-detailed.md line 174: trigger verb list "banned/kicked" omitted "muted". demote_flow.Demote.execute handles trigger="mute"; muting_flow._execute_mute calls it with trigger="mute". Corrected to "banned/kicked/muted". | 2026-06-13 (s119) |
+| Pass 10 docs audit (session 119) | audit | Comprehensive docs+code audit. AST scans (sequential awaits, q.answer first, gather return_exceptions, hardcoded IDs, TODO/FIXME) all CLEAN. Sub-agent doc sweeps: zero em-dash/en-dash anywhere. Six docs accuracy bugs found and fixed (#321-#326). Ruff: 73 files clean. Total: #1-#326. | 2026-06-13 (s119) |
 | Bug #320 (session 118) | ux/policy | appeals.py "What happens next" section: `→` (U+2192) used as connector in 2 user-facing strings. Replaced with `:`. No pictograph symbols in bot output. | 2026-06-13 (s118) |
 | Bug #319 (session 118) | ux/policy | muting.py time-format help section: `→` (U+2192) used as list bullet in 7 user-facing strings. Replaced all 7 with ASCII `-`. | 2026-06-13 (s118) |
 | Bug #318 (session 118) | ux/policy | keyboards.py `group_start_kb`: `↗` (U+2197) in user-facing button label "Open in PM ↗". Removed symbol; label now "Open in PM". | 2026-06-13 (s118) |

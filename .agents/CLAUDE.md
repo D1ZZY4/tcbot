@@ -153,7 +153,7 @@ Replit Secrets. For local development, use a gitignored `config.env` copied from
 ## Repository Map
 
 ```text
-tgbot/
+<project root>/
 ├── .agents/                         AI-agent policy and workflow docs
 ├── docs/                           Human-facing architecture and module docs
 ├── tcbot/
