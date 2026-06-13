@@ -215,6 +215,10 @@ class BuildAppeal:
             ctx.user_data["appeal_instruction_msg_id"] = instr.message_id
         except Exception as exc:
             log.debug("Appeal instruction send failed for user %d: %s", uid, exc)
+            # * Clear keys set above so user_data does not contain stale appeal state
+            # * if the user retries later or starts a different conversation.
+            ctx.user_data.pop("appeal_ban_id", None)
+            ctx.user_data.pop("appeal_log_msg_id", None)
             return ConversationHandler.END
 
         return WAITING_APPEAL
@@ -256,6 +260,13 @@ class BuildAppeal:
 
     async def _end(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Fallback handler; fires on any unrecognised command during the flow."""
+        if ctx.user_data is not None:
+            for key in (
+                "appeal_ban_id",
+                "appeal_log_msg_id",
+                "appeal_instruction_msg_id",
+            ):
+                ctx.user_data.pop(key, None)
         msg = update.effective_message
         if msg:
             try:
@@ -315,6 +326,12 @@ class BuildAppeal:
 
         user = update.effective_user
         if user is None:
+            for key in (
+                "appeal_ban_id",
+                "appeal_log_msg_id",
+                "appeal_instruction_msg_id",
+            ):
+                ctx.user_data.pop(key, None)
             return ConversationHandler.END
 
         uid = user.id
@@ -404,6 +421,14 @@ class BuildAppeal:
             await asyncio.gather(edit_coro, upsert_coro, return_exceptions=True)
         else:
             await upsert_coro
+
+        # * Clear appeal keys so user_data is clean after successful submission.
+        for key in (
+            "appeal_ban_id",
+            "appeal_log_msg_id",
+            "appeal_instruction_msg_id",
+        ):
+            ctx.user_data.pop(key, None)
 
         return ConversationHandler.END
 

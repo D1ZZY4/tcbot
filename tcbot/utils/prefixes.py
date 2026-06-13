@@ -8,15 +8,13 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from telegram.ext import filters
 
 from tcbot import cfg
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine
-
     from telegram import Message
 
 log = logging.getLogger(__name__)
@@ -32,58 +30,6 @@ class _MessageLike(Protocol):
     def get_bot(self) -> _BotLike:
         """Return the bot instance associated with this message."""
         ...
-
-
-class _UpdateLike(Protocol):
-    effective_message: _MessageLike | None
-
-
-class _ContextLike(Protocol):
-    args: list[str]
-
-
-# ─────────────────────── Alt-Prefix Registry ────────────────────── #
-# * Stores callbacks for non-slash prefixed commands (!cmd, .cmd)
-
-_REGISTRY: dict[str, Callable[..., Coroutine[Any, Any, None]]] = {}
-
-
-def register_command(
-    name: str, callback: Callable[..., Coroutine[Any, Any, None]]
-) -> None:
-    """Register an async callback for a lowercase command name."""
-    _REGISTRY[name.lower()] = callback
-
-
-async def dispatch_alt_prefix(update: _UpdateLike, context: _ContextLike) -> None:
-    """Dispatch an update to a registered alt-prefix command handler."""
-    msg = getattr(update, "effective_message", None)
-    if not msg:
-        return
-    text: str | None = getattr(msg, "text", None)
-    if not text:
-        return
-
-    parsed = _parse_prefixed_command(
-        text,
-        _get_custom_prefixes(),
-        _bot_username_from_message(msg),
-    )
-    if parsed is None:
-        return
-
-    cmd, _mention = parsed
-    callback = _REGISTRY.get(cmd)
-    if callback is None:
-        return
-
-    parts = text.strip().split(None, 1)
-    context.args = parts[1].split() if len(parts) > 1 else []
-
-    try:
-        await callback(update, context)
-    except Exception as exc:
-        log.warning("dispatch_alt_prefix: handler %r raised %s", cmd, exc)
 
 
 # ──────────────────────── Prefix Resolution ─────────────────────── #

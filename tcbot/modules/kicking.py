@@ -160,6 +160,8 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     target_mention = mention(target_id, target_name or str(target_id))
 
+    _KICK_KEYS = ("kick_target_id", "kick_target_name", "kick_proof_desc")
+
     if inline_reason:
         ctx.user_data["kick_reason"] = inline_reason
         try:
@@ -170,6 +172,8 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             )
         except Exception as exc:
             log.debug("cmd_kick proof-prompt reply failed: %s", exc)
+            for key in (*_KICK_KEYS, "kick_reason"):
+                ctx.user_data.pop(key, None)
             return ConversationHandler.END
         return WAITING_PROOF
 
@@ -181,6 +185,8 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         )
     except Exception as exc:
         log.debug("cmd_kick reason-prompt reply failed: %s", exc)
+        for key in _KICK_KEYS:
+            ctx.user_data.pop(key, None)
         return ConversationHandler.END
     return WAITING_REASON
 

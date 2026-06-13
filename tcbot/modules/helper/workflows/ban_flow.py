@@ -136,7 +136,10 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         ban_id = existing["ban_id"]
         old_admin_id = existing.get("admin_user_id", admin_id)
         bot_username = bot.username or "TCFBot"
-        old_admin_fname = await _old_admin_fname_task
+        try:
+            old_admin_fname = await _old_admin_fname_task
+        except Exception:
+            old_admin_fname = "Admin"
         old_proof_msg_id = existing.get("proof_message_id", 0)
         old_log_msg_id = existing.get("log_message_id", 0)
         new_proof_msg_id = proof_msg_id or old_proof_msg_id
@@ -289,7 +292,12 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         if isinstance(upsert_result, BaseException):
             log.error("upsert_user failed for target=%d: %s", target_id, upsert_result)
     else:
-        await db.users_cache.upsert_user(target_id, None, target_fname)
+        try:
+            await db.users_cache.upsert_user(target_id, None, target_fname)
+        except Exception:
+            log.exception(
+                "upsert_user (no-prompt path) failed for target=%d", target_id
+            )
 
 
 # ───────────────── Proof collection state handlers ──────────────── #
@@ -315,6 +323,9 @@ async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
 
     # * Single media file - execute immediately
     await _execute_ban(ctx.bot, [msg], dict(ctx.user_data))
+    # * Clear ban state so user_data is clean after the ban completes.
+    for key in _BAN_USER_DATA_KEYS:
+        ctx.user_data.pop(key, None)
     return ConversationHandler.END
 
 
@@ -331,13 +342,16 @@ async def _flush_album(mgid: str, bot: Bot) -> None:
         )
         return
     log.info("Flushing album %s with %d media items", mgid, len(msgs))
-    await _execute_ban(bot, msgs, meta)
-    # * Clear ban keys from the live user_data so the ConversationHandler does
-    # * not re-fire _execute_ban if a second album arrives before the conversation
-    # * naturally times out or ends.
-    if user_data is not None:
-        for key in _BAN_USER_DATA_KEYS:
-            user_data.pop(key, None)
+    try:
+        await _execute_ban(bot, msgs, meta)
+    except Exception:
+        log.exception("_execute_ban raised in _flush_album for album %s", mgid)
+    finally:
+        # * Clear ban keys from the live user_data regardless of whether the ban
+        # * succeeded or failed, so user_data is clean after this task completes.
+        if user_data is not None:
+            for key in _BAN_USER_DATA_KEYS:
+                user_data.pop(key, None)
 
 
 async def on_proof_unexpected(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -359,6 +373,12 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
     if ctx.user_data is not None:
         for key in _BAN_USER_DATA_KEYS:
             ctx.user_data.pop(key, None)
+        # * Cancel any in-progress album flush for this conversation so the ban
+        # * does not execute after the user has already pressed Cancel.
+        for mgid in [k for k, ud in _album_userdata.items() if ud is ctx.user_data]:
+            _albums.pop(mgid, None)
+            _album_meta.pop(mgid, None)
+            _album_userdata.pop(mgid, None)
 
     await asyncio.gather(
         q.answer(), q.edit_message_text(_MSG_CANCELLED), return_exceptions=True
@@ -371,6 +391,12 @@ async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
     if ctx.user_data is not None:
         for key in _BAN_USER_DATA_KEYS:
             ctx.user_data.pop(key, None)
+        # * Cancel any in-progress album flush for this conversation so the ban
+        # * does not execute after the proof window has expired.
+        for mgid in [k for k, ud in _album_userdata.items() if ud is ctx.user_data]:
+            _albums.pop(mgid, None)
+            _album_meta.pop(mgid, None)
+            _album_userdata.pop(mgid, None)
 
     if update.effective_message:
         try:

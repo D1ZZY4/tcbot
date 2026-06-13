@@ -28,8 +28,3 @@ def fmt_dt(dt: datetime) -> str:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
     return dt.strftime("%d-%m-%Y | %H:%M")
-
-
-def utc_now_str() -> str:
-    """Return the current UTC time as a formatted string."""
-    return fmt_dt(utc_now())

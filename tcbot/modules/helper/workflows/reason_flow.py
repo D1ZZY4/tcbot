@@ -162,6 +162,7 @@ def build_modaction_conv(
             except Exception as exc:
                 log.debug("%s reason-text fallback reply failed: %s", action, exc)
         if not prompt_sent:
+            _clear_user_data(ctx)
             return ConversationHandler.END
         return WAITING_PROOF
 
@@ -186,6 +187,10 @@ def build_modaction_conv(
             log.debug(
                 "%s prompt edit failed (skip-reason step): %s", action, results[1]
             )
+            # * Proof prompt is invisible to the user; clear state to avoid locking
+            # * them in WAITING_PROOF with no visible UI element to interact with.
+            _clear_user_data(ctx)
+            return ConversationHandler.END
         return WAITING_PROOF
 
     # ── WAITING_PROOF handlers ───────────────────────────────────── #

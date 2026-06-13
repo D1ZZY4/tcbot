@@ -170,6 +170,8 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     target_mention = mention(target_id, target_name or str(target_id))
 
+    _WARN_KEYS = ("warn_target_id", "warn_target_name", "warn_proof_desc")
+
     if inline_reason:
         ctx.user_data["warn_reason"] = inline_reason
         try:
@@ -180,6 +182,8 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             )
         except Exception as exc:
             log.debug("cmd_warn_entry proof-prompt reply failed: %s", exc)
+            for key in (*_WARN_KEYS, "warn_reason"):
+                ctx.user_data.pop(key, None)
             return ConversationHandler.END
         return WAITING_PROOF
 
@@ -191,6 +195,8 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         )
     except Exception as exc:
         log.debug("cmd_warn_entry reason-prompt reply failed: %s", exc)
+        for key in _WARN_KEYS:
+            ctx.user_data.pop(key, None)
         return ConversationHandler.END
     return WAITING_REASON
 

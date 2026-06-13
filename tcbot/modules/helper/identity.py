@@ -105,12 +105,22 @@ async def classify(
 
     """
     # * Both are independent cached reads; run in parallel.
-    (cached_fname, target_username), role = await asyncio.gather(
+    # * return_exceptions=True prevents a transient DB error from propagating
+    # * to every moderation command that calls classify().
+    results = await asyncio.gather(
         db.users_cache.get_user_mention_data(target_id),
         db.users_roles.get_effective_role(target_id),
+        return_exceptions=True,
     )
+    (cached_fname, target_username) = (
+        results[0] if not isinstance(results[0], BaseException) else (None, None)
+    )
+    role = results[1] if not isinstance(results[1], BaseException) else None
     if not target_fname or target_fname.startswith("User "):
         target_fname = cached_fname
+    # * Guard: cached_fname is None when the DB call itself raised an exception.
+    if not target_fname:
+        target_fname = f"User {target_id}"
 
     if target_id == executor_id:
         return Identity("self", target_id, target_fname, target_username, is_bot=False)
