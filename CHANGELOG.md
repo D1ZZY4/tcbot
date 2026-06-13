@@ -2,6 +2,18 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 118)
+
+### Fixed
+
+- **`tcbot/modules/helper/keyboards.py`** (`group_start_kb`): Button label `"Open in PM ↗"` contained `↗` (U+2197 NORTH EAST ARROW), a Unicode pictograph symbol, in a user-facing Telegram inline button label. Project policy forbids pictograph emoji and Unicode symbols in all bot output. Removed the symbol; label is now `"Open in PM"`. (Bug #318)
+- **`tcbot/modules/muting.py`** (time-format help section): Seven lines in the "Time format" help section used `→` (U+2192 RIGHT ARROW) as a list bullet: `→ <code>s</code> Seconds: ...` through `→ <code>ye</code> Years: ...`. This is a Unicode pictograph symbol in a user-facing Telegram message. Replaced all seven `→` bullets with ASCII `-` bullets. (Bug #319)
+- **`tcbot/modules/appeals.py`** ("What happens next" help section): Two lines used `→` as a sentence connector in user-facing appeal instructions: `"If approved → your ban is lifted..."` and `"If rejected → your ban remains..."`. Both replaced with plain ASCII `:` (colon) to eliminate the Unicode pictograph from bot output. (Bug #320)
+
+### Audit
+
+- **Pass 9 — entry point and config layer**: `__main__.py` verified CLEAN (`allowed_updates=Update.ALL_TYPES` correct; all handler groups correct; asyncio exception handler layer 3 correct; RUF006-compliant task sets). `tcbot/__init__.py` (config singleton) verified CLEAN — `Configs` frozen dataclass + `_CfgAdapter` wrapper; all env var parsing functions correct; `_int_from_env` minimum enforcement correct. `greeting.py` verified CLEAN — all four member-event paths covered: `new_chat_members` (parallel batch fan-out with `greet=False` for secondary groups), `ChatJoinRequest` (decline if banned), `left_chat_member`, `MIGRATE`. `identity.py` verified CLEAN — no emoticons, no pictograph emoji; all ten refusal tables (`ban`, `kick`, `mute`, `warn`, `unban`, `unmute`, `promote`, `demote`, `transfer`, `unwarn`, `resetwarns`) correct. `extraction.py` verified CLEAN — all five resolution paths in correct priority order; `_ANONYMOUS_BOT_ID` and `_skip_sender_chat` logic correct; `_best_name` numeric-fallback detection correct. Symlinks (`.kilo`, `.trae`, `.claude`, `.roo` → `.agents/`) confirmed OK. `uv lock --upgrade` resolved 32 packages (no version changes). Unicode pictograph scan of all 73 Python files: 3 bugs found and fixed (#318–#320); remaining `→` occurrences confirmed to be in docstrings, log strings, and terminal formatter (not bot output). Full ruff check after all edits: All checks passed (73 files).
+
 ## [Unreleased] - 2026-06-13 (session 117)
 
 ### Fixed

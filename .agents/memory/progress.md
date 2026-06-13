@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-13 (session 117)
+**Last updated:** 2026-06-13 (session 118)
 
 ## Verification baseline
 
@@ -36,6 +36,10 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Bug #320 (session 118) | ux/policy | appeals.py "What happens next" section: `→` (U+2192) used as connector in 2 user-facing strings. Replaced with `:`. No pictograph symbols in bot output. | 2026-06-13 (s118) |
+| Bug #319 (session 118) | ux/policy | muting.py time-format help section: `→` (U+2192) used as list bullet in 7 user-facing strings. Replaced all 7 with ASCII `-`. | 2026-06-13 (s118) |
+| Bug #318 (session 118) | ux/policy | keyboards.py `group_start_kb`: `↗` (U+2197) in user-facing button label "Open in PM ↗". Removed symbol; label now "Open in PM". | 2026-06-13 (s118) |
+| Pass 9 audit (session 118) | audit | Entry point + config + key helper layer audit. CLEAN: `__main__.py`, `__init__.py` (cfg), `greeting.py`, `identity.py`, `extraction.py`. Unicode pictograph scan all 73 files: 3 bugs (#318-320) found+fixed; remaining `→` confirmed in docstrings/logs only. Symlinks OK. uv lock --upgrade no changes. Ruff: 73 files clean. Total bugs: #1-#320. | 2026-06-13 (s118) |
 | Bug #317 (session 117) | security/rank | warnings.py cmd_resetwarns: missing resolve_and_check — any staff could reset warns on any target regardless of rank. Fixed with parallel resolve_and_check+identity.classify gather + double-reply guard. | 2026-06-13 (s117) |
 | Bug #316 (session 117) | security/rank | warnings.py cmd_unwarn: missing resolve_and_check(min_role="tester") — Tester could unwarn Admin. Fixed with parallel gather + double-reply guard, matching ban/mute/warn pattern. | 2026-06-13 (s117) |
 | Pass 8 audit (session 117) | audit | Full modules/workflows layer audit: 19 files verified CLEAN + 12 db/utils CLEAN. Two bugs found (#316-#317). Ruff: 73 files clean. Total bugs fixed: #1-#317. | 2026-06-13 (s117) |

@@ -5,9 +5,19 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 117 pass 8)
+**Last updated:** 2026-06-13 (session 118 pass 9)
 
 ## What is done
+
+- Session 118 pass 9 (2026-06-13): Entry point + config layer audit + Unicode pictograph scan. 3 bugs found and fixed.
+  - Bug #318: keyboards.py `group_start_kb` — `↗` (U+2197) in user-facing button label "Open in PM ↗". Removed symbol.
+  - Bug #319: muting.py time-format help section — `→` (U+2192) used as bullet in 7 user-facing strings. Replaced with `-`.
+  - Bug #320: appeals.py "What happens next" — `→` in 2 user-facing strings ("If approved →", "If rejected →"). Replaced with `:`.
+  - Verified CLEAN: `__main__.py`, `__init__.py` (cfg), `greeting.py`, `identity.py`, `extraction.py`.
+  - Symlinks (.kilo/.trae/.claude/.roo → .agents/) confirmed OK. `uv lock --upgrade` no version changes.
+  - Unicode scan of all 73 Python files: remaining `→` only in docstrings, log strings, terminal formatter (not bot output).
+  - Full ruff check: All checks passed (73 files). Bot restart: 27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling active.
+  - Total bugs fixed: #1–#320.
 
 - Session 117 pass 8 complete (2026-06-13): Full audit of modules/workflows layer — 2 bugs found and fixed.
   - Bug #316: warnings.py cmd_unwarn — missing resolve_and_check(min_role="tester"); Tester could unwarn Admin. Fixed with parallel gather + double-reply guard.
@@ -171,8 +181,8 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## AUDIT STATUS
 
-**COMPLETE** as of session 117 (pass 8 final). All 73 tcbot/ Python files audited and ruff-clean (eight full passes).
-Total bugs fixed: **#1-#317** (Bugs #306-#309, #311-#314 docs-only; Bug #310 is a code comment). Code logic/UX bugs: #1-#305, #315-#317. Perf improvements: **#292-#294, Perf #4**.
+**COMPLETE** as of session 118 (pass 9). All 73 tcbot/ Python files audited and ruff-clean (nine full passes).
+Total bugs fixed: **#1-#320** (Bugs #306-#309, #311-#314 docs-only; Bug #310 is a code comment). Code logic/UX bugs: #1-#305, #315-#320. Perf improvements: **#292-#294, Perf #4**.
 
 ### All files fully audited across all sessions:
 ban_flow.py, greeting.py, bans_db.py, unban_flow.py, appeal_flow.py, banning.py, muting.py, muting_flow.py, kicking.py, kicking_flow.py, warnings.py, warning_flow.py, demote_flow.py, connected_flow.py, proof_flow.py, reason_flow.py, parse_logmsg.py, decorators.py, admins.py, users_cache.py, users_roles.py, promote_flow.py, connecting.py, disconnecting.py, groups_db.py, unbanning.py, appeals.py, check_flow.py, broadcasting.py, mongos.py, mutes_db.py, warns_db.py, kicks_db.py, queues_db.py, pagination.py, error_reporter.py, keyboards.py, parse_editmsg.py, documents.py, replies.py, timedate_format.py, parse_link.py, prefixes.py, redis_client.py, alive.py, checking.py, stats.py, stats_flow.py, maintenance.py, additional.py, netspeed.py, formatter.py, identity.py, cache.py, scheduler.py, __init__.py, __main__.py, ban_info.py, extraction.py, start.py, help.py, about.py, privacy.py, groups.py, modules/__init__.py, modules/types.py, dispatch.py, logger.py, utils/__init__.py, database/__init__.py, database/types.py, modules/helper/__init__.py, modules/helper/workflows/__init__.py

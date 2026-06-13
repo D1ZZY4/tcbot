@@ -68,8 +68,8 @@ __help_sections__: list[tuple[str, str]] = [
         "What happens next",
         "Your appeal is forwarded to TC admins for review. The admin who issued the original "
         "ban has a <b>12-hour priority window</b> to respond; after that, any admin can act.\n\n"
-        "If approved → your ban is lifted immediately across all connected groups.\n"
-        "If rejected → your ban remains in place.\n"
+        "If approved: your ban is lifted immediately across all connected groups.\n"
+        "If rejected: your ban remains in place.\n"
         "You will be notified by the bot either way.",
     ),
 ]

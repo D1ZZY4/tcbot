@@ -157,7 +157,7 @@ def group_start_kb(bot_username: str) -> InlineKeyboardMarkup:
     pm_url = f"https://t.me/{bot_username}?start=menu"
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("Open in PM ↗", url=pm_url)],
+            [InlineKeyboardButton("Open in PM", url=pm_url)],
             [InlineKeyboardButton("Help", callback_data="help_menu_group")],
         ]
     )

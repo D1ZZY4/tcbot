@@ -78,13 +78,13 @@ __help_sections__: list[tuple[str, str]] = [
     (
         "Time format",
         "Place the duration before the reason. Omit a duration to apply a permanent mute.\n\n"
-        "→ <code>s</code> Seconds: <code>30s</code> = 30 seconds\n"
-        "→ <code>m</code> Minutes: <code>15m</code> = 15 minutes\n"
-        "→ <code>h</code> Hours: <code>2h</code> = 2 hours\n"
-        "→ <code>d</code> Days: <code>7d</code> = 7 days\n"
-        "→ <code>w</code> Weeks: <code>2w</code> = 2 weeks\n"
-        "→ <code>mo</code> Months: <code>3mo</code> = 3 months\n"
-        "→ <code>ye</code> Years: <code>2ye</code> = 2 years",
+        "- <code>s</code> Seconds: <code>30s</code> = 30 seconds\n"
+        "- <code>m</code> Minutes: <code>15m</code> = 15 minutes\n"
+        "- <code>h</code> Hours: <code>2h</code> = 2 hours\n"
+        "- <code>d</code> Days: <code>7d</code> = 7 days\n"
+        "- <code>w</code> Weeks: <code>2w</code> = 2 weeks\n"
+        "- <code>mo</code> Months: <code>3mo</code> = 3 months\n"
+        "- <code>ye</code> Years: <code>2ye</code> = 2 years",
     ),
     (
         replies.SEC_TARGET,
