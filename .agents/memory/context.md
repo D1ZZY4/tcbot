@@ -5,9 +5,21 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 99)
+**Last updated:** 2026-06-13 (session 100)
 
 ## What is done
+
+- Session 100 (2026-06-13): Documentation-only session. No code changes. Nine docs updated to reflect code changes from sessions 95-99 that had not yet been documented.
+  - docs/helper/helper.md: user_ref() added to formatter.py table.
+  - docs/databases/databases.md: deactivate_all_active_bans + deactivate_extra_active_bans added.
+  - docs/banning-detailed.md: dedup guard and deactivate_all_active_bans + cancel_schedule documented.
+  - docs/appeal-detailed.md: deactivate_all_active_bans on approval documented.
+  - docs/check-detailed.md + docs/stats-detailed.md: fallback name str(uid) not "User <id>".
+  - docs/demote-detailed.md: trigger="mute" added as fourth auto-demote path.
+  - docs/role-detailed.md: all auto-demote references updated to include "mute".
+  - docs/workflows/workflows.md: trigger="mute" row added to demote table.
+  - CHANGELOG.md: session 100 Documentation section added.
+  - Ruff: All checks passed (73 files, no code changed).
 
 - Session 99 (2026-06-13): Bug #265 fixed. Full audit of checking.py, check_flow.py, connecting.py, disconnecting.py, unbanning.py, admins.py, appeals.py, stats.py, broadcasting.py, maintenance.py, additional.py all verified clean. CHANGELOG.md updated with Bug #265 entry. Ruff: All checks passed (73 files).
   - Bug #265: warnings.py cmd_warn_entry - missing identity.staff_notice("warn", ident, cfg.community_name) call before return in refusal guard; consistent with cmd_unwarn and cmd_resetwarns in same file.

@@ -136,7 +136,9 @@ Key helper functions:
 - `bans_db.get_active_ban(user_id)`: returns the currently active ban for a user, or `None`.
 - `bans_db.get_ban(ban_id)`: fetches a single ban record by its short ID.
 - `bans_db.create_ban(...)` / `bans_db.update_ban(...)`: write a new ban or update an existing one.
-- `bans_db.deactivate_ban(ban_id)`: marks a ban inactive (used by unban flow).
+- `bans_db.deactivate_ban(ban_id)`: marks a single ban record inactive by its `ban_id`.
+- `bans_db.deactivate_all_active_bans(user_id)`: marks every active ban for a user inactive in one atomic update. Returns the count of deactivated records. Used by unban and appeal-approval flows to clear all active duplicates at once.
+- `bans_db.deactivate_extra_active_bans(user_id, keep_ban_id)`: marks all active bans for a user inactive except the one matching `keep_ban_id`. Used by the ban-update path to clean up duplicate active records before writing the canonical update.
 - `bans_db.set_review(...)` / `bans_db.set_appeal_log_msg(...)`: store appeal/review metadata on an existing ban.
 - `bans_db.active_bans()` / `bans_db.active_ban_count()` / `bans_db.active_ban_user_ids()`: federation-wide active ban queries.
 - `bans_db.user_bans(user_id)` / `bans_db.user_ban_count(user_id)`: per-user ban history (all records, active and inactive).

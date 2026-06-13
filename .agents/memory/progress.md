@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-13 (session 99)
+**Last updated:** 2026-06-13 (session 100)
 
 ## Verification baseline
 
@@ -22,12 +22,14 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | docs audit (session 74) | PASS: mapping.md top-level layout completed; 3 new Mermaid diagrams added; all code files audited clean |
 | Final comprehensive audit (session 92 final) | PASS: All remaining workflow, module, database files verified. 0 new bugs found. |
 | Formatter consistency audit (session 93) | PASS: 11 files audited and fixed. All hardcoded `<b>`/`<code>` in dynamic content replaced with bold()/code() helpers. Ruff clean. Import OK. |
+| Docs sync audit (session 100) | PASS: 9 docs updated to reflect sessions 95-99 code changes (user_ref, deactivate_all/extra, trigger=mute, str(uid) fallback). CHANGELOG updated. Ruff: 73 files clean. |
 | Full module audit (session 99) | PASS: checking.py, check_flow.py, connecting.py, disconnecting.py, unbanning.py, admins.py, appeals.py, stats.py, broadcasting.py, maintenance.py, additional.py all clean. |
 
 ## Completed items (recent additions on top)
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Docs sync (session 100) | documentation | 9 docs updated to reflect sessions 95-99 code changes: user_ref in formatter table, deactivate_all/extra_active_bans in DB docs, trigger="mute" in demote/role/workflows docs, str(uid) fallback in check/stats docs, banning/appeal flow helpers updated. CHANGELOG updated. | 2026-06-13 (s100) |
 | Bug #265 (session 99) | correctness | warnings.py cmd_warn_entry missing identity.staff_notice("warn", ...) before return in refusal guard; consistent with cmd_unwarn and cmd_resetwarns. CHANGELOG updated. | 2026-06-13 (s99) |
 | Bugs #261-#264 (session 98) | correctness | banning/muting/kicking/warnings double-reply on resolve_and_check refusal; ban_flow F841 ban_duration; identity/checking numeric-string fallback guard; mention() dedup + "User {uid}"→str(uid) across 4 files. CHANGELOG updated. | 2026-06-13 (s98) |
 | Bugs #256-#260 (session 97) | correctness | warning_flow execute_resetwarns user_ref; muting.py Demote trigger "kick"→"mute"; stats_flow user list user_ref; check_flow _async_const Any→Any; additional.py bold(). CHANGELOG updated. | 2026-06-13 (s97) |

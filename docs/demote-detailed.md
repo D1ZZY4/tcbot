@@ -21,11 +21,12 @@ flowchart TD
 
 ## Purpose
 
-Demotion removes a federation role from a user. Three callers reach the same `Demote.execute` method:
+Demotion removes a federation role from a user. Four callers reach the same `Demote.execute` method:
 
 1. `/tcdemote`: manual demotion by Founder or Admin.
 2. Ban entry handler (`/tcban`): auto-demote a role-holding target before the federation ban.
 3. Kick entry handler (`/tckick`): auto-demote a role-holding target before the per-group kick.
+4. Mute entry handler (`/tcmute`): auto-demote a role-holding target before the per-group mute.
 
 The same log format is emitted in every case; there is no separate "Auto-Demote" template.
 
@@ -67,6 +68,7 @@ The `trigger` parameter controls only the DM body wording:
 - `trigger=None` (manual): `Your <Role> role in <community> has been removed by <executor>.`
 - `trigger="ban"`: `Your <Role> role in <community> has been removed - you were banned from the federation.`
 - `trigger="kick"`: `Your <Role> role in <community> has been removed - you were kicked from the federation.`
+- `trigger="mute"`: `Your <Role> role in <community> has been removed - you were muted from the federation.`
 
 The federation log emitted by `parse_logmsg.demoted` is identical in every case; `trigger` is accepted in the signature for caller API compatibility but ignored in the rendered output.
 
@@ -94,9 +96,9 @@ Callback data: `demote_confirm:<target_id>` and `demote_cancel:<target_id>`.
 
 `on_demote_cancel` simply answers the callback and edits the message to say no changes were made.
 
-## Auto-demote flow (ban / kick)
+## Auto-demote flow (ban / kick / mute)
 
-`/tcban` and `/tckick` entry handlers call `Demote.execute(..., trigger="ban")` or `trigger="kick"` after `resolve_and_check` confirms the executor outranks a role-holding target, before the actual moderation action.
+`/tcban`, `/tckick`, and `/tcmute` entry handlers call `Demote.execute(...)` with the appropriate trigger after `resolve_and_check` confirms the executor outranks a role-holding target, before the actual moderation action.
 
 ```python
 if target_role:
@@ -107,7 +109,7 @@ if target_role:
         target_role,
         admin.id,
         admin.first_name,
-        trigger="ban",  # or "kick"
+        trigger="ban",  # or "kick" or "mute"
     )
 ```
 

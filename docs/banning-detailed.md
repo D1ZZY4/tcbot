@@ -125,14 +125,15 @@ If the target already has an active ban, the bot updates the existing record ins
 
 The update flow:
 
-1. Reuses the existing `ban_id`.
-2. Builds an update proof caption with `proof_caption_update`.
-3. Preserves previous proof/log IDs as `previous_proof_message_id` and `previous_log_message_id`.
-4. Updates the reason, banning admin, proof ID, log ID, and `updated_timestamp` through `bans_db.update_ban(...)`.
-5. Increments `update_count`.
-6. Posts an update log with `parse_logmsg.ban_update_log`.
-7. Uses a keyboard with current proof, previous proof, and submit-appeal buttons when both proof links exist.
-8. Enforces the Telegram ban across connected groups again.
+1. Calls `bans_db.deactivate_extra_active_bans(target_id, keep_ban_id=existing_ban_id)` to clean up any duplicate active records, leaving only the canonical one active.
+2. Reuses the existing `ban_id`.
+3. Builds an update proof caption with `proof_caption_update`.
+4. Preserves previous proof/log IDs as `previous_proof_message_id` and `previous_log_message_id`.
+5. Updates the reason, banning admin, proof ID, log ID, and `updated_timestamp` through `bans_db.update_ban(...)`.
+6. Increments `update_count`.
+7. Posts an update log with `parse_logmsg.ban_update_log`.
+8. Uses a keyboard with current proof, previous proof, and submit-appeal buttons when both proof links exist.
+9. Enforces the Telegram ban across connected groups again.
 
 ## Connected-group enforcement
 
@@ -284,10 +285,11 @@ Flow:
 3. The bot rejects attempts to unban itself.
 4. Founder and staff targets are treated as not federation-bannable and no unban is attempted.
 5. `bans_db.get_active_ban(target_id)` must return a record.
-6. The ban is deactivated with `bans_db.deactivate_ban(ban_id)`.
-7. The target is unbanned from all active connected groups with `only_if_banned=True`.
-8. An unban log is sent to `cfg.logs`.
-9. The command reply reports the success count.
+6. All active bans for the target are deactivated atomically with `bans_db.deactivate_all_active_bans(target_id)`, which handles any duplicate active records in one operation.
+7. Any pending scheduled unban job is cancelled defensively with `scheduler.cancel_schedule(ban.schedule_id)` when a schedule ID is stored.
+8. The target is unbanned from all active connected groups with `only_if_banned=True`.
+9. An unban log is sent to `cfg.logs`.
+10. The command reply reports the success count.
 
 Manual unban does not currently edit any pending appeal review card. It deactivates the ban and posts the unban log.
 

@@ -132,7 +132,7 @@ The update helpers involved are:
 
 - `bans_db.set_review(ban_id, review_msg_id)`
 - `bans_db.set_appeal_log_msg(ban_id, appeal_log_msg_id, appeal_link=...)`
-- `bans_db.deactivate_ban(ban_id)` on approval
+- `bans_db.deactivate_all_active_bans(user_id)` on approval (clears all active records atomically)
 - `users_cache.upsert_user(...)` after submission
 
 If the review post fails, `review_message_id` is not stored. If the appeal-log post fails, `appeal_log_msg_id` is not stored. The implementation logs those failures and continues where possible.
@@ -154,7 +154,7 @@ The callback handler always answers the callback query before continuing once it
 
 When a staff member approves an appeal:
 
-1. The ban is marked inactive with `bans_db.deactivate_ban(ban_id)`.
+1. All active bans for the user are deactivated with `bans_db.deactivate_all_active_bans(user_id)`, which clears any duplicate active records in one atomic operation.
 2. Active connected groups are fetched from `groups_db.active_groups()`.
 3. The user is unbanned from every active group with `unban_chat_member(..., only_if_banned=True)` through bounded fan-out.
 4. The user receives a DM telling them the appeal was approved.

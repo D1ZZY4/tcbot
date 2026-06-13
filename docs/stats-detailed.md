@@ -175,7 +175,7 @@ Every list view that needs more than one read parallelises with `asyncio.gather`
 
 ## Edge cases
 
-- A user with no cached profile renders as `User <id>` in every list, never as a bare numeric ID.
+- A user with no cached profile renders as their numeric user ID (e.g. `123456789`) in every list when no cached name is available. This is the `str(uid)` return from `_best_name()` in `extraction.py`, not the earlier `"User <id>"` pattern.
 - An empty roster ("None assigned") never crashes pagination because the user/chat/ban lists have their own empty-state branch.
 - Re-tapping the same drill-down does not raise; `safe_edit_cb` swallows the `Message is not modified` `BadRequest`.
 - The search input handler is private-chat only and gated by `SEARCH_KEY`; it never absorbs unrelated group messages.

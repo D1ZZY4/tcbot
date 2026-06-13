@@ -22,11 +22,11 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Action{Ban or Kick action} --> RoleCheck{Target has role?}
+    Action{Ban or Kick or Mute action} --> RoleCheck{Target has role?}
     RoleCheck -->|yes| AutoDemote[Auto-demote via Demote class]
     RoleCheck -->|no| Continue[Continue action]
     AutoDemote --> Continue
-    Continue --> Apply[Apply ban/kick]
+    Continue --> Apply[Apply ban/kick/mute]
 ```
 
 ## Purpose
@@ -302,16 +302,16 @@ After transfer, the previous Founder becomes Admin and the new target becomes Fo
 
 ## Auto-demotion on moderation actions
 
-`Demote.execute(..., trigger="ban"|"kick")` from `workflows/demote_flow.py` is used before ban/kick when the target has a lower staff role than the executor.
+`Demote.execute(..., trigger="ban"|"kick"|"mute")` from `workflows/demote_flow.py` is used before ban/kick/mute when the target has a lower staff role than the executor.
 
 Behavior:
 
 - Admin target: remove from `tc_admins`.
 - Developer/Tester target: remove from `tc_roles`.
-- Send a `demoted` log (with `trigger="ban"` or `trigger="kick"`) to `cfg.logs`.
-- DM the target that their role was removed because they were banned or kicked.
+- Send a `demoted` log (with the applicable trigger) to `cfg.logs`.
+- DM the target that their role was removed because they were banned, kicked, or muted.
 
-Ban and kick command modules block equal/higher-ranked targets before calling auto-demotion, so auto-demotion only applies to lower-ranked staff targets.
+Ban, kick, and mute command modules block equal/higher-ranked targets before calling auto-demotion, so auto-demotion only applies to lower-ranked staff targets.
 
 Warnings do not auto-demote. They block equal/higher staff targets, but a higher-ranked executor can warn a lower-ranked staff user without removing the target's role.
 
@@ -322,7 +322,7 @@ Role and promotion logs are built in `parse_logmsg.py`:
 | Template | Trigger |
 |---|---|
 | `promoted(role)` | Founder/Admin promotes a user to the named role (Admin, Developer, or Tester). |
-| `demoted(role, trigger=None)` | Role removed. `trigger=None` for manual demotion; `trigger="ban"` / `"kick"` for auto-demote during a ban or kick. |
+| `demoted(role, trigger=None)` | Role removed. `trigger=None` for manual demotion; `trigger="ban"` / `"kick"` / `"mute"` for auto-demote during a ban, kick, or mute. |
 | `ownership_transferred` | Founder transfers ownership. |
 | `promote_request_log` | Admin promotion request created. |
 | `promote_approved_log` | Founder approves a promotion request. |
@@ -358,5 +358,5 @@ Key role-system behaviors to keep in mind:
 12. Admin cannot demote Admin.
 13. Confirm demotion removes the correct collection record (`tc_admins` for Admin, `tc_roles` for Developer/Tester).
 14. Transfer ownership makes the old Founder an Admin and replaces the owner record.
-15. Ban/kick auto-demotes lower-ranked staff targets and logs the role removal.
-16. Equal-rank and higher-rank targets are protected from ban/kick/warn actions.
+15. Ban/kick/mute auto-demotes lower-ranked staff targets and logs the role removal.
+16. Equal-rank and higher-rank targets are protected from ban/kick/mute/warn actions.

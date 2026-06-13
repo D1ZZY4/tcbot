@@ -55,9 +55,10 @@ All bot messages use Telegram HTML parse mode.
 | `code(text)` | `<code>...</code>` with escaped content. |
 | `link(text, url)` | HTML link. Escape or validate URLs before passing untrusted values. |
 | `mention(user_id, name, username=None)` | Smart mention with username fallback. If username is provided, creates a global `https://t.me/username` link that works across all groups. Otherwise, falls back to plain text name with copyable user ID. |
+| `user_ref(user_id, name, username=None)` | Formats a user reference for action summaries. Returns `mention(user_id, name, username) - code(str(user_id))` unless `name` equals `str(user_id)` (numeric fallback), in which case it omits the redundant ID and returns just `code(str(user_id))`. Use this instead of a bare `mention() - code(id)` pattern in log and action messages. |
 | `proof_line(proof_desc)` | Returns `\nProof: <desc>` when proof_desc is a non-empty string, or `""` otherwise. Embed directly in reply text for kick/mute/warn action messages. |
 
-Use `esc()`, `code()`, or `mention()` for any user-provided value in HTML messages.
+Use `esc()`, `code()`, `mention()`, or `user_ref()` for any user-provided value in HTML messages. Use `user_ref()` in action summaries and audit logs where both name and ID are displayed.
 
 ## `extraction.py`
 

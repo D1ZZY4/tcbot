@@ -2,6 +2,20 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 100)
+
+### Documentation
+
+- **`docs/helper/helper.md`** (formatter.py section): Added `user_ref(user_id, name, username=None)` to the function table. This helper was added in session 95 (Bug #247) but was absent from the docs. Added a usage note directing callers to prefer `user_ref()` in action summaries and audit logs.
+- **`docs/databases/databases.md`** (Ban model section): Added `bans_db.deactivate_all_active_bans(user_id)` and `bans_db.deactivate_extra_active_bans(user_id, keep_ban_id)` to the key helper functions list. Both were introduced in session 95 (Bug #248) but missing from the database reference.
+- **`docs/banning-detailed.md`** (Updating an existing active ban, `/tcunban` behavior): Updated "Updating an existing active ban" to show `deactivate_extra_active_bans` as step 1 (added in Bug #249). Updated `/tcunban` flow to use `deactivate_all_active_bans(target_id)` (Bug #250) and mention defensive `cancel_schedule` call (Bug #254). Step numbers incremented accordingly.
+- **`docs/appeal-detailed.md`** (Approval behavior, Database impact): Updated approval step 1 from `deactivate_ban(ban_id)` to `deactivate_all_active_bans(user_id)` (Bug #251). Updated database helper list to reflect the same.
+- **`docs/check-detailed.md`** (Edge cases): Corrected fallback display name description from `User <id>` to plain numeric user ID `str(uid)` (Bug #253, Bug #264).
+- **`docs/stats-detailed.md`** (Edge cases): Corrected fallback display name description from `User <id>` to `str(uid)` (Bug #253, Bug #264).
+- **`docs/demote-detailed.md`** (Purpose, trigger list, auto-demote section header): Added mute (`trigger="mute"`) as a fourth auto-demote caller path. Previously only ban and kick were documented. Corrected in response to Bug #257 which wired `muting.py` to call `Demote.execute(..., trigger="mute")`.
+- **`docs/role-detailed.md`** (Auto-demotion section, Mermaid diagram, Logs table, Behavior reference): Updated all references to auto-demotion triggers from `"ban"|"kick"` to `"ban"|"kick"|"mute"`. Updated Mermaid diagram label and behavior reference items 15 and 16.
+- **`docs/workflows/workflows.md`** (Demotion section): Added `trigger="mute"` row to the demote trigger table and updated the path count from three to four.
+
 ## [Unreleased] - 2026-06-13 (session 99)
 
 ### Fixed

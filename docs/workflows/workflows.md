@@ -209,8 +209,9 @@ Demotion is not a conversation. `Demote.execute(...)` in `workflows/demote_flow.
 | `Demote.execute(...)` | `None` | Manual `/tcdemote`: sends a confirmation prompt with `Confirm` / `Cancel` buttons, then removes the role and logs it. |
 | `Demote.execute(..., trigger="ban")` | `"ban"` | Auto-demote before a federation ban: silently removes the role and notes the trigger in the log. |
 | `Demote.execute(..., trigger="kick")` | `"kick"` | Auto-demote before a current-group kick: same silent path as `"ban"`. |
+| `Demote.execute(..., trigger="mute")` | `"mute"` | Auto-demote before a current-group mute: same silent path as `"ban"` and `"kick"`. |
 
-`Demote.remove_role(target_id, target_role)` is the shared DB write used by all three paths. It delegates to `users_roles` and returns `True` if a role was actually removed.
+`Demote.remove_role(target_id, target_role)` is the shared DB write used by all four paths. It delegates to `users_roles` and returns `True` if a role was actually removed.
 
 ## Stats: `stats_flow.py`
 
