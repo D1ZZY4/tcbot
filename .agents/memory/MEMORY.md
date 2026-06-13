@@ -22,3 +22,4 @@
 - [identity.classify numeric fname guard](decisions.md): fname override condition must include isdigit() branch — _best_name() returns str(uid) not "User {uid}" as fallback
 - [ban_duration timed-ban placeholder](decisions.md): `_ = ban_duration` in ban_flow suppresses F841 while preserving the future timed-ban contract
 - [checking.py cache-guard isdigit branch](decisions.md): conditional upsert_user calls must add isdigit() guard alongside startsWith("User ") to prevent caching numeric fallback names
+- [Anonymous admin sender_chat skip](decisions.md): in extract_target, when from_user is ANONYMOUS_BOT_ID, skip sender_chat too (it is the group itself, not a bannable user)

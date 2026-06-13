@@ -63,15 +63,19 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 ## AUDIT STATUS
 
 **Audit ongoing** as of session 101+. All 73 tcbot/ Python files ruff-clean.
-Total bugs fixed: **#1-#269**.
+Total bugs fixed: **#1-#270**.
 
 ### Session 101+ fixes:
 - Bug #266: muting.py cmd_unmute missing resolve_and_check parallel gather (added identity.classify + resolve_and_check with min_role="tester").
 - Bug #267: checking.py on_checkme_detail and on_checkme_back called q.edit_message_text without _safe_edit; both call-sites now use _safe_edit.
 - Bug #268: stats_flow.py Stats.main() — unguarded get_user_mention_data call wrapped in try/except; prevents /tcstats crash on MongoDB intermittent failure.
 - Bug #269: stats_flow.py Stats.users_list() — redundant `tail = f" · @{esc(uname)}"` alongside user_ref() caused username to appear twice; removed tail.
+- Bug #270: extraction.py extract_target — when replying to a message sent by GroupAnonymousBot (from_user.id == 1087968824), the code correctly skipped from_user but then fell through to sender_chat which is the group itself (not a bannable individual). Added _skip_sender_chat flag so sender_chat is also skipped in this case; command falls through to args/entity resolution instead.
 
-### Files fully audited in this session:
+### Files fully audited in this session (new task):
+ban_flow.py, greeting.py, bans_db.py, unban_flow.py, appeal_flow.py, banning.py, muting.py, muting_flow.py, kicking.py, kicking_flow.py, warnings.py, warning_flow.py, demote_flow.py, connected_flow.py — all clean except Bug #270.
+
+### Previously audited (session 101 initial):
 mongos.py, mutes_db.py, warns_db.py, kicks_db.py, queues_db.py, pagination.py, error_reporter.py, keyboards.py, parse_editmsg.py, admins.py (complete), documents.py, replies.py, timedate_format.py, parse_link.py, prefixes.py, redis_client.py, alive.py — all clean, no new bugs found.
 
 ### Known non-bugs (by design):

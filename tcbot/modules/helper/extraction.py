@@ -104,12 +104,19 @@ async def extract_target(
     # * Similarly skip the Telegram service account (777000) and channel posts.
     if msg.reply_to_message:
         target_msg = msg.reply_to_message
+        _skip_sender_chat = False
         if target_msg.from_user:
             u: User = target_msg.from_user
             if u.id not in (_ANONYMOUS_BOT_ID, _TELEGRAM_USER_ID):
                 return u.id, u.first_name or await _best_name(u.id)
+            # * When from_user is GroupAnonymousBot (1087968824), sender_chat is the
+            # * group itself (not an individual user). Returning it as the target would
+            # * cause downstream fan-out to try to ban a group ID from itself, which
+            # * always fails. Skip sender_chat so we fall through to args/entities.
+            if u.id == _ANONYMOUS_BOT_ID:
+                _skip_sender_chat = True
 
-        if target_msg.sender_chat:
+        if not _skip_sender_chat and target_msg.sender_chat:
             c: Chat = target_msg.sender_chat
             return c.id, c.title or await _best_name(c.id)
 
