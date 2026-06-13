@@ -162,7 +162,16 @@ async def get_first_names_batch(user_ids: list[int]) -> dict[int, str]:
 
 
 async def get_first_name(user_id: int, fallback: str = "") -> str:
-    """Return cached first_name or fallback string."""
+    """Return cached first_name or fallback string.
+
+    Checks L1 mention cache before hitting MongoDB so repeated lookups in
+    the same process avoid a network round-trip.
+    """
+    cached = user_mention_cache.get(user_id)
+    if cached is not CACHE_MISS:
+        data = cast("list[str | None]", cached)
+        return cast("str", data[0]) or fallback
+
     doc = await _members().find_one({"user_id": user_id}, {"first_name": 1})
     if doc:
         return doc.get("first_name") or fallback

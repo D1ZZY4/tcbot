@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 108)
+
+### Fixed
+
+- **`tcbot/database/users_cache.py`** (`get_first_name`): Function bypassed the `user_mention_cache` (L1 in-memory TTL cache) and issued a raw MongoDB `find_one` on every single call. This function is invoked from 10 locations across the codebase, including hot paths inside `asyncio.gather` in `ban_flow.py`, `appeal_flow.py`, `check_flow.py`, and `connected_flow.py`. Each call was an unnecessary network round-trip when the data was already cached in L1. Fixed by checking `user_mention_cache.get(user_id)` first (same pattern as `get_user_mention_data`) and only falling back to MongoDB on a true cache miss. (Bug #285)
+
 ## [Unreleased] - 2026-06-13 (session 107)
 
 ### Fixed

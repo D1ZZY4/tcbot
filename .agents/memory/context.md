@@ -5,9 +5,16 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 107)
+**Last updated:** 2026-06-13 (session 108)
 
 ## What is done
+
+- Session 108 (2026-06-13): Full second-pass comprehensive audit of all remaining unaudited areas. One performance bug found and fixed:
+  - Bug #285: users_cache.get_first_name() bypassed the L1 user_mention_cache and hit MongoDB directly on every call. Called from 10 sites including hot paths in asyncio.gather across ban_flow, appeal_flow, check_flow, connected_flow. Fixed by adding L1 cache-check path (same pattern as get_user_mention_data) before falling back to MongoDB.
+  - All areas verified clean (no new bugs): checking.py (398-564), warning_flow.py (219-310), check_flow.py (full 591 lines), muting_flow.py (full 283 lines), connected_flow.py (full 369 lines), admins.py (555-836), ban_info.py, unbanning.py, kicking.py, dispatch.py, bans_db.py, groups_db.py, warns_db.py, kicks_db.py, mutes_db.py, users_roles.py, unban_flow.py, kicking_flow.py, demote_flow.py, promote_flow.py, broadcasting.py, disconnecting.py, proof_flow.py, reason_flow.py. No emoji/emoticons, no em-dashes.
+  - Ruff: All checks passed (73 files clean).
+  - CHANGELOG.md updated with session 108 Fixed section.
+  - Total bugs fixed: #1–#285.
 
 - Session 107 (2026-06-13): Fresh context recovery + deep re-audit pass across critical files. Found and fixed 2 CI bugs:
   - Bug #283: dependency-update.yml — `GH_TOKEN: ${{ secrets.GH_TOKEN }}` (custom secret, may not exist) changed to `GH_TOKEN: ${{ github.token }}` (built-in Actions token). context.md incorrectly recorded this as fixed in session 103; the actual file change was never applied.
