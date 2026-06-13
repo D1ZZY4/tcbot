@@ -39,7 +39,7 @@ async def _handle_member(
         return
 
     _, ban = await asyncio.gather(
-        db.users_cache.upsert_user(
+        db.users_cache.upsert_user_if_changed(
             member.id,
             member.username,
             member.first_name,

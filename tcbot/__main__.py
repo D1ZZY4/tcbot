@@ -84,6 +84,9 @@ warnings.filterwarnings(
 # * Strong references to in-flight member-cache background tasks; prevents GC.
 _member_cache_tasks: set[asyncio.Task[None]] = set()
 
+# * Strong reference to the one-shot startup cache warm-up task; prevents GC.
+_startup_tasks: set[asyncio.Task[None]] = set()
+
 
 async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Cache the effective_user from any update; bot-issued events are skipped.
@@ -202,28 +205,67 @@ def _make_asyncio_exc_handler(
 # * Initializes database connections and all core bot systems
 
 
+async def _warm_hot_caches() -> None:
+    """Pre-warm frequently-read L1+L2 caches immediately after startup.
+
+    Fires get_owner_id and active_groups reads in parallel so the first
+    command handler gets an L1 hit instead of a cold MongoDB round-trip.
+    Both calls are cache-backed (L1 TTLCache + L2 Redis TwoLevelCache) so
+    the warm-up data persists for the full TTL window.
+    """
+    try:
+        await asyncio.gather(
+            db.users_roles.get_owner_id(),
+            db.groups_db.active_groups(),
+            return_exceptions=True,
+        )
+        log.debug("Cache warm-up: owner_id and active_groups pre-loaded into L1+L2.")
+    except Exception as exc:
+        log.debug("Cache warm-up failed (non-fatal): %s", exc)
+
+
 async def _post_init(app: Application) -> None:
     """Connect to MongoDB, ensure indexes, seed owner, start scheduler, and attach error reporter."""
     log.info("post_init: connecting to MongoDB...")
     await connect()
-    log.info("post_init: ensuring indexes...")
-    await ensure_indexes()
-    log.info("post_init: ensuring initial owner...")
-    await db.users_roles.ensure_initial_owner(cfg.initial_owner_id)
 
-    # * Optional Redis - degrade gracefully when REDIS_URL is not set or unreachable.
-    if cfg.redis_url:
-        try:
-            await redis_client.connect(cfg.redis_url)
-        except Exception as exc:
-            log.warning(
-                "Redis connection failed; running with in-memory cache only: %s", exc
-            )
-    else:
-        log.info("REDIS_URL not set; in-memory cache only.")
+    # * Run index creation, owner seeding, and Redis connect in parallel.
+    # * All three are safe to run concurrently once the MongoDB client is live.
+    log.info("post_init: parallel setup (indexes, owner seed, Redis)...")
+
+    async def _try_redis() -> None:
+        if cfg.redis_url:
+            try:
+                await redis_client.connect(cfg.redis_url)
+            except Exception as exc:
+                log.warning(
+                    "Redis connection failed; running with in-memory cache only: %s",
+                    exc,
+                )
+        else:
+            log.info("REDIS_URL not set; in-memory cache only.")
+
+    indexes_r, owner_r, _ = await asyncio.gather(
+        ensure_indexes(),
+        db.users_roles.ensure_initial_owner(cfg.initial_owner_id),
+        _try_redis(),
+        return_exceptions=True,
+    )
+    if isinstance(indexes_r, BaseException):
+        raise indexes_r
+    if isinstance(owner_r, BaseException):
+        log.warning("ensure_initial_owner failed (non-fatal): %s", owner_r)
 
     # * APScheduler 4 with MongoDBDataStore - persistent scheduled moderation jobs.
     await sched_mod.start(cfg.mongodb_uri, cfg.db_name, cfg.warn_expiry_days)
+
+    # * Pre-warm hot caches (owner ID + active groups) as a background task so
+    # * the first real user command hits L1 instead of going all the way to MongoDB.
+    # * Strong reference in _startup_tasks prevents GC before completion (RUF006).
+    loop = asyncio.get_running_loop()
+    _t = loop.create_task(_warm_hot_caches(), name="tcbot.cache_warmup")
+    _startup_tasks.add(_t)
+    _t.add_done_callback(_startup_tasks.discard)
 
     # * Attach live bot to the error reporter (enables Layers 1 + 3)
     # * Owner ID is passed so infra-level errors (Conflict, InvalidToken)
@@ -232,7 +274,6 @@ async def _post_init(app: Application) -> None:
     error_reporter.attach(app.bot, lec, let, owner_id=cfg.initial_owner_id)
 
     # * Register asyncio-level exception handler (Layer 3)
-    loop = asyncio.get_running_loop()
     loop.set_exception_handler(_make_asyncio_exc_handler(loop))
 
     log.info("Bot initialised.")

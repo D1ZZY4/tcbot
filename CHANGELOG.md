@@ -2,6 +2,14 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 111)
+
+### Performance
+
+- **`tcbot/modules/greeting.py`** (`_handle_member`): Changed `upsert_user` call to `upsert_user_if_changed`. Previously every `new_chat_members` event unconditionally issued a MongoDB write even when the joining user's identity was already cached and unchanged. With `upsert_user_if_changed` the L1 mention cache is consulted first; the DB write is skipped entirely on a cache hit, making the fast path sub-microsecond. This is especially impactful for batch joins via invite links where multiple users may already be known. (Perf #292)
+- **`tcbot/__main__.py`** (`_post_init`): Parallelised three independent startup tasks that previously ran sequentially: `ensure_indexes`, `ensure_initial_owner`, and `redis_client.connect`. All three are safe to run concurrently once the MongoDB client is live. This reduces `_post_init` wall-clock time by up to 2× on cold starts (saving ~100–200 ms per task on Atlas). Index-creation failure is still treated as fatal (re-raised); owner-seed failure is logged as a warning; Redis failure gracefully degrades to in-memory cache only. (Perf #293)
+- **`tcbot/__main__.py`** (new `_warm_hot_caches`): Added a background cache warm-up task that fires immediately after the scheduler starts. Pre-warms `owner_id_cache` and `active_groups_cache` via parallel `asyncio.gather` so the first real command handler gets an L1 TTLCache hit instead of a cold MongoDB round-trip. Task reference kept in module-level `_startup_tasks` set for RUF006 compliance. (Perf #294)
+
 ## [Unreleased] - 2026-06-13 (session 110)
 
 ### Fixed

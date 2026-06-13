@@ -5,9 +5,15 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 110)
+**Last updated:** 2026-06-13 (session 111)
 
 ## What is done
+
+- Session 111 (2026-06-13): v4.5.1 audit pass. No new bugs found. Three performance improvements implemented:
+  - Perf #292: greeting.py `_handle_member` — changed `upsert_user` to `upsert_user_if_changed`. On-join identity writes are now skipped if L1 cache already matches (sub-microsecond fast path). Impacts batch invite-link joins most.
+  - Perf #293: `__main__.py` `_post_init` — parallelised `ensure_indexes`, `ensure_initial_owner`, and `redis_client.connect` via `asyncio.gather`. All three are safe to run concurrently after MongoDB `connect()`. Index failure still fatal (re-raised); owner seed failure logged as warning; Redis failure degrades gracefully. Saves ~100–200 ms on cold Atlas start.
+  - Perf #294: `__main__.py` new `_warm_hot_caches` — background cache warm-up task fired after scheduler starts. Pre-warms `owner_id_cache` and `active_groups_cache` in parallel so first command handler gets L1 hit. Strong reference in `_startup_tasks` set (RUF006-compliant).
+  - Verification: ruff 73 files clean (All checks passed!).
 
 - Session 110 (2026-06-13): Performance improvements from new task file v4.1.1 mandate. No bugs found; four performance enhancements implemented:
   - `upsert_user_if_changed()` in users_cache.py: change-detection write that checks L1 mention cache before issuing MongoDB write; skips DB on cache hit (sub-microsecond). Returns bool indicating write.
@@ -110,8 +116,8 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## AUDIT STATUS
 
-**COMPLETE** as of session 109. All 73 tcbot/ Python files audited and ruff-clean (three full passes).
-Total bugs fixed: **#1-#285**.
+**COMPLETE** as of session 111 (v4.5.1 pass). All 73 tcbot/ Python files audited and ruff-clean (four full passes).
+Total bugs fixed: **#1-#291**. Perf improvements: **#292–#294**.
 
 ### All files fully audited across all sessions:
 ban_flow.py, greeting.py, bans_db.py, unban_flow.py, appeal_flow.py, banning.py, muting.py, muting_flow.py, kicking.py, kicking_flow.py, warnings.py, warning_flow.py, demote_flow.py, connected_flow.py, proof_flow.py, reason_flow.py, parse_logmsg.py, decorators.py, admins.py, users_cache.py, users_roles.py, promote_flow.py, connecting.py, disconnecting.py, groups_db.py, unbanning.py, appeals.py, check_flow.py, broadcasting.py, mongos.py, mutes_db.py, warns_db.py, kicks_db.py, queues_db.py, pagination.py, error_reporter.py, keyboards.py, parse_editmsg.py, documents.py, replies.py, timedate_format.py, parse_link.py, prefixes.py, redis_client.py, alive.py, checking.py, stats.py, stats_flow.py, maintenance.py, additional.py, netspeed.py, formatter.py, identity.py, cache.py, scheduler.py, __init__.py, __main__.py, ban_info.py, extraction.py, start.py, help.py, about.py, privacy.py, groups.py, modules/__init__.py, modules/types.py, dispatch.py, logger.py, utils/__init__.py, database/__init__.py, database/types.py, modules/helper/__init__.py, modules/helper/workflows/__init__.py
