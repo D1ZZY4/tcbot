@@ -273,6 +273,26 @@ if (
 
 ---
 
+## 2026-06-13: Hot-path member cache uses change-detection writes
+
+**Decision:** `_update_member_cache` in `__main__.py` fires a fire-and-forget background task calling `upsert_user_if_changed` (not `upsert_user`). `upsert_user_if_changed` checks the L1 mention cache first; if `(first_name, username)` matches the cached data, the DB write is skipped entirely.
+
+**Why:** The original blocking `await upsert_user(...)` issued a MongoDB write on every single Telegram update regardless of whether the user's identity had changed. In a bot receiving thousands of messages per day this adds significant unnecessary load. The fast path (cache hit, no change) is now sub-microsecond. Only actual identity changes trigger a DB write. The background task pattern keeps the handler chain non-blocking.
+
+**How to apply:** Any new hot-path location that needs to persist user identity should call `db.users_cache.upsert_user_if_changed(...)` as a fire-and-forget task. Keep a strong reference in a module-level `set` with a `discard` done-callback (RUF006). Module sets in use: `__main__._member_cache_tasks`, `connected_flow._harvest_tasks`.
+
+---
+
+## 2026-06-13: Admin harvest on group connect
+
+**Decision:** `connected_flow.complete_join` calls `getChatAdministrators` in parallel with other startup tasks, then fires a fire-and-forget `_harvest_admin_identities` coroutine that persists all admin identities via `upsert_user_if_changed`.
+
+**Why:** When a group connects, admin identities are often unknown because the bot was just added. Without this harvest, the first moderation command that references an admin would trigger a MongoDB lookup that might return empty, falling back to a numeric ID. Harvesting at connect time ensures names are available immediately.
+
+**How to apply:** `_harvest_admin_identities(chat_id, admins)` takes a list of `ChatMember` objects. Task is kept in `_harvest_tasks` set. Repeat this pattern for any future event where a batch of admin identities becomes available (e.g. periodic admin re-harvest).
+
+---
+
 ## 2026-06-13: lint.yml import check must use `python -c "import tcbot"`, not `python -m tcbot`
 
 **Decision:** The CI import-check step in `lint.yml` must be `uv run python -c "import tcbot; print('import OK')"`, never `uv run python -m tcbot`.

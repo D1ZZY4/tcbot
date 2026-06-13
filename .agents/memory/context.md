@@ -5,9 +5,16 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 109)
+**Last updated:** 2026-06-13 (session 110)
 
 ## What is done
+
+- Session 110 (2026-06-13): Performance improvements from new task file v4.1.1 mandate. No bugs found; four performance enhancements implemented:
+  - `upsert_user_if_changed()` in users_cache.py: change-detection write that checks L1 mention cache before issuing MongoDB write; skips DB on cache hit (sub-microsecond). Returns bool indicating write.
+  - `_update_member_cache` in __main__.py: converted from blocking `await upsert_user()` (every update) to fire-and-forget background task using `upsert_user_if_changed`. Fast path (cache hit, no change): ~0 cost. `_member_cache_tasks` set for RUF006 compliance.
+  - `on_join_request` in greeting.py: added parallel identity harvest (`upsert_user_if_changed`) alongside ban check via `asyncio.gather`. Previously user identity was not cached from join requests.
+  - `_harvest_admin_identities()` in connected_flow.py: new function + `_harvest_tasks` set. When group connects, `getChatAdministrators` fetched in parallel in `complete_join`; admin identities persisted via parallel `asyncio.gather` over all admins. RUF006-compliant.
+  - Verification: ruff 73 files clean, import OK, config OK, startup OK (27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling).
 
 - Session 109 (2026-06-13): Third-pass comprehensive audit of all primary moderation paths. No new bugs found — all areas verified CLEAN:
   - ban_flow.py, greeting.py, scheduler.py, muting_flow.py, unban_flow.py, extraction.py, warning_flow.py (T001-T007 repeated audit pass).

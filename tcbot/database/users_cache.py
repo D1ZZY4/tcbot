@@ -60,6 +60,32 @@ async def upsert_user(
     user_mention_cache.invalidate(user_id)
 
 
+async def upsert_user_if_changed(
+    user_id: int,
+    username: str | None,
+    first_name: str,
+    last_name: str | None = None,
+) -> bool:
+    """Write user profile to DB only when identity data has changed since last cache entry.
+
+    Checks the L1 in-memory mention cache first.  When the cached (first_name,
+    username) pair matches the incoming data, the DB write is skipped entirely
+    and False is returned.  This eliminates the MongoDB round-trip for the vast
+    majority of updates (where identity data has not changed) and makes the
+    hot-path member-cache handler nearly free.
+
+    Returns True when a DB write was performed, False when skipped.
+    """
+    cached = user_mention_cache.get(user_id)
+    if cached is not CACHE_MISS:
+        # * Cache stores [first_name, username]; compare the two cheap string fields.
+        data: list[str | None] = cached  # type: ignore[assignment]
+        if data[0] == first_name and data[1] == username:
+            return False
+    await upsert_user(user_id, username, first_name, last_name)
+    return True
+
+
 # ───────── Member cache queries ─────────
 
 

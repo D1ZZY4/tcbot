@@ -43,7 +43,9 @@ async def fan_out[T](
                 log.debug("Coroutine failed in fan_out: %s", exc)
                 return exc
 
-    return list(await asyncio.gather(*(_slot(c) for c in coros)))
+    return list(
+        await asyncio.gather(*(_slot(c) for c in coros), return_exceptions=True)
+    )
 
 
 def count_errors(results: Sequence[object]) -> int:

@@ -78,21 +78,44 @@ warnings.filterwarnings(
 # ────────────────── Member Cache Update (layer 1) ───────────────── #
 # * Caches the effective_user from every update so log messages and mention
 # * links resolve to real names instead of falling back to numeric IDs.
+# * Only writes to MongoDB when identity data has changed (name/username differs
+# * from the L1 cache), keeping the hot-path near-zero-cost on cache hits.
+
+# * Strong references to in-flight member-cache background tasks; prevents GC.
+_member_cache_tasks: set[asyncio.Task[None]] = set()
 
 
 async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Cache the effective_user from any update; bot-issued events are skipped."""
+    """Cache the effective_user from any update; bot-issued events are skipped.
+
+    Uses ``upsert_user_if_changed`` so the L1 mention cache is consulted first.
+    When identity data matches the cached entry no DB write is issued, making
+    the fast path sub-microsecond.  When a write is needed it is fire-and-forget
+    so this handler never blocks the downstream handler chain.
+    """
     user = update.effective_user
     if not user or user.is_bot:
         return
     if not user.first_name:
         return
+
+    uid = user.id
+    uname = user.username
+    fname = user.first_name
+    lname = user.last_name
+
+    async def _do_cache() -> None:
+        try:
+            await db.users_cache.upsert_user_if_changed(uid, uname, fname, lname)
+        except Exception as exc:
+            log.debug("Member cache update failed for %d: %s", uid, exc)
+
     try:
-        await db.users_cache.upsert_user(
-            user.id, user.username, user.first_name, user.last_name
-        )
-    except Exception as exc:
-        log.debug("Member cache update failed for %d: %s", user.id, exc)
+        task = asyncio.get_running_loop().create_task(_do_cache())
+        _member_cache_tasks.add(task)
+        task.add_done_callback(_member_cache_tasks.discard)
+    except RuntimeError:
+        pass
 
 
 # ─────────────────── PTB Error Handler (Layer 2) ────────────────── #

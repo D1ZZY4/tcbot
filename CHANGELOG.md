@@ -2,6 +2,20 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 110)
+
+### Fixed
+
+- **`tcbot/utils/dispatch.py`** (`fan_out`): `asyncio.gather` called without `return_exceptions=True` inside `fan_out`. The `_slot` wrapper already catches all `Exception` and returns them as values, but re-raises `asyncio.CancelledError`. Without `return_exceptions=True`, a single cancelled sub-task causes `gather` to cancel all remaining pending slots and propagate `CancelledError` to the caller — violating `fan_out`'s "never raises" contract. Fixed by adding `return_exceptions=True` so a cancelled slot result is captured as a `BaseException` in the returned list while other slots continue to completion. (Bug #290)
+- **`tcbot/database/scheduler.py`** (`setup_schedules`): `except Exception: pass` with an inline comment silently discarded the exception when `remove_schedule(_WARN_EXPIRY_SCHEDULE_ID)` failed (e.g. schedule not present on first startup). Any unexpected scheduler error (e.g. `MongoDBDataStore` timeout, unexpected APScheduler state) would be swallowed without any log output. Fixed by binding the exception as `exc` and emitting a `log.debug` message so the skipped removal is observable without being noisy. (Bug #291)
+
+### Performance
+
+- **`tcbot/database/users_cache.py`** (new `upsert_user_if_changed`): Added a change-detection write helper that checks the L1 in-memory mention cache before issuing a MongoDB write. When the cached `(first_name, username)` pair matches the incoming data the DB write is skipped entirely and the function returns in sub-microsecond time. This eliminates the MongoDB round-trip for the vast majority of updates where a user's identity has not changed since the last observed event.
+- **`tcbot/__main__.py`** (`_update_member_cache`): Converted from a blocking `await upsert_user(...)` (issued on every single Telegram update) to a fire-and-forget background task that calls `upsert_user_if_changed`. Fast path (L1 cache hit, no identity change): sub-microsecond, no task spawned. Slow path (cache miss or changed identity): spawns a background task and returns immediately so the downstream handler chain is never delayed by a MongoDB write. Strong reference to the task kept in `_member_cache_tasks` set to prevent GC before completion (RUF006-compliant).
+- **`tcbot/modules/greeting.py`** (`on_join_request`): Identity harvest and ban check now run in parallel via `asyncio.gather`. Previously the ban check was the only DB call; user identity from join requests was not cached at all. Now `upsert_user_if_changed` (change-detection, cheap on cache hit) fires alongside `get_active_ban` so both complete in one round-trip.
+- **`tcbot/modules/helper/workflows/connected_flow.py`** (`complete_join`, new `_harvest_admin_identities`): When a group connects to the federation, `getChatAdministrators` is now fetched in parallel with the existing `get_chat`, `active_ban_user_ids`, `add_group`, and `remove_pending` calls. Admin identities are persisted via `upsert_user_if_changed` (in parallel via `asyncio.gather` over all admins) as a fire-and-forget background task. Strong reference kept in module-level `_harvest_tasks` set (RUF006-compliant). This ensures all admin identities in a newly connected group are immediately available for mention formatting and target resolution without requiring a separate Telegram lookup.
+
 ## [Unreleased] - 2026-06-13 (session 108)
 
 ### Fixed

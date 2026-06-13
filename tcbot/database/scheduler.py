@@ -181,8 +181,8 @@ async def _register_periodic_schedules(
         try:
             await sched.remove_schedule(_WARN_EXPIRY_SCHEDULE_ID)
             log.info("Warn expiry schedule removed (WARN_EXPIRY_DAYS=0).")
-        except Exception:
-            pass  # Schedule did not exist: no-op
+        except Exception as exc:
+            log.debug("Warn expiry schedule not present, skipping removal: %s", exc)
 
     await sched.add_schedule(
         _cleanup_old_records,

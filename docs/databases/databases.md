@@ -39,7 +39,7 @@ flowchart TD
 
 | Helper | Collection(s) | Main responsibilities |
 |---|---|---|
-| `users_cache.py` | `member_cache` | Member profile cache operations: upsert, get, batch queries, mention formatting, total count, all users list. |
+| `users_cache.py` | `member_cache` | Member profile cache operations: upsert, change-detection upsert, get, batch queries, mention formatting, total count, all users list. |
 | `users_roles.py` | `tc_owners`, `tc_admins`, `tc_roles` | Owner CRUD, admin CRUD, developer/tester role CRUD, effective-role resolution, can_act_on checks. |
 | `bans_db.py` | `bans` | Active ban lookup, ban creation/update, unban deactivation, appeal/review metadata, active ban lists. |
 | `warns_db.py` | `warns`, `warn_counts` | Warning history, warning counters, backfill/sync, remove latest warning, clear warnings. |
@@ -68,7 +68,12 @@ The `member_cache` collection stores user profile data. For performance, use the
 
 For group title lookups across multiple chat IDs, use `groups_db.get_group_titles(chat_ids)` which returns `dict[int, str]` in a single query.
 
+| `upsert_user(user_id, username, first_name, last_name)` | All fields | Unconditional DB write (used on first-seen and forced refresh) |
+| `upsert_user_if_changed(user_id, username, first_name, last_name)` | All fields | Change-detection write: checks L1 mention cache; skips MongoDB write when `(first_name, username)` matches cached data. Returns `True` when a write occurred. Use this on every hot-path update (e.g. per-message member cache harvesting). |
+
 **Performance tip:** Use batch functions whenever you need data for more than one user in a list view or fan-out result. Calling single-user functions inside a loop is an N+1 anti-pattern. Both batch functions rely on the `(user_id, first_name, username)` covered-query index in `member_cache`. For partial-name target resolution, always use `search_by_name` instead of `all_users` to avoid a full collection transfer.
+
+**Hot-path harvest pattern:** On every observed Telegram update, call `upsert_user_if_changed` (not `upsert_user`). When the user's identity has not changed since the last observation the function returns in sub-microsecond time without any I/O. A MongoDB write only occurs when `first_name` or `username` has changed. Fire the call as a background `asyncio.Task` so the handler chain is never blocked by the DB write; keep a strong reference to the task in a module-level `set` with a `discard` done-callback to satisfy RUF006.
 
 ## Startup indexes
 

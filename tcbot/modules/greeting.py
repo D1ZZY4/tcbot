@@ -135,6 +135,7 @@ async def on_join_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
     The handler declines the request silently when the user has an active
     federation ban. Non-banned users are left for the normal approval flow.
+    Also opportunistically caches the requesting user's identity.
     """
     request = update.chat_join_request
     if request is None:
@@ -160,14 +161,21 @@ async def on_join_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         if not connected:
             return
 
-    try:
-        ban = await db.bans_db.get_active_ban(user.id)
-    except Exception as exc:
+    # * Opportunistic identity harvest + ban check in parallel.
+    # * upsert_user_if_changed skips the DB write when identity is unchanged (L1 hit).
+    _, ban = await asyncio.gather(
+        db.users_cache.upsert_user_if_changed(
+            user.id, user.username, user.first_name, user.last_name or None
+        ),
+        db.bans_db.get_active_ban(user.id),
+        return_exceptions=True,
+    )
+    if isinstance(ban, BaseException):
         log.warning(
             "get_active_ban failed for uid=%d on join_request in chat=%d: %s",
             user.id,
             chat.id,
-            exc,
+            ban,
         )
         return
 

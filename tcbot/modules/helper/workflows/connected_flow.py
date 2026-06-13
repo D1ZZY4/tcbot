@@ -24,6 +24,58 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+
+# ────────────────── Admin Identity Harvest ──────────────────────── #
+# * Called as fire-and-forget task when the bot gains access to a new group.
+# * Caches every admin's identity so name lookups are available without extra
+# * MongoDB or Telegram API round-trips later.
+
+# * Strong references to in-flight admin-harvest background tasks; prevents GC
+# * before the coroutine completes (RUF006 compliance).
+_harvest_tasks: set[asyncio.Task[None]] = set()
+
+
+async def _harvest_admin_identities(
+    chat_id: int,
+    admins: list[ChatMember],
+) -> None:
+    """Persist identity data for every admin using change-detection writes.
+
+    Uses ``upsert_user_if_changed`` so the DB write is skipped when the cached
+    identity already matches, keeping the harvest nearly free on subsequent runs.
+    """
+    coros = []
+    for member in admins:
+        user = getattr(member, "user", None)
+        if user is None or user.is_bot or not user.first_name:
+            continue
+        coros.append(
+            db.users_cache.upsert_user_if_changed(
+                user.id,
+                user.username,
+                user.first_name,
+                user.last_name,
+            )
+        )
+    if not coros:
+        return
+    results = await asyncio.gather(*coros, return_exceptions=True)
+    errors = sum(1 for r in results if isinstance(r, BaseException))
+    if errors:
+        log.debug(
+            "Admin identity harvest for chat=%d: %d/%d writes failed",
+            chat_id,
+            errors,
+            len(coros),
+        )
+    else:
+        log.debug(
+            "Admin identity harvest for chat=%d: %d identities cached",
+            chat_id,
+            len(coros),
+        )
+
+
 # ──────────────── User-facing reply constants ──────────────────── #
 
 _ERR_ROLE_CHECK_FAILED = "Could not verify your role."
@@ -114,11 +166,12 @@ class BuildConnection:
         bot: Bot,
     ) -> None:
         """Connect the group, apply all active federation bans, and notify LOG_CHANNEL."""
-        # * Fetch chat info + active ban IDs + register group + clear pending - all in parallel.
-        # * The Telegram lookup is bounded so a stalled API never blocks the connect flow.
-        chat_result, ban_uids, *_ = await asyncio.gather(
+        # * Fetch chat info + active ban IDs + admin list + register group + clear pending.
+        # * All Telegram and DB calls fire in parallel; bounded timeouts prevent stalls.
+        chat_result, ban_uids, admins_result, *_ = await asyncio.gather(
             asyncio.wait_for(bot.get_chat(chat_id), timeout=_TG_TIMEOUT),
             db.bans_db.active_ban_user_ids(),
+            asyncio.wait_for(bot.get_chat_administrators(chat_id), timeout=_TG_TIMEOUT),
             db.groups_db.add_group(chat_id, chat_title, owner_id),
             db.groups_db.remove_pending(chat_id),
             return_exceptions=True,
@@ -130,6 +183,18 @@ class BuildConnection:
         )
         if isinstance(ban_uids, BaseException):
             ban_uids = []
+
+        # * Harvest admin identities into the member cache (fire-and-forget, best-effort).
+        # * Strong reference kept in _harvest_tasks to prevent GC before completion.
+        if not isinstance(admins_result, BaseException) and admins_result:
+            try:
+                task = asyncio.get_running_loop().create_task(
+                    _harvest_admin_identities(chat_id, admins_result)
+                )
+                _harvest_tasks.add(task)
+                task.add_done_callback(_harvest_tasks.discard)
+            except RuntimeError:
+                pass
 
         # * Apply all existing federation bans concurrently - semaphore-bounded
         results = await fan_out([bot.ban_chat_member(chat_id, uid) for uid in ban_uids])
