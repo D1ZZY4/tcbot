@@ -23,7 +23,7 @@ on:
     # Resurrection backup. Fires every 30 minutes; if a run is already active
     # the new one queues (and replaces any older queued run), so a healthy bot
     # is never interrupted, only restarted when it is actually down.
-    - cron: "*/30 * * * *"
+    - cron: "55 4 * * *"
 
 concurrency:
   group: tcf-bot-runner
