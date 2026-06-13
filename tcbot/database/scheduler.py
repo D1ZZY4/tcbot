@@ -186,7 +186,7 @@ async def _register_periodic_schedules(
 
     await sched.add_schedule(
         _cleanup_old_records,
-        CronTrigger(day_of_week=0, hour=3, minute=0),
+        CronTrigger(day_of_week="mon", hour=3, minute=0),
         id=_CLEANUP_SCHEDULE_ID,
         conflict_policy=ConflictPolicy.replace,
     )

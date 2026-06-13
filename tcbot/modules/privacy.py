@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING
 
 from telegram.ext import CallbackQueryHandler, ContextTypes
@@ -16,7 +15,7 @@ from tcbot.modules.helper import decorators, keyboards
 from tcbot.modules.helper.formatter import esc
 
 if TYPE_CHECKING:
-    from telegram import CallbackQuery, Update
+    from telegram import Update
 
 # ─────────────────────── Rate-limiter constants ──────────────────── #
 _RL_PERIOD_S: int = 30
@@ -74,16 +73,16 @@ _PRIVACY_POLICY_MSG = (
 @decorators.log_execution
 async def on_privacy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the data-collection privacy notice when the Privacy button is tapped."""
-    q: CallbackQuery = update.callback_query
+    q = update.callback_query
+    if q is None:
+        return
+
     botname = esc(ctx.bot.first_name or "This bot")
-    await asyncio.gather(
-        q.answer(),
-        q.edit_message_text(
-            _PRIVACY_MSG.format(botname=botname),
-            parse_mode="HTML",
-            reply_markup=keyboards.privacy_kb(),
-        ),
-        return_exceptions=True,
+    await q.answer()
+    await q.edit_message_text(
+        _PRIVACY_MSG.format(botname=botname),
+        parse_mode="HTML",
+        reply_markup=keyboards.privacy_kb(),
     )
 
 
@@ -93,16 +92,16 @@ async def on_privacy_policy_menu(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE
 ) -> None:
     """Render the full privacy policy text when the Privacy Policy button is tapped."""
-    q: CallbackQuery = update.callback_query
+    q = update.callback_query
+    if q is None:
+        return
+
     botname = esc(ctx.bot.first_name or "This bot")
-    await asyncio.gather(
-        q.answer(),
-        q.edit_message_text(
-            _PRIVACY_POLICY_MSG.format(botname=botname),
-            parse_mode="HTML",
-            reply_markup=keyboards.back_to_privacy_kb(),
-        ),
-        return_exceptions=True,
+    await q.answer()
+    await q.edit_message_text(
+        _PRIVACY_POLICY_MSG.format(botname=botname),
+        parse_mode="HTML",
+        reply_markup=keyboards.back_to_privacy_kb(),
     )
 
 

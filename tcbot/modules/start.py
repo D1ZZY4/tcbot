@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -65,6 +64,9 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """
     msg = update.effective_message
     chat = update.effective_chat
+    if msg is None or chat is None:
+        return
+
     text = (msg.text or "").strip()
     parts = text.split(None, 1)
     arg = parts[1].strip() if len(parts) > 1 else ""
@@ -113,29 +115,23 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.log_execution
 async def on_back_to_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Return to the main menu when the Back button is tapped in a sub-menu."""
-    q: CallbackQuery = update.callback_query
+    q = update.callback_query
+    if q is None:
+        return
+
     botname = esc(ctx.bot.first_name or "")
-    await asyncio.gather(
-        q.answer(),
-        q.edit_message_text(
-            _PRIVATE_START_TEXT.format(botname=botname),
-            parse_mode="HTML",
-            reply_markup=keyboards.main_menu_kb(),
-        ),
-        return_exceptions=True,
+    await q.answer()
+    await q.edit_message_text(
+        _PRIVATE_START_TEXT.format(botname=botname),
+        parse_mode="HTML",
+        reply_markup=keyboards.main_menu_kb(),
     )
 
 
 async def _show_groups(q: CallbackQuery, *, detailed: bool) -> None:
     """Shared renderer for all group-menu callbacks."""
-    # * Gather q.answer() + DB fetch in parallel; both are independent.
-    _, groups = await asyncio.gather(
-        q.answer(),
-        db.groups_db.active_groups(),
-        return_exceptions=True,
-    )
-    if isinstance(groups, BaseException):
-        groups = []
+    await q.answer()
+    groups = await db.groups_db.active_groups()
     if not groups:
         try:
             await q.edit_message_text(
@@ -159,7 +155,10 @@ async def _show_groups(q: CallbackQuery, *, detailed: bool) -> None:
 @decorators.log_execution
 async def on_menu_groups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Show the connected-groups list in simple view from the start menu."""
-    await _show_groups(update.callback_query, detailed=False)
+    q = update.callback_query
+    if q is None:
+        return
+    await _show_groups(q, detailed=False)
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -168,14 +167,20 @@ async def on_menu_groups_details(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE
 ) -> None:
     """Show the connected-groups list with full group IDs visible."""
-    await _show_groups(update.callback_query, detailed=True)
+    q = update.callback_query
+    if q is None:
+        return
+    await _show_groups(q, detailed=True)
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_menu_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Return to simple view of the connected-groups list from the start menu."""
-    await _show_groups(update.callback_query, detailed=False)
+    q = update.callback_query
+    if q is None:
+        return
+    await _show_groups(q, detailed=False)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

@@ -37,6 +37,8 @@ async def fan_out[T](
         async with sem:
             try:
                 return await coro
+            except asyncio.CancelledError:
+                raise
             except Exception as exc:
                 log.debug("Coroutine failed in fan_out: %s", exc)
                 return exc

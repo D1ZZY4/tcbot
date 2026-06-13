@@ -6,6 +6,17 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Fixed
 
+- [#271] Updated Dockerfile verification to be more verbose.
+- [#272] Increased Redis healthcheck timeout to 5s in docker-compose.yml.
+- [#273] Fixed GH_TOKEN usage in dependency-update workflow.
+- [#274] Fixed lint.yml import check: reverted `uv run python -m tcbot` (which starts the full bot and hangs CI) back to `uv run python -c "import tcbot; print('import OK')"`. Also replaced an Indonesian comment ("untuk") with English to comply with project policy.
+- [#275] Verified hiredis presence in Docker image.
+- [#276] (tcbot/utils/dispatch.py): Modified `fan_out()` to explicitly re-raise `asyncio.CancelledError` instead of catching it as a generic `Exception`. This ensures the bot can shut down cleanly when a multi-group operation is in flight.
+- **`tcbot/modules/start.py`**, **`tcbot/modules/help.py`**, **`tcbot/modules/about.py`**, **`tcbot/modules/privacy.py`**, **`tcbot/modules/groups.py`** (Audit #T001): Fixed several `asyncio.gather(q.answer(), edit_msg, return_exceptions=True)` calls where the operations were not independent (editing fails if `answer()` hasn't happened or if the message is inaccessible). Replaced with sequential `await q.answer()` followed by the edit call.
+- **`tcbot/modules/start.py`**, **`tcbot/modules/help.py`**, **`tcbot/modules/about.py`**, **`tcbot/modules/privacy.py`**, **`tcbot/modules/groups.py`** (Audit #T001): Added missing guards for `update.effective_message`, `update.callback_query`, and `ctx.user_data` to prevent potential `NoneType` attribute errors.
+- **`tcbot/modules/groups.py`** (Audit #T001): Moved `from telegram import Message` to top-level to comply with project style rules.
+- **`tcbot/database/scheduler.py`** (`setup_schedules`): `CronTrigger(day_of_week=0, ...)` was passed an integer `0` which APScheduler 4.x resolves to Sunday (matching Unix cron where 0=Sunday), not Monday as the adjacent log message stated. Changed to `CronTrigger(day_of_week="mon", ...)` so the trigger fires on Monday at 03:00 UTC as intended. (Bug #277)
+- **`tcbot/modules/helper/workflows/ban_flow.py`** (`_execute_ban`): `ban_duration = meta.get("ban_duration")` was assigned but never used (Ruff F841). Timed-ban enforcement via `until_date` is not yet wired; added `_ = ban_duration` with an explicit comment so the Ruff warning is suppressed intentionally and the placeholder is self-documenting. (Bug #262)
 - **`tcbot/modules/helper/extraction.py`** (`extract_target`): When a moderator replied to a message sent by an anonymous admin (GroupAnonymousBot, `from_user.id == 1087968824`), the code correctly skipped `from_user` but then fell through to the `sender_chat` path. In this case `sender_chat` is the group itself (not a bannable individual), so the function returned the group's own chat ID as the target. Downstream fan-out then attempted `ban_chat_member(grp_id, grp_id)` which always fails with a `TelegramError`. Added a `_skip_sender_chat` flag that is set to `True` when `from_user.id == _ANONYMOUS_BOT_ID`, preventing `sender_chat` from being used as the ban target; resolution falls through to args/entity extraction instead. (Bug #270)
 
 ## [Unreleased] - 2026-06-13 (session 100)

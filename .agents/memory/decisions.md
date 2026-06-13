@@ -260,3 +260,23 @@ if (
 **Why:** The guard's purpose is to avoid polluting the users_cache with a numeric fallback name (e.g. "123456789") when `_best_name()` found no real name. Without `isdigit()`, a numeric fallback would overwrite a potentially real cached name with a worse one.
 
 **How to apply:** Any code that conditionally caches `target_fname` from `extract_target` must use both the `startswith("User ")` and `isdigit()` branches to guard against all possible fallback formats.
+
+---
+
+## 2026-06-13: APScheduler 4.x CronTrigger day_of_week integer 0 = Sunday (not Monday)
+
+**Decision:** Always pass `day_of_week` to `CronTrigger` as a named string (`"mon"`, `"tue"`, ..., `"sun"`) rather than an integer.
+
+**Why:** APScheduler 4.x follows Unix cron convention where `day_of_week=0` resolves to **Sunday** (not Monday as Python's `datetime.weekday()` would suggest). Passing the integer `0` with an adjacent log message saying "Monday" produced a silent mismatch: the cleanup job ran Sunday 03:00 UTC while logs claimed Monday 03:00 UTC. Using `"mon"` is unambiguous and self-documenting. Confirmed in runtime logs: before fix `day_of_week='sun'`; after fix `day_of_week='mon'`, `next run time 2026-06-15 03:00:00+00:00`.
+
+**How to apply:** In `scheduler.py` and any future schedule additions, use string weekday names for `CronTrigger(day_of_week=...)`. Never pass a bare integer.
+
+---
+
+## 2026-06-13: lint.yml import check must use `python -c "import tcbot"`, not `python -m tcbot`
+
+**Decision:** The CI import-check step in `lint.yml` must be `uv run python -c "import tcbot; print('import OK')"`, never `uv run python -m tcbot`.
+
+**Why:** `python -m tcbot` invokes `__main__.py` which calls `app.run_polling()` — the bot actually tries to connect to Telegram and MongoDB and then blocks forever (or crashes on timeout). This hangs the CI job. The import-check step's only purpose is to verify that `tcbot/__init__.py` parses correctly and `Configs.load()` succeeds (which does require BOT_TOKEN, MONGODB_URI, OWNER_ID in env). `python -c "import tcbot"` achieves that without starting the event loop.
+
+**How to apply:** In any CI workflow that validates imports, use the `-c "import tcbot; print('import OK')"` form. The three secrets (BOT_TOKEN, MONGODB_URI, OWNER_ID) must still be set in the job's `env:` block because `Configs.load()` is called at import time.

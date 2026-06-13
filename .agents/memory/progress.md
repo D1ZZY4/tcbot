@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-13 (session 102)
+**Last updated:** 2026-06-13 (session 103)
 
 ## Verification baseline
 
@@ -16,7 +16,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv run python -c "import tcbot; print('import OK')"` | PASS (re-verified session 93) |
 | `uv run python -m tcbot` | PASS by runtime evidence: MongoDB connected, indexes ensured, scheduler started, bot polling active |
 | `uv run ruff format .` | PASS (73 files) |
-| `uv run ruff check .` | PASS (All checks passed, verified session 99) |
+| `uv run ruff check .` | PASS (All checks passed, verified session 103) |
 | asyncio task-GC fix isolated test (session 43) | PASS: task registered on schedule, discarded on completion, report coroutine ran |
 | annotation AST audit | PASS: 0 non-dunder function parameters missing type annotations |
 | docs audit (session 74) | PASS: mapping.md top-level layout completed; 3 new Mermaid diagrams added; all code files audited clean |
@@ -24,11 +24,16 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Formatter consistency audit (session 93) | PASS: 11 files audited and fixed. All hardcoded `<b>`/`<code>` in dynamic content replaced with bold()/code() helpers. Ruff clean. Import OK. |
 | Docs sync audit (session 100) | PASS: 9 docs updated to reflect sessions 95-99 code changes (user_ref, deactivate_all/extra, trigger=mute, str(uid) fallback). CHANGELOG updated. Ruff: 73 files clean. |
 | Full module audit (session 99) | PASS: checking.py, check_flow.py, connecting.py, disconnecting.py, unbanning.py, admins.py, appeals.py, stats.py, broadcasting.py, maintenance.py, additional.py all clean. |
+| Session 103 comprehensive audit | PASS: All 73 tcbot/ files fully audited. Bugs #271-#277 fixed. Docker/CI/scheduler all clean. Ruff: 73 files clean. |
 
 ## Completed items (recent additions on top)
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Session 103 audit (session 103) | audit | Full audit sweep complete. T001: start.py, help.py, about.py, privacy.py, groups.py, modules/__init__.py, types.py verified clean; asyncio.gather/q.answer fixes + None guards added. T002: Dockerfile, docker-compose.yml, all 5 .github/workflows/*.yml audited. T003: dispatch.py, logger.py, utils/__init__.py, database/__init__.py, types.py, helper/__init__.py, workflows/__init__.py clean. T004: __main__.py, ban_info.py, extraction.py clean. Bugs #271-#277 fixed. CHANGELOG updated. Ruff: All checks passed (73 files). | 2026-06-13 (s103) |
+| Bug #277 (session 103) | correctness | scheduler.py setup_schedules: CronTrigger(day_of_week=0) resolves to Sunday in APScheduler 4.x (Unix cron 0=Sunday), not Monday. Log message said "Monday". Changed to day_of_week="mon" for explicit, unambiguous scheduling. | 2026-06-13 (s103) |
+| Bug #276 (session 103) | correctness | dispatch.py fan_out(): asyncio.CancelledError was caught by generic Exception handler and returned as a BaseException value rather than propagated. Added explicit CancelledError re-raise so bot shutdown is clean when multi-group fan_out is in flight. | 2026-06-13 (s103) |
+| Bugs #271-#275 (session 103) | infra | #271: Dockerfile hiredis verification verbose. #272: docker-compose Redis healthcheck timeout 5s. #273: dependency-update.yml GITHUB_TOKEN (built-in, no manual secret). #274: lint.yml import check reverted to python -c "import tcbot" (was wrongly changed to python -m tcbot which hangs CI); Indonesian comment fixed to English. #275: Dockerfile hiredis verified. | 2026-06-13 (s103) |
 | Session 102 audit (session 102) | audit | Audited 15 additional files: proof_flow.py, reason_flow.py, parse_logmsg.py, decorators.py, admins.py, users_cache.py, users_roles.py, promote_flow.py, connecting.py, disconnecting.py, groups_db.py, unbanning.py, appeals.py, check_flow.py, broadcasting.py — all clean, 0 new bugs. Em-dash/en-dash: 0 matches. Emoticon in identity.py: 0 matches. CHANGELOG.md updated for Bug #270. Ruff: All checks passed (73 files). | 2026-06-13 (s102) |
 | Bug #270 (session 102) | correctness | extraction.py extract_target: reply to anonymous admin message skipped from_user (ANONYMOUS_BOT_ID) correctly but fell through to sender_chat which is the group itself. Added _skip_sender_chat flag to skip sender_chat when from_user is ANONYMOUS_BOT_ID. Full audit of ban_flow, greeting, bans_db, unban_flow, appeal_flow, banning, muting, kicking, warnings, demote_flow, connected_flow — all clean. | 2026-06-13 (s102) |
 | Docs sync (session 100) | documentation | 9 docs updated to reflect sessions 95-99 code changes: user_ref in formatter table, deactivate_all/extra_active_bans in DB docs, trigger="mute" in demote/role/workflows docs, str(uid) fallback in check/stats docs, banning/appeal flow helpers updated. CHANGELOG updated. | 2026-06-13 (s100) |

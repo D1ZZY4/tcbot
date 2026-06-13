@@ -22,4 +22,6 @@
 - [identity.classify numeric fname guard](decisions.md): fname override condition must include isdigit() branch — _best_name() returns str(uid) not "User {uid}" as fallback
 - [ban_duration timed-ban placeholder](decisions.md): `_ = ban_duration` in ban_flow suppresses F841 while preserving the future timed-ban contract
 - [checking.py cache-guard isdigit branch](decisions.md): conditional upsert_user calls must add isdigit() guard alongside startsWith("User ") to prevent caching numeric fallback names
+- [APScheduler CronTrigger day_of_week integer trap](decisions.md): integer 0 = Sunday (Unix cron), not Monday; always use named strings ("mon"..."sun") to avoid silent mismatch
+- [lint.yml import check must use python -c not -m](decisions.md): python -m tcbot starts the full bot and hangs CI; use python -c "import tcbot" for import validation
 - [Anonymous admin sender_chat skip](decisions.md): in extract_target, when from_user is ANONYMOUS_BOT_ID, skip sender_chat too (it is the group itself, not a bannable user)

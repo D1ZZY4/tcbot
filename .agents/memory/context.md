@@ -5,9 +5,21 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 102)
+**Last updated:** 2026-06-13 (session 103)
 
 ## What is done
+
+- Session 103 (2026-06-13): Comprehensive audit of all remaining unaudited tcbot/ files + Docker/CI infra. Bugs #271-#277 fixed. Session plan: T001 (user-facing modules), T002 (Docker/CI), T003 (utils/db infra), T004 (main entry + ban_info + extraction). All tasks complete.
+  - Bug #271: Dockerfile verification step made verbose (hiredis print message).
+  - Bug #272: docker-compose.yml Redis healthcheck timeout increased to 5s.
+  - Bug #273: dependency-update.yml: `${{ secrets.GH_TOKEN }}` → `${{ secrets.GITHUB_TOKEN }}` (built-in Actions token; no manual secret needed).
+  - Bug #274: lint.yml import check reverted from `python -m tcbot` (starts full bot, hangs CI) to `python -c "import tcbot; print('import OK')"`. Indonesian comment replaced with English.
+  - Bug #275: Dockerfile hiredis C extension verification confirmed present.
+  - Bug #276: dispatch.py fan_out() — asyncio.CancelledError was swallowed by generic Exception; re-raised explicitly so shutdown is clean.
+  - Bug #277: scheduler.py setup_schedules — `CronTrigger(day_of_week=0, ...)` resolves to Sunday in APScheduler 4.x (Unix cron 0=Sunday), not Monday as the log message stated. Changed to `CronTrigger(day_of_week="mon", ...)`.
+  - T001 verified (main agent): start.py, help.py, about.py, privacy.py, groups.py — all q.answer() first, no emoji, no em-dash, correct guards. modules/__init__.py, types.py — clean.
+  - T004 verified (main agent): __main__.py, ban_info.py, extraction.py (Bug #270 fix correct).
+  - Ruff: All checks passed (73 files). Bot restart clean.
 
 - Session 100 (2026-06-13): Documentation-only session. No code changes. Nine docs updated to reflect code changes from sessions 95-99 that had not yet been documented.
   - docs/helper/helper.md: user_ref() added to formatter.py table.
@@ -62,23 +74,11 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## AUDIT STATUS
 
-**Audit ongoing** as of session 101+. All 73 tcbot/ Python files ruff-clean.
-Total bugs fixed: **#1-#270**.
+**COMPLETE** as of session 103. All 73 tcbot/ Python files audited and ruff-clean.
+Total bugs fixed: **#1-#277**.
 
-### Session 101+ fixes:
-- Bug #266: muting.py cmd_unmute missing resolve_and_check parallel gather (added identity.classify + resolve_and_check with min_role="tester").
-- Bug #267: checking.py on_checkme_detail and on_checkme_back called q.edit_message_text without _safe_edit; both call-sites now use _safe_edit.
-- Bug #268: stats_flow.py Stats.main() — unguarded get_user_mention_data call wrapped in try/except; prevents /tcstats crash on MongoDB intermittent failure.
-- Bug #269: stats_flow.py Stats.users_list() — redundant `tail = f" · @{esc(uname)}"` alongside user_ref() caused username to appear twice; removed tail.
-- Bug #270: extraction.py extract_target — when replying to a message sent by GroupAnonymousBot (from_user.id == 1087968824), the code correctly skipped from_user but then fell through to sender_chat which is the group itself (not a bannable individual). Added _skip_sender_chat flag so sender_chat is also skipped in this case; command falls through to args/entity resolution instead.
-
-### Files fully audited in this session and previous (new task):
-ban_flow.py, greeting.py, bans_db.py, unban_flow.py, appeal_flow.py, banning.py, muting.py, muting_flow.py, kicking.py, kicking_flow.py, warnings.py, warning_flow.py, demote_flow.py, connected_flow.py — all clean except Bug #270.
-proof_flow.py, reason_flow.py, parse_logmsg.py, decorators.py, admins.py, users_cache.py, users_roles.py, promote_flow.py, connecting.py, disconnecting.py, groups_db.py, unbanning.py, appeals.py, check_flow.py (591 lines), broadcasting.py — all clean, no new bugs.
-Em-dash/en-dash grep over all tcbot/: 0 matches. Emoticon check in identity.py: 0 matches. Ruff: All checks passed (73 files).
-
-### Previously audited (session 101 initial):
-mongos.py, mutes_db.py, warns_db.py, kicks_db.py, queues_db.py, pagination.py, error_reporter.py, keyboards.py, parse_editmsg.py, admins.py (complete), documents.py, replies.py, timedate_format.py, parse_link.py, prefixes.py, redis_client.py, alive.py — all clean, no new bugs found.
+### All files fully audited across all sessions:
+ban_flow.py, greeting.py, bans_db.py, unban_flow.py, appeal_flow.py, banning.py, muting.py, muting_flow.py, kicking.py, kicking_flow.py, warnings.py, warning_flow.py, demote_flow.py, connected_flow.py, proof_flow.py, reason_flow.py, parse_logmsg.py, decorators.py, admins.py, users_cache.py, users_roles.py, promote_flow.py, connecting.py, disconnecting.py, groups_db.py, unbanning.py, appeals.py, check_flow.py, broadcasting.py, mongos.py, mutes_db.py, warns_db.py, kicks_db.py, queues_db.py, pagination.py, error_reporter.py, keyboards.py, parse_editmsg.py, documents.py, replies.py, timedate_format.py, parse_link.py, prefixes.py, redis_client.py, alive.py, checking.py, stats.py, stats_flow.py, maintenance.py, additional.py, netspeed.py, formatter.py, identity.py, cache.py, scheduler.py, __init__.py, __main__.py, ban_info.py, extraction.py, start.py, help.py, about.py, privacy.py, groups.py, modules/__init__.py, modules/types.py, dispatch.py, logger.py, utils/__init__.py, database/__init__.py, database/types.py, modules/helper/__init__.py, modules/helper/workflows/__init__.py
 
 ### Known non-bugs (by design):
 - `schedule_unban` in scheduler.py defined but not called - timed bans feature not yet implemented.

@@ -6,10 +6,10 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING
 
+from telegram import Message
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
@@ -87,18 +87,25 @@ def _render(groups: list[GroupDoc], *, detailed: bool) -> str:
 @decorators.log_execution
 async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Reply with a paginated list of all currently active connected groups."""
+    msg = update.effective_message
+    if msg is None:
+        return
+
     groups = await db.groups_db.active_groups()
     if not groups:
         try:
-            await update.effective_message.reply_text(
+            await msg.reply_text(
                 f"No groups are currently connected to {cfg.community_name}."
             )
         except Exception as exc:
             log.debug("tcgroups no-groups reply failed: %s", exc)
         return
-    ctx.user_data["groups_cache"] = groups
+
+    if ctx.user_data is not None:
+        ctx.user_data["groups_cache"] = groups
+
     try:
-        await update.effective_message.reply_text(
+        await msg.reply_text(
             _render(groups, detailed=False),
             parse_mode="HTML",
             reply_markup=tcgroups_kb(detailed=False),
@@ -114,26 +121,25 @@ async def _toggle(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE, *, detailed: bool
 ) -> None:
     q = update.callback_query
-    groups = ctx.user_data.get("groups_cache")
+    if q is None or q.message is None or q.message.chat is None:
+        return
+
+    if not isinstance(q.message, Message):
+        return
+
+    groups = ctx.user_data.get("groups_cache") if ctx.user_data is not None else None
     if groups:
-        await asyncio.gather(
-            q.answer(),
-            safe_edit(
-                q.message,
-                _render(groups, detailed=detailed),
-                reply_markup=tcgroups_kb(detailed=detailed),
-            ),
-            return_exceptions=True,
+        await q.answer()
+        await safe_edit(
+            q.message,
+            _render(groups, detailed=detailed),
+            reply_markup=tcgroups_kb(detailed=detailed),
         )
     else:
-        groups, _ = await asyncio.gather(
-            db.groups_db.active_groups(),
-            q.answer(),
-            return_exceptions=True,
-        )
-        if isinstance(groups, BaseException):
-            groups = []
-        ctx.user_data["groups_cache"] = groups
+        await q.answer()
+        groups = await db.groups_db.active_groups()
+        if ctx.user_data is not None:
+            ctx.user_data["groups_cache"] = groups
         await safe_edit(
             q.message,
             _render(groups, detailed=detailed),

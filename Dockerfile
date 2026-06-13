@@ -13,7 +13,7 @@ COPY tcbot/ ./tcbot/
 RUN uv sync --frozen --no-dev
 
 # Verify hiredis C extension is present
-RUN uv run --frozen python -c "import hiredis"
+RUN uv run --frozen python -c "import hiredis; print('hiredis C extension verified')"
 
 EXPOSE 5000
 
