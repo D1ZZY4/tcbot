@@ -14,7 +14,7 @@ from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper.ban_info import build_ban_detail
-from tcbot.modules.helper.formatter import bold, code, esc, mention
+from tcbot.modules.helper.formatter import bold, code, esc, mention, user_ref
 from tcbot.utils.pagination import date_or_unknown, nav_row, paginate
 
 if TYPE_CHECKING:
@@ -255,9 +255,7 @@ class Stats:
             fname = u.get("first_name") or f"User {uid}"
             uname = u.get("username")
             tail = f" · @{esc(uname)}" if uname else ""
-            lines.append(
-                f"{base_idx + i}. {mention(uid, fname, uname)} - {code(str(uid))}{tail}"
-            )
+            lines.append(f"{base_idx + i}. {user_ref(uid, fname, uname)}{tail}")
 
         return "\n".join(lines), _list_kb(
             page,

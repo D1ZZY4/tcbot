@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
-from tcbot.modules.helper.formatter import code, esc, mention, proof_line, user_ref
+from tcbot.modules.helper.formatter import esc, proof_line, user_ref
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
@@ -267,8 +267,7 @@ async def execute_resetwarns(
 
     try:
         await msg.reply_text(
-            f"All {removed} warning(s) cleared for {mention(target_id, target_name)} - "
-            f"{code(str(target_id))}. Clean slate.",
+            f"All {removed} warning(s) cleared for {user_ref(target_id, target_name)}. Clean slate.",
             parse_mode="HTML",
         )
     except Exception as exc:

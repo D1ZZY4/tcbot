@@ -28,8 +28,8 @@ class Demote:
     """All federation-demotion logic.
 
     * ``execute(trigger=None)`` runs the manual /tcdemote path.
-    * ``execute(trigger="ban")`` / ``"kick"`` runs the auto-demote path used by
-      the ban and kick flows before the actual moderation action.
+    * ``execute(trigger="ban")`` / ``"kick"`` / ``"mute"`` runs the auto-demote
+      path used by the ban, kick, and mute flows before the actual action.
     """
 
     @staticmethod
@@ -78,7 +78,12 @@ class Demote:
                 f"{esc(executor_fname)}."
             )
         else:
-            verb = "banned" if trigger == "ban" else "kicked"
+            if trigger == "ban":
+                verb = "banned"
+            elif trigger == "mute":
+                verb = "muted"
+            else:
+                verb = "kicked"
             user_msg = (
                 f"Your {bold(role_label)} role in {esc(cfg.community_name)} has been removed - "
                 f"you were {verb} from the federation."

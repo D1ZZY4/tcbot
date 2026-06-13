@@ -66,7 +66,7 @@ async def _name(uid: int) -> str:
     return await db.users_cache.get_first_name(uid, f"User {uid}")
 
 
-async def _async_const(value: str) -> str:
+async def _async_const(value: Any) -> Any:
     """Wrap a constant in an async coroutine so gather() can mix it with awaits."""
     return value
 

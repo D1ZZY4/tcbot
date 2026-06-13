@@ -165,7 +165,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             target_role,
             admin.id,
             admin.first_name,
-            trigger="kick",
+            trigger="mute",
         )
 
     duration = None

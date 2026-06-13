@@ -13,7 +13,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes
 
 from tcbot import cfg
 from tcbot.modules.helper import decorators, keyboards
-from tcbot.modules.helper.formatter import esc
+from tcbot.modules.helper.formatter import bold, esc
 
 if TYPE_CHECKING:
     from telegram import CallbackQuery, Update
@@ -28,7 +28,7 @@ _RL_CB_LIMIT: int = 15
 # ─────────────────────── Additional Message ─────────────────────── #
 
 __additional_msg__ = (
-    f"{esc(cfg.community_name)} <b>Official Links</b>\n\n"
+    f"{esc(cfg.community_name)} {bold('Official Links')}\n\n"
     "Use the buttons below to access our channels and groups. "
     "For developers interested in contributing to Transsion device development, "
     "join TRAVEL, an independent community for collaboration and networking."

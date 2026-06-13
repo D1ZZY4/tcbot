@@ -2,6 +2,16 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 97)
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/warning_flow.py`** (`execute_resetwarns`): The success reply used `mention(target_id, target_name) - code(str(target_id))` directly instead of `user_ref()`. This was the last occurrence of the `mention - code(id)` anti-pattern in `warning_flow.py` not caught by the session 95 sweep. The now-unused `code` and `mention` imports were removed from the import line. (Bug #256)
+- **`tcbot/modules/muting.py`**, **`tcbot/modules/helper/workflows/demote_flow.py`** (Demote trigger for mute): `Demote.execute()` was called with `trigger="kick"` inside `cmd_mute`, causing the auto-demote DM to tell the target "your role was removed - you were kicked from the federation" when they were actually muted. Added `"mute"` verb handling to `demote_flow.py` and corrected the call site in `muting.py` to pass `trigger="mute"`. (Bug #257)
+- **`tcbot/modules/helper/workflows/stats_flow.py`** (user list): Each row was rendered as `mention(uid, fname, uname) - code(str(uid))` with a username tail appended. For users without a username, `mention()` already embedded `<code>uid</code>` inside its span, causing a duplicate-ID output (`fname <code>uid</code> - <code>uid</code>`). Replaced with `user_ref(uid, fname, uname)` which handles the no-username case cleanly. Added `user_ref` to the formatter import. (Bug #258)
+- **`tcbot/modules/helper/workflows/check_flow.py`** (`_async_const`): Type annotation was `value: str -> str` but the function is actually generic and is called with a `dict` argument on line 558. Changed to `value: Any -> Any` to match actual usage. (Bug #259)
+- **`tcbot/modules/additional.py`** (`__additional_msg__`): Used `<b>Official Links</b>` as a hardcoded HTML tag in an f-string instead of `bold('Official Links')`. This file was not included in the session 93 formatter sweep. Added `bold` to the formatter import and replaced the literal tag. (Bug #260)
+
 ## [Unreleased] - 2026-06-13 (session 95)
 
 ### Added
