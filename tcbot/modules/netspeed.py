@@ -15,6 +15,7 @@ from speedtest import Speedtest
 from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot.modules.helper import decorators, replies
+from tcbot.modules.helper.formatter import esc
 from tcbot.utils.prefixes import build_prefixed_filters
 
 if TYPE_CHECKING:
@@ -139,26 +140,26 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     text = (
         "<b>Speed Test Results</b>\n\n"
-        f"<b>Ping:</b> <code>{result['ping']} ms</code>\n"
-        f"<b>Timestamp:</b> <code>{result['timestamp']}</code>\n"
-        f"<b>Download:</b> <code>{dl}/s</code>\n"
-        f"<b>Upload:</b> <code>{ul}/s</code>\n"
-        f"<b>Sent:</b> <code>{sent_bytes}</code>\n"
-        f"<b>Received:</b> <code>{recv_bytes}</code>\n\n"
+        f"<b>Ping:</b> <code>{esc(result['ping'])} ms</code>\n"
+        f"<b>Timestamp:</b> <code>{esc(result['timestamp'])}</code>\n"
+        f"<b>Download:</b> <code>{esc(dl)}/s</code>\n"
+        f"<b>Upload:</b> <code>{esc(ul)}/s</code>\n"
+        f"<b>Sent:</b> <code>{esc(sent_bytes)}</code>\n"
+        f"<b>Received:</b> <code>{esc(recv_bytes)}</code>\n\n"
         "<b>Client Info</b>\n"
-        f"<b>IP:</b> <code>{client['ip']}</code>\n"
-        f"<b>ISP:</b> <code>{client['isp']}</code>\n"
-        f"<b>ISP Rating:</b> <code>{client['isprating']}</code>\n"
-        f"<b>Country:</b> <code>{client['country']}</code>\n"
-        f"<b>Latitude:</b> <code>{client['lat']}</code>\n"
-        f"<b>Longitude:</b> <code>{client['lon']}</code>\n\n"
+        f"<b>IP:</b> <code>{esc(client['ip'])}</code>\n"
+        f"<b>ISP:</b> <code>{esc(client['isp'])}</code>\n"
+        f"<b>ISP Rating:</b> <code>{esc(client['isprating'])}</code>\n"
+        f"<b>Country:</b> <code>{esc(client['country'])}</code>\n"
+        f"<b>Latitude:</b> <code>{esc(client['lat'])}</code>\n"
+        f"<b>Longitude:</b> <code>{esc(client['lon'])}</code>\n\n"
         "<b>Server Info</b>\n"
-        f"<b>Name:</b> <code>{server['name']}</code>\n"
-        f"<b>Sponsor:</b> <code>{server['sponsor']}</code>\n"
-        f"<b>Latency:</b> <code>{server['latency']}</code>\n"
-        f"<b>Country:</b> <code>{server['country']}, {server['cc']}</code>\n"
-        f"<b>Latitude:</b> <code>{server['lat']}</code>\n"
-        f"<b>Longitude:</b> <code>{server['lon']}</code>"
+        f"<b>Name:</b> <code>{esc(server['name'])}</code>\n"
+        f"<b>Sponsor:</b> <code>{esc(server['sponsor'])}</code>\n"
+        f"<b>Latency:</b> <code>{esc(server['latency'])}</code>\n"
+        f"<b>Country:</b> <code>{esc(server['country'])}, {esc(server['cc'])}</code>\n"
+        f"<b>Latitude:</b> <code>{esc(server['lat'])}</code>\n"
+        f"<b>Longitude:</b> <code>{esc(server['lon'])}</code>"
     )
 
     share_url: str | None = result.get("share")

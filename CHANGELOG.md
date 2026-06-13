@@ -2,6 +2,14 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 92)
+
+### Fixed
+
+- **`tcbot/modules/netspeed.py`** (`cmd_speedtest`): All dynamic values from the speedtest API response (ISP name, server sponsor, country, city, IP address, latitude, longitude, timestamp, etc.) were embedded directly into the HTML template without HTML escaping. External data from the speedtest server can contain `<`, `>`, `&`, or `"` characters that break Telegram HTML parse mode. Added `esc()` import from `tcbot.modules.helper.formatter` and wrapped every external value in `esc()` throughout the results template. (Bug #232)
+- **`.github/workflows/auto-fix.yml`**: `uv sync --frozen --group dev` was used to install dependencies, but `pyproject.toml` defines no `dev` dependency group. This caused the entire auto-fix workflow to fail on the install step. Removed `--group dev` so the command is now `uv sync --frozen` consistent with all other workflows. (Bug #233)
+- **`docker-compose.yml`**: Three issues. (1) `env_file: config.env` - task spec requires `env_file: .env`; `config.env` is the dev-env example file, not a standard docker-compose env file. Changed to `.env`. (2) MongoDB healthcheck used `mongosh --eval "db.adminCommand('ping')"` without `--quiet` or `.ok`; without `--quiet` mongosh prints a banner to stdout which does not indicate failure; without `.ok` the command exits 0 even when ping fails. Fixed to `mongosh --quiet --eval "db.adminCommand('ping').ok"`. Added `start_period: 20s` so the healthcheck does not fire before MongoDB has had time to initialise. (3) Redis healthcheck timeout reduced from 5s to 3s and `start_period: 10s` added. (4) `networks.internal.internal: true` was set, which marks the Docker network as fully isolated from the host network. This prevents the bot from reaching the Telegram API and MongoDB Atlas (both external internet endpoints). Removed `internal: true` to restore internet connectivity for the bot container. (Bug #234)
+
 ## [Unreleased] - 2026-06-13 (session 91)
 
 ### Added

@@ -2,7 +2,7 @@ services:
   bot:
     build: .
     restart: unless-stopped
-    env_file: config.env
+    env_file: .env
     ports:
       - "5000:5000"
     depends_on:
@@ -19,10 +19,11 @@ services:
     volumes:
       - mongo_data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 20s
     networks:
       - internal
 
@@ -34,8 +35,9 @@ services:
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
-      timeout: 5s
+      timeout: 3s
       retries: 5
+      start_period: 10s
     networks:
       - internal
 
@@ -46,4 +48,3 @@ volumes:
 networks:
   internal:
     driver: bridge
-    internal: true

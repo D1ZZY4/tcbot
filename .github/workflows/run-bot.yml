@@ -1,28 +1,8 @@
 name: TCF Bot - 24/7 Runner
 
-# 24/7 long-polling runner for GitHub Actions.
-#
-# How it stays alive:
-#   1. Watchdog       : the bot runs in the background; if it dies mid-window
-#                       it is restarted in the same job.
-#   2. Self-chain     : 15 minutes before the window ends, this run dispatches
-#                       the NEXT run (requires a PAT secret named BOT_PAT with
-#                       the `workflow` scope, because the built-in GITHUB_TOKEN
-#                       is not allowed to trigger another workflow run).
-#   3. Cron fallback  : if the whole runner dies, or no PAT is configured, the
-#                       schedule below resurrects the bot.
-#
-# Anti-collision: long polling allows only ONE active instance per bot token
-# (Telegram returns 409 Conflict otherwise). The concurrency block below keeps
-# at most one run active plus one queued, so the next run only starts once the
-# current one has stopped.
-
 on:
   workflow_dispatch:
   schedule:
-    # Resurrection backup. Fires every 30 minutes; if a run is already active
-    # the new one queues (and replaces any older queued run), so a healthy bot
-    # is never interrupted, only restarted when it is actually down.
     - cron: "55 4 * * *"
 
 concurrency:

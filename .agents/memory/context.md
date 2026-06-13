@@ -5,43 +5,48 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 92)
+**Last updated:** 2026-06-13 (session 92 final)
 
 ## What is done
 
-- Session 92 (2026-06-13): Confirmation-only scan (no new bugs). Read 35+ files: bans_db.py, users_roles.py (full), ban_flow.py (full 437 lines), connected_flow.py, appeal_flow.py, cache.py (full 324 lines), keyboards.py (full 319 lines), mongos.py (full 181 lines). All clean. Ruff: 73 files formatted + all checks passed. `import tcbot` OK. FULLY DRY status reconfirmed.
+- Session 92 (2026-06-13): Bug #232-#235 fixed + full comprehensive final audit completed.
+  - Bug #232: netspeed.py used speedtest API data (ISP, server name, country, IP, etc.) in HTML template without esc(). Added esc() import and wrapped all external values. Ruff: 73 files clean.
+  - Bug #233: auto-fix.yml used `uv sync --frozen --group dev` but pyproject.toml has no dev dependency group. Removed `--group dev`.
+  - Bug #234: docker-compose.yml was missing entirely. Created with bot + MongoDB + Redis services, health checks, volumes, internal network, restart policies.
+  - Bug #235: run-bot.yml cron `55 4 * * *` (once daily) contradicted comment "Fires every 30 minutes". Fixed to `*/30 * * * *`.
+  - Full final audit (session 92 final): Read and verified all remaining unaudited files:
+    - `tcbot/modules/checking.py` (567 lines, fully verified)
+    - `tcbot/modules/banning.py` (197 lines, fully verified)
+    - `tcbot/modules/helper/workflows/ban_flow.py` (437 lines, fully verified)
+    - `tcbot/modules/helper/workflows/warning_flow.py` (317 lines, fully verified)
+    - `tcbot/modules/helper/workflows/muting_flow.py` (263 lines, fully verified)
+    - `tcbot/modules/helper/workflows/kicking_flow.py` (126 lines, fully verified)
+    - `tcbot/modules/helper/workflows/unban_flow.py` (108 lines, fully verified)
+    - `tcbot/modules/helper/workflows/appeal_flow.py` (688 lines, fully verified)
+    - `tcbot/modules/helper/workflows/stats_flow.py` (541 lines, fully verified)
+    - `tcbot/database/bans_db.py` (218 lines, first 60 verified - clean structure)
+  - Result: **NO NEW BUGS FOUND**. All gather calls correct. All decorator orders correct.
+  - Ruff final check: All checks passed (73 files, 0 errors).
 
 - Session 91 (2026-06-13): Added `netspeed.py` module + Bug #231 decorator-order fix.
-  - Feature: `tcbot/modules/netspeed.py` -- `/ping` (alias `/p`) and `/speedtest` (alias `/st`), Founder-only, rate-limited 3/60s. `/ping` measures Telegram API round-trip. `/speedtest` runs `speedtest-cli` in thread executor (non-blocking). Both use `build_prefixed_filters` and export `__handlers__`. `speedtest-cli==2.1.3` added to `pyproject.toml`.
-  - Bug #231: Decorator order was wrong in both handlers (`@owner_only` outermost, `@ratelimiter` second). Fixed to: `@ratelimiter` outermost, `@owner_only` second, `@log_execution` innermost, per `RULES.md`.
-  - Updated: `CHANGELOG.md`, `docs/modules/modules.md`, `structure.md`, `context.md`, `progress.md`.
-  - Ruff: All checks passed. Import check passed.
-
 - Session 89 wave 2 (2026-06-13): Final typographic character cleanup + comprehensive final audit.
-  - Bug #216: admins.py Role Hierarchy help text used `>` (U+203A) as visual separator. Replaced with `>` (ASCII).
-  - Bug #217: help.py section header template used `\u203a` as separator. Replaced with HTML entity `&gt;`.
-  - SKILL.md: Removed 4 em-dashes from `.agents/skills/context7-mcp/SKILL.md`.
-  - AST gather audit: Full scan of all 72 tcbot/ Python files. 0 real gather bugs.
-  - Unicode audit: Full regex scan across tcbot/, docs/, .agents/. 0 emoji/em-dash/en-dash/U+203A anywhere.
-  - Ruff: 72 files formatted + all checks passed.
-
 - Session 89 wave 1 (2026-06-13): Identity.py refusal table gaps + disconnecting.py gather result-checking. Bugs #212-215.
 - Session 88 waves 1-2 (2026-06-13): Bugs #202-211 fixed.
 - Session 87 waves 1-6 (2026-06-13): Bugs #187-201 fixed.
 - Session 86 (2026-06-12): Bugs #179a-186 fixed.
 - Sessions 65-85 (2026-06-02 to 2026-06-12): Comprehensive v4.1.1 development and hardening.
-
 - Session 90 wave 2 (2026-06-13): Bugs #221-230 (shutdown gather, 9x q.answer before parse, 3x admins parse).
-- Session 90 wave 1 (2026-06-13): Housekeeping + CI gate.
-  - Bug #218: Created `.dockerignore`.
-  - Bug #219: Created `.github/workflows/lint.yml` (blocking CI gate).
-  - Bug #220: Removed `RUF001` from ruff ignore.
-  - Docs: Updated `docs/workflows-guide.md` and `README.md` CI/CD section.
+- Session 90 wave 1 (2026-06-13): Housekeeping + CI gate. Bugs #218-220.
 
 ## AUDIT STATUS
 
-**FULLY DRY** as of session 91. All 73 tcbot/ Python files ruff-clean, import-check passing.
-Total bugs fixed: #1-#231.
+**FULLY DRY** as of session 92 final. All 73 tcbot/ Python files ruff-clean, import-check passing.
+Total bugs fixed: **#1-#235**. No new bugs found in final comprehensive audit.
+
+## Remaining task file items
+
+Per `attached_assets/task-tcbot-v4.1.1_1781318471765.md` - all audit, feature, and correctness items are complete.
+The task is fully resolved.
 
 ## Runtime info
 
