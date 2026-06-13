@@ -515,13 +515,16 @@ class BuildAppeal:
 
         if action == "approve":
             # * Deactivate ALL active bans for the user (not only the appeal ban_id)
-            # * in parallel with fetching active groups and target name.  Using
+            # * in parallel with fetching active groups, target name, and cancelling
+            # * any pending timed-unban APScheduler job (future-proofing: no-op when
+            # * no timed ban exists, same pattern as execute_unban in unban_flow.py).
             # * deactivate_all_active_bans ensures any duplicate active bans are also
             # * cleared, preventing a "still-banned" state from leftover duplicates.
-            deactivate_result, groups, target_fname = await asyncio.gather(
+            deactivate_result, groups, target_fname, _ = await asyncio.gather(
                 db.bans_db.deactivate_all_active_bans(target_id),
                 db.groups_db.active_groups(),
                 db.users_cache.get_first_name(target_id, str(target_id)),
+                db.scheduler.cancel_schedule(f"unban.{ban_id}"),
                 return_exceptions=True,
             )
             if isinstance(deactivate_result, BaseException):
@@ -541,7 +544,17 @@ class BuildAppeal:
             if isinstance(target_fname, BaseException):
                 target_fname = str(target_id)
 
-            # * Unban from all groups - semaphore-bounded for rate safety
+            # * Include primary groups not already in the connected list.
+            # * Primary groups (MAIN_GROUP, EXEC_GROUP) are configured via env vars
+            # * and are not stored in federated_groups, so active_groups() never
+            # * returns them. The appeal approve unban must cover them explicitly.
+            _primary_ids = [cid for cid in (cfg.main_group, cfg.exec_group) if cid]
+            _existing_ids = {grp["chat_id"] for grp in groups}
+            for _pid in _primary_ids:
+                if _pid not in _existing_ids:
+                    groups = [*groups, {"chat_id": _pid, "title": ""}]
+
+            # * Unban from all groups + primary groups - semaphore-bounded for rate safety
             await fan_out(
                 [
                     ctx.bot.unban_chat_member(

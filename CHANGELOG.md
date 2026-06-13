@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 106)
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** (`on_decision`, approve branch): Primary groups (`MAIN_GROUP`, `EXEC_GROUP`) were not included in the appeal-approve unban fan-out. `active_groups()` only returns federated groups from the `federated_groups` collection; primary groups configured via env vars are never stored there and were therefore silently skipped. This meant a user whose appeal was approved could still be banned in the primary community group(s). Fixed by augmenting the `groups` list with primary group IDs (deduplicated against the already-fetched connected list) before passing to `fan_out()`, using the same pattern applied to `execute_unban` in Bug #279. Also added `db.scheduler.cancel_schedule(f"unban.{ban_id}")` to the initial gather for future-proofing consistency with `execute_unban` in `unban_flow.py`. (Bug #282)
+
 ## [Unreleased] - 2026-06-13 (session 105)
 
 ### Fixed

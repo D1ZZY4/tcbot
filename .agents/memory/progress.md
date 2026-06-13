@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-13 (session 105)
+**Last updated:** 2026-06-13 (session 106)
 
 ## Verification baseline
 
@@ -25,6 +25,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Docs sync audit (session 100) | PASS: 9 docs updated to reflect sessions 95-99 code changes (user_ref, deactivate_all/extra, trigger=mute, str(uid) fallback). CHANGELOG updated. Ruff: 73 files clean. |
 | Full module audit (session 99) | PASS: checking.py, check_flow.py, connecting.py, disconnecting.py, unbanning.py, admins.py, appeals.py, stats.py, broadcasting.py, maintenance.py, additional.py all clean. |
 | Session 103 comprehensive audit | PASS: All 73 tcbot/ files fully audited. Bugs #271-#277 fixed. Docker/CI/scheduler all clean. Ruff: 73 files clean. |
+| Session 106 fresh audit pass | PASS: appeal_flow, warning_flow, warnings, checking, identity, banning, muting, kicking, extraction, decorators, reason_flow, proof_flow, demote_flow all clean. Bug #282 found and fixed. Ruff: 73 files clean. |
 
 ## Completed items (recent additions on top)
 
