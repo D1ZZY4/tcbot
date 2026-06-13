@@ -2,6 +2,14 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 117)
+
+### Audit
+
+- **Pass 8 database + utils layer audit**: Full read of database layer (`users_cache.py`, `cache.py`, `bans_db.py`, `users_roles.py`, `groups_db.py`, `warns_db.py`, `mutes_db.py`, `mongos.py`, `kicks_db.py`, `queues_db.py`) and utils layer (`dispatch.py`, `pagination.py`) — all CLEAN. Notable verified patterns: `TwoLevelCache` L1→L2→DB with RUF006-compliant `_redis_bg_tasks` set; `get_effective_role` parallel `asyncio.gather(is_owner, is_admin, get_role)` + L1→L2→DB cache; `warns_db.remove_last_warn` sequential find→gather valid; `mongos.ensure_indexes` all-parallel gather; `groups_db.migrate_group` parallel gather + cache invalidation. Bot running: MongoDB 27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling active. Zero errors.
+
+- **Pass 7 autonomous audit**: All 73 `tcbot/` Python files re-audited (seventh full pass). Zero new bugs found. Files reviewed directly: `greeting.py`, `extraction.py`, `ban_flow.py`, `muting_flow.py`, `scheduler.py`, `appeal_flow.py`, `unban_flow.py`, `connected_flow.py`, `warnings.py`, `checking.py`, `banning.py`, `broadcasting.py`, `kicking.py`, `maintenance.py`, `warning_flow.py`, `kicking_flow.py`. Subagent sweep covered all command handlers and sequential `await` patterns across all `tcbot/modules/*.py`. Two sequential awaits flagged in `connected_flow.py` (lines 269, 273) confirmed VALID sequential dependencies (`owner_fname` depends on `pending["owner_id"]`; `add_pending` depends on `prompt.message_id`). Ruff: All checks passed.
+
 ## [Unreleased] - 2026-06-13 (session 116)
 
 ### Fixed

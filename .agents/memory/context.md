@@ -5,9 +5,22 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 116)
+**Last updated:** 2026-06-13 (session 117 pass 8)
 
 ## What is done
+
+- Session 117 pass 8 (2026-06-13): Database layer + utils layer full audit — ZERO new bugs found.
+  - Files audited: users_cache.py, database/cache.py, bans_db.py, users_roles.py, groups_db.py, warns_db.py, mutes_db.py, mongos.py, kicks_db.py, queues_db.py, utils/dispatch.py, utils/pagination.py — all CLEAN.
+  - Bot running: MongoDB 27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling active. Zero errors in logs.
+  - Total bugs fixed remains: #1-#315.
+
+- Session 117 pass 7 (2026-06-13): Full-pass autonomous audit — ZERO new bugs found.
+  - Files audited directly: greeting.py, extraction.py, ban_flow.py, muting_flow.py, scheduler.py, appeal_flow.py, unban_flow.py, connected_flow.py, warnings.py, checking.py, banning.py, broadcasting.py, kicking.py, maintenance.py, warning_flow.py, kicking_flow.py.
+  - Subagent (explore) audited all command handlers and sequential await patterns across all tcbot/modules/*.py — all CLEAN.
+  - connected_flow.py lines 269+273: two sequential awaits flagged by subagent — VALID dependencies (owner_fname depends on pending["owner_id"]; add_pending depends on prompt.message_id). Not bugs.
+  - Ruff: All checks passed (0 errors, 73 files clean).
+  - No code changes required; nothing to commit.
+  - Total bugs fixed remains: #1-#315.
 
 - Session 116 (2026-06-13): Bug #315 fixed in netspeed.py.
   - `cmd_speedtest`: replaced delete-notice + send-new-message pattern with edit-in-place pattern (consistent with `cmd_ping` and all other action modules). For `share_url` case: `notice.edit_text(text)` + `msg.reply_photo(share_url)` in parallel via `asyncio.gather`. For no share_url: `notice.edit_text(text)` only. Notice is never deleted.
@@ -156,7 +169,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## AUDIT STATUS
 
-**COMPLETE** as of session 116. All 73 tcbot/ Python files audited and ruff-clean (six full passes).
+**COMPLETE** as of session 117. All 73 tcbot/ Python files audited and ruff-clean (seven full passes).
 Total bugs fixed: **#1-#315** (Bugs #306-#309, #311-#314 docs-only; Bug #310 is a code comment). Code logic/UX bugs: #1-#305, #315. Perf improvements: **#292-#294, Perf #4**.
 
 ### All files fully audited across all sessions:
