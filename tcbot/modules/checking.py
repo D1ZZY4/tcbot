@@ -254,7 +254,11 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     parallel, then edits the message to the full detail card with a back button.
     """
     q = update.callback_query
-    ban_id = q.data.split(":")[1]
+    try:
+        ban_id = q.data.split(":")[1]
+    except IndexError:
+        await q.answer()
+        return
 
     _, ban = await asyncio.gather(
         q.answer(), db.bans_db.get_ban(ban_id), return_exceptions=True
@@ -290,7 +294,11 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     and detail keyboard.
     """
     q = update.callback_query
-    ban_id = q.data.split(":")[1]
+    try:
+        ban_id = q.data.split(":")[1]
+    except IndexError:
+        await q.answer()
+        return
 
     _, ban = await asyncio.gather(
         q.answer(), db.bans_db.get_ban(ban_id), return_exceptions=True
@@ -366,7 +374,11 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the top-level profile summary for the checked user."""
     q = update.callback_query
-    target_id = int(q.data.split(":", 1)[1])
+    try:
+        target_id = int(q.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        await q.answer()
+        return
     _, result = await asyncio.gather(
         q.answer(), Check.profile(ctx.bot, target_id), return_exceptions=True
     )
@@ -382,9 +394,13 @@ async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of federation bans for the checked user."""
     q = update.callback_query
-    _, target_id_str, page_str = q.data.split(":")
-    target_id = int(target_id_str)
-    page = int(page_str)
+    try:
+        _, target_id_str, page_str = q.data.split(":")
+        target_id = int(target_id_str)
+        page = int(page_str)
+    except (ValueError, IndexError):
+        await q.answer()
+        return
     _, result = await asyncio.gather(
         q.answer(), Check.bans_list(target_id, page), return_exceptions=True
     )
@@ -400,8 +416,12 @@ async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the full detail view for a single federation ban record."""
     q = update.callback_query
-    _, target_id_str, ban_id = q.data.split(":", 2)
-    target_id = int(target_id_str)
+    try:
+        _, target_id_str, ban_id = q.data.split(":", 2)
+        target_id = int(target_id_str)
+    except (ValueError, IndexError):
+        await q.answer()
+        return
     _, result = await asyncio.gather(
         q.answer(), Check.ban_detail(target_id, ban_id), return_exceptions=True
     )
@@ -417,7 +437,11 @@ async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the per-group warning summary for the checked user."""
     q = update.callback_query
-    target_id = int(q.data.split(":", 1)[1])
+    try:
+        target_id = int(q.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        await q.answer()
+        return
     _, result = await asyncio.gather(
         q.answer(), Check.warns_by_group(target_id), return_exceptions=True
     )
@@ -433,10 +457,14 @@ async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of warnings for the checked user in a specific group."""
     q = update.callback_query
-    _, target_id_str, chat_id_str, page_str = q.data.split(":")
-    target_id = int(target_id_str)
-    chat_id = int(chat_id_str)
-    page = int(page_str)
+    try:
+        _, target_id_str, chat_id_str, page_str = q.data.split(":")
+        target_id = int(target_id_str)
+        chat_id = int(chat_id_str)
+        page = int(page_str)
+    except (ValueError, IndexError):
+        await q.answer()
+        return
     _, result = await asyncio.gather(
         q.answer(),
         Check.warns_in_group(target_id, chat_id, page),
@@ -454,9 +482,13 @@ async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
 async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of kick records for the checked user."""
     q = update.callback_query
-    _, target_id_str, page_str = q.data.split(":")
-    target_id = int(target_id_str)
-    page = int(page_str)
+    try:
+        _, target_id_str, page_str = q.data.split(":")
+        target_id = int(target_id_str)
+        page = int(page_str)
+    except (ValueError, IndexError):
+        await q.answer()
+        return
     _, result = await asyncio.gather(
         q.answer(), Check.kicks_list(target_id, page), return_exceptions=True
     )
@@ -472,9 +504,13 @@ async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of mute records for the checked user."""
     q = update.callback_query
-    _, target_id_str, page_str = q.data.split(":")
-    target_id = int(target_id_str)
-    page = int(page_str)
+    try:
+        _, target_id_str, page_str = q.data.split(":")
+        target_id = int(target_id_str)
+        page = int(page_str)
+    except (ValueError, IndexError):
+        await q.answer()
+        return
     _, result = await asyncio.gather(
         q.answer(), Check.mutes_list(target_id, page), return_exceptions=True
     )
@@ -490,9 +526,13 @@ async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 async def on_check_appeals(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of appeal records for the checked user."""
     q = update.callback_query
-    _, target_id_str, page_str = q.data.split(":")
-    target_id = int(target_id_str)
-    page = int(page_str)
+    try:
+        _, target_id_str, page_str = q.data.split(":")
+        target_id = int(target_id_str)
+        page = int(page_str)
+    except (ValueError, IndexError):
+        await q.answer()
+        return
     _, result = await asyncio.gather(
         q.answer(), Check.appeals_list(target_id, page), return_exceptions=True
     )

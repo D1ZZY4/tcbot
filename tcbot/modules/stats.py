@@ -142,7 +142,11 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of cached users."""
     q = update.callback_query
-    page = int(q.data.split(":")[1])
+    try:
+        page = int(q.data.split(":")[1])
+    except (ValueError, IndexError):
+        await q.answer()
+        return
     await _ack_and_render(q, Stats.users_list(page))
 
 
@@ -151,8 +155,13 @@ async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 async def on_stats_user_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the detail view for a single cached user entry."""
     q = update.callback_query
-    _, page_str, idx_str = q.data.split(":")
-    await _ack_and_render(q, Stats.user_detail(int(page_str), int(idx_str)))
+    try:
+        _, page_str, idx_str = q.data.split(":")
+        page, idx = int(page_str), int(idx_str)
+    except (ValueError, IndexError):
+        await q.answer()
+        return
+    await _ack_and_render(q, Stats.user_detail(page, idx))
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -160,7 +169,11 @@ async def on_stats_user_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
 async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of connected groups."""
     q = update.callback_query
-    page = int(q.data.split(":")[1])
+    try:
+        page = int(q.data.split(":")[1])
+    except (ValueError, IndexError):
+        await q.answer()
+        return
     await _ack_and_render(q, Stats.chats_list(page))
 
 
@@ -169,8 +182,13 @@ async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 async def on_stats_chat_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the detail view for a single connected group entry."""
     q = update.callback_query
-    _, page_str, idx_str = q.data.split(":")
-    await _ack_and_render(q, Stats.chat_detail(int(page_str), int(idx_str)))
+    try:
+        _, page_str, idx_str = q.data.split(":")
+        page, idx = int(page_str), int(idx_str)
+    except (ValueError, IndexError):
+        await q.answer()
+        return
+    await _ack_and_render(q, Stats.chat_detail(page, idx))
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -178,7 +196,11 @@ async def on_stats_chat_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
 async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated ban-list page and clear any active search state."""
     q = update.callback_query
-    page = int(q.data.split(":")[1])
+    try:
+        page = int(q.data.split(":")[1])
+    except (ValueError, IndexError):
+        await q.answer()
+        return
     Stats.clear_search(ctx)
     await _ack_and_render(q, Stats.bans_list(page))
 
@@ -188,8 +210,13 @@ async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the detail view for a single ban entry from the stats list."""
     q = update.callback_query
-    _, page_str, idx_str = q.data.split(":")
-    await _ack_and_render(q, Stats.ban_detail(int(page_str), int(idx_str)))
+    try:
+        _, page_str, idx_str = q.data.split(":")
+        page, idx = int(page_str), int(idx_str)
+    except (ValueError, IndexError):
+        await q.answer()
+        return
+    await _ack_and_render(q, Stats.ban_detail(page, idx))
 
 
 # ── Search panel ─────────────────────────────────────────────────────
@@ -253,7 +280,11 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
 async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the detail view for a search result selected by the user."""
     q = update.callback_query
-    idx = int(q.data.split(":")[1])
+    try:
+        idx = int(q.data.split(":")[1])
+    except (ValueError, IndexError):
+        await q.answer()
+        return
     results = ctx.user_data.get(RESULTS_KEY, []) if ctx.user_data else []
     await _ack_and_render(q, Stats.search_detail(results, idx))
 

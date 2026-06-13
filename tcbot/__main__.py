@@ -219,8 +219,7 @@ async def _post_init(app: Application) -> None:
 
 async def _post_shutdown(app: Application) -> None:
     """Stop APScheduler and close Redis after the application fully shuts down."""
-    await sched_mod.stop()
-    await redis_client.close()
+    await asyncio.gather(sched_mod.stop(), redis_client.close(), return_exceptions=True)
 
 
 # ──────────────────────── Main Entry Point ──────────────────────── #

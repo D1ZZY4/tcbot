@@ -2,6 +2,15 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 90 wave 2)
+
+### Fixed
+
+- **`tcbot/__main__.py`** (`_post_shutdown`): `await sched_mod.stop()` and `await redis_client.close()` were executed sequentially. Since both are independent shutdown operations, a slow APScheduler stop would delay Redis closure unnecessarily. Changed to `await asyncio.gather(..., return_exceptions=True)` so both run concurrently. (Bug #221)
+- **`tcbot/modules/stats.py`** (`on_stats_users`, `on_stats_user_item`, `on_stats_chats`, `on_stats_chat_item`, `on_stats_bans`, `on_stats_ban_item`, `on_stats_search_item`): Seven callback handlers parsed `q.data.split(":")` and `int()` before calling `_ack_and_render`. If the data was stale or malformed, a `ValueError` or `IndexError` would crash the handler before `q.answer()` was called, leaving the user's button spinner active indefinitely. Added `try/except (ValueError, IndexError)` around all parse operations with `await q.answer(); return` on failure. (Bugs #222-#228)
+- **`tcbot/modules/checking.py`** (`on_checkme_detail`, `on_checkme_back`, `on_check_main`, `on_check_bans`, `on_check_ban_item`, `on_check_warns`, `on_check_warn_chat`, `on_check_kicks`, `on_check_mutes`, `on_check_appeals`): Ten callback handlers parsed `q.data.split(":")` and `int()` before `asyncio.gather(q.answer(), ...)`. A `ValueError` or `IndexError` during parse would crash before the gather started, so `q.answer()` was never called. Added `try/except (ValueError, IndexError)` around each parse block with `await q.answer(); return` on failure. (Bug #229)
+- **`tcbot/modules/admins.py`** (`on_promote_role_btn`, `on_demote_confirm`, `on_promo_decision`): Three callback handlers parsed `q.data` before the `q.answer()` gather. `on_promote_role_btn` had a `len(parts) != 3` guard but `int(target_id_str)` was still unprotected. `on_demote_confirm` did `int(q.data.split(...)[1])` naked. `on_promo_decision` did tuple-unpack from `split(":", 1)` naked. All three could leave spinners active on parse failure. Added `try/except (ValueError, IndexError)` in each, with `await q.answer(); return` on failure. (Bug #230)
+
 ## [Unreleased] - 2026-06-13 (session 90 wave 1)
 
 ### Added

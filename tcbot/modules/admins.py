@@ -259,7 +259,11 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         await q.answer()
         return
     _, role, target_id_str = parts
-    target_id = int(target_id_str)
+    try:
+        target_id = int(target_id_str)
+    except ValueError:
+        await q.answer()
+        return
 
     # * Gather role check + q.answer() in parallel so the spinner disappears
     # * immediately, regardless of DB latency.
@@ -433,7 +437,11 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     """
     q = update.callback_query
     admin = update.effective_user
-    target_id = int(q.data.split(":", 1)[1])
+    try:
+        target_id = int(q.data.split(":", 1)[1])
+    except (ValueError, IndexError):
+        await q.answer()
+        return
     # * Gather role check + q.answer() in parallel so the spinner disappears
     # * immediately, regardless of DB latency.
     executor_role, _ = await asyncio.gather(
@@ -684,7 +692,11 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     """
     q = update.callback_query
     admin = update.effective_user
-    action, request_id = q.data.split(":", 1)
+    try:
+        action, request_id = q.data.split(":", 1)
+    except ValueError:
+        await q.answer()
+        return
     # * Gather ownership check + q.answer() in parallel so the spinner disappears
     # * immediately, regardless of DB latency.
     is_owner, _ = await asyncio.gather(
