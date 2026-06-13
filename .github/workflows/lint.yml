@@ -15,6 +15,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    env:
+      # Bot configuration secrets untuk import check
+      BOT_TOKEN:               ${{ secrets.BOT_TOKEN }}
+      MONGODB_URI:             ${{ secrets.MONGODB_URI }}
+      OWNER_ID:                ${{ secrets.OWNER_ID }}
+
     steps:
       - uses: actions/checkout@v4
 
