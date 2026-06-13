@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-13 (session 93)
+**Last updated:** 2026-06-13 (session 95)
 
 ## Verification baseline
 
@@ -16,7 +16,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv run python -c "import tcbot; print('import OK')"` | PASS (re-verified session 93) |
 | `uv run python -m tcbot` | PASS by runtime evidence: MongoDB connected, indexes ensured, scheduler started, bot polling active |
 | `uv run ruff format .` | PASS (73 files) |
-| `uv run ruff check .` | PASS (All checks passed, verified session 93) |
+| `uv run ruff check .` | PASS (All checks passed, verified session 95) |
 | asyncio task-GC fix isolated test (session 43) | PASS: task registered on schedule, discarded on completion, report coroutine ran |
 | annotation AST audit | PASS: 0 non-dunder function parameters missing type annotations |
 | docs audit (session 74) | PASS: mapping.md top-level layout completed; 3 new Mermaid diagrams added; all code files audited clean |
@@ -27,6 +27,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Bugs #247-#255 (session 95) | correctness | user_ref() helper; deactivate_all/extra active bans; ban_flow: group reporting+PM notify+dedup; unban/appeal: deactivate_all; greeting: ChatJoinRequestHandler+all-groups enforcement; extraction _best_name str(uid); unban_flow cancel_schedule; conversation_timeout dead code removed (PTBUserWarning eliminated). CHANGELOG updated. | 2026-06-13 (s95) |
 | Formatter consistency (#236-#246) | style/security | 11 files: netspeed.py, ban_flow.py, appeal_flow.py, admins.py, proof_flow.py, muting_flow.py, demote_flow.py, groups.py, reason_flow.py, help.py, stats_flow.py. All hardcoded `<b>` and `<code>` in dynamic content replaced with bold()/code() helpers. | 2026-06-13 (s93) |
 | Final comprehensive audit | audit | Verified checking.py, banning.py, ban_flow.py, warning_flow.py, muting_flow.py, kicking_flow.py, unban_flow.py, appeal_flow.py, stats_flow.py, bans_db.py. All clean. No new bugs found. Total: #1-#235 final. | 2026-06-13 (s92) |
 | Bug #235: run-bot.yml cron wrong | infra | Cron `55 4 * * *` (once daily) contradicts comment "Fires every 30 minutes". Self-chain fallback was effectively broken. Fixed to `*/30 * * * *`. | 2026-06-13 (s92) |

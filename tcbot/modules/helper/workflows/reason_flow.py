@@ -17,11 +17,9 @@ from telegram.ext import (
     ContextTypes,
     ConversationHandler,
     MessageHandler,
-    TypeHandler,
     filters,
 )
 
-from tcbot import cfg
 from tcbot.modules.helper import replies
 from tcbot.modules.helper.formatter import bold, esc, mention
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
@@ -327,7 +325,6 @@ def build_modaction_conv(
         states={
             WAITING_REASON: reason_state,
             WAITING_PROOF: proof_state,
-            ConversationHandler.TIMEOUT: [TypeHandler(Update, _on_timeout)],
         },
         fallbacks=[
             CallbackQueryHandler(_on_cancel, pattern=rf"^{action}_cancel$"),
@@ -335,6 +332,5 @@ def build_modaction_conv(
         ],
         per_user=True,
         per_chat=True,
-        conversation_timeout=cfg.proof_timeout,
         per_message=False,
     )

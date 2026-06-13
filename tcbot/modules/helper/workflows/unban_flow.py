@@ -55,12 +55,13 @@ async def execute_unban(
     ban_id = ban["ban_id"]
 
     # * Deactivate ALL active bans for this user (not only the one found by
-    # * get_active_ban) and fetch active groups in parallel. This ensures that
-    # * any duplicate active bans that may have accumulated are also cleared,
-    # * preventing a "still-banned" state after a successful unban.
-    deactivate_r, groups = await asyncio.gather(
+    # * get_active_ban), fetch active groups, and cancel any pending APScheduler
+    # * unban job in parallel. The cancel call is a no-op when no timed-ban
+    # * schedule exists; it future-proofs the flow for when timed bans are added.
+    deactivate_r, groups, _ = await asyncio.gather(
         db.bans_db.deactivate_all_active_bans(target_id),
         db.groups_db.active_groups(),
+        db.scheduler.cancel_schedule(f"unban.{ban_id}"),
         return_exceptions=True,
     )
     if isinstance(deactivate_r, BaseException):

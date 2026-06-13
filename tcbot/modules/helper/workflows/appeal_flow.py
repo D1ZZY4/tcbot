@@ -20,7 +20,6 @@ from telegram.ext import (
     ContextTypes,
     ConversationHandler,
     MessageHandler,
-    TypeHandler,
     filters,
 )
 
@@ -659,12 +658,10 @@ class BuildAppeal:
                         self._on_message,
                     ),
                 ],
-                ConversationHandler.TIMEOUT: [TypeHandler(Update, self._on_timeout)],
             },
             fallbacks=[
                 MessageHandler(ALL_PREFIXES_CMD_FILTER, self._end),
             ],
-            conversation_timeout=cfg.appeal_timeout,
             per_chat=True,
             per_user=True,
             per_message=False,

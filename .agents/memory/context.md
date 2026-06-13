@@ -5,9 +5,21 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 94)
+**Last updated:** 2026-06-13 (session 95)
 
 ## What is done
+
+- Session 95 (2026-06-13): New task file (v4.1.1_1781326270448.md). Bugs #247-#255 fixed.
+  - Bug #247: New `user_ref()` helper in formatter.py; 9 files migrated from `mention()-code(id)` pattern.
+  - Bug #248: bans_db.py: added `deactivate_all_active_bans` + `deactivate_extra_active_bans`.
+  - Bug #249: ban_flow.py: per-group failure reporting, PM notification to banned user, dedup on re-ban.
+  - Bug #250: unban_flow.py: use `deactivate_all_active_bans` (was single `deactivate_ban`).
+  - Bug #251: appeal_flow.py: use `deactivate_all_active_bans` on approval.
+  - Bug #252: greeting.py: `ChatJoinRequestHandler` + all-groups enforcement via `_handle_member()`.
+  - Bug #253: extraction.py `_best_name` returns `str(uid)` not `"User {uid}"`.
+  - Bug #254: unban_flow.py: added `db.scheduler.cancel_schedule(f"unban.{ban_id}")` defensive call.
+  - Bug #255: conversation_timeout dead code removed from ban_flow, reason_flow, appeal_flow. PTBUserWarning eliminated. TypeHandler imports removed. cfg import removed from reason_flow.py.
+  - CHANGELOG.md updated. Ruff: All checks passed (0 errors). Import: OK.
 
 - Session 94 (2026-06-13): Deep audit pass, no bugs found. Verified 25+ files: kicking.py, muting.py, unbanning.py, broadcasting.py, maintenance.py, start.py, identity.py, parse_logmsg.py, ban_flow.py, kicking_flow.py, muting_flow.py, unban_flow.py, demote_flow.py, dispatch.py, users_roles.py, keyboards.py, __main__.py, appeal_flow.py, reason_flow.py, proof_flow.py, warnings.py, warning_flow.py, admins.py (partial), checking.py (partial). Grep confirmed: 0 em-dash/en-dash, 0 emoji, q.answer() always first. Symlinks .kilo/.trae/.claude/.roo verified present. Ruff: All checks passed. Import: OK.
 

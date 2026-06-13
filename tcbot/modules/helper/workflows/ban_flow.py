@@ -17,7 +17,6 @@ from telegram.ext import (
     ContextTypes,
     ConversationHandler,
     MessageHandler,
-    TypeHandler,
     filters,
 )
 
@@ -510,10 +509,8 @@ def ban_conversation(
                     on_proof_unexpected,
                 ),
             ],
-            ConversationHandler.TIMEOUT: [TypeHandler(Update, on_proof_timeout)],
         },
         fallbacks=[MessageHandler(ALL_PREFIXES_CMD_FILTER, on_proof_timeout)],
-        conversation_timeout=cfg.proof_timeout,
         per_chat=True,
         per_user=True,
         per_message=False,
