@@ -151,9 +151,12 @@ class Stats:
 
         # Fetch owner mention data in parallel with building the response
         if owner_id:
-            owner_fname, owner_uname = await db.users_cache.get_user_mention_data(
-                owner_id
-            )
+            try:
+                owner_fname, owner_uname = await db.users_cache.get_user_mention_data(
+                    owner_id
+                )
+            except Exception:
+                owner_fname, owner_uname = str(owner_id), None
             owner_line = mention(owner_id, owner_fname, owner_uname)
         else:
             owner_line = "Not set"
@@ -254,8 +257,7 @@ class Stats:
             uid = u.get("user_id", 0)
             fname = u.get("first_name") or str(uid)
             uname = u.get("username")
-            tail = f" · @{esc(uname)}" if uname else ""
-            lines.append(f"{base_idx + i}. {user_ref(uid, fname, uname)}{tail}")
+            lines.append(f"{base_idx + i}. {user_ref(uid, fname, uname)}")
 
         return "\n".join(lines), _list_kb(
             page,

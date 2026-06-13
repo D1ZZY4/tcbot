@@ -63,11 +63,16 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 ## AUDIT STATUS
 
 **Audit ongoing** as of session 101+. All 73 tcbot/ Python files ruff-clean.
-Total bugs fixed: **#1-#267**.
+Total bugs fixed: **#1-#269**.
 
 ### Session 101+ fixes:
 - Bug #266: muting.py cmd_unmute missing resolve_and_check parallel gather (added identity.classify + resolve_and_check with min_role="tester").
 - Bug #267: checking.py on_checkme_detail and on_checkme_back called q.edit_message_text without _safe_edit; both call-sites now use _safe_edit.
+- Bug #268: stats_flow.py Stats.main() — unguarded get_user_mention_data call wrapped in try/except; prevents /tcstats crash on MongoDB intermittent failure.
+- Bug #269: stats_flow.py Stats.users_list() — redundant `tail = f" · @{esc(uname)}"` alongside user_ref() caused username to appear twice; removed tail.
+
+### Files fully audited in this session:
+mongos.py, mutes_db.py, warns_db.py, kicks_db.py, queues_db.py, pagination.py, error_reporter.py, keyboards.py, parse_editmsg.py, admins.py (complete), documents.py, replies.py, timedate_format.py, parse_link.py, prefixes.py, redis_client.py, alive.py — all clean, no new bugs found.
 
 ### Known non-bugs (by design):
 - `schedule_unban` in scheduler.py defined but not called - timed bans feature not yet implemented.
