@@ -83,7 +83,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Role Hierarchy",
-        "Founder (rank 4) › Admin (rank 3) › Developer (rank 2) › Tester (rank 1)\n\n"
+        "Founder (rank 4) > Admin (rank 3) > Developer (rank 2) > Tester (rank 1)\n\n"
         "You cannot promote a user to a rank equal to or above your own. "
         "Admins promoting someone to Admin queues a request for the Founder.",
     ),

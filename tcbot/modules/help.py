@@ -228,7 +228,7 @@ async def _show_section(
         return
 
     label, content = sections[idx]
-    body = f"<b>{name} \u203a {label}</b>\n\n{content}"
+    body = f"<b>{name} &gt; {label}</b>\n\n{content}"
     await asyncio.gather(
         q.answer(),
         safe_edit_cb(q, body, reply_markup=keyboards.back_to_module_kb(back_module_cb)),

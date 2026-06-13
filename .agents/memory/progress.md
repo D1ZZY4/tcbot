@@ -260,7 +260,6 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Session 85b - ban_info.py Exception→BaseException | fix | Bug #176: isinstance(r_admin, Exception) → BaseException; CancelledError not caught = tuple-unpack crash. | 2026-06-12 (s85b) |
 | Session 85b - warning_flow.py unguarded replies | fix | Bug #177: 4 unguarded reply_text in execute_unwarn/warnlist/resetwarns wrapped try/except. | 2026-06-12 (s85b) |
 | Session 85b - muting_flow.py unguarded reply | fix | Bug #178: execute_unmute else-branch (no log channel) bare reply_text wrapped try/except. | 2026-06-12 (s85b) |
-
 | Session 86-87 - Bugs #179-201 | correctness/robustness/docs | See CHANGELOG.md session 86-87 entries for full list | 2026-06-13 (s86-87) |
 | Session 88 wave 1 - Bug #202: run-bot.yml uv sync --frozen | CI | Missing --frozen flag; added | 2026-06-13 (s88) |
 | Session 88 wave 1 - Bug #203: run-bot.yml 10 missing env vars | CI | PORT/REDIS_URL/APPEAL_LOG_HANDLE/APPEAL_DISCUSSION_TOPIC/WARN_EXPIRY_DAYS/PROOF_TIMEOUT_SECONDS/APPEAL_TIMEOUT_SECONDS/ALBUM_DEBOUNCE_SECONDS/MODULES_LOAD/MODULES_NO_LOAD all missing | 2026-06-13 (s88) |
@@ -274,6 +273,15 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Session 88 wave 2 - Bug #211: mongos.py dead bans(chat_id) index | housekeeping | BanDoc has no chat_id field; index wasted slot/write overhead; removed | 2026-06-13 (s88) |
 | Session 88 wave 2 - Perf: connected_flow.py cancel 2 gathers -> 1 | performance | Cancel action: 2 sequential gathers -> single 4-op gather | 2026-06-13 (s88) |
 | Session 88 wave 2 - Ruff clean (72 files), 27/27 indexes, bot running | audit | All fixes verified; ruff clean; app restarted; MongoDB+Redis+APScheduler+27 indexes; polling active | 2026-06-13 (s88) |
+| Session 89 wave 1 - Bug #212: identity.py _WARN_REFUSE missing other_bot+founder | correctness | other_bot: warn stored permanently with no semantic value; founder: not blocked by warn unlike all other actions | 2026-06-13 (s89) |
+| Session 89 wave 1 - Bug #213: identity.py _UNMUTE_REFUSE missing other_bot | correctness | other_bot could be unmuted even though bots can't be muted | 2026-06-13 (s89) |
+| Session 89 wave 1 - Bug #214: identity.py _DEMOTE_REFUSE missing other_bot | correctness | other_bot could be passed to demotion logic | 2026-06-13 (s89) |
+| Session 89 wave 1 - Bug #215: disconnecting.py cmd_tcleave/cmd_rmtc gather results not captured | correctness | deactivate_group failure invisible; state inconsistency undetected | 2026-06-13 (s89) |
+| Session 89 wave 2 - Bug #216: admins.py U+203A separator in help text | style | Role Hierarchy section used › (U+203A) as visual separator; replaced with > (ASCII) | 2026-06-13 (s89) |
+| Session 89 wave 2 - Bug #217: help.py U+203A separator in section header | style | section header template used \u203a as separator; replaced with HTML entity &gt; | 2026-06-13 (s89) |
+| Session 89 wave 2 - SKILL.md em-dash cleanup | housekeeping | .agents/skills/context7-mcp/SKILL.md 4 em-dashes replaced with N/A or parens | 2026-06-13 (s89) |
+| Session 89 wave 2 - Final AST gather audit (0 real bugs) | audit | AST scan: 1 hit in dispatch.py FALSE POSITIVE (_slot catches all exceptions); 0 real gather bugs remain | 2026-06-13 (s89) |
+| Session 89 wave 2 - Final Unicode audit (0 issues) | audit | Full regex scan: 0 emoji/em-dash/en-dash/U+203A in any tcbot/ Python file; 0 in docs/; 0 in .agents/ | 2026-06-13 (s89) |
 
 ## Pending (remaining optional)
 

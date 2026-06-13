@@ -199,7 +199,9 @@ _WARN_REFUSE: dict[IdentityKind, str] = {
     "self": "Self-warning is just journaling. Ask a mod if needed.",
     "this_bot": "Warn me? I'm the one tracking warnings around here.",
     "telegram": "Telegram doesn't take warnings, sorry.",
+    "other_bot": "{line} is a bot. Bots do not accumulate federation warnings.",
     "anon_admin": "Cannot warn the anonymous admin placeholder.",
+    "founder": "{line} runs the place. Warnings do not apply to the Founder.",
 }
 
 _UNBAN_REFUSE: dict[IdentityKind, str] = {
@@ -217,6 +219,7 @@ _UNMUTE_REFUSE: dict[IdentityKind, str] = {
     "self": "Can't unmute yourself - ask a mod.",
     "this_bot": "{line} - bots aren't muteable, nothing to undo.",
     "telegram": "Telegram service was never muted.",
+    "other_bot": "{line} is a bot. Bots cannot be muted, so there is nothing to undo.",
     "anon_admin": "Anonymous admin was never muted.",
     "founder": "{line} - definitely not muted.",
 }
@@ -235,6 +238,7 @@ _DEMOTE_REFUSE: dict[IdentityKind, str] = {
     "self": "Demoting yourself? Bold. Ask a higher-up if you really mean it.",
     "this_bot": "No role to lose here.",
     "telegram": "Telegram has no role to take.",
+    "other_bot": "{line} is a bot. Bots cannot hold federation roles, nothing to demote.",
     "anon_admin": "Anonymous admin has no role to take.",
     "founder": "{line} is the Founder - try /transferowner if you really mean it.",
 }

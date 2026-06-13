@@ -62,8 +62,8 @@ non-obvious API detail, record it in `.agents/memory/decisions.md`.
 | `python-telegram-bot` | `/python-telegram-bot/python-telegram-bot` | 86.8 |
 | `python-telegram-bot` (alt, more snippets) | `/websites/python-telegram-bot_en_stable` | 71.3 |
 | `motor` | `/mongodb/motor` | 85.86 |
-| `pymongo` | resolve via `ctx7 library "pymongo" "..."` | — |
-| `ruff` | resolve via `ctx7 library "ruff" "..."` | — |
+| `pymongo` | resolve via `ctx7 library "pymongo" "..."` | N/A |
+| `ruff` | resolve via `ctx7 library "ruff" "..."` | N/A |
 
 ### External AI Tools (Roo, Claude Desktop, Cursor)
 
@@ -115,7 +115,7 @@ Always verify via Context7 before writing code that uses these:
 ## MCP Server Configuration (for external tools only)
 
 Config lives in `.agents/mcp.json` and `.roo/mcp.json`. Uses `CONTEXT7_API_KEY`
-from Replit Secrets — no hardcoded value needed.
+from Replit Secrets (no hardcoded value needed).
 
 ```json
 "mcpServers": {
@@ -134,7 +134,7 @@ from Replit Secrets — no hardcoded value needed.
 The `ctx7` CLI is installed globally via `npm install -g ctx7`. Binary path:
 `/home/runner/workspace/.config/npm/node_global/bin/ctx7`
 
-The CLI auto-picks `CONTEXT7_API_KEY` from the environment — no prefix needed:
+The CLI auto-picks `CONTEXT7_API_KEY` from the environment (no prefix needed):
 
 ```bash
 ctx7 library "python-telegram-bot" "your question"

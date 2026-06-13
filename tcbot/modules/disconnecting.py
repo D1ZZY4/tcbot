@@ -139,7 +139,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
     lc, lt = cfg.logs
     # * deactivate, log, reply, and leave all run in parallel
-    await asyncio.gather(
+    deact_r, log_r, reply_r, leave_r = await asyncio.gather(
         db.groups_db.deactivate_group(chat.id),
         ctx.bot.send_message(
             lc,
@@ -155,6 +155,16 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         ctx.bot.leave_chat(chat.id),
         return_exceptions=True,
     )
+    if isinstance(deact_r, BaseException):
+        log.error(
+            "deactivate_group failed for chat %d during tcleave: %s", chat.id, deact_r
+        )
+    if isinstance(log_r, BaseException):
+        log.debug("tcleave log send failed for chat %d: %s", chat.id, log_r)
+    if isinstance(reply_r, BaseException):
+        log.debug("tcleave reply failed for chat %d: %s", chat.id, reply_r)
+    if isinstance(leave_r, BaseException):
+        log.debug("tcleave leave_chat failed for chat %d: %s", chat.id, leave_r)
 
 
 # ───────────── Command to Force-Remove a Group </rmtc> ──────────── #
@@ -185,7 +195,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if removed:
         lc, lt = cfg.logs
         # * log, leave, and reply all run in parallel
-        await asyncio.gather(
+        log_r, leave_r, reply_r = await asyncio.gather(
             ctx.bot.send_message(
                 lc,
                 parse_logmsg.group_disconnected_log(
@@ -204,6 +214,12 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             ),
             return_exceptions=True,
         )
+        if isinstance(log_r, BaseException):
+            log.debug("rmtc log send failed for chat %d: %s", chat_id, log_r)
+        if isinstance(leave_r, BaseException):
+            log.debug("rmtc leave_chat failed for chat %d: %s", chat_id, leave_r)
+        if isinstance(reply_r, BaseException):
+            log.debug("rmtc reply failed for chat %d: %s", chat_id, reply_r)
     else:
         try:
             await msg.reply_text(replies.ERR_GROUP_NOT_FOUND)
