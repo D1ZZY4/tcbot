@@ -247,8 +247,9 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Remove the chat restriction from the target and restore messaging rights.
 
-    Resolves the target, checks identity, optionally emits a staff-action notice,
-    then delegates to ``execute_unmute``.
+    Resolves the target, runs identity and role checks in parallel (mirroring
+    ``cmd_mute``), optionally emits a staff-action notice, then delegates to
+    ``execute_unmute``.
     """
     msg = update.effective_message
     admin = update.effective_user
@@ -261,7 +262,25 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.debug("cmd_unmute no-target reply failed: %s", exc)
         return
 
-    ident = await identity.classify(ctx.bot, admin.id, target_id, target_name)
+    # * Run identity classification and rank check in parallel.
+    # * return_exceptions=True prevents a DB error from leaving the command silently dead.
+    ident, role_result = await asyncio.gather(
+        identity.classify(ctx.bot, admin.id, target_id, target_name),
+        resolve_and_check(msg, admin.id, target_id, min_role="tester"),
+        return_exceptions=True,
+    )
+    if isinstance(ident, BaseException):
+        log.exception("identity.classify failed in cmd_unmute: %s", ident)
+        return
+    if isinstance(role_result, BaseException):
+        log.exception("resolve_and_check failed in cmd_unmute: %s", role_result)
+        return
+    executor_role, _ = role_result
+    # * Guard first: if resolve_and_check already replied and rejected (e.g. target
+    # * outranks executor), skip the identity refusal to avoid sending two replies.
+    if executor_role is None:
+        return
+
     refusal = identity.refuse_message("unmute", ident)
     if refusal is not None:
         try:

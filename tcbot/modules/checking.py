@@ -277,11 +277,7 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     )
 
     text, proof_link = await build_ban_detail(ban)
-    await q.edit_message_text(
-        text,
-        parse_mode="HTML",
-        reply_markup=keyboards.checkme_detail_back_kb(ban_id, proof_link),
-    )
+    await _safe_edit(q, text, keyboards.checkme_detail_back_kb(ban_id, proof_link))
 
 
 @decorators.ratelimiter(limit=_RL_CHECKME_CB_LIMIT, period=_RL_PERIOD_S)
@@ -324,11 +320,8 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     if isinstance(admin_fname, BaseException):
         admin_fname = "Admin"
     text, proof_link = await _ban_summary(ban, uid, fname, admin_fname)
-
-    await q.edit_message_text(
-        text,
-        parse_mode="HTML",
-        reply_markup=keyboards.checkme_ban_kb(ctx.bot.username, ban_id, proof_link),
+    await _safe_edit(
+        q, text, keyboards.checkme_ban_kb(ctx.bot.username, ban_id, proof_link)
     )
 
 

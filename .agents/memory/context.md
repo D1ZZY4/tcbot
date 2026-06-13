@@ -62,8 +62,12 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## AUDIT STATUS
 
-**FULLY DRY** as of session 99. All 73 tcbot/ Python files ruff-clean, import-check passing.
-Total bugs fixed: **#1-#265**.
+**Audit ongoing** as of session 101+. All 73 tcbot/ Python files ruff-clean.
+Total bugs fixed: **#1-#267**.
+
+### Session 101+ fixes:
+- Bug #266: muting.py cmd_unmute missing resolve_and_check parallel gather (added identity.classify + resolve_and_check with min_role="tester").
+- Bug #267: checking.py on_checkme_detail and on_checkme_back called q.edit_message_text without _safe_edit; both call-sites now use _safe_edit.
 
 ### Known non-bugs (by design):
 - `schedule_unban` in scheduler.py defined but not called - timed bans feature not yet implemented.
