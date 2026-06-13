@@ -16,7 +16,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot.modules import ALL_MODULES
 from tcbot.modules.helper import decorators, keyboards
-from tcbot.modules.helper.formatter import esc
+from tcbot.modules.helper.formatter import bold, code, esc
 from tcbot.modules.helper.parse_editmsg import safe_edit_cb
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -103,8 +103,8 @@ _HELP_INDEX_TEXT = (
 
 def _prefix_note() -> str:
     """Return an HTML footer listing every configured command prefix."""
-    codes = " ".join(f"<code>{esc(p)}</code>" for p in cfg.prefixes)
-    return f"\n<b>Note:</b> All commands also work with {codes}"
+    codes = " ".join(code(p) for p in cfg.prefixes)
+    return f"\n{bold('Note:')} All commands also work with {codes}"
 
 
 def _section_buttons(
@@ -122,7 +122,7 @@ def _section_buttons(
 
 def _module_text(name: str, overview: str) -> str:
     """Compose the module-overview HTML body."""
-    return f"<b>Help for {name}</b>\n\n{overview}\n{_prefix_note()}"
+    return f"{bold(f'Help for {name}')}\n\n{overview}\n{_prefix_note()}"
 
 
 async def _render_help_index(
@@ -228,7 +228,7 @@ async def _show_section(
         return
 
     label, content = sections[idx]
-    body = f"<b>{name} &gt; {label}</b>\n\n{content}"
+    body = f"{bold(f'{name} > {label}')}\n\n{content}"
     await asyncio.gather(
         q.answer(),
         safe_edit_cb(q, body, reply_markup=keyboards.back_to_module_kb(back_module_cb)),
@@ -272,11 +272,11 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             _MODULE_NAME_MAP,
             key=lambda k: (query not in k, abs(len(k) - len(query))),
         )[:3]
-        suggestion = ", ".join(f"<code>/help {c}</code>" for c in candidates if c)
+        suggestion = ", ".join(code(f"/help {c}") for c in candidates if c)
         hint = f"\n\nDid you mean: {suggestion}?" if suggestion else ""
         try:
             await update.effective_message.reply_text(
-                f"Module <b>{esc(query)}</b> not found.{hint}",
+                f"Module {bold(query)} not found.{hint}",
                 parse_mode="HTML",
                 reply_markup=keyboards.help_topics_kb(HELP_TOPICS_CMD),
             )

@@ -22,7 +22,7 @@ from tcbot.modules.helper import (
     parse_logmsg,
     replies,
 )
-from tcbot.modules.helper.formatter import code, esc, mention
+from tcbot.modules.helper.formatter import bold, code, esc, mention
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.promote_flow import ROLE_ALIASES, Promote
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
@@ -415,7 +415,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         await msg.reply_text(
             f"{mention(target_id, target_fname or str(target_id), ident.username)} is currently a "
-            f"<b>{esc(role_label)}</b>.\nConfirm to remove their role.",
+            f"{bold(role_label)}.\nConfirm to remove their role.",
             parse_mode="HTML",
             reply_markup=keyboards.demote_confirm_kb(target_id),
         )
@@ -635,7 +635,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     if existing:
         try:
             await msg.reply_text(
-                f"You already have a pending request (ID: <code>{existing['request_id']}</code>).",
+                f"You already have a pending request (ID: {code(existing['request_id'])}).",
                 parse_mode="HTML",
             )
         except Exception as exc:
@@ -665,12 +665,12 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         except Exception as exc:
             log.debug("cmd_promote_list no-pending reply failed: %s", exc)
         return
-    lines = [f"<b>Pending Promotion Requests ({len(pending)})</b>\n"]
+    lines = [f"{bold(f'Pending Promotion Requests ({len(pending)})')}\n"]
     for req in pending:
         uname = f"@{req['username']}" if req.get("username") else "no username"
         lines.append(
             f"- {mention(req['target_id'], req['first_name'], req.get('username'))} "
-            f"{code(str(req['target_id']))} | {esc(uname)} | ID: <code>{req['request_id']}</code>"
+            f"{code(str(req['target_id']))} | {esc(uname)} | ID: {code(req['request_id'])}"
         )
     try:
         await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")

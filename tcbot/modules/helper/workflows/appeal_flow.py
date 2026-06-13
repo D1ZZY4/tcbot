@@ -27,7 +27,7 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
-from tcbot.modules.helper.formatter import esc, mention
+from tcbot.modules.helper.formatter import code, esc, mention
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.utils.dispatch import fan_out
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
@@ -553,7 +553,7 @@ class BuildAppeal:
             await asyncio.gather(
                 ctx.bot.send_message(
                     target_id,
-                    f"Your appeal for ban <code>{ban_id}</code> has been approved - "
+                    f"Your appeal for ban {code(ban_id)} has been approved - "
                     f"you're now unbanned from {esc(self.community_name)}. Welcome back.",
                     parse_mode="HTML",
                 ),
@@ -603,7 +603,7 @@ class BuildAppeal:
                 db.users_cache.get_first_name(target_id, str(target_id)),
                 ctx.bot.send_message(
                     target_id,
-                    f"Your appeal for ban <code>{ban_id}</code> has been reviewed and not approved. "
+                    f"Your appeal for ban {code(ban_id)} has been reviewed and not approved. "
                     "The ban remains in place.",
                     parse_mode="HTML",
                 ),

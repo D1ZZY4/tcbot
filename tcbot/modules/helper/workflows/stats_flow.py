@@ -295,7 +295,7 @@ class Stats:
             f"Last name: {esc(str(last_name))}\n\n"
             f"First seen: {commit}\n"
             f"Last seen: {seen}\n\n"
-            f"Use <code>/check {uid}</code> for the full profile."
+            f"Use {code(f'/check {uid}')} for the full profile."
         )
         kb = InlineKeyboardMarkup(
             [[InlineKeyboardButton("« Back", callback_data=f"stats_users:{page}")]]

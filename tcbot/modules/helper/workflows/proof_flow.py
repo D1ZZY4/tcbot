@@ -18,7 +18,7 @@ from telegram import (
     Message,
 )
 
-from tcbot.modules.helper.formatter import esc
+from tcbot.modules.helper.formatter import bold
 
 log = logging.getLogger(__name__)
 
@@ -61,11 +61,11 @@ class BuildProof:
         """Proof-step prompt after reason was collected in-conversation."""
         suffix = f" {extra_info}" if extra_info else ""
         skip_hint = (
-            f", or tap <b>{self.skip_label}</b> to proceed" if self.skip_allowed else ""
+            f", or tap {bold(self.skip_label)} to proceed" if self.skip_allowed else ""
         )
         return (
             f"Reason noted; {action_label.lower()}ing {target_mention}{suffix}.\n"
-            f"Reason: <b>{esc(reason)}</b>\n\n"
+            f"Reason: {bold(reason)}\n\n"
             f"Got any proof? Send a photo or video{skip_hint}."
         )
 
@@ -79,11 +79,11 @@ class BuildProof:
         """Proof-step prompt when an inline reason was already provided."""
         suffix = f" {extra_info}" if extra_info else ""
         skip_hint = (
-            f", or tap <b>{self.skip_label}</b> to proceed" if self.skip_allowed else ""
+            f", or tap {bold(self.skip_label)} to proceed" if self.skip_allowed else ""
         )
         return (
             f"{action_label.capitalize()}ing {target_mention}{suffix}.\n"
-            f"Reason: <b>{esc(inline_reason)}</b>\n\n"
+            f"Reason: {bold(inline_reason)}\n\n"
             f"Got any proof? Send a photo or video{skip_hint}."
         )
 

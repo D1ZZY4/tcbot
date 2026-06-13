@@ -16,7 +16,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, replies
-from tcbot.modules.helper.formatter import code, esc
+from tcbot.modules.helper.formatter import bold, code, esc
 from tcbot.modules.helper.keyboards import tcgroups_kb
 from tcbot.modules.helper.parse_editmsg import safe_edit
 from tcbot.utils.prefixes import build_prefixed_filters
@@ -71,7 +71,7 @@ __help_sections__: list[tuple[str, str]] = [
 
 
 def _render(groups: list[GroupDoc], *, detailed: bool) -> str:
-    lines = [f"<b>Connected Groups</b>\n\nCount: {len(groups)}\n"]
+    lines = [f"{bold('Connected Groups')}\n\nCount: {len(groups)}\n"]
     for g in groups:
         if detailed:
             lines.append(f"- {esc(g['title'])} - {code(str(g['chat_id']))}")

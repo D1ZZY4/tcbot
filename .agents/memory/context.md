@@ -5,9 +5,14 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 92 final)
+**Last updated:** 2026-06-13 (session 93)
 
 ## What is done
+
+- Session 93 (2026-06-13): Formatter consistency audit. Bugs #236-#246 fixed across 11 files.
+  - Root cause: multiple modules used hardcoded `<b>...</b>` and `<code>...</code>` HTML literal tags directly in f-strings for dynamic content, instead of `bold()` and `code()` helpers from `tcbot.modules.helper.formatter`. Inconsistent usage found across netspeed.py, ban_flow.py, appeal_flow.py, admins.py, proof_flow.py, muting_flow.py, demote_flow.py, groups.py, reason_flow.py, help.py, stats_flow.py.
+  - All 11 files fixed: imports updated to add `bold` and/or `code` where missing, all hardcoded tags replaced with helpers. `esc` removed from proof_flow.py import (no longer used after fix).
+  - Ruff: All checks passed (73 files, 0 errors). Import check OK. Total bugs: #1-#246.
 
 - Session 92 (2026-06-13): Bug #232-#235 fixed + full comprehensive final audit completed.
   - Bug #232: netspeed.py used speedtest API data (ISP, server name, country, IP, etc.) in HTML template without esc(). Added esc() import and wrapped all external values. Ruff: 73 files clean.
@@ -42,11 +47,6 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 **FULLY DRY** as of session 92 final. All 73 tcbot/ Python files ruff-clean, import-check passing.
 Total bugs fixed: **#1-#235**. No new bugs found in final comprehensive audit.
-
-## Remaining task file items
-
-Per `attached_assets/task-tcbot-v4.1.1_1781318471765.md` - all audit, feature, and correctness items are complete.
-The task is fully resolved.
 
 ## Runtime info
 

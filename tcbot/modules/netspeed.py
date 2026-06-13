@@ -15,7 +15,7 @@ from speedtest import Speedtest
 from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot.modules.helper import decorators, replies
-from tcbot.modules.helper.formatter import esc
+from tcbot.modules.helper.formatter import bold, code
 from tcbot.utils.prefixes import build_prefixed_filters
 
 if TYPE_CHECKING:
@@ -106,7 +106,7 @@ async def cmd_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     elapsed_ms = (time.monotonic() - t0) * 1_000
     try:
         await sent.edit_text(
-            f"Pong! Round-trip: <code>{elapsed_ms:.1f} ms</code>",
+            f"Pong! Round-trip: {code(f'{elapsed_ms:.1f} ms')}",
             parse_mode="HTML",
         )
     except Exception as exc:
@@ -139,27 +139,27 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     server = result["server"]
 
     text = (
-        "<b>Speed Test Results</b>\n\n"
-        f"<b>Ping:</b> <code>{esc(result['ping'])} ms</code>\n"
-        f"<b>Timestamp:</b> <code>{esc(result['timestamp'])}</code>\n"
-        f"<b>Download:</b> <code>{esc(dl)}/s</code>\n"
-        f"<b>Upload:</b> <code>{esc(ul)}/s</code>\n"
-        f"<b>Sent:</b> <code>{esc(sent_bytes)}</code>\n"
-        f"<b>Received:</b> <code>{esc(recv_bytes)}</code>\n\n"
-        "<b>Client Info</b>\n"
-        f"<b>IP:</b> <code>{esc(client['ip'])}</code>\n"
-        f"<b>ISP:</b> <code>{esc(client['isp'])}</code>\n"
-        f"<b>ISP Rating:</b> <code>{esc(client['isprating'])}</code>\n"
-        f"<b>Country:</b> <code>{esc(client['country'])}</code>\n"
-        f"<b>Latitude:</b> <code>{esc(client['lat'])}</code>\n"
-        f"<b>Longitude:</b> <code>{esc(client['lon'])}</code>\n\n"
-        "<b>Server Info</b>\n"
-        f"<b>Name:</b> <code>{esc(server['name'])}</code>\n"
-        f"<b>Sponsor:</b> <code>{esc(server['sponsor'])}</code>\n"
-        f"<b>Latency:</b> <code>{esc(server['latency'])}</code>\n"
-        f"<b>Country:</b> <code>{esc(server['country'])}, {esc(server['cc'])}</code>\n"
-        f"<b>Latitude:</b> <code>{esc(server['lat'])}</code>\n"
-        f"<b>Longitude:</b> <code>{esc(server['lon'])}</code>"
+        f"{bold('Speed Test Results')}\n\n"
+        f"{bold('Ping:')} {code(str(result['ping']) + ' ms')}\n"
+        f"{bold('Timestamp:')} {code(str(result['timestamp']))}\n"
+        f"{bold('Download:')} {code(dl + '/s')}\n"
+        f"{bold('Upload:')} {code(ul + '/s')}\n"
+        f"{bold('Sent:')} {code(sent_bytes)}\n"
+        f"{bold('Received:')} {code(recv_bytes)}\n\n"
+        f"{bold('Client Info')}\n"
+        f"{bold('IP:')} {code(str(client['ip']))}\n"
+        f"{bold('ISP:')} {code(str(client['isp']))}\n"
+        f"{bold('ISP Rating:')} {code(str(client['isprating']))}\n"
+        f"{bold('Country:')} {code(str(client['country']))}\n"
+        f"{bold('Latitude:')} {code(str(client['lat']))}\n"
+        f"{bold('Longitude:')} {code(str(client['lon']))}\n\n"
+        f"{bold('Server Info')}\n"
+        f"{bold('Name:')} {code(str(server['name']))}\n"
+        f"{bold('Sponsor:')} {code(str(server['sponsor']))}\n"
+        f"{bold('Latency:')} {code(str(server['latency']))}\n"
+        f"{bold('Country:')} {code(str(server['country']) + ', ' + str(server['cc']))}\n"
+        f"{bold('Latitude:')} {code(str(server['lat']))}\n"
+        f"{bold('Longitude:')} {code(str(server['lon']))}"
     )
 
     share_url: str | None = result.get("share")

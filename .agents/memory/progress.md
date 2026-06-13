@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-13 (session 92 final)
+**Last updated:** 2026-06-13 (session 93)
 
 ## Verification baseline
 
@@ -13,19 +13,21 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 |---|---|
 | `uv sync` | PASS |
 | `uv pip install -e .` | PASS |
-| `uv run python -c "import tcbot; print('import OK')"` | PASS (session 91: re-verified after netspeed.py addition) |
+| `uv run python -c "import tcbot; print('import OK')"` | PASS (re-verified session 93) |
 | `uv run python -m tcbot` | PASS by runtime evidence: MongoDB connected, indexes ensured, scheduler started, bot polling active |
 | `uv run ruff format .` | PASS (73 files) |
-| `uv run ruff check .` | PASS (All checks passed, verified session 92 final) |
+| `uv run ruff check .` | PASS (All checks passed, verified session 93) |
 | asyncio task-GC fix isolated test (session 43) | PASS: task registered on schedule, discarded on completion, report coroutine ran |
 | annotation AST audit | PASS: 0 non-dunder function parameters missing type annotations |
 | docs audit (session 74) | PASS: mapping.md top-level layout completed; 3 new Mermaid diagrams added; all code files audited clean |
 | Final comprehensive audit (session 92 final) | PASS: All remaining workflow, module, database files verified. 0 new bugs found. |
+| Formatter consistency audit (session 93) | PASS: 11 files audited and fixed. All hardcoded `<b>`/`<code>` in dynamic content replaced with bold()/code() helpers. Ruff clean. Import OK. |
 
 ## Completed items (recent additions on top)
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Formatter consistency (#236-#246) | style/security | 11 files: netspeed.py, ban_flow.py, appeal_flow.py, admins.py, proof_flow.py, muting_flow.py, demote_flow.py, groups.py, reason_flow.py, help.py, stats_flow.py. All hardcoded `<b>` and `<code>` in dynamic content replaced with bold()/code() helpers. | 2026-06-13 (s93) |
 | Final comprehensive audit | audit | Verified checking.py, banning.py, ban_flow.py, warning_flow.py, muting_flow.py, kicking_flow.py, unban_flow.py, appeal_flow.py, stats_flow.py, bans_db.py. All clean. No new bugs found. Total: #1-#235 final. | 2026-06-13 (s92) |
 | Bug #235: run-bot.yml cron wrong | infra | Cron `55 4 * * *` (once daily) contradicts comment "Fires every 30 minutes". Self-chain fallback was effectively broken. Fixed to `*/30 * * * *`. | 2026-06-13 (s92) |
 | Bug #234: docker-compose.yml four issues | correctness | env_file config.env to .env; MongoDB healthcheck missing --quiet+.ok+start_period; Redis start_period missing; networks.internal.internal:true removed (blocked bot internet access). | 2026-06-13 (s92) |

@@ -23,7 +23,7 @@ from telegram.ext import (
 
 from tcbot import cfg
 from tcbot.modules.helper import replies
-from tcbot.modules.helper.formatter import esc, mention
+from tcbot.modules.helper.formatter import bold, esc, mention
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 
@@ -88,7 +88,7 @@ class BuildReason:
     ) -> str:
         """Prompt asking the moderator to type a reason."""
         suffix = f" {extra_info}" if extra_info else ""
-        skip_hint = f", or tap <b>{self.skip_label}</b>" if self.skip_allowed else ""
+        skip_hint = f", or tap {bold(self.skip_label)}" if self.skip_allowed else ""
         return (
             f"About to {action_label} {target_mention}{suffix}.\n"
             f"What's the reason? Type it below{skip_hint}."
