@@ -5,9 +5,17 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 108)
+**Last updated:** 2026-06-13 (session 109)
 
 ## What is done
+
+- Session 109 (2026-06-13): Third-pass comprehensive audit of all primary moderation paths. No new bugs found — all areas verified CLEAN:
+  - ban_flow.py, greeting.py, scheduler.py, muting_flow.py, unban_flow.py, extraction.py, warning_flow.py (T001-T007 repeated audit pass).
+  - appeal_flow.py (approval block): deactivate_all_active_bans + cancel_schedule + fan_out + primary groups — pattern correct.
+  - bans_db.py (deactivate_all/extra), mutes_db.py (log_mute with duration_secs) — clean.
+  - checking.py (full), identity.py (full), decorators.py (full), muting.py (full), kicking.py (full), unbanning.py (full), banning.py (full), warnings.py (full), kicking_flow.py (full), appeals.py (full), connected_flow.py (cmc.from_user None guard) — all clean.
+  - Verification: ruff 73 files clean, import OK, startup OK (27/27 indexes, Redis, APScheduler, polling).
+  - Total bugs fixed remains: #1–#285.
 
 - Session 108 (2026-06-13): Full second-pass comprehensive audit of all remaining unaudited areas. One performance bug found and fixed:
   - Bug #285: users_cache.get_first_name() bypassed the L1 user_mention_cache and hit MongoDB directly on every call. Called from 10 sites including hot paths in asyncio.gather across ban_flow, appeal_flow, check_flow, connected_flow. Fixed by adding L1 cache-check path (same pattern as get_user_mention_data) before falling back to MongoDB.
@@ -95,8 +103,8 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## AUDIT STATUS
 
-**COMPLETE** as of session 107. All 73 tcbot/ Python files audited and ruff-clean.
-Total bugs fixed: **#1-#284**.
+**COMPLETE** as of session 109. All 73 tcbot/ Python files audited and ruff-clean (three full passes).
+Total bugs fixed: **#1-#285**.
 
 ### All files fully audited across all sessions:
 ban_flow.py, greeting.py, bans_db.py, unban_flow.py, appeal_flow.py, banning.py, muting.py, muting_flow.py, kicking.py, kicking_flow.py, warnings.py, warning_flow.py, demote_flow.py, connected_flow.py, proof_flow.py, reason_flow.py, parse_logmsg.py, decorators.py, admins.py, users_cache.py, users_roles.py, promote_flow.py, connecting.py, disconnecting.py, groups_db.py, unbanning.py, appeals.py, check_flow.py, broadcasting.py, mongos.py, mutes_db.py, warns_db.py, kicks_db.py, queues_db.py, pagination.py, error_reporter.py, keyboards.py, parse_editmsg.py, documents.py, replies.py, timedate_format.py, parse_link.py, prefixes.py, redis_client.py, alive.py, checking.py, stats.py, stats_flow.py, maintenance.py, additional.py, netspeed.py, formatter.py, identity.py, cache.py, scheduler.py, __init__.py, __main__.py, ban_info.py, extraction.py, start.py, help.py, about.py, privacy.py, groups.py, modules/__init__.py, modules/types.py, dispatch.py, logger.py, utils/__init__.py, database/__init__.py, database/types.py, modules/helper/__init__.py, modules/helper/workflows/__init__.py

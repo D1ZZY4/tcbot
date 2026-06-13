@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-13 (session 108)
+**Last updated:** 2026-06-13 (session 109)
 
 ## Verification baseline
 
@@ -25,6 +25,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Docs sync audit (session 100) | PASS: 9 docs updated to reflect sessions 95-99 code changes (user_ref, deactivate_all/extra, trigger=mute, str(uid) fallback). CHANGELOG updated. Ruff: 73 files clean. |
 | Full module audit (session 99) | PASS: checking.py, check_flow.py, connecting.py, disconnecting.py, unbanning.py, admins.py, appeals.py, stats.py, broadcasting.py, maintenance.py, additional.py all clean. |
 | Session 103 comprehensive audit | PASS: All 73 tcbot/ files fully audited. Bugs #271-#277 fixed. Docker/CI/scheduler all clean. Ruff: 73 files clean. |
+| Session 109 comprehensive audit | PASS: Third full-pass audit of all primary moderation paths. No new bugs. ban_flow, greeting, scheduler, muting_flow, unban_flow, extraction, warning_flow, appeal_flow (approval), bans_db, mutes_db, checking, identity, decorators, muting, kicking, unbanning, banning, warnings, kicking_flow, appeals, connected_flow all verified CLEAN. Ruff: 73 files clean. Startup OK (27/27 indexes). Total: #1–#285. |
 | Session 108 comprehensive audit | PASS: Second full-pass audit of all remaining areas — checking.py, warning_flow.py, check_flow.py (full), muting_flow.py (full), connected_flow.py (full), admins.py (555-836), ban_info.py, unbanning.py, kicking.py, dispatch.py, bans_db.py, groups_db.py, warns_db.py, kicks_db.py, mutes_db.py, users_roles.py, unban_flow.py, kicking_flow.py, demote_flow.py, promote_flow.py, broadcasting.py, disconnecting.py, proof_flow.py, reason_flow.py. Bug #285 (get_first_name L1 cache bypass) found and fixed. Ruff: 73 files clean. Total: #1–#285. |
 | Session 107 fresh audit pass | PASS: mongos.py, groups_db.py, stats_flow.py, check_flow.py, broadcasting.py, maintenance.py, stats.py, connected_flow.py, kicking_flow.py, unban_flow.py, warning_flow.py, reason_flow.py, demote_flow.py, admins.py (full), checking.py, ban_flow.py all clean. Bugs #283+#284 (CI workflows) found and fixed. Ruff: 73 files clean. |
 | Session 106 fresh audit pass | PASS: appeal_flow, warning_flow, warnings, checking, identity, banning, muting, kicking, extraction, decorators, reason_flow, proof_flow, demote_flow all clean. Bug #282 found and fixed. Ruff: 73 files clean. |
