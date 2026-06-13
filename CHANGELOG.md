@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 102)
+
+### Fixed
+
+- **`tcbot/modules/helper/extraction.py`** (`extract_target`): When a moderator replied to a message sent by an anonymous admin (GroupAnonymousBot, `from_user.id == 1087968824`), the code correctly skipped `from_user` but then fell through to the `sender_chat` path. In this case `sender_chat` is the group itself (not a bannable individual), so the function returned the group's own chat ID as the target. Downstream fan-out then attempted `ban_chat_member(grp_id, grp_id)` which always fails with a `TelegramError`. Added a `_skip_sender_chat` flag that is set to `True` when `from_user.id == _ANONYMOUS_BOT_ID`, preventing `sender_chat` from being used as the ban target; resolution falls through to args/entity extraction instead. (Bug #270)
+
 ## [Unreleased] - 2026-06-13 (session 100)
 
 ### Documentation

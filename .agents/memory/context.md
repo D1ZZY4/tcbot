@@ -5,7 +5,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 100)
+**Last updated:** 2026-06-13 (session 102)
 
 ## What is done
 
@@ -72,8 +72,10 @@ Total bugs fixed: **#1-#270**.
 - Bug #269: stats_flow.py Stats.users_list() — redundant `tail = f" · @{esc(uname)}"` alongside user_ref() caused username to appear twice; removed tail.
 - Bug #270: extraction.py extract_target — when replying to a message sent by GroupAnonymousBot (from_user.id == 1087968824), the code correctly skipped from_user but then fell through to sender_chat which is the group itself (not a bannable individual). Added _skip_sender_chat flag so sender_chat is also skipped in this case; command falls through to args/entity resolution instead.
 
-### Files fully audited in this session (new task):
+### Files fully audited in this session and previous (new task):
 ban_flow.py, greeting.py, bans_db.py, unban_flow.py, appeal_flow.py, banning.py, muting.py, muting_flow.py, kicking.py, kicking_flow.py, warnings.py, warning_flow.py, demote_flow.py, connected_flow.py — all clean except Bug #270.
+proof_flow.py, reason_flow.py, parse_logmsg.py, decorators.py, admins.py, users_cache.py, users_roles.py, promote_flow.py, connecting.py, disconnecting.py, groups_db.py, unbanning.py, appeals.py, check_flow.py (591 lines), broadcasting.py — all clean, no new bugs.
+Em-dash/en-dash grep over all tcbot/: 0 matches. Emoticon check in identity.py: 0 matches. Ruff: All checks passed (73 files).
 
 ### Previously audited (session 101 initial):
 mongos.py, mutes_db.py, warns_db.py, kicks_db.py, queues_db.py, pagination.py, error_reporter.py, keyboards.py, parse_editmsg.py, admins.py (complete), documents.py, replies.py, timedate_format.py, parse_link.py, prefixes.py, redis_client.py, alive.py — all clean, no new bugs found.

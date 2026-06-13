@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-13 (session 101)
+**Last updated:** 2026-06-13 (session 102)
 
 ## Verification baseline
 
@@ -29,6 +29,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Session 102 audit (session 102) | audit | Audited 15 additional files: proof_flow.py, reason_flow.py, parse_logmsg.py, decorators.py, admins.py, users_cache.py, users_roles.py, promote_flow.py, connecting.py, disconnecting.py, groups_db.py, unbanning.py, appeals.py, check_flow.py, broadcasting.py — all clean, 0 new bugs. Em-dash/en-dash: 0 matches. Emoticon in identity.py: 0 matches. CHANGELOG.md updated for Bug #270. Ruff: All checks passed (73 files). | 2026-06-13 (s102) |
 | Bug #270 (session 102) | correctness | extraction.py extract_target: reply to anonymous admin message skipped from_user (ANONYMOUS_BOT_ID) correctly but fell through to sender_chat which is the group itself. Added _skip_sender_chat flag to skip sender_chat when from_user is ANONYMOUS_BOT_ID. Full audit of ban_flow, greeting, bans_db, unban_flow, appeal_flow, banning, muting, kicking, warnings, demote_flow, connected_flow — all clean. | 2026-06-13 (s102) |
 | Docs sync (session 100) | documentation | 9 docs updated to reflect sessions 95-99 code changes: user_ref in formatter table, deactivate_all/extra_active_bans in DB docs, trigger="mute" in demote/role/workflows docs, str(uid) fallback in check/stats docs, banning/appeal flow helpers updated. CHANGELOG updated. | 2026-06-13 (s100) |
 | Bug #265 (session 99) | correctness | warnings.py cmd_warn_entry missing identity.staff_notice("warn", ...) before return in refusal guard; consistent with cmd_unwarn and cmd_resetwarns. CHANGELOG updated. | 2026-06-13 (s99) |
