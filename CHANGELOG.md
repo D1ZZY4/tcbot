@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 94)
+
+### Changed
+
+- **Audit pass (session 94)**: Full re-audit of 25+ module and workflow files. No new bugs found. Verified: kicking.py, muting.py, unbanning.py, broadcasting.py, maintenance.py, start.py, identity.py, parse_logmsg.py, ban_flow.py, kicking_flow.py, muting_flow.py, unban_flow.py, demote_flow.py, dispatch.py, users_roles.py, keyboards.py, __main__.py, appeal_flow.py, reason_flow.py, proof_flow.py, warnings.py, warning_flow.py, admins.py, checking.py. Grep sweep confirmed zero em-dash/en-dash characters, zero emoji, and correct `q.answer()` placement across all callback handlers. Symlinks `.kilo`, `.trae`, `.claude`, `.roo` verified intact. Ruff: all checks passed (73 files). Import check: OK.
+
 ## [Unreleased] - 2026-06-13 (session 93)
 
 ### Fixed

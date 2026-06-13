@@ -5,9 +5,11 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 93)
+**Last updated:** 2026-06-13 (session 94)
 
 ## What is done
+
+- Session 94 (2026-06-13): Deep audit pass, no bugs found. Verified 25+ files: kicking.py, muting.py, unbanning.py, broadcasting.py, maintenance.py, start.py, identity.py, parse_logmsg.py, ban_flow.py, kicking_flow.py, muting_flow.py, unban_flow.py, demote_flow.py, dispatch.py, users_roles.py, keyboards.py, __main__.py, appeal_flow.py, reason_flow.py, proof_flow.py, warnings.py, warning_flow.py, admins.py (partial), checking.py (partial). Grep confirmed: 0 em-dash/en-dash, 0 emoji, q.answer() always first. Symlinks .kilo/.trae/.claude/.roo verified present. Ruff: All checks passed. Import: OK.
 
 - Session 93 (2026-06-13): Formatter consistency audit. Bugs #236-#246 fixed across 11 files.
   - Root cause: multiple modules used hardcoded `<b>...</b>` and `<code>...</code>` HTML literal tags directly in f-strings for dynamic content, instead of `bold()` and `code()` helpers from `tcbot.modules.helper.formatter`. Inconsistent usage found across netspeed.py, ban_flow.py, appeal_flow.py, admins.py, proof_flow.py, muting_flow.py, demote_flow.py, groups.py, reason_flow.py, help.py, stats_flow.py.
@@ -45,8 +47,8 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## AUDIT STATUS
 
-**FULLY DRY** as of session 92 final. All 73 tcbot/ Python files ruff-clean, import-check passing.
-Total bugs fixed: **#1-#235**. No new bugs found in final comprehensive audit.
+**FULLY DRY** as of session 94. All 73 tcbot/ Python files ruff-clean, import-check passing.
+Total bugs fixed: **#1-#246**. Two consecutive full-audit sessions (93 formatter pass + 94 deep re-audit) with no new structural bugs found.
 
 ## Runtime info
 
