@@ -27,17 +27,30 @@ def _mutes() -> AsyncIOMotorCollection:
 # * Primarily used for audit logging of moderation actions
 
 
-async def log_mute(user_id: int, chat_id: int, reason: str, admin_id: int) -> None:
-    """Log a mute event to the database for audit purposes."""
-    await _mutes().insert_one(
-        {
-            "user_id": user_id,
-            "chat_id": chat_id,
-            "reason": reason,
-            "admin_id": admin_id,
-            "timestamp": utc_now(),
-        }
-    )
+async def log_mute(
+    user_id: int,
+    chat_id: int,
+    reason: str,
+    admin_id: int,
+    *,
+    duration_secs: int | None = None,
+) -> None:
+    """Log a mute event to the database for audit purposes.
+
+    ``duration_secs`` is ``None`` for a permanent mute, or the total number of
+    seconds for a timed mute. Storing it allows mute-history views to show
+    how long a restriction was intended to last.
+    """
+    doc: dict = {
+        "user_id": user_id,
+        "chat_id": chat_id,
+        "reason": reason,
+        "admin_id": admin_id,
+        "timestamp": utc_now(),
+    }
+    if duration_secs is not None:
+        doc["duration_secs"] = duration_secs
+    await _mutes().insert_one(doc)
 
 
 # ─────────────────────── Per-user history ───────────────────────── #

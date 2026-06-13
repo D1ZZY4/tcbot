@@ -108,9 +108,17 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict) -> None:
 
     until = utc_now() + duration if duration else None
     perms = ChatPermissions(can_send_messages=False)
+    duration_secs = int(duration.total_seconds()) if duration else None
 
-    # * Apply across all connected groups - semaphore-bounded for rate safety
+    # * Apply across all connected groups + primary groups - semaphore-bounded
     groups = await db.groups_db.active_groups()
+    _primary_ids = [cid for cid in (cfg.main_group, cfg.exec_group) if cid]
+    _existing_ids = {grp["chat_id"] for grp in groups}
+    groups = groups + [
+        {"chat_id": pid, "title": ""}
+        for pid in _primary_ids
+        if pid not in _existing_ids
+    ]
     results = await fan_out(
         [
             bot.restrict_chat_member(
@@ -147,7 +155,9 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict) -> None:
     # * Log to DB, post to log channel, and edit summary - all in parallel
     chat_id = update.effective_chat.id
     results2 = await asyncio.gather(
-        db.mutes_db.log_mute(target_id, chat_id, reason_text, admin_id),
+        db.mutes_db.log_mute(
+            target_id, chat_id, reason_text, admin_id, duration_secs=duration_secs
+        ),
         bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
         bot.edit_message_text(
             summary,
@@ -192,8 +202,13 @@ async def execute_unmute(
         can_pin_messages=False,
     )
 
-    # * Unrestrict across all connected groups - semaphore-bounded for rate safety
+    # * Unrestrict across all connected groups + primary groups - semaphore-bounded
     groups = await db.groups_db.active_groups()
+    _pri_ids = [cid for cid in (cfg.main_group, cfg.exec_group) if cid]
+    _ex_ids = {grp["chat_id"] for grp in groups}
+    groups = groups + [
+        {"chat_id": pid, "title": ""} for pid in _pri_ids if pid not in _ex_ids
+    ]
     results = await fan_out(
         [
             ctx.bot.restrict_chat_member(

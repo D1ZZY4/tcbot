@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-13 (session 103)
+**Last updated:** 2026-06-13 (session 104)
 
 ## Verification baseline
 
@@ -30,6 +30,8 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Bug #279 (session 104) | correctness | ban_flow._execute_ban / muting_flow._execute_mute+execute_unmute / unban_flow.execute_unban: MAIN_GROUP and EXEC_GROUP configured via env vars are not in federated_groups collection and thus excluded from active_groups(). Federation-banned/muted users were not kicked from primary groups on action; only removed on next join attempt. Fixed by appending cfg.main_group/cfg.exec_group to the groups list before fan_out when not already present. | 2026-06-13 (s104) |
+| Bug #278 (session 104) | correctness | mutes_db.log_mute: audit record lacked duration_secs field. Timed mutes stored only user_id, chat_id, reason, admin_id, timestamp — no duration. Added duration_secs (int or None) keyword-only param to log_mute; updated _execute_mute to pass it. docs/databases/databases.md updated. | 2026-06-13 (s104) |
 | Session 103 audit (session 103) | audit | Full audit sweep complete. T001: start.py, help.py, about.py, privacy.py, groups.py, modules/__init__.py, types.py verified clean; asyncio.gather/q.answer fixes + None guards added. T002: Dockerfile, docker-compose.yml, all 5 .github/workflows/*.yml audited. T003: dispatch.py, logger.py, utils/__init__.py, database/__init__.py, types.py, helper/__init__.py, workflows/__init__.py clean. T004: __main__.py, ban_info.py, extraction.py clean. Bugs #271-#277 fixed. CHANGELOG updated. Ruff: All checks passed (73 files). | 2026-06-13 (s103) |
 | Bug #277 (session 103) | correctness | scheduler.py setup_schedules: CronTrigger(day_of_week=0) resolves to Sunday in APScheduler 4.x (Unix cron 0=Sunday), not Monday. Log message said "Monday". Changed to day_of_week="mon" for explicit, unambiguous scheduling. | 2026-06-13 (s103) |
 | Bug #276 (session 103) | correctness | dispatch.py fan_out(): asyncio.CancelledError was caught by generic Exception handler and returned as a BaseException value rather than propagated. Added explicit CancelledError re-raise so bot shutdown is clean when multi-group fan_out is in flight. | 2026-06-13 (s103) |

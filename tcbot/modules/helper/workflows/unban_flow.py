@@ -74,6 +74,13 @@ async def execute_unban(
         log.error("active_groups failed during unban of %d: %s", target_id, groups)
         groups = []
 
+    # * Include primary groups not already in the connected list
+    _primary_ids = [cid for cid in (cfg.main_group, cfg.exec_group) if cid]
+    _existing_ids = {grp["chat_id"] for grp in groups}
+    for _pid in _primary_ids:
+        if _pid not in _existing_ids:
+            groups = [*groups, {"chat_id": _pid, "title": ""}]
+
     # * unban from all groups - semaphore-bounded for rate safety
     results = await fan_out(
         [

@@ -172,7 +172,7 @@ Kicks are append-only audit records:
 
 Mutes follow the same append-only pattern as kicks:
 
-- `mutes` stores one document per mute event with fields `user_id`, `chat_id`, `reason`, `admin_id`, and `timestamp`.
+- `mutes` stores one document per mute event with fields `user_id`, `chat_id`, `reason`, `admin_id`, and `timestamp`. The optional `duration_secs` field is present for timed mutes (absent or `None` for permanent mutes).
 - `mutes_db.user_mutes(user_id)` returns all mute records for a user, newest first.
 - `mutes_db.user_mute_count(user_id)` returns the total count.
 - Records are never deleted; the collection is a permanent audit trail.

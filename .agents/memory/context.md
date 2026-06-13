@@ -5,9 +5,15 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 103)
+**Last updated:** 2026-06-13 (session 104)
 
 ## What is done
+
+- Session 104 (2026-06-13): Deep audit of all primary moderation execution paths (ban/mute/unban/kick/warn/greeting/extraction). Found and fixed 2 bugs:
+  - Bug #279: Primary groups (MAIN_GROUP, EXEC_GROUP) excluded from federation enforcement fan-out. Active_groups() only returns groups in federated_groups collection; primary groups configured via env var are not there by default. Federation-banned/muted users remained in primary groups until they left and rejoined. Fixed in ban_flow._execute_ban, muting_flow._execute_mute + execute_unmute, unban_flow.execute_unban. All three now append cfg.main_group + cfg.exec_group to the groups list before fan_out when not already present. Also fixed unban path (always future-proofs when MAIN_GROUP is already connected).
+  - Bug #278: mutes_db.log_mute stored no duration. Timed mutes had duration_secs computed in _execute_mute but never saved to DB. Added duration_secs (int | None) keyword-only param to log_mute; updated _execute_mute to pass it. DB record now shows how long the restriction was intended to last.
+  - Comprehensive verification: muting_flow ✅ (until_date passed to Telegram correctly), ban_flow ✅ (real fan_out + PM graceful), kicking_flow ✅ (local only, by design), warning_flow ✅ (local auto-ban at limit, demote first), greeting ✅ (both new_chat_member + ChatJoinRequest paths enforce bans), extraction ✅ (5 resolution paths consistent across all commands), unban_flow ✅ (deactivate_all + cancel_schedule).
+  - CHANGELOG, docs/banning-detailed.md, docs/databases/databases.md updated. Ruff: All checks passed (73 files). Total bugs fixed: #1-#279.
 
 - Session 103 (2026-06-13): Comprehensive audit of all remaining unaudited tcbot/ files + Docker/CI infra. Bugs #271-#277 fixed. Session plan: T001 (user-facing modules), T002 (Docker/CI), T003 (utils/db infra), T004 (main entry + ban_info + extraction). All tasks complete.
   - Bug #271: Dockerfile verification step made verbose (hiredis print message).

@@ -107,7 +107,7 @@ When the target has no active ban:
    - `Proof <target_id>` URL button.
    - `Submit Appeal` URL button.
 6. The sent log message ID is saved with `bans_db.set_log_message_id(...)` when available.
-7. The target is banned in every active connected group returned by `groups_db.active_groups()`.
+7. The target is banned in every active connected group returned by `groups_db.active_groups()`, plus the primary groups (`MAIN_GROUP`, `EXEC_GROUP`) when they are not already in the connected-groups list.
 8. The target user is cached with `users_cache.upsert_user(...)`.
 9. The original proof prompt is edited with an applied-groups summary.
 
@@ -137,7 +137,7 @@ The update flow:
 
 ## Connected-group enforcement
 
-Federation enforcement uses `groups_db.active_groups()` and then calls `ban_chat_member` for each group through `fan_out(...)`. `fan_out` caps concurrency and returns exceptions instead of raising them.
+Federation enforcement uses `groups_db.active_groups()` (connected groups from the `federated_groups` collection) and then appends the primary groups (`cfg.main_group`, `cfg.exec_group`) when they are not already in the list. It calls `ban_chat_member` for each group through `fan_out(...)`. `fan_out` caps concurrency and returns exceptions instead of raising them.
 
 The user-facing summary reports how many groups succeeded:
 

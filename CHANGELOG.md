@@ -2,6 +2,16 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 104)
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/ban_flow.py`** (`_execute_ban`): Primary groups (`MAIN_GROUP`, `EXEC_GROUP`) were configured via environment variables and not added to the `federated_groups` collection by default, so `groups_db.active_groups()` never included them. A federation-banned user who was already a member of the primary group would not be kicked until they left and rejoined. Added explicit inclusion of primary group IDs (via `cfg.main_group` and `cfg.exec_group`) to the enforcement list before the `fan_out` call when they are not already in the connected-groups list. (Bug #279)
+- **`tcbot/modules/helper/workflows/muting_flow.py`** (`_execute_mute`, `execute_unmute`): Same primary-group enforcement gap as ban: primary groups were absent from the mute and unmute fan-out. Applied the same fix — include `cfg.main_group` and `cfg.exec_group` in the `groups` list if not already present. (Bug #279)
+- **`tcbot/modules/helper/workflows/unban_flow.py`** (`execute_unban`): Same primary-group gap: unban fan-out via `active_groups()` omitted primary groups. Added the same augmentation so unban is lifted from primary groups too. (Bug #279)
+- **`tcbot/database/mutes_db.py`** (`log_mute`): The mute audit record stored `user_id`, `chat_id`, `reason`, `admin_id`, and `timestamp` but omitted the mute duration. Mute-history lookups had no way to show how long a restriction was intended to last. Added a `duration_secs: int | None` keyword-only parameter (omitted from the document when `None`, i.e. permanent mute). (Bug #278)
+- **`tcbot/modules/helper/workflows/muting_flow.py`** (`_execute_mute`): Updated call to `db.mutes_db.log_mute(...)` to pass `duration_secs=int(duration.total_seconds()) if duration else None`, so timed-mute durations are now stored in the audit record. (Bug #278)
+
 ## [Unreleased] - 2026-06-13 (session 102)
 
 ### Fixed
