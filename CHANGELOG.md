@@ -2,6 +2,20 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 88 wave 2)
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/connected_flow.py`** (`on_join_decision`): `update.effective_message.reply_text(...)` was passed as a direct argument to `asyncio.gather()` without first checking if `effective_message` is None. In Python, all arguments to a function are evaluated before the function is called, so if `effective_message` is None an `AttributeError` is raised before `asyncio.gather` even starts and before `return_exceptions=True` can protect against it. This would happen in inline-message contexts (where `q.message` is None). Fixed: store `update.effective_message` in a local variable and conditionally append the reply coroutine only when the message object is not None. Affects both the "role check failed" and "owner only" error paths. (Bug #207)
+- **`tcbot/modules/helper/workflows/connected_flow.py`** (`on_join_decision`): `q.message.message_id` was accessed without a None check when `q.message` can be None for inline messages. Fixed: `prompt_msg_id = q.message.message_id if q.message else 0`. (Bug #208)
+- **`tcbot/modules/admins.py`** (`on_promo_decision`): `q.message.text` was accessed as an argument to `q.edit_message_text()` without guarding against `q.message` being None (inline message case). Like Bug #207, this argument is evaluated before asyncio.gather starts, so the AttributeError bypasses `return_exceptions=True`. Fixed in both approve and reject branches: `(q.message.text if q.message else "")`. (Bug #209)
+- **`tcbot/modules/helper/workflows/kicking_flow.py`** (`execute_kick`): `results[0]` (the `unban_chat_member` call that converts ban-to-kick) was not checked after `asyncio.gather`. If unban failed, the user remained banned in that group with no log entry. Added `log.warning` for `results[0]` `BaseException` so operators are alerted when the post-kick unban fails. (Bug #210)
+- **`tcbot/database/mongos.py`** (`ensure_indexes`): `col("bans").create_index([("chat_id", 1)])` was a dead index — `BanDoc` in `bans_db.py` does not contain a `chat_id` field, so no query ever uses this index. Wasted one index slot and write overhead on every ban document insert. Removed. Kicks and mutes do have `chat_id` (their `chat_id` indexes are retained). (Bug #211)
+
+### Performance
+
+- **`tcbot/modules/helper/workflows/connected_flow.py`** (cancel action): The cancel-callback path executed two sequential `asyncio.gather` calls — the first gathering `remove_pending` + message edit, the second gathering `send_message` (log) + `leave_chat`. All four operations are independent and can be fired together. Merged into a single `asyncio.gather` with all four coroutines, saving one round-trip latency on every rejected group connection.
+
 ## [Unreleased] - 2026-06-13 (session 88 wave 1)
 
 ### Fixed

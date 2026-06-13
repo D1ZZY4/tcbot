@@ -79,6 +79,12 @@ async def execute_kick(
             ),
             return_exceptions=True,
         )
+        if isinstance(results[0], BaseException):
+            log.warning(
+                "unban_chat_member failed after kick for target=%d: %s",
+                target_id,
+                results[0],
+            )
         if isinstance(results[1], BaseException):
             log.error(
                 "log_kick DB write failed for target=%d: %s", target_id, results[1]

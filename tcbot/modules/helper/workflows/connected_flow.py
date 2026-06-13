@@ -274,21 +274,20 @@ class BuildConnection:
             q.answer(),
             return_exceptions=True,
         )
+        msg = update.effective_message
         if isinstance(member_res, BaseException):
             log.debug("Join decision role check failed: %s", member_res)
-            await asyncio.gather(
-                q.edit_message_reply_markup(None),
-                update.effective_message.reply_text(_ERR_ROLE_CHECK_FAILED),
-                return_exceptions=True,
-            )
+            coros: list = [q.edit_message_reply_markup(None)]
+            if msg:
+                coros.append(msg.reply_text(_ERR_ROLE_CHECK_FAILED))
+            await asyncio.gather(*coros, return_exceptions=True)
             return
 
         if member_res.status != ChatMemberStatus.OWNER:
-            await asyncio.gather(
-                q.edit_message_reply_markup(None),
-                update.effective_message.reply_text(_ERR_OWNER_ONLY),
-                return_exceptions=True,
-            )
+            coros = [q.edit_message_reply_markup(None)]
+            if msg:
+                coros.append(msg.reply_text(_ERR_OWNER_ONLY))
+            await asyncio.gather(*coros, return_exceptions=True)
             return
 
         action = q.data
@@ -307,12 +306,13 @@ class BuildConnection:
                 return
 
             if not self.check_perms(bot_member):
+                prompt_msg_id = q.message.message_id if q.message else 0
                 await asyncio.gather(
                     db.groups_db.add_pending(
                         chat.id,
                         chat.title or "",
                         user.id,
-                        q.message.message_id,
+                        prompt_msg_id,
                     ),
                     q.edit_message_text(
                         self.perms_required_message(), reply_markup=None
@@ -343,13 +343,10 @@ class BuildConnection:
                 log.debug("connected edit failed for chat %d: %s", chat.id, edit_r)
 
         elif action == self.cancel_callback:
+            # * All four ops are independent: remove pending, edit prompt, log, leave.
             await asyncio.gather(
                 db.groups_db.remove_pending(chat.id),
                 q.edit_message_text(self.declined_message(), reply_markup=None),
-                return_exceptions=True,
-            )
-
-            await asyncio.gather(
                 ctx.bot.send_message(
                     lc,
                     parse_logmsg.group_connection_rejected_log(

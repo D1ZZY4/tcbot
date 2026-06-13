@@ -746,7 +746,8 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         # * notify target, send log, and edit review message all in parallel
         notify_results = await asyncio.gather(
             q.edit_message_text(
-                (q.message.text or "") + f"\n\n- Approved by {admin.first_name}",
+                (q.message.text if q.message else "")
+                + f"\n\n- Approved by {admin.first_name}",
                 reply_markup=None,
             ),
             ctx.bot.send_message(
@@ -773,7 +774,8 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         # * already shows "Rejected", which would leave the queue in an inconsistent state.
         reject_results = await asyncio.gather(
             q.edit_message_text(
-                (q.message.text or "") + f"\n\n- Rejected by {admin.first_name}",
+                (q.message.text if q.message else "")
+                + f"\n\n- Rejected by {admin.first_name}",
                 reply_markup=None,
             ),
             db.queues_db.resolve(request_id, "rejected", admin.id),
