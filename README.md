@@ -169,7 +169,15 @@ Ruff targets Python 3.12 and line length 88. GitHub Actions install dependencies
 
 ## CI/CD & Automation
 
-The project uses **4 automated GitHub Actions workflows** for continuous integration, code quality, and maintenance:
+The project uses **5 automated GitHub Actions workflows** for continuous integration, code quality, and maintenance:
+
+### Lint (CI Gate)
+**File:** `.github/workflows/lint.yml`
+
+Blocking CI check that must pass before any PR can be merged:
+- Runs on push to `main`, `feat/**`, `fix/**` branches and on all PRs to `main`
+- Runs `ruff format --check .` (format check), `ruff check .` (lint), and `python -c "import tcbot"` (import check)
+- **Fails the PR** if any step has an error; auto-fix handles actual fixes
 
 ### Auto-Fix Code Quality
 **File:** `.github/workflows/auto-fix.yml`

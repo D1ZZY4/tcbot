@@ -1,0 +1,73 @@
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Agent and IDE configuration
+.agents/
+.kilo/
+.trae/
+.claude/
+.roo/
+.github/
+
+# Python cache and build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Development tools
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+*.log.*
+
+# Secrets and local config
+config.env
+.env
+*.env.local
+
+# Documentation and assets (not needed in image)
+docs/
+attached_assets/
+README.md
+AGENTS.md
+PLAN.md
+CHANGELOG.md
+replit.md
+
+# Replit-specific
+.replit
+.upm/
+.cache/
+.config/
+replit.nix
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

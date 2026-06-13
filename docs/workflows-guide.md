@@ -6,16 +6,36 @@ For user-facing overview of CI/CD, see [`../README.md`](../README.md#cicd--autom
 
 ## Overview
 
-The project uses 4 automated workflows for continuous integration, code quality, and maintenance:
+The project uses 5 automated workflows for continuous integration, code quality, and maintenance:
 
-1. **Auto-Fix Code Quality** - Automatically fix linting issues
-2. **Dependency Updates** - Weekly dependency updates with auto-PR
-3. **CodeQL** - Security analysis
-4. **Run Bot** - Self-chaining 24/7 long-polling runner
+1. **Lint** - Blocking lint, format, and import check (CI gate)
+2. **Auto-Fix Code Quality** - Automatically fix linting issues
+3. **Dependency Updates** - Weekly dependency updates with auto-PR
+4. **CodeQL** - Security analysis
+5. **Run Bot** - Self-chaining 24/7 long-polling runner
 
 ---
 
-## 1. Auto-Fix Code Quality
+## 1. Lint (CI Gate)
+
+**File:** `.github/workflows/lint.yml`
+
+**Triggers:**
+- Push to `main`, `feat/**`, `fix/**`
+- Pull requests to `main`
+
+**What it does:**
+- Runs `ruff format --check .` to verify formatting without modifying files
+- Runs `ruff check .` to catch all lint violations
+- Runs `python -c "import tcbot"` to verify all imports resolve cleanly
+- **Fails the PR** if any step exits with a non-zero code
+
+**Why this exists:**
+`auto-fix.yml` creates fix PRs when code needs corrections, but it does not block a PR that still has problems. `lint.yml` is the hard gate: a PR cannot be merged until formatting, linting, and import checks all pass.
+
+---
+
+## 2. Auto-Fix Code Quality
 
 **File:** `.github/workflows/auto-fix.yml`
 
@@ -49,7 +69,7 @@ Auto-applied by GitHub Actions
 
 ---
 
-## 2. Dependency Updates
+## 3. Dependency Updates
 
 **File:** `.github/workflows/dependency-update.yml`
 
@@ -87,7 +107,7 @@ Safe to merge with new versions.
 
 ---
 
-## 3. CodeQL
+## 4. CodeQL
 
 **File:** `.github/workflows/codeql.yml`
 
@@ -103,7 +123,7 @@ Safe to merge with new versions.
 
 ---
 
-## 4. Run Bot
+## 5. Run Bot
 
 **File:** `.github/workflows/run-bot.yml`
 
@@ -123,6 +143,10 @@ Safe to merge with new versions.
 ## Workflow Dependencies
 
 ```
+Lint (CI Gate)
+    ↓
+Pass: PR can merge / Fail: PR is blocked
+
 Auto-Fix Code Quality
     ↓
 Auto-commit (main) OR PR Comment (PR)

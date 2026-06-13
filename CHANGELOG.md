@@ -2,6 +2,17 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 90 wave 1)
+
+### Added
+
+- **`.dockerignore`**: Created missing `.dockerignore` file. Without it, the entire repository (including `.git/`, `attached_assets/`, `docs/`, `.agents/`, `__pycache__/`, `config.env`) was included in the Docker build context, dramatically inflating context size and risking accidental inclusion of sensitive or irrelevant files in the image. Added comprehensive exclusion rules for version control, agent configuration, Python artifacts, virtual environments, development tools, secrets, documentation, Replit-specific files, and test files. (Bug #218)
+- **`.github/workflows/lint.yml`**: Created missing blocking lint + import-check CI workflow. Previously, `auto-fix.yml` could produce auto-fix PRs, but there was no workflow that would **fail** a pull request if code had lint errors or format violations. The new `lint.yml` runs on push to main and feature/fix branches and on all PRs to main. It runs `ruff format --check .`, `ruff check .`, and `python -c "import tcbot"` in sequence. Any failure blocks the PR. (Bug #219)
+
+### Fixed
+
+- **`pyproject.toml`** (`[tool.ruff.lint]` ignore list): Removed `RUF001` (ambiguous-unicode-character-string) from the ruff ignore list. This rule was added when `›` (U+203A) was intentionally used as a breadcrumb separator in bot UI text. All instances of U+203A were replaced in session 89 wave 2 (Bugs #216-217: `admins.py` and `help.py`). Keeping the ignore active would silently allow future re-introduction of the character. Verified: 0 U+203A characters remain in any Python file within ruff's scan scope. (Bug #220)
+
 ## [Unreleased] - 2026-06-13 (session 89 wave 2)
 
 ### Fixed

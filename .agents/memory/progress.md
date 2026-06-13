@@ -283,6 +283,11 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Session 89 wave 2 - Final AST gather audit (0 real bugs) | audit | AST scan: 1 hit in dispatch.py FALSE POSITIVE (_slot catches all exceptions); 0 real gather bugs remain | 2026-06-13 (s89) |
 | Session 89 wave 2 - Final Unicode audit (0 issues) | audit | Full regex scan: 0 emoji/em-dash/en-dash/U+203A in any tcbot/ Python file; 0 in docs/; 0 in .agents/ | 2026-06-13 (s89) |
 
+| Session 90 wave 1 - Bug #218: Missing .dockerignore | housekeeping | Docker build context included .git/, attached_assets/, docs/, .agents/, config.env; created comprehensive .dockerignore | 2026-06-13 (s90) |
+| Session 90 wave 1 - Bug #219: Missing lint.yml CI workflow | CI | auto-fix.yml creates PRs but nothing fails; created .github/workflows/lint.yml with ruff format --check + ruff check + import tcbot | 2026-06-13 (s90) |
+| Session 90 wave 1 - Bug #220: pyproject.toml RUF001 stale ignore | housekeeping | RUF001 (U+203A) was added when › was used intentionally; all › removed in s89w2; removed ignore; 0 U+203A remaining | 2026-06-13 (s90) |
+| Session 90 wave 1 - Ruff clean (72 files), all checks pass | audit | After removing RUF001 ignore, ruff check + format --check still pass with 0 violations | 2026-06-13 (s90) |
+
 ## Pending (remaining optional)
 
 | Item | Priority | Notes |
