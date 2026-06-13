@@ -2,6 +2,16 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 88 wave 1)
+
+### Fixed
+
+- **`.github/workflows/run-bot.yml`**: `uv sync` → `uv sync --frozen` — CI must never modify the lockfile; without `--frozen` a stale or partial sync could silently write a different `uv.lock` than what was committed, making the runner non-reproducible. (Bug #202)
+- **`.github/workflows/run-bot.yml`** (`env` block): Ten optional env vars were absent from the job environment — `PORT`, `REDIS_URL`, `APPEAL_LOG_HANDLE`, `APPEAL_DISCUSSION_TOPIC`, `WARN_EXPIRY_DAYS`, `PROOF_TIMEOUT_SECONDS`, `APPEAL_TIMEOUT_SECONDS`, `ALBUM_DEBOUNCE_SECONDS`, `MODULES_LOAD`, `MODULES_NO_LOAD`. If an operator had set any of these as GitHub repository secrets, they would be silently ignored and the bot would fall back to hardcoded defaults. All ten now pass through via `${{ secrets.* }}`. (Bug #203)
+- **`.github/workflows/auto-fix.yml`**: `uv sync --group dev` → `uv sync --frozen --group dev` — same reproducibility issue as Bug #202; dev-only CI install must also be pinned to the committed lockfile. (Bug #204)
+- **`tcbot/modules/checking.py`** (`on_checkme_back`): The `asyncio.gather` that fetches both display names (`get_first_name` for the banned user and for the admin) was missing `return_exceptions=True`. A transient MongoDB error in either coroutine raised an unhandled exception that propagated out of the callback handler and left the spinner on the user's button. Fixed: added `return_exceptions=True`; each result is checked for `BaseException` and falls back to `str(uid)` / `"Admin"` respectively. (Bug #205)
+- **`tcbot/modules/admins.py`** (`on_demote_confirm`): The second `asyncio.gather` (lines 454-458) fetches `target_role` and `mention_data` in parallel. `mention_data` already had an `isinstance(BaseException)` guard, but `target_role` did not. If `get_effective_role` raised a transient DB error, `target_role` would hold a `BaseException` object; the subsequent `if not target_role or target_role == "founder"` check would evaluate `not <BaseException>` as `False` (exceptions are truthy), so the guard was skipped and `Demote.execute` was called with a `BaseException` as the `target_role` argument, causing a downstream crash. Fixed: added `if isinstance(target_role, BaseException): target_role = None` immediately after the gather. (Bug #206)
+
 ## [Unreleased] - 2026-06-13 (session 87 wave 6)
 
 ### Fixed

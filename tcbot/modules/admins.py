@@ -456,6 +456,8 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         db.users_cache.get_user_mention_data(target_id),
         return_exceptions=True,
     )
+    if isinstance(target_role, BaseException):
+        target_role = None
     if isinstance(mention_data, BaseException):
         target_fname, target_uname = str(target_id), None
     else:

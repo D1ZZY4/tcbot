@@ -309,7 +309,12 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     fname, admin_fname = await asyncio.gather(
         db.users_cache.get_first_name(uid, str(uid)),
         db.users_cache.get_first_name(aid, "Admin"),
+        return_exceptions=True,
     )
+    if isinstance(fname, BaseException):
+        fname = str(uid)
+    if isinstance(admin_fname, BaseException):
+        admin_fname = "Admin"
     text, proof_link = await _ban_summary(ban, uid, fname, admin_fname)
 
     await q.edit_message_text(

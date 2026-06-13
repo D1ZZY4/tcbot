@@ -172,6 +172,26 @@ Key approaches adopted to meet v4 targets:
 
 ---
 
+## 2026-06-13: All variables unpacked from asyncio.gather need isinstance guards — not just some
+
+**Decision:** After `a, b = await asyncio.gather(..., return_exceptions=True)`, every variable in the unpack must have its own `isinstance(x, BaseException)` fallback — not just the ones that "seem more likely to fail."
+
+**Why:** In `admins.py on_demote_confirm`, `mention_data` was guarded but `target_role` was not. A transient DB error left `target_role` as a live `BaseException` object; the later `if not target_role` evaluated `False` (exceptions are truthy), so the guard was silently skipped and `Demote.execute` received a `BaseException` as an argument, crashing downstream.
+
+**How to apply:** After every `asyncio.gather(..., return_exceptions=True)` that unpacks into named variables, write one `if isinstance(x, BaseException): x = <fallback>` line per variable before using any of them.
+
+---
+
+## 2026-06-13: All GitHub Actions CI steps must use `uv sync --frozen`
+
+**Decision:** All `uv sync` invocations inside GitHub Actions workflows must include `--frozen`. This includes both production-runner and dev-only (`--group dev`) installs.
+
+**Why:** Without `--frozen`, `uv sync` will silently rewrite `uv.lock` if the environment differs from what was committed. This makes CI non-reproducible and can mask lockfile drift. Both `run-bot.yml` (production runner) and `auto-fix.yml` (ruff linter) were missing `--frozen`.
+
+**How to apply:** Any new workflow step that calls `uv sync` must append `--frozen`. The only exception is `dependency-update.yml`, which intentionally runs `uv lock --upgrade` to produce a new lockfile and then runs `uv sync --frozen` against the updated one.
+
+---
+
 ## 2026-06-02: Memory files live in `.agents/memory/`, MEMORY.md is the index
 
 **Decision:** Persistent cross-session memory uses `.agents/memory/MEMORY.md` as a one-line-per-entry index pointing to topic files in the same directory. Context, progress, and decisions each have their own file.

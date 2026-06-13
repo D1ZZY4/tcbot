@@ -45,20 +45,30 @@ jobs:
       HANDOVER_LEAD: "900"      # dispatch the next run 15 min before the end
 
       # Bot configuration (set these as repository secrets)
-      BOT_TOKEN:      ${{ secrets.BOT_TOKEN }}
-      MONGODB_URI:    ${{ secrets.MONGODB_URI }}
-      OWNER_ID:       ${{ secrets.OWNER_ID }}
-      DB_NAME:        ${{ secrets.DB_NAME }}
-      COMMUNITY_NAME: ${{ secrets.COMMUNITY_NAME }}
-      PREFIXES:       ${{ secrets.PREFIXES }}
-      MAIN_GROUP:     ${{ secrets.MAIN_GROUP }}
-      MAIN_CHANNEL:   ${{ secrets.MAIN_CHANNEL }}
-      EXTEND_GROUP:   ${{ secrets.EXTEND_GROUP }}
-      PROOFS:         ${{ secrets.PROOFS }}
-      LOGS:           ${{ secrets.LOGS }}
-      LOGS_ERRORS:    ${{ secrets.LOGS_ERRORS }}
-      APPEALS:        ${{ secrets.APPEALS }}
-      LOG_LEVEL:      ${{ secrets.LOG_LEVEL }}
+      BOT_TOKEN:               ${{ secrets.BOT_TOKEN }}
+      MONGODB_URI:             ${{ secrets.MONGODB_URI }}
+      OWNER_ID:                ${{ secrets.OWNER_ID }}
+      DB_NAME:                 ${{ secrets.DB_NAME }}
+      COMMUNITY_NAME:          ${{ secrets.COMMUNITY_NAME }}
+      PREFIXES:                ${{ secrets.PREFIXES }}
+      MAIN_GROUP:              ${{ secrets.MAIN_GROUP }}
+      MAIN_CHANNEL:            ${{ secrets.MAIN_CHANNEL }}
+      EXTEND_GROUP:            ${{ secrets.EXTEND_GROUP }}
+      PROOFS:                  ${{ secrets.PROOFS }}
+      LOGS:                    ${{ secrets.LOGS }}
+      LOGS_ERRORS:             ${{ secrets.LOGS_ERRORS }}
+      APPEALS:                 ${{ secrets.APPEALS }}
+      LOG_LEVEL:               ${{ secrets.LOG_LEVEL }}
+      PORT:                    ${{ secrets.PORT }}
+      REDIS_URL:               ${{ secrets.REDIS_URL }}
+      APPEAL_LOG_HANDLE:       ${{ secrets.APPEAL_LOG_HANDLE }}
+      APPEAL_DISCUSSION_TOPIC: ${{ secrets.APPEAL_DISCUSSION_TOPIC }}
+      WARN_EXPIRY_DAYS:        ${{ secrets.WARN_EXPIRY_DAYS }}
+      PROOF_TIMEOUT_SECONDS:   ${{ secrets.PROOF_TIMEOUT_SECONDS }}
+      APPEAL_TIMEOUT_SECONDS:  ${{ secrets.APPEAL_TIMEOUT_SECONDS }}
+      ALBUM_DEBOUNCE_SECONDS:  ${{ secrets.ALBUM_DEBOUNCE_SECONDS }}
+      MODULES_LOAD:            ${{ secrets.MODULES_LOAD }}
+      MODULES_NO_LOAD:         ${{ secrets.MODULES_NO_LOAD }}
 
     steps:
       - uses: actions/checkout@v4
@@ -73,7 +83,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --frozen
 
       - name: Detect self-chain capability
         id: pat
