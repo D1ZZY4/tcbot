@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-13 (session 111)
+**Last updated:** 2026-06-13 (session 112)
 
 ## Verification baseline
 
@@ -35,6 +35,13 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Session 112 audit | audit | Sequential q.answer()+edit sweep across all modules. 11 bugs fixed (#295–#305). Comprehensive sweep of all remaining files confirmed clean. Ruff: 73 files clean. Bot: 27/27 indexes, Redis, APScheduler, polling active. | 2026-06-13 (s112) |
+| Bugs #300–#305 (session 112) | performance | help.py — 6 sequential await q.answer() + await safe_edit_cb() pairs across _render_help_index, _show_module (2 paths), _show_section (3 paths). All parallelised with asyncio.gather(return_exceptions=True). Added import asyncio. | 2026-06-13 (s112) |
+| Bug #299 (session 112) | performance | about.py on_about_menu — sequential q.answer() + q.edit_message_text() → gathered. Added import asyncio. | 2026-06-13 (s112) |
+| Bug #298 (session 112) | performance | privacy.py on_privacy_policy_menu — sequential q.answer() + q.edit_message_text() → gathered. | 2026-06-13 (s112) |
+| Bug #297 (session 112) | performance | privacy.py on_privacy_menu — sequential q.answer() + q.edit_message_text() → gathered. Added import asyncio. | 2026-06-13 (s112) |
+| Bug #296 (session 112) | performance | start.py on_back_to_start — sequential q.answer() + q.edit_message_text() → gathered. | 2026-06-13 (s112) |
+| Bug #295 (session 112) | performance | groups.py _toggle cache-hit branch — sequential q.answer() + safe_edit() → gathered. | 2026-06-13 (s112) |
 | Bug #284 (session 107) | policy | lint.yml env block comment in Indonesian ("untuk import check") changed to English ("required for the import check") per project policy. | 2026-06-13 (s107) |
 | Bug #283 (session 107) | infra | dependency-update.yml Create PR step: GH_TOKEN: ${{ secrets.GH_TOKEN }} changed to GH_TOKEN: ${{ github.token }} (built-in Actions token; always available without manual repo secret). | 2026-06-13 (s107) |
 | Bug #281 (session 105) | performance | groups.py _toggle cache-miss branch: await q.answer() then await active_groups() were sequential. Parallelised with asyncio.gather(return_exceptions=True). Added import asyncio. | 2026-06-13 (s105) |

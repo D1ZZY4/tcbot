@@ -5,9 +5,21 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 111)
+**Last updated:** 2026-06-13 (session 112)
 
 ## What is done
+
+- Session 112 (2026-06-13): Sequential q.answer() + edit audit pass across all module files. 11 bugs fixed (#295–#305):
+  - Bug #295: groups.py `_toggle` cache-hit branch — `q.answer()` + `safe_edit()` sequential → gathered.
+  - Bug #296: start.py `on_back_to_start` — `q.answer()` + `q.edit_message_text()` sequential → gathered.
+  - Bug #297: privacy.py `on_privacy_menu` — same pattern → gathered. Added `import asyncio`.
+  - Bug #298: privacy.py `on_privacy_policy_menu` — same pattern → gathered.
+  - Bug #299: about.py `on_about_menu` — same pattern → gathered. Added `import asyncio`.
+  - Bugs #300–#305: help.py — 6 instances across `_render_help_index`, `_show_module` (2), `_show_section` (3) — all sequential `q.answer()` + `safe_edit_cb()` → gathered. Added `import asyncio`.
+  - Comprehensive sweep of ALL remaining files: admins.py, checking.py, stats.py, appeal_flow.py, users_cache.py, users_roles.py, bans_db.py, warns_db.py, kicks_db.py, mutes_db.py, queues_db.py, scheduler.py, extraction.py, identity.py, parse_editmsg.py, dispatch.py, pagination.py, parse_logmsg.py — all CLEAN.
+  - All remaining `q.answer()` calls in swept files are guard-only early returns (no edit follows) — NOT bugs.
+  - Verification: ruff all 73 files clean (All checks passed!). Bot restart: MongoDB 27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling active.
+  - Total bugs fixed: #1–#305 + 3 Perf (#292–#294).
 
 - Session 111 (2026-06-13): v4.5.1 audit pass. No new bugs found. Three performance improvements implemented:
   - Perf #292: greeting.py `_handle_member` — changed `upsert_user` to `upsert_user_if_changed`. On-join identity writes are now skipped if L1 cache already matches (sub-microsecond fast path). Impacts batch invite-link joins most.

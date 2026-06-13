@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 from telegram.ext import CallbackQueryHandler, ContextTypes
@@ -78,11 +79,15 @@ async def on_privacy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     botname = esc(ctx.bot.first_name or "This bot")
-    await q.answer()
-    await q.edit_message_text(
-        _PRIVACY_MSG.format(botname=botname),
-        parse_mode="HTML",
-        reply_markup=keyboards.privacy_kb(),
+    # * q.answer() and edit are independent; run in parallel.
+    await asyncio.gather(
+        q.answer(),
+        q.edit_message_text(
+            _PRIVACY_MSG.format(botname=botname),
+            parse_mode="HTML",
+            reply_markup=keyboards.privacy_kb(),
+        ),
+        return_exceptions=True,
     )
 
 
@@ -97,11 +102,15 @@ async def on_privacy_policy_menu(
         return
 
     botname = esc(ctx.bot.first_name or "This bot")
-    await q.answer()
-    await q.edit_message_text(
-        _PRIVACY_POLICY_MSG.format(botname=botname),
-        parse_mode="HTML",
-        reply_markup=keyboards.back_to_privacy_kb(),
+    # * q.answer() and edit are independent; run in parallel.
+    await asyncio.gather(
+        q.answer(),
+        q.edit_message_text(
+            _PRIVACY_POLICY_MSG.format(botname=botname),
+            parse_mode="HTML",
+            reply_markup=keyboards.back_to_privacy_kb(),
+        ),
+        return_exceptions=True,
     )
 
 

@@ -2,6 +2,17 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 112)
+
+### Fixed
+
+- **`tcbot/modules/groups.py`** (`_toggle`, cache-hit branch): `await q.answer()` followed by `await safe_edit(...)` were called sequentially. Both calls are independent (Telegram ACK vs. message edit), adding one unnecessary round-trip of latency on every cached groups view toggle. Parallelised with `asyncio.gather(..., return_exceptions=True)`. (Bug #295)
+- **`tcbot/modules/start.py`** (`on_back_to_start`): `await q.answer()` followed by `await q.edit_message_text(...)` were called sequentially. Both calls are independent; parallelised with `asyncio.gather(..., return_exceptions=True)` to eliminate the extra Telegram round-trip. (Bug #296)
+- **`tcbot/modules/privacy.py`** (`on_privacy_menu`): Same sequential `q.answer()` + `q.edit_message_text(...)` pattern. Parallelised with `asyncio.gather(..., return_exceptions=True)`. Added `import asyncio` to module imports. (Bug #297)
+- **`tcbot/modules/privacy.py`** (`on_privacy_policy_menu`): Same sequential pattern as Bug #297. Parallelised with `asyncio.gather(..., return_exceptions=True)`. (Bug #298)
+- **`tcbot/modules/about.py`** (`on_about_menu`): Same sequential `q.answer()` + `q.edit_message_text(...)` pattern. Parallelised with `asyncio.gather(..., return_exceptions=True)`. Added `import asyncio` to module imports. (Bug #299)
+- **`tcbot/modules/help.py`** (`_render_help_index`, `_show_module`, `_show_section`): Six sequential `await q.answer()` + `await safe_edit_cb(...)` pairs across three helper functions. All six are independent (Telegram ACK vs. message edit) and parallelised with `asyncio.gather(..., return_exceptions=True)`. Added `import asyncio` to module imports. (Bug #300–#305)
+
 ## [Unreleased] - 2026-06-13 (session 111)
 
 ### Performance

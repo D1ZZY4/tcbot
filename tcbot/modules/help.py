@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import logging
 from typing import TYPE_CHECKING
@@ -141,11 +142,11 @@ async def _render_help_index(
         if with_back_to_start
         else keyboards.help_topics_kb(HELP_TOPICS_CMD)
     )
-    await q.answer()
-    await safe_edit_cb(
-        q,
-        _HELP_INDEX_TEXT.format(botname=botname),
-        reply_markup=kb,
+    # * q.answer() and safe_edit_cb() are independent; run in parallel.
+    await asyncio.gather(
+        q.answer(),
+        safe_edit_cb(q, _HELP_INDEX_TEXT.format(botname=botname), reply_markup=kb),
+        return_exceptions=True,
     )
 
 
@@ -162,8 +163,12 @@ async def _show_module(
             if is_menu_path
             else keyboards.back_to_help_cmd_kb()
         )
-        await q.answer()
-        await safe_edit_cb(q, _ERR_TOPIC_NOT_FOUND, reply_markup=back_kb)
+        # * q.answer() and safe_edit_cb() are independent; run in parallel.
+        await asyncio.gather(
+            q.answer(),
+            safe_edit_cb(q, _ERR_TOPIC_NOT_FOUND, reply_markup=back_kb),
+            return_exceptions=True,
+        )
         return
 
     name, overview, sections = HELP_CONTENT[menu_key]
@@ -180,8 +185,12 @@ async def _show_module(
             else keyboards.back_to_help_cmd_kb()
         )
 
-    await q.answer()
-    await safe_edit_cb(q, _module_text(name, overview), reply_markup=kb)
+    # * q.answer() and safe_edit_cb() are independent; run in parallel.
+    await asyncio.gather(
+        q.answer(),
+        safe_edit_cb(q, _module_text(name, overview), reply_markup=kb),
+        return_exceptions=True,
+    )
 
 
 async def _show_section(
@@ -196,29 +205,39 @@ async def _show_section(
     back_module_cb = ("help_" if is_menu_path else "helpc_") + mod_slug
 
     if menu_key not in HELP_CONTENT:
-        await q.answer()
-        await safe_edit_cb(
-            q,
-            _ERR_TOPIC_NOT_FOUND,
-            reply_markup=keyboards.back_to_module_kb(back_module_cb),
+        # * q.answer() and safe_edit_cb() are independent; run in parallel.
+        await asyncio.gather(
+            q.answer(),
+            safe_edit_cb(
+                q,
+                _ERR_TOPIC_NOT_FOUND,
+                reply_markup=keyboards.back_to_module_kb(back_module_cb),
+            ),
+            return_exceptions=True,
         )
         return
 
     name, _, sections = HELP_CONTENT[menu_key]
     if idx < 0 or idx >= len(sections):
-        await q.answer()
-        await safe_edit_cb(
-            q,
-            _ERR_SECTION_NOT_FOUND,
-            reply_markup=keyboards.back_to_module_kb(back_module_cb),
+        # * q.answer() and safe_edit_cb() are independent; run in parallel.
+        await asyncio.gather(
+            q.answer(),
+            safe_edit_cb(
+                q,
+                _ERR_SECTION_NOT_FOUND,
+                reply_markup=keyboards.back_to_module_kb(back_module_cb),
+            ),
+            return_exceptions=True,
         )
         return
 
     label, content = sections[idx]
     body = f"{bold(f'{name} > {label}')}\n\n{content}"
-    await q.answer()
-    await safe_edit_cb(
-        q, body, reply_markup=keyboards.back_to_module_kb(back_module_cb)
+    # * q.answer() and safe_edit_cb() are independent; run in parallel.
+    await asyncio.gather(
+        q.answer(),
+        safe_edit_cb(q, body, reply_markup=keyboards.back_to_module_kb(back_module_cb)),
+        return_exceptions=True,
     )
 
 

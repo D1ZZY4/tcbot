@@ -130,11 +130,14 @@ async def _toggle(
 
     groups = ctx.user_data.get("groups_cache") if ctx.user_data is not None else None
     if groups:
-        await q.answer()
-        await safe_edit(
-            q.message,
-            _render(groups, detailed=detailed),
-            reply_markup=tcgroups_kb(detailed=detailed),
+        await asyncio.gather(
+            q.answer(),
+            safe_edit(
+                q.message,
+                _render(groups, detailed=detailed),
+                reply_markup=tcgroups_kb(detailed=detailed),
+            ),
+            return_exceptions=True,
         )
     else:
         # * q.answer() and active_groups() are independent; run in parallel.
