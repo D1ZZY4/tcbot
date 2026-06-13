@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -136,8 +137,12 @@ async def _toggle(
             reply_markup=tcgroups_kb(detailed=detailed),
         )
     else:
-        await q.answer()
-        groups = await db.groups_db.active_groups()
+        # * q.answer() and active_groups() are independent; run in parallel.
+        _, groups = await asyncio.gather(
+            q.answer(), db.groups_db.active_groups(), return_exceptions=True
+        )
+        if isinstance(groups, BaseException):
+            groups = []
         if ctx.user_data is not None:
             ctx.user_data["groups_cache"] = groups
         await safe_edit(

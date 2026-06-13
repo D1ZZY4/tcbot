@@ -2,6 +2,13 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 105)
+
+### Fixed
+
+- **`tcbot/modules/start.py`** (`_show_groups`): `await q.answer()` and `await db.groups_db.active_groups()` were called sequentially, adding one unnecessary Telegram round-trip of latency before the groups list was fetched. Both calls are independent (one is a Telegram ACK, the other is a cached DB read), so parallelised them with `asyncio.gather(..., return_exceptions=True)`. Added `import asyncio` to the module imports. (Bug #280)
+- **`tcbot/modules/groups.py`** (`_toggle`, cache-miss branch): Same sequential pattern: `await q.answer()` followed by `await db.groups_db.active_groups()`. Parallelised with `asyncio.gather(..., return_exceptions=True)` and added `import asyncio`. (Bug #281)
+
 ## [Unreleased] - 2026-06-13 (session 104)
 
 ### Fixed
