@@ -163,21 +163,6 @@ def group_start_kb(bot_username: str) -> InlineKeyboardMarkup:
     )
 
 
-def help_modules(
-    rows: list[list[tuple[str, str]]],
-    *,
-    with_back_to_start: bool = False,
-) -> InlineKeyboardMarkup:
-    """Build a help menu keyboard from (text, callback_data) tuples."""
-    kb_rows = [
-        [InlineKeyboardButton(text, callback_data=cb) for text, cb in row]
-        for row in rows
-    ]
-    if with_back_to_start:
-        kb_rows.append([InlineKeyboardButton("« Back", callback_data="back_to_start")])
-    return InlineKeyboardMarkup(kb_rows)
-
-
 def _build_topic_rows(
     topics: list[tuple[str, str]],
 ) -> list[list[InlineKeyboardButton]]:
@@ -311,29 +296,6 @@ def tcgroups_kb(*, detailed: bool) -> InlineKeyboardMarkup:
     label = "Simple" if detailed else "Details"
     callback = "groups_simple" if detailed else "groups_details"
     return InlineKeyboardMarkup([[InlineKeyboardButton(label, callback_data=callback)]])
-
-
-# ─────────────────────────── Stats menus ────────────────────────── #
-
-
-def stats_main_kb() -> InlineKeyboardMarkup:
-    """Top-level /tcstats inline menu: staff/chats/bans drill-down."""
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("Staff Roster", callback_data="stats_admins")],
-            [InlineKeyboardButton("Connected Chats", callback_data="stats_chats:0")],
-            [InlineKeyboardButton("User Bans", callback_data="stats_bans:0")],
-        ]
-    )
-
-
-def stats_back_kb() -> InlineKeyboardMarkup:
-    """Single-button « Back to the stats main menu."""
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("« Back", callback_data="stats_main")],
-        ]
-    )
 
 
 # ───────────────────── Module help sub-menu ─────────────────────── #

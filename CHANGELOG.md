@@ -2,6 +2,18 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 87 wave 6)
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** (`_start`): `db.bans_db.get_ban(ban_id)` was not wrapped in `try/except`; a MongoDB error during appeal deep-link validation caused the PTB handler to crash without sending any feedback to the user. Fixed: wrapped in `try/except Exception`, logs via `log.exception`, and sends `_ERR_INVALID_LINK` fallback to the user before returning `ConversationHandler.END`. (Bug #201)
+
+## [Unreleased] - 2026-06-13 (session 87 wave 5)
+
+### Fixed
+
+- **`tcbot/modules/helper/keyboards.py`**: Removed three dead-code keyboard factory functions with zero callers: `help_modules` (superseded by `help_topics_menu_kb`/`help_topics_kb`), `stats_main_kb`, and `stats_back_kb` (both superseded by local `main_kb`/`back_kb` defined directly in `stats_flow.py`). Updated `docs/helper/helper.md` table accordingly. (Bug #200)
+
 ## [Unreleased] - 2026-06-13 (session 87 wave 4)
 
 ### Fixed

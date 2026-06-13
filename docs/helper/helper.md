@@ -87,10 +87,10 @@ Main groups:
 |---|---|
 | Ban/checking | `ban_log_new`, `ban_log_update`, `checkme_ban_kb`, `checkme_detail_back_kb` |
 | Admin roles | `promote_role_kb`, `demote_confirm_kb`, `promo_decision_kb` |
-| Menus/help | `main_menu_kb`, `group_start_kb`, `help_modules`, `help_topics_menu_kb`, `help_topics_kb`, `back_to_start_kb`, `back_to_help_kb`, `back_to_help_cmd_kb`, `module_help_kb`, `back_to_module_kb`, `additional_menu_kb` |
+| Menus/help | `main_menu_kb`, `group_start_kb`, `help_topics_menu_kb`, `help_topics_kb`, `back_to_start_kb`, `back_to_help_kb`, `back_to_help_cmd_kb`, `module_help_kb`, `back_to_module_kb`, `additional_menu_kb` |
 | Privacy | `privacy_kb`, `back_to_privacy_kb` |
 | Groups | `groups_menu_kb`, `tcgroups_kb` |
-| Stats | `stats_main_kb`, `stats_back_kb` |
+| Stats | `main_kb` (in `stats_flow`), `back_kb` (in `stats_flow`) |
 
 See [button styles](../button-styles.md) for layout and callback-data conventions.
 

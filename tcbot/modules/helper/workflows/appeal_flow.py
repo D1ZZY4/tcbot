@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import re
 from dataclasses import dataclass, field
@@ -173,7 +174,13 @@ class BuildAppeal:
                 log.debug("Appeal not-private reply failed: %s", exc)
             return ConversationHandler.END
 
-        ban = await db.bans_db.get_ban(ban_id)
+        try:
+            ban = await db.bans_db.get_ban(ban_id)
+        except Exception:
+            log.exception("Appeal _start: DB error fetching ban_id=%s", ban_id)
+            with contextlib.suppress(Exception):
+                await msg.reply_text(_ERR_INVALID_LINK)
+            return ConversationHandler.END
         if not ban or not ban.get("is_active"):
             try:
                 await msg.reply_text(_ERR_INVALID_LINK)
