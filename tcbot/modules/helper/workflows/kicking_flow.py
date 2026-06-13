@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg, replies
-from tcbot.modules.helper.formatter import code, esc, mention, proof_line
+from tcbot.modules.helper.formatter import esc, mention, proof_line, user_ref
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
 
@@ -72,7 +72,7 @@ async def execute_kick(
             db.kicks_db.log_kick(target_id, chat_id, reason_text, admin_id),
             ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             msg.reply_text(
-                f"{mention(target_id, target_name)} - {code(str(target_id))} has been kicked.\n"
+                f"{user_ref(target_id, target_name)} has been kicked.\n"
                 f"Reason: {esc(reason_text)}{proof_suffix}\n"
                 f"{_MSG_REJOIN_ALLOWED}",
                 parse_mode="HTML",

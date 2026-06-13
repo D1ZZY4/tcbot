@@ -45,6 +45,26 @@ def esc(text: str) -> str:
     return html.escape(str(text))
 
 
+def user_ref(user_id: int, name: str, username: str | None = None) -> str:
+    """Format a complete user reference for action confirmation messages.
+
+    Produces a clickable link with a separate code-formatted ID when a
+    username is available, a plain escaped name followed by the ID when the
+    name differs from the numeric ID, or just the code-formatted ID when the
+    name is the raw numeric string (avoiding triple-ID display when the
+    fallback name equals the user ID).
+
+    Use this helper instead of the ``mention() - code(id)`` inline pattern so
+    that every action summary (ban, unban, warn, kick, mute) formats the
+    target consistently and without duplication.
+    """
+    if username:
+        return f'<a href="https://t.me/{html.escape(username)}">{html.escape(str(name))}</a> - {code(str(user_id))}'
+    if str(name) == str(user_id):
+        return code(str(user_id))
+    return f"{html.escape(str(name))} - {code(str(user_id))}"
+
+
 def proof_line(proof_desc: str | None) -> str:
     r"""Return a formatted proof line or an empty string when no proof is given.
 

@@ -22,7 +22,7 @@ from tcbot.modules.helper import (
     parse_logmsg,
     replies,
 )
-from tcbot.modules.helper.formatter import bold, code, esc, mention
+from tcbot.modules.helper.formatter import bold, code, esc, mention, user_ref
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.promote_flow import ROLE_ALIASES, Promote
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
@@ -504,7 +504,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     role_label = db.users_roles.ROLE_LABEL.get(target_role, target_role)
     try:
         await q.edit_message_text(
-            f"Done. {mention(target_id, target_fname, target_uname)} - {code(str(target_id))} "
+            f"Done. {user_ref(target_id, target_fname, target_uname)} "
             f"has been removed from {esc(role_label)}.",
             parse_mode="HTML",
             reply_markup=None,
@@ -582,7 +582,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
         msg.reply_text(
             f"Done. Ownership has been transferred to "
-            f"{mention(target_id, target_fname, target_uname)} - {code(str(target_id))}.",
+            f"{user_ref(target_id, target_fname, target_uname)}.",
             parse_mode="HTML",
         ),
         return_exceptions=True,

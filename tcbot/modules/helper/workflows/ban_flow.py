@@ -10,7 +10,8 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from telegram import Update
+import telegram.error
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     CallbackQueryHandler,
     ContextTypes,
@@ -23,10 +24,10 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg, replies
-from tcbot.modules.helper.formatter import code, esc, mention
+from tcbot.modules.helper.formatter import esc, user_ref
 from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
 from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
-from tcbot.utils.dispatch import count_errors, fan_out
+from tcbot.utils.dispatch import fan_out
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 from tcbot.utils.timedate_format import utc_now
 
@@ -93,6 +94,22 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
 
     existing = await db.bans_db.get_active_ban(target_id)
     is_update = existing is not None
+
+    if is_update:
+        # * Suppress any stale duplicate active bans for this user, keeping only the
+        # * canonical record (existing) that will be updated. This is a no-op when
+        # * there are no duplicates. Duplicates can arise from race conditions or from
+        # * a re-ban that failed to find the prior active record before creating a new
+        # * one. Cleaning them here ensures a single active ban at all times.
+        extras = await db.bans_db.deactivate_extra_active_bans(
+            target_id, existing["ban_id"]
+        )
+        if extras > 0:
+            log.warning(
+                "Suppressed %d duplicate active ban(s) for user %d before update",
+                extras,
+                target_id,
+            )
 
     # * Start old-admin name fetch immediately - runs during proof upload I/O below
     _old_admin_fname_task = (
@@ -263,19 +280,58 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     results = await fan_out(
         [bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
     )
-    failed = count_errors(results)
+    # * Collect per-group failures for transparent reporting to the admin
+    failed_groups = [
+        (grp, r)
+        for grp, r in zip(groups, results, strict=False)
+        if isinstance(r, BaseException)
+    ]
+    failed = len(failed_groups)
+    for grp, exc in failed_groups:
+        log.warning(
+            "Ban enforcement failed for user=%d in group=%s (%d): %s",
+            target_id,
+            grp.get("title", ""),
+            grp["chat_id"],
+            exc,
+        )
     log.info(
-        "Ban enforced: target=%s groups=%d/%d",
+        "Ban enforced: target=%d applied=%d/%d",
         target_id,
         len(groups) - failed,
         len(groups),
     )
 
+    # * Build the applied-to line, surfacing a clear warning when no group was updated
+    total_groups = len(groups)
+    if total_groups == 0:
+        applied_line = "No connected groups configured."
+    elif failed == total_groups:
+        sample = ", ".join(
+            grp.get("title") or str(grp["chat_id"]) for grp, _ in failed_groups[:5]
+        )
+        applied_line = (
+            f"WARNING: ban not enforced in any group ({total_groups}/{total_groups} failed)."
+            f" Check bot admin rights in: {esc(sample)}"
+            + (" ..." if len(failed_groups) > 5 else "")
+        )
+    elif failed > 0:
+        sample = ", ".join(
+            grp.get("title") or str(grp["chat_id"]) for grp, _ in failed_groups[:3]
+        )
+        applied_line = (
+            f"Applied to {total_groups - failed}/{total_groups} groups"
+            f" ({failed} failed: {esc(sample)}"
+            + (" ..." if len(failed_groups) > 3 else ")")
+        )
+    else:
+        applied_line = f"Applied to {total_groups}/{total_groups} groups."
+
     # * Edit the original prompt to a summary + cache user in parallel
     summary = (
-        f"{mention(target_id, target_fname)} - {code(str(target_id))} has been banned.\n"
+        f"{user_ref(target_id, target_fname)} has been banned.\n"
         f"Reason: {esc(reason)}\n"
-        f"Applied to {len(groups) - failed}/{len(groups)} groups."
+        f"{applied_line}"
     )
     if prompt_msg_id and prompt_chat_id:
         _, upsert_result = await asyncio.gather(
@@ -298,6 +354,34 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             log.exception(
                 "upsert_user (no-prompt path) failed for target=%d", target_id
             )
+
+    # * Notify banned user via PM (best-effort; user may not have started the bot)
+    _pm_text = (
+        f"You have been federation-banned from {esc(cfg.community_name)}.\n"
+        f"Reason: {esc(reason)}\n\n"
+        "You may submit an appeal using the button below."
+    )
+    _pm_kb = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "Submit Appeal",
+                    url=appeal_deep_link(bot_username, ban_id),
+                )
+            ]
+        ]
+    )
+    try:
+        await bot.send_message(
+            target_id, _pm_text, parse_mode="HTML", reply_markup=_pm_kb
+        )
+    except telegram.error.Forbidden:
+        log.info(
+            "Cannot DM banned user %d: user has not started the bot or has blocked it",
+            target_id,
+        )
+    except Exception as exc:
+        log.warning("Failed to send ban PM to user %d: %s", target_id, exc)
 
 
 # ───────────────── Proof collection state handlers ──────────────── #

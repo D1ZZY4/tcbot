@@ -14,3 +14,7 @@
 - [Anonymous admin edge cases](decisions.md): GroupAnonymousBot (id 1087968824) appears as `from_user` on replies and `cmc.from_user` may be None on bot-add; both guarded in extraction.py and connected_flow.py
 - [Context7 CLI setup](context7-setup.md): npm package is `ctx7` (not `@context7/cli`); binary auto-reads `CONTEXT7_API_KEY` from env; MCP config uses `${CONTEXT7_API_KEY}` placeholder
 - [APScheduler 4 integration](apscheduler4-integration.md): pickle serializer fails on ZoneInfo; use CBORSerializer + background asyncio task for cancel-scope safety
+- [user_ref formatter helper](decisions.md): use `user_ref(uid, name, username=None)` (formatter.py) for all action summaries; avoids triple-ID when fallback name equals uid string; replaces `mention() - code(id)` pattern across 9 files
+- [_best_name numeric fallback](decisions.md): returns `str(uid)` not `"User {uid}"` so callers can detect numeric fallback via `str(name) == str(uid)` comparison
+- [ban dedup: deactivate_extra_active_bans](decisions.md): call before updating an existing ban; use deactivate_all_active_bans in unban/appeal-approve to clear all active bans atomically
+- [ChatJoinRequest enforcement](decisions.md): add ChatJoinRequestHandler alongside new_chat_member handler; both check is_connected (L1/L2 cached) for non-primary groups; greet=False for secondary groups silences welcome noise

@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from tcbot import database as db
-from tcbot.modules.helper.formatter import code, esc, mention
+from tcbot.modules.helper.formatter import esc, user_ref
 
 if TYPE_CHECKING:
     from telegram import Bot
@@ -154,7 +154,7 @@ async def classify(
 
 def _line(ident: Identity) -> str:
     """Build the canonical ``mention - <id>`` chunk for an identity."""
-    return f"{mention(ident.target_id, ident.fname, ident.username)} - {code(str(ident.target_id))}"
+    return user_ref(ident.target_id, ident.fname, ident.username)
 
 
 # ────────────────── Per-action witty refusals ───────────────────── #

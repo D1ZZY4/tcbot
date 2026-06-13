@@ -130,6 +130,38 @@ async def deactivate_ban(ban_id: str) -> bool:
     return r.matched_count > 0
 
 
+async def deactivate_all_active_bans(user_id: int) -> int:
+    """Deactivate every active ban for a user. Returns the number of bans deactivated.
+
+    Use this in unban and appeal-approve flows to ensure all active bans are
+    cleared regardless of how many were created (guarding against duplicate
+    active bans that may exist from earlier race conditions or re-ban paths).
+    """
+    r = await _bans().update_many(
+        {"banned_user_id": user_id, "is_active": True},
+        {"$set": {"is_active": False}},
+    )
+    return r.modified_count
+
+
+async def deactivate_extra_active_bans(user_id: int, keep_ban_id: str) -> int:
+    """Deactivate all active bans for a user except the one with keep_ban_id.
+
+    Called during the ban flow when an existing active ban is being updated
+    to suppress any stale duplicate active bans while preserving the canonical
+    record that is being reused. Returns the number of extras deactivated.
+    """
+    r = await _bans().update_many(
+        {
+            "banned_user_id": user_id,
+            "is_active": True,
+            "ban_id": {"$ne": keep_ban_id},
+        },
+        {"$set": {"is_active": False}},
+    )
+    return r.modified_count
+
+
 async def set_review(ban_id: str, msg_id: int) -> None:
     """Attach a review message ID to a ban record."""
     await _bans().update_one(

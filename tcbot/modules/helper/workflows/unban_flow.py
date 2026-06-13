@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
-from tcbot.modules.helper.formatter import code, mention
+from tcbot.modules.helper.formatter import user_ref
 from tcbot.utils.dispatch import count_errors, fan_out
 
 if TYPE_CHECKING:
@@ -45,8 +45,7 @@ async def execute_unban(
     if not ban:
         try:
             await msg.reply_text(
-                f"{mention(target_id, target_fname)} - {code(str(target_id))} "
-                f"has no active federation ban.",
+                f"{user_ref(target_id, target_fname)} has no active federation ban.",
                 parse_mode="HTML",
             )
         except Exception as exc:
@@ -55,16 +54,18 @@ async def execute_unban(
 
     ban_id = ban["ban_id"]
 
-    # * deactivate ban and fetch active groups in parallel
+    # * Deactivate ALL active bans for this user (not only the one found by
+    # * get_active_ban) and fetch active groups in parallel. This ensures that
+    # * any duplicate active bans that may have accumulated are also cleared,
+    # * preventing a "still-banned" state after a successful unban.
     deactivate_r, groups = await asyncio.gather(
-        db.bans_db.deactivate_ban(ban_id),
+        db.bans_db.deactivate_all_active_bans(target_id),
         db.groups_db.active_groups(),
         return_exceptions=True,
     )
     if isinstance(deactivate_r, BaseException):
         log.error(
-            "deactivate_ban failed for ban_id=%s user=%d: %s",
-            ban_id,
+            "deactivate_all_active_bans failed for user=%d: %s",
             target_id,
             deactivate_r,
         )
@@ -94,8 +95,7 @@ async def execute_unban(
     log_r, reply_r = await asyncio.gather(
         ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
         msg.reply_text(
-            f"{mention(target_id, target_fname)} - {code(str(target_id))} "
-            f"has been unbanned - "
+            f"{user_ref(target_id, target_fname)} has been unbanned - "
             f"removed from {len(groups) - failed}/{len(groups)} groups.",
             parse_mode="HTML",
         ),

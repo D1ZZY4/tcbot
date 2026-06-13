@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
-from tcbot.modules.helper.formatter import code, esc, mention, proof_line
+from tcbot.modules.helper.formatter import code, esc, mention, proof_line, user_ref
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
@@ -108,7 +108,7 @@ async def execute_warn(
                 log.exception("Warn clear after auto-ban failed")
             try:
                 await msg.reply_text(
-                    f"{mention(target_id, target_name)} - {code(str(target_id))} "
+                    f"{user_ref(target_id, target_name)} "
                     f"hit {WARN_LIMIT} warnings "
                     f"and has been banned from this group.{proof_suffix}",
                     parse_mode="HTML",
@@ -119,7 +119,7 @@ async def execute_warn(
             log.error("Auto-ban on warn limit failed: %s", ban_result)
             try:
                 await msg.reply_text(
-                    f"{mention(target_id, target_name)} - {code(str(target_id))} "
+                    f"{user_ref(target_id, target_name)} "
                     f"hit {WARN_LIMIT} warnings "
                     f"but auto-ban failed - please ban them manually.{proof_suffix}",
                     parse_mode="HTML",
@@ -131,7 +131,7 @@ async def execute_warn(
         results2 = await asyncio.gather(
             ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             msg.reply_text(
-                f"{mention(target_id, target_name)} - {code(str(target_id))} has been warned "
+                f"{user_ref(target_id, target_name)} has been warned "
                 f"({count}/{WARN_LIMIT}) - {esc(reason_text)}{proof_suffix}",
                 parse_mode="HTML",
             ),
@@ -160,8 +160,7 @@ async def execute_unwarn(
     if count == 0:
         try:
             await msg.reply_text(
-                f"{mention(target_id, target_name)} - {code(str(target_id))} "
-                f"has no warnings in this group.",
+                f"{user_ref(target_id, target_name)} has no warnings in this group.",
                 parse_mode="HTML",
             )
         except Exception as exc:
@@ -187,7 +186,7 @@ async def execute_unwarn(
         db.warns_db.remove_last_warn(target_id, chat_id),
         ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
         msg.reply_text(
-            f"One warning removed from {mention(target_id, target_name)} - {code(str(target_id))}. "
+            f"One warning removed from {user_ref(target_id, target_name)}. "
             f"They're now at {new_count}/{WARN_LIMIT}.",
             parse_mode="HTML",
         ),
@@ -224,18 +223,14 @@ async def execute_warnlist(
     if count == 0:
         try:
             await msg.reply_text(
-                f"{mention(target_id, target_name)} - {code(str(target_id))} "
-                f"has no warnings in this group.",
+                f"{user_ref(target_id, target_name)} has no warnings in this group.",
                 parse_mode="HTML",
             )
         except Exception as exc:
             log.debug("execute_warnlist no-warns reply failed: %s", exc)
         return
 
-    lines = [
-        f"{mention(target_id, target_name)} - {code(str(target_id))} "
-        f"has {count}/{WARN_LIMIT} warnings:\n"
-    ]
+    lines = [f"{user_ref(target_id, target_name)} has {count}/{WARN_LIMIT} warnings:\n"]
     for i, w in enumerate(warns, 1):
         lines.append(f"  {i}. {esc(w.get('reason', 'No reason'))}")
 
@@ -263,8 +258,7 @@ async def execute_resetwarns(
     if removed == 0:
         try:
             await msg.reply_text(
-                f"{mention(target_id, target_name)} - {code(str(target_id))} "
-                f"has no warnings to clear.",
+                f"{user_ref(target_id, target_name)} has no warnings to clear.",
                 parse_mode="HTML",
             )
         except Exception as exc:

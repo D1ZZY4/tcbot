@@ -515,18 +515,21 @@ class BuildAppeal:
         lc, lt = cfg.logs
 
         if action == "approve":
-            # * Deactivate ban + fetch active groups + fetch target name - all in parallel
+            # * Deactivate ALL active bans for the user (not only the appeal ban_id)
+            # * in parallel with fetching active groups and target name.  Using
+            # * deactivate_all_active_bans ensures any duplicate active bans are also
+            # * cleared, preventing a "still-banned" state from leftover duplicates.
             deactivate_result, groups, target_fname = await asyncio.gather(
-                db.bans_db.deactivate_ban(ban_id),
+                db.bans_db.deactivate_all_active_bans(target_id),
                 db.groups_db.active_groups(),
                 db.users_cache.get_first_name(target_id, str(target_id)),
                 return_exceptions=True,
             )
             if isinstance(deactivate_result, BaseException):
                 log.error(
-                    "deactivate_ban failed for ban_id=%s: user may remain marked"
-                    " banned in DB despite being unbanned in groups: %s",
-                    ban_id,
+                    "deactivate_all_active_bans failed for user=%d: user may remain"
+                    " marked banned in DB despite being unbanned in groups: %s",
+                    target_id,
                     deactivate_result,
                 )
             if isinstance(groups, BaseException):

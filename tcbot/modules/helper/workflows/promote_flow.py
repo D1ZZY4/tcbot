@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg
-from tcbot.modules.helper.formatter import code, esc, mention
+from tcbot.modules.helper.formatter import esc, user_ref
 
 if TYPE_CHECKING:
     from telegram import Bot
@@ -95,7 +95,7 @@ class Promote:
             return_exceptions=True,
         )
         return True, (
-            f"Done. {mention(target_id, target_fname)} - {code(str(target_id))} "
+            f"Done. {user_ref(target_id, target_fname)} "
             f"is now a {esc(cfg.community_name)} Admin."
         )
 
@@ -138,7 +138,7 @@ class Promote:
         )
         return (
             True,
-            f"Done. {mention(target_id, target_fname)} - {code(str(target_id))} "
+            f"Done. {user_ref(target_id, target_fname)} "
             f"is now a {esc(cfg.community_name)} {esc(role_label)}.",
         )
 
@@ -156,7 +156,7 @@ class Promote:
         if existing:
             return False, (
                 f"There's already a pending promotion request for "
-                f"{mention(target_id, target_fname)} - {code(str(target_id))}."
+                f"{user_ref(target_id, target_fname)}."
             )
         request_id, owner_id = await asyncio.gather(
             db.queues_db.enqueue(target_id, target_username, target_fname, admin_id),

@@ -60,15 +60,20 @@ class ResolvedTarget:
 
 
 async def _best_name(uid: int, *primary: str | None) -> str:
-    """Pick the first non-empty/non-numeric primary name; fall back to cache, then 'User <uid>'."""
+    """Pick the first non-empty/non-numeric primary name; fall back to cache, then str(uid).
+
+    Returns the raw numeric ID string rather than a decorated ``User <id>``
+    form so that callers using ``user_ref()`` or the ``mention() - code(id)``
+    pattern can detect a numeric fallback and avoid displaying the ID twice.
+    """
     for cand in primary:
         if cand and not cand.lstrip("-").isdigit():
             return cand
-    # * Try the member cache before resorting to "User <id>".
+    # * Try the member cache before resorting to a bare numeric ID.
     cached = await db.users_cache.get_first_name(uid, "")
     if cached and not cached.lstrip("-").isdigit():
         return cached
-    return f"User {uid}"
+    return str(uid)
 
 
 async def extract_target(

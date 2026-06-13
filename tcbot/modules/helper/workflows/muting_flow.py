@@ -17,7 +17,12 @@ from telegram import Bot, ChatPermissions, Update
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg, replies
-from tcbot.modules.helper.formatter import bold, code, esc, mention, proof_line
+from tcbot.modules.helper.formatter import (
+    bold,
+    esc,
+    proof_line,
+    user_ref,
+)
 from tcbot.modules.helper.workflows.proof_flow import BuildProof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
 from tcbot.utils.dispatch import count_errors, fan_out
@@ -121,7 +126,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict) -> None:
 
     proof_suffix = proof_line(proof_desc)
     summary = (
-        f"{mention(target_id, target_fname)} - {code(str(target_id))} "
+        f"{user_ref(target_id, target_fname)} "
         f"has been muted {bold(dur_str)}.\n"
         f"Reason: {esc(reason_text)}"
         f"{proof_suffix}\n"
@@ -211,7 +216,7 @@ async def execute_unmute(
     )
 
     reply = (
-        f"{mention(target_id, target_name)} - {code(str(target_id))} has been unmuted - "
+        f"{user_ref(target_id, target_name)} has been unmuted - "
         f"restored in {len(groups) - failed}/{len(groups)} groups."
     )
 
