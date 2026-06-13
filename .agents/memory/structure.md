@@ -5,7 +5,7 @@ description: Snapshot of the TCF Bot source layout after refactoring. Use this t
 
 # TCF Bot - Module Structure
 
-**Last updated:** 2026-06-12 (session 76)
+**Last updated:** 2026-06-13 (session 91)
 
 ## Repository layout
 
@@ -61,7 +61,8 @@ tcbot/
 │   ├── maintenance.py       Maintenance/admin commands
 │   ├── broadcasting.py      /broadcast command
 │   ├── privacy.py           Privacy menu callbacks
-│   └── unbanning.py         /unban command entry
+│   ├── unbanning.py         /unban command entry
+│   └── netspeed.py          /ping and /speedtest owner-only network diagnostics
 ├── database/
 │   ├── bans_db.py           Federation bans (active_bans, get_ban, add_ban, etc.)
 │   ├── cache.py             TTLCache (in-memory) + TwoLevelCache (L1 in-memory + L2 Redis optional)

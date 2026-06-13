@@ -2,6 +2,16 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 91)
+
+### Added
+
+- **`tcbot/modules/netspeed.py`**: New `netspeed` module with `/ping` (alias `/p`) and `/speedtest` (alias `/st`) commands. Both are Founder-only, rate-limited to 3 invocations per 60 seconds. `/ping` measures Telegram API round-trip latency by sending a "Pinging..." message and editing it with the measured elapsed time. `/speedtest` runs a full `speedtest-cli` measurement in a thread executor (non-blocking) and reports ping, download, upload, bytes transferred, client IP/ISP/country, and best-server details; if the server generates a share URL the result is sent as a photo caption, otherwise as text. `speedtest-cli==2.1.3` added to `pyproject.toml` dependencies.
+
+### Fixed
+
+- **`tcbot/modules/netspeed.py`** (`cmd_ping`, `cmd_speedtest`): Decorator order was wrong: `@owner_only` was outermost, `@ratelimiter` second. Per project rule (`RULES.md`), `@ratelimiter` must always be outermost for command handlers, auth guard second, `@log_execution` innermost. Swapped the two outer decorators on both handlers. (Bug #231)
+
 ## [Unreleased] - 2026-06-13 (session 90 wave 2)
 
 ### Fixed

@@ -65,6 +65,7 @@ signatures.
 | `stats.py` | `Stats` | `/tcstats` plus stats callbacks | Summary, staff list, active bans, connected chats, search/detail callbacks. |
 | `unbanning.py` | `Unban` | `/tcunban`, `/tcunb` | Developer+ federation unban. |
 | `warnings.py` | `Warnings` | `/tcwarn`, `/tcw`, `/tcunwarn`, `/tcunw`, `/warns`, `/warnlist`, `/resetwarns`, `/clearwarns` | Warning conversation and direct warning management commands. |
+| `netspeed.py` | `Netspeed` | `/ping`, `/p`, `/speedtest`, `/st` | Founder-only network diagnostics: API round-trip latency ping and full bandwidth speed test via `speedtest-cli` in a thread executor. |
 
 ## Internal/menu modules
 

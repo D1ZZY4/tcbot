@@ -94,8 +94,8 @@ def _run_speedtest() -> dict:
 # ──────────────────────── Command handlers ──────────────────────── #
 
 
-@decorators.owner_only
 @decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
+@decorators.owner_only
 @decorators.log_execution
 async def cmd_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Reply with Telegram API round-trip latency in milliseconds."""
@@ -112,8 +112,8 @@ async def cmd_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.debug("cmd_ping edit failed: %s", exc)
 
 
-@decorators.owner_only
 @decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
+@decorators.owner_only
 @decorators.log_execution
 async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Run a full network speed test and reply with detailed results."""
