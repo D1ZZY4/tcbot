@@ -36,6 +36,9 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Bug #317 (session 117) | security/rank | warnings.py cmd_resetwarns: missing resolve_and_check — any staff could reset warns on any target regardless of rank. Fixed with parallel resolve_and_check+identity.classify gather + double-reply guard. | 2026-06-13 (s117) |
+| Bug #316 (session 117) | security/rank | warnings.py cmd_unwarn: missing resolve_and_check(min_role="tester") — Tester could unwarn Admin. Fixed with parallel gather + double-reply guard, matching ban/mute/warn pattern. | 2026-06-13 (s117) |
+| Pass 8 audit (session 117) | audit | Full modules/workflows layer audit: 19 files verified CLEAN + 12 db/utils CLEAN. Two bugs found (#316-#317). Ruff: 73 files clean. Total bugs fixed: #1-#317. | 2026-06-13 (s117) |
 | Bug #315 (session 116) | ux/correctness | netspeed.py cmd_speedtest: replaced delete-notice+send-new-message with edit-in-place pattern. For share_url: notice.edit_text(text) + msg.reply_photo(share_url) in parallel. For no share_url: notice.edit_text(text) only. Consistent with cmd_ping edit pattern. | 2026-06-13 (s116) |
 | Session 112 audit | audit | Sequential q.answer()+edit sweep across all modules. 11 bugs fixed (#295–#305). Comprehensive sweep of all remaining files confirmed clean. Ruff: 73 files clean. Bot: 27/27 indexes, Redis, APScheduler, polling active. | 2026-06-13 (s112) |
 | Bugs #300–#305 (session 112) | performance | help.py — 6 sequential await q.answer() + await safe_edit_cb() pairs across _render_help_index, _show_module (2 paths), _show_section (3 paths). All parallelised with asyncio.gather(return_exceptions=True). Added import asyncio. | 2026-06-13 (s112) |

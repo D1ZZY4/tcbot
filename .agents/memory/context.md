@@ -9,10 +9,12 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## What is done
 
-- Session 117 pass 8 (2026-06-13): Database layer + utils layer full audit — ZERO new bugs found.
-  - Files audited: users_cache.py, database/cache.py, bans_db.py, users_roles.py, groups_db.py, warns_db.py, mutes_db.py, mongos.py, kicks_db.py, queues_db.py, utils/dispatch.py, utils/pagination.py — all CLEAN.
-  - Bot running: MongoDB 27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling active. Zero errors in logs.
-  - Total bugs fixed remains: #1-#315.
+- Session 117 pass 8 complete (2026-06-13): Full audit of modules/workflows layer — 2 bugs found and fixed.
+  - Bug #316: warnings.py cmd_unwarn — missing resolve_and_check(min_role="tester"); Tester could unwarn Admin. Fixed with parallel gather + double-reply guard.
+  - Bug #317: warnings.py cmd_resetwarns — same missing resolve_and_check; no rank check at all. Applied identical fix pattern.
+  - Files audited CLEAN: banning.py, muting.py, kicking.py, unbanning.py, connecting.py, disconnecting.py, stats.py, appeals.py, checking.py, decorators.py, appeal_flow.py, warning_flow.py, muting_flow.py, kicking_flow.py, demote_flow.py, reason_flow.py, stats_flow.py, proof_flow.py, connected_flow.py.
+  - Database + utils layer (session 117 start): users_cache.py, cache.py, bans_db.py, users_roles.py, groups_db.py, warns_db.py, mutes_db.py, mongos.py, kicks_db.py, queues_db.py, dispatch.py, pagination.py — all CLEAN.
+  - Total bugs fixed: #1-#317. Ruff: All checks passed.
 
 - Session 117 pass 7 (2026-06-13): Full-pass autonomous audit — ZERO new bugs found.
   - Files audited directly: greeting.py, extraction.py, ban_flow.py, muting_flow.py, scheduler.py, appeal_flow.py, unban_flow.py, connected_flow.py, warnings.py, checking.py, banning.py, broadcasting.py, kicking.py, maintenance.py, warning_flow.py, kicking_flow.py.
@@ -169,8 +171,8 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## AUDIT STATUS
 
-**COMPLETE** as of session 117. All 73 tcbot/ Python files audited and ruff-clean (seven full passes).
-Total bugs fixed: **#1-#315** (Bugs #306-#309, #311-#314 docs-only; Bug #310 is a code comment). Code logic/UX bugs: #1-#305, #315. Perf improvements: **#292-#294, Perf #4**.
+**COMPLETE** as of session 117 (pass 8 final). All 73 tcbot/ Python files audited and ruff-clean (eight full passes).
+Total bugs fixed: **#1-#317** (Bugs #306-#309, #311-#314 docs-only; Bug #310 is a code comment). Code logic/UX bugs: #1-#305, #315-#317. Perf improvements: **#292-#294, Perf #4**.
 
 ### All files fully audited across all sessions:
 ban_flow.py, greeting.py, bans_db.py, unban_flow.py, appeal_flow.py, banning.py, muting.py, muting_flow.py, kicking.py, kicking_flow.py, warnings.py, warning_flow.py, demote_flow.py, connected_flow.py, proof_flow.py, reason_flow.py, parse_logmsg.py, decorators.py, admins.py, users_cache.py, users_roles.py, promote_flow.py, connecting.py, disconnecting.py, groups_db.py, unbanning.py, appeals.py, check_flow.py, broadcasting.py, mongos.py, mutes_db.py, warns_db.py, kicks_db.py, queues_db.py, pagination.py, error_reporter.py, keyboards.py, parse_editmsg.py, documents.py, replies.py, timedate_format.py, parse_link.py, prefixes.py, redis_client.py, alive.py, checking.py, stats.py, stats_flow.py, maintenance.py, additional.py, netspeed.py, formatter.py, identity.py, cache.py, scheduler.py, __init__.py, __main__.py, ban_info.py, extraction.py, start.py, help.py, about.py, privacy.py, groups.py, modules/__init__.py, modules/types.py, dispatch.py, logger.py, utils/__init__.py, database/__init__.py, database/types.py, modules/helper/__init__.py, modules/helper/workflows/__init__.py

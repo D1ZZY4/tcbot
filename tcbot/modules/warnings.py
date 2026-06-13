@@ -233,7 +233,23 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.debug("cmd_unwarn no-target reply failed: %s", exc)
         return
 
-    ident = await identity.classify(ctx.bot, admin.id, target_id, target_name)
+    ident, role_result = await asyncio.gather(
+        identity.classify(ctx.bot, admin.id, target_id, target_name),
+        resolve_and_check(msg, admin.id, target_id, min_role="tester"),
+        return_exceptions=True,
+    )
+    if isinstance(ident, BaseException):
+        log.exception("identity.classify failed in cmd_unwarn: %s", ident)
+        return
+    if isinstance(role_result, BaseException):
+        log.exception("resolve_and_check failed in cmd_unwarn: %s", role_result)
+        return
+    executor_role, _ = role_result
+    # * Guard first: if resolve_and_check already replied and rejected (e.g. target
+    # * outranks executor), skip the identity refusal to avoid sending two replies.
+    if executor_role is None:
+        return
+
     refusal = identity.refuse_message("unwarn", ident)
     if refusal is not None:
         try:
@@ -294,7 +310,23 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
             log.debug("cmd_resetwarns no-target reply failed: %s", exc)
         return
 
-    ident = await identity.classify(ctx.bot, admin.id, target_id, target_name)
+    ident, role_result = await asyncio.gather(
+        identity.classify(ctx.bot, admin.id, target_id, target_name),
+        resolve_and_check(msg, admin.id, target_id, min_role="tester"),
+        return_exceptions=True,
+    )
+    if isinstance(ident, BaseException):
+        log.exception("identity.classify failed in cmd_resetwarns: %s", ident)
+        return
+    if isinstance(role_result, BaseException):
+        log.exception("resolve_and_check failed in cmd_resetwarns: %s", role_result)
+        return
+    executor_role, _ = role_result
+    # * Guard first: if resolve_and_check already replied and rejected (e.g. target
+    # * outranks executor), skip the identity refusal to avoid sending two replies.
+    if executor_role is None:
+        return
+
     refusal = identity.refuse_message("resetwarns", ident)
     if refusal is not None:
         try:
