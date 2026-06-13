@@ -80,8 +80,8 @@ async def get_user_mention_data(user_id: int) -> tuple[str, str | None]:
             {"user_id": user_id}, {"first_name": 1, "username": 1}
         )
         if doc:
-            return [doc.get("first_name") or f"User {user_id}", doc.get("username")]
-        return [f"User {user_id}", None]
+            return [doc.get("first_name") or str(user_id), doc.get("username")]
+        return [str(user_id), None]
 
     data = await user_mention_cache.get_or_fetch(user_id, _fetch)
     return cast("tuple[str, str | None]", (data[0], data[1]))
@@ -124,7 +124,7 @@ async def get_mention_data_batch(
     )
     for doc in docs:
         uid = doc["user_id"]
-        fname = doc.get("first_name") or f"User {uid}"
+        fname = doc.get("first_name") or str(uid)
         uname = doc.get("username")
         # * Populate L1 (and fire-and-forget L2 Redis write) for next lookup.
         user_mention_cache.put(uid, [fname, uname])
@@ -133,7 +133,7 @@ async def get_mention_data_batch(
     # * Fill fallback for users not found in DB either.
     for uid in missing:
         if uid not in result:
-            result[uid] = (f"User {uid}", None)
+            result[uid] = (str(uid), None)
 
     return result
 
@@ -152,13 +152,12 @@ async def get_first_names_batch(user_ids: list[int]) -> dict[int, str]:
         .to_list(None)
     )
     result = {
-        doc["user_id"]: doc.get("first_name") or f"User {doc['user_id']}"
-        for doc in docs
+        doc["user_id"]: doc.get("first_name") or str(doc["user_id"]) for doc in docs
     }
     # Fill in missing users with defaults
     for uid in user_ids:
         if uid not in result:
-            result[uid] = f"User {uid}"
+            result[uid] = str(uid)
     return result
 
 

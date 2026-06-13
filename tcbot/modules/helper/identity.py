@@ -92,7 +92,7 @@ async def classify(
         The user being acted on.
     target_fname:
         Best-effort first name from upstream resolution; falls back to a cache
-        lookup, then to ``"User <id>"``.
+        lookup, then to the bare numeric ID string (``str(target_id)``).
     target_is_bot:
         Optional pre-known bot flag (e.g. from ``bot.get_chat`` upstream).
 
@@ -126,7 +126,7 @@ async def classify(
         target_fname = cached_fname
     # * Guard: cached_fname is None when the DB call itself raised an exception.
     if not target_fname:
-        target_fname = f"User {target_id}"
+        target_fname = str(target_id)
 
     if target_id == executor_id:
         return Identity("self", target_id, target_fname, target_username, is_bot=False)

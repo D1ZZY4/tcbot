@@ -33,10 +33,14 @@ def mention(user_id: int, name: str, username: str | None = None) -> str:
     """Create a user mention with username fallback.
 
     If username is available, creates a global mention link (works everywhere).
+    When name equals the user ID string (numeric fallback), only the
+    code-formatted ID is returned to avoid the redundant ``"123 123"`` display.
     Otherwise, falls back to plain text name with copyable user ID.
     """
     if username:
         return f'<a href="https://t.me/{username}">{html.escape(str(name))}</a>'
+    if str(name) == str(user_id):
+        return f"<code>{user_id}</code>"
     return f"{html.escape(str(name))} <code>{user_id}</code>"
 
 

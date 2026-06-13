@@ -53,7 +53,7 @@ async def _resolve_user_info(bot: Bot, target_id: int) -> tuple[str, str | None]
         log.debug("get_chat(%s) failed: %s", target_id, exc)
 
     if not fname:
-        fname = f"User {target_id}"
+        fname = str(target_id)
     return fname, uname
 
 
@@ -62,8 +62,8 @@ def _back_to_check(target_id: int) -> list[InlineKeyboardButton]:
 
 
 async def _name(uid: int) -> str:
-    """Fast cache-only name lookup; falls back to 'User <id>' string."""
-    return await db.users_cache.get_first_name(uid, f"User {uid}")
+    """Fast cache-only name lookup; falls back to numeric ID string."""
+    return await db.users_cache.get_first_name(uid, str(uid))
 
 
 async def _async_const(value: Any) -> Any:
@@ -114,7 +114,7 @@ class Check:
         )
         if isinstance(r_user_info, BaseException):
             log.error("_resolve_user_info failed for %d: %s", target_id, r_user_info)
-            fname, uname = f"User {target_id}", None
+            fname, uname = str(target_id), None
         else:
             fname, uname = r_user_info
         if isinstance(r_role_meta, BaseException):
@@ -148,9 +148,7 @@ class Check:
         # * Build the rich role line with assignment metadata where available.
         role_lines = [f"Role: {bold(role_label)}"]
         if role and role != "founder" and role_by_id:
-            by_name = await db.users_cache.get_first_name(
-                role_by_id, f"User {role_by_id}"
-            )
+            by_name = await db.users_cache.get_first_name(role_by_id, str(role_by_id))
             role_lines.append(f"   Assigned by: {mention(role_by_id, by_name)}")
         if role and role != "founder" and role_at:
             role_lines.append(f"   Assigned at: {fmt_dt(role_at)}")

@@ -252,7 +252,7 @@ class Stats:
         base_idx = page * _PAGE_SIZE
         for i, u in enumerate(chunk, start=1):
             uid = u.get("user_id", 0)
-            fname = u.get("first_name") or f"User {uid}"
+            fname = u.get("first_name") or str(uid)
             uname = u.get("username")
             tail = f" · @{esc(uname)}" if uname else ""
             lines.append(f"{base_idx + i}. {user_ref(uid, fname, uname)}{tail}")
@@ -279,7 +279,7 @@ class Stats:
 
         u = chunk[idx]
         uid = u.get("user_id", 0)
-        fname = u.get("first_name") or f"User {uid}"
+        fname = u.get("first_name") or str(uid)
         uname = u.get("username")
         last_name = u.get("last_name") or "-"
         commit = date_or_unknown(u.get("commit_date"))

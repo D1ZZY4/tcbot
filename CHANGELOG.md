@@ -2,6 +2,15 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 98)
+
+### Fixed
+
+- **`tcbot/modules/banning.py`**, **`tcbot/modules/muting.py`**, **`tcbot/modules/kicking.py`**, **`tcbot/modules/warnings.py`** (command entry points): `resolve_and_check` may send a refusal reply internally (e.g. when the target outranks the executor). The code then continued to call `identity.refuse_message`, which also could reply, resulting in two replies being sent. Added `if executor_role is None: return ConversationHandler.END` (banning/kicking/warnings) or `return` (muting) immediately after unpacking `role_result`, before the `identity.refuse_message` call, so when `resolve_and_check` already handled the refusal the identity check is skipped. (Bug #261)
+- **`tcbot/modules/helper/workflows/ban_flow.py`** (`_execute_ban`): `ban_duration = meta.get("ban_duration")` was assigned but never used (Ruff F841). Timed-ban enforcement via `until_date` is not yet wired; added `_ = ban_duration` with an explicit comment so the Ruff warning is suppressed intentionally and the placeholder is self-documenting. (Bug #262)
+- **`tcbot/modules/helper/identity.py`** (`classify`), **`tcbot/modules/checking.py`** (`cmd_check`): Both had a `target_fname.startswith("User ")` guard to detect fallback names, but after Bug #253 changed `_best_name()` to return `str(uid)` (a bare numeric string) instead of `"User {uid}"`, the `startswith` check no longer covered numeric-string fallbacks. Added `or target_fname.lstrip("-").isdigit()` to each guard so raw numeric strings are also detected and replaced from cache or discarded before upserting. (Bug #263)
+- **`tcbot/modules/helper/formatter.py`** (`mention`), **`tcbot/database/users_cache.py`** (six fallback sites), **`tcbot/modules/helper/identity.py`** (last-resort fallback), **`tcbot/modules/helper/workflows/stats_flow.py`** (users_list, user_detail), **`tcbot/modules/helper/workflows/check_flow.py`** (`_resolve_user_info`, `_name`, `profile`, role-assigned-by line): When a user has no cached first_name, several paths fell back to `f"User {uid}"` as the display name. When this string was passed to `mention()` without a username, the output was `"User 123 <code>123</code>"` (showing the ID twice); when passed to `user_ref()`, it was `"User 123 - <code>123</code>"` (triple display after Bug #253 changed the fallback return). Two-part fix: (1) `mention()` in `formatter.py` now checks `str(name) == str(user_id)` and returns `<code>{user_id}</code>` alone, consistent with the existing smart behavior in `user_ref()`; (2) all `f"User {uid}"` fallback strings changed to `str(uid)` throughout `users_cache.py`, `identity.py`, `stats_flow.py`, and `check_flow.py`, so the smart no-duplicate check in both `mention()` and `user_ref()` fires correctly. Updated the `identity.py` `classify` docstring to reflect the new `str(target_id)` fallback. (Bug #264)
+
 ## [Unreleased] - 2026-06-13 (session 97)
 
 ### Fixed
