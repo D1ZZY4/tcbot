@@ -165,24 +165,19 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     share_url: str | None = result.get("share")
     try:
         if share_url:
-            # * Delete the "please wait" notice and send photo + caption in parallel.
+            # * Edit the "please wait" notice to the result text and send the
+            # * share photo as a separate reply to the original command message,
+            # * both in parallel. This avoids deleting the notice (consistent
+            # * with the edit pattern used in cmd_ping and other action modules).
             await asyncio.gather(
-                notice.delete(),
-                msg.reply_photo(share_url, caption=text, parse_mode="HTML"),
+                notice.edit_text(text, parse_mode="HTML"),
+                msg.reply_photo(share_url),
                 return_exceptions=True,
             )
         else:
-            await asyncio.gather(
-                notice.delete(),
-                msg.reply_text(text, parse_mode="HTML"),
-                return_exceptions=True,
-            )
-    except Exception as exc:
-        log.debug("cmd_speedtest reply failed: %s", exc)
-        try:
             await notice.edit_text(text, parse_mode="HTML")
-        except Exception as fallback_exc:
-            log.debug("cmd_speedtest fallback edit failed: %s", fallback_exc)
+    except Exception as exc:
+        log.debug("cmd_speedtest result edit failed: %s", exc)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

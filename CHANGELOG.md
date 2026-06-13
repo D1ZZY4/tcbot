@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 116)
+
+### Fixed
+
+- **`tcbot/modules/netspeed.py`** (`cmd_speedtest`): When the speed test finished, the handler deleted the "Running speed test, please wait..." notice message and sent a new reply (either `reply_photo` with the share image or `reply_text`). This is inconsistent with the edit pattern used by every other action module (including `cmd_ping` in the same file, which edits its "Pinging..." notice in-place). Changed to always edit the notice with `notice.edit_text(text, parse_mode="HTML")`. For the `share_url` case, the photo is sent as a separate `msg.reply_photo` in parallel via `asyncio.gather`. The notice is now never deleted, avoiding a visible flash where the wait message disappears before the result appears. (Bug #315)
+
 ## [Unreleased] - 2026-06-13 (session 114)
 
 ### Fixed

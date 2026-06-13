@@ -5,9 +5,14 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 115)
+**Last updated:** 2026-06-13 (session 116)
 
 ## What is done
+
+- Session 116 (2026-06-13): Bug #315 fixed in netspeed.py.
+  - `cmd_speedtest`: replaced delete-notice + send-new-message pattern with edit-in-place pattern (consistent with `cmd_ping` and all other action modules). For `share_url` case: `notice.edit_text(text)` + `msg.reply_photo(share_url)` in parallel via `asyncio.gather`. For no share_url: `notice.edit_text(text)` only. Notice is never deleted.
+  - Verification: ruff PASS, import PASS, bot running clean (27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling active).
+  - Total bugs fixed: #1-#315.
 
 - Session 115 (2026-06-13): Sixth full-pass audit — ZERO new bugs found.
   - Full read of: banning.py, checking.py (full), admins.py (full 836 lines), maintenance.py, stats.py, broadcasting.py, greeting.py, connected_flow.py (full 434 lines), about.py, disconnecting.py, warnings.py — all CLEAN.
@@ -151,8 +156,8 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## AUDIT STATUS
 
-**COMPLETE** as of session 115 (v4.5.1 sixth pass). All 73 tcbot/ Python files audited and ruff-clean (six full passes).
-Total bugs fixed: **#1-#314** (Bugs #306-#309, #311-#314 docs-only; Bug #310 is a code comment). Code logic bugs: #1-#305. Perf improvements: **#292–#294, Perf #4**.
+**COMPLETE** as of session 116. All 73 tcbot/ Python files audited and ruff-clean (six full passes).
+Total bugs fixed: **#1-#315** (Bugs #306-#309, #311-#314 docs-only; Bug #310 is a code comment). Code logic/UX bugs: #1-#305, #315. Perf improvements: **#292-#294, Perf #4**.
 
 ### All files fully audited across all sessions:
 ban_flow.py, greeting.py, bans_db.py, unban_flow.py, appeal_flow.py, banning.py, muting.py, muting_flow.py, kicking.py, kicking_flow.py, warnings.py, warning_flow.py, demote_flow.py, connected_flow.py, proof_flow.py, reason_flow.py, parse_logmsg.py, decorators.py, admins.py, users_cache.py, users_roles.py, promote_flow.py, connecting.py, disconnecting.py, groups_db.py, unbanning.py, appeals.py, check_flow.py, broadcasting.py, mongos.py, mutes_db.py, warns_db.py, kicks_db.py, queues_db.py, pagination.py, error_reporter.py, keyboards.py, parse_editmsg.py, documents.py, replies.py, timedate_format.py, parse_link.py, prefixes.py, redis_client.py, alive.py, checking.py, stats.py, stats_flow.py, maintenance.py, additional.py, netspeed.py, formatter.py, identity.py, cache.py, scheduler.py, __init__.py, __main__.py, ban_info.py, extraction.py, start.py, help.py, about.py, privacy.py, groups.py, modules/__init__.py, modules/types.py, dispatch.py, logger.py, utils/__init__.py, database/__init__.py, database/types.py, modules/helper/__init__.py, modules/helper/workflows/__init__.py

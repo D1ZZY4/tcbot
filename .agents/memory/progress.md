@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-13 (session 115)
+**Last updated:** 2026-06-13 (session 116)
 
 ## Verification baseline
 
@@ -35,6 +35,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Bug #315 (session 116) | ux/correctness | netspeed.py cmd_speedtest: replaced delete-notice+send-new-message with edit-in-place pattern. For share_url: notice.edit_text(text) + msg.reply_photo(share_url) in parallel. For no share_url: notice.edit_text(text) only. Consistent with cmd_ping edit pattern. | 2026-06-13 (s116) |
 | Session 112 audit | audit | Sequential q.answer()+edit sweep across all modules. 11 bugs fixed (#295–#305). Comprehensive sweep of all remaining files confirmed clean. Ruff: 73 files clean. Bot: 27/27 indexes, Redis, APScheduler, polling active. | 2026-06-13 (s112) |
 | Bugs #300–#305 (session 112) | performance | help.py — 6 sequential await q.answer() + await safe_edit_cb() pairs across _render_help_index, _show_module (2 paths), _show_section (3 paths). All parallelised with asyncio.gather(return_exceptions=True). Added import asyncio. | 2026-06-13 (s112) |
 | Bug #299 (session 112) | performance | about.py on_about_menu — sequential q.answer() + q.edit_message_text() → gathered. Added import asyncio. | 2026-06-13 (s112) |
