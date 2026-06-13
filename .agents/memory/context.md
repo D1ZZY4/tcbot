@@ -5,9 +5,18 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 97)
+**Last updated:** 2026-06-13 (session 99)
 
 ## What is done
+
+- Session 99 (2026-06-13): Bug #265 fixed. Full audit of checking.py, check_flow.py, connecting.py, disconnecting.py, unbanning.py, admins.py, appeals.py, stats.py, broadcasting.py, maintenance.py, additional.py all verified clean. CHANGELOG.md updated with Bug #265 entry. Ruff: All checks passed (73 files).
+  - Bug #265: warnings.py cmd_warn_entry - missing identity.staff_notice("warn", ident, cfg.community_name) call before return in refusal guard; consistent with cmd_unwarn and cmd_resetwarns in same file.
+
+- Session 98 (2026-06-13): Bugs #261-#264 fixed.
+  - Bug #261: banning/muting/kicking/warnings cmd entry points - resolve_and_check may reply internally, code continued to identity.refuse_message causing double reply; added early return after unpacking role_result.
+  - Bug #262: ban_flow._execute_ban - ban_duration F841 unused variable; added `_ = ban_duration` placeholder.
+  - Bug #263: identity.classify + checking.cmd_check - target_fname.startswith("User ") guard missed numeric-string fallback (str(uid)); added lstrip("-").isdigit() check.
+  - Bug #264: mention() smart dedup + "User {uid}" → str(uid) fallback across users_cache.py, identity.py, stats_flow.py, check_flow.py.
 
 - Session 97 (2026-06-13): Bugs #256-#260 fixed. Comprehensive audit of warning_flow.py, muting.py, demote_flow.py, stats_flow.py, check_flow.py, ban_info.py, muting_flow.py, kicking.py, kicking_flow.py, unbanning.py, checking.py, banning.py, scheduler.py, additional.py all verified clean.
   - Bug #256: warning_flow.py execute_resetwarns - last mention+code pattern → user_ref; removed unused code/mention imports.
@@ -41,8 +50,8 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## AUDIT STATUS
 
-**FULLY DRY** as of session 97. All 73 tcbot/ Python files ruff-clean, import-check passing.
-Total bugs fixed: **#1-#260**.
+**FULLY DRY** as of session 99. All 73 tcbot/ Python files ruff-clean, import-check passing.
+Total bugs fixed: **#1-#265**.
 
 ### Known non-bugs (by design):
 - `schedule_unban` in scheduler.py defined but not called - timed bans feature not yet implemented.

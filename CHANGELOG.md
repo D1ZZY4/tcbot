@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 99)
+
+### Fixed
+
+- **`tcbot/modules/warnings.py`** (`cmd_warn_entry`): Missing `identity.staff_notice("warn", ident, cfg.community_name)` call after the `refusal is not None` check. Every other permission-guarded command in the same file (`cmd_unwarn`, `cmd_resetwarns`) emits a staff notice before returning when a refusal is issued, so staff in shared groups receive the silent acknowledgement. `cmd_warn_entry` skipped this call, leaving staff with no feedback in shared-group contexts. Added the missing call immediately before the `return` statement in the refusal guard, consistent with the other two handlers. (Bug #265)
+
 ## [Unreleased] - 2026-06-13 (session 98)
 
 ### Fixed

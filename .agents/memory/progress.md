@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-13 (session 95)
+**Last updated:** 2026-06-13 (session 99)
 
 ## Verification baseline
 
@@ -16,17 +16,21 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | `uv run python -c "import tcbot; print('import OK')"` | PASS (re-verified session 93) |
 | `uv run python -m tcbot` | PASS by runtime evidence: MongoDB connected, indexes ensured, scheduler started, bot polling active |
 | `uv run ruff format .` | PASS (73 files) |
-| `uv run ruff check .` | PASS (All checks passed, verified session 95) |
+| `uv run ruff check .` | PASS (All checks passed, verified session 99) |
 | asyncio task-GC fix isolated test (session 43) | PASS: task registered on schedule, discarded on completion, report coroutine ran |
 | annotation AST audit | PASS: 0 non-dunder function parameters missing type annotations |
 | docs audit (session 74) | PASS: mapping.md top-level layout completed; 3 new Mermaid diagrams added; all code files audited clean |
 | Final comprehensive audit (session 92 final) | PASS: All remaining workflow, module, database files verified. 0 new bugs found. |
 | Formatter consistency audit (session 93) | PASS: 11 files audited and fixed. All hardcoded `<b>`/`<code>` in dynamic content replaced with bold()/code() helpers. Ruff clean. Import OK. |
+| Full module audit (session 99) | PASS: checking.py, check_flow.py, connecting.py, disconnecting.py, unbanning.py, admins.py, appeals.py, stats.py, broadcasting.py, maintenance.py, additional.py all clean. |
 
 ## Completed items (recent additions on top)
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Bug #265 (session 99) | correctness | warnings.py cmd_warn_entry missing identity.staff_notice("warn", ...) before return in refusal guard; consistent with cmd_unwarn and cmd_resetwarns. CHANGELOG updated. | 2026-06-13 (s99) |
+| Bugs #261-#264 (session 98) | correctness | banning/muting/kicking/warnings double-reply on resolve_and_check refusal; ban_flow F841 ban_duration; identity/checking numeric-string fallback guard; mention() dedup + "User {uid}"→str(uid) across 4 files. CHANGELOG updated. | 2026-06-13 (s98) |
+| Bugs #256-#260 (session 97) | correctness | warning_flow execute_resetwarns user_ref; muting.py Demote trigger "kick"→"mute"; stats_flow user list user_ref; check_flow _async_const Any→Any; additional.py bold(). CHANGELOG updated. | 2026-06-13 (s97) |
 | Bugs #247-#255 (session 95) | correctness | user_ref() helper; deactivate_all/extra active bans; ban_flow: group reporting+PM notify+dedup; unban/appeal: deactivate_all; greeting: ChatJoinRequestHandler+all-groups enforcement; extraction _best_name str(uid); unban_flow cancel_schedule; conversation_timeout dead code removed (PTBUserWarning eliminated). CHANGELOG updated. | 2026-06-13 (s95) |
 | Formatter consistency (#236-#246) | style/security | 11 files: netspeed.py, ban_flow.py, appeal_flow.py, admins.py, proof_flow.py, muting_flow.py, demote_flow.py, groups.py, reason_flow.py, help.py, stats_flow.py. All hardcoded `<b>` and `<code>` in dynamic content replaced with bold()/code() helpers. | 2026-06-13 (s93) |
 | Final comprehensive audit | audit | Verified checking.py, banning.py, ban_flow.py, warning_flow.py, muting_flow.py, kicking_flow.py, unban_flow.py, appeal_flow.py, stats_flow.py, bans_db.py. All clean. No new bugs found. Total: #1-#235 final. | 2026-06-13 (s92) |

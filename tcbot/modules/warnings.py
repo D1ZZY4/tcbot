@@ -162,6 +162,13 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             log.debug("cmd_warn_entry refusal reply failed: %s", exc)
         return ConversationHandler.END
 
+    notice = identity.staff_notice("warn", ident, cfg.community_name)
+    if notice is not None:
+        try:
+            await msg.reply_text(notice, parse_mode="HTML")
+        except Exception as exc:
+            log.debug("cmd_warn_entry staff notice reply failed: %s", exc)
+
     ctx.user_data.update(
         {
             "warn_target_id": target_id,
