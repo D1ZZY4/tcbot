@@ -5,9 +5,24 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 112)
+**Last updated:** 2026-06-13 (session 114)
 
 ## What is done
+
+- Session 114 (2026-06-13): Documentation accuracy pass — 7 bugs fixed (#306-#312):
+  - Bug #306: docs/performance.md heading "v4.1.1 Performance Targets" → "v4.5.1 Performance Targets".
+  - Bug #307: docs/performance.md Button Handlers: q.answer() < 30 ms → < 15 ms, round-trip < 150 ms → < 80 ms (v4.5.1 targets).
+  - Bug #308: docs/banning-detailed.md unban step 7: stale `scheduler.cancel_schedule(ban.schedule_id)` (schedule_id field doesn't exist); corrected to `scheduler.cancel_schedule(f"unban.{ban_id}")`.
+  - Bug #309: docs/banning-detailed.md ban step 7: "EXEC_GROUP" (nonexistent name) → "EXTEND_GROUP" (real env var).
+  - Bug #310: tcbot/modules/helper/workflows/appeal_flow.py comment line 548: "EXEC_GROUP" → "EXTEND_GROUP" (real env var name).
+  - Bug #311: docs/warnings-detailed.md lines 126+331 claimed warnings NEVER auto-demote; code shows they DO auto-demote when warn limit is hit and target has a role. Both lines corrected.
+  - Bug #312: docs/role-detailed.md line 316 same claim as #311 — "Warnings do not auto-demote" — corrected to match code reality.
+  - Bug #313: docs/workflows/workflows.md line 148 said "automatic federation ban" at WARN_LIMIT; code does local group ban only (ban_chat_member for current chat). Corrected to "automatic ban from the current group only".
+  - Bug #314: docs/workflows/workflows.md auto-demote table, mute row: said "current-group mute" but muting_flow._execute_mute is federation-wide (fan_out to all connected + primary groups). Corrected to "federation-wide mute".
+  - Comprehensive re-audit: all 73 Python files (5 passes), all docs/*.md, GitHub workflows (5), Dockerfile, docker-compose.yml — ALL clean beyond listed bugs. Ruff: 73 files clean.
+
+- Session 113 (2026-06-13): Perf #4 fix — appeal_flow.py approve action had two consecutive independent asyncio.gather calls (notify+edit, then log_edit+log_send). Merged into one gather with all 4 coroutines running in parallel. Zero Unicode emoji found in source code. AST scan of entire codebase: only 4 consecutive await patterns found; 2 are semantically ordered (DB write sequence in set_owner, add_admin→set_owner in transfer), 1 is unban-then-notify order (appeal approve), 1 was the fixed perf issue. N+1 audit: zero actual N+1 patterns (extraction.py loops are short-circuit returns). Total perf: Perf #1–#294 (prev sessions) + Perf #4 this session.
+  - Verification: ruff 73 files clean. Bot restart clean: MongoDB 27/27, Redis hiredis 3.4.0, APScheduler.
 
 - Session 112 (2026-06-13): Sequential q.answer() + edit audit pass across all module files. 11 bugs fixed (#295–#305):
   - Bug #295: groups.py `_toggle` cache-hit branch — `q.answer()` + `safe_edit()` sequential → gathered.
@@ -128,8 +143,8 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## AUDIT STATUS
 
-**COMPLETE** as of session 111 (v4.5.1 pass). All 73 tcbot/ Python files audited and ruff-clean (four full passes).
-Total bugs fixed: **#1-#291**. Perf improvements: **#292–#294**.
+**COMPLETE** as of session 114 (v4.5.1 pass). All 73 tcbot/ Python files audited and ruff-clean (five full passes).
+Total bugs fixed: **#1-#314** (Bugs #306-#309, #311-#314 docs-only; Bug #310 is a code comment). Code logic bugs: #1-#305. Perf improvements: **#292–#294, Perf #4**.
 
 ### All files fully audited across all sessions:
 ban_flow.py, greeting.py, bans_db.py, unban_flow.py, appeal_flow.py, banning.py, muting.py, muting_flow.py, kicking.py, kicking_flow.py, warnings.py, warning_flow.py, demote_flow.py, connected_flow.py, proof_flow.py, reason_flow.py, parse_logmsg.py, decorators.py, admins.py, users_cache.py, users_roles.py, promote_flow.py, connecting.py, disconnecting.py, groups_db.py, unbanning.py, appeals.py, check_flow.py, broadcasting.py, mongos.py, mutes_db.py, warns_db.py, kicks_db.py, queues_db.py, pagination.py, error_reporter.py, keyboards.py, parse_editmsg.py, documents.py, replies.py, timedate_format.py, parse_link.py, prefixes.py, redis_client.py, alive.py, checking.py, stats.py, stats_flow.py, maintenance.py, additional.py, netspeed.py, formatter.py, identity.py, cache.py, scheduler.py, __init__.py, __main__.py, ban_info.py, extraction.py, start.py, help.py, about.py, privacy.py, groups.py, modules/__init__.py, modules/types.py, dispatch.py, logger.py, utils/__init__.py, database/__init__.py, database/types.py, modules/helper/__init__.py, modules/helper/workflows/__init__.py

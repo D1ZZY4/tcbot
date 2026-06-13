@@ -107,7 +107,7 @@ When the target has no active ban:
    - `Proof <target_id>` URL button.
    - `Submit Appeal` URL button.
 6. The sent log message ID is saved with `bans_db.set_log_message_id(...)` when available.
-7. The target is banned in every active connected group returned by `groups_db.active_groups()`, plus the primary groups (`MAIN_GROUP`, `EXEC_GROUP`) when they are not already in the connected-groups list.
+7. The target is banned in every active connected group returned by `groups_db.active_groups()`, plus the primary groups (`MAIN_GROUP`, `EXTEND_GROUP`) when they are not already in the connected-groups list.
 8. The target user is cached with `users_cache.upsert_user(...)`.
 9. The original proof prompt is edited with an applied-groups summary.
 
@@ -286,7 +286,7 @@ Flow:
 4. Founder and staff targets are treated as not federation-bannable and no unban is attempted.
 5. `bans_db.get_active_ban(target_id)` must return a record.
 6. All active bans for the target are deactivated atomically with `bans_db.deactivate_all_active_bans(target_id)`, which handles any duplicate active records in one operation.
-7. Any pending scheduled unban job is cancelled defensively with `scheduler.cancel_schedule(ban.schedule_id)` when a schedule ID is stored.
+7. Any pending scheduled unban job is cancelled defensively with `scheduler.cancel_schedule(f"unban.{ban_id}")`. This is a no-op when no timed-ban schedule exists and future-proofs the flow for when timed bans are added.
 8. The target is unbanned from all active connected groups with `only_if_banned=True`.
 9. An unban log is sent to `cfg.logs`.
 10. The command reply reports the success count.

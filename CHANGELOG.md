@@ -2,6 +2,26 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 114)
+
+### Fixed
+
+- **`docs/performance.md`** (heading, line 11): Section heading still read "v4.1.1 Performance Targets" after the version bump to v4.5.1. Updated to "v4.5.1 Performance Targets". (Bug #306)
+- **`docs/performance.md`** (Button Handlers subsection): `q.answer()` target was listed as `< 30 ms` and full round-trip as `< 150 ms` — stale values from the v4 era. Updated to match the v4.5.1 mandatory targets (`< 15 ms` and `< 80 ms` respectively) defined in the table above. (Bug #307)
+- **`docs/banning-detailed.md`** (unban flow step 7): Described the defensive schedule cancellation as `scheduler.cancel_schedule(ban.schedule_id)` — referencing a `schedule_id` field that does not exist on the ban document. The actual code in `unban_flow.py` uses `scheduler.cancel_schedule(f"unban.{ban_id}")`. Corrected the description to match the real call. (Bug #308)
+- **`docs/banning-detailed.md`** (ban flow step 7): Referred to the secondary/staff group as `EXEC_GROUP` — a name that does not exist as an env var or config property. The real env var is `EXTEND_GROUP` and the config property is `cfg.exec_group`. Corrected to `EXTEND_GROUP` to match the env variable name documented in `replit.md` and `docs/setup.md`. (Bug #309)
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** (comment at approve branch, line 548): Inline comment named the secondary group env var `EXEC_GROUP` instead of the real `EXTEND_GROUP`. Corrected the comment. (Bug #310)
+- **`docs/warnings-detailed.md`** (lines 126 and 331): Both stated that warning a lower-ranked staff target never causes auto-demotion. This was incorrect. `warning_flow.execute_warn` calls `Demote.execute(trigger="ban")` when `count >= WARN_LIMIT` and the target holds a federation role, then applies the group auto-ban. A single warning below the threshold still does not demote; the incorrect claim was that demotion *never* occurs. Both lines corrected to reflect the actual behaviour. (Bug #311)
+- **`docs/role-detailed.md`** (line 316): Stated "Warnings do not auto-demote" — same incorrect claim as Bug #311. At the warn limit, `warning_flow.execute_warn` does call `Demote.execute(trigger="ban")` when the target holds a role. Corrected to: individual warnings below the limit leave the role intact, but the warn-limit path demotes before the auto-ban. (Bug #312)
+- **`docs/workflows/workflows.md`** (line 148): Described the warn-limit action as "an automatic federation ban" — incorrect. The code calls `bot.ban_chat_member(chat_id, target_id)` for the **current group only**, not a federation-wide ban across all connected groups. Corrected to "automatic ban from the current group only". (Bug #313)
+- **`docs/workflows/workflows.md`** (auto-demote table, mute row): Described `trigger="mute"` as "Auto-demote before a current-group mute". However, `_execute_mute` in `muting_flow.py` is explicitly a federation-wide operation: it calls `fan_out()` across all connected groups and primary groups. Corrected to "Auto-demote before a federation-wide mute". (Bug #314)
+
+## [Unreleased] - 2026-06-13 (session 113)
+
+### Performance
+
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** (approve action): Two consecutive independent `asyncio.gather` calls in the appeal-approve path (notify user + edit review message, then update appeal log + send unban log) were split across two sequential round-trips. Merged into a single `asyncio.gather` with all four coroutines running concurrently. Eliminates one extra round-trip on every appeal approval, cutting the approve path wall-clock time by roughly half for the post-unban notification and log update phase. (Perf #4)
+
 ## [Unreleased] - 2026-06-13 (session 112)
 
 ### Fixed

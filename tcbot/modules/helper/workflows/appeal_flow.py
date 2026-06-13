@@ -545,7 +545,7 @@ class BuildAppeal:
                 target_fname = str(target_id)
 
             # * Include primary groups not already in the connected list.
-            # * Primary groups (MAIN_GROUP, EXEC_GROUP) are configured via env vars
+            # * Primary groups (MAIN_GROUP, EXTEND_GROUP) are configured via env vars
             # * and are not stored in federated_groups, so active_groups() never
             # * returns them. The appeal approve unban must cover them explicitly.
             _primary_ids = [cid for cid in (cfg.main_group, cfg.exec_group) if cid]
@@ -564,7 +564,8 @@ class BuildAppeal:
                 ]
             )
 
-            # * Notify user + edit review message in parallel
+            # * Notify user, edit review message, update appeal log, and send
+            # * unban log - all four are independent; run in one gather.
             await asyncio.gather(
                 ctx.bot.send_message(
                     target_id,
@@ -577,11 +578,6 @@ class BuildAppeal:
                     parse_mode="HTML",
                     reply_markup=None,
                 ),
-                return_exceptions=True,
-            )
-
-            # * Edit appeal log + send unban log to the same channel in parallel
-            await asyncio.gather(
                 self._update_or_send_log(
                     ctx.bot,
                     lc,

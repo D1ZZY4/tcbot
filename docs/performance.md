@@ -8,7 +8,7 @@ This document outlines the performance optimizations implemented in the tcbot co
 
 The bot is optimized for **zero-delay, instant response** across all operations:
 
-### v4.1.1 Performance Targets (Mandatory)
+### v4.5.1 Performance Targets (Mandatory)
 
 | Operation | Target |
 |---|---|
@@ -178,9 +178,9 @@ def mention(user_id: int, name: str, username: str | None = None) -> str:
 - Ban list: 0.3-0.5 seconds (75% faster)
 - Staff roster: 0.4-0.6 seconds (70% faster)
 
-### Button Handlers (v4 Targets)
-- Callback query acknowledgment (`q.answer()`): < 30 ms
-- Full callback round-trip (answer + edit): < 150 ms
+### Button Handlers (v4.5.1 Targets)
+- Callback query acknowledgment (`q.answer()`): < 15 ms
+- Full callback round-trip (answer + edit): < 80 ms
 
 ---
 
