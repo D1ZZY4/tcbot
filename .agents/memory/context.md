@@ -5,9 +5,11 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 91)
+**Last updated:** 2026-06-13 (session 92)
 
 ## What is done
+
+- Session 92 (2026-06-13): Confirmation-only scan (no new bugs). Read 35+ files: bans_db.py, users_roles.py (full), ban_flow.py (full 437 lines), connected_flow.py, appeal_flow.py, cache.py (full 324 lines), keyboards.py (full 319 lines), mongos.py (full 181 lines). All clean. Ruff: 73 files formatted + all checks passed. `import tcbot` OK. FULLY DRY status reconfirmed.
 
 - Session 91 (2026-06-13): Added `netspeed.py` module + Bug #231 decorator-order fix.
   - Feature: `tcbot/modules/netspeed.py` -- `/ping` (alias `/p`) and `/speedtest` (alias `/st`), Founder-only, rate-limited 3/60s. `/ping` measures Telegram API round-trip. `/speedtest` runs `speedtest-cli` in thread executor (non-blocking). Both use `build_prefixed_filters` and export `__handlers__`. `speedtest-cli==2.1.3` added to `pyproject.toml`.
