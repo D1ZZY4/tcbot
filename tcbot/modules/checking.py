@@ -351,7 +351,11 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     # * Refresh cache with whatever we just resolved so future renders have a real name.
-    if target_fname and not target_fname.startswith("User "):
+    if (
+        target_fname
+        and not target_fname.startswith("User ")
+        and not target_fname.lstrip("-").isdigit()
+    ):
         try:
             await db.users_cache.upsert_user(target_id, None, target_fname)
         except Exception as exc:

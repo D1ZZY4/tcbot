@@ -149,15 +149,17 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         log.exception("resolve_and_check failed in cmd_warn: %s", role_result)
         return ConversationHandler.END
     executor_role, _ = role_result
+    # * Guard first: if resolve_and_check already replied and rejected (e.g. target
+    # * outranks executor), skip the identity refusal to avoid sending two replies.
+    if executor_role is None:
+        return ConversationHandler.END
+
     refusal = identity.refuse_message("warn", ident)
     if refusal is not None:
         try:
             await msg.reply_text(refusal, parse_mode="HTML")
         except Exception as exc:
             log.debug("cmd_warn_entry refusal reply failed: %s", exc)
-        return ConversationHandler.END
-
-    if executor_role is None:
         return ConversationHandler.END
 
     ctx.user_data.update(

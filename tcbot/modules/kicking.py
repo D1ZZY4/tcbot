@@ -128,15 +128,17 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         log.exception("resolve_and_check failed in cmd_kick: %s", role_result)
         return ConversationHandler.END
     executor_role, target_role = role_result
+    # * Guard first: if resolve_and_check already replied and rejected (e.g. target
+    # * outranks executor), skip the identity refusal to avoid sending two replies.
+    if executor_role is None:
+        return ConversationHandler.END
+
     refusal = identity.refuse_message("kick", ident)
     if refusal is not None:
         try:
             await msg.reply_text(refusal, parse_mode="HTML")
         except Exception as exc:
             log.debug("cmd_kick refusal reply failed: %s", exc)
-        return ConversationHandler.END
-
-    if executor_role is None:
         return ConversationHandler.END
 
     if target_role:

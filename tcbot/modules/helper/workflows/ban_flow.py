@@ -23,9 +23,8 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg, replies
-from tcbot.modules.helper.formatter import bold, esc, user_ref
+from tcbot.modules.helper.formatter import esc, user_ref
 from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
-from tcbot.modules.helper.workflows.muting_flow import fmt_duration
 from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
 from tcbot.utils.dispatch import fan_out
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
@@ -88,8 +87,9 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     ban_duration = meta.get("ban_duration")
 
     now = utc_now()
-    until = now + ban_duration if ban_duration else None
-    dur_str = fmt_duration(ban_duration) if ban_duration else None
+    # * ban_duration is reserved for future timed-ban support; Telegram enforcement
+    # * via until_date is not yet wired up, so we do not compute until/dur_str here.
+    _ = ban_duration
     proof_chat, proof_thread = cfg.proofs
 
     # * Pre-fetch active groups immediately so DB round-trip overlaps with the

@@ -199,3 +199,64 @@ Key approaches adopted to meet v4 targets:
 **Why:** The Replit platform memory can be reset on account change. Storing state in tracked files guarantees continuity across sessions and accounts.
 
 **How to apply:** Before finishing any work session, update context.md (state), progress.md (last-known work), and decisions.md (new decisions). Update MEMORY.md index if a new topic file is created.
+
+---
+
+## 2026-06-13: Double-reply guard — check executor_role before identity.refuse_message
+
+**Decision:** In every command entry point that runs `resolve_and_check` + `identity.classify` concurrently via `asyncio.gather`, the `executor_role is None` guard must come **before** the `identity.refuse_message` check.
+
+**Why:** `resolve_and_check` sends a reply message *inside* the gather (when the target outranks the executor). If code then falls through to `identity.refuse_message`, a second reply is sent for the same event — the user sees two bot messages for one command. Affected files: `banning.py`, `muting.py`, `kicking.py`, `warnings.py`.
+
+**How to apply:** Pattern:
+```python
+executor_role, target_role = role_result
+if executor_role is None:          # resolve_and_check already replied
+    return ConversationHandler.END
+refusal = identity.refuse_message(action, ident)
+if refusal is not None:
+    await msg.reply_text(refusal, ...)
+    return ConversationHandler.END
+```
+Never reverse this order.
+
+---
+
+## 2026-06-13: identity.classify numeric fname guard includes isdigit check
+
+**Decision:** `identity.classify`'s fname override condition is:
+```python
+if not target_fname or target_fname.startswith("User ") or target_fname.lstrip("-").isdigit():
+    target_fname = cached_fname
+```
+
+**Why:** `_best_name()` in `extraction.py` returns `str(uid)` (e.g. "123456789") when no real name is found — NOT "User 123456789". Without the `isdigit()` branch, `classify()` would skip overriding a numeric fallback fname even when its own parallel cache lookup found a real name.
+
+**How to apply:** Always include the `isdigit()` branch alongside `startswith("User ")` when guarding fname fallbacks.
+
+---
+
+## 2026-06-13: ban_duration in ban_flow reserved for timed-ban (not yet wired)
+
+**Decision:** `ban_duration = meta.get("ban_duration")` is read but intentionally unused in `_execute_ban`. `_ = ban_duration  # noqa: F841` suppresses the ruff warning while keeping the variable for future timed-ban wiring.
+
+**Why:** Timed-ban feature requires wiring `until_date` into `bot.ban_chat_member` and calling `schedule_unban`; that plumbing is not yet complete. Removing the assignment would lose the metadata contract. Using `_ = ban_duration` is the least-invasive way to preserve intent while keeping ruff clean.
+
+**How to apply:** When implementing timed bans, replace `_ = ban_duration` with `until = now + ban_duration if ban_duration else None` and wire `until` into the Telegram call and `create_ban`/`update_ban` DB writes.
+
+---
+
+## 2026-06-13: checking.py /check cache-guard must include isdigit() branch
+
+**Decision:** `cmd_check` in `checking.py` guards the `upsert_user` call with:
+```python
+if (
+    target_fname
+    and not target_fname.startswith("User ")
+    and not target_fname.lstrip("-").isdigit()
+):
+```
+
+**Why:** The guard's purpose is to avoid polluting the users_cache with a numeric fallback name (e.g. "123456789") when `_best_name()` found no real name. Without `isdigit()`, a numeric fallback would overwrite a potentially real cached name with a worse one.
+
+**How to apply:** Any code that conditionally caches `target_fname` from `extract_target` must use both the `startswith("User ")` and `isdigit()` branches to guard against all possible fallback formats.

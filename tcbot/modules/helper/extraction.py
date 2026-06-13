@@ -91,8 +91,9 @@ async def extract_target(
     5. @Mention entity
 
     The returned name is always a human-readable string. When Telegram returns
-    no first_name and the member cache has no entry, falls back to ``User <uid>``
-    rather than a bare numeric ID so log messages and mention links stay legible.
+    no first_name and the member cache has no entry, falls back to the bare
+    numeric ID string (``str(uid)``) so callers using ``user_ref()`` can detect
+    the numeric fallback and avoid displaying the ID twice.
     """
     msg: Message = update.effective_message
 

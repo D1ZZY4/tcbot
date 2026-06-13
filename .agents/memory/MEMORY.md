@@ -18,3 +18,7 @@
 - [_best_name numeric fallback](decisions.md): returns `str(uid)` not `"User {uid}"` so callers can detect numeric fallback via `str(name) == str(uid)` comparison
 - [ban dedup: deactivate_extra_active_bans](decisions.md): call before updating an existing ban; use deactivate_all_active_bans in unban/appeal-approve to clear all active bans atomically
 - [ChatJoinRequest enforcement](decisions.md): add ChatJoinRequestHandler alongside new_chat_member handler; both check is_connected (L1/L2 cached) for non-primary groups; greet=False for secondary groups silences welcome noise
+- [Double-reply guard pattern](decisions.md): executor_role is None check must come BEFORE identity.refuse_message in all command entry points that run resolve_and_check concurrently
+- [identity.classify numeric fname guard](decisions.md): fname override condition must include isdigit() branch — _best_name() returns str(uid) not "User {uid}" as fallback
+- [ban_duration timed-ban placeholder](decisions.md): `_ = ban_duration` in ban_flow suppresses F841 while preserving the future timed-ban contract
+- [checking.py cache-guard isdigit branch](decisions.md): conditional upsert_user calls must add isdigit() guard alongside startsWith("User ") to prevent caching numeric fallback names
