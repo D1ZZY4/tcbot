@@ -64,6 +64,9 @@ async def create_ban(
     proof_msg_id: int,
     log_msg_id: int,
     ban_id: str | None = None,
+    *,
+    until_date: datetime | None = None,
+    duration_str: str | None = None,
 ) -> BanDoc:
     """Create a new ban record in the database."""
     if ban_id is None:
@@ -79,6 +82,8 @@ async def create_ban(
         "previous_log_message_id": None,
         "timestamp": utc_now(),
         "updated_timestamp": None,
+        "until_date": until_date,
+        "duration_str": duration_str,
         "is_active": True,
         "update_count": 0,
         "review_message_id": None,
@@ -96,6 +101,9 @@ async def update_ban(
     new_log_id: int = 0,
     old_proof_id: int = 0,
     old_log_id: int = 0,
+    *,
+    until_date: datetime | None = None,
+    duration_str: str | None = None,
 ) -> BanDoc | None:
     """Update an existing ban record with new information."""
     return await _bans().find_one_and_update(
@@ -109,6 +117,8 @@ async def update_ban(
                 "previous_proof_message_id": old_proof_id,
                 "previous_log_message_id": old_log_id,
                 "updated_timestamp": utc_now(),
+                "until_date": until_date,
+                "duration_str": duration_str,
             },
             "$inc": {"update_count": 1},
         },

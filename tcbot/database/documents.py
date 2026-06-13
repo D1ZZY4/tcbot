@@ -39,6 +39,8 @@ class BanDoc(TypedDict, total=False):
     previous_log_message_id: int | None
     timestamp: datetime
     updated_timestamp: datetime | None
+    until_date: datetime | None
+    duration_str: str | None
     is_active: bool
     update_count: int
     review_message_id: int | None
