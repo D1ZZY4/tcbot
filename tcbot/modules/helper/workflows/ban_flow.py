@@ -23,7 +23,7 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg, replies
-from tcbot.modules.helper.formatter import bold, esc, user_ref
+from tcbot.modules.helper.formatter import esc, user_ref
 from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
 from tcbot.modules.helper.workflows.muting_flow import fmt_duration
 from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
