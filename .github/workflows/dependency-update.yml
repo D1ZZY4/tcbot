@@ -59,7 +59,7 @@ jobs:
       - name: Create PR
         if: steps.update.outputs.has_updates == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           BRANCH="deps/auto-update-$(date +%Y%m%d)"
 

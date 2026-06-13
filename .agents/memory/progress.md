@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-13 (session 106)
+**Last updated:** 2026-06-13 (session 107)
 
 ## Verification baseline
 
@@ -25,12 +25,15 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Docs sync audit (session 100) | PASS: 9 docs updated to reflect sessions 95-99 code changes (user_ref, deactivate_all/extra, trigger=mute, str(uid) fallback). CHANGELOG updated. Ruff: 73 files clean. |
 | Full module audit (session 99) | PASS: checking.py, check_flow.py, connecting.py, disconnecting.py, unbanning.py, admins.py, appeals.py, stats.py, broadcasting.py, maintenance.py, additional.py all clean. |
 | Session 103 comprehensive audit | PASS: All 73 tcbot/ files fully audited. Bugs #271-#277 fixed. Docker/CI/scheduler all clean. Ruff: 73 files clean. |
+| Session 107 fresh audit pass | PASS: mongos.py, groups_db.py, stats_flow.py, check_flow.py, broadcasting.py, maintenance.py, stats.py, connected_flow.py, kicking_flow.py, unban_flow.py, warning_flow.py, reason_flow.py, demote_flow.py, admins.py (full), checking.py, ban_flow.py all clean. Bugs #283+#284 (CI workflows) found and fixed. Ruff: 73 files clean. |
 | Session 106 fresh audit pass | PASS: appeal_flow, warning_flow, warnings, checking, identity, banning, muting, kicking, extraction, decorators, reason_flow, proof_flow, demote_flow all clean. Bug #282 found and fixed. Ruff: 73 files clean. |
 
 ## Completed items (recent additions on top)
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Bug #284 (session 107) | policy | lint.yml env block comment in Indonesian ("untuk import check") changed to English ("required for the import check") per project policy. | 2026-06-13 (s107) |
+| Bug #283 (session 107) | infra | dependency-update.yml Create PR step: GH_TOKEN: ${{ secrets.GH_TOKEN }} changed to GH_TOKEN: ${{ github.token }} (built-in Actions token; always available without manual repo secret). | 2026-06-13 (s107) |
 | Bug #281 (session 105) | performance | groups.py _toggle cache-miss branch: await q.answer() then await active_groups() were sequential. Parallelised with asyncio.gather(return_exceptions=True). Added import asyncio. | 2026-06-13 (s105) |
 | Bug #280 (session 105) | performance | start.py _show_groups: await q.answer() then await active_groups() were sequential. Parallelised with asyncio.gather(return_exceptions=True). Added import asyncio. | 2026-06-13 (s105) |
 | Bug #279 (session 104) | correctness | ban_flow._execute_ban / muting_flow._execute_mute+execute_unmute / unban_flow.execute_unban: MAIN_GROUP and EXEC_GROUP configured via env vars are not in federated_groups collection and thus excluded from active_groups(). Federation-banned/muted users were not kicked from primary groups on action; only removed on next join attempt. Fixed by appending cfg.main_group/cfg.exec_group to the groups list before fan_out when not already present. | 2026-06-13 (s104) |

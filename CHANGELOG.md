@@ -2,6 +2,13 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-13 (session 107)
+
+### Fixed
+
+- **`.github/workflows/dependency-update.yml`** (Create PR step): `GH_TOKEN: ${{ secrets.GH_TOKEN }}` referenced a custom repository secret named `GH_TOKEN` that may not exist on fresh forks or deployments, causing the PR-creation step to fail silently. Changed to `GH_TOKEN: ${{ github.token }}` to use the built-in Actions token, which is always available without manual configuration. Context.md had recorded this as Bug #273 fixed in session 103 but the change was never applied to the file. (Bug #283)
+- **`.github/workflows/lint.yml`** (env block comment): Comment read `# Bot configuration secrets untuk import check` (Indonesian). Project policy requires all comments, docs, and code to be in English. Changed to `# Bot configuration secrets required for the import check`. (Bug #284)
+
 ## [Unreleased] - 2026-06-13 (session 106)
 
 ### Fixed

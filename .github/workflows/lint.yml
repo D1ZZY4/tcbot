@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 10
 
     env:
-      # Bot configuration secrets untuk import check
+      # Bot configuration secrets required for the import check
       BOT_TOKEN:               ${{ secrets.BOT_TOKEN }}
       MONGODB_URI:             ${{ secrets.MONGODB_URI }}
       OWNER_ID:                ${{ secrets.OWNER_ID }}

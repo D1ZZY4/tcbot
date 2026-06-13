@@ -5,9 +5,17 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 104)
+**Last updated:** 2026-06-13 (session 107)
 
 ## What is done
+
+- Session 107 (2026-06-13): Fresh context recovery + deep re-audit pass across critical files. Found and fixed 2 CI bugs:
+  - Bug #283: dependency-update.yml — `GH_TOKEN: ${{ secrets.GH_TOKEN }}` (custom secret, may not exist) changed to `GH_TOKEN: ${{ github.token }}` (built-in Actions token). context.md incorrectly recorded this as fixed in session 103; the actual file change was never applied.
+  - Bug #284: lint.yml — Indonesian comment `# Bot configuration secrets untuk import check` changed to English `# Bot configuration secrets required for the import check` per project policy.
+  - Comprehensive re-verification of all gather calls in: mongos.py, groups_db.py, stats_flow.py, check_flow.py (all sections), broadcasting.py, maintenance.py, stats.py, connected_flow.py, kicking_flow.py, unban_flow.py, warning_flow.py, reason_flow.py, demote_flow.py, admins.py (all sections, 600-779), checking.py, ban_flow.py — all have return_exceptions=True ✓.
+  - Bot restart: MongoDB 27/27 indexes, Redis hiredis 3.4.0, APScheduler CBORSerializer, polling active. Ruff: All checks passed (73 files).
+  - CHANGELOG.md updated with session 107 Fixed section.
+  - Total bugs fixed: #1–#284.
 
 - Session 104 (2026-06-13): Deep audit of all primary moderation execution paths (ban/mute/unban/kick/warn/greeting/extraction). Found and fixed 2 bugs:
   - Bug #279: Primary groups (MAIN_GROUP, EXEC_GROUP) excluded from federation enforcement fan-out. Active_groups() only returns groups in federated_groups collection; primary groups configured via env var are not there by default. Federation-banned/muted users remained in primary groups until they left and rejoined. Fixed in ban_flow._execute_ban, muting_flow._execute_mute + execute_unmute, unban_flow.execute_unban. All three now append cfg.main_group + cfg.exec_group to the groups list before fan_out when not already present. Also fixed unban path (always future-proofs when MAIN_GROUP is already connected).
@@ -80,8 +88,8 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## AUDIT STATUS
 
-**COMPLETE** as of session 103. All 73 tcbot/ Python files audited and ruff-clean.
-Total bugs fixed: **#1-#277**.
+**COMPLETE** as of session 107. All 73 tcbot/ Python files audited and ruff-clean.
+Total bugs fixed: **#1-#284**.
 
 ### All files fully audited across all sessions:
 ban_flow.py, greeting.py, bans_db.py, unban_flow.py, appeal_flow.py, banning.py, muting.py, muting_flow.py, kicking.py, kicking_flow.py, warnings.py, warning_flow.py, demote_flow.py, connected_flow.py, proof_flow.py, reason_flow.py, parse_logmsg.py, decorators.py, admins.py, users_cache.py, users_roles.py, promote_flow.py, connecting.py, disconnecting.py, groups_db.py, unbanning.py, appeals.py, check_flow.py, broadcasting.py, mongos.py, mutes_db.py, warns_db.py, kicks_db.py, queues_db.py, pagination.py, error_reporter.py, keyboards.py, parse_editmsg.py, documents.py, replies.py, timedate_format.py, parse_link.py, prefixes.py, redis_client.py, alive.py, checking.py, stats.py, stats_flow.py, maintenance.py, additional.py, netspeed.py, formatter.py, identity.py, cache.py, scheduler.py, __init__.py, __main__.py, ban_info.py, extraction.py, start.py, help.py, about.py, privacy.py, groups.py, modules/__init__.py, modules/types.py, dispatch.py, logger.py, utils/__init__.py, database/__init__.py, database/types.py, modules/helper/__init__.py, modules/helper/workflows/__init__.py
