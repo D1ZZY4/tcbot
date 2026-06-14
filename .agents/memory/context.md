@@ -5,9 +5,16 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-13 (session 119 pass 10)
+**Last updated:** 2026-06-15 (session 120)
 
 ## What is done
+
+- Session 120 (2026-06-15): Infra + docs session (no `tcbot/` code changed).
+  - run-bot.yml 24/7 self-chain hardened: `HANDOVER_LEAD` 900→600, `gh` handover retried 3x, resurrection cron `55 4 * * *` → `*/15 * * * *`. Closes observed multi-hour coverage gaps. Docs synced (workflows-guide.md, README.md). Commit f33ea45.
+  - APScheduler CVE-2026-31072 (4.0.0a6, CVSS 9.8, no upstream patch) analysed and accepted as tracked risk; Dependabot alert #2 dismissed as `tolerable_risk`. Recorded in PLAN.md (Core Subsystem Design) + P1 finding + decisions.md.
+  - PLAN.md expanded: new "Core Subsystem Design" section (MongoDB/Motor, L1/L2/L3 cache, APScheduler) and a 6th "Improvements" table beside P1-P5.
+  - External `~/Documents/task-tcbot-v4.5.1.md` (Replit prompt, outside repo) improved: corrected stale cache.py "plain dict" claim, fixed scheduler init location and setup example, added the APScheduler CVE note + dependency-pin exception.
+  - Remote origin updated to `git@github.com:D1ZZY4/tcbot.git` (repo renamed). Commits remain GPG-signed/verified; signing config untouched.
 
 - Session 119 pass 10 (2026-06-13): Docs accuracy audit pass. 6 doc bugs found and fixed.
   - Bug #321: docs/demote-detailed.md line 174 — trigger verb list "banned/kicked" omitted "muted". Corrected to "banned/kicked/muted".

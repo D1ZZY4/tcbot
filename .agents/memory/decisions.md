@@ -300,3 +300,23 @@ if (
 **Why:** `python -m tcbot` invokes `__main__.py` which calls `app.run_polling()` — the bot actually tries to connect to Telegram and MongoDB and then blocks forever (or crashes on timeout). This hangs the CI job. The import-check step's only purpose is to verify that `tcbot/__init__.py` parses correctly and `Configs.load()` succeeds (which does require BOT_TOKEN, MONGODB_URI, OWNER_ID in env). `python -c "import tcbot"` achieves that without starting the event loop.
 
 **How to apply:** In any CI workflow that validates imports, use the `-c "import tcbot; print('import OK')"` form. The three secrets (BOT_TOKEN, MONGODB_URI, OWNER_ID) must still be set in the job's `env:` block because `Configs.load()` is called at import time.
+
+---
+
+## 2026-06-15: run-bot.yml 24/7 self-chain hardening
+
+**Decision:** Keep the GitHub Actions self-chaining runner, but make the chain resilient instead of relying on a single dispatch. `HANDOVER_LEAD` is 600s (dispatch the successor 10 min before the 5h window ends), the `gh workflow run` handover is retried up to 3 times (10s apart), and the resurrection cron is `*/15 * * * *` (not once-daily `55 4`). The `concurrency` group (`tcf-bot-runner`, `cancel-in-progress: false`) stays as-is.
+
+**Why:** A pure self-chain is a linked list: if one run dies before its handover point, the chain breaks and nothing recovers until an external trigger fires. The cron is that trigger, so a once-daily cron meant up to ~24h downtime on any broken link (observed multi-hour gaps, e.g. ~10h on 06-13). A single non-retried dispatch also broke the chain on one transient API hiccup. `*/15` plus retry shrinks the worst-case gap to ~15 min. The concurrency group makes a redundant cron run harmless: it queues behind the active run and is discarded, so there is never a second poller (no Telegram `409 Conflict`).
+
+**How to apply:** For true zero-gap 24/7, GitHub Actions is the wrong tool (CI, not a process host); prefer an always-on host (Oracle free VM, Replit + UptimeRobot) with Actions as backup. If staying on Actions, keep both the retry and the frequent cron; do not drop the cron in favour of the self-chain alone.
+
+---
+
+## 2026-06-15: APScheduler CVE-2026-31072 accepted as a tracked risk
+
+**Decision:** Stay on the pinned APScheduler `4.0.0a6` and accept CVE-2026-31072 (GHSA-9cfw-f3f9-7mm7, CVSS 9.8) as a tracked risk rather than upgrading or downgrading. Dependabot alert #2 was dismissed as `tolerable_risk`. Documented in `PLAN.md` (Core Subsystem Design / Persistent Scheduler) with a P1 finding row.
+
+**Why:** The advisory covers RCE via insecure deserialization in the JSON/CBOR serializers (`unmarshal_object` instantiates arbitrary classes via `__setstate__`). There is no patched release: every published 4.x is an affected alpha and 3.x is a different API with no `AsyncScheduler`/`MongoDBDataStore`. Reachability is low here: the serializer only deserialises schedule documents the bot itself wrote into its private MongoDB, referencing fixed module-level callables with primitive kwargs, so exploitation requires pre-existing MongoDB write access, not any Telegram-facing path.
+
+**How to apply:** Do NOT `uv lock --upgrade` APScheduler blindly to another alpha and do NOT downgrade to 3.x. Hold until a genuinely patched release ships, then upgrade. Mitigate operationally: private, least-privilege, IP-allowlisted MongoDB and `MONGODB_URI` secret hygiene. Re-check with `gh api repos/D1ZZY4/tcbot/dependabot/alerts/2 --jq '.security_vulnerability.first_patched_version'`.

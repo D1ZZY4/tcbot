@@ -21,6 +21,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 ### Maintenance
 
 - **Dependabot alert #2 (CVE-2026-31072) dismissed as `tolerable_risk`** with a comment pointing to the `PLAN.md` analysis: no upstream patch exists and exploitation requires pre-existing write access to the bot's private MongoDB, so it is mitigated operationally and tracked rather than fixable by a version bump.
+- **`.agents/memory/` synced for session 120**: added `decisions.md` entries for the run-bot self-chain hardening and the APScheduler CVE accepted-risk decision (with `MEMORY.md` index pointers), added `progress.md` and `context.md` session-120 entries, and corrected the stale `progress.md` Bug #235 row (it claimed a `*/30` fix that was later reverted to `55 4`, now `*/15`).
 
 ## [Unreleased] - 2026-06-13 (session 119)
 

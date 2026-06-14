@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-13 (session 119)
+**Last updated:** 2026-06-15 (session 120)
 
 ## Verification baseline
 
@@ -36,6 +36,9 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| run-bot.yml 24/7 hardening (session 120) | infra | Self-chain hardened so coverage survives one broken link: `HANDOVER_LEAD` 900→600 (dispatch successor 10 min before the 5h window ends), `gh workflow run` dispatch retried 3x (10s apart), resurrection cron `55 4 * * *` (once-daily) → `*/15 * * * *`. Closes the observed multi-hour coverage gaps (e.g. ~10h on 06-13) when a run died before its handover. concurrency group unchanged (serializes runs; cron discarded when a healthy run is active). Docs synced: workflows-guide.md, README.md. Commit f33ea45. | 2026-06-15 (s120) |
+| APScheduler CVE-2026-31072 documented + alert dismissed (session 120) | security | Critical (CVSS 9.8) insecure-deserialization RCE in APScheduler 4.0.0a6 JSON/CBOR serializer; no upstream patch (all 4.x affected alphas, 3.x is a different API). Recorded accepted-risk analysis in PLAN.md (Core Subsystem Design / Persistent Scheduler) + a P1 finding row; Dependabot alert #2 dismissed as `tolerable_risk`. Reachability gated by pre-existing MongoDB write access (only the bot writes fixed module-level callables with primitive kwargs); not Telegram-reachable. Mitigation is operational. | 2026-06-15 (s120) |
+| PLAN.md subsystem design + improvements table (session 120) | docs | New "Core Subsystem Design" section (MongoDB/Motor, L1/L2/L3 cache, APScheduler) as the canonical design reference, plus a 6th "Improvements" table beside the P1-P5 finding tiers (health/heartbeat, backups, scheduler-surface shrink, multi-instance cache invalidation, safer dep upgrades). | 2026-06-15 (s120) |
 | Bug #330 (session 119) | docs/accuracy | .agents/CLAUDE.md Repository Map line 156: `tgbot/` legacy label (same as Bugs #326-329). Corrected to `<project root>/`. | 2026-06-13 (s119) |
 | Bug #329 (session 119) | docs/accuracy | AGENTS.md Repository Layout line 50: `tgbot/` legacy label (same as Bugs #326-328). Corrected to `<project root>/`. | 2026-06-13 (s119) |
 | Bug #328 (session 119) | docs/accuracy | README.md Repository Layout line 143: `tgbot/` legacy label. Corrected to `<project root>/`. | 2026-06-13 (s119) |
@@ -81,7 +84,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Bugs #247-#255 (session 95) | correctness | user_ref() helper; deactivate_all/extra active bans; ban_flow: group reporting+PM notify+dedup; unban/appeal: deactivate_all; greeting: ChatJoinRequestHandler+all-groups enforcement; extraction _best_name str(uid); unban_flow cancel_schedule; conversation_timeout dead code removed (PTBUserWarning eliminated). CHANGELOG updated. | 2026-06-13 (s95) |
 | Formatter consistency (#236-#246) | style/security | 11 files: netspeed.py, ban_flow.py, appeal_flow.py, admins.py, proof_flow.py, muting_flow.py, demote_flow.py, groups.py, reason_flow.py, help.py, stats_flow.py. All hardcoded `<b>` and `<code>` in dynamic content replaced with bold()/code() helpers. | 2026-06-13 (s93) |
 | Final comprehensive audit | audit | Verified checking.py, banning.py, ban_flow.py, warning_flow.py, muting_flow.py, kicking_flow.py, unban_flow.py, appeal_flow.py, stats_flow.py, bans_db.py. All clean. No new bugs found. Total: #1-#235 final. | 2026-06-13 (s92) |
-| Bug #235: run-bot.yml cron wrong | infra | Cron `55 4 * * *` (once daily) contradicts comment "Fires every 30 minutes". Self-chain fallback was effectively broken. Fixed to `*/30 * * * *`. | 2026-06-13 (s92) |
+| Bug #235: run-bot.yml cron wrong | infra | Cron `55 4 * * *` (once daily) contradicted comment "Fires every 30 minutes"; self-chain fallback was effectively broken. Set to `*/30 * * * *` in s92. NOTE: later reverted to `55 4` (commit 06066e1, 06-13), then set to `*/15 * * * *` in s120 with handover retry + 10-min lead. See the s120 "run-bot.yml 24/7 hardening" entry for the current state. | 2026-06-13 (s92) |
 | Bug #234: docker-compose.yml four issues | correctness | env_file config.env to .env; MongoDB healthcheck missing --quiet+.ok+start_period; Redis start_period missing; networks.internal.internal:true removed (blocked bot internet access). | 2026-06-13 (s92) |
 | Bug #233: auto-fix.yml --group dev | infra | uv sync --frozen --group dev fails; no dev group in pyproject.toml. Removed --group dev. | 2026-06-13 (s92) |
 | Bug #232: netspeed.py no esc() on speedtest data | security | Speedtest API data (ISP, server name, country, IP, etc.) embedded in HTML template without esc(). Added esc() import and wrapped all external values. | 2026-06-13 (s92) |

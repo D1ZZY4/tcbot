@@ -25,3 +25,5 @@
 - [APScheduler CronTrigger day_of_week integer trap](decisions.md): integer 0 = Sunday (Unix cron), not Monday; always use named strings ("mon"..."sun") to avoid silent mismatch
 - [lint.yml import check must use python -c not -m](decisions.md): python -m tcbot starts the full bot and hangs CI; use python -c "import tcbot" for import validation
 - [Anonymous admin sender_chat skip](decisions.md): in extract_target, when from_user is ANONYMOUS_BOT_ID, skip sender_chat too (it is the group itself, not a bannable user)
+- [run-bot.yml 24/7 self-chain hardening](decisions.md): handover 10 min before window end + 3x retry + `*/15` resurrection cron; for true zero-gap 24/7 use an always-on host, Actions as backup
+- [APScheduler CVE-2026-31072 accepted risk](decisions.md): no upstream patch; stay pinned on 4.0.0a6, do not blind-upgrade or downgrade; reachability needs MongoDB write access; mitigate operationally
