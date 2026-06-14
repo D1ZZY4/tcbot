@@ -16,6 +16,11 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 - **`docs/workflows-guide.md`**, **`README.md`**: Synced the Run Bot descriptions to the new timings: handover at ~10 min before window end (with 3-retry note), cron fallback every 15 minutes (was incorrectly documented as "every 30 minutes" while the YAML actually held `55 4 * * *` once-daily). Clarified that the concurrency group discards a redundant cron run rather than creating a second poller.
 - **`PLAN.md`** (new "Core Subsystem Design" section): Documented the three load-bearing subsystems as the canonical design reference: MongoDB/Motor (single shared client, pool/timeout parameter table, parallel index creation, DNS patch), the L1/L2/L3 caching layer (in-process `cachetools.TTLCache` to optional Redis to MongoDB `fetch()`, with the singleton/TTL table and per-process-invalidation and stampede caveats), and the APScheduler persistent scheduler (dedicated-task lifecycle, job table, native-timed-unban note, and the CVE-2026-31072 security subsection). Each subsystem carries explicit recommendations. Also annotated the Scheduler row in Current Project State with the pin and CVE reference.
+- **`PLAN.md`** (new "Recommended Roadmap" section): Added a prioritized, evidence-grounded improvement roadmap (R1-R6): automated test suite (no `tests/` exists today; a smoke test would have caught the three P1 `NameError` findings), a meaningful health/heartbeat endpoint for 24/7 monitoring (current `alive.py` always returns `OK`), federation-data backups, shrinking the APScheduler job surface (TTL index for cleanup, native-`until_date` for unban), conditional multi-instance cache invalidation, and safer dependency upgrades. Each item cites the specific code observation behind it.
+
+### Maintenance
+
+- **Dependabot alert #2 (CVE-2026-31072) dismissed as `tolerable_risk`** with a comment pointing to the `PLAN.md` analysis: no upstream patch exists and exploitation requires pre-existing write access to the bot's private MongoDB, so it is mitigated operationally and tracked rather than fixable by a version bump.
 
 ## [Unreleased] - 2026-06-13 (session 119)
 
