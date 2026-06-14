@@ -2,6 +2,16 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-15 (session 120)
+
+### Changed
+
+- **`.github/workflows/run-bot.yml`** (24/7 self-chaining runner): Hardened the self-chain so continuous coverage survives transient failures. Three changes: (1) `HANDOVER_LEAD` `900 → 600`, so each run dispatches its successor ~10 minutes before the 5-hour window ends instead of ~15; (2) the `gh workflow run` handover dispatch is now retried up to 3 times (10s apart) instead of giving up after a single failure, so one transient GitHub API hiccup no longer breaks the chain; (3) the resurrection cron `55 4 * * *` (once daily, ~24h worst-case gap) `→ */15 * * * *` (every 15 min), so if the chain ever does break the bot is restarted within ~15 minutes instead of waiting until the next day. The `concurrency` group (`tcf-bot-runner`, `cancel-in-progress: false`) still serializes runs, so a cron run firing while a healthy run is active just queues and is discarded: no second poller, no `409 Conflict`. Symptom this fixes: observed multi-hour coverage gaps (e.g. ~10h gap on 2026-06-13) when a run died before reaching its handover point and the once-daily cron was the only fallback.
+
+### Documentation
+
+- **`docs/workflows-guide.md`**, **`README.md`**: Synced the Run Bot descriptions to the new timings: handover at ~10 min before window end (with 3-retry note), cron fallback every 15 minutes (was incorrectly documented as "every 30 minutes" while the YAML actually held `55 4 * * *` once-daily). Clarified that the concurrency group discards a redundant cron run rather than creating a second poller.
+
 ## [Unreleased] - 2026-06-13 (session 119)
 
 ### Fixed

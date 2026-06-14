@@ -201,7 +201,7 @@ Weekly automated dependency updates:
 
 ### Other Workflows
 - **CodeQL** (`.github/workflows/codeql.yml`) - Security analysis
-- **Run Bot** (`.github/workflows/run-bot.yml`) - Self-chaining 24/7 long-polling runner. Each run polls for a ~5 hour window (GitHub caps a job at 6h), then dispatches its successor ~15 minutes before the window ends for continuous coverage. A `concurrency` group keeps a single instance polling (a second would hit Telegram's `409 Conflict`), and an every-30-minute cron acts as a resurrection fallback.
+- **Run Bot** (`.github/workflows/run-bot.yml`) - Self-chaining 24/7 long-polling runner. Each run polls for a ~5 hour window (GitHub caps a job at 6h), then dispatches its successor ~10 minutes before the window ends (retried up to 3 times) for continuous coverage. A `concurrency` group keeps a single instance polling (a second would hit Telegram's `409 Conflict`), and an every-15-minute cron acts as a resurrection fallback.
 
 ### Full Documentation
 For detailed workflow descriptions, trigger conditions, notification format examples, troubleshooting, and best practices, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For changelog of all CI/CD additions, see [`CHANGELOG.md`](CHANGELOG.md).

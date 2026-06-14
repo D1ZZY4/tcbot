@@ -129,12 +129,12 @@ Safe to merge with new versions.
 
 **Triggers:**
 - Self-dispatch (`workflow_dispatch`) from the previous run, for seamless chaining
-- Cron schedule every 30 minutes as a resurrection fallback if the chain breaks
+- Cron schedule every 15 minutes as a resurrection fallback if the chain breaks
 
 **What it does:**
 - Runs the bot via long polling for a ~5 hour window per run (GitHub caps a job at 6h)
-- **Self-chains:** roughly 15 minutes before the window ends, it dispatches the next run so coverage is continuous. This requires a repository secret `BOT_PAT` (a Personal Access Token with the `workflow` scope), because the built-in `GITHUB_TOKEN` cannot trigger workflows
-- The cron schedule acts as a resurrection fallback that restarts the bot if the chain ever breaks or no PAT is configured
+- **Self-chains:** roughly 10 minutes before the window ends (`HANDOVER_LEAD=600`), it dispatches the next run so coverage is continuous. The dispatch is retried up to 3 times (10s apart) so a single transient API failure does not break the chain. This requires a repository secret `BOT_PAT` (a Personal Access Token with the `workflow` scope), because the built-in `GITHUB_TOKEN` cannot trigger workflows
+- The cron schedule (every 15 minutes) acts as a resurrection fallback that restarts the bot if the chain ever breaks or no PAT is configured. The `concurrency` group serializes runs, so a cron run that fires while a healthy run is active simply queues and is discarded; it never creates a second poller
 - A `concurrency` group (`tcf-bot-runner`, `cancel-in-progress: false`) ensures only one bot instance runs at a time, with at most one queued to take over seamlessly. Long polling allows only one active instance; a second would make Telegram return `409 Conflict`
 - Bot configuration comes from repository secrets (`BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`, etc.), plus the optional `BOT_PAT` for self-chaining
 
@@ -159,7 +159,7 @@ Telegram Notification
 
 Run Bot
     ↓
-Self-dispatch next run (~15 min before window ends)
+Self-dispatch next run (~10 min before window ends)
     ↓
 Cron fallback restarts if the chain breaks
 ```
@@ -178,7 +178,7 @@ Configure these in GitHub repository settings → Secrets:
 | `BOT_PAT` | Personal Access Token with `workflow` scope, used by Run Bot to self-chain into the next run for seamless 24/7 coverage | Optional (recommended) |
 | `GITHUB_TOKEN` | Auto-provided by GitHub Actions | Auto |
 
-Without `BOT_PAT`, the Run Bot workflow cannot dispatch its own next run; it falls back to the every-30-minute cron resurrection schedule.
+Without `BOT_PAT`, the Run Bot workflow cannot dispatch its own next run; it falls back to the every-15-minute cron resurrection schedule.
 
 ---
 
@@ -228,7 +228,7 @@ View workflow
 
 ### Bot not staying online (Run Bot)
 - Verify `BOT_TOKEN`, `MONGODB_URI`, and `OWNER_ID` secrets are set
-- For seamless 24/7, set `BOT_PAT` (a PAT with the `workflow` scope) so the run can dispatch its successor; otherwise only the 30-minute cron fallback restarts it
+- For seamless 24/7, set `BOT_PAT` (a PAT with the `workflow` scope) so the run can dispatch its successor; otherwise only the 15-minute cron fallback restarts it
 - A `409 Conflict` from Telegram means two instances are polling at once; the `tcf-bot-runner` concurrency group should prevent this, so check for a stray manual run
 
 ---

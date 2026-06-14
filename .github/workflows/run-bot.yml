@@ -3,7 +3,12 @@ name: TCF Bot - 24/7 Runner
 on:
   workflow_dispatch:
   schedule:
-    - cron: "55 4 * * *"
+    # Resurrection fallback every 15 min. If the self-chain ever breaks (a run
+    # crashes before it can dispatch its successor), this restarts coverage
+    # within ~15 min instead of waiting for the next day. The concurrency group
+    # serializes it: when a healthy run is already active, the cron run just
+    # queues and is discarded, so it never causes a second poller.
+    - cron: "*/15 * * * *"
 
 concurrency:
   group: tcf-bot-runner
@@ -22,7 +27,7 @@ jobs:
     env:
       # Window timing (seconds)
       WINDOW_SECONDS: "18000"   # 5 hours of actual bot runtime
-      HANDOVER_LEAD: "900"      # dispatch the next run 15 min before the end
+      HANDOVER_LEAD: "600"      # dispatch the next run 10 min before the end
 
       # Bot configuration (set these as repository secrets)
       BOT_TOKEN:               ${{ secrets.BOT_TOKEN }}
@@ -112,13 +117,23 @@ jobs:
             fi
 
             # Self-chain: queue the next run shortly before the window ends.
+            # Retry the dispatch a few times so a single transient API failure
+            # does not break the chain; the */15 cron is the last-resort backup.
             if [ "$handover_done" = "false" ] && [ "$now" -ge "$handover_at" ]; then
               if [ "$HAS_PAT" = "true" ]; then
                 echo "Dispatching the next run (handover)..."
-                if GH_TOKEN="$BOT_PAT" gh workflow run run-bot.yml --ref "${GITHUB_REF_NAME}"; then
-                  echo "Next run queued; it will start when this one stops."
-                else
-                  echo "::warning::Handover dispatch failed; cron will cover the restart."
+                dispatched=false
+                for attempt in 1 2 3; do
+                  if GH_TOKEN="$BOT_PAT" gh workflow run run-bot.yml --ref "${GITHUB_REF_NAME}"; then
+                    echo "Next run queued (attempt $attempt); it will start when this one stops."
+                    dispatched=true
+                    break
+                  fi
+                  echo "::warning::Handover dispatch attempt $attempt failed; retrying in 10s."
+                  sleep 10
+                done
+                if [ "$dispatched" = "false" ]; then
+                  echo "::warning::All handover dispatch attempts failed; the */15 cron will cover the restart."
                 fi
               fi
               handover_done=true
