@@ -353,86 +353,6 @@ Priorities, in order:
 3. **Operational visibility:** errors and important moderation events should be logged to configured destinations.
 4. **Performance:** use bounded fan-out for group-wide operations and avoid sequential I/O where safe.
 
-## Recommended Roadmap
-
-Forward-looking improvements, each grounded in an observation from the current
-code rather than aspirational. Ordered by leverage. Promote an item into the
-backlog or a Code Review Finding when work starts.
-
-### R1. Add an automated test suite (highest leverage)
-
-- **Observation:** there is no `tests/` directory and no `test_*.py` anywhere;
-  the only dev dependency is `ruff`. The project relies entirely on repeated
-  manual audit passes (ten-plus passes recorded in `CHANGELOG.md`) to catch
-  drift. The three P1 findings below (`_paginate` / `_nav_row` / `_kb` undefined)
-  were plain runtime `NameError`s at call sites that any import-level smoke test
-  would have caught before deploy.
-- **Recommendation:** add `pytest` + `pytest-asyncio` to the dev group and start
-  small:
-  1. A smoke test that imports every `tcbot/modules/*.py` and asserts
-     `get_handlers()` builds the full handler list without raising. This alone
-     would have caught all three P1 `NameError` bugs.
-  2. Unit tests for the role core: `get_effective_role`, `can_act_on`,
-     `resolve_and_check`, and `identity.classify` / `refuse_message`, since these
-     gate every moderation action.
-  3. One end-to-end flow test (ban or kick) against a stubbed bot/DB.
-- **Wiring:** run the suite in CI as a gate (extend `lint.yml` or add `test.yml`)
-  and include it in the dependency-update PR so weekly auto-upgrades are
-  validated before merge.
-
-### R2. Make the health check meaningful for 24/7 monitoring
-
-- **Observation:** `tcbot/alive.py` `GET /` always returns the literal `OK`,
-  even if MongoDB is down or polling has stopped. The multi-hour run-bot
-  coverage gaps were invisible until the run history was inspected by hand.
-- **Recommendation:** extend the endpoint (or add `/health`) to report MongoDB
-  `ping`, Redis status, scheduler-ready, and a "last update processed"
-  timestamp as JSON, so an external uptime monitor can detect a silently dead
-  bot. Note the deployment caveat: a Flask port inside a GitHub Actions runner is
-  not publicly reachable, so for the Actions runner a push heartbeat (write a
-  last-seen timestamp to MongoDB and alert on staleness) is the portable option;
-  the HTTP endpoint is directly useful on Replit or a VM.
-
-### R3. Back up the irreplaceable federation data
-
-- **Observation:** federation bans (`bans_db`), roles
-  (`tc_owners` / `tc_admins` / `tc_roles`), and connected groups (`groups_db`)
-  are the only state that cannot be reconstructed. The P1 tier explicitly counts
-  data loss as critical, yet no backup procedure is documented.
-- **Recommendation:** enable Atlas continuous or snapshot backups (or a
-  `mongodump` cron for self-hosted) and write a short restore runbook. Operational
-  only, no code change. This also bounds the blast radius of the scheduler CVE.
-
-### R4. Shrink the persistent-scheduler surface
-
-- **Observation:** the only one-off scheduler job (`_execute_scheduled_unban`)
-  just flips `is_active = False`; the real unban is already enforced natively by
-  Telegram's `until_date`. The weekly `_cleanup_old_records` job is a single
-  `delete_many` on an age threshold.
-- **Recommendation:** replace the weekly cleanup with a MongoDB TTL index on
-  `member_cache.last_updated`, and recompute ban `is_active` from the stored
-  expiry on read (or via a lightweight periodic sweep). Both let APScheduler jobs
-  retire, simplifying startup and shrinking the deserialisation surface that
-  makes CVE-2026-31072 relevant. Sequenced after R1 so the change is test-covered.
-
-### R5. Plan multi-instance cache invalidation before scaling out (conditional)
-
-- **Observation:** L1 cache invalidation is per-process and is correct only
-  because the `tcf-bot-runner` concurrency group guarantees a single poller.
-- **Recommendation:** if the bot is ever run as more than one instance, add a
-  Redis pub/sub invalidation channel so an L1 entry invalidated on one instance
-  is dropped everywhere. Not needed while the deployment stays single-instance.
-
-### R6. Keep dependency upgrades safe
-
-- **Observation:** top-level dependencies are unversioned in `pyproject.toml` and
-  float to latest via the weekly `uv lock --upgrade`; with no tests, a breaking
-  upgrade is caught only by the `lint.yml` import check. The APScheduler pin is an
-  alpha (`4.0.0a6`) carrying the active CVE.
-- **Recommendation:** keep the import gate, add the R1 smoke test to the
-  dependency-update PR, and pin APScheduler explicitly until a fixed release ships
-  so it cannot float to another vulnerable alpha unreviewed.
-
 ## Current Priority Backlog
 
 > The backlog below was re-verified line by line against the source tree on
@@ -520,6 +440,20 @@ in.
 | # | Finding | Location (`file.py:line`) | Evidence (code quote / observed behavior) | Proposed Fix | Status |
 |--|--|--|--|--|--|
 | 1 | `member_cache` batch queries could benefit from a covered composite index | `tcbot/database/mongos.py:1` | `get_first_names_batch` issues `$in` on `user_id` with a `first_name` projection; existing `user_id` index is not covering | `{user_id: 1, first_name: 1, username: 1}` index added to `ensure_indexes()` on 2026-06-02; batch `$in` projections are now covered queries. | `Resolved` |
+
+### Improvements
+
+Evidence-grounded improvement ideas. Same format as the priority tiers; these are
+enhancements rather than defects, so they stay here until promoted into a backlog
+item when work begins.
+
+| # | Finding | Location (`file.py:line`) | Evidence (code quote / observed behavior) | Proposed Fix | Status |
+|--|--|--|--|--|--|
+| 1 | Health check is not meaningful for 24/7 monitoring | `tcbot/alive.py:24` | `GET /` returns the literal `OK` regardless of MongoDB or polling state, so a silently dead bot still looks healthy; the multi-hour run-bot coverage gaps were invisible until the run history was inspected by hand | Extend the endpoint (or add `/health`) to report MongoDB `ping`, Redis status, scheduler-ready, and a last-update timestamp as JSON; for the Actions runner (Flask port not publicly reachable) push a last-seen heartbeat to MongoDB and alert on staleness | `Open` |
+| 2 | No documented backup for irreplaceable federation data | `tcbot/database/bans_db.py:1`, `tcbot/database/users_roles.py:1`, `tcbot/database/groups_db.py:1` | Federation bans, roles (`tc_owners`/`tc_admins`/`tc_roles`), and connected groups cannot be reconstructed; the P1 tier counts data loss as critical, yet no backup procedure exists | Enable Atlas continuous or snapshot backups (or a `mongodump` cron for self-hosted) and write a short restore runbook; also bounds the blast radius of the scheduler CVE | `Open` |
+| 3 | Persistent-scheduler surface is larger than it needs to be | `tcbot/database/scheduler.py:106`, `tcbot/database/scheduler.py:92` | `_execute_scheduled_unban` only flips `is_active = False` (the real unban is enforced natively by Telegram's `until_date`); `_cleanup_old_records` is a single weekly `delete_many` on an age threshold | Replace the weekly cleanup with a MongoDB TTL index on `member_cache.last_updated`, and recompute ban `is_active` from the stored expiry on read; both let APScheduler jobs retire and shrink the deserialisation surface that makes CVE-2026-31072 relevant | `Open` |
+| 4 | L1 cache invalidation is per-process (blocks scaling out) | `tcbot/database/cache.py:147` | `invalidate` updates only the local in-process L1; this is correct only because the `tcf-bot-runner` concurrency group guarantees a single poller | Add a Redis pub/sub invalidation channel so an L1 entry dropped on one instance is dropped everywhere, before ever running more than one instance; not needed while single-instance | `Open` |
+| 5 | Dependency upgrades are unguarded except by the import check | `pyproject.toml:6`, `.github/workflows/dependency-update.yml:1` | Top-level dependencies are unversioned and float to latest via the weekly `uv lock --upgrade`; only `lint.yml`'s import check validates the result. APScheduler is pinned to the vulnerable alpha `4.0.0a6` | Keep the import gate; pin APScheduler explicitly until a fixed release ships so it cannot float to another vulnerable alpha unreviewed | `Open` |
 
 ## Maintenance Rules
 
