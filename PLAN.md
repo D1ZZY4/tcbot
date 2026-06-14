@@ -13,7 +13,7 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 | Bot framework | `python-telegram-bot` (plain, no `[job-queue]` extra), tracking the latest compatible release. |
 | Database | MongoDB through Motor, connected during PTB `post_init`. |
 | Cache | In-process `TTLCache` L1 + optional Redis L2 via `TwoLevelCache`. `hiredis` C extension required when Redis is active. Configured via `REDIS_URL`. |
-| Scheduler | APScheduler 4.x `AsyncScheduler` with `MongoDBDataStore` and `CBORSerializer`. Persistent scheduled moderation jobs survive bot restarts. |
+| Scheduler | APScheduler **4.0.0a6** (`AsyncScheduler` + `MongoDBDataStore` + `CBORSerializer`); persistent moderation jobs survive restarts. The pinned alpha carries CVE-2026-31072 (no upstream patch); accepted and tracked risk, see Core Subsystem Design / Persistent Scheduler. |
 | Health check | Flask app in `tcbot/alive.py`, `GET /` returns `OK` on `PORT` (default `5000`). |
 | Dependency management | `uv` with `uv.lock`; CI installs with frozen lockfile by default. |
 | Formatting/linting | Ruff, configured in `pyproject.toml`. |
@@ -117,6 +117,170 @@ Current collection/domain owners include:
 | PTB error handler | `app.add_error_handler(_error_handler)` | Reports unhandled handler exceptions. |
 | Asyncio exception handler | `loop.set_exception_handler(...)` | Reports background task failures. |
 | Logging integration | `tcbot/utils/error_reporter.py` | Sends formatted error details to the configured destination. |
+
+## Core Subsystem Design
+
+This section records how the three load-bearing subsystems (MongoDB access, the
+caching layer, and the persistent scheduler) are built today, the tuning knobs
+that exist, and the recommended direction for each. It is the canonical design
+reference for these subsystems; keep it in sync when the code changes.
+
+### Data Store: MongoDB via Motor
+
+**Current design** (`tcbot/database/mongos.py`):
+
+- One shared `AsyncIOMotorClient` is created in `connect()` and stored as the
+  module global `_db`. All access goes through `db()` and `col(name)`; no module
+  opens its own client. `connect()` verifies the link with a `ping` before
+  startup proceeds.
+- Connection pool and timeout parameters are centralised as module constants:
+
+  | Parameter | Value | Purpose |
+  |---|---|---|
+  | `serverSelectionTimeoutMS` | 10000 | Fail fast when no node is reachable. |
+  | `connectTimeoutMS` | 10000 | Cap the initial TCP/TLS handshake. |
+  | `socketTimeoutMS` | 45000 | Cap a single operation; long enough for slow aggregations. |
+  | `maxPoolSize` | 20 | Upper bound on concurrent sockets for one bot instance. |
+  | `minPoolSize` | 2 | Keep warm sockets ready. |
+  | `maxIdleTimeMS` | 60000 | Recycle idle sockets. |
+  | `heartbeatFrequencyMS` | 30000 | Topology monitoring cadence. |
+  | `compressors` | `["zlib"]` | Wire compression. |
+  | `retryWrites` / `retryReads` | True | Transparent one-time retry on transient errors. |
+
+- `ensure_indexes()` creates roughly two dozen indexes in parallel with
+  `asyncio.gather(..., return_exceptions=True)`. Individual index failures are
+  logged and counted (`X/Y succeeded`) rather than silently dropped. Several
+  indexes are deliberately covered: for example the
+  `(user_id, first_name, username)` index on `member_cache` serves the batch
+  `$in` projections in `users_cache` without touching documents.
+- `_patch_dns_if_needed()` installs a fallback resolver (8.8.8.8 / 8.8.4.4) when
+  `/etc/resolv.conf` is absent, so `mongodb+srv://` works on Termux/Android and
+  similar restricted hosts.
+- `make_short_id()` issues URL-safe, cryptographically random record IDs.
+
+**Recommendations:**
+
+- Keep every new collection's indexes in `ensure_indexes()` and match query
+  shapes to an existing index; consult the `mongodb-query-optimizer` guidance
+  before adding a query.
+- Operational hardening is the main lever for the scheduler CVE below: use a
+  least-privilege MongoDB user scoped to this database only, restrict network
+  access with an Atlas IP allowlist (or a firewall for self-hosted), and never
+  let `MONGODB_URI` reach git, logs, or screenshots.
+- Consider replacing the weekly `member_cache` cleanup job with a MongoDB TTL
+  index on `last_updated` (`expireAfterSeconds` = 90 days). The server would then
+  expire stale rows on its own, removing one persistent APScheduler job and the
+  weekly `delete_many` sweep. Optional simplification, recorded as a future idea.
+
+### Caching: L1 in-process / L2 Redis / L3 MongoDB
+
+**Current design** (`tcbot/database/cache.py`):
+
+The read hot-path is a three-tier lookup implemented by
+`TwoLevelCache.get_or_fetch(key, fetch)`:
+
+| Tier | Backing | Cost | Behaviour |
+|---|---|---|---|
+| L1 | in-process `cachetools.TTLCache` | sub-microsecond, no I/O | LRU + TTL eviction, bounded by `maxsize`. |
+| L2 | Redis (optional) | one round-trip | Shared across runs/processes; JSON-encoded values. |
+| L3 | the `fetch()` coroutine | a MongoDB query | Source of truth; the result back-fills L1 (and L2). |
+
+- Writes and invalidations (`put` / `invalidate`) update L1 synchronously and
+  fire-and-forget the matching Redis write/delete. Background Redis tasks are
+  held in a strong-reference set so they are not garbage-collected mid-flight.
+- Redis is fully optional. When `REDIS_URL` is unset or Redis is unreachable,
+  all Redis operations are skipped and the cache behaves exactly like a pure L1
+  `TTLCache`. Redis errors are logged at debug level and never propagate.
+- The shared singletons and their tuned TTLs:
+
+  | Cache | L1 TTL | L2 TTL | maxsize | Invalidated by |
+  |---|---|---|---|---|
+  | `effective_role_cache` | 60s | 90s | 2048 | every role write |
+  | `connected_cache` | 120s | 180s | 512 | group add/deactivate |
+  | `active_groups_cache` | 30s | 45s | 4 | group add/deactivate |
+  | `owner_id_cache` | 300s | 360s | 4 | set_owner / initial seed |
+  | `user_mention_cache` | 300s | 600s | 4096 | upsert_user |
+
+  L2 TTLs are deliberately a little longer than L1 so Redis can still serve a
+  warm value just after an L1 entry expires.
+
+**Recommendations:**
+
+- L1 invalidation is per-process. The bot runs as a single long-polling instance
+  (the `tcf-bot-runner` concurrency group guarantees exactly one poller), so this
+  is correct today. If the bot is ever scaled past one instance, an L1 entry
+  invalidated on instance A stays warm on instance B until its `memory_ttl`
+  expires; design a Redis pub/sub invalidation channel before scaling out.
+- `get_or_fetch` takes no per-key lock, so several concurrent misses on the same
+  key each run `fetch()` (a cache stampede). On a single event loop with the
+  current low contention this is acceptable; revisit only if profiling shows a
+  hot key.
+- Cached value types must stay JSON-round-trippable because Redis stores JSON.
+  Tuples return as lists; keep the existing list-typed annotations and the
+  caller-side casts.
+
+### Persistent Scheduler: APScheduler 4.x
+
+**Current design** (`tcbot/database/scheduler.py`):
+
+- Uses `AsyncScheduler` with `MongoDBDataStore` + `CBORSerializer`, so schedules
+  and job state live in MongoDB and survive bot restarts.
+- The whole `async with AsyncScheduler()` lifecycle runs inside one dedicated
+  asyncio task (`tcbot.scheduler`), because AnyIO requires the cancel scope to be
+  entered and exited in the same task. `start()` blocks on a ready `Event`;
+  `stop()` sets a stop `Event` and waits up to 10s for a clean exit.
+- Jobs are module-level callables so their import paths can be serialised and
+  re-bound after a restart. `ConflictPolicy.replace` plus stable IDs keep
+  recurring schedules from duplicating across restarts.
+
+  | Job | Trigger | Notes |
+  |---|---|---|
+  | `_expire_old_warns` | every 24h | Only when `WARN_EXPIRY_DAYS > 0`; otherwise the schedule is removed. |
+  | `_cleanup_old_records` | cron Mon 03:00 UTC | Deletes `member_cache` rows older than 90 days. |
+  | `_execute_scheduled_unban` | one-off `DateTrigger` | Flips the ban record `is_active = False` at expiry. |
+
+- Note on scheduled unban: the real Telegram unban is enforced natively by the
+  timed `restrict_chat_member` / `ban_chat_member` `until_date` set at ban time.
+  The scheduled job only deactivates the DB record for history hygiene; it is not
+  what actually frees the user.
+
+**Security: CVE-2026-31072 (GHSA-9cfw-f3f9-7mm7), accepted and tracked risk**
+
+- Advisory: APScheduler's `JSONSerializer` and `CBORSerializer` are vulnerable to
+  RCE via insecure deserialization. `unmarshal_object` can be coerced into
+  instantiating an arbitrary class and calling `__setstate__` on it when it
+  deserialises a crafted JSON/CBOR payload. CVSS 9.8.
+- Affected range: `>= 4.0.0a1, <= 4.0.0a6`. The project is pinned to `4.0.0a6`
+  in `uv.lock`. There is no patched release: every published 4.x is a vulnerable
+  alpha, and the 3.x line is a different API with no `AsyncScheduler` /
+  `MongoDBDataStore`. `first_patched_version` is null.
+- Reachability in this deployment is low. The serializer only ever deserialises
+  schedule documents that the bot itself wrote into its own private MongoDB data
+  store, and those documents reference fixed module-level callables with
+  primitive kwargs (`ban_id`, `user_id`, `warn_expiry_days`). No Telegram-facing
+  code path lets a user write arbitrary bytes into the `apscheduler` collections.
+  Exploitation therefore requires an attacker who already holds write access to
+  the bot's MongoDB (a leaked `MONGODB_URI`, an exposed or unauthenticated
+  instance, or a shared cluster). Under a private, authenticated, IP-allowlisted
+  MongoDB this is defense-in-depth, not a remotely triggerable hole.
+- Decision: accept the risk for now. There is nothing to upgrade to, and a
+  downgrade would remove the persistence the scheduler depends on.
+- Mitigations (operational, see the MongoDB recommendations above): private,
+  least-privilege, IP-allowlisted MongoDB; secret hygiene for `MONGODB_URI`;
+  rotate the URI immediately on any suspected leak.
+- Watch: re-check the alert and upgrade as soon as APScheduler ships a fixed
+  release. Quick check:
+
+  ```bash
+  gh api repos/D1ZZY4/tcbot/dependabot/alerts/2 --jq '.security_vulnerability.first_patched_version'
+  ```
+
+- Optional future hardening: the only one-off job is the DB-side unban, which is
+  redundant with Telegram's native timed unban. Recomputing `is_active` from the
+  stored expiry on read (or a periodic sweep), plus a MongoDB TTL index for the
+  member_cache cleanup, would let both the one-off and weekly scheduler jobs
+  retire and shrink the deserialisation surface. Recorded as a direction, not a
+  mandate.
 
 ## Role System Summary
 
@@ -245,6 +409,7 @@ in.
 | 1 | `_paginate`, `_nav_row`, `_date` undefined at runtime in `stats_flow.py` | `tcbot/modules/helper/workflows/stats_flow.py:1` | All twelve call sites used private names (`_paginate`, `_nav_row`, `_date`) that were never defined in the module; calling any Stats drill-down raised `NameError` immediately | Replace all call sites with `paginate(..., _PAGE_SIZE)`, `nav_row(...)`, `date_or_unknown(...)` imported from `tcbot.utils.pagination` | `Resolved` |
 | 2 | `_paginate`, `_nav_row`, `_date` undefined at runtime in `check_flow.py` | `tcbot/modules/helper/workflows/check_flow.py:1` | Same root cause as stats_flow: twelve call sites used stale private names leftover from before pagination was extracted to utils; any Check drill-down raised `NameError` | Add `from tcbot.utils.pagination import date_or_unknown, nav_row, paginate` and replace all twelve call sites | `Resolved` |
 | 3 | `_kb` undefined at runtime in `tcbot/modules/groups.py` | `tcbot/modules/groups.py:85,103` | `_kb(False)` and `_kb(detailed)` called but never defined; `/tcgroups` and Detail/Simple toggle both raised `NameError` immediately | Imported `tcgroups_kb` from `tcbot.modules.helper.keyboards` and replaced both `_kb(...)` call sites | `Resolved` |
+| 4 | APScheduler 4.0.0a6 RCE via insecure deserialization (CVE-2026-31072 / GHSA-9cfw-f3f9-7mm7) | `tcbot/database/scheduler.py:35`, `uv.lock` (apscheduler 4.0.0a6) | CVSS 9.8. `unmarshal_object` instantiates an arbitrary class and calls `__setstate__` on a crafted CBOR/JSON payload. No patched release exists (all published 4.x are affected alphas; `first_patched` is null). Reachability is gated by MongoDB write access: only the bot writes fixed module-level callables with primitive kwargs, so it is not triggerable from Telegram. Full analysis under Core Subsystem Design / Persistent Scheduler. | Upgrade as soon as upstream ships a fix; until then mitigate operationally (private, least-privilege, IP-allowlisted MongoDB; `MONGODB_URI` secret hygiene). Accepted/tracked risk. | `Open` |
 
 ### P2 (High)
 
