@@ -512,7 +512,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "apscheduler", extras = ["mongodb"], specifier = ">=4.0.0a1" },
+    { name = "apscheduler", extras = ["mongodb"], specifier = "==4.0.0a6" },
     { name = "cachetools", specifier = ">=7.1.4" },
     { name = "cbor2" },
     { name = "flask" },

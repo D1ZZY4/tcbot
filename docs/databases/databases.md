@@ -226,7 +226,8 @@ Recurring jobs registered on every startup (idempotent via `ConflictPolicy.repla
 | Job | Trigger | Purpose |
 |---|---|---|
 | `_expire_old_warns` | every 24 h | Deletes `warn_count` records older than `WARN_EXPIRY_DAYS` days. Only registered when `WARN_EXPIRY_DAYS > 0`. |
-| `_cleanup_old_records` | Monday 03:00 UTC | Deletes `member_cache` entries not updated for 90 days. |
+
+`member_cache` cleanup is now handled automatically by a MongoDB TTL index on `last_updated` (`expireAfterSeconds=7776000`, equivalent to 90 days), created in `mongos.ensure_indexes()`. The former `_cleanup_old_records` weekly job has been retired; any persisted schedule from a previous run is removed from the APScheduler datastore on first startup after the upgrade.
 
 ## Document typing
 

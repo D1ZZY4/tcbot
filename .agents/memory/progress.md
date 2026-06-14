@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-15 (session 120)
+**Last updated:** 2026-06-14 (session 121)
 
 ## Verification baseline
 
@@ -36,6 +36,9 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Improvement #1 — alive.py /health endpoint (session 121) | enhancement | Added `GET /health` JSON endpoint: `{status, mongodb, redis, scheduler, ts}`. HTTP 200 = ok, HTTP 503 = degraded. `mongos.is_connected()` + `sched_mod.is_ready()` added as public state-readers. Backward-compatible; `GET /` unchanged. Confirmed working via curl. | 2026-06-14 (s121) |
+| Improvement #3 — MongoDB TTL index + APScheduler job retirement (session 121) | enhancement/security | Replaced `member_cache [last_updated, -1]` sort index with TTL index `[last_updated, 1], expireAfterSeconds=7776000` (90 days). `_cleanup_old_records` APScheduler job converted to no-op migration shim. `_register_periodic_schedules` removes stale `tcbot.db_cleanup_weekly` schedule on startup. Confirmed: startup log showed "Removed legacy weekly cleanup schedule". Shrinks APScheduler deserialization surface for CVE-2026-31072. | 2026-06-14 (s121) |
+| Improvement #5 — APScheduler explicit pin (session 121) | security | `pyproject.toml`: `apscheduler[mongodb]>=4.0.0a1` → `==4.0.0a6`. Prevents blind float to another vulnerable alpha while CVE-2026-31072 unpatched. | 2026-06-14 (s121) |
 | run-bot.yml 24/7 hardening (session 120) | infra | Self-chain hardened so coverage survives one broken link: `HANDOVER_LEAD` 900→600 (dispatch successor 10 min before the 5h window ends), `gh workflow run` dispatch retried 3x (10s apart), resurrection cron `55 4 * * *` (once-daily) → `*/15 * * * *`. Closes the observed multi-hour coverage gaps (e.g. ~10h on 06-13) when a run died before its handover. concurrency group unchanged (serializes runs; cron discarded when a healthy run is active). Docs synced: workflows-guide.md, README.md. Commit f33ea45. | 2026-06-15 (s120) |
 | APScheduler CVE-2026-31072 documented + alert dismissed (session 120) | security | Critical (CVSS 9.8) insecure-deserialization RCE in APScheduler 4.0.0a6 JSON/CBOR serializer; no upstream patch (all 4.x affected alphas, 3.x is a different API). Recorded accepted-risk analysis in PLAN.md (Core Subsystem Design / Persistent Scheduler) + a P1 finding row; Dependabot alert #2 dismissed as `tolerable_risk`. Reachability gated by pre-existing MongoDB write access (only the bot writes fixed module-level callables with primitive kwargs); not Telegram-reachable. Mitigation is operational. | 2026-06-15 (s120) |
 | PLAN.md subsystem design + improvements table (session 120) | docs | New "Core Subsystem Design" section (MongoDB/Motor, L1/L2/L3 cache, APScheduler) as the canonical design reference, plus a 6th "Improvements" table beside the P1-P5 finding tiers (health/heartbeat, backups, scheduler-surface shrink, multi-instance cache invalidation, safer dep upgrades). | 2026-06-15 (s120) |

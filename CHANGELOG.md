@@ -2,6 +2,27 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-14 (session 121)
+
+### Added
+
+- **`tcbot/alive.py`** (`GET /health`): New detailed health endpoint alongside the existing `GET /`. Returns JSON with `status` (`ok` / `degraded`), `mongodb` (`ok` / `error`), `redis` (`ok` / `disabled` / `error`), `scheduler` (`ok` / `error`), and `ts` (current UTC ISO timestamp). Returns HTTP 200 when all core subsystems are ready, HTTP 503 when degraded. State is read synchronously from module-level sentinels — no async ping is issued from the Flask daemon thread. (Improvement #1)
+- **`tcbot/database/mongos.py`** (`is_connected()`): Public function that returns `True` when a MongoDB connection has been established via `connect()`. Used by the `/health` endpoint to report MongoDB subsystem state without accessing the private `_db` variable from outside the module. (Improvement #1)
+- **`tcbot/database/scheduler.py`** (`is_ready()`): Public function that returns `True` when the APScheduler background task is running and the scheduler is ready to accept work. Used by the `/health` endpoint. (Improvement #1)
+
+### Changed
+
+- **`tcbot/database/mongos.py`** (`ensure_indexes`): Replaced the plain sort index `[("last_updated", -1)]` on `member_cache` with a MongoDB TTL index `[("last_updated", 1)], expireAfterSeconds=7776000` (90 days). MongoDB's TTL monitor now automatically removes stale `member_cache` documents server-side, eliminating the need for the APScheduler weekly cleanup job and shrinking the APScheduler deserialization surface that makes CVE-2026-31072 relevant. (Improvement #3)
+- **`tcbot/database/scheduler.py`** (`_register_periodic_schedules`): Removed `add_schedule` call for the weekly `_cleanup_old_records` job. Added a `remove_schedule` call for `_CLEANUP_SCHEDULE_ID` instead, so any schedule persisted from a previous bot run is cleaned out of the APScheduler MongoDB datastore on first startup after the upgrade. (Improvement #3)
+- **`tcbot/database/scheduler.py`** (`_cleanup_old_records`): Converted from an active `delete_many` job to a no-op migration shim with a log message. Retained so that any persisted APScheduler record from a prior run can be deserialised and called without an `AttributeError`. Safe to delete once all instances have restarted and the `tcbot.db_cleanup_weekly` schedule no longer exists in the datastore. (Improvement #3)
+- **`pyproject.toml`** (`apscheduler` dependency): Changed from `"apscheduler[mongodb]>=4.0.0a1"` (floats to any alpha) to `"apscheduler[mongodb]==4.0.0a6"` (exact pin). Prevents the weekly `uv lock --upgrade` from silently promoting to another vulnerable alpha while CVE-2026-31072 remains unpatched. Upgrade intentionally when upstream ships a fixed release. (Improvement #5)
+
+### Documentation
+
+- **`PLAN.md`** (Core Subsystem Design / Persistent Scheduler job table): Removed `_cleanup_old_records` row; added prose describing the TTL-index replacement and the no-op migration shim.
+- **`PLAN.md`** (Improvements table): Marked rows #1, #3, and #5 as `Resolved` with the evidence of the fix applied.
+- **`docs/databases/databases.md`** (scheduler.py section): Removed `_cleanup_old_records` from the recurring-jobs table; added prose describing the TTL-index replacement.
+
 ## [Unreleased] - 2026-06-15 (session 120)
 
 ### Changed

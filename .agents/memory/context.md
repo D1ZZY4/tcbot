@@ -5,9 +5,19 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-15 (session 120)
+**Last updated:** 2026-06-14 (session 121)
 
 ## What is done
+
+- Session 121 (2026-06-14): Pass 11 — 3 PLAN.md Improvements implemented (code + docs).
+  - Improvement #1 (alive.py): Added `GET /health` endpoint returning JSON `{status, mongodb, redis, scheduler, ts}`. HTTP 200 = all subsystems ok, HTTP 503 = degraded. State read synchronously from module-level sentinels (`mongos.is_connected()`, `sched_mod.is_ready()`, `redis_client.client()`). Backward-compatible; `GET /` still returns "OK". Confirmed: `curl /health` → `{"status":"ok","mongodb":"ok","redis":"ok","scheduler":"ok"}`.
+  - Improvement #3 (scheduler surface / TTL index): Replaced `[("last_updated", -1)]` sort index on `member_cache` with TTL index `[("last_updated", 1)], expireAfterSeconds=7776000` (90 days) in `mongos.ensure_indexes()`. `_cleanup_old_records` APScheduler job retired → no-op migration shim (safe deserialization if old schedule fires before being removed). `_register_periodic_schedules` now removes the stale `tcbot.db_cleanup_weekly` schedule from MongoDB datastore on startup. Confirmed: "Removed legacy weekly cleanup schedule" appeared in startup logs.
+  - Improvement #5 (APScheduler pin): `pyproject.toml` pinned `apscheduler[mongodb]==4.0.0a6` (was `>=4.0.0a1`). Prevents blind float to another vulnerable alpha while CVE-2026-31072 unpatched.
+  - New public API added: `mongos.is_connected() -> bool`, `scheduler.is_ready() -> bool`.
+  - `_MEMBER_CACHE_MAX_AGE_DAYS` constant removed (was 90, now expressed as TTL index `expireAfterSeconds=7776000`). `_CLEANUP_SCHEDULE_ID` kept as migration artifact.
+  - Ruff: 1 file reformatted, 4 errors auto-fixed, All checks passed (73 files). Import OK. Bot running clean: MongoDB 27/27, Redis hiredis 3.4.0, APScheduler, polling active.
+  - PLAN.md improvements table rows #1, #3, #5 → Resolved. PLAN.md job table updated. docs/databases/databases.md updated. CHANGELOG.md updated.
+  - Total bugs fixed remains: #1–#330.
 
 - Session 120 (2026-06-15): Infra + docs session (no `tcbot/` code changed).
   - run-bot.yml 24/7 self-chain hardened: `HANDOVER_LEAD` 900→600, `gh` handover retried 3x, resurrection cron `55 4 * * *` → `*/15 * * * *`. Closes observed multi-hour coverage gaps. Docs synced (workflows-guide.md, README.md). Commit f33ea45.

@@ -6,12 +6,16 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
+from datetime import UTC, datetime
 
 from flask import Flask
 
 from tcbot import cfg
+from tcbot.database import mongos, redis_client
+from tcbot.database import scheduler as sched_mod
 
 log = logging.getLogger(__name__)
 
@@ -23,8 +27,39 @@ _app = Flask(__name__)
 
 @_app.route("/")
 def index() -> str:
-    """Health check endpoint that returns "OK"."""
+    """Keep-alive endpoint that returns "OK" for basic uptime monitoring."""
     return "OK"
+
+
+@_app.route("/health")
+def health() -> tuple[str, int, dict[str, str]]:
+    """Detailed health status as JSON: mongodb, redis, scheduler, and timestamp.
+
+    Returns HTTP 200 when all core subsystems are ready, 503 when degraded.
+    Note: mongodb and scheduler state reflect the last-known connection status
+    established during startup; no live pings are issued (those require async).
+    """
+    mongodb_ok = mongos.is_connected()
+    scheduler_ok = sched_mod.is_ready()
+
+    rc = redis_client.client()
+    if rc is not None:
+        redis_status = "ok"
+    elif cfg.redis_url:
+        redis_status = "error"
+    else:
+        redis_status = "disabled"
+
+    overall = "ok" if (mongodb_ok and scheduler_ok) else "degraded"
+    payload = {
+        "status": overall,
+        "mongodb": "ok" if mongodb_ok else "error",
+        "redis": redis_status,
+        "scheduler": "ok" if scheduler_ok else "error",
+        "ts": datetime.now(UTC).isoformat(timespec="seconds"),
+    }
+    code = 200 if overall == "ok" else 503
+    return json.dumps(payload), code, {"Content-Type": "application/json"}
 
 
 # ──────────────────────── Server Execution ──────────────────────── #

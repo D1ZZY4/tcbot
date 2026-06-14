@@ -9,7 +9,7 @@ dependencies = [
     "flask",
     "python-dotenv",
     "redis[hiredis]",
-    "apscheduler[mongodb]>=4.0.0a1",
+    "apscheduler[mongodb]==4.0.0a6",
     "cbor2",
     "cachetools>=7.1.4",
     "speedtest-cli",

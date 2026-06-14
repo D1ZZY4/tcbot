@@ -33,7 +33,6 @@ from datetime import datetime, timedelta
 from apscheduler import AsyncScheduler, ConflictPolicy
 from apscheduler.datastores.mongodb import MongoDBDataStore
 from apscheduler.serializers.cbor import CBORSerializer
-from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -50,11 +49,9 @@ log = logging.getLogger(__name__)
 # * (conflict_policy=replace updates the trigger without creating duplicates)
 
 _WARN_EXPIRY_SCHEDULE_ID: str = "tcbot.warn_expiry_daily"
+# * Legacy ID kept so _register_periodic_schedules can remove the old schedule
+# * from any MongoDB datastore that was created before the TTL-index migration.
 _CLEANUP_SCHEDULE_ID: str = "tcbot.db_cleanup_weekly"
-
-# ──────────────── Cleanup thresholds (in days) ──────────────────── #
-
-_MEMBER_CACHE_MAX_AGE_DAYS: int = 90
 
 # ──────────────── Module-level scheduler state ──────────────────── #
 # * _scheduler:   live AsyncScheduler reference (set inside background task)
@@ -90,16 +87,20 @@ async def _expire_old_warns(warn_expiry_days: int) -> None:
 
 
 async def _cleanup_old_records() -> None:
-    """Remove stale ``member_cache`` entries not updated for 90 days.
+    """No-op migration shim for the retired weekly member_cache cleanup job.
 
-    Called weekly by APScheduler to keep the member_cache collection lean.
+    member_cache cleanup is now handled automatically by the MongoDB TTL index on
+    ``last_updated`` (``expireAfterSeconds=7776000``, equivalent to 90 days), added
+    in ``mongos.ensure_indexes()``.  The APScheduler schedule is removed on startup
+    in ``_register_periodic_schedules``; this function exists solely so that any
+    schedule record persisted from a previous bot version can be deserialised and
+    called without raising an ``AttributeError``.  It is safe to remove once all
+    running instances have been restarted and the MongoDB datastore no longer contains
+    the ``tcbot.db_cleanup_weekly`` schedule entry.
     """
-    cutoff = utc_now() - timedelta(days=_MEMBER_CACHE_MAX_AGE_DAYS)
-    result = await _col("member_cache").delete_many({"last_updated": {"$lt": cutoff}})
     log.info(
-        "DB cleanup: removed %d stale member_cache records (older than %d days).",
-        result.deleted_count,
-        _MEMBER_CACHE_MAX_AGE_DAYS,
+        "DB cleanup job called but is now a no-op; "
+        "cleanup is handled by the MongoDB TTL index on member_cache.last_updated."
     )
 
 
@@ -184,13 +185,13 @@ async def _register_periodic_schedules(
         except Exception as exc:
             log.debug("Warn expiry schedule not present, skipping removal: %s", exc)
 
-    await sched.add_schedule(
-        _cleanup_old_records,
-        CronTrigger(day_of_week="mon", hour=3, minute=0),
-        id=_CLEANUP_SCHEDULE_ID,
-        conflict_policy=ConflictPolicy.replace,
-    )
-    log.info("Scheduled DB cleanup: weekly Monday 03:00 UTC.")
+    # * member_cache cleanup is now handled by a MongoDB TTL index on last_updated.
+    # * Remove the legacy weekly schedule if it was persisted from a prior bot version.
+    try:
+        await sched.remove_schedule(_CLEANUP_SCHEDULE_ID)
+        log.info("Removed legacy weekly cleanup schedule (now handled by TTL index).")
+    except Exception as exc:
+        log.debug("Legacy cleanup schedule not present, nothing to remove: %s", exc)
 
 
 # ══════════════════════════════════════════════════════════════════ #
@@ -249,6 +250,11 @@ def _get() -> AsyncScheduler:
     if _scheduler is None:
         raise RuntimeError("Scheduler not started; call start() first.")
     return _scheduler
+
+
+def is_ready() -> bool:
+    """Return True when the scheduler background task is running and ready."""
+    return _scheduler is not None
 
 
 # ══════════════════════════════════════════════════════════════════ #

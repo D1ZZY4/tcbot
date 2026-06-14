@@ -156,7 +156,11 @@ async def ensure_indexes() -> None:
         col("kicks").create_index([("chat_id", 1)]),
         col("mutes").create_index([("chat_id", 1)]),
         col("federated_groups").create_index([("is_active", 1)]),
-        col("member_cache").create_index([("last_updated", -1)]),
+        # * TTL index: MongoDB auto-expires member_cache docs older than 90 days (7776000 s).
+        # * Replaces the APScheduler weekly cleanup job, shrinking the scheduler surface.
+        col("member_cache").create_index(
+            [("last_updated", 1)], expireAfterSeconds=7776000
+        ),
         return_exceptions=True,
     )
     failed = [r for r in results if isinstance(r, BaseException)]
@@ -178,3 +182,8 @@ async def ensure_indexes() -> None:
 def col(name: str) -> AsyncIOMotorCollection:
     """Get a MongoDB collection by name."""
     return db()[name]
+
+
+def is_connected() -> bool:
+    """Return True when a MongoDB connection has been established via connect()."""
+    return _db is not None

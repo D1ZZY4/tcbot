@@ -236,8 +236,13 @@ The read hot-path is a three-tier lookup implemented by
   | Job | Trigger | Notes |
   |---|---|---|
   | `_expire_old_warns` | every 24h | Only when `WARN_EXPIRY_DAYS > 0`; otherwise the schedule is removed. |
-  | `_cleanup_old_records` | cron Mon 03:00 UTC | Deletes `member_cache` rows older than 90 days. |
   | `_execute_scheduled_unban` | one-off `DateTrigger` | Flips the ban record `is_active = False` at expiry. |
+
+  `member_cache` cleanup is now handled by a MongoDB TTL index on `last_updated`
+  (`expireAfterSeconds=7776000`, 90 days) created in `mongos.ensure_indexes()`.
+  The former `_cleanup_old_records` weekly APScheduler job has been retired;
+  it remains as a no-op migration shim so any persisted schedule can be deserialised,
+  and is actively removed from the APScheduler datastore on first startup.
 
 - Note on scheduled unban: the real Telegram unban is enforced natively by the
   timed `restrict_chat_member` / `ban_chat_member` `until_date` set at ban time.
@@ -449,11 +454,11 @@ item when work begins.
 
 | # | Finding | Location (`file.py:line`) | Evidence (code quote / observed behavior) | Proposed Fix | Status |
 |--|--|--|--|--|--|
-| 1 | Health check is not meaningful for 24/7 monitoring | `tcbot/alive.py:24` | `GET /` returns the literal `OK` regardless of MongoDB or polling state, so a silently dead bot still looks healthy; the multi-hour run-bot coverage gaps were invisible until the run history was inspected by hand | Extend the endpoint (or add `/health`) to report MongoDB `ping`, Redis status, scheduler-ready, and a last-update timestamp as JSON; for the Actions runner (Flask port not publicly reachable) push a last-seen heartbeat to MongoDB and alert on staleness | `Open` |
+| 1 | Health check is not meaningful for 24/7 monitoring | `tcbot/alive.py:24` | `GET /` returned the literal `OK` regardless of MongoDB or polling state; silently dead bot looked healthy | Added `GET /health` endpoint: returns JSON with `mongodb`, `redis`, `scheduler` subsystem states, `status` (ok/degraded), and `ts` (ISO timestamp); returns HTTP 503 when degraded. `mongos.is_connected()` and `sched_mod.is_ready()` added as public state-readers | `Resolved` |
 | 2 | No documented backup for irreplaceable federation data | `tcbot/database/bans_db.py:1`, `tcbot/database/users_roles.py:1`, `tcbot/database/groups_db.py:1` | Federation bans, roles (`tc_owners`/`tc_admins`/`tc_roles`), and connected groups cannot be reconstructed; the P1 tier counts data loss as critical, yet no backup procedure exists | Enable Atlas continuous or snapshot backups (or a `mongodump` cron for self-hosted) and write a short restore runbook; also bounds the blast radius of the scheduler CVE | `Open` |
-| 3 | Persistent-scheduler surface is larger than it needs to be | `tcbot/database/scheduler.py:106`, `tcbot/database/scheduler.py:92` | `_execute_scheduled_unban` only flips `is_active = False` (the real unban is enforced natively by Telegram's `until_date`); `_cleanup_old_records` is a single weekly `delete_many` on an age threshold | Replace the weekly cleanup with a MongoDB TTL index on `member_cache.last_updated`, and recompute ban `is_active` from the stored expiry on read; both let APScheduler jobs retire and shrink the deserialisation surface that makes CVE-2026-31072 relevant | `Open` |
+| 3 | Persistent-scheduler surface is larger than it needs to be | `tcbot/database/scheduler.py:106`, `tcbot/database/scheduler.py:92` | `_execute_scheduled_unban` only flips `is_active = False` (the real unban is enforced natively by Telegram's `until_date`); `_cleanup_old_records` was a single weekly `delete_many` on an age threshold | Replaced the weekly cleanup with a MongoDB TTL index on `member_cache.last_updated` (`expireAfterSeconds=7776000`, 90 days) in `mongos.ensure_indexes()`; the `_cleanup_old_records` job retired to a no-op migration shim; stale schedule removed from APScheduler datastore on first startup after upgrade | `Resolved` |
 | 4 | L1 cache invalidation is per-process (blocks scaling out) | `tcbot/database/cache.py:147` | `invalidate` updates only the local in-process L1; this is correct only because the `tcf-bot-runner` concurrency group guarantees a single poller | Add a Redis pub/sub invalidation channel so an L1 entry dropped on one instance is dropped everywhere, before ever running more than one instance; not needed while single-instance | `Open` |
-| 5 | Dependency upgrades are unguarded except by the import check | `pyproject.toml:6`, `.github/workflows/dependency-update.yml:1` | Top-level dependencies are unversioned and float to latest via the weekly `uv lock --upgrade`; only `lint.yml`'s import check validates the result. APScheduler is pinned to the vulnerable alpha `4.0.0a6` | Keep the import gate; pin APScheduler explicitly until a fixed release ships so it cannot float to another vulnerable alpha unreviewed | `Open` |
+| 5 | Dependency upgrades are unguarded except by the import check | `pyproject.toml:6`, `.github/workflows/dependency-update.yml:1` | Top-level dependencies were unversioned and floated to latest via the weekly `uv lock --upgrade`; APScheduler used `>=4.0.0a1` which could float to any vulnerable alpha | Pinned APScheduler to `==4.0.0a6` in `pyproject.toml`; prevents blind upgrade to another vulnerable alpha until upstream ships a patched release | `Resolved` |
 
 ## Maintenance Rules
 
