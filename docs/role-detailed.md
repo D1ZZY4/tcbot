@@ -313,7 +313,7 @@ Behavior:
 
 Ban, kick, and mute command modules block equal/higher-ranked targets before calling auto-demotion, so auto-demotion only applies to lower-ranked staff targets.
 
-A single warning below the warn limit does not auto-demote. However, when the warn limit is reached, `warning_flow.execute_warn` calls `Demote.execute(trigger="ban")` before applying the group auto-ban, so a role-holding target loses their role at that point. Individual warnings below the threshold leave the role intact.
+A single warning below the warn limit does not auto-demote. However, when the warn limit is reached, `warning_flow.execute_warn` calls `Demote.execute(trigger="ban")` before issuing the federation-wide auto-ban, so a role-holding target loses their role at that point. Individual warnings below the threshold leave the role intact.
 
 ## Logs
 

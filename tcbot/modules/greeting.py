@@ -10,7 +10,13 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
-from telegram.ext import ChatJoinRequestHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import (
+    ChatJoinRequestHandler,
+    ChatMemberHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
 from tcbot import cfg
 from tcbot import database as db
@@ -219,6 +225,56 @@ async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
 
 @decorators.log_execution
+async def on_my_chat_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Auto-disconnect a federation group when the bot is removed or kicked.
+
+    When an admin removes the bot without running /tcdisconnect the group stays
+    ``is_active=True`` in the DB indefinitely. Every subsequent federation ban
+    then attempts ``ban_chat_member`` against that dead group, producing silent
+    failures for every moderation action. This handler detects bot removal and
+    calls ``deactivate_group`` immediately to keep the active-groups list clean.
+
+    Non-registered groups (where the bot was never added to the federation) are
+    silently ignored -- ``deactivate_group`` returns False and nothing is logged.
+    Primary groups (MAIN_GROUP, EXTEND_GROUP) are excluded: they are not stored
+    in ``federated_groups`` and should never be auto-deactivated here.
+    """
+    my_member = update.my_chat_member
+    if my_member is None:
+        return
+
+    new_status = my_member.new_chat_member.status
+    if new_status not in ("left", "kicked"):
+        return
+
+    chat = update.effective_chat
+    if chat is None:
+        return
+
+    # * Never auto-deactivate primary groups; they are not in federated_groups.
+    if chat.id in (cfg.main_group, cfg.exec_group):
+        return
+
+    try:
+        deactivated = await db.groups_db.deactivate_group(chat.id)
+    except Exception as exc:
+        log.warning(
+            "deactivate_group failed on bot removal from chat=%d: %s", chat.id, exc
+        )
+        return
+
+    if deactivated:
+        log.info(
+            "Bot removed from federation group chat_id=%d; group auto-deactivated.",
+            chat.id,
+        )
+    else:
+        log.debug(
+            "Bot removed from unregistered chat chat_id=%d; no action taken.", chat.id
+        )
+
+
+@decorators.log_execution
 async def on_chat_migration(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Update group records when a basic group migrates to a supergroup.
 
@@ -264,6 +320,7 @@ async def on_chat_migration(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 # ──────────────────────────── Handlers ──────────────────────────── #
 
 __handlers__ = [
+    ChatMemberHandler(on_my_chat_member),
     ChatJoinRequestHandler(on_join_request),
     MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, on_new_member),
     MessageHandler(filters.StatusUpdate.LEFT_CHAT_MEMBER, on_left_member),

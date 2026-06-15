@@ -13,14 +13,14 @@ flowchart TD
     Proof --> AddWarn[warns_db.add_warn<br/>atomic counter]
     AddWarn --> Check{count >= limit?}
     Check -->|no| Notify[Send warn notice]
-    Check -->|yes| AutoBan[Auto-ban from current group only]
+    Check -->|yes| AutoBan[Federation-wide auto-ban via fan_out]
     Notify --> Log[Log entry]
     AutoBan --> Log
 ```
 
 ## Purpose
 
-Warnings are per-group moderation records. They do not create federation-wide bans and do not carry across connected groups. When a user reaches the configured warning threshold in a group, the bot attempts to ban that user from that group only and clears the warning record after a successful auto-ban.
+Warnings are per-group moderation records. Each warn is keyed by `(user_id, chat_id)`. When a user reaches the configured warning threshold in any single group, the bot issues a **federation-wide ban** across all active connected groups, creates a ban document in the `bans` collection, and clears warnings for that user/chat pair.
 
 The current warning limit is:
 
@@ -47,7 +47,7 @@ This means:
 
 - A warning in one connected group does not affect another group.
 - Warning count is calculated for the current chat only.
-- Auto-ban at the threshold bans from the current group only.
+- Auto-ban at the threshold issues a **federation-wide ban** via `fan_out()` to all active connected groups plus primary groups.
 - `/tcunwarn`, `/warns`, and `/resetwarns` operate on the current group only.
 
 ## `/tcwarn` flow
@@ -190,19 +190,17 @@ If `count < WARN_LIMIT`:
 
 If `count >= WARN_LIMIT`:
 
-1. The bot attempts to ban the user from the current group with `ban_chat_member(chat_id, target_id)`.
-2. A warning log is sent to `cfg.logs` in parallel.
-3. If the group ban succeeds, `warns_db.clear_warns(target_id, chat_id)` clears warning history and counter for that group.
-4. The group receives a reply that the user hit 3 warnings and has been banned from this group.
-5. If the group ban fails, warnings are not cleared.
-6. The group receives a reply that the user hit 3 warnings but auto-ban failed and should be banned manually.
-
-Important: this is a local group ban, not a federation-wide ban. It does not create a document in the `bans` collection and does not generate an appeal link.
+1. Active federation groups, any existing active ban, and the audit log are fetched/sent in parallel via `asyncio.gather`.
+2. If the user does not already hold an active federation ban, `bans_db.create_ban()` creates a ban document in the `bans` collection (the same document used by `/tcban`). This makes the ban appealable via the standard appeal flow.
+3. `fan_out()` propagates `ban_chat_member` to all active connected groups plus MAIN_GROUP and EXTEND_GROUP.
+4. If at least one group ban succeeds, `warns_db.clear_warns(target_id, chat_id)` clears warning history and the counter for the originating group.
+5. The originating group receives a reply that the user hit 3 warnings and has been federation-banned.
+6. If the user already holds an active federation ban, a new ban document is not created; `fan_out()` still runs to ensure enforcement in any newly connected groups.
 
 Both auto-ban branches behave as follows:
 
-- On successful auto-ban, warnings are cleared.
-- On failed auto-ban, warnings are kept.
+- On successful auto-ban (at least one group), warnings are cleared.
+- On complete fan-out failure, warnings are kept.
 
 ## `/tcunwarn` behavior
 

@@ -145,7 +145,7 @@ flowchart TD
 | Limit | `WARN_LIMIT = 3` |
 | Executors | `execute_warn`, `execute_unwarn`, `execute_warnlist`, `execute_resetwarns` |
 
-Warns are tracked per `(user_id, chat_id)`. At `WARN_LIMIT`, the flow attempts an automatic ban from the **current group only** (not federation-wide) and then clears warnings for that user/chat.
+Warns are tracked per `(user_id, chat_id)`. At `WARN_LIMIT`, the flow issues a **federation-wide ban** via `fan_out()` to all active connected groups plus primary groups, creates a ban document in the `bans` collection, and then clears warnings for that user/chat.
 
 ## Unban: `unban_flow.py`
 

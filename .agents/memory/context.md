@@ -5,9 +5,20 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-15 (session 124)
+**Last updated:** 2026-06-15 (session 125)
 
 ## What is done
+
+- Session 125 (2026-06-15): 6 open findings from PLAN.md resolved (P1 #5, P1 #6, P2 #2, P2 #3, P3 #3, P4 #8). 6 bugs fixed (#340-#345).
+  - Bug #340 (P1 #5): warning_flow.py execute_warn — warn auto-ban now federation-wide. Parallel gather fetches active groups + existing ban check + sends audit log. `bans_db.create_ban()` creates DB record (skipped if already banned). `fan_out()` propagates ban to all active + primary groups. Originating chat and primary groups added if not already in the list. Clear warns + notify in originating chat after success.
+  - Bug #341 (P1 #6): greeting.py — Added `on_my_chat_member` handler (`ChatMemberHandler`). Detects `status in (left, kicked)`. Calls `db.groups_db.deactivate_group(chat_id)` automatically. Skips primary groups. Registered first in `__handlers__`. Prevents stale `is_active=True` groups accumulating in federation.
+  - Bug #342 (P2 #2): bans_db.py `clear_review()` + appeal_flow.py reject branch — `clear_review()` sets `review_message_id=None, review_timestamp=None`. Called in parallel in the reject gather. Banned user can now submit a second appeal after rejection.
+  - Bug #343 (P2 #3): bans_db.py `set_rejected_by()` + documents.py BanDoc — `set_rejected_by()` sets `rejected_by_id`, `rejected_by_name`, `rejected_at` on the ban doc. Called in parallel in reject gather. BanDoc TypedDict updated with three new fields.
+  - Bug #344 (P4 #8): appeal_flow.py `_on_message` — 2000-char length gate added after `starts_with_appeal_tag`. Replies with trimming instruction and returns `WAITING_APPEAL` (user can revise without restarting).
+  - Bug #345 (P3 #3): warns_db.py `federation_warn_count()` + check_flow.py profile — new function sums active warn counters across all chats. check_flow profile gather expanded from 9 to 10 parallel reads. Warnings line shows "N active across M group(s) (K total historical)". Warnings button shows "N active".
+  - Ruff: All checks passed (all tcbot/ files). Import OK. Bot restart: 27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling. Total bugs: #1-#345.
+  - PLAN.md: P1 #5, P1 #6, P2 #2, P2 #3, P3 #3, P4 #8 all marked Resolved.
+  - Remaining open items: P1 #4 (CVE-2026-31072, accepted/tracked risk), P3 #2 (Redis-backed rate limiters), Improvement #2 (backups), Improvement #4 (multi-instance cache invalidation).
 
 - Session 124 (2026-06-15): Pass 14 — Full autonomous audit loop pass. ZERO new bugs found. All 73 tcbot/ files fully read baris per baris across passes 13+14. Every module, workflow, database helper, util, entry point, and config file verified CLEAN. Bugs #338+#339 (kicks_db/mutes_db return types) fixed earlier this session. Ruff: All checks passed (73 files). Import OK. Total bugs fixed: #1–#339.
 

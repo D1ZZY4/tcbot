@@ -211,3 +211,18 @@ async def user_all_warns(user_id: int) -> list[WarnDoc]:
         .find({"user_id": user_id}, sort=[("timestamp", -1)])
         .to_list(length=None)
     )
+
+
+async def federation_warn_count(user_id: int) -> int:
+    """Total active warn count for a user across all federation chats.
+
+    Sums ``count`` from every ``warn_counts`` document for the user regardless
+    of chat. This gives the federation-wide aggregate that ``warn_count`` hides
+    (which is scoped per-chat). Returns 0 when the user has no active warnings.
+    """
+    cursor = _warn_counts().find(
+        {"user_id": user_id, "count": {"$gt": 0}},
+        {"_id": 0, "count": 1},
+    )
+    docs = await cursor.to_list(length=None)
+    return sum(int(d.get("count", 0)) for d in docs)

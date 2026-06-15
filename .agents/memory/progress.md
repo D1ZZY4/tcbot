@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-15 (session 124, pass 14)
+**Last updated:** 2026-06-15 (session 125)
 
 ## Verification baseline
 
@@ -32,12 +32,14 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Session 107 fresh audit pass | PASS: mongos.py, groups_db.py, stats_flow.py, check_flow.py, broadcasting.py, maintenance.py, stats.py, connected_flow.py, kicking_flow.py, unban_flow.py, warning_flow.py, reason_flow.py, demote_flow.py, admins.py (full), checking.py, ban_flow.py all clean. Bugs #283+#284 (CI workflows) found and fixed. Ruff: 73 files clean. |
 | Session 106 fresh audit pass | PASS: appeal_flow, warning_flow, warnings, checking, identity, banning, muting, kicking, extraction, decorators, reason_flow, proof_flow, demote_flow all clean. Bug #282 found and fixed. Ruff: 73 files clean. |
 | Session 124 pass 13 comprehensive audit | PASS: Thirteenth full-pass audit of ALL tcbot/ files. Zero new bugs found. Every module, workflow, database helper, util, entry point, and config file read baris per baris. Two sequential-await pairs in set_owner (users_roles.py) and cmd_transfer (admins.py) confirmed VALID (documented ordering constraints). AST scan: 0 asyncio.gather missing return_exceptions. Ruff: 73 files clean. Import OK. Total bugs: #1-#337. |
+| Session 125 — 6 open findings resolved (P1 #5, P1 #6, P2 #2, P2 #3, P3 #3, P4 #8) | PASS: Warning auto-ban now federation-wide (fan_out + DB create_ban). ChatMemberHandler auto-disconnects kicked groups. Appeal reject clears review_message_id (re-appeal allowed). Rejector identity persisted in ban doc. federation_warn_count() added; check_flow profile updated. Appeal 2000-char length gate. Ruff: all clean. Import: OK. Bot restart: 27/27 indexes, Redis, APScheduler, polling. Total bugs: #1-#345. |
 | Session 124 pass 14 comprehensive audit | PASS: Fourteenth full-pass audit of ALL tcbot/ files. ZERO new bugs found. Full read of: stats_flow, warning_flow, bans_db, groups_db, users_cache, users_roles, warns_db, queues_db, mongos, documents, dispatch, pagination, prefixes, timedate_format, cache, utils/__init__, error_reporter, logger, __init__, alive, modules/__init__, database/__init__, __main__. All CLEAN. Ruff: 73 files clean. Import OK. Total bugs: #1-#339. |
 
 ## Completed items (recent additions on top)
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Bug #340-#345 (session 125) | P1/P2/P3/P4 | **#340** warning_flow: warn auto-ban now federation-wide (fan_out all groups + DB ban record). **#341** greeting: ChatMemberHandler auto-disconnects bot-kicked federation groups. **#342** appeal_flow + bans_db: clear_review() on reject unblocks re-appeal. **#343** bans_db: set_rejected_by() persists rejector in ban doc; BanDoc updated. **#344** appeal_flow: 2000-char length gate in _on_message. **#345** warns_db + check_flow: federation_warn_count() + profile display. | 2026-06-15 (s125) |
 | Bug #337 (session 123) | type/correctness | `documents.py` missing `KickDoc` and `MuteDoc` TypedDicts. All other `*_db.py` files use typed document shapes; `kicks_db.py` inserted a plain `dict` literal and `mutes_db.py` used `doc: dict`. Added `KickDoc` and `MuteDoc` to `documents.py`. Updated both files to import and use them with `UserId`/`ChatId` wrapped IDs. `databases.md` updated with collection-to-TypedDict mapping table. | 2026-06-15 (s123) |
 | Bug #336 (session 122) | docs/accuracy | replit.md Health Check section — only listed `GET /` returning `OK`; `GET /health` JSON endpoint added in session 121 was absent. Expanded to two entries: uptime probe and JSON subsystem-status report. | 2026-06-15 (s122) |
 | Bug #335 (session 122) | docs/accuracy | README.md Features list Health checks bullet — only mentioned `GET /` returning `OK`; `GET /health` JSON endpoint absent after session 121 added it. Extended bullet to include both endpoints. | 2026-06-15 (s122) |

@@ -2,6 +2,25 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-15 (session 125)
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/warning_flow.py`** (`execute_warn`, P1 #5): When a user reaches the warn limit, the auto-ban now issues a full **federation-wide** ban instead of banning only from the originating group. Active groups are fetched from the DB, existing federation ban is checked, and a DB ban record is created via `bans_db.create_ban()` — all in parallel with the warn-limit audit-log send. `fan_out()` then propagates `ban_chat_member` to every active and primary group concurrently (rate-limited at 10 concurrent). The originating chat and primary groups (MAIN_GROUP, EXTEND_GROUP) are added to the group list if not already present. If the user holds an existing active federation ban the DB create is skipped to avoid duplicates. Warns are cleared in the originating chat after at least one group ban succeeds. (Bug #340)
+- **`tcbot/modules/greeting.py`** (`on_my_chat_member`, P1 #6): Added `ChatMemberHandler` that fires whenever the bot's own chat member status changes. When `new_chat_member.status` is `left` or `kicked`, `db.groups_db.deactivate_group(chat_id)` is called immediately, keeping the active-groups list clean. Primary groups (MAIN_GROUP, EXTEND_GROUP) are excluded from auto-deactivation since they are not stored in `federated_groups`. Previously a group owner could kick the bot without running `/tcdisconnect`, leaving the group `is_active=True` indefinitely and causing every subsequent federation ban to waste a Telegram API call. Handler registered as first entry in `__handlers__`. (Bug #341)
+- **`tcbot/database/bans_db.py`** (`clear_review`, P2 #2): Added new function `clear_review(ban_id)` that sets `review_message_id=None` and `review_timestamp=None` on the ban document. Called in the `on_decision` reject branch (in parallel with the existing notify/edit gather) so that a rejected appeal immediately allows the user to submit a new appeal. Previously `review_message_id` was never cleared on reject, and `_start()` gates entry with `if ban.get("review_message_id"): return _ERR_PENDING_REVIEW`, permanently locking the user out. (Bug #342)
+- **`tcbot/database/bans_db.py`** (`set_rejected_by`, P2 #3): Added new function `set_rejected_by(ban_id, admin_id, admin_name)` that persists `rejected_by_id`, `rejected_by_name`, and `rejected_at` (UTC timestamp) on the ban document. Called in the reject branch of `on_decision` in parallel with `clear_review`. Preserves the audit trail in MongoDB even if the log-channel message is later deleted or the channel becomes unavailable. (Bug #343)
+- **`tcbot/database/documents.py`** (`BanDoc`): Added `rejected_by_id: int | None`, `rejected_by_name: str | None`, and `rejected_at: datetime | None` fields to the `BanDoc` TypedDict, matching the fields written by `set_rejected_by`. (Bug #343)
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** (`_on_message`, P4 #8): Added a 2000-character length gate immediately after the `starts_with_appeal_tag` check. If the appeal text exceeds the limit the user receives a clear trimming instruction and the conversation remains in `WAITING_APPEAL` so they can revise and re-submit without restarting the deep-link flow. Without this check a single banned user could forward up to 4096-character messages on every attempt, producing unwieldy review cards in the main group discussion topic. (Bug #344)
+
+### Added
+
+- **`tcbot/database/warns_db.py`** (`federation_warn_count`, P3 #3): New async function that sums `count` from every `warn_counts` document for a user regardless of `chat_id`. Returns the federation-wide active warn aggregate. Unlike `user_total_warns` (which counts all historical warn rows), this function reads from the counter collection and reflects only current active warnings. (Bug #345)
+
+### Changed
+
+- **`tcbot/modules/helper/workflows/check_flow.py`** (`Stats.profile`, P3 #3): Profile gather expanded from 9 to 10 parallel reads; `federation_warn_count(target_id)` is now fetched in the same round-trip as the other profile fields. The Warnings line in the profile text now reads "N active across M group(s) (K total historical)" and the Warnings drill-down button label shows "N active" instead of the historical total. Staff can now immediately see when a user is distributing their rule violations across groups to stay below each group's local threshold. (Bug #345)
+
 ## [Unreleased] - 2026-06-15 (session 124)
 
 ### Fixed

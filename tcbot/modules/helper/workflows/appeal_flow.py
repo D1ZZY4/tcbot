@@ -309,6 +309,16 @@ class BuildAppeal:
         if not starts_with_appeal_tag(text):
             return WAITING_APPEAL
 
+        if len(text) > 2000:
+            try:
+                await msg.reply_text(
+                    "Your appeal message is too long (max 2000 characters). "
+                    "Please shorten it and try again.",
+                )
+            except Exception as exc:
+                log.debug("Appeal too-long reply failed: %s", exc)
+            return WAITING_APPEAL
+
         if ctx.user_data is None:
             log.error("ctx.user_data is None in appeal_flow _on_message")
             return ConversationHandler.END
@@ -609,7 +619,12 @@ class BuildAppeal:
             )
 
         elif action == "reject":
-            # * Fetch target name + notify user + edit review message - all in parallel
+            # * Fetch target name + notify user + edit review message +
+            # * clear review lock + persist rejector identity - all in parallel.
+            # * clear_review is critical: without it the user is permanently
+            # * locked out from submitting a second appeal (P2 #2).
+            # * set_rejected_by preserves the audit trail in the ban document
+            # * even if the log message is later deleted (P2 #3).
             target_fname_result, *_ = await asyncio.gather(
                 db.users_cache.get_first_name(target_id, str(target_id)),
                 ctx.bot.send_message(
@@ -623,6 +638,8 @@ class BuildAppeal:
                     parse_mode="HTML",
                     reply_markup=None,
                 ),
+                db.bans_db.clear_review(ban_id),
+                db.bans_db.set_rejected_by(ban_id, admin.id, admin.first_name),
                 return_exceptions=True,
             )
             target_fname = (

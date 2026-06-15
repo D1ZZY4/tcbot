@@ -180,6 +180,36 @@ async def set_review(ban_id: str, msg_id: int) -> None:
     )
 
 
+async def clear_review(ban_id: str) -> None:
+    """Clear review_message_id from a ban, allowing a new appeal to be submitted.
+
+    Called after an appeal is rejected so the banned user is not permanently
+    locked out from submitting a second appeal.
+    """
+    await _bans().update_one(
+        {"ban_id": ban_id},
+        {"$set": {"review_message_id": None, "review_timestamp": None}},
+    )
+
+
+async def set_rejected_by(ban_id: str, admin_id: int, admin_name: str) -> None:
+    """Persist the rejector identity and rejection timestamp on a ban document.
+
+    Called on appeal reject so the audit trail is preserved even if the log
+    message is later deleted or the log channel is unavailable.
+    """
+    await _bans().update_one(
+        {"ban_id": ban_id},
+        {
+            "$set": {
+                "rejected_by_id": admin_id,
+                "rejected_by_name": admin_name,
+                "rejected_at": utc_now(),
+            }
+        },
+    )
+
+
 async def set_appeal_log_msg(
     ban_id: str,
     msg_id: int,

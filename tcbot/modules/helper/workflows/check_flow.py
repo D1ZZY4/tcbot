@@ -88,8 +88,11 @@ class Check:
         target_id: int,
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Build the top-level profile view: identity + counts + drill-down keyboard."""
-        # * All 9 reads are independent; fire them in parallel for a single round-trip.
+        # * All 10 reads are independent; fire them in parallel for a single round-trip.
         # * return_exceptions=True prevents a single DB failure from crashing the whole view.
+        # * fed_warn_total gives the federation-wide aggregate that user_total_warns hides
+        # * (user_total_warns counts all historical warn docs; fed_warn_total sums active
+        # * counters from warn_counts across all chats and is the staff-relevant number).
         (
             r_user_info,
             r_role_meta,
@@ -98,6 +101,7 @@ class Check:
             appeal_total,
             warn_total,
             warn_groups,
+            fed_warn_total,
             kick_total,
             mute_total,
         ) = await asyncio.gather(
@@ -108,6 +112,7 @@ class Check:
             db.bans_db.user_appeal_count(target_id),
             db.warns_db.user_total_warns(target_id),
             db.warns_db.user_warn_groups(target_id),
+            db.warns_db.federation_warn_count(target_id),
             db.kicks_db.user_kick_count(target_id),
             db.mutes_db.user_mute_count(target_id),
             return_exceptions=True,
@@ -132,6 +137,8 @@ class Check:
             warn_total = 0
         if isinstance(warn_groups, BaseException):
             warn_groups = []
+        if isinstance(fed_warn_total, BaseException):
+            fed_warn_total = 0
         if isinstance(kick_total, BaseException):
             kick_total = 0
         if isinstance(mute_total, BaseException):
@@ -163,7 +170,8 @@ class Check:
             f"{bold('Federation Activity')}\n\n"
             f"Active Ban: {active_part}\n"
             f"Total Bans: {ban_total}\n"
-            f"Warnings: {warn_total} across {len(warn_groups)} group(s)\n"
+            f"Warnings: {fed_warn_total} active across {len(warn_groups)} group(s)"
+            f" ({warn_total} total historical)\n"
             f"Kicks: {kick_total}\n"
             f"Mutes: {mute_total}\n"
             f"Appeals: {appeal_total}"
@@ -185,7 +193,7 @@ class Check:
         rows.append(
             [
                 InlineKeyboardButton(
-                    f"Warnings ({warn_total})",
+                    f"Warnings ({fed_warn_total} active)",
                     callback_data=f"check_warns:{target_id}",
                 ),
             ]

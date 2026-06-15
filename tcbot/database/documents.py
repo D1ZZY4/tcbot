@@ -48,6 +48,9 @@ class BanDoc(TypedDict, total=False):
     appeal_log_msg_id: int | None
     appeal_submitted_at: datetime | None
     appeal_link: str
+    rejected_by_id: int | None
+    rejected_by_name: str | None
+    rejected_at: datetime | None
 
 
 class GroupDoc(TypedDict, total=False):
