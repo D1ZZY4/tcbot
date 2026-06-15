@@ -2,6 +2,20 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-15 (session 122)
+
+### Fixed
+
+- **`tcbot/database/scheduler.py`** (module docstring, line 8): Removed stale "DB cleanup" from the list of scheduled actions in the module docstring. Member-cache cleanup moved to a MongoDB TTL index in session 121; the docstring still implied it was a scheduler job. Clarified that only warn expiry remains as a recurring APScheduler job; added a note that cleanup is handled by the TTL index on `last_updated`. (Bug #331)
+
+### Documentation
+
+- **`docs/databases/databases.md`** (scheduler.py table row): Updated to remove "DB cleanup" from the list of persisted scheduler jobs. Added note that member-cache cleanup is handled by a MongoDB TTL index, not a scheduler job. Added mention of `is_ready()` public accessor added in session 121. (Bug #332)
+- **`PLAN.md`** (Core Subsystem Design / Health check row): Updated to mention both `GET /` (returns `OK`) and the new `GET /health` endpoint (returns JSON `{status, mongodb, redis, scheduler, ts}` with HTTP 200/503). The row previously described only `GET /` and was missing the richer endpoint added in session 121. (Bug #333)
+- **`docker-compose.yml`** (bot service): Added a `healthcheck` block to the bot service. Now that `GET /health` exists, Docker Compose can actively probe bot readiness (`python -c "import urllib.request; urllib.request.urlopen(...)"`, 30 s interval, 30 s start_period). Previously the bot service had no healthcheck while all three of its dependency services (`mongo`, `redis`, internal probe) had one. (Bug #334)
+- **`README.md`** (Features list, Health checks bullet): Extended the bullet to mention both `GET /` (plain-text `OK`) and `GET /health` (JSON subsystem-status report). After session 121 added `GET /health`, the Features bullet still only described `GET /`, making the new endpoint invisible to anyone reading the README. (Bug #335)
+- **`replit.md`** (Health Check section): Expanded the endpoint table from a single `GET /` / `OK` entry into two entries: `GET /` for uptime probes and `GET /health` for the JSON subsystem-status report with HTTP 200/503. The section was authored before `GET /health` existed and was not updated when the endpoint was added in session 121. (Bug #336)
+
 ## [Unreleased] - 2026-06-14 (session 121)
 
 ### Added

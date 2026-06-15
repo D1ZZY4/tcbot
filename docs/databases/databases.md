@@ -48,7 +48,7 @@ flowchart TD
 | `queues_db.py` | `promotion_requests` | Queued Admin promotion requests and resolution status. |
 | `cache.py` | in-process + Redis | `TTLCache[T]` (L1 in-process) and `TwoLevelCache[T]` (L1 in-process + L2 Redis). Four public singletons: `effective_role_cache`, `connected_cache`, `active_groups_cache`, `owner_id_cache`. |
 | `redis_client.py` | Redis (optional) | Async Redis client singleton via `redis.asyncio.ConnectionPool`. `connect(url)` creates the pool and runs `PING`. `client()` returns the active client or `None` when Redis is not configured. `hiredis` C extension required. |
-| `scheduler.py` | MongoDB (APScheduler) | APScheduler 4.x `AsyncScheduler` backed by `MongoDBDataStore` and `CBORSerializer`. Persistent scheduled jobs (unban, warn expiry, DB cleanup) survive bot restarts. Background asyncio task owns the cancel scope. |
+| `scheduler.py` | MongoDB (APScheduler) | APScheduler 4.x `AsyncScheduler` backed by `MongoDBDataStore` and `CBORSerializer`. Persistent scheduled jobs (unban, warn expiry) survive bot restarts. Member-cache cleanup is handled by a MongoDB TTL index, not a scheduler job. Background asyncio task owns the cancel scope. `is_ready()` returns `True` when the scheduler background task is running. |
 | `documents.py` | type-only | `TypedDict` document shapes and `Literal` aliases. |
 | `types.py` | type-only | `NewType` primitives such as `UserId`, `GroupId`, `ChatId`, and `BanId`. |
 | `groups_db.py` | `federated_groups`, `pending_joins` | Connected group state, pending connection requests, group cache invalidation. |

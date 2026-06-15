@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-14 (session 121)
+**Last updated:** 2026-06-15 (session 122)
 
 ## Verification baseline
 
@@ -36,6 +36,12 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Bug #336 (session 122) | docs/accuracy | replit.md Health Check section — only listed `GET /` returning `OK`; `GET /health` JSON endpoint added in session 121 was absent. Expanded to two entries: uptime probe and JSON subsystem-status report. | 2026-06-15 (s122) |
+| Bug #335 (session 122) | docs/accuracy | README.md Features list Health checks bullet — only mentioned `GET /` returning `OK`; `GET /health` JSON endpoint absent after session 121 added it. Extended bullet to include both endpoints. | 2026-06-15 (s122) |
+| Bug #334 (session 122) | docs/infra | docker-compose.yml bot service had no `healthcheck` block despite `GET /health` existing. Added healthcheck (30s interval, 30s start_period) matching the three other services that already had one. | 2026-06-15 (s122) |
+| Bug #333 (session 122) | docs/accuracy | PLAN.md Core Subsystem Design / Health check row — described only `GET /` returning `OK`; missing `GET /health` added in session 121. Updated to mention both endpoints and their semantics. | 2026-06-15 (s122) |
+| Bug #332 (session 122) | docs/accuracy | docs/databases/databases.md scheduler.py table row — still listed "DB cleanup" as a scheduled job after session 121 moved cleanup to a MongoDB TTL index. Added note about TTL index and `is_ready()` accessor. | 2026-06-15 (s122) |
+| Bug #331 (session 122) | code/docs | tcbot/database/scheduler.py module docstring — listed "DB cleanup" as a scheduled action after session 121 removed the job. Corrected to clarify only warn expiry remains; cleanup handled by TTL index. | 2026-06-15 (s122) |
 | Improvement #1 — alive.py /health endpoint (session 121) | enhancement | Added `GET /health` JSON endpoint: `{status, mongodb, redis, scheduler, ts}`. HTTP 200 = ok, HTTP 503 = degraded. `mongos.is_connected()` + `sched_mod.is_ready()` added as public state-readers. Backward-compatible; `GET /` unchanged. Confirmed working via curl. | 2026-06-14 (s121) |
 | Improvement #3 — MongoDB TTL index + APScheduler job retirement (session 121) | enhancement/security | Replaced `member_cache [last_updated, -1]` sort index with TTL index `[last_updated, 1], expireAfterSeconds=7776000` (90 days). `_cleanup_old_records` APScheduler job converted to no-op migration shim. `_register_periodic_schedules` removes stale `tcbot.db_cleanup_weekly` schedule on startup. Confirmed: startup log showed "Removed legacy weekly cleanup schedule". Shrinks APScheduler deserialization surface for CVE-2026-31072. | 2026-06-14 (s121) |
 | Improvement #5 — APScheduler explicit pin (session 121) | security | `pyproject.toml`: `apscheduler[mongodb]>=4.0.0a1` → `==4.0.0a6`. Prevents blind float to another vulnerable alpha while CVE-2026-31072 unpatched. | 2026-06-14 (s121) |

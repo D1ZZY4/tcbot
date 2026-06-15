@@ -4,8 +4,10 @@
 
 """Persistent moderation scheduler backed by APScheduler 4.x + MongoDB.
 
-All scheduled moderation actions (warn expiry, DB cleanup) survive bot restarts
+All scheduled moderation actions (warn expiry) survive bot restarts
 because APScheduler stores its schedule state in MongoDB via MongoDBDataStore.
+Member-cache cleanup is handled by a MongoDB TTL index on ``last_updated``,
+not by a scheduler job.
 
 The scheduler runs inside a dedicated asyncio background task so that the
 ``async with AsyncScheduler()`` context manager is entered *and* exited in the

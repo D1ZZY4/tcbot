@@ -5,9 +5,20 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-14 (session 121)
+**Last updated:** 2026-06-15 (session 122)
 
 ## What is done
+
+- Session 122 (2026-06-15): Pass 12 — 6 doc/accuracy bugs found and fixed (Bug #331–#336). No new Python code bugs found.
+  - Bug #331: `tcbot/database/scheduler.py` module docstring — stale "DB cleanup" reference removed; clarified only warn expiry remains, TTL index handles cleanup.
+  - Bug #332: `docs/databases/databases.md` scheduler.py table row — removed "DB cleanup" entry; added TTL index note and `is_ready()` mention.
+  - Bug #333: `PLAN.md` Core Subsystem Design / Health check row — updated to mention both `GET /` and `GET /health` with HTTP 200/503 semantics.
+  - Bug #334: `docker-compose.yml` bot service — added `healthcheck` block (`GET /health` probe, 30s interval, 30s start_period). Matches the three other services that already had one.
+  - Bug #335: `README.md` Features list Health checks bullet — extended to mention both `GET /` and `GET /health` JSON endpoint.
+  - Bug #336: `replit.md` Health Check section — expanded from single `GET /` / `OK` entry to two entries covering both endpoints.
+  - Full audit of all remaining unread files: admins.py (complete), check_flow.py (complete), users_roles.py (complete), bans_db.py (complete), decorators.py (complete), greeting.py (complete), start.py (complete), groups.py (complete), broadcasting.py (complete), disconnecting.py (complete), kicking.py (complete), netspeed.py (complete), maintenance.py, privacy.py, about.py, additional.py, types.py. Zero new Python code bugs found.
+  - Ruff: All checks passed (73 files). Import OK. Bot running (27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling).
+  - Total bugs fixed: #1–#336.
 
 - Session 121 (2026-06-14): Pass 11 — 3 PLAN.md Improvements implemented (code + docs).
   - Improvement #1 (alive.py): Added `GET /health` endpoint returning JSON `{status, mongodb, redis, scheduler, ts}`. HTTP 200 = all subsystems ok, HTTP 503 = degraded. State read synchronously from module-level sentinels (`mongos.is_connected()`, `sched_mod.is_ready()`, `redis_client.client()`). Backward-compatible; `GET /` still returns "OK". Confirmed: `curl /health` → `{"status":"ok","mongodb":"ok","redis":"ok","scheduler":"ok"}`.

@@ -13,7 +13,7 @@ TCF Bot is a Telegram federation management bot for the Transsion Core Federatio
 - **Smart mentions**: global username-based mentions with automatic fallback to plain text + ID for users without usernames.
 - **Flexible target resolution**: reply-first priority with partial name search support for natural command usage.
 - **Audit logging**: moderation, appeal, role, and error reports to configured log destinations.
-- **Health checks**: Flask keep-alive server on `PORT` with `GET /` returning `OK`.
+- **Health checks**: Flask keep-alive server on `PORT` with `GET /` returning `OK` and `GET /health` returning a JSON subsystem-status report.
 
 ## Stack
 
