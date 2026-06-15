@@ -29,7 +29,6 @@ outputType = "console"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "uv run python -m tcbot"
-waitForPort = 8080
 
 [[workflows.workflow]]
 name = "Bash (Don't Delete This and Don't Run This)"
