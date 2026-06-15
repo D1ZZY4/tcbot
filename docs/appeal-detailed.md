@@ -45,7 +45,7 @@ When the appeal link is opened, the bot validates the ban record before starting
 1. The `ban_id` must exist in the `bans` collection.
 2. The ban must still be active (`is_active: True`).
 3. The Telegram user opening the link must match `banned_user_id` on the ban record.
-4. The ban must not already have a stored `review_message_id`; if it does, the user is told they already have a pending appeal under review.
+4. The ban must not already have a stored `review_message_id` that is still fresh. If it does and was set within the last 72 hours, the user is told their appeal is still under review. If the `review_timestamp` is older than 72 hours (or missing), the stale review is cleared automatically and the user may submit a new appeal.
 
 Invalid, expired, or wrong-account links end the conversation without changing the database.
 

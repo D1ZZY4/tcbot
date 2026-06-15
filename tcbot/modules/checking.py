@@ -336,9 +336,7 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
         try:
-            await update.effective_message.reply_text(
-                "Couldn't resolve that user. Reply to a message or provide a valid ID / @username."
-            )
+            await update.effective_message.reply_text(replies.ERR_CANNOT_RESOLVE)
         except Exception as exc:
             log.debug("check resolve-fail reply failed: %s", exc)
         return

@@ -110,7 +110,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     if not target_id:
         try:
-            await msg.reply_text(replies.ERR_CANT_FIND_USER)
+            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
         except Exception as exc:
             log.debug("cmd_kick no-target reply failed: %s", exc)
         return ConversationHandler.END

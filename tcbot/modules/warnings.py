@@ -132,7 +132,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     if not target_id:
         try:
-            await msg.reply_text(replies.ERR_CANT_FIND_USER)
+            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
         except Exception as exc:
             log.debug("cmd_warn_entry no-target reply failed: %s", exc)
         return ConversationHandler.END
@@ -228,7 +228,7 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
         try:
-            await msg.reply_text(replies.ERR_NO_TARGET)
+            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
         except Exception as exc:
             log.debug("cmd_unwarn no-target reply failed: %s", exc)
         return

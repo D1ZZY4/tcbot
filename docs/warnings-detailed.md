@@ -123,7 +123,7 @@ Rules for `/tcwarn`:
 - Founder targets are protected.
 - Targets with rank equal to or higher than the executor are protected.
 - A higher-ranked executor can warn a lower-ranked staff target.
-- A single warning below the warn limit does not auto-demote the target. However, if the target holds a federation role when they reach the warn limit, the auto-demote (`Demote.execute(trigger="ban")`) fires before the group auto-ban.
+- A single warning below the warn limit does not auto-demote the target. However, if the target holds a federation role when their warn count reaches exactly `WARN_LIMIT` (checked with `==`, not `>=`, to prevent race conditions), the auto-demote (`Demote.execute(trigger="ban")`) fires before the group auto-ban.
 
 `/tcunwarn` and `/resetwarns` handle staff targets differently:
 

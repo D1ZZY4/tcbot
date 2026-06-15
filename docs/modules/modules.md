@@ -73,7 +73,7 @@ signatures.
 |---|---|
 | `about.py` | Start-menu About page callback. |
 | `additional.py` | Start-menu Additional page callback. |
-| `greeting.py` | New/left member status handlers for watched groups. |
+| `greeting.py` | New/left member status handlers for watched groups; also monitors bot own-membership changes (left/kicked triggers group deactivation; member/restricted demotion sends a warning to the mod log channel). |
 | `help.py` | `/help` command and help-menu callbacks generated from loaded modules. |
 | `privacy.py` | Start-menu Privacy and Privacy Policy callbacks. |
 | `start.py` | `/start` menu and group-PM handoff callbacks. |

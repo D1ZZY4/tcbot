@@ -169,9 +169,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     if not target_id:
         try:
-            await msg.reply_text(
-                "Specify a target - reply to a message, or provide a user ID / @username."
-            )
+            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
         except Exception as exc:
             log.debug("cmd_promote no-target-id reply failed: %s", exc)
         return
@@ -365,9 +363,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     if not target_id:
         try:
-            await msg.reply_text(
-                "Specify a target - reply to a message, or provide a user ID / @username."
-            )
+            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
         except Exception as exc:
             log.debug("cmd_demote no-target-id reply failed: %s", exc)
         return
@@ -549,9 +545,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
         try:
-            await msg.reply_text(
-                "Specify the new owner - reply to a message, or provide a user ID / @username."
-            )
+            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
         except Exception as exc:
             log.debug("cmd_transfer no-target reply failed: %s", exc)
         return

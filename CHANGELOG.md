@@ -2,6 +2,22 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-15 (session 128)
+
+### Fixed
+
+- **`tcbot/modules/admins.py`** (`cmd_promote`, `cmd_demote`, `cmd_transfer`, Bug #351): Replaced three hardcoded "Specify a target..." inline strings with the shared `replies.ERR_CANNOT_RESOLVE` constant. Hardcoded strings caused drift whenever the canonical wording in `replies.py` changed and made the UI inconsistent with every other command.
+- **`tcbot/modules/checking.py`** (`cmd_check`, Bug #351): Replaced hardcoded "Couldn't resolve that user..." inline string with `replies.ERR_CANNOT_RESOLVE` for the same reason.
+- **`tcbot/modules/kicking.py`** (`cmd_kick_entry`, Bug #351): Replaced `replies.ERR_CANT_FIND_USER` with `replies.ERR_CANNOT_RESOLVE`. `extract_target` returns `(None, None)` for both "nothing provided" and "provided but unresolvable", so `ERR_CANT_FIND_USER` was semantically narrower than the actual failure set.
+- **`tcbot/modules/warnings.py`** (`cmd_warn_entry`, `cmd_unwarn`, Bug #351): Standardised both handlers to `replies.ERR_CANNOT_RESOLVE`. `/tcwarn` was using `ERR_CANT_FIND_USER` and `/tcunwarn` was using `ERR_NO_TARGET` — two different constants in the same file for identical failure conditions.
+- **`tcbot/modules/unbanning.py`** (`cmd_unban`, Bug #351): Replaced `replies.ERR_NO_TARGET` with `replies.ERR_CANNOT_RESOLVE` to match every other target-resolution failure path.
+
+### Documentation
+
+- **`docs/appeal-detailed.md`** (Bug #352): Eligibility check #4 now documents the 72-hour stale-review auto-cleanup introduced in Bug #350 (session 127). Previously stated the user was locked out indefinitely if `review_message_id` was set; now correctly describes the 72-hour escape path.
+- **`docs/modules/modules.md`** (Bug #352): `greeting.py` row updated to mention bot own-membership monitoring: left/kicked triggers group deactivation; member/restricted demotion sends a warning to the mod log channel.
+- **`docs/warnings-detailed.md`** (Bug #352): Auto-demote trigger description on line 126 now says "reaches exactly `WARN_LIMIT` (checked with `==`, not `>=`, to prevent race conditions)" instead of the stale `>= WARN_LIMIT` wording.
+
 ## [Unreleased] - 2026-06-15 (session 127)
 
 ### Fixed
