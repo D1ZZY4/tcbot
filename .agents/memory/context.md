@@ -5,9 +5,14 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-15 (session 125)
+**Last updated:** 2026-06-15 (session 126)
 
 ## What is done
+
+- Session 126 (2026-06-15): 1 open finding from PLAN.md resolved (P3 #2). 1 bug fixed (#346). 1 dependency bumped (tzlocal 5.3.1→5.4).
+  - Bug #346 (P3 #2): decorators.py — Added `_AsyncRateLimiter` class with atomic Redis sorted-set sliding window (Lua script: ZREMRANGEBYSCORE + ZCARD + ZADD + PEXPIRE in one round-trip). Replaced `_cmd_limiter` and `_cbq_limiter` with `_AsyncRateLimiter(prefix="cmd"/"cbq")`. Updated `global_rate_limit_handler` to `await limiter.check(uid)`. `ratelimiter()` factory now creates `_AsyncRateLimiter(prefix="h:{func.__name__}")` per handler. Key format: `rl:{prefix}:{uid}`. Falls back to in-process `_RateLimiter` (deque-based, monotonic clock) when Redis absent or errors. Rate-limit quota now survives 4-hour restart cycle. PLAN.md P3 #2 → Resolved. CHANGELOG.md updated. docs/helper/helper.md rate-limiter-backend section added.
+  - Ruff: All checks passed (73 files). Import OK. Bot running: 27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling.
+  - Remaining open items: P1 #4 (CVE-2026-31072, accepted/tracked risk), Improvement #2 (backups), Improvement #4 (multi-instance cache invalidation).
 
 - Session 125 (2026-06-15): 6 open findings from PLAN.md resolved (P1 #5, P1 #6, P2 #2, P2 #3, P3 #3, P4 #8). 6 bugs fixed (#340-#345).
   - Bug #340 (P1 #5): warning_flow.py execute_warn — warn auto-ban now federation-wide. Parallel gather fetches active groups + existing ban check + sends audit log. `bans_db.create_ban()` creates DB record (skipped if already banned). `fan_out()` propagates ban to all active + primary groups. Originating chat and primary groups added if not already in the list. Clear warns + notify in originating chat after success.

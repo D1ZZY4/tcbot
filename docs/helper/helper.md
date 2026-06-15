@@ -25,13 +25,20 @@ Decorators provide authorization, handler-level rate limiting, and debug tracing
 
 | Decorator/helper | Purpose |
 |---|---|
-| `ratelimiter(limit=5, period=60.0)` | Per-handler sliding-window user throttle. Use as the outermost command decorator. |
+| `ratelimiter(limit=5, period=60.0)` | Per-handler sliding-window user throttle backed by Redis sorted set when available; falls back to in-process sliding window. Use as the outermost command decorator. |
 | `log_execution` | DEBUG-level entry/exit/exception tracing. Use as the innermost decorator. |
 | `owner_only` | Founder-only commands. |
 | `staff_only` | Founder/Admin commands. |
 | `mod_only` | Developer+ commands, such as ban and unban. |
 | `basic_mod_only` | Tester+ commands, such as kick, mute, and warn. |
-| `global_rate_limit_handler` | Universal rate limiter registered by `__main__.py` at group `-1`. |
+| `global_rate_limit_handler` | Universal rate limiter registered by `__main__.py` at group `-1`. Uses `_AsyncRateLimiter` (Redis sorted-set + in-process fallback) for both command and callback-query buckets. |
+
+### Rate limiter backend
+
+`_AsyncRateLimiter` backs the global `_cmd_limiter` (8 calls / 30 s), `_cbq_limiter` (20 presses / 10 s), and each `ratelimiter()` per-handler instance:
+
+- **Redis available**: atomic Lua script on a sorted-set key `rl:{prefix}:{uid}`. Expired entries are purged each check via `ZREMRANGEBYSCORE`. State survives bot restarts, so the quota is consistent across the scheduled 4-hour `run-bot.yml` cycle.
+- **Redis absent or error**: transparent fallback to `_RateLimiter` (in-process `deque`-based sliding window). Rate limiting is never silently disabled; the fallback is logged at DEBUG level.
 
 Typical command decorator order:
 

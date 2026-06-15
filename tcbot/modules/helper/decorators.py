@@ -31,7 +31,7 @@ R = TypeVar("R")
 
 
 class _RateLimiter:
-    """Sliding-window per-user rate limiter."""
+    """Synchronous in-process sliding-window per-user rate limiter (fallback)."""
 
     __slots__ = ("_buckets", "max_calls", "window")
 
@@ -66,11 +66,84 @@ class _RateLimiter:
         return 0.0
 
 
+# * Lua script for atomic sorted-set sliding-window rate limit.
+# * KEYS[1] = rate-limit key; ARGV[1] = now (float), ARGV[2] = window (float),
+# * ARGV[3] = max_calls (int), ARGV[4] = unique member (nanosecond timestamp).
+# * Returns 0 if allowed, or ceil(wait_tenths) (int) if denied (wait = result/10 s).
+_RL_LUA = """
+local key   = KEYS[1]
+local now   = tonumber(ARGV[1])
+local win   = tonumber(ARGV[2])
+local limit = tonumber(ARGV[3])
+local member = ARGV[4]
+redis.call('ZREMRANGEBYSCORE', key, '-inf', now - win)
+local count = redis.call('ZCARD', key)
+if count < limit then
+    redis.call('ZADD', key, now, member)
+    redis.call('PEXPIRE', key, math.ceil(win * 1000) + 1000)
+    return 0
+end
+local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
+if oldest and oldest[2] then
+    local wait = win - (now - tonumber(oldest[2]))
+    if wait < 0.1 then wait = 0.1 end
+    return math.ceil(wait * 10)
+end
+return math.ceil(win * 10)
+"""
+
+
+class _AsyncRateLimiter:
+    """Sliding-window rate limiter: Redis sorted-set backend with in-process fallback.
+
+    When Redis is available the sliding window state persists across bot restarts.
+    When Redis is unavailable (or errors), the call falls through to the in-process
+    ``_RateLimiter``, so rate limiting is never silently disabled.
+    """
+
+    __slots__ = ("_local", "_prefix", "max_calls", "window")
+
+    def __init__(self, max_calls: int, window: float, prefix: str) -> None:
+        self.max_calls = max_calls
+        self.window = window
+        self._prefix = prefix
+        self._local = _RateLimiter(max_calls=max_calls, window=window)
+
+    async def check(self, uid: int) -> float:
+        """Return 0.0 if allowed, or seconds to wait if denied."""
+        r = db.redis_client.client()
+        if r is None:
+            return self._local.check(uid)
+
+        key = f"rl:{self._prefix}:{uid}"
+        now = time.time()
+        # * nanosecond timestamp string as unique member - avoids ZADD collision
+        member = str(time.time_ns())
+
+        try:
+            result = await r.eval(
+                _RL_LUA,
+                1,
+                key,
+                str(now),
+                str(self.window),
+                str(self.max_calls),
+                member,
+            )
+            if result == 0:
+                return 0.0
+            # * result = ceil(wait * 10) - convert back to seconds
+            return round(int(result) / 10.0, 1)
+        except Exception as exc:
+            log.debug("Redis rate limiter error, using local fallback: %s", exc)
+            return self._local.check(uid)
+
+
 # * Commands : 8 calls per 30 s - comfortable for regular moderation
-_cmd_limiter = _RateLimiter(max_calls=8, window=30.0)
+_cmd_limiter = _AsyncRateLimiter(max_calls=8, window=30.0, prefix="cmd")
 
 # * Buttons  : 20 presses per 10 s - allows snappy navigation
-_cbq_limiter = _RateLimiter(max_calls=20, window=10.0)
+_cbq_limiter = _AsyncRateLimiter(max_calls=20, window=10.0, prefix="cbq")
 
 
 async def global_rate_limit_handler(
@@ -83,7 +156,7 @@ async def global_rate_limit_handler(
 
     # * ── button press ─────────────────────────────────────────────────────────
     if update.callback_query:
-        wait = _cbq_limiter.check(uid)
+        wait = await _cbq_limiter.check(uid)
         if wait:
             try:
                 await update.callback_query.answer(
@@ -104,7 +177,7 @@ async def global_rate_limit_handler(
     if not any(text.startswith(p) for p in cfg.prefixes):
         return  # * plain chat message - never rate-limit
 
-    wait = _cmd_limiter.check(uid)
+    wait = await _cmd_limiter.check(uid)
     if wait:
         if msg:
             try:
@@ -114,24 +187,31 @@ async def global_rate_limit_handler(
         raise ApplicationHandlerStop
 
 
-# ──────────────── Per-handler rate limiter factory ──────────────── #
+# ──────────────────── Per-handler rate limiter factory ──────────────────── #
 
 
 def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
-    """Per-handler sliding-window rate limiter factory."""
-    _limiter = _RateLimiter(max_calls=limit, window=period)
+    """Per-handler sliding-window rate limiter factory.
+
+    Backed by Redis when available; falls through to in-process sliding window
+    otherwise.  The Redis key prefix includes the wrapped function name so each
+    handler gets an independent quota bucket per user.
+    """
 
     def decorator(
         func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R]],
     ) -> Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R | None]]:
         """Wrap ``func`` with a sliding-window per-user rate check."""
+        _limiter = _AsyncRateLimiter(
+            max_calls=limit, window=period, prefix=f"h:{func.__name__}"
+        )
 
         @functools.wraps(func)
         async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> R | None:
             """Block the call and notify the user if the rate limit is exceeded."""
             uid = update.effective_user.id if update.effective_user else None
             if uid:
-                wait = _limiter.check(uid)
+                wait = await _limiter.check(uid)
                 if wait:
                     if update.callback_query:
                         try:

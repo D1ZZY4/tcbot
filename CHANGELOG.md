@@ -2,6 +2,13 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-15 (session 126)
+
+### Changed
+
+- **`tcbot/modules/helper/decorators.py`** (`_AsyncRateLimiter`, P3 #2): Replaced the in-process `_cmd_limiter` and `_cbq_limiter` with a new `_AsyncRateLimiter` class backed by a Redis sorted-set sliding window. When Redis is available, each rate-limit check atomically (Lua script) removes expired entries, counts the remainder, and either adds a new entry with a `PEXPIRE` TTL or returns the number of tenths-of-a-second to wait. The key format is `rl:{prefix}:{uid}` — per-user, per-limiter-type, survives bot restarts. When Redis is absent or raises, the check falls through to the existing in-process `_RateLimiter` so rate limiting is never silently disabled. The `ratelimiter()` per-handler factory is also upgraded: it now creates an `_AsyncRateLimiter` with a `h:{func.__name__}` prefix, giving each decorated handler its own independent Redis quota bucket per user. (Bug #346)
+- **`pyproject.toml`** / **`uv.lock`**: Upgraded `tzlocal` `5.3.1` → `5.4` (latest stable, no breaking changes). APScheduler pin `==4.0.0a6` unchanged per accepted CVE-2026-31072 risk decision.
+
 ## [Unreleased] - 2026-06-15 (session 125)
 
 ### Fixed
