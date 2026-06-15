@@ -484,3 +484,218 @@ This documentation pass updates the root Markdown files to reflect the current p
 - `README.md`
 - `PLAN.md`
 - `replit.md`
+---
+
+## Help System Audit (2026-06-16)
+
+> Findings from a full read of `tcbot/modules/help.py`, every module's
+> `__module_name__` / `__help_text__` / `__help_sections__` declarations,
+> `tcbot/modules/helper/replies.py`, and `tcbot/modules/helper/formatter.py`.
+> All issues below are verified against the live source tree.
+
+### Problem 1 — Raw HTML embedded directly in help text
+
+**Location:** Every module that declares `__help_text__` or `__help_sections__`
+(`admins.py`, `appeals.py`, `banning.py`, `broadcasting.py`, `checking.py`,
+`connecting.py`, `disconnecting.py`, `groups.py`, `kicking.py`, `maintenance.py`,
+`muting.py`, `netspeed.py`, `stats.py`, `unbanning.py`, `warnings.py`).
+
+**Evidence:** A raw grep across all modules finds 127 bare `<code>`/`</code>` tags
+and 82 bare `<b>`/`</b>` tags hardcoded inside string literals — bypassing the
+`formatter.py` helpers (`bold()`, `code()`, `esc()`, `italic()`, `link()`) that
+already exist for exactly this purpose.
+
+```python
+# Current — raw HTML sprinkled everywhere
+"<code>/tcban</code> (alias: <code>/tcb</code>)"
+"Issues a <b>federation-wide ban</b> on a user"
+
+# Correct — use formatter helpers
+f"{code('/tcban')} (alias: {code('/tcb')})"
+f"Issues a {bold('federation-wide ban')} on a user"
+```
+
+**Why it matters:**
+- Any future change to the HTML structure (e.g. switching to MarkdownV2, adding
+  a CSS class wrapper, or escaping changes) must be applied manually to 200+
+  string sites instead of one helper.
+- `esc()` is not called on dynamic values in several strings, which is an
+  XSS-class risk for any user-supplied content that makes it into help text.
+- The inconsistency makes grep-based audits of formatting usage unreliable.
+
+**Fix:** Replace all bare `<b>`, `</b>`, `<code>`, `</code>`, `<i>`, `</i>` tags
+inside `__help_text__` and `__help_sections__` content with the corresponding
+`formatter.*` calls. Run `uv run ruff format .` after each module.
+
+---
+
+### Problem 2 — Module display names are inconsistent across the board
+
+**Location:** `__module_name__` declarations in every help-bearing module.
+
+**Evidence — current names:**
+
+| File | `__module_name__` | Problem |
+|---|---|---|
+| `admins.py` | `"Admins"` | Plural noun |
+| `appeals.py` | `"Appeal"` | Singular noun |
+| `banning.py` | `"Ban"` | Bare verb / infinitive |
+| `broadcasting.py` | `"Broadcast"` | Bare verb |
+| `checking.py` | `"Checking"` | Gerund |
+| `connecting.py` | `"Connect"` | Bare verb |
+| `disconnecting.py` | `"Disconnect"` | Bare verb |
+| `groups.py` | `"Groups"` | Plural noun |
+| `kicking.py` | `"Kick"` | Bare verb |
+| `maintenance.py` | `"Cleanup"` | Noun — unrelated to filename |
+| `muting.py` | `"Mute"` | Bare verb |
+| `netspeed.py` | `"Netspeed"` | Compound noun |
+| `stats.py` | `"Stats"` | Abbreviated noun |
+| `unbanning.py` | `"Unban"` | Bare verb |
+| `warnings.py` | `"Warnings"` | Plural noun |
+
+No consistent pattern: gerunds, bare verbs, singular nouns, plural nouns, and
+abbreviations all appear. The help index menu renders these side-by-side, making
+it look unpolished. `maintenance.py` → `"Cleanup"` is the worst case: the display
+name has no relationship to the file name, the module slug, or the commands it
+exposes (which are `tcmaintenance` / `tcm`).
+
+**Fix:** Pick one naming convention and apply it uniformly. Recommended:
+**action nouns** (what the feature does, noun form, title-cased, no trailing `s`
+unless the feature is inherently plural):
+
+| File | Proposed `__module_name__` |
+|---|---|
+| `admins.py` | `"Admin"` |
+| `appeals.py` | `"Appeal"` |
+| `banning.py` | `"Ban"` |
+| `broadcasting.py` | `"Broadcast"` |
+| `checking.py` | `"Check"` |
+| `connecting.py` | `"Connect"` |
+| `disconnecting.py` | `"Disconnect"` |
+| `groups.py` | `"Groups"` |
+| `kicking.py` | `"Kick"` |
+| `maintenance.py` | `"Maintenance"` |
+| `muting.py` | `"Mute"` |
+| `netspeed.py` | `"Netspeed"` |
+| `stats.py` | `"Stats"` |
+| `unbanning.py` | `"Unban"` |
+| `warnings.py` | `"Warnings"` |
+
+The key corrections are: `"Checking"` → `"Check"`, `"Cleanup"` → `"Maintenance"`,
+`"Admins"` → `"Admin"`. The rest are already acceptable under the action-noun
+convention. Update `_MODULE_NAME_MAP` lookups in `help.py` are automatic since
+`_builder_help()` derives the map from `__module_name__` at import time.
+
+---
+
+### Problem 3 — Help contract is implicit (duck-typed `getattr` with no enforced interface)
+
+**Location:** `tcbot/modules/help.py:_builder_help()` (lines ~46–58).
+
+**Evidence:**
+
+```python
+name = getattr(mod, "__module_name__", None)
+text = getattr(mod, "__help_text__", None)
+sections = list(getattr(mod, "__help_sections__", []) or [])
+if name and text:
+    content[f"help_{mod_name}"] = (name, text, sections)
+```
+
+The help system reads three module-level attributes through `getattr` with silent
+`None` fallbacks. A module can misspell `__help_sections__` as `__help_section__`
+and the bot will silently serve help with no sections and no error. The return type
+`dict[str, tuple[str, str, list[tuple[str, str]]]]` is a bare tuple: callers must
+remember that index 0 is the name, 1 is overview text, 2 is sections — there is
+no label, no IDE completion, and no static check.
+
+**Fix:** Define a `HelpEntry` TypedDict in `tcbot/modules/helper/replies.py` (or
+a new `tcbot/modules/helper/help_types.py`):
+
+```python
+from typing import TypedDict
+
+class HelpSection(TypedDict):
+    label: str
+    content: str
+
+class HelpEntry(TypedDict):
+    name: str
+    overview: str
+    sections: list[HelpSection]
+```
+
+Each help-bearing module declares a single `__help__: HelpEntry = { ... }` instead
+of three separate module-level attributes. `_builder_help()` reads one attribute
+instead of three and unpacks into typed fields. Mypy/pyright catches misspellings
+at import time. The `HELP_CONTENT` dict becomes `dict[str, HelpEntry]`, which is
+self-documenting and IDE-navigable.
+
+Migration path: keep `_builder_help()` backward-compatible by also checking the
+old three-attribute style during the transition window, then remove the fallback
+once all modules are migrated.
+
+---
+
+### Problem 4 — Section label strings are centralised but section content is not
+
+**Location:** `tcbot/modules/helper/replies.py` (SEC_* constants) and every
+`__help_sections__` list in the modules.
+
+**Evidence:** `replies.py` already centralises section-header labels (`SEC_COMMANDS`,
+`SEC_WHO`, `SEC_WHERE`, `SEC_WHAT`, `SEC_EXAMPLES`, `SEC_TARGET`) — good. But each
+module still builds its own `list[tuple[str, str]]` with inline HTML content for
+every section body. Standard fields like `SEC_WHO` and `SEC_WHERE` repeat near-
+identical boilerplate across modules:
+
+```python
+# admins.py, banning.py, kicking.py, muting.py, unbanning.py, warnings.py
+(replies.SEC_WHERE, replies.WHERE_CONNECTED_GROUP),
+(replies.SEC_WHO,   replies.PERM_TESTER_ABOVE),
+```
+
+These already reference `replies.*` constants — but `SEC_WHAT` body content and
+`SEC_COMMANDS` listings are still raw per-module HTML strings with no shared
+structure.
+
+**Fix (incremental):** Add constructor helpers to `replies.py` that build
+standard section tuples, cutting the per-module boilerplate to a single call for
+the common fields:
+
+```python
+def who_section(perm: str) -> HelpSection:
+    return {"label": SEC_WHO, "content": perm}
+
+def where_section(ctx: str) -> HelpSection:
+    return {"label": SEC_WHERE, "content": ctx}
+
+def commands_section(*cmds: str, aliases: dict[str, str] | None = None) -> HelpSection:
+    lines = [code(c) for c in cmds]
+    if aliases:
+        lines += [f"{code(a)} (alias for {code(c)})" for c, a in aliases.items()]
+    return {"label": SEC_COMMANDS, "content": "\n".join(lines)}
+```
+
+This pairs naturally with the `HelpEntry` TypedDict from Problem 3. Section bodies
+for `SEC_WHAT` stay as module-specific strings — they describe unique behavior and
+cannot be meaningfully templated.
+
+---
+
+### Recommended Execution Order
+
+These four issues are coupled. Fixing them out of order causes double-churn:
+
+1. **First:** Define `HelpEntry` / `HelpSection` TypedDict and migrate
+   `_builder_help()` to read `__help__` (Problem 3). Keep backward-compat shim.
+2. **Second:** Standardise `__module_name__` values (Problem 2). No code path
+   changes, only string edits. Can be a single focused commit per the git style
+   guide.
+3. **Third:** Replace raw HTML in help text bodies with `formatter.*` calls
+   (Problem 1). One module per commit keeps diffs reviewable.
+4. **Fourth (optional, lower priority):** Add `commands_section()` / `who_section()`
+   / `where_section()` constructor helpers to `replies.py` and migrate section
+   declarations to use them (Problem 4). Not blocking; do after the above land.
+
+Add findings 1–3 to the P3 backlog once work starts; they are maintainability
+issues, not correctness bugs.
