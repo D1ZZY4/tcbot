@@ -11,7 +11,7 @@ flowchart TD
     Permission -->|allowed| Reason[WAITING_REASON]
     Reason --> Proof[WAITING_PROOF]
     Proof --> AddWarn[warns_db.add_warn<br/>atomic counter]
-    AddWarn --> Check{count >= limit?}
+    AddWarn --> Check{count == limit?}
     Check -->|no| Notify[Send warn notice]
     Check -->|yes| AutoBan[Federation-wide auto-ban via fan_out]
     Notify --> Log[Log entry]
@@ -188,14 +188,18 @@ If `count < WARN_LIMIT`:
 2. The group receives a reply such as `<target> has been warned (1/3) - <reason>`.
 3. If proof was supplied, the reply includes a proof description line.
 
-If `count >= WARN_LIMIT`:
+If `count == WARN_LIMIT`:
+
+The trigger uses `==` rather than `>=` to prevent a race condition: because `warns_db.add_warn` uses MongoDB's atomic `$inc`, two concurrent warns for the same user atomically produce consecutive counts (`WARN_LIMIT` and `WARN_LIMIT+1`). Only the call that returns exactly `WARN_LIMIT` enters the auto-ban path; the one that returns `WARN_LIMIT+1` takes the ordinary warn-notice path.
 
 1. Active federation groups, any existing active ban, and the audit log are fetched/sent in parallel via `asyncio.gather`.
 2. If the user does not already hold an active federation ban, `bans_db.create_ban()` creates a ban document in the `bans` collection (the same document used by `/tcban`). This makes the ban appealable via the standard appeal flow.
 3. `fan_out()` propagates `ban_chat_member` to all active connected groups plus MAIN_GROUP and EXTEND_GROUP.
-4. If at least one group ban succeeds, `warns_db.clear_warns(target_id, chat_id)` clears warning history and the counter for the originating group.
-5. The originating group receives a reply that the user hit 3 warnings and has been federation-banned.
-6. If the user already holds an active federation ban, a new ban document is not created; `fan_out()` still runs to ensure enforcement in any newly connected groups.
+4. Per-group failures are logged at WARNING level with group title, chat_id, and exception.
+5. An applied-to summary is computed: "Applied to X/Y groups", "Applied to X/Y groups (Z failed: ...)", or "WARNING: ban not enforced in any group" when all fail.
+6. If at least one group ban succeeds, `warns_db.clear_warns(target_id, chat_id)` clears warning history and the counter for the originating group.
+7. The originating group receives a reply that the user hit the warn limit and has been federation-banned, including the applied-to summary.
+8. If the user already holds an active federation ban, a new ban document is not created; `fan_out()` still runs to ensure enforcement in any newly connected groups.
 
 Both auto-ban branches behave as follows:
 

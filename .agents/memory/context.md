@@ -5,9 +5,17 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-15 (session 126)
+**Last updated:** 2026-06-15 (session 127)
 
 ## What is done
+
+- Session 127 (2026-06-15): Audit pass 15+. 4 bugs fixed (#347–#350). Zero open PLAN.md findings added.
+  - Bug #347: warning_flow.py `execute_warn` — auto-ban trigger `>=` → `==` (race condition fix).
+  - Bug #348: warning_flow.py `execute_warn` — auto-ban reply now granular X/Y groups applied-to line.
+  - Bug #349: greeting.py `on_my_chat_member` — demotion branch added (member/restricted → warn log, no deactivate).
+  - Bug #350: appeal_flow.py `_start` — stale review auto-cleanup: if review_timestamp older than 72h (or None), clear_review() called and user allowed fresh appeal. Error text updated with 72h hint. Ruff 73 files clean. Bot restart: 27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling.
+  - Verified clean: ban_flow, unban_flow, kicking_flow, muting_flow (mutes_db is pure audit log, no is_active), broadcasting (fan_out semaphore 10, rate-limited, return_exceptions=True everywhere).
+  - Total bugs: #1–#350. Remaining open: P1 #4 (CVE accepted), Improvement #2 (backups), Improvement #4 (multi-instance).
 
 - Session 126 (2026-06-15): 1 open finding from PLAN.md resolved (P3 #2). 1 bug fixed (#346). 1 dependency bumped (tzlocal 5.3.1→5.4).
   - Bug #346 (P3 #2): decorators.py — Added `_AsyncRateLimiter` class with atomic Redis sorted-set sliding window (Lua script: ZREMRANGEBYSCORE + ZCARD + ZADD + PEXPIRE in one round-trip). Replaced `_cmd_limiter` and `_cbq_limiter` with `_AsyncRateLimiter(prefix="cmd"/"cbq")`. Updated `global_rate_limit_handler` to `await limiter.check(uid)`. `ratelimiter()` factory now creates `_AsyncRateLimiter(prefix="h:{func.__name__}")` per handler. Key format: `rl:{prefix}:{uid}`. Falls back to in-process `_RateLimiter` (deque-based, monotonic clock) when Redis absent or errors. Rate-limit quota now survives 4-hour restart cycle. PLAN.md P3 #2 → Resolved. CHANGELOG.md updated. docs/helper/helper.md rate-limiter-backend section added.

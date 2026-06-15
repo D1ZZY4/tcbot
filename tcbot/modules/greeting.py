@@ -226,8 +226,18 @@ async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
 @decorators.log_execution
 async def on_my_chat_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Auto-disconnect a federation group when the bot is removed or kicked.
+    """React to changes in the bot's own membership status.
 
+    Handles two distinct scenarios:
+
+    **Admin rights lost (new_status in member/restricted, old_status administrator):**
+    When the bot is demoted in a federated group it can no longer enforce bans
+    there. The group is NOT deactivated -- permissions may be restored shortly --
+    but a warning is sent to the mod log channel so staff are aware. Primary
+    groups (MAIN_GROUP, EXTEND_GROUP) are excluded from this warning since they
+    are managed separately.
+
+    **Bot removed or kicked (new_status in left/kicked):**
     When an admin removes the bot without running /tcdisconnect the group stays
     ``is_active=True`` in the DB indefinitely. Every subsequent federation ban
     then attempts ``ban_chat_member`` against that dead group, producing silent
@@ -244,6 +254,33 @@ async def on_my_chat_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         return
 
     new_status = my_member.new_chat_member.status
+    old_status = my_member.old_chat_member.status if my_member.old_chat_member else None
+
+    # * When the bot is demoted from administrator to member or restricted,
+    # * it can no longer enforce federation bans in that group.  Log a warning
+    # * to the mod channel so staff can restore admin rights; do NOT deactivate
+    # * the group because the admin might fix permissions shortly after.
+    if new_status in ("member", "restricted") and old_status == "administrator":
+        chat = update.effective_chat
+        if chat is not None and chat.id not in (cfg.main_group, cfg.exec_group):
+            lc, lt = cfg.logs
+            warning_text = (
+                f"Bot was demoted in group <b>{esc(chat.title or str(chat.id))}</b>"
+                f" (id: <code>{chat.id}</code>)."
+                f" Federation bans cannot be enforced there until admin rights are restored."
+            )
+            try:
+                await ctx.bot.send_message(
+                    lc, warning_text, parse_mode="HTML", message_thread_id=lt
+                )
+            except Exception as exc:
+                log.warning(
+                    "Failed to send admin-rights-lost warning for chat=%d: %s",
+                    chat.id,
+                    exc,
+                )
+        return
+
     if new_status not in ("left", "kicked"):
         return
 

@@ -76,7 +76,11 @@ async def execute_warn(
         chat_title,
     )
 
-    if count >= WARN_LIMIT:
+    if count == WARN_LIMIT:
+        # * Use == not >= so that only the warn that hits the limit exactly triggers
+        # * the auto-ban.  A concurrent second warn would return count == WARN_LIMIT+1
+        # * and skip this block entirely, preventing a double-ban race condition.
+        #
         # * If the target somehow holds a federation role (e.g. promoted mid-warn-cycle),
         # * remove the role before the auto-ban so they don't keep staff perms after exile.
         target_role = await db.users_roles.get_effective_role(target_id)
@@ -141,7 +145,55 @@ async def execute_warn(
         ban_results = await fan_out(
             [ctx.bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
         )
-        any_ban_ok = any(not isinstance(r, BaseException) for r in ban_results)
+
+        total_groups = len(groups)
+        failed_groups = [
+            (grp, r)
+            for grp, r in zip(groups, ban_results, strict=False)
+            if isinstance(r, BaseException)
+        ]
+        failed = len(failed_groups)
+        applied = total_groups - failed
+        any_ban_ok = applied > 0
+
+        for grp, exc in failed_groups:
+            log.warning(
+                "Warn auto-ban enforcement failed for user=%d in group=%s (%d): %s",
+                target_id,
+                grp.get("title", ""),
+                grp["chat_id"],
+                exc,
+            )
+        log.info(
+            "Warn auto-ban enforced: target=%d applied=%d/%d",
+            target_id,
+            applied,
+            total_groups,
+        )
+
+        # * Build the applied-to summary line (mirrors ban_flow.py style).
+        if total_groups == 0:
+            applied_line = " No connected groups configured."
+        elif failed == total_groups:
+            sample = ", ".join(
+                grp.get("title") or str(grp["chat_id"]) for grp, _ in failed_groups[:5]
+            )
+            applied_line = (
+                f" WARNING: ban not enforced in any group ({total_groups}/{total_groups} failed)."
+                f" Check bot admin rights in: {esc(sample)}"
+                + (" ..." if len(failed_groups) > 5 else "")
+            )
+        elif failed > 0:
+            sample = ", ".join(
+                grp.get("title") or str(grp["chat_id"]) for grp, _ in failed_groups[:3]
+            )
+            applied_line = (
+                f" Applied to {applied}/{total_groups} groups"
+                f" ({failed} failed: {esc(sample)}"
+                + (" ..." if len(failed_groups) > 3 else ")")
+            )
+        else:
+            applied_line = f" Applied to {total_groups}/{total_groups} groups."
 
         if any_ban_ok:
             # * Clear warns in the originating chat and reply with federation-ban notice.
@@ -150,7 +202,7 @@ async def execute_warn(
                 msg.reply_text(
                     f"{user_ref(target_id, target_name)} "
                     f"hit {WARN_LIMIT} warnings "
-                    f"and has been federation-banned.{proof_suffix}",
+                    f"and has been federation-banned.{applied_line}{proof_suffix}",
                     parse_mode="HTML",
                 ),
                 return_exceptions=True,
@@ -165,16 +217,11 @@ async def execute_warn(
             if isinstance(reply_result, BaseException):
                 log.debug("Auto-ban notification reply failed: %s", reply_result)
         else:
-            log.error(
-                "All group bans failed on warn limit for target=%d; %d group(s) tried",
-                target_id,
-                len(groups),
-            )
             try:
                 await msg.reply_text(
                     f"{user_ref(target_id, target_name)} "
                     f"hit {WARN_LIMIT} warnings "
-                    f"but federation-ban failed - please ban them manually.{proof_suffix}",
+                    f"but federation-ban failed - please ban them manually.{applied_line}{proof_suffix}",
                     parse_mode="HTML",
                 )
             except Exception as exc:

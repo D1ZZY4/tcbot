@@ -28,3 +28,8 @@
 - [run-bot.yml 24/7 self-chain hardening](decisions.md): handover 10 min before window end + 3x retry + `*/15` resurrection cron; for true zero-gap 24/7 use an always-on host, Actions as backup
 - [APScheduler CVE-2026-31072 accepted risk](decisions.md): no upstream patch; stay pinned on 4.0.0a6, do not blind-upgrade or downgrade; reachability needs MongoDB write access; mitigate operationally
 - [Redis rate limiter pattern](decisions.md): `_AsyncRateLimiter` uses sorted-set Lua script (ZREMRANGEBYSCORE + ZCARD + ZADD + PEXPIRE); keys `rl:{prefix}:{uid}`; falls back to in-process `_RateLimiter` on Redis absence or error
+- [warn auto-ban == not >= rule](decisions.md): use exact threshold `count == WARN_LIMIT` not `>=`; MongoDB $inc serializes increments so only one caller gets the exact limit value
+- [appeal stale-review 72h threshold](decisions.md): review_message_id older than 72h auto-cleared in _start(); never remove threshold or permanent-lockout bug returns
+- [bot demotion no deactivate](decisions.md): member/restricted demotion only logs warning to mod channel; deactivate_group only on left/kicked
+- [mutes_db is pure audit log](decisions.md): no is_active field, no deactivation needed; mute enforcement is via Telegram until_date only
+- [extraction @username fallthrough](decisions.md): _safe_get_chat returns None for both "not found" and timeout; fallthrough to partial name search is intentional design, not a bug

@@ -40,6 +40,8 @@ log = logging.getLogger(__name__)
 WAITING_APPEAL = 0
 _LOCK_HOURS: int = 12
 _LOCK_WINDOW = timedelta(hours=_LOCK_HOURS)
+_STALE_REVIEW_HOURS: int = 72
+_STALE_REVIEW_WINDOW = timedelta(hours=_STALE_REVIEW_HOURS)
 
 _ID_RE = re.compile(r"^/start\s+appeal_([a-z0-9]{10})$")
 
@@ -48,7 +50,10 @@ _ID_RE = re.compile(r"^/start\s+appeal_([a-z0-9]{10})$")
 _ERR_NOT_PRIVATE = "Please open this link in my private messages."
 _ERR_INVALID_LINK = "This appeal link is invalid or has expired."
 _ERR_WRONG_ACCOUNT = "This appeal link doesn't belong to your account."
-_ERR_PENDING_REVIEW = "You already have a pending appeal under review."
+_ERR_PENDING_REVIEW = (
+    f"You already have a pending appeal under review."
+    f" If no decision is reached within {_STALE_REVIEW_HOURS} hours, you may try again."
+)
 _MSG_CANCELLED = "Appeal cancelled. Nothing was submitted."
 _MSG_SESSION_ENDED = "Appeal session ended."
 _MSG_TIMEOUT = "Appeal session timed out. Nothing was submitted."
@@ -197,13 +202,41 @@ class BuildAppeal:
             return ConversationHandler.END
 
         if ban.get("review_message_id"):
-            try:
-                await msg.reply_text(_ERR_PENDING_REVIEW)
-            except Exception as exc:
-                log.debug(
-                    "Appeal pending-review reply failed for user %d: %s", uid, exc
+            review_ts = ban.get("review_timestamp")
+            stale = review_ts is None or (
+                to_utc(review_ts) < utc_now() - _STALE_REVIEW_WINDOW
+            )
+            if stale:
+                # * Review card is older than _STALE_REVIEW_HOURS (message may have been
+                # * deleted from the discussion topic or staff never acted).  Clear the
+                # * stale review state so the user can submit a fresh appeal.
+                try:
+                    await db.bans_db.clear_review(ban_id)
+                except Exception:
+                    log.exception(
+                        "Appeal _start: failed to clear stale review for ban_id=%s"
+                        " user=%d; blocking appeal to avoid corrupt state",
+                        ban_id,
+                        uid,
+                    )
+                    with contextlib.suppress(Exception):
+                        await msg.reply_text(_ERR_PENDING_REVIEW)
+                    return ConversationHandler.END
+                log.info(
+                    "Appeal _start: stale review cleared for ban_id=%s user=%d"
+                    " (review_ts=%s)",
+                    ban_id,
+                    uid,
+                    review_ts,
                 )
-            return ConversationHandler.END
+            else:
+                try:
+                    await msg.reply_text(_ERR_PENDING_REVIEW)
+                except Exception as exc:
+                    log.debug(
+                        "Appeal pending-review reply failed for user %d: %s", uid, exc
+                    )
+                return ConversationHandler.END
 
         if ctx.user_data is None:
             log.error("ctx.user_data is None in appeal_flow _start")

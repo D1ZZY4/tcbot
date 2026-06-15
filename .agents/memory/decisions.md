@@ -313,6 +313,36 @@ if (
 
 ---
 
+## 2026-06-15: warn auto-ban trigger uses == not >= to prevent race condition
+
+**Decision:** `execute_warn` checks `count == WARN_LIMIT` instead of `count >= WARN_LIMIT` when deciding whether to fire the auto-ban sequence.
+
+**Why:** `warns_db.add_warn` uses MongoDB's atomic `$inc` and returns the post-increment value. Two concurrent warns for the same user therefore produce consecutive counts (`WARN_LIMIT` and `WARN_LIMIT + 1`) -- they are serialized at the DB level. With `>=`, both calls satisfied the condition and both independently started the auto-ban flow, potentially creating duplicate `bans` collection documents and sending redundant `ban_chat_member` calls. With `==`, only the call that atomically produces exactly `WARN_LIMIT` enters the auto-ban path; any higher count takes the normal warn-notice branch.
+
+**How to apply:** Any future warn-counting logic that triggers a threshold action must use `==` (exact threshold) rather than `>=` whenever the counter is incremented atomically and concurrency is possible.
+
+---
+
+## 2026-06-15: appeal stale-review threshold is 72 hours
+
+**Decision:** `appeal_flow._start()` uses `_STALE_REVIEW_HOURS = 72` as the stale-review threshold. If `review_timestamp` is older than 72 h (or is `None`), `clear_review()` is called and the user is allowed to submit a new appeal.
+
+**Why:** Without a stale threshold, deleting the review card from the discussion topic permanently locks the user out (`review_message_id` stays set, `_ERR_PENDING_REVIEW` returned on every attempt). 72 h gives staff adequate time to act (longer than the `_LOCK_HOURS = 12` reviewer lock window) while still providing an eventual escape path.
+
+**How to apply:** If the stale window needs to be adjusted, change `_STALE_REVIEW_HOURS` in `appeal_flow.py`. Do NOT remove the threshold entirely — that reintroduces the permanent-lockout bug.
+
+---
+
+## 2026-06-15: bot demotion in a federated group does NOT auto-deactivate the group
+
+**Decision:** When `on_my_chat_member` sees `new_status in ("member", "restricted") and old_status == "administrator"`, send a warning to the mod log channel but do NOT call `deactivate_group`.
+
+**Why:** Demotion is often temporary (an admin briefly adjusting permissions). Deactivating the group would require a reconnection command to restore federation coverage, creating unnecessary work. A log-channel warning is sufficient to notify staff that bans cannot be enforced there until rights are restored.
+
+**How to apply:** Only call `deactivate_group` on `left` or `kicked` (bot permanently removed). For demotion, warn and return.
+
+---
+
 ## 2026-06-15: APScheduler CVE-2026-31072 accepted as a tracked risk
 
 **Decision:** Stay on the pinned APScheduler `4.0.0a6` and accept CVE-2026-31072 (GHSA-9cfw-f3f9-7mm7, CVSS 9.8) as a tracked risk rather than upgrading or downgrading. Dependabot alert #2 was dismissed as `tolerable_risk`. Documented in `PLAN.md` (Core Subsystem Design / Persistent Scheduler) with a P1 finding row.
