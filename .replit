@@ -32,7 +32,7 @@ args = "uv run python -m tcbot"
 waitForPort = 8080
 
 [[workflows.workflow]]
-name = "Bash (Don't Delete This)"
+name = "Bash (Don't Delete This and Don't Run This)"
 mode = "sequential"
 author = 57967288
 
