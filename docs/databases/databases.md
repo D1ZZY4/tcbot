@@ -129,12 +129,14 @@ Use `users_roles.role_rank()` and `users_roles.can_act_on()` instead of hand-wri
 | `proof_message_id` | Uploaded proof message ID in the proof destination. |
 | `log_message_id` | Audit log message ID. |
 | `previous_proof_message_id` / `previous_log_message_id` | Prior records when an active ban is updated. |
+| `until_date` / `duration_str` | Reserved for future timed-ban support; both currently `None`. |
 | `timestamp` | Initial creation time. |
 | `updated_timestamp` | Last update time when applicable. |
 | `is_active` | Whether the federation ban is active. |
 | `update_count` | Number of updates to the ban. |
 | `review_message_id` / `review_timestamp` | Appeal review card metadata. |
 | `appeal_log_msg_id` / `appeal_submitted_at` / `appeal_link` | Submitted appeal metadata. |
+| `rejected_by_id` / `rejected_by_name` / `rejected_at` | Rejector identity and timestamp (set by `bans_db.set_rejected_by` on appeal rejection). |
 
 Key helper functions:
 

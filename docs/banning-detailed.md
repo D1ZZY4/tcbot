@@ -188,6 +188,8 @@ Ban records are stored in the `bans` collection. New records include:
 | `log_message_id` | Message ID of the ban log in the logs destination. |
 | `previous_proof_message_id` | Previous proof message ID after an update. |
 | `previous_log_message_id` | Previous log message ID after an update. |
+| `until_date` | Reserved for future timed-ban support; currently `None` (permanent bans only). |
+| `duration_str` | Human-readable duration string; reserved alongside `until_date`; currently `None`. |
 | `timestamp` | Original ban creation time. |
 | `updated_timestamp` | Last update time, or `None` for a new ban. |
 | `is_active` | Whether the federation ban is still active. |
@@ -197,6 +199,9 @@ Ban records are stored in the `bans` collection. New records include:
 | `appeal_log_msg_id` | Appeal log message ID after appeal submission. |
 | `appeal_submitted_at` | Appeal submission time. |
 | `appeal_link` | Link to the forwarded appeal message. |
+| `rejected_by_id` | Telegram user ID of the staff member who rejected the appeal. |
+| `rejected_by_name` | Display name of the rejector at the time of rejection. |
+| `rejected_at` | Timestamp when the appeal was rejected. |
 
 Indexes are ensured for:
 

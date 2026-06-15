@@ -52,7 +52,7 @@ Federation Activity
 
 Active Ban: Yes (<code ban_id>) / No
 Total Bans: <n>
-Warnings: <n> across <m> group(s)
+Warnings: <n> active across <m> group(s) (<total> total historical)
 Kicks: <n>
 Mutes: <n>
 Appeals: <n>
@@ -62,7 +62,7 @@ Inline keyboard:
 
 ```text
 [ Bans (n) ] [ Appeals (n) ]
-[ Warnings (n)             ]
+[ Warnings (n active)      ]
 [ Kicks (n) ] [ Mutes (n)  ]
 ```
 
@@ -145,7 +145,7 @@ All callbacks are registered in `checking.py` and run safely on repeated taps th
 
 ## Async behavior: zero-delay design
 
-The profile view performs nine independent reads in a single `asyncio.gather`:
+The profile view performs ten independent reads in a single `asyncio.gather`:
 
 ```python
 (
@@ -156,18 +156,21 @@ The profile view performs nine independent reads in a single `asyncio.gather`:
     appeal_total,
     warn_total,
     warn_groups,
+    fed_warn_total,
     kick_total,
     mute_total,
 ) = await asyncio.gather(
     _resolve_user_info(bot, target_id),
-    role_meta(target_id),
+    db.users_roles.role_meta(target_id),
     db.bans_db.get_active_ban(target_id),
     db.bans_db.user_ban_count(target_id),
     db.bans_db.user_appeal_count(target_id),
     db.warns_db.user_total_warns(target_id),
     db.warns_db.user_warn_groups(target_id),
+    db.warns_db.federation_warn_count(target_id),
     db.kicks_db.user_kick_count(target_id),
     db.mutes_db.user_mute_count(target_id),
+    return_exceptions=True,
 )
 ```
 

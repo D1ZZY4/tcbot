@@ -84,6 +84,8 @@ Examples:
 
 If the log message ID is missing or mismatched, the bot replies with `Invalid log link. Please check and try again.` and keeps waiting.
 
+Appeal messages have a **maximum length of 2000 characters**. Messages that exceed this limit are rejected with a trimming instruction; the user may shorten the message and try again without restarting the session.
+
 ## Submission side effects
 
 When a valid appeal message is submitted:
@@ -172,8 +174,12 @@ When a staff member rejects an appeal:
 2. The user receives a DM telling them the appeal was reviewed and not approved.
 3. The review message is edited to show who rejected it and the inline keyboard is removed.
 4. The submitted-appeal log message is edited to a rejected version when possible.
+5. `bans_db.clear_review(ban_id)` clears `review_message_id` and `review_timestamp` so the user can submit a new appeal.
+6. `bans_db.set_rejected_by(ban_id, admin.id, admin.first_name)` records the rejector's identity (`rejected_by_id`, `rejected_by_name`, `rejected_at`) on the ban document for the audit trail.
 
-Rejection does not clear `review_message_id`, does not deactivate the ban, and does not remove the stored appeal metadata.
+Steps 2–6 run in a single `asyncio.gather` so a DM failure does not block the review-message edit or the DB writes.
+
+Rejection does not deactivate the ban. The `review_message_id` and `review_timestamp` fields **are cleared** on rejection so the user may submit a subsequent appeal without being locked out.
 
 ## Logs
 
@@ -216,9 +222,10 @@ Important appeal behaviors to keep in mind:
 2. Text without a leading hash tag is rejected.
 3. A log message ID matches as a standalone number inside a Telegram link.
 4. Partial numeric matches are rejected.
-5. The 12-hour reviewer lock blocks a different admin inside the window.
-6. The original banning admin is allowed inside the 12-hour window.
-7. Any staff reviewer is allowed after 12 hours.
-8. Missing `review_timestamp` or missing `admin_user_id` disables the reviewer lock.
-9. Uppercase `#APPEAL` reaches the expired-session branch when conversation state is missing.
-10. The module-level appeal builder uses the configured appeal log handle.
+5. Appeal messages must not exceed 2000 characters; longer messages are rejected with a trim instruction and the user can retry without restarting.
+6. The 12-hour reviewer lock blocks a different admin inside the window.
+7. The original banning admin is allowed inside the 12-hour window.
+8. Any staff reviewer is allowed after 12 hours.
+9. Missing `review_timestamp` or missing `admin_user_id` disables the reviewer lock.
+10. Uppercase `#APPEAL` reaches the expired-session branch when conversation state is missing.
+11. The module-level appeal builder uses the configured appeal log handle.

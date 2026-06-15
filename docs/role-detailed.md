@@ -4,7 +4,7 @@ This document describes the current role and staff-management behavior implement
 
 For promote command details, see [`promote-detailed.md`](promote-detailed.md). For demote command details, see [`demote-detailed.md`](demote-detailed.md). For module structure, see [`modules/modules.md`](modules/modules.md). For shared helpers, see [`helper/helper.md`](helper/helper.md). For database layer, see [`databases/databases.md`](databases/databases.md).
 
-Every staff-management command (`/tcpromote`, `/tcdemote`, `/tcpromoterequests`, `/transferowner`, `/tcunwarn`, `/resetwarns`) classifies the target through `identity.classify(...)` and refuses disallowed identities (self, this bot, Telegram service account, other bots, Founder, and higher-rank staff where applicable) via `identity.refuse_message(action, ident)` before mutating state.
+Every staff-management command except `/tcpromoterequests` (`/tcpromote`, `/tcdemote`, `/transferowner`, `/tcunwarn`, `/resetwarns`) classifies the target through `identity.classify(...)` and refuses disallowed identities (self, this bot, Telegram service account, other bots, Founder, and higher-rank staff where applicable) via `identity.refuse_message(action, ident)` before mutating state. `/tcpromoterequests` is the exception: the caller is both executor and target, which would always produce a self-refusal, so it instead checks `get_effective_role` and `queues_db.get_request` directly to reject callers who already have a role or a pending request.
 
 ```mermaid
 flowchart TD
@@ -84,7 +84,7 @@ Common moderation thresholds:
 | `tc_owners` | Stores the single Founder/owner. | `user_id` |
 | `tc_admins` | Stores Admin users. | `user_id`, `promoted_by`, `promoted_date` |
 | `tc_roles` | Stores custom Developer/Tester roles. | `user_id`, `role`, `assigned_by`, `assigned_at` |
-| `promotion_requests` | Stores pending/resolved Admin promotion requests. | `request_id`, `target_id`, `status`, `requested_date`, `resolved_date`, `resolved_by` |
+| `promotion_requests` | Stores pending/resolved Admin promotion requests. | `request_id`, `target_id`, `username`, `first_name`, `promoted_by`, `status`, `requested_date`, `resolved_date`, `resolved_by` |
 
 Indexes are ensured for unique user IDs in `tc_owners`, `tc_admins`, and `tc_roles`, plus unique `promotion_requests.request_id` and `promotion_requests.target_id + status`.
 

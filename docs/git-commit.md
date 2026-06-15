@@ -123,8 +123,8 @@ pending appeals were locked out after a bot restart.
 
 See CHANGELOG.md for full details.
 
-Author-by: D1ZZY4 <176969112+D1ZZY4@users.noreply.github.com>
-Signed-off-by: D1ZZY4 <176969112+D1ZZY4@users.noreply.github.com>
+Author-by: Dizzy <176969112+D1ZZY4@users.noreply.github.com>
+Signed-off-by: Dizzy <176969112+D1ZZY4@users.noreply.github.com>
 ```
 
 Short commit example (no body needed):
@@ -132,8 +132,8 @@ Short commit example (no body needed):
 ```text
 Update developer docs
 
-Author-by: D1ZZY4 <176969112+D1ZZY4@users.noreply.github.com>
-Signed-off-by: D1ZZY4 <176969112+D1ZZY4@users.noreply.github.com>
+Author-by: Dizzy <176969112+D1ZZY4@users.noreply.github.com>
+Signed-off-by: Dizzy <176969112+D1ZZY4@users.noreply.github.com>
 ```
 
 ---

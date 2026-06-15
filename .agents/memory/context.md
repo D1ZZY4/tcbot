@@ -5,9 +5,45 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-15 (session 128)
+**Last updated:** 2026-06-15 (session 131)
 
 ## What is done
+
+- Session 131 (2026-06-15): Audit pass 19 — 7 docs bugs fixed (#355–#361). Zero Python code bugs.
+  - Bug #355: docs/promote-detailed.md — `/tcpromoterequests` section incorrectly described `identity.classify` call; corrected to parallel asyncio.gather reads.
+  - Bug #356: docs/role-detailed.md — opening paragraph listed `/tcpromoterequests` among classify callers; corrected with exception note.
+  - Bug #357: docs/check-detailed.md — profile warnings line missing "active" qualifier and total-historical count.
+  - Bug #358: docs/check-detailed.md — Warnings button label `(n)` vs actual `(n active)` in check_flow.py.
+  - Bug #359: docs/appeal-detailed.md — "Rejection does not clear review_message_id" was WRONG; code calls clear_review(ban_id) on rejection; corrected + added set_rejected_by docs.
+  - Bug #360: docs/banning-detailed.md + databases.md — BanDoc tables missing rejected_by_id/name/at fields added in Bug #343.
+  - Bug #361: docs/appeal-detailed.md — 2000-char appeal limit (Bug #344) was completely undocumented.
+  - Scans CLEAN: Ruff check — All checks passed (73 files). Format: 73 already formatted. Bot: 27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling. appeal_link/appeal_log_msg_id accurate, ban_info.py location, TwoLevelCache, mutes_db audit log, WARN_LIMIT, keyboard button labels (Bans/Appeals/Kicks/Mutes) all accurate.
+  - Bug #362: docs/banning-detailed.md + databases.md — BanDoc tables missing `until_date` and `duration_str` reserved fields (placeholder for future timed-ban).
+  - Bug #363: docs/check-detailed.md — async gather section said "nine independent reads" and omitted `federation_warn_count` (10th coroutine) and `return_exceptions=True`.
+  - Bug #364: docs/role-detailed.md — `promotion_requests` field list missing `username`, `first_name`, `promoted_by`.
+  - Bug #365: docs/README.md — "All 4 CI/CD workflows" wrong; 5 workflow files exist; workflows-guide.md also says 5.
+  - Bug #366: docs/setup.md — config table missing `REDIS_URL` and `WARN_EXPIRY_DAYS`.
+  - Bug #367: docs/git-commit.md — "Required Trailers" section shows "Dizzy" (canonical) but two code examples below used "D1ZZY4"; updated examples to "Dizzy".
+  - Total bugs: #1–#367. Remaining open: P1 #4 (CVE accepted), Improvement #2 (backups), Improvement #4 (multi-instance).
+
+- Session 130 (2026-06-15): Audit pass 18 — ZERO new bugs found. Deep verification audit.
+  - AST scan: 0 asyncio.gather() missing return_exceptions (entire codebase, verified via ast module). ALL CLEAN.
+  - AST scan: 0 function parameters missing type annotations. ALL CLEAN.
+  - All create_task calls verified have strong references: _member_cache_tasks, _startup_tasks, _redis_bg_tasks, _tg_tasks, _album_tasks, _harvest_tasks, _sched_task — all properly guarded (RUF006-compliant).
+  - None guard scan: 27 theoretical "unguarded" handlers — ALL confirmed FALSE POSITIVES. @staff_only uses `effective_user.id if effective_user else None` guard; CallbackQueryHandler PTB guarantees effective_user; @log_execution uses same pattern; on_proof_unexpected uses `if update.effective_message:` guard.
+  - fan_out usage: 11 call sites all verified correct (return_exceptions absorbed by _slot wrapper).
+  - admins.py FULLY read baris per baris (829 lines): cmd_promote, cmd_demote, on_promote_role_btn, on_demote_confirm, cmd_transfer, cmd_promote_request, cmd_promote_list, on_promo_decision — ALL SOLID.
+  - proof_flow.py fully read (160 lines): BuildProof dataclass, upload_proof — SOLID.
+  - dispatch.py: fan_out semaphore-bounded gather with CancelledError re-raise — SOLID.
+  - Bot: 27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling active.
+  - Total bugs: #1–#354. Remaining open: P1 #4 (CVE accepted), Improvement #2 (backups), Improvement #4 (multi-instance).
+
+- Session 129 (2026-06-15): Audit pass 17 — ZERO new bugs found. Comprehensive audit of ALL remaining tcbot/ files.
+  - Files fully read baris per baris: banning.py, unbanning.py, users_cache.py, extraction.py, unban_flow.py, muting.py (cmd_mute + cmd_unmute), kicking.py, identity.py, stats.py, cache.py, groups_db.py, broadcasting.py, __main__.py (harvest handler + error handler), checking.py (partial), connected_flow.py (full), promote_flow.py, demote_flow.py, stats_flow.py, warning_flow.py, kicking_flow.py, muting_flow.py, check_flow.py, ban_info.py, formatter.py, replies.py, keyboards.py, warns_db.py, users_roles.py, scheduler.py, parse_logmsg.py.
+  - Scanned: every asyncio.gather call — ALL have return_exceptions=True on continuation lines (grep false positives from multi-line calls confirmed valid). Every callback handler q.answer() pattern — ALL CLEAN. Every bare except Exception: — ALL intentional (rollback, broad catch with log.exception, or "not found" non-fatal). Every to_list(None) — bounded by collection size / result cap at caller level; acceptable.
+  - AST scan: 0 gathers missing return_exceptions. Sequential q.answer scan: CLEAN. TODO/FIXME scan: 0. Ruff format: 73 files already formatted. Ruff check: All checks passed (0 errors).
+  - Bot running: 27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling active.
+  - Total bugs: #1–#354. Remaining open: P1 #4 (CVE accepted), Improvement #2 (backups), Improvement #4 (multi-instance).
 
 - Session 128 (2026-06-15): Audit pass 16. 4 bugs fixed (#351–#354). 2 docs updated (Bug #352). Dead constants cleaned.
   - Bug #351 (prev part): admins.py, checking.py, kicking.py, warnings.py, unbanning.py — hardcoded error strings → ERR_CANNOT_RESOLVE.

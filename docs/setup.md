@@ -113,6 +113,8 @@ PROOFS="-1001234567890"
 | `LOG_LEVEL` | No | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | Runtime logging level. Default `INFO`. |
 | `MODULES_LOAD` | No | comma-separated module names | Optional whitelist, e.g. `banning,appeals`. |
 | `MODULES_NO_LOAD` | No | comma-separated module names | Optional blacklist, e.g. `maintenance,broadcasting`. |
+| `REDIS_URL` | No | Redis URI | L2 cache connection string, e.g. `redis://localhost:6379/0`. When absent the bot uses in-process L1 cache only. |
+| `WARN_EXPIRY_DAYS` | No | positive integer | Days after which `warn_counts` records are deleted by the daily scheduler job. Default `0` (disabled). Set to a positive integer to enable automatic warn expiry. |
 
 ## Startup sequence
 
