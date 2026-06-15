@@ -159,7 +159,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if isinstance(_target_r, BaseException):
         log.error("extract_target failed during promote: %s", _target_r)
         try:
-            await msg.reply_text(replies.ERR_NO_TARGET)
+            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
         except Exception as exc:
             log.debug("cmd_promote no-target reply failed: %s", exc)
         return
@@ -355,7 +355,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if isinstance(_target_r, BaseException):
         log.error("extract_target failed during demote: %s", _target_r)
         try:
-            await msg.reply_text(replies.ERR_NO_TARGET)
+            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
         except Exception as exc:
             log.debug("cmd_demote no-target reply failed: %s", exc)
         return

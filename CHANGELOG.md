@@ -11,12 +11,17 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 - **`tcbot/modules/kicking.py`** (`cmd_kick_entry`, Bug #351): Replaced `replies.ERR_CANT_FIND_USER` with `replies.ERR_CANNOT_RESOLVE`. `extract_target` returns `(None, None)` for both "nothing provided" and "provided but unresolvable", so `ERR_CANT_FIND_USER` was semantically narrower than the actual failure set.
 - **`tcbot/modules/warnings.py`** (`cmd_warn_entry`, `cmd_unwarn`, Bug #351): Standardised both handlers to `replies.ERR_CANNOT_RESOLVE`. `/tcwarn` was using `ERR_CANT_FIND_USER` and `/tcunwarn` was using `ERR_NO_TARGET` — two different constants in the same file for identical failure conditions.
 - **`tcbot/modules/unbanning.py`** (`cmd_unban`, Bug #351): Replaced `replies.ERR_NO_TARGET` with `replies.ERR_CANNOT_RESOLVE` to match every other target-resolution failure path.
+- **`tcbot/modules/admins.py`** (`cmd_promote` exception path, `cmd_demote` exception path, Bug #353): Changed `replies.ERR_NO_TARGET` to `replies.ERR_CANNOT_RESOLVE` on the `isinstance(_target_r, BaseException)` branch. When `extract_target` itself raises an unexpected exception the user experience is identical to the `(None, None)` path that immediately follows — neither can resolve the target — so both should show the same constant. Bug #351 standardised the `(None, None)` branch to `ERR_CANNOT_RESOLVE` but missed the exception branch two lines above it.
+- **`tcbot/modules/muting.py`** (`cmd_unmute`, Bug #354): Replaced `replies.ERR_NO_TARGET` with `replies.ERR_CANNOT_RESOLVE`. `extract_target` returns `(None, None)` for both "nothing provided" and "provided but unresolvable"; `ERR_NO_TARGET` implied only the former.
+- **`tcbot/modules/warnings.py`** (`cmd_warnlist`, `cmd_resetwarns`, Bug #354): Replaced `replies.ERR_NO_TARGET` with `replies.ERR_CANNOT_RESOLVE` in both handlers for the same reason as `cmd_unmute`.
+- **`tcbot/modules/helper/replies.py`** (Bug #353, Bug #354): Removed dead constants `ERR_NO_TARGET` and `ERR_CANT_FIND_USER`. After Bug #351 removed the last caller of `ERR_CANT_FIND_USER`, and Bugs #353+#354 migrated all callers of `ERR_NO_TARGET` to `ERR_CANNOT_RESOLVE`, both constants became entirely unused. All command modules now use a single unified constant `ERR_CANNOT_RESOLVE` for all `extract_target` failure paths.
 
 ### Documentation
 
 - **`docs/appeal-detailed.md`** (Bug #352): Eligibility check #4 now documents the 72-hour stale-review auto-cleanup introduced in Bug #350 (session 127). Previously stated the user was locked out indefinitely if `review_message_id` was set; now correctly describes the 72-hour escape path.
 - **`docs/modules/modules.md`** (Bug #352): `greeting.py` row updated to mention bot own-membership monitoring: left/kicked triggers group deactivation; member/restricted demotion sends a warning to the mod log channel.
 - **`docs/warnings-detailed.md`** (Bug #352): Auto-demote trigger description on line 126 now says "reaches exactly `WARN_LIMIT` (checked with `==`, not `>=`, to prevent race conditions)" instead of the stale `>= WARN_LIMIT` wording.
+- **`docs/helper/helper.md`** (`replies.py` table, Bug #353/354): Removed stale `ERR_NO_TARGET` and `ERR_CANT_FIND_USER` rows; updated `ERR_CANNOT_RESOLVE` description to note it covers both "no target provided" and "target provided but unresolvable" — the single canonical error for all `extract_target` failure paths.
 
 ## [Unreleased] - 2026-06-15 (session 127)
 

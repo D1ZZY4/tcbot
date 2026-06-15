@@ -134,9 +134,7 @@ Shared bot-reply string constants used by multiple command modules. Import with 
 | Constant | Purpose |
 |---|---|
 | `TARGET_SYNTAX` | Usage hint for commands that accept a target argument. |
-| `ERR_NO_TARGET` | Error when no target can be resolved. |
-| `ERR_CANNOT_RESOLVE` | Error when the target ID/username cannot be resolved via Telegram. |
-| `ERR_CANT_FIND_USER` | Error when a user is not found in the cache or Telegram. |
+| `ERR_CANNOT_RESOLVE` | Error when the target cannot be resolved — covers both "no target provided" and "target provided but unresolvable". Used by all command modules at `extract_target` return sites. |
 | `ERR_ROLE_VERIFY` | Error when executor or target role cannot be verified. |
 | `ERR_GROUP_ONLY` | Error when a command is used outside a group. |
 | `ERR_NO_CONNECTED_GROUPS` | Error when no connected groups exist for the operation. |

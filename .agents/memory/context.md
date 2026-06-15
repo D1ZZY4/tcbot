@@ -5,9 +5,18 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-15 (session 127)
+**Last updated:** 2026-06-15 (session 128)
 
 ## What is done
+
+- Session 128 (2026-06-15): Audit pass 16. 4 bugs fixed (#351–#354). 2 docs updated (Bug #352). Dead constants cleaned.
+  - Bug #351 (prev part): admins.py, checking.py, kicking.py, warnings.py, unbanning.py — hardcoded error strings → ERR_CANNOT_RESOLVE.
+  - Bug #352 (prev part): docs/appeal-detailed.md, modules.md, warnings-detailed.md — 3 docs accuracy fixes.
+  - Bug #353: admins.py cmd_promote + cmd_demote exception branch (isinstance(_target_r, BaseException)) used ERR_NO_TARGET instead of ERR_CANNOT_RESOLVE. Both user experiences identical (can't resolve target); Bug #351 fixed the (None, None) branch but missed the exception branch above it.
+  - Bug #354: muting.py cmd_unmute, warnings.py cmd_warnlist + cmd_resetwarns — all used ERR_NO_TARGET. extract_target returns (None, None) for both "no input" and "unresolvable"; ERR_NO_TARGET was semantically narrower. Standardized to ERR_CANNOT_RESOLVE.
+  - Cleanup: Removed dead constants ERR_NO_TARGET and ERR_CANT_FIND_USER from replies.py. ERR_CANT_FIND_USER was dead after Bug #351; ERR_NO_TARGET became dead after #353+#354. All 13 extract_target call sites now use ERR_CANNOT_RESOLVE uniformly. docs/helper/helper.md updated to remove stale rows.
+  - AST scan: ALL CLEAN (0 gathers missing return_exceptions). Sequential q.answer scan: ALL CLEAN. TODO/FIXME scan: 0. Ruff: 73 files clean. Import OK. Bot: 27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling.
+  - Total bugs: #1–#354. Remaining open: P1 #4 (CVE accepted), Improvement #2 (backups), Improvement #4 (multi-instance).
 
 - Session 127 (2026-06-15): Audit pass 15+. 4 bugs fixed (#347–#350). Zero open PLAN.md findings added.
   - Bug #347: warning_flow.py `execute_warn` — auto-ban trigger `>=` → `==` (race condition fix).

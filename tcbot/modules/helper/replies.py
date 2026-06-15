@@ -11,11 +11,7 @@ from __future__ import annotations
 TARGET_SYNTAX = (
     "Reply to a message, or provide a user ID / @username after the command."
 )
-ERR_NO_TARGET = "Specify a target - reply to a message or provide a user ID."
 ERR_CANNOT_RESOLVE = "Cannot resolve target. Reply to a message or provide a user ID."
-ERR_CANT_FIND_USER = (
-    "Can't find that user - reply to their message or send me a user ID."
-)
 
 # ─────────────────────── Role / Auth Errors ─────────────────────── #
 

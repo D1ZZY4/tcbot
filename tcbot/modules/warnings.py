@@ -280,7 +280,7 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
         try:
-            await msg.reply_text(replies.ERR_NO_TARGET)
+            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
         except Exception as exc:
             log.debug("cmd_warnlist no-target reply failed: %s", exc)
         return
@@ -305,7 +305,7 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
         try:
-            await msg.reply_text(replies.ERR_NO_TARGET)
+            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
         except Exception as exc:
             log.debug("cmd_resetwarns no-target reply failed: %s", exc)
         return
