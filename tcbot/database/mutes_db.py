@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from tcbot.database.documents import MuteDoc
 from tcbot.database.mongos import col
+from tcbot.database.types import ChatId, UserId
 from tcbot.utils.timedate_format import utc_now
 
 if TYPE_CHECKING:
@@ -41,11 +43,11 @@ async def log_mute(
     seconds for a timed mute. Storing it allows mute-history views to show
     how long a restriction was intended to last.
     """
-    doc: dict = {
-        "user_id": user_id,
-        "chat_id": chat_id,
+    doc: MuteDoc = {
+        "user_id": UserId(user_id),
+        "chat_id": ChatId(chat_id),
         "reason": reason,
-        "admin_id": admin_id,
+        "admin_id": UserId(admin_id),
         "timestamp": utc_now(),
     }
     if duration_secs is not None:
@@ -56,7 +58,7 @@ async def log_mute(
 # ─────────────────────── Per-user history ───────────────────────── #
 
 
-async def user_mutes(user_id: int) -> list[dict]:
+async def user_mutes(user_id: int) -> list[MuteDoc]:
     """Return every mute record for a user, newest first."""
     return (
         await _mutes()

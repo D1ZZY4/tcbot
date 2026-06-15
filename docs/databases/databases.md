@@ -233,6 +233,22 @@ Recurring jobs registered on every startup (idempotent via `ConflictPolicy.repla
 
 Use `documents.py` for MongoDB shapes and `types.py` for nominal ID types in new helpers. These are typing aids; stored MongoDB values remain plain strings, integers, booleans, and datetimes.
 
+All `*_db.py` modules use a TypedDict from `documents.py` when inserting records:
+
+| Collection | TypedDict |
+|---|---|
+| `bans` | `BanDoc` |
+| `kicks` | `KickDoc` |
+| `mutes` | `MuteDoc` |
+| `warns` | `WarnDoc` |
+| `warn_counts` | `WarnCountDoc` |
+| `member_cache` | `UserDoc` |
+| `federated_groups` | `GroupDoc` |
+| `pending_joins` | `PendingGroupDoc` |
+| `tc_admins` | `AdminDoc` |
+| `tc_roles` | `RoleDoc` |
+| `promotion_requests` | `PromotionRequestDoc` |
+
 ## Safety rules
 
 - Do not call `col()` from command modules or workflow files.

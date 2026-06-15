@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from tcbot.database.documents import KickDoc
 from tcbot.database.mongos import col
+from tcbot.database.types import ChatId, UserId
 from tcbot.utils.timedate_format import utc_now
 
 if TYPE_CHECKING:
@@ -29,21 +31,20 @@ def _kicks() -> AsyncIOMotorCollection:
 
 async def log_kick(user_id: int, chat_id: int, reason: str, admin_id: int) -> None:
     """Log a kick event to the database for audit purposes."""
-    await _kicks().insert_one(
-        {
-            "user_id": user_id,
-            "chat_id": chat_id,
-            "reason": reason,
-            "admin_id": admin_id,
-            "timestamp": utc_now(),
-        }
-    )
+    doc: KickDoc = {
+        "user_id": UserId(user_id),
+        "chat_id": ChatId(chat_id),
+        "reason": reason,
+        "admin_id": UserId(admin_id),
+        "timestamp": utc_now(),
+    }
+    await _kicks().insert_one(doc)
 
 
 # ─────────────────────── Per-user history ───────────────────────── #
 
 
-async def user_kicks(user_id: int) -> list[dict]:
+async def user_kicks(user_id: int) -> list[KickDoc]:
     """Return every kick record for a user, newest first."""
     return (
         await _kicks()

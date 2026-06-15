@@ -5,9 +5,15 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-15 (session 122)
+**Last updated:** 2026-06-15 (session 124)
 
 ## What is done
+
+- Session 124 (2026-06-15): Pass 14 — Full autonomous audit loop pass. ZERO new bugs found. All 73 tcbot/ files fully read baris per baris across passes 13+14. Every module, workflow, database helper, util, entry point, and config file verified CLEAN. Bugs #338+#339 (kicks_db/mutes_db return types) fixed earlier this session. Ruff: All checks passed (73 files). Import OK. Total bugs fixed: #1–#339.
+
+- Session 123 (2026-06-15): Pass 13 — 1 bug found and fixed (Bug #337). All Python files audited: documents.py, replies.py, parse_link.py, parse_editmsg.py, error_reporter.py, timedate_format.py, logger.py, prefixes.py, types.py, mutes_db.py, kicks_db.py — all CLEAN except Bug #337.
+  - Bug #337: `documents.py` missing `KickDoc` and `MuteDoc` TypedDict definitions. All other `*_db.py` files used TypedDicts from `documents.py`, but `kicks_db.py` and `mutes_db.py` used plain `dict`. Added `KickDoc` and `MuteDoc` to `documents.py`. Updated both `*_db.py` files to import and use the new TypedDicts with `UserId`/`ChatId` wrapped IDs. `databases.md` updated with new collection-to-TypedDict mapping table.
+  - Ruff: All checks passed (73 files). Import OK. Total bugs fixed: #1–#337.
 
 - Session 122 (2026-06-15): Pass 12 — 6 doc/accuracy bugs found and fixed (Bug #331–#336). No new Python code bugs found.
   - Bug #331: `tcbot/database/scheduler.py` module docstring — stale "DB cleanup" reference removed; clarified only warn expiry remains, TTL index handles cleanup.

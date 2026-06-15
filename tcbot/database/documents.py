@@ -96,6 +96,31 @@ class UserDoc(TypedDict, total=False):
     last_updated: datetime
 
 
+class KickDoc(TypedDict, total=False):
+    """MongoDB document for a single kick event (append-only audit record)."""
+
+    user_id: UserId
+    chat_id: ChatId
+    reason: str
+    admin_id: UserId
+    timestamp: datetime
+
+
+class MuteDoc(TypedDict, total=False):
+    """MongoDB document for a single mute event (append-only audit record).
+
+    ``duration_secs`` is absent for permanent mutes and present (int) for
+    timed mutes, reflecting how long the restriction was intended to last.
+    """
+
+    user_id: UserId
+    chat_id: ChatId
+    reason: str
+    admin_id: UserId
+    timestamp: datetime
+    duration_secs: int
+
+
 class WarnDoc(TypedDict, total=False):
     """MongoDB document for a single warning issued to a user."""
 

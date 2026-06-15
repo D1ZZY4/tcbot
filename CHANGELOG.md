@@ -2,6 +2,21 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-15 (session 124)
+
+### Fixed
+
+- **`tcbot/database/kicks_db.py`** (`user_kicks`): Corrected return type annotation from `list[dict]` to `list[KickDoc]`. The function reads from the `kicks` collection which stores `KickDoc` documents (as enforced by `log_kick`), but the query helper declared a looser `list[dict]` return. Every equivalent query helper in the codebase — `bans_db.get_bans`, `warns_db.get_warns`, `mutes_db.user_mutes` — already used the specific TypedDict return, making this the only outlier. (Bug #338)
+- **`tcbot/database/mutes_db.py`** (`user_mutes`): Same fix as above — corrected return type annotation from `list[dict]` to `list[MuteDoc]`. Brings mutes_db fully in line with the typed query-helper pattern established by every other `*_db.py` module. (Bug #339)
+
+## [Unreleased] - 2026-06-15 (session 123)
+
+### Fixed
+
+- **`tcbot/database/documents.py`**: Added `KickDoc` and `MuteDoc` TypedDict definitions. All other `*_db.py` modules (`bans_db`, `warns_db`, `users_cache`, `groups_db`, `queues_db`, `users_roles`) already used typed document shapes from `documents.py`, but `kicks_db.py` inserted a plain `dict` literal and `mutes_db.py` annotated its local variable as `dict`. Both now import and use the appropriate TypedDict, giving the kick and mute collections the same type coverage as the rest of the database layer. (Bug #337)
+- **`tcbot/database/kicks_db.py`** (`log_kick`): Changed `dict` literal insert to a typed `KickDoc` with `UserId` / `ChatId` wrapped IDs. Imported `KickDoc` from `documents.py` and `ChatId`, `UserId` from `types.py`. (Bug #337)
+- **`tcbot/database/mutes_db.py`** (`log_mute`): Changed `doc: dict = {...}` to `doc: MuteDoc = {...}` with `UserId` / `ChatId` wrapped IDs. Imported `MuteDoc` from `documents.py` and `ChatId`, `UserId` from `types.py`. (Bug #337)
+
 ## [Unreleased] - 2026-06-15 (session 122)
 
 ### Fixed

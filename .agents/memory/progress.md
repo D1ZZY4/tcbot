@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-15 (session 122)
+**Last updated:** 2026-06-15 (session 124, pass 14)
 
 ## Verification baseline
 
@@ -31,11 +31,14 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Session 108 comprehensive audit | PASS: Second full-pass audit of all remaining areas — checking.py, warning_flow.py, check_flow.py (full), muting_flow.py (full), connected_flow.py (full), admins.py (555-836), ban_info.py, unbanning.py, kicking.py, dispatch.py, bans_db.py, groups_db.py, warns_db.py, kicks_db.py, mutes_db.py, users_roles.py, unban_flow.py, kicking_flow.py, demote_flow.py, promote_flow.py, broadcasting.py, disconnecting.py, proof_flow.py, reason_flow.py. Bug #285 (get_first_name L1 cache bypass) found and fixed. Ruff: 73 files clean. Total: #1–#285. |
 | Session 107 fresh audit pass | PASS: mongos.py, groups_db.py, stats_flow.py, check_flow.py, broadcasting.py, maintenance.py, stats.py, connected_flow.py, kicking_flow.py, unban_flow.py, warning_flow.py, reason_flow.py, demote_flow.py, admins.py (full), checking.py, ban_flow.py all clean. Bugs #283+#284 (CI workflows) found and fixed. Ruff: 73 files clean. |
 | Session 106 fresh audit pass | PASS: appeal_flow, warning_flow, warnings, checking, identity, banning, muting, kicking, extraction, decorators, reason_flow, proof_flow, demote_flow all clean. Bug #282 found and fixed. Ruff: 73 files clean. |
+| Session 124 pass 13 comprehensive audit | PASS: Thirteenth full-pass audit of ALL tcbot/ files. Zero new bugs found. Every module, workflow, database helper, util, entry point, and config file read baris per baris. Two sequential-await pairs in set_owner (users_roles.py) and cmd_transfer (admins.py) confirmed VALID (documented ordering constraints). AST scan: 0 asyncio.gather missing return_exceptions. Ruff: 73 files clean. Import OK. Total bugs: #1-#337. |
+| Session 124 pass 14 comprehensive audit | PASS: Fourteenth full-pass audit of ALL tcbot/ files. ZERO new bugs found. Full read of: stats_flow, warning_flow, bans_db, groups_db, users_cache, users_roles, warns_db, queues_db, mongos, documents, dispatch, pagination, prefixes, timedate_format, cache, utils/__init__, error_reporter, logger, __init__, alive, modules/__init__, database/__init__, __main__. All CLEAN. Ruff: 73 files clean. Import OK. Total bugs: #1-#339. |
 
 ## Completed items (recent additions on top)
 
 | Item | Priority | Details | Date |
 |---|---|---|---|
+| Bug #337 (session 123) | type/correctness | `documents.py` missing `KickDoc` and `MuteDoc` TypedDicts. All other `*_db.py` files use typed document shapes; `kicks_db.py` inserted a plain `dict` literal and `mutes_db.py` used `doc: dict`. Added `KickDoc` and `MuteDoc` to `documents.py`. Updated both files to import and use them with `UserId`/`ChatId` wrapped IDs. `databases.md` updated with collection-to-TypedDict mapping table. | 2026-06-15 (s123) |
 | Bug #336 (session 122) | docs/accuracy | replit.md Health Check section — only listed `GET /` returning `OK`; `GET /health` JSON endpoint added in session 121 was absent. Expanded to two entries: uptime probe and JSON subsystem-status report. | 2026-06-15 (s122) |
 | Bug #335 (session 122) | docs/accuracy | README.md Features list Health checks bullet — only mentioned `GET /` returning `OK`; `GET /health` JSON endpoint absent after session 121 added it. Extended bullet to include both endpoints. | 2026-06-15 (s122) |
 | Bug #334 (session 122) | docs/infra | docker-compose.yml bot service had no `healthcheck` block despite `GET /health` existing. Added healthcheck (30s interval, 30s start_period) matching the three other services that already had one. | 2026-06-15 (s122) |
