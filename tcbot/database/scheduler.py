@@ -146,11 +146,13 @@ async def _scheduler_background(
     try:
         async with AsyncScheduler(data_store) as sched:
             _scheduler = sched
-            assert _sched_ready is not None
+            if _sched_ready is None:
+                raise RuntimeError("_sched_ready event not initialised before _scheduler_background ran")
             _sched_ready.set()
             await _register_periodic_schedules(sched, warn_expiry_days)
             await sched.start_in_background()
-            assert _sched_stop is not None
+            if _sched_stop is None:
+                raise RuntimeError("_sched_stop event not initialised before _scheduler_background ran")
             await _sched_stop.wait()
     except Exception:
         log.exception("APScheduler background task crashed.")

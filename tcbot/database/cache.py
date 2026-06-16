@@ -253,6 +253,13 @@ def _log_redis_task_error(task: asyncio.Task) -> None:  # type: ignore[type-arg]
 _ROLE_CACHE_TTL_S: float = 60.0
 _ROLE_REDIS_TTL_S: float = 90.0  # Redis TTL slightly longer than in-memory
 
+# ─────────────────────── Cache Maxsize Constants ─────────────────── #
+# * Maximum in-memory entry counts per cache instance.
+# * Sized to hold peak concurrent users/chats without unbounded growth.
+_ROLE_CACHE_MAXSIZE: int = 2048       # roles: one entry per active user
+_USER_MENTION_CACHE_MAXSIZE: int = 4096  # mention data: larger pool for check/stats lookups
+_CONNECTED_CACHE_MAXSIZE: int = 512   # connection status: one entry per connected chat
+
 # Per-chat connection status: medium window; connection changes are infrequent.
 _CONNECTION_CACHE_TTL_S: float = 120.0
 _CONNECTION_REDIS_TTL_S: float = 180.0
@@ -277,7 +284,7 @@ effective_role_cache: TwoLevelCache[str | None] = TwoLevelCache(
     memory_ttl=_ROLE_CACHE_TTL_S,
     redis_ttl=_ROLE_REDIS_TTL_S,
     redis_prefix="role",
-    maxsize=2048,
+    maxsize=_ROLE_CACHE_MAXSIZE,
 )
 
 # Per-chat connection cache (bool per chat_id)
@@ -286,7 +293,7 @@ connected_cache: TwoLevelCache[bool] = TwoLevelCache(
     memory_ttl=_CONNECTION_CACHE_TTL_S,
     redis_ttl=_CONNECTION_REDIS_TTL_S,
     redis_prefix="conn",
-    maxsize=512,
+    maxsize=_CONNECTED_CACHE_MAXSIZE,
 )
 
 # Whole-list active-groups cache (list[dict], single entry keyed by _ALL_GROUPS_KEY)
@@ -319,5 +326,5 @@ user_mention_cache: TwoLevelCache[list[str | None]] = TwoLevelCache(
     memory_ttl=_USER_MENTION_CACHE_TTL_S,
     redis_ttl=_USER_MENTION_REDIS_TTL_S,
     redis_prefix="umention",
-    maxsize=4096,
+    maxsize=_USER_MENTION_CACHE_MAXSIZE,
 )

@@ -5,9 +5,20 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 132)
+**Last updated:** 2026-06-16 (session 133)
 
 ## What is done
+
+- Session 133 (2026-06-16): Audit pass 21 — 11 bugs fixed (#368–#378). Non-ASCII sweep completed. Docs updated.
+  - Bug #368: appeal_flow.py — hardcoded `2000` → `_MAX_APPEAL_LEN: int = 2000` constant.
+  - Bug #369: cache.py — maxsize=2048/4096 literals → `_ROLE_CACHE_MAXSIZE` / `_USER_MENTION_CACHE_MAXSIZE`.
+  - Bug #370–#375: Non-ASCII `·` (U+00B7) and `•` (U+2022) in user-facing Telegram message text — check_flow.py ban list (`·` → `|`), check_flow.py warnings list (`•` → `-`), check_flow.py appeals list (`·` → `|`), stats_flow.py Users/Chats/Bans pagination headers (`·` → `-`).
+  - Bug #376–#377: error_reporter.py — `·` in When: line (→ `-`) and `━` box-drawing separator (→ `-`).
+  - Bug #378: docs/check-detailed.md — stale Bans format block showing old `·` separators; updated to match post-fix format (`|`).
+  - AST scans: callback answer() order — all false positives. Fire-and-forget tracking — all correct. No hardcoded chat IDs. No bare type:ignore. No bare noqa. Bare except: — all intentional fallbacks.
+  - Dependency upgrade: uv lock --upgrade clean; APScheduler ==4.0.0a6 pinned (CVE accepted).
+  - Ruff: All checks passed (73 files). Import: clean. Bot: 27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling.
+  - Total bugs: #1–#378. Remaining open: P1 #4 (CVE accepted), Improvement #4 (multi-instance cache, future).
 
 - Session 132 (2026-06-16): Audit pass 20 — ZERO new bugs found. Final comprehensive sweep of ALL remaining tcbot/ files.
   - Files verified CLEAN this session (reads done directly, line by line): ban_flow.py, appeal_flow.py, banning.py, extraction.py, greeting.py, decorators.py, warning_flow.py, unban_flow.py, muting_flow.py, kicking_flow.py, muting.py, kicking.py, admins.py, warnings.py, checking.py, connecting.py, __main__.py, bans_db.py, warns_db.py, users_roles.py, users_cache.py, groups_db.py, cache.py, scheduler.py, maintenance.py, appeals.py, broadcasting.py, unbanning.py, stats.py, disconnecting.py, groups.py, greeting.py (again), mongos.py, redis_client.py, start.py, help.py, about.py, additional.py, privacy.py, netspeed.py, types.py.

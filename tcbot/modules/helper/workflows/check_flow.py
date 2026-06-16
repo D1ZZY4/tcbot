@@ -252,7 +252,7 @@ class Check:
                 str(ban.get("reason", "(no reason)"))[:_BAN_LIST_REASON_LEN]
             )
             lines.append(
-                f"{base_idx + i}. {status} · {code(ban['ban_id'])} · {ts}\n"
+                f"{base_idx + i}. {status} | {code(ban['ban_id'])} | {ts}\n"
                 f"   <i>{reason_short}</i>"
             )
             item_btns.append(
@@ -342,7 +342,7 @@ class Check:
         rows: list[list[InlineKeyboardButton]] = []
         for cid, count in groups:
             title = titles.get(cid) or str(cid)
-            lines.append(f"• {esc(title)}: {bold(str(count))}")
+            lines.append(f"- {esc(title)}: {bold(str(count))}")
             rows.append(
                 [
                     InlineKeyboardButton(
@@ -502,7 +502,7 @@ class Check:
                 else "Pending / Rejected"
             )
             lines.append(
-                f"{base_idx + i}. {status}\n   Ban ID: {code(ban['ban_id'])} · {ts}"
+                f"{base_idx + i}. {status}\n   Ban ID: {code(ban['ban_id'])} | {ts}"
             )
             item_btns.append(
                 InlineKeyboardButton(

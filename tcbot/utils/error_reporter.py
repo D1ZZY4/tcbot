@@ -292,14 +292,14 @@ def build_error_message(
 
     py_ver = sys.version.split()[0]
     host = platform.node() or "?"
-    sep = "━" * _REPORT_SEP_LEN
+    sep = "-" * _REPORT_SEP_LEN
 
     return (
         f"<b>Error Report</b>\n"
         f"{sep}\n"
         f"<b>Type:</b> {label}\n"
         f"<b>Where:</b> <code>{_esc(file_part)}:{line_no}</code> in <code>{_esc(func_name)}</code>\n"
-        f"<b>When:</b> {time_str} · {date_str}\n"
+        f"<b>When:</b> {time_str} - {date_str}\n"
         f"<b>Host:</b> Python {py_ver} @ {_esc(host)}\n"
         f"{sep}\n"
         f"<b>Message:</b>\n<code>{_esc(raw_msg[:_MAX_MSG])}</code>"

@@ -2,6 +2,41 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-16 (session 133)
+
+### Added
+
+- **`docs/backup-restore.md`** (Improvement #2): New operational runbook documenting MongoDB Atlas continuous/snapshot backup setup, `mongodump` nightly cron script with 14-day rotation and optional rclone offsite copy, step-by-step restore procedure, post-restore health check via `GET /health`, and CVE-2026-31072 mitigation notes (least-privilege MongoDB user, IP allowlist, `MONGODB_URI` hygiene).
+- **`tcbot/modules/helper/replies.py`** (Improvement #6): Added `who_section(perm)`, `where_section(ctx)`, and `target_section()` constructor helpers that each return a `tuple[str, str]` section entry. Eliminates repetitive 4-line inline tuple blocks from every help-bearing module.
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/appeal_flow.py`** (Bug #368): The appeal-message length limit (`2000`) was a bare magic number literal in both the guard `if len(text) > 2000:` and the user-facing error string. Extracted to `_MAX_APPEAL_LEN: int = 2000` module-level constant. Error message now interpolates `_MAX_APPEAL_LEN` so a value change is one-place-one-change.
+- **`tcbot/database/cache.py`** (Bug #369): The `effective_role_cache` (`maxsize=2048`) and `user_mention_cache` (`maxsize=4096`) cache instances used bare integer literals. Added `_ROLE_CACHE_MAXSIZE: int = 2048` and `_USER_MENTION_CACHE_MAXSIZE: int = 4096` alongside the existing named TTL constants in the `Cache Maxsize Constants` block; both instances now reference the named constants.
+- **`tcbot/modules/helper/workflows/check_flow.py`** (Bug #370): Ban-list rows used `·` (U+00B7 middle dot) as a separator between ban ID and timestamp: `` `{status} · {code(ban_id)} · {ts}` ``. Replaced with ASCII pipe `|`. Missed by session-118 Unicode scan which targeted directional arrows only.
+- **`tcbot/modules/helper/workflows/check_flow.py`** (Bug #371): Warnings drill-down list used `•` (U+2022 bullet) as a per-group line prefix: `` `• {esc(title)}: {bold(count)}` ``. Replaced with ASCII hyphen `-`.
+- **`tcbot/modules/helper/workflows/check_flow.py`** (Bug #372): Appeals history ban-list rows used `·` (U+00B7) as separator between ban ID and timestamp in the `/checkme` appeal view. Replaced with ASCII pipe `|`.
+- **`tcbot/modules/helper/workflows/stats_flow.py`** (Bug #373): Users pagination header used `·` as visual separator: `` `{len(users)} total  ·  page {n}/{total}` ``. Replaced with ASCII hyphen.
+- **`tcbot/modules/helper/workflows/stats_flow.py`** (Bug #374): Connected Chats pagination header used `·` as visual separator: `` `{len(groups)} total  ·  page {n}/{total}` ``. Replaced with ASCII hyphen.
+- **`tcbot/modules/helper/workflows/stats_flow.py`** (Bug #375): User Bans pagination header used `·` as visual separator: `` `{len(bans)} total  ·  page {n}/{total}` ``. Replaced with ASCII hyphen.
+- **`tcbot/utils/error_reporter.py`** (Bug #376): Error-report `When:` line used `·` as date/time separator: `` `{time_str} · {date_str}` ``. Replaced with ASCII hyphen. Error reports are sent to `LOG_ERRORS` channel — still a Telegram message subject to the no-non-ASCII rule.
+- **`tcbot/utils/error_reporter.py`** (Bug #377): Error-report horizontal separator was `` `"━" * _REPORT_SEP_LEN` `` (U+2501 BOX DRAWINGS HEAVY HORIZONTAL) inside the HTML report sent to the `LOG_ERRORS` Telegram channel. Replaced with `"-" * _REPORT_SEP_LEN` (ASCII hyphen). Missed by session-118 Unicode scan because `━` was not in the arrow/bullet scan pattern.
+- **`docs/check-detailed.md`** (Bug #378): Bans drill-down format block showed the pre-fix format: header `Bans: N total · page p/P` and row `{n}. Active · <code ban_id> · dd-mm-yyyy | HH:MM`. After Bug #370 and #372 the actual format is `Bans: N total, page p/P` and row `{n}. Active | <code ban_id> | dd-mm-yyyy HH:MM`. Updated the doc block to match.
+- **`tcbot/database/cache.py`** (Bug #379): `connected_cache` used bare integer literal `maxsize=512`. Added `_CONNECTED_CACHE_MAXSIZE: int = 512` to the "Cache Maxsize Constants" block alongside `_ROLE_CACHE_MAXSIZE` and `_USER_MENTION_CACHE_MAXSIZE`; updated `connected_cache` to reference the constant.
+- **`tcbot/database/scheduler.py`** (Bug #380): `_scheduler_background()` used two `assert _sched_ready is not None` / `assert _sched_stop is not None` guards. Assert statements are silently disabled with `python -O`, so a programming error would produce an opaque `AttributeError` instead of an explicit message. Replaced with `if X is None: raise RuntimeError(...)` guards.
+
+### Changed
+
+- **`tcbot/modules/helper/replies.py`** (P3 #5): Added `HelpEntry` TypedDict (fields: `name: str`, `overview: str`, `sections: list[tuple[str, str]]`). Provides a typed, enforced interface for module help content, replacing the previous three-loose-attribute approach where `__help_sections__` could silently return `[]` if misspelled.
+- **`tcbot/modules/help.py`** (P3 #5): `_builder_help()` now prefers `module.__help__` (`HelpEntry`) when present, falling back to the legacy `__help_text__` / `__help_sections__` attributes for backward compatibility.
+- **All 15 help-bearing modules** (P3 #5 + Improvement #6): Each module now declares `__help__: replies.HelpEntry = {"name": ..., "overview": ..., "sections": [...]}`. All `(replies.SEC_WHO, ...)`, `(replies.SEC_WHERE, ...)`, and `(replies.SEC_TARGET, replies.TARGET_SYNTAX)` inline tuple blocks replaced with `replies.who_section(...)`, `replies.where_section(...)`, and `replies.target_section()` calls respectively. Affects: `admins.py`, `appeals.py`, `banning.py`, `broadcasting.py`, `checking.py`, `connecting.py`, `disconnecting.py`, `groups.py`, `kicking.py`, `maintenance.py`, `muting.py`, `netspeed.py`, `stats.py`, `unbanning.py`, `warnings.py`.
+
+### Documentation
+
+- **`PLAN.md`**: P3 #5 and Improvement #2 and Improvement #6 marked `Done`.
+- **`docs/README.md`**: Added `backup-restore.md` to the documentation navigation table.
+- **`docs/helper/helper.md`**: Updated `replies.py` section to document `HelpEntry` TypedDict, `who_section`, `where_section`, and `target_section` helpers.
+
 ## [Unreleased] - 2026-06-15 (session 131)
 
 ### Documentation

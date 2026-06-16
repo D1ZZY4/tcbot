@@ -38,6 +38,9 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 WAITING_APPEAL = 0
+
+# * Maximum character length for an appeal message.
+_MAX_APPEAL_LEN: int = 2000
 _LOCK_HOURS: int = 12
 _LOCK_WINDOW = timedelta(hours=_LOCK_HOURS)
 _STALE_REVIEW_HOURS: int = 72
@@ -342,10 +345,10 @@ class BuildAppeal:
         if not starts_with_appeal_tag(text):
             return WAITING_APPEAL
 
-        if len(text) > 2000:
+        if len(text) > _MAX_APPEAL_LEN:
             try:
                 await msg.reply_text(
-                    "Your appeal message is too long (max 2000 characters). "
+                    f"Your appeal message is too long (max {_MAX_APPEAL_LEN} characters). "
                     "Please shorten it and try again.",
                 )
             except Exception as exc:

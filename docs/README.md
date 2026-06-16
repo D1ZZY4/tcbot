@@ -25,6 +25,7 @@ For user-facing setup, see [`../README.md`](../README.md). For contributor rules
 
 | Document | Purpose |
 |---|---|
+| [Backup and restore](backup-restore.md) | MongoDB backup setup (Atlas or `mongodump` cron), restore procedure, post-restore health check, and CVE mitigation notes. |
 | [Appeals detailed](appeal-detailed.md) | Appeal deep links, private DM submission, review buttons, approval/rejection behavior, and edge cases. |
 | [Banning detailed](banning-detailed.md) | Federation ban flow, proof collection, ban updates, unban checks, logs, and appeal links. |
 | [Check detailed](check-detailed.md) | `/check` user-profile command, drill-down views, pagination, parallel DB reads, and edge cases. |

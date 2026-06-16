@@ -250,7 +250,7 @@ class Stats:
             return text, back_kb()
 
         lines = [
-            f"{bold('Users')} - {len(users)} total  ·  page {page + 1}/{total_pages}\n"
+            f"{bold('Users')} - {len(users)} total - page {page + 1}/{total_pages}\n"
         ]
         base_idx = page * _PAGE_SIZE
         for i, u in enumerate(chunk, start=1):
@@ -315,8 +315,7 @@ class Stats:
             return text, back_kb()
 
         lines = [
-            f"{bold('Connected Chats')} - {len(groups)} total  "
-            f"·  page {page + 1}/{total_pages}\n"
+            f"{bold('Connected Chats')} - {len(groups)} total - page {page + 1}/{total_pages}\n"
         ]
         base_idx = page * _PAGE_SIZE
         for i, grp in enumerate(chunk, start=1):
@@ -381,8 +380,7 @@ class Stats:
         fname_map = await db.users_cache.get_first_names_batch(uids) if uids else {}
 
         lines = [
-            f"{bold('User Bans')} - {len(bans)} total  "
-            f"·  page {page + 1}/{total_pages}\n"
+            f"{bold('User Bans')} - {len(bans)} total - page {page + 1}/{total_pages}\n"
         ]
         base_idx = page * _PAGE_SIZE
         for i, ban in enumerate(chunk, start=1):

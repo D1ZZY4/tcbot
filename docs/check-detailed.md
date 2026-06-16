@@ -77,11 +77,11 @@ Every drill-down keyboard ends with `« Back` which re-renders the profile via `
 `Check.bans_list` lists every ban (active and inactive), newest first, 5 per page. Each line shows status (`Active` / `Inactive`), Ban ID, timestamp, and a 60-character reason snippet. Numbered buttons open `Check.ban_detail` for the full ban card.
 
 ```text
-Bans: N total · page p/P
+Bans: N total, page p/P
 
-1. Active · <code ban_id> · dd-mm-yyyy | HH:MM
+1. Active | <code ban_id> | dd-mm-yyyy HH:MM
    spam in connected groups
-2. Inactive · <code ban_id> · ...
+2. Inactive | <code ban_id> | ...
    ...
 ```
 

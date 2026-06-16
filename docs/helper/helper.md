@@ -129,7 +129,30 @@ Ban and kick entry points pair this with `Demote.execute(..., trigger="ban"/"kic
 
 ## `replies.py`
 
-Shared bot-reply string constants used by multiple command modules. Import with `from tcbot.modules.helper import replies`.
+Shared bot-reply string constants and typed help-entry interface used by multiple command modules. Import with `from tcbot.modules.helper import replies`.
+
+### `HelpEntry` TypedDict
+
+```python
+class HelpEntry(TypedDict):
+    name: str                       # display name (matches __module_name__)
+    overview: str                   # one-line or short paragraph overview
+    sections: list[tuple[str, str]] # (section_header, section_body) pairs
+```
+
+Each help-bearing module declares exactly one `__help__: replies.HelpEntry = {...}` instead of three separate attributes. `help.py` reads this dict via `_builder_help()` and falls back to the legacy `__help_text__` / `__help_sections__` attributes for backward compatibility during migration.
+
+### Section constructor helpers
+
+| Helper | Returns | Purpose |
+|---|---|---|
+| `who_section(perm)` | `tuple[str, str]` | Builds a `(SEC_WHO, perm)` section entry. |
+| `where_section(ctx)` | `tuple[str, str]` | Builds a `(SEC_WHERE, ctx)` section entry. |
+| `target_section()` | `tuple[str, str]` | Builds a `(SEC_TARGET, TARGET_SYNTAX)` section entry. |
+
+All 15 command modules use these helpers rather than raw inline tuple literals.
+
+### String constants
 
 | Constant | Purpose |
 |---|---|
