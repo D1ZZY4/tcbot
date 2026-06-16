@@ -336,35 +336,9 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     else:
         applied_line = f"Applied to {total_groups}/{total_groups} groups."
 
-    # * Edit the original prompt to a summary + cache user in parallel
-    summary = (
-        f"{user_ref(target_id, target_fname)} has been banned.\n"
-        f"Reason: {esc(reason)}\n"
-        f"{applied_line}"
-    )
-    if prompt_msg_id and prompt_chat_id:
-        _, upsert_result = await asyncio.gather(
-            bot.edit_message_text(
-                summary,
-                chat_id=prompt_chat_id,
-                message_id=prompt_msg_id,
-                parse_mode="HTML",
-                reply_markup=None,
-            ),
-            db.users_cache.upsert_user(target_id, None, target_fname),
-            return_exceptions=True,
-        )
-        if isinstance(upsert_result, BaseException):
-            log.error("upsert_user failed for target=%d: %s", target_id, upsert_result)
-    else:
-        try:
-            await db.users_cache.upsert_user(target_id, None, target_fname)
-        except Exception:
-            log.exception(
-                "upsert_user (no-prompt path) failed for target=%d", target_id
-            )
-
-    # * Notify banned user via PM (best-effort; user may not have started the bot)
+    # * Build PM content before the conditional so it can fire in parallel with
+    # * both upsert_user and (optionally) edit_message_text.  All three operations
+    # * are independent: no output of one is an input to another.
     _pm_text = (
         f"You have been federation-banned from {esc(cfg.community_name)}.\n"
         f"Reason: {esc(reason)}\n\n"
@@ -380,17 +354,51 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             ]
         ]
     )
-    try:
-        await bot.send_message(
-            target_id, _pm_text, parse_mode="HTML", reply_markup=_pm_kb
+
+    # * Edit prompt summary + cache user + notify banned user in one round-trip.
+    summary = (
+        f"{user_ref(target_id, target_fname)} has been banned.\n"
+        f"Reason: {esc(reason)}\n"
+        f"{applied_line}"
+    )
+    if prompt_msg_id and prompt_chat_id:
+        _, upsert_result, pm_result = await asyncio.gather(
+            bot.edit_message_text(
+                summary,
+                chat_id=prompt_chat_id,
+                message_id=prompt_msg_id,
+                parse_mode="HTML",
+                reply_markup=None,
+            ),
+            db.users_cache.upsert_user(target_id, None, target_fname),
+            bot.send_message(
+                target_id, _pm_text, parse_mode="HTML", reply_markup=_pm_kb
+            ),
+            return_exceptions=True,
         )
-    except telegram.error.Forbidden:
+        if isinstance(upsert_result, BaseException):
+            log.error("upsert_user failed for target=%d: %s", target_id, upsert_result)
+    else:
+        upsert_result, pm_result = await asyncio.gather(
+            db.users_cache.upsert_user(target_id, None, target_fname),
+            bot.send_message(
+                target_id, _pm_text, parse_mode="HTML", reply_markup=_pm_kb
+            ),
+            return_exceptions=True,
+        )
+        if isinstance(upsert_result, BaseException):
+            log.error(
+                "upsert_user (no-prompt path) failed for target=%d: %s",
+                target_id,
+                upsert_result,
+            )
+    if isinstance(pm_result, telegram.error.Forbidden):
         log.info(
             "Cannot DM banned user %d: user has not started the bot or has blocked it",
             target_id,
         )
-    except Exception as exc:
-        log.warning("Failed to send ban PM to user %d: %s", target_id, exc)
+    elif isinstance(pm_result, BaseException):
+        log.warning("Failed to send ban PM to user %d: %s", target_id, pm_result)
 
 
 # ───────────────── Proof collection state handlers ──────────────── #

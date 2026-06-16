@@ -493,10 +493,11 @@ class BuildAppeal:
             action = "reject"
             ban_id = data[len("appeal_reject_") :]
 
-        # * Gather staff check + q.answer() in parallel so the spinner
-        # * disappears immediately, regardless of DB latency.
-        is_staff, _ = await asyncio.gather(
+        # * Pre-fetch ban record alongside staff check and q.answer();
+        # * ban_id is known from callback data so the DB call fires speculatively.
+        is_staff, ban_result, _ = await asyncio.gather(
             db.users_roles.is_staff(admin.id),
+            db.bans_db.get_ban(ban_id),
             q.answer(),
             return_exceptions=True,
         )
@@ -506,21 +507,20 @@ class BuildAppeal:
             except Exception as exc:
                 log.debug("Appeal not-authorized edit failed: %s", exc)
             return
-        try:
-            ban = await db.bans_db.get_ban(ban_id)
-        except Exception:
-            log.exception("get_ban failed in appeal review for %s", ban_id)
+        if isinstance(ban_result, BaseException):
+            log.error("get_ban failed in appeal review for %s: %s", ban_id, ban_result)
             try:
                 await q.edit_message_text(_ERR_BAN_NOT_FOUND, reply_markup=None)
             except Exception as exc:
                 log.debug("Appeal ban-not-found edit failed: %s", exc)
             return
-        if not ban:
+        if not ban_result:
             try:
                 await q.edit_message_text(_ERR_BAN_NOT_FOUND, reply_markup=None)
             except Exception as exc:
                 log.debug("Appeal ban-not-found (empty) edit failed: %s", exc)
             return
+        ban = ban_result
 
         if not ban.get("is_active"):
             try:

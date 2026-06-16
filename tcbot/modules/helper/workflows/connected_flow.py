@@ -329,32 +329,47 @@ class BuildConnection:
             return
 
         if new_status in (ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR):
-            pending = await db.groups_db.get_pending(chat.id)
+            # * Speculatively pre-fetch both reads in parallel; is_already_connected
+            # * is only consumed if the pending+ADMINISTRATOR fast path is not taken.
+            pending, is_already_connected = await asyncio.gather(
+                db.groups_db.get_pending(chat.id),
+                db.groups_db.is_connected(chat.id),
+                return_exceptions=True,
+            )
+            if isinstance(pending, BaseException):
+                pending = None
+            if isinstance(is_already_connected, BaseException):
+                is_already_connected = False
 
             if pending and new_status == ChatMemberStatus.ADMINISTRATOR:
                 if self.check_perms(cmc.new_chat_member):
                     owner_fname = await db.users_cache.get_first_name(
                         pending["owner_id"], "Owner"
                     )
-                    await self.complete_join(
-                        chat.id,
-                        chat.title or "",
-                        pending["owner_id"],
-                        owner_fname,
-                        ctx.bot,
-                    )
-                    try:
-                        await ctx.bot.edit_message_text(
+                    # * complete_join (applies bans/mutes, sends log) and
+                    # * edit_message_text (updates the join prompt) are independent;
+                    # * fire them in parallel for lower perceived latency.
+                    _join_r, _edit_r = await asyncio.gather(
+                        self.complete_join(
+                            chat.id,
+                            chat.title or "",
+                            pending["owner_id"],
+                            owner_fname,
+                            ctx.bot,
+                        ),
+                        ctx.bot.edit_message_text(
                             self.connected_message(),
                             chat_id=chat.id,
                             message_id=pending["message_id"],
                             reply_markup=None,
-                        )
-                    except Exception as exc:
-                        log.debug("Failed to edit pending connect prompt: %s", exc)
+                        ),
+                        return_exceptions=True,
+                    )
+                    if isinstance(_edit_r, BaseException):
+                        log.debug("Failed to edit pending connect prompt: %s", _edit_r)
                 return
 
-            if await db.groups_db.is_connected(chat.id):
+            if is_already_connected:
                 return
 
             if pending:

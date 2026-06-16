@@ -5,9 +5,20 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 158)
+**Last updated:** 2026-06-16 (session 159)
 
 ## What is done
+
+- Session 159 (2026-06-16): Bug #424-#429 fixed. Systematic sequential-await audit across all major workflow and command files.
+  - Bug #424: `connected_flow.on_bot_added` — parallel `get_pending + is_connected` pre-fetch + `complete_join + edit_message_text` gather.
+  - Bug #425: `admins.on_promo_decision` — speculative pre-fetch of `get_request_by_id` into initial gather alongside ownership check and `q.answer()`.
+  - Bug #426: `appeal_flow` review callback — speculative pre-fetch of `get_ban` into initial gather alongside staff check and `q.answer()`.
+  - Bug #427: `disconnecting.cmd_tcdisconnect` — parallel pre-fetch of `is_connected + is_staff + member` in initial gather.
+  - Bug #428: `ban_flow.execute_ban` — PM notification merged into gather with `upsert_user` and `edit_message_text`.
+  - Bug #429: `connecting.cmd_tcconnect` — `get_chat_member(ctx.bot.id)` added speculatively to initial 4-way gather (was sequential after user-member + DB reads).
+  - All other areas audited CLEAN: `warning_flow.py` (all standalone awaits are guard-check or sequential-dep patterns), `muting_flow.py` (active_groups before fan_out, CORRECT), `check_flow.py` (get_group_titles deps on user_warn_groups, CORRECT), `stats_flow.py` (all deps chains correct), `error_reporter.py` (if/else mutually exclusive branches, CORRECT), `demote_flow.py` (guard check sequential dep, CORRECT).
+  - Verification: ruff format 74 files unchanged, ruff check All checks passed, import OK. Bot: 29/29 indexes, Redis hiredis 3.4.0, APScheduler, polling.
+  - Total bugs: #1-#429. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 157 (2026-06-16): Bug #423 fixed. `proof_line()` removed entirely. Mute/kick/warn proof now uploaded to proof channel and shown as inline keyboard button (identical pattern to ban). Files changed: `reason_flow.py`, `keyboards.py`, `muting_flow.py`, `kicking_flow.py`, `warning_flow.py`, `utils/formatter.py`, `modules/helper/formatter.py`. Ruff: all checks passed. Import: OK. Total bugs: #1-#423.
 

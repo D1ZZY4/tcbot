@@ -102,7 +102,18 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             log.debug("cmd_tcleave group-only reply failed: %s", exc)
         return
 
-    if not await db.groups_db.is_connected(chat.id):
+    # * Pre-fetch all three in parallel: is_connected (cache-backed), staff check,
+    # * and the Telegram member lookup (dominates latency at 50-200 ms).
+    # * Front-loading the Telegram call eliminates it from the sequential path.
+    is_connected, is_tc_staff, member = await asyncio.gather(
+        db.groups_db.is_connected(chat.id),
+        db.users_roles.is_staff(user.id),
+        asyncio.wait_for(
+            ctx.bot.get_chat_member(chat.id, user.id), timeout=_TG_TIMEOUT
+        ),
+        return_exceptions=True,
+    )
+    if isinstance(is_connected, BaseException) or not is_connected:
         try:
             await update.effective_message.reply_text(
                 f"This group is not connected to {cfg.community_name}."
@@ -110,16 +121,6 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         except Exception as exc:
             log.debug("cmd_tcleave not-connected reply failed: %s", exc)
         return
-
-    # * Staff check + group membership check + Telegram lookup run in parallel.
-    # * The Telegram call is bounded so a stalled API never blocks the reply.
-    is_tc_staff, member = await asyncio.gather(
-        db.users_roles.is_staff(user.id),
-        asyncio.wait_for(
-            ctx.bot.get_chat_member(chat.id, user.id), timeout=_TG_TIMEOUT
-        ),
-        return_exceptions=True,
-    )
     if isinstance(member, BaseException):
         log.debug("Disconnect: get_chat_member failed for %d: %s", chat.id, member)
         try:

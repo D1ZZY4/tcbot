@@ -114,14 +114,18 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.debug("cmd_tctc group-only reply failed: %s", exc)
         return
 
-    # * Telegram lookup + DB reads run in parallel; member check is bounded so a
-    # * stalled Telegram API never blocks the user-facing reply.
-    member, is_connected, pending = await asyncio.gather(
+    # * All four calls are independent; fire them in one round-trip.
+    # * bot_member is fetched speculatively alongside the user/DB reads so no
+    # * extra Telegram round-trip is needed after the early-exit checks.
+    member, is_connected, pending, bot_member = await asyncio.gather(
         asyncio.wait_for(
             ctx.bot.get_chat_member(chat.id, user.id), timeout=_TG_TIMEOUT
         ),
         db.groups_db.is_connected(chat.id),
         db.groups_db.get_pending(chat.id),
+        asyncio.wait_for(
+            ctx.bot.get_chat_member(chat.id, ctx.bot.id), timeout=_TG_TIMEOUT
+        ),
         return_exceptions=True,
     )
     if isinstance(member, BaseException):
@@ -160,16 +164,12 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.debug("cmd_tctc pending-request reply failed: %s", exc)
         return
 
-    try:
-        bot_member = await asyncio.wait_for(
-            ctx.bot.get_chat_member(chat.id, ctx.bot.id), timeout=_TG_TIMEOUT
-        )
-    except Exception as exc:
-        log.debug("Could not verify bot permissions for %d: %s", chat.id, exc)
+    if isinstance(bot_member, BaseException):
+        log.debug("Could not verify bot permissions for %d: %s", chat.id, bot_member)
         try:
             await update.effective_message.reply_text(replies.ERR_ROLE_VERIFY)
-        except Exception as exc2:
-            log.debug("cmd_tctc perms-verify reply failed: %s", exc2)
+        except Exception as exc:
+            log.debug("cmd_tctc perms-verify reply failed: %s", exc)
         return
 
     if not connection.check_perms(bot_member):

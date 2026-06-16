@@ -696,10 +696,11 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     except ValueError:
         await q.answer()
         return
-    # * Gather ownership check + q.answer() in parallel so the spinner disappears
-    # * immediately, regardless of DB latency.
-    is_owner, _ = await asyncio.gather(
+    # * Pre-fetch request record alongside ownership check and q.answer();
+    # * request_id is known from q.data so the DB call can fire speculatively.
+    is_owner, req_result, _ = await asyncio.gather(
         db.users_roles.is_owner(admin.id),
+        db.queues_db.get_request_by_id(request_id),
         q.answer(),
         return_exceptions=True,
     )
@@ -709,21 +710,20 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         except Exception as exc:
             log.debug("on_promo_decision perm-denied edit failed: %s", exc)
         return
-    try:
-        req = await db.queues_db.get_request_by_id(request_id)
-    except Exception:
-        log.exception("get_request_by_id failed for %s", request_id)
+    if isinstance(req_result, BaseException):
+        log.error("get_request_by_id failed for %s: %s", request_id, req_result)
         try:
             await q.edit_message_text(_ERR_REQUEST_NOT_FOUND)
         except Exception as exc:
             log.debug("on_promo_decision db-error edit failed: %s", exc)
         return
-    if not req:
+    if not req_result:
         try:
             await q.edit_message_text(_ERR_REQUEST_NOT_FOUND)
         except Exception as exc:
             log.debug("on_promo_decision not-found edit failed: %s", exc)
         return
+    req = req_result
     target_id = req["target_id"]
     target_fname = req.get("first_name", str(target_id))
     lc, lt = cfg.logs
