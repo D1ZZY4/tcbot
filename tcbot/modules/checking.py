@@ -16,6 +16,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, extraction, keyboards, replies
+from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.formatter import bold, code, esc, mention
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.check_flow import Check
@@ -268,10 +269,6 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         except Exception as exc:
             log.debug("checkme_detail error edit failed: %s", exc)
         return
-
-    from tcbot.modules.helper.ban_info import (  # noqa: PLC0415
-        build_ban_detail,
-    )
 
     text, proof_link = await build_ban_detail(ban)
     await _safe_edit(q, text, keyboards.checkme_detail_back_kb(ban_id, proof_link))

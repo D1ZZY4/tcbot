@@ -5,9 +5,25 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 138)
+**Last updated:** 2026-06-16 (session 140)
 
 ## What is done
+
+- Session 140 (2026-06-16): Bug #414 found and fixed. Full audit of checking.py, appeal_flow.py, unban_flow.py, extraction.py, maintenance.py, admins.py, __main__.py, ban_info.py, logger.py/utils/__init__.py (circular import confirmed).
+  - AST scan: 5 consecutive-await pairs found — all confirmed VALID (sequential dependencies). checking.py:276+277 (text from build_ban_detail feeds _safe_edit), checking.py:319+320 (text from _ban_summary feeds _safe_edit), maintenance.py:193+196 (groups from active_groups feeds gather), users_roles.py:91 and admins.py:570 previously documented ordering constraints.
+  - Inline import audit: checking.py:272 inline `build_ban_detail` import — no circular dependency (ban_info does not import checking.py). Moved to module-level top import, removed `# noqa: PLC0415`. Logger.py inline `error_reporter` import confirmed NECESSARY (tcbot/utils/__init__.py imports all siblings including logger.py; top-level import would be circular). mongos.py dns.resolver inline VALID (optional dependency). All 3 noqa: PLC0415 sites evaluated.
+  - Non-ASCII scan: `→` characters only in code comments, log messages, and docstrings — zero in user-facing Telegram strings. CLEAN.
+  - Em-dash/emoji scan: 0 in Python source. CLEAN.
+  - appeal_flow.py (full read): all gather patterns, reject path sequential `_update_or_send_log` (depends on target_fname from gather — VALID), approve path 4-way gather CLEAN, ConversationHandler builder CLEAN.
+  - Bug #414: `checking.py` — `from tcbot.modules.helper.ban_info import build_ban_detail` moved from inline (inside `on_checkme_detail`) to module-level imports. No functional change; pure rule compliance fix.
+  - Verification: ruff check All checks passed!, ruff format 74 files already formatted. Import OK. Bot running.
+  - Total bugs: #1–#414. Remaining open: P1 #4 (CVE-2026-31072, accepted), Improvement #4 (multi-instance cache, future).
+
+- Session 139 (2026-06-16): Bugs #399–#411 found and fixed (all docs/accuracy). Bugs #412–#413 found and fixed (code correctness). Comprehensive audit of all new code from sessions 133–138.
+  - Bug #412: `warning_flow.execute_resetwarns` — no audit log posted on success. Added `resetwarns_log()` to `parse_logmsg.py`. Updated `execute_resetwarns` to send log + reply in parallel gather.
+  - Bug #413: `banning.cmd_ban_start`, `kicking.cmd_kick`, `muting.cmd_mute`, `admins.on_demote_confirm` — `Demote.execute` calls not wrapped in `try/except`. MongoDB timeout would silently abort ConversationHandler entry. Fixed with `try/except Exception + log.exception()` in all 4 sites.
+  - Bugs #399–#411: 13 docs accuracy fixes (mute section, warnings-detailed, appeal-detailed, banning-detailed, databases.md — all covering omitted FED_WARN_LIMIT, active_mutes, and stale TIMEOUT-state references).
+  - Total bugs: #1–#413. Remaining open: P1 #4 (CVE-2026-31072, accepted), Improvement #4 (multi-instance cache, future).
 
 - Session 138 (2026-06-16): Bugs #393-#398 found and fixed. Comprehensive audit of remaining new code from sessions 133-137.
   - Audit scope: `stats.py` (q.answer patterns), `checking.py` (q.answer patterns), `admins.py` (q.answer patterns), `ban_flow.py` (post-#392 re-audit), `check_flow.py` (session 133 changes: 11-way gather + fed_warn_total + active_mute), `connecting.py` (session 134: MY_CHAT_MEMBER consolidation), `muting_flow.py` (session 135: active mute gather patterns), `greeting.py` (session 135: 3-way gather + mute re-apply), `connected_flow.py` (session 135: 6-way gather + mute fan_out), `warning_flow.py` (FED_WARN_LIMIT sequential awaits — all justified), `mutes_db.py` (active mute helpers), `__main__.py` (session 136: timeout constants + bootstrap_retries). All CLEAN except Bug #398.
