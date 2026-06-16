@@ -5,9 +5,11 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 156)
+**Last updated:** 2026-06-16 (session 157)
 
 ## What is done
+
+- Session 157 (2026-06-16): Bug #423 fixed. `proof_line()` removed entirely. Mute/kick/warn proof now uploaded to proof channel and shown as inline keyboard button (identical pattern to ban). Files changed: `reason_flow.py`, `keyboards.py`, `muting_flow.py`, `kicking_flow.py`, `warning_flow.py`, `utils/formatter.py`, `modules/helper/formatter.py`. Ruff: all checks passed. Import: OK. Total bugs: #1-#423.
 
 - Session 156 (2026-06-16): Wave 5 deep combinatorial audit — ALL 6 "Bug Nyata dari Testing Langsung" areas, ZERO new bugs.
   - Direct reads (all CLEAN): muting_flow.py (full 300 lines), ban_flow.py (full 528 lines), unban_flow.py (full), scheduler.py (full), check_flow.py (400-601). All previously audited files confirmed again.

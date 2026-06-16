@@ -47,6 +47,21 @@ def ban_log_update(
     )
 
 
+# ─────────────── Mute / Kick / Warn proof button ────────────────── #
+
+
+def action_proof_kb(
+    target_id: int,
+    proof_link: str | None,
+) -> InlineKeyboardMarkup | None:
+    """Single-button keyboard with a proof URL, or None when no proof link is available."""
+    if not proof_link:
+        return None
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton(f"Proof {target_id}", url=proof_link)]]
+    )
+
+
 # ───────────────────────── Admin promotion ──────────────────────── #
 
 

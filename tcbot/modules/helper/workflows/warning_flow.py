@@ -12,12 +12,14 @@ from typing import TYPE_CHECKING, Any
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import parse_logmsg
-from tcbot.modules.helper.formatter import esc, proof_line, user_ref
+from tcbot.modules.helper import keyboards, parse_logmsg
+from tcbot.modules.helper.formatter import esc, user_ref
+from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
-from tcbot.modules.helper.workflows.proof_flow import BuildProof
+from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
 from tcbot.utils.dispatch import fan_out
+from tcbot.utils.timedate_format import utc_now
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -46,6 +48,7 @@ async def execute_warn(
     target_name: str,
     reason_text: str,
     proof_desc: str | None = None,
+    proof_msgs: list | None = None,
 ) -> None:
     """Issue a warning and auto-ban the target if a warn threshold is reached.
 
@@ -67,10 +70,24 @@ async def execute_warn(
     msg = update.effective_message
     chat_id = update.effective_chat.id
     admin_id = update.effective_user.id
-    proof_suffix = proof_line(proof_desc)
-    chat_title = update.effective_chat.title or str(chat_id)
     admin_fname = update.effective_user.first_name
+    chat_title = update.effective_chat.title or str(chat_id)
     lc, lt = cfg.logs
+
+    proof_link: str | None = None
+    if proof_msgs:
+        try:
+            pc, pt = cfg.proofs
+            caption = parse_logmsg.proof_caption_new(
+                target_id, admin_id, admin_fname, utc_now()
+            )
+            warn_proof_id = await upload_proof(ctx.bot, proof_msgs, caption, pc, pt)
+            if warn_proof_id:
+                proof_link = message_link(pc, warn_proof_id, pt)
+        except Exception:
+            log.warning("Warn proof upload skipped for target=%d", target_id)
+
+    proof_kb = keyboards.action_proof_kb(target_id, proof_link)
 
     count = await db.warns_db.add_warn(target_id, reason_text, admin_id, chat_id)
     log_text = parse_logmsg.warn_log(
@@ -131,7 +148,9 @@ async def execute_warn(
         groups_result, existing_ban, log_result = await asyncio.gather(
             db.groups_db.active_groups(),
             db.bans_db.get_active_ban(target_id),
-            ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+            ctx.bot.send_message(
+                lc, log_text, parse_mode="HTML", message_thread_id=lt, reply_markup=proof_kb
+            ),
             return_exceptions=True,
         )
         if isinstance(log_result, BaseException):
@@ -253,8 +272,9 @@ async def execute_warn(
             clear_result, reply_result = await asyncio.gather(
                 db.warns_db.clear_warns(target_id, chat_id),
                 msg.reply_text(
-                    f"{ban_notice}{applied_line}{proof_suffix}",
+                    f"{ban_notice}{applied_line}",
                     parse_mode="HTML",
+                    reply_markup=proof_kb,
                 ),
                 return_exceptions=True,
             )
@@ -270,19 +290,23 @@ async def execute_warn(
         else:
             try:
                 await msg.reply_text(
-                    f"{ban_fail_notice}{applied_line}{proof_suffix}",
+                    f"{ban_fail_notice}{applied_line}",
                     parse_mode="HTML",
+                    reply_markup=proof_kb,
                 )
             except Exception as exc:
                 log.debug("Auto-ban failure notice reply failed: %s", exc)
     else:
         # * federation log + reply in parallel
         results2 = await asyncio.gather(
-            ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+            ctx.bot.send_message(
+                lc, log_text, parse_mode="HTML", message_thread_id=lt, reply_markup=proof_kb
+            ),
             msg.reply_text(
                 f"{user_ref(target_id, target_name)} has been warned "
-                f"({count}/{WARN_LIMIT}) - {esc(reason_text)}{proof_suffix}",
+                f"({count}/{WARN_LIMIT}) - {esc(reason_text)}",
                 parse_mode="HTML",
+                reply_markup=proof_kb,
             ),
             return_exceptions=True,
         )
@@ -450,9 +474,11 @@ async def _exec_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     target_name = ctx.user_data.pop("warn_target_name", "")
     reason_text = ctx.user_data.pop("warn_reason", "")
     proof_desc = ctx.user_data.pop("warn_proof_desc", None)
+    proof_msgs = ctx.user_data.pop("warn_proof_msgs", None)
     ctx.user_data.pop("warn_extra_info", None)
     await execute_warn(
-        update, ctx, target_id, target_name, reason_text, proof_desc=proof_desc
+        update, ctx, target_id, target_name, reason_text,
+        proof_desc=proof_desc, proof_msgs=proof_msgs,
     )
 
 

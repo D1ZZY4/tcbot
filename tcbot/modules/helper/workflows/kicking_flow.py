@@ -12,10 +12,12 @@ from typing import TYPE_CHECKING, Any
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import parse_logmsg, replies
-from tcbot.modules.helper.formatter import esc, mention, proof_line, user_ref
-from tcbot.modules.helper.workflows.proof_flow import BuildProof
+from tcbot.modules.helper import keyboards, parse_logmsg, replies
+from tcbot.modules.helper.formatter import esc, mention, user_ref
+from tcbot.modules.helper.parse_link import message_link
+from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
+from tcbot.utils.timedate_format import utc_now
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -45,17 +47,32 @@ async def execute_kick(
     target_name: str,
     reason_text: str,
     proof_desc: str | None = None,
+    proof_msgs: list | None = None,
 ) -> None:
     """Kick (ban then immediately unban) a user from the current group."""
     msg = update.effective_message
     chat_id = update.effective_chat.id
     admin_id = update.effective_user.id
+    admin_fname = update.effective_user.first_name
+
+    proof_link: str | None = None
+    if proof_msgs:
+        try:
+            pc, pt = cfg.proofs
+            caption = parse_logmsg.proof_caption_new(
+                target_id, admin_id, admin_fname, utc_now()
+            )
+            proof_msg_id = await upload_proof(ctx.bot, proof_msgs, caption, pc, pt)
+            if proof_msg_id:
+                proof_link = message_link(pc, proof_msg_id, pt)
+        except Exception:
+            log.warning("Kick proof upload skipped for target=%d", target_id)
+
+    proof_kb = keyboards.action_proof_kb(target_id, proof_link)
 
     try:
         await ctx.bot.ban_chat_member(chat_id, target_id)
-        proof_suffix = proof_line(proof_desc)
         chat_title = update.effective_chat.title or str(chat_id)
-        admin_fname = update.effective_user.first_name
         lc, lt = cfg.logs
         log_text = parse_logmsg.kick_log(
             target_id,
@@ -70,12 +87,15 @@ async def execute_kick(
         results = await asyncio.gather(
             ctx.bot.unban_chat_member(chat_id, target_id, only_if_banned=True),
             db.kicks_db.log_kick(target_id, chat_id, reason_text, admin_id),
-            ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+            ctx.bot.send_message(
+                lc, log_text, parse_mode="HTML", message_thread_id=lt, reply_markup=proof_kb
+            ),
             msg.reply_text(
                 f"{user_ref(target_id, target_name)} has been kicked.\n"
-                f"Reason: {esc(reason_text)}{proof_suffix}\n"
+                f"Reason: {esc(reason_text)}\n"
                 f"{_MSG_REJOIN_ALLOWED}",
                 parse_mode="HTML",
+                reply_markup=proof_kb,
             ),
             return_exceptions=True,
         )
@@ -111,9 +131,11 @@ async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     target_name = ctx.user_data.pop("kick_target_name", "")
     reason_text = ctx.user_data.pop("kick_reason", replies.NO_REASON)
     proof_desc = ctx.user_data.pop("kick_proof_desc", None)
+    proof_msgs = ctx.user_data.pop("kick_proof_msgs", None)
     ctx.user_data.pop("kick_extra_info", None)
     await execute_kick(
-        update, ctx, target_id, target_name, reason_text, proof_desc=proof_desc
+        update, ctx, target_id, target_name, reason_text,
+        proof_desc=proof_desc, proof_msgs=proof_msgs,
     )
 
 

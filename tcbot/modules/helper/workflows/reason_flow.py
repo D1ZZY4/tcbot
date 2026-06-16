@@ -108,6 +108,7 @@ def build_modaction_conv(
     action = reason.action
     _reason_key = f"{action}_reason"
     _proof_key = f"{action}_proof_desc"
+    _proof_msgs_key = f"{action}_proof_msgs"
     _extra_info_key = f"{action}_extra_info"
     _prompt_chat_key = f"{action}_prompt_chat"
     _prompt_id_key = f"{action}_prompt_id"
@@ -194,9 +195,12 @@ def build_modaction_conv(
     # ── WAITING_PROOF handlers ───────────────────────────────────── #
 
     async def _on_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        p = proof.record(update.effective_message)
+        msg = update.effective_message
+        p = proof.record(msg)
         if p:
             ctx.user_data[_proof_key] = p
+            existing: list = ctx.user_data.get(_proof_msgs_key, [])
+            ctx.user_data[_proof_msgs_key] = [*existing, msg]
         await executor(update, ctx)
         return ConversationHandler.END
 

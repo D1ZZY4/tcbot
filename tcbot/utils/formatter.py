@@ -77,13 +77,3 @@ def user_ref(user_id: int, name: str, username: str | None = None) -> str:
     if str(name) == str(user_id):
         return code(str(user_id))
     return f"{html.escape(str(name))} - {code(str(user_id))}"
-
-
-def proof_line(proof_desc: str | None) -> str:
-    r"""Return a formatted proof line or an empty string when no proof is given.
-
-    Produces ``\nProof: <desc>`` when *proof_desc* is a non-empty string,
-    or ``""`` otherwise.  Callers embed the result directly in HTML reply text,
-    so *proof_desc* is HTML-escaped here at the source.
-    """
-    return f"\nProof: {esc(proof_desc)}" if proof_desc else ""

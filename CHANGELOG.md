@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-16 (session 157)
+
+### Fixed
+
+- **Bug #423** (`muting_flow.py`, `kicking_flow.py`, `warning_flow.py`, `reason_flow.py`, `keyboards.py`, `utils/formatter.py`, `modules/helper/formatter.py`): `proof_line()` embedded the proof description as plain text (`\nProof: Photo (msg X)`) directly in mute summary, kick reply, and all warn reply messages. This was inconsistent with the ban flow, which already uploads proof media to the proof channel and shows the link as an inline keyboard button. Fixed by: (1) modifying `reason_flow._on_proof` to also store the actual `Message` object in `{action}_proof_msgs` user_data alongside the existing text description; (2) adding `action_proof_kb(target_id, proof_link)` to `keyboards.py` for a single-button "Proof {target_id}" URL keyboard; (3) updating `_execute_mute`, `execute_kick`, and `execute_warn` to upload proof media to `cfg.proofs` channel via `upload_proof()`, derive the proof URL via `message_link()`, and attach the resulting keyboard to all outgoing messages (summary edits, log channel posts, and chat replies); (4) removing all `proof_suffix = proof_line(...)` usage from all three executors; (5) removing `proof_line` function entirely from `tcbot/utils/formatter.py` and its re-export shim `tcbot/modules/helper/formatter.py` since no callers remain. If no proof channel is configured or upload fails, the keyboard is silently omitted and the action completes normally.
+
 ## [Unreleased] - 2026-06-16 (session 156)
 
 ### Changed

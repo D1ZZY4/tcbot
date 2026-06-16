@@ -3,6 +3,8 @@ name: Progress tracker
 description: Item-by-item status of the improvement plan. Updated at each commit checkpoint.
 ---
 
+| Session 157 Bug #423 | PASS: proof_line() removed entirely. reason_flow._on_proof now stores actual Message to {action}_proof_msgs user_data. action_proof_kb() added to keyboards.py. _execute_mute, execute_kick, execute_warn all upload proof via upload_proof(), derive proof_link via message_link(), attach proof_kb to all outgoing messages (log channel and chat replies). proof_line function deleted from utils/formatter.py and helper/formatter.py shim. Ruff: 74 files clean. Import: OK. Total bugs: #1-#423. |
+
 # TCF Bot - Progress
 
 **Last updated:** 2026-06-16 (session 156)

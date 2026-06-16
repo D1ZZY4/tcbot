@@ -21,7 +21,6 @@ from tcbot.utils.formatter import (
     link,
     mention,
     pre,
-    proof_line,
     user_ref,
 )
 
@@ -33,6 +32,5 @@ __all__ = [
     "link",
     "mention",
     "pre",
-    "proof_line",
     "user_ref",
 ]

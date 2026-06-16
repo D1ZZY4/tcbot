@@ -16,14 +16,14 @@ from telegram import Bot, ChatPermissions, Update
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import parse_logmsg, replies
+from tcbot.modules.helper import keyboards, parse_logmsg, replies
 from tcbot.modules.helper.formatter import (
     bold,
     esc,
-    proof_line,
     user_ref,
 )
-from tcbot.modules.helper.workflows.proof_flow import BuildProof
+from tcbot.modules.helper.parse_link import message_link
+from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
 from tcbot.utils.dispatch import count_errors, fan_out
 from tcbot.utils.timedate_format import utc_now
@@ -101,7 +101,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict) -> None:
     reason_text = meta.get("mute_reason") or replies.NO_REASON
     admin_id = meta["mute_admin_id"]
     duration = meta.get("mute_duration")
-    proof_desc = meta.get("mute_proof_desc")
+    proof_msgs = meta.get("mute_proof_msgs")
     prompt_chat = meta.get("mute_prompt_chat")
     prompt_id = meta.get("mute_prompt_id")
     dur_str = fmt_duration(duration)
@@ -132,16 +132,29 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict) -> None:
     )
     failed = count_errors(results)
 
-    proof_suffix = proof_line(proof_desc)
+    admin_fname = meta.get("mute_admin_fname", "Admin")
+
+    proof_link: str | None = None
+    if proof_msgs:
+        try:
+            pc, pt = cfg.proofs
+            caption = parse_logmsg.proof_caption_new(
+                target_id, admin_id, admin_fname, utc_now()
+            )
+            pmid = await upload_proof(bot, proof_msgs, caption, pc, pt)
+            if pmid:
+                proof_link = message_link(pc, pmid, pt)
+        except Exception:
+            log.warning("Mute proof upload skipped for target=%d", target_id)
+
+    proof_kb = keyboards.action_proof_kb(target_id, proof_link)
     summary = (
         f"{user_ref(target_id, target_fname)} "
         f"has been muted {bold(dur_str)}.\n"
-        f"Reason: {esc(reason_text)}"
-        f"{proof_suffix}\n"
+        f"Reason: {esc(reason_text)}\n"
         f"Applied to {len(groups) - failed}/{len(groups)} groups."
     )
 
-    admin_fname = meta.get("mute_admin_fname", "Admin")
     lc, lt = cfg.logs
     log_text = parse_logmsg.mute_log(
         target_id,
@@ -159,13 +172,15 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict) -> None:
             target_id, chat_id, reason_text, admin_id, duration_secs=duration_secs
         ),
         db.mutes_db.set_active_mute(target_id, until=until),
-        bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+        bot.send_message(
+            lc, log_text, parse_mode="HTML", message_thread_id=lt, reply_markup=proof_kb
+        ),
         bot.edit_message_text(
             summary,
             chat_id=prompt_chat,
             message_id=prompt_id,
             parse_mode="HTML",
-            reply_markup=None,
+            reply_markup=proof_kb,
         ),
         return_exceptions=True,
     )
@@ -179,7 +194,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict) -> None:
         msg = update.effective_message
         if msg:
             try:
-                await msg.reply_text(summary, parse_mode="HTML")
+                await msg.reply_text(summary, parse_mode="HTML", reply_markup=proof_kb)
             except Exception as exc:
                 log.debug("Mute summary fallback reply failed: %s", exc)
 
