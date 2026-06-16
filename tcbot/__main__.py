@@ -42,10 +42,11 @@ log = logging.getLogger(__name__)
 # ─────────────────────── Application constants ──────────────────── #
 
 # * HTTP timeout values for the PTB ApplicationBuilder (seconds).
-_HTTP_READ_TIMEOUT: int = 15
-_HTTP_WRITE_TIMEOUT: int = 15
-_HTTP_CONNECT_TIMEOUT: int = 10
-_HTTP_POOL_TIMEOUT: int = 5
+# * Raised for Replit: first getMe() response can take >15s on this network.
+_HTTP_READ_TIMEOUT: int = 60
+_HTTP_WRITE_TIMEOUT: int = 30
+_HTTP_CONNECT_TIMEOUT: int = 30
+_HTTP_POOL_TIMEOUT: int = 15
 
 # * Connection pool sizes for the underlying httpx client.
 _API_POOL_SIZE: int = 8
@@ -362,7 +363,11 @@ def main() -> None:
 
         log.info("Handlers registered. Starting polling...")
         stage = "polling"
-        app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+        app.run_polling(
+            drop_pending_updates=True,
+            allowed_updates=Update.ALL_TYPES,
+            bootstrap_retries=-1,
+        )
     except SystemExit:
         # * Module discovery uses SystemExit on failure; logging already reported the cause.
         raise
