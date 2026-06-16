@@ -362,8 +362,9 @@ class _CfgAdapter:
         """Ban proof upload timeout in seconds.
 
         Parsed from PROOF_TIMEOUT_SECONDS but not currently consumed by any handler.
-        Conversations end via command-fallback only (no job-queue ConversationHandler
-        timeout).  Reserved for future wiring when the [job-queue] PTB extra is added.
+        Conversations end via command-fallback only (no ConversationHandler timeout
+        active).  Reserved for future wiring via APScheduler triggers if inactivity
+        timeouts are added.
         """
         return self._c.proof_timeout_seconds
 
@@ -372,8 +373,9 @@ class _CfgAdapter:
         """Appeal conversation inactivity timeout in seconds.
 
         Parsed from APPEAL_TIMEOUT_SECONDS but not currently consumed by any handler.
-        Conversations end via command-fallback only (no job-queue ConversationHandler
-        timeout).  Reserved for future wiring when the [job-queue] PTB extra is added.
+        Conversations end via command-fallback only (no ConversationHandler timeout
+        active).  Reserved for future wiring via APScheduler triggers if inactivity
+        timeouts are added.
         """
         return self._c.appeal_timeout_seconds
 

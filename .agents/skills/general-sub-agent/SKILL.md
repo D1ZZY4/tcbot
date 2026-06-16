@@ -17,7 +17,7 @@ This skill was copied from the user's global `general-sub-agent` skill and adapt
 
 TCF Bot is a Python 3.12 Telegram moderation bot built with:
 
-- `python-telegram-bot` (with the `[job-queue]` extra), tracking the latest compatible release
+- `python-telegram-bot` (with the `[rate-limiter]` extra, no `[job-queue]` extra), tracking the latest compatible release
 - Motor/MongoDB for persistence
 - Flask for the keep-alive health endpoint
 - `uv` for dependency management

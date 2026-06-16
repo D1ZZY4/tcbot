@@ -31,7 +31,7 @@ From `pyproject.toml` as of 2026-06-11:
 [project]
 requires-python = ">=3.12"
 dependencies = [
-    "python-telegram-bot[job-queue]",
+    "python-telegram-bot[rate-limiter]",
     "motor",
     "flask",
     "python-dotenv",

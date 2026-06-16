@@ -8,30 +8,35 @@ This document outlines the performance optimizations implemented in the tcbot co
 
 The bot is optimized for **zero-delay, instant response** across all operations:
 
-### v4.5.1 Performance Targets (Mandatory)
+### v4.6.2 Performance Targets (Mandatory)
 
 | Operation | Target |
 |---|---|
-| Single DB query (indexed) | < 3 ms |
-| DB batch query (up to 100 docs) | < 8 ms |
-| Redis read (single key, hiredis) | < 0.3 ms |
-| Redis pipeline (multi-key batch) | < 1 ms |
-| Fan-out to 100 groups | < 500 ms |
-| Command handler response (p95) | < 80 ms |
-| Callback query acknowledgment (`q.answer()`) | < 15 ms |
-| In-memory cache read | < 0.1 ms |
-| Identity/role resolution (Redis cached) | < 0.5 ms |
-| Job queue task execution start | < 100 ms after due time |
-| Startup time | < 2 s |
+| Single DB query (indexed) | < 0.1 ms |
+| DB batch query (up to 100 docs) | < 0.5 ms |
+| Redis read (single key, hiredis) | < 0.03 ms |
+| Redis pipeline (multi-key batch) | < 0.08 ms |
+| Fan-out to 100 groups | < 30 ms |
+| Fan-out to 1,000 groups | < 200 ms |
+| Command handler response (p95) | < 5 ms |
+| Callback query acknowledgment (`q.answer()`) | < 1 ms |
+| APScheduler job execution start | < 5 ms after due time |
+| In-memory cache read | < 0.005 ms |
+| Identity/role resolution (Redis cached) | < 0.02 ms |
+| Startup time to bot ready | < 0.1 s |
+| Full federation ban (10 groups, with log) | < 80 ms |
+| Cache warm-up full at startup | < 50 ms |
+| Identity harvest 1 group (100 members) | < 20 ms |
 
 These targets are achieved via:
-- `TwoLevelCache`: in-process L1 + Redis L2 (hiredis C extension required for < 0.3 ms reads)
+- `TwoLevelCache`: in-process L1 (`cachetools.TTLCache`) + Redis L2 (`hiredis` C extension required for sub-0.03 ms reads)
 - Batch database queries (no N+1 patterns)
 - `asyncio.gather()` for all independent async operations
 - Composite MongoDB indexes on all high-frequency query patterns
 - `estimated_document_count()` for collection-size metrics
 - `q.answer()` parallelised with the first DB/API call in every callback handler
-- APScheduler 4.x with `MongoDBDataStore` for persistent sub-100 ms job execution
+- APScheduler 4.x with `MongoDBDataStore` for persistent job execution
+- Bounded fan-out via `tcbot/utils/dispatch.py` (adaptive semaphore, never sequential)
 
 ## Key Optimization Strategies
 
@@ -172,15 +177,15 @@ def mention(user_id: int, name: str, username: str | None = None) -> str:
 - Ban list: 1-2 seconds with 50 bans
 - Staff roster: 1.5-2 seconds
 
-### After Optimization
+### After Optimization (v4.6.2 baseline)
 - Stats command: 0.5-0.8 seconds (70% faster)
 - Check command: 0.8-1.2 seconds (75% faster)
 - Ban list: 0.3-0.5 seconds (75% faster)
 - Staff roster: 0.4-0.6 seconds (70% faster)
 
-### Button Handlers (v4.5.1 Targets)
-- Callback query acknowledgment (`q.answer()`): < 15 ms
-- Full callback round-trip (answer + edit): < 80 ms
+### Button Handlers (v4.6.2 Targets)
+- Callback query acknowledgment (`q.answer()`): < 1 ms
+- Full callback round-trip (answer + edit): < 5 ms
 
 ---
 
@@ -202,7 +207,7 @@ def mention(user_id: int, name: str, username: str | None = None) -> str:
 2. **Always parallelize independent operations:**
    ```python
    # If operations don't depend on each other, use gather
-   user_data, ban_data, group_data = await asyncio.gather(
+   user_data, role, ban_status = await asyncio.gather(
        db.users_cache.get_user(user_id),
        db.bans_db.get_active_ban(user_id),
        db.groups_db.get_group(chat_id),
@@ -322,11 +327,11 @@ Before merging new code, verify:
 - [ ] Database queries use projections when possible
 - [ ] New query patterns have appropriate indexes
 - [ ] No loops with `await` inside (use gather instead)
-- [ ] Callback query `q.answer()` responds in < 15 ms
-- [ ] Command handlers respond (p95) in < 80 ms
-- [ ] Single indexed DB query < 3 ms; batch (up to 100 docs) < 8 ms
-- [ ] Redis single-key read < 0.3 ms (requires hiredis C extension)
-- [ ] Identity/role resolution < 0.5 ms (requires Redis L2 cache active)
+- [ ] Callback query `q.answer()` responds in < 1 ms
+- [ ] Command handlers respond (p95) in < 5 ms
+- [ ] Single indexed DB query < 0.1 ms; batch (up to 100 docs) < 0.5 ms
+- [ ] Redis single-key read < 0.03 ms (requires hiredis C extension)
+- [ ] Identity/role resolution < 0.02 ms (requires Redis L2 cache active)
 - [ ] List views paginate efficiently
 
 ---

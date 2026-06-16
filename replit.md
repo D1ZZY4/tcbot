@@ -114,8 +114,8 @@ flowchart TD
 
 - Host: `0.0.0.0`
 - Port: `PORT` from the environment, default `5000`
-- `GET /` — returns plain-text `OK` for basic uptime probes.
-- `GET /health` — returns a JSON subsystem-status report (`mongodb`, `redis`, `scheduler`, `ts`) with HTTP 200 when all subsystems are ready or HTTP 503 when degraded.
+- `GET /`: returns plain-text `OK` for basic uptime probes.
+- `GET /health`: returns a JSON subsystem-status report (`mongodb`, `redis`, `scheduler`, `ts`) with HTTP 200 when all subsystems are ready or HTTP 503 when degraded.
 
 If the hosting platform requires a specific public port, set `PORT` accordingly in the environment. Invalid or out-of-range values fall back to `5000` instead of crashing the health server.
 

@@ -9,6 +9,15 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## What is done
 
+- Session 142 (2026-06-16): Audit pass 23 — 4 doc/skill bugs fixed (#415-#418).
+  - Bug #415: Em-dash (Unicode U+2014) removed from replit.md (2), CHANGELOG.md (52 lines), PLAN.md (14). All project .md files now CLEAN — 39 files verified across root + docs + docs subdirs (22 docs files).
+  - Bug #416: docs/performance.md target table updated from v4.5.1 to v4.6.2 mandatory targets (single DB < 0.1 ms, batch < 0.5 ms, Redis read < 0.03 ms, pipeline < 0.08 ms, fan-out 100 groups < 30 ms, 1000 groups < 200 ms, p95 cmd < 5 ms, q.answer < 1 ms, APScheduler < 5 ms, mem cache < 0.005 ms, identity < 0.02 ms, startup < 0.1 s). Checklist thresholds and benchmark label updated. Bounded fan-out via dispatch.py added.
+  - Bug #417: 6 agent skill files corrected from [job-queue] to [rate-limiter]+no-[job-queue]: project-policy/SKILL.md, async-python-patterns/SKILL.md, docs-maintainer/SKILL.md, general-sub-agent/SKILL.md, python-code-quality/SKILL.md (example snippet), telegram-bot-builder/SKILL.md.
+  - Bug #418: tcbot/__init__.py proof_timeout/appeal_timeout docstrings removed misleading forward-reference "when the [job-queue] PTB extra is added"; replaced with "via APScheduler triggers if inactivity timeouts are added."
+  - Comprehensive code scans: 0 HTML-without-parse_mode (13 false positives via mention()/non-HTML q.edit_message_text), 0 missing-q.answer callbacks (2 false positives via _render_help_index/_ack_and_render), 0 gather-without-return_exceptions (5 false positives via multi-line context), 0 unhandled gather results (5 false positives — all have isinstance(BaseException) checks), 0 em-dash/emoji in .py files, 0 smart quotes, 0 hardcoded chat IDs (1 example string), 0 job-queue usage in tcbot/ source, 0 create_task without handlers, 0 missing future-annotations, 0 inline imports (PLC0415 ruff-clean), 0 unsafe update.message access, all modules documented in modules.md.
+  - tcbot/: 74 files, 17,221 lines, 136 gather() calls (all return_exceptions=True).
+  - Ruff: All checks passed, 74 files formatted. Total bugs: #1-#418. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
+
 - Session 142 (2026-06-16): Audit pass 22 — ZERO new bugs found. Comprehensive sweep of all remaining files.
   - Files verified CLEAN this session (full reads): checking.py (all callback handlers), stats.py (full — _ack_and_render helper confirmed, all q.answer patterns CLEAN), muting_flow.py (full), greeting.py (full), __main__.py (full), decorators.py (full — _RateLimiter, _AsyncRateLimiter, global_rate_limit_handler, ratelimiter factory, log_execution, owner_only/staff_only/mod_only/basic_mod_only, resolve_and_check), extraction.py (full), start.py (full — _show_groups helper has q.answer() in gather), help.py (full — _show_module/_render_help_index/_show_section all have q.answer() in gather).
   - AST scan: 0 HTML strings without parse_mode in any messaging call. 0 callback handlers missing q.answer() (5 flagged were all false positives — helpers contain q.answer() in gather). 0 asyncio.gather missing return_exceptions.

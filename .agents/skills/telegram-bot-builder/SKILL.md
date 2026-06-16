@@ -9,7 +9,7 @@ Last updated: 2026-05-29
 
 Before invoking this skill, confirm the read/update rules in [`.agents/CLAUDE.md`](../../CLAUDE.md#mandatory-read-these-files-before-any-work). After any handler or workflow change, update [`CHANGELOG.md`](../../../CHANGELOG.md), [`PLAN.md`](../../../PLAN.md) (if state changes), and the matching `docs/<feature>-detailed.md` plus [`docs/modules/modules.md`](../../../docs/modules/modules.md) or [`docs/workflows/workflows.md`](../../../docs/workflows/workflows.md) in the same turn.
 
-Use this skill for Telegram bot product and engineering work in the TCF Bot repository. The project is a Python 3.12 community moderation bot built with `python-telegram-bot` (with the `[job-queue]` extra, tracking the latest compatible release), Motor/MongoDB, Flask keepalive, `uv`, and Ruff.
+Use this skill for Telegram bot product and engineering work in the TCF Bot repository. The project is a Python 3.12 community moderation bot built with `python-telegram-bot` (with the `[rate-limiter]` extra, no `[job-queue]` extra, tracking the latest compatible release), Motor/MongoDB, Flask keepalive, `uv`, and Ruff.
 
 The goal is to build reliable moderation workflows that feel clear, respectful, and fast for staff and users.
 
