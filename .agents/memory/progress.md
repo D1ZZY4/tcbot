@@ -5,12 +5,13 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-16 (session 150)
+**Last updated:** 2026-06-16 (session 151)
 
 ## Verification baseline
 
 | Check | Result |
 |---|---|
+| Session 151 zero-finding pass | PASS: Full audit of all remaining tcbot/ files — proof_flow.py, warnings.py, appeals.py, mutes_db.py, kicks_db.py, connecting.py, disconnecting.py, warning_flow.py, error_reporter.py, cache.py (database layer), alive.py, parse_logmsg.py, prefixes.py, pagination.py, timedate_format.py, logger.py — all CLEAN. Ruff: All checks passed. Import: OK. Bot: APScheduler ready, all subsystems healthy. Total bugs: #1-#422. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |
 | Session 150 Bug #422 | PASS: docs/performance.md "After Optimization (v4.6.2 baseline)" subsection showed 0.5-1.2 s times contradicting < 5 ms p95 target. Fixed: replaced with per-layer breakdown and bot-side-only scope clarification. Added v4.6.2 performance decision to decisions.md. All GitHub workflows, Dockerfile, docker-compose.yml, symlinks verified CLEAN. Ruff: 74 files clean. Import: OK. Total bugs: #1-#422. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |
 | Session 146 combinatorial audit | PASS: ZERO new bugs. Deep audit of 6 focus areas: chat migration handler (CLEAN), mutes race condition (CLEAN, query-time filter), ban double-submit (CLEAN, get_active_ban guard + ConversationHandler state), group re-add (CLEAN, add_group is upsert), timed-ban lifecycle (known limitation, cancel_schedule future-proof already present), cfg/warns/bans verification (all CLEAN). Ruff: 74 files clean. Import: OK. Total bugs: #1-#420. Third consecutive zero-finding session. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |
 | Session 145 final audit sweep | PASS: ZERO new bugs. Final 8 files audited and confirmed CLEAN: `tcbot/utils/__init__.py`, `tcbot/modules/about.py`, `tcbot/modules/help.py`, `tcbot/modules/start.py`, `tcbot/modules/stats.py`, `tcbot/modules/checking.py`, `tcbot/modules/privacy.py`, `tcbot/modules/maintenance.py`. All 74 tcbot/ Python files across all sessions now fully verified. Ruff: 74 files clean. Import: OK. Total bugs: #1-#420. Audit complete. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |

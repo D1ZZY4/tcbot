@@ -5,9 +5,14 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 150)
+**Last updated:** 2026-06-16 (session 151)
 
 ## What is done
+
+- Session 151 (2026-06-16): Zero-finding pass — full audit of remaining files. AUDIT COMPLETE.
+  - Files audited (all CLEAN): proof_flow.py, warnings.py, appeals.py, mutes_db.py, kicks_db.py, connecting.py, disconnecting.py, warning_flow.py (full 477 lines), error_reporter.py, cache.py (database layer, full), alive.py, parse_logmsg.py (full), prefixes.py, pagination.py, timedate_format.py, logger.py.
+  - Ruff: All checks passed. Import: OK. Bot running (APScheduler ready, all subsystems healthy).
+  - No bugs found. Baseline holds: #1-#422 total. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 150 (2026-06-16): Bug #422 found and fixed.
   - Bug #422: `docs/performance.md` "Performance Benchmarks" section — subsection "After Optimization (v4.6.2 baseline)" showed second-level measured times (0.5-1.2 s) that directly contradicted the mandatory v4.6.2 targets (< 5 ms p95 bot-side). Label was misleading. Fixed: replaced contradictory subsection with an accurate per-layer breakdown (L1/L2/MongoDB/Telegram network) and a clarifying note that the p95 target is bot-side processing only.
