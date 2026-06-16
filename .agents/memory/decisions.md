@@ -125,6 +125,16 @@ description: Non-trivial technical decisions made during development. Format: da
 
 ---
 
+## 2026-06-16: v4.6.2 performance targets - bot-side vs. network split
+
+**Decision:** The v4.6.2 p95 command handler target of < 5 ms covers **bot-side processing only**: cache lookups, DB reads, business logic, and response formatting. The Telegram network round-trip (typically 50-200 ms depending on region) is hardware-bound and outside the bot's control. The benchmarks in `docs/performance.md` must not mix bot-side targets with end-to-end times. Any benchmark section showing second-level times labeled as "v4.6.2 baseline" is incorrect and misleading.
+
+**Why:** The "After Optimization (v4.6.2 baseline)" subsection in `docs/performance.md` previously showed 0.5-1.2 s measured times that appeared to contradict the < 5 ms target. This was Bug #422. Clarifying the scope (bot-side only) resolves the apparent contradiction without weakening the target.
+
+**How to apply:** When adding benchmarks or performance measurements, always specify which layer is being measured: L1 cache read, Redis read, MongoDB query, bot-side processing, or end-to-end (user perception). Never label second-level end-to-end times as "v4.6.2 compliant" - they include network that the bot cannot optimise.
+
+---
+
 ## 2026-06-12: v4 performance targets and achievability notes
 
 **Decision:** All v4 performance targets are treated as binding. Where a target cannot be measured directly (e.g., "< 5 ms single DB query"), the architectural guarantee is that the code does not add avoidable overhead: indexed queries, server-side projections, no full-collection loads, no sequential independent awaits. Targets that depend on network latency to MongoDB Atlas (< 5 ms single query) are hardware-bound and noted as such; code-side latency is minimised.

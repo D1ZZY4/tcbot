@@ -171,21 +171,36 @@ def mention(user_id: int, name: str, username: str | None = None) -> str:
 
 ## Performance Benchmarks
 
-### Before Optimization
+### Pre-v4 Baseline (before architectural optimizations)
+
+These were measured before the batch-query, gather-parallelism, and cache-layer
+rewrites introduced in v4. They serve as the reference point for the v4+ targets.
+
 - Stats command: 2-3 seconds with 50 staff members
 - Check command: 3-5 seconds with 100 warnings
 - Ban list: 1-2 seconds with 50 bans
 - Staff roster: 1.5-2 seconds
 
-### After Optimization (v4.6.2 baseline)
-- Stats command: 0.5-0.8 seconds (70% faster)
-- Check command: 0.8-1.2 seconds (75% faster)
-- Ban list: 0.3-0.5 seconds (75% faster)
-- Staff roster: 0.4-0.6 seconds (70% faster)
+### v4.6.2 Architecture Targets
 
-### Button Handlers (v4.6.2 Targets)
-- Callback query acknowledgment (`q.answer()`): < 1 ms
-- Full callback round-trip (answer + edit): < 5 ms
+The v4.6.2 targets (listed in the table above) are the binding architecture goals.
+Achieving them requires the full stack to cooperate:
+
+| Layer | Contribution |
+|---|---|
+| In-memory L1 (cachetools TTLCache) | Role and identity reads: < 0.005 ms |
+| Redis L2 (hiredis C extension) | Distributed reads: < 0.03 ms |
+| MongoDB (indexed query, Atlas) | Single doc: < 0.1 ms; batch 100: < 0.5 ms |
+| Network to Telegram API | Baseline round-trip adds ~50-200 ms depending on region |
+
+The command handler p95 target of < 5 ms covers the **bot-side** processing time
+(cache lookups, DB reads, business logic, response formatting) and does not include
+the Telegram network round-trip. End-to-end time as seen by the user includes the
+network leg, which is outside the bot's control.
+
+### Button Handlers
+- Callback query acknowledgment (`q.answer()`): < 1 ms (bot-side)
+- Full callback round-trip (answer + edit): < 5 ms (bot-side processing)
 
 ---
 

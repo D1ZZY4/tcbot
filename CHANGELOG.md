@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-16 (session 150)
+
+### Fixed
+
+- **`docs/performance.md`** (Bug #422): "Performance Benchmarks" section contained a subsection titled "After Optimization (v4.6.2 baseline)" showing second-level measured times (0.5-1.2 s) that directly contradict the mandatory v4.6.2 architecture targets (< 5 ms p95 bot-side). The label created a false impression that v4.6.2 targets had already been validated at those slower speeds. The contradictory subsection was replaced with an accurate breakdown by cache layer and a clarifying note that the p95 target covers bot-side processing time only and excludes the Telegram network round-trip.
+
 ## [Unreleased] - 2026-06-16 (session 148)
 
 ### Fixed

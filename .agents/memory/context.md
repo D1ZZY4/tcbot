@@ -5,9 +5,23 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 146)
+**Last updated:** 2026-06-16 (session 150)
 
 ## What is done
+
+- Session 150 (2026-06-16): Bug #422 found and fixed.
+  - Bug #422: `docs/performance.md` "Performance Benchmarks" section — subsection "After Optimization (v4.6.2 baseline)" showed second-level measured times (0.5-1.2 s) that directly contradicted the mandatory v4.6.2 targets (< 5 ms p95 bot-side). Label was misleading. Fixed: replaced contradictory subsection with an accurate per-layer breakdown (L1/L2/MongoDB/Telegram network) and a clarifying note that the p95 target is bot-side processing only.
+  - Added v4.6.2 performance decision entry to `.agents/memory/decisions.md` (bot-side vs. network split).
+  - All GitHub workflows verified CLEAN: lint.yml, run-bot.yml (FED_WARN_LIMIT confirmed present), auto-fix.yml, codeql.yml, dependency-update.yml.
+  - Dockerfile verified CLEAN (Python 3.12-slim, uv, hiredis C extension verify step).
+  - docker-compose.yml verified CLEAN (all 3 services, healthchecks, restart policies, internal network, .env).
+  - Symlinks verified: .kilo/.trae/.claude/.roo all point to .agents.
+  - Ruff: 74 files unchanged, All checks passed. Import: OK. Total bugs: #1-#422.
+  - Remaining open: CVE-2026-31072 (accepted), Improvement #4 (future).
+
+- Session 149 (2026-06-16): Zero-finding pass — all remaining modules audited CLEAN.
+  - Files audited: `about.py`, `start.py`, `help.py`, `stats.py`, `maintenance.py`, `netspeed.py`, `privacy.py`. All CLEAN.
+  - Ruff: 74 files unchanged, All checks passed. Import: OK.
 
 - Session 146 (2026-06-16): Deep combinatorial audit of 6 focus areas — ZERO new bugs. Third consecutive zero-finding session.
   - T001: `allowed_updates=Update.ALL_TYPES` confirmed; `on_chat_migration` with `MIGRATE` filter present in greeting.py. CLEAN.

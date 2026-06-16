@@ -35,3 +35,4 @@
 - [extraction @username fallthrough](decisions.md): _safe_get_chat returns None for both "not found" and timeout; fallthrough to partial name search is intentional design, not a bug
 - [formatter location and shim pattern](decisions.md): formatter.py lives at tcbot/utils/formatter.py; tcbot/modules/helper/formatter.py is a re-export shim — utils layer imports from tcbot.utils.formatter, modules layer keeps existing imports unchanged
 - [nested f-string quote escape](decisions.md): avoid f"...f'...{var}...'..." nested quotes — use an intermediate variable instead to avoid syntax errors
+- [v4.6.2 performance target scope](decisions.md): p95 < 5 ms target is bot-side processing only; Telegram network round-trip (50-200 ms) is excluded; never label second-level end-to-end times as "v4.6.2 compliant"
