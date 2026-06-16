@@ -128,36 +128,46 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.debug("cmd_speedtest failure-edit failed: %s", edit_exc)
         return
 
-    dl = _readable_size(result["download"] / 8)
-    ul = _readable_size(result["upload"] / 8)
-    sent_bytes = _readable_size(int(result["bytes_sent"]))
-    recv_bytes = _readable_size(int(result["bytes_received"]))
-    client = result["client"]
-    server = result["server"]
+    try:
+        dl = _readable_size(result["download"] / 8)
+        ul = _readable_size(result["upload"] / 8)
+        sent_bytes = _readable_size(int(result["bytes_sent"]))
+        recv_bytes = _readable_size(int(result["bytes_received"]))
+        client = result["client"]
+        server = result["server"]
 
-    text = (
-        f"{bold('Speed Test Results')}\n\n"
-        f"{bold('Ping:')} {code(str(result['ping']) + ' ms')}\n"
-        f"{bold('Timestamp:')} {code(str(result['timestamp']))}\n"
-        f"{bold('Download:')} {code(dl + '/s')}\n"
-        f"{bold('Upload:')} {code(ul + '/s')}\n"
-        f"{bold('Sent:')} {code(sent_bytes)}\n"
-        f"{bold('Received:')} {code(recv_bytes)}\n\n"
-        f"{bold('Client Info')}\n"
-        f"{bold('IP:')} {code(str(client['ip']))}\n"
-        f"{bold('ISP:')} {code(str(client['isp']))}\n"
-        f"{bold('ISP Rating:')} {code(str(client['isprating']))}\n"
-        f"{bold('Country:')} {code(str(client['country']))}\n"
-        f"{bold('Latitude:')} {code(str(client['lat']))}\n"
-        f"{bold('Longitude:')} {code(str(client['lon']))}\n\n"
-        f"{bold('Server Info')}\n"
-        f"{bold('Name:')} {code(str(server['name']))}\n"
-        f"{bold('Sponsor:')} {code(str(server['sponsor']))}\n"
-        f"{bold('Latency:')} {code(str(server['latency']))}\n"
-        f"{bold('Country:')} {code(str(server['country']) + ', ' + str(server['cc']))}\n"
-        f"{bold('Latitude:')} {code(str(server['lat']))}\n"
-        f"{bold('Longitude:')} {code(str(server['lon']))}"
-    )
+        text = (
+            f"{bold('Speed Test Results')}\n\n"
+            f"{bold('Ping:')} {code(str(result['ping']) + ' ms')}\n"
+            f"{bold('Timestamp:')} {code(str(result['timestamp']))}\n"
+            f"{bold('Download:')} {code(dl + '/s')}\n"
+            f"{bold('Upload:')} {code(ul + '/s')}\n"
+            f"{bold('Sent:')} {code(sent_bytes)}\n"
+            f"{bold('Received:')} {code(recv_bytes)}\n\n"
+            f"{bold('Client Info')}\n"
+            f"{bold('IP:')} {code(str(client['ip']))}\n"
+            f"{bold('ISP:')} {code(str(client['isp']))}\n"
+            f"{bold('ISP Rating:')} {code(str(client.get('isprating', 'N/A')))}\n"
+            f"{bold('Country:')} {code(str(client['country']))}\n"
+            f"{bold('Latitude:')} {code(str(client['lat']))}\n"
+            f"{bold('Longitude:')} {code(str(client['lon']))}\n\n"
+            f"{bold('Server Info')}\n"
+            f"{bold('Name:')} {code(str(server['name']))}\n"
+            f"{bold('Sponsor:')} {code(str(server.get('sponsor', 'N/A')))}\n"
+            f"{bold('Latency:')} {code(str(server['latency']))}\n"
+            f"{bold('Country:')} {code(str(server['country']) + ', ' + str(server['cc']))}\n"
+            f"{bold('Latitude:')} {code(str(server['lat']))}\n"
+            f"{bold('Longitude:')} {code(str(server['lon']))}"
+        )
+    except (KeyError, TypeError):
+        log.exception("Speedtest result parsing failed")
+        try:
+            await notice.edit_text(
+                "Speed test completed but result parsing failed. Check bot logs."
+            )
+        except Exception as edit_exc:
+            log.debug("cmd_speedtest parse-fail edit failed: %s", edit_exc)
+        return
 
     share_url: str | None = result.get("share")
     try:

@@ -88,7 +88,7 @@ class Check:
         target_id: int,
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Build the top-level profile view: identity + counts + drill-down keyboard."""
-        # * All 10 reads are independent; fire them in parallel for a single round-trip.
+        # * All 11 reads are independent; fire them in parallel for a single round-trip.
         # * return_exceptions=True prevents a single DB failure from crashing the whole view.
         # * fed_warn_total gives the federation-wide aggregate that user_total_warns hides
         # * (user_total_warns counts all historical warn docs; fed_warn_total sums active
@@ -97,6 +97,7 @@ class Check:
             r_user_info,
             r_role_meta,
             active_ban,
+            active_mute,
             ban_total,
             appeal_total,
             warn_total,
@@ -108,6 +109,7 @@ class Check:
             _resolve_user_info(bot, target_id),
             db.users_roles.role_meta(target_id),
             db.bans_db.get_active_ban(target_id),
+            db.mutes_db.get_active_mute(target_id),
             db.bans_db.user_ban_count(target_id),
             db.bans_db.user_appeal_count(target_id),
             db.warns_db.user_total_warns(target_id),
@@ -129,6 +131,8 @@ class Check:
             role, role_by_id, role_at = r_role_meta
         if isinstance(active_ban, BaseException):
             active_ban = None
+        if isinstance(active_mute, BaseException):
+            active_mute = None
         if isinstance(ban_total, BaseException):
             ban_total = 0
         if isinstance(appeal_total, BaseException):
@@ -151,6 +155,7 @@ class Check:
         )
         uname_part = f"@{esc(uname)}" if uname else "(none)"
         active_part = f"Yes ({code(active_ban['ban_id'])})" if active_ban else "No"
+        active_mute_part = "Yes" if active_mute else "No"
 
         # * Build the rich role line with assignment metadata where available.
         role_lines = [f"Role: {bold(role_label)}"]
@@ -169,6 +174,7 @@ class Check:
             f"{role_block}\n\n"
             f"{bold('Federation Activity')}\n\n"
             f"Active Ban: {active_part}\n"
+            f"Active Mute: {active_mute_part}\n"
             f"Total Bans: {ban_total}\n"
             f"Warnings: {fed_warn_total} active across {len(warn_groups)} group(s)"
             f" ({warn_total} total historical)\n"

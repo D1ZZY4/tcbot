@@ -51,6 +51,7 @@ Role: <Role>
 Federation Activity
 
 Active Ban: Yes (<code ban_id>) / No
+Active Mute: Yes / No
 Total Bans: <n>
 Warnings: <n> active across <m> group(s) (<total> total historical)
 Kicks: <n>
@@ -131,6 +132,7 @@ All callbacks are registered in `checking.py` and run safely on repeated taps th
 | `users_roles.role_meta(uid)` | `(role, assigned_by, assigned_at)` for the Role line. |
 | `users_cache.get_first_name(uid, fallback)` | Cache-only name lookup used for admin attribution in drill-down lists. |
 | `bans_db.get_active_ban(uid)` | Current active ban, if any. |
+| `mutes_db.get_active_mute(uid)` | Current active federation mute, if any. Drives `Active Mute: Yes / No`. |
 | `bans_db.user_bans(uid)` | Every ban record (active + inactive), newest first. |
 | `bans_db.user_ban_count(uid)` | Count of bans on this user. |
 | `bans_db.user_appeal_count(uid)` | Count of bans on this user that ever had an appeal submitted. |
@@ -145,13 +147,14 @@ All callbacks are registered in `checking.py` and run safely on repeated taps th
 
 ## Async behavior: zero-delay design
 
-The profile view performs ten independent reads in a single `asyncio.gather`:
+The profile view performs eleven independent reads in a single `asyncio.gather`:
 
 ```python
 (
     (fname, uname),
     (role, role_by_id, role_at),
     active_ban,
+    active_mute,
     ban_total,
     appeal_total,
     warn_total,
@@ -163,6 +166,7 @@ The profile view performs ten independent reads in a single `asyncio.gather`:
     _resolve_user_info(bot, target_id),
     db.users_roles.role_meta(target_id),
     db.bans_db.get_active_ban(target_id),
+    db.mutes_db.get_active_mute(target_id),
     db.bans_db.user_ban_count(target_id),
     db.bans_db.user_appeal_count(target_id),
     db.warns_db.user_total_warns(target_id),
