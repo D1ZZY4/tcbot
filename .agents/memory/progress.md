@@ -5,12 +5,13 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-16 (session 151)
+**Last updated:** 2026-06-16 (session 152)
 
 ## Verification baseline
 
 | Check | Result |
 |---|---|
+| Session 152 zero-finding pass | PASS: Full audit of all remaining files — stats_flow.py (539 lines), checking.py (556 lines), groups_db.py (176 lines), scheduler.py (332 lines), kicks_db.py (59 lines), mutes_db.py (139 lines) — ALL CLEAN. Combined with prior session 152 reads (ban_flow, connected_flow, warning_flow, muting_flow, kicking_flow, reason_flow, unban_flow, greeting, banning, kicking, muting, warnings, unbanning, appeal_flow, bans_db, warns_db, users_cache, users_roles, decorators, extraction, identity, dispatch, check_flow, admins, __main__) all 74 tcbot/ Python files fully verified CLEAN. Ruff format: 74 files unchanged. Ruff check: All checks passed. Import: OK. Total bugs: #1-#422. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |
 | Session 151 zero-finding pass | PASS: Full audit of all remaining tcbot/ files — proof_flow.py, warnings.py, appeals.py, mutes_db.py, kicks_db.py, connecting.py, disconnecting.py, warning_flow.py, error_reporter.py, cache.py (database layer), alive.py, parse_logmsg.py, prefixes.py, pagination.py, timedate_format.py, logger.py — all CLEAN. Ruff: All checks passed. Import: OK. Bot: APScheduler ready, all subsystems healthy. Total bugs: #1-#422. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |
 | Session 150 Bug #422 | PASS: docs/performance.md "After Optimization (v4.6.2 baseline)" subsection showed 0.5-1.2 s times contradicting < 5 ms p95 target. Fixed: replaced with per-layer breakdown and bot-side-only scope clarification. Added v4.6.2 performance decision to decisions.md. All GitHub workflows, Dockerfile, docker-compose.yml, symlinks verified CLEAN. Ruff: 74 files clean. Import: OK. Total bugs: #1-#422. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |
 | Session 146 combinatorial audit | PASS: ZERO new bugs. Deep audit of 6 focus areas: chat migration handler (CLEAN), mutes race condition (CLEAN, query-time filter), ban double-submit (CLEAN, get_active_ban guard + ConversationHandler state), group re-add (CLEAN, add_group is upsert), timed-ban lifecycle (known limitation, cancel_schedule future-proof already present), cfg/warns/bans verification (all CLEAN). Ruff: 74 files clean. Import: OK. Total bugs: #1-#420. Third consecutive zero-finding session. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |
