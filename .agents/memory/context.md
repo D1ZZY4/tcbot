@@ -5,9 +5,16 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-15 (session 131)
+**Last updated:** 2026-06-16 (session 132)
 
 ## What is done
+
+- Session 132 (2026-06-16): Audit pass 20 — ZERO new bugs found. Final comprehensive sweep of ALL remaining tcbot/ files.
+  - Files verified CLEAN this session (reads done directly, line by line): ban_flow.py, appeal_flow.py, banning.py, extraction.py, greeting.py, decorators.py, warning_flow.py, unban_flow.py, muting_flow.py, kicking_flow.py, muting.py, kicking.py, admins.py, warnings.py, checking.py, connecting.py, __main__.py, bans_db.py, warns_db.py, users_roles.py, users_cache.py, groups_db.py, cache.py, scheduler.py, maintenance.py, appeals.py, broadcasting.py, unbanning.py, stats.py, disconnecting.py, groups.py, greeting.py (again), mongos.py, redis_client.py, start.py, help.py, about.py, additional.py, privacy.py, netspeed.py, types.py.
+  - Ruff: All checks passed (73/73 files). Format: 73 already formatted. Import OK. Bot: 27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling.
+  - Total bugs: #1–#367. No new bugs added this session.
+  - Remaining open items: P1 #4 (CVE-2026-31072, accepted risk), Improvement #2 (backups, operational), Improvement #4 (multi-instance cache invalidation).
+  - AUDIT COMPLETE: All 73 Python files across 20 audit passes verified production-ready.
 
 - Session 131 (2026-06-15): Audit pass 19 — 7 docs bugs fixed (#355–#361). Zero Python code bugs.
   - Bug #355: docs/promote-detailed.md — `/tcpromoterequests` section incorrectly described `identity.classify` call; corrected to parallel asyncio.gather reads.
