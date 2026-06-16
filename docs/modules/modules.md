@@ -75,7 +75,7 @@ signatures.
 | `additional.py` | Start-menu Additional page callback. |
 | `greeting.py` | New/left member status handlers for watched groups; also monitors bot own-membership changes (left/kicked triggers group deactivation; member/restricted demotion sends a warning to the mod log channel). |
 | `help.py` | `/help` command and help-menu callbacks generated from loaded modules. |
-| `privacy.py` | Start-menu Privacy and Privacy Policy callbacks. |
+| `privacy.py` | Start-menu Privacy and Privacy Policy callbacks. Privacy Policy uses per-section navigation: an index page lists six sections (What We Collect, Why We Collect It, Who Can Access It, How Long We Keep It, Your Rights, Contact), each rendered individually via `privacy_section_<idx>` callbacks with a back button to the index. |
 | `start.py` | `/start` menu and group-PM handoff callbacks. |
 
 These modules usually set `__module_name__ = None` so they are not listed as separate `/help` topics.

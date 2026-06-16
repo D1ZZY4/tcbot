@@ -5,9 +5,17 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 140)
+**Last updated:** 2026-06-16 (session 141)
 
 ## What is done
+
+- Session 141 (2026-06-16): New task received — improve and enhance ALL bot user-facing messages. Primary deliverable: privacy policy per-section navigation. All changes ruff-clean, import-verified, bot running.
+  - `privacy.py`: Complete rewrite of privacy policy display. `on_privacy_policy_menu` now shows a section index with 6 inline buttons. Added `on_privacy_section` handler for individual section view with back-to-index button. `_PRIVACY_POLICY_SECTIONS` module-level constant (6 sections). `_privacy_msg()` improved. New `_privacy_policy_index_msg()`. New callback pattern `privacy_section_\d+`.
+  - `keyboards.py`: Added `privacy_policy_sections_kb()` and `back_to_privacy_policy_kb()` factories.
+  - `start.py`: PM message improved (bold bot name header, clearer description, staff note). Group message improved (removed redundant greeting, added mention of PM options).
+  - `about.py`: Added "How it works" section explaining federation mechanics, improved history text and disclaimer.
+  - `help.py`: Index text clarified. Group-context alert updated.
+  - Verification: ruff format (5 files unchanged), ruff check (All checks passed), import OK, bot running cleanly (29/29 indexes, Redis hiredis 3.4.0, APScheduler, polling).
 
 - Session 140 (2026-06-16): Bug #414 found and fixed. Full audit of checking.py, appeal_flow.py, unban_flow.py, extraction.py, maintenance.py, admins.py, __main__.py, ban_info.py, logger.py/utils/__init__.py (circular import confirmed).
   - AST scan: 5 consecutive-await pairs found — all confirmed VALID (sequential dependencies). checking.py:276+277 (text from build_ban_detail feeds _safe_edit), checking.py:319+320 (text from _ban_summary feeds _safe_edit), maintenance.py:193+196 (groups from active_groups feeds gather), users_roles.py:91 and admins.py:570 previously documented ordering constraints.

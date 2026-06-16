@@ -2,6 +2,20 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-16 (session 141)
+
+### Changed
+
+- **`tcbot/modules/privacy.py`**: Privacy Policy rewritten with per-section navigation. `on_privacy_policy_menu` now renders a section index page with six inline buttons (one per section: What We Collect, Why We Collect It, Who Can Access It, How Long We Keep It, Your Rights, Contact). Added `on_privacy_section` handler that renders a single section with a back button to the index. `_PRIVACY_POLICY_SECTIONS` defined as a module-level list of `(label, content)` tuples so sections are computed once. `_privacy_msg()` (data summary page) improved for clarity and conciseness. `_privacy_policy_index_msg()` new function builds the index header. `__handlers__` updated with new `privacy_section_\d+` pattern.
+
+- **`tcbot/modules/helper/keyboards.py`**: Added `privacy_policy_sections_kb(section_labels)` and `back_to_privacy_policy_kb()` keyboard factories to support per-section privacy policy navigation.
+
+- **`tcbot/modules/start.py`**: PM and group start messages improved. PM: cleaner structure with bot name as bold header, explicit description of what the bot handles, and clearer CTA. Group: removed generic greeting phrasing, added mention of privacy info and about page in PM.
+
+- **`tcbot/modules/about.py`**: About message improved with clearer structure: added "How it works" section explaining federation mechanics, improved history section, and updated disclaimer text.
+
+- **`tcbot/modules/help.py`**: Help index text improved to be more descriptive. Group-context alert text updated from "Use /help" to "Run /help". All changes ruff-clean and import-verified.
+
 ## [Unreleased] - 2026-06-16 (session 140)
 
 ### Fixed

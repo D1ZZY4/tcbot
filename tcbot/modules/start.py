@@ -40,22 +40,22 @@ _CNAME = esc(cfg.community_name)
 
 def _private_start_text(botname: str) -> str:
     """Build the PM start message for the given plain-text bot display name."""
-    greeting = "Hey, I'm " + botname + "."
     return (
-        f"{bold(greeting)}\n\n"
-        f"Federation management assistant for {_CNAME}. "
-        "I coordinate bans, mutes, kicks, and moderation across all connected groups.\n\n"
-        "Use the buttons below to explore."
+        f"{bold(botname)}\n"
+        f"Federation management bot for {_CNAME}.\n\n"
+        "I handle federation-wide bans, mutes, kicks, and moderation across all "
+        "connected groups. Staff can run commands here or from within any connected group.\n\n"
+        "Use the buttons below to explore what I can do."
     )
 
 
 def _group_start_text(botname: str) -> str:
     """Build the group start message for the given plain-text bot display name."""
-    greeting = "Hey, I'm " + botname + "."
     return (
-        f"{bold(greeting)}\n\n"
-        f"Federation management assistant for {_CNAME}. "
-        "Use /help for the full help menu, or open me in PM for all options."
+        f"{bold(botname)}\n"
+        f"Federation management bot for {_CNAME}.\n\n"
+        "Run /help for the full command list, or open me in PM for all options "
+        "including privacy info and the about page."
     )
 
 

@@ -38,6 +38,8 @@ prefix; subsequent segments are typed positional fields.
 |---|---|---|---|
 | `back_to_start` | start menu | flat | Returns to `/start` PM landing. |
 | `about_menu` / `additional_menu` / `help_menu` / `privacy_menu` / `privacy_policy_menu` | start menu | flat | Top-level menu transitions. |
+| `privacy_section_<idx>` | privacy policy | integer index | Renders one of the six privacy policy sections (0-5). Produced by `privacy_policy_sections_kb()`. |
+| `back_to_privacy_policy` | privacy policy | flat | Returns from a section view back to the policy section index. Produced by `back_to_privacy_policy_kb()`. |
 | `help_menu_group` | start in groups | flat | Alert-only: points users to `/help`. |
 | `helpc_main` | `/help` command | flat | Returns to the command-path help index. |
 | `help_<mod>` | help menu path | one segment | Module overview reached from the start menu. |
@@ -115,6 +117,17 @@ record detail; `« Back` returns to the parent.
 [ View Appeal ]         ← URL, only when an appeal link exists
 [ « Back ]
 ```
+
+### Privacy policy section index
+
+```text
+[ What We Collect ]      [ Why We Collect It ]
+[ Who Can Access It ]    [ How Long We Keep It ]
+[ Your Rights ]          [ Contact ]
+[ « Back ]
+```
+
+Produced by `privacy_policy_sections_kb(section_labels)` in `keyboards.py`. Each button carries `callback_data=f"privacy_section_{idx}"`. Tapping a section renders the section text with a `back_to_privacy_policy_kb()` back button.
 
 ### Conversation flow keyboards (`BuildReason`, `BuildProof`)
 

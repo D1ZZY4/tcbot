@@ -5,12 +5,13 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-16 (session 140)
+**Last updated:** 2026-06-16 (session 141)
 
 ## Verification baseline
 
 | Check | Result |
 |---|---|
+| Session 141 message improvements | PASS: privacy.py per-section navigation, start.py/about.py/help.py improved, keyboards.py new factories, 3 docs updated (button-styles.md, helper.md, modules.md). Ruff: 74 files clean. Import: OK. Bot: 29/29 indexes, Redis hiredis 3.4.0, APScheduler, polling. |
 | `uv sync` | PASS |
 | `uv pip install -e .` | PASS |
 | `uv run python -c "import tcbot; print('import OK')"` | PASS (re-verified session 93) |

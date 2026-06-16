@@ -109,8 +109,9 @@ def _help_index_text(botname: str) -> str:
     """Build the help index header for the given plain-text bot display name."""
     return (
         f"{bold(f'{botname} Help')}\n"
-        f"I manage groups connected on {_CNAME}.\n\n"
-        f"Select a topic below, or use {code('/help <module>')} for direct access."
+        f"Federation management bot for {_CNAME}.\n\n"
+        f"Select a module below to read its overview and commands, "
+        f"or use {code('/help <module>')} to jump straight to a topic."
     )
 
 
@@ -338,7 +339,7 @@ async def on_help_menu_group(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     await q.answer(
-        "Use /help in this group to browse all commands.",
+        "Run /help in this group to browse all modules and commands.",
         show_alert=True,
     )
 

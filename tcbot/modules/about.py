@@ -30,13 +30,19 @@ _RL_CB_LIMIT: int = 15
 _CNAME = esc(cfg.community_name)
 
 __about_msg__ = (
-    f"{bold('What is')} {_CNAME}?\n"
-    f"{_CNAME} is a community-driven federation for Infinix, Tecno, and Itel groups. "
-    "Our main focus is maintaining group security and a conducive environment so members can discuss comfortably.\n\n"
+    f"{bold(_CNAME)}\n\n"
+    f"A community-driven federation for Infinix, Tecno, and Itel device groups. "
+    f"The focus is straightforward: keep connected groups safe, well-moderated, and "
+    "free of spam, scams, and bad actors.\n\n"
+    f"{bold('How it works')}\n"
+    f"Groups that join the federation share a single moderation layer. "
+    "A ban issued in one connected group is applied across all of them automatically. "
+    "The same goes for mutes and broadcasts from TC Staff.\n\n"
     f"{bold('History')}\n"
-    "Established in 2024. Originally named TFI, but it was disbanded due to internal issues. "
-    f"Shortly after, {_CNAME} was formed to continue managing the community with better stability.\n\n"
-    f"{_CNAME} {italic('is not an official part of Transsion Holdings. This is strictly an independent community.')}"
+    "Founded in 2024 under the name TFI, which was later disbanded following internal "
+    f"issues. {_CNAME} was formed shortly after to continue the work with a cleaner structure "
+    "and better long-term stability.\n\n"
+    f"{italic(f'{_CNAME} is not affiliated with or endorsed by Transsion Holdings. This is an independent community.')}"
 )
 
 

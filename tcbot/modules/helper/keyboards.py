@@ -246,6 +246,23 @@ def back_to_privacy_kb() -> InlineKeyboardMarkup:
     )
 
 
+def privacy_policy_sections_kb(section_labels: list[str]) -> InlineKeyboardMarkup:
+    """Policy index keyboard: one button per section + Back to privacy data."""
+    pairs: list[tuple[str, str]] = [
+        (label, f"privacy_section_{idx}") for idx, label in enumerate(section_labels)
+    ]
+    rows = _build_topic_rows(pairs)
+    rows.append([InlineKeyboardButton("« Back", callback_data="privacy_menu")])
+    return InlineKeyboardMarkup(rows)
+
+
+def back_to_privacy_policy_kb() -> InlineKeyboardMarkup:
+    """Back to privacy policy section index from an individual section view."""
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton("« Back", callback_data="privacy_policy_menu")]]
+    )
+
+
 # ─────────────────── Additional / Groups menus ──────────────────── #
 
 
