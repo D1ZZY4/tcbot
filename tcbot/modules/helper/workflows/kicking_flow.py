@@ -88,7 +88,11 @@ async def execute_kick(
             ctx.bot.unban_chat_member(chat_id, target_id, only_if_banned=True),
             db.kicks_db.log_kick(target_id, chat_id, reason_text, admin_id),
             ctx.bot.send_message(
-                lc, log_text, parse_mode="HTML", message_thread_id=lt, reply_markup=proof_kb
+                lc,
+                log_text,
+                parse_mode="HTML",
+                message_thread_id=lt,
+                reply_markup=proof_kb,
             ),
             msg.reply_text(
                 f"{user_ref(target_id, target_name)} has been kicked.\n"
@@ -134,8 +138,13 @@ async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     proof_msgs = ctx.user_data.pop("kick_proof_msgs", None)
     ctx.user_data.pop("kick_extra_info", None)
     await execute_kick(
-        update, ctx, target_id, target_name, reason_text,
-        proof_desc=proof_desc, proof_msgs=proof_msgs,
+        update,
+        ctx,
+        target_id,
+        target_name,
+        reason_text,
+        proof_desc=proof_desc,
+        proof_msgs=proof_msgs,
     )
 
 
