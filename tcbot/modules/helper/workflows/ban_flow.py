@@ -203,7 +203,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
                 reason,
                 admin_id,
                 new_proof_msg_id,
-                old_log_msg_id,
+                0,
                 old_proof_msg_id,
                 old_log_msg_id,
             ),

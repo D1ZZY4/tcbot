@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-16 (session 137)
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/ban_flow.py`** (Bug #392): In the re-ban path (user already has an active ban), `update_ban` was called with `old_log_msg_id` as the 5th positional argument (`new_log_id`), even though the new log message is still being sent in parallel via `asyncio.gather`. This mirrors the pattern used by `create_ban` (which passes `log_msg_id=0` and later calls `set_log_message_id`). The bug caused MongoDB to temporarily store the previous ban's log message ID as the current `log_message_id`; and if the parallel `send_message` call failed, the record would permanently retain the old log ID rather than `0`, making it appear the re-ban had a valid log entry when it did not. Fixed by changing the 5th argument from `old_log_msg_id` to `0`, consistent with the `create_ban` path. The subsequent `set_log_message_id` call (gated on `log_msg_id > 0`) then sets the correct value when the send succeeds.
+
 ## [Unreleased] - 2026-06-16 (session 136)
 
 ### Fixed

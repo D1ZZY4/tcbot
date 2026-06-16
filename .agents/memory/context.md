@@ -5,9 +5,15 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 136)
+**Last updated:** 2026-06-16 (session 137)
 
 ## What is done
+
+- Session 137 (2026-06-16): Bug #392 found and fixed. Full audit pass of all major workflow files.
+  - Audit scope: `ban_flow.py`, `banning.py`, `unban_flow.py`, `muting_flow.py`, `mutes_db.py`, `bans_db.py`, `warning_flow.py`, `kicking_flow.py`, `appeal_flow.py`, `check_flow.py`, `checking.py`, `connected_flow.py`, `greeting.py`, `mongos.py` — all verified except Bug #392.
+  - Bug #392: `ban_flow.py` re-ban path — `update_ban` 5th arg (`new_log_id`) was `old_log_msg_id` instead of `0`. When parallel `send_message` failed, `log_message_id` stayed as old ban's log ID (misleading pointer). Fixed to `0` consistent with `create_ban` pattern; `set_log_message_id` corrects to real value on success.
+  - Verification: ruff format 74 files unchanged, ruff check All checks passed, import OK.
+  - Total bugs: #1–#392. Remaining open: P1 #4 (CVE-2026-31072, accepted), Improvement #4 (multi-instance cache, future).
 
 - Session 136 (2026-06-16): Bugs #390–#391 fixed. Verification clean. No new code bugs found in audit scan.
   - Bug #390: `_HTTP_READ_TIMEOUT` 15→60, `_HTTP_WRITE_TIMEOUT` 15→30, `_HTTP_CONNECT_TIMEOUT` 10→30, `_HTTP_POOL_TIMEOUT` 5→15. Too-tight values caused fatal startup crash on Replit where first getMe() can take >15s.
