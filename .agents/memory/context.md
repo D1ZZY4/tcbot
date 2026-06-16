@@ -5,9 +5,21 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 155)
+**Last updated:** 2026-06-16 (session 156)
 
 ## What is done
+
+- Session 156 (2026-06-16): Wave 5 deep combinatorial audit — ALL 6 "Bug Nyata dari Testing Langsung" areas, ZERO new bugs.
+  - Direct reads (all CLEAN): muting_flow.py (full 300 lines), ban_flow.py (full 528 lines), unban_flow.py (full), scheduler.py (full), check_flow.py (400-601). All previously audited files confirmed again.
+  - 5 parallel subagent waves: SA1 (ban enforcement), SA2 (muting/unban/scheduling), SA3 (target resolution), SA4 (decorators/warning_flow/appeal_flow/admins), SA5 (connected_flow/bans_db/greeting/dispatch). All returned CLEAN.
+  - Confirmed: execute_unmute has no cancel_schedule because mutes use Telegram until_date (no APScheduler job); timed-ban is future work (schedule_unban only referenced in scheduler.py docstring, never called externally).
+  - Confirmed: warning_flow per_group uses exact `==` (atomic $inc), fed_global uses `>=` with already_banned guard — no race condition. Both paths produce identical outcome (federation ban).
+  - Confirmed: appeal_flow stale-review 72h auto-clear in _start() prevents permanent lockout.
+  - Confirmed: admins.py uses identity.classify + Promote/Demote.execute (not resolve_and_check) — intentional because hierarchy management requires finer control via internal rank validation.
+  - Confirmed: dispatch.py semaphore _MAX_CONCURRENT=10, configurable via max_concurrent kwarg.
+  - uv lock --upgrade run: 33 packages resolved, lock updated.
+  - Ruff: All checks passed (74 files). Import: OK. Zero new bugs. Total bugs: #1-#422 (unchanged).
+  - Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 155 (2026-06-16): Wave 4 zero-finding pass — ALL 74 tcbot/ Python files fully re-audited CLEAN.
   - Files audited this session (all CLEAN, confirmed by direct reads + explore subagent batch): extraction.py, identity.py, admins.py, checking.py, dispatch.py, decorators.py, users_cache.py, users_roles.py, kicking_flow.py, keyboards.py, replies.py, cache.py, __main__.py, ban_info.py, mongos.py (full), groups_db.py (full), formatter.py, pagination.py, prefixes.py, timedate_format.py, alive.py, scheduler.py (database), redis_client.py, documents.py, kicks_db.py, stats_flow.py (full 539 lines), promote_flow.py (full 246 lines), parse_logmsg.py (full 798 lines), error_reporter.py, queues_db.py, __init__.py, database/__init__.py, modules/__init__.py, about.py, additional.py, appeals.py, broadcasting.py, connecting.py, disconnecting.py, groups.py, help.py, maintenance.py, netspeed.py, privacy.py, start.py, stats.py, types.py, modules/helper/__init__.py, helper/formatter.py, parse_editmsg.py, parse_link.py, workflows/__init__.py, proof_flow.py, reason_flow.py.

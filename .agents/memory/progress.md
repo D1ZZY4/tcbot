@@ -5,12 +5,13 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-16 (session 155)
+**Last updated:** 2026-06-16 (session 156)
 
 ## Verification baseline
 
 | Check | Result |
 |---|---|
+| Session 156 wave-5 combinatorial audit | PASS: ZERO new bugs. Deep combinatorial audit of all 6 "Bug Nyata dari Testing Langsung" areas. SA1 (ban enforcement), SA2 (muting/unban/scheduling), SA3 (target resolution), SA4 (decorators/warning_flow/appeal_flow/admins), SA5 (connected_flow/bans_db/greeting/dispatch) — all returned CLEAN. Direct reads: muting_flow (full), ban_flow (full), unban_flow (full), scheduler (full), check_flow (400-601). Key confirmations: mutes use Telegram until_date (no APScheduler cancel needed on unmute); schedule_unban unreachable externally (timed-ban future work); warning_flow atomic `==` per_group + `>=` fed_global no race; appeal stale-review 72h guard prevents lockout; admins.py rank control via Promote/Demote internal validation. uv lock --upgrade: 33 packages resolved. Ruff: 74 files clean. Total bugs: #1-#422. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |
 | Session 152 zero-finding pass | PASS: Full audit of all remaining files — stats_flow.py (539 lines), checking.py (556 lines), groups_db.py (176 lines), scheduler.py (332 lines), kicks_db.py (59 lines), mutes_db.py (139 lines) — ALL CLEAN. Combined with prior session 152 reads (ban_flow, connected_flow, warning_flow, muting_flow, kicking_flow, reason_flow, unban_flow, greeting, banning, kicking, muting, warnings, unbanning, appeal_flow, bans_db, warns_db, users_cache, users_roles, decorators, extraction, identity, dispatch, check_flow, admins, __main__) all 74 tcbot/ Python files fully verified CLEAN. Ruff format: 74 files unchanged. Ruff check: All checks passed. Import: OK. Total bugs: #1-#422. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |
 | Session 151 zero-finding pass | PASS: Full audit of all remaining tcbot/ files — proof_flow.py, warnings.py, appeals.py, mutes_db.py, kicks_db.py, connecting.py, disconnecting.py, warning_flow.py, error_reporter.py, cache.py (database layer), alive.py, parse_logmsg.py, prefixes.py, pagination.py, timedate_format.py, logger.py — all CLEAN. Ruff: All checks passed. Import: OK. Bot: APScheduler ready, all subsystems healthy. Total bugs: #1-#422. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |
 | Session 150 Bug #422 | PASS: docs/performance.md "After Optimization (v4.6.2 baseline)" subsection showed 0.5-1.2 s times contradicting < 5 ms p95 target. Fixed: replaced with per-layer breakdown and bot-side-only scope clarification. Added v4.6.2 performance decision to decisions.md. All GitHub workflows, Dockerfile, docker-compose.yml, symlinks verified CLEAN. Ruff: 74 files clean. Import: OK. Total bugs: #1-#422. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |

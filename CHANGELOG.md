@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-16 (session 156)
+
+### Changed
+
+- No bugs found. Wave 5 deep combinatorial audit of all 6 "Bug Nyata dari Testing Langsung" areas across 5 parallel subagent waves (SA1: ban enforcement; SA2: muting/unban/scheduling; SA3: target resolution consistency; SA4: decorators/warning_flow/appeal_flow/admins; SA5: connected_flow/bans_db/greeting/dispatch) plus direct full reads of muting_flow.py (300 lines), ban_flow.py (528 lines), unban_flow.py, scheduler.py, and check_flow.py (400-601). All areas returned CLEAN. Key confirmations: mutes use Telegram `until_date` natively so `execute_unmute` correctly omits `cancel_schedule`; `schedule_unban` is only referenced in scheduler.py docstring and never called externally (timed-ban is documented future work); `warning_flow` per-group auto-ban uses exact `== WARN_LIMIT` on atomic `$inc` result (no double-trigger race) while fed-global uses `>=` with `already_banned` guard; appeal `_start()` 72-hour stale-review auto-clear prevents permanent lockout; `admins.py` rank management via `Promote/Demote.execute` internal validation is intentional and more granular than generic `resolve_and_check`; `dispatch.py` semaphore `_MAX_CONCURRENT=10` configurable via `max_concurrent` kwarg. `uv lock --upgrade` run: 33 packages resolved, lock file updated. Ruff: 74 files, all checks passed. Total bugs remains #1-#422.
+
 ## [Unreleased] - 2026-06-16 (session 150)
 
 ### Fixed
