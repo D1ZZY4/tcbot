@@ -149,7 +149,11 @@ async def execute_warn(
             db.groups_db.active_groups(),
             db.bans_db.get_active_ban(target_id),
             ctx.bot.send_message(
-                lc, log_text, parse_mode="HTML", message_thread_id=lt, reply_markup=proof_kb
+                lc,
+                log_text,
+                parse_mode="HTML",
+                message_thread_id=lt,
+                reply_markup=proof_kb,
             ),
             return_exceptions=True,
         )
@@ -300,7 +304,11 @@ async def execute_warn(
         # * federation log + reply in parallel
         results2 = await asyncio.gather(
             ctx.bot.send_message(
-                lc, log_text, parse_mode="HTML", message_thread_id=lt, reply_markup=proof_kb
+                lc,
+                log_text,
+                parse_mode="HTML",
+                message_thread_id=lt,
+                reply_markup=proof_kb,
             ),
             msg.reply_text(
                 f"{user_ref(target_id, target_name)} has been warned "
@@ -477,8 +485,13 @@ async def _exec_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     proof_msgs = ctx.user_data.pop("warn_proof_msgs", None)
     ctx.user_data.pop("warn_extra_info", None)
     await execute_warn(
-        update, ctx, target_id, target_name, reason_text,
-        proof_desc=proof_desc, proof_msgs=proof_msgs,
+        update,
+        ctx,
+        target_id,
+        target_name,
+        reason_text,
+        proof_desc=proof_desc,
+        proof_msgs=proof_msgs,
     )
 
 
