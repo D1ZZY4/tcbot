@@ -3,6 +3,8 @@ name: Progress tracker
 description: Item-by-item status of the improvement plan. Updated at each commit checkpoint.
 ---
 
+| Session 158 zero-finding pass | PASS: Docs fixed for Bug #423 fallout (proof_line stale refs in helper.md + utils.md; execute_kick/execute_warn signatures in workflows.md; action_proof_kb added to keyboards table). Two parallel subagents (SA1: async/gather patterns, SA2: docs stale refs) returned CLEAN. All SA2 findings verified as false positives against actual code. Ruff: all checks passed. Import: OK. Total bugs: #1-#423 (unchanged). Open: CVE-2026-31072 (accepted), Improvement #4 (future). |
+
 | Session 157 Bug #423 | PASS: proof_line() removed entirely. reason_flow._on_proof now stores actual Message to {action}_proof_msgs user_data. action_proof_kb() added to keyboards.py. _execute_mute, execute_kick, execute_warn all upload proof via upload_proof(), derive proof_link via message_link(), attach proof_kb to all outgoing messages (log channel and chat replies). proof_line function deleted from utils/formatter.py and helper/formatter.py shim. Ruff: 74 files clean. Import: OK. Total bugs: #1-#423. |
 
 # TCF Bot - Progress

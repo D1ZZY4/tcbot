@@ -132,7 +132,7 @@ Single source of truth for all Telegram HTML markup. Both the utils layer (e.g. 
 | `link(text, url)` | HTML anchor tag. Escape or validate untrusted URLs before passing. |
 | `mention(user_id, name, username=None)` | Smart mention: `https://t.me/username` link when username available; otherwise plain name + copyable ID. |
 | `user_ref(user_id, name, username=None)` | Action-summary reference: `mention - code(id)`. Omits redundant ID when name equals the numeric string fallback. |
-| `proof_line(proof_desc)` | `\nProof: <desc>` or `""` when proof_desc is falsy. Embed directly in kick/mute/warn action messages. |
+| `proof_caption_new(target_id, admin_id, admin_fname, timestamp)` | Generates a proof channel caption for newly uploaded proof. |
 
 Always import from `tcbot.utils.formatter` in utils-layer code. Modules-layer code may continue using `tcbot.modules.helper.formatter` (the shim) for backward compatibility.
 

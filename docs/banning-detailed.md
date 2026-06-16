@@ -129,9 +129,9 @@ The update flow:
 2. Reuses the existing `ban_id`.
 3. Builds an update proof caption with `proof_caption_update`.
 4. Preserves previous proof/log IDs as `previous_proof_message_id` and `previous_log_message_id`.
-5. Updates the reason, banning admin, proof ID, log ID, and `updated_timestamp` through `bans_db.update_ban(...)`.
-6. Increments `update_count`.
-7. Posts an update log with `parse_logmsg.ban_update_log`.
+5. Updates the reason, banning admin, proof ID, and `updated_timestamp` through `bans_db.update_ban(...)`; increments `update_count` atomically inside the same call. The log ID field is passed as `0` here and set separately in step 7.
+6. Posts an update log with `parse_logmsg.ban_update_log`.
+7. The sent log message ID is saved with `bans_db.set_log_message_id(...)` when available (same pattern as new-ban step 6).
 8. Uses a keyboard with current proof, previous proof, and submit-appeal buttons when both proof links exist.
 9. Enforces the Telegram ban across connected groups again.
 

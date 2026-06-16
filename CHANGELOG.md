@@ -2,6 +2,19 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-16 (session 158)
+
+### Fixed
+
+- **Bug #426** (`docs/appeal-detailed.md` line 200): Misleadingly stated "The appeal conversation timeout is `cfg.appeal_timeout`", implying the value is applied to the `ConversationHandler`. In code `cfg.appeal_timeout` is parsed from the environment but not passed to `ConversationHandler`; the appeal flow has no active timeout. Merged into the accurate bullet that already stated there is no `ConversationHandler.TIMEOUT` state.
+- **Bug #425** (`docs/warnings-detailed.md` line 113): Stale description stated warning proof is not uploaded to a proof channel. After Bug #423, `execute_warn` now uploads proof media to the proof channel via `upload_proof()` and attaches the URL as a `keyboards.action_proof_kb()` inline keyboard button to the warning reply, warning log, and auto-ban messages (consistent with ban/kick/mute executors). Updated the Proof behavior section to reflect the actual behavior.
+- **Bug #424** (`docs/banning-detailed.md`): Update-ban flow step 5 incorrectly stated that `bans_db.update_ban(...)` updates the log message ID. In code, `update_ban` is called with `new_log_id=0` (log ID is not updated via update_ban); the actual log message ID is set separately via `bans_db.set_log_message_id(...)` after the log send succeeds (same pattern as new-ban step 6). Also merged the stale step 6 "Increments update_count" into step 5 (update_count increment happens atomically inside `update_ban`, not as a separate step). Fixed steps 5-9 to accurately reflect the code.
+
+### Documentation
+
+- Updated `docs/helper/helper.md`, `docs/utils/utils.md`: replaced stale `proof_line(proof_desc)` row in formatter tables with `proof_caption_new(target_id, admin_id, admin_fname, timestamp)` (which is the function that actually remains). Added `action_proof_kb(target_id, proof_link)` entry to the `keyboards.py` factory group table in `docs/helper/helper.md`.
+- Updated `docs/workflows/workflows.md`: corrected `execute_kick` signature (`proof_msgs=None` replaces the old `proof_desc=None` parameter name); corrected `execute_warn` signature similarly; added prose to Kick, Warn, and `reason_flow.py` sections explaining that proof media is now uploaded to the proof channel and returned as an inline keyboard button.
+
 ## [Unreleased] - 2026-06-16 (session 157)
 
 ### Fixed

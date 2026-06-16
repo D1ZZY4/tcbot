@@ -42,7 +42,7 @@ Exports:
 | `BuildReason(...)` | Configures reason-step prompts and buttons. |
 | `build_modaction_conv(reason, proof, entry_fn, executor, entry_filter, escape_filter=None)` | Builds the shared kick/mute/warn conversation. |
 
-The shared factory stores action-specific values in `ctx.user_data`, then calls the supplied executor adapter.
+The shared factory stores action-specific values in `ctx.user_data`, then calls the supplied executor adapter. When a moderator submits proof media, `_on_proof` stores both the short text description (`{action}_proof_desc`) and the actual `Message` objects (`{action}_proof_msgs`) in `user_data`. Executors pop `{action}_proof_msgs` and upload them to the proof channel via `upload_proof()`; the resulting URL is shown as an inline keyboard button via `keyboards.action_proof_kb()`.
 
 ```mermaid
 flowchart TD
@@ -92,9 +92,9 @@ flowchart TD
 |---|---|
 | Factory | `kick_conversation(entry_fn, entry_filter)` |
 | Module instances | `reason = BuildReason("kick")`, `proof = BuildProof("kick")` |
-| Executor | `execute_kick(update, ctx, target_id, target_name, reason_text, proof_desc=None)` |
+| Executor | `execute_kick(update, ctx, target_id, target_name, reason_text, proof_desc=None, proof_msgs=None)` |
 
-Kick is current-group-only. It bans the user from the current chat and immediately unbans them so the action behaves as a kick rather than a permanent group ban.
+Kick is current-group-only. It bans the user from the current chat and immediately unbans them so the action behaves as a kick rather than a permanent group ban. If `proof_msgs` is provided, proof media is uploaded to the proof channel and the resulting link is shown as an inline keyboard button on the reply and log messages.
 
 ## Mute: `muting_flow.py`
 
@@ -151,9 +151,9 @@ flowchart TD
 | Factory | `warn_conversation(entry_fn, entry_filter, escape_filter=None)` |
 | Module instances | `reason = BuildReason("warn", skip_allowed=False)`, `proof = BuildProof("warn")` |
 | Limit | `WARN_LIMIT = 3` |
-| Executors | `execute_warn`, `execute_unwarn`, `execute_warnlist`, `execute_resetwarns` |
+| Executors | `execute_warn(update, ctx, target_id, target_name, reason_text, warn_n, proof_desc=None, proof_msgs=None)`, `execute_unwarn`, `execute_warnlist`, `execute_resetwarns` |
 
-Warns are tracked per `(user_id, chat_id)`. At `WARN_LIMIT`, the flow issues a **federation-wide ban** via `fan_out()` to all active connected groups plus primary groups, creates a ban document in the `bans` collection, and then clears warnings for that user/chat.
+Warns are tracked per `(user_id, chat_id)`. At `WARN_LIMIT`, the flow issues a **federation-wide ban** via `fan_out()` to all active connected groups plus primary groups, creates a ban document in the `bans` collection, and then clears warnings for that user/chat. If `proof_msgs` is provided, proof media is uploaded to the proof channel and the resulting link is attached as an inline keyboard button to all outgoing messages (auto-ban log, replies, non-auto-ban log).
 
 ## Unban: `unban_flow.py`
 

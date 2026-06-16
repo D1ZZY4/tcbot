@@ -110,7 +110,7 @@ Proof options:
 - Tap `Skip` to warn without proof.
 - Tap `Cancel` to stop the operation.
 
-The proof is stored only as a short description in the warning response, such as `Photo (msg 123)` or `Video (msg 123)`. Unlike ban proof, warning proof is not uploaded to a proof channel and no proof message ID is stored in the warning database document.
+When proof is provided, `execute_warn` uploads it to the proof channel (`cfg.proofs`) using `upload_proof()` and attaches the resulting URL as a `keyboards.action_proof_kb()` inline keyboard button to all outgoing messages (the warning reply, the warning log, and — if the warn triggers an auto-ban — the auto-ban log and auto-ban notice). If upload fails, outgoing messages still send without a proof button. When proof is skipped, no upload is attempted and no proof button is shown. No proof message ID is stored in the warning database document (`warns` collection).
 
 ## Role hierarchy and target protection
 

@@ -5,9 +5,11 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 157)
+**Last updated:** 2026-06-16 (session 158)
 
 ## What is done
+
+- Session 158 (2026-06-16): Zero-finding pass. Docs fixed for Bug #423 fallout: removed stale `proof_line(proof_desc)` rows from `docs/helper/helper.md` and `docs/utils/utils.md`, replaced with `proof_caption_new(...)`. Updated `docs/workflows/workflows.md`: corrected `execute_kick`/`execute_warn` signatures to `proof_msgs=None`, added prose explaining proof upload + keyboard pattern in reason_flow/kick/warn sections. Added `action_proof_kb` to keyboards table in helper.md. Two parallel subagents (SA1: async patterns, SA2: docs accuracy) both returned CLEAN after verification against actual code — all SA2 findings were false positives (referenced code actually exists in the codebase). Total bugs: #1-#423 (unchanged). Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 157 (2026-06-16): Bug #423 fixed. `proof_line()` removed entirely. Mute/kick/warn proof now uploaded to proof channel and shown as inline keyboard button (identical pattern to ban). Files changed: `reason_flow.py`, `keyboards.py`, `muting_flow.py`, `kicking_flow.py`, `warning_flow.py`, `utils/formatter.py`, `modules/helper/formatter.py`. Ruff: all checks passed. Import: OK. Total bugs: #1-#423.
 

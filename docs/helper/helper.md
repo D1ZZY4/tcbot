@@ -66,7 +66,7 @@ All bot messages use Telegram HTML parse mode. Functions are documented in full 
 | `link(text, url)` | HTML link. Escape or validate URLs before passing untrusted values. |
 | `mention(user_id, name, username=None)` | Smart mention with username fallback. |
 | `user_ref(user_id, name, username=None)` | Action-summary reference: omits redundant ID when name equals numeric fallback. |
-| `proof_line(proof_desc)` | `\nProof: <desc>` or `""` when proof_desc is falsy. |
+| `proof_caption_new(target_id, admin_id, admin_fname, timestamp)` | Generates a proof channel caption for newly uploaded proof. |
 
 Use `esc()`, `code()`, `mention()`, or `user_ref()` for any user-provided value in HTML messages. Use `user_ref()` in action summaries and audit logs where both name and ID are displayed.
 
@@ -97,6 +97,7 @@ Main groups:
 | Factory group | Examples |
 |---|---|
 | Ban/checking | `ban_log_new`, `ban_log_update`, `checkme_ban_kb`, `checkme_detail_back_kb` |
+| Proof | `action_proof_kb(target_id, proof_link)` — single "Proof {target_id}" URL button; returns `None` when `proof_link` is falsy. Used by mute/kick/warn executors after uploading proof. |
 | Admin roles | `promote_role_kb`, `demote_confirm_kb`, `promo_decision_kb` |
 | Menus/help | `main_menu_kb`, `group_start_kb`, `help_topics_menu_kb`, `help_topics_kb`, `back_to_start_kb`, `back_to_help_kb`, `back_to_help_cmd_kb`, `module_help_kb`, `back_to_module_kb`, `additional_menu_kb` |
 | Privacy | `privacy_kb`, `back_to_privacy_kb`, `privacy_policy_sections_kb`, `back_to_privacy_policy_kb` |
