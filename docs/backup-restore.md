@@ -1,4 +1,4 @@
-# TCF Bot — Backup & Restore Runbook
+# TCF Bot: Backup and Restore Runbook
 
 Federation bans, staff roles, and connected groups are irreplaceable operational
 data. Loss of any of these collections requires manual reconstruction from
@@ -9,11 +9,11 @@ recover that data.
 
 | Collection | Contents | Loss impact |
 |---|---|---|
-| `tc_bans` | All active and historical federation bans | Critical — bans cannot be reconstructed from Telegram |
-| `tc_owners` / `tc_admins` / `tc_roles` | Staff role assignments | Critical — roles must be re-granted manually |
-| `tc_groups` | Connected group registry | High — reconnecting requires each group admin to re-run `/tcconnect` |
-| `warn_counts` / `tc_warns` | Warning records | Medium — warn history lost; users get a clean slate |
-| `apscheduler_jobs` | Persistent scheduled jobs (e.g. timed unbans) | Medium — jobs must be re-created manually on restore |
+| `tc_bans` | All active and historical federation bans | Critical: bans cannot be reconstructed from Telegram |
+| `tc_owners` / `tc_admins` / `tc_roles` | Staff role assignments | Critical: roles must be re-granted manually |
+| `tc_groups` | Connected group registry | High: reconnecting requires each group admin to re-run `/tcconnect` |
+| `warn_counts` / `tc_warns` | Warning records | Medium: warn history lost; users get a clean slate |
+| `apscheduler_jobs` | Persistent scheduled jobs (e.g. timed unbans) | Medium: jobs must be re-created manually on restore |
 
 ---
 
@@ -48,7 +48,7 @@ and most reliable option.
 
 ---
 
-## Self-hosted or Atlas free tier — `mongodump` cron
+## Self-hosted or Atlas free tier: `mongodump` cron
 
 For deployments without Atlas paid backup, schedule a nightly `mongodump`.
 
@@ -122,7 +122,7 @@ rclone copy "${DEST}.tar.gz" remote:tcbot-backups/
 # 1. Extract the archive
 tar -xzf /opt/tcbot/backups/20260101T020000.tar.gz -C /tmp/
 
-# 2. Restore (additive — does not drop existing data)
+# 2. Restore (additive; does not drop existing data)
 mongorestore --uri="${MONGODB_URI}" --db="${DB_NAME}" \
   /tmp/20260101T020000/${DB_NAME}/
 
@@ -167,7 +167,7 @@ execution on the bot host. Access controls that reduce backup-restore risk also
 reduce CVE reachability:
 
 - Restrict `MONGODB_URI` to a dedicated database user with
-  **read/write on `tcbot` only** — no `admin` or `local` access.
+  **read/write on `tcbot` only** (no `admin` or `local` access).
 - Enable MongoDB Atlas IP Access List or network peering.
 - Rotate `MONGODB_URI` immediately if a breach is suspected.
 

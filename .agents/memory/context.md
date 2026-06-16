@@ -5,9 +5,36 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 137)
+**Last updated:** 2026-06-16 (session 138)
 
 ## What is done
+
+- Session 138 (2026-06-16): Bugs #393-#398 found and fixed. Comprehensive audit of remaining new code from sessions 133-137.
+  - Audit scope: `stats.py` (q.answer patterns), `checking.py` (q.answer patterns), `admins.py` (q.answer patterns), `ban_flow.py` (post-#392 re-audit), `check_flow.py` (session 133 changes: 11-way gather + fed_warn_total + active_mute), `connecting.py` (session 134: MY_CHAT_MEMBER consolidation), `muting_flow.py` (session 135: active mute gather patterns), `greeting.py` (session 135: 3-way gather + mute re-apply), `connected_flow.py` (session 135: 6-way gather + mute fan_out), `warning_flow.py` (FED_WARN_LIMIT sequential awaits — all justified), `mutes_db.py` (active mute helpers), `__main__.py` (session 136: timeout constants + bootstrap_retries). All CLEAN except Bug #398.
+  - AST scan: only 2 consecutive-await pairs found — both intentionally sequential (documented ordering constraints in `users_roles.set_owner` and `admins.cmd_transfer`). CLEAN.
+  - Unicode/emoji scan: 0 emoji/pictograph across all 74 Python files. CLEAN.
+  - Em-dash/en-dash final scan: 0 remaining in Python source or docs (excluding CHANGELOG/PLAN/README/AGENTS historical records).
+  - Bug #393: `documents.py` `ActiveMuteDoc` docstring — em-dash `— one` → `: one`.
+  - Bug #394: `formatter.py` module docstring — em-dash `All modules — including` → parentheses.
+  - Bug #395: `docs/backup-restore.md` — 6 em-dashes replaced (heading, 5 table cells, section header, shell comment, security bullet).
+  - Bug #396: `docs/helper/helper.md` — em-dash in `ERR_CANNOT_RESOLVE` table cell replaced with parentheses.
+  - Bug #397: `docs/appeal-detailed.md` — en-dash `2–6` → hyphen `2-6`.
+  - Bug #398: `muting_flow.py` `execute_unmute` else-branch — `clear_active_mute` and `reply_text` were sequential independent awaits (single-item gather with exception silently swallowed, then separate try/except). Replaced with proper 2-way `asyncio.gather(clear_active_mute, reply_text, return_exceptions=True)` with per-result error logging, consistent with the `if lc:` branch.
+  - Bug #399: `docs/workflows/workflows.md` mute section omitted all `active_mutes` persistence behaviour from Improvement #7. Added prose for `set_active_mute` upsert, `clear_active_mute` clear, `greeting._handle_member` re-apply on join, `connected_flow.complete_join` fan-out re-apply on group connect. Mermaid updated with `active_mutes collection`, `greeting._handle_member`, `connected_flow.complete_join` nodes.
+  - Bug #400: `docs/warnings-detailed.md` edge cases — stale claim "auto-ban does not create a federation ban record" directly contradicts line 196; fixed.
+  - Bug #401: `docs/warnings-detailed.md` timeouts — "_on_timeout handler via TIMEOUT state" was dead code removed in Bug #382; fixed to accurate statement.
+  - Bug #402: `docs/warnings-detailed.md` behavior reference — items 7/11/12 omitted FED_WARN_LIMIT (Bug #383); added item 13 for fed_global trigger path; item 7 updated to describe both thresholds.
+  - Bug #403: `docs/appeal-detailed.md` timeouts — `BuildAppeal._on_timeout` / `ConversationHandler.TIMEOUT` stale (function removed in #382); fixed.
+  - Bug #404: `docs/banning-detailed.md` edge cases — `on_proof_timeout` via `ConversationHandler.TIMEOUT` stale; it is a fallback handler for commands, not a scheduler/TIMEOUT state; fixed.
+  - Bug #405: `docs/workflows/workflows.md` package rules — "All timed conversations must register a TIMEOUT state" stale (none do); fixed to accurate description.
+  - Bug #406: `docs/warnings-detailed.md` — Mermaid, Purpose, Scope, and "Warning auto-ban behavior" sections all omitted FED_WARN_LIMIT; four areas updated to document both per-group (==) and federation-wide (>=) thresholds.
+  - Bug #407: `docs/workflows.md` Warn row — "auto-ban at 3 warnings" omitted FED_WARN_LIMIT; updated.
+  - Bug #408: `docs/workflows.md` group connection Mermaid — "Apply existing federation bans" omitted active mutes replay; updated.
+  - Bug #409: `docs/databases/databases.md` warning model — WARN_LIMIT only, FED_WARN_LIMIT omitted; added.
+  - Bug #410: `docs/databases/databases.md` warns_db helpers — federation_warn_count omitted; added.
+  - Bug #411: `docs/databases/databases.md` mute model — active_mutes collection omitted; rewrote section to cover both mutes and active_mutes.
+  - Verification: ruff check/format clean, import OK, bot running (29/29 indexes, Redis, APScheduler, polling).
+  - Total bugs: #1–#411. Remaining open: P1 #4 (CVE-2026-31072, accepted), Improvement #4 (multi-instance cache, future).
 
 - Session 137 (2026-06-16): Bug #392 found and fixed. Full audit pass of all major workflow files.
   - Audit scope: `ban_flow.py`, `banning.py`, `unban_flow.py`, `muting_flow.py`, `mutes_db.py`, `bans_db.py`, `warning_flow.py`, `kicking_flow.py`, `appeal_flow.py`, `check_flow.py`, `checking.py`, `connected_flow.py`, `greeting.py`, `mongos.py` — all verified except Bug #392.

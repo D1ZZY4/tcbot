@@ -10,7 +10,7 @@ Conversation and multi-step logic lives in `tcbot/modules/helper/workflows/`. Ne
 - Workflow files own state constants, `ConversationHandler` factories, and execution adapters.
 - Shared reason/proof logic belongs in `reason_flow.py` and `proof_flow.py`.
 - Callback handlers must call `await q.answer()` before doing further work.
-- Timeouts use configuration values such as `cfg.proof_timeout`, `cfg.appeal_timeout`, and `cfg.album_debounce`. All timed conversations must register a `ConversationHandler.TIMEOUT` state with a `TypeHandler(Update, handler)` so PTB's scheduler notifies the user when the window expires naturally.
+- Timeout configuration values (`cfg.proof_timeout`, `cfg.appeal_timeout`, `cfg.album_debounce`) are parsed from the environment. The bot does not use job-queue or `ConversationHandler.TIMEOUT` states; conversations end via escape commands, cancel, or explicit fallback handlers (e.g. `on_proof_timeout` in `ban_flow.py` fires when the moderator sends a command during the proof window).
 
 ## Shared proof builder: `proof_flow.py`
 
@@ -118,7 +118,12 @@ Duration tokens are parsed before entering the conversation.
 | `mo` | months (30 days) | `3mo` |
 | `ye` | years (365 days) | `1ye` |
 
-Mute applies restrictions across all connected groups with `fan_out()`.
+Mute applies restrictions across all connected groups with `fan_out()`. The mute is also persisted to the `active_mutes` collection so it can be re-applied automatically when:
+
+- A muted user joins any connected group (`greeting._handle_member` fetches `get_active_mute` in parallel with `get_active_ban` and calls `restrict_chat_member` if an active mute is found).
+- A new group connects to the federation (`connected_flow.complete_join` fetches `active_mute_docs()` and fans out `restrict_chat_member` for every active mute, mirroring the existing ban replay).
+
+`execute_unmute` clears the `active_mutes` record via `clear_active_mute` in the same gather as the log send and reply, so the re-application stops as soon as the unmute is issued.
 
 ```mermaid
 flowchart TD
@@ -133,6 +138,9 @@ flowchart TD
     Exec -->|fan_out restrict to all groups| Groups[Active connected groups]
     Exec -->|upload proof if any| ProofChat[Proof channel/chat]
     Exec -->|post audit log| LogChat[Log channel]
+    Exec -->|upsert active_mutes record| ActiveMutes[active_mutes collection]
+    ActiveMutes -->|re-applied on join| Join[greeting._handle_member]
+    ActiveMutes -->|re-applied on group connect| Connect[connected_flow.complete_join]
     Exec --> End
 ```
 

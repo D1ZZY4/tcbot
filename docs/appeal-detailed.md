@@ -177,7 +177,7 @@ When a staff member rejects an appeal:
 5. `bans_db.clear_review(ban_id)` clears `review_message_id` and `review_timestamp` so the user can submit a new appeal.
 6. `bans_db.set_rejected_by(ban_id, admin.id, admin.first_name)` records the rejector's identity (`rejected_by_id`, `rejected_by_name`, `rejected_at`) on the ban document for the audit trail.
 
-Steps 2–6 run in a single `asyncio.gather` so a DM failure does not block the review-message edit or the DB writes.
+Steps 2-6 run in a single `asyncio.gather` so a DM failure does not block the review-message edit or the DB writes.
 
 Rejection does not deactivate the ban. The `review_message_id` and `review_timestamp` fields **are cleared** on rejection so the user may submit a subsequent appeal without being locked out.
 
@@ -198,7 +198,7 @@ If editing the existing appeal log fails, the bot attempts to send a new log mes
 ## Timeouts and fallbacks
 
 - The appeal conversation timeout is `cfg.appeal_timeout` (`APPEAL_TIMEOUT_SECONDS`, default `600`).
-- When the timeout expires naturally (user inactive), PTB's scheduler fires `BuildAppeal._on_timeout` via `ConversationHandler.TIMEOUT`; the user receives `"Appeal session timed out. Nothing was submitted."` and the conversation ends.
+- The appeal conversation does not have an active timeout handler; there is no `ConversationHandler.TIMEOUT` state. Conversations end only via escape commands, cancel, or successful submission.
 - Any recognized command during the waiting state ends the session with `Appeal session ended.`
 - Cancel ends the session without writing appeal metadata.
 - If the user sends `#appeal` after the session state has expired or the ban ID is missing from `ctx.user_data`, the bot asks them to start the appeal again.

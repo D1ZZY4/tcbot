@@ -160,7 +160,7 @@ All 15 command modules use these helpers rather than raw inline tuple literals.
 | Constant | Purpose |
 |---|---|
 | `TARGET_SYNTAX` | Usage hint for commands that accept a target argument. |
-| `ERR_CANNOT_RESOLVE` | Error when the target cannot be resolved — covers both "no target provided" and "target provided but unresolvable". Used by all command modules at `extract_target` return sites. |
+| `ERR_CANNOT_RESOLVE` | Error when the target cannot be resolved (covers both "no target provided" and "target provided but unresolvable"). Used by all command modules at `extract_target` return sites. |
 | `ERR_ROLE_VERIFY` | Error when executor or target role cannot be verified. |
 | `ERR_GROUP_ONLY` | Error when a command is used outside a group. |
 | `ERR_NO_CONNECTED_GROUPS` | Error when no connected groups exist for the operation. |

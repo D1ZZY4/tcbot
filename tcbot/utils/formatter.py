@@ -4,7 +4,7 @@
 
 """HTML text formatters: the single source of truth for all Telegram HTML markup.
 
-All modules — including tcbot.utils — import from here.  The shim at
+All modules (including tcbot.utils) import from here.  The shim at
 tcbot/modules/helper/formatter.py re-exports every name for backward
 compatibility with the modules layer import paths.
 """

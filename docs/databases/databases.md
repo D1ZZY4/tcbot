@@ -157,7 +157,7 @@ Warnings are stored per user and chat:
 
 - `warns` stores each warning event.
 - `warn_counts` stores a counter document for fast limit checks with `unique (user_id, chat_id)` index.
-- `warning_flow.WARN_LIMIT` is currently `3`.
+- `warning_flow.WARN_LIMIT` is currently `3`. A second threshold `FED_WARN_LIMIT` (env var `FED_WARN_LIMIT`, default 0 = disabled) triggers auto-ban when a user's total warns across all groups reaches or exceeds the configured value. See `docs/warnings-detailed.md`.
 
 Key helper functions:
 
@@ -165,6 +165,7 @@ Key helper functions:
 - `warns_db.warn_count(user_id, chat_id)` / `warns_db.get_warns(user_id, chat_id)`: current count and full list for a user in a group.
 - `warns_db.remove_last_warn(user_id, chat_id)` / `warns_db.clear_warns(user_id, chat_id)`: undo latest warning or reset all.
 - `warns_db.user_total_warns(user_id)` / `warns_db.user_warn_groups(user_id)` / `warns_db.user_all_warns(user_id)`: federation-wide warn aggregates used by `/check`.
+- `warns_db.federation_warn_count(user_id)`: total warn count across all connected groups; used by `warning_flow.execute_warn` to evaluate the `FED_WARN_LIMIT` threshold.
 
 ## Kick model
 
@@ -177,12 +178,12 @@ Kicks are append-only audit records:
 
 ## Mute model
 
-Mutes follow the same append-only pattern as kicks:
+Mutes use an append-only audit trail (`mutes`) plus a live-state store (`active_mutes`):
 
-- `mutes` stores one document per mute event with fields `user_id`, `chat_id`, `reason`, `admin_id`, and `timestamp`. The optional `duration_secs` field is present for timed mutes (absent or `None` for permanent mutes).
+- `mutes` stores one document per mute event with fields `user_id`, `chat_id`, `reason`, `admin_id`, and `timestamp`. The optional `duration_secs` field is present for timed mutes (absent or `None` for permanent mutes). Records are never deleted; the collection is a permanent audit trail.
+- `active_mutes` stores one document per currently-muted user. `mutes_db.set_active_mute(user_id, ...)` upserts on each `/tcmute`; `mutes_db.clear_active_mute(user_id)` deletes on `/tcunmute`. This powers two re-application paths: (1) `greeting._handle_member` calls `get_active_mute` on every join event and calls `restrict_chat_member` when an active mute is found; (2) `connected_flow.complete_join` calls `active_mute_docs()` and fans out `restrict_chat_member` for every active mute when a new group connects.
 - `mutes_db.user_mutes(user_id)` returns all mute records for a user, newest first.
 - `mutes_db.user_mute_count(user_id)` returns the total count.
-- Records are never deleted; the collection is a permanent audit trail.
 
 ## Group model
 

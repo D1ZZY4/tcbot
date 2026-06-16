@@ -127,7 +127,7 @@ class MuteDoc(TypedDict, total=False):
 class ActiveMuteDoc(TypedDict, total=False):
     """MongoDB document tracking a currently active federation mute.
 
-    Stored in the ``active_mutes`` collection — one document per muted user.
+    Stored in the ``active_mutes`` collection: one document per muted user.
     ``until_date`` is ``None`` for a permanent mute or a UTC datetime for a
     timed mute.  Documents for timed mutes are auto-filtered by ``until_date``
     at query time (documents with ``until_date`` in the past are treated as

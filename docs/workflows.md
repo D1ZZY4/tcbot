@@ -11,7 +11,7 @@ This page describes the user-visible flows in TCF Bot. For state constants, fact
 | Kick | `/tckick`, `/tck` | Tester+ | Current group only | Conversation asks for reason/proof; auto-demotes role holders before kicking. |
 | Mute | `/tcmute`, `/tcm` | Tester+ | All connected groups | Optional duration token before reason, for example `7d`. |
 | Unmute | `/tcunmute`, `/tcunm`, `/tcum` | Tester+ | All connected groups | Direct command; restores send permissions. |
-| Warn | `/tcwarn`, `/tcw` | Tester+ | Current group warning history | Reason required; auto-ban is attempted at 3 warnings. |
+| Warn | `/tcwarn`, `/tcw` | Tester+ | Current group warning history | Reason required; auto-ban at `WARN_LIMIT` (default 3) per group or when `FED_WARN_LIMIT` (env, default disabled) is crossed across all groups. |
 | Unwarn | `/tcunwarn`, `/tcunw` | Tester+ | Current group warning history | Removes the newest warning. |
 | Warn list | `/warns`, `/warnlist` | Anyone | Current group warning history | Shows a user's warnings. |
 | Reset warns | `/resetwarns`, `/clearwarns` | Tester+ | Current group warning history | Clears all warnings for a user in the chat. |
@@ -97,7 +97,7 @@ flowchart TD
     C -- Connect --> D{Bot has required admin permissions?}
     D -- No --> E[Show required permissions]
     D -- Yes --> F[Add group as active]
-    F --> G[Apply existing federation bans]
+    F --> G[Apply existing federation bans and active mutes]
     G --> H[Log connection]
 ```
 

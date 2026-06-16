@@ -2,6 +2,48 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-16 (session 138)
+
+### Fixed
+
+- **`tcbot/modules/helper/workflows/muting_flow.py`** (`execute_unmute`, Bug #398): In the `else` branch (no log channel configured), `clear_active_mute` and `reply_text` were independent but executed sequentially. The single-item `asyncio.gather(clear_active_mute, return_exceptions=True)` suppressed the exception without logging it, then `reply_text` ran in a separate `try/except`. This diverged from the `if lc:` branch which already gathered all three operations in parallel. Replaced with a proper 2-way `asyncio.gather(clear_active_mute, reply_text, return_exceptions=True)` with per-result error logging consistent with the `if lc:` branch pattern. Reduces unmute latency in installations without a log channel.
+
+- **`tcbot/database/documents.py`** (Bug #393): Em-dash in `ActiveMuteDoc` docstring (`— one document`) replaced with a colon (`:`). Em-dash is prohibited everywhere per project conventions.
+
+- **`tcbot/utils/formatter.py`** (Bug #394): Em-dash in module docstring (`All modules — including tcbot.utils`) replaced with parentheses. Same em-dash prohibition.
+
+- **`docs/backup-restore.md`** (Bug #395): Six em-dash occurrences replaced with colons or parentheses throughout the document (heading, table cells, section header, shell comment, and security bullet). Em-dash prohibited in all docs.
+
+- **`docs/helper/helper.md`** (Bug #396): Em-dash in `ERR_CANNOT_RESOLVE` table cell replaced with parentheses.
+
+- **`docs/appeal-detailed.md`** (Bug #397): En-dash in numeric range `Steps 2-6` (was `2–6`) replaced with a plain hyphen. En-dash is also prohibited.
+
+- **`docs/appeal-detailed.md`** (Bug #403): Timeouts section stated "PTB's scheduler fires `BuildAppeal._on_timeout` via `ConversationHandler.TIMEOUT`". `BuildAppeal._on_timeout` was dead code removed in Bug #382 (session 134) — no `TIMEOUT` state was ever wired, no job-queue is available. Replaced with accurate statement: appeal conversation has no active timeout handler; no `ConversationHandler.TIMEOUT` state; conversations end only via escape commands, cancel, or successful submission.
+
+- **`docs/banning-detailed.md`** (Bug #404): Edge cases section stated "PTB's scheduler fires `on_proof_timeout` via `ConversationHandler.TIMEOUT`". This is incorrect on two counts: (1) there is no `ConversationHandler.TIMEOUT` state in `ban_conversation()` — `on_proof_timeout` is registered as a **fallback** handler for any command sent during the proof step; (2) there is no job-queue, so natural-expiry firing via PTB's scheduler is impossible. Replaced with accurate description: `on_proof_timeout` is a fallback handler that fires when the moderator sends a command during the proof window; `PROOF_TIMEOUT_SECONDS` is parsed but not consumed.
+
+- **`docs/workflows/workflows.md`** (Package rules, Bug #405): Package rules section stated "All timed conversations must register a `ConversationHandler.TIMEOUT` state with a `TypeHandler(Update, handler)`". No flow in the codebase has a `TIMEOUT` state or uses job-queue. This was aspirational guidance contradicted by the actual implementation. Replaced with accurate description of how conversations actually terminate.
+
+- **`docs/workflows.md`** (Warn row, Bug #407): Moderation flow table Warn row said "auto-ban is attempted at 3 warnings", omitting that `FED_WARN_LIMIT` (env var, default disabled) provides a second, federation-wide threshold. Updated to reference both `WARN_LIMIT` per group and `FED_WARN_LIMIT` across all groups.
+
+- **`docs/workflows.md`** (Group connection Mermaid, Bug #408): Group connection flow Mermaid node "Apply existing federation bans" omitted active mutes, which are also fanned out to new groups on connect (`connected_flow.complete_join` replays `active_mute_docs()`). Updated node text to "Apply existing federation bans and active mutes".
+
+- **`docs/databases/databases.md`** (Warning model, Bug #409): "Warning model" section stated only `warning_flow.WARN_LIMIT is currently 3` with no mention of `FED_WARN_LIMIT`. Added description of the second threshold and reference to `docs/warnings-detailed.md`.
+
+- **`docs/databases/databases.md`** (Warning model, Bug #410): Key helper functions list omitted `warns_db.federation_warn_count(user_id)` added for `FED_WARN_LIMIT` evaluation in `warning_flow.execute_warn`. Added bullet alongside the other federation-wide aggregates.
+
+- **`docs/databases/databases.md`** (Mute model, Bug #411): Mute model section described only the append-only `mutes` audit trail and did not mention `active_mutes`. The live-state `active_mutes` collection was added by Improvement #7 and drives mute re-application on join (`greeting._handle_member`) and on group connect (`connected_flow.complete_join`). Rewrote section to describe both collections with all four CRUD helpers.
+
+- **`docs/warnings-detailed.md`** (Bug #406): Three areas did not document the `FED_WARN_LIMIT` federation-wide threshold added by Bug #383 (session 134): (1) The Mermaid diagram only showed `count == limit?` with a single branch, missing the `FED_WARN_LIMIT` check; updated to add `CheckFed` node with `fed_count >= limit?` guard. (2) The Purpose section described a single threshold and omitted `FED_WARN_LIMIT`; rewritten to list both thresholds with their `==` vs `>=` semantics. (3) The Scope section stated "A warning in one connected group does not affect another group" without qualification; replaced with accurate statement that per-group warns are isolated for `WARN_LIMIT` but the bot also checks the federation-wide aggregate when `FED_WARN_LIMIT > 0`. (4) The "Warning auto-ban behavior" section only documented the `count == WARN_LIMIT` path; rewritten as a two-step evaluation with Step 1 (per-group `==`) and Step 2 (federation-wide `>=`) with prose explaining why each uses a different comparison operator.
+
+- **`docs/warnings-detailed.md`** (Bug #400): Edge cases section contained the stale claim "Warning auto-ban does not create a federation ban record and does not create an appeal path." This was accurate before Bug #340 (session 125) added `bans_db.create_ban()` to the auto-ban path, but was never removed. The statement directly contradicts line 196 of the same file ("If the user does not already hold an active federation ban, `bans_db.create_ban()` creates a ban document"). Replaced with accurate description: auto-ban creates a ban record via `bans_db.create_ban()` (same as `/tcban`, appealable), skipping creation when an active ban already exists while still running `fan_out()`.
+
+- **`docs/warnings-detailed.md`** (Bug #401): Timeouts section stated "When the timeout expires naturally (user inactive), PTB's scheduler fires the `_on_timeout` handler via `ConversationHandler.TIMEOUT`". The `_on_timeout` function in `warning_flow.py` was dead code removed in Bug #382 (session 134) — no `TIMEOUT` state was ever wired, no job-queue is available. Replaced with accurate statement: warning conversation has no active timeout handler; `PROOF_TIMEOUT_SECONDS` is parsed but not consumed; conversations end only via escape commands or cancel.
+
+- **`docs/warnings-detailed.md`** (Bug #402): Behavior reference (items 7, 11, 12) omitted `FED_WARN_LIMIT` added in Bug #383 (session 134). Item 7 said "Warning counts do not carry across groups" with no qualification, ignoring that `FED_WARN_LIMIT > 0` enables federation-wide accumulation auto-ban. Items 11-12 described only the per-group `WARN_LIMIT` threshold. Added item 7 description of both thresholds (`WARN_LIMIT` per-group `==` vs `FED_WARN_LIMIT` cross-group `>=`), updated items 11-12, and added item 13 documenting the `"fed_global"` trigger path. Renumbered items 13-15 → 14-16.
+
+- **`docs/workflows/workflows.md`** (Mute section, Bug #399): The mute flow description omitted all persistence behaviour added by Improvement #7. The section described only the conversation steps and `fan_out()` restriction, but made no mention of `set_active_mute` upserting to the `active_mutes` collection, `clear_active_mute` clearing it on unmute, or the two re-application paths (`greeting._handle_member` re-applies on join, `connected_flow.complete_join` fans out on group connect). Added prose explaining all three behaviours and updated the Mermaid diagram with `active_mutes collection`, `greeting._handle_member`, and `connected_flow.complete_join` nodes.
+
 ## [Unreleased] - 2026-06-16 (session 137)
 
 ### Fixed
