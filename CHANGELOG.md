@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-16 (session 148)
+
+### Fixed
+
+- **`pyproject.toml`** (Bug #421): `version` field still read `4.5.1` since it was never bumped during the v4.6.2 feature work. Updated to `4.6.2` to match CHANGELOG, task file, and all other version references across the project. No code change; purely a metadata correction.
+
 ## [Unreleased] - 2026-06-16 (session 146)
 
 ### Changed
