@@ -7,6 +7,7 @@ For modules that consume these utilities, see [`../modules/modules.md`](../modul
 ```mermaid
 flowchart TD
     Main[tcbot/__main__.py] --> Utils[tcbot/utils/]
+    Utils --> CB[circuit_breaker.py<br/>Telegram + MongoDB circuit]
     Utils --> Dispatch[dispatch.py<br/>fan_out concurrency]
     Utils --> Prefixes[prefixes.py<br/>command prefix builders]
     Utils --> Logging[logger.py<br/>logger config]
@@ -14,6 +15,7 @@ flowchart TD
     Utils --> TimeDate[timedate_format.py<br/>UTC + display]
     Utils --> Pagination[pagination.py<br/>paginate, nav_row, date_or_unknown]
     Utils --> Fmt[formatter.py<br/>HTML escape, bold, code, mention]
+    Dispatch --> CB
     Modules[tcbot/modules/] --> Dispatch
     Modules --> Prefixes
     Modules --> TimeDate
@@ -21,7 +23,35 @@ flowchart TD
     Logging --> ErrorReporter
     ErrorReporter --> Fmt
     HelperFmt[helper/formatter.py<br/>re-export shim] --> Fmt
+    Alive[tcbot/alive.py<br/>health endpoint] --> CB
 ```
+
+## `circuit_breaker.py`
+
+Lightweight async circuit breaker that protects the bot from wasting time on repeated timeouts when a downstream service is unresponsive.
+
+| Export | Purpose |
+|---|---|
+| `CircuitBreaker(name, failure_threshold=5, recovery_timeout=60.0)` | Per-service circuit breaker instance. |
+| `CircuitOpenError` | Raised when a call is rejected because the circuit is OPEN. |
+| `CircuitState` | Enum: `CLOSED`, `OPEN`, `HALF_OPEN`. |
+| `telegram` | Module-level singleton for Telegram API calls. |
+| `mongodb` | Module-level singleton for MongoDB calls. |
+
+States and transitions:
+
+```
+CLOSED --[5 consecutive TimedOut/NetworkError]--> OPEN
+OPEN   --[60s elapsed]--> HALF_OPEN
+HALF_OPEN --[probe succeeds]--> CLOSED
+HALF_OPEN --[probe fails]--> OPEN
+```
+
+`CircuitBreaker.call(coro)` executes the coroutine through the breaker: a `CircuitOpenError` is raised without touching the service when the circuit is OPEN; any exception from the coroutine is re-raised after being counted against the circuit.
+
+`record_success()` and `record_failure()` are public methods for callers that manage their own try/except (for example, `dispatch.fan_out` which only counts network errors, not expected API refusals).
+
+The Telegram circuit state (`closed`, `open`, or `half_open`) is exposed in the `/health` endpoint under `circuit_telegram` and `circuit_mongodb`.
 
 ## `dispatch.py`
 
@@ -35,7 +65,9 @@ flowchart TD
 - preserves input order in the returned list;
 - returns exceptions as list elements instead of raising;
 - returns an empty list for empty input;
-- defaults to 10 concurrent tasks, which is safe for Telegram API fan-out operations.
+- defaults to 10 concurrent tasks, which is safe for Telegram API fan-out operations;
+- integrates the `telegram` circuit breaker: slots that run while the circuit is OPEN return `CircuitOpenError` immediately instead of issuing a Telegram request that will time out;
+- only `TimedOut` and `NetworkError` are counted against the circuit; expected API refusals (403 Forbidden, 400 Bad Request) are not.
 
 Use it for multi-group actions such as ban, unban, mute, broadcast, and cleanup.
 

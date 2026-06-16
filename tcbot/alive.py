@@ -16,6 +16,7 @@ from flask import Flask
 from tcbot import cfg
 from tcbot.database import mongos, redis_client
 from tcbot.database import scheduler as sched_mod
+from tcbot.utils import circuit_breaker as _cb
 
 log = logging.getLogger(__name__)
 
@@ -50,12 +51,19 @@ def health() -> tuple[str, int, dict[str, str]]:
     else:
         redis_status = "disabled"
 
-    overall = "ok" if (mongodb_ok and scheduler_ok) else "degraded"
+    tg_circuit = _cb.telegram.state.value
+    db_circuit = _cb.mongodb.state.value
+
+    overall = (
+        "ok" if (mongodb_ok and scheduler_ok and tg_circuit != "open") else "degraded"
+    )
     payload = {
         "status": overall,
         "mongodb": "ok" if mongodb_ok else "error",
         "redis": redis_status,
         "scheduler": "ok" if scheduler_ok else "error",
+        "circuit_telegram": tg_circuit,
+        "circuit_mongodb": db_circuit,
         "ts": datetime.now(UTC).isoformat(timespec="seconds"),
     }
     code = 200 if overall == "ok" else 503

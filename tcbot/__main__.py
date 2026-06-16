@@ -210,18 +210,23 @@ def _make_asyncio_exc_handler(
 async def _warm_hot_caches() -> None:
     """Pre-warm frequently-read L1+L2 caches immediately after startup.
 
-    Fires get_owner_id and active_groups reads in parallel so the first
-    command handler gets an L1 hit instead of a cold MongoDB round-trip.
-    Both calls are cache-backed (L1 TTLCache + L2 Redis TwoLevelCache) so
-    the warm-up data persists for the full TTL window.
+    Step 1 (parallel): get_owner_id + active_groups — both are TwoLevelCache-backed
+    so the first command handler gets an L1 hit instead of a cold MongoDB round-trip.
+
+    Step 2 (sequential dep): get_effective_role(owner_id) — requires owner_id from
+    step 1 and populates the effective_role_cache (L1+L2) for the owner so the first
+    command from the owner resolves the role without any DB round-trip.
     """
     try:
-        await asyncio.gather(
+        owner_id_r, _ = await asyncio.gather(
             db.users_roles.get_owner_id(),
             db.groups_db.active_groups(),
             return_exceptions=True,
         )
         log.debug("Cache warm-up: owner_id and active_groups pre-loaded into L1+L2.")
+        if isinstance(owner_id_r, int):
+            await db.users_roles.get_effective_role(owner_id_r)
+            log.debug("Cache warm-up: owner effective_role pre-loaded into L1+L2.")
     except Exception as exc:
         log.debug("Cache warm-up failed (non-fatal): %s", exc)
 

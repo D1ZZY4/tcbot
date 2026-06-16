@@ -14,7 +14,7 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 | Database | MongoDB through Motor, connected during PTB `post_init`. |
 | Cache | In-process `TTLCache` L1 + optional Redis L2 via `TwoLevelCache`. `hiredis` C extension required when Redis is active. Configured via `REDIS_URL`. |
 | Scheduler | APScheduler **4.0.0a6** (`AsyncScheduler` + `MongoDBDataStore` + `CBORSerializer`); persistent moderation jobs survive restarts. The pinned alpha carries CVE-2026-31072 (no upstream patch); accepted and tracked risk, see Core Subsystem Design / Persistent Scheduler. |
-| Health check | Flask app in `tcbot/alive.py`. `GET /` returns `OK`. `GET /health` returns JSON `{status, mongodb, redis, scheduler, ts}` with HTTP 200 (all ok) or HTTP 503 (degraded). Port from `PORT` env var (default `5000`). |
+| Health check | Flask app in `tcbot/alive.py`. `GET /` returns `OK`. `GET /health` returns JSON `{status, mongodb, redis, scheduler, circuit_telegram, circuit_mongodb, ts}` with HTTP 200 (all ok) or HTTP 503 (degraded). Port from `PORT` env var (default `5000`). |
 | Dependency management | `uv` with `uv.lock`; CI installs with frozen lockfile by default. |
 | Formatting/linting | Ruff, configured in `pyproject.toml`. |
 | Deployment notes | Local `config.env`, Docker Compose, and Replit/hosted environment variables are documented. |
@@ -81,7 +81,7 @@ flowchart TD
 | `tcbot/modules/helper/` | Shared formatter, keyboard, decorator, target extraction, and role guard helpers. |
 | `tcbot/modules/helper/workflows/` | ConversationHandler flows, all named `*_flow.py`. |
 | `tcbot/database/` | Async MongoDB access helpers and document/type definitions. |
-| `tcbot/utils/` | Logging, bounded fan-out dispatch, prefix filters, datetime helpers, error reporting. |
+| `tcbot/utils/` | Circuit breaker, logging, bounded fan-out dispatch, prefix filters, datetime helpers, error reporting. |
 
 ### Module Discovery
 

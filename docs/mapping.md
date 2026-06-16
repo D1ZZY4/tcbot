@@ -59,7 +59,8 @@ tcbot/
 │       └── workflows/
 │           └── *_flow.py   Conversation factories, plus Promote / Demote / Check classes
 └── utils/
-    ├── dispatch.py         Bounded concurrent fan-out
+    ├── circuit_breaker.py  Async circuit breaker for Telegram + MongoDB
+    ├── dispatch.py         Bounded concurrent fan-out (integrates Telegram circuit)
     ├── error_reporter.py   Telegram error classification and reporting
     ├── logger.py           Console formatter and error log handler
     ├── pagination.py       Shared paginate(), nav_row(), date_or_unknown() helpers
@@ -88,8 +89,10 @@ graph TD
     Helper -->|reads/writes via| DB
     Flows -->|reads/writes via| DB
     Flows -->|fan-out via| Utils[utils/dispatch.py]
-    Utils -->|Telegram API| TG[Telegram]
+    Utils -->|guarded by| CB[utils/circuit_breaker.py]
+    CB -->|Telegram API| TG[Telegram]
     Mods -->|Telegram API| TG
+    Alive[alive.py] -->|reads state from| CB
 ```
 
 ## Startup flow

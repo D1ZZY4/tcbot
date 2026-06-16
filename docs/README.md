@@ -15,7 +15,7 @@ For user-facing setup, see [`../README.md`](../README.md). For contributor rules
 | [Workflow internals](workflows/workflows.md) | `ConversationHandler` factories, state constants, callback patterns, and flow-specific behavior. |
 | [Database layer](databases/databases.md) | MongoDB collections, helper modules, indexes, document shapes, and cache rules. |
 | [Helper utilities](helper/helper.md) | Shared formatting, decorators, target extraction, keyboards, role guards, and log-message builders. |
-| [Runtime utils](utils/utils.md) | Dispatch, prefixes, logging, error reporting, and datetime utilities. |
+| [Runtime utils](utils/utils.md) | Circuit breaker, dispatch, prefixes, logging, error reporting, and datetime utilities. |
 | [Button styles](button-styles.md) | Inline keyboard layout and callback-data naming conventions. |
 | [Git commit style](git-commit.md) | Commit message conventions for this repository. |
 | [Performance notes](performance.md) | Batch query patterns, optimization rules, and benchmarking. |

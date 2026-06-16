@@ -6,9 +6,18 @@
 
 from __future__ import annotations
 
-from . import dispatch, error_reporter, formatter, logger, prefixes, timedate_format
+from . import (
+    circuit_breaker,
+    dispatch,
+    error_reporter,
+    formatter,
+    logger,
+    prefixes,
+    timedate_format,
+)
 
 __all__ = [
+    "circuit_breaker",
     "dispatch",
     "error_reporter",
     "formatter",

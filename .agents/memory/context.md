@@ -5,9 +5,13 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 160)
+**Last updated:** 2026-06-16 (session 161)
 
 ## What is done
+
+- Session 162 (2026-06-16): Improvement #5. `_warm_hot_caches` expanded to also pre-warm owner's effective_role (L1+L2 TwoLevelCache) after owner_id known. Step 1 stays parallel (owner_id + active_groups); step 2 sequential dep (get_effective_role(owner_id)). CHANGELOG, docs/README.md quick nav updated. Ruff: 75 files clean. Import: OK. Bot: 29/29 indexes, Redis hiredis 3.4.0. Total bugs: #1-#431 + Improvement #5.
+
+- Session 161 (2026-06-16): Bug #431 (circuit breaker) added. `tcbot/utils/circuit_breaker.py` created with `CircuitBreaker` class (CLOSED/OPEN/HALF_OPEN states, 5 failure threshold, 60s recovery). Module singletons `telegram` and `mongodb`. Integrated into `dispatch.fan_out`: OPEN circuit returns `CircuitOpenError` immediately; only `TimedOut`/`NetworkError` counted (not 403/400). `/health` endpoint updated with `circuit_telegram` and `circuit_mongodb` fields. Exported from `tcbot/utils/__init__.py`. Docs: `docs/utils/utils.md` updated with circuit docs + Mermaid diagram; `docs/mapping.md` updated. Comprehensive scans: GitHub workflows (5 files, all CLEAN), Dockerfile + docker-compose (CLEAN), bot voice emoji/dash (CLEAN), HTML escaping (CLEAN), q.answer() callbacks (all use gather pattern, CLEAN). Ruff: 75 files unchanged, all checks passed. Import: OK. Bot: running 29/29 indexes, Redis hiredis 3.4.0. Total bugs: #1-#431. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 160 (2026-06-16): Bug #430 fixed. `unbanning.cmd_unban` gathered `identity.classify` with speculative `db.bans_db.get_active_ban` in parallel; `execute_unban` updated to accept `pre_ban` keyword arg (skips DB round-trip when caller supplies the record). Docs: `docs/workflows/workflows.md` updated for new `execute_unban` signature. Comprehensive scans: N+1 AST scan CLEAN, create_task error-handlers CLEAN, q.answer() placement CLEAN, identity.classify consistency CLEAN, consecutive-await AST scan found only 2 intentionally-sequential pairs (`set_owner` crash-safety, `cmd_transfer` DB write order). Total bugs: #1-#430. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 

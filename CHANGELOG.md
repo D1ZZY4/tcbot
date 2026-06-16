@@ -2,6 +2,18 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-16 (session 162)
+
+### Performance
+
+- **Improvement #5** (`tcbot/__main__.py`): `_warm_hot_caches` previously loaded only `owner_id` and `active_groups` in parallel. Expanded to also pre-warm the owner's effective role (L1+L2 `effective_role_cache`) in a sequential step after the owner ID is known. The owner's role is the most frequently queried effective-role entry (checked on every privileged command) and was the only high-certainty preload candidate that was cache-backed but missing from startup warm-up. Step 1 remains parallel (`get_owner_id` + `active_groups`); step 2 (`get_effective_role(owner_id)`) runs only when step 1 yields a valid integer ID.
+
+## [Unreleased] - 2026-06-16 (session 161)
+
+### Added
+
+- **Bug #431** (`tcbot/utils/circuit_breaker.py`, `tcbot/utils/dispatch.py`, `tcbot/alive.py`, `tcbot/utils/__init__.py`): Circuit breaker for external service calls was absent. Added `tcbot/utils/circuit_breaker.py` implementing a lightweight async `CircuitBreaker` class (CLOSED/OPEN/HALF_OPEN states, configurable failure threshold and recovery timeout, no asyncio.Lock needed due to cooperative multitasking). Module-level singletons `telegram` and `mongodb` cover the two external dependencies. Integrated into `dispatch.fan_out`: slots running while the Telegram circuit is OPEN return `CircuitOpenError` immediately instead of attempting a Telegram API call that will time out; only `TimedOut` and `NetworkError` are counted against the circuit (not expected 403/400 refusals). Exposed circuit state in the `/health` endpoint under `circuit_telegram` and `circuit_mongodb` keys; a non-closed Telegram circuit shifts overall status to `degraded`. Exported `circuit_breaker` from `tcbot/utils/__init__.py`. Updated `docs/utils/utils.md` with circuit breaker docs and Mermaid diagram.
+
 ## [Unreleased] - 2026-06-16 (session 158)
 
 ### Performance
