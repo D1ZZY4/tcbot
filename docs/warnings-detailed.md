@@ -259,9 +259,7 @@ Flow:
 3. Handle bot/Founder/staff messages as described above.
 4. Delete all matching warning history and the counter with `warns_db.clear_warns(...)`.
 5. If nothing was removed, reply that there are no warnings to clear.
-6. Otherwise, reply with how many warning documents were cleared.
-
-`/resetwarns` currently does not send a federation log entry.
+6. Otherwise, send an audit log to the federation log channel and reply with how many warning documents were cleared. Both actions run in parallel via `asyncio.gather`.
 
 ## Logs
 
@@ -271,6 +269,7 @@ Warning-related log templates are in `parse_logmsg.py`:
 |---|---|
 | `warn_log` | Every warning, including the warning that reaches the auto-ban threshold. |
 | `unwarn_log` | Removing the latest warning with `/tcunwarn`. |
+| `resetwarns_log` | Clearing all warnings with `/resetwarns` when at least one warning was removed. |
 
 `warn_log` includes:
 
@@ -288,6 +287,15 @@ Warning-related log templates are in `parse_logmsg.py`:
 - Moderator mention.
 - Target mention and user ID.
 - New warning count.
+- Group title and chat ID.
+- Date.
+
+`resetwarns_log` includes:
+
+- Community name.
+- Moderator mention.
+- Target mention and user ID.
+- Number of warnings cleared.
 - Group title and chat ID.
 - Date.
 

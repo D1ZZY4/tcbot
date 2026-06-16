@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-16 (session 143)
+
+### Fixed
+
+- **`docs/warnings-detailed.md`** (Bug #419): `/resetwarns behavior` section still contained the stale statement "`/resetwarns` currently does not send a federation log entry." Bug #412 (session 140) added `resetwarns_log()` to `parse_logmsg.py` and updated `execute_resetwarns` to send an audit log concurrently with the reply, but the documentation was not updated to reflect this. Fixed by: (1) removing the stale statement, (2) updating flow step 6 to say "send an audit log to the federation log channel and reply with how many warning documents were cleared. Both actions run in parallel via `asyncio.gather`.", (3) adding `resetwarns_log` to the log templates table with its trigger description, and (4) adding a `resetwarns_log includes:` section listing all fields (community name, moderator mention, target mention and user ID, number of warnings cleared, group title and chat ID, date), consistent with the adjacent `warn_log` and `unwarn_log` sections.
+
 ## [Unreleased] - 2026-06-16 (session 142)
 
 ### Fixed

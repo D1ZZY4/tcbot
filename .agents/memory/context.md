@@ -5,9 +5,17 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 142)
+**Last updated:** 2026-06-16 (session 143)
 
 ## What is done
+
+- Session 143 (2026-06-16): Audit pass 24 — 1 doc bug fixed (#419).
+  - Bug #419: docs/warnings-detailed.md `/resetwarns behavior` section still stated "/resetwarns currently does not send a federation log entry." — stale since Bug #412 (session 140) added resetwarns_log() and the concurrent log+reply gather. Fixed: (1) removed stale statement, (2) updated flow step 6 to describe concurrent log send + reply, (3) added resetwarns_log row to templates table, (4) added resetwarns_log includes: section (community name, moderator mention, target mention+user ID, warnings cleared count, group, date).
+  - Comprehensive code audit this session: ban_flow.py, banning.py, greeting.py, connected_flow.py, extraction.py, identity.py (full), decorators.py (full), warning_flow.py, muting_flow.py, kicking_flow.py, unban_flow.py, appeal_flow.py (full), check_flow.py (full 601 lines), warns_db.py (full), bans_db.py (partial — set_appeal_log_msg), groups_db.py, users_cache.py, dispatch.py, scheduler.py, __main__.py. All CLEAN except Bug #419.
+  - All entry handler double-reply guards verified CLEAN: banning.py, muting.py, warnings.py, unbanning.py, kicking.py — all have `executor_role is None` check before `refuse_message`.
+  - All asyncio.gather return_exceptions=True verified CLEAN across all audit files. All fire-and-forget create_task strong-ref sets verified CLEAN.
+  - Ruff: All checks passed (74 files). Import OK. Total bugs: #1-#419.
+  - Remaining open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 142 (2026-06-16): Audit pass 23 — 4 doc/skill bugs fixed (#415-#418).
   - Bug #415: Em-dash (Unicode U+2014) removed from replit.md (2), CHANGELOG.md (52 lines), PLAN.md (14). All project .md files now CLEAN — 39 files verified across root + docs + docs subdirs (22 docs files).
