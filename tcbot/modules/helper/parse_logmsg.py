@@ -302,6 +302,29 @@ def kick_log(
 # ─────────────────────────── Warn logs ──────────────────────────── #
 
 
+def resetwarns_log(
+    target_id: int,
+    target_fname: str,
+    admin_id: int,
+    admin_fname: str,
+    removed: int,
+    chat_id: int,
+    chat_title: str,
+) -> str:
+    """Reset-warns audit-log message."""
+    return (
+        LogBuilder(f"{cfg.community_name} Reset Warns")
+        .mention_field("Admin", admin_id, admin_fname)
+        .mention_field("User", target_id, target_fname)
+        .field("User ID", target_id, escape=False)
+        .field("Warnings cleared", str(removed), escape=False)
+        .raw(f"Group: {esc(chat_title)} ({code(str(chat_id))})")
+        .section()
+        .date()
+        .build()
+    )
+
+
 def warn_log(
     target_id: int,
     target_fname: str,

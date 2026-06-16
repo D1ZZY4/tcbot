@@ -399,9 +399,13 @@ async def execute_resetwarns(
 
     Calls ``db.warns_db.clear_warns`` and replies with the number of removed
     warnings. Replies early if the target has no warnings to clear.
+    Logs the action to the mod log channel on success.
     """
     msg = update.effective_message
+    admin = update.effective_user
     chat_id = update.effective_chat.id
+    chat_title = update.effective_chat.title or str(chat_id)
+    lc, lt = cfg.logs
 
     removed = await db.warns_db.clear_warns(target_id, chat_id)
     if removed == 0:
@@ -414,13 +418,25 @@ async def execute_resetwarns(
             log.debug("execute_resetwarns no-warns reply failed: %s", exc)
         return
 
-    try:
-        await msg.reply_text(
+    log_text = parse_logmsg.resetwarns_log(
+        target_id,
+        target_name,
+        admin.id,
+        admin.first_name,
+        removed,
+        chat_id,
+        chat_title,
+    )
+    results = await asyncio.gather(
+        ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+        msg.reply_text(
             f"All {removed} warning(s) cleared for {user_ref(target_id, target_name)}. Clean slate.",
             parse_mode="HTML",
-        )
-    except Exception as exc:
-        log.debug("execute_resetwarns success reply failed: %s", exc)
+        ),
+        return_exceptions=True,
+    )
+    if isinstance(results[0], BaseException):
+        log.error("Reset-warns log send failed for target=%d: %s", target_id, results[0])
 
 
 # ──────────────────────── Executor adapter ──────────────────────── #

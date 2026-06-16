@@ -148,15 +148,18 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     if target_role:
-        await Demote.execute(
-            ctx.bot,
-            target_id,
-            target_fname or str(target_id),
-            target_role,
-            admin.id,
-            admin.first_name,
-            trigger="ban",
-        )
+        try:
+            await Demote.execute(
+                ctx.bot,
+                target_id,
+                target_fname or str(target_id),
+                target_role,
+                admin.id,
+                admin.first_name,
+                trigger="ban",
+            )
+        except Exception:
+            log.exception("Auto-demote before ban failed for target=%d", target_id)
 
     ctx.user_data["ban_target_id"] = target_id
     ctx.user_data["ban_target_fname"] = target_fname or str(target_id)

@@ -157,15 +157,18 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     if target_role:
-        await Demote.execute(
-            ctx.bot,
-            target_id,
-            target_fname or str(target_id),
-            target_role,
-            admin.id,
-            admin.first_name,
-            trigger="mute",
-        )
+        try:
+            await Demote.execute(
+                ctx.bot,
+                target_id,
+                target_fname or str(target_id),
+                target_role,
+                admin.id,
+                admin.first_name,
+                trigger="mute",
+            )
+        except Exception:
+            log.exception("Auto-demote before mute failed for target=%d", target_id)
 
     duration = None
     if remaining_args and _DURATION_RE.match(remaining_args[0]):

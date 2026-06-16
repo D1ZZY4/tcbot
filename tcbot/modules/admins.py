@@ -480,15 +480,19 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             log.debug("on_demote_confirm founder-only edit failed: %s", exc)
         return
 
-    removed = await Demote.execute(
-        ctx.bot,
-        target_id,
-        target_fname,
-        target_role,
-        admin.id,
-        admin.first_name,
-        trigger=None,
-    )
+    try:
+        removed = await Demote.execute(
+            ctx.bot,
+            target_id,
+            target_fname,
+            target_role,
+            admin.id,
+            admin.first_name,
+            trigger=None,
+        )
+    except Exception:
+        log.exception("Demote.execute raised for target=%d in on_demote_confirm", target_id)
+        removed = False
     if not removed:
         try:
             await q.edit_message_text(_ERR_ROLE_CLEAR_FAILED, reply_markup=None)
