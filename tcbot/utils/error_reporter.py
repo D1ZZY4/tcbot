@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 import telegram.error as _te
 
+from tcbot.utils.formatter import bold, code, pre
 from tcbot.utils.timedate_format import utc_now
 
 if TYPE_CHECKING:
@@ -284,25 +285,25 @@ def build_error_message(
 
     tb_block = ""
     if exc and exc.__traceback__:
-        tb_block = f"\n\n<b>Traceback:</b>\n<pre>{_esc(_condensed_tb(exc))}</pre>"
+        tb_block = f"\n\n{bold('Traceback:')}\n{pre(_condensed_tb(exc))}"
 
     ctx_block = ""
     if context:
-        ctx_block = f"\n\n<b>Context:</b>\n<code>{_esc(str(context)[:_MAX_CTX])}</code>"
+        ctx_block = f"\n\n{bold('Context:')}\n{code(str(context)[:_MAX_CTX])}"
 
     py_ver = sys.version.split()[0]
     host = platform.node() or "?"
     sep = "-" * _REPORT_SEP_LEN
 
     return (
-        f"<b>Error Report</b>\n"
+        f"{bold('Error Report')}\n"
         f"{sep}\n"
-        f"<b>Type:</b> {label}\n"
-        f"<b>Where:</b> <code>{_esc(file_part)}:{line_no}</code> in <code>{_esc(func_name)}</code>\n"
-        f"<b>When:</b> {time_str} - {date_str}\n"
-        f"<b>Host:</b> Python {py_ver} @ {_esc(host)}\n"
+        f"{bold('Type:')} {label}\n"
+        f"{bold('Where:')} {code(f'{file_part}:{line_no}')} in {code(func_name)}\n"
+        f"{bold('When:')} {time_str} - {date_str}\n"
+        f"{bold('Host:')} Python {py_ver} @ {_esc(host)}\n"
         f"{sep}\n"
-        f"<b>Message:</b>\n<code>{_esc(raw_msg[:_MAX_MSG])}</code>"
+        f"{bold('Message:')}\n{code(raw_msg[:_MAX_MSG])}"
         f"{tb_block}"
         f"{ctx_block}"
     )

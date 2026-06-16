@@ -26,7 +26,7 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
-from tcbot.modules.helper.formatter import code, esc, mention
+from tcbot.modules.helper.formatter import bold, code, esc, mention, pre
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.utils.dispatch import fan_out
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
@@ -95,17 +95,20 @@ class BuildAppeal:
     def instruction_text(self) -> str:
         """Multi-line HTML instruction prompt sent when the user opens an appeal."""
         log_handle = self.log_channel.lstrip("@")
-        return (
-            f"{esc(self.community_name)} Ban Appeal\n\n"
-            "To submit your appeal, reply with a message starting with <code>#appeal</code>, containing:\n"
-            "- <b>Log link:</b> (the link to your ban log from the log channel)\n"
-            "- <b>Clarification:</b> (your honest explanation of what happened)\n"
-            "- <b>Agreement:</b> (your commitment not to repeat the violation)\n\n"
-            "<b>Example:</b>\n"
-            "<pre>#appeal\n"
+        pre_content = (
+            f"#appeal\n"
             f"Log link: https://t.me/{log_handle}/1\n"
             "Clarification: I spammed unintentionally due to an auto-clicker.\n"
-            "Agreement: I will not use any automation tools in the group again.</pre>\n\n"
+            "Agreement: I will not use any automation tools in the group again."
+        )
+        return (
+            f"{esc(self.community_name)} Ban Appeal\n\n"
+            f"To submit your appeal, reply with a message starting with {code('#appeal')}, containing:\n"
+            f"- {bold('Log link:')} (the link to your ban log from the log channel)\n"
+            f"- {bold('Clarification:')} (your honest explanation of what happened)\n"
+            f"- {bold('Agreement:')} (your commitment not to repeat the violation)\n\n"
+            f"{bold('Example:')}\n"
+            f"{pre(pre_content)}\n\n"
             f"Log Channel: {esc(self.log_channel)}"
         )
 

@@ -13,7 +13,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes
 
 from tcbot import cfg
 from tcbot.modules.helper import decorators, keyboards
-from tcbot.modules.helper.formatter import esc
+from tcbot.modules.helper.formatter import bold, esc, italic
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -30,13 +30,13 @@ _RL_CB_LIMIT: int = 15
 _CNAME = esc(cfg.community_name)
 
 __about_msg__ = (
-    f"<b>What is</b> {_CNAME}?\n"
+    f"{bold('What is')} {_CNAME}?\n"
     f"{_CNAME} is a community-driven federation for Infinix, Tecno, and Itel groups. "
     "Our main focus is maintaining group security and a conducive environment so members can discuss comfortably.\n\n"
-    "<b>History</b>\n"
+    f"{bold('History')}\n"
     "Established in 2024. Originally named TFI, but it was disbanded due to internal issues. "
     f"Shortly after, {_CNAME} was formed to continue managing the community with better stability.\n\n"
-    f"{_CNAME} <i>is not an official part of Transsion Holdings. This is strictly an independent community.</i>"
+    f"{_CNAME} {italic('is not an official part of Transsion Holdings. This is strictly an independent community.')}"
 )
 
 

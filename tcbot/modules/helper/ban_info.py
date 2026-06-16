@@ -11,7 +11,7 @@ import asyncio
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import replies
-from tcbot.modules.helper.formatter import code, esc, mention
+from tcbot.modules.helper.formatter import bold, code, esc, mention
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.utils.timedate_format import fmt_dt
 
@@ -56,7 +56,7 @@ async def build_ban_detail(
     date_str = fmt_dt(ts) if ts else "Unknown"
 
     text = (
-        "<b>Ban Information</b>\n\n"
+        f"{bold('Ban Information')}\n\n"
         f"User: {mention(uid, target_fname, target_uname)}\n"
         f"User ID: {code(str(uid))}\n\n"
         f"Banned by: {mention(aid, admin_fname, admin_uname)}\n"

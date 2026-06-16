@@ -104,11 +104,14 @@ for _key, (_dname, _, _) in HELP_CONTENT.items():
 
 _CNAME = esc(cfg.community_name)
 
-_HELP_INDEX_TEXT = (
-    "<b>{botname} Help</b>\n"
-    f"I manage groups connected on {_CNAME}.\n\n"
-    "Select a topic below, or use <code>/help &lt;module&gt;</code> for direct access."
-)
+
+def _help_index_text(botname: str) -> str:
+    """Build the help index header for the given plain-text bot display name."""
+    return (
+        f"{bold(f'{botname} Help')}\n"
+        f"I manage groups connected on {_CNAME}.\n\n"
+        f"Select a topic below, or use {code('/help <module>')} for direct access."
+    )
 
 
 # ──────────────────────── Shared Renderers ──────────────────────── #
@@ -149,7 +152,7 @@ async def _render_help_index(
     if q is None:
         return
 
-    botname = esc(ctx.bot.first_name or "")
+    botname = ctx.bot.first_name or ""
     kb = (
         keyboards.help_topics_menu_kb(HELP_TOPICS_MENU)
         if with_back_to_start
@@ -158,7 +161,7 @@ async def _render_help_index(
     # * q.answer() and safe_edit_cb() are independent; run in parallel.
     await asyncio.gather(
         q.answer(),
-        safe_edit_cb(q, _HELP_INDEX_TEXT.format(botname=botname), reply_markup=kb),
+        safe_edit_cb(q, _help_index_text(botname), reply_markup=kb),
         return_exceptions=True,
     )
 
@@ -265,7 +268,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if msg is None:
         return
 
-    botname = esc(ctx.bot.first_name or "")
+    botname = ctx.bot.first_name or ""
     args = parse_cmd_args(msg.text)
 
     if args:
@@ -308,7 +311,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     try:
         await msg.reply_text(
-            _HELP_INDEX_TEXT.format(botname=botname),
+            _help_index_text(botname),
             parse_mode="HTML",
             reply_markup=keyboards.help_topics_kb(HELP_TOPICS_CMD),
         )

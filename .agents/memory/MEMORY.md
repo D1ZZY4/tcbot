@@ -33,3 +33,5 @@
 - [bot demotion no deactivate](decisions.md): member/restricted demotion only logs warning to mod channel; deactivate_group only on left/kicked
 - [mutes_db is pure audit log](decisions.md): no is_active field, no deactivation needed; mute enforcement is via Telegram until_date only
 - [extraction @username fallthrough](decisions.md): _safe_get_chat returns None for both "not found" and timeout; fallthrough to partial name search is intentional design, not a bug
+- [formatter location and shim pattern](decisions.md): formatter.py lives at tcbot/utils/formatter.py; tcbot/modules/helper/formatter.py is a re-export shim — utils layer imports from tcbot.utils.formatter, modules layer keeps existing imports unchanged
+- [nested f-string quote escape](decisions.md): avoid f"...f'...{var}...'..." nested quotes — use an intermediate variable instead to avoid syntax errors

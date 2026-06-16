@@ -17,7 +17,7 @@ from telegram.constants import ChatMemberStatus
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
-from tcbot.modules.helper.formatter import esc
+from tcbot.modules.helper.formatter import bold, code
 from tcbot.utils.dispatch import count_errors, fan_out
 
 if TYPE_CHECKING:
@@ -279,8 +279,8 @@ class BuildConnection:
             if chat.id not in (cfg.main_group, cfg.exec_group):
                 warning_text = (
                     f"Bot was demoted in group"
-                    f" <b>{esc(chat.title or str(chat.id))}</b>"
-                    f" (id: <code>{chat.id}</code>)."
+                    f" {bold(chat.title or str(chat.id))}"
+                    f" (id: {code(str(chat.id))})."
                     " Federation bans cannot be enforced there until"
                     " admin rights are restored."
                 )

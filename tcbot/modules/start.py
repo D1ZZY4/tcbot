@@ -17,7 +17,7 @@ from tcbot import database as db
 from tcbot.modules.about import __about_msg__
 from tcbot.modules.groups import _render
 from tcbot.modules.helper import decorators, keyboards
-from tcbot.modules.helper.formatter import esc
+from tcbot.modules.helper.formatter import bold, esc
 from tcbot.utils.prefixes import build_prefixed_filters
 
 if TYPE_CHECKING:
@@ -37,18 +37,26 @@ __module_name__ = None
 
 _CNAME = esc(cfg.community_name)
 
-_PRIVATE_START_TEXT = (
-    "<b>Hey, I'm {botname}.</b>\n\n"
-    f"Federation management assistant for {_CNAME}. "
-    "I coordinate bans, mutes, kicks, and moderation across all connected groups.\n\n"
-    "Use the buttons below to explore."
-)
 
-_GROUP_START_TEXT = (
-    "<b>Hey, I'm {botname}.</b>\n\n"
-    f"Federation management assistant for {_CNAME}. "
-    "Use /help for the full help menu, or open me in PM for all options."
-)
+def _private_start_text(botname: str) -> str:
+    """Build the PM start message for the given plain-text bot display name."""
+    greeting = "Hey, I'm " + botname + "."
+    return (
+        f"{bold(greeting)}\n\n"
+        f"Federation management assistant for {_CNAME}. "
+        "I coordinate bans, mutes, kicks, and moderation across all connected groups.\n\n"
+        "Use the buttons below to explore."
+    )
+
+
+def _group_start_text(botname: str) -> str:
+    """Build the group start message for the given plain-text bot display name."""
+    greeting = "Hey, I'm " + botname + "."
+    return (
+        f"{bold(greeting)}\n\n"
+        f"Federation management assistant for {_CNAME}. "
+        "Use /help for the full help menu, or open me in PM for all options."
+    )
 
 
 # ──────────────────────── Command Handlers ──────────────────────── #
@@ -71,14 +79,14 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     text = (msg.text or "").strip()
     parts = text.split(None, 1)
     arg = parts[1].strip() if len(parts) > 1 else ""
-    botname = esc(ctx.bot.first_name or "")
+    botname = ctx.bot.first_name or ""
 
     # * Group / supergroup context - send a minimal message with PM link
     if chat.type in ("group", "supergroup", "forum"):
         bot_username = ctx.bot.username or ""
         try:
             await msg.reply_text(
-                _GROUP_START_TEXT.format(botname=botname),
+                _group_start_text(botname),
                 parse_mode="HTML",
                 reply_markup=keyboards.group_start_kb(bot_username),
             )
@@ -101,7 +109,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * appeal<ban_id> deep links are handled by the ConversationHandler in appeals.py
     try:
         await msg.reply_text(
-            _PRIVATE_START_TEXT.format(botname=botname),
+            _private_start_text(botname),
             parse_mode="HTML",
             reply_markup=keyboards.main_menu_kb(),
         )
@@ -120,12 +128,12 @@ async def on_back_to_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     if q is None:
         return
 
-    botname = esc(ctx.bot.first_name or "")
+    botname = ctx.bot.first_name or ""
     # * q.answer() and edit are independent; run in parallel.
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(
-            _PRIVATE_START_TEXT.format(botname=botname),
+            _private_start_text(botname),
             parse_mode="HTML",
             reply_markup=keyboards.main_menu_kb(),
         ),

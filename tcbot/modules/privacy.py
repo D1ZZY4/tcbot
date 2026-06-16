@@ -13,7 +13,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes
 
 from tcbot import cfg
 from tcbot.modules.helper import decorators, keyboards
-from tcbot.modules.helper.formatter import esc
+from tcbot.modules.helper.formatter import bold, esc
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -29,42 +29,48 @@ __module_name__ = None
 
 _CNAME = esc(cfg.community_name)
 
-_PRIVACY_MSG = (
-    "<b>Privacy & Data</b>\n\n"
-    "We keep things simple. Here's what {botname} stores about you:\n\n"
-    "- <b>User ID & first name</b> - cached when you interact with the bot or a connected group.\n"
-    "- <b>Ban records</b> - if you receive a federation ban, the reason and proof are stored alongside it.\n"
-    "- <b>Warn & mute records</b> - logged per group for moderation tracking.\n"
-    "- <b>Kick logs</b> - recorded for staff reference.\n"
-    "- <b>Appeal submissions</b> - your messages and any attachments you send through the appeal system.\n\n"
-    f"All data is stored securely and is only accessible to {_CNAME} staff. "
-    "We don't share anything with third parties - ever.\n\n"
-    "Tap <b>Privacy Policy</b> below for the full policy."
-)
 
-_PRIVACY_POLICY_MSG = (
-    "<b>Privacy Policy</b>\n"
-    "{botname}\n"
-    "<b>1. What we collect</b>\n"
-    "Your Telegram user ID, first name, and username are cached when you interact with {botname} "
-    "or any connected group. We also store ban records, appeal submissions, warn records, "
-    "mute records, and kick logs.\n\n"
-    "<b>2. Why we collect it</b>\n"
-    f"Everything we store is used solely for federation moderation - keeping {_CNAME} groups safe "
-    "and well-managed. Nothing more.\n\n"
-    "<b>3. Who can access it</b>\n"
-    f"Only {_CNAME} staff (admins and the owner) have access to stored data. "
-    "No data is shared with third parties under any circumstances.\n\n"
-    "<b>4. How long we keep it</b>\n"
-    "Ban records are kept indefinitely as part of the federation log. "
-    "Cached user data (names, IDs) may be pruned periodically. "
-    "Appeal records are kept for reference.\n\n"
-    "<b>5. Your rights</b>\n"
-    f"You can request a review or deletion of your data by reaching out to a {_CNAME} admin directly. "
-    "We'll handle it as soon as we can.\n\n"
-    "<b>6. Contact</b>\n"
-    f"Reach {_CNAME} staff through the main {_CNAME} group or via this bot's appeal system."
-)
+def _privacy_msg(botname: str) -> str:
+    """Build the data-collection notice for the given bot display name."""
+    return (
+        f"{bold('Privacy & Data')}\n\n"
+        f"We keep things simple. Here's what {botname} stores about you:\n\n"
+        f"- {bold('User ID & first name')} - cached when you interact with the bot or a connected group.\n"
+        f"- {bold('Ban records')} - if you receive a federation ban, the reason and proof are stored alongside it.\n"
+        f"- {bold('Warn & mute records')} - logged per group for moderation tracking.\n"
+        f"- {bold('Kick logs')} - recorded for staff reference.\n"
+        f"- {bold('Appeal submissions')} - your messages and any attachments you send through the appeal system.\n\n"
+        f"All data is stored securely and is only accessible to {_CNAME} staff. "
+        "We don't share anything with third parties - ever.\n\n"
+        f"Tap {bold('Privacy Policy')} below for the full policy."
+    )
+
+
+def _privacy_policy_msg(botname: str) -> str:
+    """Build the full privacy-policy text for the given bot display name."""
+    return (
+        f"{bold('Privacy Policy')}\n"
+        f"{botname}\n"
+        f"{bold('1. What we collect')}\n"
+        f"Your Telegram user ID, first name, and username are cached when you interact with {botname} "
+        f"or any connected group. We also store ban records, appeal submissions, warn records, "
+        "mute records, and kick logs.\n\n"
+        f"{bold('2. Why we collect it')}\n"
+        f"Everything we store is used solely for federation moderation - keeping {_CNAME} groups safe "
+        "and well-managed. Nothing more.\n\n"
+        f"{bold('3. Who can access it')}\n"
+        f"Only {_CNAME} staff (admins and the owner) have access to stored data. "
+        "No data is shared with third parties under any circumstances.\n\n"
+        f"{bold('4. How long we keep it')}\n"
+        "Ban records are kept indefinitely as part of the federation log. "
+        "Cached user data (names, IDs) may be pruned periodically. "
+        "Appeal records are kept for reference.\n\n"
+        f"{bold('5. Your rights')}\n"
+        f"You can request a review or deletion of your data by reaching out to a {_CNAME} admin directly. "
+        "We'll handle it as soon as we can.\n\n"
+        f"{bold('6. Contact')}\n"
+        f"Reach {_CNAME} staff through the main {_CNAME} group or via this bot's appeal system."
+    )
 
 
 # ──────────────────────── Callback Handlers ─────────────────────── #
@@ -83,7 +89,7 @@ async def on_privacy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(
-            _PRIVACY_MSG.format(botname=botname),
+            _privacy_msg(botname),
             parse_mode="HTML",
             reply_markup=keyboards.privacy_kb(),
         ),
@@ -106,7 +112,7 @@ async def on_privacy_policy_menu(
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(
-            _PRIVACY_POLICY_MSG.format(botname=botname),
+            _privacy_policy_msg(botname),
             parse_mode="HTML",
             reply_markup=keyboards.back_to_privacy_kb(),
         ),

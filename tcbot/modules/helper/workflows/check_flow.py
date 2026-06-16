@@ -14,7 +14,7 @@ from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 
 from tcbot import database as db
 from tcbot.modules.helper.ban_info import build_ban_detail
-from tcbot.modules.helper.formatter import bold, code, esc, mention
+from tcbot.modules.helper.formatter import bold, code, esc, italic, mention
 from tcbot.utils.pagination import date_or_unknown, nav_row, paginate
 from tcbot.utils.timedate_format import fmt_dt
 
@@ -248,12 +248,10 @@ class Check:
         for i, ban in enumerate(chunk, start=1):
             status = bold("Active") if ban.get("is_active") else "Inactive"
             ts = date_or_unknown(ban.get("timestamp"))
-            reason_short = esc(
-                str(ban.get("reason", "(no reason)"))[:_BAN_LIST_REASON_LEN]
-            )
+            reason_short = str(ban.get("reason", "(no reason)"))[:_BAN_LIST_REASON_LEN]
             lines.append(
                 f"{base_idx + i}. {status} | {code(ban['ban_id'])} | {ts}\n"
-                f"   <i>{reason_short}</i>"
+                f"   {italic(reason_short)}"
             )
             item_btns.append(
                 InlineKeyboardButton(
@@ -402,14 +400,12 @@ class Check:
         base_idx = page * _PAGE_SIZE
         for i, w in enumerate(chunk, start=1):
             ts = date_or_unknown(w.get("timestamp"))
-            reason_short = esc(
-                str(w.get("reason", "(no reason)"))[:_REASON_PREVIEW_LEN]
-            )
+            reason_short = str(w.get("reason", "(no reason)"))[:_REASON_PREVIEW_LEN]
             admin_id = w.get("admin_id", 0)
             admin_name = admin_name_map.get(admin_id, "Admin") if admin_id else "Admin"
             lines.append(
                 f"{base_idx + i}. {ts}\n"
-                f"   <i>{reason_short}</i>\n"
+                f"   {italic(reason_short)}\n"
                 f"   By {mention(admin_id, admin_name)}"
             )
 
@@ -575,7 +571,7 @@ async def _per_chat_event_list(
     base_idx = page * _PAGE_SIZE
     for i, rec in enumerate(chunk, start=1):
         ts = date_or_unknown(rec.get("timestamp"))
-        reason_short = esc(str(rec.get("reason", "(no reason)"))[:_REASON_PREVIEW_LEN])
+        reason_short = str(rec.get("reason", "(no reason)"))[:_REASON_PREVIEW_LEN]
         chat_id = rec.get("chat_id", 0)
         title = titles.get(chat_id) or str(chat_id)
         admin_id = rec.get("admin_id", 0)
@@ -583,7 +579,7 @@ async def _per_chat_event_list(
         lines.append(
             f"{base_idx + i}. {ts}\n"
             f"   Group: {esc(title)}\n"
-            f"   <i>{reason_short}</i>\n"
+            f"   {italic(reason_short)}\n"
             f"   By {mention(admin_id, admin_name)}"
         )
 
