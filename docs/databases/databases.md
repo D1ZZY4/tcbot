@@ -44,7 +44,7 @@ flowchart TD
 | `bans_db.py` | `bans` | Active ban lookup, ban creation/update, unban deactivation, appeal/review metadata, active ban lists. |
 | `warns_db.py` | `warns`, `warn_counts` | Warning history, warning counters, backfill/sync, remove latest warning, clear warnings. |
 | `kicks_db.py` | `kicks` | Kick audit records. |
-| `mutes_db.py` | `mutes` | Mute audit records. |
+| `mutes_db.py` | `mutes`, `active_mutes` | Mute audit records (`mutes`). Active-mute store (`active_mutes`): one document per muted user, used to re-apply restrictions on join and on group connect. `set_active_mute` / `clear_active_mute` / `get_active_mute` / `active_mute_docs`. |
 | `queues_db.py` | `promotion_requests` | Queued Admin promotion requests and resolution status. |
 | `cache.py` | in-process + Redis | `TTLCache[T]` (L1 in-process) and `TwoLevelCache[T]` (L1 in-process + L2 Redis). Four public singletons: `effective_role_cache`, `connected_cache`, `active_groups_cache`, `owner_id_cache`. |
 | `redis_client.py` | Redis (optional) | Async Redis client singleton via `redis.asyncio.ConnectionPool`. `connect(url)` creates the pool and runs `PING`. `client()` returns the active client or `None` when Redis is not configured. `hiredis` C extension required. |

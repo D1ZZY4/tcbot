@@ -5,9 +5,16 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 134)
+**Last updated:** 2026-06-16 (session 135)
 
 ## What is done
+
+- Session 135 (2026-06-16): Bugs #385–#387 fixed + Improvement #7 fully implemented.
+  - Bug #385: `tcbot/utils/__init__.py` — `formatter` missing from `__all__`.
+  - Bug #386: `docs/utils/utils.md` Mermaid diagram missing `formatter.py` node + new formatter.py section.
+  - Bug #387: `docs/helper/helper.md` formatter section incorrectly described as implementation source; corrected to re-export shim.
+  - Improvement #7 (fed mute re-apply): Added `active_mutes` MongoDB collection. `ActiveMuteDoc` TypedDict added to `documents.py`. `set_active_mute` / `clear_active_mute` / `get_active_mute` / `active_mute_docs` added to `mutes_db.py`. Two new indexes in `mongos.py` (29/29 total). `_execute_mute` upserts active mute record in gather. `execute_unmute` clears active mute record in gather. `_handle_member` in `greeting.py` fetches `get_active_mute` in parallel with `get_active_ban` and re-applies `restrict_chat_member` on join. `complete_join` in `connected_flow.py` fetches `active_mute_docs()` in parallel with `active_ban_user_ids()` and fans out `restrict_chat_member` for all active mutes on group connect. `ChatPermissions` import added to both files. PLAN.md Improvement #7 → Resolved. CHANGELOG.md updated. docs/databases/databases.md updated. Ruff: 74 files clean (1 file reformatted). Import OK.
+  - Total bugs: #1–#387. Remaining open: P1 #4 (CVE-2026-31072, accepted), Improvement #4 (multi-instance cache, future).
 
 - Session 134 (2026-06-16): 4 open PLAN.md findings from session 133 resolved — 4 bugs fixed (#381–#384).
   - Bug #381 (P2 #4): Duplicate ChatMemberHandler(MY_CHAT_MEMBER) — greeting.on_my_chat_member and connected_flow.on_bot_added both registered in PTB group 0, one silently shadowing the other (nondeterministic by filesystem sort). Fixed: merged demotion-warning branch (MEMBER/RESTRICTED + old_status==ADMINISTRATOR → mod-channel warning, primary-group exclusion) into connected_flow.on_bot_added. Deleted greeting.on_my_chat_member function and its ChatMemberHandler registration. Removed ChatMemberHandler import from greeting.py. Added esc import to connected_flow.py. Now exactly ONE MY_CHAT_MEMBER handler covers all cases.

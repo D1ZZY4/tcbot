@@ -13,11 +13,14 @@ flowchart TD
     Utils --> ErrorReporter[error_reporter.py<br/>error sink]
     Utils --> TimeDate[timedate_format.py<br/>UTC + display]
     Utils --> Pagination[pagination.py<br/>paginate, nav_row, date_or_unknown]
+    Utils --> Fmt[formatter.py<br/>HTML escape, bold, code, mention]
     Modules[tcbot/modules/] --> Dispatch
     Modules --> Prefixes
     Modules --> TimeDate
     Modules --> Pagination
     Logging --> ErrorReporter
+    ErrorReporter --> Fmt
+    HelperFmt[helper/formatter.py<br/>re-export shim] --> Fmt
 ```
 
 ## `dispatch.py`
@@ -114,6 +117,24 @@ Shared pagination helpers used by `stats_flow.py` and `check_flow.py` drill-down
 | `date_or_unknown(value)` | Format a datetime field via `fmt_dt` or return `"Unknown"` if the value is falsy. |
 
 Always import these from `tcbot.utils.pagination`; do not reimplement pagination logic inside individual flow files.
+
+## `formatter.py`
+
+Single source of truth for all Telegram HTML markup. Both the utils layer (e.g. `error_reporter.py`) and the modules layer import from here. `tcbot/modules/helper/formatter.py` is a thin re-export shim that preserves backward-compatible import paths for existing callers.
+
+| Function | Output/use |
+|---|---|
+| `esc(text)` | Escape HTML special characters for safe inline inclusion. |
+| `bold(text)` | `<b>...</b>` with escaped content. |
+| `italic(text)` | `<i>...</i>` with escaped content. |
+| `code(text)` | `<code>...</code>` with escaped content. |
+| `pre(text)` | `<pre>...</pre>` monospace block with escaped content. |
+| `link(text, url)` | HTML anchor tag. Escape or validate untrusted URLs before passing. |
+| `mention(user_id, name, username=None)` | Smart mention: `https://t.me/username` link when username available; otherwise plain name + copyable ID. |
+| `user_ref(user_id, name, username=None)` | Action-summary reference: `mention - code(id)`. Omits redundant ID when name equals the numeric string fallback. |
+| `proof_line(proof_desc)` | `\nProof: <desc>` or `""` when proof_desc is falsy. Embed directly in kick/mute/warn action messages. |
+
+Always import from `tcbot.utils.formatter` in utils-layer code. Modules-layer code may continue using `tcbot.modules.helper.formatter` (the shim) for backward compatibility.
 
 ## Utility boundaries
 

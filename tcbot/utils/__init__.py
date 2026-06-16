@@ -2,10 +2,17 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Studio
 
-"""Utils package: dispatching, error reporting, logging, prefixes, and datetime helpers."""
+"""Utils package: dispatching, error reporting, logging, prefixes, datetime helpers, and HTML formatters."""
 
 from __future__ import annotations
 
-from . import dispatch, error_reporter, logger, prefixes, timedate_format
+from . import dispatch, error_reporter, formatter, logger, prefixes, timedate_format
 
-__all__ = ["dispatch", "error_reporter", "logger", "prefixes", "timedate_format"]
+__all__ = [
+    "dispatch",
+    "error_reporter",
+    "formatter",
+    "logger",
+    "prefixes",
+    "timedate_format",
+]

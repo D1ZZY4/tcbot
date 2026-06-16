@@ -156,6 +156,10 @@ async def ensure_indexes() -> None:
         col("kicks").create_index([("chat_id", 1)]),
         col("mutes").create_index([("chat_id", 1)]),
         col("federated_groups").create_index([("is_active", 1)]),
+        # * active_mutes: one document per muted user (upserted by set_active_mute)
+        col("active_mutes").create_index([("user_id", 1)], unique=True),
+        # * Serves active_mute_docs() bulk-fetch and get_active_mute() filtered by expiry
+        col("active_mutes").create_index([("until_date", 1)]),
         # * TTL index: MongoDB auto-expires member_cache docs older than 90 days (7776000 s).
         # * Replaces the APScheduler weekly cleanup job, shrinking the scheduler surface.
         col("member_cache").create_index(

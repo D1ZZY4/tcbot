@@ -11,7 +11,14 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from telegram import Bot, ChatMember, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (
+    Bot,
+    ChatMember,
+    ChatPermissions,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Update,
+)
 from telegram.constants import ChatMemberStatus
 
 from tcbot import cfg
@@ -167,11 +174,12 @@ class BuildConnection:
         bot: Bot,
     ) -> None:
         """Connect the group, apply all active federation bans, and notify LOG_CHANNEL."""
-        # * Fetch chat info + active ban IDs + admin list + register group + clear pending.
+        # * Fetch chat info + active ban IDs + active mute docs + admin list + register group + clear pending.
         # * All Telegram and DB calls fire in parallel; bounded timeouts prevent stalls.
-        chat_result, ban_uids, admins_result, *_ = await asyncio.gather(
+        chat_result, ban_uids, mute_docs, admins_result, *_ = await asyncio.gather(
             asyncio.wait_for(bot.get_chat(chat_id), timeout=_TG_TIMEOUT),
             db.bans_db.active_ban_user_ids(),
+            db.mutes_db.active_mute_docs(),
             asyncio.wait_for(bot.get_chat_administrators(chat_id), timeout=_TG_TIMEOUT),
             db.groups_db.add_group(chat_id, chat_title, owner_id),
             db.groups_db.remove_pending(chat_id),
@@ -184,6 +192,8 @@ class BuildConnection:
         )
         if isinstance(ban_uids, BaseException):
             ban_uids = []
+        if isinstance(mute_docs, BaseException):
+            mute_docs = []
 
         # * Harvest admin identities into the member cache (fire-and-forget, best-effort).
         # * Strong reference kept in _harvest_tasks to prevent GC before completion.
@@ -199,7 +209,22 @@ class BuildConnection:
 
         # * Apply all existing federation bans concurrently - semaphore-bounded
         results = await fan_out([bot.ban_chat_member(chat_id, uid) for uid in ban_uids])
-        applied = len(results) - count_errors(results)
+        applied_bans = len(results) - count_errors(results)
+
+        # * Apply all existing federation mutes concurrently - semaphore-bounded
+        _mute_perms = ChatPermissions(can_send_messages=False)
+        mute_results = await fan_out(
+            [
+                bot.restrict_chat_member(
+                    chat_id,
+                    doc["user_id"],
+                    permissions=_mute_perms,
+                    until_date=doc.get("until_date"),
+                )
+                for doc in mute_docs
+            ]
+        )
+        applied_mutes = len(mute_results) - count_errors(mute_results)
 
         lc, lt = cfg.logs
         try:
@@ -215,7 +240,11 @@ class BuildConnection:
             log.exception("Group connect log failed")
 
         log.info(
-            "Group %d ('%s') connected. %d bans applied.", chat_id, chat_title, applied
+            "Group %d ('%s') connected. %d bans and %d mutes applied.",
+            chat_id,
+            chat_title,
+            applied_bans,
+            applied_mutes,
         )
 
     # ── PTB event handlers ─────────────────────────────────────────────────

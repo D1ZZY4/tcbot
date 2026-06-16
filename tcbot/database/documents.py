@@ -124,6 +124,22 @@ class MuteDoc(TypedDict, total=False):
     duration_secs: int
 
 
+class ActiveMuteDoc(TypedDict, total=False):
+    """MongoDB document tracking a currently active federation mute.
+
+    Stored in the ``active_mutes`` collection — one document per muted user.
+    ``until_date`` is ``None`` for a permanent mute or a UTC datetime for a
+    timed mute.  Documents for timed mutes are auto-filtered by ``until_date``
+    at query time (documents with ``until_date`` in the past are treated as
+    expired and ignored).  Use ``set_active_mute`` / ``clear_active_mute`` from
+    ``mutes_db`` to manage this collection; do not write directly.
+    """
+
+    user_id: UserId
+    until_date: datetime | None
+    timestamp: datetime
+
+
 class WarnDoc(TypedDict, total=False):
     """MongoDB document for a single warning issued to a user."""
 

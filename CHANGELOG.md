@@ -2,6 +2,19 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-16 (session 135)
+
+### Added
+
+- **`tcbot/database/mutes_db.py` / `tcbot/database/documents.py` / `tcbot/database/mongos.py` / `tcbot/modules/helper/workflows/muting_flow.py` / `tcbot/modules/greeting.py` / `tcbot/modules/helper/workflows/connected_flow.py`** (Improvement #7): Federation mutes were not re-applied to groups joined or connected after the mute was issued. Added `active_mutes` MongoDB collection (one document per muted user: `user_id`, `until_date`, `timestamp`). Added `set_active_mute(user_id, until=...)` upsert (called in `_execute_mute` gather) and `clear_active_mute(user_id)` delete (called in `execute_unmute` gather). `_handle_member` in `greeting.py` now fetches `get_active_mute(user_id)` in parallel with `get_active_ban` and silently re-applies `restrict_chat_member` when an active mute is found. `complete_join` in `connected_flow.py` now fetches `active_mute_docs()` in parallel with `active_ban_user_ids()` and fans out `restrict_chat_member` for every active mute, mirroring the existing ban replay. Expired timed mutes are excluded at query time (`until_date > now`) with no background cleanup needed. Two new indexes: `active_mutes [("user_id", 1)] unique` and `active_mutes [("until_date", 1)]`. `ActiveMuteDoc` TypedDict added to `documents.py`. Startup index count is now 29/29.
+- **`tcbot/utils/formatter.py`** (Bug #385-#387): Centralized all Telegram HTML formatter logic into `tcbot/utils/formatter.py` as the single source of truth. Added `pre()` helper alongside the existing `bold`, `italic`, `code`, `link`, `mention`, `esc`, `user_ref`, and `proof_line` functions. Converted `tcbot/modules/helper/formatter.py` to a thin backward-compatible re-export shim (`from tcbot.utils.formatter import ...`) so all 33+ existing module-layer import paths continue to work unchanged. Updated `tcbot/utils/error_reporter.py` and all formatter-using modules to resolve imports through the appropriate layer. Updated `tcbot/utils/__init__.py` to export `formatter` alongside the other utils submodules.
+
+### Fixed
+
+- **`tcbot/utils/__init__.py`** (Bug #385): `formatter` module was missing from the `__all__` export list after being added to `tcbot/utils/`. `from tcbot.utils import formatter` and `tcbot.utils.formatter` attribute access now resolve correctly.
+- **`docs/utils/utils.md`** (Bug #386): Mermaid architecture diagram omitted `formatter.py` from the `tcbot/utils/` subgraph after it was moved there. Added `formatter.py` node with edges showing `error_reporter.py` imports it and `helper/formatter.py` re-exports from it. Added full `formatter.py` section with function reference table and import guidance.
+- **`docs/helper/helper.md`** (Bug #387): `formatter.py` section described the helper as the implementation source, contradicting the actual structure where it is now a re-export shim. Updated section to clearly state the shim role and link to `docs/utils/utils.md` for the canonical function reference.
+
 ## [Unreleased] - 2026-06-16 (session 134)
 
 ### Fixed

@@ -52,7 +52,9 @@ async def cmd_example(update, ctx):
 
 ## `formatter.py`
 
-All bot messages use Telegram HTML parse mode.
+This file is a **backward-compatible re-export shim**. All formatter logic lives in `tcbot/utils/formatter.py` (the single source of truth). The shim re-exports every public name so that existing callers using `from tcbot.modules.helper.formatter import bold` continue to work unchanged.
+
+All bot messages use Telegram HTML parse mode. Functions are documented in full at [`../utils/utils.md#formatterpy`](../utils/utils.md).
 
 | Function | Output/use |
 |---|---|
@@ -60,10 +62,11 @@ All bot messages use Telegram HTML parse mode.
 | `bold(text)` | `<b>...</b>` with escaped content. |
 | `italic(text)` | `<i>...</i>` with escaped content. |
 | `code(text)` | `<code>...</code>` with escaped content. |
+| `pre(text)` | `<pre>...</pre>` monospace block with escaped content. |
 | `link(text, url)` | HTML link. Escape or validate URLs before passing untrusted values. |
-| `mention(user_id, name, username=None)` | Smart mention with username fallback. If username is provided, creates a global `https://t.me/username` link that works across all groups. Otherwise, falls back to plain text name with copyable user ID. |
-| `user_ref(user_id, name, username=None)` | Formats a user reference for action summaries. Returns `mention(user_id, name, username) - code(str(user_id))` unless `name` equals `str(user_id)` (numeric fallback), in which case it omits the redundant ID and returns just `code(str(user_id))`. Use this instead of a bare `mention() - code(id)` pattern in log and action messages. |
-| `proof_line(proof_desc)` | Returns `\nProof: <desc>` when proof_desc is a non-empty string, or `""` otherwise. Embed directly in reply text for kick/mute/warn action messages. |
+| `mention(user_id, name, username=None)` | Smart mention with username fallback. |
+| `user_ref(user_id, name, username=None)` | Action-summary reference: omits redundant ID when name equals numeric fallback. |
+| `proof_line(proof_desc)` | `\nProof: <desc>` or `""` when proof_desc is falsy. |
 
 Use `esc()`, `code()`, `mention()`, or `user_ref()` for any user-provided value in HTML messages. Use `user_ref()` in action summaries and audit logs where both name and ID are displayed.
 

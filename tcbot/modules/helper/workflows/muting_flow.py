@@ -152,12 +152,13 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict) -> None:
         dur_str,
     )
 
-    # * Log to DB, post to log channel, and edit summary - all in parallel
+    # * Log to DB, persist active mute, post to log channel, and edit summary - all in parallel
     chat_id = update.effective_chat.id
     results2 = await asyncio.gather(
         db.mutes_db.log_mute(
             target_id, chat_id, reason_text, admin_id, duration_secs=duration_secs
         ),
+        db.mutes_db.set_active_mute(target_id, until=until),
         bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
         bot.edit_message_text(
             summary,
@@ -171,8 +172,10 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict) -> None:
     if isinstance(results2[0], BaseException):
         log.error("log_mute DB write failed for target=%d: %s", target_id, results2[0])
     if isinstance(results2[1], BaseException):
-        log.error("Mute log send failed: %s", results2[1])
+        log.error("set_active_mute failed for target=%d: %s", target_id, results2[1])
     if isinstance(results2[2], BaseException):
+        log.error("Mute log send failed: %s", results2[2])
+    if isinstance(results2[3], BaseException):
         msg = update.effective_message
         if msg:
             try:
@@ -235,16 +238,25 @@ async def execute_unmute(
         f"restored in {len(groups) - failed}/{len(groups)} groups."
     )
 
-    # * Send log to channel and reply in parallel
+    # * Clear active mute record, send log to channel, and reply - all in parallel
     if lc:
         results2 = await asyncio.gather(
+            db.mutes_db.clear_active_mute(target_id),
             ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             msg.reply_text(reply, parse_mode="HTML"),
             return_exceptions=True,
         )
         if isinstance(results2[0], BaseException):
-            log.error("Unmute log send failed: %s", results2[0])
+            log.error(
+                "clear_active_mute failed for target=%d: %s", target_id, results2[0]
+            )
+        if isinstance(results2[1], BaseException):
+            log.error("Unmute log send failed: %s", results2[1])
     else:
+        await asyncio.gather(
+            db.mutes_db.clear_active_mute(target_id),
+            return_exceptions=True,
+        )
         try:
             await msg.reply_text(reply, parse_mode="HTML")
         except Exception as exc:

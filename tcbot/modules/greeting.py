@@ -10,6 +10,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
+from telegram import ChatPermissions
 from telegram.ext import (
     ChatJoinRequestHandler,
     ContextTypes,
@@ -43,7 +44,7 @@ async def _handle_member(
     if member.is_bot:
         return
 
-    _, ban = await asyncio.gather(
+    _, ban, mute = await asyncio.gather(
         db.users_cache.upsert_user_if_changed(
             member.id,
             member.username,
@@ -51,11 +52,15 @@ async def _handle_member(
             member.last_name,
         ),
         db.bans_db.get_active_ban(member.id),
+        db.mutes_db.get_active_mute(member.id),
         return_exceptions=True,
     )
     if isinstance(ban, BaseException):
         log.error("get_active_ban failed on join for uid=%d: %s", member.id, ban)
         ban = None
+    if isinstance(mute, BaseException):
+        log.error("get_active_mute failed on join for uid=%d: %s", member.id, mute)
+        mute = None
 
     if ban:
         coros: list = [bot.ban_chat_member(chat.id, member.id)]
@@ -76,6 +81,25 @@ async def _handle_member(
                 results[0],
             )
         return
+
+    if mute:
+        until = mute.get("until_date") if mute else None
+        perms = ChatPermissions(can_send_messages=False)
+        try:
+            await bot.restrict_chat_member(
+                chat.id, member.id, permissions=perms, until_date=until
+            )
+            log.info(
+                "Re-applied active federation mute for uid=%d in chat=%d",
+                member.id,
+                chat.id,
+            )
+        except Exception:
+            log.exception(
+                "Mute re-apply on join failed for uid=%d in chat=%d",
+                member.id,
+                chat.id,
+            )
 
     if greet:
         try:
