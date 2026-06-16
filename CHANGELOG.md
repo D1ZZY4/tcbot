@@ -2,6 +2,17 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-16 (session 134)
+
+### Documentation
+
+- **`PLAN.md`** (workflow/moderation security audit, no code changed): Added five evidence-grounded findings to the existing review tables after reading every `tcbot/modules/helper/workflows/*_flow.py` plus the supporting handler-registration, auth, fan-out, and DB layers.
+  - **P2 #4**: Duplicate `ChatMemberHandler(MY_CHAT_MEMBER)` — `greeting.on_my_chat_member` and `connected_flow.on_bot_added` are both registered in default group 0, so PTB runs only the first and permanently shadows the other. Module order comes from unsorted `Path.glob`, so the winner is nondeterministic across hosts: either the bot-demotion mod-log warning (Bug #349) is dead, or group onboarding (connect prompt + pending→admin completion) is dead. Verified.
+  - **P3 #6**: Cross-group warn accumulation never triggers a federation ban; `execute_warn` triggers only on the per-chat `count == WARN_LIMIT`, so spreading 2 warns across many groups evades the auto-ban. P3 #3 added visibility (`federation_warn_count`) but not enforcement. Verified.
+  - **P3 #7**: No global Telegram API pacing — plain PTB without `AIORateLimiter`; `fan_out` bounds concurrency (10) but not rate, and `complete_join` replays the entire active-ban list to a newly connected group in one burst, so a subset of `ban_chat_member` calls can silently FloodWait-fail at scale. Verified.
+  - **P4 #10**: Conversation timeouts are not wired — no handler sets `conversation_timeout`; `cfg.proof_timeout`/`cfg.appeal_timeout` are parsed but never consumed; `appeal._on_timeout` and `reason_flow._on_timeout` are unreachable dead code; the appeal `_on_timeout` docstring is misleading. Verified.
+  - **Improvements #7**: Federation mutes are not re-applied on join or on new-group connect (only bans are), so a muted user is not muted in groups connected after the mute. Proposes an `active_mutes` store mirrored on the ban re-application paths. Open.
+
 ## [Unreleased] - 2026-06-16 (session 133)
 
 ### Added
