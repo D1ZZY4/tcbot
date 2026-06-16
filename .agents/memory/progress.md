@@ -5,12 +5,13 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-16 (session 141)
+**Last updated:** 2026-06-16 (session 142)
 
 ## Verification baseline
 
 | Check | Result |
 |---|---|
+| Session 142 audit pass 22 | PASS: ZERO new bugs. 74 Python files fully verified across all audit passes. Files read this session: checking.py (all callbacks), stats.py, muting_flow.py, greeting.py, __main__.py, decorators.py, extraction.py, start.py, help.py. 5 AST-scan false positives resolved — all delegated to helpers with q.answer() in gather. 0 HTML-without-parse_mode, 0 missing-q.answer callbacks, 0 gather-without-return_exceptions. Ruff: 74 files clean. Total bugs: #1-#414. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |
 | Session 141 message improvements | PASS: privacy.py per-section navigation, start.py/about.py/help.py improved, keyboards.py new factories, 3 docs updated (button-styles.md, helper.md, modules.md). Ruff: 74 files clean. Import: OK. Bot: 29/29 indexes, Redis hiredis 3.4.0, APScheduler, polling. |
 | `uv sync` | PASS |
 | `uv pip install -e .` | PASS |

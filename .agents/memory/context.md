@@ -5,9 +5,17 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 141)
+**Last updated:** 2026-06-16 (session 142)
 
 ## What is done
+
+- Session 142 (2026-06-16): Audit pass 22 — ZERO new bugs found. Comprehensive sweep of all remaining files.
+  - Files verified CLEAN this session (full reads): checking.py (all callback handlers), stats.py (full — _ack_and_render helper confirmed, all q.answer patterns CLEAN), muting_flow.py (full), greeting.py (full), __main__.py (full), decorators.py (full — _RateLimiter, _AsyncRateLimiter, global_rate_limit_handler, ratelimiter factory, log_execution, owner_only/staff_only/mod_only/basic_mod_only, resolve_and_check), extraction.py (full), start.py (full — _show_groups helper has q.answer() in gather), help.py (full — _show_module/_render_help_index/_show_section all have q.answer() in gather).
+  - AST scan: 0 HTML strings without parse_mode in any messaging call. 0 callback handlers missing q.answer() (5 flagged were all false positives — helpers contain q.answer() in gather). 0 asyncio.gather missing return_exceptions.
+  - All 5 scan-flagged handlers confirmed CLEAN: `on_stats_admins`→`_ack_and_render`, `on_menu_groups*`→`_show_groups`, `on_help_topic_any`→`_show_module` — each helper wraps q.answer() in asyncio.gather.
+  - Ruff check: All checks passed (74 files). Import OK. Bot running (29/29 indexes, Redis hiredis 3.4.0, APScheduler, polling).
+  - Total bugs: #1–#414. ZERO new bugs this session.
+  - Remaining open: P1 #4 (CVE-2026-31072, accepted), Improvement #4 (multi-instance cache, future).
 
 - Session 141 (2026-06-16): New task received — improve and enhance ALL bot user-facing messages. Primary deliverable: privacy policy per-section navigation. All changes ruff-clean, import-verified, bot running.
   - `privacy.py`: Complete rewrite of privacy policy display. `on_privacy_policy_menu` now shows a section index with 6 inline buttons. Added `on_privacy_section` handler for individual section view with back-to-index button. `_PRIVACY_POLICY_SECTIONS` module-level constant (6 sections). `_privacy_msg()` improved. New `_privacy_policy_index_msg()`. New callback pattern `privacy_section_\d+`.
