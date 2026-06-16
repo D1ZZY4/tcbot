@@ -2,6 +2,18 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-16 (session 145)
+
+### Changed
+
+- No bugs found. Comprehensive final audit sweep of all remaining tcbot/ files: `tcbot/utils/__init__.py`, `tcbot/modules/about.py`, `tcbot/modules/help.py`, `tcbot/modules/start.py`, `tcbot/modules/stats.py`, `tcbot/modules/checking.py`, `tcbot/modules/privacy.py`, `tcbot/modules/maintenance.py`. All files verified CLEAN. Ruff: 74 files, all checks passed. Import: OK. Total bugs remains #1-#420. Codebase audit complete across all 145 sessions.
+
+## [Unreleased] - 2026-06-16 (session 144)
+
+### Fixed
+
+- **`.github/workflows/run-bot.yml`** (Bug #420): `FED_WARN_LIMIT` was missing from the `env` block, so any deployment using the GitHub Actions runner workflow would not pass this environment variable to the bot process. `FED_WARN_LIMIT` was added in Bug #383 (session 134) as the federation-wide warn auto-ban threshold but was never added to the workflow's secrets-to-env mapping. Added `FED_WARN_LIMIT: ${{ secrets.FED_WARN_LIMIT }}` alongside `WARN_EXPIRY_DAYS` in the env section, consistent with all other configurable bot variables.
+
 ## [Unreleased] - 2026-06-16 (session 143)
 
 ### Fixed

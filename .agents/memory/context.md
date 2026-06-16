@@ -5,9 +5,22 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 143)
+**Last updated:** 2026-06-16 (session 145)
 
 ## What is done
+
+- Session 145 (2026-06-16): Final audit sweep — ZERO new bugs. All remaining tcbot/ files verified CLEAN.
+  - Files audited (all CLEAN): `tcbot/utils/__init__.py`, `tcbot/modules/about.py`, `tcbot/modules/help.py`, `tcbot/modules/start.py`, `tcbot/modules/stats.py`, `tcbot/modules/checking.py`, `tcbot/modules/privacy.py`, `tcbot/modules/maintenance.py`.
+  - Previous sessions (141-144) had already verified all other modules in `tcbot/modules/` CLEAN.
+  - Ruff: 74 files, all checks passed. Import: OK. Total bugs: #1-#420. Codebase audit complete.
+  - Remaining open: CVE-2026-31072 (accepted), Improvement #4 (future).
+
+- Session 144 (2026-06-16): Audit pass 25 — 1 CI workflow bug fixed (#420).
+  - Bug #420: `.github/workflows/run-bot.yml` env block was missing `FED_WARN_LIMIT`. Added in Bug #383 (session 134) as the federation-wide warn auto-ban threshold, never added to the GitHub Actions env mapping. Added `FED_WARN_LIMIT: ${{ secrets.FED_WARN_LIMIT }}` alongside `WARN_EXPIRY_DAYS`.
+  - Full task file (attached_assets/task-tcbot-v4.6.2_1781639614633.md, 953 lines) read completely.
+  - Comprehensive code audit this session: promote_flow.py (full), mongos.py (full), cache.py (full), redis_client.py (full), connecting.py (full), admins.py on_promo_decision + on_demote_confirm (full verification of all 4 Bug #413 sites), lint.yml, run-bot.yml, auto-fix.yml, dependency-update.yml, codeql.yml, Dockerfile, docker-compose.yml. All CLEAN except Bug #420.
+  - Ruff: All checks passed (74 files). Import OK. Total bugs: #1-#420.
+  - Remaining open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 143 (2026-06-16): Audit pass 24 — 1 doc bug fixed (#419).
   - Bug #419: docs/warnings-detailed.md `/resetwarns behavior` section still stated "/resetwarns currently does not send a federation log entry." — stale since Bug #412 (session 140) added resetwarns_log() and the concurrent log+reply gather. Fixed: (1) removed stale statement, (2) updated flow step 6 to describe concurrent log send + reply, (3) added resetwarns_log row to templates table, (4) added resetwarns_log includes: section (community name, moderator mention, target mention+user ID, warnings cleared count, group, date).
