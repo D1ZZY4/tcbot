@@ -2,6 +2,14 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-16 (session 136)
+
+### Fixed
+
+- **`tcbot/__main__.py`** (Bug #390): HTTP timeout constants were tuned for a fast private server (`_HTTP_READ_TIMEOUT=15`, `_HTTP_WRITE_TIMEOUT=15`, `_HTTP_CONNECT_TIMEOUT=10`, `_HTTP_POOL_TIMEOUT=5`) but are too tight for Replit's proxied outbound network. The initial `getMe()` call during Application startup can take more than 15 seconds on Replit, causing a `TimedOut` exception that propagated as a fatal startup crash before any polling began. Raised all four constants to production-safe values: `_HTTP_READ_TIMEOUT=60`, `_HTTP_WRITE_TIMEOUT=30`, `_HTTP_CONNECT_TIMEOUT=30`, `_HTTP_POOL_TIMEOUT=15`. Values are still bounded so a genuinely hung Telegram API call does not block the event loop indefinitely.
+
+- **`tcbot/__main__.py`** (Bug #391): `app.run_polling()` was called without `bootstrap_retries`, which defaults to `0` — meaning a single failed `getUpdates` call during the initial connection handshake raises `NetworkError` and terminates the process. On Replit, transient TCP resets and SSL handshake failures during startup are common due to shared network infrastructure. Added `bootstrap_retries=-1` to retry the initial connection indefinitely, consistent with how production bots are hardened against momentary network blips. The bot will now wait until Telegram is reachable rather than exiting immediately on the first transient failure.
+
 ## [Unreleased] - 2026-06-16 (session 135)
 
 ### Fixed

@@ -5,9 +5,16 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 135)
+**Last updated:** 2026-06-16 (session 136)
 
 ## What is done
+
+- Session 136 (2026-06-16): Bugs #390–#391 fixed. Verification clean. No new code bugs found in audit scan.
+  - Bug #390: `_HTTP_READ_TIMEOUT` 15→60, `_HTTP_WRITE_TIMEOUT` 15→30, `_HTTP_CONNECT_TIMEOUT` 10→30, `_HTTP_POOL_TIMEOUT` 5→15. Too-tight values caused fatal startup crash on Replit where first getMe() can take >15s.
+  - Bug #391: `bootstrap_retries=-1` added to `app.run_polling()`. Default 0 caused immediate process exit on any transient NetworkError during initial getUpdates handshake; Replit network is intermittent.
+  - Verification baseline: ruff format 74 files unchanged, ruff check All checks passed, import OK, uv sync OK.
+  - AST scan: 0 `asyncio.gather()` missing `return_exceptions`. Unicode scan: all `→`/`—` hits are in comments/docstrings/log messages only (not user-facing Telegram strings) — CLEAN.
+  - Total bugs: #1–#391. Remaining open: P1 #4 (CVE-2026-31072, accepted), Improvement #4 (multi-instance cache, future).
 
 - Session 135 (2026-06-16): Bugs #385–#387 fixed + Improvement #7 fully implemented.
   - Bug #385: `tcbot/utils/__init__.py` — `formatter` missing from `__all__`.
