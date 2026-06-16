@@ -38,33 +38,33 @@ __help_text__ = (
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        "<code>/ping</code> (alias: <code>/p</code>)\n"
-        "<code>/speedtest</code> (alias: <code>/st</code>)",
+        f"{code('/ping')} (alias: {code('/p')})\n"
+        f"{code('/speedtest')} (alias: {code('/st')})",
     ),
-    (
-        replies.SEC_WHO,
-        replies.PERM_FOUNDER_ONLY,
-    ),
-    (
-        replies.SEC_WHERE,
-        replies.CONTEXT_BOT_OR_GROUP,
-    ),
+    replies.who_section(replies.PERM_FOUNDER_ONLY),
+    replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
     (
         replies.SEC_WHAT,
-        "<b>ping</b>: Measures the round-trip time from the bot to "
+        f"{bold('ping')}: Measures the round-trip time from the bot to "
         "Telegram's servers.\n"
-        "<b>speedtest</b>: Runs a full network speed test and reports "
+        f"{bold('speedtest')}: Runs a full network speed test and reports "
         "ping, upload, download, bytes transferred, client IP, ISP, "
         "and best-server details.",
     ),
     (
         replies.SEC_EXAMPLES,
-        "<code>/ping</code>\n"
-        "<code>/p</code>\n"
-        "<code>/speedtest</code>\n"
-        "<code>/st</code>",
+        f"{code('/ping')}\n"
+        f"{code('/p')}\n"
+        f"{code('/speedtest')}\n"
+        f"{code('/st')}",
     ),
 ]
+
+__help__: replies.HelpEntry = {
+    "name": __module_name__,
+    "overview": __help_text__,
+    "sections": __help_sections__,
+}
 
 
 # ──────────────────────── Size formatter ────────────────────────── #

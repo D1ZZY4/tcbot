@@ -39,22 +39,16 @@ __help_text__ = f"Sends a message to every group currently connected to {_CNAME}
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        "<code>/tcbroadcast</code> (alias: <code>/bc</code>)",
+        f"{code('/tcbroadcast')} (alias: {code('/bc')})",
     ),
-    (
-        replies.SEC_WHO,
-        replies.PERM_STAFF_ONLY,
-    ),
-    (
-        replies.SEC_WHERE,
-        replies.CONTEXT_EXEC_OR_GROUP,
-    ),
+    replies.who_section(replies.PERM_STAFF_ONLY),
+    replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
     (
         replies.SEC_WHAT,
         f"Sends a message to every group currently connected to {_CNAME}.\n\n"
         f"You can compose the message in two ways:\n"
         f"- Type the message directly after the command (HTML formatting is supported).\n"
-        f"- Reply to an existing message with <code>/bc</code> to forward that message "
+        f"- Reply to an existing message with {code('/bc')} to forward that message "
         f"to all groups.\n\n"
         f"When the broadcast is complete, the bot shows a summary of how many groups "
         f"received the message and how many deliveries failed, and posts a log entry "
@@ -62,11 +56,17 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         replies.SEC_EXAMPLES,
-        "<code>/tcbroadcast Reminder: please review the community rules.</code>\n"
-        "<code>/bc &lt;b&gt;Event tonight&lt;/b&gt; (join us at 8 PM UTC).</code>\n"
-        "Or reply to any message and run <code>/bc</code> to forward it to all groups.",
+        f"{code('/tcbroadcast Reminder: please review the community rules.')}\n"
+        f"{code('/bc <b>Event tonight</b> (join us at 8 PM UTC).')}\n"
+        f"Or reply to any message and run {code('/bc')} to forward it to all groups.",
     ),
 ]
+
+__help__: replies.HelpEntry = {
+    "name": __module_name__,
+    "overview": __help_text__,
+    "sections": __help_sections__,
+}
 
 
 # ──────────────── Command Broadcast </tcbroadcast> ──────────────── #

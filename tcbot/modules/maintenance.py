@@ -16,7 +16,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, parse_logmsg, replies
-from tcbot.modules.helper.formatter import code
+from tcbot.modules.helper.formatter import bold, code
 from tcbot.utils.prefixes import build_prefixed_filters
 
 if TYPE_CHECKING:
@@ -35,7 +35,7 @@ _MEMBERSHIP_CHECK_TIMEOUT = 3.0
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
-__module_name__ = "Cleanup"
+__module_name__ = "Maintenance"
 __help_text__ = (
     "Maintenance commands for managing connected groups: clean up inaccessible ones "
     "or leave all in an emergency."
@@ -44,24 +44,20 @@ __help_text__ = (
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        "<code>/leaveall</code> (aliases: <code>/exitall</code>, <code>/tcleave</code>)\n"
-        "<code>/cleanup</code> (aliases: <code>/tcclean</code>, <code>/tcc</code>)",
+        f"{code('/leaveall')} (aliases: {code('/exitall')}, {code('/tcleave')})\n"
+        f"{code('/cleanup')} (aliases: {code('/tcclean')}, {code('/tcc')})",
     ),
-    (
-        replies.SEC_WHO,
-        f"<b>/leaveall</b>: {replies.PERM_FOUNDER_ONLY}\n"
-        f"<b>/cleanup</b>: {replies.PERM_STAFF_ONLY}",
+    replies.who_section(
+        f"{bold('/leaveall')}: {replies.PERM_FOUNDER_ONLY}\n"
+        f"{bold('/cleanup')}: {replies.PERM_STAFF_ONLY}"
     ),
-    (
-        replies.SEC_WHERE,
-        replies.CONTEXT_EXEC_OR_GROUP,
-    ),
+    replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
     (
         "/leaveall",
         "Makes the bot leave every connected group simultaneously, marks them all as "
         "disconnected in the database, and posts a log entry for each group. "
-        "This is irreversible - each group must be manually reconnected with "
-        "<code>/tcconnect</code>. Use only in emergencies.",
+        f"This is irreversible - each group must be manually reconnected with "
+        f"{code('/tcconnect')}. Use only in emergencies.",
     ),
     (
         "/cleanup",
@@ -72,10 +68,16 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         replies.SEC_EXAMPLES,
-        "<code>/cleanup</code>: remove stale or inaccessible groups.\n"
-        "<code>/leaveall</code>: emergency withdrawal from all connected groups.",
+        f"{code('/cleanup')}: remove stale or inaccessible groups.\n"
+        f"{code('/leaveall')}: emergency withdrawal from all connected groups.",
     ),
 ]
+
+__help__: replies.HelpEntry = {
+    "name": __module_name__,
+    "overview": __help_text__,
+    "sections": __help_sections__,
+}
 
 
 # ──────────────────────── Helper Functions ──────────────────────── #

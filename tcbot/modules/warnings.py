@@ -15,7 +15,7 @@ from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 from tcbot import cfg
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
-from tcbot.modules.helper.formatter import mention
+from tcbot.modules.helper.formatter import bold, code, mention
 from tcbot.modules.helper.workflows.reason_flow import (
     WAITING_PROOF,
     WAITING_REASON,
@@ -49,56 +49,55 @@ _RL_READ_LIMIT: int = 8
 __module_name__ = "Warnings"
 __help_text__ = (
     "Per-group warning tracking. At "
-    f"<b>{WARN_LIMIT} warnings</b> the user is automatically banned from the group "
+    f"{bold(f'{WARN_LIMIT} warnings')} the user is automatically banned from the group "
     "and their record cleared."
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        "<code>/tcwarn</code> (alias: <code>/tcw</code>)\n"
-        "<code>/tcunwarn</code> (alias: <code>/tcunw</code>)\n"
-        "<code>/warns</code> (alias: <code>/warnlist</code>)\n"
-        "<code>/resetwarns</code> (alias: <code>/clearwarns</code>)",
+        f"{code('/tcwarn')} (alias: {code('/tcw')})\n"
+        f"{code('/tcunwarn')} (alias: {code('/tcunw')})\n"
+        f"{code('/warns')} (alias: {code('/warnlist')})\n"
+        f"{code('/resetwarns')} (alias: {code('/clearwarns')})",
     ),
-    (
-        replies.SEC_WHO,
-        "<b>/tcwarn</b>, <b>/tcunwarn</b>, <b>/resetwarns</b>: Tester and above.\n"
-        "<b>/warns</b>: anyone.",
+    replies.who_section(
+        f"{bold('/tcwarn')}, {bold('/tcunwarn')}, {bold('/resetwarns')}: Tester and above.\n"
+        f"{bold('/warns')}: anyone."
     ),
-    (
-        replies.SEC_WHERE,
-        replies.WHERE_CONNECTED_GROUP,
-    ),
+    replies.where_section(replies.WHERE_CONNECTED_GROUP),
     (
         replies.SEC_WHAT,
-        f"<b>/tcwarn</b>: issues a formal warning. Warnings are tracked <b>per-group</b> and "
-        f"do not carry across connected groups. At <b>{WARN_LIMIT} warnings</b>, the user is "
+        f"{bold('/tcwarn')}: issues a formal warning. Warnings are tracked {bold('per-group')} and "
+        f"do not carry across connected groups. At {bold(f'{WARN_LIMIT} warnings')}, the user is "
         f"automatically banned from the group and their warning record is cleared.\n\n"
-        f"<b>/tcunwarn</b>: removes the user's most recent warning in the current group.\n\n"
-        f"<b>/warns</b>: shows the current warning count and full list of reasons.\n\n"
-        f"<b>/resetwarns</b>: clears all warnings for a user in the current group at once, "
+        f"{bold('/tcunwarn')}: removes the user's most recent warning in the current group.\n\n"
+        f"{bold('/warns')}: shows the current warning count and full list of reasons.\n\n"
+        f"{bold('/resetwarns')}: clears all warnings for a user in the current group at once, "
         f"without triggering the ban threshold.",
     ),
     (
         "Flow (/tcwarn)",
-        "1. Run <code>/tcwarn</code> with the target (and optional inline reason).\n"
+        f"1. Run {code('/tcwarn')} with the target (and optional inline reason).\n"
         "2. If no reason was given, the bot asks - reply with text.\n"
-        "3. The bot asks for proof - send a photo/video or tap <b>Skip</b>.",
+        f"3. The bot asks for proof - send a photo/video or tap {bold('Skip')}.",
     ),
-    (
-        replies.SEC_TARGET,
-        replies.TARGET_SYNTAX,
-    ),
+    replies.target_section(),
     (
         replies.SEC_EXAMPLES,
-        "<code>/tcwarn @username spamming</code>: reason inline\n"
-        "<code>/tcw 123456789</code>: bot will ask for reason\n"
-        "<code>/tcunwarn @username</code>\n"
-        "<code>/warns @username</code>\n"
-        "<code>/resetwarns @username</code>",
+        f"{code('/tcwarn @username spamming')}: reason inline\n"
+        f"{code('/tcw 123456789')}: bot will ask for reason\n"
+        f"{code('/tcunwarn @username')}\n"
+        f"{code('/warns @username')}\n"
+        f"{code('/resetwarns @username')}",
     ),
 ]
+
+__help__: replies.HelpEntry = {
+    "name": __module_name__,
+    "overview": __help_text__,
+    "sections": __help_sections__,
+}
 
 
 # ──────────────────────── Helper Functions ──────────────────────── #

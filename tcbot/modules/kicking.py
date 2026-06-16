@@ -14,7 +14,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
-from tcbot.modules.helper.formatter import mention
+from tcbot.modules.helper.formatter import bold, code, mention
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.kicking_flow import kick_conversation, proof, reason
 from tcbot.modules.helper.workflows.reason_flow import (
@@ -38,26 +38,20 @@ _RL_LIMIT: int = 5
 
 __module_name__ = "Kick"
 __help_text__ = (
-    "Removes a user from the <b>current group only</b>. Federation roles are auto-removed "
+    f"Removes a user from the {bold('current group only')}. Federation roles are auto-removed "
     "if the target is staff."
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        "<code>/tckick</code> (alias: <code>/tck</code>)",
+        f"{code('/tckick')} (alias: {code('/tck')})",
     ),
-    (
-        replies.SEC_WHO,
-        replies.PERM_TESTER_ABOVE,
-    ),
-    (
-        replies.SEC_WHERE,
-        replies.WHERE_CONNECTED_GROUP,
-    ),
+    replies.who_section(replies.PERM_TESTER_ABOVE),
+    replies.where_section(replies.WHERE_CONNECTED_GROUP),
     (
         replies.SEC_WHAT,
-        "Removes a user from the <b>current group only</b>. This is not a federation-wide "
+        f"Removes a user from the {bold('current group only')}. This is not a federation-wide "
         "action; the user can rejoin via an invite link unless they are separately "
         "federation-banned.\n\n"
         "If the target holds a federation role (Tester / Developer / Admin), that role is "
@@ -66,21 +60,24 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Flow",
-        "1. Run <code>/tckick</code> with the target (and optional inline reason).\n"
-        "2. If no reason was given, the bot asks: reply with text or tap <b>Skip</b>.\n"
-        "3. The bot asks for proof: send a photo/video or tap <b>Skip</b>.",
+        f"1. Run {code('/tckick')} with the target (and optional inline reason).\n"
+        f"2. If no reason was given, the bot asks: reply with text or tap {bold('Skip')}.\n"
+        f"3. The bot asks for proof: send a photo/video or tap {bold('Skip')}.",
     ),
-    (
-        replies.SEC_TARGET,
-        replies.TARGET_SYNTAX,
-    ),
+    replies.target_section(),
     (
         replies.SEC_EXAMPLES,
-        "<code>/tckick @username being disruptive</code>: reason inline\n"
-        "<code>/tck 123456789</code>: bot will ask for reason\n"
-        "Or reply to a message and run <code>/tck</code>.",
+        f"{code('/tckick @username being disruptive')}: reason inline\n"
+        f"{code('/tck 123456789')}: bot will ask for reason\n"
+        f"Or reply to a message and run {code('/tck')}.",
     ),
 ]
+
+__help__: replies.HelpEntry = {
+    "name": __module_name__,
+    "overview": __help_text__,
+    "sections": __help_sections__,
+}
 
 
 # ───────────────────── Command Kick </tckick> ───────────────────── #

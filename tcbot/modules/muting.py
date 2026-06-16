@@ -15,7 +15,7 @@ from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 from tcbot import cfg
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
-from tcbot.modules.helper.formatter import code, mention
+from tcbot.modules.helper.formatter import bold, code, mention
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.muting_flow import (
     _DURATION_RE,
@@ -48,56 +48,53 @@ _RL_LIMIT: int = 5
 __module_name__ = "Mute"
 __help_text__ = (
     "Federation-wide mute and unmute: restricts a user from sending messages "
-    "across <b>all connected groups</b> at once."
+    f"across {bold('all connected groups')} at once."
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        "<code>/tcmute</code> (alias: <code>/tcm</code>)\n"
-        "<code>/tcunmute</code> (aliases: <code>/tcunm</code>, <code>/tcum</code>)",
+        f"{code('/tcmute')} (alias: {code('/tcm')})\n"
+        f"{code('/tcunmute')} (aliases: {code('/tcunm')}, {code('/tcum')})",
     ),
-    (
-        replies.SEC_WHO,
-        replies.PERM_TESTER_ABOVE,
-    ),
-    (
-        replies.SEC_WHERE,
-        replies.WHERE_CONNECTED_GROUP,
-    ),
+    replies.who_section(replies.PERM_TESTER_ABOVE),
+    replies.where_section(replies.WHERE_CONNECTED_GROUP),
     (
         replies.SEC_WHAT,
-        "<b>/tcmute</b>: restricts a user from sending messages, media, stickers, and GIFs "
-        "across <b>all connected groups</b> simultaneously. After the command, the bot "
+        f"{bold('/tcmute')}: restricts a user from sending messages, media, stickers, and GIFs "
+        f"across {bold('all connected groups')} simultaneously. After the command, the bot "
         "asks for a reason and optionally proof - both steps can be skipped. If the user "
         "is already muted, the existing restriction is replaced. A summary shows how many "
         "groups the mute was applied in.\n\n"
-        "<b>/tcunmute</b>: restores the user's full send permissions across all connected "
+        f"{bold('/tcunmute')}: restores the user's full send permissions across all connected "
         "groups. A summary shows how many groups the unmute was applied in.",
     ),
     (
         "Time format",
         "Place the duration before the reason. Omit a duration to apply a permanent mute.\n\n"
-        "- <code>s</code> Seconds: <code>30s</code> = 30 seconds\n"
-        "- <code>m</code> Minutes: <code>15m</code> = 15 minutes\n"
-        "- <code>h</code> Hours: <code>2h</code> = 2 hours\n"
-        "- <code>d</code> Days: <code>7d</code> = 7 days\n"
-        "- <code>w</code> Weeks: <code>2w</code> = 2 weeks\n"
-        "- <code>mo</code> Months: <code>3mo</code> = 3 months\n"
-        "- <code>ye</code> Years: <code>2ye</code> = 2 years",
+        f"- {code('s')} Seconds: {code('30s')} = 30 seconds\n"
+        f"- {code('m')} Minutes: {code('15m')} = 15 minutes\n"
+        f"- {code('h')} Hours: {code('2h')} = 2 hours\n"
+        f"- {code('d')} Days: {code('7d')} = 7 days\n"
+        f"- {code('w')} Weeks: {code('2w')} = 2 weeks\n"
+        f"- {code('mo')} Months: {code('3mo')} = 3 months\n"
+        f"- {code('ye')} Years: {code('2ye')} = 2 years",
     ),
-    (
-        replies.SEC_TARGET,
-        replies.TARGET_SYNTAX,
-    ),
+    replies.target_section(),
     (
         replies.SEC_EXAMPLES,
-        "<code>/tcmute @username 3d spamming</code>: 3-day mute, reason inline\n"
-        "<code>/tcm @username 1w</code>: 1-week mute, bot will ask for reason\n"
-        "<code>/tcm @username</code>: permanent mute, bot walks you through it\n"
-        "<code>/tcunmute @username</code>: lift mute immediately across all groups",
+        f"{code('/tcmute @username 3d spamming')}: 3-day mute, reason inline\n"
+        f"{code('/tcm @username 1w')}: 1-week mute, bot will ask for reason\n"
+        f"{code('/tcm @username')}: permanent mute, bot walks you through it\n"
+        f"{code('/tcunmute @username')}: lift mute immediately across all groups",
     ),
 ]
+
+__help__: replies.HelpEntry = {
+    "name": __module_name__,
+    "overview": __help_text__,
+    "sections": __help_sections__,
+}
 
 
 # ───────────────────── Command Mute </tcmute> ───────────────────── #

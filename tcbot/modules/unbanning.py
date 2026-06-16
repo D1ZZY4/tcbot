@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot.modules.helper import decorators, extraction, identity, replies
+from tcbot.modules.helper.formatter import bold, code
 from tcbot.modules.helper.workflows.unban_flow import execute_unban
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -29,42 +30,39 @@ _RL_LIMIT: int = 5
 
 __module_name__ = "Unban"
 __help_text__ = (
-    "Lifts an active federation ban across <b>all connected groups</b> at once."
+    f"Lifts an active federation ban across {bold('all connected groups')} at once."
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        "<code>/tcunban</code> (alias: <code>/tcunb</code>)",
+        f"{code('/tcunban')} (alias: {code('/tcunb')})",
     ),
-    (
-        replies.SEC_WHO,
-        replies.PERM_DEV_ABOVE,
-    ),
-    (
-        replies.SEC_WHERE,
-        replies.CONTEXT_EXEC_OR_GROUP,
-    ),
+    replies.who_section(replies.PERM_DEV_ABOVE),
+    replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
     (
         replies.SEC_WHAT,
         "Lifts an active federation ban on the target user. The unban is applied across "
-        "<b>all connected groups</b> simultaneously so they can rejoin freely. A log entry "
+        f"{bold('all connected groups')} simultaneously so they can rejoin freely. A log entry "
         "is posted to the federation logs channel.\n\n"
         "If the user has no active federation ban, the bot will let you know and take no "
         "action.\n"
         "If the target's ban was under appeal, the appeal is also resolved as approved.",
     ),
-    (
-        replies.SEC_TARGET,
-        replies.TARGET_SYNTAX,
-    ),
+    replies.target_section(),
     (
         replies.SEC_EXAMPLES,
-        "<code>/tcunban @username</code>\n"
-        "<code>/tcunb 123456789</code>\n"
-        "Or reply to a message and run <code>/tcunb</code>.",
+        f"{code('/tcunban @username')}\n"
+        f"{code('/tcunb 123456789')}\n"
+        f"Or reply to a message and run {code('/tcunb')}.",
     ),
 ]
+
+__help__: replies.HelpEntry = {
+    "name": __module_name__,
+    "overview": __help_text__,
+    "sections": __help_sections__,
+}
 
 
 # ──────────────────── Command Unban </tcunban> ──────────────────── #

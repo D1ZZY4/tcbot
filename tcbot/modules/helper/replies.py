@@ -6,6 +6,16 @@
 
 from __future__ import annotations
 
+from typing import TypedDict
+
+
+class HelpEntry(TypedDict):
+    """Typed container for a module's user-facing help content."""
+
+    name: str
+    overview: str
+    sections: list[tuple[str, str]]
+
 # ──────────────────────── Target Syntax ─────────────────────────── #
 
 TARGET_SYNTAX = (
@@ -49,3 +59,21 @@ SEC_WHERE = "Where to use"
 SEC_WHAT = "What it does"
 SEC_EXAMPLES = "Examples"
 SEC_TARGET = "Target syntax"
+
+
+# ─────────── Help-section constructor helpers ──────────────────── #
+
+
+def who_section(perm: str) -> tuple[str, str]:
+    """Build a 'Who can use' section entry."""
+    return (SEC_WHO, perm)
+
+
+def where_section(ctx: str) -> tuple[str, str]:
+    """Build a 'Where to use' section entry."""
+    return (SEC_WHERE, ctx)
+
+
+def target_section() -> tuple[str, str]:
+    """Build a standard 'Target syntax' section entry."""
+    return (SEC_TARGET, TARGET_SYNTAX)

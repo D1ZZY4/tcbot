@@ -5,7 +5,7 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-16 (session 132)
+**Last updated:** 2026-06-16 (session 133)
 
 ## Verification baseline
 
@@ -97,6 +97,8 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 | Bug #277 (session 103) | correctness | scheduler.py setup_schedules: CronTrigger(day_of_week=0) resolves to Sunday in APScheduler 4.x (Unix cron 0=Sunday), not Monday. Log message said "Monday". Changed to day_of_week="mon" for explicit, unambiguous scheduling. | 2026-06-13 (s103) |
 | Bug #276 (session 103) | correctness | dispatch.py fan_out(): asyncio.CancelledError was caught by generic Exception handler and returned as a BaseException value rather than propagated. Added explicit CancelledError re-raise so bot shutdown is clean when multi-group fan_out is in flight. | 2026-06-13 (s103) |
 | Bugs #271-#275 (session 103) | infra | #271: Dockerfile hiredis verification verbose. #272: docker-compose Redis healthcheck timeout 5s. #273: dependency-update.yml GITHUB_TOKEN (built-in, no manual secret). #274: lint.yml import check reverted to python -c "import tcbot" (was wrongly changed to python -m tcbot which hangs CI); Indonesian comment fixed to English. #275: Dockerfile hiredis verified. | 2026-06-13 (s103) |
+| P3 #5 + Improvement #6 (session 133) | code quality | HelpEntry TypedDict added to replies.py; all 15 modules declare `__help__: HelpEntry`; `_builder_help()` prefers `__help__` with backward-compat fallback. Section constructors `who_section()`, `where_section()`, `target_section()` added to replies.py; all 15 modules migrated from 4-line tuple blocks to 1-line helper calls. Empty TYPE_CHECKING block removed from replies.py. Ruff: All checks passed. Import: clean. | 2026-06-16 (s133) |
+| Improvement #2 (session 133) | documentation | docs/backup-restore.md created: Atlas continuous/snapshot backup setup, mongodump cron script with 14-day retention, offsite rclone copy, step-by-step restore, post-restore /health check, CVE mitigation notes. PLAN.md Improvement #2 → Done. | 2026-06-16 (s133) |
 | Session 102 audit (session 102) | audit | Audited 15 additional files: proof_flow.py, reason_flow.py, parse_logmsg.py, decorators.py, admins.py, users_cache.py, users_roles.py, promote_flow.py, connecting.py, disconnecting.py, groups_db.py, unbanning.py, appeals.py, check_flow.py, broadcasting.py — all clean, 0 new bugs. Em-dash/en-dash: 0 matches. Emoticon in identity.py: 0 matches. CHANGELOG.md updated for Bug #270. Ruff: All checks passed (73 files). | 2026-06-13 (s102) |
 | Bug #270 (session 102) | correctness | extraction.py extract_target: reply to anonymous admin message skipped from_user (ANONYMOUS_BOT_ID) correctly but fell through to sender_chat which is the group itself. Added _skip_sender_chat flag to skip sender_chat when from_user is ANONYMOUS_BOT_ID. Full audit of ban_flow, greeting, bans_db, unban_flow, appeal_flow, banning, muting, kicking, warnings, demote_flow, connected_flow — all clean. | 2026-06-13 (s102) |
 | Docs sync (session 100) | documentation | 9 docs updated to reflect sessions 95-99 code changes: user_ref in formatter table, deactivate_all/extra_active_bans in DB docs, trigger="mute" in demote/role/workflows docs, str(uid) fallback in check/stats docs, banning/appeal flow helpers updated. CHANGELOG updated. | 2026-06-13 (s100) |

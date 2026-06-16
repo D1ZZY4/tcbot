@@ -56,7 +56,7 @@ _RL_BULK_LIMIT: int = 3
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
-__module_name__ = "Admins"
+__module_name__ = "Admin"
 __help_text__ = (
     "Promote and demote staff, transfer ownership, and manage promotion requests "
     "across the federation."
@@ -65,36 +65,29 @@ __help_text__ = (
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        "<code>/tcpromote</code> (alias: <code>/tcp</code>)\n"
-        "<code>/tcdemote</code> (alias: <code>/tcd</code>)\n"
-        "<code>/transferowner</code> (alias: <code>/tfowner</code>)\n"
-        "<code>/tcpromoterequests</code> (alias: <code>/tcreqs</code>)\n"
-        "<code>/tcpromotelist</code> (alias: <code>/tcplist</code>)",
+        f"{code('/tcpromote')} (alias: {code('/tcp')})\n"
+        f"{code('/tcdemote')} (alias: {code('/tcd')})\n"
+        f"{code('/transferowner')} (alias: {code('/tfowner')})\n"
+        f"{code('/tcpromoterequests')} (alias: {code('/tcreqs')})\n"
+        f"{code('/tcpromotelist')} (alias: {code('/tcplist')})",
     ),
-    (
-        replies.SEC_WHO,
-        "<b>/tcpromote</b>, <b>/tcdemote</b>, <b>/tcpromotelist</b>: Founder and Admin.\n"
-        f"<b>/transferowner</b>: {replies.PERM_FOUNDER_ONLY}\n"
-        "<b>/tcpromoterequests</b>: anyone (creates a self-request to the Founder).",
+    replies.who_section(
+        f"{bold('/tcpromote')}, {bold('/tcdemote')}, {bold('/tcpromotelist')}: Founder and Admin.\n"
+        f"{bold('/transferowner')}: {replies.PERM_FOUNDER_ONLY}\n"
+        f"{bold('/tcpromoterequests')}: anyone (creates a self-request to the Founder)."
     ),
-    (
-        replies.SEC_WHERE,
-        replies.CONTEXT_BOT_OR_GROUP,
-    ),
+    replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
     (
         "Role Hierarchy",
         "Founder (rank 4) > Admin (rank 3) > Developer (rank 2) > Tester (rank 1)\n\n"
         "You cannot promote a user to a rank equal to or above your own. "
         "Admins promoting someone to Admin queues a request for the Founder.",
     ),
-    (
-        replies.SEC_TARGET,
-        replies.TARGET_SYNTAX,
-    ),
+    replies.target_section(),
     (
         "/tcpromote",
         "Assigns a role to a user. Omit the role argument to get an inline button menu.\n\n"
-        "<b>Usage:</b> <code>/tcpromote &lt;target&gt; [admin|developer|tester]</code>\n"
+        f"{bold('Usage:')} {code('/tcpromote <target> [admin|developer|tester]')}\n"
         "- Founder can promote to any role directly.\n"
         "- Admin can promote to Developer or Tester directly; promoting to Admin "
         "sends a pending request to the Founder for approval.",
@@ -102,7 +95,7 @@ __help_sections__: list[tuple[str, str]] = [
     (
         "/tcdemote",
         "Removes a user's role. A confirmation button is shown before the action executes.\n\n"
-        "<b>Usage:</b> <code>/tcdemote &lt;target&gt;</code>\n"
+        f"{bold('Usage:')} {code('/tcdemote <target>')}\n"
         "- Founder can demote any role.\n"
         "- Admin can demote Developer or Tester only.\n"
         "- When a user with a role is banned or kicked, their role is automatically removed "
@@ -112,18 +105,24 @@ __help_sections__: list[tuple[str, str]] = [
         "/transferowner",
         "Transfers federation ownership to another user. The current Founder steps down "
         "to Admin. Founder only.\n\n"
-        "<b>Usage:</b> <code>/transferowner &lt;target&gt;</code>",
+        f"{bold('Usage:')} {code('/transferowner <target>')}",
     ),
     (
         replies.SEC_EXAMPLES,
-        "<code>/tcpromote @username developer</code>\n"
-        "<code>/tcpromote 123456789</code> - shows role selection menu\n"
-        "<code>/tcdemote @username</code>\n"
-        "<code>/transferowner @newowner</code>\n"
-        "<code>/tcpromoterequests</code> - request promotion to Admin\n"
-        "<code>/tcplist</code> - list pending promotion requests",
+        f"{code('/tcpromote @username developer')}\n"
+        f"{code('/tcpromote 123456789')} - shows role selection menu\n"
+        f"{code('/tcdemote @username')}\n"
+        f"{code('/transferowner @newowner')}\n"
+        f"{code('/tcpromoterequests')} - request promotion to Admin\n"
+        f"{code('/tcplist')} - list pending promotion requests",
     ),
 ]
+
+__help__: replies.HelpEntry = {
+    "name": __module_name__,
+    "overview": __help_text__,
+    "sections": __help_sections__,
+}
 
 
 # ────────────────── Command Promote </tcpromote> ────────────────── #

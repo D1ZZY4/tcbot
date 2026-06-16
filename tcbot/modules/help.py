@@ -47,11 +47,24 @@ def _builder_help() -> dict[str, tuple[str, str, list[tuple[str, str]]]]:
 
     Returns a dict keyed by ``help_<module>`` mapping to
     ``(display_name, overview_text, sections)``.
+
+    Prefers the unified ``__help__: HelpEntry`` attribute introduced in P3 #5.
+    Falls back to legacy ``__module_name__`` / ``__help_text__`` / ``__help_sections__``
+    for modules that have not been migrated yet.
     """
     content: dict[str, tuple[str, str, list[tuple[str, str]]]] = {}
     for mod_name in ALL_MODULES:
         try:
             mod = importlib.import_module(f"tcbot.modules.{mod_name}")
+            h = getattr(mod, "__help__", None)
+            if h is not None:
+                content[f"help_{mod_name}"] = (
+                    h["name"],
+                    h["overview"],
+                    list(h.get("sections", [])),
+                )
+                continue
+            # Backward-compat path for un-migrated modules.
             name = getattr(mod, "__module_name__", None)
             text = getattr(mod, "__help_text__", None)
             sections: list[tuple[str, str]] = list(

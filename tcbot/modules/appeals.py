@@ -9,6 +9,7 @@ from __future__ import annotations
 from telegram.ext import CallbackQueryHandler, filters
 
 from tcbot.modules.helper import replies
+from tcbot.modules.helper.formatter import bold, code
 from tcbot.modules.helper.workflows.appeal_flow import (
     appeal,
     reviewer_locked_out,
@@ -31,18 +32,17 @@ __module_name__ = "Appeal"
 
 __help_text__ = (
     "Submit an appeal for an active federation ban. Staff review with a "
-    "<b>12-hour priority window</b> for the banning admin."
+    f"{bold('12-hour priority window')} for the banning admin."
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         "How to start",
-        "Tap the <b>Submit Appeal</b> button on your ban notification (sent by the bot in PM), "
-        "or use <code>/checkme</code> and tap the appeal button that appears.",
+        f"Tap the {bold('Submit Appeal')} button on your ban notification (sent by the bot in PM), "
+        f"or use {code('/checkme')} and tap the appeal button that appears.",
     ),
-    (
-        replies.SEC_WHO,
-        "Anyone with an active federation ban. You can only have one active appeal at a time.",
+    replies.who_section(
+        "Anyone with an active federation ban. You can only have one active appeal at a time."
     ),
     (
         "Where to start",
@@ -50,12 +50,12 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "How it works",
-        "Once the appeal flow is open, send a single message starting with <code>#appeal</code> "
+        f"Once the appeal flow is open, send a single message starting with {code('#appeal')} "
         "that includes all three of the following sections:\n\n"
-        "- <b>Log link</b>: the link to your ban log entry in the federation logs channel\n"
-        "- <b>Clarification</b>: your honest explanation of why the ban was issued or was a "
+        f"- {bold('Log link')}: the link to your ban log entry in the federation logs channel\n"
+        f"- {bold('Clarification')}: your honest explanation of why the ban was issued or was a "
         "mistake\n"
-        "- <b>Agreement</b>: your commitment to follow community rules going forward",
+        f"- {bold('Agreement')}: your commitment to follow community rules going forward",
     ),
     (
         "Format example",
@@ -67,12 +67,18 @@ __help_sections__: list[tuple[str, str]] = [
     (
         "What happens next",
         "Your appeal is forwarded to TC admins for review. The admin who issued the original "
-        "ban has a <b>12-hour priority window</b> to respond; after that, any admin can act.\n\n"
+        f"ban has a {bold('12-hour priority window')} to respond; after that, any admin can act.\n\n"
         "If approved: your ban is lifted immediately across all connected groups.\n"
         "If rejected: your ban remains in place.\n"
         "You will be notified by the bot either way.",
     ),
 ]
+
+__help__: replies.HelpEntry = {
+    "name": __module_name__,
+    "overview": __help_text__,
+    "sections": __help_sections__,
+}
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

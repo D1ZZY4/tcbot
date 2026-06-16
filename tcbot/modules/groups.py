@@ -44,28 +44,28 @@ __help_text__ = (
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        "<code>/tcgroups</code> (alias: <code>/tcg</code>)",
+        f"{code('/tcgroups')} (alias: {code('/tcg')})",
     ),
-    (
-        replies.SEC_WHO,
-        replies.CONTEXT_ANYONE,
-    ),
-    (
-        replies.SEC_WHERE,
-        replies.CONTEXT_BOT_OR_GROUP,
-    ),
+    replies.who_section(replies.CONTEXT_ANYONE),
+    replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
     (
         replies.SEC_WHAT,
         f"Lists all groups currently connected to {_CNAME}, along with the total "
         f"count.\n\n"
-        f"The default view shows group names only. Tap <b>Details</b> to expand the list and "
-        f"show each group's chat ID alongside its name. Tap <b>Simple</b> to collapse back.",
+        f"The default view shows group names only. Tap {bold('Details')} to expand the list and "
+        f"show each group's chat ID alongside its name. Tap {bold('Simple')} to collapse back.",
     ),
     (
         "Example",
-        "<code>/tcgroups</code> or <code>/tcg</code>",
+        f"{code('/tcgroups')} or {code('/tcg')}",
     ),
 ]
+
+__help__: replies.HelpEntry = {
+    "name": __module_name__,
+    "overview": __help_text__,
+    "sections": __help_sections__,
+}
 
 
 # ──────────────────────── Helper Functions ──────────────────────── #

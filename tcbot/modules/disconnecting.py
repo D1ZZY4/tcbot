@@ -15,7 +15,7 @@ from telegram.ext import ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, parse_logmsg, replies
-from tcbot.modules.helper.formatter import code, esc
+from tcbot.modules.helper.formatter import bold, code, esc
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -41,40 +41,44 @@ _CNAME = esc(cfg.community_name)
 
 __module_name__ = "Disconnect"
 __help_text__ = (
-    f"Removes a group from {_CNAME}. Use <code>/tcdisconnect</code> from "
-    f"inside the group, or <code>/rmtc</code> remotely with a chat ID."
+    f"Removes a group from {_CNAME}. Use {code('/tcdisconnect')} from "
+    f"inside the group, or {code('/rmtc')} remotely with a chat ID."
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        "<code>/tcdisconnect</code> (alias: <code>/tcdiscon</code>)\n"
-        "<code>/rmtc</code>",
+        f"{code('/tcdisconnect')} (alias: {code('/tcdiscon')})\n"
+        f"{code('/rmtc')}",
     ),
-    (
-        replies.SEC_WHO,
-        "<b>/tcdisconnect</b>: the group owner or TC Staff (Admin and above).\n"
-        "<b>/rmtc</b>: TC Staff only.",
+    replies.who_section(
+        f"{bold('/tcdisconnect')}: the group owner or TC Staff (Admin and above).\n"
+        f"{bold('/rmtc')}: TC Staff only."
     ),
-    (
-        replies.SEC_WHERE,
-        "<b>/tcdisconnect</b>: inside the group you want to disconnect.\n"
-        "<b>/rmtc</b>: exec group or bot PM (works remotely by chat ID).",
+    replies.where_section(
+        f"{bold('/tcdisconnect')}: inside the group you want to disconnect.\n"
+        f"{bold('/rmtc')}: exec group or bot PM (works remotely by chat ID)."
     ),
     (
         replies.SEC_WHAT,
-        f"<b>/tcdisconnect</b>: removes the current group from {_CNAME}, posts a "
+        f"{bold('/tcdisconnect')}: removes the current group from {_CNAME}, posts a "
         f"disconnection log entry, and causes the bot to leave the group.\n\n"
-        f"<b>/rmtc</b>: force-removes a group from the federation by chat ID. Use this for "
+        f"{bold('/rmtc')}: force-removes a group from the federation by chat ID. Use this for "
         f"groups the bot has already been kicked from, or to remove a group remotely without "
         f"being inside it. A log entry is still posted.",
     ),
     (
         replies.SEC_EXAMPLES,
-        "Run <code>/tcdisconnect</code> inside the group to disconnect it.\n"
-        "<code>/rmtc -1001234567890</code>: force-remove a group by chat ID.",
+        f"Run {code('/tcdisconnect')} inside the group to disconnect it.\n"
+        f"{code('/rmtc -1001234567890')}: force-remove a group by chat ID.",
     ),
 ]
+
+__help__: replies.HelpEntry = {
+    "name": __module_name__,
+    "overview": __help_text__,
+    "sections": __help_sections__,
+}
 
 
 # ────────── Command to Disconnect a Group </tcdisconnect> ───────── #

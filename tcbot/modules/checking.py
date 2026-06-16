@@ -16,7 +16,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, extraction, keyboards, replies
-from tcbot.modules.helper.formatter import code, esc, mention
+from tcbot.modules.helper.formatter import bold, code, esc, mention
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.check_flow import Check
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
@@ -40,32 +40,26 @@ _ERR_BAN_NOT_FOUND = "Ban record not found."
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
-__module_name__ = "Checking"
+__module_name__ = "Check"
 __help_text__ = (
-    "Look up your own ban status with <code>/checkme</code>, or pull a full "
-    "federation activity profile for any user with <code>/check</code>."
+    f"Look up your own ban status with {code('/checkme')}, or pull a full "
+    f"federation activity profile for any user with {code('/check')}."
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        "<code>/checkme</code> (alias: <code>/cme</code>)\n"
-        "<code>/check</code> (alias: <code>/c</code>)",
+        f"{code('/checkme')} (alias: {code('/cme')})\n"
+        f"{code('/check')} (alias: {code('/c')})",
     ),
-    (
-        replies.SEC_WHO,
-        replies.CONTEXT_ANYONE,
-    ),
-    (
-        replies.SEC_WHERE,
-        replies.CONTEXT_BOT_OR_GROUP,
-    ),
+    replies.who_section(replies.CONTEXT_ANYONE),
+    replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
     (
         "/checkme",
         "Checks your own federation ban status.\n\n"
-        "- If you are <b>not banned</b>: the bot confirms your account is in good standing.\n"
-        "- If you are <b>banned</b>: the bot shows the reason, the admin who issued the ban, "
-        "the ban date, and gives you a <b>Submit Appeal</b> button to start the appeal "
+        f"- If you are {bold('not banned')}: the bot confirms your account is in good standing.\n"
+        f"- If you are {bold('banned')}: the bot shows the reason, the admin who issued the ban, "
+        f"the ban date, and gives you a {bold('Submit Appeal')} button to start the appeal "
         "process.",
     ),
     (
@@ -75,18 +69,21 @@ __help_sections__: list[tuple[str, str]] = [
         "Each section opens a drill-down inline keyboard so you can inspect every "
         "record individually.",
     ),
-    (
-        replies.SEC_TARGET,
-        replies.TARGET_SYNTAX,
-    ),
+    replies.target_section(),
     (
         replies.SEC_EXAMPLES,
-        "<code>/checkme</code>\n"
-        "<code>/check @username</code>\n"
-        "<code>/c 123456789</code>\n"
-        "Or reply to a message and run <code>/c</code>.",
+        f"{code('/checkme')}\n"
+        f"{code('/check @username')}\n"
+        f"{code('/c 123456789')}\n"
+        f"Or reply to a message and run {code('/c')}.",
     ),
 ]
+
+__help__: replies.HelpEntry = {
+    "name": __module_name__,
+    "overview": __help_text__,
+    "sections": __help_sections__,
+}
 
 
 # ───────────────────────────── Helpers ──────────────────────────── #

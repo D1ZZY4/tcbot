@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
 from tcbot.modules.helper import decorators, replies
+from tcbot.modules.helper.formatter import bold, code
 from tcbot.modules.helper.parse_editmsg import safe_edit_cb
 from tcbot.modules.helper.workflows.stats_flow import (
     CHAT_KEY,
@@ -46,16 +47,10 @@ __help_text__ = (
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        "<code>/tcstats</code> (alias: <code>/tcs</code>)",
+        f"{code('/tcstats')} (alias: {code('/tcs')})",
     ),
-    (
-        replies.SEC_WHO,
-        replies.CONTEXT_ANYONE,
-    ),
-    (
-        replies.SEC_WHERE,
-        replies.CONTEXT_BOT_OR_GROUP,
-    ),
+    replies.who_section(replies.CONTEXT_ANYONE),
+    replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
     (
         replies.SEC_WHAT,
         "Shows a live federation summary: Founder, total staff broken down by "
@@ -64,21 +59,27 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Drill-downs",
-        "<b>Staff Roster</b>: Founder, Admins, Developers, Testers, all listed "
+        f"{bold('Staff Roster')}: Founder, Admins, Developers, Testers, all listed "
         "with mentions.\n"
-        "<b>Users</b>: paginated list of every cached user. Numbered buttons "
+        f"{bold('Users')}: paginated list of every cached user. Numbered buttons "
         "open a per-user detail card.\n"
-        "<b>Connected Chats</b>: paginated list of every active group; "
+        f"{bold('Connected Chats')}: paginated list of every active group; "
         "drill-in shows owner, ID, and connect date.\n"
-        "<b>User Bans</b>: paginated list of every active ban with a "
-        "<b>Search</b> shortcut to look up a user by name or ID.\n\n"
-        "Every view ends with a <b>« Back</b> button to the main summary.",
+        f"{bold('User Bans')}: paginated list of every active ban with a "
+        f"{bold('Search')} shortcut to look up a user by name or ID.\n\n"
+        f"Every view ends with a {bold('Back')} button to the main summary.",
     ),
     (
         replies.SEC_EXAMPLES,
-        "<code>/tcstats</code>\n<code>/tcs</code>",
+        f"{code('/tcstats')}\n{code('/tcs')}",
     ),
 ]
+
+__help__: replies.HelpEntry = {
+    "name": __module_name__,
+    "overview": __help_text__,
+    "sections": __help_sections__,
+}
 
 
 # ──────────────────────── Command Handlers ──────────────────────── #

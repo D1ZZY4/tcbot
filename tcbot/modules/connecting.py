@@ -20,7 +20,7 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, replies
-from tcbot.modules.helper.formatter import esc
+from tcbot.modules.helper.formatter import bold, code, esc
 from tcbot.modules.helper.workflows.connected_flow import connection
 from tcbot.utils.prefixes import build_prefixed_filters
 
@@ -54,16 +54,10 @@ __help_text__ = (
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        "<code>/tcconnect</code> (alias: <code>/tccon</code>)",
+        f"{code('/tcconnect')} (alias: {code('/tccon')})",
     ),
-    (
-        replies.SEC_WHO,
-        "Group admins and creators only (checked per-group).",
-    ),
-    (
-        replies.SEC_WHERE,
-        f"Inside the group you want to connect to {_CNAME}.",
-    ),
+    replies.who_section("Group admins and creators only (checked per-group)."),
+    replies.where_section(f"Inside the group you want to connect to {_CNAME}."),
     (
         replies.SEC_WHAT,
         f"Connects your group to the {_CNAME} federation. Once connected:\n"
@@ -74,9 +68,8 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Required permissions",
-        "Before running the command, make the bot a group admin with these three "
-        "permissions: <b>Delete Messages</b>, <b>Ban Users</b>, and <b>Invite Users "
-        "via Link</b>.",
+        f"Before running the command, make the bot a group admin with these three "
+        f"permissions: {bold('Delete Messages')}, {bold('Ban Users')}, and {bold('Invite Users via Link')}.",
     ),
     (
         "Notes",
@@ -87,9 +80,15 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "Example",
-        "Make the bot a group admin, then run <code>/tcconnect</code> inside the group.",
+        f"Make the bot a group admin, then run {code('/tcconnect')} inside the group.",
     ),
 ]
+
+__help__: replies.HelpEntry = {
+    "name": __module_name__,
+    "overview": __help_text__,
+    "sections": __help_sections__,
+}
 
 
 # ───────────── Command to Connect a Group </tcconnect> ──────────── #

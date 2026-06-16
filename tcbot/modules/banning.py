@@ -14,7 +14,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
-from tcbot.modules.helper.formatter import mention
+from tcbot.modules.helper.formatter import bold, code, mention
 from tcbot.modules.helper.workflows.ban_flow import (
     WAITING_PROOF,
     ban_conversation,
@@ -41,26 +41,20 @@ _RL_LIMIT: int = 3
 
 __module_name__ = "Ban"
 __help_text__ = (
-    "Issues a <b>federation-wide ban</b> on a user, applied across every connected "
+    f"Issues a {bold('federation-wide ban')} on a user, applied across every connected "
     "group at once. Auto-demotes staff targets and stores proof with the ban record."
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        "<code>/tcban</code> (alias: <code>/tcb</code>)",
+        f"{code('/tcban')} (alias: {code('/tcb')})",
     ),
-    (
-        replies.SEC_WHO,
-        replies.PERM_DEV_ABOVE,
-    ),
-    (
-        replies.SEC_WHERE,
-        replies.CONTEXT_EXEC_OR_GROUP,
-    ),
+    replies.who_section(replies.PERM_DEV_ABOVE),
+    replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
     (
         replies.SEC_WHAT,
-        "Issues a <b>federation-wide ban</b> on the target, applied across all connected "
+        f"Issues a {bold('federation-wide ban')} on the target, applied across all connected "
         "groups automatically. A reason is required - provide it directly after the target.\n\n"
         "After the command, the bot walks you through the proof step: send one or more "
         "photos or videos as evidence. Proof is required and is logged with the ban record "
@@ -70,17 +64,20 @@ __help_sections__: list[tuple[str, str]] = [
         "If the target holds a federation role (Tester / Developer / Admin), that role is "
         "automatically removed and they are notified by DM before the ban is enforced.",
     ),
-    (
-        replies.SEC_TARGET,
-        replies.TARGET_SYNTAX,
-    ),
+    replies.target_section(),
     (
         replies.SEC_EXAMPLES,
-        "<code>/tcban @username spamming in connected groups</code>\n"
-        "<code>/tcban 123456789 scamming members</code>\n"
-        "Or reply to a message and run <code>/tcb reason here</code>.",
+        f"{code('/tcban @username spamming in connected groups')}\n"
+        f"{code('/tcban 123456789 scamming members')}\n"
+        f"Or reply to a message and run {code('/tcb reason here')}.",
     ),
 ]
+
+__help__: replies.HelpEntry = {
+    "name": __module_name__,
+    "overview": __help_text__,
+    "sections": __help_sections__,
+}
 
 
 # ────────────────────── Command Ban </tcban> ────────────────────── #
