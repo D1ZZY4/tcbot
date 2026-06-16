@@ -23,21 +23,12 @@ args = "Start Application"
 name = "Start Application"
 author = "agent"
 
-[workflows.workflow.metadata]
-outputType = "console"
-
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "uv run python -m tcbot"
 
-[[workflows.workflow]]
-name = "Bash (Don't Delete This and Don't Run This)"
-mode = "sequential"
-author = 57967288
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "bash"
+[workflows.workflow.metadata]
+outputType = "console"
 
 [[ports]]
 localPort = 8080
