@@ -436,7 +436,9 @@ async def execute_resetwarns(
         return_exceptions=True,
     )
     if isinstance(results[0], BaseException):
-        log.error("Reset-warns log send failed for target=%d: %s", target_id, results[0])
+        log.error(
+            "Reset-warns log send failed for target=%d: %s", target_id, results[0]
+        )
 
 
 # ──────────────────────── Executor adapter ──────────────────────── #

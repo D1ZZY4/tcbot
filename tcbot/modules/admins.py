@@ -491,7 +491,9 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             trigger=None,
         )
     except Exception:
-        log.exception("Demote.execute raised for target=%d in on_demote_confirm", target_id)
+        log.exception(
+            "Demote.execute raised for target=%d in on_demote_confirm", target_id
+        )
         removed = False
     if not removed:
         try:
