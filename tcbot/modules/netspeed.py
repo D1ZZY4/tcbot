@@ -53,10 +53,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         replies.SEC_EXAMPLES,
-        f"{code('/ping')}\n"
-        f"{code('/p')}\n"
-        f"{code('/speedtest')}\n"
-        f"{code('/st')}",
+        f"{code('/ping')}\n{code('/p')}\n{code('/speedtest')}\n{code('/st')}",
     ),
 ]
 

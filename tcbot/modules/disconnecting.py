@@ -48,8 +48,7 @@ __help_text__ = (
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tcdisconnect')} (alias: {code('/tcdiscon')})\n"
-        f"{code('/rmtc')}",
+        f"{code('/tcdisconnect')} (alias: {code('/tcdiscon')})\n{code('/rmtc')}",
     ),
     replies.who_section(
         f"{bold('/tcdisconnect')}: the group owner or TC Staff (Admin and above).\n"

@@ -59,7 +59,6 @@ _ERR_PENDING_REVIEW = (
 )
 _MSG_CANCELLED = "Appeal cancelled. Nothing was submitted."
 _MSG_SESSION_ENDED = "Appeal session ended."
-_MSG_TIMEOUT = "Appeal session timed out. Nothing was submitted."
 _ERR_SESSION_EXPIRED = "Session expired - please start the appeal again."
 _ERR_INVALID_LOG = "Invalid log link. Please check and try again."
 _ERR_NOT_AUTHORIZED = "You are not authorized."
@@ -315,23 +314,6 @@ class BuildAppeal:
                 await msg.reply_text(_MSG_SESSION_ENDED)
             except Exception as exc:
                 log.debug("Appeal _end reply failed: %s", exc)
-        return ConversationHandler.END
-
-    async def _on_timeout(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        """Timeout handler; fires when ``conversation_timeout`` expires."""
-        if ctx.user_data is not None:
-            for key in (
-                "appeal_ban_id",
-                "appeal_log_msg_id",
-                "appeal_instruction_msg_id",
-            ):
-                ctx.user_data.pop(key, None)
-
-        if update.effective_message:
-            try:
-                await update.effective_message.reply_text(_MSG_TIMEOUT)
-            except Exception as exc:
-                log.debug("Appeal _on_timeout reply failed: %s", exc)
         return ConversationHandler.END
 
     async def _on_message(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:

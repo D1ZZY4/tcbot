@@ -173,6 +173,7 @@ class Configs:
     modules_no_load: list[str]
     redis_url: str | None
     warn_expiry_days: int
+    fed_warn_limit: int
 
     # * Properties below handle lazy type-casting from raw env strings.
     @property
@@ -267,6 +268,7 @@ class Configs:
             modules_no_load=_env_list("MODULES_NO_LOAD"),
             redis_url=os.getenv("REDIS_URL", "").strip() or None,
             warn_expiry_days=_int_from_env("WARN_EXPIRY_DAYS", 0, minimum=0),
+            fed_warn_limit=_int_from_env("FED_WARN_LIMIT", 0, minimum=0),
         )
 
 
@@ -357,12 +359,22 @@ class _CfgAdapter:
 
     @property
     def proof_timeout(self) -> int:
-        """Ban proof upload timeout in seconds."""
+        """Ban proof upload timeout in seconds.
+
+        Parsed from PROOF_TIMEOUT_SECONDS but not currently consumed by any handler.
+        Conversations end via command-fallback only (no job-queue ConversationHandler
+        timeout).  Reserved for future wiring when the [job-queue] PTB extra is added.
+        """
         return self._c.proof_timeout_seconds
 
     @property
     def appeal_timeout(self) -> int:
-        """Appeal conversation inactivity timeout in seconds."""
+        """Appeal conversation inactivity timeout in seconds.
+
+        Parsed from APPEAL_TIMEOUT_SECONDS but not currently consumed by any handler.
+        Conversations end via command-fallback only (no job-queue ConversationHandler
+        timeout).  Reserved for future wiring when the [job-queue] PTB extra is added.
+        """
         return self._c.appeal_timeout_seconds
 
     @property
@@ -399,6 +411,18 @@ class _CfgAdapter:
     def warn_expiry_days(self) -> int:
         """Days after which warn_counts expire; 0 = disabled."""
         return self._c.warn_expiry_days
+
+    @property
+    def fed_warn_limit(self) -> int:
+        """Federation-wide warn threshold that triggers an auto-ban (0 = disabled).
+
+        When a user accumulates this many warnings across all federation groups
+        combined (summed by ``federation_warn_count``), they are automatically
+        federation-banned, even if no single group has reached the per-group
+        ``WARN_LIMIT``.  Set to 0 to disable cross-group enforcement and rely
+        solely on the per-group threshold.
+        """
+        return self._c.fed_warn_limit
 
 
 # * This adapter instance is the single global 'cfg' used by every module.

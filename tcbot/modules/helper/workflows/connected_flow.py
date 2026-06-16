@@ -17,6 +17,7 @@ from telegram.constants import ChatMemberStatus
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
+from tcbot.modules.helper.formatter import esc
 from tcbot.utils.dispatch import count_errors, fan_out
 
 if TYPE_CHECKING:
@@ -232,6 +233,7 @@ class BuildConnection:
             return
 
         new_status = cmc.new_chat_member.status
+        old_status = cmc.old_chat_member.status if cmc.old_chat_member else None
         by_user = cmc.from_user
         lc, lt = cfg.logs
 
@@ -263,6 +265,38 @@ class BuildConnection:
                 except Exception:
                     log.exception("Bot removed log failed for %d", chat.id)
             log.info("Bot removed from %d; group deactivated", chat.id)
+            return
+
+        # Demotion: bot lost admin rights (was administrator, now member or restricted).
+        # The group is NOT deactivated because permissions may be restored shortly, but
+        # a warning is sent to the mod channel so staff are aware of the enforcement gap.
+        # Primary groups (MAIN_GROUP, EXTEND_GROUP) are excluded from this warning since
+        # they are managed separately and are not in the federated_groups collection.
+        if (
+            new_status in (ChatMemberStatus.MEMBER, ChatMemberStatus.RESTRICTED)
+            and old_status == ChatMemberStatus.ADMINISTRATOR
+        ):
+            if chat.id not in (cfg.main_group, cfg.exec_group):
+                warning_text = (
+                    f"Bot was demoted in group"
+                    f" <b>{esc(chat.title or str(chat.id))}</b>"
+                    f" (id: <code>{chat.id}</code>)."
+                    " Federation bans cannot be enforced there until"
+                    " admin rights are restored."
+                )
+                try:
+                    await ctx.bot.send_message(
+                        lc,
+                        warning_text,
+                        parse_mode="HTML",
+                        message_thread_id=lt,
+                    )
+                except Exception as exc:
+                    log.warning(
+                        "Failed to send admin-rights-lost warning for chat=%d: %s",
+                        chat.id,
+                        exc,
+                    )
             return
 
         if new_status in (ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR):

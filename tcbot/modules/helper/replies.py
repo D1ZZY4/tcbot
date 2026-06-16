@@ -16,6 +16,7 @@ class HelpEntry(TypedDict):
     overview: str
     sections: list[tuple[str, str]]
 
+
 # ──────────────────────── Target Syntax ─────────────────────────── #
 
 TARGET_SYNTAX = (

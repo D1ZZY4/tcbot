@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from telegram import LinkPreviewOptions, Update
 from telegram.ext import (
+    AIORateLimiter,
     Application,
     ApplicationBuilder,
     ContextTypes,
@@ -331,6 +332,10 @@ def main() -> None:
             .write_timeout(_HTTP_WRITE_TIMEOUT)
             .connect_timeout(_HTTP_CONNECT_TIMEOUT)
             .pool_timeout(_HTTP_POOL_TIMEOUT)
+            # * Global Telegram API pacing: ~30 req/s with automatic 429/RetryAfter
+            # * backoff.  Works alongside fan_out's semaphore (max 10 concurrent) and
+            # * the per-user decorator rate limiter (group -1).
+            .rate_limiter(AIORateLimiter())
             .build()
         )
 

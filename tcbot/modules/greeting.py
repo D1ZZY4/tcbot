@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING
 
 from telegram.ext import (
     ChatJoinRequestHandler,
-    ChatMemberHandler,
     ContextTypes,
     MessageHandler,
     filters,
@@ -225,93 +224,6 @@ async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
 
 @decorators.log_execution
-async def on_my_chat_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """React to changes in the bot's own membership status.
-
-    Handles two distinct scenarios:
-
-    **Admin rights lost (new_status in member/restricted, old_status administrator):**
-    When the bot is demoted in a federated group it can no longer enforce bans
-    there. The group is NOT deactivated -- permissions may be restored shortly --
-    but a warning is sent to the mod log channel so staff are aware. Primary
-    groups (MAIN_GROUP, EXTEND_GROUP) are excluded from this warning since they
-    are managed separately.
-
-    **Bot removed or kicked (new_status in left/kicked):**
-    When an admin removes the bot without running /tcdisconnect the group stays
-    ``is_active=True`` in the DB indefinitely. Every subsequent federation ban
-    then attempts ``ban_chat_member`` against that dead group, producing silent
-    failures for every moderation action. This handler detects bot removal and
-    calls ``deactivate_group`` immediately to keep the active-groups list clean.
-
-    Non-registered groups (where the bot was never added to the federation) are
-    silently ignored -- ``deactivate_group`` returns False and nothing is logged.
-    Primary groups (MAIN_GROUP, EXTEND_GROUP) are excluded: they are not stored
-    in ``federated_groups`` and should never be auto-deactivated here.
-    """
-    my_member = update.my_chat_member
-    if my_member is None:
-        return
-
-    new_status = my_member.new_chat_member.status
-    old_status = my_member.old_chat_member.status if my_member.old_chat_member else None
-
-    # * When the bot is demoted from administrator to member or restricted,
-    # * it can no longer enforce federation bans in that group.  Log a warning
-    # * to the mod channel so staff can restore admin rights; do NOT deactivate
-    # * the group because the admin might fix permissions shortly after.
-    if new_status in ("member", "restricted") and old_status == "administrator":
-        chat = update.effective_chat
-        if chat is not None and chat.id not in (cfg.main_group, cfg.exec_group):
-            lc, lt = cfg.logs
-            warning_text = (
-                f"Bot was demoted in group <b>{esc(chat.title or str(chat.id))}</b>"
-                f" (id: <code>{chat.id}</code>)."
-                f" Federation bans cannot be enforced there until admin rights are restored."
-            )
-            try:
-                await ctx.bot.send_message(
-                    lc, warning_text, parse_mode="HTML", message_thread_id=lt
-                )
-            except Exception as exc:
-                log.warning(
-                    "Failed to send admin-rights-lost warning for chat=%d: %s",
-                    chat.id,
-                    exc,
-                )
-        return
-
-    if new_status not in ("left", "kicked"):
-        return
-
-    chat = update.effective_chat
-    if chat is None:
-        return
-
-    # * Never auto-deactivate primary groups; they are not in federated_groups.
-    if chat.id in (cfg.main_group, cfg.exec_group):
-        return
-
-    try:
-        deactivated = await db.groups_db.deactivate_group(chat.id)
-    except Exception as exc:
-        log.warning(
-            "deactivate_group failed on bot removal from chat=%d: %s", chat.id, exc
-        )
-        return
-
-    if deactivated:
-        log.info(
-            "Bot removed from federation group chat_id=%d; group auto-deactivated.",
-            chat.id,
-        )
-    else:
-        log.debug(
-            "Bot removed from unregistered chat chat_id=%d; no action taken.", chat.id
-        )
-
-
-@decorators.log_execution
 async def on_chat_migration(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Update group records when a basic group migrates to a supergroup.
 
@@ -356,8 +268,14 @@ async def on_chat_migration(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
 # ──────────────────────────── Handlers ──────────────────────────── #
 
+# NOTE: The bot's own chat-member updates (MY_CHAT_MEMBER) are handled
+# exclusively by connected_flow.connection.on_bot_added, registered in
+# connecting.py. That single handler covers bot-added/promoted (join prompt,
+# pending completion), bot-demoted (admin-rights-lost warning to mod channel),
+# and bot-removed/kicked (federation group auto-deactivation). No second
+# ChatMemberHandler is registered here to avoid PTB group-0 shadowing.
+
 __handlers__ = [
-    ChatMemberHandler(on_my_chat_member),
     ChatJoinRequestHandler(on_join_request),
     MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, on_new_member),
     MessageHandler(filters.StatusUpdate.LEFT_CHAT_MEMBER, on_left_member),

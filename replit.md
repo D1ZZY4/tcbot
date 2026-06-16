@@ -54,6 +54,7 @@ Use `config.env.example` as the complete template. Important variables:
 | `MODULES_NO_LOAD` | Optional comma-separated denylist of module names. |
 | `REDIS_URL` | Optional Redis connection URL (e.g. `redis://localhost:6379/0`). When unset the bot uses in-memory L1 cache only; no Redis dependency is required. |
 | `WARN_EXPIRY_DAYS` | Days after which warn_count records expire; default `0` (disabled). Set to a positive integer to enable daily APScheduler expiry job. |
+| `FED_WARN_LIMIT` | Federation-wide warn threshold that triggers an automatic federation ban; default `0` (disabled). Set to a positive integer (e.g. `5`) to auto-ban a user when their total warn count across **all** connected groups reaches this value. Operates independently of and in addition to the per-group `WARN_LIMIT` auto-ban. |
 
 Destination variables that represent forum topics use this format:
 

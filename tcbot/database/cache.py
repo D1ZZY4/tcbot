@@ -256,9 +256,11 @@ _ROLE_REDIS_TTL_S: float = 90.0  # Redis TTL slightly longer than in-memory
 # ─────────────────────── Cache Maxsize Constants ─────────────────── #
 # * Maximum in-memory entry counts per cache instance.
 # * Sized to hold peak concurrent users/chats without unbounded growth.
-_ROLE_CACHE_MAXSIZE: int = 2048       # roles: one entry per active user
-_USER_MENTION_CACHE_MAXSIZE: int = 4096  # mention data: larger pool for check/stats lookups
-_CONNECTED_CACHE_MAXSIZE: int = 512   # connection status: one entry per connected chat
+_ROLE_CACHE_MAXSIZE: int = 2048  # roles: one entry per active user
+_USER_MENTION_CACHE_MAXSIZE: int = (
+    4096  # mention data: larger pool for check/stats lookups
+)
+_CONNECTED_CACHE_MAXSIZE: int = 512  # connection status: one entry per connected chat
 
 # Per-chat connection status: medium window; connection changes are infrequent.
 _CONNECTION_CACHE_TTL_S: float = 120.0

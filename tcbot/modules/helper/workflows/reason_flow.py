@@ -276,17 +276,6 @@ def build_modaction_conv(
                 log.debug("%s cancel-via-command reply failed: %s", action, exc)
         return ConversationHandler.END
 
-    async def _on_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        _clear_user_data(ctx)
-        if update.effective_message:
-            try:
-                await update.effective_message.reply_text(
-                    f"{action.capitalize()} operation timed out. No action was taken."
-                )
-            except Exception as exc:
-                log.debug("%s timeout reply failed: %s", action, exc)
-        return ConversationHandler.END
-
     # ── Build states ─────────────────────────────────────────────── #
 
     reason_state: list = [

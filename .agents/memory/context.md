@@ -5,9 +5,18 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 133)
+**Last updated:** 2026-06-16 (session 134)
 
 ## What is done
+
+- Session 134 (2026-06-16): 4 open PLAN.md findings from session 133 resolved — 4 bugs fixed (#381–#384).
+  - Bug #381 (P2 #4): Duplicate ChatMemberHandler(MY_CHAT_MEMBER) — greeting.on_my_chat_member and connected_flow.on_bot_added both registered in PTB group 0, one silently shadowing the other (nondeterministic by filesystem sort). Fixed: merged demotion-warning branch (MEMBER/RESTRICTED + old_status==ADMINISTRATOR → mod-channel warning, primary-group exclusion) into connected_flow.on_bot_added. Deleted greeting.on_my_chat_member function and its ChatMemberHandler registration. Removed ChatMemberHandler import from greeting.py. Added esc import to connected_flow.py. Now exactly ONE MY_CHAT_MEMBER handler covers all cases.
+  - Bug #382 (P4 #10): Dead _on_timeout handlers — appeal_flow.BuildAppeal._on_timeout + _MSG_TIMEOUT constant and reason_flow._on_timeout were unreachable dead code (no ConversationHandler.TIMEOUT state wired, no job-queue). Removed both. Updated cfg.proof_timeout/appeal_timeout docstrings and config.env.example comments to document they are parsed but not consumed (reserved for future job-queue wiring).
+  - Bug #383 (P3 #6): Cross-group warn accumulation evaded federation auto-ban — execute_warn only triggered on count == WARN_LIMIT (per-chat), so thin-spread evasion (2 warns × 25 groups) was never auto-banned. Added FED_WARN_LIMIT env var (cfg.fed_warn_limit, default 0 = disabled). Restructured execute_warn with auto_ban_trigger flag ("per_group" / "fed_global" / None); fed-global checks federation_warn_count(target_id) >= fed_limit. Both paths share one auto-ban code block. Default 0 = fully backward-compatible.
+  - Bug #384 (P3 #7): No global Telegram API pacing — Application built without AIORateLimiter; fan_out semaphore capped concurrency but not rate. Added python-telegram-bot[rate-limiter] to pyproject.toml (aiolimiter==1.2.1 installed). Added AIORateLimiter import + .rate_limiter(AIORateLimiter()) to ApplicationBuilder chain in __main__.py. ~30 req/s pacing + automatic 429/RetryAfter backoff now active globally.
+  - Ruff: All checks passed (73 files). Bot restart: 27/27 indexes, Redis hiredis 3.4.0, APScheduler, AIORateLimiter active, polling.
+  - Total bugs: #1–#384. All P2/P3/P4 findings from session 133 → Resolved.
+  - Remaining open: P1 #4 (CVE-2026-31072, accepted), Improvement #4 (multi-instance L1 cache, future), Improvement #7 (fed mutes not re-applied on join, enhancement).
 
 - Session 133 (2026-06-16): Audit pass 21 — 11 bugs fixed (#368–#378). Non-ASCII sweep completed. Docs updated.
   - Bug #368: appeal_flow.py — hardcoded `2000` → `_MAX_APPEAL_LEN: int = 2000` constant.

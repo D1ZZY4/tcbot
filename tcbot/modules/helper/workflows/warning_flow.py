@@ -47,13 +47,22 @@ async def execute_warn(
     reason_text: str,
     proof_desc: str | None = None,
 ) -> None:
-    """Issue a warning and auto-ban the target if the warn limit is reached.
+    """Issue a warning and auto-ban the target if a warn threshold is reached.
 
-    Increments the warn counter via ``db.warns_db.add_warn``. If the new count
-    meets or exceeds ``WARN_LIMIT``, any held federation role is demoted first,
-    then the user is banned from the originating group and their warning record
-    is cleared. Logs and user-facing replies always run in parallel via
-    ``asyncio.gather``.
+    Two thresholds can trigger an automatic federation ban:
+
+    1. **Per-group threshold** (``WARN_LIMIT``): fires when a user's warn count
+       in the *current* group reaches exactly ``WARN_LIMIT``.  Uses ``==`` so
+       that concurrent warns at limit+1 don't double-fire.
+
+    2. **Federation-wide threshold** (``cfg.fed_warn_limit``, default 0 = off):
+       fires when the user's total warns *across all groups* reach or exceed the
+       configured value, even if no single group has hit its per-group limit.
+       This closes the evasion path of spreading thin warns across many groups.
+
+    In both cases any held federation role is demoted first, then the user is
+    banned from all active federation groups.  When ``cfg.fed_warn_limit`` is 0
+    only the per-group threshold applies (backward-compatible default).
     """
     msg = update.effective_message
     chat_id = update.effective_chat.id
@@ -76,11 +85,30 @@ async def execute_warn(
         chat_title,
     )
 
+    # ── Determine whether to auto-ban and record the trigger ────────
+    # * "per_group": per-chat WARN_LIMIT reached for this group.
+    # * "fed_global": federation-wide FED_WARN_LIMIT reached across all groups.
+    # * None: below both thresholds; issue a plain warning only.
+    #
+    # * Per-group uses == (not >=) so that only the exact hit triggers the ban;
+    # * a concurrent second warn returns WARN_LIMIT+1 and is silently skipped,
+    # * preventing a double-ban race condition.
+    # * Federation-wide uses >= because the aggregation is a separate DB read
+    # * and has no atomicity guarantee across chat boundaries; >= ensures no
+    # * trigger is missed, and the already_banned guard below prevents double bans.
+    auto_ban_trigger: str | None = None
+    fed_count: int = 0
+
     if count == WARN_LIMIT:
-        # * Use == not >= so that only the warn that hits the limit exactly triggers
-        # * the auto-ban.  A concurrent second warn would return count == WARN_LIMIT+1
-        # * and skip this block entirely, preventing a double-ban race condition.
-        #
+        auto_ban_trigger = "per_group"
+    else:
+        fed_limit = cfg.fed_warn_limit
+        if fed_limit > 0:
+            fed_count = await db.warns_db.federation_warn_count(target_id)
+            if fed_count >= fed_limit:
+                auto_ban_trigger = "fed_global"
+
+    if auto_ban_trigger is not None:
         # * If the target somehow holds a federation role (e.g. promoted mid-warn-cycle),
         # * remove the role before the auto-ban so they don't keep staff perms after exile.
         target_role = await db.users_roles.get_effective_role(target_id)
@@ -165,7 +193,8 @@ async def execute_warn(
                 exc,
             )
         log.info(
-            "Warn auto-ban enforced: target=%d applied=%d/%d",
+            "Warn auto-ban enforced (%s): target=%d applied=%d/%d",
+            auto_ban_trigger,
             target_id,
             applied,
             total_groups,
@@ -195,14 +224,36 @@ async def execute_warn(
         else:
             applied_line = f" Applied to {total_groups}/{total_groups} groups."
 
+        # * Build reply text based on which threshold fired.
+        if auto_ban_trigger == "per_group":
+            ban_notice = (
+                f"{user_ref(target_id, target_name)} "
+                f"hit {WARN_LIMIT} warnings "
+                f"and has been federation-banned."
+            )
+            ban_fail_notice = (
+                f"{user_ref(target_id, target_name)} "
+                f"hit {WARN_LIMIT} warnings "
+                f"but federation-ban failed - please ban them manually."
+            )
+        else:
+            ban_notice = (
+                f"{user_ref(target_id, target_name)} "
+                f"hit {fed_count}/{cfg.fed_warn_limit} warnings across the federation "
+                f"and has been federation-banned."
+            )
+            ban_fail_notice = (
+                f"{user_ref(target_id, target_name)} "
+                f"hit {fed_count}/{cfg.fed_warn_limit} federation-wide warnings "
+                f"but federation-ban failed - please ban them manually."
+            )
+
         if any_ban_ok:
             # * Clear warns in the originating chat and reply with federation-ban notice.
             clear_result, reply_result = await asyncio.gather(
                 db.warns_db.clear_warns(target_id, chat_id),
                 msg.reply_text(
-                    f"{user_ref(target_id, target_name)} "
-                    f"hit {WARN_LIMIT} warnings "
-                    f"and has been federation-banned.{applied_line}{proof_suffix}",
+                    f"{ban_notice}{applied_line}{proof_suffix}",
                     parse_mode="HTML",
                 ),
                 return_exceptions=True,
@@ -219,9 +270,7 @@ async def execute_warn(
         else:
             try:
                 await msg.reply_text(
-                    f"{user_ref(target_id, target_name)} "
-                    f"hit {WARN_LIMIT} warnings "
-                    f"but federation-ban failed - please ban them manually.{applied_line}{proof_suffix}",
+                    f"{ban_fail_notice}{applied_line}{proof_suffix}",
                     parse_mode="HTML",
                 )
             except Exception as exc:
