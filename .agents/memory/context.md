@@ -5,9 +5,11 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 159)
+**Last updated:** 2026-06-16 (session 160)
 
 ## What is done
+
+- Session 160 (2026-06-16): Bug #430 fixed. `unbanning.cmd_unban` gathered `identity.classify` with speculative `db.bans_db.get_active_ban` in parallel; `execute_unban` updated to accept `pre_ban` keyword arg (skips DB round-trip when caller supplies the record). Docs: `docs/workflows/workflows.md` updated for new `execute_unban` signature. Comprehensive scans: N+1 AST scan CLEAN, create_task error-handlers CLEAN, q.answer() placement CLEAN, identity.classify consistency CLEAN, consecutive-await AST scan found only 2 intentionally-sequential pairs (`set_owner` crash-safety, `cmd_transfer` DB write order). Total bugs: #1-#430. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 159 (2026-06-16): Bug #424-#429 fixed. Systematic sequential-await audit across all major workflow and command files.
   - Bug #424: `connected_flow.on_bot_added` — parallel `get_pending + is_connected` pre-fetch + `complete_join + edit_message_text` gather.

@@ -6,11 +6,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
 from telegram.ext import ContextTypes, MessageHandler
 
+from tcbot import database as db
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.formatter import bold, code
 from tcbot.modules.helper.workflows.unban_flow import execute_unban
@@ -72,7 +74,12 @@ __help__: replies.HelpEntry = {
 @decorators.mod_only
 @decorators.log_execution
 async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Lift the federation ban on a target user after identity and refusal checks."""
+    """Lift the federation ban on a target user after identity and refusal checks.
+
+    Speculatively pre-fetches the active ban record in parallel with identity
+    classification so that ``execute_unban`` skips a redundant DB round-trip when
+    the refusal check passes.
+    """
     msg = update.effective_message
     admin = update.effective_user
     args = parse_cmd_args(msg.text)
@@ -84,7 +91,26 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.debug("unban no-target reply failed: %s", exc)
         return
 
-    ident = await identity.classify(ctx.bot, admin.id, target_id, target_fname)
+    # * Classify and pre-fetch the active ban record in parallel. Both depend only
+    # * on the already-resolved target_id, so there is no sequential dependency.
+    # * If classify returns a refusal the pre-fetched ban is discarded; when it
+    # * passes, execute_unban gets the record without an extra DB round-trip.
+    ident, pre_ban = await asyncio.gather(
+        identity.classify(ctx.bot, admin.id, target_id, target_fname),
+        db.bans_db.get_active_ban(target_id),
+        return_exceptions=True,
+    )
+    if isinstance(ident, BaseException):
+        log.exception("identity.classify failed in cmd_unban: %s", ident)
+        return
+    if isinstance(pre_ban, BaseException):
+        log.error(
+            "get_active_ban speculative pre-fetch failed for user=%d: %s",
+            target_id,
+            pre_ban,
+        )
+        pre_ban = None
+
     refusal = identity.refuse_message("unban", ident)
     if refusal is not None:
         try:
@@ -94,7 +120,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     try:
-        await execute_unban(update, ctx, target_id, target_fname)
+        await execute_unban(update, ctx, target_id, target_fname, pre_ban=pre_ban)
     except Exception:
         log.exception("execute_unban failed for target=%s", target_id)
 

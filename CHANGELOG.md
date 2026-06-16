@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-16 (session 158)
+
+### Performance
+
+- **Bug #430** (`unbanning.py`, `unban_flow.py`): `cmd_unban` called `identity.classify()` as a sequential standalone await with no concurrent work alongside it. Per speculative pre-fetch doctrine, the active ban record (`get_active_ban`) is always needed when classify passes, making it a zero-dependency parallel candidate. Fixed by gathering `identity.classify` and `db.bans_db.get_active_ban` in parallel; the pre-fetched ban is forwarded to `execute_unban` via the new `pre_ban` keyword argument. `execute_unban` signature updated to accept `pre_ban: dict | None = None`; when the caller supplies it, the function skips the `get_active_ban` DB round-trip entirely. If classify returns a refusal (e.g. self-target, this_bot) the pre-fetched ban is silently discarded. Exceptions from either coroutine are handled with `return_exceptions=True`; a failed pre-fetch falls back to `pre_ban=None` so `execute_unban` fetches the record itself as before.
+
 ## [Unreleased] - 2026-06-16 (session 157)
 
 ### Fixed

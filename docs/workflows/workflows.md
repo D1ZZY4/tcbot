@@ -157,7 +157,7 @@ Warns are tracked per `(user_id, chat_id)`. At `WARN_LIMIT`, the flow issues a *
 
 ## Unban: `unban_flow.py`
 
-`execute_unban(update, ctx, target_id, target_fname)` is a direct executor, not a `ConversationHandler`. It finds the active ban, deactivates it, unbans the user from all active groups with `fan_out()`, and posts an audit log.
+`execute_unban(update, ctx, target_id, target_fname, *, pre_ban=None)` is a direct executor, not a `ConversationHandler`. It finds the active ban (or uses a caller-supplied `pre_ban` record to skip the DB round-trip), deactivates it, unbans the user from all active groups with `fan_out()`, and posts an audit log.
 
 ## Appeal: `appeal_flow.py`
 

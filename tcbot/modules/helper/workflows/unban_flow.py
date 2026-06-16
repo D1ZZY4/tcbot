@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from tcbot import cfg
 from tcbot import database as db
@@ -31,17 +31,30 @@ async def execute_unban(
     ctx: ContextTypes.DEFAULT_TYPE,
     target_id: int,
     target_fname: str,
+    *,
+    pre_ban: dict[str, Any] | None = None,
 ) -> None:
     """Lift a federation ban: deactivate the DB record and unban across all connected groups.
 
-    Fetches the active ban, runs ``deactivate_ban`` and ``active_groups`` in parallel,
-    fans out ``unban_chat_member`` across every group, then sends the log and reply
-    concurrently. Replies inline if no active ban is found.
+    Fetches the active ban (unless ``pre_ban`` is supplied), runs ``deactivate_ban``
+    and ``active_groups`` in parallel, fans out ``unban_chat_member`` across every
+    group, then sends the log and reply concurrently. Replies inline if no active ban
+    is found.
+
+    When ``pre_ban`` is provided by the caller the function skips the ``get_active_ban``
+    DB round-trip entirely, saving one network hop on the hot path. Pass ``None`` (the
+    default) to let this function fetch the record itself.
     """
     msg = update.effective_message
     admin = update.effective_user
 
-    ban = await db.bans_db.get_active_ban(target_id)
+    # * Use the caller-supplied record when available; fall back to a DB fetch.
+    ban: dict[str, Any] | None
+    if pre_ban is not None:
+        ban = pre_ban
+    else:
+        ban = await db.bans_db.get_active_ban(target_id)
+
     if not ban:
         try:
             await msg.reply_text(
