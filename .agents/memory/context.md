@@ -5,9 +5,14 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 151)
+**Last updated:** 2026-06-16 (session 155)
 
 ## What is done
+
+- Session 155 (2026-06-16): Wave 4 zero-finding pass — ALL 74 tcbot/ Python files fully re-audited CLEAN.
+  - Files audited this session (all CLEAN, confirmed by direct reads + explore subagent batch): extraction.py, identity.py, admins.py, checking.py, dispatch.py, decorators.py, users_cache.py, users_roles.py, kicking_flow.py, keyboards.py, replies.py, cache.py, __main__.py, ban_info.py, mongos.py (full), groups_db.py (full), formatter.py, pagination.py, prefixes.py, timedate_format.py, alive.py, scheduler.py (database), redis_client.py, documents.py, kicks_db.py, stats_flow.py (full 539 lines), promote_flow.py (full 246 lines), parse_logmsg.py (full 798 lines), error_reporter.py, queues_db.py, __init__.py, database/__init__.py, modules/__init__.py, about.py, additional.py, appeals.py, broadcasting.py, connecting.py, disconnecting.py, groups.py, help.py, maintenance.py, netspeed.py, privacy.py, start.py, stats.py, types.py, modules/helper/__init__.py, helper/formatter.py, parse_editmsg.py, parse_link.py, workflows/__init__.py, proof_flow.py, reason_flow.py.
+  - Ruff: All checks passed (74 files). Bot: APScheduler running, all subsystems healthy.
+  - Zero new bugs found. Baseline holds: #1-#422 total. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 151 (2026-06-16): Zero-finding pass — full audit of remaining files. AUDIT COMPLETE.
   - Files audited (all CLEAN): proof_flow.py, warnings.py, appeals.py, mutes_db.py, kicks_db.py, connecting.py, disconnecting.py, warning_flow.py (full 477 lines), error_reporter.py, cache.py (database layer, full), alive.py, parse_logmsg.py (full), prefixes.py, pagination.py, timedate_format.py, logger.py.
