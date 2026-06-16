@@ -5,12 +5,13 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-06-16 (session 145)
+**Last updated:** 2026-06-16 (session 146)
 
 ## Verification baseline
 
 | Check | Result |
 |---|---|
+| Session 146 combinatorial audit | PASS: ZERO new bugs. Deep audit of 6 focus areas: chat migration handler (CLEAN), mutes race condition (CLEAN, query-time filter), ban double-submit (CLEAN, get_active_ban guard + ConversationHandler state), group re-add (CLEAN, add_group is upsert), timed-ban lifecycle (known limitation, cancel_schedule future-proof already present), cfg/warns/bans verification (all CLEAN). Ruff: 74 files clean. Import: OK. Total bugs: #1-#420. Third consecutive zero-finding session. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |
 | Session 145 final audit sweep | PASS: ZERO new bugs. Final 8 files audited and confirmed CLEAN: `tcbot/utils/__init__.py`, `tcbot/modules/about.py`, `tcbot/modules/help.py`, `tcbot/modules/start.py`, `tcbot/modules/stats.py`, `tcbot/modules/checking.py`, `tcbot/modules/privacy.py`, `tcbot/modules/maintenance.py`. All 74 tcbot/ Python files across all sessions now fully verified. Ruff: 74 files clean. Import: OK. Total bugs: #1-#420. Audit complete. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |
 | Session 142 audit pass 23 | PASS: 4 doc/skill bugs fixed (#415-#418). Em-dash cleaned from replit.md/CHANGELOG.md/PLAN.md. docs/performance.md targets updated to v4.6.2. 6 agent skill files corrected from [job-queue] to [rate-limiter]. tcbot/__init__.py docstrings updated. Comprehensive code scans: 0 HTML-without-parse_mode (all 13 false positives via mention()/non-HTML contexts), 0 missing-q.answer callbacks (2 false positives via _render_help_index/_ack_and_render), 0 gather-without-return_exceptions, 0 unhandled gather results, 0 em-dash/emoji in .py files, 0 hardcoded chat IDs (1 false positive example string), 0 job-queue usage in tcbot/, 0 create_task without handlers. All project docs/root .md files CLEAN of em/en-dash. Ruff: 74 files clean. Total bugs: #1-#418. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |
 | Session 142 audit pass 22 | PASS: ZERO new bugs. 74 Python files fully verified across all audit passes. Files read this session: checking.py (all callbacks), stats.py, muting_flow.py, greeting.py, __main__.py, decorators.py, extraction.py, start.py, help.py. 5 AST-scan false positives resolved — all delegated to helpers with q.answer() in gather. 0 HTML-without-parse_mode, 0 missing-q.answer callbacks, 0 gather-without-return_exceptions. Ruff: 74 files clean. Total bugs: #1-#414. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |

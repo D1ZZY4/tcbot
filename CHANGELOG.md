@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-16 (session 146)
+
+### Changed
+
+- No bugs found. Deep combinatorial audit of six focus areas: (T001) `allowed_updates=Update.ALL_TYPES` confirmed; `on_chat_migration` handler with `filters.StatusUpdate.MIGRATE` present in `greeting.py` - CLEAN. (T002) `mutes_db` active-mute query filters `until_date > now` at query time - no APScheduler race condition possible - CLEAN. (T003) `ban_flow._execute_ban` has `get_active_ban` guard before create/update; ConversationHandler `per_user=True`/`per_chat=True` prevents double-submit - CLEAN. (T004) `groups_db.add_group` is upsert (`update_one + upsert=True`); `on_bot_added` checks `is_connected` before sending join prompt on re-add - CLEAN. (T005) timed-ban placeholder `_ = ban_duration` confirmed known limitation; `unban_flow.execute_unban` already calls `cancel_schedule(f"unban.{ban_id}")` future-proofing the flow - CLEAN. (T006) `__init__.py` cfg confirmed: `WARN_LIMIT=3` hardcoded in `warning_flow.py` is intentional (no `cfg.warn_limit`), `fed_warn_limit` integrated correctly; `warns_db.federation_warn_count` sums `warn_counts` docs correctly; `bans_db` all deactivate functions correct. Ruff: 74 files, all checks passed. Import: OK. Total bugs remains #1-#420.
+
 ## [Unreleased] - 2026-06-16 (session 145)
 
 ### Changed

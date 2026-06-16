@@ -5,9 +5,18 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 145)
+**Last updated:** 2026-06-16 (session 146)
 
 ## What is done
+
+- Session 146 (2026-06-16): Deep combinatorial audit of 6 focus areas — ZERO new bugs. Third consecutive zero-finding session.
+  - T001: `allowed_updates=Update.ALL_TYPES` confirmed; `on_chat_migration` with `MIGRATE` filter present in greeting.py. CLEAN.
+  - T002: `mutes_db` `get_active_mute`/`active_mute_docs` filter `until_date > now` at query time — no APScheduler race possible. CLEAN.
+  - T003: `ban_flow._execute_ban` has `get_active_ban` guard; ConversationHandler `per_user/per_chat=True` state prevents double-submit. CLEAN.
+  - T004: `groups_db.add_group` is upsert; `on_bot_added` checks `is_connected` before sending join prompt on re-add. CLEAN.
+  - T005: timed-ban `_ = ban_duration` confirmed known limitation; `unban_flow` already calls `cancel_schedule` for future-proofing. CLEAN.
+  - T006: `WARN_LIMIT=3` hardcoded intentional (no `cfg.warn_limit`); `fed_warn_limit` integrated; `federation_warn_count` sums correctly; all `bans_db` deactivate funcs correct.
+  - Ruff: 74 files, all checks passed. Import: OK. Total bugs: #1-#420. Remaining open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 145 (2026-06-16): Final audit sweep — ZERO new bugs. All remaining tcbot/ files verified CLEAN.
   - Files audited (all CLEAN): `tcbot/utils/__init__.py`, `tcbot/modules/about.py`, `tcbot/modules/help.py`, `tcbot/modules/start.py`, `tcbot/modules/stats.py`, `tcbot/modules/checking.py`, `tcbot/modules/privacy.py`, `tcbot/modules/maintenance.py`.
