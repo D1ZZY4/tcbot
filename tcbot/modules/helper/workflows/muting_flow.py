@@ -252,6 +252,8 @@ async def execute_unmute(
             )
         if isinstance(results2[1], BaseException):
             log.error("Unmute log send failed: %s", results2[1])
+        if isinstance(results2[2], BaseException):
+            log.debug("execute_unmute reply failed: %s", results2[2])
     else:
         results2 = await asyncio.gather(
             db.mutes_db.clear_active_mute(target_id),
