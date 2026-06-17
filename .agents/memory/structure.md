@@ -5,7 +5,7 @@ description: Snapshot of the TCF Bot source layout after refactoring. Use this t
 
 # TCF Bot - Module Structure
 
-**Last updated:** 2026-06-13 (session 91)
+**Last updated:** 2026-06-17 (session 163)
 
 ## Repository layout
 
@@ -79,8 +79,11 @@ tcbot/
 │   ├── users_roles.py       Roles: owner, admin, developer, tester; role_meta, can_act_on
 │   └── warns_db.py          Warning records (add_warn, get_warns, user_total_warns, etc.)
 └── utils/
+    ├── __init__.py          Package init; re-exports nothing (direct imports only)
+    ├── circuit_breaker.py   CircuitBreaker, CircuitState, CircuitOpenError; singletons telegram, mongodb
     ├── dispatch.py          fan_out() bounded async fan-out for multi-group ops
     ├── error_reporter.py    Async error reporting to configured Telegram destination
+    ├── formatter.py         bold(), code(), esc(), mention(), italic(), link() - HTML formatters
     ├── logger.py            Logging configuration (BotLogFormatter, TelegramErrorHandler, setup)
     ├── pagination.py        paginate(), nav_row(), date_or_unknown() - shared paginators
     ├── prefixes.py          build_prefixed_filters() - command filter builder

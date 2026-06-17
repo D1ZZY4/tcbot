@@ -55,7 +55,14 @@ def health() -> tuple[str, int, dict[str, str]]:
     db_circuit = _cb.mongodb.state.value
 
     overall = (
-        "ok" if (mongodb_ok and scheduler_ok and tg_circuit != "open") else "degraded"
+        "ok"
+        if (
+            mongodb_ok
+            and scheduler_ok
+            and tg_circuit != "open"
+            and db_circuit != "open"
+        )
+        else "degraded"
     )
     payload = {
         "status": overall,

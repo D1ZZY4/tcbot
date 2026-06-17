@@ -5,9 +5,16 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-16 (session 161)
+**Last updated:** 2026-06-17 (session 163)
 
 ## What is done
+
+- Session 163 (2026-06-17): Bug #432 + Bug #433 fixed. Comprehensive audit of all major files CLEAN.
+  - Bug #432: `alive.py` `/health` endpoint — `overall` status check included `tg_circuit != "open"` but omitted the symmetric `db_circuit != "open"` guard. When the MongoDB circuit breaker opens (5 consecutive failures), `/health` would still return 200/ok because only the Telegram circuit was checked. Fixed by adding `and db_circuit != "open"` to the overall condition.
+  - Bug #433: `.agents/memory/structure.md` — utils/ section listed only 6 files; missing `circuit_breaker.py`, `formatter.py`, and `__init__.py` added in sessions 135/161. Updated to 9 files with correct one-line descriptions. Last-updated date corrected (2026-06-13 → 2026-06-17).
+  - Design gap noted (not fixed this session): `_cb.mongodb` singleton defined and exported but never integrated into actual MongoDB DB calls — only used for health reporting. Circuit state stays permanently "closed". `dispatch.fan_out` correctly integrates `_cb.telegram`, but no equivalent wrapping exists for Motor/pymongo calls in `database/`. Documented for future work.
+  - Comprehensive audit: all major files verified CLEAN — ban_flow, appeal_flow, check_flow, warning_flow, kicking_flow, unban_flow, muting_flow, connected_flow, stats_flow, greeting, broadcasting, disconnecting, banning, warnings, admins, groups_db, warns_db, alive, dispatch, mutes_db, queues_db, circuit_breaker, dispatch.
+  - Ruff: 75 files clean. Import: OK. Bot: 29/29 indexes, Redis hiredis 3.4.0, APScheduler, polling. Total bugs: #1-#433. Open: CVE-2026-31072 (accepted), Improvement #4 (future), MongoDB circuit integration (future).
 
 - Session 162 (2026-06-16): Improvement #5. `_warm_hot_caches` expanded to also pre-warm owner's effective_role (L1+L2 TwoLevelCache) after owner_id known. Step 1 stays parallel (owner_id + active_groups); step 2 sequential dep (get_effective_role(owner_id)). CHANGELOG, docs/README.md quick nav updated. Ruff: 75 files clean. Import: OK. Bot: 29/29 indexes, Redis hiredis 3.4.0. Total bugs: #1-#431 + Improvement #5.
 
