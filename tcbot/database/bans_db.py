@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, cast
 from pymongo import ReturnDocument
 
 from tcbot.database.documents import BanDoc
-from tcbot.database.mongos import col, make_short_id
+from tcbot.database.mongos import col, db_call, make_short_id
 from tcbot.utils.timedate_format import utc_now
 
 if TYPE_CHECKING:
@@ -40,15 +40,17 @@ def make_ban_id() -> str:
 
 async def get_active_ban(user_id: int) -> BanDoc | None:
     """Get the currently active ban for a specific user."""
-    return await _bans().find_one(
-        {"banned_user_id": user_id, "is_active": True},
-        sort=[("timestamp", -1), ("ban_id", -1)],
+    return await db_call(
+        _bans().find_one(
+            {"banned_user_id": user_id, "is_active": True},
+            sort=[("timestamp", -1), ("ban_id", -1)],
+        )
     )
 
 
 async def get_ban(ban_id: str) -> BanDoc | None:
     """Get any ban record by its unique ban_id."""
-    return await _bans().find_one({"ban_id": ban_id})
+    return await db_call(_bans().find_one({"ban_id": ban_id}))
 
 
 # ──────────────────────────── Mutations ─────────────────────────── #
@@ -89,7 +91,7 @@ async def create_ban(
         "review_message_id": None,
         "review_timestamp": None,
     }
-    await _bans().insert_one(doc)
+    await db_call(_bans().insert_one(doc))
     return cast("BanDoc", doc)
 
 
@@ -106,37 +108,43 @@ async def update_ban(
     duration_str: str | None = None,
 ) -> BanDoc | None:
     """Update an existing ban record with new information."""
-    return await _bans().find_one_and_update(
-        {"ban_id": ban_id},
-        {
-            "$set": {
-                "reason": reason,
-                "admin_user_id": admin_id,
-                "proof_message_id": new_proof_id,
-                "log_message_id": new_log_id,
-                "previous_proof_message_id": old_proof_id,
-                "previous_log_message_id": old_log_id,
-                "updated_timestamp": utc_now(),
-                "until_date": until_date,
-                "duration_str": duration_str,
+    return await db_call(
+        _bans().find_one_and_update(
+            {"ban_id": ban_id},
+            {
+                "$set": {
+                    "reason": reason,
+                    "admin_user_id": admin_id,
+                    "proof_message_id": new_proof_id,
+                    "log_message_id": new_log_id,
+                    "previous_proof_message_id": old_proof_id,
+                    "previous_log_message_id": old_log_id,
+                    "updated_timestamp": utc_now(),
+                    "until_date": until_date,
+                    "duration_str": duration_str,
+                },
+                "$inc": {"update_count": 1},
             },
-            "$inc": {"update_count": 1},
-        },
-        return_document=ReturnDocument.AFTER,
+            return_document=ReturnDocument.AFTER,
+        )
     )
 
 
 async def set_log_message_id(ban_id: str, log_msg_id: int) -> None:
     """Update only the log message ID for an existing ban."""
-    await _bans().update_one(
-        {"ban_id": ban_id},
-        {"$set": {"log_message_id": log_msg_id}},
+    await db_call(
+        _bans().update_one(
+            {"ban_id": ban_id},
+            {"$set": {"log_message_id": log_msg_id}},
+        )
     )
 
 
 async def deactivate_ban(ban_id: str) -> bool:
     """Mark a ban as inactive (user is unbanned). Returns True if the ban exists."""
-    r = await _bans().update_one({"ban_id": ban_id}, {"$set": {"is_active": False}})
+    r = await db_call(
+        _bans().update_one({"ban_id": ban_id}, {"$set": {"is_active": False}})
+    )
     return r.matched_count > 0
 
 
@@ -147,9 +155,11 @@ async def deactivate_all_active_bans(user_id: int) -> int:
     cleared regardless of how many were created (guarding against duplicate
     active bans that may exist from earlier race conditions or re-ban paths).
     """
-    r = await _bans().update_many(
-        {"banned_user_id": user_id, "is_active": True},
-        {"$set": {"is_active": False}},
+    r = await db_call(
+        _bans().update_many(
+            {"banned_user_id": user_id, "is_active": True},
+            {"$set": {"is_active": False}},
+        )
     )
     return r.modified_count
 
@@ -161,22 +171,26 @@ async def deactivate_extra_active_bans(user_id: int, keep_ban_id: str) -> int:
     to suppress any stale duplicate active bans while preserving the canonical
     record that is being reused. Returns the number of extras deactivated.
     """
-    r = await _bans().update_many(
-        {
-            "banned_user_id": user_id,
-            "is_active": True,
-            "ban_id": {"$ne": keep_ban_id},
-        },
-        {"$set": {"is_active": False}},
+    r = await db_call(
+        _bans().update_many(
+            {
+                "banned_user_id": user_id,
+                "is_active": True,
+                "ban_id": {"$ne": keep_ban_id},
+            },
+            {"$set": {"is_active": False}},
+        )
     )
     return r.modified_count
 
 
 async def set_review(ban_id: str, msg_id: int) -> None:
     """Attach a review message ID to a ban record."""
-    await _bans().update_one(
-        {"ban_id": ban_id},
-        {"$set": {"review_message_id": msg_id, "review_timestamp": utc_now()}},
+    await db_call(
+        _bans().update_one(
+            {"ban_id": ban_id},
+            {"$set": {"review_message_id": msg_id, "review_timestamp": utc_now()}},
+        )
     )
 
 
@@ -186,9 +200,11 @@ async def clear_review(ban_id: str) -> None:
     Called after an appeal is rejected so the banned user is not permanently
     locked out from submitting a second appeal.
     """
-    await _bans().update_one(
-        {"ban_id": ban_id},
-        {"$set": {"review_message_id": None, "review_timestamp": None}},
+    await db_call(
+        _bans().update_one(
+            {"ban_id": ban_id},
+            {"$set": {"review_message_id": None, "review_timestamp": None}},
+        )
     )
 
 
@@ -198,15 +214,17 @@ async def set_rejected_by(ban_id: str, admin_id: int, admin_name: str) -> None:
     Called on appeal reject so the audit trail is preserved even if the log
     message is later deleted or the log channel is unavailable.
     """
-    await _bans().update_one(
-        {"ban_id": ban_id},
-        {
-            "$set": {
-                "rejected_by_id": admin_id,
-                "rejected_by_name": admin_name,
-                "rejected_at": utc_now(),
-            }
-        },
+    await db_call(
+        _bans().update_one(
+            {"ban_id": ban_id},
+            {
+                "$set": {
+                    "rejected_by_id": admin_id,
+                    "rejected_by_name": admin_name,
+                    "rejected_at": utc_now(),
+                }
+            },
+        )
     )
 
 
@@ -217,15 +235,17 @@ async def set_appeal_log_msg(
     appeal_link: str = "",
 ) -> None:
     """Attach appeal-related metadata to a ban record."""
-    await _bans().update_one(
-        {"ban_id": ban_id},
-        {
-            "$set": {
-                "appeal_log_msg_id": msg_id,
-                "appeal_submitted_at": submitted_at or utc_now(),
-                "appeal_link": appeal_link,
-            }
-        },
+    await db_call(
+        _bans().update_one(
+            {"ban_id": ban_id},
+            {
+                "$set": {
+                    "appeal_log_msg_id": msg_id,
+                    "appeal_submitted_at": submitted_at or utc_now(),
+                    "appeal_link": appeal_link,
+                }
+            },
+        )
     )
 
 
@@ -236,13 +256,13 @@ async def set_appeal_log_msg(
 
 async def active_ban_count() -> int:
     """Count the total number of currently active bans."""
-    return await _bans().count_documents({"is_active": True})
+    return await db_call(_bans().count_documents({"is_active": True}))
 
 
 async def active_bans() -> list[BanDoc]:
     """Get all active ban records in the database."""
-    return (
-        await _bans()
+    return await db_call(
+        _bans()
         .find({"is_active": True}, sort=[("timestamp", -1), ("ban_id", -1)])
         .to_list(None)
     )
@@ -250,8 +270,8 @@ async def active_bans() -> list[BanDoc]:
 
 async def active_ban_user_ids() -> list[int]:
     """Return only the user IDs of all active bans (projection-only, fastest path)."""
-    docs = (
-        await _bans()
+    docs = await db_call(
+        _bans()
         .find(
             {"is_active": True},
             {"_id": 0, "banned_user_id": 1},
@@ -267,8 +287,8 @@ async def active_ban_user_ids() -> list[int]:
 
 async def user_bans(user_id: int) -> list[BanDoc]:
     """Return every ban (active + inactive) for a user, newest first."""
-    return (
-        await _bans()
+    return await db_call(
+        _bans()
         .find(
             {"banned_user_id": user_id},
             sort=[("timestamp", -1), ("ban_id", -1)],
@@ -279,11 +299,16 @@ async def user_bans(user_id: int) -> list[BanDoc]:
 
 async def user_ban_count(user_id: int) -> int:
     """Count every ban ever issued against the user."""
-    return await _bans().count_documents({"banned_user_id": user_id})
+    return await db_call(_bans().count_documents({"banned_user_id": user_id}))
 
 
 async def user_appeal_count(user_id: int) -> int:
     """Count bans on this user that ever had an appeal submitted."""
-    return await _bans().count_documents(
-        {"banned_user_id": user_id, "appeal_log_msg_id": {"$ne": None, "$exists": True}}
+    return await db_call(
+        _bans().count_documents(
+            {
+                "banned_user_id": user_id,
+                "appeal_log_msg_id": {"$ne": None, "$exists": True},
+            }
+        )
     )

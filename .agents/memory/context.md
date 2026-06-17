@@ -5,9 +5,16 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-17 (session 164)
+**Last updated:** 2026-06-17 (session 165)
 
 ## What is done
+
+- Session 165 (2026-06-17): MongoDB circuit breaker fully wired into all DB helpers.
+  - Problem: `db_call()` existed (session 164) but was not imported or called in any DB helper — circuit could never trip on runtime DB failures, only on the startup ping.
+  - Fix: All 8 DB helpers now import `db_call` from `mongos` and wrap every Motor coroutine. Files: `bans_db.py` (19 ops), `groups_db.py` (12 ops), `users_roles.py` (15 ops), `users_cache.py` (10 ops), `warns_db.py` (15 ops), `mutes_db.py` (8 ops), `kicks_db.py` (3 ops), `queues_db.py` (5 ops).
+  - Result: Any failing Motor coroutine records a failure; 5 consecutive failures open circuit; subsequent calls fast-fail (`CircuitOpenError`) instead of 45s timeout; half-open probe re-closes on recovery.
+  - Ruff: 6 files reformatted, all checks passed. Import: OK. Bot: 29/29 indexes, Redis hiredis 3.4.0, APScheduler, polling.
+  - Open: CVE-2026-31072 (accepted), Improvement #4 (future). MongoDB circuit now FULLY LIVE (startup + runtime).
 
 - Session 164 (2026-06-17): MongoDB circuit integration (Improvement #6) + dependency bumps.
   - Dependency bump: `certifi v2026.5.20 -> v2026.6.17`, `tzlocal v5.4 -> v5.4.3` via `uv lock --upgrade` + `uv sync`.

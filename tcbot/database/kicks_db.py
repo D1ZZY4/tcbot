@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from tcbot.database.documents import KickDoc
-from tcbot.database.mongos import col
+from tcbot.database.mongos import col, db_call
 from tcbot.database.types import ChatId, UserId
 from tcbot.utils.timedate_format import utc_now
 
@@ -38,7 +38,7 @@ async def log_kick(user_id: int, chat_id: int, reason: str, admin_id: int) -> No
         "admin_id": UserId(admin_id),
         "timestamp": utc_now(),
     }
-    await _kicks().insert_one(doc)
+    await db_call(_kicks().insert_one(doc))
 
 
 # ─────────────────────── Per-user history ───────────────────────── #
@@ -46,13 +46,11 @@ async def log_kick(user_id: int, chat_id: int, reason: str, admin_id: int) -> No
 
 async def user_kicks(user_id: int) -> list[KickDoc]:
     """Return every kick record for a user, newest first."""
-    return (
-        await _kicks()
-        .find({"user_id": user_id}, sort=[("timestamp", -1)])
-        .to_list(None)
+    return await db_call(
+        _kicks().find({"user_id": user_id}, sort=[("timestamp", -1)]).to_list(None)
     )
 
 
 async def user_kick_count(user_id: int) -> int:
     """Count every kick ever logged against the user."""
-    return await _kicks().count_documents({"user_id": user_id})
+    return await db_call(_kicks().count_documents({"user_id": user_id}))

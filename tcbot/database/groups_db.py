@@ -15,7 +15,7 @@ from tcbot.database.cache import (
     connected_cache,
 )
 from tcbot.database.documents import GroupDoc, PendingGroupDoc
-from tcbot.database.mongos import col
+from tcbot.database.mongos import col, db_call
 from tcbot.utils.timedate_format import utc_now
 
 if TYPE_CHECKING:
@@ -41,15 +41,15 @@ def _pending() -> AsyncIOMotorCollection:
 
 async def get_group(chat_id: int) -> GroupDoc | None:
     """Get the full group record for a specific chat ID."""
-    return await _groups().find_one({"chat_id": chat_id})
+    return await db_call(_groups().find_one({"chat_id": chat_id}))
 
 
 async def get_group_titles(chat_ids: list[int]) -> dict[int, str]:
     """Return {chat_id: title} for the given chat_ids; missing groups are absent."""
     if not chat_ids:
         return {}
-    docs = (
-        await _groups()
+    docs = await db_call(
+        _groups()
         .find({"chat_id": {"$in": chat_ids}}, {"_id": 0, "chat_id": 1, "title": 1})
         .to_list(length=None)
     )
@@ -57,12 +57,12 @@ async def get_group_titles(chat_ids: list[int]) -> dict[int, str]:
 
 
 async def is_connected(chat_id: int) -> bool:
-    """Check if a group is currently active and connected to the federation (L1→L2→DB cached)."""
+    """Check if a group is currently active and connected to the federation (L1->L2->DB cached)."""
 
     async def _fetch() -> bool:
         return (
-            await _groups().find_one(
-                {"chat_id": chat_id, "is_active": True}, {"_id": 1}
+            await db_call(
+                _groups().find_one({"chat_id": chat_id, "is_active": True}, {"_id": 1})
             )
             is not None
         )
@@ -72,18 +72,20 @@ async def is_connected(chat_id: int) -> bool:
 
 async def add_group(chat_id: int, title: str, added_by: int) -> None:
     """Add or update a group in the federated_groups collection."""
-    await _groups().update_one(
-        {"chat_id": chat_id},
-        {
-            "$set": {
-                "chat_id": chat_id,
-                "title": title,
-                "added_by": added_by,
-                "added_date": utc_now(),
-                "is_active": True,
-            }
-        },
-        upsert=True,
+    await db_call(
+        _groups().update_one(
+            {"chat_id": chat_id},
+            {
+                "$set": {
+                    "chat_id": chat_id,
+                    "title": title,
+                    "added_by": added_by,
+                    "added_date": utc_now(),
+                    "is_active": True,
+                }
+            },
+            upsert=True,
+        )
     )
     connected_cache.put(chat_id, True)  # noqa: FBT003
     active_groups_cache.invalidate(_ALL_GROUPS_KEY)
@@ -91,17 +93,19 @@ async def add_group(chat_id: int, title: str, added_by: int) -> None:
 
 async def deactivate_group(chat_id: int) -> bool:
     """Mark a group as inactive (disconnect from federation)."""
-    r = await _groups().update_one({"chat_id": chat_id}, {"$set": {"is_active": False}})
+    r = await db_call(
+        _groups().update_one({"chat_id": chat_id}, {"$set": {"is_active": False}})
+    )
     connected_cache.put(chat_id, False)  # noqa: FBT003
     active_groups_cache.invalidate(_ALL_GROUPS_KEY)
     return r.matched_count > 0
 
 
 async def active_groups() -> list[GroupDoc]:
-    """Get all currently active and connected groups (L1→L2→DB cached)."""
+    """Get all currently active and connected groups (L1->L2->DB cached)."""
 
     async def _fetch() -> list[GroupDoc]:
-        return await _groups().find({"is_active": True}).to_list(None)
+        return await db_call(_groups().find({"is_active": True}).to_list(None))
 
     return cast(
         "list[GroupDoc]",
@@ -111,7 +115,7 @@ async def active_groups() -> list[GroupDoc]:
 
 async def active_group_count() -> int:
     """Count the number of currently active connected groups."""
-    return await _groups().count_documents({"is_active": True})
+    return await db_call(_groups().count_documents({"is_active": True}))
 
 
 async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
@@ -122,13 +126,17 @@ async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
     the relevant cache entries. Returns ``True`` if any record was updated.
     """
     results = await asyncio.gather(
-        _groups().update_one(
-            {"chat_id": old_chat_id},
-            {"$set": {"chat_id": new_chat_id}},
+        db_call(
+            _groups().update_one(
+                {"chat_id": old_chat_id},
+                {"$set": {"chat_id": new_chat_id}},
+            )
         ),
-        _pending().update_one(
-            {"chat_id": old_chat_id},
-            {"$set": {"chat_id": new_chat_id}},
+        db_call(
+            _pending().update_one(
+                {"chat_id": old_chat_id},
+                {"$set": {"chat_id": new_chat_id}},
+            )
         ),
         return_exceptions=True,
     )
@@ -150,26 +158,28 @@ async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
 
 async def add_pending(chat_id: int, title: str, owner_id: int, message_id: int) -> None:
     """Add or update a pending join request from a group."""
-    await _pending().update_one(
-        {"chat_id": chat_id},
-        {
-            "$set": {
-                "chat_id": chat_id,
-                "title": title,
-                "owner_id": owner_id,
-                "message_id": message_id,
-                "added_date": utc_now(),
-            }
-        },
-        upsert=True,
+    await db_call(
+        _pending().update_one(
+            {"chat_id": chat_id},
+            {
+                "$set": {
+                    "chat_id": chat_id,
+                    "title": title,
+                    "owner_id": owner_id,
+                    "message_id": message_id,
+                    "added_date": utc_now(),
+                }
+            },
+            upsert=True,
+        )
     )
 
 
 async def get_pending(chat_id: int) -> PendingGroupDoc | None:
     """Get a pending join request by chat ID."""
-    return await _pending().find_one({"chat_id": chat_id})
+    return await db_call(_pending().find_one({"chat_id": chat_id}))
 
 
 async def remove_pending(chat_id: int) -> None:
     """Remove a pending join request after it's approved or rejected."""
-    await _pending().delete_one({"chat_id": chat_id})
+    await db_call(_pending().delete_one({"chat_id": chat_id}))

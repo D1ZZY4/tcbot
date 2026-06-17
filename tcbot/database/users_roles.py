@@ -22,7 +22,7 @@ from tcbot.database.cache import (
     owner_id_cache,
 )
 from tcbot.database.documents import AdminDoc, RoleDoc, RoleRefDoc
-from tcbot.database.mongos import col
+from tcbot.database.mongos import col, db_call
 from tcbot.utils.timedate_format import utc_now
 
 log = logging.getLogger(__name__)
@@ -56,11 +56,11 @@ def role_rank(role: str | None) -> int:
 
 
 async def get_owner_id() -> int | None:
-    """Return the current owner's user ID (L1→L2→DB cached)."""
+    """Return the current owner's user ID (L1->L2->DB cached)."""
 
     async def _fetch() -> int | None:
-        doc: AdminDoc | None = await col("tc_owners").find_one(
-            {}, {"_id": 0, "user_id": 1}
+        doc: AdminDoc | None = await db_call(
+            col("tc_owners").find_one({}, {"_id": 0, "user_id": 1})
         )
         return doc["user_id"] if doc else None
 
@@ -69,15 +69,18 @@ async def get_owner_id() -> int | None:
 
 async def is_owner(user_id: int) -> bool:
     """Return True if user_id belongs to the bot owner."""
-    return await col("tc_owners").find_one({"user_id": user_id}, {"_id": 1}) is not None
+    return (
+        await db_call(col("tc_owners").find_one({"user_id": user_id}, {"_id": 1}))
+        is not None
+    )
 
 
 async def ensure_initial_owner(initial_id: int) -> None:
     """Create the first owner entry if the owners collection is empty."""
-    if await col("tc_owners").count_documents({}) > 0:
+    if await db_call(col("tc_owners").count_documents({})) > 0:
         return
     try:
-        await col("tc_owners").insert_one({"user_id": initial_id})
+        await db_call(col("tc_owners").insert_one({"user_id": initial_id}))
         owner_id_cache.put(_OWNER_KEY, initial_id)
     except DuplicateKeyError:
         # * Another instance won the startup race; drop the cache so the next read refreshes.
@@ -88,12 +91,14 @@ async def set_owner(user_id: int) -> None:
     """Replace the current owner with user_id; clears the role cache."""
     # * Insert the new owner first so a mid-flight crash leaves the new owner present,
     # * not zero owners. The unique index on user_id makes the upsert idempotent.
-    await col("tc_owners").update_one(
-        {"user_id": user_id},
-        {"$setOnInsert": {"user_id": user_id}},
-        upsert=True,
+    await db_call(
+        col("tc_owners").update_one(
+            {"user_id": user_id},
+            {"$setOnInsert": {"user_id": user_id}},
+            upsert=True,
+        )
     )
-    await col("tc_owners").delete_many({"user_id": {"$ne": user_id}})
+    await db_call(col("tc_owners").delete_many({"user_id": {"$ne": user_id}}))
     owner_id_cache.put(_OWNER_KEY, user_id)
     # * Clear the full role cache; the old owner's ID is unknown
     effective_role_cache.clear()
@@ -104,7 +109,10 @@ async def set_owner(user_id: int) -> None:
 
 async def is_admin(user_id: int) -> bool:
     """Return True if user_id is a registered admin."""
-    return await col("tc_admins").find_one({"user_id": user_id}, {"_id": 1}) is not None
+    return (
+        await db_call(col("tc_admins").find_one({"user_id": user_id}, {"_id": 1}))
+        is not None
+    )
 
 
 async def is_staff(user_id: int) -> bool:
@@ -123,35 +131,39 @@ async def is_staff(user_id: int) -> bool:
 
 async def add_admin(user_id: int, promoted_by: int) -> None:
     """Add a new admin via upsert; no-op if already present."""
-    await col("tc_admins").update_one(
-        {"user_id": user_id},
-        {
-            "$setOnInsert": {
-                "user_id": user_id,
-                "promoted_by": promoted_by,
-                "promoted_date": utc_now(),
-            }
-        },
-        upsert=True,
+    await db_call(
+        col("tc_admins").update_one(
+            {"user_id": user_id},
+            {
+                "$setOnInsert": {
+                    "user_id": user_id,
+                    "promoted_by": promoted_by,
+                    "promoted_date": utc_now(),
+                }
+            },
+            upsert=True,
+        )
     )
     effective_role_cache.invalidate(user_id)
 
 
 async def remove_admin(user_id: int) -> bool:
     """Remove an admin; return True if the entry was deleted."""
-    r = await col("tc_admins").delete_one({"user_id": user_id})
+    r = await db_call(col("tc_admins").delete_one({"user_id": user_id}))
     effective_role_cache.invalidate(user_id)
     return r.deleted_count > 0
 
 
 async def all_admins() -> list[AdminDoc]:
     """Return all admin documents."""
-    return await col("tc_admins").find({}, {"_id": 0, "user_id": 1}).to_list(None)
+    return await db_call(
+        col("tc_admins").find({}, {"_id": 0, "user_id": 1}).to_list(None)
+    )
 
 
 async def admin_count() -> int:
     """Return the total count of registered admins."""
-    return await col("tc_admins").estimated_document_count()
+    return await db_call(col("tc_admins").estimated_document_count())
 
 
 # ───────────────── Custom role CRUD (dev / tester) ─────────────── #
@@ -159,46 +171,46 @@ async def admin_count() -> int:
 
 async def set_role(user_id: int, role: str, assigned_by: int) -> None:
     """Assign a custom role (developer/tester) to a user."""
-    await col("tc_roles").update_one(
-        {"user_id": user_id},
-        {
-            "$set": {
-                "user_id": user_id,
-                "role": role,
-                "assigned_by": assigned_by,
-                "assigned_at": utc_now(),
-            }
-        },
-        upsert=True,
+    await db_call(
+        col("tc_roles").update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    "user_id": user_id,
+                    "role": role,
+                    "assigned_by": assigned_by,
+                    "assigned_at": utc_now(),
+                }
+            },
+            upsert=True,
+        )
     )
     effective_role_cache.invalidate(user_id)
 
 
 async def remove_role(user_id: int) -> bool:
     """Remove a user's custom role from the database."""
-    r = await col("tc_roles").delete_one({"user_id": user_id})
+    r = await db_call(col("tc_roles").delete_one({"user_id": user_id}))
     effective_role_cache.invalidate(user_id)
     return r.deleted_count > 0
 
 
 async def get_role(user_id: int) -> str | None:
     """Get a user's custom role from the database only."""
-    doc = await col("tc_roles").find_one({"user_id": user_id}, {"role": 1})
+    doc = await db_call(col("tc_roles").find_one({"user_id": user_id}, {"role": 1}))
     return doc["role"] if doc else None
 
 
 async def all_by_role(role: str) -> list[RoleRefDoc]:
     """Get all users with a specific custom role."""
-    return (
-        await col("tc_roles")
-        .find({"role": role}, {"_id": 0, "user_id": 1})
-        .to_list(None)
+    return await db_call(
+        col("tc_roles").find({"role": role}, {"_id": 0, "user_id": 1}).to_list(None)
     )
 
 
 async def all_roles() -> list[RoleDoc]:
     """Get all custom role assignments in the database."""
-    return await col("tc_roles").find({}).to_list(None)
+    return await db_call(col("tc_roles").find({}).to_list(None))
 
 
 # ──────────────────── Effective role resolution ────────────────── #
@@ -223,7 +235,7 @@ async def can_act_on(executor_id: int, target_id: int) -> bool:
 
 
 async def get_effective_role(user_id: int) -> str | None:
-    """Resolve a user's full effective role including owner/admin status (L1→L2→DB cached)."""
+    """Resolve a user's full effective role including owner/admin status (L1->L2->DB cached)."""
 
     async def _fetch() -> str | None:
         owner, admin, role = await asyncio.gather(
@@ -261,16 +273,20 @@ async def role_meta(user_id: int) -> tuple[str | None, int | None, Any]:
         # * tc_owners stores only user_id; no metadata to surface.
         return role, None, None
     if role == "admin":
-        doc = await col("tc_admins").find_one(
-            {"user_id": user_id},
-            {"_id": 0, "promoted_by": 1, "promoted_date": 1},
+        doc = await db_call(
+            col("tc_admins").find_one(
+                {"user_id": user_id},
+                {"_id": 0, "promoted_by": 1, "promoted_date": 1},
+            )
         )
         if doc:
             return role, doc.get("promoted_by"), doc.get("promoted_date")
         return role, None, None
-    doc = await col("tc_roles").find_one(
-        {"user_id": user_id},
-        {"_id": 0, "assigned_by": 1, "assigned_at": 1},
+    doc = await db_call(
+        col("tc_roles").find_one(
+            {"user_id": user_id},
+            {"_id": 0, "assigned_by": 1, "assigned_at": 1},
+        )
     )
     if doc:
         return role, doc.get("assigned_by"), doc.get("assigned_at")

@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-17 (session 165)
+
+### Changed
+
+- **MongoDB circuit breaker — DB helper integration** (`tcbot/database/bans_db.py`, `groups_db.py`, `users_roles.py`, `users_cache.py`, `warns_db.py`, `mutes_db.py`, `kicks_db.py`, `queues_db.py`): The `db_call()` helper added in session 164 was not yet wired into any database helper. Since session 161 the circuit breaker existed; since session 164 `connect()` could trip it via the startup ping — but after startup, MongoDB failures on individual Motor calls never recorded failures against the circuit, so it could never trip or self-heal based on runtime DB traffic. Fixed by importing `db_call` from `tcbot.database.mongos` in all eight DB helper modules and wrapping every `await collection.operation(...)` call (including cursor `.to_list()`, `find_one`, `insert_one`, `update_one`, `update_many`, `delete_one`, `delete_many`, `count_documents`, `estimated_document_count`, `find_one_and_update`) with `await db_call(...)`. Each failed Motor coroutine now records a failure against the MongoDB circuit; five consecutive failures open the circuit; subsequent calls fast-fail with `CircuitOpenError` instead of waiting the 45-second `socketTimeoutMS`. When MongoDB recovers, the half-open probe closes the circuit and normal operation resumes. Ruff reformatted 6 files; all checks passed. Import: OK. Bot: 29/29 indexes, Redis, APScheduler, polling.
+
 ## [Unreleased] - 2026-06-17 (session 164)
 
 ### Changed

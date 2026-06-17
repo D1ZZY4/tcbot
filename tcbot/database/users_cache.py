@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, cast
 
 from tcbot.database.cache import CACHE_MISS, user_mention_cache
 from tcbot.database.documents import UserDoc
-from tcbot.database.mongos import col
+from tcbot.database.mongos import col, db_call
 from tcbot.utils.timedate_format import utc_now
 
 if TYPE_CHECKING:
@@ -40,21 +40,23 @@ async def upsert_user(
 ) -> None:
     """Update or insert a user's profile information into the cache."""
     now = utc_now()
-    await _members().update_one(
-        {"user_id": user_id},
-        {
-            "$set": {
-                "user_id": user_id,
-                "username": username,
-                "first_name": first_name,
-                "last_name": last_name,
-                "last_updated": now,
+    await db_call(
+        _members().update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    "user_id": user_id,
+                    "username": username,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "last_updated": now,
+                },
+                "$setOnInsert": {
+                    "commit_date": now,
+                },
             },
-            "$setOnInsert": {
-                "commit_date": now,
-            },
-        },
-        upsert=True,
+            upsert=True,
+        )
     )
     # * Invalidate mention cache so the next read reflects the updated profile.
     user_mention_cache.invalidate(user_id)
@@ -91,19 +93,19 @@ async def upsert_user_if_changed(
 
 async def get_user(user_id: int) -> UserDoc | None:
     """Get the full cached profile for a specific user."""
-    return await _members().find_one({"user_id": user_id})
+    return await db_call(_members().find_one({"user_id": user_id}))
 
 
 async def get_user_mention_data(user_id: int) -> tuple[str, str | None]:
-    """Return (first_name, username) for mention formatting (L1→L2→DB cached).
+    """Return (first_name, username) for mention formatting (L1->L2->DB cached).
 
     Uses ``user_mention_cache`` (Redis-backed TwoLevelCache) to avoid MongoDB
     round-trips on repeated lookups.  Cache is invalidated on every ``upsert_user``.
     """
 
     async def _fetch() -> list[str | None]:
-        doc = await _members().find_one(
-            {"user_id": user_id}, {"first_name": 1, "username": 1}
+        doc = await db_call(
+            _members().find_one({"user_id": user_id}, {"first_name": 1, "username": 1})
         )
         if doc:
             return [doc.get("first_name") or str(user_id), doc.get("username")]
@@ -140,8 +142,8 @@ async def get_mention_data_batch(
         return result
 
     # * Batch-fetch only uncached users from MongoDB in a single round-trip.
-    docs = (
-        await _members()
+    docs = await db_call(
+        _members()
         .find(
             {"user_id": {"$in": missing}},
             {"user_id": 1, "first_name": 1, "username": 1},
@@ -172,8 +174,8 @@ async def get_first_names_batch(user_ids: list[int]) -> dict[int, str]:
     """
     if not user_ids:
         return {}
-    docs = (
-        await _members()
+    docs = await db_call(
+        _members()
         .find({"user_id": {"$in": user_ids}}, {"user_id": 1, "first_name": 1})
         .to_list(None)
     )
@@ -198,7 +200,7 @@ async def get_first_name(user_id: int, fallback: str = "") -> str:
         data = cast("list[str | None]", cached)
         return cast("str", data[0]) or fallback
 
-    doc = await _members().find_one({"user_id": user_id}, {"first_name": 1})
+    doc = await db_call(_members().find_one({"user_id": user_id}, {"first_name": 1}))
     if doc:
         return doc.get("first_name") or fallback
     return fallback
@@ -206,7 +208,7 @@ async def get_first_name(user_id: int, fallback: str = "") -> str:
 
 async def total_users() -> int:
     """Get the total number of unique users in the cache."""
-    return await _members().estimated_document_count()
+    return await db_call(_members().estimated_document_count())
 
 
 async def all_users(*, sort_by: str = "first_name") -> list[UserDoc]:
@@ -216,11 +218,8 @@ async def all_users(*, sort_by: str = "first_name") -> list[UserDoc]:
     paginated view does not need to sort in-process for large caches.
     """
     sort_dir = 1 if sort_by != "last_updated" else -1
-    return (
-        await _members()
-        .find({}, {"_id": 0})
-        .sort(sort_by, sort_dir)
-        .to_list(length=None)
+    return await db_call(
+        _members().find({}, {"_id": 0}).sort(sort_by, sort_dir).to_list(length=None)
     )
 
 
@@ -235,8 +234,8 @@ async def search_by_name(needle: str, limit: int = 5) -> list[UserDoc]:
     if not needle:
         return []
     pattern = {"$regex": re.escape(needle), "$options": "i"}
-    return (
-        await _members()
+    return await db_call(
+        _members()
         .find(
             {"$or": [{"first_name": pattern}, {"username": pattern}]},
             {"user_id": 1, "first_name": 1, "username": 1, "_id": 0},

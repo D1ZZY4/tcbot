@@ -33,7 +33,7 @@ flowchart TD
 | `ensure_indexes()` | Creates all required indexes on startup. Safe to call repeatedly. |
 | `db()` | Returns the active database or raises if `connect()` has not run. |
 | `col(name)` | Returns a collection from `db()`. Use only inside database helper modules. |
-| `db_call(coro)` | Executes a Motor coroutine through the `mongodb` circuit breaker. Raises `CircuitOpenError` when the circuit is OPEN so callers fast-fail instead of waiting the 45-second socket timeout. Use inside database helper modules for critical read/write operations. |
+| `db_call(coro)` | Executes a Motor coroutine through the `mongodb` circuit breaker. Raises `CircuitOpenError` when the circuit is OPEN so callers fast-fail instead of waiting the 45-second socket timeout. All eight DB helper modules (`bans_db`, `groups_db`, `users_roles`, `users_cache`, `warns_db`, `mutes_db`, `kicks_db`, `queues_db`) wrap every Motor operation with `db_call()`. Five consecutive failures open the circuit; a half-open probe re-closes it when MongoDB recovers. |
 | `make_short_id(length=10)` | Generates lowercase alphanumeric IDs for records such as bans and promotion requests. |
 
 ## Collections and helpers
