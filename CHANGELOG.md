@@ -2,6 +2,16 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-17 (session 164)
+
+### Changed
+
+- **Dependency bump** (`uv.lock`): `certifi v2026.5.20 -> v2026.6.17`, `tzlocal v5.4 -> v5.4.3`. Both are safe minor/patch releases; bumped via `uv lock --upgrade` and installed with `uv sync`. No API changes affect bot code.
+
+### Added
+
+- **Improvement #6** (`tcbot/database/mongos.py`): MongoDB circuit breaker singleton (`tcbot.utils.circuit_breaker.mongodb`) existed since session 161 but was never wired into actual Motor calls, meaning the circuit could never trip or self-heal on MongoDB failures. Fixed by: (1) importing `mongodb as _mongo_cb` from `tcbot.utils.circuit_breaker` in `mongos.py`; (2) replacing the bare `await _db.command("ping")` in `connect()` with `await _mongo_cb.call(_db.command("ping"))` so a successful startup ping records a CLOSED success on the circuit and repeated connection failures during recovery probes correctly advance the circuit state machine; (3) adding a module-level `async def db_call(coro)` convenience function that routes any Motor coroutine through the MongoDB circuit breaker, enabling database helper modules to fast-fail with `CircuitOpenError` instead of waiting the full 45-second socket timeout when MongoDB is unreachable. The health endpoint (`/health`) already reported `circuit_mongodb` state; the circuit is now live and operational. Updated `docs/databases/databases.md` to document `db_call()`.
+
 ## [Unreleased] - 2026-06-17 (session 163)
 
 ### Fixed

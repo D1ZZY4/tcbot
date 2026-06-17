@@ -29,10 +29,11 @@ flowchart TD
 
 | Export | Purpose |
 |---|---|
-| `connect()` | Creates the `AsyncIOMotorClient`, selects `cfg.db_name`, and pings MongoDB. |
+| `connect()` | Creates the `AsyncIOMotorClient`, selects `cfg.db_name`, and pings MongoDB through the circuit breaker. A successful ping records a CLOSED success on the `mongodb` circuit; repeated failures trip it to OPEN. |
 | `ensure_indexes()` | Creates all required indexes on startup. Safe to call repeatedly. |
 | `db()` | Returns the active database or raises if `connect()` has not run. |
 | `col(name)` | Returns a collection from `db()`. Use only inside database helper modules. |
+| `db_call(coro)` | Executes a Motor coroutine through the `mongodb` circuit breaker. Raises `CircuitOpenError` when the circuit is OPEN so callers fast-fail instead of waiting the 45-second socket timeout. Use inside database helper modules for critical read/write operations. |
 | `make_short_id(length=10)` | Generates lowercase alphanumeric IDs for records such as bans and promotion requests. |
 
 ## Collections and helpers

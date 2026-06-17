@@ -11,6 +11,7 @@ import logging
 import secrets
 import string
 from pathlib import Path
+from typing import TYPE_CHECKING, TypeVar
 
 from motor.motor_asyncio import (
     AsyncIOMotorClient,
@@ -19,6 +20,12 @@ from motor.motor_asyncio import (
 )
 
 from tcbot import cfg
+from tcbot.utils.circuit_breaker import mongodb as _mongo_cb
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
+_T = TypeVar("_T")
 
 _RESOLV_CONF = "/etc/resolv.conf"
 
@@ -104,7 +111,7 @@ async def connect() -> None:
         retryReads=True,
     )
     _db = client[cfg.db_name]
-    await _db.command("ping")
+    await _mongo_cb.call(_db.command("ping"))
     log.info("MongoDB connected → %s", cfg.db_name)
 
 
@@ -191,3 +198,27 @@ def col(name: str) -> AsyncIOMotorCollection:
 def is_connected() -> bool:
     """Return True when a MongoDB connection has been established via connect()."""
     return _db is not None
+
+
+# ─────────────────── Circuit-Breaker Wrapper ────────────────────── #
+# * Optional convenience for database helpers that want to route a
+# * single Motor coroutine through the mongodb circuit breaker.
+# * Raises CircuitOpenError when the circuit is OPEN (MongoDB is
+# * considered unreachable) so callers can fast-fail without waiting
+# * for a socket timeout.
+
+
+async def db_call(coro: Awaitable[_T]) -> _T:
+    """Execute a Motor coroutine through the MongoDB circuit breaker.
+
+    Use this inside database helper modules for operations where a full
+    socket-timeout wait is undesirable when the cluster is unreachable.
+
+    Raises:
+        CircuitOpenError: Circuit is OPEN; the call was rejected without
+            touching MongoDB.
+        Any exception the coroutine raises (also recorded as a failure;
+            the exception propagates to the caller unchanged).
+
+    """
+    return await _mongo_cb.call(coro)

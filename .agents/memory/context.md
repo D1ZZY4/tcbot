@@ -5,19 +5,24 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-17 (session 163)
+**Last updated:** 2026-06-17 (session 164)
 
 ## What is done
 
-- Session 163 (2026-06-17): Bug #432 + #433 + #434 + #435 fixed. Comprehensive audit ongoing.
+- Session 164 (2026-06-17): MongoDB circuit integration (Improvement #6) + dependency bumps.
+  - Dependency bump: `certifi v2026.5.20 -> v2026.6.17`, `tzlocal v5.4 -> v5.4.3` via `uv lock --upgrade` + `uv sync`.
+  - Improvement #6: MongoDB circuit breaker singleton (`_cb.mongodb`) was never wired into actual Motor calls since session 161 — could never trip or self-heal. Fixed: (1) `mongos.py` imports `mongodb as _mongo_cb` from `tcbot.utils.circuit_breaker`; (2) `connect()` ping wrapped with `await _mongo_cb.call(_db.command("ping"))` — successful startup ping records CLOSED, repeated failures trip to OPEN; (3) new `async def db_call(coro)` module-level helper routes any Motor coroutine through the circuit breaker for fast-fail on OPEN state.
+  - Updated `docs/databases/databases.md`: `connect()` and `db_call()` entries updated.
+  - Verified: re-audited `alive.py`, `reason_flow.py`, `connected_flow.py`, `admins.py` (all changed in s163) — all CLEAN. Ruff: 75 files clean. Import: OK. Bot: 29/29 indexes, Redis hiredis 3.4.0, APScheduler, polling.
+  - Open: CVE-2026-31072 (accepted), Improvement #4 (future). MongoDB circuit now LIVE (not future).
+
+- Session 163 (2026-06-17): Bug #432 + #433 + #434 + #435 + #436 fixed. Comprehensive audit ongoing.
   - Bug #432: `alive.py` `/health` endpoint — `overall` status check omitted `db_circuit != "open"` guard. Fixed.
   - Bug #433: `structure.md` utils/ section listed 6 files instead of 9. Fixed.
   - Bug #434: `reason_flow._on_reason_text` accepted unbounded reason text. Fixed: `_MAX_REASON_LEN = 1000`.
-  - Bug #435: `complete_join` in `connected_flow.py` discarded results of `add_group` + `remove_pending` via `*_` unpacking. DB failures silently swallowed; `connecting.py` sent false "connected" confirmation. Fixed: (1) explicitly unpack `add_group_r`, raise if BaseException; (2) `cmd_tcconnect` now sequential (join first, reply only on success); (3) `on_bot_added` now checks `_join_r` BaseException.
-  - Bug #436: `admins.py` `on_promo_decision` — both approve/reject branches used `q.message.text` (HTML-stripped plain text) without `parse_mode="HTML"`, losing HTML formatting of the review card. Also `admin.first_name` not esc'd. Fixed: use `q.message.text_html` + `parse_mode="HTML"` + `esc(admin.first_name)` in both branches.
-  - Comprehensive audit continued: parse_logmsg, greeting, banning, broadcasting, check_flow, muting_flow, kicking_flow, demote_flow, promote_flow, proof_flow, warning_flow, unban_flow, appeal_flow — all CLEAN. All gather calls return_exceptions=True. All HTML uses mention()/esc()/user_ref(). Ruff: 75 files clean. Import: OK. Total bugs: #1-#436. Open: CVE-2026-31072 (accepted), Improvement #4 (future), MongoDB circuit integration (future).
-  - Design gap noted: `_cb.mongodb` singleton never integrated into actual Motor DB calls (future work).
-  - Comprehensive audit: callback_data parsing, gather calls, HTML escaping, user_data access, about/start/privacy/netspeed/appeals/unbanning/connecting/disconnecting/maintenance/broadcasting — all CLEAN. Ruff: 75 files clean. Import: OK. Bot: 29/29 indexes, Redis hiredis 3.4.0, APScheduler, polling. Total bugs: #1-#435. Open: CVE-2026-31072 (accepted), Improvement #4 (future), MongoDB circuit integration (future).
+  - Bug #435: `complete_join` in `connected_flow.py` discarded results of `add_group` + `remove_pending` via `*_` unpacking. DB failures silently swallowed; `connecting.py` sent false "connected" confirmation. Fixed.
+  - Bug #436: `admins.py` `on_promo_decision` — HTML formatting lost, `admin.first_name` not esc'd. Fixed.
+  - Ruff: 75 files clean. Import: OK. Total bugs: #1-#436. Open: CVE-2026-31072 (accepted), Improvement #4 (future), MongoDB circuit integration (now done in s164).
 
 - Session 162 (2026-06-16): Improvement #5. `_warm_hot_caches` expanded to also pre-warm owner's effective_role (L1+L2 TwoLevelCache) after owner_id known. Step 1 stays parallel (owner_id + active_groups); step 2 sequential dep (get_effective_role(owner_id)). CHANGELOG, docs/README.md quick nav updated. Ruff: 75 files clean. Import: OK. Bot: 29/29 indexes, Redis hiredis 3.4.0. Total bugs: #1-#431 + Improvement #5.
 
