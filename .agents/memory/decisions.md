@@ -360,3 +360,19 @@ if (
 **Why:** The advisory covers RCE via insecure deserialization in the JSON/CBOR serializers (`unmarshal_object` instantiates arbitrary classes via `__setstate__`). There is no patched release: every published 4.x is an affected alpha and 3.x is a different API with no `AsyncScheduler`/`MongoDBDataStore`. Reachability is low here: the serializer only deserialises schedule documents the bot itself wrote into its private MongoDB, referencing fixed module-level callables with primitive kwargs, so exploitation requires pre-existing MongoDB write access, not any Telegram-facing path.
 
 **How to apply:** Do NOT `uv lock --upgrade` APScheduler blindly to another alpha and do NOT downgrade to 3.x. Hold until a genuinely patched release ships, then upgrade. Mitigate operationally: private, least-privilege, IP-allowlisted MongoDB and `MONGODB_URI` secret hygiene. Re-check with `gh api repos/D1ZZY4/tcbot/dependabot/alerts/2 --jq '.security_vulnerability.first_patched_version'`.
+
+---
+
+## 2026-06-17: _error_handler must filter CircuitOpenError to prevent error-channel flood
+
+**Decision:** `_error_handler` in `tcbot/__main__.py` must short-circuit with `log.warning` and `return` when the caught exception is an instance of `CircuitOpenError`, **before** forwarding to `report_exc`.
+
+**Why:** When the MongoDB circuit is OPEN, every incoming Telegram update that touches any DB helper will raise `CircuitOpenError` (fast-fail). All of those propagate to the PTB application error handler. Without the early-return guard, each one invokes `report_exc`, which calls `bot.send_message` to the error channel — creating a flooding cascade of hundreds of identical messages per minute. With the guard, the circuit state is logged once at WARNING level and the error channel stays clean.
+
+**How to apply:** The guard lives in `_error_handler` right after extracting `exc` and before any `await report_exc(...)` call:
+```python
+if isinstance(exc, CircuitOpenError):
+    log.warning("MongoDB circuit open — skipping error report: %s", exc)
+    return
+```
+`CircuitOpenError` must be imported at the top of `__main__.py` from `tcbot.utils.circuit_breaker`.

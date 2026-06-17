@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-17 (session 166)
+
+### Fixed
+
+- **Bug #437** (`tcbot/__main__.py`): `_error_handler` (PTB Layer 2) did not filter `CircuitOpenError`. When MongoDB entered OPEN state, every incoming Telegram update that triggered a DB operation would propagate `CircuitOpenError` to the error handler, which would then attempt to send a report to the error channel for each one — flooding it with hundreds of identical "Circuit is OPEN" messages per second. Fixed by adding an early `isinstance(exc, CircuitOpenError)` guard: circuit-open errors are now logged at `WARNING` level only (the circuit breaker itself already logs state transitions at `WARNING`/`INFO`), and `error_reporter.report_exc` is not called. Added `from tcbot.utils.circuit_breaker import CircuitOpenError` import. The asyncio Layer 3 handler is not affected: the only background task that touches MongoDB (`_do_cache`) already wraps its DB call in `except Exception`, preventing CircuitOpenError from reaching the asyncio exception handler.
+
 ## [Unreleased] - 2026-06-17 (session 165)
 
 ### Changed

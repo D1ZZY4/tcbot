@@ -5,9 +5,16 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-17 (session 165)
+**Last updated:** 2026-06-17 (session 166)
 
 ## What is done
+
+- Session 166 (2026-06-17): Bug #437 fixed. Task file (1781713971762.md, 953 lines) read completely.
+  - Bug #437: `_error_handler` (PTB Layer 2) did not filter `CircuitOpenError`. When MongoDB entered OPEN state every incoming update propagated CircuitOpenError → error_reporter flooded the error channel with hundreds of identical messages. Fixed: `isinstance(exc, CircuitOpenError)` early-return in `_error_handler`; logs WARNING only. Verified all Layer 3 background tasks already safe: `_do_cache` has `except Exception`, `_harvest_admin_identities` uses `gather(return_exceptions=True)`, `_flush_album` has `try/except Exception`, `_groups_task`/`_old_admin_fname_task` awaited with `gather(return_exceptions=True)` or `try/except`.
+  - dep bump attempted: `uv lock --upgrade` — 33 packages resolved, no actual version changes (already up to date).
+  - PLAN.md Error Handling section updated with CircuitOpenError filter note.
+  - Ruff: 75 files clean, all checks passed. Import: OK. Config: OK. Bot: 29/29 indexes, Redis hiredis 3.4.0, APScheduler, polling.
+  - Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 165 (2026-06-17): MongoDB circuit breaker fully wired into all DB helpers.
   - Problem: `db_call()` existed (session 164) but was not imported or called in any DB helper — circuit could never trip on runtime DB failures, only on the startup ping.

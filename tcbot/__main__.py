@@ -32,6 +32,7 @@ from tcbot.database.mongos import connect, ensure_indexes
 from tcbot.modules import get_handlers
 from tcbot.modules.helper.decorators import global_rate_limit_handler
 from tcbot.utils import error_reporter
+from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.logger import setup as setup_logging
 
 if TYPE_CHECKING:
@@ -132,6 +133,14 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
     """Catch all unhandled PTB handler exceptions and report them to the logs-errors channel."""
     exc = ctx.error
     if exc is None:
+        return
+
+    # * Circuit-open errors are expected when a downstream service is temporarily
+    # * unreachable.  Reporting every update's CircuitOpenError to the error channel
+    # * would flood it with identical messages.  Log once at WARNING and return; the
+    # * circuit breaker itself already logs state transitions at WARNING/INFO level.
+    if isinstance(exc, CircuitOpenError):
+        log.warning("Handler aborted: %s", exc)
         return
 
     # * Build context string from the update for extra detail

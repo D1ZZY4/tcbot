@@ -114,7 +114,7 @@ Current collection/domain owners include:
 
 | Layer | Location | Purpose |
 |---|---|---|
-| PTB error handler | `app.add_error_handler(_error_handler)` | Reports unhandled handler exceptions. |
+| PTB error handler | `app.add_error_handler(_error_handler)` | Reports unhandled handler exceptions. `CircuitOpenError` is filtered here: logged at WARNING only, not forwarded to the error channel, to prevent flooding when MongoDB is temporarily unreachable. |
 | Asyncio exception handler | `loop.set_exception_handler(...)` | Reports background task failures. |
 | Logging integration | `tcbot/utils/error_reporter.py` | Sends formatted error details to the configured destination. |
 
