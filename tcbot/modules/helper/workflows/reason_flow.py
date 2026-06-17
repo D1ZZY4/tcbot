@@ -36,6 +36,12 @@ log = logging.getLogger(__name__)
 WAITING_REASON = 0
 WAITING_PROOF = 1
 
+# * Maximum characters accepted for a typed moderation reason.
+# * Telegram hard-caps messages at 4096 chars; action summaries include names,
+# * IDs, and other metadata on top of the reason.  1000 chars is generous for
+# * any real reason while guaranteeing the combined message stays under the cap.
+_MAX_REASON_LEN: int = 1000
+
 
 # ───────────────────────── Reason parsing ───────────────────────── #
 
@@ -132,6 +138,15 @@ def build_modaction_conv(
             return WAITING_REASON
 
         text = msg.text.strip()
+        if len(text) > _MAX_REASON_LEN:
+            try:
+                await update.effective_message.reply_text(
+                    f"Reason is too long (max {_MAX_REASON_LEN} characters, "
+                    f"you sent {len(text)}). Please shorten it."
+                )
+            except Exception as exc:
+                log.debug("%s reason-too-long reply failed: %s", action, exc)
+            return WAITING_REASON
         ctx.user_data[_reason_key] = text
         extra_info = ctx.user_data.get(_extra_info_key, "")
         prompt_txt = proof.step_prompt(_get_target(ctx), action, text, extra_info)

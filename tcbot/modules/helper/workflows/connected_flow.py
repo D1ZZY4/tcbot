@@ -176,7 +176,14 @@ class BuildConnection:
         """Connect the group, apply all active federation bans, and notify LOG_CHANNEL."""
         # * Fetch chat info + active ban IDs + active mute docs + admin list + register group + clear pending.
         # * All Telegram and DB calls fire in parallel; bounded timeouts prevent stalls.
-        chat_result, ban_uids, mute_docs, admins_result, *_ = await asyncio.gather(
+        (
+            chat_result,
+            ban_uids,
+            mute_docs,
+            admins_result,
+            add_group_r,
+            _remove_pending_r,
+        ) = await asyncio.gather(
             asyncio.wait_for(bot.get_chat(chat_id), timeout=_TG_TIMEOUT),
             db.bans_db.active_ban_user_ids(),
             db.mutes_db.active_mute_docs(),
@@ -185,6 +192,10 @@ class BuildConnection:
             db.groups_db.remove_pending(chat_id),
             return_exceptions=True,
         )
+        # * add_group is the critical write; if it failed the group is not in the DB.
+        # * Re-raise so callers can detect failure and avoid sending a false confirmation.
+        if isinstance(add_group_r, BaseException):
+            raise RuntimeError(f"add_group failed for chat {chat_id}") from add_group_r
         chat_username: str | None = (
             getattr(chat_result, "username", None)
             if not isinstance(chat_result, BaseException)
@@ -365,6 +376,12 @@ class BuildConnection:
                         ),
                         return_exceptions=True,
                     )
+                    if isinstance(_join_r, BaseException):
+                        log.error(
+                            "complete_join failed in on_bot_added for chat %d: %s",
+                            chat.id,
+                            _join_r,
+                        )
                     if isinstance(_edit_r, BaseException):
                         log.debug("Failed to edit pending connect prompt: %s", _edit_r)
                 return

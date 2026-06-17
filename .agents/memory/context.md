@@ -9,12 +9,15 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## What is done
 
-- Session 163 (2026-06-17): Bug #432 + Bug #433 fixed. Comprehensive audit of all major files CLEAN.
-  - Bug #432: `alive.py` `/health` endpoint — `overall` status check included `tg_circuit != "open"` but omitted the symmetric `db_circuit != "open"` guard. When the MongoDB circuit breaker opens (5 consecutive failures), `/health` would still return 200/ok because only the Telegram circuit was checked. Fixed by adding `and db_circuit != "open"` to the overall condition.
-  - Bug #433: `.agents/memory/structure.md` — utils/ section listed only 6 files; missing `circuit_breaker.py`, `formatter.py`, and `__init__.py` added in sessions 135/161. Updated to 9 files with correct one-line descriptions. Last-updated date corrected (2026-06-13 → 2026-06-17).
-  - Design gap noted (not fixed this session): `_cb.mongodb` singleton defined and exported but never integrated into actual MongoDB DB calls — only used for health reporting. Circuit state stays permanently "closed". `dispatch.fan_out` correctly integrates `_cb.telegram`, but no equivalent wrapping exists for Motor/pymongo calls in `database/`. Documented for future work.
-  - Comprehensive audit: all major files verified CLEAN — ban_flow, appeal_flow, check_flow, warning_flow, kicking_flow, unban_flow, muting_flow, connected_flow, stats_flow, greeting, broadcasting, disconnecting, banning, warnings, admins, groups_db, warns_db, alive, dispatch, mutes_db, queues_db, circuit_breaker, dispatch.
-  - Ruff: 75 files clean. Import: OK. Bot: 29/29 indexes, Redis hiredis 3.4.0, APScheduler, polling. Total bugs: #1-#433. Open: CVE-2026-31072 (accepted), Improvement #4 (future), MongoDB circuit integration (future).
+- Session 163 (2026-06-17): Bug #432 + #433 + #434 + #435 fixed. Comprehensive audit ongoing.
+  - Bug #432: `alive.py` `/health` endpoint — `overall` status check omitted `db_circuit != "open"` guard. Fixed.
+  - Bug #433: `structure.md` utils/ section listed 6 files instead of 9. Fixed.
+  - Bug #434: `reason_flow._on_reason_text` accepted unbounded reason text. Fixed: `_MAX_REASON_LEN = 1000`.
+  - Bug #435: `complete_join` in `connected_flow.py` discarded results of `add_group` + `remove_pending` via `*_` unpacking. DB failures silently swallowed; `connecting.py` sent false "connected" confirmation. Fixed: (1) explicitly unpack `add_group_r`, raise if BaseException; (2) `cmd_tcconnect` now sequential (join first, reply only on success); (3) `on_bot_added` now checks `_join_r` BaseException.
+  - Bug #436: `admins.py` `on_promo_decision` — both approve/reject branches used `q.message.text` (HTML-stripped plain text) without `parse_mode="HTML"`, losing HTML formatting of the review card. Also `admin.first_name` not esc'd. Fixed: use `q.message.text_html` + `parse_mode="HTML"` + `esc(admin.first_name)` in both branches.
+  - Comprehensive audit continued: parse_logmsg, greeting, banning, broadcasting, check_flow, muting_flow, kicking_flow, demote_flow, promote_flow, proof_flow, warning_flow, unban_flow, appeal_flow — all CLEAN. All gather calls return_exceptions=True. All HTML uses mention()/esc()/user_ref(). Ruff: 75 files clean. Import: OK. Total bugs: #1-#436. Open: CVE-2026-31072 (accepted), Improvement #4 (future), MongoDB circuit integration (future).
+  - Design gap noted: `_cb.mongodb` singleton never integrated into actual Motor DB calls (future work).
+  - Comprehensive audit: callback_data parsing, gather calls, HTML escaping, user_data access, about/start/privacy/netspeed/appeals/unbanning/connecting/disconnecting/maintenance/broadcasting — all CLEAN. Ruff: 75 files clean. Import: OK. Bot: 29/29 indexes, Redis hiredis 3.4.0, APScheduler, polling. Total bugs: #1-#435. Open: CVE-2026-31072 (accepted), Improvement #4 (future), MongoDB circuit integration (future).
 
 - Session 162 (2026-06-16): Improvement #5. `_warm_hot_caches` expanded to also pre-warm owner's effective_role (L1+L2 TwoLevelCache) after owner_id known. Step 1 stays parallel (owner_id + active_groups); step 2 sequential dep (get_effective_role(owner_id)). CHANGELOG, docs/README.md quick nav updated. Ruff: 75 files clean. Import: OK. Bot: 29/29 indexes, Redis hiredis 3.4.0. Total bugs: #1-#431 + Improvement #5.
 

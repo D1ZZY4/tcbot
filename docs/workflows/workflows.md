@@ -41,6 +41,7 @@ Exports:
 | `parse_inline_reason(args, has_explicit_target)` | Returns reason text after the target token when needed. |
 | `BuildReason(...)` | Configures reason-step prompts and buttons. |
 | `build_modaction_conv(reason, proof, entry_fn, executor, entry_filter, escape_filter=None)` | Builds the shared kick/mute/warn conversation. |
+| `_MAX_REASON_LEN` | Maximum character length accepted for a typed reason (1000). Input exceeding this is rejected with a user-visible message and the conversation stays in `WAITING_REASON`. |
 
 The shared factory stores action-specific values in `ctx.user_data`, then calls the supplied executor adapter. When a moderator submits proof media, `_on_proof` stores both the short text description (`{action}_proof_desc`) and the actual `Message` objects (`{action}_proof_msgs`) in `user_data`. Executors pop `{action}_proof_msgs` and upload them to the proof channel via `upload_proof()`; the resulting URL is shown as an inline keyboard button via `keyboards.action_proof_kb()`.
 

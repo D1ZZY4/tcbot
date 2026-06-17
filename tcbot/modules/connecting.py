@@ -181,18 +181,27 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.debug("cmd_tctc perms-required reply failed: %s", exc)
         return
 
-    # * complete_join returns None - reply can be sent in parallel
-    join_result, reply_result = await asyncio.gather(
-        connection.complete_join(
+    # * Run complete_join first so that we only send a "connected" confirmation
+    # * when the DB write (add_group) actually succeeded.  Sending the reply in
+    # * parallel was an optimistic pattern that silently swallowed add_group
+    # * failures and left the user with a false confirmation.
+    try:
+        await connection.complete_join(
             chat.id, chat.title or "", user.id, user.first_name, ctx.bot
-        ),
-        update.effective_message.reply_text(connection.connected_message()),
-        return_exceptions=True,
-    )
-    if isinstance(join_result, BaseException):
-        log.error("complete_join failed for chat %d: %s", chat.id, join_result)
-    if isinstance(reply_result, BaseException):
-        log.debug("connected reply failed for chat %d: %s", chat.id, reply_result)
+        )
+    except Exception:
+        log.exception("complete_join failed for chat %d", chat.id)
+        try:
+            await update.effective_message.reply_text(
+                "Failed to connect the group due to a server error. Please try again."
+            )
+        except Exception as reply_exc:
+            log.debug("connect failure reply failed: %s", reply_exc)
+        return
+    try:
+        await update.effective_message.reply_text(connection.connected_message())
+    except Exception as exc:
+        log.debug("connected reply failed for chat %d: %s", chat.id, exc)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #
