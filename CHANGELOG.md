@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-23 (session 167)
+
+### Changed
+
+- **Dependency bump** (`uv.lock`): `redis v8.0.0 -> v8.0.1`. Patch release; no API changes affect bot code. `redis.asyncio.Redis.eval` confirmed present (used by `_AsyncRateLimiter` Lua script). Bumped via `uv lock --upgrade` and installed with `uv sync`. Ruff: 75 files clean. Import: OK.
+
 ## [Unreleased] - 2026-06-17 (session 166)
 
 ### Fixed
