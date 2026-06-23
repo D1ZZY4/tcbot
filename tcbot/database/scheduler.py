@@ -42,6 +42,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 # * imports: tcbot.database.__init__ → scheduler → tcbot.database.__init__
 from tcbot.database.bans_db import deactivate_ban as _bans_deactivate
 from tcbot.database.mongos import col as _col
+from tcbot.database.mongos import db_call as _db_call
 from tcbot.utils.timedate_format import utc_now
 
 log = logging.getLogger(__name__)
@@ -80,7 +81,9 @@ async def _expire_old_warns(warn_expiry_days: int) -> None:
     Called daily by APScheduler when ``WARN_EXPIRY_DAYS > 0``.
     """
     cutoff = utc_now() - timedelta(days=warn_expiry_days)
-    result = await _col("warn_counts").delete_many({"updated_at": {"$lt": cutoff}})
+    result = await _db_call(
+        _col("warn_counts").delete_many({"updated_at": {"$lt": cutoff}})
+    )
     log.info(
         "Warn expiry: removed %d warn_count records older than %d days.",
         result.deleted_count,

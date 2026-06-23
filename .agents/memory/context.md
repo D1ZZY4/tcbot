@@ -5,9 +5,15 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-23 (session 168)
+**Last updated:** 2026-06-23 (session 169)
 
 ## What is done
+
+- Session 169 (2026-06-23): Bug #441 + Bug #442 fixed. Extended autonomous audit continuation: 67 categories across 75 files, 17841 LOC. Zero additional bugs found.
+  - Bug #441: `scheduler.py:_expire_old_warns` called `_col("warn_counts").delete_many()` without `db_call()` circuit breaker wrapper. All 8 production DB helpers use `db_call()` since session 165, but this scheduler job was missed. Fixed: added `db_call as _db_call` to mongos import; wrapped delete_many with `await _db_call(...)`.
+  - Bug #442: em-dash in `docs/helper/helper.md` (table cell) and `docs/warnings-detailed.md` (inline prose). Fixed both. Also batch-cleared em-dash from CHANGELOG.md (6 lines) and all .agents/memory/ files (93 lines) using Python batch replace.
+  - Extended audit (67 categories): asyncio.gather return_exceptions (all confirmed with full window), HTML escape (LogBuilder.field confirmed applies esc by default), db_call coverage (all 15 DB files OK), is_connected type safety, yield/async generator, get_me() repeated calls, parse_logmsg HTML safety, chat.title HTML escape, appeal ConversationHandler (timeout intentionally deferred - documented in __init__.py), proof_timeout/appeal_timeout (documented "Reserved for future wiring"), APScheduler call protection (schedule_unban/cancel_schedule all wrapped in gather return_exceptions=True), direct ban authorization (0 unauthorized calls), Motor circuit breaker (all 15 DB files), eval()/exec() (r.eval() is Redis Lua EVAL - not Python eval, safe), datetime timezone consistency (utc_now() confirmed tz-aware), warn_limit comparison (`==` not `>=` confirmed), appeal 72h stale-review threshold (confirmed _STALE_REVIEW_HOURS=72), pass-in-except (both RuntimeError patterns are correct asyncio.get_running_loop guards), module-level expensive operations (0), TODO/FIXME (0), user_data lifecycle (all writers use ConversationHandler.END or cache pattern), ban_flow atomicity (uses $inc + find_one_and_update/upsert), query.answer await (0), delete() guards (0), int or None (0), ChatPermissions (unmute correctly restores all permissions), parse_mode case (all "HTML" uppercase), mention() args (all >= 2 args), user_data KeyError on reads (0 - all 26 flagged were write assignments), command handler duplicates (0), ban_id type safety (UUID str confirmed), get_first_name fallback (0 missing), builtin name shadows (0), TYPE_CHECKING guards (0), asyncio.sleep patterns (only sleep(0) no-op or cfg-based debounce), hardcoded user IDs (0 beyond ANONYMOUS_BOT_ID 1087968824), PII in logs (0), cfg.logs unpack (all use lc, lt = cfg.logs), effective_chat.id (all in PTB-registered handlers), fan_out result handling (all use count_errors or explicit per-result isinstance check), pass-in-except (only 2: asyncio.get_running_loop guards), broadcasting fan_out (exceptions logged per-group via fan_out result iteration), appeal_flow ConversationHandler (timeout deferred, documented), reply_to_message guards (broadcasting._send_one has `if msg.reply_to_message` guard), warns_db atomicity ($inc confirmed), photo[] access (0), int() cast safety (0), query.answer await (0).
+  - Ruff: 75 files clean (1 import sort auto-fixed). Import: OK. Total bugs: #1-#442. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 168 (2026-06-23): Bug #438 (hardcoded WARN_LIMIT), Bug #439 (stale WARN_LIMIT docs), Bug #440 (em-dash in __main__.py docstring) fixed.
   - Bug #438 (completed prior): WARN_LIMIT now configurable env var (default 3, minimum 1), exposed as `cfg.warn_limit`. Updated config.env.example, docs/setup.md, replit.md.
@@ -16,11 +22,11 @@ description: Current state of TCF Bot project - what is done, in progress, and p
   - Fresh audit scans: TODO/FIXME (0), em-dash/emoji in Python source (0 after fix), AST consecutive-await (2 VALID pairs unchanged), ruff: 75 files clean, import: OK.
   - Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
-- Session 167 (2026-06-23): Fresh audit pass — zero new bugs. Dependency bump redis 8.0.0 -> 8.0.1.
+- Session 167 (2026-06-23): Fresh audit pass - zero new bugs. Dependency bump redis 8.0.0 -> 8.0.1.
   - dep bump: `redis v8.0.0 -> v8.0.1` via `uv lock --upgrade` + `uv sync`. Patch release, no API changes. `redis.asyncio.Redis.eval` confirmed present (used by `_AsyncRateLimiter` Lua script for sorted-set sliding window rate limit).
   - Fresh audit files (all CLEAN): `__main__.py` (full, all 397 lines), `extraction.py` (full, all 175 lines), `greeting.py` (full, all 308 lines), `alive.py` (full, 104 lines), `cache.py` (full, 333 lines), `decorators.py` (full, 447 lines), `redis_client.py` (full, 80 lines).
-  - AST scan: 2 consecutive-await pairs — both VALID (users_roles.set_owner ordering constraint, admins.cmd_transfer ordering constraint). No new pairs found.
-  - q.answer() scan: 48 callback functions — all use gather pattern or await as first call. All CLEAN.
+  - AST scan: 2 consecutive-await pairs - both VALID (users_roles.set_owner ordering constraint, admins.cmd_transfer ordering constraint). No new pairs found.
+  - q.answer() scan: 48 callback functions - all use gather pattern or await as first call. All CLEAN.
   - TODO/FIXME scan: 0 found in tcbot/ source.
   - Em-dash/emoji scan: 0 in Python source. CLEAN.
   - CHANGELOG updated. Ruff: 75 files clean. Import: OK. Bot: 29/29 indexes, Redis hiredis 3.4.0, APScheduler, polling.
@@ -28,13 +34,13 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 - Session 166 (2026-06-17): Bug #437 fixed. Task file (1781713971762.md, 953 lines) read completely.
   - Bug #437: `_error_handler` (PTB Layer 2) did not filter `CircuitOpenError`. When MongoDB entered OPEN state every incoming update propagated CircuitOpenError → error_reporter flooded the error channel with hundreds of identical messages. Fixed: `isinstance(exc, CircuitOpenError)` early-return in `_error_handler`; logs WARNING only. Verified all Layer 3 background tasks already safe: `_do_cache` has `except Exception`, `_harvest_admin_identities` uses `gather(return_exceptions=True)`, `_flush_album` has `try/except Exception`, `_groups_task`/`_old_admin_fname_task` awaited with `gather(return_exceptions=True)` or `try/except`.
-  - dep bump attempted: `uv lock --upgrade` — 33 packages resolved, no actual version changes (already up to date).
+  - dep bump attempted: `uv lock --upgrade` - 33 packages resolved, no actual version changes (already up to date).
   - PLAN.md Error Handling section updated with CircuitOpenError filter note.
   - Ruff: 75 files clean, all checks passed. Import: OK. Config: OK. Bot: 29/29 indexes, Redis hiredis 3.4.0, APScheduler, polling.
   - Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 165 (2026-06-17): MongoDB circuit breaker fully wired into all DB helpers.
-  - Problem: `db_call()` existed (session 164) but was not imported or called in any DB helper — circuit could never trip on runtime DB failures, only on the startup ping.
+  - Problem: `db_call()` existed (session 164) but was not imported or called in any DB helper - circuit could never trip on runtime DB failures, only on the startup ping.
   - Fix: All 8 DB helpers now import `db_call` from `mongos` and wrap every Motor coroutine. Files: `bans_db.py` (19 ops), `groups_db.py` (12 ops), `users_roles.py` (15 ops), `users_cache.py` (10 ops), `warns_db.py` (15 ops), `mutes_db.py` (8 ops), `kicks_db.py` (3 ops), `queues_db.py` (5 ops).
   - Result: Any failing Motor coroutine records a failure; 5 consecutive failures open circuit; subsequent calls fast-fail (`CircuitOpenError`) instead of 45s timeout; half-open probe re-closes on recovery.
   - Ruff: 6 files reformatted, all checks passed. Import: OK. Bot: 29/29 indexes, Redis hiredis 3.4.0, APScheduler, polling.
@@ -42,17 +48,17 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 - Session 164 (2026-06-17): MongoDB circuit integration (Improvement #6) + dependency bumps.
   - Dependency bump: `certifi v2026.5.20 -> v2026.6.17`, `tzlocal v5.4 -> v5.4.3` via `uv lock --upgrade` + `uv sync`.
-  - Improvement #6: MongoDB circuit breaker singleton (`_cb.mongodb`) was never wired into actual Motor calls since session 161 — could never trip or self-heal. Fixed: (1) `mongos.py` imports `mongodb as _mongo_cb` from `tcbot.utils.circuit_breaker`; (2) `connect()` ping wrapped with `await _mongo_cb.call(_db.command("ping"))` — successful startup ping records CLOSED, repeated failures trip to OPEN; (3) new `async def db_call(coro)` module-level helper routes any Motor coroutine through the circuit breaker for fast-fail on OPEN state.
+  - Improvement #6: MongoDB circuit breaker singleton (`_cb.mongodb`) was never wired into actual Motor calls since session 161 - could never trip or self-heal. Fixed: (1) `mongos.py` imports `mongodb as _mongo_cb` from `tcbot.utils.circuit_breaker`; (2) `connect()` ping wrapped with `await _mongo_cb.call(_db.command("ping"))` - successful startup ping records CLOSED, repeated failures trip to OPEN; (3) new `async def db_call(coro)` module-level helper routes any Motor coroutine through the circuit breaker for fast-fail on OPEN state.
   - Updated `docs/databases/databases.md`: `connect()` and `db_call()` entries updated.
-  - Verified: re-audited `alive.py`, `reason_flow.py`, `connected_flow.py`, `admins.py` (all changed in s163) — all CLEAN. Ruff: 75 files clean. Import: OK. Bot: 29/29 indexes, Redis hiredis 3.4.0, APScheduler, polling.
+  - Verified: re-audited `alive.py`, `reason_flow.py`, `connected_flow.py`, `admins.py` (all changed in s163) - all CLEAN. Ruff: 75 files clean. Import: OK. Bot: 29/29 indexes, Redis hiredis 3.4.0, APScheduler, polling.
   - Open: CVE-2026-31072 (accepted), Improvement #4 (future). MongoDB circuit now LIVE (not future).
 
 - Session 163 (2026-06-17): Bug #432 + #433 + #434 + #435 + #436 fixed. Comprehensive audit ongoing.
-  - Bug #432: `alive.py` `/health` endpoint — `overall` status check omitted `db_circuit != "open"` guard. Fixed.
+  - Bug #432: `alive.py` `/health` endpoint - `overall` status check omitted `db_circuit != "open"` guard. Fixed.
   - Bug #433: `structure.md` utils/ section listed 6 files instead of 9. Fixed.
   - Bug #434: `reason_flow._on_reason_text` accepted unbounded reason text. Fixed: `_MAX_REASON_LEN = 1000`.
   - Bug #435: `complete_join` in `connected_flow.py` discarded results of `add_group` + `remove_pending` via `*_` unpacking. DB failures silently swallowed; `connecting.py` sent false "connected" confirmation. Fixed.
-  - Bug #436: `admins.py` `on_promo_decision` — HTML formatting lost, `admin.first_name` not esc'd. Fixed.
+  - Bug #436: `admins.py` `on_promo_decision` - HTML formatting lost, `admin.first_name` not esc'd. Fixed.
   - Ruff: 75 files clean. Import: OK. Total bugs: #1-#436. Open: CVE-2026-31072 (accepted), Improvement #4 (future), MongoDB circuit integration (now done in s164).
 
 - Session 162 (2026-06-16): Improvement #5. `_warm_hot_caches` expanded to also pre-warm owner's effective_role (L1+L2 TwoLevelCache) after owner_id known. Step 1 stays parallel (get_owner_id + active_groups); step 2 sequential dep (get_effective_role(owner_id)). CHANGELOG, docs/README.md quick nav updated. Ruff: 75 files clean. Import: OK. Bot: 29/29 indexes, Redis hiredis 3.4.0. Total bugs: #1-#431 + Improvement #5.
@@ -62,25 +68,25 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 - Session 160 (2026-06-16): Bug #430 fixed. `unbanning.cmd_unban` gathered `identity.classify` with speculative `db.bans_db.get_active_ban` in parallel; `execute_unban` updated to accept `pre_ban` keyword arg (skips DB round-trip when caller supplies the record). Docs: `docs/workflows/workflows.md` updated for new `execute_unban` signature. Comprehensive scans: N+1 AST scan CLEAN, create_task error-handlers CLEAN, q.answer() placement CLEAN, identity.classify consistency CLEAN, consecutive-await AST scan found only 2 intentionally-sequential pairs (`set_owner` crash-safety, `cmd_transfer` DB write order). Total bugs: #1-#430. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 159 (2026-06-16): Bug #424-#429 fixed. Systematic sequential-await audit across all major workflow and command files.
-  - Bug #424: `connected_flow.on_bot_added` — parallel `get_pending + is_connected` pre-fetch + `complete_join + edit_message_text` gather.
-  - Bug #425: `admins.on_promo_decision` — speculative pre-fetch of `get_request_by_id` into initial gather alongside ownership check and `q.answer()`.
-  - Bug #426: `appeal_flow` review callback — speculative pre-fetch of `get_ban` into initial gather alongside staff check and `q.answer()`.
-  - Bug #427: `disconnecting.cmd_tcdisconnect` — parallel pre-fetch of `is_connected + is_staff + member` in initial gather.
-  - Bug #428: `ban_flow.execute_ban` — PM notification merged into gather with `upsert_user` and `edit_message_text`.
-  - Bug #429: `connecting.cmd_tcconnect` — `get_chat_member(ctx.bot.id)` added speculatively to initial 4-way gather (was sequential after user-member + DB reads).
+  - Bug #424: `connected_flow.on_bot_added` - parallel `get_pending + is_connected` pre-fetch + `complete_join + edit_message_text` gather.
+  - Bug #425: `admins.on_promo_decision` - speculative pre-fetch of `get_request_by_id` into initial gather alongside ownership check and `q.answer()`.
+  - Bug #426: `appeal_flow` review callback - speculative pre-fetch of `get_ban` into initial gather alongside staff check and `q.answer()`.
+  - Bug #427: `disconnecting.cmd_tcdisconnect` - parallel pre-fetch of `is_connected + is_staff + member` in initial gather.
+  - Bug #428: `ban_flow.execute_ban` - PM notification merged into gather with `upsert_user` and `edit_message_text`.
+  - Bug #429: `connecting.cmd_tcconnect` - `get_chat_member(ctx.bot.id)` added speculatively to initial 4-way gather (was sequential after user-member + DB reads).
   - All other areas audited CLEAN: `warning_flow.py` (all standalone awaits are guard-check or sequential-dep patterns), `muting_flow.py` (active_groups before fan_out, CORRECT), `check_flow.py` (get_group_titles deps on user_warn_groups, CORRECT), `stats_flow.py` (all deps chains correct), `error_reporter.py` (if/else mutually exclusive branches, CORRECT), `demote_flow.py` (guard check sequential dep, CORRECT).
   - Verification: ruff format 74 files unchanged, ruff check All checks passed, import OK. Bot: 29/29 indexes, Redis hiredis 3.4.0, APScheduler, polling.
   - Total bugs: #1-#429. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 157 (2026-06-16): Bug #423 fixed. `proof_line()` removed entirely. Mute/kick/warn proof now uploaded to proof channel and shown as inline keyboard button (identical pattern to ban). Files changed: `reason_flow.py`, `keyboards.py`, `muting_flow.py`, `kicking_flow.py`, `warning_flow.py`, `utils/formatter.py`, `modules/helper/formatter.py`. Ruff: all checks passed. Import: OK. Total bugs: #1-#423.
 
-- Session 156 (2026-06-16): Wave 5 deep combinatorial audit — ALL 6 "Bug Nyata dari Testing Langsung" areas, ZERO new bugs.
+- Session 156 (2026-06-16): Wave 5 deep combinatorial audit - ALL 6 "Bug Nyata dari Testing Langsung" areas, ZERO new bugs.
   - Direct reads (all CLEAN): muting_flow.py (full 300 lines), ban_flow.py (full 528 lines), unban_flow.py (full), scheduler.py (full), check_flow.py (400-601). All previously audited files confirmed again.
   - 5 parallel subagent waves: SA1 (ban enforcement), SA2 (muting/unban/scheduling), SA3 (target resolution), SA4 (decorators/warning_flow/appeal_flow/admins), SA5 (connected_flow/bans_db/greeting/dispatch). All returned CLEAN.
   - Confirmed: execute_unmute has no cancel_schedule because mutes use Telegram until_date (no APScheduler job); timed-ban is future work (schedule_unban only referenced in scheduler.py docstring, never called externally).
-  - Confirmed: warning_flow per_group uses exact `==` (atomic $inc), fed_global uses `>=` with already_banned guard — no race condition. Both paths produce identical outcome (federation ban).
+  - Confirmed: warning_flow per_group uses exact `==` (atomic $inc), fed_global uses `>=` with already_banned guard - no race condition. Both paths produce identical outcome (federation ban).
   - Confirmed: appeal_flow stale-review 72h auto-clear in _start() prevents permanent lockout.
-  - Confirmed: admins.py uses identity.classify + Promote/Demote.execute (not resolve_and_check) — intentional because hierarchy management requires finer control via internal rank validation.
+  - Confirmed: admins.py uses identity.classify + Promote/Demote.execute (not resolve_and_check) - intentional because hierarchy management requires finer control via internal rank validation.
   - Confirmed: dispatch.py semaphore _MAX_CONCURRENT=10, configurable via max_concurrent kwarg.
   - uv lock --upgrade run: 33 packages resolved, lock updated.
   - Ruff: All checks passed (74 files). Import: OK. Zero new bugs. Total bugs: #1-#422 (unchanged).
@@ -89,7 +95,7 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 ## What is open
 
 - CVE-2026-31072 (APScheduler 4.0.0a6 RCE via insecure deserialization): accepted risk. No upstream patch. Mitigated operationally (private MongoDB, least-privilege, IP-allowlist). Reachability gated by MongoDB write access only.
-- Improvement #4 (multi-instance L1 cache invalidation via Redis pub/sub): deferred — future enhancement, not a correctness issue.
+- Improvement #4 (multi-instance L1 cache invalidation via Redis pub/sub): deferred - future enhancement, not a correctness issue.
 
 ## Bug count
 

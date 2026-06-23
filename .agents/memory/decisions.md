@@ -182,9 +182,9 @@ Key approaches adopted to meet v4 targets:
 
 ---
 
-## 2026-06-13: All variables unpacked from asyncio.gather need isinstance guards — not just some
+## 2026-06-13: All variables unpacked from asyncio.gather need isinstance guards - not just some
 
-**Decision:** After `a, b = await asyncio.gather(..., return_exceptions=True)`, every variable in the unpack must have its own `isinstance(x, BaseException)` fallback — not just the ones that "seem more likely to fail."
+**Decision:** After `a, b = await asyncio.gather(..., return_exceptions=True)`, every variable in the unpack must have its own `isinstance(x, BaseException)` fallback - not just the ones that "seem more likely to fail."
 
 **Why:** In `admins.py on_demote_confirm`, `mention_data` was guarded but `target_role` was not. A transient DB error left `target_role` as a live `BaseException` object; the later `if not target_role` evaluated `False` (exceptions are truthy), so the guard was silently skipped and `Demote.execute` received a `BaseException` as an argument, crashing downstream.
 
@@ -212,11 +212,11 @@ Key approaches adopted to meet v4 targets:
 
 ---
 
-## 2026-06-13: Double-reply guard — check executor_role before identity.refuse_message
+## 2026-06-13: Double-reply guard - check executor_role before identity.refuse_message
 
 **Decision:** In every command entry point that runs `resolve_and_check` + `identity.classify` concurrently via `asyncio.gather`, the `executor_role is None` guard must come **before** the `identity.refuse_message` check.
 
-**Why:** `resolve_and_check` sends a reply message *inside* the gather (when the target outranks the executor). If code then falls through to `identity.refuse_message`, a second reply is sent for the same event — the user sees two bot messages for one command. Affected files: `banning.py`, `muting.py`, `kicking.py`, `warnings.py`.
+**Why:** `resolve_and_check` sends a reply message *inside* the gather (when the target outranks the executor). If code then falls through to `identity.refuse_message`, a second reply is sent for the same event - the user sees two bot messages for one command. Affected files: `banning.py`, `muting.py`, `kicking.py`, `warnings.py`.
 
 **How to apply:** Pattern:
 ```python
@@ -240,7 +240,7 @@ if not target_fname or target_fname.startswith("User ") or target_fname.lstrip("
     target_fname = cached_fname
 ```
 
-**Why:** `_best_name()` in `extraction.py` returns `str(uid)` (e.g. "123456789") when no real name is found — NOT "User 123456789". Without the `isdigit()` branch, `classify()` would skip overriding a numeric fallback fname even when its own parallel cache lookup found a real name.
+**Why:** `_best_name()` in `extraction.py` returns `str(uid)` (e.g. "123456789") when no real name is found - NOT "User 123456789". Without the `isdigit()` branch, `classify()` would skip overriding a numeric fallback fname even when its own parallel cache lookup found a real name.
 
 **How to apply:** Always include the `isdigit()` branch alongside `startswith("User ")` when guarding fname fallbacks.
 
@@ -307,7 +307,7 @@ if (
 
 **Decision:** The CI import-check step in `lint.yml` must be `uv run python -c "import tcbot; print('import OK')"`, never `uv run python -m tcbot`.
 
-**Why:** `python -m tcbot` invokes `__main__.py` which calls `app.run_polling()` — the bot actually tries to connect to Telegram and MongoDB and then blocks forever (or crashes on timeout). This hangs the CI job. The import-check step's only purpose is to verify that `tcbot/__init__.py` parses correctly and `Configs.load()` succeeds (which does require BOT_TOKEN, MONGODB_URI, OWNER_ID in env). `python -c "import tcbot"` achieves that without starting the event loop.
+**Why:** `python -m tcbot` invokes `__main__.py` which calls `app.run_polling()` - the bot actually tries to connect to Telegram and MongoDB and then blocks forever (or crashes on timeout). This hangs the CI job. The import-check step's only purpose is to verify that `tcbot/__init__.py` parses correctly and `Configs.load()` succeeds (which does require BOT_TOKEN, MONGODB_URI, OWNER_ID in env). `python -c "import tcbot"` achieves that without starting the event loop.
 
 **How to apply:** In any CI workflow that validates imports, use the `-c "import tcbot; print('import OK')"` form. The three secrets (BOT_TOKEN, MONGODB_URI, OWNER_ID) must still be set in the job's `env:` block because `Configs.load()` is called at import time.
 
@@ -339,7 +339,7 @@ if (
 
 **Why:** Without a stale threshold, deleting the review card from the discussion topic permanently locks the user out (`review_message_id` stays set, `_ERR_PENDING_REVIEW` returned on every attempt). 72 h gives staff adequate time to act (longer than the `_LOCK_HOURS = 12` reviewer lock window) while still providing an eventual escape path.
 
-**How to apply:** If the stale window needs to be adjusted, change `_STALE_REVIEW_HOURS` in `appeal_flow.py`. Do NOT remove the threshold entirely — that reintroduces the permanent-lockout bug.
+**How to apply:** If the stale window needs to be adjusted, change `_STALE_REVIEW_HOURS` in `appeal_flow.py`. Do NOT remove the threshold entirely - that reintroduces the permanent-lockout bug.
 
 ---
 
@@ -367,12 +367,12 @@ if (
 
 **Decision:** `_error_handler` in `tcbot/__main__.py` must short-circuit with `log.warning` and `return` when the caught exception is an instance of `CircuitOpenError`, **before** forwarding to `report_exc`.
 
-**Why:** When the MongoDB circuit is OPEN, every incoming Telegram update that touches any DB helper will raise `CircuitOpenError` (fast-fail). All of those propagate to the PTB application error handler. Without the early-return guard, each one invokes `report_exc`, which calls `bot.send_message` to the error channel — creating a flooding cascade of hundreds of identical messages per minute. With the guard, the circuit state is logged once at WARNING level and the error channel stays clean.
+**Why:** When the MongoDB circuit is OPEN, every incoming Telegram update that touches any DB helper will raise `CircuitOpenError` (fast-fail). All of those propagate to the PTB application error handler. Without the early-return guard, each one invokes `report_exc`, which calls `bot.send_message` to the error channel - creating a flooding cascade of hundreds of identical messages per minute. With the guard, the circuit state is logged once at WARNING level and the error channel stays clean.
 
 **How to apply:** The guard lives in `_error_handler` right after extracting `exc` and before any `await report_exc(...)` call:
 ```python
 if isinstance(exc, CircuitOpenError):
-    log.warning("MongoDB circuit open — skipping error report: %s", exc)
+    log.warning("MongoDB circuit open - skipping error report: %s", exc)
     return
 ```
 `CircuitOpenError` must be imported at the top of `__main__.py` from `tcbot.utils.circuit_breaker`.

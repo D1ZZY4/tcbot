@@ -19,7 +19,7 @@
 - [ban dedup: deactivate_extra_active_bans](decisions.md): call before updating an existing ban; use deactivate_all_active_bans in unban/appeal-approve to clear all active bans atomically
 - [ChatJoinRequest enforcement](decisions.md): add ChatJoinRequestHandler alongside new_chat_member handler; both check is_connected (L1/L2 cached) for non-primary groups; greet=False for secondary groups silences welcome noise
 - [Double-reply guard pattern](decisions.md): executor_role is None check must come BEFORE identity.refuse_message in all command entry points that run resolve_and_check concurrently
-- [identity.classify numeric fname guard](decisions.md): fname override condition must include isdigit() branch — _best_name() returns str(uid) not "User {uid}" as fallback
+- [identity.classify numeric fname guard](decisions.md): fname override condition must include isdigit() branch - _best_name() returns str(uid) not "User {uid}" as fallback
 - [ban_duration timed-ban placeholder](decisions.md): `_ = ban_duration` in ban_flow suppresses F841 while preserving the future timed-ban contract
 - [checking.py cache-guard isdigit branch](decisions.md): conditional upsert_user calls must add isdigit() guard alongside startsWith("User ") to prevent caching numeric fallback names
 - [APScheduler CronTrigger day_of_week integer trap](decisions.md): integer 0 = Sunday (Unix cron), not Monday; always use named strings ("mon"..."sun") to avoid silent mismatch
@@ -33,6 +33,6 @@
 - [bot demotion no deactivate](decisions.md): member/restricted demotion only logs warning to mod channel; deactivate_group only on left/kicked
 - [mutes_db is pure audit log](decisions.md): no is_active field, no deactivation needed; mute enforcement is via Telegram until_date only
 - [extraction @username fallthrough](decisions.md): _safe_get_chat returns None for both "not found" and timeout; fallthrough to partial name search is intentional design, not a bug
-- [formatter location and shim pattern](decisions.md): formatter.py lives at tcbot/utils/formatter.py; tcbot/modules/helper/formatter.py is a re-export shim — utils layer imports from tcbot.utils.formatter, modules layer keeps existing imports unchanged
-- [nested f-string quote escape](decisions.md): avoid f"...f'...{var}...'..." nested quotes — use an intermediate variable instead to avoid syntax errors
+- [formatter location and shim pattern](decisions.md): formatter.py lives at tcbot/utils/formatter.py; tcbot/modules/helper/formatter.py is a re-export shim - utils layer imports from tcbot.utils.formatter, modules layer keeps existing imports unchanged
+- [nested f-string quote escape](decisions.md): avoid f"...f'...{var}...'..." nested quotes - use an intermediate variable instead to avoid syntax errors
 - [v4.6.2 performance target scope](decisions.md): p95 < 5 ms target is bot-side processing only; Telegram network round-trip (50-200 ms) is excluded; never label second-level end-to-end times as "v4.6.2 compliant"
