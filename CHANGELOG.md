@@ -6,6 +6,10 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Fixed
 
+- **Bug #440 — em-dash in `_warm_hot_caches` docstring** (`tcbot/__main__.py`): Two em-dashes in the `_warm_hot_caches` docstring (lines 222 and 225) violated the project's no-em-dash rule. Replaced both `—` with semicolons. Ruff: clean. Import: OK.
+
+- **Bug #439 — stale `WARN_LIMIT = 3` references in docs** (`docs/warnings-detailed.md`, `docs/workflows/workflows.md`): After Bug #438 made `WARN_LIMIT` configurable via env var, the documentation in `docs/warnings-detailed.md` (Mermaid diagram, purpose section, scope section, auto-ban behavior section, and test-checklist section) and `docs/workflows/workflows.md` (Warn table, description paragraph) still showed the old hardcoded constant `WARN_LIMIT = 3`. Updated all occurrences to reference `cfg.warn_limit` (env var `WARN_LIMIT`, default 3, minimum 1).
+
 - **Bug #438 — hardcoded `WARN_LIMIT = 3`** (`tcbot/modules/helper/workflows/warning_flow.py`, `tcbot/__init__.py`, `tcbot/modules/warnings.py`): The per-group warning threshold was hardcoded as a module-level constant `WARN_LIMIT = 3`. Operators could not adjust the threshold without editing source code. Fixed by adding `WARN_LIMIT` as a configurable env var (minimum 1, default 3) read via `_int_from_env("WARN_LIMIT", 3, minimum=1)` in `Configs.load()`, exposed as `cfg.warn_limit` through `_CfgAdapter`. All six remaining `WARN_LIMIT` references in `warning_flow.py` now use `cfg.warn_limit` (either a local `warn_limit = cfg.warn_limit` alias captured once per `execute_warn` call, or direct `cfg.warn_limit` in the other executors). The module-level `WARN_LIMIT` constant in `warning_flow.py` was removed; `warnings.py` updated its import accordingly and uses `cfg.warn_limit` in the help text strings. Updated `config.env.example`, `docs/setup.md`, `replit.md` with the new env var documentation.
 
 ## [Unreleased] - 2026-06-23 (session 167)

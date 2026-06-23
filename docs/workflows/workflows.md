@@ -151,10 +151,10 @@ flowchart TD
 |---|---|
 | Factory | `warn_conversation(entry_fn, entry_filter, escape_filter=None)` |
 | Module instances | `reason = BuildReason("warn", skip_allowed=False)`, `proof = BuildProof("warn")` |
-| Limit | `WARN_LIMIT = 3` |
+| Limit | `cfg.warn_limit` (env var `WARN_LIMIT`, default 3, minimum 1) |
 | Executors | `execute_warn(update, ctx, target_id, target_name, reason_text, warn_n, proof_desc=None, proof_msgs=None)`, `execute_unwarn`, `execute_warnlist`, `execute_resetwarns` |
 
-Warns are tracked per `(user_id, chat_id)`. At `WARN_LIMIT`, the flow issues a **federation-wide ban** via `fan_out()` to all active connected groups plus primary groups, creates a ban document in the `bans` collection, and then clears warnings for that user/chat. If `proof_msgs` is provided, proof media is uploaded to the proof channel and the resulting link is attached as an inline keyboard button to all outgoing messages (auto-ban log, replies, non-auto-ban log).
+Warns are tracked per `(user_id, chat_id)`. At `cfg.warn_limit` (per-group) or `cfg.fed_warn_limit` (federation-wide), the flow issues a **federation-wide ban** via `fan_out()` to all active connected groups plus primary groups, creates a ban document in the `bans` collection, and then clears warnings for that user/chat. If `proof_msgs` is provided, proof media is uploaded to the proof channel and the resulting link is attached as an inline keyboard button to all outgoing messages (auto-ban log, replies, non-auto-ban log).
 
 ## Unban: `unban_flow.py`
 

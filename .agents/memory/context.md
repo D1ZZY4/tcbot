@@ -5,9 +5,16 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-23 (session 167)
+**Last updated:** 2026-06-23 (session 168)
 
 ## What is done
+
+- Session 168 (2026-06-23): Bug #438 (hardcoded WARN_LIMIT), Bug #439 (stale WARN_LIMIT docs), Bug #440 (em-dash in __main__.py docstring) fixed.
+  - Bug #438 (completed prior): WARN_LIMIT now configurable env var (default 3, minimum 1), exposed as `cfg.warn_limit`. Updated config.env.example, docs/setup.md, replit.md.
+  - Bug #439: `docs/warnings-detailed.md` (Mermaid diagram, purpose, scope, auto-ban behavior, test-checklist) and `docs/workflows/workflows.md` (Warn table + description) still showed hardcoded `WARN_LIMIT = 3`. All updated to `cfg.warn_limit` (env var `WARN_LIMIT`, default 3, minimum 1).
+  - Bug #440: Two em-dashes in `_warm_hot_caches` docstring (`__main__.py:222,225`) replaced with semicolons.
+  - Fresh audit scans: TODO/FIXME (0), em-dash/emoji in Python source (0 after fix), AST consecutive-await (2 VALID pairs unchanged), ruff: 75 files clean, import: OK.
+  - Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 167 (2026-06-23): Fresh audit pass — zero new bugs. Dependency bump redis 8.0.0 -> 8.0.1.
   - dep bump: `redis v8.0.0 -> v8.0.1` via `uv lock --upgrade` + `uv sync`. Patch release, no API changes. `redis.asyncio.Redis.eval` confirmed present (used by `_AsyncRateLimiter` Lua script for sorted-set sliding window rate limit).

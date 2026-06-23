@@ -219,10 +219,10 @@ def _make_asyncio_exc_handler(
 async def _warm_hot_caches() -> None:
     """Pre-warm frequently-read L1+L2 caches immediately after startup.
 
-    Step 1 (parallel): get_owner_id + active_groups — both are TwoLevelCache-backed
+    Step 1 (parallel): get_owner_id + active_groups; both are TwoLevelCache-backed
     so the first command handler gets an L1 hit instead of a cold MongoDB round-trip.
 
-    Step 2 (sequential dep): get_effective_role(owner_id) — requires owner_id from
+    Step 2 (sequential dep): get_effective_role(owner_id); requires owner_id from
     step 1 and populates the effective_role_cache (L1+L2) for the owner so the first
     command from the owner resolves the role without any DB round-trip.
     """
