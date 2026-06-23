@@ -174,6 +174,7 @@ class Configs:
     redis_url: str | None
     warn_expiry_days: int
     fed_warn_limit: int
+    warn_limit: int
 
     # * Properties below handle lazy type-casting from raw env strings.
     @property
@@ -269,6 +270,7 @@ class Configs:
             redis_url=os.getenv("REDIS_URL", "").strip() or None,
             warn_expiry_days=_int_from_env("WARN_EXPIRY_DAYS", 0, minimum=0),
             fed_warn_limit=_int_from_env("FED_WARN_LIMIT", 0, minimum=0),
+            warn_limit=_int_from_env("WARN_LIMIT", 3, minimum=1),
         )
 
 
@@ -421,10 +423,21 @@ class _CfgAdapter:
         When a user accumulates this many warnings across all federation groups
         combined (summed by ``federation_warn_count``), they are automatically
         federation-banned, even if no single group has reached the per-group
-        ``WARN_LIMIT``.  Set to 0 to disable cross-group enforcement and rely
+        warn threshold.  Set to 0 to disable cross-group enforcement and rely
         solely on the per-group threshold.
         """
         return self._c.fed_warn_limit
+
+    @property
+    def warn_limit(self) -> int:
+        """Per-group warning threshold that triggers an automatic ban.
+
+        When a user's warn count in a single group reaches exactly this value,
+        they are automatically federation-banned and their warns in that group
+        are cleared.  Uses ``==`` (not ``>=``) so that concurrent increments
+        cannot double-fire the auto-ban.  Minimum 1; defaults to 3.
+        """
+        return self._c.warn_limit
 
 
 # * This adapter instance is the single global 'cfg' used by every module.

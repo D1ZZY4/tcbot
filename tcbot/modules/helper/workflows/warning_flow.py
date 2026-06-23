@@ -30,8 +30,6 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-WARN_LIMIT = 3
-
 # * Per-action BuildReason and BuildProof instances; imported by warnings.py
 # * skip_allowed=False because warn requires a reason; Skip is not offered
 reason = BuildReason("warn", skip_allowed=False)
@@ -54,8 +52,8 @@ async def execute_warn(
 
     Two thresholds can trigger an automatic federation ban:
 
-    1. **Per-group threshold** (``WARN_LIMIT``): fires when a user's warn count
-       in the *current* group reaches exactly ``WARN_LIMIT``.  Uses ``==`` so
+    1. **Per-group threshold** (``cfg.warn_limit``): fires when a user's warn count
+       in the *current* group reaches exactly the configured limit.  Uses ``==`` so
        that concurrent warns at limit+1 don't double-fire.
 
     2. **Federation-wide threshold** (``cfg.fed_warn_limit``, default 0 = off):
@@ -89,6 +87,7 @@ async def execute_warn(
 
     proof_kb = keyboards.action_proof_kb(target_id, proof_link)
 
+    warn_limit = cfg.warn_limit
     count = await db.warns_db.add_warn(target_id, reason_text, admin_id, chat_id)
     log_text = parse_logmsg.warn_log(
         target_id,
@@ -97,18 +96,18 @@ async def execute_warn(
         admin_fname,
         reason_text,
         count,
-        WARN_LIMIT,
+        warn_limit,
         chat_id,
         chat_title,
     )
 
     # ── Determine whether to auto-ban and record the trigger ────────
-    # * "per_group": per-chat WARN_LIMIT reached for this group.
+    # * "per_group": per-chat warn_limit reached for this group.
     # * "fed_global": federation-wide FED_WARN_LIMIT reached across all groups.
     # * None: below both thresholds; issue a plain warning only.
     #
     # * Per-group uses == (not >=) so that only the exact hit triggers the ban;
-    # * a concurrent second warn returns WARN_LIMIT+1 and is silently skipped,
+    # * a concurrent second warn returns warn_limit+1 and is silently skipped,
     # * preventing a double-ban race condition.
     # * Federation-wide uses >= because the aggregation is a separate DB read
     # * and has no atomicity guarantee across chat boundaries; >= ensures no
@@ -116,7 +115,7 @@ async def execute_warn(
     auto_ban_trigger: str | None = None
     fed_count: int = 0
 
-    if count == WARN_LIMIT:
+    if count == warn_limit:
         auto_ban_trigger = "per_group"
     else:
         fed_limit = cfg.fed_warn_limit
@@ -251,12 +250,12 @@ async def execute_warn(
         if auto_ban_trigger == "per_group":
             ban_notice = (
                 f"{user_ref(target_id, target_name)} "
-                f"hit {WARN_LIMIT} warnings "
+                f"hit {warn_limit} warnings "
                 f"and has been federation-banned."
             )
             ban_fail_notice = (
                 f"{user_ref(target_id, target_name)} "
-                f"hit {WARN_LIMIT} warnings "
+                f"hit {warn_limit} warnings "
                 f"but federation-ban failed - please ban them manually."
             )
         else:
@@ -312,7 +311,7 @@ async def execute_warn(
             ),
             msg.reply_text(
                 f"{user_ref(target_id, target_name)} has been warned "
-                f"({count}/{WARN_LIMIT}) - {esc(reason_text)}",
+                f"({count}/{warn_limit}) - {esc(reason_text)}",
                 parse_mode="HTML",
                 reply_markup=proof_kb,
             ),
@@ -358,7 +357,7 @@ async def execute_unwarn(
         admin.id,
         admin.first_name,
         new_count,
-        WARN_LIMIT,
+        cfg.warn_limit,
         chat_id,
         chat_title,
     )
@@ -368,7 +367,7 @@ async def execute_unwarn(
         ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
         msg.reply_text(
             f"One warning removed from {user_ref(target_id, target_name)}. "
-            f"They're now at {new_count}/{WARN_LIMIT}.",
+            f"They're now at {new_count}/{cfg.warn_limit}.",
             parse_mode="HTML",
         ),
         return_exceptions=True,
@@ -411,7 +410,9 @@ async def execute_warnlist(
             log.debug("execute_warnlist no-warns reply failed: %s", exc)
         return
 
-    lines = [f"{user_ref(target_id, target_name)} has {count}/{WARN_LIMIT} warnings:\n"]
+    lines = [
+        f"{user_ref(target_id, target_name)} has {count}/{cfg.warn_limit} warnings:\n"
+    ]
     for i, w in enumerate(warns, 1):
         lines.append(f"  {i}. {esc(w.get('reason', 'No reason'))}")
 

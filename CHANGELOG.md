@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-23 (session 168)
+
+### Fixed
+
+- **Bug #438 — hardcoded `WARN_LIMIT = 3`** (`tcbot/modules/helper/workflows/warning_flow.py`, `tcbot/__init__.py`, `tcbot/modules/warnings.py`): The per-group warning threshold was hardcoded as a module-level constant `WARN_LIMIT = 3`. Operators could not adjust the threshold without editing source code. Fixed by adding `WARN_LIMIT` as a configurable env var (minimum 1, default 3) read via `_int_from_env("WARN_LIMIT", 3, minimum=1)` in `Configs.load()`, exposed as `cfg.warn_limit` through `_CfgAdapter`. All six remaining `WARN_LIMIT` references in `warning_flow.py` now use `cfg.warn_limit` (either a local `warn_limit = cfg.warn_limit` alias captured once per `execute_warn` call, or direct `cfg.warn_limit` in the other executors). The module-level `WARN_LIMIT` constant in `warning_flow.py` was removed; `warnings.py` updated its import accordingly and uses `cfg.warn_limit` in the help text strings. Updated `config.env.example`, `docs/setup.md`, `replit.md` with the new env var documentation.
+
 ## [Unreleased] - 2026-06-23 (session 167)
 
 ### Changed

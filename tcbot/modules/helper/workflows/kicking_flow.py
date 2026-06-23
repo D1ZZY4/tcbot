@@ -115,6 +115,8 @@ async def execute_kick(
             )
         if isinstance(results[2], BaseException):
             log.error("Kick log send failed: %s", results[2])
+        if isinstance(results[3], BaseException):
+            log.debug("Kick reply_text failed: %s", results[3])
     except Exception as exc:
         log.exception("Kick failed for %s in %s", target_id, chat_id)
         try:

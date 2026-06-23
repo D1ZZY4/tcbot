@@ -376,3 +376,13 @@ if isinstance(exc, CircuitOpenError):
     return
 ```
 `CircuitOpenError` must be imported at the top of `__main__.py` from `tcbot.utils.circuit_breaker`.
+
+---
+
+## 2026-06-23: WARN_LIMIT lifted from hardcode to cfg.warn_limit
+
+**Decision:** Remove module-level constant `WARN_LIMIT = 3` from `warning_flow.py` and expose `cfg.warn_limit` backed by env var `WARN_LIMIT` (default 3, minimum 1) in `Configs`/`_CfgAdapter`.
+
+**Why:** The task explicitly forbids any hardcoded magic numbers. Operators needed to adjust the per-group warning threshold for their community size without touching source code. The `== warn_limit` (not `>=`) invariant is preserved because the comparison still uses the exact threshold value.
+
+**How to apply:** All per-group warn threshold checks must use `cfg.warn_limit`. Federation-wide checks use `cfg.fed_warn_limit` (unchanged). Module-level help strings that reference the threshold should read `cfg.warn_limit` at import time (not a constant) so they always reflect the configured value.
