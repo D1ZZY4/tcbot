@@ -5,9 +5,16 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-23 (session 169)
+**Last updated:** 2026-06-24 (session 170)
 
 ## What is done
+
+- Session 170 (2026-06-24): Bug #443 + Bug #444 fixed. Dependency bumps click 8.4.2, ruff 0.15.19. Extended audit continuation (session 170): all core scans clean, two new bugs found and fixed.
+  - Bug #443: `run-bot.yml` env section missing `WARN_LIMIT: ${{ secrets.WARN_LIMIT }}`. Bug #438 added cfg.warn_limit env var but the GitHub Actions 24/7 runner workflow was not updated. Runner always started with hardcoded default 3 regardless of WARN_LIMIT secret. Fixed: added `WARN_LIMIT` line after `WARN_EXPIRY_DAYS`.
+  - Bug #444: `checking.py` - `ctx.bot.username` used without `or ""` fallback in two `checkme_ban_kb()` call sites (lines 237 and 318). PTB Bot.username is Optional[str]; if None, appeal URL becomes `https://t.me/None?start=appeal_...`. ban_flow.py and start.py already guard correctly. Fixed both call sites with `ctx.bot.username or ""`.
+  - Dep bump: click 8.4.1 -> 8.4.2, ruff 0.15.18 -> 0.15.19 via `uv lock --upgrade` + `uv sync`. Ruff 0.15.19 produces zero new violations on 75 files.
+  - Fresh audit scans: consecutive-await (2 VALID unchanged), emoji scan (box-drawing chars only in comments - not emoji), em/en-dash (CLEAN in all .md), TODO/FIXME (0), asyncio.gather return_exceptions (CLEAN), create_task bare (CLEAN), deprecated asyncio (CLEAN), Motor calls without db_call (CLEAN), f-string log calls (CLEAN), bot.username (all guarded), mutable defaults (CLEAN).
+  - Ruff: 75 files clean (1 file reformatted for Bug #444). Import: OK. Total bugs: #1-#444. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 169 (2026-06-23): Bug #441 + Bug #442 fixed. Extended autonomous audit continuation: 67 categories across 75 files, 17841 LOC. Zero additional bugs found.
   - Bug #441: `scheduler.py:_expire_old_warns` called `_col("warn_counts").delete_many()` without `db_call()` circuit breaker wrapper. All 8 production DB helpers use `db_call()` since session 165, but this scheduler job was missed. Fixed: added `db_call as _db_call` to mongos import; wrapped delete_many with `await _db_call(...)`.
@@ -99,4 +106,4 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## Bug count
 
-Total: **437 bugs fixed** (session 1 through 166), 0 new bugs in session 167.
+Total: **444 bugs fixed** (sessions 1-170). Open: CVE-2026-31072 (accepted), Improvement #4 (future).

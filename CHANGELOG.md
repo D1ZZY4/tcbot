@@ -2,6 +2,16 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-24 (session 170)
+
+### Fixed
+
+- **Bug #443** (`tcbot/modules/checking.py`): `ctx.bot.username` was used without a `None` fallback in two call sites that pass it to `keyboards.checkme_ban_kb(bot_username: str, ...)`. In PTB, `Bot.username` is typed `Optional[str]`; after `initialize()` it is always populated in practice, but the type system allows `None`. If `None` were passed, `checkme_ban_kb` would embed it literally in the URL: `https://t.me/None?start=appeal_<id>`, producing an invalid Appeal button for every banned user who runs `/checkme`. `ban_flow.py` already guards with `bot.username or "TCFBot"` and `start.py` uses `ctx.bot.username or ""`. Fixed both call sites in `checking.py` (lines 237 and 318) to use `ctx.bot.username or ""`, consistent with `start.py`. Ruff: 1 file reformatted, all checks passed. Import: OK.
+
+### Changed
+
+- **Dependency bump** (`uv.lock`): `click v8.4.1 -> v8.4.2`, `ruff v0.15.18 -> v0.15.19`. Both are safe patch releases; no API changes affect bot code. Bumped via `uv lock --upgrade` and installed with `uv sync`. Ruff re-verified clean (75 files) with new version.
+
 ## [Unreleased] - 2026-06-23 (session 169)
 
 ### Fixed

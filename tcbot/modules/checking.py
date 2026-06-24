@@ -234,7 +234,9 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await msg.reply_text(
             text,
             parse_mode="HTML",
-            reply_markup=keyboards.checkme_ban_kb(ctx.bot.username, ban_id, proof_link),
+            reply_markup=keyboards.checkme_ban_kb(
+                ctx.bot.username or "", ban_id, proof_link
+            ),
         )
     except Exception as exc:
         log.debug("checkme ban-detail reply failed for user %d: %s", user.id, exc)
@@ -315,7 +317,7 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         admin_fname = "Admin"
     text, proof_link = await _ban_summary(ban, uid, fname, admin_fname)
     await _safe_edit(
-        q, text, keyboards.checkme_ban_kb(ctx.bot.username, ban_id, proof_link)
+        q, text, keyboards.checkme_ban_kb(ctx.bot.username or "", ban_id, proof_link)
     )
 
 
