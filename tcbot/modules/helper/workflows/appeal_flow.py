@@ -45,6 +45,8 @@ _LOCK_HOURS: int = 12
 _LOCK_WINDOW = timedelta(hours=_LOCK_HOURS)
 _STALE_REVIEW_HOURS: int = 72
 _STALE_REVIEW_WINDOW = timedelta(hours=_STALE_REVIEW_HOURS)
+_REJECTION_COOLDOWN_HOURS: int = 24
+_REJECTION_COOLDOWN = timedelta(hours=_REJECTION_COOLDOWN_HOURS)
 
 _ID_RE = re.compile(r"^/start\s+appeal_([a-z0-9]{10})$")
 
@@ -56,6 +58,10 @@ _ERR_WRONG_ACCOUNT = "This appeal link doesn't belong to your account."
 _ERR_PENDING_REVIEW = (
     f"You already have a pending appeal under review."
     f" If no decision is reached within {_STALE_REVIEW_HOURS} hours, you may try again."
+)
+_ERR_REJECTION_COOLDOWN = (
+    f"Your previous appeal was rejected."
+    f" Please wait {_REJECTION_COOLDOWN_HOURS} hours before submitting a new one."
 )
 _MSG_CANCELLED = "Appeal cancelled. Nothing was submitted."
 _MSG_SESSION_ENDED = "Appeal session ended."
@@ -241,6 +247,21 @@ class BuildAppeal:
                     log.debug(
                         "Appeal pending-review reply failed for user %d: %s", uid, exc
                     )
+                return ConversationHandler.END
+
+        rejected_at = ban.get("rejected_at")
+        if rejected_at is not None:
+            elapsed = utc_now() - to_utc(rejected_at)
+            if elapsed < _REJECTION_COOLDOWN:
+                remaining_h = (
+                    int((_REJECTION_COOLDOWN - elapsed).total_seconds() / 3600) + 1
+                )
+                try:
+                    await msg.reply_text(
+                        f"{_ERR_REJECTION_COOLDOWN} ({remaining_h}h remaining)"
+                    )
+                except Exception as exc:
+                    log.debug("Appeal cooldown reply failed for user %d: %s", uid, exc)
                 return ConversationHandler.END
 
         if ctx.user_data is None:

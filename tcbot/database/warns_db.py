@@ -156,6 +156,22 @@ async def clear_warns(user_id: int, chat_id: int) -> int:
     return r0.deleted_count if not isinstance(r0, BaseException) else 0
 
 
+async def clear_all_warns(user_id: int) -> int:
+    """Remove ALL warnings for a user across every federation group.
+
+    Used on federation auto-ban to ensure the user starts with a clean warn
+    slate in every group after a potential unban, preventing immediate re-ban
+    from stale per-group counts accumulated before the federation ban.
+    """
+    results = await asyncio.gather(
+        db_call(_warns().delete_many({"user_id": user_id})),
+        db_call(_warn_counts().delete_many({"user_id": user_id})),
+        return_exceptions=True,
+    )
+    r0 = results[0]
+    return r0.deleted_count if not isinstance(r0, BaseException) else 0
+
+
 async def get_warns(user_id: int, chat_id: int) -> list[WarnDoc]:
     """Return all warn documents for a user in a chat, oldest first."""
     return await db_call(

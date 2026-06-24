@@ -271,9 +271,11 @@ async def execute_warn(
             )
 
         if any_ban_ok:
-            # * Clear warns in the originating chat and reply with federation-ban notice.
+            # * Clear warns across ALL federation groups (not just the originating chat)
+            # * so the user starts fresh after a potential unban, preventing immediate
+            # * re-ban from stale per-group counts accumulated before this federation ban.
             clear_result, reply_result = await asyncio.gather(
-                db.warns_db.clear_warns(target_id, chat_id),
+                db.warns_db.clear_all_warns(target_id),
                 msg.reply_text(
                     f"{ban_notice}{applied_line}",
                     parse_mode="HTML",

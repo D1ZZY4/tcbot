@@ -2,6 +2,28 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-24 (session 171)
+
+### Fixed
+
+- **Bug #444** (`tcbot/modules/helper/workflows/connected_flow.py`): `on_join_decision` ran `complete_join` and `q.edit_message_text(connected_message())` in the same `asyncio.gather`. When `complete_join` raised (e.g. DB write failure), the group was never persisted but the owner still saw "This community is now connected" because `edit_message_text` had already been dispatched in the same gather. The ghost group receives no ban/mute enforcement, `/tcdisconnect` cannot find it, and no error feedback reaches the owner. Fixed by making the calls sequential: `await complete_join(...)` first; on exception, log and edit to `_ERR_COMPLETE_JOIN` then return; only on success call `q.edit_message_text(connected_message())`. Added `import contextlib` and `_ERR_COMPLETE_JOIN` constant. Ruff: 1 file reformatted, all checks passed. Import: OK.
+
+- **Bug #445** (`tcbot/modules/helper/workflows/appeal_flow.py`): No re-appeal cooldown was enforced after rejection. `bans_db.set_rejected_by` stores `rejected_at` on the ban document, but `_start()` never checked it - a persistent user could spam-appeal immediately after every rejection. Fixed by adding `_REJECTION_COOLDOWN_HOURS = 24` / `_REJECTION_COOLDOWN = timedelta(hours=24)` constants and checking `ban.get("rejected_at")` in `_start()` after the stale-review block: if `utc_now() - to_utc(rejected_at) < _REJECTION_COOLDOWN`, reply with `_ERR_REJECTION_COOLDOWN` showing hours remaining and return `END`. Ruff: clean. Import: OK.
+
+- **Bug #446** (`tcbot/modules/helper/workflows/warning_flow.py`, `tcbot/database/warns_db.py`): On federation auto-ban triggered by `execute_warn`, `db.warns_db.clear_warns(target_id, chat_id)` only cleared warns in the originating group. Warns accumulated in other groups remained intact, so after a future unban the user could re-enter those groups with existing warn counts and immediately re-trigger an auto-ban on the very next warn. Fixed by: (1) adding `clear_all_warns(user_id)` to `warns_db.py` - deletes from both `warns` and `warn_counts` for all `chat_id` values in one `asyncio.gather`; (2) replacing the `clear_warns(target_id, chat_id)` call in the auto-ban success branch with `clear_all_warns(target_id)`. Ruff: clean. Import: OK.
+
+- **Bug #447** (`tcbot/modules/helper/workflows/muting_flow.py`): `execute_unmute` performed a federation-wide `restrict_chat_member` fan-out to all connected groups without first checking whether the target user had an active mute record. When staff accidentally targeted the wrong user or a user who was never muted, the bot still fired `restrict_chat_member` to every connected group, wrote an unmute log entry, and replied "restored N/N groups" - a misleading success message for a no-op. This mirrors the design of `execute_unban` which calls `get_active_ban` first. Fixed by adding a `db.mutes_db.get_active_mute(target_id)` guard at the top of `execute_unmute`: if `None`, reply "X has no active federation mute." and return early. Ruff: clean. Import: OK.
+
+- **Bug #448** (`tcbot/modules/disconnecting.py`): A group owner in anonymous admin mode (GroupAnonymousBot, `user_id = 1087968824`) running `/tcdisconnect` received the generic "Only the group owner or TC admins can disconnect this group." refusal with no indication that anonymous mode was the cause. The owner had no way to know they needed to disable anonymous mode or ask TC Staff to run `/rmtc`. Fixed by checking `user.id == decorators._ANON_BOT_ID` inside the not-authorized branch: anonymous senders now receive "Anonymous admin mode is active. Please send this command from your personal account, or ask TC Staff to run /rmtc." Ruff: clean. Import: OK.
+
+### Changed
+
+- **Dependency bump** (`uv.lock`): `click v8.4.1 -> v8.4.2`, `ruff v0.15.18 -> v0.15.19`. Both are safe patch releases; no API changes affect bot code. Bumped via `uv lock --upgrade` and installed with `uv sync`. Ruff re-verified clean (75 files) with new version.
+
+### Documentation
+
+- **docs(appeal)**: Added "Rejection cooldown" section to `docs/appeal-detailed.md` documenting the 24-hour wait enforced after rejection, how it is checked in `_start()`, and its independence from the stale-review window. Added "Anonymous admin mode and appeal decisions" section documenting that Telegram always sends the real user ID for callback queries: anonymous staff cannot issue commands but can click Approve/Reject on review cards, with their real identity recorded. Added items 12 and 13 to the Behavior reference list. Updated PLAN.md findings P2#5, P3#6, P3#7, P3#8, P4#11, P4#12 from `Open` to `Resolved`.
+
 ## [Unreleased] - 2026-06-24 (session 170)
 
 ### Fixed

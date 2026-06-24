@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -90,6 +91,9 @@ _ERR_ROLE_CHECK_FAILED = "Could not verify your role."
 _ERR_OWNER_ONLY = "Only the group owner can decide."
 _ERR_BOT_PERMS_VERIFY = (
     "Could not verify my own permissions. Please promote me as admin and try again."
+)
+_ERR_COMPLETE_JOIN = (
+    "Connection failed due to a database error. Please try again later."
 )
 
 _TG_TIMEOUT = 3.0
@@ -490,17 +494,20 @@ class BuildConnection:
                     log.debug("Join decision already-connected edit failed: %s", exc)
                 return
 
-            join_r, edit_r = await asyncio.gather(
-                self.complete_join(
+            # * complete_join must succeed before showing the success message.
+            # * Running both in a gather was a bug: if complete_join raised, the group
+            # * was never persisted but the owner saw "connected" anyway.
+            try:
+                await self.complete_join(
                     chat.id, chat.title or "", user.id, user.first_name, ctx.bot
-                ),
-                q.edit_message_text(self.connected_message(), reply_markup=None),
-                return_exceptions=True,
-            )
-            if isinstance(join_r, BaseException):
-                log.error("complete_join failed for chat %d: %s", chat.id, join_r)
-            if isinstance(edit_r, BaseException):
-                log.debug("connected edit failed for chat %d: %s", chat.id, edit_r)
+                )
+            except Exception:
+                log.exception("complete_join failed for chat %d", chat.id)
+                with contextlib.suppress(Exception):
+                    await q.edit_message_text(_ERR_COMPLETE_JOIN, reply_markup=None)
+                return
+            with contextlib.suppress(Exception):
+                await q.edit_message_text(self.connected_message(), reply_markup=None)
 
         elif action == self.cancel_callback:
             # * All four ops are independent: remove pending, edit prompt, log, leave.

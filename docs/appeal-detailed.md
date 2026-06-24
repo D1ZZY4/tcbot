@@ -213,6 +213,35 @@ If editing the existing appeal log fails, the bot attempts to send a new log mes
 - If user DM notification fails during approval or rejection, the review/log operations still proceed because those calls use `asyncio.gather(..., return_exceptions=True)`.
 - If a ban was already deactivated before a decision, the review message is edited to show that the appeal is already resolved.
 
+## Rejection cooldown
+
+After a staff member rejects an appeal, the banned user must wait **24 hours** before
+submitting a new one. This prevents spam-appealing immediately after every rejection.
+
+The cooldown is enforced in `BuildAppeal._start()`: when `ban.rejected_at` is present and
+`utc_now() - to_utc(rejected_at) < timedelta(hours=24)`, the user receives a message
+showing the hours remaining and `ConversationHandler.END` is returned.
+
+The cooldown applies independently of the stale-review window. If a stale review
+(≥ 72 h old) is cleared in `_start()`, the rejection cooldown check still follows
+immediately after.
+
+## Anonymous admin mode and appeal decisions
+
+Federation staff in anonymous admin mode (GroupAnonymousBot, `user_id = 1087968824`)
+**cannot use any bot command** because all command entry-point decorators check
+`effective_user.id == 1087968824` and return an error.
+
+However, staff **can still click Approve or Reject** on the appeal review card.
+Telegram always sends the real Telegram user ID as `effective_user` for callback queries
+(button presses), even when the user is in anonymous admin mode. The bot never
+substitutes GroupAnonymousBot for callback senders, so `is_staff()` receives the
+presser's actual account ID and the decision proceeds normally.
+
+Practical consequence: an admin in anonymous mode cannot issue `/tcban` or `/tcwarn`,
+but they can open the appeal review card in the main group and use the Approve/Reject
+buttons. Their real account identity is recorded as the approver or rejector.
+
 ## Behavior reference
 
 Important appeal behaviors to keep in mind:
@@ -228,3 +257,5 @@ Important appeal behaviors to keep in mind:
 9. Missing `review_timestamp` or missing `admin_user_id` disables the reviewer lock.
 10. Uppercase `#APPEAL` reaches the expired-session branch when conversation state is missing.
 11. The module-level appeal builder uses the configured appeal log handle.
+12. After rejection, a 24-hour cooldown applies before the user can start a new appeal.
+13. Staff in anonymous admin mode can use appeal decision buttons but not bot commands.

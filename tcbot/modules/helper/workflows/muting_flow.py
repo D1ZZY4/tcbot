@@ -208,8 +208,28 @@ async def execute_unmute(
     target_id: int,
     target_name: str,
 ) -> None:
-    """Restore full send permissions across all connected groups."""
+    """Restore full send permissions across all connected groups.
+
+    Guards against issuing a federation-wide unrestrict when no active mute
+    record exists, mirroring the ``get_active_ban`` guard in ``execute_unban``.
+    """
     msg = update.effective_message
+
+    # * Guard: only proceed if an active mute record exists.
+    # * Without this check, execute_unmute would fan restrict_chat_member to all
+    # * connected groups even when the user was never muted (or already unmuted),
+    # * producing a misleading "restored N/N groups" success reply for a no-op.
+    active_mute = await db.mutes_db.get_active_mute(target_id)
+    if active_mute is None:
+        try:
+            await msg.reply_text(
+                f"{user_ref(target_id, target_name)} has no active federation mute.",
+                parse_mode="HTML",
+            )
+        except Exception as exc:
+            log.debug("execute_unmute no-mute reply failed: %s", exc)
+        return
+
     full_perms = ChatPermissions(
         can_send_messages=True,
         can_send_polls=True,

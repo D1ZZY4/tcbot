@@ -386,3 +386,33 @@ if isinstance(exc, CircuitOpenError):
 **Why:** The task explicitly forbids any hardcoded magic numbers. Operators needed to adjust the per-group warning threshold for their community size without touching source code. The `== warn_limit` (not `>=`) invariant is preserved because the comparison still uses the exact threshold value.
 
 **How to apply:** All per-group warn threshold checks must use `cfg.warn_limit`. Federation-wide checks use `cfg.fed_warn_limit` (unchanged). Module-level help strings that reference the threshold should read `cfg.warn_limit` at import time (not a constant) so they always reflect the configured value.
+
+---
+
+## 2026-06-24: asyncio.gather sequential dependency pattern
+
+**Decision:** When operation B must only proceed if operation A fully succeeds (including DB writes), do NOT put both in the same `asyncio.gather`. Use sequential awaits: `await A()`, then on success `await B()`.
+
+**Why:** `asyncio.gather` dispatches all coroutines concurrently. If A fails (raises), B has already been dispatched and may show a false-positive success UI to the user. Example: `connected_flow.on_join_decision` ran `complete_join` (DB write) and `edit_message_text(connected_message())` in the same gather - group was never persisted but owner saw "connected". Use `asyncio.gather` only for truly independent operations.
+
+**How to apply:** Before using `asyncio.gather`, ask: "Would showing B's success UI when A fails be a bug?" If yes, make them sequential. The rule of thumb: gather for independent side-effects (log + reply + leave), sequential for causally dependent operations (write then confirm).
+
+---
+
+## 2026-06-24: Federation auto-ban warn clearing must be federation-wide
+
+**Decision:** `warns_db.clear_all_warns(user_id)` (deletes from `warns` + `warn_counts` for ALL chat_ids) must be used on federation auto-ban, not `clear_warns(user_id, chat_id)` (group-scoped).
+
+**Why:** After a federation ban and later unban, the user re-enters groups with stale per-group warn counts from before the ban. One additional warn in a group with count = warn_limit - 1 immediately re-triggers auto-ban. This creates a "re-ban trap" that is surprising for staff and the returning user.
+
+**How to apply:** Any code path that triggers `execute_ban` via auto-ban (warn threshold exceeded, fed_warn_limit exceeded) must call `clear_all_warns(target_id)`. Group-scoped `clear_warns(target_id, chat_id)` is only correct for `/tcunwarn` (intentional group-local reversal by staff).
+
+---
+
+## 2026-06-24: Active record guards before federation fan-out operations
+
+**Decision:** Every federation fan-out executor (`execute_unban`, `execute_unmute`) must check for an active record (via `get_active_ban` / `get_active_mute`) before issuing the fan-out, and return early with a clear "no active X" message if the check fails.
+
+**Why:** Without the guard, accidental `/tcunmute @wrong_user` or `/tcunban @already_unbanned` fans `restrict_chat_member` / `unban_chat_member` to every connected group (potentially 50+), writes a misleading "restored N/N groups" success reply, and produces spurious log entries. The bot API quota is consumed for a no-op.
+
+**How to apply:** Pattern (mirrors `execute_unban`): `if await db.mutes_db.get_active_mute(target_id) is None: reply "no active mute"; return`. Must be the first async operation in the executor, before fetching active groups or building the fan-out list.

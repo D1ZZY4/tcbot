@@ -133,10 +133,15 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     is_group_owner = member.status == "creator"
 
     if not is_tc_staff and not is_group_owner:
-        try:
-            await update.effective_message.reply_text(
-                "Only the group owner or TC admins can disconnect this group."
+        if user.id == decorators._ANON_BOT_ID:
+            msg_text = (
+                "Anonymous admin mode is active. Please send this command from your "
+                "personal account, or ask TC Staff to run /rmtc."
             )
+        else:
+            msg_text = "Only the group owner or TC admins can disconnect this group."
+        try:
+            await update.effective_message.reply_text(msg_text)
         except Exception as exc:
             log.debug("cmd_tcleave not-authorized reply failed: %s", exc)
         return
