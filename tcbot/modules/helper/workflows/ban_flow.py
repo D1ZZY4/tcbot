@@ -417,7 +417,9 @@ async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
             _albums[mgid] = []
             _album_meta[mgid] = meta_snapshot
             _album_userdata[mgid] = ctx.user_data
-            task = asyncio.create_task(_flush_album(mgid, ctx.bot, meta_snapshot, ctx.user_data))
+            task = asyncio.create_task(
+                _flush_album(mgid, ctx.bot, meta_snapshot, ctx.user_data)
+            )
             _album_tasks[mgid] = task
             task.add_done_callback(lambda t, mgid=mgid: _album_tasks.pop(mgid, None))
         _albums[mgid].append(msg)
@@ -431,7 +433,9 @@ async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
     return ConversationHandler.END
 
 
-async def _flush_album(mgid: str, bot: Bot, meta: dict[str, Any], user_data: dict[str, Any] | None) -> None:
+async def _flush_album(
+    mgid: str, bot: Bot, meta: dict[str, Any], user_data: dict[str, Any] | None
+) -> None:
     await asyncio.sleep(cfg.album_debounce)
     if meta.get("_cancelled"):
         log.info("Album flush aborted: cancelled flag set for %s", mgid)
