@@ -2,6 +2,16 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-24 (session 172)
+
+### Fixed
+
+- **Bug #449** (`tcbot/modules/helper/workflows/connected_flow.py`): `on_join_decision` accessed `user.id` and `chat.id` at line 436 inside `asyncio.gather` with no prior guard for `q`, `chat`, or `user` being `None`. PTB types all three as `Optional`; a malformed or anonymous callback with no sender would crash with `AttributeError`. Fixed by adding `if q is None or chat is None or user is None: return` immediately after the three assignments, consistent with the pattern used in every other callback handler in the codebase (e.g. `on_back_to_start`). Ruff: clean. Import: OK.
+
+- **Bug #450** (`tcbot/database/scheduler.py`): `_expire_old_warns` deleted from `warn_counts` (keyed by `updated_at`) but left all individual `warns` documents intact. `_sync_warn_count` backfills a missing `warn_counts` document by counting rows in `warns`, so the very next `warn_count()` or `add_warn()` call on an expired user reconstructed the deleted counter from the still-existing `warns` rows. Net effect: `WARN_EXPIRY_DAYS` was silently a no-op - counters were reset by the nightly job but immediately restored by `_sync_warn_count`. Fixed by deleting from both collections in parallel via `asyncio.gather`: `warn_counts` where `updated_at < cutoff` (existing) and `warns` where `timestamp < cutoff` (new). Log message updated to report both deleted counts. `import asyncio` was already at module level so the previously added inline import was removed. Ruff: 1 file reformatted, clean. Import: OK.
+
+- **Bug #451** (`tcbot/database/mongos.py`): The warn expiry queries introduced by the Bug #450 fix - `delete_many({"timestamp": {"$lt": cutoff}})` on `warns` and `delete_many({"updated_at": {"$lt": cutoff}})` on `warn_counts` - had no supporting indexes. Both queries would perform a full collection scan (COLLSCAN) on every daily expiry run. Existing `warns` indexes are compound with `user_id` as the prefix, which MongoDB cannot use for a bare `{timestamp: ...}` predicate. Fixed by adding two new indexes to `ensure_indexes()`: `col("warns").create_index([("timestamp", 1)])` and `col("warn_counts").create_index([("updated_at", 1)])`. Both are created in the existing parallel `asyncio.gather` call and are idempotent on restart. Ruff: clean. Import: OK.
+
 ## [Unreleased] - 2026-06-24 (session 171)
 
 ### Fixed

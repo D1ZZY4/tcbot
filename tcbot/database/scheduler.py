@@ -76,17 +76,32 @@ _sched_stop: asyncio.Event | None = None
 
 
 async def _expire_old_warns(warn_expiry_days: int) -> None:
-    """Delete warn_count records whose ``updated_at`` is older than *warn_expiry_days* days.
+    """Delete expired warn records from both ``warns`` and ``warn_counts``.
+
+    Both collections must be pruned together. Deleting only ``warn_counts``
+    leaves individual ``warns`` documents intact; ``_sync_warn_count`` then
+    reconstructs the counter from those documents on the next warn operation,
+    making expiry a no-op. Deleting both collections atomically (in parallel)
+    prevents this backfill from restoring stale counts.
 
     Called daily by APScheduler when ``WARN_EXPIRY_DAYS > 0``.
     """
     cutoff = utc_now() - timedelta(days=warn_expiry_days)
-    result = await _db_call(
-        _col("warn_counts").delete_many({"updated_at": {"$lt": cutoff}})
+    counts_res, warns_res = await asyncio.gather(
+        _db_call(_col("warn_counts").delete_many({"updated_at": {"$lt": cutoff}})),
+        _db_call(_col("warns").delete_many({"timestamp": {"$lt": cutoff}})),
+        return_exceptions=True,
+    )
+    counts_del = (
+        counts_res.deleted_count if not isinstance(counts_res, BaseException) else 0
+    )
+    warns_del = (
+        warns_res.deleted_count if not isinstance(warns_res, BaseException) else 0
     )
     log.info(
-        "Warn expiry: removed %d warn_count records older than %d days.",
-        result.deleted_count,
+        "Warn expiry: removed %d warn_count and %d warn records older than %d days.",
+        counts_del,
+        warns_del,
         warn_expiry_days,
     )
 

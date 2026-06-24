@@ -427,6 +427,8 @@ class BuildConnection:
         q = update.callback_query
         chat = update.effective_chat
         user = update.effective_user
+        if q is None or chat is None or user is None:
+            return
         lc, lt = cfg.logs
 
         # * Gather q.answer() + member check in parallel so the spinner

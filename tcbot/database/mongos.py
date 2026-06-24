@@ -152,7 +152,11 @@ async def ensure_indexes() -> None:
         col("warns").create_index([("user_id", 1), ("chat_id", 1), ("timestamp", -1)]),
         # * Serves /check history: every warning for a user across groups
         col("warns").create_index([("user_id", 1), ("timestamp", -1)]),
+        # * Serves warn expiry: delete_many({"timestamp": {"$lt": cutoff}}) COLLSCAN without this
+        col("warns").create_index([("timestamp", 1)]),
         col("warn_counts").create_index([("user_id", 1), ("chat_id", 1)], unique=True),
+        # * Serves warn expiry: delete_many({"updated_at": {"$lt": cutoff}}) COLLSCAN without this
+        col("warn_counts").create_index([("updated_at", 1)]),
         # * Per-user kick / mute history for /check
         col("kicks").create_index([("user_id", 1), ("timestamp", -1)]),
         col("mutes").create_index([("user_id", 1), ("timestamp", -1)]),
