@@ -70,7 +70,7 @@ _album_meta: dict[str, dict[str, Any]] = {}
 _album_userdata: dict[str, dict[str, Any]] = {}
 
 # * Strong references to in-flight album flush tasks (prevents GC)
-_album_tasks: set[asyncio.Task[None]] = set()
+_album_tasks: dict[str, asyncio.Task[None]] = {}
 
 
 # ────────────────────────── Ban executor ────────────────────────── #
@@ -417,8 +417,8 @@ async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
             _album_meta[mgid] = dict(ctx.user_data)
             _album_userdata[mgid] = ctx.user_data
             task = asyncio.create_task(_flush_album(mgid, ctx.bot))
-            _album_tasks.add(task)
-            task.add_done_callback(_album_tasks.discard)
+            _album_tasks[mgid] = task
+            task.add_done_callback(lambda t, mgid=mgid: _album_tasks.pop(mgid, None))
         _albums[mgid].append(msg)
         return WAITING_PROOF
 
@@ -477,6 +477,9 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
         # * Cancel any in-progress album flush for this conversation so the ban
         # * does not execute after the user has already pressed Cancel.
         for mgid in [k for k, ud in _album_userdata.items() if ud is ctx.user_data]:
+            task = _album_tasks.pop(mgid, None)
+            if task is not None:
+                task.cancel()
             _albums.pop(mgid, None)
             _album_meta.pop(mgid, None)
             _album_userdata.pop(mgid, None)
@@ -495,6 +498,9 @@ async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
         # * Cancel any in-progress album flush for this conversation so the ban
         # * does not execute after the proof window has expired.
         for mgid in [k for k, ud in _album_userdata.items() if ud is ctx.user_data]:
+            task = _album_tasks.pop(mgid, None)
+            if task is not None:
+                task.cancel()
             _albums.pop(mgid, None)
             _album_meta.pop(mgid, None)
             _album_userdata.pop(mgid, None)

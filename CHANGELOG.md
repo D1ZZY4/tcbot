@@ -68,6 +68,10 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 - **docs(appeal)**: Added "Rejection cooldown" section to `docs/appeal-detailed.md` documenting the 24-hour wait enforced after rejection, how it is checked in `_start()`, and its independence from the stale-review window. Added "Anonymous admin mode and appeal decisions" section documenting that Telegram always sends the real user ID for callback queries: anonymous staff cannot issue commands but can click Approve/Reject on review cards, with their real identity recorded. Added items 12 and 13 to the Behavior reference list. Updated PLAN.md findings P2#5, P3#6, P3#7, P3#8, P4#11, P4#12 from `Open` to `Resolved`.
 
+- **Bug #465** (`tcbot/modules/helper/workflows/ban_flow.py`): Album flush tasks (`_flush_album` scheduled via `asyncio.create_task`) were never cancelled when the proof conversation was cancelled or timed out. The cancel/timeout handlers popped the media group entries from `_albums`, `_album_meta`, and `_album_userdata`, but the sleeping task continued running. If Telegram reused the same `media_group_id` for a subsequent album after cancel/timeout but before the old task finished its debounce sleep, the old task could wake up and intercept the new album's messages, attempting to execute a ban with stale/empty metadata. Fixed by changing `_album_tasks` from `set[Task]` to `dict[str, Task]` keyed by `media_group_id`, and calling `task.cancel()` on matching tasks in both `on_cancel_proof` and `on_proof_timeout` before popping the dict entries. Ruff: clean. Import: OK.
+
+- **Bug #466** (`tcbot/modules/helper/workflows/muting_flow.py`): `execute_unmute` built `ChatPermissions` with `can_send_messages=True`, `can_send_polls=True`, etc., but omitted `can_send_media_messages=True`. Telegram treats omitted `ChatPermissions` fields as "no change", so a user who had been restricted from sending media (e.g. by another admin) would remain unable to send photos, videos, or audio after an unmute. Fixed by adding `can_send_media_messages=True` to the constructor. Ruff: clean. Import: OK.
+
 ## [Unreleased] - 2026-06-24 (session 170)
 
 ### Fixed

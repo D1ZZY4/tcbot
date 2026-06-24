@@ -6,7 +6,7 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 
 ## [Current State]
 
-- Audit session 173: 13 bugs fixed across 19 files (Docker, CI/CD, DB layer, utils, modules, extraction, formatter, parse_logmsg, keyboards, checking, netspeed). All 75 files ruff-clean. Bot starts clean: 31/31 indexes, Redis hiredis 3.4.0, APScheduler, polling active.
+- Audit session 173: 15 bugs fixed across 21 files (Docker, CI/CD, DB layer, utils, modules, extraction, formatter, parse_logmsg, keyboards, checking, netspeed, ban_flow, muting_flow). All 75 files ruff-clean. Bot starts clean: 31/31 indexes, Redis hiredis 3.4.0, APScheduler, polling active.
 | Area | Status |
 |---|---|
 | Runtime | Long-polling Telegram bot started with `uv run python -m tcbot`. |
