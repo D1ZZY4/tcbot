@@ -47,7 +47,7 @@ class BanDoc(TypedDict, total=False):
     review_timestamp: datetime | None
     appeal_log_msg_id: int | None
     appeal_submitted_at: datetime | None
-    appeal_link: str
+    appeal_link: str | None
     rejected_by_id: int | None
     rejected_by_name: str | None
     rejected_at: datetime | None
@@ -121,7 +121,7 @@ class MuteDoc(TypedDict, total=False):
     reason: str
     admin_id: UserId
     timestamp: datetime
-    duration_secs: int
+    duration_secs: int | None
 
 
 class ActiveMuteDoc(TypedDict, total=False):

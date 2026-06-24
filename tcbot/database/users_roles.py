@@ -77,7 +77,7 @@ async def is_owner(user_id: int) -> bool:
 
 async def ensure_initial_owner(initial_id: int) -> None:
     """Create the first owner entry if the owners collection is empty."""
-    if await db_call(col("tc_owners").count_documents({})) > 0:
+    if await db_call(col("tc_owners").estimated_document_count()) > 0:
         return
     try:
         await db_call(col("tc_owners").insert_one({"user_id": initial_id}))

@@ -126,10 +126,12 @@ async def ensure_indexes() -> None:
     results = await asyncio.gather(
         col("bans").create_index([("banned_user_id", 1), ("is_active", 1)]),
         col("bans").create_index([("ban_id", 1)], unique=True),
+        # * Serves user_appeal_count() which filters on banned_user_id + appeal_log_msg_id presence
+        col("bans").create_index([("banned_user_id", 1), ("appeal_log_msg_id", 1)], sparse=True),
         # * Serves active_bans()/active_ban_count() which filter on is_active only
         col("bans").create_index([("is_active", 1), ("timestamp", -1), ("ban_id", -1)]),
         # * Serves /check history: every ban (active+inactive) for a user, newest first
-        col("bans").create_index([("banned_user_id", 1), ("timestamp", -1)]),
+        col("bans").create_index([("banned_user_id", 1), ("timestamp", -1), ("ban_id", -1)]),
         col("tc_owners").create_index([("user_id", 1)], unique=True),
         col("tc_admins").create_index([("user_id", 1)], unique=True),
         col("tc_roles").create_index([("user_id", 1)], unique=True),
@@ -152,11 +154,15 @@ async def ensure_indexes() -> None:
         col("warns").create_index([("user_id", 1), ("chat_id", 1), ("timestamp", -1)]),
         # * Serves /check history: every warning for a user across groups
         col("warns").create_index([("user_id", 1), ("timestamp", -1)]),
+        # * Serves get_warns() oldest-first sort (timestamp ASC)
+        col("warns").create_index([("user_id", 1), ("chat_id", 1), ("timestamp", 1)]),
         # * Serves warn expiry: delete_many({"timestamp": {"$lt": cutoff}}) COLLSCAN without this
         col("warns").create_index([("timestamp", 1)]),
         col("warn_counts").create_index([("user_id", 1), ("chat_id", 1)], unique=True),
         # * Serves warn expiry: delete_many({"updated_at": {"$lt": cutoff}}) COLLSCAN without this
         col("warn_counts").create_index([("updated_at", 1)]),
+        # * Serves user_warn_groups() and federation_warn_count() filter + sort
+        col("warn_counts").create_index([("user_id", 1), ("count", 1), ("updated_at", -1)]),
         # * Per-user kick / mute history for /check
         col("kicks").create_index([("user_id", 1), ("timestamp", -1)]),
         col("mutes").create_index([("user_id", 1), ("timestamp", -1)]),
@@ -171,6 +177,8 @@ async def ensure_indexes() -> None:
         col("active_mutes").create_index([("user_id", 1)], unique=True),
         # * Serves active_mute_docs() bulk-fetch and get_active_mute() filtered by expiry
         col("active_mutes").create_index([("until_date", 1)]),
+        # * Compound for get_active_mute() $or filter on specific user
+        col("active_mutes").create_index([("user_id", 1), ("until_date", 1)]),
         # * TTL index: MongoDB auto-expires member_cache docs older than 90 days (7776000 s).
         # * Replaces the APScheduler weekly cleanup job, shrinking the scheduler surface.
         col("member_cache").create_index(

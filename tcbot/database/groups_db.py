@@ -96,7 +96,8 @@ async def deactivate_group(chat_id: int) -> bool:
     r = await db_call(
         _groups().update_one({"chat_id": chat_id}, {"$set": {"is_active": False}})
     )
-    connected_cache.put(chat_id, False)  # noqa: FBT003
+    if r.matched_count > 0:
+        connected_cache.put(chat_id, False)  # noqa: FBT003
     active_groups_cache.invalidate(_ALL_GROUPS_KEY)
     return r.matched_count > 0
 
