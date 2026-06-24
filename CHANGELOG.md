@@ -2,6 +2,40 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-25 (session 173)
+
+### Fixed
+
+- **Bug #452** (`.github/workflows/auto-fix.yml`): Three issues in the auto-fix workflow: (1) `astral-sh/setup-uv` had no `enable-cache: true`, causing every run to re-download all dependencies from scratch; (2) no `concurrency` group, allowing overlapping runs that race to push to the same `auto-fix/ruff` branch; (3) `gh pr create --base main` was hardcoded regardless of which branch triggered the workflow, causing cross-branch PRs from feature branches. Fixed all three: added `enable-cache: true`, added `concurrency: group: auto-fix-${{ github.ref }} cancel-in-progress: true`, changed `--base main` to `--base ${{ github.ref_name }}`.
+
+- **Bug #453** (`.github/workflows/dependency-update.yml`): Three issues: (1) `uv lock --upgrade` was missing the `--frozen` flag, violating the project mandatory rule and producing potentially non-reproducible lockfiles; (2) `astral-sh/setup-uv` had no `enable-cache: true`; (3) no `concurrency` group, allowing overlapping runs that could race during lockfile generation and push. Fixed all three.
+
+- **Bug #454** (`.github/workflows/run-bot.yml`): Self-chain dispatch used `${GITHUB_REF_NAME}` which resolves to the triggering branch name. A manual `workflow_dispatch` from a feature branch would dispatch a second bot runner on that feature branch against production MongoDB. Fixed by hard-coding `--ref "main"` in the `gh workflow run` call.
+
+- **Bug #455** (`Dockerfile`): `RUN uv run --frozen python -c "..."` passed `--frozen` as an argument to the Python subprocess instead of to `uv run`. Python 3.12 exits with "unrecognized arguments: --frozen", making every `docker build` fail at the hiredis verification step. Fixed by inserting `--` separator: `uv run --frozen -- python -c "..."`.
+
+- **Bug #456** (`tcbot/database/redis_client.py`): The module raised `RuntimeError` at import time when the `hiredis` C extension was absent, even when `REDIS_URL` was unset. This contradicted the module docstring ("If REDIS_URL is not set the module remains inert") and prevented the bot from starting with in-memory-only caching on systems where hiredis wasn't installed. Fixed by making hiredis truly optional: flag `_HIREDIS_AVAILABLE = True/False` set at import; `RuntimeError` moved into `connect()` so it only fires when Redis is actually configured. Also replaced deprecated `aioredis.Redis.from_pool(pool)` with `aioredis.Redis(connection_pool=pool)` for forward compatibility.
+
+- **Bug #457** (`tcbot/database/mongos.py`): `connect()` assigned `_db = client[cfg.db_name]` BEFORE the circuit-breaker-wrapped `ping`. If the ping failed (MongoDB unreachable), `_db` was left as a non-None but broken reference, so `is_connected()` would incorrectly return `True` and subsequent `db()` calls would operate on a dead client. Fixed by pinging `client.admin.command("ping")` first; `_db` is only assigned after the ping succeeds.
+
+- **Bug #458** (`tcbot/modules/netspeed.py`): `cmd_ping` and `cmd_speedtest` sent their initial `msg.reply_text("Pinging..." / "Running speed test...")` without any `try/except`. If Telegram rejected the first reply (rate-limited, blocked user, etc.), the exception propagated out of the handler unhandled. Fixed by wrapping both initial replies in `try/except Exception` with `log.debug` on failure and early return.
+
+- **Bug #459** (`tcbot/modules/helper/extraction.py`): The `text_mention` (priority 4) and `@mention` (priority 5) entity paths lacked the `_ANONYMOUS_BOT_ID` / `_TELEGRAM_USER_ID` guard present in the reply path. A manually-crafted message containing a `text_mention` or `@mention` for GroupAnonymousBot or Telegram would be returned as a valid resolution target. Fixed by adding the same skip guard to both entity paths.
+
+- **Bug #460** (`tcbot/modules/checking.py`): `cmd_checkme` (self-check command) bypassed `identity.classify()` and used inline role-rank branches (`user.id == owner_id`, `user_role == "admin"`, `user_role in ("developer", "tester")`), violating the rule that all self/bot/Telegram/Founder/staff target-type branches must use `identity.classify` plus `identity.refuse_message`. Fixed by replacing the three manual branches with a single `identity.classify()` call and `ident.kind` dispatch.
+
+- **Bug #461** (`tcbot/utils/formatter.py`): `link(text, url)` did not escape the `url` parameter in the `href` attribute (only escaped `text`). `mention()` similarly did not escape `username` in the `href`. `user_ref()` did escape correctly, creating inconsistency. Fixed both helpers to use `html.escape(url, quote=True)` and `html.escape(username)` in hrefs respectively.
+
+- **Bug #462** (`tcbot/modules/helper/parse_logmsg.py`): `proof_caption_update` used `LogBuilder.raw()` with an unescaped `prev_proof_lnk` interpolated directly into an HTML anchor tag. Fixed by using `link("Click Here", prev_proof_lnk)` via the `field()` method with `escape=False`.
+
+- **Bug #463** (`tcbot/utils/error_reporter.py`): `_esc()` used three manual `.replace()` calls (`&` → `&amp;`, `<` → `&lt;`, `>` → `&gt;`) instead of `html.escape()`. The manual version did not escape `"` (irrelevant for Telegram text, but inconsistent with `tcbot.utils.formatter.esc()`). Fixed by replacing with `html.escape(str(s))`.
+
+- **Bug #464** (`tcbot/modules/helper/keyboards.py`): `checkme_ban_kb(bot_username, ban_id)` accepted an empty `bot_username` string and produced an invalid URL (`https://t.me/?start=appeal_...`). Fixed by adding an early `if not bot_username: return None` guard.
+
+### Documentation
+
+- **Documentation accuracy audit** (session 173): Three cross-references between docs and source were stale or missing: (1) `.agents/CLAUDE.md` had a duplicate `mongos.py` entry in its repository map (lines 171 and 176 both listed the same file); removed the duplicate. (2) `docs/modules/modules.md` still showed `__module_name__ = "Cleanup"` for `maintenance.py` even though the source was already corrected to `"Maintenance"` (PLAN.md P4#9); updated the module table cell. (3) `docs/databases/databases.md` "Public singletons" table omitted `user_mention_cache`, which is a live `TwoLevelCache` exported from `tcbot/database/cache.py:327` and consumed by `users_cache.py`; added the missing row with TTLs (L1 300s, L2 600s, maxsize 4096) and population source. No code changes.
+
 ## [Unreleased] - 2026-06-24 (session 172)
 
 ### Fixed

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import html
 import logging
 import platform
 import sys
@@ -210,7 +211,7 @@ def _esc(s: str | None) -> str:
     """Escape HTML special characters for Telegram HTML parse mode."""
     if s is None:
         return ""
-    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return html.escape(str(s))
 
 
 def _shorten_path(path: str) -> str:

@@ -15,7 +15,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import decorators, extraction, keyboards, replies
+from tcbot.modules.helper import decorators, extraction, identity, keyboards, replies
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.formatter import bold, code, esc, mention
 from tcbot.modules.helper.parse_link import message_link
@@ -177,10 +177,12 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         owner_id = None
     if isinstance(user_role, BaseException):
         user_role = None
-    if isinstance(ban, BaseException):
-        ban = None
 
-    if user.id == owner_id:
+    ident = await identity.classify(
+        ctx.bot, user.id, user.id, fname, target_is_bot=user.is_bot
+    )
+
+    if ident.kind == "founder":
         try:
             await msg.reply_text(
                 f"Bro, {mention(user.id, fname, user.username)}... seriously?\n\n"
@@ -191,6 +193,30 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             )
         except Exception as exc:
             log.debug("checkme founder reply failed for user %d: %s", user.id, exc)
+        return
+
+    if ident.kind == "admin":
+        try:
+            await msg.reply_text(
+                f"Hey {mention(user.id, fname, user.username)}, checking yourself?\n\n"
+                "You're on the staff team - you handle bans, not receive them. "
+                "No active ban on your end. You're good.",
+                parse_mode="HTML",
+            )
+        except Exception as exc:
+            log.debug("checkme admin reply failed for user %d: %s", user.id, exc)
+        return
+    if ident.kind in ("developer", "tester"):
+        role_label = ident.role_label
+        try:
+            await msg.reply_text(
+                f"Hey {mention(user.id, fname, user.username)}, all good.\n\n"
+                f"You're a {esc(cfg.community_name)} {esc(role_label)} - on the team, not on the ban list. "
+                "Nothing to worry about.",
+                parse_mode="HTML",
+            )
+        except Exception as exc:
+            log.debug("checkme subrole reply failed for user %d: %s", user.id, exc)
         return
 
     if user_role == "admin":

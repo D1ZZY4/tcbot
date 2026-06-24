@@ -99,7 +99,11 @@ async def cmd_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Reply with Telegram API round-trip latency in milliseconds."""
     msg = update.effective_message
     t0 = time.monotonic()
-    sent = await msg.reply_text("Pinging...")
+    try:
+        sent = await msg.reply_text("Pinging...")
+    except Exception as exc:
+        log.debug("cmd_ping initial reply failed: %s", exc)
+        return
     elapsed_ms = (time.monotonic() - t0) * 1_000
     try:
         await sent.edit_text(
@@ -116,7 +120,11 @@ async def cmd_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Run a full network speed test and reply with detailed results."""
     msg = update.effective_message
-    notice = await msg.reply_text("Running speed test, please wait...")
+    try:
+        notice = await msg.reply_text("Running speed test, please wait...")
+    except Exception as exc:
+        log.debug("cmd_speedtest initial reply failed: %s", exc)
+        return
     try:
         loop = asyncio.get_running_loop()
         result: dict = await loop.run_in_executor(None, _run_speedtest)

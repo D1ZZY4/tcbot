@@ -126,7 +126,7 @@ jobs:
                 echo "Dispatching the next run (handover)..."
                 dispatched=false
                 for attempt in 1 2 3; do
-                  if GH_TOKEN="$BOT_PAT" gh workflow run run-bot.yml --ref "${GITHUB_REF_NAME}"; then
+                  if GH_TOKEN="$BOT_PAT" gh workflow run run-bot.yml --ref "main"; then
                     echo "Next run queued (attempt $attempt); it will start when this one stops."
                     dispatched=true
                     break

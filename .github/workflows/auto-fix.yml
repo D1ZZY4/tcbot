@@ -19,6 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    concurrency:
+      group: auto-fix-${{ github.ref }}
+      cancel-in-progress: true
+
     steps:
       - uses: actions/checkout@v7
         with:
@@ -30,6 +34,8 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
 
       - name: Install dependencies
         run: uv sync --frozen
@@ -125,8 +131,8 @@ jobs:
           </details>
 
           **Safe to merge** - all fixes are automated and follow project style guide." \
-              --base main \
-              --head "$BRANCH"
+               --base ${{ github.ref_name }} \
+               --head "$BRANCH"
           fi
 
       - name: Comment on PR

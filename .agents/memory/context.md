@@ -5,11 +5,13 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-24 (session 170)
+**Last updated:** 2026-06-25 (session 173)
 
 ## What is done
 
-- Session 170 (2026-06-24): Bug #443 + Bug #444 fixed. Dependency bumps click 8.4.2, ruff 0.15.19. Extended audit continuation (session 170): all core scans clean, two new bugs found and fixed.
+- Session 173 (2026-06-25): Comprehensive audit + 13 bug fixes across 19 files. Dockerfile CRITICAL fix, CI/CD hardening (run-bot.yml, auto-fix.yml, dependency-update.yml), DB layer fixes (mongos ping order, redis_client optionality + api compat, extraction ANONYMOUS_BOT_ID guards), formatter href escaping, netspeed try/except, checking.py classify migration, parse_logmsg proof link escaping, error_reporter _esc() html.escape, keyboards bot_username guard, logger inline import guard. All 75 files ruff-clean. Bot starts clean: 31/31 indexes, Redis hiredis 3.4.0, APScheduler, polling active. Total bugs: #1-#464. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
+
+- Session 172 (2026-06-24): Bug #449 + Bug #450 + Bug #451 fixed. Extended audit continuation: all core scans clean.
   - Bug #443: `run-bot.yml` env section missing `WARN_LIMIT: ${{ secrets.WARN_LIMIT }}`. Bug #438 added cfg.warn_limit env var but the GitHub Actions 24/7 runner workflow was not updated. Runner always started with hardcoded default 3 regardless of WARN_LIMIT secret. Fixed: added `WARN_LIMIT` line after `WARN_EXPIRY_DAYS`.
   - Bug #444: `checking.py` - `ctx.bot.username` used without `or ""` fallback in two `checkme_ban_kb()` call sites (lines 237 and 318). PTB Bot.username is Optional[str]; if None, appeal URL becomes `https://t.me/None?start=appeal_...`. ban_flow.py and start.py already guard correctly. Fixed both call sites with `ctx.bot.username or ""`.
   - Dep bump: click 8.4.1 -> 8.4.2, ruff 0.15.18 -> 0.15.19 via `uv lock --upgrade` + `uv sync`. Ruff 0.15.19 produces zero new violations on 75 files.

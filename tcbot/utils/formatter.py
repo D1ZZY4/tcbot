@@ -35,8 +35,8 @@ def pre(text: str) -> str:
 
 
 def link(text: str, url: str) -> str:
-    """Wrap text in an HTML anchor tag pointing to url, escaping the display text."""
-    return f'<a href="{url}">{html.escape(str(text))}</a>'
+    """Wrap text in an HTML anchor tag pointing to url, escaping both text and url."""
+    return f'<a href="{html.escape(str(url), quote=True)}">{html.escape(str(text))}</a>'
 
 
 def mention(user_id: int, name: str, username: str | None = None) -> str:
@@ -48,7 +48,7 @@ def mention(user_id: int, name: str, username: str | None = None) -> str:
     Otherwise, falls back to plain text name with copyable user ID.
     """
     if username:
-        return f'<a href="https://t.me/{username}">{html.escape(str(name))}</a>'
+        return f'<a href="https://t.me/{html.escape(str(username))}">{html.escape(str(name))}</a>'
     if str(name) == str(user_id):
         return f"<code>{user_id}</code>"
     return f"{html.escape(str(name))} <code>{user_id}</code>"

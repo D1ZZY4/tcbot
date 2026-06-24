@@ -173,7 +173,6 @@ Replit Secrets. For local development, use a gitignored `config.env` copied from
 │   │   ├── queues_db.py            Promotion request queue
 │   │   ├── types.py                NewType domain primitives
 │   │   ├── warns_db.py             Warning records and counts
-│   │   └── mongos.py               Motor client, connect(), indexes, col()
 │   ├── modules/                    Telegram command modules
 │   │   ├── helper/                 Shared decorators, formatting, keyboards
 │   │   │   └── workflows/          ConversationHandler flows (`*_flow.py` only)

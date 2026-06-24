@@ -110,8 +110,8 @@ async def connect() -> None:
         retryWrites=True,
         retryReads=True,
     )
+    await _mongo_cb.call(client.admin.command("ping"))
     _db = client[cfg.db_name]
-    await _mongo_cb.call(_db.command("ping"))
     log.info("MongoDB connected → %s", cfg.db_name)
 
 

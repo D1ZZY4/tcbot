@@ -210,6 +210,7 @@ Mutes use an append-only audit trail (`mutes`) plus a live-state store (`active_
 | `connected_cache` | `TwoLevelCache[bool]` | 120 s | 180 s | `chat_id` | `groups_db.is_connected()` |
 | `active_groups_cache` | `TwoLevelCache[list[GroupDoc]]` | 30 s | 45 s | fixed key | `groups_db.active_groups()` |
 | `owner_id_cache` | `TwoLevelCache[int \| None]` | 300 s | 360 s | fixed key | `users_roles.get_owner_id()` |
+| `user_mention_cache` | `TwoLevelCache[list[str \| None]]` | 300 s | 600 s | `user_id` | `users_cache.get_user_mention_data()` / `upsert_user()` |
 
 Write helpers must invalidate or refresh related cache entries. Role writes invalidate the target user's effective role cache; group writes clear or update the groups and connected caches.
 

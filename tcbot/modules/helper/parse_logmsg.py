@@ -224,7 +224,7 @@ def proof_caption_update(
         .field("Admin ID", admin_id, escape=False)
     )
     if prev_proof_lnk:
-        b.section().raw(f'Previous: <a href="{prev_proof_lnk}">Click Here</a>')
+        b.section().field("Previous", link("Click Here", prev_proof_lnk), escape=False)
     return (
         b.section().date(original_ts, label="Commit at").date(label="Update at").build()
     )

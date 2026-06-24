@@ -159,6 +159,8 @@ async def extract_target(
     for ent in msg.entities or []:
         if ent.type == "text_mention" and ent.user:
             u = ent.user
+            if u.id in (_ANONYMOUS_BOT_ID, _TELEGRAM_USER_ID):
+                continue
             return u.id, u.first_name or await _best_name(u.id)
 
     # * Priority 5: @Mention entity
@@ -167,6 +169,11 @@ async def extract_target(
         for ent in msg.entities or []:
             if ent.type == "mention":
                 uname = text[ent.offset + 1 : ent.offset + ent.length]
+                if uname.lstrip("@") in (
+                    "GroupAnonymousBot",
+                    "Telegram",
+                ):
+                    continue
                 chat = await _safe_get_chat(bot, f"@{uname}")
                 if chat is not None:
                     return chat.id, await _best_name(chat.id, chat.first_name, uname)

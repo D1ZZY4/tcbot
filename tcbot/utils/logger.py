@@ -110,9 +110,12 @@ class TelegramErrorHandler(logging.Handler):
             loop = asyncio.get_running_loop()
         except RuntimeError:
             return
-        from tcbot.utils import (  # noqa: PLC0415
-            error_reporter,
-        )
+        try:
+            from tcbot.utils import (  # noqa: PLC0415
+                error_reporter,
+            )
+        except ImportError:
+            return
 
         task = loop.create_task(error_reporter.report_record(record))
         _tg_tasks.add(task)
