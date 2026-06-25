@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import TYPE_CHECKING
 
 from pymongo import ReturnDocument
@@ -17,6 +18,8 @@ from tcbot.utils.timedate_format import utc_now
 
 if TYPE_CHECKING:
     from motor.motor_asyncio import AsyncIOMotorCollection
+
+log = logging.getLogger(__name__)
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
 # * Internal collection access utilities for the warns database
@@ -128,7 +131,14 @@ async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> in
             )
         )
     except Exception:
-        await db_call(c.delete_one({"_id": inserted.inserted_id}))
+        try:
+            await db_call(c.delete_one({"_id": inserted.inserted_id}))
+        except Exception as rollback_exc:
+            log.warning(
+                "add_warn rollback failed for inserted_id=%s: %s",
+                inserted.inserted_id,
+                rollback_exc,
+            )
         raise
     if counter is None:
         return await _sync_warn_count(user_id, chat_id)

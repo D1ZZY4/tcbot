@@ -2,6 +2,14 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-25 (session 175)
+
+### Fixed
+
+- **Bug #468** (`tcbot/database/warns_db.py`): `add_warn` rollback pattern masked original exception. When `find_one_and_update` on `warn_counts` failed, the `except Exception:` block ran `await db_call(c.delete_one(...))` to rollback the inserted `warns` document, then executed a bare `raise`. If the rollback `delete_one` itself raised (e.g. circuit breaker open, network error), Python replaced the original exception with the new one before `raise` could re-raise it. The caller would see a rollback failure instead of the real cause, making the warn-count inconsistency invisible in logs. Fixed by wrapping the rollback in its own `try/except Exception as rollback_exc:` that logs a warning with `log.warning("add_warn rollback failed...")` and then falls through to the original `raise`. Added `import logging` and `log = logging.getLogger(__name__)` to `warns_db.py` (the module previously had no logger). Ruff: clean. Import: OK.
+
+- **Bug #467** (`tcbot/modules/helper/workflows/ban_flow.py`): Duplicate album cancellation and user-data cleanup code existed in three places: the 11-line "cancel in-flight album tasks" block in `on_cancel_proof` (lines 523-530) was byte-for-byte identical to the same block in `on_proof_timeout` (lines 545-552), and the `user_data.pop` cleanup loop for `_BAN_USER_DATA_KEYS` appeared five times across `_flush_album` (three times — two early-return branches and the `finally` block) and one more in `on_proof_received`'s single-media path, totalling six near-identical inline loops with no shared abstraction. Extracted two sync helper functions: `_clear_ban_state(user_data)` removes all ban keys from `user_data` safely (no-op on `None`), and `_cancel_proof_session(user_data)` calls `_clear_ban_state` then iterates `_album_userdata` to set the `_cancelled` flag, call `task.cancel()`, and pop all album state dicts — the exact body that was duplicated between `on_cancel_proof` and `on_proof_timeout`. Both `on_cancel_proof` and `on_proof_timeout` are now single-call sites. The three repeated cleanup blocks in `_flush_album` are each replaced with `_clear_ban_state(user_data)`. The `on_proof_received` single-media path is similarly simplified. Ruff: clean. Import: OK.
+
 ## [Unreleased] - 2026-06-25 (session 174)
 
 ### Verified

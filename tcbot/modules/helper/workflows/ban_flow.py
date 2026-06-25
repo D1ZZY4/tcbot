@@ -73,6 +73,42 @@ _album_userdata: dict[str, dict[str, Any]] = {}
 _album_tasks: dict[str, asyncio.Task[None]] = {}
 
 
+# ─────────────────── Album state helpers ────────────────────────── #
+
+
+def _clear_ban_state(user_data: dict[str, Any] | None) -> None:
+    """Remove all ban-related keys from ``user_data``.
+
+    Safe to call when ``user_data`` is ``None`` (no-op).
+    """
+    if user_data is None:
+        return
+    for key in _BAN_USER_DATA_KEYS:
+        user_data.pop(key, None)
+
+
+def _cancel_proof_session(user_data: dict[str, Any] | None) -> None:
+    """Cancel any in-flight album flush tasks and clear all ban state.
+
+    Clears ban keys from ``user_data`` and cancels every album flush task
+    whose ``user_data`` reference matches the given dict.  Called from
+    both ``on_cancel_proof`` and ``on_proof_timeout`` so the cleanup path
+    is defined exactly once.
+    """
+    _clear_ban_state(user_data)
+    if user_data is None:
+        return
+    for mgid in [k for k, ud in _album_userdata.items() if ud is user_data]:
+        if mgid in _album_meta:
+            _album_meta[mgid]["_cancelled"] = True
+        task = _album_tasks.pop(mgid, None)
+        if task is not None:
+            task.cancel()
+        _albums.pop(mgid, None)
+        _album_meta.pop(mgid, None)
+        _album_userdata.pop(mgid, None)
+
+
 # ────────────────────────── Ban executor ────────────────────────── #
 
 
@@ -427,9 +463,7 @@ async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
 
     # * Single media file - execute immediately
     await _execute_ban(ctx.bot, [msg], dict(ctx.user_data))
-    # * Clear ban state so user_data is clean after the ban completes.
-    for key in _BAN_USER_DATA_KEYS:
-        ctx.user_data.pop(key, None)
+    _clear_ban_state(ctx.user_data)
     return ConversationHandler.END
 
 
@@ -442,17 +476,13 @@ async def _flush_album(
         return
     msgs = _albums.pop(mgid, [])
     if not msgs:
-        if user_data is not None:
-            for key in _BAN_USER_DATA_KEYS:
-                user_data.pop(key, None)
+        _clear_ban_state(user_data)
         return
     if not meta.get("ban_target_id") or not meta.get("ban_admin_id"):
         log.warning(
             "Album flush aborted for %s: meta missing target_id or admin_id", mgid
         )
-        if user_data is not None:
-            for key in _BAN_USER_DATA_KEYS:
-                user_data.pop(key, None)
+        _clear_ban_state(user_data)
         return
     log.info("Flushing album %s with %d media items", mgid, len(msgs))
     try:
@@ -460,9 +490,7 @@ async def _flush_album(
     except Exception:
         log.exception("_execute_ban raised in _flush_album for album %s", mgid)
     finally:
-        if user_data is not None:
-            for key in _BAN_USER_DATA_KEYS:
-                user_data.pop(key, None)
+        _clear_ban_state(user_data)
 
 
 async def on_proof_unexpected(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -482,17 +510,7 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
         return ConversationHandler.END
     await q.answer()
 
-    if ctx.user_data is not None:
-        for key in _BAN_USER_DATA_KEYS:
-            ctx.user_data.pop(key, None)
-        for mgid in [k for k, ud in _album_userdata.items() if ud is ctx.user_data]:
-            _album_meta[mgid]["_cancelled"] = True
-            task = _album_tasks.pop(mgid, None)
-            if task is not None:
-                task.cancel()
-            _albums.pop(mgid, None)
-            _album_meta.pop(mgid, None)
-            _album_userdata.pop(mgid, None)
+    _cancel_proof_session(ctx.user_data)
 
     if update.effective_message:
         try:
@@ -504,17 +522,7 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
 
 async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Notify the user that the proof window expired and end the conversation."""
-    if ctx.user_data is not None:
-        for key in _BAN_USER_DATA_KEYS:
-            ctx.user_data.pop(key, None)
-        for mgid in [k for k, ud in _album_userdata.items() if ud is ctx.user_data]:
-            _album_meta[mgid]["_cancelled"] = True
-            task = _album_tasks.pop(mgid, None)
-            if task is not None:
-                task.cancel()
-            _albums.pop(mgid, None)
-            _album_meta.pop(mgid, None)
-            _album_userdata.pop(mgid, None)
+    _cancel_proof_session(ctx.user_data)
 
     if update.effective_message:
         try:
