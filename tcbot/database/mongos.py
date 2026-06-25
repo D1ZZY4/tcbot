@@ -127,11 +127,15 @@ async def ensure_indexes() -> None:
         col("bans").create_index([("banned_user_id", 1), ("is_active", 1)]),
         col("bans").create_index([("ban_id", 1)], unique=True),
         # * Serves user_appeal_count() which filters on banned_user_id + appeal_log_msg_id presence
-        col("bans").create_index([("banned_user_id", 1), ("appeal_log_msg_id", 1)], sparse=True),
+        col("bans").create_index(
+            [("banned_user_id", 1), ("appeal_log_msg_id", 1)], sparse=True
+        ),
         # * Serves active_bans()/active_ban_count() which filter on is_active only
         col("bans").create_index([("is_active", 1), ("timestamp", -1), ("ban_id", -1)]),
         # * Serves /check history: every ban (active+inactive) for a user, newest first
-        col("bans").create_index([("banned_user_id", 1), ("timestamp", -1), ("ban_id", -1)]),
+        col("bans").create_index(
+            [("banned_user_id", 1), ("timestamp", -1), ("ban_id", -1)]
+        ),
         col("tc_owners").create_index([("user_id", 1)], unique=True),
         col("tc_admins").create_index([("user_id", 1)], unique=True),
         col("tc_roles").create_index([("user_id", 1)], unique=True),
@@ -162,7 +166,9 @@ async def ensure_indexes() -> None:
         # * Serves warn expiry: delete_many({"updated_at": {"$lt": cutoff}}) COLLSCAN without this
         col("warn_counts").create_index([("updated_at", 1)]),
         # * Serves user_warn_groups() and federation_warn_count() filter + sort
-        col("warn_counts").create_index([("user_id", 1), ("count", 1), ("updated_at", -1)]),
+        col("warn_counts").create_index(
+            [("user_id", 1), ("count", 1), ("updated_at", -1)]
+        ),
         # * Per-user kick / mute history for /check
         col("kicks").create_index([("user_id", 1), ("timestamp", -1)]),
         col("mutes").create_index([("user_id", 1), ("timestamp", -1)]),

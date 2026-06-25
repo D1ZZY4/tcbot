@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-06-25 (session 174)
+
+### Verified
+
+- **Comprehensive verification pass (session 174):** Full re-audit of all bugs fixed in sessions 171-173 (Bug #444-#466). Zero new bugs found across 75 Python files. Categories audited: (1) asyncio.gather return_exceptions - ALL 75 files CLEAN; (2) N+1 DB queries in loops - CLEAN; (3) HTML parse_mode consistency - CLEAN; (4) bare `except BaseException:` / bare `except:` - CLEAN; (5) unescaped `first_name` in HTML reply blocks - CLEAN; (6) `callback_query` handlers without `query.answer()` - CLEAN (all 48 handlers confirmed); (7) ConversationHandler fallbacks - CLEAN (kicking/muting/warning delegate to `build_modaction_conv()` which defines `fallbacks=[MessageHandler(ALL_PREFIXES_CMD_FILTER, ...)]`); (8) `t.me/` URL construction in f-strings - all cases confirmed safe (integers or alphanumeric-only Telegram usernames, used in `InlineKeyboardButton.url` not HTML innerHTML); (9) APScheduler job ID uniqueness - CLEAN (all schedules use `ConflictPolicy.replace`); (10) missing `await` on bot/msg calls - CLEAN; (11) unguarded `int()` on `.get()` results - all confirmed safe (default values present or pre-validated regex). Specific fix verifications: Bug #445 rejection cooldown in `appeal_flow._start()` - CLEAN; Bug #446 `clear_all_warns` - CLEAN (deletes both `warns` and `warn_counts` for all chats in parallel); Bug #447 `execute_unmute` guard - CLEAN (returns early with "no active mute" message when `get_active_mute` is None); Bug #460 `identity.classify` `.lstrip("-").isdigit()` guard - CLEAN (line 124); Bug #461 `formatter.link()` and `mention()` href escaping - CLEAN (`html.escape(url, quote=True)` and `html.escape(username)`); Bug #464 `keyboards.checkme_ban_kb` bot_username guard - CLEAN (`if not bot_username: return None`); Bug #465 `_album_tasks` dict keyed by `media_group_id` with `task.cancel()` on cancel/timeout - CLEAN; Bug #466 `ChatPermissions` `can_send_media_messages=True` - CLEAN. `ruff check` 0 violations, `ruff format` 0 reformats. `import tcbot` OK. Total bugs: #1-#466 (unchanged). Open: CVE-2026-31072 (accepted), Improvement #4 (future).
+
 ## [Unreleased] - 2026-06-25 (session 173)
 
 ### Fixed
