@@ -5,9 +5,13 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-06-25 (session 174)
+**Last updated:** 2026-07-01 (session 179)
 
 ## What is done
+
+- Session 179 (2026-07-01): Autonomous audit loop - 4 bugs fixed (Bug #470-#473). Deployed parallel subagents (7 total) covering all 75 Python files. Webhook audit: alive.py Update.de_json None guard (Bug #470). DB audit: groups_db.migrate_group exceptions silently swallowed + missing logger (Bug #471), scheduler._expire_old_warns BaseException swallowed (Bug #472). Workflow audit: promote_flow._assign_admin and _assign_subrole partial-state bugs - sequenced writes atomically and removed dangerous pre-step remove_role (Bug #473). Ruff: clean. Import: OK. Bot: webhook active, 35/35 indexes. Commit: 3b83ae6. Total bugs: #1-#473. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
+
+- Session 178 (2026-07-01): Bug #469 (active_groups ObjectId + datetime Redis serialization) + post_init/post_shutdown not called in webhook mode + webhook transport implementation. Bot now runs in webhook mode on Replit. Commit: 04ea696.
 
 - Session 174 (2026-06-25): Comprehensive verification pass only. Zero new bugs found across 75 Python files. All 23 bug fixes from sessions 171-173 (Bug #444-#466) re-verified CLEAN. 11 scan categories run: asyncio.gather return_exceptions, N+1 DB in loops, HTML parse_mode, bare except, unescaped names in HTML, callback_query.answer(), ConversationHandler fallbacks, t.me URL construction, APScheduler job IDs, missing await, unguarded int(). All CLEAN. Ruff: 0 violations, 0 reformats. Import: OK. Total bugs: #1-#466 (unchanged). Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
