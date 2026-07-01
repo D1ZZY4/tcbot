@@ -92,6 +92,10 @@ async def _expire_old_warns(warn_expiry_days: int) -> None:
         _db_call(_col("warns").delete_many({"timestamp": {"$lt": cutoff}})),
         return_exceptions=True,
     )
+    if isinstance(counts_res, BaseException):
+        log.error("Warn expiry: warn_counts delete failed: %s", counts_res)
+    if isinstance(warns_res, BaseException):
+        log.error("Warn expiry: warns delete failed: %s", warns_res)
     counts_del = (
         counts_res.deleted_count if not isinstance(counts_res, BaseException) else 0
     )

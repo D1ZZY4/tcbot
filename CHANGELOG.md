@@ -2,6 +2,18 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-07-01 (session 179)
+
+### Fixed
+
+- **Bug #470** (`tcbot/alive.py`): `Update.de_json(data, bot)` can return `None` for update types not yet recognized by the installed PTB version (e.g., future Telegram Bot API additions). The webhook route previously passed the `None` result directly to `asyncio.run_coroutine_threadsafe(_wh_queue.put(update), _wh_loop)`, which would enqueue `None` into PTB's update queue. PTB's dispatcher would then attempt to access `update.update_id` and raise `AttributeError`, poisoning the dispatcher loop. Fixed by adding a `None` guard immediately after `de_json`: if `update is None`, log at `DEBUG` and return `"OK", 200` so Telegram does not retry an unrecognized type. No user-visible change; guard is transparent for all known update types.
+
+- **Bug #471** (`tcbot/database/groups_db.py`): `migrate_group` used `asyncio.gather(..., return_exceptions=True)` but silently discarded all exceptions — the `for r in results` loop only checked `r.matched_count` and skipped `isinstance(r, BaseException)` entries without any log. A failed DB call (circuit-open, network timeout) would be treated as "zero matches" without any diagnostic. Added `log.error(...)` for each `BaseException` result and added the missing `import logging` + `log = logging.getLogger(__name__)` (the module previously had no logger). Ruff: clean. Import: OK.
+
+- **Bug #472** (`tcbot/database/scheduler.py`): `_expire_old_warns` called `asyncio.gather(..., return_exceptions=True)` but only used the results to count deleted documents — `BaseException` entries silently fell through the `deleted_count` access and were swallowed. Added explicit `log.error()` calls for each `BaseException` result before reading `.deleted_count`, so a MongoDB or circuit-breaker failure during scheduled warn expiry surfaces in logs instead of appearing as "0 deleted" with no error.
+
+- **Bug #473** (`tcbot/modules/helper/workflows/promote_flow.py`): Two methods had gather-result blind spots and a partial-state risk. `_assign_admin` ran `add_admin`, `remove_role`, and `upsert_user` in a single `asyncio.gather` and checked results together — if any step failed, the function returned `(False, ...)` but could not determine which step succeeded, potentially leaving the user partially promoted. `_assign_subrole` called `remove_role(target_id)` then `set_role(target_id, role)` sequentially (not in gather): if `set_role` failed after `remove_role` succeeded, the user lost their old role and received no new one (complete role loss). Fixes: (1) `_assign_admin` now calls `add_admin` first in isolation — failure aborts cleanly with no partial write; secondary cleanup (`remove_role` for dev/tester targets + `upsert_user`) runs in a gather afterwards and only logs warnings on failure since the user is already correctly promoted at that point. (2) `_assign_subrole` drops the pre-step `remove_role` entirely, relying on `set_role`'s `update_one(upsert=True)` to atomically replace any existing `tc_roles` entry; if `set_role` fails, the target retains their previous role unchanged; `upsert_user` is tried separately and only logs a warning on failure. Ruff: clean. Import: OK.
+
 ## [Unreleased] - 2026-07-01 (session 178)
 
 ### Fixed

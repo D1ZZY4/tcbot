@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import TYPE_CHECKING, cast
 
 from tcbot.database.cache import (
@@ -20,6 +21,8 @@ from tcbot.utils.timedate_format import utc_now
 
 if TYPE_CHECKING:
     from motor.motor_asyncio import AsyncIOMotorCollection
+
+log = logging.getLogger(__name__)
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
 # * Internal collection access utilities for groups database
@@ -145,7 +148,14 @@ async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
     )
     matched_any = False
     for r in results:
-        if not isinstance(r, BaseException) and r.matched_count > 0:
+        if isinstance(r, BaseException):
+            log.error(
+                "migrate_group (%d -> %d) DB call failed: %s",
+                old_chat_id,
+                new_chat_id,
+                r,
+            )
+        elif r.matched_count > 0:
             matched_any = True
     if matched_any:
         connected_cache.put(old_chat_id, False)  # noqa: FBT003

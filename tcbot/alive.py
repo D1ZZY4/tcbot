@@ -133,6 +133,11 @@ def webhook_route() -> tuple[str, int]:
 
     try:
         update = Update.de_json(data, _wh_bot)
+        if update is None:
+            # * de_json returns None for update types not recognized by this PTB version.
+            # * Silently acknowledge so Telegram does not retry.
+            log.debug("Webhook: received unrecognized update type; skipping.")
+            return "OK", 200
         # * Thread-safe: Flask runs in a sync daemon thread; PTB loop is in main thread.
         asyncio.run_coroutine_threadsafe(_wh_queue.put(update), _wh_loop)
     except Exception:

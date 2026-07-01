@@ -69,19 +69,24 @@ class Promote:
         current_role: str | None,
     ) -> tuple[bool, str]:
         """Founder-only path: directly add the target to tc_admins and log it."""
+        # * Write the primary record first; if this fails the target is never promoted,
+        # * leaving a consistent state (no partial write).
+        try:
+            await db.users_roles.add_admin(target_id, admin_id)
+        except Exception:
+            log.exception("_assign_admin: add_admin failed for target=%d", target_id)
+            return False, "Failed to save the promotion. Please try again."
+        # * Secondary cleanup: purge any old tc_roles entry and update the user cache.
+        # * These are non-critical; a failure leaves the user correctly promoted so we
+        # * log a warning instead of aborting.
+        cleanup: list = [db.users_cache.upsert_user(target_id, None, target_fname)]
         if current_role in ("developer", "tester"):
-            await asyncio.gather(
-                db.users_roles.add_admin(target_id, admin_id),
-                db.users_roles.remove_role(target_id),
-                db.users_cache.upsert_user(target_id, None, target_fname),
-                return_exceptions=True,
-            )
-        else:
-            await asyncio.gather(
-                db.users_roles.add_admin(target_id, admin_id),
-                db.users_cache.upsert_user(target_id, None, target_fname),
-                return_exceptions=True,
-            )
+            cleanup.append(db.users_roles.remove_role(target_id))
+        for _r in await asyncio.gather(*cleanup, return_exceptions=True):
+            if isinstance(_r, BaseException):
+                log.warning(
+                    "_assign_admin cleanup step failed for target=%d: %s", target_id, _r
+                )
         lc, lt = cfg.logs
         log_text = parse_logmsg.promoted(
             target_id, target_fname, "admin", admin_id, admin_fname
@@ -116,13 +121,25 @@ class Promote:
                 False,
                 f"That user is already an Admin. Demote them first before assigning {esc(label)}.",
             )
-        if current_role in ("developer", "tester"):
-            await db.users_roles.remove_role(target_id)
-        await asyncio.gather(
-            db.users_roles.set_role(target_id, role, admin_id),
-            db.users_cache.upsert_user(target_id, None, target_fname),
-            return_exceptions=True,
-        )
+        # * set_role uses update_one(upsert=True) so it atomically replaces an existing
+        # * developer/tester entry without a prior remove_role call.  This eliminates
+        # * the partial-state window where the target holds no role between delete and insert.
+        try:
+            await db.users_roles.set_role(target_id, role, admin_id)
+        except Exception:
+            log.exception(
+                "_assign_subrole: set_role failed for target=%d role=%s",
+                target_id,
+                role,
+            )
+            return False, "Failed to save the role assignment. Please try again."
+        # * Cache upsert is non-critical; log but do not abort.
+        try:
+            await db.users_cache.upsert_user(target_id, None, target_fname)
+        except Exception as exc:
+            log.warning(
+                "_assign_subrole: upsert_user failed for target=%d: %s", target_id, exc
+            )
         role_label = db.users_roles.ROLE_LABEL.get(role, role)
         lc, lt = cfg.logs
         log_text = parse_logmsg.promoted(
