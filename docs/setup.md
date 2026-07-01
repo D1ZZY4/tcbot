@@ -114,7 +114,10 @@ PROOFS="-1001234567890"
 | `MODULES_LOAD` | No | comma-separated module names | Optional whitelist, e.g. `banning,appeals`. |
 | `MODULES_NO_LOAD` | No | comma-separated module names | Optional blacklist, e.g. `maintenance,broadcasting`. |
 | `REDIS_URL` | No | Redis URI | L2 cache connection string, e.g. `redis://localhost:6379/0`. When absent the bot uses in-process L1 cache only. |
+| `WEBHOOK_URL` | No | HTTPS URL | Base URL for webhook transport, e.g. `https://yourdomain.example.com`. When set, the bot runs in webhook mode; absent falls back to long polling (local dev only). On Replit, `REPLIT_DEV_DOMAIN` is auto-detected and takes precedence. |
+| `WEBHOOK_SECRET` | No | random string | Secret token sent in the `X-Telegram-Bot-Api-Secret-Token` header by Telegram on every webhook POST. Auto-generated with `secrets.token_hex(32)` if absent. Set it explicitly for reproducible deployments. |
 | `WARN_LIMIT` | No | integer >= 1 | Per-group warning threshold that triggers automatic federation ban. Default `3`. When a user's warn count in one group reaches exactly this value, they are federation-banned and their group warns cleared. |
+| `FED_WARN_LIMIT` | No | integer >= 0 | Federation-wide warning threshold: sum of warn counts across all groups triggers an automatic federation ban when >= this value. Default `0` (disabled). Set to a positive integer to enable cross-group warn aggregation. |
 | `WARN_EXPIRY_DAYS` | No | positive integer | Days after which `warn_counts` records are deleted by the daily scheduler job. Default `0` (disabled). Set to a positive integer to enable automatic warn expiry. |
 
 ## Startup sequence
@@ -124,8 +127,10 @@ PROOFS="-1001234567890"
 3. `tcbot.alive.start_keepalive()` starts Flask on `0.0.0.0:PORT`.
 4. PTB `ApplicationBuilder` builds the bot application.
 5. `tcbot.modules.get_handlers()` imports active modules and stops startup if an enabled module fails to import.
-6. `_post_init()` connects MongoDB, ensures indexes, seeds the initial owner, and attaches the error reporter.
-7. Long polling starts with `drop_pending_updates=True`.
+6. Signal handlers (`SIGTERM`, `SIGINT`) are registered immediately before the PTB lifecycle begins.
+7. `_post_init()` connects MongoDB, ensures indexes, seeds the initial owner, and attaches the error reporter.
+8. **Webhook mode** (default on Replit and any host with `WEBHOOK_URL` / `REPLIT_DEV_DOMAIN`): `bot.set_webhook()` registers the URL, `register_webhook()` wires Flask's `POST /webhook` to PTB's update queue, and the bot waits for `SIGTERM`/`SIGINT`.
+9. **Polling mode** (local dev fallback when no webhook URL is detected): `run_polling()` starts with `drop_pending_updates=True`. A `WARNING` log is emitted to make the fallback visible.
 
 ## Troubleshooting
 

@@ -252,6 +252,8 @@ All `*_db.py` modules use a TypedDict from `documents.py` when inserting records
 | `pending_joins` | `PendingGroupDoc` |
 | `tc_admins` | `AdminDoc` |
 | `tc_roles` | `RoleDoc` |
+| `tc_roles` (index reference) | `RoleRefDoc` |
+| `active_mutes` | `ActiveMuteDoc` |
 | `promotion_requests` | `PromotionRequestDoc` |
 
 ## Safety rules
