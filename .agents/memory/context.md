@@ -5,9 +5,11 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-07-01 (session 179)
+**Last updated:** 2026-07-01 (session 180)
 
 ## What is done
+
+- Session 180 (2026-07-01): Autonomous audit loop - 2 bugs fixed (Bug #474-#475). Wave 1: 5 parallel subagents covering all 75 files - all findings verified as false positives (code() already escapes HTML, guillemets are punctuation not emoji, db_call wrappers all present, except RuntimeError: pass are intentional asyncio.get_running_loop() guards). Wave 2: 3 targeted subagents on security/infra - found Bug #474 (signal handler timing, already in code from s179 incomplete commit) and Bug #475 (alive.py timing attack). Bug #474: __main__.py SIGTERM race window - signal handlers moved before async with app: block (completed the s179 "not completed" commit). Bug #475: alive.py webhook secret comparison used != (timing attack) - fixed with hmac.compare_digest. Ruff: clean. Import: OK. Total bugs: #1-#475. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 179 (2026-07-01): Autonomous audit loop - 4 bugs fixed (Bug #470-#473). Deployed parallel subagents (7 total) covering all 75 Python files. Webhook audit: alive.py Update.de_json None guard (Bug #470). DB audit: groups_db.migrate_group exceptions silently swallowed + missing logger (Bug #471), scheduler._expire_old_warns BaseException swallowed (Bug #472). Workflow audit: promote_flow._assign_admin and _assign_subrole partial-state bugs - sequenced writes atomically and removed dangerous pre-step remove_role (Bug #473). Ruff: clean. Import: OK. Bot: webhook active, 35/35 indexes. Commit: 3b83ae6. Total bugs: #1-#473. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 

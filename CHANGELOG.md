@@ -2,6 +2,14 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-07-01 (session 180)
+
+### Fixed
+
+- **Bug #474** (`tcbot/__main__.py`): Signal handlers (`SIGTERM`, `SIGINT`) were registered *inside* the `async with app:` block, after `_post_init` (MongoDB, Redis, APScheduler) and `app.start()` had already run. This exposed a ~500 ms window during startup where a `SIGTERM` would bypass the graceful shutdown path entirely -- no `delete_webhook`, no `app.stop()`, no `_post_shutdown()`. Fixed by moving `loop = asyncio.get_running_loop()`, `shutdown_event = asyncio.Event()`, and both `loop.add_signal_handler()` calls to *before* `async with app:`, so the shutdown event is armed at the earliest possible moment. Docstring lifecycle comment updated with step 0. No behavior change under normal operation; only the startup race window is closed.
+
+- **Bug #475** (`tcbot/alive.py`): Webhook secret token comparison used the plain `!=` operator (`token != _wh_secret`), which is susceptible to timing-based side-channel attacks that could allow an attacker to brute-force the secret one byte at a time by measuring response latency. Fixed by importing `hmac` and replacing `token != _wh_secret` with `not hmac.compare_digest(token, _wh_secret)`, which runs in constant time regardless of how many leading bytes match. Added `import hmac` to the module imports. Comment updated to explain the timing-safe comparison rationale.
+
 ## [Unreleased] - 2026-07-01 (session 179)
 
 ### Fixed

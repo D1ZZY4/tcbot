@@ -6,7 +6,7 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 
 ## [Current State]
 
-- Audit session 179 (2026-07-01): 5 bugs fixed (Bug #470-#474). All 75 files ruff-clean. Bot runs in webhook mode; 35/35 indexes, Redis hiredis 3.4.0, APScheduler, webhook active.
+- Audit session 180 (2026-07-01): 2 bugs fixed (Bug #474-#475). All 75 files ruff-clean. Bot runs in webhook mode; 35/35 indexes, Redis hiredis 3.4.0, APScheduler, webhook active. Signal handlers registered before async with app: (Bug #474). Webhook secret uses hmac.compare_digest (Bug #475).
 | Area | Status |
 |---|---|
 | Runtime | Webhook-mode Telegram bot started with `uv run python -m tcbot`. On Replit, REPLIT_DEV_DOMAIN is auto-detected and webhook is registered at startup; local dev falls back to polling. Signal handlers registered at the earliest possible point in `_run_webhook_mode` to eliminate the SIGTERM race window. |

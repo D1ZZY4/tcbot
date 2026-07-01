@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import logging
 import threading
@@ -117,8 +118,10 @@ def register_webhook(
 def webhook_route() -> tuple[str, int]:
     """Receive Telegram update via webhook POST, validate, and enqueue for PTB."""
     # * Validate secret token before touching the payload (OWASP guideline).
+    # * Use hmac.compare_digest for timing-safe comparison to prevent timing
+    # * attacks that could be used to brute-force the secret token byte-by-byte.
     token = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-    if not _wh_secret or token != _wh_secret:
+    if not _wh_secret or not hmac.compare_digest(token, _wh_secret):
         log.warning("Webhook: rejected request with invalid or missing secret token.")
         return "Forbidden", 403
 
