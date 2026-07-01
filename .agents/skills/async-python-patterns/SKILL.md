@@ -7,7 +7,7 @@ Last updated: 2026-05-29
 
 # Async Python Patterns for TCBot
 
-Before invoking this skill, confirm the read/update rules in [`.agents/CLAUDE.md`](../../CLAUDE.md#mandatory-read-these-files-before-any-work). After any async-code change, update [`CHANGELOG.md`](../../../CHANGELOG.md) and the matching `docs/*.md` whose behavior changed in the same turn.
+Before invoking this skill, confirm the read/update rules in [`.agents/rules/CLAUDE.md`](../../rules/CLAUDE.md#mandatory-read-these-files-before-any-work). After any async-code change, update [`CHANGELOG.md`](../../../CHANGELOG.md) and the matching `docs/*.md` whose behavior changed in the same turn.
 
 Use this skill for asynchronous Python work in the TCF Bot codebase. The project runs on Python 3.12 with `python-telegram-bot` (with the `[rate-limiter]` extra, no `[job-queue]` extra, tracking the latest compatible release), Motor/MongoDB, Flask keepalive, `uv`, and Ruff.
 

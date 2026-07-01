@@ -1,6 +1,6 @@
 # Python Code Quality: TCBot Reference
 
-For the parent skill instructions, see [`SKILL.md`](SKILL.md). For the canonical project rules this reference enforces, see [`../../CLAUDE.md`](../../CLAUDE.md) and [`../../RULES.md`](../../RULES.md).
+For the parent skill instructions, see [`SKILL.md`](SKILL.md). For the canonical project rules this reference enforces, see [`../../rules/CLAUDE.md`](../../rules/CLAUDE.md) and [`../../rules/RULES.md`](../../rules/RULES.md).
 
 Updated: 2026-06-11
 
@@ -23,7 +23,7 @@ exclude = [".local/", ".agents/", ".kilo/", ".trae/", ".claude/", "attached_asse
 select = ["B", "C4", "D", "E4", "E7", "E9", "F", "FBT", "I", "PERF", "PIE", "PLC", "PLE", "PTH", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]
 ```
 
-Ruff enforces a broad suite: pyflakes/syntax (`E`, `F`), import order (`I`), bugbear (`B`), comprehensions (`C4`), pydocstyle (`D`), boolean-trap (`FBT`), performance (`PERF`), misc (`PIE`), Pylint error/convention (`PLE`, `PLC`), pathlib (`PTH`), returns (`RET`), Ruff-specific (`RUF`), simplify (`SIM`), type-checking imports (`TC`), targeted try rules (`TRY400`, `TRY401`), pyupgrade (`UP`), and warnings (`W`). See `.agents/RUFF.md` for the canonical list and per-rule ignores. Apply remaining project conventions manually during review.
+Ruff enforces a broad suite: pyflakes/syntax (`E`, `F`), import order (`I`), bugbear (`B`), comprehensions (`C4`), pydocstyle (`D`), boolean-trap (`FBT`), performance (`PERF`), misc (`PIE`), Pylint error/convention (`PLE`, `PLC`), pathlib (`PTH`), returns (`RET`), Ruff-specific (`RUF`), simplify (`SIM`), type-checking imports (`TC`), targeted try rules (`TRY400`, `TRY401`), pyupgrade (`UP`), and warnings (`W`). See `.agents/rules/RUFF.md` for the canonical list and per-rule ignores. Apply remaining project conventions manually during review.
 
 ## Commands
 

@@ -12,7 +12,7 @@ These two rules are non-negotiable and apply to every task. The user should NEVE
 
 **Before any work**, read these files at the start of every new conversation:
 
-- [`.agents/CLAUDE.md`](CLAUDE.md), [`.agents/RULES.md`](RULES.md) (this file)
+- [`.agents/rules/CLAUDE.md`](CLAUDE.md), [`.agents/rules/RULES.md`](RULES.md) (this file)
 - [`AGENTS.md`](../AGENTS.md), [`PLAN.md`](../PLAN.md), [`CHANGELOG.md`](../CHANGELOG.md)
 - The relevant files in [`.agents/`](.), [`docs/`](../docs/), and the root project folder for the area you are touching.
 

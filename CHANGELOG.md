@@ -6,6 +6,8 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Fixed
 
+- **Documentation reorganization** (session 176): Moved the 7 AI-agent policy files from `.agents/` root into a new `.agents/rules/` subfolder (`CLAUDE.md`, `RULES.md`, `RUFF.md`, `REPLIT.md`, `STYLE-CODE.md`, `STYLE-COMMENTS.md`, `WORKFLOW.md`). Updated all cross-references in `.agents/agents/`, `.agents/skills/`, `.agents/memory/`, `AGENTS.md`, `README.md`, `CHANGELOG.md`, `PLAN.md`, and `docs/mapping.md` so references remain valid. No runtime behavior changed. Ruff: clean.
+
 - **Bug #468** (`tcbot/database/warns_db.py`): `add_warn` rollback pattern masked original exception. When `find_one_and_update` on `warn_counts` failed, the `except Exception:` block ran `await db_call(c.delete_one(...))` to rollback the inserted `warns` document, then executed a bare `raise`. If the rollback `delete_one` itself raised (e.g. circuit breaker open, network error), Python replaced the original exception with the new one before `raise` could re-raise it. The caller would see a rollback failure instead of the real cause, making the warn-count inconsistency invisible in logs. Fixed by wrapping the rollback in its own `try/except Exception as rollback_exc:` that logs a warning with `log.warning("add_warn rollback failed...")` and then falls through to the original `raise`. Added `import logging` and `log = logging.getLogger(__name__)` to `warns_db.py` (the module previously had no logger). Ruff: clean. Import: OK.
 
 - **Bug #467** (`tcbot/modules/helper/workflows/ban_flow.py`): Duplicate album cancellation and user-data cleanup code existed in three places: the 11-line "cancel in-flight album tasks" block in `on_cancel_proof` (lines 523-530) was byte-for-byte identical to the same block in `on_proof_timeout` (lines 545-552), and the `user_data.pop` cleanup loop for `_BAN_USER_DATA_KEYS` appeared five times across `_flush_album` (three times — two early-return branches and the `finally` block) and one more in `on_proof_received`'s single-media path, totalling six near-identical inline loops with no shared abstraction. Extracted two sync helper functions: `_clear_ban_state(user_data)` removes all ban keys from `user_data` safely (no-op on `None`), and `_cancel_proof_session(user_data)` calls `_clear_ban_state` then iterates `_album_userdata` to set the `_cancelled` flag, call `task.cancel()`, and pop all album state dicts — the exact body that was duplicated between `on_cancel_proof` and `on_proof_timeout`. Both `on_cancel_proof` and `on_proof_timeout` are now single-call sites. The three repeated cleanup blocks in `_flush_album` are each replaced with `_clear_ban_state(user_data)`. The `on_proof_received` single-media path is similarly simplified. Ruff: clean. Import: OK.
@@ -48,7 +50,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Documentation
 
-- **Documentation accuracy audit** (session 173): Three cross-references between docs and source were stale or missing: (1) `.agents/CLAUDE.md` had a duplicate `mongos.py` entry in its repository map (lines 171 and 176 both listed the same file); removed the duplicate. (2) `docs/modules/modules.md` still showed `__module_name__ = "Cleanup"` for `maintenance.py` even though the source was already corrected to `"Maintenance"` (PLAN.md P4#9); updated the module table cell. (3) `docs/databases/databases.md` "Public singletons" table omitted `user_mention_cache`, which is a live `TwoLevelCache` exported from `tcbot/database/cache.py:327` and consumed by `users_cache.py`; added the missing row with TTLs (L1 300s, L2 600s, maxsize 4096) and population source. No code changes.
+- **Documentation accuracy audit** (session 173): Three cross-references between docs and source were stale or missing: (1) `.agents/rules/CLAUDE.md` had a duplicate `mongos.py` entry in its repository map (lines 171 and 176 both listed the same file); removed the duplicate. (2) `docs/modules/modules.md` still showed `__module_name__ = "Cleanup"` for `maintenance.py` even though the source was already corrected to `"Maintenance"` (PLAN.md P4#9); updated the module table cell. (3) `docs/databases/databases.md` "Public singletons" table omitted `user_mention_cache`, which is a live `TwoLevelCache` exported from `tcbot/database/cache.py:327` and consumed by `users_cache.py`; added the missing row with TTLs (L1 300s, L2 600s, maxsize 4096) and population source. No code changes.
 
 ## [Unreleased] - 2026-06-24 (session 172)
 
@@ -542,11 +544,11 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 - **`docs/stats-detailed.md`** (Mermaid diagram, line 15): Node edge `Staff & Users & Bans --> SearchPanel[Search panel]` implied that the Staff list and Users list also expose a Search panel. Only the Bans list has a Search button (`stats_bans_search` callback, `stats_flow.py` line 394). The prose on line 22 already correctly states "a search panel for active bans". Corrected the diagram edge to `Bans --> SearchPanel[Search panel]`. (Bug #327)
 - **`README.md`** (Repository Layout code block, line 143): Top-level directory label was `tgbot/` - same legacy artifact as `docs/mapping.md` (Bug #326). Corrected to `<project root>/`. (Bug #328)
 - **`AGENTS.md`** (Repository Layout code block, line 50): Top-level directory label was `tgbot/` - same legacy artifact as Bugs #326 and #328. Corrected to `<project root>/`. (Bug #329)
-- **`.agents/CLAUDE.md`** (Repository Map code block, line 156): Top-level directory label was `tgbot/` - same legacy artifact as Bugs #326-329. Corrected to `<project root>/`. (Bug #330)
+- **`.agents/rules/CLAUDE.md`** (Repository Map code block, line 156): Top-level directory label was `tgbot/` - same legacy artifact as Bugs #326-329. Corrected to `<project root>/`. (Bug #330)
 
 ### Audit
 
-- **Pass 10 (session 119)**: `.agents/RULES.md`, project-policy skill, async-python-patterns skill read. `PLAN.md`, `identity.py`, `docs/button-styles.md` verified CLEAN. Unicode scan of all tcbot/ Python files: zero em-dash/en-dash in string literals. Docs scan: zero em-dash/en-dash in docs/ and root .md files. AST scans CLEAN: sequential awaits (2 valid), q.answer() first (0), gather() return_exceptions (0), hardcoded chat IDs (1 valid placeholder), TODO/FIXME (0), unescaped HTML f-strings (0 new), silent except handlers (4 valid RuntimeError/shutdown guards), raise-from-None (0), type()==Y (0), mutable defaults (0). Ruff check + format check: All checks passed, 73 files formatted. Ten doc accuracy bugs found and fixed (#321-#330). Docs audited CLEAN: docs/utils/utils.md, docs/workflows/workflows.md, docs/helper/helper.md, docs/databases/databases.md, docs/appeal-detailed.md, docs/promote-detailed.md, docs/role-detailed.md, docs/check-detailed.md, docs/performance.md, docs/setup.md, docs/workflows-guide.md, docs/workflows.md, docs/git-commit.md, PLAN.md, README.md, AGENTS.md (after fixes), .agents/CLAUDE.md (after fix), GitHub workflows (5 YAMLs). Bot running: MongoDB 27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling active.
+- **Pass 10 (session 119)**: `.agents/rules/RULES.md`, project-policy skill, async-python-patterns skill read. `PLAN.md`, `identity.py`, `docs/button-styles.md` verified CLEAN. Unicode scan of all tcbot/ Python files: zero em-dash/en-dash in string literals. Docs scan: zero em-dash/en-dash in docs/ and root .md files. AST scans CLEAN: sequential awaits (2 valid), q.answer() first (0), gather() return_exceptions (0), hardcoded chat IDs (1 valid placeholder), TODO/FIXME (0), unescaped HTML f-strings (0 new), silent except handlers (4 valid RuntimeError/shutdown guards), raise-from-None (0), type()==Y (0), mutable defaults (0). Ruff check + format check: All checks passed, 73 files formatted. Ten doc accuracy bugs found and fixed (#321-#330). Docs audited CLEAN: docs/utils/utils.md, docs/workflows/workflows.md, docs/helper/helper.md, docs/databases/databases.md, docs/appeal-detailed.md, docs/promote-detailed.md, docs/role-detailed.md, docs/check-detailed.md, docs/performance.md, docs/setup.md, docs/workflows-guide.md, docs/workflows.md, docs/git-commit.md, PLAN.md, README.md, AGENTS.md (after fixes), .agents/rules/CLAUDE.md (after fix), GitHub workflows (5 YAMLs). Bot running: MongoDB 27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling active.
 
 ## [Unreleased] - 2026-06-13 (session 118)
 
@@ -918,7 +920,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Chore
 
-- **`CHANGELOG.md`**: Replaced 14 Unicode em-dash characters (`\u2014`) with colon-space (`: `) throughout the file. Em-dashes are banned from all project files per style rules (`.agents/STYLE-CODE.md`).
+- **`CHANGELOG.md`**: Replaced 14 Unicode em-dash characters (`\u2014`) with colon-space (`: `) throughout the file. Em-dashes are banned from all project files per style rules (`.agents/rules/STYLE-CODE.md`).
 
 ## [Unreleased] - 2026-06-12 (session 84)
 
@@ -1034,7 +1036,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 - **`docs/databases/databases.md`** (Caches section): Rewrote to document `TTLCache[T]` vs `TwoLevelCache[T]` architecture, the `CACHE_MISS` sentinel, and all four public singletons with L1 and L2 TTLs.
 - **`docs/databases/databases.md`** (Scheduler section): New section documenting `scheduler.py` public API (`start`, `stop`, `schedule_unban`, `cancel_schedule`, `run_now`) and recurring jobs table.
 - **`docs/performance.md`** (Performance Targets): Updated from v4 to v4.1.1 mandatory targets. Single DB query < 3 ms (was 5 ms), batch < 8 ms (was 15 ms), fan-out < 500 ms (was 800 ms), command p95 < 80 ms (was 150 ms), `q.answer()` < 15 ms (was 30 ms), startup < 2 s (was 3 s). Added Redis read < 0.3 ms, Redis pipeline < 1 ms, identity/role < 0.5 ms, job task start < 100 ms. Updated Performance Checklist with v4.1.1 thresholds.
-- **`AGENTS.md`**, **`README.md`**, **`.agents/CLAUDE.md`**: Removed stale `[job-queue]` extra references from all three bot framework descriptions. APScheduler 4.x `[mongodb]` is incompatible with `[job-queue]`'s APScheduler ~3.x; the extra was removed from `pyproject.toml` when APScheduler 4 was added.
+- **`AGENTS.md`**, **`README.md`**, **`.agents/rules/CLAUDE.md`**: Removed stale `[job-queue]` extra references from all three bot framework descriptions. APScheduler 4.x `[mongodb]` is incompatible with `[job-queue]`'s APScheduler ~3.x; the extra was removed from `pyproject.toml` when APScheduler 4 was added.
 
 ## [Unreleased] - 2026-06-12 (session 76)
 
@@ -1419,7 +1421,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 ### Documentation
 
 - **`README.md`**: `MAIN_GROUP` description was too vague ("Main community group/forum chat ID"); added a note that it is required for appeal review cards and promotion-flow messages to accurately reflect its usage in `appeal_flow.py` and `promote_flow.py`.
-- **`.agents/RUFF.md`**, **`.agents/skills/python-code-quality/SKILL.md`**, **`.agents/skills/python-code-quality/REFERENCE.md`**: updated the embedded `[tool.ruff] exclude` list to include `attached_assets/`, mirroring the `pyproject.toml` change above.
+- **`.agents/rules/RUFF.md`**, **`.agents/skills/python-code-quality/SKILL.md`**, **`.agents/skills/python-code-quality/REFERENCE.md`**: updated the embedded `[tool.ruff] exclude` list to include `attached_assets/`, mirroring the `pyproject.toml` change above.
 
 ### Code quality
 
@@ -1429,7 +1431,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Documentation
 
-- **`.agents/skills/python-code-quality/SKILL.md`** and **`.agents/skills/python-code-quality/REFERENCE.md`**: synced the embedded `pyproject.toml` snapshot with the real file. Both showed a stale 5-group ruff `select` (`["E4", "E7", "E9", "F", "I"]`); corrected to the current 22-group set (matching `.agents/RUFF.md`). In SKILL.md, moved `ruff` out of `[project] dependencies` into `[dependency-groups] dev` (resolving an internal contradiction with its own following prose) and removed the four stale `# Migrate to latest channel version` comments that were deleted from `pyproject.toml` in session 37. Added the `[tool.ruff] exclude` list to both. Replaced REFERENCE.md's now-false "enforces syntax/pyflakes/import-order rules, not a full strict style suite" line with an accurate per-rule summary that points to the canonical `.agents/RUFF.md`. Bumped the embedded "as of"/"Updated" dates to 2026-06-11.
+- **`.agents/skills/python-code-quality/SKILL.md`** and **`.agents/skills/python-code-quality/REFERENCE.md`**: synced the embedded `pyproject.toml` snapshot with the real file. Both showed a stale 5-group ruff `select` (`["E4", "E7", "E9", "F", "I"]`); corrected to the current 22-group set (matching `.agents/rules/RUFF.md`). In SKILL.md, moved `ruff` out of `[project] dependencies` into `[dependency-groups] dev` (resolving an internal contradiction with its own following prose) and removed the four stale `# Migrate to latest channel version` comments that were deleted from `pyproject.toml` in session 37. Added the `[tool.ruff] exclude` list to both. Replaced REFERENCE.md's now-false "enforces syntax/pyflakes/import-order rules, not a full strict style suite" line with an accurate per-rule summary that points to the canonical `.agents/rules/RUFF.md`. Bumped the embedded "as of"/"Updated" dates to 2026-06-11.
 
 ## [Unreleased] - 2026-06-11 (session 43)
 
@@ -1605,7 +1607,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Documentation
 
-- Updated all workflow documentation (`README.md`, `docs/README.md`, `docs/workflows-guide.md`, `docs/performance.md`, `.agents/CLAUDE.md`, `.agents/skills/docs-maintainer/SKILL.md`) to reflect 4 workflows (was 5), the new self-chaining `run-bot.yml` behavior and its required secrets, and the removal of `performance.yml`.
+- Updated all workflow documentation (`README.md`, `docs/README.md`, `docs/workflows-guide.md`, `docs/performance.md`, `.agents/rules/CLAUDE.md`, `.agents/skills/docs-maintainer/SKILL.md`) to reflect 4 workflows (was 5), the new self-chaining `run-bot.yml` behavior and its required secrets, and the removal of `performance.yml`.
 
 ## [Unreleased] - 2026-06-08 (session 31)
 
@@ -1624,7 +1626,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 ### Documentation
 
 - Removed test-related content from the prompt files `nothing.md` and `nothing-2.md` (dropped the test verification step and renumbered the sequence, removed the testing-guidelines section, and cleaned scattered test references) while keeping the rest of each prompt intact.
-- Removed test-related content from all documentation across `docs/`, the repo root (`README.md`, `PLAN.md`, `AGENTS.md`, `replit.md`), and `.agents/` (rules, skills, sub-agents, memory) without deleting any files. Ruff/lint/validation content was preserved throughout. `.agents/TEST-RUFF.md` was kept and renamed to `.agents/RUFF.md` (now a Ruff/validation reference); all references were updated.
+- Removed test-related content from all documentation across `docs/`, the repo root (`README.md`, `PLAN.md`, `AGENTS.md`, `replit.md`), and `.agents/` (rules, skills, sub-agents, memory) without deleting any files. Ruff/lint/validation content was preserved throughout. `.agents/TEST-RUFF.md` was kept and renamed to `.agents/rules/RUFF.md` (now a Ruff/validation reference); all references were updated.
 
 ## [Unreleased] - 2026-06-06 (session 30)
 
@@ -1641,7 +1643,7 @@ Test suite: 1492 tests / 71 files / **0 warnings** / all green. Ruff: clean (144
 
 - Fixed stale test counts across all root and memory docs (1405/1466/1481 → 1492): `README.md` (×2), `PLAN.md` (×2), `AGENTS.md`, `replit.md`, `.agents/memory/MEMORY.md`, `.agents/memory/structure.md`.
 - Updated `docs/helper/helper.md` replies.py constants table: added 9 missing entries (`ERR_PERM_EXPIRED`, `ERR_UNKNOWN_ROLE`, `WHERE_CONNECTED_GROUP`, `NO_REASON`, `SEC_COMMANDS`, `SEC_WHO`, `SEC_WHERE`, `SEC_WHAT`, `SEC_EXAMPLES`, `SEC_TARGET`).
-- Completed full doc audit: `docs/README.md`, `docs/mapping.md`, `docs/modules/modules.md`, `docs/helper/helper.md`, `docs/databases/databases.md`, `docs/utils/utils.md`, `docs/workflows/workflows.md`, `docs/performance.md`, `docs/setup.md`, `.agents/REPLIT.md`: all accurate.
+- Completed full doc audit: `docs/README.md`, `docs/mapping.md`, `docs/modules/modules.md`, `docs/helper/helper.md`, `docs/databases/databases.md`, `docs/utils/utils.md`, `docs/workflows/workflows.md`, `docs/performance.md`, `docs/setup.md`, `.agents/rules/REPLIT.md`: all accurate.
 
 ### Tests
 
@@ -1735,7 +1737,7 @@ Test suite: 1405 tests / 71 files / **0 warnings** / all green. Ruff: clean (144
 
 ### Documentation
 
-- Added a Mermaid startup-log checklist flowchart to `.agents/REPLIT.md` so the Replit runtime verification sequence is visual as well as textual.
+- Added a Mermaid startup-log checklist flowchart to `.agents/rules/REPLIT.md` so the Replit runtime verification sequence is visual as well as textual.
 
 ## [Unreleased] - 2026-06-06 (session 20)
 
@@ -1747,7 +1749,7 @@ Test suite: 1405 tests / 71 files / **0 warnings** / all green. Ruff: clean (144
 
 ### Documentation
 
-- Added a Mermaid validation-flow diagram to `.agents/WORKFLOW.md` so the ordered workflow for focused checks, Ruff, full tests, runtime verification, and final reporting is visible at a glance.
+- Added a Mermaid validation-flow diagram to `.agents/rules/WORKFLOW.md` so the ordered workflow for focused checks, Ruff, full tests, runtime verification, and final reporting is visible at a glance.
 
 ## [Unreleased] - 2026-06-06 (session 18)
 
@@ -1771,7 +1773,7 @@ Test suite: 1405 tests / 71 files / **0 warnings** / all green. Ruff: clean (144
 
 ### Documentation
 
-- Fixed a contradictory bot-voice rule in `.agents/CLAUDE.md`: the Telegram message formatting section no longer allows "1-3 emojis" and now matches the canonical no-emoji, no-emoticon policy documented later in the same file and in `.agents/RULES.md`.
+- Fixed a contradictory bot-voice rule in `.agents/rules/CLAUDE.md`: the Telegram message formatting section no longer allows "1-3 emojis" and now matches the canonical no-emoji, no-emoticon policy documented later in the same file and in `.agents/rules/RULES.md`.
 
 ## [Unreleased] - 2026-06-06 (session 14)
 
@@ -2842,9 +2844,9 @@ Extracted all static user-facing reply strings from `tcbot/modules/helper/workfl
 ### Changed - Refactoring
 
 - **Em-dash and en-dash removal (Python source)**: All em-dashes (`-`) and en-dashes (`-`) removed from every Python source file across `tcbot/`, `tests/`, and all workflow, database, helper, and utility files. Replaced with `:`, `;`, `,`, or parentheses as appropriate for the context. Numeric ranges changed to hyphens (e.g. `1-3`). 176/176 tests pass, ruff clean after the full sweep.
-- **Em-dash and en-dash removal (documentation)**: All em/en-dashes removed from every `.md` file in the repository: `README.md`, `AGENTS.md`, `PLAN.md`, `CHANGELOG.md`, `docs/`, `.agents/CLAUDE.md`, `.agents/RULES.md`, `.agents/STYLE-CODE.md`, `.agents/STYLE-COMMENTS.md`, `.agents/WORKFLOW.md`, `.agents/TEST-RUFF.md`, `.agents/REPLIT.md`, all `.agents/agents/*.md`, all `.agents/skills/**/*.md`, and `.agents/memory/*.md`. Final grep across all project `.md` files (excluding `.git/`, `.trae/`, `.local/`) confirms 0 remaining occurrences.
-- **Text emoticon removal from bot responses**: All text emoticons (`:)`, `:v`, `:')`, `:D`) removed from `tcbot/modules/helper/identity.py`. Agent instruction files (`.agents/CLAUDE.md`, `.agents/RULES.md`) updated to reflect the new policy: the bot expresses dry humor through word choice only, no text emoticons in any reply path.
-- **Bot voice policy updated**: `.agents/CLAUDE.md` and `.agents/RULES.md` now state the canonical voice as professional, friendly, formal, and dry; humor via word choice only. No pictograph emoji, no text emoticons.
+- **Em-dash and en-dash removal (documentation)**: All em/en-dashes removed from every `.md` file in the repository: `README.md`, `AGENTS.md`, `PLAN.md`, `CHANGELOG.md`, `docs/`, `.agents/rules/CLAUDE.md`, `.agents/rules/RULES.md`, `.agents/rules/STYLE-CODE.md`, `.agents/rules/STYLE-COMMENTS.md`, `.agents/rules/WORKFLOW.md`, `.agents/TEST-RUFF.md`, `.agents/rules/REPLIT.md`, all `.agents/agents/*.md`, all `.agents/skills/**/*.md`, and `.agents/memory/*.md`. Final grep across all project `.md` files (excluding `.git/`, `.trae/`, `.local/`) confirms 0 remaining occurrences.
+- **Text emoticon removal from bot responses**: All text emoticons (`:)`, `:v`, `:')`, `:D`) removed from `tcbot/modules/helper/identity.py`. Agent instruction files (`.agents/rules/CLAUDE.md`, `.agents/rules/RULES.md`) updated to reflect the new policy: the bot expresses dry humor through word choice only, no text emoticons in any reply path.
+- **Bot voice policy updated**: `.agents/rules/CLAUDE.md` and `.agents/rules/RULES.md` now state the canonical voice as professional, friendly, formal, and dry; humor via word choice only. No pictograph emoji, no text emoticons.
 
 ### Added - Agent Memory
 
@@ -2901,17 +2903,17 @@ Extracted all static user-facing reply strings from `tcbot/modules/helper/workfl
 - **Link integrity verified**: Every internal markdown link (path + anchor) across all 65 project .md files (excluding `.trae/` mirror) was validated against existing files and headings: 0 broken paths, 0 broken anchors.
 
 ### Added - Agent Workflow Enforcement
-- **Mandatory read-before-work and update-after-work rules**: Added prominent top-of-file sections to [`.agents/CLAUDE.md`](.agents/CLAUDE.md), [`.agents/RULES.md`](.agents/RULES.md), [`AGENTS.md`](AGENTS.md), [`.agents/skills/project-policy/SKILL.md`](.agents/skills/project-policy/SKILL.md), [`.agents/skills/docs-maintainer/SKILL.md`](.agents/skills/docs-maintainer/SKILL.md), and [`.agents/agents/coordinator.md`](.agents/agents/coordinator.md) that require every AI agent (Claude, Replit AI, Gemini, Qwen, Copilot, etc.) to:
-  - **Read** at the start of every new conversation: `.agents/CLAUDE.md`, `.agents/RULES.md`, `AGENTS.md`, `PLAN.md`, `CHANGELOG.md`, plus relevant files in `.agents/`, `docs/`, and the project root. The CLAUDE.md table now lists every skill by name so there is no excuse to miss them.
+- **Mandatory read-before-work and update-after-work rules**: Added prominent top-of-file sections to [`.agents/rules/CLAUDE.md`](.agents/rules/CLAUDE.md), [`.agents/rules/RULES.md`](.agents/rules/RULES.md), [`AGENTS.md`](AGENTS.md), [`.agents/skills/project-policy/SKILL.md`](.agents/skills/project-policy/SKILL.md), [`.agents/skills/docs-maintainer/SKILL.md`](.agents/skills/docs-maintainer/SKILL.md), and [`.agents/agents/coordinator.md`](.agents/agents/coordinator.md) that require every AI agent (Claude, Replit AI, Gemini, Qwen, Copilot, etc.) to:
+  - **Read** at the start of every new conversation: `.agents/rules/CLAUDE.md`, `.agents/rules/RULES.md`, `AGENTS.md`, `PLAN.md`, `CHANGELOG.md`, plus relevant files in `.agents/`, `docs/`, and the project root. The CLAUDE.md table now lists every skill by name so there is no excuse to miss them.
   - **Update** in the same turn after any change: `CHANGELOG.md` (always), `PLAN.md` (when project state changes), and every related doc whose content is now stale.
   - **Why**: Prevents the recurring failure where agents ship code without updating CHANGELOG.md, PLAN.md, or related docs and the user has to manually remind them every time.
 
-- **Skills and sub-agents policy**: New explicit policy in [`.agents/CLAUDE.md`](.agents/CLAUDE.md#mandatory-auto-invoke-skills-use-sub-agents-sparingly), [`.agents/RULES.md`](.agents/RULES.md#skills-and-sub-agents-policy), [`AGENTS.md`](AGENTS.md#skills-and-sub-agents-policy), and [`.agents/agents/coordinator.md`](.agents/agents/coordinator.md#skills-and-sub-agents-policy) covering:
+- **Skills and sub-agents policy**: New explicit policy in [`.agents/rules/CLAUDE.md`](.agents/rules/CLAUDE.md#mandatory-auto-invoke-skills-use-sub-agents-sparingly), [`.agents/rules/RULES.md`](.agents/rules/RULES.md#skills-and-sub-agents-policy), [`AGENTS.md`](AGENTS.md#skills-and-sub-agents-policy), and [`.agents/agents/coordinator.md`](.agents/agents/coordinator.md#skills-and-sub-agents-policy) covering:
   - **Skills auto-invoke**: All skills under `.agents/skills/` (`project-policy`, `docs-maintainer`, `telegram-bot-builder`, `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `runtime-debugger`, `feature-reviewer`, `general-sub-agent`) must be invoked silently whenever their trigger matches the current task. Compose multiple skills when one task spans multiple areas.
   - **Sub-agents used sparingly**: Sub-agents under `.agents/agents/` are expensive (token cost) and risky (can drift off-task). Default is to do the work in the main agent. Only delegate when the task is large, scopes are genuinely independent, and parallelism or independent-perspective value justifies the cost.
   - **Why**: User flagged sub-agents as wasteful and noisy, but skills as cheap and project-correct. Codifying the preference so future agents make the same call without being asked.
 
-- **Pointers added to every skill and sub-agent**: Each `.agents/skills/*/SKILL.md` and `.agents/agents/*.md` file now opens with a short pointer to the read/update rules in [`.agents/CLAUDE.md`](.agents/CLAUDE.md#mandatory-read-these-files-before-any-work) and a reminder to update [`CHANGELOG.md`](CHANGELOG.md) (and `PLAN.md` when relevant) in the same turn. Files updated:
+- **Pointers added to every skill and sub-agent**: Each `.agents/skills/*/SKILL.md` and `.agents/agents/*.md` file now opens with a short pointer to the read/update rules in [`.agents/rules/CLAUDE.md`](.agents/rules/CLAUDE.md#mandatory-read-these-files-before-any-work) and a reminder to update [`CHANGELOG.md`](CHANGELOG.md) (and `PLAN.md` when relevant) in the same turn. Files updated:
   - **Skills (10)**: `project-policy`, `docs-maintainer`, `telegram-bot-builder`, `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `runtime-debugger`, `feature-reviewer`, `general-sub-agent`.
   - **Sub-agents (8)**: `coordinator`, `debug-investigator`, `docs-and-skills-editor`, `general-operator`, `implementation-helper`, `project-explorer`, `review-guardian`, `validation-runner`.
   - **Why**: Even when an agent loads only a single skill or sub-agent prompt without reading CLAUDE.md, it still sees the rule. No entry point in `.agents/` lets you skip the read/update workflow.
@@ -2970,7 +2972,7 @@ Extracted all static user-facing reply strings from `tcbot/modules/helper/workfl
 - **Performance degradation**: Optimized database queries prevent slowdown from fetching unnecessary user profile fields.
 - **N+1 query patterns**: Eliminated all N+1 patterns in list views by using batch queries.
 - **Unused variable**: Fixed unused variable in `muting.py` (executor_role).
-- **Code standards compliance**: Removed all pictograph emoji from bot messages per .agents/RULES.md.
+- **Code standards compliance**: Removed all pictograph emoji from bot messages per .agents/rules/RULES.md.
 - **Missing asyncio import**: Fixed `NameError` in `warns_db.py` - added missing `import asyncio` for parallel operations in `clear_warns()` and `remove_last_warn()`. Caught by TDD test suite as 4 failing tests.
 - **Auto-fix workflow committing directly to main**: Changed auto-fix workflow to create PR for review instead of committing directly to main branch. Safer, requires review before merge.
 - **Auto-fix branch sprawl**: Switched from timestamped branch names (e.g. `auto-fix/ruff-20260529-021249`) to a fixed branch name `auto-fix/ruff` that gets force-updated, so the repository never accumulates stale auto-fix branches.
@@ -3033,7 +3035,7 @@ Extracted all static user-facing reply strings from `tcbot/modules/helper/workfl
 - `docs/workflows-guide.md` - Comprehensive GitHub Actions workflows documentation
 - `docs/setup.md`, `docs/README.md` - Added inline cross-references to related guides
 - `docs/banning-detailed.md`, `docs/appeal-detailed.md`, `docs/check-detailed.md`, `docs/warnings-detailed.md`, `docs/stats-detailed.md`, `docs/role-detailed.md`, `docs/promote-detailed.md`, `docs/demote-detailed.md` - Added inline cross-references and flow mermaid diagrams
-- `.agents/CLAUDE.md`, `.agents/RULES.md`, `.agents/STYLE-CODE.md`, `.agents/STYLE-COMMENTS.md`, `.agents/WORKFLOW.md`, `.agents/TEST-RUFF.md`, `.agents/REPLIT.md` - Added inline cross-references between siblings and to top-level docs
+- `.agents/rules/CLAUDE.md`, `.agents/rules/RULES.md`, `.agents/rules/STYLE-CODE.md`, `.agents/rules/STYLE-COMMENTS.md`, `.agents/rules/WORKFLOW.md`, `.agents/TEST-RUFF.md`, `.agents/rules/REPLIT.md` - Added inline cross-references between siblings and to top-level docs
 - `README.md` - Added smart mentions, flexible target resolution, CI/CD automation section, inline cross-references throughout
 - `AGENTS.md`, `PLAN.md`, `replit.md` - Added intro paragraphs with inline cross-references to related docs
 - `CHANGELOG.md` - Comprehensive changelog with technical details and workflow additions

@@ -11,7 +11,7 @@ Use this skill when the user asks to update, fill in, review, or reorganize Mark
 
 ## Mandatory Read-Before-Work and Update-After-Work
 
-Before invoking this skill, you must already have read [`.agents/CLAUDE.md`](../../CLAUDE.md), [`.agents/RULES.md`](../../RULES.md), [`AGENTS.md`](../../../AGENTS.md), [`PLAN.md`](../../../PLAN.md), and [`CHANGELOG.md`](../../../CHANGELOG.md). The full read/update tables live at [`.agents/CLAUDE.md`](../../CLAUDE.md#mandatory-read-these-files-before-any-work).
+Before invoking this skill, you must already have read [`.agents/rules/CLAUDE.md`](../../rules/CLAUDE.md), [`.agents/rules/RULES.md`](../../rules/RULES.md), [`AGENTS.md`](../../../AGENTS.md), [`PLAN.md`](../../../PLAN.md), and [`CHANGELOG.md`](../../../CHANGELOG.md). The full read/update tables live at [`.agents/rules/CLAUDE.md`](../../rules/CLAUDE.md#mandatory-read-these-files-before-any-work).
 
 When you change *any* documentation file, update the related markdown in the same turn:
 

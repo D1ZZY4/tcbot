@@ -12,14 +12,14 @@ Compatible with: Claude, Replit AI, Gemini, Qwen, GitHub Copilot, and any AI cod
 
 Every new conversation **must start by reading** the following files. The user should NEVER need to remind you. If you skip this step, you will produce inconsistent or wrong work, exactly the failure mode that has happened repeatedly in this repo.
 
-**This rule already lives in many places**: `.agents/CLAUDE.md` (here), `.agents/RULES.md`, `AGENTS.md`, `PLAN.md`, `.agents/skills/project-policy/SKILL.md`, `.agents/skills/docs-maintainer/SKILL.md`, `.agents/agents/*.md` sub-agent prompts. If you found this file, you have no excuse.
+**This rule already lives in many places**: `.agents/rules/CLAUDE.md` (here), `.agents/rules/RULES.md`, `AGENTS.md`, `PLAN.md`, `.agents/skills/project-policy/SKILL.md`, `.agents/skills/docs-maintainer/SKILL.md`, `.agents/agents/*.md` sub-agent prompts. If you found this file, you have no excuse.
 
 **Tier 1: Read every conversation, no exceptions:**
 
 | File | Why |
 |---|---|
-| [`.agents/CLAUDE.md`](CLAUDE.md) (this file) | Canonical project reference |
-| [`.agents/RULES.md`](RULES.md) | Hard constraints and forbidden actions |
+| [`.agents/rules/CLAUDE.md`](CLAUDE.md) (this file) | Canonical project reference |
+| [`.agents/rules/RULES.md`](RULES.md) | Hard constraints and forbidden actions |
 | [`AGENTS.md`](../AGENTS.md) | Top-level project guide |
 | [`PLAN.md`](../PLAN.md) | Current project state, runtime flow, priorities |
 | [`CHANGELOG.md`](../CHANGELOG.md) | Recent changes: what already shipped vs what is in flight |
@@ -110,7 +110,7 @@ Every change (code, docs, workflows, refactors, bug fixes) **must update the rel
 | [`docs/<feature>-detailed.md`](../docs/) | A specific feature (ban, appeal, check, warn, role, promote, demote, stats) changed |
 | [`docs/mapping.md`](../docs/mapping.md) | Repository tree changed (new files, moved files, renamed packages) |
 | [`docs/README.md`](../docs/README.md) | A new doc was added: update the Quick navigation or Detailed feature guides table |
-| [`.agents/CLAUDE.md`](CLAUDE.md), [`.agents/RULES.md`](RULES.md) | A canonical pattern, helper, or rule changed |
+| [`.agents/rules/CLAUDE.md`](CLAUDE.md), [`.agents/rules/RULES.md`](RULES.md) | A canonical pattern, helper, or rule changed |
 | [`AGENTS.md`](../AGENTS.md) | Repository structure, ownership rules, or contributor commands changed |
 | [`replit.md`](../replit.md) | Deployment-relevant change (port, entry command, env var) |
 
@@ -155,6 +155,10 @@ Replit Secrets. For local development, use a gitignored `config.env` copied from
 ```text
 <project root>/
 ├── .agents/                         AI-agent policy and workflow docs
+│   ├── rules/                        Canonical project rules (CLAUDE, RULES, STYLE, RUFF, etc.)
+│   ├── skills/                       Reusable agent skills
+│   ├── agents/                       Project-local sub-agent prompts
+│   └── memory/                       Agent memory and progress logs
 ├── docs/                           Human-facing architecture and module docs
 ├── tcbot/
 │   ├── __init__.py                 Configs dataclass + global cfg adapter
@@ -218,7 +222,7 @@ Rules:
 
 ## Code Style Summary
 
-Full details: `.agents/STYLE-CODE.md` and `.agents/STYLE-COMMENTS.md`.
+Full details: `.agents/rules/STYLE-CODE.md` and `.agents/rules/STYLE-COMMENTS.md`.
 
 Required Python module header:
 
@@ -656,7 +660,7 @@ Whenever you rename, move, or replace an internal API, **update every reference 
 | `docs/{databases,helper,modules,utils,workflows}/*.md` | Per-package reference docs |
 | `docs/mapping.md` | The repository tree at the top of the docs |
 | `docs/README.md` | The "Detailed feature guides" index |
-| `.agents/*.md` | All agent policy files (especially `.agents/CLAUDE.md` repo map + `RULES.md`) |
+| `.agents/rules/*.md` | All agent policy files (especially `.agents/rules/CLAUDE.md` repo map + `RULES.md`) |
 | `.agents/skills/*/SKILL.md` | Reusable agent skills referencing canonical helpers |
 | `.agents/agents/*.md` | Project-local sub-agent prompts (coordinator, debug-investigator, etc.) |
 | `PLAN.md`, `AGENTS.md` | Top-level planning + AI agent entry points |
@@ -678,12 +682,11 @@ Skipping the doc sweep is a serious defect.
 ---
 
 
-
 | File | Purpose |
 |---|---|
-| `.agents/RULES.md` | Hard constraints and forbidden actions |
-| `.agents/STYLE-CODE.md` | Python style, imports, typing, handlers |
-| `.agents/STYLE-COMMENTS.md` | Comments, docstrings, section dividers |
-| `.agents/RUFF.md` | Ruff and validation workflow |
-| `.agents/WORKFLOW.md` | Development process, commits, deployment checks |
-| `.agents/REPLIT.md` | Replit-specific run, secrets, and port guidance |
+| `.agents/rules/RULES.md` | Hard constraints and forbidden actions |
+| `.agents/rules/STYLE-CODE.md` | Python style, imports, typing, handlers |
+| `.agents/rules/STYLE-COMMENTS.md` | Comments, docstrings, section dividers |
+| `.agents/rules/RUFF.md` | Ruff and validation workflow |
+| `.agents/rules/WORKFLOW.md` | Development process, commits, deployment checks |
+| `.agents/rules/REPLIT.md` | Replit-specific run, secrets, and port guidance |

@@ -12,7 +12,7 @@ existing architecture. Prefer existing helpers and patterns over new abstraction
 
 ## Mandatory Read-Before-Work and Update-After-Work
 
-Before invoking this skill, you must already have read [`.agents/CLAUDE.md`](../../CLAUDE.md), [`.agents/RULES.md`](../../RULES.md), [`AGENTS.md`](../../../AGENTS.md), [`PLAN.md`](../../../PLAN.md), and [`CHANGELOG.md`](../../../CHANGELOG.md) at the start of this conversation. The full read/update tables live at [`.agents/CLAUDE.md`](../../CLAUDE.md#mandatory-read-these-files-before-any-work).
+Before invoking this skill, you must already have read [`.agents/rules/CLAUDE.md`](../../rules/CLAUDE.md), [`.agents/rules/RULES.md`](../../rules/RULES.md), [`AGENTS.md`](../../../AGENTS.md), [`PLAN.md`](../../../PLAN.md), and [`CHANGELOG.md`](../../../CHANGELOG.md) at the start of this conversation. The full read/update tables live at [`.agents/rules/CLAUDE.md`](../../rules/CLAUDE.md#mandatory-read-these-files-before-any-work).
 
 After any code change in `tcbot/`, in the same turn:
 

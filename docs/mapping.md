@@ -10,7 +10,7 @@ This page maps the repository structure and the service boundaries between packa
 <project root>/
 ├── tcbot/                  Main Python package
 ├── docs/                   Developer documentation
-├── .agents/                Contributor and agent rules
+├── .agents/                Agent config (rules/, skills/, agents/)
 ├── pyproject.toml          Dependencies and Ruff config
 ├── uv.lock                 Locked dependency graph
 ├── config.env.example      Environment variable template

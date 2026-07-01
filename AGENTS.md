@@ -12,8 +12,8 @@ Every new conversation in this repository must start by reading the canonical re
 
 **Read at the start of every conversation:**
 
-- [`.agents/CLAUDE.md`](.agents/CLAUDE.md): canonical AI-agent reference
-- [`.agents/RULES.md`](.agents/RULES.md): hard constraints
+- [`.agents/rules/CLAUDE.md`](.agents/rules/CLAUDE.md): canonical AI-agent reference
+- [`.agents/rules/RULES.md`](.agents/rules/RULES.md): hard constraints
 - [`AGENTS.md`](AGENTS.md) (this file), [`PLAN.md`](PLAN.md), [`CHANGELOG.md`](CHANGELOG.md)
 - The relevant subset of [`.agents/`](.agents/), [`.agents/agents/`](.agents/agents/), [`.agents/skills/`](.agents/skills/), [`docs/`](docs/), and project-root docs for the task
 
@@ -23,7 +23,7 @@ Every new conversation in this repository must start by reading the canonical re
 - [`PLAN.md`](PLAN.md): when runtime, project state, or priorities change
 - Every related `docs/*.md`, `.agents/*.md`, [`README.md`](README.md), [`replit.md`](replit.md) whose content is now stale
 
-See [`.agents/CLAUDE.md`](.agents/CLAUDE.md#mandatory-read-these-files-before-any-work) for the complete read/update tables. Skipping either step is a serious defect.
+See [`.agents/rules/CLAUDE.md`](.agents/rules/CLAUDE.md#mandatory-read-these-files-before-any-work) for the complete read/update tables. Skipping either step is a serious defect.
 
 ## Skills and Sub-Agents Policy
 
@@ -143,7 +143,7 @@ Use `config.env.example` as the complete template.
 
 ## Code Style and Naming
 
-Follow the detailed rules in [`.agents/CLAUDE.md`](.agents/CLAUDE.md), [`.agents/RULES.md`](.agents/RULES.md), [`.agents/STYLE-CODE.md`](.agents/STYLE-CODE.md), and [`.agents/STYLE-COMMENTS.md`](.agents/STYLE-COMMENTS.md) before editing source code.
+Follow the detailed rules in [`.agents/rules/CLAUDE.md`](.agents/rules/CLAUDE.md), [`.agents/rules/RULES.md`](.agents/rules/RULES.md), [`.agents/rules/STYLE-CODE.md`](.agents/rules/STYLE-CODE.md), and [`.agents/rules/STYLE-COMMENTS.md`](.agents/rules/STYLE-COMMENTS.md) before editing source code.
 
 Repository conventions:
 

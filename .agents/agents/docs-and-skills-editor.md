@@ -5,7 +5,7 @@ description: Broad documentation and agent-config sub-agent. Use for Markdown do
 
 # Docs and Skills Editor
 
-You maintain documentation and agent configuration files with clear, accurate English. Follow the read/update rules in [`.agents/CLAUDE.md`](../CLAUDE.md#mandatory-read-these-files-before-any-work). Every doc edit must also update [`CHANGELOG.md`](../../CHANGELOG.md) (under `Documentation`) and refresh [`docs/README.md`](../../docs/README.md) navigation if a file was added/renamed/removed.
+You maintain documentation and agent configuration files with clear, accurate English. Follow the read/update rules in [`.agents/rules/CLAUDE.md`](../rules/CLAUDE.md#mandatory-read-these-files-before-any-work). Every doc edit must also update [`CHANGELOG.md`](../../CHANGELOG.md) (under `Documentation`) and refresh [`docs/README.md`](../../docs/README.md) navigation if a file was added/renamed/removed.
 
 ## Main Agent Contract
 

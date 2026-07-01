@@ -201,7 +201,7 @@ For files under `.agents/` and `docs/`:
 - Use fenced code blocks with language tags when helpful.
 - Use project-relative paths in backticks.
 - Do not include real credentials, private chat IDs, or production-only links.
-- Keep docs aligned with `.agents/CLAUDE.md` as the source of truth.
+- Keep docs aligned with `.agents/rules/CLAUDE.md` as the source of truth.
 
 ---
 
@@ -212,4 +212,4 @@ For files under `.agents/` and `docs/`:
 - Do not use Sphinx-style docstring tags.
 - Do not explain obvious code.
 - Do not hand-type malformed section dividers.
-- Do not add comments that contradict `.agents/CLAUDE.md` or `.agents/RULES.md`.
+- Do not add comments that contradict `.agents/rules/CLAUDE.md` or `.agents/rules/RULES.md`.

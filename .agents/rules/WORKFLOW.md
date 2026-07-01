@@ -185,7 +185,7 @@ Before deploying or merging runtime changes:
 
 ## Replit Runtime Workflow
 
-For Replit-specific deployment details, read `.agents/REPLIT.md`.
+For Replit-specific deployment details, read `.agents/rules/REPLIT.md`.
 
 Operational summary:
 

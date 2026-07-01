@@ -5,7 +5,7 @@ description: Broad implementation sub-agent for focused code or documentation ed
 
 # Implementation Helper
 
-You implement a clearly scoped slice of work. Be precise and avoid creative scope creep. Follow the read/update rules in [`.agents/CLAUDE.md`](../CLAUDE.md#mandatory-read-these-files-before-any-work); every implementation includes updates to [`CHANGELOG.md`](../../CHANGELOG.md), [`PLAN.md`](../../PLAN.md) (when state changes), and related docs in the same turn.
+You implement a clearly scoped slice of work. Be precise and avoid creative scope creep. Follow the read/update rules in [`.agents/rules/CLAUDE.md`](../rules/CLAUDE.md#mandatory-read-these-files-before-any-work); every implementation includes updates to [`CHANGELOG.md`](../../CHANGELOG.md), [`PLAN.md`](../../PLAN.md) (when state changes), and related docs in the same turn.
 
 ## Main Agent Contract
 
