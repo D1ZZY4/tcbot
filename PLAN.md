@@ -6,18 +6,18 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 
 ## [Current State]
 
-- Audit session 173: 15 bugs fixed across 21 files (Docker, CI/CD, DB layer, utils, modules, extraction, formatter, parse_logmsg, keyboards, checking, netspeed, ban_flow, muting_flow). All 75 files ruff-clean. Bot starts clean: 31/31 indexes, Redis hiredis 3.4.0, APScheduler, polling active.
+- Audit session 179 (2026-07-01): 5 bugs fixed (Bug #470-#474). All 75 files ruff-clean. Bot runs in webhook mode; 35/35 indexes, Redis hiredis 3.4.0, APScheduler, webhook active.
 | Area | Status |
 |---|---|
-| Runtime | Webhook-mode Telegram bot started with `uv run python -m tcbot`. On Replit, REPLIT_DEV_DOMAIN is auto-detected; local dev falls back to polling. |
+| Runtime | Webhook-mode Telegram bot started with `uv run python -m tcbot`. On Replit, REPLIT_DEV_DOMAIN is auto-detected and webhook is registered at startup; local dev falls back to polling. Signal handlers registered at the earliest possible point in `_run_webhook_mode` to eliminate the SIGTERM race window. |
 | Python target | Python 3.12 project target (`pyproject.toml` requires `>=3.12`). |
-| Bot framework | `python-telegram-bot` (plain, no `[job-queue]` extra), tracking the latest compatible release. |
-| Database | MongoDB through Motor, connected during PTB `post_init`. |
-| Cache | In-process `TTLCache` L1 + optional Redis L2 via `TwoLevelCache`. `hiredis` C extension required when Redis is active. Configured via `REDIS_URL`. |
+| Bot framework | `python-telegram-bot` v22.8 (plain, no `[job-queue]` extra), tracking the latest compatible release. |
+| Database | MongoDB through Motor v3.7.0, connected during PTB `post_init`. |
+| Cache | In-process `TTLCache` L1 + optional Redis L2 via `TwoLevelCache`. `hiredis` C extension required when Redis is active. Configured via `REDIS_URL`. Redis JSON serialization uses `_MongoJSONEncoder` to handle `datetime` and `ObjectId` fields from MongoDB documents. |
 | Scheduler | APScheduler **4.0.0a6** (`AsyncScheduler` + `MongoDBDataStore` + `CBORSerializer`); persistent moderation jobs survive restarts. The pinned alpha carries CVE-2026-31072 (no upstream patch); accepted and tracked risk, see Core Subsystem Design / Persistent Scheduler. |
-| Health check / Webhook | Flask app in `tcbot/alive.py`. `GET /` returns `OK`. `GET /health` returns JSON subsystem status. `POST /webhook` receives Telegram updates (validates `X-Telegram-Bot-Api-Secret-Token`, feeds to PTB via `asyncio.run_coroutine_threadsafe`). Port from `PORT` env var (default `5000`). |
+| Health check / Webhook | Flask app in `tcbot/alive.py`. `GET /` returns `OK`. `GET /health` returns JSON subsystem status. `POST /webhook` receives Telegram updates (validates `X-Telegram-Bot-Api-Secret-Token`, feeds to PTB via `asyncio.run_coroutine_threadsafe`). `Update.de_json` None guard prevents enqueueing unrecognized update types. Port from `PORT` env var (default `5000`). |
 | Dependency management | `uv` with `uv.lock`; CI installs with frozen lockfile by default. |
-| Formatting/linting | Ruff, configured in `pyproject.toml`. |
+| Formatting/linting | Ruff v0.15.20, configured in `pyproject.toml`. |
 | Deployment notes | Local `config.env`, Docker Compose, and Replit/hosted environment variables are documented. |
 
 ## Runtime Flow
@@ -31,17 +31,24 @@ flowchart TD
     LoadEnv --> Config[Build Configs and cfg adapter]
     Config --> Main[tcbot.__main__.main]
     Main --> Logging[setup_logging]
-    Main --> KeepAlive[start_keepalive on cfg.port]
-    Main --> Builder[ApplicationBuilder - registers post_init callback]
+    Main --> KeepAlive[start_keepalive on cfg.port - Flask port 8080]
+    Main --> Builder[ApplicationBuilder - build PTB Application]
     Builder --> Handlers[get_handlers - discover and import modules]
     Handlers --> AddHandlers[add_handler for each module + error handler]
-    AddHandlers --> Polling[run_polling]
-    Polling --> PostInit[post_init runs before polling loop]
+    AddHandlers --> ModeCheck{Webhook URL detected?}
+    ModeCheck -->|Yes - Replit or VPS| WebhookMode[asyncio.run _run_webhook_mode]
+    ModeCheck -->|No - local dev only| PollingMode[run_polling - accepted-risk fallback]
+    WebhookMode --> Signals[Register SIGTERM/SIGINT handlers immediately]
+    Signals --> AppInit[async with app - app.initialize]
+    AppInit --> PostInit[_post_init - explicit call]
     PostInit --> MongoDB[connect MongoDB + ensure_indexes + seed owner]
     PostInit --> Redis[connect Redis if REDIS_URL set - optional]
     PostInit --> APSched[start APScheduler MongoDBDataStore + CBORSerializer]
     PostInit --> Reporter[attach error_reporter + asyncio exception handler]
-    Reporter --> Updates[accept Telegram updates]
+    Reporter --> AppStart[app.start - PTB dispatcher starts]
+    AppStart --> SetWebhook[bot.set_webhook + get_webhook_info verification]
+    SetWebhook --> RegisterFlask[register_webhook - wire Flask POST /webhook to PTB queue]
+    RegisterFlask --> Updates[await shutdown_event - accept Telegram updates via webhook]
 ```
 
 ### `post_init` Sequence

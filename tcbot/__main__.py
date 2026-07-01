@@ -349,6 +349,7 @@ async def _run_webhook_mode(app: Application) -> None:
     """Run PTB in webhook mode using Flask (alive.py) as the webhook receiver.
 
     Lifecycle:
+    0. Signal handlers registered immediately to close the SIGTERM race window.
     1. app.initialize() -> triggers _post_init (MongoDB, Redis, APScheduler, etc.)
     2. app.start()      -> starts the PTB update dispatcher
     3. set_webhook()    -> registers the public URL with Telegram
@@ -359,6 +360,17 @@ async def _run_webhook_mode(app: Application) -> None:
     """
     full_url = f"{cfg.webhook_url}{_WEBHOOK_PATH}"
     secret = cfg.webhook_secret
+
+    # * Register signal handlers at the earliest possible moment.  If we wait
+    # * until after _post_init + app.start() + set_webhook() the bot is exposed
+    # * to a ~500 ms window where a SIGTERM would bypass the graceful shutdown
+    # * path entirely (no delete_webhook, no app.stop, no _post_shutdown).
+    loop = asyncio.get_running_loop()
+    shutdown_event = asyncio.Event()
+    with contextlib.suppress(NotImplementedError):
+        # * Windows does not support add_signal_handler; suppress gracefully.
+        loop.add_signal_handler(signal.SIGTERM, shutdown_event.set)
+        loop.add_signal_handler(signal.SIGINT, shutdown_event.set)
 
     async with app:
         # * PTB's Application.initialize() (called by __aenter__) does NOT invoke
@@ -400,15 +412,8 @@ async def _run_webhook_mode(app: Application) -> None:
             )
 
             # * Wire Flask's POST /webhook route to PTB's asyncio update_queue.
-            loop = asyncio.get_running_loop()
+            # * loop is already obtained above (before async with app:).
             register_webhook(app.update_queue, loop, secret, app.bot)
-
-            # * Set up signal handlers so SIGTERM (container stop) shuts down cleanly.
-            shutdown_event = asyncio.Event()
-            with contextlib.suppress(NotImplementedError):
-                # * Windows does not support add_signal_handler; suppress gracefully.
-                loop.add_signal_handler(signal.SIGTERM, shutdown_event.set)
-                loop.add_signal_handler(signal.SIGINT, shutdown_event.set)
 
             log.info("Bot running in webhook mode. Waiting for updates...")
             await shutdown_event.wait()
