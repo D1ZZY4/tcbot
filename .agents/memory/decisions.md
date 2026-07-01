@@ -453,6 +453,6 @@ if isinstance(exc, CircuitOpenError):
 
 **Decision:** `cache.py` defines `_MongoJSONEncoder(json.JSONEncoder)` and passes `cls=_MongoJSONEncoder` to every `json.dumps` call in `TwoLevelCache`. The encoder handles `datetime` → ISO-8601 string and falls back to `str()` for any other unknown type (defensive against `ObjectId` and future MongoDB scalar types).
 
-**Why:** `GroupDoc` contains a `datetime` field (`added_date`). The `active_groups` fetch query previously also returned `_id: ObjectId` (fixed by adding `{"_id": 0}` projection), but the root cause — that plain `json.JSONEncoder` cannot handle Motor-returned documents — remains latent for any future cache value that includes a `datetime`. The encoder is the correct single-point fix rather than adding projections to every individual query.
+**Why:** `GroupDoc` contains a `datetime` field (`added_date`). The `active_groups` fetch query previously also returned `_id: ObjectId` (fixed by adding `{"_id": 0}` projection), but the root cause -- that plain `json.JSONEncoder` cannot handle Motor-returned documents -- remains latent for any future cache value that includes a `datetime`. The encoder is the correct single-point fix rather than adding projections to every individual query.
 
 **How to apply:** All new `TwoLevelCache` instances that may cache MongoDB documents automatically benefit from this encoder because it is wired inside `TwoLevelCache`. No per-call-site changes needed. If a new type causes serialization failure in the future, add a branch to `_MongoJSONEncoder.default()` in `cache.py`.
