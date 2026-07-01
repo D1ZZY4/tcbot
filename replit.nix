@@ -1,1 +1,0 @@
-{ pkgs }: { deps = [ pkgs.gnupg ]; }
