@@ -10,6 +10,7 @@ import ast
 import logging
 import os
 import re
+import secrets
 from dataclasses import dataclass
 
 from dotenv import find_dotenv, load_dotenv
@@ -20,11 +21,14 @@ log = logging.getLogger(__name__)
 
 # ─────────────────────── Module-level constants ──────────────────── #
 
-# * Default TCP port for the Flask health-check server.
+# * Default TCP port for the Flask health-check / webhook server.
 _DEFAULT_PORT: int = 5000
 
 # * Error message emitted when OWNER_ID is missing or invalid.
 _ERR_OWNER_ID: str = "OWNER_ID is required and must be a positive integer."
+
+# * Replit environment variable that exposes the dev domain (always HTTPS).
+_REPLIT_DEV_DOMAIN_VAR: str = "REPLIT_DEV_DOMAIN"
 
 # ───────────────────────── Config Parsing ───────────────────────── #
 
@@ -142,6 +146,35 @@ def _parse_log_level(raw: str) -> int:
     return logging.INFO
 
 
+def _auto_webhook_url() -> str:
+    """Build the public webhook base URL from env vars with Replit auto-detection.
+
+    Priority:
+    1. WEBHOOK_URL env var (explicit override, any environment).
+    2. REPLIT_DEV_DOMAIN env var (Replit auto-detection, always HTTPS).
+    3. Empty string: no public URL available; bot falls back to polling (local dev only).
+    """
+    explicit = os.getenv("WEBHOOK_URL", "").strip()
+    if explicit:
+        return explicit.rstrip("/")
+
+    replit_domain = os.getenv(_REPLIT_DEV_DOMAIN_VAR, "").strip()
+    if replit_domain:
+        return f"https://{replit_domain}"
+
+    return ""
+
+
+def _resolve_webhook_secret() -> str:
+    """Return WEBHOOK_SECRET from env, or generate a cryptographically random token.
+
+    A generated token changes every restart, but that is safe because set_webhook()
+    is always called with the current token at startup, keeping Telegram in sync.
+    """
+    explicit = os.getenv("WEBHOOK_SECRET", "").strip()
+    return explicit if explicit else secrets.token_hex(32)
+
+
 # ─────────────────── Immutable Config Dataclass ─────────────────── #
 
 
@@ -175,6 +208,8 @@ class Configs:
     warn_expiry_days: int
     fed_warn_limit: int
     warn_limit: int
+    webhook_url: str
+    webhook_secret: str
 
     # * Properties below handle lazy type-casting from raw env strings.
     @property
@@ -271,6 +306,8 @@ class Configs:
             warn_expiry_days=_int_from_env("WARN_EXPIRY_DAYS", 0, minimum=0),
             fed_warn_limit=_int_from_env("FED_WARN_LIMIT", 0, minimum=0),
             warn_limit=_int_from_env("WARN_LIMIT", 3, minimum=1),
+            webhook_url=_auto_webhook_url(),
+            webhook_secret=_resolve_webhook_secret(),
         )
 
 
@@ -316,7 +353,7 @@ class _CfgAdapter:
 
     @property
     def port(self) -> int:
-        """Flask health-check port as int; falls back to 5000 for invalid values."""
+        """Flask health-check / webhook server port as int; falls back to 5000 for invalid values."""
         return self._c.port_int
 
     @property
@@ -438,6 +475,31 @@ class _CfgAdapter:
         cannot double-fire the auto-ban.  Minimum 1; defaults to 3.
         """
         return self._c.warn_limit
+
+    @property
+    def webhook_url(self) -> str:
+        """Public base URL for the webhook endpoint (empty string = polling fallback).
+
+        Set by WEBHOOK_URL env var, or auto-detected from REPLIT_DEV_DOMAIN on Replit.
+        An empty value means no public URL is available; the bot falls back to
+        long-polling, which is only acceptable for local development.
+        """
+        return self._c.webhook_url
+
+    @property
+    def webhook_secret(self) -> str:
+        """Secret token sent by Telegram in the X-Telegram-Bot-Api-Secret-Token header.
+
+        Set by WEBHOOK_SECRET env var, or generated via secrets.token_hex(32) at startup.
+        A generated token changes every restart, but set_webhook() is always called with
+        the current token, so Telegram stays in sync.
+        """
+        return self._c.webhook_secret
+
+    @property
+    def is_webhook_mode(self) -> bool:
+        """True when a public webhook URL is available; False for polling fallback."""
+        return bool(self._c.webhook_url)
 
 
 # * This adapter instance is the single global 'cfg' used by every module.

@@ -416,3 +416,43 @@ if isinstance(exc, CircuitOpenError):
 **Why:** Without the guard, accidental `/tcunmute @wrong_user` or `/tcunban @already_unbanned` fans `restrict_chat_member` / `unban_chat_member` to every connected group (potentially 50+), writes a misleading "restored N/N groups" success reply, and produces spurious log entries. The bot API quota is consumed for a no-op.
 
 **How to apply:** Pattern (mirrors `execute_unban`): `if await db.mutes_db.get_active_mute(target_id) is None: reply "no active mute"; return`. Must be the first async operation in the executor, before fetching active groups or building the fan-out list.
+
+---
+
+## 2026-07-01: Polling fallback in local dev is accepted risk
+
+**Decision:** When neither `WEBHOOK_URL` nor `REPLIT_DEV_DOMAIN` is set, the bot falls back to `app.run_polling()` with an explicit WARNING log. This is the ONLY accepted context for polling mode.
+
+**Why:** PROMPT.md v5.2.6 mandates webhook transport for all production environments. Polling consumes a persistent outbound connection (long-poll) and is incompatible with multi-instance deployments. Replit always exposes `REPLIT_DEV_DOMAIN`, so on Replit webhook is always active. The fallback exists solely to keep local developer machines usable without ngrok or a tunnel.
+
+**How to apply:** Never remove the WARNING log or the early-return guard. If a future environment adds a new domain env var, add it to `_auto_webhook_url()` in `tcbot/__init__.py` before the empty-string fallback. Document in CHANGELOG and decisions.md.
+
+---
+
+## 2026-07-01: Webhook mode - Flask + asyncio.run_coroutine_threadsafe pattern
+
+**Decision:** Flask (sync, daemon thread) receives Telegram webhook POSTs and pushes `Update` objects to PTB's `asyncio.Queue` via `asyncio.run_coroutine_threadsafe(queue.put(update), loop)`. PTB's `Application` runs in the main asyncio event loop without using `run_webhook()` or `run_polling()`. Lifecycle is managed via `async with app:` + `app.start()` / `app.stop()`.
+
+**Why:** PROMPT.md v5.2.6 requires one HTTP server (Flask, port 8080) to serve both health check and webhook. PTB's built-in `run_webhook()` starts its own Tornado server which cannot share a port with Flask. The thread-safe queue bridge is the official PTB pattern documented in the PTB wiki (Webhooks > Custom solution).
+
+**How to apply:** `register_webhook(queue, loop, secret, bot)` must be called after `app.start()` is awaited. The loop reference must be obtained from `asyncio.get_running_loop()` inside `_run_webhook_mode`. Never call `asyncio.run_coroutine_threadsafe` with a loop that has stopped.
+
+---
+
+## 2026-07-01: PTB post_init / post_shutdown must be called explicitly in webhook mode
+
+**Decision:** In `_run_webhook_mode()`, call `await _post_init(app)` immediately after `async with app:` enters (before `app.start()`), and `await _post_shutdown(app)` in the `finally` block after `app.stop()`.
+
+**Why:** PTB v22.x `Application.initialize()` (invoked by `async with app:` `__aenter__`) explicitly does NOT call `post_init`. Likewise `Application.shutdown()` (invoked by `__aexit__`) does NOT call `post_shutdown`. Both callbacks are only triggered automatically by `run_polling()` and `run_webhook()`. Without explicit calls, MongoDB, Redis, APScheduler, the error reporter, and cache warm-up are never initialised; every subsystem appears as `error` on the health endpoint.
+
+**How to apply:** Whenever the webhook lifecycle is managed manually (i.e. not via `run_polling`/`run_webhook`), always bracket `app.start()` with an explicit `_post_init` call before it and `_post_shutdown` call after `app.stop()` in `finally`. This applies to any future transport layer that wraps PTB the same way.
+
+---
+
+## 2026-07-01: TwoLevelCache uses _MongoJSONEncoder for Redis serialization
+
+**Decision:** `cache.py` defines `_MongoJSONEncoder(json.JSONEncoder)` and passes `cls=_MongoJSONEncoder` to every `json.dumps` call in `TwoLevelCache`. The encoder handles `datetime` → ISO-8601 string and falls back to `str()` for any other unknown type (defensive against `ObjectId` and future MongoDB scalar types).
+
+**Why:** `GroupDoc` contains a `datetime` field (`added_date`). The `active_groups` fetch query previously also returned `_id: ObjectId` (fixed by adding `{"_id": 0}` projection), but the root cause — that plain `json.JSONEncoder` cannot handle Motor-returned documents — remains latent for any future cache value that includes a `datetime`. The encoder is the correct single-point fix rather than adding projections to every individual query.
+
+**How to apply:** All new `TwoLevelCache` instances that may cache MongoDB documents automatically benefit from this encoder because it is wired inside `TwoLevelCache`. No per-call-site changes needed. If a new type causes serialization failure in the future, add a branch to `_MongoJSONEncoder.default()` in `cache.py`.

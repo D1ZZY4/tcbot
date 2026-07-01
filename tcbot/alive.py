@@ -2,33 +2,39 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Studio
 
-"""Keep-alive server - maintains bot uptime with Flask health check endpoint."""
+"""Keep-alive server - Flask health check and webhook receiver on a single port."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import threading
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
-from flask import Flask
+from flask import Flask, request
+from telegram import Update
 
 from tcbot import cfg
 from tcbot.database import mongos, redis_client
 from tcbot.database import scheduler as sched_mod
 from tcbot.utils import circuit_breaker as _cb
 
+if TYPE_CHECKING:
+    import telegram
+
 log = logging.getLogger(__name__)
 
 
 # ───────────────────────── Flask App Setup ──────────────────────── #
-# * Initialize the Flask application for health checks
+# * Initialize the Flask application for health checks and webhook.
 _app = Flask(__name__)
 
 
 @_app.route("/")
 def index() -> str:
-    """Keep-alive endpoint that returns "OK" for basic uptime monitoring."""
+    """Keep-alive endpoint that returns OK for basic uptime monitoring."""
     return "OK"
 
 
@@ -77,6 +83,65 @@ def health() -> tuple[str, int, dict[str, str]]:
     return json.dumps(payload), code, {"Content-Type": "application/json"}
 
 
+# ───────────────────────── Webhook Receiver ─────────────────────── #
+# * State injected by __main__.py after PTB Application is initialized.
+# * Flask runs in a daemon thread; PTB runs in the main asyncio loop.
+# * Updates are passed between threads via asyncio.run_coroutine_threadsafe.
+
+_wh_queue: asyncio.Queue[object] | None = None
+_wh_loop: asyncio.AbstractEventLoop | None = None
+_wh_secret: str = ""
+_wh_bot: telegram.Bot | None = None
+
+
+def register_webhook(
+    queue: asyncio.Queue[object],
+    loop: asyncio.AbstractEventLoop,
+    secret: str,
+    bot: telegram.Bot,
+) -> None:
+    """Wire PTB's update_queue and event loop into the Flask webhook route.
+
+    Called from __main__.py after app.initialize() and before waiting for
+    shutdown.  Thread-safe: only written once at startup.
+    """
+    global _wh_queue, _wh_loop, _wh_secret, _wh_bot
+    _wh_queue = queue
+    _wh_loop = loop
+    _wh_secret = secret
+    _wh_bot = bot
+    log.info("Webhook receiver registered.")
+
+
+@_app.route("/webhook", methods=["POST"])
+def webhook_route() -> tuple[str, int]:
+    """Receive Telegram update via webhook POST, validate, and enqueue for PTB."""
+    # * Validate secret token before touching the payload (OWASP guideline).
+    token = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+    if not _wh_secret or token != _wh_secret:
+        log.warning("Webhook: rejected request with invalid or missing secret token.")
+        return "Forbidden", 403
+
+    if _wh_queue is None or _wh_loop is None or _wh_bot is None:
+        log.warning("Webhook: received update before PTB is ready.")
+        return "Service unavailable", 503
+
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        log.warning("Webhook: received request with empty or non-JSON body.")
+        return "Bad request", 400
+
+    try:
+        update = Update.de_json(data, _wh_bot)
+        # * Thread-safe: Flask runs in a sync daemon thread; PTB loop is in main thread.
+        asyncio.run_coroutine_threadsafe(_wh_queue.put(update), _wh_loop)
+    except Exception:
+        log.exception("Webhook: failed to enqueue update.")
+        return "Internal error", 500
+
+    return "OK", 200
+
+
 # ──────────────────────── Server Execution ──────────────────────── #
 # * Internal function to run the Flask server
 # * Blocking call - must be run in a separate thread
@@ -93,7 +158,7 @@ def _run() -> None:
 # ─────────────────────────── Public API ─────────────────────────── #
 # * Entry point to start the keep-alive server from the main bot
 def start_keepalive() -> None:
-    """Launch the keep-alive server in a daemon thread."""
+    """Launch the Flask server in a daemon thread."""
     t = threading.Thread(
         target=_run,
         name="keepalive",

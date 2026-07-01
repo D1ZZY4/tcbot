@@ -106,7 +106,9 @@ async def active_groups() -> list[GroupDoc]:
     """Get all currently active and connected groups (L1->L2->DB cached)."""
 
     async def _fetch() -> list[GroupDoc]:
-        return await db_call(_groups().find({"is_active": True}).to_list(None))
+        return await db_call(
+            _groups().find({"is_active": True}, {"_id": 0}).to_list(None)
+        )
 
     return cast(
         "list[GroupDoc]",

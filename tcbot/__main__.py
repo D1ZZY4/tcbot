@@ -2,12 +2,14 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Studio
 
-"""Bot entry point: initialises the PTB application and starts long-polling."""
+"""Bot entry point: initialises the PTB application and starts in webhook or polling mode."""
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+import signal
 import sys
 import traceback
 import warnings
@@ -25,7 +27,7 @@ from telegram.ext import (
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.alive import start_keepalive
+from tcbot.alive import register_webhook, start_keepalive
 from tcbot.database import redis_client
 from tcbot.database import scheduler as sched_mod
 from tcbot.database.mongos import connect, ensure_indexes
@@ -49,8 +51,11 @@ _HTTP_WRITE_TIMEOUT: int = 30
 _HTTP_CONNECT_TIMEOUT: int = 30
 _HTTP_POOL_TIMEOUT: int = 15
 
-# * Connection pool sizes for the underlying httpx client.
+# * Connection pool size for the underlying httpx client (API calls).
+# * Not used for update fetching in webhook mode; still needed for send/edit/etc.
 _API_POOL_SIZE: int = 8
+
+# * Pool size for the dedicated getUpdates lane (polling mode only).
 _UPDATES_POOL_SIZE: int = 4
 
 # * Maximum number of characters captured from a message in error-handler context.
@@ -65,6 +70,9 @@ _FATAL_BORDER_WIDTH: int = 70
 # * PTB handler group IDs: lower number = higher priority.
 _HANDLER_GROUP_RATE_LIMITER: int = -1
 _HANDLER_GROUP_CACHE: int = 10
+
+# * URL path where Telegram delivers webhook updates.
+_WEBHOOK_PATH: str = "/webhook"
 
 # * PTB emits a UserWarning about per_message=False + CallbackQueryHandler when
 # * ConversationHandlers are built. Our flows deliberately use per_message=False
@@ -172,7 +180,7 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await error_reporter.report_exc(exc, context=context_str)
 
 
-# ─────────────── Asyncio Exception Handler (Layer3) ─────────────── #
+# ─────────────────── Asyncio Exception Handler (Layer3) ─────────────── #
 # * Catches unhandled asyncio exceptions from background tasks
 # * Layer 3 of 3 error handling system - last line of defense for errors
 
@@ -212,7 +220,7 @@ def _make_asyncio_exc_handler(
 
 
 # ───────────────────────── Post-Init Setup ──────────────────────── #
-# * Runs after PTB Application is built but before polling starts
+# * Runs after PTB Application is built but before polling or webhook starts
 # * Initializes database connections and all core bot systems
 
 
@@ -302,6 +310,124 @@ async def _post_shutdown(app: Application) -> None:
     await asyncio.gather(sched_mod.stop(), redis_client.close(), return_exceptions=True)
 
 
+# ────────────────────── Application Builder ─────────────────────── #
+
+
+def _build_application(*, polling: bool) -> Application:
+    """Construct the PTB Application with transport-appropriate connection pool sizes."""
+    builder = (
+        ApplicationBuilder()
+        .token(cfg.bot_token)
+        .post_init(_post_init)
+        .post_shutdown(_post_shutdown)
+        # * Disable link preview on all bot messages globally.
+        .defaults(Defaults(link_preview_options=_LINK_PREVIEW_DISABLED))
+        # * Process independent updates in parallel (big latency win)
+        .concurrent_updates(True)  # noqa: FBT003
+        # * HTTP connection pool for outbound API calls (send, edit, delete, etc.)
+        .connection_pool_size(_API_POOL_SIZE)
+        # * HTTP timeouts - generous but bounded so hangs never block the loop
+        .read_timeout(_HTTP_READ_TIMEOUT)
+        .write_timeout(_HTTP_WRITE_TIMEOUT)
+        .connect_timeout(_HTTP_CONNECT_TIMEOUT)
+        .pool_timeout(_HTTP_POOL_TIMEOUT)
+        # * Global Telegram API pacing: ~30 req/s with automatic 429/RetryAfter
+        # * backoff.  Works alongside fan_out's semaphore (max 10 concurrent) and
+        # * the per-user decorator rate limiter (group -1).
+        .rate_limiter(AIORateLimiter())
+    )
+    if polling:
+        # * Dedicated pool for the getUpdates long-polling lane (not used in webhook mode).
+        builder = builder.get_updates_connection_pool_size(_UPDATES_POOL_SIZE)
+    return builder.build()
+
+
+# ────────────────────────── Webhook Mode ────────────────────────── #
+
+
+async def _run_webhook_mode(app: Application) -> None:
+    """Run PTB in webhook mode using Flask (alive.py) as the webhook receiver.
+
+    Lifecycle:
+    1. app.initialize() -> triggers _post_init (MongoDB, Redis, APScheduler, etc.)
+    2. app.start()      -> starts the PTB update dispatcher
+    3. set_webhook()    -> registers the public URL with Telegram
+    4. get_webhook_info() -> verifies registration; fails fast on mismatch
+    5. register_webhook() -> wires Flask's /webhook route to PTB's update_queue
+    6. wait for SIGTERM / SIGINT
+    7. Finally: delete_webhook(), app.stop(), app.shutdown() (-> _post_shutdown)
+    """
+    full_url = f"{cfg.webhook_url}{_WEBHOOK_PATH}"
+    secret = cfg.webhook_secret
+
+    async with app:
+        # * PTB's Application.initialize() (called by __aenter__) does NOT invoke
+        # * post_init - that callback is only called by run_polling/run_webhook.
+        # * We call it explicitly here so MongoDB, Redis, APScheduler, and the
+        # * error reporter are initialised before any update is processed.
+        await _post_init(app)
+
+        # * app.start() must be called after post_init so the dispatcher starts
+        # * with all subsystems already connected.
+        await app.start()
+
+        try:
+            log.info("Registering webhook at %s ...", full_url)
+            await app.bot.set_webhook(
+                url=full_url,
+                secret_token=secret,
+                allowed_updates=list(Update.ALL_TYPES),
+                drop_pending_updates=True,
+            )
+
+            # * Fail fast if Telegram did not accept the registration.
+            info = await app.bot.get_webhook_info()
+            if info.url != full_url:
+                log.critical(
+                    "Webhook registration failed: expected %r, got %r. "
+                    "Check WEBHOOK_URL and that the endpoint is reachable from Telegram.",
+                    full_url,
+                    info.url,
+                )
+                raise RuntimeError(
+                    f"Webhook URL mismatch after set_webhook: {info.url!r} != {full_url!r}"
+                )
+
+            log.info(
+                "Webhook active. Pending updates: %d | Max connections: %s",
+                info.pending_update_count,
+                info.max_connections,
+            )
+
+            # * Wire Flask's POST /webhook route to PTB's asyncio update_queue.
+            loop = asyncio.get_running_loop()
+            register_webhook(app.update_queue, loop, secret, app.bot)
+
+            # * Set up signal handlers so SIGTERM (container stop) shuts down cleanly.
+            shutdown_event = asyncio.Event()
+            with contextlib.suppress(NotImplementedError):
+                # * Windows does not support add_signal_handler; suppress gracefully.
+                loop.add_signal_handler(signal.SIGTERM, shutdown_event.set)
+                loop.add_signal_handler(signal.SIGINT, shutdown_event.set)
+
+            log.info("Bot running in webhook mode. Waiting for updates...")
+            await shutdown_event.wait()
+
+        except asyncio.CancelledError:
+            log.info("Webhook mode cancelled.")
+        finally:
+            log.info("Webhook mode shutting down...")
+            with contextlib.suppress(Exception):
+                await app.bot.delete_webhook(drop_pending_updates=False)
+            await app.stop()
+            # * PTB's Application.shutdown() does NOT invoke post_shutdown - that
+            # * callback is only called by run_polling/run_webhook.  Call explicitly.
+            await _post_shutdown(app)
+
+    # * app.shutdown() (PTB internal teardown) is called by __aexit__.
+    log.info("Bot shutdown complete.")
+
+
 # ──────────────────────── Main Entry Point ──────────────────────── #
 # * The main function that starts the entire bot application
 # * Configures PTB Application and registers all handlers
@@ -309,7 +435,7 @@ async def _post_shutdown(app: Application) -> None:
 
 def _print_fatal(stage: str, exc: BaseException) -> None:
     """Print a fatal startup error with stage label and full traceback to stderr."""
-    border = "═" * _FATAL_BORDER_WIDTH
+    border = "=" * _FATAL_BORDER_WIDTH
     print(f"\n{border}", file=sys.stderr)
     print(f" FATAL STARTUP ERROR in stage: {stage}", file=sys.stderr)
     print(f" {type(exc).__name__}: {exc}", file=sys.stderr)
@@ -319,7 +445,7 @@ def _print_fatal(stage: str, exc: BaseException) -> None:
 
 
 def main() -> None:
-    """Configure and start the PTB application with long-polling."""
+    """Configure and start the PTB application in webhook or polling mode."""
     # * Each stage is wrapped so any failure prints a clear stage + traceback before exit.
     stage = "logging setup"
     try:
@@ -330,29 +456,8 @@ def main() -> None:
         start_keepalive()
 
         stage = "PTB application build"
-        app: Application = (
-            ApplicationBuilder()
-            .token(cfg.bot_token)
-            .post_init(_post_init)
-            .post_shutdown(_post_shutdown)
-            # * Disable link preview on all bot messages globally.
-            .defaults(Defaults(link_preview_options=_LINK_PREVIEW_DISABLED))
-            # * Process independent updates in parallel (big latency win)
-            .concurrent_updates(True)  # noqa: FBT003
-            # * Connection pools - API calls and dedicated getUpdates polling lane
-            .connection_pool_size(_API_POOL_SIZE)
-            .get_updates_connection_pool_size(_UPDATES_POOL_SIZE)
-            # * HTTP timeouts - generous but bounded so hangs never block the loop
-            .read_timeout(_HTTP_READ_TIMEOUT)
-            .write_timeout(_HTTP_WRITE_TIMEOUT)
-            .connect_timeout(_HTTP_CONNECT_TIMEOUT)
-            .pool_timeout(_HTTP_POOL_TIMEOUT)
-            # * Global Telegram API pacing: ~30 req/s with automatic 429/RetryAfter
-            # * backoff.  Works alongside fan_out's semaphore (max 10 concurrent) and
-            # * the per-user decorator rate limiter (group -1).
-            .rate_limiter(AIORateLimiter())
-            .build()
-        )
+        use_webhook = cfg.is_webhook_mode
+        app: Application = _build_application(polling=not use_webhook)
 
         # * Layer 1: Global per-user rate limiter - runs before every handler (group -1)
         stage = "handler registration"
@@ -375,13 +480,28 @@ def main() -> None:
         # * Layer 2: PTB global error handler - catches all unhandled handler exceptions
         app.add_error_handler(_error_handler)
 
-        log.info("Handlers registered. Starting polling...")
-        stage = "polling"
-        app.run_polling(
-            drop_pending_updates=True,
-            allowed_updates=Update.ALL_TYPES,
-            bootstrap_retries=-1,
-        )
+        if use_webhook:
+            log.info(
+                "Webhook mode detected (URL: %s). Starting webhook transport...",
+                cfg.webhook_url,
+            )
+            stage = "webhook"
+            asyncio.run(_run_webhook_mode(app))
+        else:
+            # * Polling fallback: only for local development where no public URL exists.
+            # * Accepted risk: documented in .agents/memory/decisions.md.
+            log.warning(
+                "No WEBHOOK_URL or REPLIT_DEV_DOMAIN found. "
+                "Falling back to long-polling (local development only). "
+                "Do not use polling mode in production."
+            )
+            log.info("Starting long-polling...")
+            stage = "polling"
+            app.run_polling(
+                drop_pending_updates=True,
+                allowed_updates=Update.ALL_TYPES,
+                bootstrap_retries=-1,
+            )
     except SystemExit:
         # * Module discovery uses SystemExit on failure; logging already reported the cause.
         raise

@@ -10,7 +10,8 @@ This file describes how to run TCF Bot on Replit or a similar hosted environment
 - Database: MongoDB through Motor
 - Cache: in-memory `TwoLevelCache` (L1) + optional Redis L2 (`REDIS_URL`)
 - Scheduler: APScheduler 4.x `AsyncScheduler` with `MongoDBDataStore` + `CBORSerializer` (persistent across restarts)
-- Health check: Flask app on `0.0.0.0:${PORT}` with `GET /` returning `OK`
+- Transport: webhook mode (auto-detected from `REPLIT_DEV_DOMAIN`; local dev falls back to polling)
+- Health check + webhook receiver: Flask app on `0.0.0.0:${PORT}` -- `GET /` returns `OK`, `POST /webhook` receives Telegram updates
 - Dependency manager: `uv`
 
 ## Required Secrets

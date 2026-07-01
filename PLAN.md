@@ -9,13 +9,13 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 - Audit session 173: 15 bugs fixed across 21 files (Docker, CI/CD, DB layer, utils, modules, extraction, formatter, parse_logmsg, keyboards, checking, netspeed, ban_flow, muting_flow). All 75 files ruff-clean. Bot starts clean: 31/31 indexes, Redis hiredis 3.4.0, APScheduler, polling active.
 | Area | Status |
 |---|---|
-| Runtime | Long-polling Telegram bot started with `uv run python -m tcbot`. |
+| Runtime | Webhook-mode Telegram bot started with `uv run python -m tcbot`. On Replit, REPLIT_DEV_DOMAIN is auto-detected; local dev falls back to polling. |
 | Python target | Python 3.12 project target (`pyproject.toml` requires `>=3.12`). |
 | Bot framework | `python-telegram-bot` (plain, no `[job-queue]` extra), tracking the latest compatible release. |
 | Database | MongoDB through Motor, connected during PTB `post_init`. |
 | Cache | In-process `TTLCache` L1 + optional Redis L2 via `TwoLevelCache`. `hiredis` C extension required when Redis is active. Configured via `REDIS_URL`. |
 | Scheduler | APScheduler **4.0.0a6** (`AsyncScheduler` + `MongoDBDataStore` + `CBORSerializer`); persistent moderation jobs survive restarts. The pinned alpha carries CVE-2026-31072 (no upstream patch); accepted and tracked risk, see Core Subsystem Design / Persistent Scheduler. |
-| Health check | Flask app in `tcbot/alive.py`. `GET /` returns `OK`. `GET /health` returns JSON `{status, mongodb, redis, scheduler, circuit_telegram, circuit_mongodb, ts}` with HTTP 200 (all ok) or HTTP 503 (degraded). Port from `PORT` env var (default `5000`). |
+| Health check / Webhook | Flask app in `tcbot/alive.py`. `GET /` returns `OK`. `GET /health` returns JSON subsystem status. `POST /webhook` receives Telegram updates (validates `X-Telegram-Bot-Api-Secret-Token`, feeds to PTB via `asyncio.run_coroutine_threadsafe`). Port from `PORT` env var (default `5000`). |
 | Dependency management | `uv` with `uv.lock`; CI installs with frozen lockfile by default. |
 | Formatting/linting | Ruff, configured in `pyproject.toml`. |
 | Deployment notes | Local `config.env`, Docker Compose, and Replit/hosted environment variables are documented. |

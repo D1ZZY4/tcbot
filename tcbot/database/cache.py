@@ -31,6 +31,7 @@ import asyncio
 import contextlib
 import json
 import logging
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, cast
 
 import cachetools as _cachetools
@@ -42,6 +43,31 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
 log = logging.getLogger(__name__)
+
+
+# ──────────────────────── JSON Encoder ───────────────────────── #
+# * Custom encoder so MongoDB documents (with datetime / ObjectId) can be
+# * round-tripped through Redis without crashing json.dumps.
+
+
+class _MongoJSONEncoder(json.JSONEncoder):
+    """Extend the standard encoder to handle types returned by Motor queries.
+
+    * ``datetime`` → ISO-8601 string (UTC; no timezone suffix added so
+      callers that do ``datetime.fromisoformat`` get a naive UTC value back).
+    * Any type that has a ``__str__`` method (e.g. ``bson.ObjectId``) →
+      plain string, used as a last-resort fallback so the encode never
+      raises ``TypeError`` on unknown MongoDB scalars.
+    """
+
+    def default(self, o: Any) -> Any:
+        if isinstance(o, datetime):
+            return o.isoformat()
+        try:
+            return str(o)
+        except Exception:
+            return super().default(o)
+
 
 # * Strong references to in-flight Redis background tasks; prevents GC before completion.
 # * Mirrors the pattern used in __main__._asyncio_report_tasks and ban_flow._album_tasks.
@@ -192,7 +218,9 @@ class TwoLevelCache[T]:
         if rc is not None:
             rkey = self._rkey(key)
             try:
-                await rc.set(rkey, json.dumps(val), ex=self._redis_ttl)
+                await rc.set(
+                    rkey, json.dumps(val, cls=_MongoJSONEncoder), ex=self._redis_ttl
+                )
             except Exception as exc:
                 log.debug("Redis set failed for %s: %s", rkey, exc)
 
@@ -211,7 +239,9 @@ class TwoLevelCache[T]:
         rkey = self._rkey(key)
         try:
             loop = asyncio.get_running_loop()
-            task = loop.create_task(rc.set(rkey, json.dumps(val), ex=self._redis_ttl))
+            task = loop.create_task(
+                rc.set(rkey, json.dumps(val, cls=_MongoJSONEncoder), ex=self._redis_ttl)
+            )
             _redis_bg_tasks.add(task)
             task.add_done_callback(_redis_bg_tasks.discard)
             task.add_done_callback(_log_redis_task_error)
