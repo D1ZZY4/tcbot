@@ -11,6 +11,7 @@ from telegram.ext import CallbackQueryHandler, filters
 from tcbot.modules.helper import replies
 from tcbot.modules.helper.formatter import bold, code, pre
 from tcbot.modules.helper.workflows.appeal_flow import (
+    LOCK_HOURS,
     appeal,
     reviewer_locked_out,
     starts_with_appeal_tag,
@@ -32,7 +33,7 @@ __module_name__ = "Appeal"
 
 __help_text__ = (
     "Submit an appeal for an active federation ban. Staff review with a "
-    f"{bold('12-hour priority window')} for the banning admin."
+    f"{bold(f'{LOCK_HOURS}-hour priority window')} for the banning admin."
 )
 
 __help_sections__: list[tuple[str, str]] = [
@@ -69,7 +70,7 @@ __help_sections__: list[tuple[str, str]] = [
     (
         "What happens next",
         "Your appeal is forwarded to TC admins for review. The admin who issued the original "
-        f"ban has a {bold('12-hour priority window')} to respond; after that, any admin can act.\n\n"
+        f"ban has a {bold(f'{LOCK_HOURS}-hour priority window')} to respond; after that, any admin can act.\n\n"
         "If approved: your ban is lifted immediately across all connected groups.\n"
         "If rejected: your ban remains in place.\n"
         "You will be notified by the bot either way.",

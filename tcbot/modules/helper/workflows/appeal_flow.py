@@ -42,6 +42,7 @@ WAITING_APPEAL = 0
 # * Maximum character length for an appeal message.
 _MAX_APPEAL_LEN: int = 2000
 _LOCK_HOURS: int = 12
+LOCK_HOURS: int = _LOCK_HOURS
 _LOCK_WINDOW = timedelta(hours=_LOCK_HOURS)
 _STALE_REVIEW_HOURS: int = 72
 _STALE_REVIEW_WINDOW = timedelta(hours=_STALE_REVIEW_HOURS)

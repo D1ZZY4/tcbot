@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-07-01 (session 182)
+
+### Fixed
+
+- **Bug #481** (`tcbot/modules/appeals.py`, `tcbot/modules/helper/workflows/appeal_flow.py`): `appeals.py` hardcoded `"12-hour priority window"` as a raw string literal in two help-text locations (lines 35 and 72), while the authoritative value is `_LOCK_HOURS: int = 12` in `appeal_flow.py`. If the lock window is ever changed in `appeal_flow.py`, the user-visible help text in `appeals.py` would silently remain incorrect. Fixed by exposing a public alias `LOCK_HOURS: int = _LOCK_HOURS` in `appeal_flow.py`, importing it in `appeals.py`, and replacing both hardcoded strings with `f"{LOCK_HOURS}-hour priority window"` so the help text stays in sync with the runtime constant automatically.
+
 ## [Unreleased] - 2026-07-01 (session 181)
 
 ### Fixed
