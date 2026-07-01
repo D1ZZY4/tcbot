@@ -6,6 +6,7 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 
 ## [Current State]
 
+- Audit session 181 (2026-07-01): 2 bugs fixed (Bug #479-#480). All 75 files ruff-clean. Bot runs in webhook mode; clean startup confirmed. Bug #479: hardcoded "TCFBot" fallback in ban_flow.py replaced with empty string + pm_kb guarded. Bug #480: `can_send_media_messages` removed from ChatPermissions (invalid in PTB 22.8 / Bot API 7.0+, causes TypeError on unmute). Stale doc in banning-detailed.md updated.
 - Audit session 180 (2026-07-01): 5 bugs fixed (Bug #474-#478). All 75 files ruff-clean. Bot runs in webhook mode; 35/35 indexes, Redis hiredis 3.4.0, APScheduler, webhook active. Signal handlers before async with app: (Bug #474). hmac.compare_digest for webhook secret (Bug #475). Docs: setup.md env vars + startup sequence (Bug #476), databases.md TypedDicts (Bug #477), em-dashes cleared from CHANGELOG + decisions.md (Bug #478).
 | Area | Status |
 |---|---|

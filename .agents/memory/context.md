@@ -5,9 +5,11 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-07-01 (session 180)
+**Last updated:** 2026-07-01 (session 181)
 
 ## What is done
+
+- Session 181 (2026-07-01): Autonomous audit loop - 2 bugs fixed (Bug #479-#480). Wave 1-3 parallel scans covering all 75 Python files. Bug #479: ban_flow.py hardcoded "TCFBot" fallback in bot.username or "TCFBot" (two places, update + new-ban branches) replaced with or "" + _pm_kb guarded with if bot_username else None. Bug #480: muting_flow.py can_send_media_messages=True in ChatPermissions causes TypeError in PTB 22.8 / Bot API 7.0+ (parameter removed from API); removed from execute_unmute. Docs: banning-detailed.md stale TCFBot fallback description updated. All 75 files ruff-clean. Import: OK. Bot: clean webhook startup confirmed. Total bugs: #1-#480. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 180 (2026-07-01): Autonomous audit loop - 5 bugs fixed (Bug #474-#478). Wave 1-5 parallel subagents (14 total) covering all 75 files + docs. Bug #474: __main__.py SIGTERM race window (signal handlers before async with app:). Bug #475: alive.py hmac.compare_digest for webhook secret. Bug #476: docs/setup.md missing WEBHOOK_URL, WEBHOOK_SECRET, FED_WARN_LIMIT + startup sequence still said polling. Bug #477: docs/databases/databases.md missing RoleRefDoc and ActiveMuteDoc. Bug #478: 8 em-dashes in CHANGELOG.md and decisions.md. All other wave findings verified as false positives (code()/mention()/user_ref() all escape internally, db_call wrappers present, RuntimeError:pass guards intentional, maintenance group_disconnected_log uses esc()). Ruff: clean. Import: OK. Total bugs: #1-#478. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
@@ -116,4 +118,4 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## Bug count
 
-Total: **466 bugs fixed** (sessions 1-173). Open: CVE-2026-31072 (accepted), Improvement #4 (future).
+Total: **480 bugs fixed** (sessions 1-181). Open: CVE-2026-31072 (accepted), Improvement #4 (future).

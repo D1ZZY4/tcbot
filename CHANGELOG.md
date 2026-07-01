@@ -2,6 +2,14 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-07-01 (session 181)
+
+### Fixed
+
+- **Bug #479** (`tcbot/modules/helper/workflows/ban_flow.py`): `bot.username or "TCFBot"` used a hardcoded fallback bot username ("TCFBot") in two places (lines 195 and 253, covering both the ban-update and new-ban branches). If the deployed bot's actual username differs from "TCFBot", appeal deep-links embedded in ban log keyboards and in the banned-user PM would silently point to the wrong bot, making appeals unreachable. Fixed by changing the fallback to `or ""` (an empty string). Added a `if bot_username else None` guard on the inline `_pm_kb` construction so that when `bot.username` is unavailable no `InlineKeyboardButton` with an invalid `https://t.me/?start=...` URL is created. `keyboards.ban_log_new` and `keyboards.ban_log_update` already had a guard; the PM keyboard was the only unguarded site.
+
+- **Bug #480** (`tcbot/modules/helper/workflows/muting_flow.py`): `ChatPermissions(can_send_media_messages=True, ...)` caused a `TypeError: ChatPermissions.__init__() got an unexpected keyword argument 'can_send_media_messages'` at runtime in PTB 22.8. The `can_send_media_messages` field was removed from the Bot API in Bot API 7.0 and is no longer a valid parameter in PTB 22+; it was replaced with per-media-type fields (`can_send_audios`, `can_send_documents`, `can_send_photos`, `can_send_videos`, `can_send_video_notes`, `can_send_voice_notes`). The offending parameter was removed from the `full_perms = ChatPermissions(...)` call in `execute_unmute`. The remaining fields (`can_send_messages`, `can_send_polls`, `can_send_other_messages`, `can_add_web_page_previews`, `can_change_info`, `can_invite_users`, `can_pin_messages`) are all valid in PTB 22.8 and were left unchanged.
+
 ## [Unreleased] - 2026-07-01 (session 180)
 
 ### Fixed

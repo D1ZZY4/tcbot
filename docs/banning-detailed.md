@@ -117,7 +117,7 @@ The `Submit Appeal` button opens the bot DM deep link:
 https://t.me/<bot_username>?start=appeal_<ban_id>
 ```
 
-If `bot.username` is unavailable, the implementation falls back to `TCFBot` when building the appeal link.
+If `bot.username` is unavailable (e.g. before bot initialization completes), the implementation falls back to an empty string, which suppresses the appeal button rather than generating an invalid or misdirected link.
 
 ## Updating an existing active ban
 

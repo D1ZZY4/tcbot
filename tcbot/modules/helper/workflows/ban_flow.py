@@ -192,7 +192,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     if is_update:
         ban_id = existing["ban_id"]
         old_admin_id = existing.get("admin_user_id", admin_id)
-        bot_username = bot.username or "TCFBot"
+        bot_username = bot.username or ""
         try:
             old_admin_fname = await _old_admin_fname_task
         except Exception:
@@ -250,7 +250,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             log.error("update_ban failed for ban_id=%s: %s", ban_id, db_result)
     else:
         ban_id = db.bans_db.make_ban_id()
-        bot_username = bot.username or "TCFBot"
+        bot_username = bot.username or ""
 
         log_text = parse_logmsg.ban_log(
             target_id,
@@ -380,15 +380,19 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         f"Reason: {esc(reason)}\n\n"
         "You may submit an appeal using the button below."
     )
-    _pm_kb = InlineKeyboardMarkup(
-        [
+    _pm_kb = (
+        InlineKeyboardMarkup(
             [
-                InlineKeyboardButton(
-                    "Submit Appeal",
-                    url=appeal_deep_link(bot_username, ban_id),
-                )
+                [
+                    InlineKeyboardButton(
+                        "Submit Appeal",
+                        url=appeal_deep_link(bot_username, ban_id),
+                    )
+                ]
             ]
-        ]
+        )
+        if bot_username
+        else None
     )
 
     # * Edit prompt summary + cache user + notify banned user in one round-trip.

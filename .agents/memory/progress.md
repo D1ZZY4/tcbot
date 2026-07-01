@@ -5,12 +5,13 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-07-01 (session 179)
+**Last updated:** 2026-07-01 (session 181)
 
 ## Verification baseline
 
 | Check | Result |
 |---|---|
+| Session 181 Bug #479-#480 | PASS: 2 bugs fixed. (1) ban_flow.py: bot.username or "TCFBot" hardcode (2 sites) replaced with or "" + _pm_kb guarded with if bot_username else None; (2) muting_flow.py: can_send_media_messages removed from ChatPermissions (invalid in PTB 22.8 / Bot API 7.0+ -- TypeError at runtime). Wave 1-3 scans: ruff CLEAN (75 files), consecutive-await (3 candidates all VALID), emit/en-dash (0), gather-without-return_exceptions (0), bare-except (0), N+1 loops (0), create_task-without-handlers (0), sequential Telegram API calls (0), callback q.answer() (all valid via gather helpers), RuntimeError:pass guards (4 -- all intentional shutdown-guard patterns). Stale doc banning-detailed.md updated. Bot: clean webhook startup confirmed. Total bugs: #1-#480. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |
 | Session 180 Bug #474-#478 | PASS: 5 bugs fixed. (1) __main__.py SIGTERM race window; (2) alive.py hmac.compare_digest; (3) docs/setup.md missing env vars + startup sequence; (4) docs/databases/databases.md missing TypedDicts; (5) CHANGELOG.md + decisions.md em-dashes. Wave 1-5 (14 parallel subagents) confirmed all other areas CLEAN (code()/mention()/user_ref() all escape, db_call wrappers present). Ruff: clean. Import: OK. Total bugs: #1-#478. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |
 | Session 179 Bug #470-#473 | PASS: 4 bugs fixed. (1) alive.py: Update.de_json None guard; (2) groups_db.py: migrate_group exceptions silently swallowed + missing logger; (3) scheduler.py: _expire_old_warns BaseException swallowed; (4) promote_flow.py: _assign_admin partial-state (added atomicity via sequential primary write + cleanup gather), _assign_subrole partial-state (removed remove_role pre-step, set_role upsert is atomic). Ruff: clean. Import: OK. Bot: webhook active, 35/35 indexes. Total bugs: #1-#473. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |
 | Session 178 Bug #469, webhook mode post_init fix | PASS. Webhook transport + Redis serialization fixed. Commit 04ea696. |
