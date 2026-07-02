@@ -56,6 +56,10 @@ _WARN_EXPIRY_SCHEDULE_ID: str = "tcbot.warn_expiry_daily"
 # * from any MongoDB datastore that was created before the TTL-index migration.
 _CLEANUP_SCHEDULE_ID: str = "tcbot.db_cleanup_weekly"
 
+# * Maximum seconds to wait for the scheduler background task to exit cleanly
+# * before declaring it stuck.  10 s matches the PTB shutdown grace window.
+_STOP_TIMEOUT_S: float = 10.0
+
 # ──────────────── Module-level scheduler state ──────────────────── #
 # * _scheduler:   live AsyncScheduler reference (set inside background task)
 # * _sched_task:  the asyncio Task that keeps async-with context alive
@@ -266,9 +270,12 @@ async def stop() -> None:
         _sched_stop.set()
     if _sched_task is not None:
         try:
-            await asyncio.wait_for(_sched_task, timeout=10.0)
+            await asyncio.wait_for(_sched_task, timeout=_STOP_TIMEOUT_S)
         except TimeoutError:
-            log.warning("APScheduler background task did not stop within 10s.")
+            log.warning(
+                "APScheduler background task did not stop within %.0fs.",
+                _STOP_TIMEOUT_S,
+            )
     _sched_task = None
     _sched_ready = None
     _sched_stop = None

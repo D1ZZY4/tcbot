@@ -64,6 +64,13 @@ _MONGO_MIN_POOL_SIZE: int = 2
 _MONGO_MAX_IDLE_MS: int = 60_000
 _MONGO_HEARTBEAT_MS: int = 30_000
 
+# ──────────────────────── Index TTL Constants ───────────────────── #
+# * MongoDB TTL index for member_cache: auto-expire docs after 90 days.
+# * 90 days * 86400 s/day = 7776000 s; split into named parts so the
+# * intent is obvious and adjustable without hunting for a raw literal.
+_MEMBER_CACHE_TTL_DAYS: int = 90
+_MEMBER_CACHE_EXPIRE_S: int = _MEMBER_CACHE_TTL_DAYS * 86_400
+
 
 # ────────────────────────── ID Generator ────────────────────────── #
 # * Creates unique, URL-safe IDs for database records
@@ -185,10 +192,10 @@ async def ensure_indexes() -> None:
         col("active_mutes").create_index([("until_date", 1)]),
         # * Compound for get_active_mute() $or filter on specific user
         col("active_mutes").create_index([("user_id", 1), ("until_date", 1)]),
-        # * TTL index: MongoDB auto-expires member_cache docs older than 90 days (7776000 s).
+        # * TTL index: MongoDB auto-expires member_cache docs older than _MEMBER_CACHE_TTL_DAYS.
         # * Replaces the APScheduler weekly cleanup job, shrinking the scheduler surface.
         col("member_cache").create_index(
-            [("last_updated", 1)], expireAfterSeconds=7776000
+            [("last_updated", 1)], expireAfterSeconds=_MEMBER_CACHE_EXPIRE_S
         ),
         return_exceptions=True,
     )

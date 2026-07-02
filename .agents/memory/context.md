@@ -5,9 +5,11 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-07-02 (session 182)
+**Last updated:** 2026-07-02 (session 183)
 
 ## What is done
+
+- Session 183 (2026-07-02): Autonomous audit loop - 2 bugs fixed (Bug #481-#482), 1 dep bump. Bug #481: scheduler.py stop() used magic number 10.0 directly in asyncio.wait_for call; extracted to _STOP_TIMEOUT_S constant. Bug #482: mongos.py expireAfterSeconds=7776000 magic number extracted to _MEMBER_CACHE_TTL_DAYS=90 + _MEMBER_CACHE_EXPIRE_S=90*86400 constants. Dep bump: typing-extensions v4.15.0 -> v4.16.0. Full 15-category scan suite across 75 Python files (18388 lines): AST consecutive-await VALID, gather-no-return_exceptions 0, create_task-no-done-callback 0, em-dash 0, emoji 0, TODO/FIXME 0, HTML-no-parse_mode (false positives confirmed safe), unescaped names 0, blocking I/O 0, security scan (ast.literal_eval FALSE POSITIVE), magic numbers (2 found+fixed: 10.0 + 7776000), hardcoded chat IDs (example string INTENTIONAL), type:ignore (3 VALID asyncio.Task generics), deprecated PTB patterns (2 false positives in docstrings + 1 intentional polling fallback), BaseFilter imports (6 CORRECT via telegram.ext.filters). appeal_flow.py: 8 gather / 8 return_exceptions - PERFECT. Ruff: ALL PASS. Import: OK. Total bugs: #1-#482. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 182 (2026-07-02): Autonomous audit loop - ZERO new bugs. Comprehensive re-audit of 75 Python files. Files read this session: check_flow.py (601 lines, full), parse_logmsg.py, admins.py (promote flow, parallel gather pattern CLEAN), broadcasting.py, checking.py (cmdcheck + cmdcheckme sequential-await cross-checked, 377 upsert-then-profile sequential is intentional), banning.py (152 Demote.execute sequential is intentional), warnings.py, muting.py (161 Demote.execute sequential is intentional), formatter.py (shim CLEAN), pagination.py (CLEAN), replies.py (CLEAN), prefixes.py (CLEAN), timedate_format.py (CLEAN). Explore subagent findings all verified as false positives or intentional design: PTB MessageHandler unguarded user/msg access is correct (filter guarantees), Demote.execute sequential before ban/mute is intentional ordering, checking.py:377 upsert-before-profile is correct ordering. Ruff: 75 files clean. Import: OK. Total bugs: #1-#480 (unchanged). Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 

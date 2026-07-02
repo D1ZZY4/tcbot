@@ -2,6 +2,18 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-07-02 (session 183)
+
+### Fixed
+
+- **Bug #482** (`tcbot/database/mongos.py`): `ensure_indexes()` passed `expireAfterSeconds=7776000` as a bare numeric literal to the `member_cache` TTL index creation call. The in-code comment explained the value ("90 days (7776000 s)") but any reader wanting to adjust the retention window would need to manually recompute the seconds rather than changing a single named constant. Extracted into `_MEMBER_CACHE_TTL_DAYS: int = 90` and `_MEMBER_CACHE_EXPIRE_S: int = _MEMBER_CACHE_TTL_DAYS * 86_400`, both placed in a new "Index TTL Constants" block at module scope alongside the existing connection-pool constants. `expireAfterSeconds` now references `_MEMBER_CACHE_EXPIRE_S`. No behavioral change; ruff PASS.
+
+- **Bug #481** (`tcbot/database/scheduler.py`): `stop()` passed `timeout=10.0` as a bare numeric literal directly to `asyncio.wait_for(_sched_task, timeout=10.0)`. Any future change to the stop timeout requires grep-hunting for the literal rather than updating a single named constant. Extracted into `_STOP_TIMEOUT_S: float = 10.0` at the module's constant block (with an explanatory comment tying it to the PTB shutdown grace window) and updated both the `wait_for` call and the `log.warning` message to reference the constant. No behavioral change; ruff format unchanged.
+
+### Changed
+
+- **Dependency bump** (`uv.lock`): `typing-extensions` upgraded `v4.15.0` to `v4.16.0` (patch release, no API changes). Verified: `import tcbot` OK, `ruff check` all checks passed, no code changes required. Comprehensive audit of all 75 Python files confirms zero new bugs.
+
 ## [Unreleased] - 2026-07-01 (session 182)
 
 ### Fixed
