@@ -515,4 +515,5 @@ def warn_conversation(
         _exec_warn,
         entry_filter,
         escape_filter=escape_filter,
+        conversation_timeout=cfg.proof_timeout,
     )

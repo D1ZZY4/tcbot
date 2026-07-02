@@ -558,6 +558,7 @@ def ban_conversation(
             ],
         },
         fallbacks=[MessageHandler(ALL_PREFIXES_CMD_FILTER, on_proof_timeout)],
+        conversation_timeout=cfg.proof_timeout,
         per_chat=True,
         per_user=True,
         per_message=False,

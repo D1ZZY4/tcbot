@@ -118,7 +118,7 @@ async def _cleanup_old_records() -> None:
     """No-op migration shim for the retired weekly member_cache cleanup job.
 
     member_cache cleanup is now handled automatically by the MongoDB TTL index on
-    ``last_updated`` (``expireAfterSeconds=7776000``, equivalent to 90 days), added
+    ``last_updated`` (``expireAfterSeconds=_MEMBER_CACHE_EXPIRE_S``, 90 days), added
     in ``mongos.ensure_indexes()``.  The APScheduler schedule is removed on startup
     in ``_register_periodic_schedules``; this function exists solely so that any
     schedule record persisted from a previous bot version can be deserialised and

@@ -400,10 +400,9 @@ class _CfgAdapter:
     def proof_timeout(self) -> int:
         """Ban proof upload timeout in seconds.
 
-        Parsed from PROOF_TIMEOUT_SECONDS but not currently consumed by any handler.
-        Conversations end via command-fallback only (no ConversationHandler timeout
-        active).  Reserved for future wiring via APScheduler triggers if inactivity
-        timeouts are added.
+        Parsed from PROOF_TIMEOUT_SECONDS. Passed as ``conversation_timeout`` to
+        the ban, kick, mute, and warn ConversationHandlers so inactive conversations
+        are cleaned up automatically after this many seconds.
         """
         return self._c.proof_timeout_seconds
 
@@ -411,10 +410,9 @@ class _CfgAdapter:
     def appeal_timeout(self) -> int:
         """Appeal conversation inactivity timeout in seconds.
 
-        Parsed from APPEAL_TIMEOUT_SECONDS but not currently consumed by any handler.
-        Conversations end via command-fallback only (no ConversationHandler timeout
-        active).  Reserved for future wiring via APScheduler triggers if inactivity
-        timeouts are added.
+        Parsed from APPEAL_TIMEOUT_SECONDS. Passed as ``conversation_timeout`` to
+        the appeal ConversationHandler so stale appeal sessions are cleaned up
+        automatically after this many seconds.
         """
         return self._c.appeal_timeout_seconds
 

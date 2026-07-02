@@ -331,4 +331,5 @@ def mute_conversation(
         _exec_mute,
         entry_filter,
         escape_filter=escape_filter,
+        conversation_timeout=cfg.proof_timeout,
     )

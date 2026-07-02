@@ -48,6 +48,7 @@ _STALE_REVIEW_HOURS: int = 72
 _STALE_REVIEW_WINDOW = timedelta(hours=_STALE_REVIEW_HOURS)
 _REJECTION_COOLDOWN_HOURS: int = 24
 _REJECTION_COOLDOWN = timedelta(hours=_REJECTION_COOLDOWN_HOURS)
+_SECONDS_PER_HOUR: int = 3600
 
 _ID_RE = re.compile(r"^/start\s+appeal_([a-z0-9]{10})$")
 
@@ -255,7 +256,7 @@ class BuildAppeal:
             elapsed = utc_now() - to_utc(rejected_at)
             if elapsed < _REJECTION_COOLDOWN:
                 remaining_h = (
-                    int((_REJECTION_COOLDOWN - elapsed).total_seconds() / 3600) + 1
+                    int((_REJECTION_COOLDOWN - elapsed).total_seconds() / _SECONDS_PER_HOUR) + 1
                 )
                 try:
                     await msg.reply_text(
@@ -731,6 +732,7 @@ class BuildAppeal:
             fallbacks=[
                 MessageHandler(ALL_PREFIXES_CMD_FILTER, self._end),
             ],
+            conversation_timeout=cfg.appeal_timeout,
             per_chat=True,
             per_user=True,
             per_message=False,

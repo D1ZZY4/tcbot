@@ -109,6 +109,7 @@ def build_modaction_conv(
     executor: Callable[..., Any],
     entry_filter: BaseFilter,
     escape_filter: BaseFilter | None = None,
+    conversation_timeout: float | None = None,
 ) -> ConversationHandler:
     """Build a generic reason + proof ConversationHandler."""
     action = reason.action
@@ -338,6 +339,7 @@ def build_modaction_conv(
             CallbackQueryHandler(_on_cancel, pattern=rf"^{action}_cancel$"),
             MessageHandler(fallback_filter, _end_conv),
         ],
+        conversation_timeout=conversation_timeout,
         per_user=True,
         per_chat=True,
         per_message=False,
