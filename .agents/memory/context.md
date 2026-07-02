@@ -5,9 +5,11 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-07-01 (session 181)
+**Last updated:** 2026-07-02 (session 182)
 
 ## What is done
+
+- Session 182 (2026-07-02): Autonomous audit loop - ZERO new bugs. Comprehensive re-audit of 75 Python files. Files read this session: check_flow.py (601 lines, full), parse_logmsg.py, admins.py (promote flow, parallel gather pattern CLEAN), broadcasting.py, checking.py (cmdcheck + cmdcheckme sequential-await cross-checked, 377 upsert-then-profile sequential is intentional), banning.py (152 Demote.execute sequential is intentional), warnings.py, muting.py (161 Demote.execute sequential is intentional), formatter.py (shim CLEAN), pagination.py (CLEAN), replies.py (CLEAN), prefixes.py (CLEAN), timedate_format.py (CLEAN). Explore subagent findings all verified as false positives or intentional design: PTB MessageHandler unguarded user/msg access is correct (filter guarantees), Demote.execute sequential before ban/mute is intentional ordering, checking.py:377 upsert-before-profile is correct ordering. Ruff: 75 files clean. Import: OK. Total bugs: #1-#480 (unchanged). Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 181 (2026-07-01): Autonomous audit loop - 2 bugs fixed (Bug #479-#480). Wave 1-3 parallel scans covering all 75 Python files. Bug #479: ban_flow.py hardcoded "TCFBot" fallback in bot.username or "TCFBot" (two places, update + new-ban branches) replaced with or "" + _pm_kb guarded with if bot_username else None. Bug #480: muting_flow.py can_send_media_messages=True in ChatPermissions causes TypeError in PTB 22.8 / Bot API 7.0+ (parameter removed from API); removed from execute_unmute. Docs: banning-detailed.md stale TCFBot fallback description updated. All 75 files ruff-clean. Import: OK. Bot: clean webhook startup confirmed. Total bugs: #1-#480. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
