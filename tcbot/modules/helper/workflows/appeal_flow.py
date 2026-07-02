@@ -256,7 +256,11 @@ class BuildAppeal:
             elapsed = utc_now() - to_utc(rejected_at)
             if elapsed < _REJECTION_COOLDOWN:
                 remaining_h = (
-                    int((_REJECTION_COOLDOWN - elapsed).total_seconds() / _SECONDS_PER_HOUR) + 1
+                    int(
+                        (_REJECTION_COOLDOWN - elapsed).total_seconds()
+                        / _SECONDS_PER_HOUR
+                    )
+                    + 1
                 )
                 try:
                     await msg.reply_text(
