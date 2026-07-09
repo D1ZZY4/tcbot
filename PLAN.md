@@ -6,6 +6,8 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 
 ## [Current State]
 
+- Audit session 184 (2026-07-09): 3 bugs fixed (Bug #483-#485), 2 dep bumps, 3 doc bugs fixed (Bug #486-#488). Bug #483: conversation_timeout no-op removed from all 6 ConversationHandlers (PTB job-queue extra not installed, PTBUserWarning suppressed, conversations never actually timed out). Bug #484: contextlib.suppress(Exception) in webhook shutdown replaced with explicit try/except + DEBUG log. Bug #485: warns_db.federation_warn_count Python sum() replaced with MongoDB $group aggregation. Bug #486: docs/performance.md targets updated from v4.6.2 to v5.2.6. Bug #487: PLAN.md missing sessions 183-184. Bug #488: README.md missing REDIS_URL, WEBHOOK_URL, WEBHOOK_SECRET env vars. Dep bump: cbor2 6.1.2->6.1.3, ruff 0.15.20->0.15.21. Ruff: 75 files clean. Import: OK. Total bugs: #1-#488.
+- Audit session 183 (2026-07-02): 2 bugs fixed (Bug #481-#482), 1 dep bump. Bug #481: scheduler.py magic number 10.0 extracted to _STOP_TIMEOUT_S. Bug #482: mongos.py expireAfterSeconds=7776000 extracted to _MEMBER_CACHE_TTL_DAYS=90 + _MEMBER_CACHE_EXPIRE_S. Dep bump: typing-extensions v4.15.0->v4.16.0. Ruff: 75 files clean. Import: OK.
 - Audit session 181 (2026-07-01): 2 bugs fixed (Bug #479-#480). All 75 files ruff-clean. Bot runs in webhook mode; clean startup confirmed. Bug #479: hardcoded "TCFBot" fallback in ban_flow.py replaced with empty string + pm_kb guarded. Bug #480: `can_send_media_messages` removed from ChatPermissions (invalid in PTB 22.8 / Bot API 7.0+, causes TypeError on unmute). Stale doc in banning-detailed.md updated.
 - Audit session 180 (2026-07-01): 5 bugs fixed (Bug #474-#478). All 75 files ruff-clean. Bot runs in webhook mode; 35/35 indexes, Redis hiredis 3.4.0, APScheduler, webhook active. Signal handlers before async with app: (Bug #474). hmac.compare_digest for webhook secret (Bug #475). Docs: setup.md env vars + startup sequence (Bug #476), databases.md TypedDicts (Bug #477), em-dashes cleared from CHANGELOG + decisions.md (Bug #478).
 | Area | Status |
@@ -18,7 +20,7 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 | Scheduler | APScheduler **4.0.0a6** (`AsyncScheduler` + `MongoDBDataStore` + `CBORSerializer`); persistent moderation jobs survive restarts. The pinned alpha carries CVE-2026-31072 (no upstream patch); accepted and tracked risk, see Core Subsystem Design / Persistent Scheduler. |
 | Health check / Webhook | Flask app in `tcbot/alive.py`. `GET /` returns `OK`. `GET /health` returns JSON subsystem status. `POST /webhook` receives Telegram updates (validates `X-Telegram-Bot-Api-Secret-Token`, feeds to PTB via `asyncio.run_coroutine_threadsafe`). `Update.de_json` None guard prevents enqueueing unrecognized update types. Port from `PORT` env var (default `5000`). |
 | Dependency management | `uv` with `uv.lock`; CI installs with frozen lockfile by default. |
-| Formatting/linting | Ruff v0.15.20, configured in `pyproject.toml`. |
+| Formatting/linting | Ruff v0.15.21, configured in `pyproject.toml`. |
 | Deployment notes | Local `config.env`, Docker Compose, and Replit/hosted environment variables are documented. |
 
 ## Runtime Flow

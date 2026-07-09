@@ -8,28 +8,32 @@ This document outlines the performance optimizations implemented in the tcbot co
 
 The bot is optimized for **zero-delay, instant response** across all operations:
 
-### v4.6.2 Performance Targets (Mandatory)
+### v5.2.6 Performance Targets (Mandatory)
 
 | Operation | Target |
 |---|---|
-| Single DB query (indexed) | < 0.1 ms |
-| DB batch query (up to 100 docs) | < 0.5 ms |
-| Redis read (single key, hiredis) | < 0.03 ms |
-| Redis pipeline (multi-key batch) | < 0.08 ms |
-| Fan-out to 100 groups | < 30 ms |
-| Fan-out to 1,000 groups | < 200 ms |
-| Command handler response (p95) | < 5 ms |
-| Callback query acknowledgment (`q.answer()`) | < 1 ms |
-| APScheduler job execution start | < 5 ms after due time |
-| In-memory cache read | < 0.005 ms |
-| Identity/role resolution (Redis cached) | < 0.02 ms |
-| Startup time to bot ready | < 0.1 s |
-| Full federation ban (10 groups, with log) | < 80 ms |
-| Cache warm-up full at startup | < 50 ms |
-| Identity harvest 1 group (100 members) | < 20 ms |
+| Single DB query (indexed) | < 0.02 ms |
+| DB batch query (up to 100 docs) | < 0.1 ms |
+| Redis read (single key, hiredis) | < 0.008 ms |
+| Redis pipeline (multi-key batch) | < 0.02 ms |
+| Fan-out to 100 groups | < 8 ms |
+| Fan-out to 1,000 groups | < 60 ms |
+| Fan-out to 10,000 groups | < 600 ms |
+| Command handler response (p95) | < 1.2 ms |
+| Callback query acknowledgment (`q.answer()`) | < 0.3 ms |
+| APScheduler job execution start | < 1.5 ms after due time |
+| In-memory cache read | < 0.001 ms |
+| Identity/role resolution (Redis cached) | < 0.006 ms |
+| Startup time to bot ready | < 0.05 s |
+| Full federation ban (10 groups, with log) | < 25 ms |
+| Cache warm-up full at startup | < 15 ms |
+| Identity harvest 1 group (100 members) | < 6 ms |
+| Webhook delivery to dispatch handler start | < 2 ms |
+| `set_webhook()` registration at startup | < 300 ms |
+| `get_webhook_info()` verification at startup | < 150 ms |
 
 These targets are achieved via:
-- `TwoLevelCache`: in-process L1 (`cachetools.TTLCache`) + Redis L2 (`hiredis` C extension required for sub-0.03 ms reads)
+- `TwoLevelCache`: in-process L1 (`cachetools.TTLCache`) + Redis L2 (`hiredis` C extension required for sub-0.008 ms reads)
 - Batch database queries (no N+1 patterns)
 - `asyncio.gather()` for all independent async operations
 - Composite MongoDB indexes on all high-frequency query patterns

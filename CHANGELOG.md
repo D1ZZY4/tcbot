@@ -2,6 +2,16 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-07-09 (session 185)
+
+### Fixed
+
+- **Bug #488** (`README.md`): Config table was missing `REDIS_URL`, `WEBHOOK_URL`, `WEBHOOK_SECRET`, `SESSION_SECRET`, `WARN_LIMIT`, `FED_WARN_LIMIT`, and `WARN_EXPIRY_DAYS` environment variables. Users setting up the bot would not know these variables exist from the README alone, having to consult `docs/setup.md` separately. Added all seven missing rows with accurate descriptions and Required column values. Also clarified `PROOF_TIMEOUT_SECONDS` and `APPEAL_TIMEOUT_SECONDS` docstrings to note they are reserved for future wiring while PTB `job-queue` extra is not installed.
+
+- **Bug #487** (`PLAN.md`): Current State section was missing sessions 183 and 184 audit entries. Bug numbers #481-#485 were unrepresented, and the ruff version shown was stale (v0.15.20 vs actual v0.15.21 post-bump). Added both session entries and corrected ruff version.
+
+- **Bug #486** (`docs/performance.md`): Performance targets table still listed v4.6.2 targets (e.g., < 0.1 ms for single DB query, < 0.03 ms for Redis read). PROMPT.md mandates v5.2.6 targets as the new baseline. Updated the table heading from "v4.6.2" to "v5.2.6" and replaced all 15 existing target values with v5.2.6 values. Added four new rows introduced in v5.2.6: fan-out to 10,000 groups (< 600 ms), webhook delivery to dispatch handler (< 2 ms), `set_webhook()` startup registration (< 300 ms), and `get_webhook_info()` verification (< 150 ms). Also updated the `hiredis` footnote to reflect the new 0.008 ms target.
+
 ## [Unreleased] - 2026-07-09 (session 184)
 
 ### Fixed

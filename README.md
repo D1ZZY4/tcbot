@@ -92,6 +92,10 @@ For detailed environment variable formats and validation, see [`docs/setup.md`](
 | `BOT_TOKEN` | Yes | Telegram bot token from BotFather. |
 | `OWNER_ID` | Yes | Positive Telegram user ID seeded as the initial Founder. |
 | `MONGODB_URI` | Yes | MongoDB connection string. |
+| `REDIS_URL` | No | Redis connection URL (e.g. `redis://localhost:6379/0`). Enables L2 distributed cache and Redis-backed rate limiting. Falls back to in-process rate limiting when absent. |
+| `WEBHOOK_URL` | Usually | Public HTTPS URL for Telegram webhook (e.g. `https://your-domain.com`). Required for webhook mode; omit only for local development (falls back to polling). |
+| `WEBHOOK_SECRET` | Usually | Secret token passed to `set_webhook` and validated on every incoming update (`X-Telegram-Bot-Api-Secret-Token` header). Required when `WEBHOOK_URL` is set. |
+| `SESSION_SECRET` | No | Flask session secret key; generated at startup if not set. |
 | `DB_NAME` | No | MongoDB database name, default `tcbot`. |
 | `COMMUNITY_NAME` | No | Display name used in bot messages and logs. |
 | `PREFIXES` | No | Python-style list of command prefixes, default `["/", "!", "."]`. |
@@ -101,12 +105,15 @@ For detailed environment variable formats and validation, see [`docs/setup.md`](
 | `EXTEND_GROUP` | No | Optional secondary/staff group watched by selected handlers. |
 | `PROOFS` | Usually | Proof destination as `chat_id` or `chat_id/thread_id`. |
 | `LOGS` | Usually | Action log destination as `chat_id` or `chat_id/thread_id`. |
-| `LOGS_ERRORS` | No | Error log destination; if empty, code paths may use the parsed empty value. |
+| `LOGS_ERRORS` | No | Error log destination; if empty, error logs are suppressed. |
 | `APPEALS` | Usually | Appeal record destination as `chat_id` or `chat_id/thread_id`. |
 | `APPEAL_LOG_HANDLE` | No | Public log handle shown in appeal instructions. |
 | `APPEAL_DISCUSSION_TOPIC` | Usually | Thread ID inside `MAIN_GROUP` for appeal review cards. |
-| `PROOF_TIMEOUT_SECONDS` | No | Ban proof conversation timeout, default `100`; values below `1` fall back to default. |
-| `APPEAL_TIMEOUT_SECONDS` | No | Appeal DM conversation timeout, default `600`; values below `1` fall back to default. |
+| `WARN_LIMIT` | No | Warn count that triggers an automatic federation ban, default `3`, minimum `1`. |
+| `FED_WARN_LIMIT` | No | Federation-wide warn threshold (across all groups), default `3`. |
+| `WARN_EXPIRY_DAYS` | No | Days after which warn counts expire and are deleted, default `0` (disabled). |
+| `PROOF_TIMEOUT_SECONDS` | No | Ban proof conversation timeout, default `100`; values below `1` fall back to default. Reserved for future wiring (currently unused while PTB job-queue extra is not installed). |
+| `APPEAL_TIMEOUT_SECONDS` | No | Appeal DM conversation timeout, default `600`; values below `1` fall back to default. Reserved for future wiring. |
 | `ALBUM_DEBOUNCE_SECONDS` | No | Album media grouping window, default `2`; values below `1` fall back to default. |
 | `LOG_LEVEL` | No | Logging level, default `INFO`. |
 | `MODULES_LOAD` | No | Comma-separated module allowlist. |
