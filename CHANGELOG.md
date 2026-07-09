@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-07-09 (session 187)
+
+### Fixed
+
+- **Bug #490** (`tcbot/modules/admins.py`): The promotion-approval DM sent to a target after `/promote` review interpolated `{cfg.community_name}` directly instead of `{esc(cfg.community_name)}`, unlike every other neighboring interpolation site in the same file. A community name containing an HTML special character (`&`, `<`, `>`) would render broken or truncated in the Telegram client since the message is sent with `parse_mode="HTML"`. Wrapped the interpolation in `esc()` to match the rest of the module.
+
 ## [Unreleased] - 2026-07-09 (session 186)
 
 ### Fixed

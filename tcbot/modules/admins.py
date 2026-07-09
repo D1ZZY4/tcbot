@@ -764,7 +764,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             ),
             ctx.bot.send_message(
                 target_id,
-                f"Your promotion request has been approved - welcome to the {cfg.community_name} staff team, Admin.",
+                f"Your promotion request has been approved - welcome to the {esc(cfg.community_name)} staff team, Admin.",
             ),
             ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             return_exceptions=True,
