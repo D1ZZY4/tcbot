@@ -29,7 +29,7 @@ This page maps the repository structure and the service boundaries between packa
 tcbot/
 ├── __init__.py             Environment loader and cfg adapter
 ├── __main__.py             PTB app setup, DB init, handler registration, polling
-├── alive.py                Flask health endpoint
+├── alive.py                Flask health endpoint and webhook receiver
 ├── database/
 │   ├── mongos.py           Motor client, collection accessor, indexes
 │   ├── bans_db.py          Federation ban records (incl. per-user history)

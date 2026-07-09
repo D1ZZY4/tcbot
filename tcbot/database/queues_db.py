@@ -94,8 +94,3 @@ async def resolve(request_id: str, status: str, resolved_by: int) -> None:
             },
         )
     )
-
-
-async def pending_count() -> int:
-    """Count the number of pending promotion requests."""
-    return await db_call(_requests().count_documents({"status": "pending"}))

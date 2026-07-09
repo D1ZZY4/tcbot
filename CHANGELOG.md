@@ -2,6 +2,16 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-07-09 (session 188)
+
+### Removed
+
+- **Cleanup** (`tcbot/database/queues_db.py`): `pending_count()` had zero callers anywhere in `tcbot/` (grep-verified against every module, workflow, and test); the only reference was a stale comment in `mongos.py`. Removed the dead function.
+
+### Documentation
+
+- **Docs drift** (`docs/mapping.md`): `alive.py` entry described it only as a "Flask health endpoint," omitting that the same Flask app also serves as the Telegram webhook receiver (registered via `alive.register_webhook_receiver`, confirmed in `__main__.py` and `docs/mapping.md`'s own Mermaid diagram). Updated the prose line to match what the diagram already showed correctly.
+
 ## [Unreleased] - 2026-07-09 (session 187)
 
 ### Fixed
