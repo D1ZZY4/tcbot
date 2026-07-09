@@ -265,7 +265,26 @@ async def on_chat_migration(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         old_id = msg.migrate_from_chat_id
         new_id = update.effective_chat.id if update.effective_chat else None
         if old_id and new_id and old_id != new_id:
-            migrated = await db.groups_db.migrate_group(old_id, new_id)
+            migrated, _warns_migrated = await asyncio.gather(
+                db.groups_db.migrate_group(old_id, new_id),
+                db.warns_db.migrate_records(old_id, new_id),
+                return_exceptions=True,
+            )
+            if isinstance(migrated, BaseException):
+                log.error(
+                    "groups_db.migrate_group failed for %d -> %d: %s",
+                    old_id,
+                    new_id,
+                    migrated,
+                )
+                migrated = False
+            if isinstance(_warns_migrated, BaseException):
+                log.error(
+                    "warns_db.migrate_records failed for %d -> %d: %s",
+                    old_id,
+                    new_id,
+                    _warns_migrated,
+                )
             if migrated:
                 log.info(
                     "Federation group migrated: old_chat_id=%d new_chat_id=%d",

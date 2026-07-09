@@ -2,9 +2,13 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
-## [Unreleased] - 2026-07-09 (session 185)
+## [Unreleased] - 2026-07-09 (session 186)
 
 ### Fixed
+
+- **Bug #489** (`tcbot/database/warns_db.py`, `tcbot/modules/greeting.py`): `on_chat_migration` only called `groups_db.migrate_group` when a basic group upgraded to a supergroup, repointing `federated_groups` and `pending_joins`. The `warns` and `warn_counts` collections are also keyed by `chat_id` (unlike `kicks_db` and `mutes_db`, which are keyed by `user_id` only) and were never migrated, so a migrated group would silently start with zero warning history and a reset auto-ban counter under its new supergroup ID. Added `warns_db.migrate_records(old_chat_id, new_chat_id)` (parallel `update_many` on both collections via `asyncio.gather(return_exceptions=True)`) and wired it into `on_chat_migration` alongside `groups_db.migrate_group`, with per-call error logging so a failure in one does not mask the other.
+
+### Fixed (session 185)
 
 - **Bug #488** (`README.md`): Config table was missing `REDIS_URL`, `WEBHOOK_URL`, `WEBHOOK_SECRET`, `SESSION_SECRET`, `WARN_LIMIT`, `FED_WARN_LIMIT`, and `WARN_EXPIRY_DAYS` environment variables. Users setting up the bot would not know these variables exist from the README alone, having to consult `docs/setup.md` separately. Added all seven missing rows with accurate descriptions and Required column values. Also clarified `PROOF_TIMEOUT_SECONDS` and `APPEAL_TIMEOUT_SECONDS` docstrings to note they are reserved for future wiring while PTB `job-queue` extra is not installed.
 

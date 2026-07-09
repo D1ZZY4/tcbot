@@ -259,6 +259,44 @@ async def user_all_warns(user_id: int) -> list[WarnDoc]:
     )
 
 
+async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:
+    """Repoint every warn record and counter from ``old_chat_id`` to ``new_chat_id``.
+
+    Called when a basic group migrates to a supergroup. Both ``warns`` (audit
+    history) and ``warn_counts`` (the per-group counter documents that gate
+    the auto-ban threshold) are keyed by ``chat_id``, so without this the
+    supergroup would silently start with a clean slate and lose all warning
+    history from the legacy chat. Returns ``True`` if any record was updated.
+    """
+    results = await asyncio.gather(
+        db_call(
+            _warns().update_many(
+                {"chat_id": old_chat_id},
+                {"$set": {"chat_id": new_chat_id}},
+            )
+        ),
+        db_call(
+            _warn_counts().update_many(
+                {"chat_id": old_chat_id},
+                {"$set": {"chat_id": new_chat_id}},
+            )
+        ),
+        return_exceptions=True,
+    )
+    matched_any = False
+    for r in results:
+        if isinstance(r, BaseException):
+            log.error(
+                "warns_db.migrate_records (%d -> %d) DB call failed: %s",
+                old_chat_id,
+                new_chat_id,
+                r,
+            )
+        elif r.matched_count > 0:
+            matched_any = True
+    return matched_any
+
+
 async def federation_warn_count(user_id: int) -> int:
     """Total active warn count for a user across all federation chats.
 
