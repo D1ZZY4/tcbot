@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-07-09 (session 189)
+
+### Fixed
+
+- **Bug #491** (`tcbot/modules/greeting.py`): A user under an active federation mute could regain full posting rights by requesting to join a group with join-request approval enabled and having an admin (or auto-approve bot) accept them. `on_join_request` only declines active *bans* (a mute is not grounds for declining - the user is meant to be let in, just restricted), and approving a join request does not produce a `new_chat_members` service message, so `on_new_member` never ran for this path either. Added `on_join_request_approved`, a `ChatMemberHandler` (`ChatMemberHandler.CHAT_MEMBER`) that fires on membership transitions, filters to `via_join_request=True` transitions into `member` status (so regular invite-link/added joins - already covered by `on_new_member` - are not double-processed), and re-applies the active mute's `restrict_chat_member` call if one exists.
+
 ## [Unreleased] - 2026-07-09 (session 188)
 
 ### Removed

@@ -11,8 +11,10 @@ import logging
 from typing import TYPE_CHECKING
 
 from telegram import ChatPermissions
+from telegram.constants import ChatMemberStatus
 from telegram.ext import (
     ChatJoinRequestHandler,
+    ChatMemberHandler,
     ContextTypes,
     MessageHandler,
     filters,
@@ -150,6 +152,80 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         ],
         return_exceptions=True,
     )
+
+
+@decorators.log_execution
+async def on_join_request_approved(
+    update: Update, ctx: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """Re-apply an active federation mute when a join request is approved.
+
+    ``on_join_request`` declines banned users at request time, but an active
+    *mute* is not grounds for declining (the user is allowed in, just
+    restricted), so it cannot be enforced there. Approving a join request
+    does not produce a ``new_chat_members`` service message, so
+    ``on_new_member`` never runs for this path either - without this handler
+    a muted user could regain full posting rights simply by requesting to
+    join and having an admin approve them.
+
+    ``via_join_request`` distinguishes this from a regular invite-link/added
+    join (already handled by ``on_new_member``), so no double-enforcement.
+    """
+    cmu = update.chat_member
+    if cmu is None or not cmu.via_join_request:
+        return
+    if cmu.new_chat_member.status != ChatMemberStatus.MEMBER:
+        return
+
+    user = cmu.new_chat_member.user
+    if user.is_bot:
+        return
+
+    chat = cmu.chat
+    is_primary = chat.id in (cfg.main_group, cfg.exec_group)
+    if not is_primary:
+        try:
+            connected = await db.groups_db.is_connected(chat.id)
+        except Exception as exc:
+            log.warning(
+                "is_connected check failed for chat=%d on join_request_approved: %s",
+                chat.id,
+                exc,
+            )
+            return
+        if not connected:
+            return
+
+    try:
+        mute = await db.mutes_db.get_active_mute(user.id)
+    except Exception as exc:
+        log.warning(
+            "get_active_mute failed for uid=%d on join_request_approved in chat=%d: %s",
+            user.id,
+            chat.id,
+            exc,
+        )
+        return
+    if not mute:
+        return
+
+    until = mute.get("until_date")
+    perms = ChatPermissions(can_send_messages=False)
+    try:
+        await ctx.bot.restrict_chat_member(
+            chat.id, user.id, permissions=perms, until_date=until
+        )
+        log.info(
+            "Re-applied active federation mute on approved join_request for uid=%d in chat=%d",
+            user.id,
+            chat.id,
+        )
+    except Exception:
+        log.exception(
+            "Mute re-apply on join_request_approved failed for uid=%d in chat=%d",
+            user.id,
+            chat.id,
+        )
 
 
 @decorators.log_execution
@@ -320,6 +396,7 @@ async def on_chat_migration(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
 __handlers__ = [
     ChatJoinRequestHandler(on_join_request),
+    ChatMemberHandler(on_join_request_approved, ChatMemberHandler.CHAT_MEMBER),
     MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, on_new_member),
     MessageHandler(filters.StatusUpdate.LEFT_CHAT_MEMBER, on_left_member),
     MessageHandler(filters.StatusUpdate.MIGRATE, on_chat_migration),
