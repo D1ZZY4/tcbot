@@ -449,6 +449,16 @@ if isinstance(exc, CircuitOpenError):
 
 ---
 
+## 2026-07-09: conversation_timeout intentionally absent from all ConversationHandlers
+
+**Decision:** `conversation_timeout` is NOT set on any ConversationHandler (ban, kick, mute, warn, appeal). The parameter exists in `cfg.proof_timeout` and `cfg.appeal_timeout` but is not passed to any handler.
+
+**Why:** PTB's `conversation_timeout` requires the `python-telegram-bot[job-queue]` extra, which depends on APScheduler 3.x as its backend. This project uses APScheduler 4 (pinned for CVE-2026-31072 mitigation). Installing `[job-queue]` would conflict with APScheduler 4 and break the scheduler. Without the extra, `ApplicationBuilder().build()` returns `app.job_queue = None`; PTB emits a `PTBUserWarning: No JobQueue set up` per ConversationHandler at startup and silently ignores all timeout values. Conversations were never actually timed out.
+
+**How to apply:** Do NOT add `conversation_timeout=...` to any ConversationHandler. Conversations are ended via command fallbacks (`_end_conv`, `on_proof_timeout`, `_end`) or Cancel buttons. If a future migration to PTB's job-queue becomes possible (e.g. APScheduler 4 conflict resolved), add TIMEOUT state handlers to all five ConversationHandlers before re-enabling the parameter.
+
+---
+
 ## 2026-07-01: TwoLevelCache uses _MongoJSONEncoder for Redis serialization
 
 **Decision:** `cache.py` defines `_MongoJSONEncoder(json.JSONEncoder)` and passes `cls=_MongoJSONEncoder` to every `json.dumps` call in `TwoLevelCache`. The encoder handles `datetime` → ISO-8601 string and falls back to `str()` for any other unknown type (defensive against `ObjectId` and future MongoDB scalar types).

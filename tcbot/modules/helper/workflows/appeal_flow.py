@@ -716,7 +716,14 @@ class BuildAppeal:
     # ── ConversationHandler factory ────────────────────────────────────────
 
     def build_handler(self, entry_filter: BaseFilter) -> ConversationHandler:
-        """Assemble and return the appeal ConversationHandler."""
+        """Assemble and return the appeal ConversationHandler.
+
+        Note: ``conversation_timeout`` is intentionally absent.  PTB's timeout
+        support requires the ``job-queue`` extra (APScheduler 3.x backend) which
+        conflicts with this project's APScheduler 4 dependency.  Stale sessions
+        are detected via the 72-hour ``_STALE_REVIEW_WINDOW`` guard in ``_start``
+        and ended via the ``_end`` fallback (triggered on any command) or Cancel.
+        """
         return ConversationHandler(
             entry_points=[MessageHandler(entry_filter, self._on_entry)],
             states={
@@ -736,7 +743,6 @@ class BuildAppeal:
             fallbacks=[
                 MessageHandler(ALL_PREFIXES_CMD_FILTER, self._end),
             ],
-            conversation_timeout=cfg.appeal_timeout,
             per_chat=True,
             per_user=True,
             per_message=False,

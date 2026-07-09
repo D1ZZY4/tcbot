@@ -542,7 +542,14 @@ async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
 def ban_conversation(
     entry_fn: Callable[..., Any], entry_filter: BaseFilter
 ) -> ConversationHandler:
-    """Return the ban ConversationHandler with the given entry-point function."""
+    """Return the ban ConversationHandler with the given entry-point function.
+
+    Note: ``conversation_timeout`` is intentionally omitted.  PTB's timeout
+    support requires the ``job-queue`` extra (APScheduler 3.x backend) which
+    conflicts with this project's APScheduler 4 dependency.  Conversations
+    are ended via the fallback ``on_proof_timeout`` handler (triggered on any
+    command) or by the user pressing Cancel.
+    """
     return ConversationHandler(
         entry_points=[MessageHandler(entry_filter, entry_fn)],
         states={
@@ -558,7 +565,6 @@ def ban_conversation(
             ],
         },
         fallbacks=[MessageHandler(ALL_PREFIXES_CMD_FILTER, on_proof_timeout)],
-        conversation_timeout=cfg.proof_timeout,
         per_chat=True,
         per_user=True,
         per_message=False,

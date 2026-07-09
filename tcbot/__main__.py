@@ -422,8 +422,10 @@ async def _run_webhook_mode(app: Application) -> None:
             log.info("Webhook mode cancelled.")
         finally:
             log.info("Webhook mode shutting down...")
-            with contextlib.suppress(Exception):
+            try:
                 await app.bot.delete_webhook(drop_pending_updates=False)
+            except Exception as exc:
+                log.debug("delete_webhook failed during shutdown (non-fatal): %s", exc)
             await app.stop()
             # * PTB's Application.shutdown() does NOT invoke post_shutdown - that
             # * callback is only called by run_polling/run_webhook.  Call explicitly.

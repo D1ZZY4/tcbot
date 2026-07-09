@@ -2,6 +2,22 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-07-09 (session 184)
+
+### Fixed
+
+- **Bug #483** (`tcbot/modules/helper/workflows/{ban_flow,appeal_flow,reason_flow,kicking_flow,muting_flow,warning_flow}.py`): Commit a2257d4 added `conversation_timeout=cfg.proof_timeout` (or `appeal_timeout`) to all six ConversationHandler constructions. PTB's `conversation_timeout` requires the `job-queue` extra (`python-telegram-bot[job-queue]`) which internally depends on APScheduler 3.x. This project uses APScheduler 4 (pinned for CVE-2026-31072 mitigation), so the extra cannot be installed without breaking the scheduler. Consequence: PTB emits a `PTBUserWarning: No JobQueue set up` on every Application initialization (once per ConversationHandler at startup) and silently ignores all timeout values -- conversations were never actually timed out. Removed `conversation_timeout` from all six ConversationHandler calls and from `build_modaction_conv`'s signature. Added explanatory docstring notes to `ban_conversation`, `build_modaction_conv`, and `BuildAppeal.build_handler` preventing future reintroduction. Updated `cfg.proof_timeout` and `cfg.appeal_timeout` property docstrings in `__init__.py` to clarify these values are reserved for future wiring, not currently consumed. Ruff: 75 files clean.
+
+- **Bug #484** (`tcbot/__main__.py`): `contextlib.suppress(Exception)` in the webhook-mode `finally` block silently swallowed any error from `app.bot.delete_webhook()`. Failures during graceful shutdown (e.g. network timeout, Telegram 5xx) left no trace in logs, making post-mortem investigation impossible. Replaced with an explicit `try/except Exception` that logs the failure at DEBUG level with message `"delete_webhook failed during shutdown (non-fatal): %s"`. Behavior remains non-fatal; `app.stop()` and `_post_shutdown` always execute.
+
+### Performance
+
+- **Perf #485** (`tcbot/database/warns_db.py`): `federation_warn_count` used a Python-side `sum()` over a `.to_list()` result, fetching every `warn_counts` document for the user before summing in the application process. For users with many federation warnings across many groups this transfers unnecessary data. Replaced with a server-side MongoDB `$group` aggregation pipeline (`$match` + `$group: {$sum: "$count"}`) that returns a single document with the total. Semantics unchanged: only documents with `count > 0` are considered; returns `0` when no matches.
+
+### Changed
+
+- **Dependency bump** (`uv.lock`): `cbor2` upgraded `v6.1.2` -> `v6.1.3`, `ruff` upgraded `v0.15.20` -> `v0.15.21`. Verified: import OK, ruff check passes, no code changes required.
+
 ## [Unreleased] - 2026-07-02 (session 183)
 
 ### Fixed

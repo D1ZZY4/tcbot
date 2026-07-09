@@ -109,9 +109,15 @@ def build_modaction_conv(
     executor: Callable[..., Any],
     entry_filter: BaseFilter,
     escape_filter: BaseFilter | None = None,
-    conversation_timeout: float | None = None,
 ) -> ConversationHandler:
-    """Build a generic reason + proof ConversationHandler."""
+    """Build a generic reason + proof ConversationHandler.
+
+    Note: ``conversation_timeout`` is intentionally absent.  PTB's timeout
+    support requires the ``job-queue`` extra (APScheduler 3.x backend) which
+    conflicts with this project's APScheduler 4 dependency.  Conversations
+    are ended via the ``_end_conv`` fallback (triggered on any command) or
+    by the user pressing the Cancel button.
+    """
     action = reason.action
     _reason_key = f"{action}_reason"
     _proof_key = f"{action}_proof_desc"
@@ -339,7 +345,6 @@ def build_modaction_conv(
             CallbackQueryHandler(_on_cancel, pattern=rf"^{action}_cancel$"),
             MessageHandler(fallback_filter, _end_conv),
         ],
-        conversation_timeout=conversation_timeout,
         per_user=True,
         per_chat=True,
         per_message=False,

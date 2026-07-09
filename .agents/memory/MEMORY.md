@@ -37,4 +37,5 @@
 - [nested f-string quote escape](decisions.md): avoid f"...f'...{var}...'..." nested quotes - use an intermediate variable instead to avoid syntax errors
 - [v4.6.2 performance target scope](decisions.md): p95 < 5 ms target is bot-side processing only; Telegram network round-trip (50-200 ms) is excluded; never label second-level end-to-end times as "v4.6.2 compliant"
 - [PTB post_init/post_shutdown in webhook mode](decisions.md): PTB Application.initialize/__aenter__ does NOT call post_init; shutdown/__aexit__ does NOT call post_shutdown; both only fire via run_polling/run_webhook; must call explicitly in custom webhook loop
+- [PTB conversation_timeout disabled](decisions.md): requires [job-queue] extra (APScheduler 3.x) which conflicts with APScheduler 4; never add conversation_timeout to any ConversationHandler
 - [TwoLevelCache Redis JSON encoder](decisions.md): cache.py uses _MongoJSONEncoder(json.JSONEncoder) for all json.dumps calls; handles datetime→ISO-8601, ObjectId→str fallback; required because GroupDoc contains datetime fields
