@@ -5,9 +5,11 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-07-02 (session 183)
+**Last updated:** 2026-07-09 (session 184)
 
 ## What is done
+
+- Session 184 (2026-07-09): Autonomous audit loop - 3 bugs fixed (Bug #483-#485), 2 dep bumps. 6 parallel sub-agents (SA1-SA6) ran full codebase scan; majority of findings were false positives (db_call already present, q.answer() already in gather, no emoji, keyboard text not HTML, esc() already applied in parse_logmsg). Real bugs confirmed and fixed: Bug #483 (conversation_timeout no-op on all 6 ConversationHandlers - PTB job-queue extra not installed), Bug #484 (__main__.py contextlib.suppress(Exception) in shutdown), Bug #485 (warns_db federation_warn_count Python sum -> MongoDB $group aggregation). Dep bump: cbor2 6.1.2->6.1.3, ruff 0.15.20->0.15.21. Ruff: 75 files clean. Import: OK. Bot: clean startup, no PTBUserWarning. Commit: 280bc55. Total bugs: #1-#485. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 183 (2026-07-02): Autonomous audit loop - 2 bugs fixed (Bug #481-#482), 1 dep bump. Bug #481: scheduler.py stop() used magic number 10.0 directly in asyncio.wait_for call; extracted to _STOP_TIMEOUT_S constant. Bug #482: mongos.py expireAfterSeconds=7776000 magic number extracted to _MEMBER_CACHE_TTL_DAYS=90 + _MEMBER_CACHE_EXPIRE_S=90*86400 constants. Dep bump: typing-extensions v4.15.0 -> v4.16.0. Full 15-category scan suite across 75 Python files (18388 lines): AST consecutive-await VALID, gather-no-return_exceptions 0, create_task-no-done-callback 0, em-dash 0, emoji 0, TODO/FIXME 0, HTML-no-parse_mode (false positives confirmed safe), unescaped names 0, blocking I/O 0, security scan (ast.literal_eval FALSE POSITIVE), magic numbers (2 found+fixed: 10.0 + 7776000), hardcoded chat IDs (example string INTENTIONAL), type:ignore (3 VALID asyncio.Task generics), deprecated PTB patterns (2 false positives in docstrings + 1 intentional polling fallback), BaseFilter imports (6 CORRECT via telegram.ext.filters). appeal_flow.py: 8 gather / 8 return_exceptions - PERFECT. Ruff: ALL PASS. Import: OK. Total bugs: #1-#482. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
