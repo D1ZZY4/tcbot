@@ -33,5 +33,5 @@ Both `.agents/mcp.json` and `.roo/mcp.json` use `${CONTEXT7_API_KEY}` placeholde
 
 ## ctx7 version
 - `ctx7 0.5.4` installed and verified working on 11 Jul 2026
-- Re-verified 11 Jul 2026: updated from 0.5.3 → 0.5.4 via `npm install -g ctx7@latest`
+- Re-verified 11 Jul 2026 (second session): confirmed 0.5.3 → 0.5.4 via `npm install -g ctx7@latest`
 - Node v20 engine warning on install is safe to ignore - CLI works fine
