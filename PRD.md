@@ -1,6 +1,6 @@
-# PRD — TCBot AI Federation Moderation System
+# PRD — TCBot AI Moderation System
 > **Status**: Draft v1.0 | **Tanggal**: 11 Juli 2026
-> **Scope**: Integrasi AI moderasi otomatis berbasis rules federasi ke dalam TCBot yang sudah ada
+> **Scope**: Integrasi AI moderasi otomatis berbasis rules ke dalam TCBot yang sudah ada
 > **Target**: 60 grup, ~600.000 member, Telegram bot berbasis python-telegram-bot + MongoDB
 
 ---
@@ -10,7 +10,7 @@
 1. [Latar Belakang & Tujuan](#1-latar-belakang--tujuan)
 2. [Batasan & Asumsi](#2-batasan--asumsi)
 3. [Arsitektur Sistem Keseluruhan](#3-arsitektur-sistem-keseluruhan)
-4. [Federation Rules — Struktur & Storage](#4-federation-rules--struktur--storage)
+4. [Rules — Struktur & Storage](#4-rules--struktur--storage)
 5. [Sistem Severity](#5-sistem-severity)
 6. [Sistem Actions](#6-sistem-actions)
 7. [Proof dalam Konteks AI](#7-proof-dalam-konteks-ai)
@@ -40,13 +40,13 @@ TCBot sudah memiliki sistem moderasi manual yang lengkap:
 - `/kick` single-group
 - `/warn` dengan auto-escalate ke ban saat batas tercapai
 
-Namun semua aksi ini **100% manual** — admin harus melihat pelanggaran, memutuskan, lalu menjalankan command. Di federasi dengan 60 grup dan ratusan ribu member, ini tidak skala.
+Namun semua aksi ini **100% manual** — admin harus melihat pelanggaran, memutuskan, lalu menjalankan command. Di jaringan dengan 60 grup dan ratusan ribu member, ini tidak skala.
 
 ### Tujuan
 
 Tambahkan lapisan **AI pre-screening** yang:
 1. Memantau setiap pesan masuk di semua grup yang terhubung
-2. Mengevaluasi pesan terhadap 27 federation rules
+2. Mengevaluasi pesan terhadap 27 rules
 3. Mengeksekusi action ringan-sedang secara otomatis, low confidence dieskalasi ke admin
 4. Memberikan rekomendasi ke mod channel untuk action berat
 5. Tidak menggantikan admin — melengkapi dan meringankan beban moderasi
@@ -65,7 +65,7 @@ Semua flow manual yang sudah ada (`/ban`, `/mute`, `/kick`, `/warn`) **tidak dis
 |---|---|
 | AI dapat melihat media (foto, video, stiker) | Tidak — AI hanya menerima teks pesan |
 | AI dapat memberikan bukti screenshot | Tidak — bukti hanya berupa teks pesan itu sendiri |
-| Action `fban` sebagai action terpisah | Dihapus — diganti `ban` yang sudah federation-wide |
+| Action `fban` sebagai action terpisah | Dihapus — diganti `ban` yang sudah network-wide |
 | Rules disimpan dalam dua bahasa di DB | Tidak — hanya EN, terjemahan dilakukan on-demand |
 | Field `last_updated` per rule di DB | Tidak diperlukan |
 | AI memutuskan sendiri untuk action `ban` | Dengan syarat confidence threshold — lihat Bagian 7 |
@@ -113,9 +113,9 @@ flowchart TD
 
 ---
 
-## 4. FEDERATION RULES — STRUKTUR & STORAGE
+## 4. RULES — STRUKTUR & STORAGE
 
-### Format File (fed-rules/*.md)
+### Format File (rules/*.md)
 
 Setiap file rule memiliki YAML frontmatter di bagian atas, diikuti konten teks EN untuk ditampilkan ke user.
 
@@ -145,12 +145,12 @@ ai_description: >
 ...konten EN lengkap...
 ```
 
-### Apa yang Disimpan di MongoDB (collection: `fed_rules`)
+### Apa yang Disimpan di MongoDB (collection: `rules`)
 
 Hanya data yang diperlukan bot secara operasional:
 
 ```
-FedRuleDoc:
+RuleDoc:
   rule_id         : str           # unique key, contoh: "cheat"
   display_name    : str           # untuk tampilan di bot, contoh: "Cheat & Hack"
   severity        : str           # "low" | "medium" | "high" | "xhigh" | "max"
@@ -168,7 +168,7 @@ FedRuleDoc:
 | No | rule_id | display_name | Severity | ai_enforceable |
 |---|---|---|---|---|
 | 01 | `18-plus` | 18+ Content | xhigh | Ya |
-| 02 | `fed-admin` | Federation Admin Conduct | high | Tidak — butuh human judgment |
+| 02 | `admin` | Admin Conduct | high | Tidak — butuh human judgment |
 | 03 | `admin-power` | Admin Power Abuse | high | Tidak — butuh human judgment |
 | 04 | `group-admin` | Group Admin Conduct | medium | Tidak — butuh human judgment |
 | 05 | `cheat` | Cheat & Hack | xhigh | Ya |
@@ -264,7 +264,7 @@ Mute permanen. User tidak bisa kirim pesan sampai admin un-mute manual.
 
 - `restrict_chat_member(permissions=ChatPermissions(can_send_messages=False), until_date=None)`
 - Tersimpan di `mutes` (audit) dan `active_mutes` (state)
-- Scope: satu grup saja, bukan federation-wide
+- Scope: satu grup saja, bukan network-wide
 - Bisa di-unmute via `/unmute`
 
 ### 6.3 `mute_time`
@@ -291,7 +291,7 @@ Hapus user dari grup. User bisa join kembali via invite link.
 
 ### 6.5 `ban`
 
-Ban permanen dari seluruh federasi, fan-out ke semua 60 grup. Ini action paling berat.
+Ban permanen ke seluruh jaringan, fan-out ke semua 60 grup. Ini action paling berat.
 
 - Memerlukan `reason` (string) + `proof` (lihat Bagian 7)
 - Menggunakan `_execute_ban` yang sudah ada di `ban_flow.py`
@@ -308,7 +308,7 @@ Ban permanen dari seluruh federasi, fan-out ke semua 60 grup. Ini action paling 
 | `mute` | Permanent | Per-grup | Tidak | Ya |
 | `mute_time` | Sementara 1h sampai 7d | Per-grup | Tidak | Ya |
 | `kick` | Permanent tapi bisa re-join | Per-grup | Tidak | Ya |
-| `ban` | Permanent bisa di-unban | Federation-wide | Ya (teks pesan) | Ya, jika confidence >= threshold |
+| `ban` | Permanent bisa di-unban | Network-wide | Ya (teks pesan) | Ya, jika confidence >= threshold |
 
 ---
 
@@ -404,7 +404,7 @@ flowchart TD
     W3 --> W4{warn_count == cfg.warn_limit?}
     W4 -->|Tidak| W5[Kirim notif warning ke grup\nPeringatan ke-N dari limit]
     W4 -->|Ya| W6[Auto-escalate ke ban\nPanggil _execute_ban\nSama seperti warn limit normal]
-    W6 --> W7[Fan-out ban seluruh federasi]
+    W6 --> W7[Fan-out ban ke semua grup]
 ```
 
 ### Threshold Decision Matrix
@@ -428,8 +428,8 @@ JSON yang dikirim sebagai `user` message ke LLM. Harus tepat format ini.
 ### System Prompt (dikirim sekali sebagai `system` role)
 
 ```
-You are a strict AI moderator for TCF (Transsion Community Federation), a Telegram
-tech and gaming community with 60 groups and 600,000 members. You enforce federation
+You are a strict AI moderator for TCF (Transsion Community Network), a Telegram
+tech and gaming community with 60 groups and 600,000 members. You enforce community
 rules and output ONLY valid JSON.
 
 CRITICAL INSTRUCTIONS:
@@ -710,7 +710,7 @@ sequenceDiagram
     AR->>LOG: info log
 ```
 
-### 11.5 Flow `ban` (Federation-Wide)
+### 11.5 Flow `ban` (Network-Wide)
 
 ```mermaid
 sequenceDiagram
@@ -728,7 +728,7 @@ sequenceDiagram
     BF->>DB: create BanDoc(reason, proof_message_id=9901, admin_user_id=BOT_USER_ID, is_active=True)
     BF->>FO: ban user di semua active_groups() dengan semaphore-bounded concurrency
     FO-->>BF: done
-    BF->>GRP: "Moderasi Otomatis\n@user di-ban dari federasi TCF\nRule: display_name\nAlasan: reason\nAppeal: link"
+    BF->>GRP: "Moderasi Otomatis\n@user di-ban dari jaringan TCF\nRule: display_name\nAlasan: reason\nAppeal: link"
     BF->>LOG: "[AI MOD] Auto-Ban Executed\nGroup: ...\nUser: ...\nConf: 96%\n[Undo Ban] [Lihat Bukti]"
 ```
 
@@ -799,30 +799,30 @@ Rekomendasi: MyMemory untuk sekarang. Jika volume naik, switch ke argostranslate
 
 ### Kapan Seeding Terjadi
 
-Satu kali saat bot pertama kali dijalankan, atau ketika collection `fed_rules` kosong. Setelah itu, rules dikelola via DB dan tidak pernah baca file `.md` lagi dalam operasional normal.
+Satu kali saat bot pertama kali dijalankan, atau ketika collection `rules` kosong. Setelah itu, rules dikelola via DB dan tidak pernah baca file `.md` lagi dalam operasional normal.
 
 ### Flow Seeding
 
 ```mermaid
 flowchart TD
-    A[Bot startup] --> B{Collection fed_rules kosong?}
+    A[Bot startup] --> B{Collection rules kosong?}
     B -->|Tidak| C[Skip — sudah seeded]
-    B -->|Ya| D[Baca semua fed-rules/*.md\nurutkan berdasarkan nama file]
+    B -->|Ya| D[Baca semua rules/*.md\nurutkan berdasarkan nama file]
     D --> E{File punya YAML frontmatter?}
     E -->|Tidak| F[Log warning\nSkip file ini]
     E -->|Ya| G[Parse YAML frontmatter\nExtract rule_id, severity, auto_actions,\nai_enforceable, ai_description]
     G --> H[Extract konten EN dari body setelah frontmatter]
-    H --> I[Build FedRuleDoc]
+    H --> I[Build RuleDoc]
     I --> J{File berikutnya?}
     J -->|Masih ada| E
     J -->|Selesai| K[bulk insert_many ke MongoDB]
     K --> L[create_index rule_id unique\ncreate_index ai_enforceable]
-    L --> M[Log: Seeded N federation rules]
+    L --> M[Log: Seeded N rules]
 ```
 
 ### Prasyarat: YAML Frontmatter
 
-Setiap file `fed-rules/*.md` harus punya YAML frontmatter (ditulis manual sekali untuk semua 27 file):
+Setiap file `rules/*.md` harus punya YAML frontmatter (ditulis manual sekali untuk semua 27 file):
 
 ```yaml
 ---
@@ -847,14 +847,14 @@ ai_description: >
 ### Proses Seeding (Kode)
 
 ```python
-async def seed_fed_rules(db: AsyncIOMotorDatabase) -> None:
-    collection = db["fed_rules"]
+async def seed_rules(db: AsyncIOMotorDatabase) -> None:
+    collection = db["rules"]
 
     if await collection.count_documents({}) > 0:
-        logger.info("fed_rules already seeded, skipping")
+        logger.info("rules already seeded, skipping")
         return
 
-    rules_dir = Path("fed-rules")
+    rules_dir = Path("rules")
     docs = []
 
     for md_file in sorted(rules_dir.glob("*.md")):
@@ -885,7 +885,7 @@ async def seed_fed_rules(db: AsyncIOMotorDatabase) -> None:
         await collection.insert_many(docs)
         await collection.create_index("rule_id", unique=True)
         await collection.create_index("ai_enforceable")
-        logger.info(f"Seeded {len(docs)} federation rules")
+        logger.info(f"Seeded {len(docs)} rules")
 ```
 
 ### Re-seeding dan Update Rules
@@ -994,7 +994,7 @@ Alasan : User membagikan link download FKM versi ilegal.
 ```
 [Moderasi Otomatis]
 
-Pengguna @keymaster_vip [ID: 801] telah di-ban dari federasi TCF.
+Pengguna @keymaster_vip [ID: 801] telah di-ban dari jaringan TCF.
 
 Rule   : Keybox & VVIP Sales
 Alasan : Menjual keybox dengan label VVIP dan harga berlangganan 15rb/bulan.
@@ -1010,7 +1010,7 @@ Appeal : [Ajukan Banding]
 Group  : TCF Gaming ID (-100123456789)
 User   : KeyMaster (@keymaster_vip) [ID: 801]
 Rule   : keybox (max severity)
-Action : BAN (federation-wide)
+Action : BAN (network-wide)
 Conf.  : 96%
 Reason : Menjual keybox dengan label VVIP dan harga berlangganan.
 
@@ -1069,10 +1069,10 @@ tcbot/
 │   │   ├── ai_client.py            <- Panggil LLM API + parse response
 │   │   ├── decision_router.py      <- Logic routing berdasarkan confidence
 │   │   ├── action_executor.py      <- Wrapper panggil existing flows
-│   │   └── seeder.py               <- Seed fed_rules ke MongoDB
+│   │   └── seeder.py               <- Seed rules ke MongoDB
 │   └── ...
 ├── database/
-│   └── fed_rules_db.py             <- BARU: CRUD untuk collection fed_rules
+│   └── rules_db.py                 <- BARU: CRUD untuk collection rules
 └── utils/
     └── translator.py               <- BARU: MyMemory API wrapper
 ```
@@ -1131,9 +1131,9 @@ flowchart TD
     AE --> MF[muting_flow._execute_mute\nEXISTING]
     AE --> KF[kicking_flow.execute_kick\nEXISTING]
     AE --> WF[warning_flow._execute_warn\nEXISTING]
-    CB --> FRD[fed_rules_db.py\nNEW]
+    CB --> FRD[rules_db.py\nNEW]
     FRD --> REDIS[(Redis Cache)]
-    FRD --> MONGO[(MongoDB fed_rules)]
+    FRD --> MONGO[(MongoDB rules)]
 ```
 
 ---
@@ -1144,7 +1144,7 @@ flowchart TD
 
 | Rule | Kenapa Tidak Bisa AI | Penanganan |
 |---|---|---|
-| `fed-admin` | Aturan untuk admin, bukan member biasa | Human only |
+| `admin` | Aturan untuk admin, bukan member biasa | Human only |
 | `admin-power` | Abuse of power butuh konteks organisasi | Human only |
 | `group-admin` | Tentang perilaku admin internal | Human only |
 | `group-ownership` | Tentang kepemilikan grup, tidak terdeteksi via chat | Human only |
@@ -1203,7 +1203,7 @@ if existing_ban:
 ### 18.6 AI Rekomendasikan Action di Luar auto_actions Rule
 
 ```python
-rule = await fed_rules_db.get_rule(output["rule_violated"])
+rule = await rules_db.get_rule(output["rule_violated"])
 if output["selected_action"] not in rule["auto_actions"]:
     logger.error(f"AI picked invalid action {output['selected_action']} for rule {rule['rule_id']}")
     return
@@ -1290,7 +1290,7 @@ Item-item berikut tidak termasuk dalam PRD ini dan tidak akan dibangun:
 | Aspek | Keputusan |
 |---|---|
 | Actions yang tersedia | `warning`, `mute`, `mute_time`, `kick`, `ban` |
-| Action yang dihapus | `fban` sebagai action terpisah — digabung ke `ban` yang sudah federation-wide |
+| Action yang dihapus | `fban` sebagai action terpisah — digabung ke `ban` yang sudah network-wide |
 | Severity levels | `low`, `medium`, `high`, `xhigh`, `max` |
 | Rules storage | EN only di MongoDB, terjemahan ID on-demand via MyMemory |
 | Terjemahan | MyMemory API gratis 1.000 req/hari, cached di Redis TTL 7 hari |
