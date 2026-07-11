@@ -101,6 +101,10 @@ async def get_user_mention_data(user_id: int) -> tuple[str, str | None]:
 
     Uses ``user_mention_cache`` (Redis-backed TwoLevelCache) to avoid MongoDB
     round-trips on repeated lookups.  Cache is invalidated on every ``upsert_user``.
+
+    Cache sentinel: ``[None, None]`` is stored when the user has no document in
+    ``member_cache``.  The consumer converts ``None`` → ``str(user_id)`` so the
+    returned tuple always contains a non-empty string as the first element.
     """
 
     async def _fetch() -> list[str | None]:
@@ -109,10 +113,15 @@ async def get_user_mention_data(user_id: int) -> tuple[str, str | None]:
         )
         if doc:
             return [doc.get("first_name") or str(user_id), doc.get("username")]
-        return [str(user_id), None]
+        # * Sentinel: user has no member_cache document.  Stored as [None, None]
+        # * so get_first_name() can distinguish "real name" from "no record" and
+        # * return the caller's fallback instead of a raw numeric ID string.
+        return [None, None]
 
     data = await user_mention_cache.get_or_fetch(user_id, _fetch)
-    return cast("tuple[str, str | None]", (data[0], data[1]))
+    # * data[0] is None when the user has no member_cache document (sentinel).
+    name = cast("str", data[0]) if data[0] is not None else str(user_id)
+    return (name, data[1])
 
 
 async def get_mention_data_batch(
@@ -134,7 +143,9 @@ async def get_mention_data_batch(
         cached = user_mention_cache.get(uid)
         if cached is not CACHE_MISS:
             data = cast("list[str | None]", cached)
-            result[uid] = (cast("str", data[0]), cast("str | None", data[1]))
+            # * data[0] may be None (not-found sentinel); fall back to str(uid).
+            fname = cast("str", data[0]) if data[0] is not None else str(uid)
+            result[uid] = (fname, cast("str | None", data[1]))
         else:
             missing.append(uid)
 
@@ -190,12 +201,17 @@ async def get_first_names_batch(user_ids: list[int]) -> dict[int, str]:
 
 
 async def get_first_name(user_id: int, fallback: str = "") -> str:
-    """Return cached first_name or fallback string (L1 → L2 Redis → DB cached).
+    """Return cached first_name or caller's fallback (L1 → L2 Redis → DB cached).
 
     Routes through ``user_mention_cache.get_or_fetch`` so all three layers are
     checked in order and both L1 and L2 are populated on a miss -- exactly the
     same path as ``get_user_mention_data``.  Calling this function never causes
     a redundant MongoDB round-trip for a user already fetched by either helper.
+
+    When the user has no document in ``member_cache``, ``_fetch`` stores the
+    sentinel ``[None, None]`` in the cache.  The sentinel is distinguished from a
+    real name so the caller's ``fallback`` is returned instead of a raw numeric ID
+    string (e.g. ``"Admin"`` instead of ``"123456789"``).
     """
 
     async def _fetch() -> list[str | None]:
@@ -204,10 +220,16 @@ async def get_first_name(user_id: int, fallback: str = "") -> str:
         )
         if doc:
             return [doc.get("first_name") or str(user_id), doc.get("username")]
-        return [str(user_id), None]
+        # * Sentinel: user has no member_cache document.  [None, None] is used
+        # * (not [str(user_id), None]) so the not-found case is unambiguous --
+        # * a real first_name is never None, but str(user_id) could coincide
+        # * with an actual numeric display name and would suppress fallback.
+        return [None, None]
 
     data = await user_mention_cache.get_or_fetch(user_id, _fetch)
-    return cast("str", data[0]) or fallback
+    # * data[0] is None when the sentinel is in cache (user not in member_cache DB).
+    # * Use caller's fallback in that case; otherwise return the real name.
+    return cast("str", data[0]) if data[0] is not None else fallback
 
 
 async def total_users() -> int:

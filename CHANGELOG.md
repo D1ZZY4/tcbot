@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-07-11 (session 194+, cont.)
+
+### Fixed
+
+- **Bug #507** (`tcbot/database/users_cache.py`): Regresi di `get_first_name()` pasca-refactor Bug #504. `_fetch()` mengembalikan `[str(user_id), None]` saat user tidak punya dokumen di `member_cache`, sehingga `data[0] or fallback` tidak pernah jatuh ke `fallback` (nilai `str(user_id)` selalu truthy). Akibatnya tiga caller yang memberi fallback bermakna (`"Admin"` di `ban_flow.py`, `"Owner"` di `connected_flow.py`, `"Admin"` di `checking.py`) menampilkan ID numerik mentah ke user. Diperbaiki dengan mengubah sentinel "tidak ditemukan" dari `[str(user_id), None]` ke `[None, None]` di semua `_fetch` closure yang berbagi `user_mention_cache`, dan memperbarui semua consumer (`get_user_mention_data`, `get_mention_data_batch` L1-path, `get_first_name`) untuk memeriksa `data[0] is not None` sebelum memutuskan nilai yang dikembalikan. `extraction.py` tidak terdampak (sudah memfilter hasil dengan `isdigit()`).
+
 ## [Unreleased] - 2026-07-11 (session 194+)
 
 ### Changed

@@ -469,13 +469,15 @@ if isinstance(exc, CircuitOpenError):
 
 ---
 
-## 2026-07-11: get_first_name must route through user_mention_cache.get_or_fetch
+## 2026-07-11: get_first_name must use get_or_fetch + [None, None] sentinel for not-found
 
-**Decision:** `users_cache.get_first_name()` must call `user_mention_cache.get_or_fetch(user_id, _fetch)` rather than checking L1 directly and falling back to a raw MongoDB call.
+**Decision:** `users_cache.get_first_name()` must call `user_mention_cache.get_or_fetch(user_id, _fetch)`. The `_fetch` closure must return `[None, None]` (not `[str(user_id), None]`) when the user has no document in `member_cache`. The consumer checks `data[0] is not None` before deciding between the cached name and the caller's `fallback`.
 
-**Why:** The old implementation checked only `user_mention_cache.get(user_id)` (L1 in-memory) and on a miss called `_members().find_one()` directly, bypassing the L2 Redis layer entirely and never writing the result back to any cache. Every call for a user absent from L1 became an unnecessary MongoDB round-trip. The `get_or_fetch` path (L1 → L2 Redis → DB) populates both layers on a DB hit, so subsequent calls -- whether from `get_first_name` or `get_user_mention_data` -- all share the same cache namespace.
+All `_fetch` closures that share `user_mention_cache` must use the same `[None, None]` sentinel for the not-found case. This applies to `get_user_mention_data._fetch` and `get_first_name._fetch`. The `get_mention_data_batch` L1-path reader must also guard: `fname = data[0] if data[0] is not None else str(uid)`.
 
-**How to apply:** Always call `user_mention_cache.get_or_fetch(user_id, _fetch)` where `_fetch` returns `[first_name, username]` (same shape as `get_user_mention_data`). Never add a separate `_members().find_one()` call that bypasses the cache tiers.
+**Why:** The initial refactor (Bug #504) stored `[str(user_id), None]` as the not-found sentinel. Since `str(user_id)` is always truthy, `data[0] or fallback` never returned the caller's fallback, causing `ban_flow.py` (`"Admin"`), `connected_flow.py` (`"Owner"`), and `checking.py` (`"Admin"`) to display raw numeric IDs to users. A real `first_name` is never `None`, so `[None, None]` is unambiguous as a not-found sentinel.
+
+**How to apply:** Any new consumer of `user_mention_cache` that needs to distinguish "user not in DB" from "user has a real name" must check `data[0] is not None`. `get_user_mention_data` converts `None` → `str(user_id)` so its return type is always a non-empty string. `get_first_name` converts `None` → caller's `fallback`. `extraction.py`'s `get_first_name(uid, "")` is unaffected (already filters results with `isdigit()`).
 
 ---
 
