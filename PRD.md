@@ -198,7 +198,7 @@ class RuleDoc(TypedDict, total=False):
 | 06 | `crypto` | Cryptocurrency | high | Ya |
 | 07 | `doxing` | Doxing & Privacy | high | Ya |
 | 08 | `drugs` | Narcotics & Drugs | max | Ya |
-| 09 | `fundraising` | Fundraising Abuse | high | Parsial — flag ke admin saja |
+| 09 | `fundraising` | Fundraising Abuse | high | Ya |
 | 10 | `group-ownership` | Group Ownership | high | Tidak — tidak terdeteksi via chat |
 | 11 | `gambling` | Gambling | high | Ya |
 | 12 | `harmful-modules` | Harmful Modules | high | Ya |
@@ -218,7 +218,13 @@ class RuleDoc(TypedDict, total=False):
 | 26 | `spam-flooding` | Spam & Flooding | low | Ya |
 | 27 | `unethical-marketing` | Unethical Marketing | high | Ya |
 
-**AI-enforceable: 20 rules.** Non-enforceable by AI: 7 rules (02, 03, 04, 10, 16 butuh human; 09 parsial).
+**AI-enforceable: 21 rules.** Non-enforceable by AI: 6 rules (02, 03, 04, 10, 16 butuh human judgment penuh).
+
+> **Keputusan (review lanjutan)**: rule `fundraising` (09) awalnya berstatus "Parsial — flag ke
+> admin saja", tapi diputuskan **`ai_enforceable: true` penuh** — tidak dibatasi cuma
+> flag-worthy, boleh juga auto-execute mengikuti aturan confidence/severity normal yang sama
+> seperti 20 rule enforceable lain (Bagian 8), bukan kategori "flag only" khusus. `auto_actions`
+> untuk rule ini diisi sama seperti rule severity `high` lainnya, tanpa pembatasan tambahan.
 
 ---
 
@@ -413,7 +419,7 @@ flowchart TD
     PF4 -->|Tidak| END4[Skip]
     PF4 -->|Ya| PF5{Cooldown Redis aktif?}
     PF5 -->|Ya| END5[Skip]
-    PF5 -->|Tidak| CB[Context Builder\nAmbil 10 pesan terakhir dari buffer in-memory per grup\nfallback ke Redis mirror jika bot baru restart\nLoad 20 rules dari Redis\nBuild JSON payload]
+    PF5 -->|Tidak| CB[Context Builder\nAmbil 10 pesan terakhir dari buffer in-memory per grup\nfallback ke Redis mirror jika bot baru restart\nLoad 21 rules dari Redis\nBuild JSON payload]
     CB --> SET_CD[Set cooldown Redis 30 detik]
     SET_CD --> AI[Kirim ke LLM API\ntimeout 15 detik]
     AI -->|Timeout| ERR1[Log error\nSelesai]
@@ -589,7 +595,8 @@ OUTPUT FORMAT if no violation:
    ada collection MongoDB baru untuk histori pesan mentah** — ini koreksi dari asumsi awal PRD
    yang menganggap sumber data ini "sudah ada".
 2. **`has_media`**: `true` jika pesan punya foto/video/stiker. Jika `has_media: true` dan `text: null`, AI tidak bisa evaluate dan harus return `clean`.
-3. **`rules`**: Kirim HANYA rules dengan `ai_enforceable: true` — hanya 20 dari 27.
+3. **`rules`**: Kirim HANYA rules dengan `ai_enforceable: true` — 21 dari 27 (termasuk
+   `fundraising`, lihat Bagian 4/22.5).
 4. **Order conversation**: Dari yang terlama ke yang terbaru, ascending timestamp.
 5. **Field yang tidak perlu**: Jangan kirim field DB internal seperti ObjectId, timestamps DB. Hanya field yang relevan untuk konteks percakapan.
 
@@ -1291,7 +1298,11 @@ flowchart TD
 
 ## 17. RULES YANG TIDAK BISA DI-ENFORCE AI
 
-7 rules dengan `ai_enforceable: false` tetap ada di DB untuk keperluan tampilan ke user via `/rules`, referensi manual admin, dan dokumentasi. AI tidak pernah menerima rules ini dalam payload.
+6 rules dengan `ai_enforceable: false` tetap ada di DB untuk keperluan tampilan ke user via `/rules`, referensi manual admin, dan dokumentasi. AI tidak pernah menerima rules ini dalam payload.
+
+> **Koreksi (review lanjutan)**: `fundraising` sebelumnya masuk daftar ini sebagai "Parsial — flag
+> ke admin saja". Sudah dipindah jadi `ai_enforceable: true` penuh (Bagian 4/22.5) — AI boleh
+> auto-execute untuk rule ini sama seperti rule `high`-severity lain, tidak dibatasi flag-only.
 
 | Rule | Kenapa Tidak Bisa AI | Penanganan |
 |---|---|---|
@@ -1300,7 +1311,6 @@ flowchart TD
 | `group-admin` | Tentang perilaku admin internal | Human only |
 | `group-ownership` | Tentang kepemilikan grup, tidak terdeteksi via chat | Human only |
 | `nickname-pfp` | Butuh inspeksi visual profil | Human only |
-| `fundraising` | AI bisa flag tapi tidak bisa verify transparansi | Flag ke admin saja |
 | `10-group-ownership` | Tidak ada sinyal teks yang bisa dideteksi | Human only |
 
 ---
@@ -1677,10 +1687,10 @@ Satu pertanyaan genuinely ambigu ditemukan yang berdampak ke jumlah rule AI-enfo
 (20 vs 21) — didiskusikan dan dijawab di luar dokumen ini, lihat catatan jawaban di bawah setiap
 poin bila sudah diputuskan:
 
-- **Klasifikasi rule `fundraising` (rule 09)**, yang statusnya "Parsial — flag ke admin saja":
-  apakah `ai_enforceable: true` (dengan `auto_actions` dibatasi cuma actions yang flag-worthy,
-  tidak pernah auto-execute) atau `ai_enforceable: false` seperti 5 rule lain yang butuh
-  keputusan manusia penuh?
+- **Klasifikasi rule `fundraising` (rule 09)** — **DIJAWAB**: `ai_enforceable: true` penuh,
+  boleh auto-execute mengikuti aturan confidence/severity normal (bukan dibatasi flag-only).
+  Jumlah rule AI-enforceable jadi **21 dari 27** (bukan 20), non-enforceable jadi 6 rule
+  (02, 03, 04, 10, 16). Lihat Bagian 4 dan 17 untuk update tabel lengkap.
 
 ---
 
@@ -1699,7 +1709,7 @@ poin bila sudah diputuskan:
 | Confidence threshold log saja | di bawah 0.75 |
 | Cooldown per grup | 30 detik |
 | Context window | 10 pesan terakhir per grup |
-| Rules di-enforce AI | 20 dari 27 — 7 butuh human judgment |
+| Rules di-enforce AI | 21 dari 27 — 6 butuh human judgment penuh (fundraising kini full-enforceable, bukan flag-only) |
 | Integrasi kode existing | Zero breaking changes — `_execute_ban`/`_execute_mute`/`execute_kick` tidak diubah, AI pakai jalur eksekusi baru terisolasi di `action_executor.py`, terdaftar manual di `__main__.py` (group=50) |
 | Opt-in per grup | Ya — field `ai_moderation_enabled` di GroupDoc (`total=False`, aman tanpa migrasi), toggle wajib lewat fungsi `groups_db.py` untuk invalidasi cache |
 | Scope mute AI | Network-wide ke semua grup terhubung — reuse infrastruktur mute existing, bukan kapabilitas single-group baru |
