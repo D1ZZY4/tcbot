@@ -5,9 +5,11 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-07-11 (session 193)
+**Last updated:** 2026-07-11 (session 194)
 
 ## What is done
+
+- Session 194 (2026-07-11): Bugs #504-#505 fixed (priority caching bugs). Bug #504: get_first_name() in users_cache.py bypassed L2 Redis and never populated any cache on a miss; rewritten to use user_mention_cache.get_or_fetch() (L1->L2->DB) matching get_user_mention_data() pattern. Bug #505: TwoLevelCache.clear() used by set_owner() only cleared L1 in-memory, leaving stale role entries in Redis for up to 90s after ownership transfer. Added clear_all() async method (L1 + Redis SCAN+UNLINK in batches); set_owner() now awaits it. Ruff: 75 files clean. Import: OK. Total bugs: #1-#505. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 193 (2026-07-11): Bugs #502-#503 fixed. 17 parallel sub-agents (SA1-SA18) in 6 waves across all 75 Python files. Bug #502: 3 em-dashes in .md files. Bug #503: keyboards.py additional_menu_kb() 5 hardcoded community t.me URLs moved to cfg (COMMUNITY_CHANNEL_URL/GROUP/LOGS/EXEC/TRAVEL_URL); buttons shown conditionally; config.env.example + docs/setup.md updated. Waves 1-6 findings: all other sub-agent claims verified false positive (mutes Telegram until_date only; album mgid guard present; DB layer all clean; text_html PTB-escaped; is_bot catches GroupAnonymousBot; SA7-SA9 clean; SA10 stop() safe; SA14 Lua PEXPIRE correct; SA15 connect() bypasses CB by design; SA16 utc_now() tz-aware; SA17 ASCII hyphen not em-dash, promote DM plain-text; SA18 parse_logmsg escape=False on system values only). Final scans: 0 em-dashes, 0 deprecated utcnow(), 0 emoji across all 75 files. Audit DRY: 6 consecutive waves, no new code bugs. Ruff: 75 files clean. Import: OK. Total bugs: #1-#503. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 

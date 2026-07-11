@@ -179,6 +179,37 @@ class TwoLevelCache[T]:
         """Clear the in-memory layer (does not flush Redis keys)."""
         self._mem.clear()
 
+    async def clear_all(self) -> None:
+        """Clear the in-memory layer AND delete all matching keys from Redis.
+
+        Use this when you need a full two-layer invalidation and the set of
+        affected keys is not known in advance (e.g. after an ownership transfer
+        where the previous owner's ID is unavailable).  Unlike ``clear()``,
+        this method is async and removes Redis keys via SCAN + UNLINK in
+        batches of 100, avoiding the O(N) blocking behaviour of ``KEYS``.
+
+        Unlike ``invalidate(key)``, which removes one known key from both layers,
+        this sweeps every key matching ``tcbot:<prefix>:*``.  Do not call it in
+        hot paths; it is designed for rare, high-impact invalidations only.
+        """
+        self._mem.clear()
+        rc = _redis_client()
+        if rc is None:
+            return
+        pattern = f"tcbot:{self._redis_prefix}:*"
+        cursor: int = 0
+        try:
+            while True:
+                cursor, keys = await rc.scan(cursor, match=pattern, count=100)
+                if keys:
+                    await rc.unlink(*keys)
+                if cursor == 0:
+                    break
+        except Exception as exc:
+            log.debug(
+                "Redis clear_all failed for prefix %s: %s", self._redis_prefix, exc
+            )
+
     # ── Async hot-path ── #
 
     async def get_or_fetch(

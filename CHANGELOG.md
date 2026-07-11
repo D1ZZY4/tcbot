@@ -2,6 +2,14 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-07-11 (session 194)
+
+### Fixed
+
+- **Bug #504** (`tcbot/database/users_cache.py`): `get_first_name()` only checked the L1 in-memory layer (`user_mention_cache.get`) and then queried MongoDB directly on a miss, completely bypassing the L2 Redis layer and never writing the result back to any cache layer. Every call for a user absent from L1 caused an unnecessary MongoDB round-trip even if Redis already held the value from a recent `get_user_mention_data()` call. Fixed by rewriting the function to route through `user_mention_cache.get_or_fetch()` (L1 -> L2 Redis -> DB), using the same fetch closure pattern as `get_user_mention_data`. The two helpers now share the same cache namespace so a hit for one benefits the other. Caller signatures and fallback behaviour are unchanged.
+
+- **Bug #505** (`tcbot/database/cache.py`, `tcbot/database/users_roles.py`): `TwoLevelCache.clear()` is documented as in-memory-only ("does not flush Redis keys"), but `set_owner()` called `effective_role_cache.clear()` as the sole cache-invalidation step after an ownership transfer. Because the previous owner's user ID is not known at that point, per-key `invalidate()` is not possible; yet `clear()` left all role entries in Redis intact for up to 90 seconds (the `_ROLE_REDIS_TTL_S`), allowing other processes reading from Redis to see a stale "founder" role. Added `TwoLevelCache.clear_all()` (async): clears L1 then uses Redis `SCAN` + `UNLINK` in batches of 100 to delete every matching `tcbot:<prefix>:*` key without blocking the Redis server (avoids `KEYS` which is O(N) blocking). Changed `set_owner()` to `await effective_role_cache.clear_all()`. The original `clear()` method is unchanged for callers that only need local invalidation.
+
 ## [Unreleased] - 2026-07-11 (session 193)
 
 ### Fixed

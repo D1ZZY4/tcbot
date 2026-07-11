@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+tests/
 
 # Environment variables (real credentials)
 *.env

@@ -100,8 +100,11 @@ async def set_owner(user_id: int) -> None:
     )
     await db_call(col("tc_owners").delete_many({"user_id": {"$ne": user_id}}))
     owner_id_cache.put(_OWNER_KEY, user_id)
-    # * Clear the full role cache; the old owner's ID is unknown
-    effective_role_cache.clear()
+    # * Full two-layer invalidation: old owner's ID is unknown, so we cannot
+    # * call invalidate(old_id).  clear_all() sweeps L1 + all Redis keys with
+    # * the "role" prefix so no process reads a stale "founder" role after the
+    # * transfer completes.
+    await effective_role_cache.clear_all()
 
 
 # ────────────────────────── Admin CRUD ─────────────────────────── #

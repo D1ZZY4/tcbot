@@ -190,20 +190,24 @@ async def get_first_names_batch(user_ids: list[int]) -> dict[int, str]:
 
 
 async def get_first_name(user_id: int, fallback: str = "") -> str:
-    """Return cached first_name or fallback string.
+    """Return cached first_name or fallback string (L1 → L2 Redis → DB cached).
 
-    Checks L1 mention cache before hitting MongoDB so repeated lookups in
-    the same process avoid a network round-trip.
+    Routes through ``user_mention_cache.get_or_fetch`` so all three layers are
+    checked in order and both L1 and L2 are populated on a miss -- exactly the
+    same path as ``get_user_mention_data``.  Calling this function never causes
+    a redundant MongoDB round-trip for a user already fetched by either helper.
     """
-    cached = user_mention_cache.get(user_id)
-    if cached is not CACHE_MISS:
-        data = cast("list[str | None]", cached)
-        return cast("str", data[0]) or fallback
 
-    doc = await db_call(_members().find_one({"user_id": user_id}, {"first_name": 1}))
-    if doc:
-        return doc.get("first_name") or fallback
-    return fallback
+    async def _fetch() -> list[str | None]:
+        doc = await db_call(
+            _members().find_one({"user_id": user_id}, {"first_name": 1, "username": 1})
+        )
+        if doc:
+            return [doc.get("first_name") or str(user_id), doc.get("username")]
+        return [str(user_id), None]
+
+    data = await user_mention_cache.get_or_fetch(user_id, _fetch)
+    return cast("str", data[0]) or fallback
 
 
 async def total_users() -> int:
