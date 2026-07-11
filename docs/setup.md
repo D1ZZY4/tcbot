@@ -56,6 +56,18 @@ For Replit or another hosting platform:
 
 Do not commit a filled `config.env` file.
 
+### Community links (optional)
+
+The Additional Links menu in the bot start screen shows buttons for community channels, groups, and the TRAVEL community. Each button is shown only when its corresponding env var is set to a non-empty URL. Leave any of these empty to hide that button:
+
+| Variable | Button label |
+|---|---|
+| `COMMUNITY_CHANNEL_URL` | Main Channel |
+| `COMMUNITY_GROUP_URL` | Discussion Group |
+| `COMMUNITY_LOGS_URL` | Logs Channel |
+| `COMMUNITY_EXEC_URL` | Exec Group |
+| `COMMUNITY_TRAVEL_URL` | TRAVEL - Transsion Development (Community) |
+
 ## Environment variable format
 
 The configuration loader reads environment variables in `tcbot/__init__.py`. Local development uses `python-dotenv` to load `config.env`.

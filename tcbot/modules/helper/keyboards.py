@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+from tcbot import cfg
 from tcbot import database as db
 
 # ──────────────────────────── Ban flow ──────────────────────────── #
@@ -284,35 +285,54 @@ def back_to_privacy_policy_kb() -> InlineKeyboardMarkup:
 
 
 def additional_menu_kb() -> InlineKeyboardMarkup:
-    """Return the static links menu shown from the start menu: channels, groups, TRAVEL."""
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(
-                    "Main Channel", url="https://t.me/TranssionCoreFederation"
-                ),
-                InlineKeyboardButton(
-                    "Discussion Group",
-                    url="https://t.me/TranssionCoreFederationGroup",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    "Logs Channel", url="https://t.me/TranssionCoreFederationLogs"
-                ),
-                InlineKeyboardButton(
-                    "Exec Group", url="https://t.me/+A105pfnCvkhiZWM1"
-                ),
-            ],
+    """Return the community links menu shown from the start menu.
+
+    Each button row is only included when the corresponding env var URL is
+    non-empty (COMMUNITY_CHANNEL_URL, COMMUNITY_GROUP_URL, COMMUNITY_LOGS_URL,
+    COMMUNITY_EXEC_URL, COMMUNITY_TRAVEL_URL).  Rows with no configured URL are
+    silently omitted so the keyboard stays clean for deployments that do not
+    configure every link.
+    """
+    rows: list[list[InlineKeyboardButton]] = []
+
+    channel_btn = (
+        InlineKeyboardButton("Main Channel", url=cfg.community_channel_url)
+        if cfg.community_channel_url
+        else None
+    )
+    group_btn = (
+        InlineKeyboardButton("Discussion Group", url=cfg.community_group_url)
+        if cfg.community_group_url
+        else None
+    )
+    if channel_btn or group_btn:
+        rows.append([b for b in (channel_btn, group_btn) if b is not None])
+
+    logs_btn = (
+        InlineKeyboardButton("Logs Channel", url=cfg.community_logs_url)
+        if cfg.community_logs_url
+        else None
+    )
+    exec_btn = (
+        InlineKeyboardButton("Exec Group", url=cfg.community_exec_url)
+        if cfg.community_exec_url
+        else None
+    )
+    if logs_btn or exec_btn:
+        rows.append([b for b in (logs_btn, exec_btn) if b is not None])
+
+    if cfg.community_travel_url:
+        rows.append(
             [
                 InlineKeyboardButton(
                     "TRAVEL - Transsion Development (Community)",
-                    url="http://t.me/+S2C_ppFvHlAwMzNl",
-                ),
-            ],
-            [InlineKeyboardButton("« Back", callback_data="back_to_start")],
-        ]
-    )
+                    url=cfg.community_travel_url,
+                )
+            ]
+        )
+
+    rows.append([InlineKeyboardButton("« Back", callback_data="back_to_start")])
+    return InlineKeyboardMarkup(rows)
 
 
 def groups_menu_kb(*, detailed: bool) -> InlineKeyboardMarkup:

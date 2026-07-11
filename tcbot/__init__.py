@@ -210,6 +210,11 @@ class Configs:
     warn_limit: int
     webhook_url: str
     webhook_secret: str
+    community_channel_url: str
+    community_group_url: str
+    community_logs_url: str
+    community_exec_url: str
+    community_travel_url: str
 
     # * Properties below handle lazy type-casting from raw env strings.
     @property
@@ -308,6 +313,11 @@ class Configs:
             warn_limit=_int_from_env("WARN_LIMIT", 3, minimum=1),
             webhook_url=_auto_webhook_url(),
             webhook_secret=_resolve_webhook_secret(),
+            community_channel_url=os.getenv("COMMUNITY_CHANNEL_URL", "").strip(),
+            community_group_url=os.getenv("COMMUNITY_GROUP_URL", "").strip(),
+            community_logs_url=os.getenv("COMMUNITY_LOGS_URL", "").strip(),
+            community_exec_url=os.getenv("COMMUNITY_EXEC_URL", "").strip(),
+            community_travel_url=os.getenv("COMMUNITY_TRAVEL_URL", "").strip(),
         )
 
 
@@ -500,6 +510,31 @@ class _CfgAdapter:
     def is_webhook_mode(self) -> bool:
         """True when a public webhook URL is available; False for polling fallback."""
         return bool(self._c.webhook_url)
+
+    @property
+    def community_channel_url(self) -> str:
+        """Public URL of the main community channel (empty = button not shown)."""
+        return self._c.community_channel_url
+
+    @property
+    def community_group_url(self) -> str:
+        """Public URL of the main community discussion group (empty = button not shown)."""
+        return self._c.community_group_url
+
+    @property
+    def community_logs_url(self) -> str:
+        """Public URL of the logs channel (empty = button not shown)."""
+        return self._c.community_logs_url
+
+    @property
+    def community_exec_url(self) -> str:
+        """Public URL or invite link of the exec/staff group (empty = button not shown)."""
+        return self._c.community_exec_url
+
+    @property
+    def community_travel_url(self) -> str:
+        """Public URL or invite link of the TRAVEL community (empty = button not shown)."""
+        return self._c.community_travel_url
 
 
 # * This adapter instance is the single global 'cfg' used by every module.

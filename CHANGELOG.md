@@ -4,6 +4,10 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ## [Unreleased] - 2026-07-11 (session 193)
 
+### Fixed
+
+- **Bug #503** (`tcbot/modules/helper/keyboards.py`, `tcbot/__init__.py`, `config.env.example`, `docs/setup.md`): `additional_menu_kb()` contained five hardcoded community t.me URLs (`TranssionCoreFederation`, `TranssionCoreFederationGroup`, `TranssionCoreFederationLogs`, exec-group invite, TRAVEL invite). Added five optional env vars (`COMMUNITY_CHANNEL_URL`, `COMMUNITY_GROUP_URL`, `COMMUNITY_LOGS_URL`, `COMMUNITY_EXEC_URL`, `COMMUNITY_TRAVEL_URL`) to `Configs` dataclass and `_CfgAdapter`. Rewrote `additional_menu_kb()` to build each button row only when the corresponding cfg URL is non-empty, keeping the keyboard clean for deployments that do not configure every link. Updated `config.env.example` with documented entries for all five new vars and added a "Community links" section to `docs/setup.md`.
+
 ### Documentation
 
 - **Bug #502** (`CHANGELOG.md`, `PLAN.md`, `.agents/memory/context.md`): Three em-dashes (U+2014) found in documentation files added during session 192 entries. Replaced with colons or semicolons to comply with the no-em/en-dash policy. Audit note: session 193 ran 10 parallel sub-agents (SA1-SA10) across all 75 Python source files in 3 independent waves; zero code-level bugs found.

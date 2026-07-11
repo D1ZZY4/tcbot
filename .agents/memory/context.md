@@ -142,4 +142,4 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## Bug count
 
-Total: **502 bugs fixed** (sessions 1-193). Open: CVE-2026-31072 (accepted), Improvement #4 (future).
+Total: **503 bugs fixed** (sessions 1-193). Open: CVE-2026-31072 (accepted), Improvement #4 (future).
