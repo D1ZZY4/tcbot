@@ -1,7 +1,3 @@
-- [AI moderation PRD decisions](ai-moderation-prd.md) - finalized answers to all 7 open PRD questions (mute scope, ban proof bypass, undo-ban window, roles, TTLs) — check before building ai_moderation/
-- [AI moderation vision (StepFun)](ai-moderation-vision.md) - nickname-pfp is now AI-enforceable via a separate vision model; periodic 24h scan + in-chat media, confirmed config keys and cost guards
-- [AI moderation reuse audit](ai-moderation-reuse-audit.md) - confirmed real bans_db/mutes_db/parse_logmsg signatures vs a skeleton draft's wrong guesses (ctx_bot_id, revoke_ban, missing chat_title)
-- [Kilo AI Gateway setup](kilo-gateway.md) - OpenAI-compatible (not Anthropic), base URL, free Nemotron text model ID, StepFun vision model ID — check before writing ai_client.py
 - [Python implicit-string-concat pitfall](decisions.md) - variables cannot participate in implicit string concat; use `f"{var}"` instead of placing a bare variable name adjacent to string literals
 - [Pagination refactor pattern](pagination-refactor.md) - `paginate`, `nav_row`, `date_or_unknown` live in `tcbot.utils.pagination`; flow files must import and call these directly with `_PAGE_SIZE` as third arg
 - [Project context](context.md) - current state, what is done, what is pending, known runtime notes
