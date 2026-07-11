@@ -37,6 +37,7 @@
 19. [Konfigurasi Bot](#19-konfigurasi-bot)
 20. [Out of Scope](#20-out-of-scope)
 21. [Koreksi Audit Kode & Pertanyaan Terbuka](#21-koreksi-audit-kode--pertanyaan-terbuka)
+22. [Review Lanjutan: Skeleton Implementasi & Rencana Testing](#22-review-lanjutan-skeleton-implementasi--rencana-testing)
 
 ---
 
@@ -254,7 +255,7 @@ flowchart LR
         H1[warning]
         H2[mute_time]
         H3[kick]
-        H4["ban — hanya jika conf >= 0.90\nDAN admin aktifkan auto_ban"]
+        H4["ban TIDAK PERNAH auto-execute untuk severity high\napapun confidence-nya — selalu flag ke admin"]
     end
     subgraph xhigh["Severity: xhigh"]
         X1[semua action diizinkan]
@@ -455,10 +456,15 @@ flowchart TD
 | kurang dari 0.75 | apapun | Log saja, tidak ada action |
 | 0.75 sampai 0.89 | apapun | Flag ke mod channel, tunggu admin |
 | 0.90 ke atas | warning, mute, mute_time, kick | Auto-execute |
-| 0.90 ke atas | ban + severity max atau xhigh | Auto-execute ban |
-| 0.90 ke atas | ban + severity high ke bawah | Flag ke mod channel |
 | 0.87 ke atas | ban + severity xhigh | Auto-execute ban |
 | 0.85 ke atas | ban + severity max | Auto-execute ban |
+| berapapun | ban + severity high ke bawah | **Tidak pernah** auto-execute — selalu flag ke mod channel |
+
+> **Koreksi (review lanjutan)**: baris "0.90 ke atas, ban + severity max/xhigh, auto-execute"
+> di draft sebelumnya adalah sisa draft lama yang kontradiksi dengan dua baris `AI_CONF_BAN_XHIGH`
+> (0.87) dan `AI_CONF_BAN_MAX` (0.85) di Bagian 19 — sudah dihapus. Tidak ada toggle `auto_ban`
+> per-grup/per-rule di skema manapun (`RuleDoc` maupun `GroupDoc`); severity `high` **selalu**
+> di-flag ke admin, tidak pernah auto-ban, terlepas dari confidence berapa pun.
 
 ---
 
@@ -1191,8 +1197,23 @@ mencerminkan pendekatan final: reuse langsung untuk warn, jalur baru terisolasi 
 hanya menangani `.photo`/`.video`, bukan pesan teks. Modifikasi itu dibatalkan — AI ban memakai
 `action_executor.execute_ai_ban()` yang terpisah total, lihat Bagian 7.
 
-**`muting_flow._execute_mute()` — TIDAK DIUBAH.** Sudah federation-wide sesuai kebutuhan
-(dikonfirmasi Bagian 6.2/6.3), dipanggil langsung tanpa modifikasi.
+**`muting_flow._execute_mute()` — TIDAK DIUBAH, TAPI TIDAK DIPANGGIL LANGSUNG (koreksi review
+lanjutan).** Draft sebelumnya salah mengklaim fungsi ini "cocok dipanggil langsung tanpa
+modifikasi" karena sudah federation-wide. Audit kode nyata menunjukkan `_execute_mute` **hard
+depend** pada `update.effective_chat.id` (harus non-`None`) dan tanpa syarat memanggil
+`bot.edit_message_text` ke sebuah `prompt_chat`/`prompt_id` di `meta` — field ini cuma ada karena
+fungsi ini didesain sebagai ekor sebuah `ConversationHandler` interaktif (`/mute` manual, di mana
+ada pesan prompt yang sedang di-edit jadi ringkasan). AI moderation tidak punya `Update` asli
+maupun pesan prompt untuk di-edit; memanggil fungsi ini langsung akan **error** di baris
+`edit_message_text`, bukan "jalan tanpa modifikasi" seperti klaim sebelumnya.
+
+**Keputusan final**: `action_executor.execute_ai_mute()` dan `execute_ai_mute_time()` adalah
+implementasi **baru dan terisolasi**, sama seperti `execute_ai_kick()`/`execute_ai_ban()` —
+mereplikasi bagian inti `_execute_mute` (fan-out `restrict_chat_member` ke semua grup + tulis
+`mutes_db.log_mute()`/`set_active_mute()` + kirim notifikasi log & grup), tapi **skip** langkah
+`edit_message_text` ke prompt yang memang tidak relevan untuk pemanggilan non-interaktif. Fungsi
+`_execute_mute` existing tetap tidak disentuh sama sekali dan tetap dipakai apa adanya untuk
+`/mute` manual.
 
 **`kicking_flow.execute_kick()` — TIDAK DIUBAH.** Bergantung pada `update.effective_*`, tidak
 cocok dipanggil programatik oleh AI. `action_executor.execute_ai_kick()` baru dibuat terpisah,
@@ -1250,15 +1271,21 @@ flowchart TD
     HANDLER --> CB[context_builder.py\nBuild JSON payload]
     HANDLER --> AIC[ai_client.py\nLLM API call]
     HANDLER --> DR[decision_router.py\nConfidence routing]
-    DR --> AE[action_executor.py\nWrapper existing flows]
-    AE --> BF[ban_flow._execute_ban\nEXISTING]
-    AE --> MF[muting_flow._execute_mute\nEXISTING]
-    AE --> KF[kicking_flow.execute_kick\nEXISTING]
-    AE --> WF[warning_flow._execute_warn\nEXISTING]
+    DR --> AE[action_executor.py\nIsolated execution layer]
+    AE --> AEB[execute_ai_ban\nNEW, tidak panggil _execute_ban]
+    AE --> AEM[execute_ai_mute / execute_ai_mute_time\nNEW, tidak panggil _execute_mute]
+    AE --> AEK[execute_ai_kick\nNEW, tidak panggil execute_kick]
+    AE --> WF[warning_flow.execute_warn\nEXISTING — reused dengan update=None]
     CB --> FRD[rules_db.py\nNEW]
     FRD --> REDIS[(Redis Cache)]
     FRD --> MONGO[(MongoDB rules)]
 ```
+
+> **Koreksi (review lanjutan)**: diagram sebelumnya adalah leftover draft v1.0 sebelum keputusan
+> isolasi fungsi diambil — masih mengarah ke `_execute_ban`/`_execute_mute`/`execute_kick`
+> existing, kontradiksi langsung dengan teks "Modifikasi pada Kode Existing" tepat di atasnya.
+> Diagram sudah diperbaiki agar konsisten: hanya `execute_warn` yang benar-benar dipanggil
+> langsung (reused), tiga lainnya adalah implementasi baru yang terisolasi.
 
 ---
 
@@ -1538,6 +1565,122 @@ action yang benar-benar tereksekusi.
 
 > Dengan semua Q1–Q7 terjawab, **tidak ada lagi blocker keputusan** untuk memulai implementasi
 > Fase 0 sampai Fase 7 sesuai urutan yang sudah direncanakan.
+
+---
+
+## 22. REVIEW LANJUTAN: SKELETON IMPLEMENTASI & RENCANA TESTING
+
+Bagian ini merangkum hasil review putaran kedua (setelah Bagian 21 disusun) yang membaca kode
+tambahan (`groups_db.py`, `mongos.py`, `warning_flow.py`, `muting_flow.py`, `ban_flow.py`,
+`bans_db.create_ban`, `fan_out`, `keyboards.py`, `parse_logmsg.py`) dan menghasilkan skeleton
+kode konkret untuk Fase 0-4, plus 4 inkonsistensi yang ditemukan dan sudah diperbaiki langsung
+di bagian aslinya masing-masing (lihat catatan "Koreksi (review lanjutan)" di Bagian 5, 8, dan 16).
+
+### 22.1 Ringkasan Koreksi yang Sudah Diterapkan
+
+| # | Lokasi | Masalah | Status |
+|---|---|---|---|
+| 1a | Bagian 16, diagram relasi modul | Masih mengarah ke `_execute_ban`/`execute_kick`/`_execute_warn` existing, kontradiksi dengan teks di atasnya | Diperbaiki |
+| 1b | Bagian 8, threshold matrix | Baris "0.90 ke atas untuk max/xhigh" kontradiksi dengan baris "0.87/0.85" dan dengan Bagian 19 | Diperbaiki, baris lama dihapus |
+| 1c | Bagian 5, diagram severity | Frasa "admin aktifkan auto_ban" mengacu toggle yang tidak ada di `RuleDoc`/`GroupDoc` manapun | Diperbaiki — severity `high` dipertegas tidak pernah auto-ban |
+| 1d | Bagian 16, klaim mute "cocok tanpa modifikasi" | `_execute_mute` hard-depend ke `update.effective_chat` dan prompt message interaktif yang tidak ada di jalur AI | Diperbaiki — `execute_ai_mute`/`execute_ai_mute_time` jadi implementasi baru terisolasi, sama seperti kick/ban |
+
+### 22.2 Signature Final Fungsi-Fungsi Kunci
+
+Untuk dipakai persis saat implementasi (bukan pseudo-code lagi):
+
+```python
+# action_executor.py
+
+UNDO_BAN_WINDOW_SECONDS: int = 24 * 3600   # Q3
+
+async def execute_ai_warn(
+    ctx: ContextTypes.DEFAULT_TYPE, chat_id: int, target_id: int,
+    target_name: str, reason_text: str,
+) -> None:
+    """Reuse execute_warn(update=None, ...) — satu-satunya fungsi existing yang dipanggil."""
+
+async def execute_ai_mute(
+    bot: Bot, chat_id: int, target_id: int, target_fname: str, reason_text: str,
+) -> None:
+    """Mute permanen network-wide. Implementasi baru — TIDAK panggil _execute_mute (lihat 1d)."""
+
+async def execute_ai_mute_time(
+    bot: Bot, chat_id: int, target_id: int, target_fname: str,
+    reason_text: str, duration_key: str,
+) -> None:
+    """Mute sementara. duration_key harus salah satu dari whitelist eksplisit
+    {1h, 3h, 6h, 12h, 24h, 2d, 3d, 7d} — di luar whitelist fallback ke '1h' + log WARNING,
+    tidak pernah mempercayai durasi mentah dari AI langsung ke aritmetika timedelta."""
+
+async def execute_ai_kick(
+    bot: Bot, chat_id: int, target_id: int, target_fname: str, reason_text: str,
+) -> None:
+    """ban_chat_member lalu unban_chat_member(only_if_banned=True). TIDAK panggil execute_kick."""
+
+async def execute_ai_ban(
+    ctx: ContextTypes.DEFAULT_TYPE, chat_id: int, offending_msg_id: int, target_id: int,
+    target_fname: str, reason_text: str, ai_confidence: float, ai_eval_id: str | None = None,
+) -> None:
+    """Urutan wajib: (1) forward_message ke cfg.proofs -> proof_message_id (None jika gagal,
+    TIDAK membatalkan ban), (2) bans_db.create_ban(..., ai_confidence=, ai_eval_id=),
+    (3) fan_out ban_chat_member ke semua active_groups(), (4) kirim log ke cfg.logs dengan
+    tombol Undo Ban (24 jam) + Lihat Bukti. TIDAK PERNAH memanggil upload_proof() atau
+    ban_flow._execute_ban — lihat Bagian 7."""
+
+async def ai_undo_ban_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """callback_data: 'ai_undo_ban:{ban_id}'. Bandingkan now - ban.timestamp terhadap
+    UNDO_BAN_WINDOW_SECONDS: dalam window -> unban semua grup + is_active=False + hapus tombol;
+    lewat window -> jangan coba unban sama sekali, ganti tombol jadi label statis nonaktif
+    ('Undo window expired — pakai /tcunban')."""
+```
+
+```python
+# tcbot/utils/translator.py
+
+async def translate_rule(rule_id: str, content_en: str) -> str:
+    """Cek Redis (key: tcbot:rule_translated:{rule_id}:id) -> MyMemory API jika miss ->
+    cache dengan TTL = 7 hari + jitter acak 0-24 jam (stagger, Q5) -> fallback content_en
+    asli tanpa raise pada kegagalan apa pun (timeout, non-200, rate limit, response cacat)."""
+```
+
+### 22.3 Item yang Wajib Diverifikasi Sebelum Coding Sungguhan
+
+Beberapa nama fungsi di skeleton Bagian 21/22 masih **asumsi**, belum diverifikasi 100% terhadap
+`bans_db.py`/`mutes_db.py` yang sebenarnya. Ini bukan keputusan desain, tapi tugas verifikasi
+teknis wajib di awal Fase 3:
+
+- `bans_db.create_ban()` perlu ditambah dua kwarg baru `ai_confidence`/`ai_eval_id` — signature
+  saat ini belum punya, perlu ditulis diff eksplisit sebelum `execute_ai_ban` dikodekan.
+- Perlu dipastikan ada (atau ditambah) helper: cara membaca satu `BanDoc` by id (`get_ban` atau
+  nama lain), cara menonaktifkan ban (`revoke_ban`/`deactivate_ban` atau nama lain, untuk Undo
+  Ban), dan cara update `log_message_id` setelah pesan log terkirim (pola yang sama dipakai
+  `ban_flow` manual — cek nama fungsi aslinya, jangan asumsikan).
+- `mutes_db.log_mute()` — verifikasi kwarg persis (bukan `ctx_bot_id`, tapi kemungkinan besar
+  `admin_id` sama seperti pola lain di codebase — cek langsung ke `mutes_db.py`).
+- `parse_logmsg.kick_log`/`ban_log` urutan parameter positional — jangan disalin dari skeleton
+  tanpa dicocokkan ke definisi asli.
+
+### 22.4 Rencana Testing Ringkas per Fase
+
+| Fase | Fokus Test Kritis |
+|---|---|
+| Fase 0 (Config) | `AI_API_KEY` kosong -> `ai_moderation_configured=False`, bot tetap start, WARNING sekali; parse gagal (float/di luar rentang) -> fallback ke default + WARNING, bukan crash |
+| Fase 1 (rules_db) | Seed 27 file valid -> 27 rules; 1 file rusak di antaranya -> 26 ter-seed + error logged, tidak abort batch; seed dipanggil 2x -> tetap 27 (idempotent); `set_ai_moderation` lalu baca lagi -> hasil konsisten tanpa delay cache |
+| Fase 2 (`execute_warn` signature) | **Wajib regresi penuh command `/warn` manual dulu, tanpa perubahan test lama.** Panggil dengan `update` asli -> perilaku identik seperti sebelum ubah. Panggil dengan `update=None` + param eksplisit -> tidak ada akses `update.effective_*` yang lolos. `chat_id=None` lupa diisi -> `ValueError`/`TypeError` jelas, bukan `AttributeError` membingungkan |
+| Fase 3 (`action_executor.py`) | **Test paling penting di seluruh fitur**: mock `upload_proof` dan assert **tidak pernah dipanggil** oleh `execute_ai_ban`. Urutan `ban_chat_member` -> `unban_chat_member` di kick (urutan salah = permanent ban, bukan kick). `mute_time` dengan durasi di luar whitelist -> fallback ke 1h + WARNING. Undo Ban dalam vs lewat 24 jam -> assert `unban_chat_member` dipanggil vs tidak pernah dipanggil sama sekali. Race condition dua admin tekan Undo Ban bersamaan -> unban efektif cuma sekali (idempotency di level DB) |
+| Fase 4 (`translator.py`) | Cache hit tidak memanggil MyMemory lagi; 27 rule_id berbeda menghasilkan TTL yang **tidak identik** (stagger benar-benar jalan); rate limit/timeout -> fallback EN tanpa exception dan tanpa cache write hasil gagal |
+
+### 22.5 Pertanyaan Terbuka Baru dari Review Lanjutan
+
+Satu pertanyaan genuinely ambigu ditemukan yang berdampak ke jumlah rule AI-enforceable
+(20 vs 21) — didiskusikan dan dijawab di luar dokumen ini, lihat catatan jawaban di bawah setiap
+poin bila sudah diputuskan:
+
+- **Klasifikasi rule `fundraising` (rule 09)**, yang statusnya "Parsial — flag ke admin saja":
+  apakah `ai_enforceable: true` (dengan `auto_actions` dibatasi cuma actions yang flag-worthy,
+  tidak pernah auto-execute) atau `ai_enforceable: false` seperti 5 rule lain yang butuh
+  keputusan manusia penuh?
 
 ---
 
