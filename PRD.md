@@ -760,11 +760,16 @@ sequenceDiagram
 
 ### 11.5 Flow `ban` (Network-Wide)
 
+**Koreksi**: fungsi existing `ban_flow._execute_ban` **tidak dipanggil sama sekali** (lihat Bagian
+7 dan 16). Jalur eksekusi memakai `action_executor.execute_ai_ban()` yang baru dan terisolasi,
+menulis langsung ke `bans_db.create_ban()` + `fan_out()` sendiri, meniru pola akhir
+`_execute_ban` tanpa dependency ke fungsi itu:
+
 ```mermaid
 sequenceDiagram
     participant AR as Decision Router
     participant PROOFS as cfg.proofs channel
-    participant BF as ban_flow._execute_ban
+    participant AE as action_executor.execute_ai_ban (BARU, terisolasi)
     participant DB as MongoDB bans
     participant FO as fan_out ke semua grup
     participant GRP as Telegram Group asal
@@ -772,12 +777,12 @@ sequenceDiagram
 
     AR->>PROOFS: forward_message(chat_id, offending_msg_id)
     PROOFS-->>AR: proof_message_id = 9901
-    AR->>BF: _execute_ban(user_id, reason=ai_reason, proof_msg_id=9901, is_ai_ban=True, admin_id=BOT_USER_ID)
-    BF->>DB: create BanDoc(reason, proof_message_id=9901, admin_user_id=BOT_USER_ID, is_active=True)
-    BF->>FO: ban user di semua active_groups() dengan semaphore-bounded concurrency
-    FO-->>BF: done
-    BF->>GRP: "Moderasi Otomatis\n@user di-ban dari jaringan TCF\nRule: display_name\nAlasan: reason\nAppeal: link"
-    BF->>LOG: "[AI MOD] Auto-Ban Executed\nGroup: ...\nUser: ...\nConf: 96%\n[Undo Ban] [Lihat Bukti]"
+    AR->>AE: execute_ai_ban(chat_id, offending_msg_id, target_id, reason)
+    AE->>DB: bans_db.create_ban(reason, proof_message_id=9901, admin_user_id=BOT_USER_ID, ai_confidence=0.96, is_active=True)
+    AE->>FO: ban user di semua active_groups() dengan semaphore-bounded concurrency
+    FO-->>AE: done
+    AE->>GRP: "Moderasi Otomatis\n@user di-ban dari jaringan TCF\nRule: display_name\nAlasan: reason\nAppeal: link"
+    AE->>LOG: "[AI MOD] Auto-Ban Executed\nGroup: ...\nUser: ...\nConf: 96%\n[Undo Ban — 24 jam] [Lihat Bukti]"
 ```
 
 ---
@@ -813,13 +818,28 @@ GET https://api.mymemory.translated.net/get?q={text}&langpair=en|id
 
 ### Flow Terjemahan
 
+**Keputusan (Q5)**: tidak ada `MYMEMORY_EMAIL` yang disediakan dari awal, jadi limit tetap
+1.000 req/hari. Untuk mencegah 27 rules re-translate bersamaan di hari yang sama (yang akan
+langsung menghabiskan kuota), TTL cache **di-stagger** dengan jitter acak per rule alih-alih
+TTL 7 hari yang identik untuk semua rule:
+
+```python
+import random
+
+BASE_TTL = 7 * 86400          # 7 hari
+JITTER_MAX = 86400            # +0 sampai +1 hari acak per rule
+
+def stagger_ttl() -> int:
+    return BASE_TTL + random.randint(0, JITTER_MAX)
+```
+
 ```mermaid
 flowchart TD
     A[User ketik /rules di grup] --> B{Redis cache ada?\nkey: rule_translated:rule_id:id}
-    B -->|Ada, TTL 7 hari| C[Tampilkan dari cache]
+    B -->|Ada, TTL 7-8 hari ter-stagger| C[Tampilkan dari cache]
     B -->|Tidak ada| D[Ambil content_en dari MongoDB]
     D --> E[Kirim ke MyMemory API\nGET langpair=en|id]
-    E -->|Sukses| F[Simpan hasil ke Redis\nTTL 7 hari]
+    E -->|Sukses| F[Simpan hasil ke Redis\nTTL 7 hari + jitter acak 0-24 jam]
     F --> G[Tampilkan ke user]
     E -->|Gagal timeout atau rate limit| H[Fallback tampilkan EN\ntanpa error ke user]
 ```
@@ -1072,7 +1092,7 @@ Action : BAN (network-wide)
 Conf.  : 96%
 Reason : Menjual keybox dengan label VVIP dan harga berlangganan.
 
-[Lihat Pesan Asli] [Lihat Bukti] [Undo Ban]
+[Lihat Pesan Asli] [Lihat Bukti] [Undo Ban] (aktif 24 jam sejak ban)
 ```
 
 **Untuk flag ke admin (confidence 0.75 sampai 0.89):**
@@ -1104,7 +1124,7 @@ Reason : Menjual keybox dengan label VVIP dan harga berlangganan (15rb/bulan).
 
 Ini adalah ban otomatis oleh AI. Verifikasi jika perlu.
 
-[Lihat Bukti di proofs] [Undo Ban] [Lihat Appeal]
+[Lihat Bukti di proofs] [Undo Ban — aktif 24 jam] [Lihat Appeal]
 ```
 
 ---
@@ -1348,8 +1368,11 @@ async def is_ai_moderation_enabled(chat_id: int) -> bool:
     """Baca status dari cache (L1/L2), fallback ke MongoDB jika cache miss."""
 ```
 
-Owner grup bisa aktifkan via command admin: `/admin_set_ai on` atau `/admin_set_ai off`
-(role minimum masih perlu diputuskan — lihat Bagian 21, Q4).
+Owner grup bisa aktifkan via command admin: `/admin_set_ai on` atau `/admin_set_ai off`.
+Role minimum: **`staff_only`** — staff federation bisa toggle grup manapun, sama seperti pola
+`cmd_cleanup` (lihat Bagian 21, Q4). Toggle **tidak** memvalidasi permission bot (ban/delete) di
+muka — kegagalan eksekusi karena permission kurang ditangani lewat error handling standar
+(log ke `cfg.logs`), bukan ditolak proaktif saat toggle (Q7).
 
 ### Ringkasan Error Handling
 
@@ -1483,26 +1506,38 @@ class BanDoc(TypedDict, total=False):
 pemanggilan `create_ban()`/`log_mute()`/`add_warn()` — tidak perlu collection audit terpisah untuk
 action yang benar-benar tereksekusi.
 
-### Keputusan yang Sudah Diambil
+### Keputusan yang Sudah Diambil (Semua Pertanyaan Terjawab)
 
-| Keputusan | Hasil |
-|---|---|
-| Sumber "10 pesan terakhir" | Buffer in-memory per `chat_id` (`deque(maxlen=10)`) + mirror Redis TTL pendek untuk resilience restart — prioritas kecepatan, bukan MongoDB |
-| Scope mute AI | Network-wide ke semua grup terhubung, reuse `_execute_mute` existing — tidak ada kapabilitas single-group baru |
-
-### Pertanyaan yang Masih Terbuka — Perlu Keputusan Sebelum Implementasi Bagian Terkait
-
-| # | Pertanyaan | Dampak Jika Tidak Diputuskan |
+| # | Keputusan | Hasil |
 |---|---|---|
-| Q3 | Mekanisme tombol "Undo Ban" di log channel — callback setara `/tcunban` aktif tanpa batas waktu, atau ada jendela waktu (misal 24 jam) sebelum harus manual? | Menentukan apakah perlu handler callback baru + expiry logic, atau cukup callback sederhana |
-| Q4 | Role minimum untuk `/admin_set_ai on\|off` — `staff_only` (siapa saja staff bisa toggle grup manapun) atau harus admin lokal grup itu sendiri (perlu `get_chat_member` check seperti `/tcconnect`)? | Berdampak besar ke UX 60 grup — staff_only berarti satu staff bisa nyalakan AI di semua grup tanpa sepengetahuan admin lokal |
-| Q5 | `MYMEMORY_EMAIL` akan dikonfigurasi dari awal (limit naik ke 10k/hari), atau perlu strategi stagger TTL cache per rule supaya 27 rules tidak re-translate bersamaan dan menghabiskan kuota 1.000/hari? | Menentukan apakah perlu logic stagger TTL tambahan di `translator.py` |
-| Q6 | Retensi `ai_evaluations` — perlu TTL index (mirip `member_cache` 90 hari), atau verdict "clean"/confidence rendah cukup log aplikasi biasa tanpa masuk MongoDB sama sekali? | Menentukan apakah collection butuh TTL index sejak awal untuk mencegah pertumbuhan tak terbatas di 60 grup × ratusan ribu member |
-| Q7 | Saat admin toggle `/admin_set_ai on`, perlu validasi dulu bot punya izin (ban/delete) cukup — seperti `check_perms()` di `/tcconnect` — atau dibiarkan gagal senyap saat AI mencoba eksekusi? | Menentukan UX kegagalan: proaktif ditolak saat toggle, vs silent fail yang baru ketahuan saat AI gagal eksekusi |
+| Q1 | Sumber "10 pesan terakhir" | Buffer in-memory per `chat_id` (`deque(maxlen=10)`) + mirror Redis TTL pendek untuk resilience restart — prioritas kecepatan, bukan MongoDB |
+| Q2 | Scope mute AI | Network-wide ke semua grup terhubung, reuse `_execute_mute` existing — tidak ada kapabilitas single-group baru |
+| Q3 | Mekanisme tombol "Undo Ban" | Callback aktif **24 jam** sejak AI ban dieksekusi, setelah itu tombol non-aktif dan harus `/tcunban` manual |
+| Q4 | Role minimum `/admin_set_ai on\|off` | `staff_only` — staff federation bisa toggle grup manapun, sama seperti pola `cmd_cleanup` |
+| Q5 | Strategi rate limit MyMemory | Tidak ada `MYMEMORY_EMAIL` disediakan — TTL cache Redis per rule di-**stagger** (jitter acak, bukan TTL 7 hari identik untuk semua rule) supaya 27 rules tidak re-translate bersamaan dan menghabiskan kuota 1.000 req/hari di hari yang sama |
+| Q6 | Retensi `ai_evaluations` | TTL index **90 hari**, mengikuti pola `member_cache` — semua evaluasi (termasuk verdict `clean` dan confidence rendah) tetap masuk MongoDB untuk audit jangka menengah, bukan cuma log aplikasi |
+| Q7 | Validasi permission saat toggle `/admin_set_ai on` | Tidak ada validasi proaktif — dibiarkan gagal senyap saat AI mencoba eksekusi dan gagal (log error), mengikuti pola `fan_out()` existing yang juga tidak memvalidasi permission di muka |
 
-> Implementasi Fase 0–2 (fondasi, data layer, utilitas pendukung — lihat rencana bertahap yang
-> didiskusikan terpisah) tidak terhambat oleh Q3–Q7. Namun Fase 4 (`action_executor.py`) dan
-> Fase 6 (command admin) sebaiknya menunggu jawaban Q3, Q4, Q7 agar tidak perlu dirombak ulang.
+**Implikasi teknis dari keputusan ini:**
+
+- **Q3 (24 jam)** → `AIEvaluationDoc`/`BanDoc` butuh timestamp ban untuk dicek saat callback
+  ditekan; callback handler `ai_undo_ban` harus membandingkan `now - ban.timestamp > 24h` dan
+  menonaktifkan tombol (edit reply markup ke teks statis) jika kedaluwarsa.
+- **Q4 (staff_only)** → `/admin_set_ai` memakai decorator `staff_only` yang sudah ada, tanpa
+  perlu `get_chat_member` check tambahan — konsisten dengan `cmd_cleanup`.
+- **Q5 (stagger TTL)** → `translator.py` men-set TTL Redis dengan jitter, misal
+  `TTL = 7 * 86400 + random.randint(0, 86400)` (7 hari ± jitter 1 hari), bukan TTL statis identik
+  untuk seluruh 27 rules.
+- **Q6 (TTL 90 hari)** → `mongos.py::ensure_indexes()` harus membuat TTL index di
+  `ai_evaluations.timestamp` dengan `expireAfterSeconds = 90 * 86400`, mengikuti pola index TTL
+  `member_cache` yang sudah ada. Semua verdict (termasuk `clean`) masuk collection ini — bukan
+  cuma yang di-flag atau confidence rendah, supaya audit trail lengkap dalam window 90 hari.
+- **Q7 (silent fail)** → tidak perlu logic validasi baru di handler toggle. Kegagalan eksekusi AI
+  karena permission kurang cukup dicatat lewat mekanisme error handling yang sudah ada di
+  Bagian 18 (log error ke `cfg.logs`), sama seperti kegagalan `fan_out` lain.
+
+> Dengan semua Q1–Q7 terjawab, **tidak ada lagi blocker keputusan** untuk memulai implementasi
+> Fase 0 sampai Fase 7 sesuai urutan yang sudah direncanakan.
 
 ---
 
@@ -1528,9 +1563,14 @@ action yang benar-benar tereksekusi.
 | Sumber context 10 pesan terakhir | Buffer in-memory per grup + mirror Redis, bukan MongoDB — prioritas kecepatan respons |
 | Collection baru | `rules` dan `ai_evaluations` (bukan reuse `bans`/`mutes`/`warns` untuk log evaluasi yang belum jadi action) |
 | Dependency baru | `httpx`, `pyyaml` |
+| Undo Ban | Callback aktif 24 jam sejak AI ban, setelah itu wajib `/tcunban` manual |
+| Role `/admin_set_ai` | `staff_only` |
+| Rate limit MyMemory | Tanpa email, TTL cache 7 hari + jitter acak 0-24 jam per rule (stagger) |
+| Retensi `ai_evaluations` | TTL index 90 hari, semua verdict (termasuk `clean`) tercatat |
+| Validasi permission saat toggle AI | Tidak ada — gagal senyap saat eksekusi, dicatat via error handling standar |
 
 ---
 
 *PRD ini adalah dokumen hidup, sudah direvisi v1.1 berdasarkan audit kode nyata (lihat Bagian 21).
-5 pertanyaan (Q3–Q7) masih terbuka dan perlu keputusan sebelum implementasi Fase 4 (action
-executor) dan Fase 6 (command admin) dimulai.*
+Seluruh 7 pertanyaan (Q1–Q7) sudah dijawab dan tidak ada lagi blocker keputusan — implementasi
+bisa dimulai dari Fase 0.*

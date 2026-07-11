@@ -1,3 +1,4 @@
+- [AI moderation PRD decisions](ai-moderation-prd.md) - finalized answers to all 7 open PRD questions (mute scope, ban proof bypass, undo-ban window, roles, TTLs) — check before building ai_moderation/
 - [Python implicit-string-concat pitfall](decisions.md) - variables cannot participate in implicit string concat; use `f"{var}"` instead of placing a bare variable name adjacent to string literals
 - [Pagination refactor pattern](pagination-refactor.md) - `paginate`, `nav_row`, `date_or_unknown` live in `tcbot.utils.pagination`; flow files must import and call these directly with `_PAGE_SIZE` as third arg
 - [Project context](context.md) - current state, what is done, what is pending, known runtime notes
