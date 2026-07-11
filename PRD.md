@@ -38,6 +38,7 @@
 20. [Out of Scope](#20-out-of-scope)
 21. [Koreksi Audit Kode & Pertanyaan Terbuka](#21-koreksi-audit-kode--pertanyaan-terbuka)
 22. [Review Lanjutan: Skeleton Implementasi & Rencana Testing](#22-review-lanjutan-skeleton-implementasi--rencana-testing)
+23. [Moderasi Vision: Foto Profil & Media Pesan](#23-moderasi-vision-foto-profil--media-pesan)
 
 ---
 
@@ -205,7 +206,7 @@ class RuleDoc(TypedDict, total=False):
 | 13 | `keybox` | Keybox & VVIP Sales | max | Ya |
 | 14 | `hate-speech` | Hate Speech | xhigh | Ya |
 | 15 | `license-claiming` | License & Ownership | high | Ya |
-| 16 | `nickname-pfp` | Nickname & Profile Picture | medium | Tidak — butuh inspeksi visual |
+| 16 | `nickname-pfp` | Nickname & Profile Picture | medium | Ya — via model vision terpisah (StepFun), lihat Bagian 23 |
 | 17 | `hoax-monopoly` | Hoax & Monopoly | high | Ya |
 | 18 | `root-module` | Root Module Rules | high | Ya |
 | 19 | `phishing` | Phishing | max | Ya |
@@ -218,13 +219,25 @@ class RuleDoc(TypedDict, total=False):
 | 26 | `spam-flooding` | Spam & Flooding | low | Ya |
 | 27 | `unethical-marketing` | Unethical Marketing | high | Ya |
 
-**AI-enforceable: 21 rules.** Non-enforceable by AI: 6 rules (02, 03, 04, 10, 16 butuh human judgment penuh).
+**AI-enforceable: 23 rules.** Non-enforceable by AI: 4 rules (02 `admin`, 03 `admin-power`,
+04 `group-admin`, 10 `group-ownership` — semuanya butuh human judgment penuh, tidak ada yang
+terdeteksi lewat teks/gambar sama sekali).
 
 > **Keputusan (review lanjutan)**: rule `fundraising` (09) awalnya berstatus "Parsial — flag ke
 > admin saja", tapi diputuskan **`ai_enforceable: true` penuh** — tidak dibatasi cuma
 > flag-worthy, boleh juga auto-execute mengikuti aturan confidence/severity normal yang sama
-> seperti 20 rule enforceable lain (Bagian 8), bukan kategori "flag only" khusus. `auto_actions`
-> untuk rule ini diisi sama seperti rule severity `high` lainnya, tanpa pembatasan tambahan.
+> seperti rule enforceable lain (Bagian 8), bukan kategori "flag only" khusus.
+>
+> **Koreksi (review lanjutan, temuan A1.3)**: tabel Bagian 17 sebelumnya punya baris duplikat
+> — `group-ownership` dan `10-group-ownership` adalah rule yang SAMA (rule_id `group-ownership`,
+> nomor urut 10) ditulis dua kali dengan nama beda, bikin salah hitung "6 rule human-only"
+> padahal cuma 5 rule unik. Baris duplikat sudah dihapus di Bagian 17.
+>
+> **Keputusan baru**: rule `nickname-pfp` (16), yang sebelumnya "Tidak — butuh inspeksi visual",
+> sekarang **`ai_enforceable: true`** juga — dianalisis lewat model vision terpisah (StepFun),
+> bukan model teks utama. Lihat Bagian 23 untuk desain lengkap. Ini mengurangi daftar human-only
+> jadi 4 rule (`admin`, `admin-power`, `group-admin`, `group-ownership`), menaikkan jumlah
+> AI-enforceable dari 22 (setelah koreksi duplikat) jadi **23 dari 27**.
 
 ---
 
@@ -419,7 +432,7 @@ flowchart TD
     PF4 -->|Tidak| END4[Skip]
     PF4 -->|Ya| PF5{Cooldown Redis aktif?}
     PF5 -->|Ya| END5[Skip]
-    PF5 -->|Tidak| CB[Context Builder\nAmbil 10 pesan terakhir dari buffer in-memory per grup\nfallback ke Redis mirror jika bot baru restart\nLoad 21 rules dari Redis\nBuild JSON payload]
+    PF5 -->|Tidak| CB[Context Builder\nAmbil 10 pesan terakhir dari buffer in-memory per grup\nfallback ke Redis mirror jika bot baru restart\nLoad 23 rules dari Redis\nBuild JSON payload]
     CB --> SET_CD[Set cooldown Redis 30 detik]
     SET_CD --> AI[Kirim ke LLM API\ntimeout 15 detik]
     AI -->|Timeout| ERR1[Log error\nSelesai]
@@ -595,8 +608,10 @@ OUTPUT FORMAT if no violation:
    ada collection MongoDB baru untuk histori pesan mentah** — ini koreksi dari asumsi awal PRD
    yang menganggap sumber data ini "sudah ada".
 2. **`has_media`**: `true` jika pesan punya foto/video/stiker. Jika `has_media: true` dan `text: null`, AI tidak bisa evaluate dan harus return `clean`.
-3. **`rules`**: Kirim HANYA rules dengan `ai_enforceable: true` — 21 dari 27 (termasuk
-   `fundraising`, lihat Bagian 4/22.5).
+3. **`rules`**: Kirim HANYA rules dengan `ai_enforceable: true` — 23 dari 27 (termasuk
+   `fundraising` dan `nickname-pfp`, lihat Bagian 4/22.5/23). `nickname-pfp` dikirim ke model
+   teks seperti rule lain (deskripsinya), tapi eksekusinya terpisah lewat jalur vision
+   (Bagian 23) — bukan lewat evaluasi teks payload ini.
 4. **Order conversation**: Dari yang terlama ke yang terbaru, ascending timestamp.
 5. **Field yang tidak perlu**: Jangan kirim field DB internal seperti ObjectId, timestamps DB. Hanya field yang relevan untuk konteks percakapan.
 
@@ -668,6 +683,14 @@ if output["verdict"] == "violation":
     # Pastikan selected_action ada di auto_actions rule yang dimaksud
     rule = get_rule_by_id(output["rule_violated"])
     assert output["selected_action"] in rule["auto_actions"]
+
+    # KOREKSI (review lanjutan, temuan A1.1): severity yang dilaporkan AI TIDAK PERNAH
+    # dipercaya sebagai sumber kebenaran untuk keputusan threshold. AI bisa halusinasi atau
+    # kena prompt injection dari isi pesan pelanggar sendiri. severity yang valid SATU-SATUNYA
+    # adalah yang tersimpan di RuleDoc — timpa di sini SEBELUM dipakai untuk threshold ban
+    # (Bagian 8) atau apa pun. Field "severity" di output AI setelah titik ini cuma dipakai
+    # untuk logging/debug, bukan untuk eksekusi.
+    output["severity"] = rule["severity"]
 ```
 
 ### Parsing JSON Tidak Valid dari AI
@@ -997,20 +1020,26 @@ Tanpa cooldown, grup yang ramai bisa trigger AI call ratusan kali per menit, men
 - Rate limit dari LLM provider
 - Latency tinggi yang memblokir event loop bot
 
-### Implementasi Cooldown
+### Implementasi Cooldown — REUSE `_AsyncRateLimiter` (Koreksi Review Lanjutan)
 
-Per-grup cooldown: 30 detik
+Per-grup cooldown: 30 detik. **Draft awal menulis Redis `exists`/`setex` mentah tanpa
+null-check** — tidak konsisten dengan pola degradasi Redis yang dipakai di seluruh codebase
+(`TwoLevelCache`, dan `_AsyncRateLimiter` yang sudah dipakai `/ban`, `/mute` command
+rate-limiting). `_AsyncRateLimiter` (sliding-window Redis sorted-set, fallback in-process
+otomatis kalau Redis mati) sudah tersedia dan harus di-reuse, bukan ditulis ulang:
 
 ```python
-COOLDOWN_KEY = "ai_moderation:cooldown:{chat_id}"
-COOLDOWN_TTL = 30  # detik
+from tcbot.modules.helper.decorators import _AsyncRateLimiter
+
+# max_calls=1 dalam window 30s == "boleh evaluasi sekali per grup per 30 detik"
+_ai_cooldown = _AsyncRateLimiter(max_calls=1, window=30.0, prefix="ai_mod_cooldown")
 
 async def is_cooldown_active(chat_id: int) -> bool:
-    return await redis.exists(COOLDOWN_KEY.format(chat_id=chat_id))
-
-async def set_cooldown(chat_id: int) -> None:
-    await redis.setex(COOLDOWN_KEY.format(chat_id=chat_id), COOLDOWN_TTL, 1)
+    return await _ai_cooldown.check(chat_id)
 ```
+
+`.check()` sekaligus mencatat hit (row baru di sorted-set) — perilaku ini sudah sesuai
+kebutuhan "1 evaluasi lolos gate = 1 hit ke window berikutnya", tidak perlu logic set terpisah.
 
 ### Sliding Window Context
 
@@ -1040,6 +1069,32 @@ Tidak ada celah — user yang melanggar saat cooldown tetap tertangkap di evalua
 - Max AI calls per jam per bot instance: 500 (safetynet global)
 - Timeout per AI call: 15 detik. Jika timeout, tidak ada action
 - Max retry: 0. Gagal berarti skip, coba di evaluasi berikutnya
+
+> **Koreksi (review lanjutan, temuan A1.2)**: draft sebelumnya cuma menyebutkan angka 500/jam
+> sebagai bullet tanpa mekanisme konkret sama sekali (tidak ada key Redis, tidak ada lokasi
+> kode, tidak ada perilaku saat limit tercapai). Ini gap nyata — tanpa implementasi, tidak ada
+> proteksi cost API agregat di luar cooldown per-grup (yang cuma membatasi satu grup, bukan
+> total 60 grup). Implementasi konkret, reuse `_AsyncRateLimiter` yang sama:
+>
+> ```python
+> # Key tunggal (bukan per-chat) — ini agregat seluruh bot instance, bukan per grup.
+> _AI_GLOBAL_KEY = 0  # dummy "uid" konstan, semua panggilan pakai key yang sama
+> _ai_global_limiter = _AsyncRateLimiter(max_calls=500, window=3600.0, prefix="ai_mod_global")
+>
+> async def _should_evaluate(chat_id: int) -> bool:
+>     """Gate sebelum context_builder dipanggil: safetynet global dicek DULUAN, baru cooldown
+>     per-grup — supaya saat limit global tercapai, semua grup di-skip tanpa terkecuali."""
+>     if await _ai_global_limiter.check(_AI_GLOBAL_KEY):
+>         log.warning("AI moderation global hourly cap (500) reached; skipping evaluation.")
+>         return False
+>     if await _ai_cooldown.check(chat_id):
+>         return False  # cooldown aktif, skip diam-diam
+>     return True
+> ```
+>
+> Saat limit global tercapai: **semua 60 grup di-skip** (bukan fallback per-grup) sampai window
+> 1 jam bergeser lagi — pesan yang di-skip tetap masuk context buffer in-memory seperti biasa,
+> jadi tetap ikut dievaluasi begitu limit longgar lagi (tidak hilang, cuma tertunda).
 
 ---
 
@@ -1298,20 +1353,20 @@ flowchart TD
 
 ## 17. RULES YANG TIDAK BISA DI-ENFORCE AI
 
-6 rules dengan `ai_enforceable: false` tetap ada di DB untuk keperluan tampilan ke user via `/rules`, referensi manual admin, dan dokumentasi. AI tidak pernah menerima rules ini dalam payload.
+4 rules dengan `ai_enforceable: false` tetap ada di DB untuk keperluan tampilan ke user via `/rules`, referensi manual admin, dan dokumentasi. AI tidak pernah menerima rules ini dalam payload.
 
 > **Koreksi (review lanjutan)**: `fundraising` sebelumnya masuk daftar ini sebagai "Parsial — flag
-> ke admin saja". Sudah dipindah jadi `ai_enforceable: true` penuh (Bagian 4/22.5) — AI boleh
-> auto-execute untuk rule ini sama seperti rule `high`-severity lain, tidak dibatasi flag-only.
+> ke admin saja", sudah dipindah jadi `ai_enforceable: true` penuh (Bagian 4/22.5). `nickname-pfp`
+> sebelumnya "Butuh inspeksi visual profil", sudah dipindah jadi `ai_enforceable: true` juga lewat
+> jalur vision terpisah (Bagian 23) — bukan human-only lagi. Baris `10-group-ownership` juga
+> dihapus karena ternyata duplikat dari `group-ownership` (temuan A1.3), bukan rule berbeda.
 
 | Rule | Kenapa Tidak Bisa AI | Penanganan |
 |---|---|---|
 | `admin` | Aturan untuk admin, bukan member biasa | Human only |
 | `admin-power` | Abuse of power butuh konteks organisasi | Human only |
 | `group-admin` | Tentang perilaku admin internal | Human only |
-| `group-ownership` | Tentang kepemilikan grup, tidak terdeteksi via chat | Human only |
-| `nickname-pfp` | Butuh inspeksi visual profil | Human only |
-| `10-group-ownership` | Tidak ada sinyal teks yang bisa dideteksi | Human only |
+| `group-ownership` | Tentang kepemilikan grup, tidak terdeteksi via chat maupun visual | Human only |
 
 ---
 
@@ -1410,6 +1465,25 @@ Role minimum: **`staff_only`** — staff federation bisa toggle grup manapun, sa
 `cmd_cleanup` (lihat Bagian 21, Q4). Toggle **tidak** memvalidasi permission bot (ban/delete) di
 muka — kegagalan eksekusi karena permission kurang ditangani lewat error handling standar
 (log ke `cfg.logs`), bukan ditolak proaktif saat toggle (Q7).
+
+### 18.9 Bot Restart Menghilangkan Context Buffer 60 Grup Sekaligus (Temuan A2, Review Lanjutan)
+
+Sumber "10 pesan terakhir" (Bagian 9) adalah `deque(maxlen=10)` **in-memory per proses bot**.
+Karena `tcf-bot-runner` menjamin satu poller aktif (bukan masalah multi-instance), ini bukan
+soal konsistensi cache — tapi **restart bot menghilangkan seluruh buffer 60 grup sekaligus**,
+dan mirror Redis-nya ber-TTL pendek. Selama window sejak restart sampai buffer terisi ulang
+per grup, AI mengevaluasi pesan **tanpa histori percakapan**, yang secara langsung menaikkan
+risiko false-positive/false-negative karena AI kehilangan konteks (mis. candaan berantai yang
+baru "melanggar" di pesan ke-4 tanpa 3 pesan sebelumnya).
+
+**Keputusan**: TTL mirror Redis untuk buffer per grup di-set eksplisit **15 menit** — cukup
+untuk menutup restart cepat (deploy, crash-recovery) tapi tidak menyimpan histori basi selamanya.
+Selama window kosong (buffer dan mirror sama-sama kosong), AI tetap dipanggil tapi cuma dengan
+1 pesan yang sedang dievaluasi (tanpa histori) — **bukan** di-skip total, karena rule severity
+`max`/`xhigh` (keybox, drugs, 18+, dst) tetap harus terdeteksi meski tanpa histori. Confidence
+threshold tidak diturunkan khusus untuk kasus ini; risiko residual ini diterima secara sadar,
+bukan showstopper, karena rule-rule paling berbahaya biasanya terdeteksi dari 1 pesan saja
+(bukan butuh histori panjang untuk disimpulkan).
 
 ### Ringkasan Error Handling
 
@@ -1595,14 +1669,24 @@ di bagian aslinya masing-masing (lihat catatan "Koreksi (review lanjutan)" di Ba
 | 1c | Bagian 5, diagram severity | Frasa "admin aktifkan auto_ban" mengacu toggle yang tidak ada di `RuleDoc`/`GroupDoc` manapun | Diperbaiki — severity `high` dipertegas tidak pernah auto-ban |
 | 1d | Bagian 16, klaim mute "cocok tanpa modifikasi" | `_execute_mute` hard-depend ke `update.effective_chat` dan prompt message interaktif yang tidak ada di jalur AI | Diperbaiki — `execute_ai_mute`/`execute_ai_mute_time` jadi implementasi baru terisolasi, sama seperti kick/ban |
 
-### 22.2 Signature Final Fungsi-Fungsi Kunci
+### 22.2 Signature Final Fungsi-Fungsi Kunci (Direvisi — Reuse Diterapkan)
 
-Untuk dipakai persis saat implementasi (bukan pseudo-code lagi):
+Revisi setelah audit reuse-vs-reinvent (lihat 22.6): parsing durasi, error counting, dan log
+channel sekarang memanggil helper existing, bukan implementasi baru.
 
 ```python
 # action_executor.py
 
+from tcbot.modules.helper.workflows.muting_flow import fmt_duration, parse_duration  # REUSE
+from tcbot.utils.dispatch import count_errors, fan_out                              # REUSE
+from tcbot.modules.helper.extraction import _ANONYMOUS_BOT_ID                        # REUSE
+
 UNDO_BAN_WINDOW_SECONDS: int = 24 * 3600   # Q3
+
+# Subset durasi yang boleh dipakai AI — parse_duration menerima lebih banyak (30m, 2w, 1ye,
+# dst), tapi Bagian 11.3 sengaja membatasi AI ke whitelist ini saja.
+_AI_MUTE_DURATION_WHITELIST = frozenset({"1h", "3h", "6h", "12h", "24h", "2d", "3d", "7d"})
+_AI_MUTE_DEFAULT_DURATION = "1h"
 
 async def execute_ai_warn(
     ctx: ContextTypes.DEFAULT_TYPE, chat_id: int, target_id: int,
@@ -1619,30 +1703,36 @@ async def execute_ai_mute_time(
     bot: Bot, chat_id: int, target_id: int, target_fname: str,
     reason_text: str, duration_key: str,
 ) -> None:
-    """Mute sementara. duration_key harus salah satu dari whitelist eksplisit
-    {1h, 3h, 6h, 12h, 24h, 2d, 3d, 7d} — di luar whitelist fallback ke '1h' + log WARNING,
-    tidak pernah mempercayai durasi mentah dari AI langsung ke aritmetika timedelta."""
+    """Mute sementara. duration_key di luar _AI_MUTE_DURATION_WHITELIST -> fallback ke '1h'
+    + log WARNING. Konversi string->timedelta REUSE parse_duration(), label tampilan REUSE
+    fmt_duration() — satu implementasi dipakai bersama /mute manual dan AI mute_time."""
 
 async def execute_ai_kick(
-    bot: Bot, chat_id: int, target_id: int, target_fname: str, reason_text: str,
+    bot: Bot, chat_id: int, chat_title: str, target_id: int, target_fname: str,
+    rule_id: str, reason_text: str, confidence: float,
 ) -> None:
-    """ban_chat_member lalu unban_chat_member(only_if_banned=True). TIDAK panggil execute_kick."""
+    """ban_chat_member lalu unban_chat_member(only_if_banned=True). TIDAK panggil execute_kick.
+    Log channel REUSE parse_logmsg.kick_log(..., chat_title) — parameter chat_title wajib."""
 
 async def execute_ai_ban(
     ctx: ContextTypes.DEFAULT_TYPE, chat_id: int, offending_msg_id: int, target_id: int,
-    target_fname: str, reason_text: str, ai_confidence: float, ai_eval_id: str | None = None,
+    target_fname: str, rule_id: str, reason_text: str, ai_confidence: float,
+    ai_eval_id: str | None = None,
 ) -> None:
     """Urutan wajib: (1) forward_message ke cfg.proofs -> proof_message_id (None jika gagal,
     TIDAK membatalkan ban), (2) bans_db.create_ban(..., ai_confidence=, ai_eval_id=),
     (3) fan_out ban_chat_member ke semua active_groups(), (4) kirim log ke cfg.logs dengan
-    tombol Undo Ban (24 jam) + Lihat Bukti. TIDAK PERNAH memanggil upload_proof() atau
-    ban_flow._execute_ban — lihat Bagian 7."""
+    tombol Undo Ban (24 jam) + Lihat Bukti via parse_logmsg.ai_autoban_log() (BUKAN ban_log()
+    existing — slot argumen tidak cocok, lihat 22.6 B5). TIDAK PERNAH memanggil upload_proof()
+    atau ban_flow._execute_ban — lihat Bagian 7."""
 
 async def ai_undo_ban_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """callback_data: 'ai_undo_ban:{ban_id}'. Bandingkan now - ban.timestamp terhadap
-    UNDO_BAN_WINDOW_SECONDS: dalam window -> unban semua grup + is_active=False + hapus tombol;
-    lewat window -> jangan coba unban sama sekali, ganti tombol jadi label statis nonaktif
-    ('Undo window expired — pakai /tcunban')."""
+    """callback_data: 'ai_undo_ban:{ban_id}'. REUSE bans_db.get_ban(ban_id) dan
+    bans_db.deactivate_ban(ban_id) — keduanya sudah ada persis dengan nama ini (dikonfirmasi,
+    lihat 22.6 B7). Bandingkan now - ban['timestamp'] terhadap UNDO_BAN_WINDOW_SECONDS: dalam
+    window -> unban semua grup + deactivate_ban + hapus tombol; lewat window -> jangan coba
+    unban sama sekali, ganti tombol jadi label statis nonaktif ('Undo window expired — pakai
+    /tcunban')."""
 ```
 
 ```python
@@ -1651,25 +1741,33 @@ async def ai_undo_ban_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
 async def translate_rule(rule_id: str, content_en: str) -> str:
     """Cek Redis (key: tcbot:rule_translated:{rule_id}:id) -> MyMemory API jika miss ->
     cache dengan TTL = 7 hari + jitter acak 0-24 jam (stagger, Q5) -> fallback content_en
-    asli tanpa raise pada kegagalan apa pun (timeout, non-200, rate limit, response cacat)."""
+    asli tanpa raise pada kegagalan apa pun (timeout, non-200, rate limit, response cacat).
+    JUSTIFIED NEW — tidak ada HTTP client generik/translation helper existing untuk di-reuse
+    (httpx sendiri baru jadi dependency eksplisit di fitur ini, lihat Bagian 19)."""
 ```
 
-### 22.3 Item yang Wajib Diverifikasi Sebelum Coding Sungguhan
+### 22.3 Verifikasi Nama Fungsi — Sudah Dikonfirmasi (Sebelumnya Berstatus NOTE)
 
-Beberapa nama fungsi di skeleton Bagian 21/22 masih **asumsi**, belum diverifikasi 100% terhadap
-`bans_db.py`/`mutes_db.py` yang sebenarnya. Ini bukan keputusan desain, tapi tugas verifikasi
-teknis wajib di awal Fase 3:
+Semua item yang sebelumnya ditandai "perlu diverifikasi" sudah dicek langsung terhadap kode asli
+`bans_db.py`/`mutes_db.py`/`parse_logmsg.py` dan **dikonfirmasi ada**, dengan koreksi nama di
+beberapa tempat:
 
-- `bans_db.create_ban()` perlu ditambah dua kwarg baru `ai_confidence`/`ai_eval_id` — signature
-  saat ini belum punya, perlu ditulis diff eksplisit sebelum `execute_ai_ban` dikodekan.
-- Perlu dipastikan ada (atau ditambah) helper: cara membaca satu `BanDoc` by id (`get_ban` atau
-  nama lain), cara menonaktifkan ban (`revoke_ban`/`deactivate_ban` atau nama lain, untuk Undo
-  Ban), dan cara update `log_message_id` setelah pesan log terkirim (pola yang sama dipakai
-  `ban_flow` manual — cek nama fungsi aslinya, jangan asumsikan).
-- `mutes_db.log_mute()` — verifikasi kwarg persis (bukan `ctx_bot_id`, tapi kemungkinan besar
-  `admin_id` sama seperti pola lain di codebase — cek langsung ke `mutes_db.py`).
-- `parse_logmsg.kick_log`/`ban_log` urutan parameter positional — jangan disalin dari skeleton
-  tanpa dicocokkan ke definisi asli.
+- `bans_db.create_ban()` — signature asli belum punya `ai_confidence`/`ai_eval_id`; ini tetap
+  butuh diff kecil (2 field baru di `doc = {...}` literal) sebelum `execute_ai_ban` dikodekan.
+  Scope-nya kecil karena struktur function-nya sudah pas — bukan reuse murni, tapi modifikasi
+  minor terhadap fungsi existing.
+- `bans_db.get_ban(ban_id)` — **ada**, nama persis seperti diasumsikan.
+- `bans_db.deactivate_ban(ban_id)` — **ada**, tapi namanya `deactivate_ban`, BUKAN `revoke_ban`
+  seperti tebakan awal.
+- `bans_db.set_log_message_id(ban_id, log_msg_id)` — **ada**, nama persis seperti diasumsikan.
+- `mutes_db.log_mute(user_id, chat_id, reason, admin_id, *, duration_secs=None)` — parameter
+  ke-4 itu **positional `admin_id`**, BUKAN kwarg `ctx_bot_id` yang dikarang di draft awal.
+- `parse_logmsg.kick_log(target_id, target_fname, admin_id, admin_fname, reason, chat_id, chat_title)`
+  — ada, tapi draft awal lupa parameter ke-7 (`chat_title`) — wajib disertakan.
+- `parse_logmsg.ban_log(target_id, target_fname, admin_id, admin_fname, reason, ban_id, proof_lnk=None, timestamp=None)`
+  — ada, tapi **tidak cocok dipakai untuk AI ban**: draft awal salah taruh `chat_id` di slot
+  argumen ke-6 (`ban_id`). Solusinya BUKAN memperbaiki pemanggilan `ban_log()`, tapi menulis
+  fungsi baru `ai_autoban_log()` yang memang didesain untuk kasus AI (lihat 22.6 B3/B5).
 
 ### 22.4 Rencana Testing Ringkas per Fase
 
@@ -1689,8 +1787,126 @@ poin bila sudah diputuskan:
 
 - **Klasifikasi rule `fundraising` (rule 09)** — **DIJAWAB**: `ai_enforceable: true` penuh,
   boleh auto-execute mengikuti aturan confidence/severity normal (bukan dibatasi flag-only).
-  Jumlah rule AI-enforceable jadi **21 dari 27** (bukan 20), non-enforceable jadi 6 rule
-  (02, 03, 04, 10, 16). Lihat Bagian 4 dan 17 untuk update tabel lengkap.
+  Jumlah rule AI-enforceable jadi **23 dari 27** setelah juga menghitung koreksi duplikat
+  Bagian 17 (temuan A1.3, lihat di bawah) dan `nickname-pfp` yang kini enforceable via vision
+  (Bagian 23). Non-enforceable final: 4 rule (02, 03, 04, 10). Lihat Bagian 4 dan 17 untuk tabel
+  lengkap.
+
+### 22.6 Ringkasan Perbaikan Reuse Konkret (Audit Reuse vs Reinvent)
+
+| # | Perbaikan | Dari (skeleton awal) | Ke (setelah audit) |
+|---|---|---|---|
+| B1 | Duration parsing | `_DURATION_MAP` custom | `muting_flow.parse_duration()`/`fmt_duration()` — sudah menangani semua unit yang dibutuhkan |
+| B2 | Fan-out error counting | `sum(1 for r in results if isinstance(r, BaseException))` manual | `dispatch.count_errors()` |
+| B3 | Log channel messages | f-string manual | `parse_logmsg.ai_action_log()`/`ai_autoban_log()`/`ai_flag_log()` baru, dibangun di atas `LogBuilder` yang sama dipakai semua log existing |
+| B4 | `kick_log()` call | Salah — kurang parameter `chat_title` | Ditambah parameter ke-7 |
+| B5 | Log ban AI | Coba reuse `ban_log()` — salah total, `chat_id` masuk slot `ban_id` | `ai_autoban_log()` baru (bentuk mirip `ban_log()` tapi field AI-specific) — `ban_log()` existing memang tidak cocok untuk kasus ini |
+| B6 | `mutes_db.log_mute()` call | Kwarg karangan `ctx_bot_id` | Positional `admin_id` sesuai signature asli |
+| B7 | Undo Ban DB helpers | `get_ban`/`revoke_ban`/`set_log_message_id` diasumsikan, ditandai NOTE belum diverifikasi | Ketiganya **dikonfirmasi ada**; cuma `deactivate_ban` beda nama dari tebakan awal `revoke_ban` |
+| B8 | Cooldown per-grup + safetynet global | Redis `exists`/`setex` mentah tanpa null-check (Bagian 14) | `_AsyncRateLimiter` — reuse dua instance (per-grup + global), sudah ada fallback in-process kalau Redis mati |
+| B9 | `ANONYMOUS_BOT_ID` (Bagian 18.2) | Redefinisi ulang | Import `_ANONYMOUS_BOT_ID` dari `extraction.py` |
+
+Item yang **tetap JUSTIFIED NEW** tanpa perubahan setelah audit: kerangka fungsi
+`execute_ai_mute`/`execute_ai_mute_time`/`execute_ai_kick`/`execute_ai_ban` (kerangkanya baru
+karena butuh isolasi dari flow interaktif, tapi isinya sekarang lebih banyak reuse), seluruh
+`translator.py`, dan `keyboards.ai_autoban_kb()` (polanya mengikuti keyboard `callback_data`
+existing seperti `demote_confirm_kb`, tapi tidak ada preseden tombol Undo untuk ban manapun).
+`extraction.extract_target()` sendiri (bukan cuma constant-nya) **tidak relevan** untuk AI
+moderation — fungsi itu menyelesaikan resolusi target dari command manual (`/ban @user`),
+sedangkan AI moderation cuma butuh `message.from_user.id`/`.first_name` langsung dari pesan
+masuk.
+
+---
+
+## 23. MODERASI VISION: FOTO PROFIL & MEDIA PESAN
+
+Fitur baru hasil diskusi lanjutan: rule `nickname-pfp` (16) dipindah dari human-only jadi
+AI-enforceable lewat model vision terpisah, dan cakupannya diperluas ke foto/video yang
+dikirim di pesan chat (bukan cuma caption teksnya).
+
+### 23.1 Model & Pemisahan dari Jalur Teks
+
+- Model vision: **StepFun Step 3.7 Flash** (`stepfun-ai/step-3.7-flash` via Kilo AI Gateway,
+  base URL sama `AI_API_URL`) — native multimodal, mendukung image **dan** video, cocok untuk
+  kedua kasus (pfp statis maupun video profile picture Telegram).
+- **Model terpisah dari jalur teks** — model teks utama (`AI_MODEL`, default Nemotron 3 Ultra
+  free) tetap dipakai untuk semua evaluasi pesan teks seperti sudah dirancang di Bagian 9/10.
+  Model vision (`AI_VISION_MODEL`) **hanya** dipanggil ketika ada gambar/video untuk dianalisis
+  — tidak menggantikan jalur teks, dan tidak dipanggil sama sekali untuk pesan tanpa media.
+- Kedua model dipanggil lewat `ai_client.py` yang sama (base URL + format request OpenAI-compatible
+  identik), cuma field `model` di request body yang berbeda — tidak perlu HTTP client kedua.
+
+### 23.2 Cakupan A — Foto Profil & Nickname (Periodik, 24 Jam)
+
+- **Trigger**: job terjadwal (APScheduler, pola sama seperti job `WARN_EXPIRY_DAYS` yang sudah
+  ada) berjalan tiap 24 jam, scan seluruh member aktif per grup yang mengaktifkan
+  `ai_moderation_enabled`.
+- **Bukan** dicek di setiap join atau setiap pesan — perubahan pfp/nickname baru terdeteksi di
+  siklus scan berikutnya (maksimal delay 24 jam). Ini trade-off sadar demi menghemat kuota API
+  dibanding cek real-time per event `ChatMemberUpdated`.
+- **Dedup dengan file_unique_id**: `bot.get_chat(user_id).photo.big_file_unique_id` (atau
+  `small_file_unique_id`) disimpan di cache Redis per user (`ai_pfp_checked:{user_id}` ->
+  `file_unique_id`, TTL 25 jam). Kalau `file_unique_id` sama dengan scan sebelumnya, **skip**
+  panggilan vision sama sekali — pfp yang tidak berubah tidak pernah dianalisis ulang. Ini
+  konstrain hemat-kuota yang saya tambahkan sendiri (user tidak menspesifikkan batasan lain,
+  "terserah") karena tanpa ini, 600rb member discan ulang setiap hari tanpa alasan.
+- **Nickname** (`first_name`/`last_name`) dicek sebagai teks biasa dalam scan yang sama —
+  dikirim ke model teks utama (bukan model vision), jadi tidak menambah panggilan vision baru.
+- Hasil pelanggaran (severity `medium` sesuai Bagian 5) mengikuti threshold & action flow yang
+  sama seperti rule teks lain (Bagian 8/11) — tidak ada jalur eksekusi baru, cuma sumber input
+  yang beda (foto/nickname, bukan isi chat).
+
+```python
+# tcbot/modules/ai_moderation/vision_scan.py (job terjadwal, BARU)
+
+async def scan_profile_pictures() -> None:
+    """Dipanggil APScheduler tiap 24 jam. Iterasi member per grup ai_moderation_enabled,
+    skip user yang file_unique_id pfp-nya tidak berubah sejak scan terakhir (Redis dedup
+    cache), panggil vision model cuma untuk pfp yang baru/berubah."""
+```
+
+### 23.3 Cakupan B — Foto & Video di Pesan Chat
+
+- Ketika pesan masuk membawa `message.photo` atau `message.video`/`message.animation`,
+  `context_builder.py` menambahkan **satu langkah tambahan sebelum** payload teks dikirim:
+  panggil model vision untuk media tersebut, hasil deskripsi/verdict-nya digabung ke context
+  yang sama yang dikirim ke model teks (bukan dua evaluasi terpisah yang saling tidak tahu).
+- **Batas ukuran/durasi** (konstrain hemat-kuota tambahan, user delegasikan ke saya): video di
+  atas **20 MB atau 60 detik** di-skip dari analisis vision (fallback ke evaluasi teks/caption
+  saja + log INFO) — mencegah biaya token vision yang tidak proporsional untuk klip panjang,
+  dan menghindari timeout request yang lebih lama dari `AI_TIMEOUT` (15 detik) untuk file besar.
+- **Gagal vision (timeout, error API, format tidak didukung)**: fallback ke evaluasi teks saja
+  (caption + konteks), **tidak** memblokir evaluasi keseluruhan pesan — pola yang sama dengan
+  penanganan timeout AI teks di Bagian 18.4.
+- Cooldown & safetynet global (Bagian 14) berlaku gabungan untuk panggilan teks + vision —
+  tidak ada limiter terpisah untuk vision, supaya total biaya API per grup/per jam tetap
+  konsisten dengan satu angka yang sama.
+
+### 23.4 Konfigurasi Baru
+
+```python
+# Di tcbot/__init__.py — Configs dataclass, Configs.load(), _CfgAdapter:
+
+AI_VISION_MODEL: str = "stepfun-ai/step-3.7-flash"  # Model vision, kosong = fitur vision off
+AI_PFP_SCAN_INTERVAL_HOURS: int = 24                # Interval scan pfp/nickname terjadwal
+AI_VISION_MAX_VIDEO_MB: int = 20                    # Skip video di atas ukuran ini
+AI_VISION_MAX_VIDEO_SECONDS: int = 60               # Skip video di atas durasi ini
+```
+
+`AI_VISION_MODEL` kosong menonaktifkan **cuma** fitur vision (rule `nickname-pfp` kembali
+non-enforceable, foto/video pesan dievaluasi lewat teks/caption saja) — tidak mematikan seluruh
+AI moderation teks, konsisten dengan pola fail-open per-fitur di Bagian 21 (`ai_moderation_configured`).
+
+### 23.5 Item yang Perlu Diverifikasi Sebelum Coding
+
+- Apakah `bot.get_chat(user_id)` cukup untuk ambil `photo.big_file_unique_id` semua member
+  tanpa rate-limit Telegram API yang signifikan untuk grup besar — perlu throttling eksplisit
+  di dalam job scan (bukan asumsi aman), pola serupa `fan_out` dengan batch kecil + delay.
+  Ini bukan keputusan desain, tapi verifikasi teknis wajib sebelum job ini dikodekan.
+- Format request vision di Kilo Gateway (image sebagai base64 vs URL vs file upload) mengikuti
+  OpenAI `image_url` content-part format standar — perlu dikonfirmasi eksplisit di dokumentasi
+  Kilo/StepFun saat implementasi `ai_client.py`, bukan diasumsikan sama persis dengan OpenAI
+  Vision API tanpa dicek.
 
 ---
 
@@ -1709,7 +1925,7 @@ poin bila sudah diputuskan:
 | Confidence threshold log saja | di bawah 0.75 |
 | Cooldown per grup | 30 detik |
 | Context window | 10 pesan terakhir per grup |
-| Rules di-enforce AI | 21 dari 27 — 6 butuh human judgment penuh (fundraising kini full-enforceable, bukan flag-only) |
+| Rules di-enforce AI | 23 dari 27 — 4 butuh human judgment penuh (fundraising & nickname-pfp kini full-enforceable — teks & vision) |
 | Integrasi kode existing | Zero breaking changes — `_execute_ban`/`_execute_mute`/`execute_kick` tidak diubah, AI pakai jalur eksekusi baru terisolasi di `action_executor.py`, terdaftar manual di `__main__.py` (group=50) |
 | Opt-in per grup | Ya — field `ai_moderation_enabled` di GroupDoc (`total=False`, aman tanpa migrasi), toggle wajib lewat fungsi `groups_db.py` untuk invalidasi cache |
 | Scope mute AI | Network-wide ke semua grup terhubung — reuse infrastruktur mute existing, bukan kapabilitas single-group baru |
