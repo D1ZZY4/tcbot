@@ -1,7 +1,16 @@
 # PRD — TCBot AI Moderation System
-> **Status**: Draft v1.0 | **Tanggal**: 11 Juli 2026
+> **Status**: Draft v1.1 — direvisi berdasarkan audit kode nyata | **Tanggal**: 11 Juli 2026
 > **Scope**: Integrasi AI moderasi otomatis berbasis rules ke dalam TCBot yang sudah ada
 > **Target**: 60 grup, ~600.000 member, Telegram bot berbasis python-telegram-bot + MongoDB
+>
+> **Catatan revisi v1.1**: Draft v1.0 dibuat sebelum audit terhadap kode nyata (`tcbot/__main__.py`,
+> `documents.py`, seluruh `*_db.py` dan `*_flow.py`). Audit menemukan beberapa asumsi PRD yang tidak
+> cocok dengan implementasi aktual — lihat Bagian 21 untuk daftar lengkap koreksi. Perubahan paling
+> signifikan: (1) mute AI dikonfirmasi **federation-wide ke semua grup terhubung**, bukan per-grup;
+> (2) sumber "10 pesan terakhir" adalah **buffer in-memory per grup + mirror Redis**, bukan MongoDB;
+> (3) `_execute_ban`/`_execute_mute`/`execute_kick` yang sudah ada **tidak disentuh** — AI moderation
+> memakai jalur eksekusi baru yang terisolasi di `action_executor.py`; (4) package `ai_moderation/`
+> **tidak ter-load otomatis** oleh sistem discovery module yang ada, harus didaftarkan manual.
 
 ---
 
@@ -27,6 +36,7 @@
 18. [Edge Cases & Penanganan Error](#18-edge-cases--penanganan-error)
 19. [Konfigurasi Bot](#19-konfigurasi-bot)
 20. [Out of Scope](#20-out-of-scope)
+21. [Koreksi Audit Kode & Pertanyaan Terbuka](#21-koreksi-audit-kode--pertanyaan-terbuka)
 
 ---
 
@@ -53,7 +63,11 @@ Tambahkan lapisan **AI pre-screening** yang:
 
 ### Yang Tidak Berubah
 
-Semua flow manual yang sudah ada (`/ban`, `/mute`, `/kick`, `/warn`) **tidak disentuh**. AI adalah lapisan tambahan di atas sistem yang sudah ada, bukan pengganti.
+Semua flow manual yang sudah ada (`/ban`, `/mute`, `/kick`, `/warn`) **tidak disentuh sama sekali**,
+termasuk signature fungsinya (`ban_flow._execute_ban`, `muting_flow._execute_mute`,
+`kicking_flow.execute_kick`). AI adalah lapisan tambahan di atas sistem yang sudah ada, bukan
+pengganti — dan dieksekusi lewat fungsi baru yang terisolasi di `action_executor.py`, bukan dengan
+menambah parameter ke fungsi existing (lihat Bagian 16).
 
 ---
 
@@ -147,18 +161,26 @@ ai_description: >
 
 ### Apa yang Disimpan di MongoDB (collection: `rules`)
 
-Hanya data yang diperlukan bot secara operasional:
+Hanya data yang diperlukan bot secara operasional. TypedDict berikut mengikuti konvensi persis
+`documents.py` yang sudah ada (`total=False`, docstring satu baris, tanpa `_id` eksplisit karena
+`rule_id` sudah jadi unique key operasional):
 
-```
-RuleDoc:
-  rule_id         : str           # unique key, contoh: "cheat"
-  display_name    : str           # untuk tampilan di bot, contoh: "Cheat & Hack"
-  severity        : str           # "low" | "medium" | "high" | "xhigh" | "max"
-  auto_actions    : list[str]     # ["warning", "kick", "ban"] terurut ringan ke berat
-  ai_enforceable  : bool          # False = skip AI untuk rule ini
-  ai_description  : str           # dioptimalkan untuk AI, bukan untuk human
-  content_en      : str           # teks lengkap EN untuk ditampilkan ke user
-  is_active       : bool          # bisa di-disable tanpa hapus dari DB
+```python
+RuleSeverity = Literal["low", "medium", "high", "xhigh", "max"]
+RuleAction = Literal["warning", "mute", "mute_time", "kick", "ban"]
+
+
+class RuleDoc(TypedDict, total=False):
+    """MongoDB document for a single federation moderation rule."""
+
+    rule_id: str            # unique key, contoh: "cheat"
+    display_name: str       # untuk tampilan di bot, contoh: "Cheat & Hack"
+    severity: RuleSeverity
+    auto_actions: list[RuleAction]   # terurut ringan ke berat
+    ai_enforceable: bool     # False = skip AI untuk rule ini
+    ai_description: str      # dioptimalkan untuk AI, bukan untuk human
+    content_en: str          # teks lengkap EN untuk ditampilkan ke user
+    is_active: bool           # bisa di-disable tanpa hapus dari DB
 ```
 
 > Tidak ada `content_id`, tidak ada `last_updated`. Terjemahan ID dilakukan secara on-demand (lihat Bagian 12). `last_updated` hanya relevan sebagai info di file `.md` asli, tidak perlu masuk DB.
@@ -260,16 +282,21 @@ Tambah peringatan ke user di grup tersebut. Jika mencapai batas warn (`cfg.warn_
 
 ### 6.2 `mute`
 
-Mute permanen. User tidak bisa kirim pesan sampai admin un-mute manual.
+Mute permanen. **Dikonfirmasi: scope network-wide ke SEMUA grup yang terhubung**, memakai
+infrastruktur mute yang sudah ada (`muting_flow._execute_mute`, `ActiveMuteDoc`) — bukan
+kapabilitas single-group baru. Keputusan ini diambil sadar bahwa infrastruktur mute existing
+memang federation-wide by design (`ActiveMuteDoc` bahkan tidak punya field `chat_id`), jadi
+AI moderation mengikuti pola yang sama alih-alih membangun state single-group terpisah.
 
 - `restrict_chat_member(permissions=ChatPermissions(can_send_messages=False), until_date=None)`
-- Tersimpan di `mutes` (audit) dan `active_mutes` (state)
-- Scope: satu grup saja, bukan network-wide
-- Bisa di-unmute via `/unmute`
+- Tersimpan di `mutes` (audit) dan `active_mutes` (state) — collection yang sama dengan mute manual
+- Scope: **network-wide**, fan-out ke semua `active_groups()`, sama seperti `/mute` manual
+- Bisa di-unmute via `/unmute` manual — tidak ada state AI mute terpisah yang bisa membingungkan
 
 ### 6.3 `mute_time`
 
-Mute sementara dengan durasi tertentu. AI menentukan durasi berdasarkan severity.
+Mute sementara dengan durasi tertentu. AI menentukan durasi berdasarkan severity. **Sama seperti
+6.2, scope-nya network-wide** — mengikuti perilaku `_execute_mute` yang sudah ada, bukan per-grup.
 
 - `restrict_chat_member(..., until_date=<datetime>)`
 - Durasi yang bisa AI rekomendasikan:
@@ -305,8 +332,8 @@ Ban permanen ke seluruh jaringan, fan-out ke semua 60 grup. Ini action paling be
 | Action | Durasi | Scope | Butuh Proof Formal | Bisa AI Otomatis |
 |---|---|---|---|---|
 | `warning` | Permanent (counter) | Per-grup | Tidak | Ya |
-| `mute` | Permanent | Per-grup | Tidak | Ya |
-| `mute_time` | Sementara 1h sampai 7d | Per-grup | Tidak | Ya |
+| `mute` | Permanent | **Network-wide** (semua grup terhubung) | Tidak | Ya |
+| `mute_time` | Sementara 1h sampai 7d | **Network-wide** (semua grup terhubung) | Tidak | Ya |
 | `kick` | Permanent tapi bisa re-join | Per-grup | Tidak | Ya |
 | `ban` | Permanent bisa di-unban | Network-wide | Ya (teks pesan) | Ya, jika confidence >= threshold |
 
@@ -353,6 +380,20 @@ AI tidak boleh ban atas dasar:
 
 Untuk kasus-kasus ini, AI hanya boleh flag ke admin atau pilih action lebih ringan.
 
+### Koreksi Penting: `_execute_ban` Existing TIDAK Bisa Dipakai Langsung
+
+Audit kode menemukan `_execute_ban` di `ban_flow.py` mem-forward `msgs: list[Message]` lewat
+`upload_proof()`, yang **hanya menangani `.photo`/`.video`** — pesan teks murni (kasus AI ban)
+akan gagal upload dan `proof_msg_id` jadi `None`. Menambah parameter opsional `is_ai_ban`/
+`ai_proof_msg_id` ke fungsi ini **tidak menyelesaikan masalah itu** dan berisiko regresi ke jalur
+ban manual yang sudah dipakai di 60 grup produksi.
+
+**Keputusan final**: AI ban memakai fungsi baru dan terisolasi,
+`action_executor.execute_ai_ban()`, yang menulis langsung ke `bans_db.create_ban()` dengan
+`proof_message_id` hasil `forward_message()`, lalu memanggil `fan_out()` sendiri — meniru pola
+akhir `_execute_ban` (fan-out + log + PM ke target) tanpa memanggil fungsi itu maupun
+memodifikasi signature-nya. Lihat Bagian 16 untuk detail.
+
 ---
 
 ## 8. FLOW LENGKAP: PESAN MASUK KE KEPUTUSAN AI KE EKSEKUSI
@@ -371,7 +412,7 @@ flowchart TD
     PF4 -->|Tidak| END4[Skip]
     PF4 -->|Ya| PF5{Cooldown Redis aktif?}
     PF5 -->|Ya| END5[Skip]
-    PF5 -->|Tidak| CB[Context Builder\nAmbil 10 pesan terakhir\nLoad 20 rules dari Redis\nBuild JSON payload]
+    PF5 -->|Tidak| CB[Context Builder\nAmbil 10 pesan terakhir dari buffer in-memory per grup\nfallback ke Redis mirror jika bot baru restart\nLoad 20 rules dari Redis\nBuild JSON payload]
     CB --> SET_CD[Set cooldown Redis 30 detik]
     SET_CD --> AI[Kirim ke LLM API\ntimeout 15 detik]
     AI -->|Timeout| ERR1[Log error\nSelesai]
@@ -534,6 +575,13 @@ OUTPUT FORMAT if no violation:
 ### Catatan Penting untuk Payload
 
 1. **`conversation`**: Maksimal 10 pesan terakhir. AI butuh konteks, bukan seluruh riwayat.
+   **Sumber data**: buffer in-memory per `chat_id` (`deque(maxlen=10)`, mengikuti pola `_albums`
+   di `ban_flow.py`) sebagai jalur utama — nol latensi tambahan karena tidak menulis ke MongoDB
+   setiap pesan masuk (60 grup aktif × tiap pesan ke MongoDB akan membebani database dan justru
+   menambah delay). Buffer ini di-mirror secara asinkron (non-blocking) ke Redis list dengan TTL
+   pendek sebagai jaring pengaman jika bot restart, sehingga context tidak hilang total. **Tidak
+   ada collection MongoDB baru untuk histori pesan mentah** — ini koreksi dari asumsi awal PRD
+   yang menganggap sumber data ini "sudah ada".
 2. **`has_media`**: `true` jika pesan punya foto/video/stiker. Jika `has_media: true` dan `text: null`, AI tidak bisa evaluate dan harus return `clean`.
 3. **`rules`**: Kirim HANYA rules dengan `ai_enforceable: true` — hanya 20 dari 27.
 4. **Order conversation**: Dari yang terlama ke yang terbaru, ascending timestamp.
@@ -844,9 +892,19 @@ ai_description: >
 ... konten EN asli ...
 ```
 
+### Lokasi Kode Seeding (Koreksi)
+
+Tidak ada modul di `tcbot/modules/` yang melakukan seeding data sendiri — pola yang sudah ada
+adalah `_post_init()` di `__main__.py` memanggil fungsi setup lewat `asyncio.gather` (lihat
+`ensure_indexes()`, `ensure_initial_owner()`). Karena itu, `seed_rules()` **bukan** file terpisah
+`ai_moderation/seeder.py` seperti draft awal, melainkan fungsi di `tcbot/database/rules_db.py`,
+dipanggil dari `_post_init()` sejajar dengan `ensure_indexes()`. Index untuk collection `rules`
+juga ditambahkan ke `mongos.py::ensure_indexes()` yang sudah ada, bukan fungsi index terpisah.
+
 ### Proses Seeding (Kode)
 
 ```python
+# tcbot/database/rules_db.py
 async def seed_rules(db: AsyncIOMotorDatabase) -> None:
     collection = db["rules"]
 
@@ -883,9 +941,9 @@ async def seed_rules(db: AsyncIOMotorDatabase) -> None:
 
     if docs:
         await collection.insert_many(docs)
-        await collection.create_index("rule_id", unique=True)
-        await collection.create_index("ai_enforceable")
         logger.info(f"Seeded {len(docs)} rules")
+        # index rule_id (unique) dan ai_enforceable dibuat di mongos.py::ensure_indexes(),
+        # bukan di sini — mengikuti pola index-management terpusat yang sudah ada
 ```
 
 ### Re-seeding dan Update Rules
@@ -1055,7 +1113,11 @@ Ini adalah ban otomatis oleh AI. Verifikasi jika perlu.
 
 ### Prinsip Utama
 
-Tidak ada kode yang sudah ada yang dihapus atau diubah besar. AI moderation adalah lapisan baru (`tcbot/modules/ai_moderation/`) yang memanggil fungsi-fungsi existing.
+Tidak ada kode yang sudah ada yang dihapus atau diubah besar. AI moderation adalah lapisan baru
+(`tcbot/modules/ai_moderation/`) yang **sebisa mungkin menulis langsung ke `*_db.py`** alih-alih
+memanggil fungsi `*_flow.py` yang terikat erat ke `Update`/`ctx.user_data` dari command manual.
+Satu-satunya pengecualian adalah `warning_flow.execute_warn()`, yang boleh menerima parameter
+eksplisit opsional karena logic auto-ban-nya kompleks dan sayang diduplikasi.
 
 ### File Baru yang Perlu Dibuat
 
@@ -1065,57 +1127,99 @@ tcbot/
 │   ├── ai_moderation/
 │   │   ├── __init__.py
 │   │   ├── handler.py              <- MessageHandler entry point
-│   │   ├── context_builder.py      <- Build JSON payload
-│   │   ├── ai_client.py            <- Panggil LLM API + parse response
+│   │   ├── context_builder.py      <- Build JSON payload dari buffer in-memory + rules
+│   │   ├── ai_client.py            <- Panggil LLM API + parse response (class AIModerationClient)
 │   │   ├── decision_router.py      <- Logic routing berdasarkan confidence
-│   │   ├── action_executor.py      <- Wrapper panggil existing flows
-│   │   └── seeder.py               <- Seed rules ke MongoDB
+│   │   └── action_executor.py      <- Eksekusi action, ISOLASI dari *_flow.py existing
 │   └── ...
 ├── database/
-│   └── rules_db.py                 <- BARU: CRUD untuk collection rules
+│   └── rules_db.py                 <- BARU: CRUD + cache untuk collection rules + seed_rules()
 └── utils/
     └── translator.py               <- BARU: MyMemory API wrapper
 ```
 
-### Fungsi Existing yang Dipanggil
+> **Koreksi terhadap draft awal**: tidak ada `seeder.py` di dalam package (lihat Bagian 13).
+> `ai_moderation/` sebagai **package** (folder dengan `__init__.py`) **tidak akan ter-load
+> otomatis** oleh `_discover_modules()` di `tcbot/modules/__init__.py` — fungsi itu memakai
+> `this_dir.glob("*.py")`, hanya file `.py` langsung, tidak rekursif ke subfolder. `handler.py`
+> di dalamnya **tidak** boleh diasumsikan otomatis terdaftar lewat `__handlers__` seperti modul
+> lain di `MODULES_LOAD`/`MODULES_NO_LOAD` — registrasinya **wajib manual** di `__main__.py`
+> (lihat "Handler Registration" di bawah). Jika lupa didaftarkan, seluruh fitur silently tidak
+> jalan tanpa error jelas — mitigasi: tambahkan log INFO eksplisit saat `_post_init` yang
+> menyatakan status AI moderation aktif/nonaktif.
 
-| Fungsi Existing | Dipanggil AI Moderation Untuk |
-|---|---|
-| `ban_flow._execute_ban()` | Action `ban` |
-| `muting_flow._execute_mute()` | Action `mute` dan `mute_time` |
-| `kicking_flow.execute_kick()` | Action `kick` |
-| `warning_flow._execute_warn()` | Action `warning` |
-| `bans_db.create_ban()` | Buat BanDoc untuk AI ban |
-| `mutes_db.log_mute()` dan `set_active_mute()` | Record AI mute |
-| `warns_db.add_warn()` dan `warn_count()` | Record AI warning |
-| `groups_db.active_groups()` | Fan-out ban ke semua grup |
+### Fungsi Existing yang Dipakai — Ulang, Bukan Dipanggil Langsung
 
-### Modifikasi Minor pada Kode Existing
+Nama fungsi di draft awal PRD tidak seluruhnya cocok dengan kode nyata (`execute_warn` dan
+`execute_kick` public tanpa underscore, `_execute_ban` memang private). Tabel berikut
+mencerminkan pendekatan final: reuse langsung untuk warn, jalur baru terisolasi untuk mute/kick/ban.
 
-`ban_flow._execute_ban()` perlu dua parameter opsional baru:
+| Existing / DB Layer | Dipakai AI Moderation Untuk | Cara Pakai |
+|---|---|---|
+| `warning_flow.execute_warn()` | Action `warning` | Panggil langsung dengan parameter eksplisit baru (chat_id/admin_id/admin_fname tidak dari `Update`) |
+| `muting_flow._execute_mute()` | Action `mute` dan `mute_time` | Panggil langsung — sudah federation-wide, cocok tanpa modifikasi |
+| `bans_db.create_ban()` + `fan_out()` | Action `ban` | **Tidak** lewat `_execute_ban` — `action_executor.execute_ai_ban()` menulis langsung ke DB + fan-out sendiri |
+| `kicking_flow` pattern (bukan fungsi-nya) | Action `kick` | `action_executor.execute_ai_kick()` baru, meniru `ban_chat_member` + `unban_chat_member` tanpa dependency `Update` |
+| `warns_db.add_warn()` dan `warn_count()` | Record AI warning | Dipanggil dari dalam `execute_warn` yang sudah ada |
+| `mutes_db.log_mute()` dan `set_active_mute()` | Record AI mute | Dipanggil dari dalam `_execute_mute` yang sudah ada |
+| `groups_db.active_groups()` | Fan-out mute/ban ke semua grup | Sudah dipakai otomatis oleh `_execute_mute`/`execute_ai_ban` |
+
+### Modifikasi pada Kode Existing — Diperjelas
+
+**`ban_flow._execute_ban()` — TIDAK DIUBAH.** Draft awal mengusulkan dua parameter opsional
+(`is_ai_ban`, `ai_proof_msg_id`), tapi ini tidak menyelesaikan masalah inti: `upload_proof()`
+hanya menangani `.photo`/`.video`, bukan pesan teks. Modifikasi itu dibatalkan — AI ban memakai
+`action_executor.execute_ai_ban()` yang terpisah total, lihat Bagian 7.
+
+**`muting_flow._execute_mute()` — TIDAK DIUBAH.** Sudah federation-wide sesuai kebutuhan
+(dikonfirmasi Bagian 6.2/6.3), dipanggil langsung tanpa modifikasi.
+
+**`kicking_flow.execute_kick()` — TIDAK DIUBAH.** Bergantung pada `update.effective_*`, tidak
+cocok dipanggil programatik oleh AI. `action_executor.execute_ai_kick()` baru dibuat terpisah,
+menduplikasi logic `ban_chat_member` + `unban_chat_member(only_if_banned=True)` tanpa
+menyentuh fungsi existing.
+
+**`warning_flow.execute_warn()` — satu-satunya fungsi existing yang menerima perubahan**, berupa
+parameter opsional baru dengan default `None` yang fallback ke `update.effective_*` bila
+dipanggil dari command manual seperti biasa:
 
 ```python
-async def _execute_ban(
-    ...,                                  # semua parameter yang sudah ada
-    is_ai_ban: bool = False,              # BARU
-    ai_proof_msg_id: int | None = None,   # BARU
+async def execute_warn(
+    update: Update | None,               # None jika dipanggil dari AI moderation
+    ctx: ContextTypes.DEFAULT_TYPE,
+    ...,                                   # parameter existing lainnya
+    chat_id: int | None = None,            # BARU — wajib diisi jika update=None
+    admin_id: int | None = None,           # BARU — diisi bot_user_id untuk AI warn
+    admin_fname: str | None = None,        # BARU
 ) -> ...:
-    # Jika is_ai_ban = True, skip langkah BuildProof interaktif
-    # Langsung gunakan ai_proof_msg_id sebagai proof_message_id di BanDoc
+    # Jika update tidak None, ambil chat_id/admin_id/admin_fname dari update.effective_* seperti biasa
+    # Jika update None, gunakan parameter eksplisit — wajib tidak None
     ...
 ```
 
-Tidak ada perubahan lain ke kode existing.
+Perubahan ini tetap butuh test regresi penuh untuk command `/warn` manual karena fungsi ini
+kompleks (auto-ban logic, fed_warn_limit, dst), meski risikonya rendah karena backward-compatible.
+
+### `parse_logmsg.py` dan `keyboards.py` yang Sudah Ada Juga Perlu Ditambah
+
+Supaya konsisten dengan `LogBuilder` dan keyboard existing, bukan format/keyboard custom di
+dalam modul baru:
+
+- `parse_logmsg.py`: tambah `ai_action_log()`, `ai_flag_log()`, `ai_autoban_log()`
+- `keyboards.py`: tambah `ai_flag_kb(eval_id)` (tombol Approve/Escalate/Ignore) dan
+  `ai_autoban_kb(eval_id)` (tombol Undo Ban/Lihat Bukti)
 
 ### Handler Registration
 
-Di `tcbot/__main__.py`, tambah handler AI moderation dengan group tinggi agar diproses terakhir:
+Di `tcbot/__main__.py`, tambah handler AI moderation dengan group tinggi agar diproses terakhir.
+Ini **wajib manual** karena package tidak ikut sistem `MODULES_LOAD` berbasis nama file:
 
 ```python
 from tcbot.modules.ai_moderation.handler import ai_moderation_handler
 
 app.add_handler(ai_moderation_handler, group=50)
 # group 50 = setelah semua handler normal (group -1, 10, dst)
+logger.info("AI moderation handler registered (group=50)")
 ```
 
 ### Diagram Relasi Modul
@@ -1221,14 +1325,31 @@ except MessageIdInvalid:
 
 ### 18.8 Grup Tidak Mengaktifkan AI Moderation
 
-AI moderation bersifat opt-in per grup. GroupDoc perlu field tambahan:
+AI moderation bersifat opt-in per grup. `GroupDoc` sudah `total=False`, jadi menambah field ini
+aman tanpa migrasi data (dokumen lama otomatis dianggap `.get("ai_moderation_enabled", False)`):
 
 ```python
-# Di GroupDoc (modifikasi minor)
-"ai_moderation_enabled": bool  # default: False
+class GroupDoc(TypedDict, total=False):
+    # ... field existing tidak berubah ...
+    ai_moderation_enabled: bool  # BARU — default False
+```
+
+**Koreksi penting**: menambah field ke TypedDict saja **tidak cukup secara operasional**.
+`active_groups()` dan `is_connected()` di-cache lewat `TwoLevelCache` dengan TTL 30–120 detik.
+Toggle field ini **tidak boleh** dilakukan dengan update langsung ke dokumen — harus lewat dua
+fungsi baru di `groups_db.py` yang menangani invalidasi cache dengan benar, mengikuti pola
+`deactivate_group()` yang sudah ada:
+
+```python
+async def set_ai_moderation(chat_id: int, enabled: bool) -> None:
+    """Toggle ai_moderation_enabled dan invalidasi cache grup terkait."""
+
+async def is_ai_moderation_enabled(chat_id: int) -> bool:
+    """Baca status dari cache (L1/L2), fallback ke MongoDB jika cache miss."""
 ```
 
 Owner grup bisa aktifkan via command admin: `/admin_set_ai on` atau `/admin_set_ai off`
+(role minimum masih perlu diputuskan — lihat Bagian 21, Q4).
 
 ### Ringkasan Error Handling
 
@@ -1247,10 +1368,12 @@ flowchart TD
 
 ## 19. KONFIGURASI BOT
 
-Field baru yang perlu ditambah ke `cfg`:
+Field baru yang perlu ditambah ke `cfg`. **Koreksi lokasi**: config project ini sebenarnya ada di
+`tcbot/__init__.py` (`Configs` dataclass + `_CfgAdapter`), **bukan** `tcbot/config.py` yang tidak
+ada di codebase.
 
 ```python
-# Di tcbot/config.py atau environment secrets:
+# Di tcbot/__init__.py — Configs dataclass, Configs.load(), _CfgAdapter:
 
 AI_API_URL: str           # URL LLM API endpoint
 AI_API_KEY: str           # API key (dari Replit Secrets, bukan hardcode)
@@ -1266,6 +1389,17 @@ AI_CONF_BAN_MAX: float = 0.85     # Auto-ban untuk severity max
 
 # Translation
 MYMEMORY_EMAIL: str | None = None  # Opsional, tingkatkan limit ke 10k chars/hari
+```
+
+### Dependency Baru di `pyproject.toml`
+
+Tidak ada `httpx`/`aiohttp` langsung di dependency saat ini (tersedia transitif via PTB, tapi
+tidak boleh diandalkan sebagai dependency implisit), dan tidak ada `pyyaml`. Keduanya wajib
+ditambah eksplisit untuk fitur ini:
+
+```toml
+httpx = ">=0.27,<1"    # AI API client
+pyyaml = ">=6.0,<7"    # Parse YAML frontmatter di rules/*.md
 ```
 
 ---
@@ -1285,6 +1419,93 @@ Item-item berikut tidak termasuk dalam PRD ini dan tidak akan dibangun:
 
 ---
 
+## 21. KOREKSI AUDIT KODE & PERTANYAAN TERBUKA
+
+Bagian ini merangkum hasil audit terhadap kode nyata (`__main__.py`, `documents.py`, seluruh
+`*_db.py` dan `*_flow.py`, `pyproject.toml`) yang dilakukan sebelum implementasi dimulai, plus
+keputusan yang sudah diambil dan yang masih terbuka.
+
+### Versi Terverifikasi dari `pyproject.toml`
+
+Python `>=3.12`, `python-telegram-bot[rate-limiter]>=22.8,<23`, `motor>=3.7,<4`,
+`redis[hiredis]>=8.0,<9`, `apscheduler[mongodb]==4.0.0a6`, `cachetools>=7.1,<8`.
+
+### Schema Tambahan yang Belum Disebut di Draft Awal
+
+**`AIEvaluationDoc`** — collection baru `ai_evaluations`, dibutuhkan untuk kasus yang **tidak**
+menghasilkan action tercatat di collection existing (`bans`/`mutes`/`warns`): confidence < 0.75
+(log internal) dan flag 0.75–0.89 (menunggu keputusan admin). Tanpa collection ini, keputusan
+"Ignore" dari admin tidak punya tempat penyimpanan status, dan item yang di-flag tapi tidak
+pernah diputuskan tidak punya audit trail.
+
+```python
+AIVerdict = Literal["clean", "violation"]
+AIFlagStatus = Literal["pending", "approved", "escalated", "ignored"]
+
+
+class AIEvaluationDoc(TypedDict, total=False):
+    """MongoDB document for a single AI moderation evaluation (flag or low-confidence log)."""
+
+    eval_id: str
+    chat_id: int
+    offending_msg_id: int
+    offending_user_id: int
+    rule_violated: str | None
+    confidence: float
+    severity: RuleSeverity | None
+    selected_action: RuleAction | None
+    mute_duration: str | None
+    reason: str
+    status: AIFlagStatus
+    flag_log_msg_id: int | None
+    resolved_by: int | None
+    resolved_at: datetime | None
+    timestamp: datetime
+```
+
+**`BanDoc`** — tidak perlu field baru untuk *menandai* AI ban (cukup `admin_user_id == bot.id`,
+sama seperti pola `Demote.execute()` yang menerima executor ID generik). Tapi dua field baru
+diperlukan untuk kebutuhan operasional yang PRD sendiri sebut (tombol "Undo Ban", audit
+"confidence 96%"), konsisten dengan pola `until_date`/`duration_str` yang juga `None` untuk kasus
+biasa:
+
+```python
+class BanDoc(TypedDict, total=False):
+    # ... field existing tidak berubah ...
+    ai_confidence: float | None   # BARU — hanya terisi untuk AI ban
+    ai_eval_id: str | None        # BARU — link balik ke AIEvaluationDoc jika berasal dari flag
+```
+
+### Reuse Audit Trail — Tidak Ada Collection Baru untuk Actions yang Sudah Dieksekusi
+
+`bans`, `mutes`, `warns` (dan `kicks` bila ada) sudah append-only dengan `admin_id`/
+`admin_user_id` generik. AI moderation cukup memakai **bot's own user ID** sebagai admin di setiap
+pemanggilan `create_ban()`/`log_mute()`/`add_warn()` — tidak perlu collection audit terpisah untuk
+action yang benar-benar tereksekusi.
+
+### Keputusan yang Sudah Diambil
+
+| Keputusan | Hasil |
+|---|---|
+| Sumber "10 pesan terakhir" | Buffer in-memory per `chat_id` (`deque(maxlen=10)`) + mirror Redis TTL pendek untuk resilience restart — prioritas kecepatan, bukan MongoDB |
+| Scope mute AI | Network-wide ke semua grup terhubung, reuse `_execute_mute` existing — tidak ada kapabilitas single-group baru |
+
+### Pertanyaan yang Masih Terbuka — Perlu Keputusan Sebelum Implementasi Bagian Terkait
+
+| # | Pertanyaan | Dampak Jika Tidak Diputuskan |
+|---|---|---|
+| Q3 | Mekanisme tombol "Undo Ban" di log channel — callback setara `/tcunban` aktif tanpa batas waktu, atau ada jendela waktu (misal 24 jam) sebelum harus manual? | Menentukan apakah perlu handler callback baru + expiry logic, atau cukup callback sederhana |
+| Q4 | Role minimum untuk `/admin_set_ai on\|off` — `staff_only` (siapa saja staff bisa toggle grup manapun) atau harus admin lokal grup itu sendiri (perlu `get_chat_member` check seperti `/tcconnect`)? | Berdampak besar ke UX 60 grup — staff_only berarti satu staff bisa nyalakan AI di semua grup tanpa sepengetahuan admin lokal |
+| Q5 | `MYMEMORY_EMAIL` akan dikonfigurasi dari awal (limit naik ke 10k/hari), atau perlu strategi stagger TTL cache per rule supaya 27 rules tidak re-translate bersamaan dan menghabiskan kuota 1.000/hari? | Menentukan apakah perlu logic stagger TTL tambahan di `translator.py` |
+| Q6 | Retensi `ai_evaluations` — perlu TTL index (mirip `member_cache` 90 hari), atau verdict "clean"/confidence rendah cukup log aplikasi biasa tanpa masuk MongoDB sama sekali? | Menentukan apakah collection butuh TTL index sejak awal untuk mencegah pertumbuhan tak terbatas di 60 grup × ratusan ribu member |
+| Q7 | Saat admin toggle `/admin_set_ai on`, perlu validasi dulu bot punya izin (ban/delete) cukup — seperti `check_perms()` di `/tcconnect` — atau dibiarkan gagal senyap saat AI mencoba eksekusi? | Menentukan UX kegagalan: proaktif ditolak saat toggle, vs silent fail yang baru ketahuan saat AI gagal eksekusi |
+
+> Implementasi Fase 0–2 (fondasi, data layer, utilitas pendukung — lihat rencana bertahap yang
+> didiskusikan terpisah) tidak terhambat oleh Q3–Q7. Namun Fase 4 (`action_executor.py`) dan
+> Fase 6 (command admin) sebaiknya menunggu jawaban Q3, Q4, Q7 agar tidak perlu dirombak ulang.
+
+---
+
 ## RINGKASAN EKSEKUTIF
 
 | Aspek | Keputusan |
@@ -1301,9 +1522,15 @@ Item-item berikut tidak termasuk dalam PRD ini dan tidak akan dibangun:
 | Cooldown per grup | 30 detik |
 | Context window | 10 pesan terakhir per grup |
 | Rules di-enforce AI | 20 dari 27 — 7 butuh human judgment |
-| Integrasi kode existing | Zero breaking changes — AI adalah lapisan tambahan di group=50 |
-| Opt-in per grup | Ya — field `ai_moderation_enabled` di GroupDoc, default False |
+| Integrasi kode existing | Zero breaking changes — `_execute_ban`/`_execute_mute`/`execute_kick` tidak diubah, AI pakai jalur eksekusi baru terisolasi di `action_executor.py`, terdaftar manual di `__main__.py` (group=50) |
+| Opt-in per grup | Ya — field `ai_moderation_enabled` di GroupDoc (`total=False`, aman tanpa migrasi), toggle wajib lewat fungsi `groups_db.py` untuk invalidasi cache |
+| Scope mute AI | Network-wide ke semua grup terhubung — reuse infrastruktur mute existing, bukan kapabilitas single-group baru |
+| Sumber context 10 pesan terakhir | Buffer in-memory per grup + mirror Redis, bukan MongoDB — prioritas kecepatan respons |
+| Collection baru | `rules` dan `ai_evaluations` (bukan reuse `bans`/`mutes`/`warns` untuk log evaluasi yang belum jadi action) |
+| Dependency baru | `httpx`, `pyyaml` |
 
 ---
 
-*PRD ini adalah dokumen hidup. Diskusikan schema DB final dengan Claude terpisah sebelum implementasi dimulai.*
+*PRD ini adalah dokumen hidup, sudah direvisi v1.1 berdasarkan audit kode nyata (lihat Bagian 21).
+5 pertanyaan (Q3–Q7) masih terbuka dan perlu keputusan sebelum implementasi Fase 4 (action
+executor) dan Fase 6 (command admin) dimulai.*
