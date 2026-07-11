@@ -2,6 +2,14 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-07-11 (session 190)
+
+### Fixed
+
+- **Bug #492** (`tcbot/modules/helper/workflows/reason_flow.py`): A moderator sending a multi-photo album as proof (e.g. three photos in one message) triggered the kick/mute/warn executor once per photo, producing duplicate DB records and duplicate log-channel messages for the same moderation action. Added a `{action}_seen_mgid` guard in `_on_proof`: the first photo's `media_group_id` is stored in `ctx.user_data`; any subsequent update carrying the same ID is discarded before the executor is called. Only the first photo's metadata is used as proof (same behaviour as a single-photo submission).
+
+- **Bug #493** (`tcbot/modules/helper/workflows/reason_flow.py`, `tcbot/modules/helper/workflows/ban_flow.py`): Rapid double-submission could invoke the executor twice before the ConversationHandler transitioned to END. For `reason_flow.py` this covered both `_on_proof` (user sends two photos in quick succession) and `_on_skip_proof` (user taps Skip twice). For `ban_flow.py` this covered the single-media proof path. Added `{action}_executing` / `ban_executing` guards set atomically before the first `await` in each executor entry point; a duplicate call that arrives while execution is in flight returns `ConversationHandler.END` immediately (with `q.answer()` for the callback variant).
+
 ## [Unreleased] - 2026-07-09 (session 189)
 
 ### Fixed

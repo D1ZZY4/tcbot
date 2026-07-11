@@ -53,6 +53,7 @@ _BAN_USER_DATA_KEYS = (
     "ban_prompt_msg_id",
     "ban_prompt_chat_id",
     "ban_duration",
+    "ban_executing",
 )
 
 WAITING_PROOF = 0
@@ -465,7 +466,13 @@ async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
         _albums[mgid].append(msg)
         return WAITING_PROOF
 
-    # * Single media file - execute immediately
+    # * Single media file - execute immediately.
+    # * Double-submit guard: the album path already deduplicates via mgid; for
+    # * single-media we guard with an executing flag so a rapid second proof
+    # * message (e.g. two quick photo sends) cannot invoke _execute_ban twice.
+    if ctx.user_data.get("ban_executing"):
+        return ConversationHandler.END
+    ctx.user_data["ban_executing"] = True
     await _execute_ban(ctx.bot, [msg], dict(ctx.user_data))
     _clear_ban_state(ctx.user_data)
     return ConversationHandler.END

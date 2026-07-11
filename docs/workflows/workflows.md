@@ -45,6 +45,13 @@ Exports:
 
 The shared factory stores action-specific values in `ctx.user_data`, then calls the supplied executor adapter. When a moderator submits proof media, `_on_proof` stores both the short text description (`{action}_proof_desc`) and the actual `Message` objects (`{action}_proof_msgs`) in `user_data`. Executors pop `{action}_proof_msgs` and upload them to the proof channel via `upload_proof()`; the resulting URL is shown as an inline keyboard button via `keyboards.action_proof_kb()`.
 
+`_on_proof` and `_on_skip_proof` include two in-flight guards stored in `ctx.user_data`:
+
+- `{action}_executing` - set to `True` before the first `await` in either handler; any duplicate call (double-tap, rapid proof send) that arrives while the executor is running returns `ConversationHandler.END` immediately.
+- `{action}_seen_mgid` - records the `media_group_id` of the first photo in an album; subsequent photos from the same album are discarded so the executor fires only once.
+
+Both keys are cleared automatically by `_clear_user_data` (prefix `{action}_`) on cancel, timeout, and END.
+
 ```mermaid
 flowchart TD
     Entry[entry_fn] --> Reason[WAITING_REASON]

@@ -5,9 +5,11 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-07-09 (session 186)
+**Last updated:** 2026-07-11 (session 190)
 
 ## What is done
+
+- Session 190 (2026-07-11): 3 parallel explore sub-agents (cmd modules + DB layer; workflows + utils + helpers; entry points + config). All major SA findings verified as false positives against the actual source: unban_flow.py correctly unpacks 3 vars from 3 coroutines; about.py has no emoji; warning_flow.py existing_ban is already guarded; appeal_flow.py gathers already have return_exceptions=True; connecting.py and disconnecting.py already use asyncio.gather. Fixed two documented gaps from conversation-flow-gaps.md - Bug #492 (album dedup in reason_flow._on_proof: {action}_seen_mgid guard prevents executor firing for each photo in an album) and Bug #493 (double-submit guard: {action}_executing flag in reason_flow._on_proof + _on_skip_proof; ban_executing in ban_flow single-media path; key added to _BAN_USER_DATA_KEYS). All keys cleared automatically by existing prefix-based _clear_user_data. conversation-flow-gaps.md marked FIXED. Lint: ruff all checks passed. Import: OK. Bot: clean webhook startup, 35/35 indexes, Redis hiredis 3.4.0. Total bugs: #1-#493. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 189 (2026-07-09): 2 parallel explore sub-agents (ConversationHandler edge cases in *_flow.py; rejoin enforcement for banned/muted targets). Fixed real Bug #491: join-request-approved users bypassed active mutes entirely (no `new_chat_members` message fires for that path, and `on_join_request` only declines bans, not mutes) - added a `ChatMemberHandler(CHAT_MEMBER)` filtered to `via_join_request=True` transitions to re-apply the mute without double-processing regular joins. Dismissed false positives after verification: greeting.py's rejoin mute permissions (`can_send_messages=False` only) match the *actual* mute-application permission set in muting_flow.py `_execute_mute` exactly - not a bug, `execute_unmute`'s broader permission restore is just defensive, not evidence of a narrower mute scope. Album/double-submit findings in reason_flow.py/ban_flow.py noted but not yet fixed - see [conversation-flow-gaps](conversation-flow-gaps.md) if revisited.
 
@@ -134,4 +136,4 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## Bug count
 
-Total: **480 bugs fixed** (sessions 1-181). Open: CVE-2026-31072 (accepted), Improvement #4 (future).
+Total: **493 bugs fixed** (sessions 1-190). Open: CVE-2026-31072 (accepted), Improvement #4 (future).

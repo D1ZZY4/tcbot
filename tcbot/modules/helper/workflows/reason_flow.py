@@ -216,8 +216,33 @@ def build_modaction_conv(
 
     # ── WAITING_PROOF handlers ───────────────────────────────────── #
 
+    # * Per-action keys used by the double-submit guard and album dedup.
+    _exec_key = f"{action}_executing"
+    _mgid_key = f"{action}_seen_mgid"
+
     async def _on_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         msg = update.effective_message
+        if msg is None:
+            return WAITING_PROOF
+
+        # * Double-submit guard: a previous _on_proof or _on_skip_proof call is
+        # * already running the executor.  Discard this duplicate update silently.
+        if ctx.user_data.get(_exec_key):
+            return ConversationHandler.END
+
+        # * Album dedup: Telegram delivers each photo in a multi-photo album as a
+        # * separate update.  Without this guard every photo would invoke the
+        # * executor independently, producing duplicate DB records and log messages.
+        # * We record the media_group_id of the first photo we process and discard
+        # * any further photos from the same album.
+        if msg.media_group_id:
+            if ctx.user_data.get(_mgid_key) == msg.media_group_id:
+                return ConversationHandler.END
+            ctx.user_data[_mgid_key] = msg.media_group_id
+
+        # * Set the executing flag before the first await to close the race window.
+        ctx.user_data[_exec_key] = True
+
         p = proof.record(msg)
         if p:
             ctx.user_data[_proof_key] = p
@@ -230,6 +255,16 @@ def build_modaction_conv(
         q = update.callback_query
         if q is None:
             return WAITING_PROOF
+
+        # * Double-submit guard: user tapped Skip twice before the first call
+        # * returned END.  Acknowledge and discard the duplicate.
+        if ctx.user_data.get(_exec_key):
+            try:
+                await q.answer()
+            except Exception as exc:
+                log.debug("%s skip-proof dup q.answer failed: %s", action, exc)
+            return ConversationHandler.END
+        ctx.user_data[_exec_key] = True
 
         await asyncio.gather(
             q.answer(),
