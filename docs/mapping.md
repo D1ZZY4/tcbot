@@ -28,7 +28,7 @@ This page maps the repository structure and the service boundaries between packa
 ```text
 tcbot/
 ├── __init__.py             Environment loader and cfg adapter
-├── __main__.py             PTB app setup, DB init, handler registration, polling
+├── __main__.py             PTB app setup, DB init, handler registration, webhook (polling fallback in local dev)
 ├── alive.py                Flask health endpoint and webhook receiver
 ├── database/
 │   ├── mongos.py           Motor client, collection accessor, indexes
@@ -72,7 +72,7 @@ tcbot/
 
 | Area | Owns | Must not own |
 |---|---|---|
-| `tcbot/__main__.py` | Application startup, global handlers, DB init, polling | Feature business logic |
+| `tcbot/__main__.py` | Application startup, global handlers, DB init, webhook transport (polling fallback for local dev only) | Feature business logic |
 | `tcbot/modules/*.py` | Command entry points, handler registration, user-facing permissions | Raw MongoDB writes, duplicate conversation state handlers |
 | `tcbot/modules/helper/` | Shared handler helpers and keyboard factories | Top-level command registration |
 | `tcbot/modules/helper/workflows/*_flow.py` | Conversation factories, state transitions, flow executors | Module discovery or `__handlers__` exports |
@@ -116,14 +116,15 @@ sequenceDiagram
     Mods->>Mods: discover, filter, import modules
     Mods-->>Main: handlers
     Main->>PTB: add handlers and error handler
-    Main->>PTB: run_polling()
-    PTB->>Main: run post_init (before polling starts)
+    Main->>PTB: initialize() + post_init (explicit; not called by PTB in webhook mode)
     Main->>DB: connect() and ensure_indexes()
     Main->>DB: ensure_initial_owner()
     Main->>Main: connect Redis (optional)
     Main->>Main: start APScheduler
     Main->>Main: attach error_reporter + asyncio handler
-    PTB->>PTB: start polling loop
+    Main->>PTB: set_webhook() + get_webhook_info() verify
+    Main->>Alive: register_webhook() wire Flask /webhook -> PTB queue
+    PTB->>PTB: await updates from Flask webhook receiver
 ```
 
 ## Dynamic module discovery

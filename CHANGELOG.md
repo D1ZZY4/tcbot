@@ -2,6 +2,32 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-07-11 (session 191)
+
+### Changed
+
+- **Version bump** (`pyproject.toml`): Updated project version from `4.6.2` to `5.2.6` to align with PROMPT.md target version.
+
+### Fixed
+
+- **Bug #494** (`docs/performance.md`): Performance checklist items (lines 350-353) still referenced v4.6.2 thresholds (`< 5 ms` command handler, `< 0.1 ms` DB, `< 0.03 ms` Redis, `< 0.02 ms` identity resolution). Updated all five checklist thresholds to v5.2.6 values: `q.answer()` < 0.3 ms, command p95 < 1.2 ms, single DB query < 0.02 ms, batch < 0.1 ms, Redis < 0.008 ms, identity resolution < 0.006 ms.
+
+- **Bug #495** (`docs/performance.md`): The "Architecture Targets" subsection header and layer-contribution table still referenced `v4.6.2` values and omitted the webhook transport row. Updated header to `v5.2.6`, all four layer rows to v5.2.6 values, added a webhook transport row (< 2 ms delivery vs. ~50-200 ms polling round-trip), and updated button handler targets to match the v5.2.6 table (< 0.3 ms / < 1.2 ms).
+
+- **Bug #496** (`docs/mapping.md`): The runtime package map entry for `__main__.py` said "polling" without mentioning webhook mode, and the startup sequence Mermaid diagram still showed `run_polling()` with a polling loop. Updated both to accurately represent webhook transport as primary (with polling fallback for local dev). Also updated ownership boundary table to mention polling fallback.
+
+- **Bug #497** (`docs/modules/modules.md`): Discovery flow Mermaid diagram final node read "Start long polling" instead of "Start webhook or polling transport". Fixed.
+
+- **Bug #498** (`docs/workflows-guide.md`): Run Bot workflow description called it a "long-polling runner" and made no mention of webhook support. Updated description, self-chain bullets, and concurrency note to reflect that webhook mode is used when `WEBHOOK_URL` / `WEBHOOK_SECRET` secrets are set. Added both secrets to the Secrets Required table.
+
+- **Bug #499** (`.github/workflows/run-bot.yml`): `WEBHOOK_URL` and `WEBHOOK_SECRET` secrets were absent from the job-level `env` block. The bot detects webhook mode from `WEBHOOK_URL`; without the env mapping the run-bot workflow would always fall back to polling even when the secrets were set. Added both mappings to the `env` section alongside existing bot secrets.
+
+- **Bug #500** (`config.env.example`): `REDIS_URL` was defined twice (line 20 and line 138, with identical comment blocks). Removed the duplicate second definition. First definition at line 20 is retained.
+
+### Dependency
+
+- **Dep bump** (`uv.lock`): `tzdata v2026.2 -> v2026.3` via `uv lock --upgrade`.
+
 ## [Unreleased] - 2026-07-11 (session 190)
 
 ### Fixed

@@ -12,7 +12,7 @@ The project uses 5 automated workflows for continuous integration, code quality,
 2. **Auto-Fix Code Quality** - Automatically fix linting issues
 3. **Dependency Updates** - Weekly dependency updates with auto-PR
 4. **CodeQL** - Security analysis
-5. **Run Bot** - Self-chaining 24/7 long-polling runner
+5. **Run Bot** - Self-chaining 24/7 bot runner (webhook or polling depending on env vars)
 
 ---
 
@@ -132,11 +132,11 @@ Safe to merge with new versions.
 - Cron schedule every 15 minutes as a resurrection fallback if the chain breaks
 
 **What it does:**
-- Runs the bot via long polling for a ~5 hour window per run (GitHub caps a job at 6h)
+- Runs the bot for a ~5 hour window per run (GitHub caps a job at 6h). When `WEBHOOK_URL` and `WEBHOOK_SECRET` secrets are set the bot uses webhook mode; otherwise it falls back to polling
 - **Self-chains:** roughly 10 minutes before the window ends (`HANDOVER_LEAD=600`), it dispatches the next run so coverage is continuous. The dispatch is retried up to 3 times (10s apart) so a single transient API failure does not break the chain. This requires a repository secret `BOT_PAT` (a Personal Access Token with the `workflow` scope), because the built-in `GITHUB_TOKEN` cannot trigger workflows
-- The cron schedule (every 15 minutes) acts as a resurrection fallback that restarts the bot if the chain ever breaks or no PAT is configured. The `concurrency` group serializes runs, so a cron run that fires while a healthy run is active simply queues and is discarded; it never creates a second poller
-- A `concurrency` group (`tcf-bot-runner`, `cancel-in-progress: false`) ensures only one bot instance runs at a time, with at most one queued to take over seamlessly. Long polling allows only one active instance; a second would make Telegram return `409 Conflict`
-- Bot configuration comes from repository secrets (`BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`, etc.), plus the optional `BOT_PAT` for self-chaining
+- The cron schedule (every 15 minutes) acts as a resurrection fallback that restarts the bot if the chain ever breaks or no PAT is configured. The `concurrency` group serializes runs, so only one run is active at a time; any other is queued and discarded once the active run ends
+- A `concurrency` group (`tcf-bot-runner`, `cancel-in-progress: false`) ensures only one bot instance runs at a time, with at most one queued to take over seamlessly. In polling mode a second instance would cause Telegram `409 Conflict`; webhook mode is safe to overlap briefly as Telegram queues updates
+- Bot configuration comes from repository secrets (`BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`, `WEBHOOK_URL`, `WEBHOOK_SECRET`, etc.), plus the optional `BOT_PAT` for self-chaining
 
 ---
 
@@ -175,6 +175,8 @@ Configure these in GitHub repository settings → Secrets:
 | `BOT_TOKEN` | Telegram bot token (bot runtime + notifications) | Yes |
 | `MONGODB_URI` | MongoDB connection string for the bot runtime | Yes |
 | `OWNER_ID` | Your Telegram user ID (initial owner + notifications) | Yes |
+| `WEBHOOK_URL` | Public HTTPS URL for Telegram webhook (e.g. `https://your-domain.com`). When set, bot runs in webhook mode; absent means polling fallback | Recommended |
+| `WEBHOOK_SECRET` | Secret token for `set_webhook` and `X-Telegram-Bot-Api-Secret-Token` validation. Required when `WEBHOOK_URL` is set | Recommended |
 | `BOT_PAT` | Personal Access Token with `workflow` scope, used by Run Bot to self-chain into the next run for seamless 24/7 coverage | Optional (recommended) |
 | `GITHUB_TOKEN` | Auto-provided by GitHub Actions | Auto |
 

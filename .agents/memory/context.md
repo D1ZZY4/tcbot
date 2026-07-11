@@ -5,9 +5,11 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-07-11 (session 190)
+**Last updated:** 2026-07-11 (session 191)
 
 ## What is done
+
+- Session 191 (2026-07-11): Full autonomous wave-2 audit (docs-drift, voice/security, devops sub-agents). 7 doc bugs fixed (Bug #494-#500). Bug #494: performance checklist thresholds updated to v5.2.6. Bug #495: performance.md architecture targets section renamed to v5.2.6, layer table + button handler targets updated. Bug #496: mapping.md __main__.py description and startup Mermaid diagram updated to webhook-first. Bug #497: modules.md discovery diagram node "Start long polling" replaced. Bug #498: workflows-guide.md Run Bot description + secrets table updated for WEBHOOK_URL/SECRET. Bug #499: run-bot.yml env block added WEBHOOK_URL + WEBHOOK_SECRET. Bug #500: config.env.example duplicate REDIS_URL definition removed. pyproject.toml version bumped 4.6.2->5.2.6. Dep bump: tzdata v2026.2->v2026.3. All 75 files ruff-clean. Import: OK. Total bugs: #1-#500. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 190 (2026-07-11): 3 parallel explore sub-agents (cmd modules + DB layer; workflows + utils + helpers; entry points + config). All major SA findings verified as false positives against the actual source: unban_flow.py correctly unpacks 3 vars from 3 coroutines; about.py has no emoji; warning_flow.py existing_ban is already guarded; appeal_flow.py gathers already have return_exceptions=True; connecting.py and disconnecting.py already use asyncio.gather. Fixed two documented gaps from conversation-flow-gaps.md - Bug #492 (album dedup in reason_flow._on_proof: {action}_seen_mgid guard prevents executor firing for each photo in an album) and Bug #493 (double-submit guard: {action}_executing flag in reason_flow._on_proof + _on_skip_proof; ban_executing in ban_flow single-media path; key added to _BAN_USER_DATA_KEYS). All keys cleared automatically by existing prefix-based _clear_user_data. conversation-flow-gaps.md marked FIXED. Lint: ruff all checks passed. Import: OK. Bot: clean webhook startup, 35/35 indexes, Redis hiredis 3.4.0. Total bugs: #1-#493. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
@@ -136,4 +138,4 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## Bug count
 
-Total: **493 bugs fixed** (sessions 1-190). Open: CVE-2026-31072 (accepted), Improvement #4 (future).
+Total: **500 bugs fixed** (sessions 1-191). Open: CVE-2026-31072 (accepted), Improvement #4 (future).

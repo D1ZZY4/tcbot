@@ -185,26 +185,28 @@ rewrites introduced in v4. They serve as the reference point for the v4+ targets
 - Ban list: 1-2 seconds with 50 bans
 - Staff roster: 1.5-2 seconds
 
-### v4.6.2 Architecture Targets
+### v5.2.6 Architecture Targets
 
-The v4.6.2 targets (listed in the table above) are the binding architecture goals.
+The v5.2.6 targets (listed in the table above) are the binding architecture goals.
 Achieving them requires the full stack to cooperate:
 
 | Layer | Contribution |
 |---|---|
-| In-memory L1 (cachetools TTLCache) | Role and identity reads: < 0.005 ms |
-| Redis L2 (hiredis C extension) | Distributed reads: < 0.03 ms |
-| MongoDB (indexed query, Atlas) | Single doc: < 0.1 ms; batch 100: < 0.5 ms |
-| Network to Telegram API | Baseline round-trip adds ~50-200 ms depending on region |
+| In-memory L1 (cachetools TTLCache) | Role and identity reads: < 0.001 ms |
+| Redis L2 (hiredis C extension) | Distributed reads: < 0.008 ms |
+| MongoDB (indexed query, Atlas) | Single doc: < 0.02 ms; batch 100: < 0.1 ms |
+| Webhook transport | Delivery to dispatch handler: < 2 ms (vs. ~50-200 ms polling round-trip) |
+| Network to Telegram API | Outbound API calls add ~50-200 ms depending on region |
 
-The command handler p95 target of < 5 ms covers the **bot-side** processing time
+The command handler p95 target of < 1.2 ms covers the **bot-side** processing time
 (cache lookups, DB reads, business logic, response formatting) and does not include
 the Telegram network round-trip. End-to-end time as seen by the user includes the
-network leg, which is outside the bot's control.
+network leg, which is outside the bot's control. Webhook mode (the production
+transport since v4.6.8) eliminates the polling round-trip on the inbound path.
 
 ### Button Handlers
-- Callback query acknowledgment (`q.answer()`): < 1 ms (bot-side)
-- Full callback round-trip (answer + edit): < 5 ms (bot-side processing)
+- Callback query acknowledgment (`q.answer()`): < 0.3 ms (bot-side)
+- Full callback round-trip (answer + edit): < 1.2 ms (bot-side processing)
 
 ---
 
@@ -346,11 +348,11 @@ Before merging new code, verify:
 - [ ] Database queries use projections when possible
 - [ ] New query patterns have appropriate indexes
 - [ ] No loops with `await` inside (use gather instead)
-- [ ] Callback query `q.answer()` responds in < 1 ms
-- [ ] Command handlers respond (p95) in < 5 ms
-- [ ] Single indexed DB query < 0.1 ms; batch (up to 100 docs) < 0.5 ms
-- [ ] Redis single-key read < 0.03 ms (requires hiredis C extension)
-- [ ] Identity/role resolution < 0.02 ms (requires Redis L2 cache active)
+- [ ] Callback query `q.answer()` responds in < 0.3 ms
+- [ ] Command handlers respond (p95) in < 1.2 ms
+- [ ] Single indexed DB query < 0.02 ms; batch (up to 100 docs) < 0.1 ms
+- [ ] Redis single-key read < 0.008 ms (requires hiredis C extension)
+- [ ] Identity/role resolution < 0.006 ms (requires Redis L2 cache active)
 - [ ] List views paginate efficiently
 
 ---

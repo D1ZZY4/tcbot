@@ -17,7 +17,7 @@ flowchart TD
     Active --> Import[Import each module]
     Import --> Collect[Collect __handlers__]
     Collect --> Register[Register on PTB Application]
-    Register --> Polling[Start long polling]
+    Register --> Transport[Start webhook or polling transport]
 ```
 
 Environment filters:
