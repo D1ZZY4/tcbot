@@ -1,6 +1,6 @@
 # PRD — TCBot AI Federation Moderation System
-> **Status**: Draft v1.0 | **Tanggal**: 11 Juli 2026  
-> **Scope**: Integrasi AI moderasi otomatis berbasis rules federasi ke dalam TCBot yang sudah ada  
+> **Status**: Draft v1.0 | **Tanggal**: 11 Juli 2026
+> **Scope**: Integrasi AI moderasi otomatis berbasis rules federasi ke dalam TCBot yang sudah ada
 > **Target**: 60 grup, ~600.000 member, Telegram bot berbasis python-telegram-bot + MongoDB
 
 ---
@@ -14,11 +14,11 @@
 5. [Sistem Severity](#5-sistem-severity)
 6. [Sistem Actions](#6-sistem-actions)
 7. [Proof dalam Konteks AI](#7-proof-dalam-konteks-ai)
-8. [Flow Lengkap: Pesan Masuk → Keputusan AI → Eksekusi](#8-flow-lengkap-pesan-masuk--keputusan-ai--eksekusi)
+8. [Flow Lengkap: Pesan Masuk ke Keputusan AI ke Eksekusi](#8-flow-lengkap-pesan-masuk-ke-keputusan-ai-ke-eksekusi)
 9. [Format JSON ke AI](#9-format-json-ke-ai)
 10. [Format JSON Output dari AI](#10-format-json-output-dari-ai)
 11. [Action Flows Detail](#11-action-flows-detail)
-12. [Sistem Terjemahan Otomatis (EN → ID)](#12-sistem-terjemahan-otomatis-en--id)
+12. [Sistem Terjemahan Otomatis EN ke ID](#12-sistem-terjemahan-otomatis-en-ke-id)
 13. [Seeding Rules ke Database](#13-seeding-rules-ke-database)
 14. [Cooldown & Rate Limiting AI](#14-cooldown--rate-limiting-ai)
 15. [Log Channel & Notifikasi Admin](#15-log-channel--notifikasi-admin)
@@ -35,7 +35,7 @@
 ### Situasi Saat Ini
 
 TCBot sudah memiliki sistem moderasi manual yang lengkap:
-- `/ban` dengan bukti wajib → fan-out ke semua grup (fban)
+- `/ban` dengan bukti wajib, fan-out ke semua grup (perilaku fban)
 - `/mute` dengan durasi opsional
 - `/kick` single-group
 - `/warn` dengan auto-escalate ke ban saat batas tercapai
@@ -47,13 +47,13 @@ Namun semua aksi ini **100% manual** — admin harus melihat pelanggaran, memutu
 Tambahkan lapisan **AI pre-screening** yang:
 1. Memantau setiap pesan masuk di semua grup yang terhubung
 2. Mengevaluasi pesan terhadap 27 federation rules
-3. Mengeksekusi action ringan-sedang **secara otomatis** (low confidence → eskalasi ke admin)
-4. Memberikan **rekomendasi** ke mod channel untuk action berat
+3. Mengeksekusi action ringan-sedang secara otomatis, low confidence dieskalasi ke admin
+4. Memberikan rekomendasi ke mod channel untuk action berat
 5. Tidak menggantikan admin — melengkapi dan meringankan beban moderasi
 
 ### Yang Tidak Berubah
 
-Semua flow manual yang sudah ada (`/ban`, `/mute`, `/kick`, `/warn`, `/fban`) **tidak disentuh**. AI adalah lapisan tambahan di atas sistem yang sudah ada, bukan pengganti.
+Semua flow manual yang sudah ada (`/ban`, `/mute`, `/kick`, `/warn`) **tidak disentuh**. AI adalah lapisan tambahan di atas sistem yang sudah ada, bukan pengganti.
 
 ---
 
@@ -63,16 +63,16 @@ Semua flow manual yang sudah ada (`/ban`, `/mute`, `/kick`, `/warn`, `/fban`) **
 
 | Item | Keputusan |
 |---|---|
-| AI dapat melihat media (foto, video, stiker) | ❌ Tidak — AI hanya menerima teks pesan |
-| AI dapat memberikan bukti screenshot | ❌ Tidak — bukti hanya berupa teks pesan itu sendiri |
-| Action `fban` (federation ban terpisah) | ❌ Dihapus dari sistem baru — diganti `ban` |
-| Rules disimpan dalam dua bahasa di DB | ❌ Tidak — hanya EN, terjemahan dilakukan on-demand |
-| Field `last_updated` per rule di DB | ❌ Tidak diperlukan |
-| AI memutuskan sendiri untuk action `ban` | ⚠️ Dengan syarat — lihat Bagian 7 |
+| AI dapat melihat media (foto, video, stiker) | Tidak — AI hanya menerima teks pesan |
+| AI dapat memberikan bukti screenshot | Tidak — bukti hanya berupa teks pesan itu sendiri |
+| Action `fban` sebagai action terpisah | Dihapus — diganti `ban` yang sudah federation-wide |
+| Rules disimpan dalam dua bahasa di DB | Tidak — hanya EN, terjemahan dilakukan on-demand |
+| Field `last_updated` per rule di DB | Tidak diperlukan |
+| AI memutuskan sendiri untuk action `ban` | Dengan syarat confidence threshold — lihat Bagian 7 |
 
 ### Asumsi
 
-- Model AI yang digunakan sudah mampu memahami konteks percakapan Bahasa Indonesia dan Bahasa Inggris (bilingual)
+- Model AI yang digunakan mampu memahami konteks percakapan Bahasa Indonesia dan Bahasa Inggris (bilingual)
 - Bot sudah terhubung ke semua 60 grup sebagai admin dengan izin delete message
 - `cfg.logs` channel sudah ada dan berfungsi untuk log moderasi
 - MongoDB dan Redis sudah running
@@ -81,56 +81,34 @@ Semua flow manual yang sudah ada (`/ban`, `/mute`, `/kick`, `/warn`, `/fban`) **
 
 ## 3. ARSITEKTUR SISTEM KESELURUHAN
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         TELEGRAM GROUPS                          │
-│              (60 grup, semua pesan masuk di-process)            │
-└────────────────────────────┬────────────────────────────────────┘
-                             │ setiap pesan (MessageHandler)
-                             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    PRE-FILTER LAYER                              │
-│  • Skip jika pengirim adalah admin/bot                           │
-│  • Skip jika pesan tidak punya teks (hanya stiker/foto kosong)  │
-│  • Skip jika grup belum mengaktifkan AI moderation              │
-│  • Rate limit: satu evaluasi per 30 detik per grup               │
-└────────────────────────────┬────────────────────────────────────┘
-                             │ lolos filter
-                             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   CONTEXT BUILDER                                │
-│  • Ambil 10 pesan terakhir di grup (sliding window)             │
-│  • Format menjadi conversation array                             │
-│  • Load rules dari cache (Redis L1 → MongoDB L2)                │
-│  • Bangun JSON payload untuk AI                                  │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    AI EVALUATION ENGINE                          │
-│  • Kirim JSON ke LLM via API                                     │
-│  • Parse JSON response                                           │
-│  • Validasi output (verdict, rule_id, confidence, action)       │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-            ┌────────────────┴────────────────┐
-            │ clean                           │ violation
-            ▼                                ▼
-     [Log → discard]            ┌────────────────────────┐
-                                │   DECISION ROUTER       │
-                                │  berdasarkan:            │
-                                │  - confidence level      │
-                                │  - severity rule         │
-                                │  - selected_action       │
-                                └────────────────────────┘
-                                         │
-                   ┌─────────────────────┼───────────────────────┐
-                   │                     │                         │
-                   ▼                     ▼                         ▼
-         confidence < 0.75     0.75 ≤ conf < 0.90         confidence ≥ 0.90
-              │                         │                         │
-         Log saja               Flag ke mod channel       Auto-execute action
-         (tidak ada action)     (admin putuskan)          + notify log channel
+```mermaid
+flowchart TD
+    A[Telegram Groups\n60 grup semua pesan masuk] --> B[MessageHandler\nsetiap pesan masuk]
+    B --> C{Pre-Filter}
+    C -->|from_user is None| SKIP1[Skip]
+    C -->|pengirim adalah admin atau bot| SKIP2[Skip]
+    C -->|tidak ada teks atau caption| SKIP3[Skip]
+    C -->|ai_moderation_enabled = False| SKIP4[Skip]
+    C -->|cooldown Redis aktif| SKIP5[Skip]
+    C -->|lolos semua filter| D[Context Builder\nAmbil 10 pesan terakhir\nLoad rules dari Redis atau MongoDB\nBuild JSON payload]
+    D --> E[AI Evaluation Engine\nKirim JSON ke LLM\nTimeout 15 detik\nParse dan validasi JSON response]
+    E -->|verdict = clean| F[Log debug\nSelesai]
+    E -->|verdict = violation| G{Decision Router}
+    G -->|confidence kurang dari 0.75| H[Log internal saja\nTidak ada action]
+    G -->|0.75 sampai 0.89| I[Flag ke mod channel\nAdmin putuskan\nApprove atau Ignore]
+    G -->|0.90 ke atas| J{Selected Action?}
+    J -->|warning| K[execute_warn]
+    J -->|mute| L[execute_mute permanent]
+    J -->|mute_time| M[execute_mute timed]
+    J -->|kick| N[execute_kick]
+    J -->|ban| O{Severity?}
+    O -->|max atau xhigh| P[Auto-execute ban\nForward ke proofs\nFan-out semua grup]
+    O -->|high ke bawah| Q[Flag ke mod channel\nAdmin putuskan]
+    K --> R[Notifikasi ke grup\nLog ke cfg.logs]
+    L --> R
+    M --> R
+    N --> R
+    P --> R
 ```
 
 ---
@@ -164,13 +142,7 @@ ai_description: >
 ---
 
 **CHEAT**
-─────────
-**EN**
-
-**Rules**: Using or sharing cheating scripts (cheats) in games or applications
-is strictly prohibited. Let's maintain sportsmanship within the community.
-
-...dst (konten EN lengkap)
+...konten EN lengkap...
 ```
 
 ### Apa yang Disimpan di MongoDB (collection: `fed_rules`)
@@ -179,57 +151,57 @@ Hanya data yang diperlukan bot secara operasional:
 
 ```
 FedRuleDoc:
-  rule_id         : str           # unique key, e.g. "cheat"
-  display_name    : str           # untuk tampilan di bot, e.g. "Cheat & Hack"
+  rule_id         : str           # unique key, contoh: "cheat"
+  display_name    : str           # untuk tampilan di bot, contoh: "Cheat & Hack"
   severity        : str           # "low" | "medium" | "high" | "xhigh" | "max"
-  auto_actions    : list[str]     # ["warning", "kick", "ban"] terurut ringan→berat
-  ai_enforceable  : bool          # False → skip AI untuk rule ini
+  auto_actions    : list[str]     # ["warning", "kick", "ban"] terurut ringan ke berat
+  ai_enforceable  : bool          # False = skip AI untuk rule ini
   ai_description  : str           # dioptimalkan untuk AI, bukan untuk human
   content_en      : str           # teks lengkap EN untuk ditampilkan ke user
-  is_active       : bool          # bisa di-disable tanpa hapus
+  is_active       : bool          # bisa di-disable tanpa hapus dari DB
 ```
 
-> **Catatan**: Tidak ada `content_id`, tidak ada `last_updated`. Terjemahan ID dilakukan secara on-demand (lihat Bagian 12). `last_updated` hanya relevan sebagai info di file `.md` asli, tidak perlu masuk DB.
+> Tidak ada `content_id`, tidak ada `last_updated`. Terjemahan ID dilakukan secara on-demand (lihat Bagian 12). `last_updated` hanya relevan sebagai info di file `.md` asli, tidak perlu masuk DB.
 
 ### 27 Rules yang Ada Saat Ini
 
-| # | rule_id | display_name | Severity | ai_enforceable |
+| No | rule_id | display_name | Severity | ai_enforceable |
 |---|---|---|---|---|
-| 01 | `18-plus` | 18+ Content | xhigh | ✅ (teks deskriptif) |
-| 02 | `fed-admin` | Federation Admin Conduct | high | ❌ (butuh human judgment) |
-| 03 | `admin-power` | Admin Power Abuse | high | ❌ (butuh human judgment) |
-| 04 | `group-admin` | Group Admin Conduct | medium | ❌ (butuh human judgment) |
-| 05 | `cheat` | Cheat & Hack | xhigh | ✅ |
-| 06 | `crypto` | Cryptocurrency | high | ✅ |
-| 07 | `doxing` | Doxing & Privacy | high | ✅ |
-| 08 | `drugs` | Narcotics & Drugs | max | ✅ |
-| 09 | `fundraising` | Fundraising Abuse | high | ✅ (partial) |
-| 10 | `group-ownership` | Group Ownership | high | ❌ |
-| 11 | `gambling` | Gambling | high | ✅ |
-| 12 | `harmful-modules` | Harmful Modules | high | ✅ |
-| 13 | `keybox` | Keybox & VVIP Sales | max | ✅ |
-| 14 | `hate-speech` | Hate Speech | xhigh | ✅ |
-| 15 | `license-claiming` | License & Ownership | high | ✅ |
-| 16 | `nickname-pfp` | Nickname & Profile Picture | medium | ❌ (butuh visual) |
-| 17 | `hoax-monopoly` | Hoax & Monopoly | high | ✅ |
-| 18 | `root-module` | Root Module Rules | high | ✅ |
-| 19 | `phishing` | Phishing | max | ✅ |
-| 20 | `piracy` | Piracy | high | ✅ |
-| 21 | `promotion` | Unauthorized Promotion | low | ✅ |
-| 22 | `provocation` | Provocation | medium | ✅ |
-| 23 | `racism-sara` | Racism & SARA | xhigh | ✅ |
-| 24 | `politics` | Political Content | high | ✅ |
-| 25 | `scam-ripper` | Scam & Ripper | max | ✅ |
-| 26 | `spam-flooding` | Spam & Flooding | low | ✅ |
-| 27 | `unethical-marketing` | Unethical Marketing | high | ✅ |
+| 01 | `18-plus` | 18+ Content | xhigh | Ya |
+| 02 | `fed-admin` | Federation Admin Conduct | high | Tidak — butuh human judgment |
+| 03 | `admin-power` | Admin Power Abuse | high | Tidak — butuh human judgment |
+| 04 | `group-admin` | Group Admin Conduct | medium | Tidak — butuh human judgment |
+| 05 | `cheat` | Cheat & Hack | xhigh | Ya |
+| 06 | `crypto` | Cryptocurrency | high | Ya |
+| 07 | `doxing` | Doxing & Privacy | high | Ya |
+| 08 | `drugs` | Narcotics & Drugs | max | Ya |
+| 09 | `fundraising` | Fundraising Abuse | high | Parsial — flag ke admin saja |
+| 10 | `group-ownership` | Group Ownership | high | Tidak — tidak terdeteksi via chat |
+| 11 | `gambling` | Gambling | high | Ya |
+| 12 | `harmful-modules` | Harmful Modules | high | Ya |
+| 13 | `keybox` | Keybox & VVIP Sales | max | Ya |
+| 14 | `hate-speech` | Hate Speech | xhigh | Ya |
+| 15 | `license-claiming` | License & Ownership | high | Ya |
+| 16 | `nickname-pfp` | Nickname & Profile Picture | medium | Tidak — butuh inspeksi visual |
+| 17 | `hoax-monopoly` | Hoax & Monopoly | high | Ya |
+| 18 | `root-module` | Root Module Rules | high | Ya |
+| 19 | `phishing` | Phishing | max | Ya |
+| 20 | `piracy` | Piracy | high | Ya |
+| 21 | `promotion` | Unauthorized Promotion | low | Ya |
+| 22 | `provocation` | Provocation | medium | Ya |
+| 23 | `racism-sara` | Racism & SARA | xhigh | Ya |
+| 24 | `politics` | Political Content | high | Ya |
+| 25 | `scam-ripper` | Scam & Ripper | max | Ya |
+| 26 | `spam-flooding` | Spam & Flooding | low | Ya |
+| 27 | `unethical-marketing` | Unethical Marketing | high | Ya |
 
-**AI-enforceable: 20 rules.** Non-enforceable by AI: 7 rules (02, 03, 04, 10, 16 = butuh human; 09 = partial).
+**AI-enforceable: 20 rules.** Non-enforceable by AI: 7 rules (02, 03, 04, 10, 16 butuh human; 09 parsial).
 
 ---
 
 ## 5. SISTEM SEVERITY
 
-Severity mendefinisikan **seberapa serius** pelanggaran tersebut dan menentukan batas minimum action yang bisa AI rekomendasikan.
+Severity mendefinisikan seberapa serius pelanggaran tersebut dan menentukan batas minimum action yang bisa AI rekomendasikan.
 
 ### Level Severity
 
@@ -239,36 +211,46 @@ Severity mendefinisikan **seberapa serius** pelanggaran tersebut dan menentukan 
 | `medium` | Mengganggu suasana grup | provocation, nickname-pfp | AI auto-execute dengan notif |
 | `high` | Pelanggaran serius, berdampak luas | politics, piracy, hate-speech | AI rekomendasikan, admin approve |
 | `xhigh` | Sangat serius, multi-korban potensial | cheat, 18+, racism-sara | AI auto-ban dengan notif wajib |
-| `max` | Kriminal / zero-tolerance | phishing, scam, drugs, keybox | AI auto-ban langsung, no appeal otomatis |
+| `max` | Kriminal atau zero-tolerance | phishing, scam, drugs, keybox | AI auto-ban langsung |
 
-### Mapping Severity → Action yang Diizinkan AI
+### Mapping Severity ke Action yang Diizinkan AI
 
-```
-low   → AI boleh: warning, mute, mute_time
-        AI tidak boleh: kick, ban
-        
-medium → AI boleh: warning, mute, mute_time, kick
-         AI tidak boleh: ban (kecuali repeat offender dalam window)
-
-high   → AI boleh: warning, kick, mute_time
-         ban: hanya jika confidence ≥ 0.90 DAN auto_execute diaktifkan admin
-         
-xhigh  → AI boleh semua kecuali ban langsung tanpa confidence ≥ 0.90
-         ban: confidence ≥ 0.87 sudah cukup
-         
-max    → AI langsung ban jika confidence ≥ 0.85
-         tidak ada warning/mute terlebih dahulu
+```mermaid
+flowchart LR
+    subgraph low["Severity: low"]
+        L1[warning]
+        L2[mute]
+        L3[mute_time]
+    end
+    subgraph medium["Severity: medium"]
+        M1[warning]
+        M2[mute]
+        M3[mute_time]
+        M4[kick]
+    end
+    subgraph high["Severity: high"]
+        H1[warning]
+        H2[mute_time]
+        H3[kick]
+        H4["ban — hanya jika conf >= 0.90\nDAN admin aktifkan auto_ban"]
+    end
+    subgraph xhigh["Severity: xhigh"]
+        X1[semua action diizinkan]
+        X2["ban — conf >= 0.87 cukup"]
+    end
+    subgraph max["Severity: max"]
+        MA1["ban langsung — conf >= 0.85\ntanpa warning atau mute dahulu"]
+    end
 ```
 
 ---
 
 ## 6. SISTEM ACTIONS
 
-### 5 Actions yang Tersedia
+Tidak ada lagi `fban` sebagai action terpisah. Lima actions yang valid:
 
-Tidak ada lagi `fban` sebagai action terpisah. Actions yang valid:
+### 6.1 `warning`
 
-#### 6.1 `warning`
 Tambah peringatan ke user di grup tersebut. Jika mencapai batas warn (`cfg.warn_limit`), auto-escalate ke `ban`.
 
 - Tersimpan di collection `warns`
@@ -276,39 +258,42 @@ Tambah peringatan ke user di grup tersebut. Jika mencapai batas warn (`cfg.warn_
 - Tidak ada efek langsung ke kemampuan chat user
 - Bot kirim pesan notifikasi ke grup bahwa user mendapat warn
 
-#### 6.2 `mute`
+### 6.2 `mute`
+
 Mute permanen. User tidak bisa kirim pesan sampai admin un-mute manual.
 
 - `restrict_chat_member(permissions=ChatPermissions(can_send_messages=False), until_date=None)`
 - Tersimpan di `mutes` (audit) dan `active_mutes` (state)
-- Scope: satu grup saja (bukan federation-wide)
+- Scope: satu grup saja, bukan federation-wide
 - Bisa di-unmute via `/unmute`
 
-#### 6.3 `mute_time`
+### 6.3 `mute_time`
+
 Mute sementara dengan durasi tertentu. AI menentukan durasi berdasarkan severity.
 
 - `restrict_chat_member(..., until_date=<datetime>)`
-- Durasi default yang bisa AI rekomendasikan:
+- Durasi yang bisa AI rekomendasikan:
   - Pelanggaran ringan pertama: `1h`
   - Pelanggaran sedang: `6h` atau `12h`
   - Pelanggaran berat pertama: `24h` atau `3d`
-  - Maximum AI bisa rekomendasikan: `7d`
+  - Maximum: `7d`
 - Tersimpan di `active_mutes` dengan `until_date`
-- Telegram handle expiry secara otomatis (tidak perlu background job)
+- Telegram handle expiry secara otomatis, tidak perlu background job
 
-#### 6.4 `kick`
+### 6.4 `kick`
+
 Hapus user dari grup. User bisa join kembali via invite link.
 
-- `ban_chat_member` lalu `unban_chat_member(only_if_banned=True)` — persis seperti kode yang ada sekarang
-- Tidak ada record permanen di DB (atau bisa log minimal di collection `kicks`)
+- `ban_chat_member` lalu `unban_chat_member(only_if_banned=True)` — persis seperti `kicking_flow.py` yang ada
 - Scope: satu grup saja
 - Tidak memerlukan bukti formal
 - Bot kirim notifikasi ke grup
 
-#### 6.5 `ban`
-Ban permanen dari seluruh federasi (fan-out ke semua 60 grup). Ini yang paling berat.
+### 6.5 `ban`
 
-- **Memerlukan**: `reason` (string) + `proof` (lihat Bagian 7)
+Ban permanen dari seluruh federasi, fan-out ke semua 60 grup. Ini action paling berat.
+
+- Memerlukan `reason` (string) + `proof` (lihat Bagian 7)
 - Menggunakan `_execute_ban` yang sudah ada di `ban_flow.py`
 - Fan-out via `fan_out()` ke semua `active_groups()`
 - Tersimpan di collection `bans` sebagai `BanDoc`
@@ -317,13 +302,13 @@ Ban permanen dari seluruh federasi (fan-out ke semua 60 grup). Ini yang paling b
 
 ### Tabel Ringkasan Actions
 
-| Action | Durasi | Scope | Butuh Proof | Bisa AI Otomatis |
+| Action | Durasi | Scope | Butuh Proof Formal | Bisa AI Otomatis |
 |---|---|---|---|---|
-| `warning` | Permanent (counter) | Per-grup | ❌ | ✅ |
-| `mute` | Permanent | Per-grup | ❌ | ✅ |
-| `mute_time` | Sementara (1h–7d) | Per-grup | ❌ | ✅ |
-| `kick` | Permanent (tapi bisa re-join) | Per-grup | ❌ | ✅ |
-| `ban` | Permanent (bisa di-unban) | Federation-wide | ✅ (teks) | ✅ (confidence ≥ threshold) |
+| `warning` | Permanent (counter) | Per-grup | Tidak | Ya |
+| `mute` | Permanent | Per-grup | Tidak | Ya |
+| `mute_time` | Sementara 1h sampai 7d | Per-grup | Tidak | Ya |
+| `kick` | Permanent tapi bisa re-join | Per-grup | Tidak | Ya |
+| `ban` | Permanent bisa di-unban | Federation-wide | Ya (teks pesan) | Ya, jika confidence >= threshold |
 
 ---
 
@@ -333,130 +318,118 @@ Ban permanen dari seluruh federasi (fan-out ke semua 60 grup). Ini yang paling b
 
 Sistem ban yang ada di `ban_flow.py` memerlukan bukti (`proof_message_id`). Untuk ban manual, admin attach screenshot atau forward pesan. AI **tidak bisa** menghasilkan screenshot atau gambar.
 
-### Solusi
+### Solusi: Pesan Itu Sendiri sebagai Bukti
 
-Untuk ban yang diinisiasi AI, "bukti" adalah **pesan itu sendiri**. Flow-nya:
+```mermaid
+sequenceDiagram
+    participant AI as AI Engine
+    participant Bot as TCBot
+    participant Proofs as cfg.proofs channel
+    participant DB as MongoDB
+    participant Logs as cfg.logs channel
 
-```
-AI deteksi pesan ID: 6001 dari user 801 sebagai violation
-        │
-        ▼
-Bot forward pesan ID 6001 ke cfg.proofs channel
-        │
-        ▼
-Dapatkan message_id hasil forward di proofs channel = proof_message_id
-        │
-        ▼
-Buat BanDoc dengan:
-  - reason = teks reasoning dari AI (e.g. "Menjual keybox dengan label VVIP...")
-  - proof_message_id = ID pesan yang di-forward ke proofs channel
-  - admin_user_id = BOT_USER_ID (bot yang eksekusi, bukan admin manusia)
-        │
-        ▼
-Kirim ke cfg.logs channel dengan format standar + tag "[AI Moderation]"
+    AI->>Bot: verdict=violation, offending_msg_id=6001, action=ban
+    Bot->>Proofs: forward_message(chat_id, msg_id=6001)
+    Proofs-->>Bot: proof_message_id = 9901
+    Bot->>DB: create BanDoc(reason=ai_reason, proof_message_id=9901, admin_user_id=BOT_USER_ID)
+    Bot->>Bot: fan_out ban ke semua active_groups()
+    Bot->>Logs: kirim log AI ban + tombol Undo Ban
 ```
 
 ### Implikasi
 
-- Field `proof_message_id` di `BanDoc` tetap terisi (link ke pesan asli yang di-forward)
-- `reason` diisi oleh AI reasoning — bukan "tidak ada alasan"
+- Field `proof_message_id` di `BanDoc` tetap terisi — link ke pesan asli yang di-forward ke proofs channel
+- `reason` diisi oleh AI reasoning, bukan kosong
 - Log channel menandai jelas bahwa ini "AI ban" bukan "manual ban"
-- Admin tetap bisa undo jika AI salah, via tombol `[Undo Ban]` di log channel
+- Admin tetap bisa undo jika AI salah via tombol di log channel
 
 ### Batas AI untuk Ban
 
-AI **tidak boleh** ban atas dasar:
+AI tidak boleh ban atas dasar:
 - Media saja (foto/video) tanpa teks pendamping yang melanggar
 - Stiker tanpa konteks teks
-- Link tanpa domain yang jelas berbahaya/dikenal
-- Pesan yang sangat ambigu (confidence < threshold)
+- Link tanpa domain yang jelas berbahaya
+- Pesan yang sangat ambigu dengan confidence di bawah threshold
 
-Untuk kasus-kasus ini, AI hanya boleh: flag ke admin, atau pilih action lebih ringan.
+Untuk kasus-kasus ini, AI hanya boleh flag ke admin atau pilih action lebih ringan.
 
 ---
 
-## 8. FLOW LENGKAP: PESAN MASUK → KEPUTUSAN AI → EKSEKUSI
+## 8. FLOW LENGKAP: PESAN MASUK KE KEPUTUSAN AI KE EKSEKUSI
 
-### Diagram Detail
+### Flow Utama
 
+```mermaid
+flowchart TD
+    MSG[Pesan masuk dari member] --> PF1{from_user is None?}
+    PF1 -->|Ya| END1[Skip]
+    PF1 -->|Tidak| PF2{Pengirim admin atau bot?}
+    PF2 -->|Ya| END2[Skip]
+    PF2 -->|Tidak| PF3{Ada teks atau caption?}
+    PF3 -->|Tidak| END3[Skip — media only]
+    PF3 -->|Ya| PF4{ai_moderation_enabled?}
+    PF4 -->|Tidak| END4[Skip]
+    PF4 -->|Ya| PF5{Cooldown Redis aktif?}
+    PF5 -->|Ya| END5[Skip]
+    PF5 -->|Tidak| CB[Context Builder\nAmbil 10 pesan terakhir\nLoad 20 rules dari Redis\nBuild JSON payload]
+    CB --> SET_CD[Set cooldown Redis 30 detik]
+    SET_CD --> AI[Kirim ke LLM API\ntimeout 15 detik]
+    AI -->|Timeout| ERR1[Log error\nSelesai]
+    AI -->|JSON invalid| ERR2[Log error\nSelesai]
+    AI -->|verdict = clean| CLEAN[Log debug\nSelesai]
+    AI -->|verdict = violation| CONF{Confidence level?}
+    CONF -->|kurang dari 0.75| LOW[Log internal saja\nTidak ada action ke user]
+    CONF -->|0.75 sampai 0.89| FLAG[Flag ke mod channel\nKirim tombol Approve dan Ignore]
+    CONF -->|0.90 ke atas| ACT{Selected action?}
+    ACT -->|warning| WRN[execute_warn\nIncrement warn_count\nCek auto-ban threshold]
+    ACT -->|mute| MUT[execute_mute permanent\nrestrict_chat_member until_date=None]
+    ACT -->|mute_time| MTM[Parse durasi\nexecute_mute until_date=now+duration]
+    ACT -->|kick| KCK[ban_chat_member\nlalu unban_chat_member]
+    ACT -->|ban| BANSEV{Severity rule?}
+    BANSEV -->|max atau xhigh| BANAUTO[Forward pesan ke proofs\nBuat BanDoc\nFan-out ban]
+    BANSEV -->|high ke bawah| FLAG2[Flag ke mod channel\nAdmin putuskan]
+    WRN --> NOTIFY[Notifikasi ke grup\nLog ke cfg.logs]
+    MUT --> NOTIFY
+    MTM --> NOTIFY
+    KCK --> NOTIFY
+    BANAUTO --> NOTIFY
 ```
-TELEGRAM MESSAGE HANDLER (setiap pesan di semua grup)
-│
-├─ PRE-FILTER (sinkron, cepat)
-│   ├─ from_user is None? → skip (anonymous admin)
-│   ├─ from_user.id in admin_ids? → skip
-│   ├─ from_user.is_bot? → skip
-│   ├─ message.text is None AND message.caption is None? → skip
-│   ├─ group ai_enabled = False? → skip
-│   └─ Redis check: cooldown active for this chat_id? → skip
-│       (set cooldown 30 detik setelah setiap evaluasi)
-│
-├─ CONTEXT BUILDER (async)
-│   ├─ Ambil 10 pesan sebelumnya dari chat (Telegram getMessages atau cache)
-│   ├─ Sanitasi: hapus field tidak perlu (entities, keyboards, dll)
-│   ├─ Load fed_rules dari Redis (TTL 10 menit) → fallback ke MongoDB
-│   ├─ Filter: hanya rules dengan ai_enforceable = True
-│   └─ Build JSON payload (lihat Bagian 9)
-│
-├─ AI CALL (async, timeout 15 detik)
-│   ├─ POST ke LLM API
-│   ├─ Timeout → log error, tidak ada action, reset cooldown
-│   ├─ Parse JSON response
-│   └─ Validasi: verdict harus "violation" atau "clean"
-│
-├─ DECISION ROUTER
-│   │
-│   ├─ verdict = "clean" → log debug, selesai
-│   │
-│   └─ verdict = "violation":
-│       │
-│       ├─ confidence < 0.75
-│       │   └─ Hanya log ke internal debug. Tidak ada action.
-│       │
-│       ├─ 0.75 ≤ confidence < 0.90
-│       │   └─ Flag ke mod channel dengan tombol:
-│       │       [Approve Action] [Ignore] [Lihat Pesan]
-│       │       Admin yang memutuskan. Bot tidak eksekusi otomatis.
-│       │
-│       └─ confidence ≥ 0.90
-│           ├─ selected_action = "warning"  → execute_warn()
-│           ├─ selected_action = "mute"     → execute_mute(permanent=True)
-│           ├─ selected_action = "mute_time" → execute_mute(duration=ai_duration)
-│           ├─ selected_action = "kick"     → execute_kick()
-│           └─ selected_action = "ban"
-│               ├─ Cek severity rule: max/xhigh → langsung eksekusi
-│               ├─ Severity high ke bawah → flag dulu ke mod channel
-│               └─ Forward offending message ke proofs channel
-│                   → create BanDoc → fan_out ban → notify logs
-│
-└─ NOTIFIKASI
-    ├─ Kirim pesan ke grup (lihat format di Bagian 15)
-    └─ Kirim log ke cfg.logs channel (lihat format di Bagian 15)
+
+### Flow Warning dengan Auto-Escalate
+
+```mermaid
+flowchart TD
+    W1[AI putuskan: warning] --> W2[add_warn ke DB\nuser_id, chat_id, reason, admin=BOT]
+    W2 --> W3[increment warn_count]
+    W3 --> W4{warn_count == cfg.warn_limit?}
+    W4 -->|Tidak| W5[Kirim notif warning ke grup\nPeringatan ke-N dari limit]
+    W4 -->|Ya| W6[Auto-escalate ke ban\nPanggil _execute_ban\nSama seperti warn limit normal]
+    W6 --> W7[Fan-out ban seluruh federasi]
 ```
 
 ### Threshold Decision Matrix
 
 | Confidence | Severity Action | Hasil |
 |---|---|---|
-| < 0.75 | apapun | Log saja, tidak ada action |
-| 0.75–0.89 | apapun | Flag ke mod channel, tunggu admin |
-| ≥ 0.90 | warning/mute/mute_time/kick | Auto-execute |
-| ≥ 0.90 | ban + severity max/xhigh | Auto-execute ban |
-| ≥ 0.90 | ban + severity high ke bawah | Flag ke mod channel |
-| ≥ 0.87 | ban + severity xhigh | Auto-execute ban |
-| ≥ 0.85 | ban + severity max | Auto-execute ban |
+| kurang dari 0.75 | apapun | Log saja, tidak ada action |
+| 0.75 sampai 0.89 | apapun | Flag ke mod channel, tunggu admin |
+| 0.90 ke atas | warning, mute, mute_time, kick | Auto-execute |
+| 0.90 ke atas | ban + severity max atau xhigh | Auto-execute ban |
+| 0.90 ke atas | ban + severity high ke bawah | Flag ke mod channel |
+| 0.87 ke atas | ban + severity xhigh | Auto-execute ban |
+| 0.85 ke atas | ban + severity max | Auto-execute ban |
 
 ---
 
 ## 9. FORMAT JSON KE AI
 
-Ini adalah JSON yang dikirim sebagai `user` message ke LLM. **Harus tepat format ini, tidak boleh berbeda.**
+JSON yang dikirim sebagai `user` message ke LLM. Harus tepat format ini.
 
 ### System Prompt (dikirim sekali sebagai `system` role)
 
 ```
-You are a strict AI moderator for TCF (Transsion Community Federation), a Telegram 
-tech & gaming community with 60 groups and 600,000 members. You enforce federation 
+You are a strict AI moderator for TCF (Transsion Community Federation), a Telegram
+tech and gaming community with 60 groups and 600,000 members. You enforce federation
 rules and output ONLY valid JSON.
 
 CRITICAL INSTRUCTIONS:
@@ -529,7 +502,7 @@ OUTPUT FORMAT if no violation:
       "user_id": 801,
       "name": "KeyMaster",
       "username": "keymaster_vip",
-      "text": "OPEN KEYBOX VVIP!! Keybox exclusive premium kami sudah teruji di 500+ device. Garansi aktif PlayIntegrity & strong. Harga mulai 15rb/bulan. Daftar sekarang!",
+      "text": "OPEN KEYBOX VVIP!! Keybox exclusive premium kami sudah teruji di 500+ device. Garansi aktif PlayIntegrity. Harga mulai 15rb/bulan. Daftar sekarang!",
       "reply_to": null,
       "timestamp": "2026-07-11T13:00:45Z",
       "has_media": false
@@ -554,18 +527,17 @@ OUTPUT FORMAT if no violation:
       "auto_actions": ["kick", "ban"],
       "description": "Fraudulent activities (scam) or avoiding transaction responsibilities (ripper). Any form of financial fraud or deceptive transactions results in permanent removal."
     }
-    // ... semua rules ai_enforceable = True (20 rules)
   ]
 }
 ```
 
 ### Catatan Penting untuk Payload
 
-1. **`conversation`**: Maksimal 10 pesan terakhir. Tidak perlu lebih — AI butuh konteks, bukan seluruh riwayat.
-2. **`has_media`**: `true` jika pesan punya foto/video/stiker — untuk info AI bahwa ada media yang tidak bisa dilihatnya. Jika `has_media: true` dan `text: null`, AI seharusnya tidak bisa evaluate (hasilnya `clean` dengan catatan).
-3. **`rules`**: Kirim HANYA rules dengan `ai_enforceable: true` — tidak semua 27, hanya 20 yang bisa di-evaluate dari teks.
-4. **Order conversation**: Dari yang terlama ke yang terbaru (ascending timestamp).
-5. **Field yang tidak perlu**: Jangan kirim field DB internal (ObjectId, timestamps DB, dll). Hanya yang relevan untuk konteks.
+1. **`conversation`**: Maksimal 10 pesan terakhir. AI butuh konteks, bukan seluruh riwayat.
+2. **`has_media`**: `true` jika pesan punya foto/video/stiker. Jika `has_media: true` dan `text: null`, AI tidak bisa evaluate dan harus return `clean`.
+3. **`rules`**: Kirim HANYA rules dengan `ai_enforceable: true` — hanya 20 dari 27.
+4. **Order conversation**: Dari yang terlama ke yang terbaru, ascending timestamp.
+5. **Field yang tidak perlu**: Jangan kirim field DB internal seperti ObjectId, timestamps DB. Hanya field yang relevan untuk konteks percakapan.
 
 ---
 
@@ -587,7 +559,7 @@ OUTPUT FORMAT if no violation:
 }
 ```
 
-### Kasus: Mute Time
+### Kasus: Action mute_time
 
 ```json
 {
@@ -613,9 +585,7 @@ OUTPUT FORMAT if no violation:
 }
 ```
 
-### Validasi Output (Bot Harus Cek)
-
-Sebelum bot eksekusi apapun, validasi JSON output AI:
+### Validasi Output (Bot Harus Cek Sebelum Eksekusi)
 
 ```python
 # Validasi wajib — jika gagal, treat as "clean" dan log error
@@ -629,26 +599,23 @@ if output["verdict"] == "violation":
     assert output["severity"] in ("low", "medium", "high", "xhigh", "max")
     assert output["selected_action"] in ("warning", "mute", "mute_time", "kick", "ban")
     assert isinstance(output["reason"], str) and len(output["reason"]) > 0
-    
+
     if output["selected_action"] == "mute_time":
         assert output["mute_duration"] is not None
-        # Validasi format durasi: angka + unit (1h, 6h, 24h, 3d, 7d)
         assert re.match(r"^\d+[hd]$", output["mute_duration"])
-    
+
     # Pastikan selected_action ada di auto_actions rule yang dimaksud
     rule = get_rule_by_id(output["rule_violated"])
     assert output["selected_action"] in rule["auto_actions"]
 ```
 
-### Penanganan JSON Tidak Valid dari AI
+### Parsing JSON Tidak Valid dari AI
 
-AI terkadang mengirim JSON dengan karakter ekstra (```json, teks tambahan). Parsing harus robust:
+AI terkadang mengirim JSON dengan karakter ekstra seperti code fences. Parsing harus robust:
 
 ```python
 def parse_ai_response(raw: str) -> dict:
-    # Strip code fences
     raw = re.sub(r"```(?:json)?\n?", "", raw).strip()
-    # Extract JSON object saja
     match = re.search(r"\{.*\}", raw, re.DOTALL)
     if not match:
         raise ValueError("No JSON object found in AI response")
@@ -661,155 +628,125 @@ def parse_ai_response(raw: str) -> dict:
 
 ### 11.1 Flow `warning`
 
-```
-AI putuskan → warning
-│
-├─ Panggil: tcbot.modules.helper.workflows.warning_flow._execute_warn()
-│           (fungsi yang sudah ada, tambah parameter: is_ai_triggered=True)
-│
-├─ DB: add_warn(user_id, chat_id, reason=ai_reason, admin_id=BOT_USER_ID)
-│
-├─ DB: increment warn_count → cek apakah == cfg.warn_limit
-│   └─ Jika == limit: auto-escalate ke ban (flow ban existing berjalan)
-│
-├─ Pesan ke GRUP:
-│   "⚠️ Moderasi Otomatis
-│   @username mendapat peringatan.
-│   Alasan: [ai_reason]
-│   Rule: [display_name] | Peringatan ke-[N] dari [limit]"
-│
-└─ Log ke cfg.logs: minimal log, bukan alert penuh
+```mermaid
+sequenceDiagram
+    participant AR as Decision Router
+    participant WF as warning_flow
+    participant DB as MongoDB warns
+    participant TG as Telegram Group
+    participant LOG as cfg.logs
+
+    AR->>WF: _execute_warn(user_id, chat_id, reason, is_ai_triggered=True)
+    WF->>DB: add_warn(user_id, chat_id, reason, admin_id=BOT_USER_ID)
+    WF->>DB: warn_count(user_id, chat_id)
+    DB-->>WF: count = N
+    alt count == cfg.warn_limit
+        WF->>WF: auto-escalate ke _execute_ban
+        WF->>TG: kirim notif ban karena warn limit
+    else count < cfg.warn_limit
+        WF->>TG: "Moderasi Otomatis\n@user mendapat peringatan ke-N dari limit\nRule: display_name\nAlasan: reason"
+        WF->>LOG: info log minimal
+    end
 ```
 
 ### 11.2 Flow `mute` (Permanent)
 
-```
-AI putuskan → mute
-│
-├─ Telegram API: restrict_chat_member(
-│     user_id=offending_user_id,
-│     chat_id=chat_id,
-│     permissions=ChatPermissions(can_send_messages=False),
-│     until_date=None
-│   )
-│
-├─ DB: log_mute(user_id, chat_id, reason, admin_id=BOT_USER_ID, duration_secs=None)
-├─ DB: set_active_mute(user_id, until_date=None)
-│
-├─ Pesan ke GRUP:
-│   "🔇 Moderasi Otomatis
-│   @username telah di-mute secara permanen.
-│   Alasan: [ai_reason]
-│   Rule: [display_name]"
-│
-└─ Log ke cfg.logs: info log
+```mermaid
+sequenceDiagram
+    participant AR as Decision Router
+    participant TG as Telegram API
+    participant DB as MongoDB
+    participant GRP as Telegram Group
+    participant LOG as cfg.logs
+
+    AR->>TG: restrict_chat_member(user_id, chat_id, ChatPermissions(can_send_messages=False), until_date=None)
+    TG-->>AR: OK
+    AR->>DB: log_mute(user_id, chat_id, reason, admin_id=BOT_USER_ID, duration_secs=None)
+    AR->>DB: set_active_mute(user_id, until_date=None)
+    AR->>GRP: "Moderasi Otomatis\n@user telah di-mute secara permanen\nRule: display_name\nAlasan: reason"
+    AR->>LOG: info log
 ```
 
 ### 11.3 Flow `mute_time` (Sementara)
 
-```
-AI putuskan → mute_time, duration = "6h"
-│
-├─ Parse duration: "6h" → timedelta(hours=6)
-│   until_dt = datetime.utcnow() + timedelta(hours=6)
-│
-├─ Telegram API: restrict_chat_member(
-│     user_id=offending_user_id,
-│     chat_id=chat_id,
-│     permissions=ChatPermissions(can_send_messages=False),
-│     until_date=until_dt
-│   )
-│
-├─ DB: log_mute(user_id, chat_id, reason, admin_id=BOT_USER_ID, duration_secs=21600)
-├─ DB: set_active_mute(user_id, until_date=until_dt)
-│
-├─ Pesan ke GRUP:
-│   "🔇 Moderasi Otomatis
-│   @username di-mute selama 6 jam.
-│   Alasan: [ai_reason]
-│   Rule: [display_name]
-│   Mute berakhir: 11 Jul 2026, 19:00 WIB"
-│
-└─ Log ke cfg.logs: info log
+```mermaid
+sequenceDiagram
+    participant AR as Decision Router
+    participant PR as Parse Duration
+    participant TG as Telegram API
+    participant DB as MongoDB
+    participant GRP as Telegram Group
+    participant LOG as cfg.logs
+
+    AR->>PR: parse "6h" ke timedelta(hours=6)
+    PR-->>AR: until_dt = now + timedelta(hours=6)
+    AR->>TG: restrict_chat_member(user_id, chat_id, ChatPermissions(...), until_date=until_dt)
+    TG-->>AR: OK
+    AR->>DB: log_mute(user_id, chat_id, reason, admin_id=BOT_USER_ID, duration_secs=21600)
+    AR->>DB: set_active_mute(user_id, until_date=until_dt)
+    AR->>GRP: "Moderasi Otomatis\n@user di-mute 6 jam\nRule: display_name\nBerakhir: tanggal waktu"
+    AR->>LOG: info log
 ```
 
-**Durasi yang Valid untuk AI (strict whitelist):**
-`1h`, `3h`, `6h`, `12h`, `24h`, `2d`, `3d`, `7d`
+**Durasi valid (strict whitelist):** `1h`, `3h`, `6h`, `12h`, `24h`, `2d`, `3d`, `7d`
 
-Jika AI kirim durasi lain (e.g. `"forever"`, `"30m"`), bot fallback ke `1h` dan log warning.
+Jika AI kirim durasi di luar whitelist ini (contoh: `"forever"`, `"30m"`), bot fallback ke `1h` dan log warning.
 
 ### 11.4 Flow `kick`
 
-```
-AI putuskan → kick
-│
-├─ Telegram API: ban_chat_member(user_id, chat_id)
-├─ Telegram API: unban_chat_member(user_id, chat_id, only_if_banned=True)
-│   (user bisa join kembali — persis seperti kicking_flow.py yang ada)
-│
-├─ Opsional DB: log ke collection "kicks" (bisa minimal — user_id, chat_id, reason, timestamp)
-│
-├─ Pesan ke GRUP:
-│   "👢 Moderasi Otomatis
-│   @username telah di-kick dari grup.
-│   Alasan: [ai_reason]
-│   Rule: [display_name]"
-│
-└─ Log ke cfg.logs: info log
+```mermaid
+sequenceDiagram
+    participant AR as Decision Router
+    participant TG as Telegram API
+    participant GRP as Telegram Group
+    participant LOG as cfg.logs
+
+    AR->>TG: ban_chat_member(user_id, chat_id)
+    TG-->>AR: OK
+    AR->>TG: unban_chat_member(user_id, chat_id, only_if_banned=True)
+    TG-->>AR: OK
+    note over TG: User dikeluarkan tapi bisa join kembali via link
+    AR->>GRP: "Moderasi Otomatis\n@user telah di-kick\nRule: display_name\nAlasan: reason"
+    AR->>LOG: info log
 ```
 
 ### 11.5 Flow `ban` (Federation-Wide)
 
-```
-AI putuskan → ban, confidence ≥ threshold
-│
-├─ Forward offending message ke cfg.proofs channel
-│   proof_message_id = message_id hasil forward
-│
-├─ Panggil: _execute_ban() dari ban_flow.py (yang sudah ada)
-│   Parameter baru perlu ditambahkan:
-│     - is_ai_ban: bool = True
-│     - ai_reason: str = output["reason"]
-│     - proof_msg_id: int = proof_message_id
-│     - trigger_user_id: int = BOT_USER_ID
-│
-├─ Di dalam _execute_ban():
-│   ├─ Buat BanDoc:
-│   │   - reason = ai_reason
-│   │   - proof_message_id = proof_msg_id
-│   │   - admin_user_id = BOT_USER_ID (bot, bukan manusia)
-│   │   - is_active = True
-│   │
-│   ├─ Fan-out: ban user di semua active_groups()
-│   │   (menggunakan fan_out() yang sudah ada — semaphore-bounded)
-│   │
-│   └─ Kirim ke cfg.logs channel:
-│       Format khusus AI ban (lihat Bagian 15)
-│       Dengan tombol: [Undo Ban] [Lihat Pesan Asli] [Lihat Bukti]
-│
-└─ Pesan ke GRUP tempat pelanggaran terjadi:
-    "🚫 Moderasi Otomatis
-    @username telah di-ban dari federasi TCF.
-    Alasan: [ai_reason]
-    Rule: [display_name]
-    Untuk appeal: [link appeal]"
+```mermaid
+sequenceDiagram
+    participant AR as Decision Router
+    participant PROOFS as cfg.proofs channel
+    participant BF as ban_flow._execute_ban
+    participant DB as MongoDB bans
+    participant FO as fan_out ke semua grup
+    participant GRP as Telegram Group asal
+    participant LOG as cfg.logs
+
+    AR->>PROOFS: forward_message(chat_id, offending_msg_id)
+    PROOFS-->>AR: proof_message_id = 9901
+    AR->>BF: _execute_ban(user_id, reason=ai_reason, proof_msg_id=9901, is_ai_ban=True, admin_id=BOT_USER_ID)
+    BF->>DB: create BanDoc(reason, proof_message_id=9901, admin_user_id=BOT_USER_ID, is_active=True)
+    BF->>FO: ban user di semua active_groups() dengan semaphore-bounded concurrency
+    FO-->>BF: done
+    BF->>GRP: "Moderasi Otomatis\n@user di-ban dari federasi TCF\nRule: display_name\nAlasan: reason\nAppeal: link"
+    BF->>LOG: "[AI MOD] Auto-Ban Executed\nGroup: ...\nUser: ...\nConf: 96%\n[Undo Ban] [Lihat Bukti]"
 ```
 
 ---
 
-## 12. SISTEM TERJEMAHAN OTOMATIS (EN → ID)
+## 12. SISTEM TERJEMAHAN OTOMATIS EN KE ID
 
 ### Masalah
 
-Rules hanya disimpan dalam Bahasa Inggris di DB. Ketika user minta lihat rules via `/rules`, komunitas ini mayoritas berbahasa Indonesia, sehingga perlu terjemahan.
+Rules hanya disimpan dalam Bahasa Inggris di DB. Ketika user minta lihat rules via `/rules`, komunitas mayoritas berbahasa Indonesia, sehingga perlu terjemahan.
 
 ### Solusi: MyMemory API (Free, Tanpa API Key)
 
-**MyMemory** dipilih karena:
-- Gratis sepenuhnya hingga 1.000 permintaan/hari (tanpa API key)
-- Dengan email parameter: 10.000 karakter/hari
+MyMemory dipilih karena:
+- Gratis sepenuhnya hingga 1.000 permintaan/hari tanpa API key
+- Dengan parameter email: 10.000 karakter/hari
 - Tidak perlu autentikasi untuk penggunaan basic
-- Mendukung EN → ID dengan baik
+- Mendukung EN ke ID dengan baik
 
 **Endpoint:**
 ```
@@ -828,37 +765,33 @@ GET https://api.mymemory.translated.net/get?q={text}&langpair=en|id
 
 ### Flow Terjemahan
 
+```mermaid
+flowchart TD
+    A[User ketik /rules di grup] --> B{Redis cache ada?\nkey: rule_translated:rule_id:id}
+    B -->|Ada, TTL 7 hari| C[Tampilkan dari cache]
+    B -->|Tidak ada| D[Ambil content_en dari MongoDB]
+    D --> E[Kirim ke MyMemory API\nGET langpair=en|id]
+    E -->|Sukses| F[Simpan hasil ke Redis\nTTL 7 hari]
+    F --> G[Tampilkan ke user]
+    E -->|Gagal timeout atau rate limit| H[Fallback tampilkan EN\ntanpa error ke user]
 ```
-User ketik /rules di grup
-│
-├─ Bot cek Redis: "rule_translated:{rule_id}:id" ada?
-│   ├─ Ada → langsung pakai dari cache (TTL 7 hari)
-│   └─ Tidak ada:
-│       │
-│       ├─ Ambil content_en dari DB
-│       ├─ Kirim ke MyMemory API
-│       ├─ Simpan hasil ke Redis dengan key "rule_translated:{rule_id}:id"
-│       └─ Tampilkan ke user
-```
-
-**Penting:** Terjemahan hanya terjadi untuk perintah `/rules` — bukan real-time. Rules sudah ada EN-nya, terjemahan adalah tambahan kenyamanan. Jika MyMemory gagal (timeout, rate limit), bot fallback ke EN tanpa error ke user.
 
 ### Batasan Terjemahan
 
-- Terjemahan otomatis tidak sempurna untuk istilah teknis (FBAN, keybox, rootmodule)
-- Istilah teknis dibiarkan dalam EN (tidak diterjemahkan)
-- Terjemahan hanya untuk tampilan user — **tidak mempengaruhi ai_description** yang selalu EN
+- Terjemahan otomatis tidak sempurna untuk istilah teknis seperti keybox, rootmodule, fban
+- Istilah teknis dibiarkan dalam EN, tidak diterjemahkan
+- Terjemahan hanya untuk tampilan user, **tidak mempengaruhi ai_description** yang selalu EN
 
-### Alternatif Jika MyMemory Tidak Cukup
+### Perbandingan Alternatif
 
 | Library | Tipe | Limit | Kekurangan |
 |---|---|---|---|
 | MyMemory | Online API | 1.000 req/hari | Tergantung internet |
-| argostranslate | Offline Python | Unlimited | Model ~100MB perlu download |
-| GoogleTrans (unofficial) | Online | Unlimited (unstable) | Sering di-block |
-| LibreTranslate (self-hosted) | Online/Offline | Unlimited | Perlu hosting sendiri |
+| argostranslate | Offline Python | Unlimited | Model sekitar 100MB perlu download |
+| GoogleTrans unofficial | Online | Unlimited tapi tidak stabil | Sering di-block Google |
+| LibreTranslate self-hosted | Online atau Offline | Unlimited | Perlu hosting sendiri |
 
-**Rekomendasi**: MyMemory untuk sekarang. Jika volume naik, switch ke argostranslate (offline, tidak ada rate limit, tidak perlu API key).
+Rekomendasi: MyMemory untuk sekarang. Jika volume naik, switch ke argostranslate yang offline dan tidak ada rate limit.
 
 ---
 
@@ -866,11 +799,30 @@ User ketik /rules di grup
 
 ### Kapan Seeding Terjadi
 
-Satu kali saat bot pertama kali dijalankan — atau ketika collection `fed_rules` kosong. Setelah itu, rules dikelola via DB dan tidak pernah baca file `.md` lagi dalam operasional normal.
+Satu kali saat bot pertama kali dijalankan, atau ketika collection `fed_rules` kosong. Setelah itu, rules dikelola via DB dan tidak pernah baca file `.md` lagi dalam operasional normal.
 
-### Prasyarat
+### Flow Seeding
 
-Setiap file `fed-rules/*.md` harus punya YAML frontmatter (perlu ditulis manual sekali untuk semua 27 file):
+```mermaid
+flowchart TD
+    A[Bot startup] --> B{Collection fed_rules kosong?}
+    B -->|Tidak| C[Skip — sudah seeded]
+    B -->|Ya| D[Baca semua fed-rules/*.md\nurutkan berdasarkan nama file]
+    D --> E{File punya YAML frontmatter?}
+    E -->|Tidak| F[Log warning\nSkip file ini]
+    E -->|Ya| G[Parse YAML frontmatter\nExtract rule_id, severity, auto_actions,\nai_enforceable, ai_description]
+    G --> H[Extract konten EN dari body setelah frontmatter]
+    H --> I[Build FedRuleDoc]
+    I --> J{File berikutnya?}
+    J -->|Masih ada| E
+    J -->|Selesai| K[bulk insert_many ke MongoDB]
+    K --> L[create_index rule_id unique\ncreate_index ai_enforceable]
+    L --> M[Log: Seeded N federation rules]
+```
+
+### Prasyarat: YAML Frontmatter
+
+Setiap file `fed-rules/*.md` harus punya YAML frontmatter (ditulis manual sekali untuk semua 27 file):
 
 ```yaml
 ---
@@ -889,37 +841,34 @@ ai_description: >
 ---
 
 **CHEAT**
-... (konten EN asli)
+... konten EN asli ...
 ```
 
-### Proses Seeding
+### Proses Seeding (Kode)
 
 ```python
 async def seed_fed_rules(db: AsyncIOMotorDatabase) -> None:
     collection = db["fed_rules"]
-    
-    # Cek apakah sudah ada data
+
     if await collection.count_documents({}) > 0:
         logger.info("fed_rules already seeded, skipping")
         return
-    
+
     rules_dir = Path("fed-rules")
     docs = []
-    
+
     for md_file in sorted(rules_dir.glob("*.md")):
-        # Parse frontmatter
         with open(md_file) as f:
             content = f.read()
-        
-        # Split frontmatter dan body
+
         parts = content.split("---", 2)
         if len(parts) < 3:
             logger.warning(f"No frontmatter in {md_file}, skipping")
             continue
-        
-        meta = yaml.safe_load(parts[1])  # parse YAML
-        body_en = parts[2].strip()       # konten EN
-        
+
+        meta = yaml.safe_load(parts[1])
+        body_en = parts[2].strip()
+
         doc = {
             "rule_id":        meta["rule_id"],
             "display_name":   meta["display_name"],
@@ -931,19 +880,17 @@ async def seed_fed_rules(db: AsyncIOMotorDatabase) -> None:
             "is_active":      True,
         }
         docs.append(doc)
-    
+
     if docs:
         await collection.insert_many(docs)
-        # Buat index
         await collection.create_index("rule_id", unique=True)
         await collection.create_index("ai_enforceable")
         logger.info(f"Seeded {len(docs)} federation rules")
 ```
 
-### Re-seeding / Update Rules
+### Re-seeding dan Update Rules
 
-Untuk update rule setelah awal seeding (misalnya rule baru atau perubahan ai_description):
-
+Untuk update rule setelah awal seeding:
 - Gunakan command admin di bot: `/admin_update_rule <rule_id>` — update field tertentu di DB
 - Atau script CLI `python -m tcbot.scripts.update_rules` yang baca frontmatter terbaru dari file
 - Setelah update DB, bot otomatis invalidate cache Redis untuk rule tersebut
@@ -957,11 +904,11 @@ Untuk update rule setelah awal seeding (misalnya rule baru atau perubahan ai_des
 Tanpa cooldown, grup yang ramai bisa trigger AI call ratusan kali per menit, menyebabkan:
 - Cost API tinggi
 - Rate limit dari LLM provider
-- Latency tinggi yang memblokir bot
+- Latency tinggi yang memblokir event loop bot
 
 ### Implementasi Cooldown
 
-**Per-grup cooldown: 30 detik**
+Per-grup cooldown: 30 detik
 
 ```python
 COOLDOWN_KEY = "ai_moderation:cooldown:{chat_id}"
@@ -976,50 +923,89 @@ async def set_cooldown(chat_id: int) -> None:
 
 ### Sliding Window Context
 
-Walaupun ada cooldown 30 detik, bot tetap **menyimpan context pesan** yang masuk selama cooldown. Ketika cooldown berakhir dan evaluasi berikutnya terjadi, context window mencakup semua pesan yang masuk sejak evaluasi terakhir (max 10 pesan).
+```mermaid
+sequenceDiagram
+    participant G as Telegram Group
+    participant B as Bot
+    participant R as Redis
 
-Ini artinya tidak ada "celah" — user yang melanggar saat cooldown tetap akan tertangkap di evaluasi berikutnya.
+    G->>B: Pesan ke-1 (12:00:00)
+    B->>R: Cek cooldown — tidak ada
+    B->>R: Set cooldown 30 detik
+    B->>B: Evaluasi AI dengan pesan ke-1
+    G->>B: Pesan ke-2 (12:00:10)
+    B->>R: Cek cooldown — aktif, skip
+    G->>B: Pesan ke-3 (12:00:20)
+    B->>R: Cek cooldown — aktif, skip
+    G->>B: Pesan ke-4 (12:00:31)
+    B->>R: Cek cooldown — sudah expired
+    B->>B: Evaluasi AI dengan pesan ke-2, 3, 4 sekaligus\nmaksimal 10 pesan dalam window
+```
+
+Tidak ada celah — user yang melanggar saat cooldown tetap tertangkap di evaluasi berikutnya karena pesan masuk ke context window.
 
 ### Rate Limiting Tambahan
 
-- **Max AI calls per jam per bot instance**: 500 (safetynet)
-- **Timeout per AI call**: 15 detik — jika timeout, tidak ada action
-- **Max retry**: 0 — tidak ada retry. Gagal = skip, coba di evaluasi berikutnya
+- Max AI calls per jam per bot instance: 500 (safetynet global)
+- Timeout per AI call: 15 detik. Jika timeout, tidak ada action
+- Max retry: 0. Gagal berarti skip, coba di evaluasi berikutnya
 
 ---
 
 ## 15. LOG CHANNEL & NOTIFIKASI ADMIN
 
-### Format Pesan ke Grup (Setelah Action Dieksekusi)
+### Format Pesan ke Grup Setelah Action Dieksekusi
 
+**Untuk warning:**
 ```
-🤖 Moderasi Otomatis
+[Moderasi Otomatis]
 
-Pengguna @username [ID: 801] mendapat warning.
+Pengguna @username [ID: 801] mendapat peringatan.
 
-📋 Rule: Cheat & Hack
-⚡ Alasan: User membagikan link download cheat maphack.
-📊 Peringatan ke-2 dari 3
+Rule   : Cheat & Hack
+Alasan : User membagikan link download cheat maphack.
+Status : Peringatan ke-2 dari 3
 
-─────────────────
 Tidak setuju? Hubungi admin grup.
 ```
 
+**Untuk mute atau mute_time:**
 ```
-🚫 Moderasi Otomatis
+[Moderasi Otomatis]
+
+Pengguna @username [ID: 820] telah di-mute selama 1 jam.
+
+Rule    : Spam & Flooding
+Alasan  : User mengirim 8 pesan promosi identik dalam 2 menit.
+Berakhir: 11 Jul 2026 14:00 WIB
+```
+
+**Untuk kick:**
+```
+[Moderasi Otomatis]
+
+Pengguna @username [ID: 905] telah di-kick dari grup.
+
+Rule   : Piracy
+Alasan : User membagikan link download FKM versi ilegal.
+```
+
+**Untuk ban:**
+```
+[Moderasi Otomatis]
 
 Pengguna @keymaster_vip [ID: 801] telah di-ban dari federasi TCF.
 
-📋 Rule: Keybox & VVIP Sales  
-⚡ Alasan: Menjual keybox dengan label VVIP dan harga berlangganan.
-🔗 Appeal: [Ajukan Banding]
+Rule   : Keybox & VVIP Sales
+Alasan : Menjual keybox dengan label VVIP dan harga berlangganan 15rb/bulan.
+Appeal : [Ajukan Banding]
 ```
 
 ### Format Log ke cfg.logs Channel
 
-**Untuk semua actions (info log):**
+**Untuk semua actions yang dieksekusi otomatis:**
 ```
-[AI MOD] ✅ Action Executed
+[AI MOD] Action Executed
 
 Group  : TCF Gaming ID (-100123456789)
 User   : KeyMaster (@keymaster_vip) [ID: 801]
@@ -1031,9 +1017,9 @@ Reason : Menjual keybox dengan label VVIP dan harga berlangganan.
 [Lihat Pesan Asli] [Lihat Bukti] [Undo Ban]
 ```
 
-**Untuk flag ke admin (confidence 0.75–0.89):**
+**Untuk flag ke admin (confidence 0.75 sampai 0.89):**
 ```
-[AI MOD] ⚠️ Review Required
+[AI MOD] Review Required
 
 Group  : TCF Gaming ID
 User   : SomeMember (@some_user) [ID: 905]
@@ -1045,12 +1031,12 @@ Reason : User membahas download FKM illegal dengan link channel Telegram.
 Preview Pesan:
 "nah mending download FKM yang versi gratis aja, ada di t.me/..."
 
-[✅ Approve Kick] [⬆️ Escalate to Ban] [❌ Ignore] [👁 Lihat Konteks]
+[Approve Kick] [Escalate to Ban] [Ignore] [Lihat Konteks]
 ```
 
 **Untuk AI ban dengan bukti:**
 ```
-[AI MOD] 🚫 Auto-Ban Executed
+[AI MOD] Auto-Ban Executed
 
 Group  : TCF Gaming ID
 User   : KeyMaster (@keymaster_vip) [ID: 801]
@@ -1058,9 +1044,9 @@ Rule   : keybox (MAXIMUM severity)
 Conf.  : 96%
 Reason : Menjual keybox dengan label VVIP dan harga berlangganan (15rb/bulan).
 
-⚠️  Ini adalah ban otomatis oleh AI. Verifikasi jika perlu.
+Ini adalah ban otomatis oleh AI. Verifikasi jika perlu.
 
-[🔍 Lihat Bukti di #proofs] [↩️ Undo Ban] [📋 Lihat Appeal]
+[Lihat Bukti di proofs] [Undo Ban] [Lihat Appeal]
 ```
 
 ---
@@ -1069,51 +1055,52 @@ Reason : Menjual keybox dengan label VVIP dan harga berlangganan (15rb/bulan).
 
 ### Prinsip Utama
 
-**Tidak ada kode yang sudah ada yang dihapus atau diubah besar.** AI moderation adalah **lapisan baru** (`tcbot/modules/ai_moderation/`) yang memanggil fungsi-fungsi existing.
+Tidak ada kode yang sudah ada yang dihapus atau diubah besar. AI moderation adalah lapisan baru (`tcbot/modules/ai_moderation/`) yang memanggil fungsi-fungsi existing.
 
 ### File Baru yang Perlu Dibuat
 
 ```
 tcbot/
 ├── modules/
-│   ├── ai_moderation/              ← BARU: package AI moderation
+│   ├── ai_moderation/
 │   │   ├── __init__.py
-│   │   ├── handler.py              ← MessageHandler entry point
-│   │   ├── context_builder.py      ← Build JSON payload
-│   │   ├── ai_client.py            ← Panggil LLM API + parse response
-│   │   ├── decision_router.py      ← Logic routing berdasarkan confidence
-│   │   ├── action_executor.py      ← Wrapper panggil existing flows
-│   │   └── seeder.py               ← Seed fed_rules ke MongoDB
+│   │   ├── handler.py              <- MessageHandler entry point
+│   │   ├── context_builder.py      <- Build JSON payload
+│   │   ├── ai_client.py            <- Panggil LLM API + parse response
+│   │   ├── decision_router.py      <- Logic routing berdasarkan confidence
+│   │   ├── action_executor.py      <- Wrapper panggil existing flows
+│   │   └── seeder.py               <- Seed fed_rules ke MongoDB
 │   └── ...
 ├── database/
-│   └── fed_rules_db.py             ← BARU: CRUD untuk collection fed_rules
+│   └── fed_rules_db.py             <- BARU: CRUD untuk collection fed_rules
 └── utils/
-    └── translator.py               ← BARU: MyMemory API wrapper
+    └── translator.py               <- BARU: MyMemory API wrapper
 ```
 
-### Fungsi Existing yang Dipanggil (Tidak Diubah)
+### Fungsi Existing yang Dipanggil
 
-| Fungsi Existing | Dipanggil Oleh AI Moderation Untuk |
+| Fungsi Existing | Dipanggil AI Moderation Untuk |
 |---|---|
 | `ban_flow._execute_ban()` | Action `ban` |
 | `muting_flow._execute_mute()` | Action `mute` dan `mute_time` |
 | `kicking_flow.execute_kick()` | Action `kick` |
 | `warning_flow._execute_warn()` | Action `warning` |
 | `bans_db.create_ban()` | Buat BanDoc untuk AI ban |
-| `mutes_db.log_mute()` + `set_active_mute()` | Record AI mute |
-| `warns_db.add_warn()` + `warn_count()` | Record AI warning |
+| `mutes_db.log_mute()` dan `set_active_mute()` | Record AI mute |
+| `warns_db.add_warn()` dan `warn_count()` | Record AI warning |
 | `groups_db.active_groups()` | Fan-out ban ke semua grup |
 
-### Modifikasi Minor yang Diperlukan pada Kode Existing
+### Modifikasi Minor pada Kode Existing
 
-`ban_flow._execute_ban()` perlu parameter opsional baru:
+`ban_flow._execute_ban()` perlu dua parameter opsional baru:
+
 ```python
 async def _execute_ban(
-    ...,                              # semua parameter yang sudah ada
-    is_ai_ban: bool = False,          # BARU
-    ai_proof_msg_id: int | None = None,  # BARU
+    ...,                                  # semua parameter yang sudah ada
+    is_ai_ban: bool = False,              # BARU
+    ai_proof_msg_id: int | None = None,   # BARU
 ) -> ...:
-    # Jika is_ai_ban = True, skip langkah BuildProof (sudah ada proof_msg_id)
+    # Jika is_ai_ban = True, skip langkah BuildProof interaktif
     # Langsung gunakan ai_proof_msg_id sebagai proof_message_id di BanDoc
     ...
 ```
@@ -1122,46 +1109,61 @@ Tidak ada perubahan lain ke kode existing.
 
 ### Handler Registration
 
-Di `tcbot/__main__.py`, tambah handler AI moderation dengan priority rendah (group tinggi = diproses terakhir):
+Di `tcbot/__main__.py`, tambah handler AI moderation dengan group tinggi agar diproses terakhir:
 
 ```python
 from tcbot.modules.ai_moderation.handler import ai_moderation_handler
 
 app.add_handler(ai_moderation_handler, group=50)
-# group 50 = setelah semua handler normal (group -1, 10, dll)
+# group 50 = setelah semua handler normal (group -1, 10, dst)
+```
+
+### Diagram Relasi Modul
+
+```mermaid
+flowchart TD
+    HANDLER[ai_moderation/handler.py\nMessageHandler entry point]
+    HANDLER --> CB[context_builder.py\nBuild JSON payload]
+    HANDLER --> AIC[ai_client.py\nLLM API call]
+    HANDLER --> DR[decision_router.py\nConfidence routing]
+    DR --> AE[action_executor.py\nWrapper existing flows]
+    AE --> BF[ban_flow._execute_ban\nEXISTING]
+    AE --> MF[muting_flow._execute_mute\nEXISTING]
+    AE --> KF[kicking_flow.execute_kick\nEXISTING]
+    AE --> WF[warning_flow._execute_warn\nEXISTING]
+    CB --> FRD[fed_rules_db.py\nNEW]
+    FRD --> REDIS[(Redis Cache)]
+    FRD --> MONGO[(MongoDB fed_rules)]
 ```
 
 ---
 
 ## 17. RULES YANG TIDAK BISA DI-ENFORCE AI
 
-7 rules dengan `ai_enforceable: false` — ini tetap ada di DB untuk keperluan:
-- Tampilan ke user via `/rules`
-- Referensi manual admin
-- Dokumentasi
+7 rules dengan `ai_enforceable: false` tetap ada di DB untuk keperluan tampilan ke user via `/rules`, referensi manual admin, dan dokumentasi. AI tidak pernah menerima rules ini dalam payload.
 
 | Rule | Kenapa Tidak Bisa AI | Penanganan |
 |---|---|---|
-| `fed-admin` | Ini aturan UNTUK admin, bukan member biasa | Human only |
+| `fed-admin` | Aturan untuk admin, bukan member biasa | Human only |
 | `admin-power` | Abuse of power butuh konteks organisasi | Human only |
 | `group-admin` | Tentang perilaku admin internal | Human only |
 | `group-ownership` | Tentang kepemilikan grup, tidak terdeteksi via chat | Human only |
 | `nickname-pfp` | Butuh inspeksi visual profil | Human only |
-| `fundraising` | Partial — AI bisa flag tapi tidak bisa verify transparansi | Flag to admin saja |
+| `fundraising` | AI bisa flag tapi tidak bisa verify transparansi | Flag ke admin saja |
+| `10-group-ownership` | Tidak ada sinyal teks yang bisa dideteksi | Human only |
 
 ---
 
 ## 18. EDGE CASES & PENANGANAN ERROR
 
-### 18.1 Pesan Hanya Media (Foto/Video Tanpa Teks)
+### 18.1 Pesan Hanya Media Tanpa Teks
 
 ```python
 if not (message.text or message.caption):
-    # Skip — AI tidak bisa evaluate
-    return
+    return  # Skip — AI tidak bisa evaluate media
 ```
 
-### 18.2 Pesan dari Anonymous Admin (GroupAnonymousBot)
+### 18.2 Pesan dari Anonymous Admin
 
 ```python
 ANONYMOUS_BOT_ID = 1087968824
@@ -1180,7 +1182,7 @@ except (json.JSONDecodeError, AssertionError, KeyError) as e:
     return  # Tidak ada action, tidak crash bot
 ```
 
-### 18.4 AI Timeout (> 15 Detik)
+### 18.4 AI Timeout
 
 ```python
 try:
@@ -1198,9 +1200,7 @@ if existing_ban:
     return  # User sudah di-ban, skip evaluasi
 ```
 
-### 18.6 AI Rekomendasikan Action yang Bukan di auto_actions Rule
-
-Validasi wajib — jika `selected_action` tidak ada di `auto_actions` rule yang dimaksud, tolak dan tidak eksekusi:
+### 18.6 AI Rekomendasikan Action di Luar auto_actions Rule
 
 ```python
 rule = await fed_rules_db.get_rule(output["rule_violated"])
@@ -1215,41 +1215,54 @@ if output["selected_action"] not in rule["auto_actions"]:
 try:
     await bot.forward_message(cfg.proofs, chat_id, offending_msg_id)
 except MessageIdInvalid:
-    # Pesan sudah dihapus, gunakan teks dari context sebagai fallback
+    # Pesan sudah dihapus, kirim teks dari context sebagai fallback
     await bot.send_message(cfg.proofs, f"[Pesan dihapus]\nKonten: {offending_text}")
 ```
 
 ### 18.8 Grup Tidak Mengaktifkan AI Moderation
 
-AI moderation bersifat opt-in per grup. GroupDoc di MongoDB perlu field tambahan:
+AI moderation bersifat opt-in per grup. GroupDoc perlu field tambahan:
 
 ```python
 # Di GroupDoc (modifikasi minor)
 "ai_moderation_enabled": bool  # default: False
 ```
 
-Owner grup bisa aktifkan via command admin: `/admin_set_ai on/off`
+Owner grup bisa aktifkan via command admin: `/admin_set_ai on` atau `/admin_set_ai off`
+
+### Ringkasan Error Handling
+
+```mermaid
+flowchart TD
+    ERR[Error terjadi] --> T{Tipe error?}
+    T -->|Timeout AI| A[Log warning\nReset cooldown\nSelesai tanpa action]
+    T -->|JSON invalid dari AI| B[Log error dengan raw output\nSelesai tanpa action]
+    T -->|Validasi output gagal| C[Log error\nSelesai tanpa action]
+    T -->|selected_action tidak valid| D[Log error\nSelesai tanpa action]
+    T -->|Pesan dihapus saat forward| E[Kirim teks fallback ke proofs\nLanjut eksekusi ban]
+    T -->|Telegram API error saat ban| F[Log error\nKirim alert ke cfg.logs\nAdmin perlu manual action]
+```
 
 ---
 
 ## 19. KONFIGURASI BOT
 
-Field baru yang perlu ditambah ke `cfg` (konfigurasi bot):
+Field baru yang perlu ditambah ke `cfg`:
 
 ```python
-# Di tcbot/config.py atau environment:
+# Di tcbot/config.py atau environment secrets:
 
-AI_API_URL: str          # URL LLM API endpoint
-AI_API_KEY: str          # API key (dari secrets)
-AI_MODEL: str            # e.g. "nvidia/nemotron-3-ultra-550b-a55b:free"
-AI_TIMEOUT: int = 15     # Detik
-AI_COOLDOWN: int = 30    # Detik per grup
+AI_API_URL: str           # URL LLM API endpoint
+AI_API_KEY: str           # API key (dari Replit Secrets, bukan hardcode)
+AI_MODEL: str             # contoh: "nvidia/nemotron-3-ultra-550b-a55b:free"
+AI_TIMEOUT: int = 15      # Detik
+AI_COOLDOWN: int = 30     # Detik per grup
 
 # Confidence thresholds
-AI_CONF_EXECUTE: float = 0.90   # Auto-execute action
-AI_CONF_FLAG: float = 0.75      # Flag ke admin
-AI_CONF_BAN_XHIGH: float = 0.87 # Auto-ban untuk severity xhigh
-AI_CONF_BAN_MAX: float = 0.85   # Auto-ban untuk severity max
+AI_CONF_EXECUTE: float = 0.90     # Auto-execute action non-ban
+AI_CONF_FLAG: float = 0.75        # Flag ke admin
+AI_CONF_BAN_XHIGH: float = 0.87   # Auto-ban untuk severity xhigh
+AI_CONF_BAN_MAX: float = 0.85     # Auto-ban untuk severity max
 
 # Translation
 MYMEMORY_EMAIL: str | None = None  # Opsional, tingkatkan limit ke 10k chars/hari
@@ -1259,15 +1272,15 @@ MYMEMORY_EMAIL: str | None = None  # Opsional, tingkatkan limit ke 10k chars/har
 
 ## 20. OUT OF SCOPE
 
-Item-item berikut **tidak termasuk dalam PRD ini** dan tidak akan dibangun:
+Item-item berikut tidak termasuk dalam PRD ini dan tidak akan dibangun:
 
 - Dashboard web untuk melihat AI moderation history
-- Training / fine-tuning model AI sendiri
-- Deteksi media (foto, video, stiker) — AI hanya teks
-- Real-time terjemahan pesan member (bukan rules)
-- Integrasi dengan platform eksternal (Discord, WhatsApp, dll)
-- Auto-appeal system (appeal tetap manual via bot yang sudah ada)
-- Statistik moderasi (berapa % AI vs manual, accuracy, dll) — mungkin fase berikutnya
+- Training atau fine-tuning model AI sendiri
+- Deteksi media foto, video, stiker — AI hanya teks
+- Real-time terjemahan pesan member, bukan rules
+- Integrasi dengan platform eksternal seperti Discord atau WhatsApp
+- Auto-appeal system — appeal tetap manual via bot yang sudah ada
+- Statistik moderasi seperti persentase AI vs manual, accuracy — mungkin fase berikutnya
 - Perubahan pada sistem warn, ban, mute manual yang sudah ada
 
 ---
@@ -1277,17 +1290,19 @@ Item-item berikut **tidak termasuk dalam PRD ini** dan tidak akan dibangun:
 | Aspek | Keputusan |
 |---|---|
 | Actions yang tersedia | `warning`, `mute`, `mute_time`, `kick`, `ban` |
-| Action yang dihapus | `fban` (digabung ke `ban` yang sudah federation-wide) |
+| Action yang dihapus | `fban` sebagai action terpisah — digabung ke `ban` yang sudah federation-wide |
 | Severity levels | `low`, `medium`, `high`, `xhigh`, `max` |
-| Rules storage | EN only di MongoDB, terjemahan ID on-demand |
-| Terjemahan | MyMemory API (free, 1000 req/hari), cached di Redis 7 hari |
-| Proof untuk AI ban | Forward pesan pelanggaran ke cfg.proofs channel |
-| Confidence threshold | Auto-execute ≥ 0.90 | Flag ke admin 0.75–0.89 | Log saja < 0.75 |
+| Rules storage | EN only di MongoDB, terjemahan ID on-demand via MyMemory |
+| Terjemahan | MyMemory API gratis 1.000 req/hari, cached di Redis TTL 7 hari |
+| Proof untuk AI ban | Forward pesan pelanggaran ke cfg.proofs channel sebagai proof_message_id |
+| Confidence threshold auto-execute | 0.90 ke atas |
+| Confidence threshold flag admin | 0.75 sampai 0.89 |
+| Confidence threshold log saja | di bawah 0.75 |
 | Cooldown per grup | 30 detik |
 | Context window | 10 pesan terakhir per grup |
-| Rules di-enforce AI | 20 dari 27 (7 butuh human judgment) |
-| Integrasi kode existing | Zero breaking changes — AI adalah lapisan tambahan |
-| Opt-in per grup | Ya — `ai_moderation_enabled` field di GroupDoc |
+| Rules di-enforce AI | 20 dari 27 — 7 butuh human judgment |
+| Integrasi kode existing | Zero breaking changes — AI adalah lapisan tambahan di group=50 |
+| Opt-in per grup | Ya — field `ai_moderation_enabled` di GroupDoc, default False |
 
 ---
 
