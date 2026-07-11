@@ -59,9 +59,9 @@ non-obvious API detail, record it in `.agents/memory/decisions.md`.
 
 | Library | Best Context7 ID | Benchmark |
 |---|---|---|
-| `python-telegram-bot` | `/python-telegram-bot/python-telegram-bot` | 86.8 |
-| `python-telegram-bot` (alt, more snippets) | `/websites/python-telegram-bot_en_stable` | 71.3 |
-| `motor` | `/mongodb/motor` | 85.86 |
+| `python-telegram-bot` | `/python-telegram-bot/python-telegram-bot` | 75.57 |
+| `python-telegram-bot` (alt, more snippets) | `/websites/python-telegram-bot_en_stable` | 73.33 |
+| `motor` | `/mongodb/motor` | 78.74 |
 | `pymongo` | resolve via `ctx7 library "pymongo" "..."` | N/A |
 | `ruff` | resolve via `ctx7 library "ruff" "..."` | N/A |
 
@@ -131,7 +131,7 @@ from Replit Secrets (no hardcoded value needed).
 
 ## Installation Notes (Replit)
 
-The `ctx7` CLI is installed globally via `npm install -g ctx7`. Binary path:
+The `ctx7` CLI is installed globally via `npm install -g ctx7`. Current version: **0.5.4** (updated 11 Jul 2026). Binary path:
 `/home/runner/workspace/.config/npm/node_global/bin/ctx7`
 
 The CLI auto-picks `CONTEXT7_API_KEY` from the environment (no prefix needed):

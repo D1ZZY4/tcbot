@@ -24,13 +24,14 @@ ctx7 docs "/python-telegram-bot/python-telegram-bot" "your specific question"
 ## MCP config files
 Both `.agents/mcp.json` and `.roo/mcp.json` use `${CONTEXT7_API_KEY}` placeholder (not hardcoded). Secret `CONTEXT7_API_KEY` is stored in Replit Secrets.
 
-## Verified library IDs (June 2026 - re-tested 16 Jun 2026)
+## Verified library IDs (re-tested 11 Jul 2026)
 | Library | ID | Benchmark | Notes |
 |---|---|---|---|
-| python-telegram-bot | `/python-telegram-bot/python-telegram-bot` | 78.32 | 1156 snippets, v22.5 |
-| python-telegram-bot (alt) | `/websites/python-telegram-bot_en_stable` | 71.96 | 10178 snippets - better for examples |
-| motor | `/mongodb/motor` | 89.3 | 853 snippets, best choice |
+| python-telegram-bot | `/python-telegram-bot/python-telegram-bot` | 75.57 | 1088 snippets, v22.5 |
+| python-telegram-bot (alt) | `/websites/python-telegram-bot_en_stable` | 73.33 | better for examples |
+| motor | `/mongodb/motor` | 78.74 | 519 snippets, best choice |
 
 ## ctx7 version
-- `ctx7 0.5.2` installed and verified working on 16 Jun 2026
+- `ctx7 0.5.4` installed and verified working on 11 Jul 2026
+- Updated from 0.5.3 → 0.5.4 via `npm install -g ctx7@latest`
 - Node v20 engine warning on install is safe to ignore - CLI works fine
