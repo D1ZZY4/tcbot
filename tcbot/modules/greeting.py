@@ -196,14 +196,21 @@ async def on_join_request_approved(
         if not connected:
             return
 
-    try:
-        mute = await db.mutes_db.get_active_mute(user.id)
-    except Exception as exc:
+    # * Identity harvest in parallel with mute lookup.
+    # * upsert_user_if_changed skips the DB write when identity is unchanged (L1 hit).
+    _, mute = await asyncio.gather(
+        db.users_cache.upsert_user_if_changed(
+            user.id, user.username, user.first_name, user.last_name or None
+        ),
+        db.mutes_db.get_active_mute(user.id),
+        return_exceptions=True,
+    )
+    if isinstance(mute, BaseException):
         log.warning(
             "get_active_mute failed for uid=%d on join_request_approved in chat=%d: %s",
             user.id,
             chat.id,
-            exc,
+            mute,
         )
         return
     if not mute:

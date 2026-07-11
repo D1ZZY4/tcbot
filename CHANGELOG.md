@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-07-11 (session 192)
+
+### Fixed
+
+- **Bug #501** (`tcbot/modules/greeting.py`): `on_join_request_approved` (introduced in Bug #491 fix) performed identity harvesting on zero join paths — unlike `on_new_member` (which calls `upsert_user_if_changed` in its `_handle_member` gather) and `on_join_request` (which calls it at L272), the approved-request handler silently skipped the DB profile write entirely. A user who enters a connected group exclusively via the join-request approval path would never have their identity cached, so their `first_name` / `username` / `last_name` in the `member_cache` collection would remain stale or absent. Replaced the sequential `try/except` block around `db.mutes_db.get_active_mute(user.id)` with an `asyncio.gather` that runs `upsert_user_if_changed` in parallel (matching the pattern in `on_join_request`). The gather uses `return_exceptions=True`; the mute result is checked for `BaseException` before use. Net latency cost: zero (parallelized).
+
 ## [Unreleased] - 2026-07-11 (session 191)
 
 ### Changed
