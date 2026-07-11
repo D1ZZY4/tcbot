@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-07-11 (session 194+)
+
+### Changed
+
+- **Bug #506** (`pyproject.toml`): All direct runtime dependencies lacked explicit upper-bound version constraints, allowing silent breaking changes on every `uv sync`. Per project policy, each dependency is now pinned to an explicit minor-version range (`>=X.Y,<X+1`): `python-telegram-bot[rate-limiter]>=22.8,<23`, `motor>=3.7,<4`, `flask>=3.1,<4`, `python-dotenv>=1.2,<2`, `redis[hiredis]>=8.0,<9`, `cbor2>=6.1,<7`, `cachetools>=7.1,<8`, `speedtest-cli>=2.1,<3`. `apscheduler[mongodb]==4.0.0a6` retains its exact pin per the CVE-2026-31072 exception. `uv sync` resolves to the same package versions as before; lock file unchanged.
+
 ## [Unreleased] - 2026-07-11 (session 194)
 
 ### Fixed

@@ -4,15 +4,15 @@ version = "5.2.6"
 description = "TCF | Transsion Core Federation - Telegram Bot"
 requires-python = ">=3.12"
 dependencies = [
-    "python-telegram-bot[rate-limiter]",
-    "motor",
-    "flask",
-    "python-dotenv",
-    "redis[hiredis]",
+    "python-telegram-bot[rate-limiter]>=22.8,<23",
+    "motor>=3.7,<4",
+    "flask>=3.1,<4",
+    "python-dotenv>=1.2,<2",
+    "redis[hiredis]>=8.0,<9",
     "apscheduler[mongodb]==4.0.0a6",
-    "cbor2",
-    "cachetools>=7.1.4",
-    "speedtest-cli",
+    "cbor2>=6.1,<7",
+    "cachetools>=7.1,<8",
+    "speedtest-cli>=2.1,<3",
 ]
 
 [dependency-groups]

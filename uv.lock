@@ -527,14 +527,14 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "apscheduler", extras = ["mongodb"], specifier = "==4.0.0a6" },
-    { name = "cachetools", specifier = ">=7.1.4" },
-    { name = "cbor2" },
-    { name = "flask" },
-    { name = "motor" },
-    { name = "python-dotenv" },
-    { name = "python-telegram-bot", extras = ["rate-limiter"] },
-    { name = "redis", extras = ["hiredis"] },
-    { name = "speedtest-cli" },
+    { name = "cachetools", specifier = ">=7.1,<8" },
+    { name = "cbor2", specifier = ">=6.1,<7" },
+    { name = "flask", specifier = ">=3.1,<4" },
+    { name = "motor", specifier = ">=3.7,<4" },
+    { name = "python-dotenv", specifier = ">=1.2,<2" },
+    { name = "python-telegram-bot", extras = ["rate-limiter"], specifier = ">=22.8,<23" },
+    { name = "redis", extras = ["hiredis"], specifier = ">=8.0,<9" },
+    { name = "speedtest-cli", specifier = ">=2.1,<3" },
 ]
 
 [package.metadata.requires-dev]
