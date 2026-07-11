@@ -45,6 +45,65 @@ Setiap skenario harus tertangani dan terdokumentasi. Anggap edge case yang belum
 
 ---
 
+## IDENTITAS
+
+AI adalah engineer otonom dengan kepemilikan penuh atas project TCF Bot (Telegram federation moderation bot), berjalan di environment **Replit**.
+
+**Stack:** Python 3.12, python-telegram-bot, APScheduler 4.x, MongoDB via Motor, Redis via redis-py async dengan hiredis (native C parser, wajib ter-install sebagai C extension), cachetools (L1 in-process cache: TTLCache atau LRUCache dengan eviction otomatis), dikelola dengan `uv` (uv.lock), di-lint dengan `ruff`. **Pin tiap dependency ke rentang minor version eksplisit** di `pyproject.toml` (misalnya `>=X.Y,<X+1`), bukan dibiarkan sepenuhnya lepas. Bot production yang harus stabil tidak boleh kebobolan breaking change diam-diam setiap `uv sync` dijalankan (python-telegram-bot, motor, dan redis-py rutin punya breaking changes antar minor version). `uv lock --upgrade` ke rentang minor berikutnya adalah langkah sadar yang dilakukan lalu diverifikasi penuh (rangkaian verifikasi 1-7), bukan default implisit yang terjadi tanpa disengaja. APScheduler tetap mengikuti aturan khusus di CVE-2026-31072 di bawah (tahan di versi sekarang, jangan upgrade ke alpha lain maupun downgrade ke 3.x).
+
+**Layout:** kode utama di `tcbot/`.
+
+---
+
+## WAJIB DIBACA DULU (jangan ada yang terlewat)
+
+Sebelum mengubah apa pun, baca semua file `.md` di repo secara lengkap, baris per baris, jangan dibatasi jumlah baris, jangan skip satu pun (abaikan mirror di `.kilo/`, `.trae/`, `.claude/`, dan `.roo/` karena semuanya symlink ke `.agents/`).
+
+**Urutan prioritas:**
+
+1. **Aturan agent:** `.agents/CLAUDE.md`, `.agents/RULES.md`, `.agents/WORKFLOW.md`, `.agents/STYLE-CODE.md`, `.agents/STYLE-COMMENTS.md`, `.agents/RUFF.md`, `.agents/REPLIT.md`
+2. **Folder aturan agent:** semua file di `.agents/rules/` termasuk `context7.md` dan file rule lainnya.
+3. **Skill agent:** `.agents/skills/context7-mcp.md` dan semua skill file lainnya.
+4. **Root:** `PLAN.md`, `CHANGELOG.md`, `AGENTS.md`, `README.md`, `replit.md`
+5. **Docs:** `docs/README.md`, `docs/setup.md`, `docs/mapping.md`, `docs/performance.md`, `docs/workflows-guide.md`, `docs/button-styles.md`, semua file di `docs/modules/`, `docs/helper/`, `docs/databases/`, `docs/utils/`, `docs/workflows/`, dan semua file `*-detailed.md`.
+
+Patuhi semua aturan di file `.agents/` sebagai hukum.
+
+---
+
+## PERSISTENSI MEMORY: WAJIB SYNC KE `.agents/memory/`
+
+Setiap kali platform menyimpan "Agent Memory" atau session state, wajib juga tulis ulang konten yang sama ke file `.agents/memory/` secara eksplisit. Memory bawaan platform tidak bisa diandalkan sebagai satu-satunya sumber kebenaran.
+
+### File Memory
+
+| File | Fungsi |
+|---|---|
+| `.agents/memory/MEMORY.md` | Indeks semua file `.md` di `.agents/memory/`, beserta fungsi masing-masing. Update setiap kali folder memory berubah. |
+| `.agents/memory/context.md` | State project saat ini: apa yang sudah selesai, sedang dikerjakan, belum dikerjakan, blocker jika ada. Update di setiap commit checkpoint. Hand-off note untuk sesi berikutnya. |
+| `.agents/memory/progress.md` | Status item rencana (done/in-progress/todo), hasil verifikasi, error yang ditemukan dan sudah diperbaiki. |
+| `.agents/memory/decisions.md` | Setiap keputusan teknis non-trivial beserta alasannya. Format: tanggal ringkas ditambah keputusan ditambah alasan. |
+| `.agents/memory/structure.md` | Snapshot struktur modul atau folder terkini setelah refactor. Memungkinkan sesi baru langsung oriented tanpa baca seluruh repo. |
+
+File lain di `.agents/memory/` juga harus dirawat dan diperbarui ketika relevan.
+
+**Wajib:** Sebelum melakukan git commit checkpoint apa pun, update semua file di `.agents/memory/` terlebih dahulu agar commit tersebut sudah mengandung state memory terbaru. Jangan biarkan `.agents/memory/` stale lebih dari satu checkpoint.
+
+### Context Recovery (langkah pertama sesi baru)
+
+Kalau memulai sesi baru, langkah pertama sebelum apa pun adalah:
+
+1. Baca `.agents/memory/MEMORY.md` sebagai indeks dan orientasi awal.
+2. Baca `.agents/memory/context.md` untuk tahu state terakhir.
+3. Baca `.agents/memory/progress.md` untuk tahu posisi di rencana.
+4. Baca `.agents/memory/decisions.md` untuk tahu keputusan yang sudah dibuat.
+5. Baca `.agents/memory/structure.md` untuk tahu layout kode terkini.
+6. Baru baca file `.md` lainnya sesuai urutan prioritas di atas.
+
+Jangan mulai kerja sebelum context recovery selesai.
+
+---
+
 ## KELENGKAPAN SKENARIO (edge case wajib, sampai detail terkecil)
 
 Audit tidak dianggap selesai sampai setiap command, conversation, dan callback terbukti menangani semua skenario di bawah dengan benar, entah memprosesnya, entah menolaknya dengan pesan yang jelas dan ber-voice konsisten. Telusuri tiap jalur secara nyata di kode; jangan berasumsi sudah ditangani. Untuk tiap skenario: buktikan dengan membaca handler dari awal sampai akhir, lalu lengkapi yang bocor.
@@ -150,63 +209,7 @@ Turunkan skenario yang bisa bertumpuk secara bersamaan ini lewat penalaran sendi
 
 > **Adaptif terhadap platform:** kalau environment membatasi jumlah sub-agent paralel atau tidak mendukung spawn paralel, turunkan jumlahnya secara bertahap namun pertahankan pola yang sama: pecah scope, kerjakan tanpa duplikasi, integrasi terpusat, verifikasi penuh. Jangan berhenti hanya karena paralelisme terbatas; sesuaikan dan lanjut.
 
----
-
-## IDENTITAS
-
-AI adalah engineer otonom dengan kepemilikan penuh atas project TCF Bot (Telegram federation moderation bot), berjalan di environment **Replit**.
-
-**Stack:** Python 3.12, python-telegram-bot, APScheduler 4.x, MongoDB via Motor, Redis via redis-py async dengan hiredis (native C parser, wajib ter-install sebagai C extension), cachetools (L1 in-process cache: TTLCache atau LRUCache dengan eviction otomatis), dikelola dengan `uv` (uv.lock), di-lint dengan `ruff`. Semua dependency mengikuti rilis terbaru yang kompatibel: biarkan tidak di-pin di `pyproject.toml` dan biarkan `uv lock` me-resolve versi terbaru.
-
-**Layout:** kode utama di `tcbot/`.
-
----
-
-## JOB SCHEDULING: APSCHEDULER 4
-
-Bot ini memakai **APScheduler 4.x** sebagai satu-satunya mekanisme job scheduling. Semua scheduled action, termasuk unban, unmute, warn expiry, cleanup, dan reminder federasi, dijadwalkan lewat APScheduler dengan persistent MongoDBDataStore agar bertahan restart. Job yang hilang saat restart adalah bug kritis untuk komunitas besar.
-
-### Setup APScheduler 4
-
-```python
-from apscheduler import AsyncScheduler
-from apscheduler.datastores.mongodb import MongoDBDataStore
-from apscheduler.serializers.cbor import CBORSerializer
-
-# CBORSerializer is mandatory: the default PickleSerializer cannot serialize the
-# ZoneInfo objects used by Cron/Interval triggers (see memory/decisions.md).
-data_store = MongoDBDataStore(
-    mongodb_uri, database=db_name, serializer=CBORSerializer()
-)
-async with AsyncScheduler(data_store) as scheduler:
-    await scheduler.start_in_background()
-    # ... register schedules; keep this task alive until shutdown ...
-```
-
-APScheduler 4 native async. Scheduler di-start di `tcbot/__main__.py` `_post_init` (setelah MongoDB connect) dan di-stop di `_post_shutdown`, sehingga lifecycle-nya sinkron dengan bot. Seluruh blok `async with AsyncScheduler()` berjalan di dalam satu asyncio task khusus karena AnyIO mewajibkan cancel-scope masuk dan keluar di task yang sama.
-
-### Aturan Implementasi
-
-- Inject bot atau application ke dalam APScheduler job via closure atau dependency injection eksplisit -- jangan pakai global.
-- Semua job harus idempoten: kalau dijalankan dua kali karena retry setelah crash, hasilnya sama, tidak ada aksi ganda ke user.
-- Gunakan `asyncio.gather` kalau satu titik trigger harus mendaftarkan banyak job sekaligus misalnya bulk mute saat fan-out.
-- Catat setiap keputusan desain non-trivial tentang scheduling di `.agents/memory/decisions.md`.
-
-### Keamanan APScheduler: CVE-2026-31072
-
-APScheduler 4.0.0a6 yang ter-pin sekarang terkena **CVE-2026-31072** (GHSA-9cfw-f3f9-7mm7, CVSS 9.8): `JSONSerializer` atau `CBORSerializer` rentan RCE lewat insecure deserialization. Belum ada rilis yang mem-patch: semua 4.x adalah alpha yang terdampak, dan 3.x API-nya berbeda total (tidak punya `AsyncScheduler` atau `MongoDBDataStore`). Karena itu:
-
-- **Pengecualian dari kebijakan "biarkan tidak di-pin".** Khusus APScheduler, jangan `uv lock --upgrade` membabi buta ke alpha lain dan jangan downgrade ke 3.x. Tahan di versi sekarang sampai ada rilis yang benar-benar mem-patch, baru naik.
-- **Keterjangkauan rendah di deployment ini:** serializer hanya men-deserialize dokumen jadwal yang ditulis bot sendiri ke MongoDB privatnya. Eksploitasi butuh akses tulis ke MongoDB lebih dulu, bukan jalur dari Telegram. Mitigasi melalui pengerasan operasional: MongoDB privat, user least-privilege, IP allowlist, dan URI koneksi jangan bocor.
-- Analisis lengkap dan keputusan accepted-risk ada di `PLAN.md` dan `CHANGELOG.md`.
-
-### Context7 Wajib Sebelum Implementasi
-
-APScheduler 4 punya breaking changes yang tidak tercermin di training data. Sebelum menulis kode scheduling apa pun, jalankan Context7:
-
-```
-mcp: context7 | library: apscheduler | topic: AsyncScheduler, MongoDBDataStore
-```
+> **Verifikasi keberadaan sebelum memakai.** Sebelum memanggil sub-agent atau skill bernama spesifik (dari daftar di atas atau di bagian SKILL & SUB-AGENT), pastikan filenya benar-benar ada di `.agents/agents/` atau `.agents/skills/`. Kalau tidak ada, jangan berhenti dan jangan berhalusinasi hasilnya seolah ada: treat sebagai `general-operator` atau `general-sub-agent` yang generik dan lanjut kerja.
 
 ---
 
@@ -442,6 +445,58 @@ Idiom Python 3.12, `async`/`await` menyeluruh, type hint penuh, dataclass, dan p
 
 ---
 
+## JOB SCHEDULING: APSCHEDULER 4
+
+Bot ini memakai **APScheduler 4.x** sebagai satu-satunya mekanisme scheduling berbasis waktu (time-based execution). Semua scheduled action, termasuk unban, unmute, warn expiry, cleanup, dan reminder federasi, dijadwalkan lewat APScheduler dengan persistent MongoDBDataStore agar bertahan restart, bertahan pindah environment (VPS baru, Replit ke self-hosted, dsb), dan otomatis jalan begitu scheduler start lagi kalau jatuh tempo terlewat saat proses mati (asalkan job idempoten). Job yang hilang saat restart adalah bug kritis untuk komunitas besar.
+
+**Jangan bingung dengan queue data lain yang bukan scheduling.** `tcbot/database/queues_db.py` (promotion request queue: antrean pengajuan promosi staff dengan status pending/resolved) adalah struktur data approval workflow, bukan mekanisme time-based execution -- jangan dianggap sebagai job queue yang harus dimigrasi ke APScheduler, dan jangan dihapus atau digabung ke scheduler karena beda konsep sepenuhnya.
+
+**Audit wajib: cari residu mekanisme scheduling lama yang bukan APScheduler.** Telusuri seluruh `tcbot/` untuk pola delay atau eksekusi tertunda yang non-persistent: `asyncio.sleep` yang dipakai sebagai penunda aksi bukan sekadar debounce singkat dalam satu request (misalnya album debounce di `ban_flow.py` itu debounce sesaat dan sah, bukan scheduling -- bedakan keduanya), `threading.Timer`, custom in-memory queue/dict untuk delayed action, cron job terpisah di luar APScheduler, atau library job queue lain. Kalau ditemukan sesuatu yang berfungsi sebagai "jalankan aksi X nanti" dan datanya hilang saat proses restart, itu wajib dimigrasikan ke APScheduler dengan `MongoDBDataStore` agar persisten. Verifikasi tidak ada dua mekanisme time-based execution berjalan bersamaan untuk jenis job yang sama.
+
+### Setup APScheduler 4
+
+```python
+from apscheduler import AsyncScheduler
+from apscheduler.datastores.mongodb import MongoDBDataStore
+from apscheduler.serializers.cbor import CBORSerializer
+
+# CBORSerializer is mandatory: the default PickleSerializer cannot serialize the
+# ZoneInfo objects used by Cron/Interval triggers (see memory/decisions.md).
+data_store = MongoDBDataStore(
+    mongodb_uri, database=db_name, serializer=CBORSerializer()
+)
+async with AsyncScheduler(data_store) as scheduler:
+    await scheduler.start_in_background()
+    # ... register schedules; keep this task alive until shutdown ...
+```
+
+APScheduler 4 native async. Scheduler di-start di `tcbot/__main__.py` `_post_init` (setelah MongoDB connect) dan di-stop di `_post_shutdown`, sehingga lifecycle-nya sinkron dengan bot. Seluruh blok `async with AsyncScheduler()` berjalan di dalam satu asyncio task khusus karena AnyIO mewajibkan cancel-scope masuk dan keluar di task yang sama.
+
+### Aturan Implementasi
+
+- Inject bot atau application ke dalam APScheduler job via closure atau dependency injection eksplisit -- jangan pakai global.
+- Semua job harus idempoten: kalau dijalankan dua kali karena retry setelah crash, hasilnya sama, tidak ada aksi ganda ke user.
+- Gunakan `asyncio.gather` kalau satu titik trigger harus mendaftarkan banyak job sekaligus misalnya bulk mute saat fan-out.
+- Catat setiap keputusan desain non-trivial tentang scheduling di `.agents/memory/decisions.md`.
+
+### Keamanan APScheduler: CVE-2026-31072
+
+APScheduler 4.0.0a6 yang ter-pin sekarang terkena **CVE-2026-31072** (GHSA-9cfw-f3f9-7mm7, CVSS 9.8): `JSONSerializer` atau `CBORSerializer` rentan RCE lewat insecure deserialization. Belum ada rilis yang mem-patch: semua 4.x adalah alpha yang terdampak, dan 3.x API-nya berbeda total (tidak punya `AsyncScheduler` atau `MongoDBDataStore`). Karena itu:
+
+- **Pengecualian dari kebijakan naik-versi rutin.** Dependency lain naik rentang minor lewat proses sadar di KEBIJAKAN UPDATE DEPENDENCY; khusus APScheduler, itu tidak berlaku sama sekali sampai ada rilis yang mem-patch: jangan `uv lock --upgrade` membabi buta ke alpha lain dan jangan downgrade ke 3.x. Tahan di versi sekarang, baru naik setelah ada patch nyata.
+- **Keterjangkauan rendah di deployment ini:** serializer hanya men-deserialize dokumen jadwal yang ditulis bot sendiri ke MongoDB privatnya. Eksploitasi butuh akses tulis ke MongoDB lebih dulu, bukan jalur dari Telegram. Mitigasi melalui pengerasan operasional: MongoDB privat, user least-privilege, IP allowlist, dan URI koneksi jangan bocor.
+- Analisis lengkap dan keputusan accepted-risk ada di `PLAN.md` dan `CHANGELOG.md`.
+
+### Context7 Wajib Sebelum Implementasi
+
+APScheduler 4 punya breaking changes yang tidak tercermin di training data. Sebelum menulis kode scheduling apa pun, jalankan Context7:
+
+```
+mcp: context7 | library: apscheduler | topic: AsyncScheduler, MongoDBDataStore
+```
+
+---
+
 ## PERFORMA: ASYNC, PARALEL, ZERO DELAY
 
 **Kecepatan adalah citizen kelas satu, bukan afterthought.** Setiap hotpath harus dioptimalkan secara aktif. Kalau target di bawah terasa tidak masuk akal, itu disengaja: cari cara untuk mencapainya, bukan alasan untuk tidak mencapainya.
@@ -449,7 +504,7 @@ Idiom Python 3.12, `async`/`await` menyeluruh, type hint penuh, dataclass, dan p
 - Semua I/O wajib async. Tidak boleh ada satu pun blocking call di event loop, tidak ada pengecualian, tidak ada "nanti saja".
 - **Paralelkan segalanya, tanpa terkecuali.** Setiap operasi yang tidak saling bergantung wajib jalan bersamaan lewat `asyncio.gather` (atau `asyncio.TaskGroup` atau `asyncio.as_completed`): di query MongoDB, di call Telegram API, di lookup Redis dan cache, di fan-out federasi, di mana pun tanpa kecuali. `await` berurutan untuk dua operasi independen adalah larangan keras. Dua `await` berturut-turut yang tidak saling bergantung adalah bug performa yang wajib diubah jadi paralel sebelum lanjut. Refleks wajib di tiap handler, helper, dan job: "ini bisa di-gather?" Kalau bisa, gather. Banyak DB call dalam satu alur wajib jadi satu batch atau aggregation atau di-`gather`, bukan satu per satu.
 - **Pre-fetch agresif.** Kalau bisa ditebak data apa yang dibutuhkan berikutnya misalnya user info saat command masuk, mulai fetch sebelum ia dibutuhkan. Jangan tunggu jalur eksekusi sampai ke titik konsumsi baru fetch.
-- **Spekulatif.** Kalau ada dua jalur eksekusi yang mungkin dan data untuk keduanya bisa di-fetch paralel dengan cost rendah, fetch keduanya sekarang, buang yang tidak terpakai. Lebih murah dari round-trip tambahan.
+- **Spekulatif, tapi tidak untuk Telegram Bot API.** Kalau ada dua jalur eksekusi yang mungkin dan data untuk keduanya bisa di-fetch paralel dengan cost rendah, fetch keduanya sekarang, buang yang tidak terpakai. Lebih murah dari round-trip tambahan -- **berlaku untuk DB dan cache internal saja**. Jangan terapkan pola ini ke panggilan Telegram Bot API: Telegram punya rate limit ketat (sekitar 30 pesan/detik global, 20/menit per grup) dan panggilan spekulatif yang dibuang tetap memakan quota itu, berisiko memicu `429 Too Many Requests` di jalur yang justru penting. Untuk Telegram API, fetch atau kirim hanya yang benar-benar akan dipakai; paralelkan panggilan yang independen (`gather`), tapi jangan panggil ganda untuk jalur yang belum pasti dipakai.
 - **Pipeline DB.** Hindari N+1 query pattern di mana pun. Setiap loop yang mengandung DB call individu wajib dikonversi ke batch query atau aggregation. Satu round-trip MongoDB harus menyelesaikan pekerjaan yang sebelumnya butuh N.
 - **Cache ultra-agresif, tiga lapisan, semua wajib hidup bersamaan.** Urutan lookup wajib: L1 cachetools (in-process, target < 0.001ms di v5.2.6) lalu L2 Redis (distributed, target < 0.008ms di v5.2.6) lalu L3 MongoDB (persistent, target < 0.02ms di v5.2.6). L1 lokal wajib selalu aktif di depan Redis: walau Redis sudah dipakai, jangan pernah melompati cachetools lalu langsung ke Redis. Hit L1 in-process selalu mengalahkan round-trip Redis; Redis bukan pengganti L1, melainkan lapisan di belakangnya. Tidak ada mode "cukup Redis saja" dan tidak ada mode "cukup L1 saja": ketiga lapis dipakai berbarengan, tiap lapis mengisi lapis di atasnya begitu terjadi miss. Invalidasi berjalan dari L3 ke atas: tulis MongoDB lalu invalidate Redis lalu invalidate cachetools. Stale cache yang menghasilkan state salah adalah bug kebenaran, bukan sekadar performa.
 - **cachetools untuk hot path.** Data yang dibaca di setiap pesan masuk seperti role lookup, identity resolution, dan federation membership wajib di-cache di TTLCache atau LRUCache. `cache.py` yang ada sudah memakai cachetools `TTLCache` (eviction TTL dan LRU lewat `maxsize`): pertahankan itu, jangan pernah turun ke plain dict tanpa eviction karena itu memory leak yang menunggu waktu.
@@ -487,6 +542,8 @@ Doktrin zero-delay tidak berhenti di database dan cache: jalur update dari Teleg
 ### Performance Baselines (v5.2.6 -- Batas Mustahil yang Wajib Dicapai, Lebih Keras dari Semua Versi Sebelumnya)
 
 Target berikut sengaja dipasang di titik yang tidak hanya terasa mustahil, tetapi sebagian memang melanggar ekspektasi fisika perangkat lunak konvensional. Itu bukan salah ketik: itu undangan untuk menyalip batas yang ada. Kolom v5.2.6 sengaja dipasang lebih tidak masuk akal dari kolom v4.6.2 sebelumnya, dan itu juga bukan salah ketik. **Ini bukan wilayah abu-abu: AI wajib benar-benar mematuhi angka ini, bukan mendekatinya "lumayan dekat".** Kalau target belum tercapai lewat cara konvensional, itu artinya belum cukup jauh mencari jalan pintas -- bukan alasan untuk berhenti di angka yang "sudah cukup cepat". Untuk sampai ke sana mungkin perlu cara yang sama sekali tidak konvensional: ubah query shape, tambah index yang sangat spesifik, ganti pola akses, precompute di background, warm cache saat startup dengan data yang pasti dibutuhkan, pegang koneksi tetap panas, hilangkan lapisan jaringan yang tidak perlu (termasuk mengganti polling dengan webhook native, lihat subsection Transport Update di atas), rancang ulang seluruh flow dari nol, atau kombinasi dari semuanya. Cari caranya sendiri; jadikan target ini motivasi, bukan hambatan, dan jangan pernah menganggap target v5.2.6 "terlalu ekstrem untuk dicoba" sebagai alasan sah untuk tidak mencoba.
+
+**Kejujuran angka lebih tinggi dari tercapainya angka.** Mengukur dengan cara yang digimmick -- misalnya cuma mengukur cache-hit path lalu melaporkannya seolah itu angka end-to-end, memanaskan cache tepat sebelum diukur lalu mematikan pengukuran cold-path, atau membulatkan/memoles hasil supaya "lolos" di atas kertas -- adalah pelanggaran yang lebih berat daripada sekadar gagal mencapai target. Kalau sudah dicoba dengan segala cara yang masuk akal dan tetap tidak tercapai, tulis angka aslinya apa adanya di `.agents/memory/decisions.md` beserta cara yang sudah dicoba; itu bukan kegagalan, itu kejujuran teknis, dan tidak menghalangi status selesai selama sudah tercatat sebagai accepted-gap (lihat definition of done). Setiap angka yang dilaporkan wajib berasal dari pengukuran nyata yang bisa direproduksi: pakai `time.perf_counter_ns` (bukan `time`/`datetime` yang resolusinya kasar), jalankan minimal puluhan iterasi dengan warm-up run dibuang, dan catat di environment mana diukur (variabilitas Replit shared-resource beda dari VPS dedicated) -- catat metodologi ini bersamaan dengan angkanya, bukan angka telanjang tanpa konteks bagaimana didapat.
 
 | Operasi | Target v3 | Target v4 | Target v4.5.1 | Target v4.6.2 | Target v5.2.6 (LEBIH TIDAK MASUK AKAL, WAJIB DIPATUHI) |
 |---|---|---|---|---|---|
@@ -606,7 +663,7 @@ Ini sering diabaikan. Jangan diabaikan lagi. Audit dan perbaiki semua.
 
 ### Kapan Bump Dependency
 
-Project ini mengikuti versi terbaru yang kompatibel dari semua dependency. Biarkan tidak di-pin di `pyproject.toml` dan jalankan `uv lock --upgrade` untuk menarik rilis terbaru. Bump bebas, tapi selalu verifikasi setiap upgrade dengan Context7 (atau inspeksi source) dan rangkaian verifikasi penuh sebelum commit.
+Project ini mengikuti versi terbaru yang kompatibel dari semua dependency, tapi tetap **dipin ke rentang minor version eksplisit** di `pyproject.toml` (lihat bagian IDENTITAS). Naik ke rentang minor berikutnya lewat `uv lock --upgrade` atau update constraint di `pyproject.toml` adalah langkah sadar, bukan default otomatis setiap sync. Setiap bump, sekecil apa pun, selalu diverifikasi dengan Context7 (atau inspeksi source) dan rangkaian verifikasi penuh sebelum commit.
 
 > **Pengecualian: APScheduler.** Versi terkunci terkena CVE-2026-31072 dan belum ada patch (lihat bagian "Keamanan APScheduler"). Jangan upgrade membabi buta ke alpha lain dan jangan downgrade ke 3.x; tahan sampai ada rilis yang mem-patch, baru naik.
 
@@ -685,55 +742,6 @@ git branch -D feature/bad-branch
 | Environment benar-benar rusak | `uv cache clean && uv sync`, lalu assessment |
 
 Selalu catat apa yang salah dan kenapa di `.agents/memory/progress.md` sebelum melakukan rollback, agar informasinya tidak hilang.
-
----
-
-## WAJIB DIBACA DULU (jangan ada yang terlewat)
-
-Sebelum mengubah apa pun, baca semua file `.md` di repo secara lengkap, baris per baris, jangan dibatasi jumlah baris, jangan skip satu pun (abaikan mirror di `.kilo/`, `.trae/`, `.claude/`, dan `.roo/` karena semuanya symlink ke `.agents/`).
-
-**Urutan prioritas:**
-
-1. **Aturan agent:** `.agents/CLAUDE.md`, `.agents/RULES.md`, `.agents/WORKFLOW.md`, `.agents/STYLE-CODE.md`, `.agents/STYLE-COMMENTS.md`, `.agents/RUFF.md`, `.agents/REPLIT.md`
-2. **Folder aturan agent:** semua file di `.agents/rules/` termasuk `context7.md` dan file rule lainnya.
-3. **Skill agent:** `.agents/skills/context7-mcp.md` dan semua skill file lainnya.
-4. **Root:** `PLAN.md`, `CHANGELOG.md`, `AGENTS.md`, `README.md`, `replit.md`
-5. **Docs:** `docs/README.md`, `docs/setup.md`, `docs/mapping.md`, `docs/performance.md`, `docs/workflows-guide.md`, `docs/button-styles.md`, semua file di `docs/modules/`, `docs/helper/`, `docs/databases/`, `docs/utils/`, `docs/workflows/`, dan semua file `*-detailed.md`.
-
-Patuhi semua aturan di file `.agents/` sebagai hukum.
-
----
-
-## PERSISTENSI MEMORY: WAJIB SYNC KE `.agents/memory/`
-
-Setiap kali platform menyimpan "Agent Memory" atau session state, wajib juga tulis ulang konten yang sama ke file `.agents/memory/` secara eksplisit. Memory bawaan platform tidak bisa diandalkan sebagai satu-satunya sumber kebenaran.
-
-### File Memory
-
-| File | Fungsi |
-|---|---|
-| `.agents/memory/MEMORY.md` | Indeks semua file `.md` di `.agents/memory/`, beserta fungsi masing-masing. Update setiap kali folder memory berubah. |
-| `.agents/memory/context.md` | State project saat ini: apa yang sudah selesai, sedang dikerjakan, belum dikerjakan, blocker jika ada. Update di setiap commit checkpoint. Hand-off note untuk sesi berikutnya. |
-| `.agents/memory/progress.md` | Status item rencana (done/in-progress/todo), hasil verifikasi, error yang ditemukan dan sudah diperbaiki. |
-| `.agents/memory/decisions.md` | Setiap keputusan teknis non-trivial beserta alasannya. Format: tanggal ringkas ditambah keputusan ditambah alasan. |
-| `.agents/memory/structure.md` | Snapshot struktur modul atau folder terkini setelah refactor. Memungkinkan sesi baru langsung oriented tanpa baca seluruh repo. |
-
-File lain di `.agents/memory/` juga harus dirawat dan diperbarui ketika relevan.
-
-**Wajib:** Sebelum melakukan git commit checkpoint apa pun, update semua file di `.agents/memory/` terlebih dahulu agar commit tersebut sudah mengandung state memory terbaru. Jangan biarkan `.agents/memory/` stale lebih dari satu checkpoint.
-
-### Context Recovery (langkah pertama sesi baru)
-
-Kalau memulai sesi baru, langkah pertama sebelum apa pun adalah:
-
-1. Baca `.agents/memory/MEMORY.md` sebagai indeks dan orientasi awal.
-2. Baca `.agents/memory/context.md` untuk tahu state terakhir.
-3. Baca `.agents/memory/progress.md` untuk tahu posisi di rencana.
-4. Baca `.agents/memory/decisions.md` untuk tahu keputusan yang sudah dibuat.
-5. Baca `.agents/memory/structure.md` untuk tahu layout kode terkini.
-6. Baru baca file `.md` lainnya sesuai urutan prioritas di atas.
-
-Jangan mulai kerja sebelum context recovery selesai.
 
 ---
 
@@ -919,7 +927,7 @@ Project dianggap selesai ketika semua kondisi berikut terpenuhi:
 - **Audit kering:** beberapa gelombang sub-agent berturut-turut tidak menemukan temuan baru. Seluruh kode `tcbot/` sudah ditelusuri dari awal sampai akhir, setiap skenario di bagian kelengkapan skenario sudah terbukti tertangani.
 - Siap production dan stabil. Tidak ada bug yang diketahui.
 - Struktur sangat modular, modern, clean: tidak ada dead code, tidak ada duplicate code, tidak ada nilai hardcode.
-- **Semua target performa v5.2.6 terpenuhi** atau ada catatan eksplisit di `.agents/memory/decisions.md` mengapa target tertentu tidak bisa dicapai beserta bukti bahwa semua cara yang masuk akal, termasuk yang tidak konvensional, sudah dicoba.
+- **Semua target performa v5.2.6 terpenuhi**, atau ada catatan eksplisit di `.agents/memory/decisions.md` mengapa target tertentu tidak bisa dicapai beserta bukti bahwa semua cara yang masuk akal, termasuk yang tidak konvensional, sudah dicoba, beserta angka nyata yang benar-benar tercapai (lihat kejujuran angka di bagian PERFORMA). **Target performa yang tercatat sebagai accepted-gap dengan bukti seperti ini tidak menghalangi status selesai** -- yang menghalangi status selesai hanyalah bug, celah skenario yang belum tertangani, atau keamanan yang belum utuh; target latency ekstrem yang sudah dicoba habis-habisan dan dicatat jujur adalah pengecualian yang sah, bukan pekerjaan yang belum selesai.
 - **Bot berjalan dalam mode webhook native** sesuai environment (lihat subsection Transport Update di bagian PERFORMA), tanpa loop `getUpdates` kontinu yang berjalan bersamaan, kecuali fallback local dev yang sudah dicatat eksplisit sebagai accepted-risk.
 - Semua I/O async dan operasi independen diparalelkan. `asyncio.gather` digunakan di setiap tempat yang memungkinkan. Tidak ada `await` berurutan untuk operasi independen. Tidak ada N+1 DB query pattern tersisa.
 - `q.answer()` selalu menjadi instruksi pertama di callback handler, tanpa pengecualian.
