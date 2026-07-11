@@ -2,6 +2,12 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-07-11 (session 194+, cont. 2)
+
+### Fixed
+
+- **Bug #508** (`tcbot/database/users_cache.py`): `get_mention_data_batch()` tidak menyimpan sentinel `[None, None]` ke `user_mention_cache` untuk user yang tidak ditemukan di MongoDB dalam batch query. Akibatnya, setiap pemanggilan berikutnya untuk user yang sama tetap mengenai DB (loop tidak pernah berhenti di L1). Tambahkan `user_mention_cache.put(uid, [None, None])` di path not-found agar konsisten dengan sentinel yang sudah dipakai `get_user_mention_data` dan `get_first_name`.
+
 ## [Unreleased] - 2026-07-11 (session 194+, cont.)
 
 ### Fixed

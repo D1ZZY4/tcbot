@@ -169,9 +169,12 @@ async def get_mention_data_batch(
         user_mention_cache.put(uid, [fname, uname])
         result[uid] = (fname, uname)
 
-    # * Fill fallback for users not found in DB either.
+    # * Fill fallback for users not found in DB either and cache the sentinel so
+    # * subsequent calls (get_user_mention_data, get_first_name, this function)
+    # * skip the MongoDB round-trip on the next lookup.
     for uid in missing:
         if uid not in result:
+            user_mention_cache.put(uid, [None, None])
             result[uid] = (str(uid), None)
 
     return result
