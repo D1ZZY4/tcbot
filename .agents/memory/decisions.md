@@ -466,3 +466,33 @@ if isinstance(exc, CircuitOpenError):
 **Why:** `GroupDoc` contains a `datetime` field (`added_date`). The `active_groups` fetch query previously also returned `_id: ObjectId` (fixed by adding `{"_id": 0}` projection), but the root cause -- that plain `json.JSONEncoder` cannot handle Motor-returned documents -- remains latent for any future cache value that includes a `datetime`. The encoder is the correct single-point fix rather than adding projections to every individual query.
 
 **How to apply:** All new `TwoLevelCache` instances that may cache MongoDB documents automatically benefit from this encoder because it is wired inside `TwoLevelCache`. No per-call-site changes needed. If a new type causes serialization failure in the future, add a branch to `_MongoJSONEncoder.default()` in `cache.py`.
+
+---
+
+## 2026-07-11: get_first_name must route through user_mention_cache.get_or_fetch
+
+**Decision:** `users_cache.get_first_name()` must call `user_mention_cache.get_or_fetch(user_id, _fetch)` rather than checking L1 directly and falling back to a raw MongoDB call.
+
+**Why:** The old implementation checked only `user_mention_cache.get(user_id)` (L1 in-memory) and on a miss called `_members().find_one()` directly, bypassing the L2 Redis layer entirely and never writing the result back to any cache. Every call for a user absent from L1 became an unnecessary MongoDB round-trip. The `get_or_fetch` path (L1 → L2 Redis → DB) populates both layers on a DB hit, so subsequent calls -- whether from `get_first_name` or `get_user_mention_data` -- all share the same cache namespace.
+
+**How to apply:** Always call `user_mention_cache.get_or_fetch(user_id, _fetch)` where `_fetch` returns `[first_name, username]` (same shape as `get_user_mention_data`). Never add a separate `_members().find_one()` call that bypasses the cache tiers.
+
+---
+
+## 2026-07-11: TwoLevelCache.clear_all for full two-layer invalidation
+
+**Decision:** When invalidating a `TwoLevelCache` and the affected key is not known in advance (e.g. after an ownership transfer where the old owner's ID is unknown), use `await cache.clear_all()` instead of `cache.clear()`.
+
+**Why:** `TwoLevelCache.clear()` explicitly documents that it does NOT flush Redis keys -- it is L1-only by design, to avoid blocking I/O in callers that only need in-process eviction. `set_owner()` previously called `effective_role_cache.clear()`, leaving stale role entries in Redis for up to 90 s (the `_ROLE_REDIS_TTL_S`). Any other process reading from Redis in that window saw a stale "founder" role for the deposed owner. `clear_all()` uses Redis `SCAN` + `UNLINK` in batches of 100 to remove all `tcbot:<prefix>:*` keys without blocking the Redis server.
+
+**How to apply:** Keep `clear()` for callers that only need L1 eviction (no Redis I/O acceptable, e.g. in sync context). Use `await clear_all()` when you need both layers flushed and the key set is unbounded or unknown. For single known keys, prefer `invalidate(key)`.
+
+---
+
+## 2026-07-11: pyproject.toml explicit minor-version pinning for all runtime deps
+
+**Decision:** All direct runtime dependencies in `pyproject.toml` are pinned to an explicit minor-version range (`>=X.Y,<X+1`). The only exception is `apscheduler[mongodb]==4.0.0a6`, which stays at an exact pin per the CVE-2026-31072 exception.
+
+**Why:** Unbound dependencies allow silent breaking changes on every `uv sync`. PTB, Motor, and redis-py routinely introduce breaking changes across minor versions. A constraint like `>=22.8,<23` makes bumping to PTB 23 a deliberate `uv lock --upgrade` step that triggers the full 7-step verification sequence, not an implicit default.
+
+**How to apply:** After any intentional minor-version bump, run `uv lock --upgrade` with the new constraint, then run the full verification sequence (uv sync, import, startup, lint, run bot, docs). Record the bump in CHANGELOG.md.

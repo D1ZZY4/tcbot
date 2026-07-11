@@ -39,3 +39,6 @@
 - [PTB post_init/post_shutdown in webhook mode](decisions.md): PTB Application.initialize/__aenter__ does NOT call post_init; shutdown/__aexit__ does NOT call post_shutdown; both only fire via run_polling/run_webhook; must call explicitly in custom webhook loop
 - [PTB conversation_timeout disabled](decisions.md): requires [job-queue] extra (APScheduler 3.x) which conflicts with APScheduler 4; never add conversation_timeout to any ConversationHandler
 - [TwoLevelCache Redis JSON encoder](decisions.md): cache.py uses _MongoJSONEncoder(json.JSONEncoder) for all json.dumps calls; handles datetime→ISO-8601, ObjectId→str fallback; required because GroupDoc contains datetime fields
+- [get_first_name must use get_or_fetch](decisions.md): route through user_mention_cache.get_or_fetch (L1->L2->DB); never bypass to MongoDB directly or cache benefits are lost
+- [TwoLevelCache.clear_all for unknown-key invalidation](decisions.md): use clear_all() (async SCAN+UNLINK) when the old key is unknown; clear() is L1-only and leaves Redis stale
+- [pyproject.toml minor-version pinning](decisions.md): all deps pinned to >=X.Y,<X+1 except APScheduler exact-pin; upgrade is a conscious uv lock --upgrade step, not default
