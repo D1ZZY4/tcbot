@@ -5,11 +5,13 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-07-11 (session 191)
+**Last updated:** 2026-07-11 (session 193)
 
 ## What is done
 
-- Session 192 (2026-07-11): Bug #501 fixed. greeting.py on_join_request_approved was missing upsert_user_if_changed — identity never harvested for users entering via approved join request. Replaced sequential get_active_mute try/except with asyncio.gather(upsert_user_if_changed, get_active_mute, return_exceptions=True), matching on_join_request pattern. Wave 3 audit (5 parallel sub-agents SA9-SA13): all other findings verified as false positives (circuit breaker HALF_OPEN acceptable in asyncio; broadcasting.py HTML intentional; proof_flow caption code-built; checking.py timestamp None guarded; scheduler stop() correct on crash). Ruff: 75 files clean. Import: OK. Total bugs: #1-#501. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
+- Session 193 (2026-07-11): Bug #502 fixed (doc-only). 10 parallel sub-agents (SA1-SA10) in 3 waves across all 75 Python files: zero code-level bugs found. Only 3 em-dashes in .md files (context.md, CHANGELOG.md, PLAN.md from session-192 entries) corrected. SA1 (ban/mute/unban): cancel_schedule-on-unmute is false positive (mutes use Telegram until_date, no APScheduler job). SA2 (warning/reason/proof): album-capture false positive (Bug #492 already guards with mgid). SA3 (database): all 8 claimed bugs verified false positives (federation_warn_count guarded, deactivate_extra_active_bans called by callers, cast() no-op, add_warn atomicity known design). SA4 (admins): text_html concatenation safe (PTB escapes), already-owner false positive. SA5 (main/alive): hiredis lazy-checked correctly at connect(), config int() guarded. SA6 (greeting/connected): is_bot catches GroupAnonymousBot, join_prompt plain-text. SA7 (decorators/identity/extraction): all CLEAN. SA8 (docs): all 7 docs accurate. SA9 (checking/appeal): all CLEAN. SA10 (scheduler/dispatch/circuit): stop() safe, _sched_task referenced at module level, HALF_OPEN single-threaded safe. Ruff: 75 files clean. Import: OK. Total bugs: #1-#502. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
+
+- Session 192 (2026-07-11): Bug #501 fixed. greeting.py on_join_request_approved was missing upsert_user_if_changed: identity never harvested for users entering via approved join request. Replaced sequential get_active_mute try/except with asyncio.gather(upsert_user_if_changed, get_active_mute, return_exceptions=True), matching on_join_request pattern. Wave 3 audit (5 parallel sub-agents SA9-SA13): all other findings verified as false positives (circuit breaker HALF_OPEN acceptable in asyncio; broadcasting.py HTML intentional; proof_flow caption code-built; checking.py timestamp None guarded; scheduler stop() correct on crash). Ruff: 75 files clean. Import: OK. Total bugs: #1-#501. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 191 (2026-07-11): Full autonomous wave-2 audit (docs-drift, voice/security, devops sub-agents). 7 doc bugs fixed (Bug #494-#500). Bug #494: performance checklist thresholds updated to v5.2.6. Bug #495: performance.md architecture targets section renamed to v5.2.6, layer table + button handler targets updated. Bug #496: mapping.md __main__.py description and startup Mermaid diagram updated to webhook-first. Bug #497: modules.md discovery diagram node "Start long polling" replaced. Bug #498: workflows-guide.md Run Bot description + secrets table updated for WEBHOOK_URL/SECRET. Bug #499: run-bot.yml env block added WEBHOOK_URL + WEBHOOK_SECRET. Bug #500: config.env.example duplicate REDIS_URL definition removed. pyproject.toml version bumped 4.6.2->5.2.6. Dep bump: tzdata v2026.2->v2026.3. All 75 files ruff-clean. Import: OK. Total bugs: #1-#500. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
@@ -140,4 +142,4 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## Bug count
 
-Total: **501 bugs fixed** (sessions 1-192). Open: CVE-2026-31072 (accepted), Improvement #4 (future).
+Total: **502 bugs fixed** (sessions 1-193). Open: CVE-2026-31072 (accepted), Improvement #4 (future).
