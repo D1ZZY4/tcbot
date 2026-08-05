@@ -1,0 +1,65 @@
+# Setup
+
+Not triggered by documentation questions, only when the user explicitly asks to set up or
+configure Context7 for their editor or coding agent.
+
+## ctx7 setup
+
+One-time command that configures Context7 for an AI coding agent. On first run it prompts for
+a mode:
+
+- **MCP server**: registers the Context7 MCP server so the agent can call its tools natively.
+  This is what makes `mcp-mode.md` applicable afterward.
+- **CLI + Skills**: installs a `find-docs`-style skill that guides the agent to use `ctx7` CLI
+  commands directly, no MCP server required. This is what makes `cli-mode.md` applicable.
+
+```bash
+npx ctx7@latest setup                     # interactive, prompts for mode then agent/target
+npx ctx7@latest setup --mcp               # skip the prompt, use MCP server mode
+npx ctx7@latest setup --cli               # skip the prompt, use CLI + Skills mode
+
+# MCP mode, target a specific agent
+npx ctx7@latest setup --claude            # Claude Code only
+npx ctx7@latest setup --cursor            # Cursor only
+npx ctx7@latest setup --opencode          # OpenCode only
+
+# CLI + Skills mode, target a specific install location
+npx ctx7@latest setup --cli --claude      # Claude Code (~/.claude/skills)
+npx ctx7@latest setup --cli --cursor      # Cursor (~/.cursor/skills)
+npx ctx7@latest setup --cli --universal   # universal (~/.agents/skills)
+npx ctx7@latest setup --cli --antigravity # Antigravity (~/.config/agent/skills)
+
+npx ctx7@latest setup --project           # configure the current project instead of globally
+npx ctx7@latest setup --yes               # skip confirmation prompts
+```
+
+## Authentication options
+
+```bash
+npx ctx7@latest setup --api-key YOUR_KEY  # use an existing API key, works for both modes
+npx ctx7@latest setup --oauth             # OAuth endpoint, MCP mode only, IDE handles the flow
+```
+
+Without `--api-key` or `--oauth`, setup opens a browser for OAuth login. MCP mode additionally
+generates a new API key after login. `--oauth` only applies to MCP mode.
+
+## What gets written
+
+**MCP mode:**
+- An MCP server entry in the agent's config file (`.mcp.json` for Claude, `.cursor/mcp.json`
+  for Cursor, `.opencode.json` for OpenCode)
+- A Context7 rule file instructing the agent to use Context7 for library docs
+- A `context7-mcp`-style skill in the agent's skills directory
+
+**CLI + Skills mode:**
+- A `find-docs`-style skill in the chosen agent's skills directory, guiding it to use
+  `ctx7 library` and `ctx7 docs` commands
+
+## Which mode to recommend
+
+If the user hasn't specified a preference, MCP mode is generally lower friction once set up,
+since tools are called natively without shelling out. CLI + Skills mode is the better fit when
+the environment doesn't support MCP servers, or when the user is working somewhere with tighter
+constraints around what can be installed or configured (for example, a mobile terminal
+environment where a persistent MCP server process isn't practical). Ask if genuinely unsure,
+don't default silently to one over the other when the tradeoff actually matters for the setup.
