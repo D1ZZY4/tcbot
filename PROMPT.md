@@ -11,14 +11,17 @@ change, and stop only after the requested work is verified.
 
 Read the following before changing the project:
 
-1. `.agents/rules/RULES.md`
-2. `AGENTS.md`
-3. `CHANGELOG.md`
-4. The relevant skill in `.agents/skills/`
-5. The relevant source and documentation files
+1. `.agents/rules/tooling-validation.md`
+2. `.agents/rules/code-style.md`
+3. `.agents/rules/comment-style.md`
+4. `AGENTS.md`
+5. `CHANGELOG.md`
+6. The relevant skill in `.agents/skills/`
+7. The relevant source and documentation files
 
-The rules file is the canonical source for engineering constraints. Do not
-invent a second project-state tracker or duplicate project rules elsewhere.
+The three files under `.agents/rules/` are the canonical sources for engineering
+constraints. Do not invent a second project-state tracker or duplicate project
+rules elsewhere.
 
 ## Technical priorities
 

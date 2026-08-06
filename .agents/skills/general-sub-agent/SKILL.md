@@ -7,7 +7,12 @@ Last updated: 2026-05-29
 
 # General Sub Agent
 
-Before invoking this skill, confirm the read/update rules in [`.agents/rules/RULES.md`](../../rules/RULES.md#mandatory-read-before-work-and-update-after-work). After any change, update [`CHANGELOG.md`](../../../CHANGELOG.md) and any related document under `docs/` in the same turn.
+Before invoking this skill, confirm the read/update rules in
+[`tooling-validation.md`](../../rules/tooling-validation.md#read-before-work-and-update-after-work),
+[`code-style.md`](../../rules/code-style.md), and
+[`comment-style.md`](../../rules/comment-style.md). After any change, update
+[`CHANGELOG.md`](../../../CHANGELOG.md) and any related document under `docs/`
+in the same turn.
 
 Use this project-local skill when the user asks for broad help that is not covered by a more specific TCF Bot skill. It is useful for general exploration, code review, small bug fixes, documentation updates, and focused quality improvements across the repository.
 

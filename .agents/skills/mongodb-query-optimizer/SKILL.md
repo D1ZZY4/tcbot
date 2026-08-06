@@ -5,7 +5,13 @@ description: Optimize MongoDB query and index performance for the TCF Bot projec
 
 # MongoDB Query Optimizer for TCF Bot
 
-Before invoking this skill, confirm the read/update rules in [`.agents/rules/RULES.md`](../../rules/RULES.md#mandatory-read-before-work-and-update-after-work). After any change in `tcbot/database/`, update [`CHANGELOG.md`](../../../CHANGELOG.md) and [`docs/architecture/database.md`](../../../docs/architecture/database.md) in the same turn.
+Before invoking this skill, confirm the read/update rules in
+[`tooling-validation.md`](../../rules/tooling-validation.md#read-before-work-and-update-after-work),
+[`code-style.md`](../../rules/code-style.md), and
+[`comment-style.md`](../../rules/comment-style.md). After any change in
+`tcbot/database/`, update [`CHANGELOG.md`](../../../CHANGELOG.md) and
+[`docs/architecture/database.md`](../../../docs/architecture/database.md) in
+the same turn.
 
 Use this skill only for MongoDB performance, query-plan, or indexing work. Keep guidance aligned with TCF Bot's async Motor database layer and project architecture.
 

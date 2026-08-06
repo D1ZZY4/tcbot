@@ -7,7 +7,11 @@ Last updated: 2026-05-29
 
 # Feature Reviewer
 
-Before invoking this skill, confirm the read/update rules in [`.agents/rules/RULES.md`](../../rules/RULES.md#mandatory-read-before-work-and-update-after-work). When reviewing, flag a missing [`CHANGELOG.md`](../../../CHANGELOG.md) entry as a review finding.
+Before invoking this skill, confirm the read/update rules in
+[`tooling-validation.md`](../../rules/tooling-validation.md#read-before-work-and-update-after-work),
+[`code-style.md`](../../rules/code-style.md), and
+[`comment-style.md`](../../rules/comment-style.md). When reviewing, flag a
+missing [`CHANGELOG.md`](../../../CHANGELOG.md) entry as a review finding.
 
 Use this skill when the user asks for a code review, final check, regression review, or "is this ready?" review of project changes.
 

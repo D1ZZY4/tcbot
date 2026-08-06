@@ -21,6 +21,11 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - Reorganized `docs/` into professional public categories: `getting-started`, `architecture`, `features`, `operations`, and `reference`. Removed the agent-specific commit guide and the empty contribution category, renamed ambiguous documents, removed the former flat and duplicated directory structure, updated active cross-references, and made `docs/README.md` the category-based documentation index. Corrected setup, backup, health, workflow, feature, and performance guidance to match the current implementation.
 
+- Added root-level `CONTRIBUTING.md` and replaced the monolithic rule file
+  plus three legacy rule filenames with categorized tooling, code-style, and
+  comment-style guidance. Updated contributor docs, repository maps, and
+  skills to use the new paths.
+
 ## [Unreleased] - 2026-07-11 (session 194+, cont. 2)
 
 ### Fixed
@@ -56,7 +61,7 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 ### Documentation
 
 - **Bug #502** (documentation): Three em-dashes (U+2014) found in documentation files added during session 192 entries. Replaced with colons or semicolons to comply with the no-em/en-dash policy. Audit note: session 193 ran 10 parallel sub-agents (SA1-SA10) across all 75 Python source files in 3 independent waves; zero code-level bugs found.
-- **Agent repository cleanup**: Removed obsolete local agent rules, state folders, the retired project plan, and the deleted test suite. Consolidated current contributor guidance in `AGENTS.md`, `PROMPT.md`, and `.agents/rules/RULES.md`.
+- **Agent repository cleanup**: Removed obsolete local agent rules, state folders, the retired project plan, and the deleted test suite. Consolidated current contributor guidance in `AGENTS.md`, `PROMPT.md`, and the project rule set.
 
 ## [Unreleased] - 2026-07-11 (session 192)
 
@@ -459,7 +464,7 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Fixed
 
-- **`tcbot/modules/checking.py`** (Bug #414): Inline import of `build_ban_detail` inside `on_checkme_detail` violated the project rule "No inline imports inside functions or handlers" (RULES.md line 64). `ban_info.py` does not import back from `checking.py`, so no circular dependency exists; the inline import was unnecessary. Moved `from tcbot.modules.helper.ban_info import build_ban_detail` to the module-level import block and removed the `# noqa: PLC0415`-tagged inline import from inside the function body.
+- **`tcbot/modules/checking.py`** (Bug #414): Inline import of `build_ban_detail` inside `on_checkme_detail` violated the project rule against inline imports inside functions or handlers. `ban_info.py` does not import back from `checking.py`, so no circular dependency exists; the inline import was unnecessary. Moved `from tcbot.modules.helper.ban_info import build_ban_detail` to the module-level import block and removed the `# noqa: PLC0415`-tagged inline import from inside the function body.
 
 - **`tcbot/modules/helper/parse_logmsg.py`** + **`tcbot/modules/helper/workflows/warning_flow.py`** (Bug #412): `execute_resetwarns` did not send any entry to the moderator log channel after successfully clearing warnings. Every other moderation action (warn, unwarn, mute, ban, unban) posts an audit-log message on success. The absence of a resetwarns log meant staff could not audit who cleared a user's warnings or when. Added `resetwarns_log()` formatter to `parse_logmsg.py` (consistent with `warn_log`/`unwarn_log` structure: admin mention, user mention, user ID, warnings-cleared count, group name, and timestamp) and updated `execute_resetwarns` to build the log text and send it concurrently with the reply via `asyncio.gather`, with per-result error logging on failure.
 
@@ -992,7 +997,7 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Fixed
 
-- **`tcbot/modules/netspeed.py`** (`cmd_ping`, `cmd_speedtest`): Decorator order was wrong: `@owner_only` was outermost, `@ratelimiter` second. Per project rule (`RULES.md`), `@ratelimiter` must always be outermost for command handlers, auth guard second, `@log_execution` innermost. Swapped the two outer decorators on both handlers. (Bug #231)
+- **`tcbot/modules/netspeed.py`** (`cmd_ping`, `cmd_speedtest`): Decorator order was wrong: `@owner_only` was outermost, `@ratelimiter` second. Per project decorator-order policy, `@ratelimiter` must always be outermost for command handlers, auth guard second, `@log_execution` innermost. Swapped the two outer decorators on both handlers. (Bug #231)
 
 ## [Unreleased] - 2026-06-13 (session 90 wave 2)
 
@@ -1130,7 +1135,7 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Chore
 
-- **`CHANGELOG.md`**: Replaced 14 Unicode em-dash characters (`\u2014`) with colon-space (`: `) throughout the file. Em-dashes are banned from all project files per style rules (`.agents/rules/STYLE-CODE.md`).
+- **`CHANGELOG.md`**: Replaced 14 Unicode em-dash characters (`\u2014`) with colon-space (`: `) throughout the file. Em-dashes are banned from all project files by the code-style rules.
 
 ## [Unreleased] - 2026-06-12 (session 84)
 
@@ -1631,7 +1636,7 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 ### Documentation
 
 - **`README.md`**: `MAIN_GROUP` description was too vague ("Main community group/forum chat ID"); added a note that it is required for appeal review cards and promotion-flow messages to accurately reflect its usage in `appeal_flow.py` and `promote_flow.py`.
-- **`.agents/rules/RUFF.md`**, **`.agents/skills/python-code-quality/SKILL.md`**, **`.agents/skills/python-code-quality/REFERENCE.md`**: updated the embedded `[tool.ruff] exclude` list to include `attached_assets/`, mirroring the `pyproject.toml` change above.
+- **Project Ruff guidance** in `.agents/skills/python-code-quality/SKILL.md` and `.agents/skills/python-code-quality/REFERENCE.md`: updated the embedded `[tool.ruff] exclude` list to include `attached_assets/`, mirroring the `pyproject.toml` change above.
 
 ### Code quality
 
@@ -1641,7 +1646,7 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Documentation
 
-- **`.agents/skills/python-code-quality/SKILL.md`** and **`.agents/skills/python-code-quality/REFERENCE.md`**: synced the embedded `pyproject.toml` snapshot with the real file. Both showed a stale 5-group ruff `select` (`["E4", "E7", "E9", "F", "I"]`); corrected to the current 22-group set (matching `.agents/rules/RUFF.md`). In SKILL.md, moved `ruff` out of `[project] dependencies` into `[dependency-groups] dev` (resolving an internal contradiction with its own following prose) and removed the four stale `# Migrate to latest channel version` comments that were deleted from `pyproject.toml` in session 37. Added the `[tool.ruff] exclude` list to both. Replaced REFERENCE.md's now-false "enforces syntax/pyflakes/import-order rules, not a full strict style suite" line with an accurate per-rule summary that points to the canonical `.agents/rules/RUFF.md`. Bumped the embedded "as of"/"Updated" dates to 2026-06-11.
+- **`.agents/skills/python-code-quality/SKILL.md`** and **`.agents/skills/python-code-quality/REFERENCE.md`**: synced the embedded `pyproject.toml` snapshot with the real file. Both showed a stale 5-group ruff `select` (`["E4", "E7", "E9", "F", "I"]`); corrected to the current 22-group set. In SKILL.md, moved `ruff` out of `[project] dependencies` into `[dependency-groups] dev` (resolving an internal contradiction with its own following prose) and removed the four stale `# Migrate to latest channel version` comments that were deleted from `pyproject.toml` in session 37. Added the `[tool.ruff] exclude` list to both. Replaced REFERENCE.md's now-false "enforces syntax/pyflakes/import-order rules, not a full strict style suite" line with an accurate per-rule summary that points to the current validation guidance. Bumped the embedded "as of"/"Updated" dates to 2026-06-11.
 
 ## [Unreleased] - 2026-06-11 (session 43)
 
@@ -1836,7 +1841,7 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 ### Documentation
 
 - Removed test-related content from the prompt files `nothing.md` and `nothing-2.md` (dropped the test verification step and renumbered the sequence, removed the testing-guidelines section, and cleaned scattered test references) while keeping the rest of each prompt intact.
-- Removed test-related content from all documentation across `docs/`, the repo root (`README.md`, `AGENTS.md`, `replit.md`), and the surviving agent rules and skills without deleting any files. Ruff/lint/validation content was preserved throughout. The Ruff reference was retained and renamed to `.agents/rules/RUFF.md`; all references were updated.
+- Removed test-related content from all documentation across `docs/`, the repo root (`README.md`, `AGENTS.md`, `replit.md`), and the surviving agent rules and skills without deleting any files. Ruff/lint/validation content was preserved throughout. The Ruff reference was retained in the project rule set and all references were updated.
 
 ## [Unreleased] - 2026-06-06 (session 30)
 
@@ -2564,7 +2569,7 @@ Ruff reformatted; all 1078 tests green.
 
 ### Fixed - Sequential await defects in `cmd_promote` and `cmd_demote` (admins.py)
 
-Two Forbidden Action violations (RULES.md: "sequential awaits on independent operations")
+Two Forbidden Action violations (the project rule against sequential awaits on independent operations)
 were present in `tcbot/modules/admins.py`:
 
 - **`cmd_promote`** (line 155): `identity.classify` was awaited first, then after the
@@ -2818,7 +2823,7 @@ All 1005 tests still pass; lint clean.
 
 ### Fixed - RULES compliance: `except Exception: pass` in `checking.py`
 
-`tcbot/modules/checking.py` had a bare `except Exception: pass` on a non-critical cache upsert (silently dropped any DB error). This violates the `RULES.md` rule "No bare `except:` and no `except Exception: pass`." Fix: added `import logging` and `log = logging.getLogger(__name__)`, then changed the bare `pass` to `log.debug("users_cache upsert failed for %d: %s", target_id, exc)`.
+`tcbot/modules/checking.py` had a bare `except Exception: pass` on a non-critical cache upsert (silently dropped any DB error). This violates the project rule "No bare `except:` and no `except Exception: pass`." Fix: added `import logging` and `log = logging.getLogger(__name__)`, then changed the bare `pass` to `log.debug("users_cache upsert failed for %d: %s", target_id, exc)`.
 
 ### Documentation - Fix four stale references across docs and agent files
 
@@ -3168,7 +3173,7 @@ Extracted all static user-facing reply strings from `tcbot/modules/helper/workfl
 - **Performance degradation**: Optimized database queries prevent slowdown from fetching unnecessary user profile fields.
 - **N+1 query patterns**: Eliminated all N+1 patterns in list views by using batch queries.
 - **Unused variable**: Fixed unused variable in `muting.py` (executor_role).
-- **Code standards compliance**: Removed all pictograph emoji from bot messages per .agents/rules/RULES.md.
+- **Code standards compliance**: Removed all pictograph emoji from bot messages per the project code-style rules.
 - **Missing asyncio import**: Fixed `NameError` in `warns_db.py` - added missing `import asyncio` for parallel operations in `clear_warns()` and `remove_last_warn()`. Caught by TDD test suite as 4 failing tests.
 - **Auto-fix workflow committing directly to main**: Changed auto-fix workflow to create PR for review instead of committing directly to main branch. Safer, requires review before merge.
 - **Auto-fix branch sprawl**: Switched from timestamped branch names (e.g. `auto-fix/ruff-20260529-021249`) to a fixed branch name `auto-fix/ruff` that gets force-updated, so the repository never accumulates stale auto-fix branches.

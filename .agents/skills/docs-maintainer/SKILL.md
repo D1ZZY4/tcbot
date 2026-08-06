@@ -11,7 +11,9 @@ Use this skill when the user asks to update, fill in, review, or reorganize Mark
 
 ## Mandatory Read-Before-Work and Update-After-Work
 
-Before invoking this skill, you must already have read [`.agents/rules/RULES.md`](../../rules/RULES.md), [`AGENTS.md`](../../../AGENTS.md), and [`CHANGELOG.md`](../../../CHANGELOG.md).
+Before invoking this skill, you must already have read the three canonical rule
+files in `../../rules/`, [`AGENTS.md`](../../../AGENTS.md), and
+[`CHANGELOG.md`](../../../CHANGELOG.md).
 
 When you change *any* documentation file, update the related markdown in the same turn:
 

@@ -155,11 +155,12 @@ For detailed architecture, see [`docs/architecture/repository-map.md`](docs/arch
 │   │       └── workflows/    Conversation flows (`*_flow.py`)
 │   └── utils/                Logging, prefixes, dispatch, datetime helpers
 ├── docs/                     Developer documentation grouped by category
-├── .agents/                   Optional repository maintenance guidance
+├── .agents/                  Repository maintenance guidance and skills
 ├── config.env.example        Environment template
 ├── docker-compose.yml        Bot + MongoDB local compose setup
 ├── pyproject.toml            Project metadata, dependencies, Ruff
 ├── uv.lock                   Locked dependency graph
+├── CONTRIBUTING.md           Contribution workflow and review checklist
 ├── AGENTS.md                 Project guide for contributors
 └── replit.md                 Replit deployment notes
 ```
@@ -171,7 +172,7 @@ uv run ruff format .
 uv run ruff check --fix .
 ```
 
-Ruff targets Python 3.12 and line length 88. GitHub Actions install dependencies through `uv sync --frozen` so CI follows `pyproject.toml` and `uv.lock`. Project code should follow the detailed rules in [`.agents/rules/RULES.md`](.agents/rules/RULES.md), [`.agents/rules/RUFF.md`](.agents/rules/RUFF.md), [`.agents/rules/STYLE-CODE.md`](.agents/rules/STYLE-CODE.md), and [`.agents/rules/STYLE-COMMENTS.md`](.agents/rules/STYLE-COMMENTS.md).
+Ruff targets Python 3.12 and line length 88. GitHub Actions install dependencies through `uv sync --frozen` so CI follows `pyproject.toml` and `uv.lock`. Project code should follow the detailed rules in [tooling and validation](.agents/rules/tooling-validation.md), [code style and architecture](.agents/rules/code-style.md), and [comment and documentation style](.agents/rules/comment-style.md).
 
 ## CI/CD & Automation
 
@@ -228,6 +229,7 @@ Configure in GitHub repository settings → Secrets:
 ## Where to look next
 
 - For project guide and contributor rules, see [`AGENTS.md`](AGENTS.md).
+- For the contribution workflow and pull request checklist, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - For Replit deployment notes, see [`replit.md`](replit.md).
 - For developer documentation overview and detailed guide index, see [`docs/README.md`](docs/README.md).
 - For local, Docker, and hosted setup workflow, see [`docs/getting-started/setup.md`](docs/getting-started/setup.md).
@@ -237,7 +239,7 @@ Configure in GitHub repository settings → Secrets:
 - For utility module notes, see [`docs/architecture/utilities.md`](docs/architecture/utilities.md).
 - For user-facing flow overview, see [`docs/features/workflow-overview.md`](docs/features/workflow-overview.md). For conversation internals, see [`docs/architecture/workflows.md`](docs/architecture/workflows.md).
 - For appeals flow, see [`docs/features/appeals.md`](docs/features/appeals.md). For banning flow, see [`docs/features/moderation/banning.md`](docs/features/moderation/banning.md). For roles, see [`docs/features/roles/roles.md`](docs/features/roles/roles.md). For warnings, see [`docs/features/moderation/warnings.md`](docs/features/moderation/warnings.md).
-- For detailed engineering rules used by repository maintainers, see [`.agents/rules/RULES.md`](.agents/rules/RULES.md), [`.agents/rules/RUFF.md`](.agents/rules/RUFF.md), [`.agents/rules/STYLE-CODE.md`](.agents/rules/STYLE-CODE.md), and [`.agents/rules/STYLE-COMMENTS.md`](.agents/rules/STYLE-COMMENTS.md).
+- For detailed engineering rules used by repository maintainers, see [tooling and validation](.agents/rules/tooling-validation.md), [code style and architecture](.agents/rules/code-style.md), and [comment and documentation style](.agents/rules/comment-style.md).
 
 ## Current Status
 

@@ -12,7 +12,9 @@ existing architecture. Prefer existing helpers and patterns over new abstraction
 
 ## Mandatory Read-Before-Work and Update-After-Work
 
-Before invoking this skill, you must already have read [`.agents/rules/RULES.md`](../../rules/RULES.md), [`AGENTS.md`](../../../AGENTS.md), and [`CHANGELOG.md`](../../../CHANGELOG.md) at the start of this conversation.
+Before invoking this skill, you must already have read the three canonical rule
+files in `../../rules/`, [`AGENTS.md`](../../../AGENTS.md), and
+[`CHANGELOG.md`](../../../CHANGELOG.md) at the start of this conversation.
 
 After any code change in `tcbot/`, in the same turn:
 

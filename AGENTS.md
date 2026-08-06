@@ -2,7 +2,10 @@
 
 This file is the top-level guide for agents and contributors working in this repository. It summarizes the current project layout, development commands, style rules, and safety requirements.
 
-For user-facing setup, see [`README.md`](README.md). For Replit deployment, see [`replit.md`](replit.md). For detailed developer documentation, see [`docs/README.md`](docs/README.md).
+For user-facing setup, see [`README.md`](README.md). For contribution workflow,
+see [`CONTRIBUTING.md`](CONTRIBUTING.md). For Replit deployment, see
+[`replit.md`](replit.md). For detailed developer documentation, see
+[`docs/README.md`](docs/README.md).
 
 ---
 
@@ -12,7 +15,12 @@ Every new conversation in this repository must start by reading the canonical ru
 
 **Read at the start of every conversation:**
 
-- [`.agents/rules/RULES.md`](.agents/rules/RULES.md): canonical hard constraints
+- [`.agents/rules/tooling-validation.md`](.agents/rules/tooling-validation.md):
+  workflow, dependency, documentation, and validation rules
+- [`.agents/rules/code-style.md`](.agents/rules/code-style.md): Python style,
+  architecture, handler, database, and async rules
+- [`.agents/rules/comment-style.md`](.agents/rules/comment-style.md): comments,
+  docstrings, section dividers, and Markdown rules
 - [`AGENTS.md`](AGENTS.md) (this file), [`CHANGELOG.md`](CHANGELOG.md)
 - The relevant [`.agents/skills/`](.agents/skills/), [`docs/`](docs/), and project-root docs for the task
 
@@ -21,7 +29,8 @@ Every new conversation in this repository must start by reading the canonical ru
 - [`CHANGELOG.md`](CHANGELOG.md): entry under `[Unreleased]` (Added / Changed / Fixed / Removed / Documentation)
 - Every related `docs/**/*.md`, `.agents/**/*.md`, [`README.md`](README.md), [`replit.md`](replit.md) whose content is now stale
 
-See [`.agents/rules/RULES.md`](.agents/rules/RULES.md#mandatory-read-before-work-and-update-after-work) for the complete read/update rules. Skipping either step is a serious defect.
+See [`tooling-validation.md`](.agents/rules/tooling-validation.md#read-before-work-and-update-after-work)
+for the complete read/update rules. Skipping either step is a serious defect.
 
 ## Skills and Sub-Agents Policy
 
@@ -72,6 +81,7 @@ Current stack:
 ├── Dockerfile                Container image definition
 ├── pyproject.toml            Dependencies and Ruff settings
 ├── uv.lock                   Locked dependency graph
+├── CONTRIBUTING.md           Contribution workflow and review checklist
 ├── README.md                 User-facing setup and architecture overview
 └── replit.md                 Replit deployment notes
 ```
@@ -138,7 +148,11 @@ Use `config.env.example` as the complete template.
 
 ## Code Style and Naming
 
-Follow the detailed rules in [`.agents/rules/RULES.md`](.agents/rules/RULES.md), [`.agents/rules/RUFF.md`](.agents/rules/RUFF.md), [`.agents/rules/STYLE-CODE.md`](.agents/rules/STYLE-CODE.md), and [`.agents/rules/STYLE-COMMENTS.md`](.agents/rules/STYLE-COMMENTS.md) before editing source code.
+Follow the detailed rules in
+[`.agents/rules/tooling-validation.md`](.agents/rules/tooling-validation.md),
+[`.agents/rules/code-style.md`](.agents/rules/code-style.md), and
+[`.agents/rules/comment-style.md`](.agents/rules/comment-style.md) before
+editing source code.
 
 Repository conventions:
 

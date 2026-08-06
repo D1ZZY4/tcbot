@@ -9,7 +9,14 @@ setup instructions, architecture notes, feature behavior, operations, and
 stable reference material remain easy to find.
 
 For the project overview, see [`../README.md`](../README.md). For Replit
-deployment, see [`../replit.md`](../replit.md).
+deployment, see [`../replit.md`](../replit.md). For contribution workflow, see
+[`../CONTRIBUTING.md`](../CONTRIBUTING.md).
+
+## Contributor reference
+
+| Document | Purpose |
+|---|---|
+| [Contribution guide](../CONTRIBUTING.md) | Local setup, development workflow, validation, pull requests, and security checklist. |
 
 ## Documentation map
 

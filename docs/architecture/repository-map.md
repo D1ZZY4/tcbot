@@ -4,7 +4,8 @@ For the project overview, see [`../../README.md`](../../README.md). For the
 documentation index, see [`../README.md`](../README.md). For module breakdown,
 see [`modules.md`](modules.md). For the database layer, see
 [`database.md`](database.md). For shared helpers, see [`helpers.md`](helpers.md).
-For runtime utilities, see [`utilities.md`](utilities.md).
+For runtime utilities, see [`utilities.md`](utilities.md). For contribution
+workflow, see [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md).
 
 This page maps the repository structure and the service boundaries between packages.
 
@@ -18,11 +19,17 @@ This page maps the repository structure and the service boundaries between packa
 ├── uv.lock                 Locked dependency graph
 ├── config.env.example      Environment variable template
 ├── README.md               Project overview
+├── CONTRIBUTING.md         Contribution workflow and review checklist
+├── AGENTS.md               Maintainer and agent project guide
 ├── replit.md               Replit deployment notes
 ├── CHANGELOG.md            Version history
 ├── docker-compose.yml      Bot + MongoDB + Redis local stack
 └── Dockerfile              Container image
 ```
+
+Repository maintenance guidance lives under `.agents/`. Its three canonical
+rule files are `rules/tooling-validation.md`, `rules/code-style.md`, and
+`rules/comment-style.md`; specialized skills live under `.agents/skills/`.
 
 ## Documentation structure
 
