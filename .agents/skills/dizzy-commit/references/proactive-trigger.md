@@ -6,8 +6,8 @@ to be typed before thinking about this.
 ## When to check in
 
 - **You just finished a coding task** (wrote, edited, or generated files) and the working tree
-  now has uncommitted changes. Before ending your turn, run `git status --short` and, if it's
-  not empty, check in with the user using the flow below.
+  now has uncommitted changes. Before ending your turn, run `git status --short`, inspect
+  ownership, and report the changes. Ask for commit approval using the flow below.
 - **The user explicitly asked to commit, push, or stage** (or a clear synonym, or named this
   skill directly). Skip the check-in entirely, go straight to Step 1 in SKILL.md.
 - **You're about to end a session or declare a task done** and the tree is dirty. Check in
@@ -32,9 +32,9 @@ to be typed before thinking about this.
    - **Custom answer**: follow what the user actually asked for instead of the binary Yes/No
      flow. Treat it as an explicit instruction, not as a request that still needs the two
      questions above.
-3. Once confirmed, proceed through the rest of the workflow (Step 1 through Step 5 in
-   SKILL.md) without further permission-asking, unless something encountered along the way
-   (an ignored file, unclear ownership of a change) needs a check-in of its own.
+3. Once confirmed, proceed through the commit workflow. If ownership is unclear, an ignored
+   file is involved, or cleanup would be destructive, stop and ask a focused question instead
+   of making the change.
 
 ## Why this matters
 

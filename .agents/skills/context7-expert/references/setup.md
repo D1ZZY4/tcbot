@@ -13,32 +13,24 @@ a mode:
 - **CLI + Skills**: installs a `find-docs`-style skill that guides the agent to use `ctx7` CLI
   commands directly, no MCP server required. This is what makes `cli-mode.md` applicable.
 
+These are reference commands only. Do not run setup, change agent configuration, install a
+skill, or authenticate merely because a documentation task mentions Context7. Perform setup
+only after the user explicitly requests it and confirms the target and mode. Do not use
+`--yes` by default. The exact target flags and configuration locations are host-specific.
+Read `agent-adapters.md` and the target agent's current documentation before running one.
+
 ```bash
 npx ctx7@latest setup                     # interactive, prompts for mode then agent/target
 npx ctx7@latest setup --mcp               # skip the prompt, use MCP server mode
 npx ctx7@latest setup --cli               # skip the prompt, use CLI + Skills mode
-
-# MCP mode, target a specific agent
-npx ctx7@latest setup --claude            # Claude Code only
-npx ctx7@latest setup --cursor            # Cursor only
-npx ctx7@latest setup --opencode          # OpenCode only
-
-# CLI + Skills mode, target a specific install location
-npx ctx7@latest setup --cli --claude      # Claude Code (~/.claude/skills)
-npx ctx7@latest setup --cli --cursor      # Cursor (~/.cursor/skills)
-npx ctx7@latest setup --cli --universal   # universal (~/.agents/skills)
-npx ctx7@latest setup --cli --antigravity # Antigravity (~/.config/agent/skills)
-
 npx ctx7@latest setup --project           # configure the current project instead of globally
-npx ctx7@latest setup --yes               # skip confirmation prompts
 ```
 
 ## Authentication options
 
-```bash
-npx ctx7@latest setup --api-key YOUR_KEY  # use an existing API key, works for both modes
-npx ctx7@latest setup --oauth             # OAuth endpoint, MCP mode only, IDE handles the flow
-```
+Authentication is also an explicit user action. Never put an API key in a shell command or
+commit it to a file; use the workspace's secret flow when a key is required. Do not initiate
+login, logout, OAuth, or credential changes during a normal documentation lookup.
 
 Without `--api-key` or `--oauth`, setup opens a browser for OAuth login. MCP mode additionally
 generates a new API key after login. `--oauth` only applies to MCP mode.
@@ -46,10 +38,9 @@ generates a new API key after login. `--oauth` only applies to MCP mode.
 ## What gets written
 
 **MCP mode:**
-- An MCP server entry in the agent's config file (`.mcp.json` for Claude, `.cursor/mcp.json`
-  for Cursor, `.opencode.json` for OpenCode)
+- An MCP server entry in the target agent's documented config file
 - A Context7 rule file instructing the agent to use Context7 for library docs
-- A Context7 documentation skill in the agent's skills directory
+- A `context7-mcp`-style skill in the agent's skills directory
 
 **CLI + Skills mode:**
 - A `find-docs`-style skill in the chosen agent's skills directory, guiding it to use

@@ -1,24 +1,28 @@
 # CLI Mode
 
 Full detail for when no Context7 MCP server is connected but a shell/bash tool is available.
-Uses the `ctx7` CLI via `npx`, so no global install is required for it to work.
+Prefer an already-installed `ctx7` CLI. A transient `npx` invocation is a fallback only when
+network access and package execution are permitted for the current request. If that permission
+has not already been given, ask before using the network-backed fallback.
 
 ## Running commands
 
-Prefer running through `npx` so it always resolves to the latest CLI without needing a global
-install first:
+If `ctx7` is installed, use it directly:
+
+```bash
+ctx7 library <name> "<query>"
+ctx7 docs <libraryId> "<query>"
+```
+
+If it is not installed and network-backed package execution has been approved, use the fallback:
 
 ```bash
 npx ctx7@latest library <name> "<query>"
 npx ctx7@latest docs <libraryId> "<query>"
 ```
 
-A global install is fine too if it's already present or the user prefers a bare `ctx7`
-command, but don't require it, `npx` works out of the box.
-
-```bash
-npm install -g ctx7@latest    # optional
-```
+Do not install the CLI globally as part of a normal documentation lookup. Record or report the
+CLI version when reproducibility matters.
 
 ## Step 1: Resolve a library
 
@@ -26,8 +30,8 @@ npm install -g ctx7@latest    # optional
 npx ctx7@latest library "Next.js" "How to set up app router with middleware"
 ```
 
-You MUST run this first to get a valid library ID, UNLESS the user already gave one directly
-in `/org/project` or `/org/project/version` format.
+You MUST run this first to get a valid library ID, UNLESS the user already gave one directly in
+`/org/project` or `/org/project/version` format.
 
 - Use the library's proper official name and punctuation ("Next.js" not "nextjs",
   "Customer.io" not "customerio", "Three.js" not "threejs"). If results look wrong, try an
@@ -65,7 +69,8 @@ in MCP mode.
 The output contains two kinds of content: code snippets (titled, language-tagged blocks) and
 info snippets (prose explanations with breadcrumb context).
 
-Useful flags for scripting or filtering large output:
+Useful optional flags for scripting or filtering large output. Do not assume `jq` or `grep` is
+available, and do not fail the documentation lookup merely because an optional filter is not:
 
 ```bash
 npx ctx7@latest library react "How to use hooks for state management" --json | jq '.[0].id'
@@ -75,46 +80,35 @@ npx ctx7@latest docs /vercel/next.js "middleware for route protection" | grep -A
 
 ## Call budget
 
-Do not run `library` or `docs` more than 3 times total per question. If you still don't have
-what you need after 3 attempts, use the best result you have and say so.
+Read `risk-and-budget.md` for the operation budget. Three operations is the default. A
+documented increase to five or seven is allowed only for medium- or high-risk questions, when
+each additional operation has a clear purpose. Count every `library` resolution, `docs` fetch,
+and retry toward the same finite budget.
 
 ## Authentication
 
-Works without authentication. For higher rate limits:
-
-```bash
-# Option A: environment variable
-export CONTEXT7_API_KEY=your_key
-
-# Option B: OAuth login
-npx ctx7@latest login
-```
-
-```bash
-npx ctx7@latest login               # opens browser for OAuth
-npx ctx7@latest login --no-browser  # prints a URL instead
-npx ctx7@latest logout              # clear stored tokens
-npx ctx7@latest whoami              # show current login status
-```
+Works without authentication. Do not initiate login, logout, or credential changes during a
+normal documentation lookup. If the user explicitly requests authentication, explain what will
+change and use the workspace's approved secret or integration flow. Never ask the user to paste
+an API key into chat, a shell command, a query, or a committed file.
 
 ## Error handling
 
 If a command fails with a quota error ("Monthly quota reached" or "quota exceeded"):
 
 1. Tell the user their Context7 quota is exhausted, plainly.
-2. Suggest authenticating for higher limits: `npx ctx7@latest login`.
-3. If they can't or don't want to authenticate, answer from training knowledge and clearly
-   note it may be outdated.
+2. Mention authentication as an optional user-controlled remedy, without initiating it.
+3. If the user cannot or does not want to authenticate, answer from training knowledge and
+   clearly note it may be outdated.
 
 Never silently fall back to training data, always say why Context7 wasn't used.
 
 ## Common mistakes to avoid
 
 - Library IDs require a `/` prefix, `/facebook/react` not `facebook/react`
-- Always resolve first, `npx ctx7@latest docs react "hooks"` fails without a valid ID from
-  the `library` step
-- Use descriptive queries, not single words, `"React useEffect cleanup function"` not
-  `"hooks"`
+- Always resolve first, `npx ctx7@latest docs react "hooks"` fails without a valid ID from the
+  `library` step
+- Use descriptive queries, not single words, `"React useEffect cleanup function"` not `"hooks"`
 - One topic per query, split multi-concept questions into separate `docs` calls per concept,
   unless the question is specifically about how the concepts interact
 - Never put sensitive information (API keys, passwords, credentials) in a query

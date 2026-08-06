@@ -20,11 +20,12 @@ tree state wasn't re-checked before starting this one, or the same task got run 
 `git status --short` to see what's actually still uncommitted before writing another message
 for it.
 
-## Never squash subject and body into one string
+## Keep subject and body structurally correct
 
-A commit message is two blocks separated by a blank line: subject, then body. If they get
-concatenated into a single run-on string, the result reads like a wall of text and defeats
-the entire point of Conventional Commits.
+A commit with a body uses two blocks separated by a blank line: subject, then body. If they get
+concatenated into a single run-on string, the result reads like a wall of text and defeats the
+point of a structured commit message. A genuinely trivial subject-only commit may omit the body
+when the resolved policy allows it.
 
 ## Never use literal backslash-n as a stand-in for a real line break
 
@@ -38,7 +39,7 @@ typed-out escape sequence.
 
 ## Method 1: two `-m` flags
 
-Works for short, simple bodies:
+Works for short, simple bodies when a body is required:
 
 ```bash
 git commit -m "type(scope): summary" -m "body line one
@@ -69,9 +70,9 @@ git commit -F /tmp/commit-msg.txt
 git log -1
 ```
 
-Confirm three things: the subject and body rendered as two visually separate blocks with a
-blank line between them, not one run-on paragraph; there's no literal `\n` text sitting
-anywhere in the message (that means the escape-sequence bug happened, not a real newline); and
+Confirm that a required body rendered as a separate block with a blank line, not a run-on
+paragraph; there's no literal `\n` text sitting anywhere in the message (that means the
+escape-sequence bug happened, not a real newline); and
 if a `Co-authored-by` trailer is present, the email is wrapped in angle brackets, `<email>`,
 since that part is what actually breaks recognition if missing. Casing of the trailer key
 itself is case-insensitive per the git trailer spec and works either way, default to

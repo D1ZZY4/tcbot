@@ -1,8 +1,22 @@
 # Architecture Diagrams Reference
 
-For the parent skill instructions, see [`../SKILL.md`](../SKILL.md). For other Mermaid diagram references, see siblings in [`../references/`](../references/).
+Architecture diagrams visualize cloud services, CI/CD deployments, and infrastructure
+relationships. The `architecture-beta` syntax requires Mermaid v11.1.0 or newer in renderers
+that implement it. A target platform may bundle an older or customized renderer, so check the
+actual renderer before using this syntax.
 
-Architecture diagrams visualize cloud services, CI/CD deployments, and infrastructure relationships. Introduced in Mermaid v11.1.0.
+## Compatibility matrix
+
+| Feature or syntax | Minimum Mermaid version | Compatibility guidance |
+|---|---:|---|
+| Common diagram types | Varies by feature | Check the target renderer when using newer configuration or layout options. |
+| `architecture-beta` | 11.1.0 | Do not use when the target renderer is older, even if a local package is newer. |
+| Iconify-backed architecture icons | Renderer and icon-pack dependent | Verify renderer support and local icon-pack availability. |
+| ELK layout | Renderer and version dependent | Treat it as optional and validate the rendered result. |
+
+If the target version is unknown, use a broadly supported diagram type such as `flowchart`, or
+provide a compatibility fallback instead of claiming that every Mermaid renderer supports the
+same syntax.
 
 ## Basic Syntax
 
@@ -93,6 +107,9 @@ architecture-beta
 
 **Default icons:** `cloud`, `database`, `disk`, `internet`, `server`
 
+> Compatibility: custom icons, icon packs, and some service shapes are renderer-dependent. Use
+> the default set when the target capabilities are unknown.
+
 **Custom icons:** Use any of 200,000+ icons from iconify.design:
 
 ```mermaid
@@ -103,12 +120,13 @@ architecture-beta
 
 ### Using @iconify-json Icon Packs
 
-Use npm icon packs with Mermaid CLI for a wide variety of technology logos:
+Use already-installed icon packs with Mermaid CLI for a wide variety of technology logos:
 
 ```bash
-npm install @iconify-json/logos @mermaid-js/mermaid-cli
 mmdc --iconPacks @iconify-json/logos -i ./diagram.mmd -o ./output.svg
 ```
+
+Installing icon packs or Mermaid CLI changes the environment and requires explicit approval.
 
 Use icons with the `logos:` prefix:
 
@@ -126,12 +144,12 @@ architecture-beta
 
 **Popular icon packs:**
 
-| Icon Pack                    | Description                                   | Install                            |
+| Icon Pack                    | Description                                   | Package                            |
 | ---------------------------- | --------------------------------------------- | ---------------------------------- |
-| `@iconify-json/logos`        | Technology brands (Docker, AWS, GitHub, etc.) | `npm i @iconify-json/logos`        |
-| `@iconify-json/bi`           | Bootstrap icons                               | `npm i @iconify-json/bi`           |
-| `@iconify-json/mdi`          | Material Design icons                         | `npm i @iconify-json/mdi`          |
-| `@iconify-json/simple-icons` | Simple icons                                  | `npm i @iconify-json/simple-icons` |
+| `@iconify-json/logos`        | Technology brands | `npm install @iconify-json/logos@latest` |
+| `@iconify-json/bi`           | Bootstrap icons | `npm install @iconify-json/bi@latest` |
+| `@iconify-json/mdi`          | Material Design icons | `npm install @iconify-json/mdi@latest` |
+| `@iconify-json/simple-icons` | Simple icons | `npm install @iconify-json/simple-icons@latest` |
 
 Usage: `pack:icon-name` (e.g., `logos:docker`, `mdi:database`)
 

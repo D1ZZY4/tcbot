@@ -65,9 +65,9 @@ or the server reports a rate limit or quota issue:
 1. Tell the user plainly what happened, don't just go silent about it.
 2. Try once more with a more specific query if the failure looked like a ranking/relevance
    miss rather than an outage.
-3. If it's still not working after a couple of attempts (see the 3-call cap in SKILL.md), fall
-   back to training knowledge and clearly say the answer might be outdated, rather than
-   presenting it with the same confidence as a Context7-backed answer.
+3. If it's still not working after the risk-tier budget is exhausted, fall back to training
+   knowledge and clearly say the answer might be outdated, rather than presenting it with the
+   same confidence as a Context7-backed answer.
 
 Never silently fall back to training data without saying so. The user should always be able to
 tell whether an answer came from live docs or from training knowledge.

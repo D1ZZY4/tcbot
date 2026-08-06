@@ -29,8 +29,11 @@ Before doing anything else, check what's actually available in this environment:
 - **MCP tools present** (a Context7 MCP server is connected, tools with names like
   `resolve-library-id` and `get-library-docs` or `query-docs` appear in the tool list): use
   MCP mode. Read `references/mcp-mode.md`.
-- **No MCP tools, but a shell/bash tool is available**: use CLI mode via `npx ctx7@latest`.
-  Read `references/cli-mode.md`.
+- **No MCP tools, but a shell/bash tool and an installed `ctx7` CLI are available**: use CLI
+  mode. Read `references/cli-mode.md`.
+- **No MCP tools and no installed CLI**: ask before using the transient `npx` fallback unless
+  network-backed package execution was already explicitly approved for this request. Do not
+  install globally or change project configuration just to answer a documentation question.
 - **Neither is available**: say so plainly, answer from training knowledge, and flag that the
   answer may be outdated for fast-moving libraries. Never silently pretend training data is
   current.
@@ -52,9 +55,10 @@ call (see `references/selection-and-query-writing.md` for why and for good/bad q
 examples). Use the returned docs to answer, including relevant code examples, and mention the
 library version when it's relevant to the answer.
 
-Cap yourself at 3 resolve/fetch calls total per question. If you still don't have what you
-need after 3, answer with the best information you have and say so, don't keep retrying
-indefinitely.
+Read `references/risk-and-budget.md` before choosing the operation budget. Use three operations
+as the default for a normal question, but allow a documented increase when the user explicitly
+asks about multiple libraries, a migration, security-sensitive behavior, or a version-specific
+breaking change. Every retry and fetch still counts, and the budget must remain finite.
 
 ## Step 3: Handle failures honestly
 
@@ -77,7 +81,7 @@ asked for.
   when Context7 (MCP or CLI) is available and wasn't tried
 - Narrating "let me use Context7" or similar before every call, just do it
 - Combining multiple distinct concepts into one query instead of splitting per concept
-- Retrying more than 3 times per question instead of using the best result available
+- Retrying beyond the finite risk-tier budget instead of using the best result available
 - Silently falling back to training data on a tool failure or quota error without telling the
   user
 - Using this skill for refactoring, from-scratch scripts with no library involved, business
@@ -89,5 +93,7 @@ asked for.
 - `references/mcp-mode.md`: full detail for MCP mode, tool names, selection, error handling.
 - `references/cli-mode.md`: full detail for CLI mode, commands, auth, error handling.
 - `references/selection-and-query-writing.md`: shared library selection and query rules.
+- `references/risk-and-budget.md`: risk tiers and adaptive operation budgets.
 - `references/cli-skills-management.md`: install/search/suggest/generate skills via `ctx7`.
 - `references/setup.md`: configuring Context7 MCP or CLI + Skills mode for an editor.
+- `references/agent-adapters.md`: optional target-agent setup and installation locations.

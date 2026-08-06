@@ -1,8 +1,7 @@
 # Class Diagrams
 
-For the parent skill instructions, see [`../SKILL.md`](../SKILL.md). For other Mermaid diagram references, see siblings in [`../references/`](../references/).
-
-Class diagrams model object-oriented designs and domain models. They show entities (classes), their attributes/methods, and relationships.
+Class diagrams model object-oriented designs and domain models. They show entities (classes),
+their attributes/methods, and relationships.
 
 ## Basic Syntax
 
@@ -70,12 +69,12 @@ classDiagram
 classDiagram
     Animal <|-- Dog
     Animal <|-- Cat
-
+    
     class Animal {
         +String name
         +makeSound()
     }
-
+    
     class Dog {
         +bark()
     }
@@ -140,12 +139,12 @@ classDiagram
         +save(entity)
         +findById(id)
     }
-
+    
     class UserService {
         <<service>>
         +createUser()
     }
-
+    
     class UserDTO {
         <<dataclass>>
         +String name
@@ -164,7 +163,7 @@ classDiagram
         +draw()* abstract
         +move(x, y)
     }
-
+    
     Shape <|-- Circle
     Shape <|-- Rectangle
 ```
@@ -177,7 +176,7 @@ classDiagram
         +add(item: T)
         +get(index: int) T
     }
-
+    
     List~String~ <-- StringProcessor
 ```
 
@@ -194,7 +193,7 @@ classDiagram
         +placeOrder(cart: Cart) Order
         +getOrderHistory() List~Order~
     }
-
+    
     class Order {
         +UUID id
         +DateTime orderDate
@@ -204,13 +203,13 @@ classDiagram
         +ship()
         +cancel()
     }
-
+    
     class LineItem {
         +int quantity
         +Decimal pricePerUnit
         +getSubtotal() Decimal
     }
-
+    
     class Product {
         +UUID id
         +String name
@@ -220,19 +219,19 @@ classDiagram
         +reduceStock(quantity: int)
         +isAvailable() bool
     }
-
+    
     class Category {
         +String name
         +String description
     }
-
+    
     class Cart {
         +addItem(product: Product, quantity: int)
         +removeItem(product: Product)
         +getTotal() Decimal
         +clear()
     }
-
+    
     %% Relationships
     Customer "1" --> "0..*" Order : places
     Customer "1" --> "1" Cart : has
@@ -240,7 +239,7 @@ classDiagram
     LineItem "1" --> "1" Product : references
     Product "0..*" --> "1" Category : belongs to
     Cart "1" o-- "0..*" Product : contains
-
+    
     %% Enums
     class OrderStatus {
         <<enumeration>>
@@ -250,7 +249,7 @@ classDiagram
         DELIVERED
         CANCELLED
     }
-
+    
     Order --> OrderStatus
 ```
 
@@ -276,7 +275,7 @@ classDiagram
         +String currency
         +add(other: Money) Money
     }
-
+    
     class Address {
         <<value object>>
         +String street
@@ -294,7 +293,7 @@ classDiagram
         +addLineItem(item)
         +removeLineItem(item)
     }
-
+    
     Order *-- LineItem
 ```
 
@@ -302,7 +301,8 @@ classDiagram
 
 1. **Start with core entities** - Add attributes and methods incrementally
 2. **Show only relevant details** - Omit obvious getters/setters unless important
-3. **Use appropriate relationships** - Choose between association, aggregation, and composition carefully
+3. **Use appropriate relationships** - Choose between association, aggregation, and
+   composition carefully
 4. **Add multiplicity** - Clarifies how many instances participate
 5. **Group related classes** - Use notes or visual proximity
 6. **Document invariants** - Use notes to explain business rules
@@ -318,11 +318,11 @@ classDiagram
         +findById(id: UUID) T
         +delete(entity: T)
     }
-
+    
     class UserRepository {
         +findByEmail(email: String) User
     }
-
+    
     IRepository~User~ <|.. UserRepository
 ```
 
@@ -332,12 +332,12 @@ classDiagram
     class ShapeFactory {
         +createShape(type: String) Shape
     }
-
+    
     class Shape {
         <<abstract>>
         +draw()*
     }
-
+    
     ShapeFactory ..> Shape : creates
     Shape <|-- Circle
     Shape <|-- Rectangle
@@ -351,12 +351,12 @@ classDiagram
         +setStrategy(strategy: PaymentStrategy)
         +processPayment(amount: Decimal)
     }
-
+    
     class PaymentStrategy {
         <<interface>>
         +pay(amount: Decimal)*
     }
-
+    
     PaymentStrategy <|.. CreditCardPayment
     PaymentStrategy <|.. PayPalPayment
     PaymentProcessor --> PaymentStrategy
