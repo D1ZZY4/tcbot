@@ -16,8 +16,8 @@ Architecture
     with ``TTLCache[T]``.
 
     *  ``get`` / ``put`` / ``invalidate`` / ``clear`` stay synchronous, operating
-       on the in-memory layer.  ``put`` and ``invalidate`` also fire-and-forget a
-       Redis write/delete to keep L2 eventually consistent.
+       on the in-memory layer.  ``put`` and ``invalidate`` also enqueue ordered
+       Redis writes/deletes to keep L2 eventually consistent.
     *  ``get_or_fetch`` is the primary hot-path: L1 → L2 → DB fetch, populating
        both layers on a miss.
 
@@ -35,6 +35,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, cast
 
 import cachetools as _cachetools
+from bson import ObjectId
 
 import tcbot.database.redis_client as _redis_mod
 from tcbot.database.documents import GroupDoc
@@ -46,32 +47,61 @@ log = logging.getLogger(__name__)
 
 
 # ──────────────────────── JSON Encoder ───────────────────────── #
-# * Custom encoder so MongoDB documents (with datetime / ObjectId) can be
-# * round-tripped through Redis without crashing json.dumps.
+# * Tagged values preserve MongoDB scalar types across the Redis JSON boundary.
+_MONGO_TYPE_KEY: str = "__tcbot_type__"
+_MONGO_DATETIME_TYPE: str = "datetime"
+_MONGO_OBJECT_ID_TYPE: str = "objectid"
 
 
 class _MongoJSONEncoder(json.JSONEncoder):
     """Extend the standard encoder to handle types returned by Motor queries.
 
-    * ``datetime`` → ISO-8601 string (UTC; no timezone suffix added so
-      callers that do ``datetime.fromisoformat`` get a naive UTC value back).
-    * Any type that has a ``__str__`` method (e.g. ``bson.ObjectId``) →
-      plain string, used as a last-resort fallback so the encode never
-      raises ``TypeError`` on unknown MongoDB scalars.
+    ``datetime`` and ``ObjectId`` values receive explicit type tags so a Redis
+    cache hit has the same runtime types as the original MongoDB document.
+    Unknown MongoDB scalar types still fall back to strings rather than making
+    a cache write fail.
     """
 
     def default(self, o: Any) -> Any:
         if isinstance(o, datetime):
-            return o.isoformat()
+            return {
+                _MONGO_TYPE_KEY: _MONGO_DATETIME_TYPE,
+                "value": o.isoformat(),
+            }
+        if isinstance(o, ObjectId):
+            return {
+                _MONGO_TYPE_KEY: _MONGO_OBJECT_ID_TYPE,
+                "value": str(o),
+            }
         try:
             return str(o)
         except Exception:
             return super().default(o)
 
 
+def _mongo_object_hook(value: dict[str, Any]) -> Any:
+    """Restore tagged MongoDB scalar values while tolerating legacy cache data."""
+    value_type = value.get(_MONGO_TYPE_KEY)
+    raw_value = value.get("value")
+    if value_type == _MONGO_DATETIME_TYPE and isinstance(raw_value, str):
+        try:
+            return datetime.fromisoformat(raw_value)
+        except ValueError:
+            return value
+    if value_type == _MONGO_OBJECT_ID_TYPE and isinstance(raw_value, str):
+        try:
+            return ObjectId(raw_value)
+        except Exception:
+            return value
+    return value
+
+
 # * Strong references to in-flight Redis background tasks; prevents GC before completion.
 # * Mirrors the pattern used in __main__._asyncio_report_tasks and ban_flow._album_tasks.
 _redis_bg_tasks: set[asyncio.Task[None]] = set()
+# * Redis namespaces must be ordered across cache instances sharing a prefix.
+# * Scope by event loop because asyncio tasks cannot be awaited across loops.
+_redis_tails: dict[tuple[str, asyncio.AbstractEventLoop], asyncio.Task[None]] = {}
 
 # * Public sentinel; compare using ``is CACHE_MISS`` to detect a cache miss.
 # * Distinct from None because None is a valid cache value (e.g. user has no role).
@@ -166,12 +196,12 @@ class TwoLevelCache[T]:
         return self._mem.get(key)
 
     def put(self, key: Any, val: T) -> None:
-        """Store in memory and fire-and-forget a Redis write."""
+        """Store in memory and enqueue an ordered Redis write."""
         self._mem.put(key, val)
         self._redis_put_background(key, val)
 
     def invalidate(self, key: Any) -> None:
-        """Remove from memory and fire-and-forget a Redis delete."""
+        """Remove from memory and enqueue an ordered Redis delete."""
         self._mem.invalidate(key)
         self._redis_del_background(key)
 
@@ -189,26 +219,34 @@ class TwoLevelCache[T]:
         batches of 100, avoiding the O(N) blocking behaviour of ``KEYS``.
 
         Unlike ``invalidate(key)``, which removes one known key from both layers,
-        this sweeps every key matching ``tcbot:<prefix>:*``.  Do not call it in
+        this sweeps every key matching ``tcbot:<prefix>:v2:*``.  Do not call it in
         hot paths; it is designed for rare, high-impact invalidations only.
         """
         self._mem.clear()
         rc = _redis_client()
         if rc is None:
             return
-        pattern = f"tcbot:{self._redis_prefix}:*"
-        cursor: int = 0
-        try:
-            while True:
-                cursor, keys = await rc.scan(cursor, match=pattern, count=100)
-                if keys:
-                    await rc.unlink(*keys)
-                if cursor == 0:
-                    break
-        except Exception as exc:
-            log.debug(
-                "Redis clear_all failed for prefix %s: %s", self._redis_prefix, exc
-            )
+        pattern = f"tcbot:{self._redis_prefix}:v2:*"
+
+        async def _clear_redis() -> None:
+            cursor: int = 0
+            try:
+                while True:
+                    cursor, keys = await rc.scan(cursor, match=pattern, count=100)
+                    if keys:
+                        await rc.unlink(*keys)
+                    if cursor == 0:
+                        break
+            except Exception as exc:
+                log.debug(
+                    "Redis clear_all failed for prefix %s: %s",
+                    self._redis_prefix,
+                    exc,
+                )
+
+        task = self._enqueue_redis_mutation(_clear_redis)
+        if task is not None:
+            await asyncio.shield(task)
 
     # ── Async hot-path ── #
 
@@ -237,7 +275,7 @@ class TwoLevelCache[T]:
             try:
                 raw = await rc.get(rkey)
                 if raw is not None:
-                    loaded: T = json.loads(raw)
+                    loaded: T = json.loads(raw, object_hook=_mongo_object_hook)
                     self._mem.put(key, loaded)
                     return loaded
             except Exception as exc:
@@ -248,19 +286,19 @@ class TwoLevelCache[T]:
         self._mem.put(key, val)
         if rc is not None:
             rkey = self._rkey(key)
-            try:
-                await rc.set(
-                    rkey, json.dumps(val, cls=_MongoJSONEncoder), ex=self._redis_ttl
-                )
-            except Exception as exc:
-                log.debug("Redis set failed for %s: %s", rkey, exc)
+            payload = json.dumps(val, cls=_MongoJSONEncoder)
+            task = self._enqueue_redis_mutation(
+                lambda: self._redis_set(rc, rkey, payload)
+            )
+            if task is not None:
+                await asyncio.shield(task)
 
         return cast("T", val)
 
     # ── Internal helpers ── #
 
     def _rkey(self, key: Any) -> str:
-        return f"tcbot:{self._redis_prefix}:{key}"
+        return f"tcbot:{self._redis_prefix}:v2:{key}"
 
     def _redis_put_background(self, key: Any, val: T) -> None:
         """Fire-and-forget Redis write without blocking the caller."""
@@ -268,16 +306,8 @@ class TwoLevelCache[T]:
         if rc is None:
             return
         rkey = self._rkey(key)
-        try:
-            loop = asyncio.get_running_loop()
-            task = loop.create_task(
-                rc.set(rkey, json.dumps(val, cls=_MongoJSONEncoder), ex=self._redis_ttl)
-            )
-            _redis_bg_tasks.add(task)
-            task.add_done_callback(_redis_bg_tasks.discard)
-            task.add_done_callback(_log_redis_task_error)
-        except RuntimeError:
-            pass  # No running loop during shutdown
+        payload = json.dumps(val, cls=_MongoJSONEncoder)
+        self._enqueue_redis_mutation(lambda: self._redis_set(rc, rkey, payload))
 
     def _redis_del_background(self, key: Any) -> None:
         """Fire-and-forget Redis key deletion without blocking the caller."""
@@ -285,14 +315,69 @@ class TwoLevelCache[T]:
         if rc is None:
             return
         rkey = self._rkey(key)
+        self._enqueue_redis_mutation(lambda: self._redis_delete(rc, rkey))
+
+    async def _redis_set(self, rc: Any, rkey: str, payload: str) -> None:
+        """Write one Redis value and keep failures observable but non-fatal."""
+        try:
+            await rc.set(rkey, payload, ex=self._redis_ttl)
+        except Exception as exc:
+            log.debug("Redis set failed for %s: %s", rkey, exc)
+
+    async def _redis_delete(self, rc: Any, rkey: str) -> None:
+        """Delete one Redis value and keep failures observable but non-fatal."""
+        try:
+            await rc.delete(rkey)
+        except Exception as exc:
+            log.debug("Redis delete failed for %s: %s", rkey, exc)
+
+    def _enqueue_redis_mutation(
+        self, operation: Callable[[], Awaitable[None]]
+    ) -> asyncio.Task[None] | None:
+        """Run Redis mutations FIFO for this Redis prefix and event loop.
+
+        ``put()``, ``invalidate()``, and ``clear_all()`` are called from
+        different synchronous and asynchronous paths.  Chaining each operation
+        to the previous task prevents a slower Redis write from completing
+        after a newer delete or prefix-wide clear, including when separate
+        cache objects share the same Redis namespace.
+        """
         try:
             loop = asyncio.get_running_loop()
-            task = loop.create_task(rc.delete(rkey))
-            _redis_bg_tasks.add(task)
-            task.add_done_callback(_redis_bg_tasks.discard)
-            task.add_done_callback(_log_redis_task_error)
         except RuntimeError:
-            pass  # No running loop during shutdown
+            return None
+
+        tail_key = (self._redis_prefix, loop)
+        previous = _redis_tails.get(tail_key)
+
+        async def _run() -> None:
+            if previous is not None:
+                try:
+                    await previous
+                except BaseException as exc:
+                    log.debug(
+                        "Previous Redis mutation failed for prefix %s: %s",
+                        self._redis_prefix,
+                        exc,
+                    )
+            await operation()
+
+        task = loop.create_task(_run(), name=f"tcbot.redis.{self._redis_prefix}")
+        _redis_tails[tail_key] = task
+        _redis_bg_tasks.add(task)
+        task.add_done_callback(_redis_bg_tasks.discard)
+        task.add_done_callback(_log_redis_task_error)
+        task.add_done_callback(lambda completed: _clear_redis_tail(tail_key, completed))
+        return task
+
+
+def _clear_redis_tail(
+    tail_key: tuple[str, asyncio.AbstractEventLoop],
+    task: asyncio.Task[None],
+) -> None:
+    """Release a namespace tail when no newer mutation follows it."""
+    if _redis_tails.get(tail_key) is task:
+        _redis_tails.pop(tail_key, None)
 
 
 def _redis_client() -> Any:

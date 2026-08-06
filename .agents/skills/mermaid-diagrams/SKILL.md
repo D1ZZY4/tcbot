@@ -17,7 +17,7 @@ TCF Bot is a Python 3.12 Telegram bot built with `python-telegram-bot` (latest),
 
 Relevant project structure:
 
-- `tcbot/__main__.py` builds the PTB application, starts keep-alive, connects MongoDB, ensures indexes, registers handlers, and starts polling.
+- `tcbot/__main__.py` builds the PTB application, starts keep-alive, connects MongoDB, ensures indexes, registers handlers, and starts webhook transport with a local polling fallback.
 - `tcbot/modules/` contains top-level Telegram command and event handler modules.
 - `tcbot/modules/helper/` contains shared handler helpers.
 - `tcbot/modules/helper/workflows/*_flow.py` contains `ConversationHandler` workflows.
@@ -66,8 +66,11 @@ flowchart TD
     Mongo --> Indexes[Run mongos.ensure_indexes]
     Indexes --> Owner[Ensure initial owner]
     Owner --> Modules[Load tcbot.modules handlers]
-    Modules --> Polling[Start Telegram polling]
-    Polling --> Handlers[Command and event handlers]
+    Modules --> Transport{Public webhook URL}
+    Transport -->|yes| Webhook[Start Telegram webhook]
+    Transport -->|no| Polling[Start local polling fallback]
+    Webhook --> Handlers[Command and event handlers]
+    Polling --> Handlers
     Handlers --> Helpers[Helper utilities and workflows]
     Helpers --> Database[Async database helpers]
     Database --> Motor[Motor MongoDB client]

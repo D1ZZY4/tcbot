@@ -27,7 +27,7 @@ See [`.agents/rules/CLAUDE.md`](.agents/rules/CLAUDE.md#mandatory-read-these-fil
 
 ## Skills and Sub-Agents Policy
 
-**Skills in `.agents/skills/` auto-invoke whenever their trigger matches**: no need for the user to ask. If you are about to write code in `tcbot/`, invoke [`project-policy`](.agents/skills/project-policy/SKILL.md). If you are about to edit docs, invoke [`docs-maintainer`](.agents/skills/docs-maintainer/SKILL.md). Same for `telegram-bot-builder`, `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `runtime-debugger`, `feature-reviewer`, `general-sub-agent`. Compose multiple skills when one task spans multiple areas.
+**Skills in `.agents/skills/` auto-invoke whenever their trigger matches**: no need for the user to ask. If you are about to write code in `tcbot/`, invoke [`project-policy`](.agents/skills/project-policy/SKILL.md). If you are about to edit docs, invoke [`docs-maintainer`](.agents/skills/docs-maintainer/SKILL.md). Same for `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `feature-reviewer`, `general-sub-agent`. Compose multiple skills when one task spans multiple areas.
 
 **Sub-agents in `.agents/agents/` are expensive and used sparingly.** Default to doing the work yourself in the main agent. Only delegate to a sub-agent when the task is large, the scopes are genuinely independent, and the parallelism justifies the token cost; sub-agents can drift off-task, so prefer one focused main agent over a noisy sub-agent fleet.
 
@@ -50,8 +50,8 @@ Current stack:
 <project root>/
 ├── tcbot/                    Main bot package
 │   ├── __init__.py           Environment config loader and `cfg` adapter
-│   ├── __main__.py           Runtime entry point, handler registration, polling
-│   ├── alive.py              Flask keep-alive endpoint
+│   ├── __main__.py           Runtime entry point, handler registration, webhook/polling transport
+│   ├── alive.py              Flask keep-alive and webhook receiver
 │   ├── database/             MongoDB helpers, one file per collection/domain
 │   │   ├── users_cache.py    Member profile cache operations
 │   │   ├── users_roles.py    Role system: owners/admins/roles
@@ -72,7 +72,7 @@ Current stack:
 ├── docs/                     Developer documentation by subsystem
 ├── .agents/                   Detailed coding, workflow, and style rules
 ├── config.env.example        Environment variable template
-├── docker-compose.yml        Local bot + MongoDB compose setup
+├── docker-compose.yml        Local bot + MongoDB + Redis compose setup
 ├── Dockerfile                Container image definition
 ├── pyproject.toml            Dependencies and Ruff settings
 ├── uv.lock                   Locked dependency graph
@@ -113,7 +113,7 @@ uv run ruff check --fix .
 Run with Docker Compose:
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 ## Configuration and Secrets
@@ -159,7 +159,7 @@ Repository conventions:
 
 ## Architecture Rules
 
-- `tcbot/__main__.py` builds the PTB application, starts Flask keep-alive, registers the global rate limiter, loads module handlers, and starts long polling.
+- `tcbot/__main__.py` builds the PTB application, starts Flask keep-alive, registers the global rate limiter, loads module handlers, and starts the native webhook transport when a public URL is available. Local development without a public URL falls back to polling.
 - `tcbot/modules/__init__.py` discovers top-level module files, applies `MODULES_LOAD` / `MODULES_NO_LOAD` filters, and fails startup if an enabled module cannot be imported.
 - Handlers should use database helper modules instead of calling `mongos.col()` directly.
 - Multi-group actions should use `tcbot.utils.dispatch.fan_out()` to bound concurrent Telegram API calls.

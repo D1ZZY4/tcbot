@@ -5,10 +5,11 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 # TCF Bot - Current Context
 
-**Last updated:** 2026-07-11 (session 194)
+**Last updated:** 2026-08-05 (audit continuation)
 
 ## What is done
 
+- Audit continuation (2026-08-05): scheduler readiness now reflects successful schedule registration and background startup, including a health gate that rejects partial initialization and startup errors; webhook requests wait for bounded queue insertion and return retryable 503 responses on delivery failure; Redis cache mutations are FIFO across writes, deletes, and prefix clears, including cache objects sharing a prefix; Redis v2 tagged JSON restores datetime and ObjectId values. Focused regression tests pass, and runtime/skill documentation is synchronized. Open: APScheduler CVE-2026-31072 accepted operational risk.
 - Session 194 (2026-07-11): Bugs #504-#506 fixed. Bug #504: get_first_name() L2 bypass fixed (get_or_fetch). Bug #505: TwoLevelCache.clear_all() added; set_owner() uses it. Bug #506: pyproject.toml all deps now pinned to explicit minor-version ranges (>=X.Y,<X+1). Wave 1+2 audit (7 parallel sub-agents, all 75 files): zero new bugs. All findings verified as FALSE POSITIVE. Ruff: 75 files clean. Import: OK. Total bugs: #1-#506. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
 
 - Session 193 (2026-07-11): Bugs #502-#503 fixed. 17 parallel sub-agents (SA1-SA18) in 6 waves across all 75 Python files. Bug #502: 3 em-dashes in .md files. Bug #503: keyboards.py additional_menu_kb() 5 hardcoded community t.me URLs moved to cfg (COMMUNITY_CHANNEL_URL/GROUP/LOGS/EXEC/TRAVEL_URL); buttons shown conditionally; config.env.example + docs/setup.md updated. Waves 1-6 findings: all other sub-agent claims verified false positive (mutes Telegram until_date only; album mgid guard present; DB layer all clean; text_html PTB-escaped; is_bot catches GroupAnonymousBot; SA7-SA9 clean; SA10 stop() safe; SA14 Lua PEXPIRE correct; SA15 connect() bypasses CB by design; SA16 utc_now() tz-aware; SA17 ASCII hyphen not em-dash, promote DM plain-text; SA18 parse_logmsg escape=False on system values only). Final scans: 0 em-dashes, 0 deprecated utcnow(), 0 emoji across all 75 files. Audit DRY: 6 consecutive waves, no new code bugs. Ruff: 75 files clean. Import: OK. Total bugs: #1-#503. Open: CVE-2026-31072 (accepted), Improvement #4 (future).
@@ -144,4 +145,4 @@ description: Current state of TCF Bot project - what is done, in progress, and p
 
 ## Bug count
 
-Total: **503 bugs fixed** (sessions 1-193, session 193 = 2 bugs). Open: CVE-2026-31072 (accepted), Improvement #4 (future).
+Total: **503 bugs fixed** (sessions 1-193, session 193 = 2 bugs). The audit continuation addressed runtime correctness and documentation without assigning a new numbered bug. Open: CVE-2026-31072 (accepted), Improvement #4 (future).

@@ -33,13 +33,14 @@ uv run ruff check --fix .
 
 ## Docker setup
 
-The repository includes a Docker Compose stack with the bot and `mongo:7`.
+The repository includes a Docker Compose stack with the bot, `mongo:7`, and Redis.
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
-The `bot` service reads `config.env`, exposes port `5000`, and waits for the MongoDB health check before startup. The image runs:
+The `bot` service reads `.env`, exposes port `5000`, and waits for both MongoDB
+and Redis health checks before startup. The image runs:
 
 ```bash
 uv run --frozen python -m tcbot
@@ -126,8 +127,8 @@ PROOFS="-1001234567890"
 | `MODULES_LOAD` | No | comma-separated module names | Optional whitelist, e.g. `banning,appeals`. |
 | `MODULES_NO_LOAD` | No | comma-separated module names | Optional blacklist, e.g. `maintenance,broadcasting`. |
 | `REDIS_URL` | No | Redis URI | L2 cache connection string, e.g. `redis://localhost:6379/0`. When absent the bot uses in-process L1 cache only. |
-| `WEBHOOK_URL` | No | HTTPS URL | Base URL for webhook transport, e.g. `https://yourdomain.example.com`. When set, the bot runs in webhook mode; absent falls back to long polling (local dev only). On Replit, `REPLIT_DEV_DOMAIN` is auto-detected and takes precedence. |
-| `WEBHOOK_SECRET` | No | random string | Secret token sent in the `X-Telegram-Bot-Api-Secret-Token` header by Telegram on every webhook POST. Auto-generated with `secrets.token_hex(32)` if absent. Set it explicitly for reproducible deployments. |
+| `WEBHOOK_URL` | No | HTTPS URL | Base URL for webhook transport, e.g. `https://yourdomain.example.com`. When set, the bot runs in webhook mode; absent falls back to polling (local development only). On Replit, `REPLIT_DEV_DOMAIN` is auto-detected and takes precedence. |
+| `WEBHOOK_SECRET` | No | random string | Secret token sent in the `X-Telegram-Bot-Api-Secret-Token` header by Telegram on every webhook POST. Auto-generated with `secrets.token_hex(32)` if absent. Set it explicitly for a stable deployment token. |
 | `WARN_LIMIT` | No | integer >= 1 | Per-group warning threshold that triggers automatic federation ban. Default `3`. When a user's warn count in one group reaches exactly this value, they are federation-banned and their group warns cleared. |
 | `FED_WARN_LIMIT` | No | integer >= 0 | Federation-wide warning threshold: sum of warn counts across all groups triggers an automatic federation ban when >= this value. Default `0` (disabled). Set to a positive integer to enable cross-group warn aggregation. |
 | `WARN_EXPIRY_DAYS` | No | positive integer | Days after which `warn_counts` records are deleted by the daily scheduler job. Default `0` (disabled). Set to a positive integer to enable automatic warn expiry. |

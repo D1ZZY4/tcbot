@@ -19,7 +19,7 @@ This page maps the repository structure and the service boundaries between packa
 ├── README.md               Project overview
 ├── replit.md               Replit deployment notes
 ├── CHANGELOG.md            Version history
-├── docker-compose.yml      Bot + MongoDB local stack
+├── docker-compose.yml      Bot + MongoDB + Redis local stack
 └── Dockerfile              Container image
 ```
 

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import hmac
 import json
 import logging
@@ -94,6 +95,11 @@ _wh_loop: asyncio.AbstractEventLoop | None = None
 _wh_secret: str = ""
 _wh_bot: telegram.Bot | None = None
 
+# * A Telegram webhook request must receive a retryable response when the PTB
+# * loop cannot accept the update promptly.  This bounds the synchronous Flask
+# * worker instead of leaving it blocked behind a full update queue.
+_WEBHOOK_ENQUEUE_TIMEOUT_S: float = 1.0
+
 
 def register_webhook(
     queue: asyncio.Queue[object],
@@ -142,9 +148,27 @@ def webhook_route() -> tuple[str, int]:
             log.debug("Webhook: received unrecognized update type; skipping.")
             return "OK", 200
         # * Thread-safe: Flask runs in a sync daemon thread; PTB loop is in main thread.
-        asyncio.run_coroutine_threadsafe(_wh_queue.put(update), _wh_loop)
+        put_coro = _wh_queue.put(update)
+        try:
+            future = asyncio.run_coroutine_threadsafe(put_coro, _wh_loop)
+        except Exception:
+            put_coro.close()
+            log.exception("Webhook: PTB event loop rejected the update.")
+            return "Service unavailable", 503
+        try:
+            future.result(timeout=_WEBHOOK_ENQUEUE_TIMEOUT_S)
+        except concurrent.futures.TimeoutError:
+            future.cancel()
+            log.warning(
+                "Webhook: PTB update queue did not accept the update within %.1fs.",
+                _WEBHOOK_ENQUEUE_TIMEOUT_S,
+            )
+            return "Service unavailable", 503
+        except Exception:
+            log.exception("Webhook: PTB update queue rejected the update.")
+            return "Service unavailable", 503
     except Exception:
-        log.exception("Webhook: failed to enqueue update.")
+        log.exception("Webhook: failed to decode or enqueue update.")
         return "Internal error", 500
 
     return "OK", 200

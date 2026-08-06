@@ -172,13 +172,33 @@ Key approaches adopted to meet v4 targets:
 
 ---
 
-## 2026-06-12: fire-and-forget loop.create_task in TwoLevelCache needs strong-ref set
+## 2026-08-05: Redis cache mutations use a FIFO tail
 
-**Decision:** `TwoLevelCache._redis_put_background` and `_redis_del_background` use `loop.create_task()` for fire-and-forget Redis writes/deletes. Each task is added to the module-level `_redis_bg_tasks` set and removed via a `discard` done-callback (same pattern as `__main__._asyncio_report_tasks`).
+**Decision:** `TwoLevelCache` chains every Redis `set`, `delete`, and `clear_all` operation behind the previous mutation for that Redis prefix and event loop. Each task is retained until completion and then removed from the global strong-reference set; per-instance views are cleared when they are still current.
 
-**Why:** RUF006 does not catch `loop.create_task()` scheduled through a local variable (only catches `asyncio.create_task` and `asyncio.get_event_loop().create_task` shapes statically). Without a strong reference the task can be GC-collected before completion, silently dropping the Redis write.
+**Why:** Independent background writes can finish out of order. A stale write completing after an invalidation recreates data that the caller intentionally removed. A bounded per-prefix chain also covers separate cache objects sharing the same Redis namespace without blocking synchronous L1 operations.
 
-**How to apply:** Whenever adding a new `loop.create_task(...)` fire-and-forget in `cache.py`, add the task to `_redis_bg_tasks` and register `_redis_bg_tasks.discard` as the done-callback. The `_log_redis_task_error` callback must also be registered as a second done-callback so errors are surfaced to the log.
+**How to apply:** Add all future Redis mutations to `_enqueue_redis_mutation`; do not schedule direct Redis writes or deletes from `put`, `invalidate`, or `clear_all`. Keep the event-loop component in the registry key because tasks cannot cross loops.
+
+---
+
+## 2026-08-05: Redis cache values use tagged v2 JSON
+
+**Decision:** Redis cache keys use a `v2` namespace. `datetime` and `bson.ObjectId` values are encoded with explicit type tags and restored with a JSON object hook; untagged legacy JSON remains readable as ordinary values.
+
+**Why:** Plain string conversion loses MongoDB scalar types and can make downstream code receive the wrong document shape after an L2 cache hit. A versioned key namespace prevents old untyped entries from being treated as typed documents during rollout.
+
+**How to apply:** Keep `_MongoJSONEncoder` and `_mongo_object_hook` paired. When the serialized shape changes again, use a new key namespace and preserve a safe fallback for older values.
+
+---
+
+## 2026-08-05: Webhook enqueue failures are retryable
+
+**Decision:** The synchronous Flask webhook route waits a bounded interval for `asyncio.run_coroutine_threadsafe(...).result()`. Queue timeout, loop rejection, and enqueue exceptions return HTTP 503 so Telegram retries instead of losing the update.
+
+**Why:** Returning 200 before queue insertion completes acknowledges delivery that may never reach PTB. A retryable response is safer than silent loss.
+
+**How to apply:** Keep webhook route enqueue waits bounded and never expose internal exception details in the response body.
 
 ---
 

@@ -5,15 +5,15 @@ description: Snapshot of the TCF Bot source layout after refactoring. Use this t
 
 # TCF Bot - Module Structure
 
-**Last updated:** 2026-06-17 (session 163)
+**Last updated:** 2026-08-05 (audit continuation)
 
 ## Repository layout
 
 ```
 tcbot/
 ├── __init__.py              Configs dataclass, global cfg adapter, env parsing
-├── __main__.py              Runtime entry point, handler registration, polling
-├── alive.py                 Flask keep-alive endpoint
+├── __main__.py              Runtime entry point, handler registration, webhook-first transport
+├── alive.py                 Flask health and webhook receiver
 ├── modules/
 │   ├── __init__.py          Dynamic module loader (discover, allowlist, denylist)
 │   ├── types.py             Shared type aliases for command/callback/data coroutines
@@ -65,7 +65,7 @@ tcbot/
 │   └── netspeed.py          /ping and /speedtest owner-only network diagnostics
 ├── database/
 │   ├── bans_db.py           Federation bans (active_bans, get_ban, add_ban, etc.)
-│   ├── cache.py             TTLCache (in-memory) + TwoLevelCache (L1 in-memory + L2 Redis optional)
+│   ├── cache.py             TTLCache + FIFO TwoLevelCache with typed Redis v2 values
 │   ├── documents.py         TypedDict document shapes and Literal aliases
 │   ├── groups_db.py         Connected groups, join queue, active_groups
 │   ├── kicks_db.py          Kick log (log_kick, user_kicks, user_kick_count)

@@ -92,7 +92,7 @@ If your Replit workflow supports custom commands, set the run command to:
 uv run python -m tcbot
 ```
 
-The bot fails fast when `BOT_TOKEN`, `MONGODB_URI`, or `OWNER_ID` are missing. It starts polling Telegram after MongoDB connection, index creation, owner seeding, handler registration, and error reporter setup complete.
+The bot fails fast when `BOT_TOKEN`, `MONGODB_URI`, or `OWNER_ID` are missing. It starts webhook transport after MongoDB connection, index creation, owner seeding, handler registration, and error reporter setup complete when `WEBHOOK_URL` or `REPLIT_DEV_DOMAIN` is available. Without a public URL, local development falls back to polling.
 
 ```mermaid
 flowchart TD
@@ -105,7 +105,9 @@ flowchart TD
     Ready --> Owner[Initial owner ensured]
     Ready --> Handlers[Handlers registered]
     Ready --> Reporter[Error reporter attached]
-    Ready --> Polling[Start Telegram polling]
+    Ready --> Transport{Public webhook URL?}
+    Transport -->|yes| Webhook[Start webhook transport]
+    Transport -->|no| Polling[Start local polling fallback]
     Ready --> Health[Expose Flask health check]
     Health --> Ok[GET slash returns OK]
 ```
@@ -125,7 +127,8 @@ If the hosting platform requires a specific public port, set `PORT` accordingly 
 
 AI coding agents (Replit Agent, Roo, etc.) use the `ctx7` CLI to fetch live,
 version-accurate library documentation instead of relying on potentially stale
-training data. This is mandatory for this project. See `.agents/skills/context7-mcp/SKILL.md`.
+training data. This is mandatory for this project. See
+[`.agents/skills/context7-expert/SKILL.md`](.agents/skills/context7-expert/SKILL.md).
 
 ### First-time setup on a new Replit account
 

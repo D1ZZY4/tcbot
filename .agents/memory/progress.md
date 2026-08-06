@@ -5,12 +5,13 @@ description: Item-by-item status of the improvement plan. Updated at each commit
 
 # TCF Bot - Progress
 
-**Last updated:** 2026-07-11 (session 194)
+**Last updated:** 2026-08-05 (audit continuation)
 
 ## Verification baseline
 
 | Check | Result |
 |---|---|
+| Audit continuation (2026-08-05) | PASS: dependency sync, editable install, 8 focused regression tests, compile/import checks, full Ruff format/lint, JSON and diff validation, workflow restart, health and webhook smoke checks, stale-reference scan, and final runtime review. Scheduler readiness propagation and health gate, bounded webhook enqueue with retryable 503 responses, FIFO Redis mutations including `clear_all()` across shared prefixes, typed Redis v2 serialization, and documentation synchronization are complete. |
 | Session 194 Bugs #504-#506 | PASS: 3 bugs fixed. Bug #504: users_cache.get_first_name() rewired to user_mention_cache.get_or_fetch() (L1->L2->DB). Bug #505: TwoLevelCache.clear_all() added (async SCAN+UNLINK); set_owner() awaits it. Bug #506: pyproject.toml all deps pinned to explicit minor-version ranges (>=X.Y,<X+1). Wave 1+2 audit (7 parallel sub-agents covering all 75 Python files in 2 waves): all other findings verified FALSE POSITIVE after direct source read. docs/databases/databases.md + CHANGELOG updated. Ruff: 75 files clean. Import: OK. Total bugs: #1-#506. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |
 | Session 193 Bug #502-#503 | PASS: 13 parallel sub-agents (SA1-SA13) in 4 waves covering all 75 Python files. Bug #502: 3 em-dashes in .md files. Bug #503: keyboards.py additional_menu_kb() 5 hardcoded community t.me URLs moved to cfg (COMMUNITY_CHANNEL_URL/GROUP/LOGS/EXEC/TRAVEL_URL); buttons shown conditionally when URL is set. All other findings verified false positives. uv lock --upgrade: 33 packages, no version changes. Ruff: 75 files clean. Import: OK. Config: OK. Total: #1-#503. |
 | Session 191 Bug #494-#500 + version + dep bump | PASS: Full wave-2 autonomous audit (5 parallel sub-agents: SA3-SA8 covering all docs, voice/security/UX, and DevOps). SA wave-1 findings verified as false positives: estimated_document_count() already wrapped in db_call(), 5000 uses _DEFAULT_PORT constant, hiredis verified lazily at connect() correctly, date_or_unknown() output is safe (not user HTML), consecutive awaits are intentionally sequential. 7 doc bugs confirmed and fixed: performance checklist to v5.2.6, architecture targets section to v5.2.6, mapping.md startup diagram to webhook, modules.md diagram node fixed, workflows-guide.md Run Bot description + secrets table updated, run-bot.yml missing WEBHOOK_URL/WEBHOOK_SECRET env, config.env.example duplicate REDIS_URL removed. pyproject.toml bumped to 5.2.6. Dep: tzdata v2026.2->v2026.3. Ruff: 75 files clean. Import: OK. Total bugs: #1-#500. Open: CVE-2026-31072 (accepted), Improvement #4 (future). |

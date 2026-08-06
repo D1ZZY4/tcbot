@@ -61,9 +61,9 @@ Sebelum mengubah apa pun, baca semua file `.md` di repo secara lengkap, baris pe
 
 **Urutan prioritas:**
 
-1. **Aturan agent:** `.agents/CLAUDE.md`, `.agents/RULES.md`, `.agents/WORKFLOW.md`, `.agents/STYLE-CODE.md`, `.agents/STYLE-COMMENTS.md`, `.agents/RUFF.md`, `.agents/REPLIT.md`
+1. **Aturan agent:** `.agents/rules/CLAUDE.md`, `.agents/rules/RULES.md`, `.agents/rules/WORKFLOW.md`, `.agents/rules/STYLE-CODE.md`, `.agents/rules/STYLE-COMMENTS.md`, `.agents/rules/RUFF.md`, `.agents/rules/REPLIT.md`
 2. **Folder aturan agent:** semua file di `.agents/rules/` termasuk `context7.md` dan file rule lainnya.
-3. **Skill agent:** `.agents/skills/context7-mcp.md` dan semua skill file lainnya.
+3. **Skill agent:** `.agents/skills/context7-expert/SKILL.md` dan semua skill file lainnya.
 4. **Root:** `PLAN.md`, `CHANGELOG.md`, `AGENTS.md`, `README.md`, `replit.md`
 5. **Docs:** `docs/README.md`, `docs/setup.md`, `docs/mapping.md`, `docs/performance.md`, `docs/workflows-guide.md`, `docs/button-styles.md`, semua file di `docs/modules/`, `docs/helper/`, `docs/databases/`, `docs/utils/`, `docs/workflows/`, dan semua file `*-detailed.md`.
 
@@ -250,7 +250,7 @@ uv run python -c "import <module>; print(<module>.__version__)"
 
 Selalu cross-reference dengan versi di `uv.lock`. Catat temuan di `.agents/memory/decisions.md` agar sesi berikutnya tidak perlu melakukan lookup yang sama.
 
-Definisi skill lengkap: `.agents/skills/context7-mcp.md`
+Definisi skill lengkap: `.agents/skills/context7-expert/SKILL.md`
 Rule lengkap: `.agents/rules/context7.md`
 
 ---
@@ -394,7 +394,7 @@ Anggap dirimu sebagai senior atau staff engineer yang bertanggung jawab penuh at
 
 Kamu boleh menghapus, menambah, mengedit, memindah, merename, dan merombak total file, folder, dan arsitektur. Tidak perlu minta izin untuk refactor. Syaratnya: bot berjalan tanpa error (langkah 6), docs diperbarui di semua file `.md` di root, `docs/`, dan `.agents/`, semua diagram Mermaid akurat, dan ada commit checkpoint setelah setiap langkah agar semuanya bisa di-revert.
 
-Jika kode atau file yang ada tidak sesuai dengan prinsip modular, tanpa hardcode, atau code style di `.agents/STYLE-CODE.md`, kamu wajib memperbaikinya. Semua kode harus benar-benar modular, modern, clean, dan bebas hardcode. Perbaiki semua pelanggaran yang ditemukan tanpa menunggu instruksi khusus.
+Jika kode atau file yang ada tidak sesuai dengan prinsip modular, tanpa hardcode, atau code style di `.agents/rules/STYLE-CODE.md`, kamu wajib memperbaikinya. Semua kode harus benar-benar modular, modern, clean, dan bebas hardcode. Perbaiki semua pelanggaran yang ditemukan tanpa menunggu instruksi khusus.
 
 ---
 
@@ -441,7 +441,7 @@ Idiom Python 3.12, `async`/`await` menyeluruh, type hint penuh, dataclass, dan p
 - Tidak ada dead code (hapus yang tidak terpakai setelah cek referensi penuh).
 - Tidak ada duplicate code (DRY: satukan pola berulang jadi shared helper).
 - Fungsi fokus dengan docstring yang jelas.
-- Style konsisten sesuai `.agents/STYLE-CODE.md`.
+- Style konsisten sesuai `.agents/rules/STYLE-CODE.md`.
 
 ---
 
@@ -839,7 +839,7 @@ Catat pesan yang diubah di `.agents/memory/decisions.md` secara ringkas agar ses
 ## SKILL & SUB-AGENT (pakai tanpa disuruh)
 
 Gunakan semua skill yang relevan secara otomatis tanpa perlu diinstruksikan:
-`context7-mcp`, `project-policy`, `docs-maintainer`, `telegram-bot-builder`, `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `runtime-debugger`, `feature-reviewer`, dan `general-sub-agent` (semua ada di `.agents/skills/`).
+`context7-expert`, `project-policy`, `docs-maintainer`, `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `feature-reviewer`, dan `general-sub-agent` (semua ada di `.agents/skills/`).
 
 Komposisikan skill ketika pekerjaan mencakup beberapa area. Untuk sub-agent, ikuti bagian orkestrasi sub-agent di atas: spawn banyak sub-agent paralel untuk scope independen dan tetap bekerja sambil menunggu. Patuhi aturan satu scope satu pemilik agar tidak ada duplikasi, dan jaga verifikasi serta commit tetap terpusat di main agent.
 
@@ -863,7 +863,7 @@ Komposisikan skill ketika pekerjaan mencakup beberapa area. Untuk sub-agent, iku
 
 - Semua dokumentasi dalam bahasa Inggris profesional.
 - **Tidak boleh ada em-dash atau en-dash di mana pun:** docs, komentar kode, dan string bot. Ganti dengan titik dua, kurung, atau koma. Panah (`-->`) boleh di docs. Tidak boleh ada emoji di docs maupun di bot.
-- Komentar ikut `.agents/STYLE-COMMENTS.md`, gaya kode ikut `.agents/STYLE-CODE.md`.
+- Komentar ikut `.agents/rules/STYLE-COMMENTS.md`, gaya kode ikut `.agents/rules/STYLE-CODE.md`.
 
 ---
 

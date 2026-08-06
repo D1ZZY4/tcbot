@@ -49,7 +49,7 @@ generates a new API key after login. `--oauth` only applies to MCP mode.
 - An MCP server entry in the agent's config file (`.mcp.json` for Claude, `.cursor/mcp.json`
   for Cursor, `.opencode.json` for OpenCode)
 - A Context7 rule file instructing the agent to use Context7 for library docs
-- A `context7-mcp`-style skill in the agent's skills directory
+- A Context7 documentation skill in the agent's skills directory
 
 **CLI + Skills mode:**
 - A `find-docs`-style skill in the chosen agent's skills directory, guiding it to use

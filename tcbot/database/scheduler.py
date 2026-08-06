@@ -70,6 +70,7 @@ _scheduler: AsyncScheduler | None = None
 _sched_task: asyncio.Task | None = None  # type: ignore[type-arg]
 _sched_ready: asyncio.Event | None = None
 _sched_stop: asyncio.Event | None = None
+_sched_error: BaseException | None = None
 
 
 # ══════════════════════════════════════════════════════════════════ #
@@ -166,7 +167,7 @@ async def _scheduler_background(
     is entered and exited in the *same* asyncio task.  Running this entire
     lifecycle inside a dedicated task satisfies that requirement.
     """
-    global _scheduler
+    global _scheduler, _sched_error
     serializer = CBORSerializer()
     data_store = MongoDBDataStore(mongodb_uri, database=db_name, serializer=serializer)
     try:
@@ -176,16 +177,19 @@ async def _scheduler_background(
                 raise RuntimeError(
                     "_sched_ready event not initialised before _scheduler_background ran"
                 )
-            _sched_ready.set()
             await _register_periodic_schedules(sched, warn_expiry_days)
             await sched.start_in_background()
             if _sched_stop is None:
                 raise RuntimeError(
                     "_sched_stop event not initialised before _scheduler_background ran"
                 )
+            # Signal readiness only after the recurring schedules are registered
+            # and the scheduler has accepted background execution.
+            _sched_ready.set()
             await _sched_stop.wait()
-    except Exception:
+    except Exception as exc:
         log.exception("APScheduler background task crashed.")
+        _sched_error = exc
         if _sched_ready is not None and not _sched_ready.is_set():
             _sched_ready.set()  # unblock start() so it doesn't hang forever
     finally:
@@ -248,14 +252,24 @@ async def start(mongodb_uri: str, db_name: str, warn_expiry_days: int) -> None:
         warn_expiry_days: Days after which warn_counts are expired (0 = disabled).
 
     """
-    global _sched_task, _sched_ready, _sched_stop
+    global _sched_task, _sched_ready, _sched_stop, _sched_error
     _sched_ready = asyncio.Event()
     _sched_stop = asyncio.Event()
+    _sched_error = None
     _sched_task = asyncio.create_task(
         _scheduler_background(mongodb_uri, db_name, warn_expiry_days),
         name="tcbot.scheduler",
     )
     await _sched_ready.wait()
+    if _sched_error is not None:
+        startup_error = _sched_error
+        if _sched_task is not None:
+            await _sched_task
+        _sched_task = None
+        _sched_ready = None
+        _sched_stop = None
+        _sched_error = None
+        raise RuntimeError("APScheduler failed to start.") from startup_error
     log.info("APScheduler ready (MongoDBDataStore + CBORSerializer → %s).", db_name)
 
 
@@ -265,7 +279,7 @@ async def stop() -> None:
     Sets the stop event so the background task can exit the ``async with`` block
     cleanly.  Safe to call even if :func:`start` was never called.
     """
-    global _sched_task, _sched_ready, _sched_stop
+    global _sched_task, _sched_ready, _sched_stop, _sched_error
     if _sched_stop is not None:
         _sched_stop.set()
     if _sched_task is not None:
@@ -279,6 +293,7 @@ async def stop() -> None:
     _sched_task = None
     _sched_ready = None
     _sched_stop = None
+    _sched_error = None
     log.info("APScheduler stopped.")
 
 
@@ -290,8 +305,13 @@ def _get() -> AsyncScheduler:
 
 
 def is_ready() -> bool:
-    """Return True when the scheduler background task is running and ready."""
-    return _scheduler is not None
+    """Return True only after scheduler startup has completed successfully."""
+    return (
+        _scheduler is not None
+        and _sched_ready is not None
+        and _sched_ready.is_set()
+        and _sched_error is None
+    )
 
 
 # ══════════════════════════════════════════════════════════════════ #

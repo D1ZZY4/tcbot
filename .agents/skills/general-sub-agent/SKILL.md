@@ -38,13 +38,13 @@ Use this skill when the task is broad, mixed, or exploratory, for example:
 Prefer a more specific local skill when available:
 
 - Use `project-policy` before editing TCBot source code.
-- Use `telegram-bot-builder` for PTB handlers and Telegram UX.
+- Use `project-policy` and `async-python-patterns` for PTB handlers and Telegram UX.
 - Use `async-python-patterns` for async handlers, cancellation, and fan-out.
 - Use `mongodb-query-optimizer` for database query/index performance.
 - Use `python-code-quality` for Ruff, typing, and quality gates.
 - Use `mermaid-diagrams` for diagrams.
 - Use `docs-maintainer` for any Markdown documentation update or reorganization.
-- Use `runtime-debugger` for startup, polling, MongoDB, or keep-alive runtime issues.
+- Use `diagnostics` and `workflows` for startup, transport, MongoDB, or keep-alive runtime issues.
 - Use `feature-reviewer` for code review and "is this ready?" passes.
 
 ## Workflow

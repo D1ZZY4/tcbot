@@ -94,7 +94,7 @@ For detailed environment variable formats and validation, see [`docs/setup.md`](
 | `MONGODB_URI` | Yes | MongoDB connection string. |
 | `REDIS_URL` | No | Redis connection URL (e.g. `redis://localhost:6379/0`). Enables L2 distributed cache and Redis-backed rate limiting. Falls back to in-process rate limiting when absent. |
 | `WEBHOOK_URL` | Usually | Public HTTPS URL for Telegram webhook (e.g. `https://your-domain.com`). Required for webhook mode; omit only for local development (falls back to polling). |
-| `WEBHOOK_SECRET` | Usually | Secret token passed to `set_webhook` and validated on every incoming update (`X-Telegram-Bot-Api-Secret-Token` header). Required when `WEBHOOK_URL` is set. |
+| `WEBHOOK_SECRET` | No | Secret token passed to `set_webhook` and validated on every incoming update (`X-Telegram-Bot-Api-Secret-Token` header). When omitted, the bot generates a random token at startup. |
 | `SESSION_SECRET` | No | Flask session secret key; generated at startup if not set. |
 | `DB_NAME` | No | MongoDB database name, default `tcbot`. |
 | `COMMUNITY_NAME` | No | Display name used in bot messages and logs. |
@@ -136,7 +136,7 @@ flowchart TD
 Key runtime pieces:
 
 - `tcbot/__init__.py` loads environment configuration into an immutable dataclass and exposes the `cfg` adapter.
-- `tcbot/__main__.py` starts logging, launches Flask keep-alive, builds the PTB application, registers handlers, connects MongoDB in `post_init`, and starts long polling.
+- `tcbot/__main__.py` starts logging, launches Flask keep-alive, builds the PTB application, registers handlers, connects MongoDB in `post_init`, and starts webhook transport when a public URL is available. Local development without a public URL falls back to polling.
 - `tcbot/modules/__init__.py` discovers top-level modules, collects their `__handlers__` lists, and fails startup if an enabled module cannot be imported.
 - `tcbot/database/mongos.py` owns the Motor client, database accessor, short ID generator, and index setup.
 - `tcbot/utils/dispatch.py` provides bounded concurrent fan-out for multi-group Telegram API calls.
@@ -208,7 +208,7 @@ Weekly automated dependency updates:
 
 ### Other Workflows
 - **CodeQL** (`.github/workflows/codeql.yml`) - Security analysis
-- **Run Bot** (`.github/workflows/run-bot.yml`) - Self-chaining 24/7 long-polling runner. Each run polls for a ~5 hour window (GitHub caps a job at 6h), then dispatches its successor ~10 minutes before the window ends (retried up to 3 times) for continuous coverage. A `concurrency` group keeps a single instance polling (a second would hit Telegram's `409 Conflict`), and an every-15-minute cron acts as a resurrection fallback.
+- **Run Bot** (`.github/workflows/run-bot.yml`) - Self-chaining 24/7 runner. Each run stays active for a ~5 hour window (GitHub caps a job at 6h), then dispatches its successor ~10 minutes before the window ends (retried up to 3 times) for continuous coverage. A `concurrency` group keeps a single instance active, and an every-15-minute cron acts as a resurrection fallback.
 
 ### Full Documentation
 For detailed workflow descriptions, trigger conditions, notification format examples, troubleshooting, and best practices, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For changelog of all CI/CD additions, see [`CHANGELOG.md`](CHANGELOG.md).

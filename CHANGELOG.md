@@ -2,6 +2,23 @@
 
 For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
+## [Unreleased] - 2026-08-05 (audit continuation)
+
+### Fixed
+
+- **Webhook delivery** (`tcbot/alive.py`): wait for the PTB update queue to accept each webhook update and return retryable HTTP `503` responses for queue timeouts, event-loop rejection, or enqueue failures instead of acknowledging undelivered updates.
+- **Scheduler readiness** (`tcbot/database/scheduler.py`): expose readiness only after recurring schedules are registered and background execution starts; propagate initialization failures to startup.
+- **Redis cache ordering** (`tcbot/database/cache.py`): serialize `set`, `delete`, and `clear_all` mutations through a FIFO queue shared by cache objects using the same prefix, so a slow write cannot complete after a newer invalidation. Completed queue tails are released to avoid retaining task chains.
+- **Scheduler health** (`tcbot/database/scheduler.py`): prevent `/health` from reporting the scheduler as ready during partial initialization or after a startup error. Added regression coverage for readiness timing and startup error propagation.
+
+### Changed
+
+- **Redis cache serialization** (`tcbot/database/cache.py`): use a `v2` key namespace and tagged JSON values that restore `datetime` and `ObjectId` instances while remaining compatible with legacy untagged values.
+
+### Documentation
+
+- Synchronized runtime, Replit, setup, agent-rule, workflow, and database documentation with webhook-first transport, optional generated webhook secrets, active skills, and the Redis cache contract. Added focused regression tests in `tests/test_runtime_audit.py`.
+
 ## [Unreleased] - 2026-07-11 (session 194+, cont. 2)
 
 ### Fixed
@@ -419,7 +436,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 - **`tcbot/__init__.py`** (`proof_timeout`, `appeal_timeout` docstrings, Bug #418): Both property docstrings said "Reserved for future wiring when the [job-queue] PTB extra is added." The project intentionally does not use the `[job-queue]` PTB extra and will not add it; APScheduler 4.x handles all scheduling. The misleading forward-reference to `[job-queue]` was replaced with "Reserved for future wiring via APScheduler triggers if inactivity timeouts are added."
 
-- **`.agents/skills/project-policy/SKILL.md`**, **`.agents/skills/async-python-patterns/SKILL.md`**, **`.agents/skills/docs-maintainer/SKILL.md`**, **`.agents/skills/general-sub-agent/SKILL.md`**, **`.agents/skills/python-code-quality/SKILL.md`**, **`.agents/skills/telegram-bot-builder/SKILL.md`** (Bug #417): All six agent skill files incorrectly stated the project uses `python-telegram-bot` with the `[job-queue]` extra. `pyproject.toml` has used `python-telegram-bot[rate-limiter]` since Bug #384 (session 134) when `[job-queue]` was removed and `aiolimiter`-based rate limiting was added. Corrected all six files to `[rate-limiter]` extra with explicit `no [job-queue] extra` note. `python-code-quality/SKILL.md` had a pyproject.toml example snippet with `python-telegram-bot[job-queue]` which was also corrected.
+- **The six agent skill files** (Bug #417): All six agent skill files incorrectly stated the project uses `python-telegram-bot` with the `[job-queue]` extra. `pyproject.toml` has used `python-telegram-bot[rate-limiter]` since Bug #384 (session 134) when `[job-queue]` was removed and `aiolimiter`-based rate limiting was added. Corrected all six files to `[rate-limiter]` extra with explicit `no [job-queue] extra` note. The Python quality skill also had a pyproject.toml example snippet with `python-telegram-bot[job-queue]`, which was corrected.
 
 ## [Unreleased] - 2026-06-16 (session 141)
 
@@ -1000,7 +1017,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 - **`tcbot/modules/admins.py`** (Role Hierarchy help section): Used `›` (U+203A, single right-pointing angle quotation mark) as a visual hierarchy separator in the help text for `/tcpromote`. This character is outside the plain ASCII set and qualifies as a decorative typographic symbol. Replaced with `>` (ASCII greater-than). (Bug #216)
 - **`tcbot/modules/help.py`** (section header template): Used `\u203a` (`›`) as a visual separator between the module name and section label in the help section header. Same character as Bug #216. Replaced with HTML entity `&gt;` (renders as `>` in Telegram HTML mode, which is also the correct way to output `>` without triggering HTML parse errors). (Bug #217)
-- **`CHANGELOG.md`** and **`.agents/skills/context7-mcp/SKILL.md`**: Removed all remaining em-dash (U+2014) and en-dash (U+2013) characters from authored documentation. Replaced with colons, commas, or parentheses per project style. Also removed two em-dashes from the skill file where they were used in table cells. Verified: 0 em/en-dash characters remain across `tcbot/`, `docs/`, root `.md` files, and `.agents/` skill files.
+- **`CHANGELOG.md`** and the legacy Context7 skill documentation: Removed all remaining em-dash (U+2014) and en-dash (U+2013) characters from authored documentation. Replaced with colons, commas, or parentheses per project style. Also removed two em-dashes from the skill file where they were used in table cells. Verified: 0 em/en-dash characters remain across `tcbot/`, `docs/`, root `.md` files, and `.agents/` skill files.
 
 ## [Unreleased] - 2026-06-13 (session 89 wave 1)
 
@@ -2281,7 +2298,7 @@ diverging from `.agents/` over time.
   `.agents/skills/` (files differed for `async-python-patterns`,
   `python-code-quality`, `mongodb-query-optimizer` references, and five skills
   were missing entirely: `docs-maintainer`, `feature-reviewer`,
-  `general-sub-agent`, `project-policy`, `runtime-debugger`).
+  `general-sub-agent`, plus the runtime debugging skill).
 - `.trae/` directory removed; symlink `.trae -> .agents` created.
 
 Both tool paths now transparently resolve to `.agents/`, eliminating stale
@@ -3099,20 +3116,20 @@ Extracted all static user-facing reply strings from `tcbot/modules/helper/workfl
   - **Why**: Prevents the recurring failure where agents ship code without updating CHANGELOG.md, PLAN.md, or related docs and the user has to manually remind them every time.
 
 - **Skills and sub-agents policy**: New explicit policy in [`.agents/rules/CLAUDE.md`](.agents/rules/CLAUDE.md#mandatory-auto-invoke-skills-use-sub-agents-sparingly), [`.agents/rules/RULES.md`](.agents/rules/RULES.md#skills-and-sub-agents-policy), [`AGENTS.md`](AGENTS.md#skills-and-sub-agents-policy), and [`.agents/agents/coordinator.md`](.agents/agents/coordinator.md#skills-and-sub-agents-policy) covering:
-  - **Skills auto-invoke**: All skills under `.agents/skills/` (`project-policy`, `docs-maintainer`, `telegram-bot-builder`, `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `runtime-debugger`, `feature-reviewer`, `general-sub-agent`) must be invoked silently whenever their trigger matches the current task. Compose multiple skills when one task spans multiple areas.
+  - **Skills auto-invoke**: All skills under `.agents/skills/` must be invoked silently whenever their trigger matches the current task. Compose multiple skills when one task spans multiple areas.
   - **Sub-agents used sparingly**: Sub-agents under `.agents/agents/` are expensive (token cost) and risky (can drift off-task). Default is to do the work in the main agent. Only delegate when the task is large, scopes are genuinely independent, and parallelism or independent-perspective value justifies the cost.
   - **Why**: User flagged sub-agents as wasteful and noisy, but skills as cheap and project-correct. Codifying the preference so future agents make the same call without being asked.
 
 - **Pointers added to every skill and sub-agent**: Each `.agents/skills/*/SKILL.md` and `.agents/agents/*.md` file now opens with a short pointer to the read/update rules in [`.agents/rules/CLAUDE.md`](.agents/rules/CLAUDE.md#mandatory-read-these-files-before-any-work) and a reminder to update [`CHANGELOG.md`](CHANGELOG.md) (and `PLAN.md` when relevant) in the same turn. Files updated:
-  - **Skills (10)**: `project-policy`, `docs-maintainer`, `telegram-bot-builder`, `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `runtime-debugger`, `feature-reviewer`, `general-sub-agent`.
+  - **Skills**: the project-policy, documentation, database, async, Python quality, diagram, runtime, feature-review, and general-purpose skills.
   - **Sub-agents (8)**: `coordinator`, `debug-investigator`, `docs-and-skills-editor`, `general-operator`, `implementation-helper`, `project-explorer`, `review-guardian`, `validation-runner`.
   - **Why**: Even when an agent loads only a single skill or sub-agent prompt without reading CLAUDE.md, it still sees the rule. No entry point in `.agents/` lets you skip the read/update workflow.
 
 ### Changed - Skills Content Audit
 - **`.agents/skills/mongodb-query-optimizer/SKILL.md`**: Updated the "current critical indexes" list to match the actual indexes in `tcbot/database/mongos.py::ensure_indexes()`. Added missing indexes that previously could lead an agent to recommend duplicates: `bans` (`is_active + timestamp desc + ban_id desc`, `banned_user_id + timestamp desc`), `tc_roles` (`role` for staff roster lookups), `pending_joins` (unique `chat_id`), `member_cache` (`username`, `first_name` for smart-mention/batch-query helpers), `warns` (`user_id + timestamp desc` for cross-chat history), `kicks` (`user_id + timestamp desc`), `mutes` (`user_id + timestamp desc`).
 - **`.agents/skills/docs-maintainer/SKILL.md`**: "Project Facts To Keep Current" now lists the recent additions agents must keep accurate when editing docs: smart mention system with `mention(user_id, name, username=None)`, batch query helpers (`get_user_mention_data`, `get_mention_data_batch`, `get_first_names_batch`), partial-name search in `extract_target` and the new resolution order, `username` field on `Identity` and `member_cache` indexes, and the four CI/CD workflows (`auto-fix.yml`, `dependency-update.yml`, `performance.yml`, enhanced `verification.yml`) with a pointer to [`docs/workflows-guide.md`](docs/workflows-guide.md). Test inventory line updated to "125 tests across 14 files".
-- **`.agents/skills/telegram-bot-builder/SKILL.md`**: Handler skeleton now uses the new `mention(user.id, user.first_name, user.username)` signature so generated handlers include the username for global cross-group mentions.
-- **`.agents/skills/general-sub-agent/SKILL.md`**: "Prefer a more specific local skill" list now includes `docs-maintainer`, `runtime-debugger`, and `feature-reviewer` so the fallback skill always points to the better-scoped option.
+- **Legacy Telegram handler skill documentation**: Handler skeleton now uses the new `mention(user.id, user.first_name, user.username)` signature so generated handlers include the username for global cross-group mentions.
+- **General-purpose agent skill documentation**: "Prefer a more specific local skill" list now includes documentation, runtime, and feature-review skills so the fallback skill always points to the better-scoped option.
 - **`.agents/skills/feature-reviewer/SKILL.md`**: Review checklist now requires reviewers to flag missing `CHANGELOG.md` and `PLAN.md` entries, and adds a "CI/CD and Workflows" section so workflow YAML changes are checked against [`docs/workflows-guide.md`](docs/workflows-guide.md), the auto-fix PR-only policy, and the Telegram notification fallback.
 - **All skills**: Updated `Last updated` / `Last refreshed` to 2026-05-29 to reflect the audit.
 

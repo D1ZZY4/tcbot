@@ -50,12 +50,10 @@ The user does not want to type "use the X skill" every time. If a task matches a
 |---|---|
 | [`project-policy`](skills/project-policy/SKILL.md) | About to write, edit, or generate ANY code under `tcbot/` (handlers, db helpers, workflows, utilities, config) |
 | [`docs-maintainer`](skills/docs-maintainer/SKILL.md) | About to update, fill in, review, or reorganize any Markdown in this repo |
-| [`telegram-bot-builder`](skills/telegram-bot-builder/SKILL.md) | About to add or modify a Telegram handler, ConversationHandler, or PTB-specific code |
 | [`mongodb-query-optimizer`](skills/mongodb-query-optimizer/SKILL.md) | About to write a MongoDB query, index, aggregation, or modify `tcbot/database/*_db.py` |
 | [`async-python-patterns`](skills/async-python-patterns/SKILL.md) | About to write `async def`, `asyncio.gather`, or any concurrency code |
 | [`python-code-quality`](skills/python-code-quality/SKILL.md) | About to write or refactor Python; for typing, imports, naming, Ruff compliance |
 | [`mermaid-diagrams`](skills/mermaid-diagrams/SKILL.md) | About to add or update a flow / architecture / sequence diagram in any `.md` file |
-| [`runtime-debugger`](skills/runtime-debugger/SKILL.md) | Debugging a live runtime issue, exception trace, or hang |
 | [`feature-reviewer`](skills/feature-reviewer/SKILL.md) | Reviewing a feature, PR, or completed change before declaring done |
 | [`general-sub-agent`](skills/general-sub-agent/SKILL.md) | General-purpose fallback when no specific skill applies but heavy guidance is needed |
 
@@ -136,7 +134,7 @@ connected groups, per-group moderation, and audit logging.
 | Area | Current standard |
 |---|---|
 | Language | Python 3.12 |
-| Bot framework | `python-telegram-bot` (plain, no `[job-queue]` extra), tracking the latest compatible release, async, long polling |
+| Bot framework | `python-telegram-bot` (plain, no `[job-queue]` extra), tracking the latest compatible release, async, webhook-first transport with local polling fallback |
 | Database | MongoDB through Motor async |
 | Keep-alive | Flask health endpoint, default local port 5000 |
 | Replit port | `PORT=8080` |
@@ -162,8 +160,8 @@ Replit Secrets. For local development, use a gitignored `config.env` copied from
 ├── docs/                           Human-facing architecture and module docs
 ├── tcbot/
 │   ├── __init__.py                 Configs dataclass + global cfg adapter
-│   ├── __main__.py                 Startup, handlers, polling, error handling
-│   ├── alive.py                    Flask keep-alive server
+│   ├── __main__.py                 Startup, handlers, webhook-first transport, error handling
+│   ├── alive.py                    Flask health and webhook server
 │   ├── database/                   Async MongoDB helpers, one file per area
 │   │   ├── users_cache.py          Member profile cache operations
 │   │   ├── users_roles.py          Owners + admins + developer/tester roles, effective-role resolution

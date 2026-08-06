@@ -9,7 +9,7 @@ Read [`CLAUDE.md`](CLAUDE.md) first. This file documents Replit-specific runtime
 | Setting | Value |
 |---|---|
 | Start command | `uv run python -m tcbot` |
-| Bot mode | Long polling, no webhook |
+| Bot mode | Webhook-first; local polling fallback when no public URL exists |
 | Keep-alive | Flask server from `tcbot/alive.py` |
 | Replit port | `PORT=8080` |
 | Local default port | `PORT=5000` when unset |
@@ -125,7 +125,7 @@ After starting the bot, inspect logs for:
 - Indexes ensured.
 - Initial owner ensured.
 - Modules loaded and handlers registered.
-- Polling started.
+- Webhook transport started, or the explicit local polling fallback warning appears.
 
 Fix startup `ERROR` logs before testing commands in Telegram.
 

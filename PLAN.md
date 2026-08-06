@@ -6,6 +6,9 @@ For user-facing overview, see [`README.md`](README.md). For contributor rules an
 
 ## [Current State]
 
+- Audit continuation (2026-08-05): fixed scheduler startup readiness so APScheduler reports ready only after schedule registration and background start succeed, and startup now propagates initialization failures. Webhook delivery now waits for queue insertion and returns a retryable 503 when the PTB loop cannot accept an update. Redis mutations now execute FIFO across cache objects sharing a prefix, `clear_all()` shares that ordering, and typed v2 JSON values restore MongoDB scalar types. Added focused regression tests and synchronized runtime, skill, and deployment documentation. The accepted APScheduler CVE risk remains the only open security risk.
+- Readiness follow-up (2026-08-05): health status now requires the scheduler readiness event, an active scheduler, and no startup error, closing the partial-initialization window found during final review. Regression tests cover the readiness gate and `start()` error propagation.
+
 - Audit session 193 (2026-07-11): 2 bugs fixed (Bug #502-#503). 13 parallel sub-agents (SA1-SA13) across 4 waves covering all 75 Python files. Bug #502: 3 em-dashes in .md files from session-192 entries. Bug #503: keyboards.py additional_menu_kb() 5 hardcoded community t.me URLs moved to cfg (COMMUNITY_CHANNEL_URL, COMMUNITY_GROUP_URL, COMMUNITY_LOGS_URL, COMMUNITY_EXEC_URL, COMMUNITY_TRAVEL_URL); buttons shown conditionally when URL is non-empty. config.env.example and docs/setup.md updated. All other sub-agent findings verified as false positives. Ruff: 75 files clean. Import: OK. Total bugs: #1-#503.
 - Audit session 192 (2026-07-11): 1 bug fixed (Bug #501). Bug #501: greeting.py on_join_request_approved missing upsert_user_if_changed: identity was never harvested for users who enter via approved join request; replaced sequential get_active_mute try/except with asyncio.gather parallel upsert+mute (matching on_join_request pattern). Wave 3 (5 parallel sub-agents): SA9-SA13 confirmed all other wave-3 findings as false positives; circuit breaker HALF_OPEN race is acceptable in single-threaded asyncio; broadcasting.py parse_mode="HTML" is intentional (admin-typed content); proof_flow.py caption is code-built; appeal_flow.py log text is code-built; checking.py timestamp None already guarded; scheduler stop() behaviour on crash is correct (asyncio.wait_for(_sched_task) returns when task finishes). Ruff: 75 files clean. Import: OK. Total bugs: #1-#501.
 - Audit session 191 (2026-07-11): 7 doc bugs fixed (Bug #494-#500), 1 dep bump. Bug #494: performance checklist targets updated to v5.2.6. Bug #495: performance.md architecture targets section updated to v5.2.6 with webhook transport row. Bug #496: mapping.md __main__.py description and startup diagram updated to webhook mode. Bug #497: modules.md discovery diagram "Start long polling" -> "Start webhook or polling transport". Bug #498: workflows-guide.md Run Bot description updated; WEBHOOK_URL/WEBHOOK_SECRET added to secrets table. Bug #499: run-bot.yml missing WEBHOOK_URL and WEBHOOK_SECRET env mappings. Bug #500: config.env.example duplicate REDIS_URL removed. Dep bump: tzdata v2026.2->v2026.3. pyproject.toml version bumped to 5.2.6. Ruff: 75 files clean. Import: OK. Total bugs: #1-#500.
@@ -221,11 +224,11 @@ The read hot-path is a three-tier lookup implemented by
 
 **Recommendations:**
 
-- L1 invalidation is per-process. The bot runs as a single long-polling instance
-  (the `tcf-bot-runner` concurrency group guarantees exactly one poller), so this
-  is correct today. If the bot is ever scaled past one instance, an L1 entry
-  invalidated on instance A stays warm on instance B until its `memory_ttl`
-  expires; design a Redis pub/sub invalidation channel before scaling out.
+- L1 invalidation is per-process. The `tcf-bot-runner` concurrency group currently
+  keeps one active bot instance, so this is correct today. If the bot is ever
+  scaled past one instance, an L1 entry invalidated on instance A stays warm on
+  instance B until its `memory_ttl` expires; design a Redis pub/sub invalidation
+  channel before scaling out.
 - `get_or_fetch` takes no per-key lock, so several concurrent misses on the same
   key each run `fetch()` (a cache stampede). On a single event loop with the
   current low contention this is acceptable; revisit only if profiling shows a
@@ -361,7 +364,7 @@ uv run ruff check --fix .
 Run local bot + MongoDB:
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 ## Improvement Strategy
