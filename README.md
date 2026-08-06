@@ -95,7 +95,6 @@ For detailed environment variable formats and validation, see [`docs/getting-sta
 | `REDIS_URL` | No | Redis connection URL (e.g. `redis://localhost:6379/0`). Enables L2 distributed cache and Redis-backed rate limiting. Falls back to in-process rate limiting when absent. |
 | `WEBHOOK_URL` | Usually | Public HTTPS URL for Telegram webhook (e.g. `https://your-domain.com`). Required for webhook mode; omit only for local development (falls back to polling). |
 | `WEBHOOK_SECRET` | No | Secret token passed to `set_webhook` and validated on every incoming update (`X-Telegram-Bot-Api-Secret-Token` header). When omitted, the bot generates a random token at startup. |
-| `SESSION_SECRET` | No | Flask session secret key; generated at startup if not set. |
 | `DB_NAME` | No | MongoDB database name, default `tcbot`. |
 | `COMMUNITY_NAME` | No | Display name used in bot messages and logs. |
 | `PREFIXES` | No | Python-style list of command prefixes, default `["/", "!", "."]`. |

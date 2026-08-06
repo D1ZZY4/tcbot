@@ -5,7 +5,7 @@ stack = "FLASK_VANILLA_JS"
 
 [nix]
 channel = "stable-25_05"
-packages = ["openssl", "postgresql"]
+packages = ["openssl"]
 
 [workflows]
 runButton = "Project"
@@ -37,26 +37,3 @@ externalPort = 80
 [deployment]
 deploymentTarget = "autoscale"
 run = ["gunicorn", "--bind", "0.0.0.0:5000", "main:app"]
-
-[userenv]
-
-[userenv.shared]
-DB_NAME = "tcbot"
-COMMUNITY_NAME = "𝘛𝘊𝘍 - 𝘛𝘳𝘢𝘯𝘴𝘴𝘪𝘰𝘯 𝘊𝘰𝘳𝘦 𝘍𝘦𝘥𝘦𝘳𝘢𝘵𝘪𝘰𝘯"
-PREFIXES = "[\"/\", \"!\", \".\"]"
-PORT = "8080"
-MAIN_GROUP = "-1003872207988"
-MAIN_CHANNEL = "-1003852970764"
-PROOFS = "-1003872207988/67"
-LOGS = "-1003941141635"
-LOGS_ERRORS = "-1003872207988/279"
-APPEALS = "-1003872207988/12"
-PROOF_TIMEOUT_SECONDS = "100"
-APPEAL_TIMEOUT_SECONDS = "600"
-EXTEND_GROUP = ""
-ALBUM_DEBOUNCE_SECONDS = "2"
-OWNER_ID = "7146954165"
-APPEAL_DISCUSSION_TOPIC = "11"
-LOG_LEVEL = "DEBUG"
-MODULES_LOAD = ""
-MODULES_NO_LOAD = ""
