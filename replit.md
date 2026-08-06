@@ -1,6 +1,6 @@
 # Replit Deployment Notes
 
-This file describes how to run TCF Bot on Replit or a similar hosted environment. It is intentionally focused on deployment and environment setup. For general architecture and development guidance, see [`README.md`](README.md) and [`AGENTS.md`](AGENTS.md). For local and Docker setup, see [`docs/setup.md`](docs/setup.md). For automation and CI/CD workflows, see [`docs/workflows-guide.md`](docs/workflows-guide.md).
+This file describes how to run TCF Bot on Replit or a similar hosted environment. It is intentionally focused on deployment and environment setup. For general architecture and development guidance, see [`README.md`](README.md) and [`AGENTS.md`](AGENTS.md). For local and Docker setup, see [`docs/getting-started/setup.md`](docs/getting-started/setup.md). For automation and CI/CD workflows, see [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md).
 
 ## Runtime Summary
 
@@ -10,7 +10,7 @@ This file describes how to run TCF Bot on Replit or a similar hosted environment
 - Database: MongoDB through Motor
 - Cache: in-memory `TwoLevelCache` (L1) + optional Redis L2 (`REDIS_URL`)
 - Scheduler: APScheduler 4.x `AsyncScheduler` with `MongoDBDataStore` + `CBORSerializer` (persistent across restarts)
-- Transport: webhook mode (auto-detected from `REPLIT_DEV_DOMAIN`; local dev falls back to polling)
+- Transport: webhook mode when explicit `WEBHOOK_URL` or `REPLIT_DEV_DOMAIN` is available (explicit URL takes precedence; local dev falls back to polling)
 - Health check + webhook receiver: Flask app on `0.0.0.0:${PORT}` -- `GET /` returns `OK`, `POST /webhook` receives Telegram updates
 - Dependency manager: `uv`
 
@@ -22,10 +22,11 @@ Store credentials in Replit Secrets or the equivalent platform secret manager. D
 |---|---|---|
 | `BOT_TOKEN` | YES | Telegram bot token from BotFather. Format: `1234567890:AAFxxxxxxxx` |
 | `MONGODB_URI` | YES | MongoDB connection string, for example MongoDB Atlas. Format: `mongodb+srv://user:pass@cluster.mongodb.net/` |
-| `CONTEXT7_API_KEY` | YES | Context7 API key for the `ctx7` CLI. AI coding agents (Replit Agent, Roo, etc.) use this to fetch live, version-accurate library docs. Get one at https://context7.com/settings, then run `npm install -g ctx7` in the Shell to finish setup. |
-| `REDIS_URL` | YES | Redis connection URL for L2 cache (persists cache across restarts). Without this the bot uses in-memory cache only. Format: `redis://localhost:6379/0` or a managed Redis URL (Upstash, Redis Cloud, etc.). |
+| `OWNER_ID` | YES | Positive Telegram user ID for the initial Founder account. |
+| `REDIS_URL` | NO | Redis connection URL for the optional L2 cache. Without this the bot uses in-memory cache only. Format: `redis://localhost:6379/0` or a managed Redis URL. |
 
-`OWNER_ID` is also required for startup. It is not a credential, but it identifies the initial Founder account and should be set as an environment variable or secret according to your deployment policy.
+`OWNER_ID` identifies the initial Founder account and should be set as an
+environment variable or secret according to your deployment policy.
 
 ## Environment Variables
 
@@ -123,41 +124,6 @@ flowchart TD
 
 If the hosting platform requires a specific public port, set `PORT` accordingly in the environment. Invalid or out-of-range values fall back to `5000` instead of crashing the health server.
 
-## Context7 CLI (AI Agent Tooling)
-
-AI coding agents (Replit Agent, Roo, etc.) use the `ctx7` CLI to fetch live,
-version-accurate library documentation instead of relying on potentially stale
-training data. This is mandatory for this project. See
-[`.agents/skills/context7-expert/SKILL.md`](.agents/skills/context7-expert/SKILL.md).
-
-### First-time setup on a new Replit account
-
-1. Add `CONTEXT7_API_KEY` to Replit Secrets (get key at https://context7.com/settings).
-2. Install the CLI:
-   ```bash
-   npm install -g ctx7
-   ```
-3. Verify it works:
-   ```bash
-   ctx7 library "python-telegram-bot" "ConversationHandler"
-   ```
-
-The CLI auto-reads `CONTEXT7_API_KEY` from the environment; no extra config needed.
-
-### MCP config (external tools: Roo, Cursor, Claude Desktop)
-
-Both `.agents/mcp.json` and `.roo/mcp.json` are pre-configured. Note that `.roo`
-is a symlink to `.agents`: do not convert it to a real directory. The same
-applies to `.claude`, `.kilo`, and `.trae`.
-
-### Preferred library IDs
-
-| Library | Context7 ID | Benchmark |
-|---|---|---|
-| `python-telegram-bot` | `/python-telegram-bot/python-telegram-bot` | 86.8 |
-| `motor` | `/mongodb/motor` | 85.86 |
-| `python-telegram-bot` (alt) | `/websites/python-telegram-bot_en_stable` | 71.3 |
-
 ## Code Quality Commands
 
 ```bash
@@ -173,7 +139,6 @@ Before starting the deployment:
 
 - [ ] `BOT_TOKEN` is set in Replit Secrets or the platform secret manager.
 - [ ] `MONGODB_URI` is set and reachable from Replit.
-- [ ] `CONTEXT7_API_KEY` is set in Replit Secrets and `ctx7` CLI is installed (`npm install -g ctx7`).
 - [ ] `OWNER_ID` is set to the correct Telegram user ID.
 - [ ] `PORT` matches the hosting platform expectation.
 - [ ] Required Telegram destinations (`MAIN_GROUP`, `LOGS`, `PROOFS`, `APPEALS`, and appeal topic settings) are configured.

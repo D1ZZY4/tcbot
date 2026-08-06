@@ -1,6 +1,10 @@
-# Project Mapping
+# Repository Map
 
-For project overview, see [`../README.md`](../README.md). For module breakdown, see [`modules/modules.md`](modules/modules.md). For database layer, see [`databases/databases.md`](databases/databases.md). For shared helpers, see [`helper/helper.md`](helper/helper.md). For runtime utilities, see [`utils/utils.md`](utils/utils.md).
+For the project overview, see [`../../README.md`](../../README.md). For the
+documentation index, see [`../README.md`](../README.md). For module breakdown,
+see [`modules.md`](modules.md). For the database layer, see
+[`database.md`](database.md). For shared helpers, see [`helpers.md`](helpers.md).
+For runtime utilities, see [`utilities.md`](utilities.md).
 
 This page maps the repository structure and the service boundaries between packages.
 
@@ -9,18 +13,26 @@ This page maps the repository structure and the service boundaries between packa
 ```text
 <project root>/
 ├── tcbot/                  Main Python package
-├── docs/                   Developer documentation
-├── .agents/                Agent config (rules/ and skills/)
+├── docs/                   Documentation grouped by purpose
 ├── pyproject.toml          Dependencies and Ruff config
 ├── uv.lock                 Locked dependency graph
 ├── config.env.example      Environment variable template
-├── AGENTS.md               Contributor and agent guidelines
 ├── README.md               Project overview
 ├── replit.md               Replit deployment notes
 ├── CHANGELOG.md            Version history
 ├── docker-compose.yml      Bot + MongoDB + Redis local stack
 └── Dockerfile              Container image
 ```
+
+## Documentation structure
+
+| Category | Scope |
+|---|---|
+| `getting-started/` | Local, Docker, and hosted setup instructions. |
+| `architecture/` | Repository boundaries, modules, database, helpers, utilities, and workflow internals. |
+| `features/` | User-visible flows and detailed moderation, role, appeal, and statistics behavior. |
+| `operations/` | Backup and restore, CI/CD, and performance guidance. |
+| `reference/` | Stable UI and callback conventions such as keyboard styles. |
 
 ## Runtime package map
 
@@ -39,7 +51,7 @@ tcbot/
 │   ├── kicks_db.py         Kick audit records (incl. per-user history)
 │   ├── mutes_db.py         Mute audit records (incl. per-user history)
 │   ├── queues_db.py        Promotion request queue
-│   ├── cache.py            Single-process TTL caches
+│   ├── cache.py            L1 TTL caches with optional Redis L2
 │   ├── documents.py        TypedDict document shapes
 │   └── types.py            NewType ID primitives
 ├── modules/
@@ -155,9 +167,9 @@ flowchart TD
 
 ## Cross-links
 
-- Setup and environment: [setup.md](setup.md)
-- Command modules: [modules/modules.md](modules/modules.md)
-- Workflows: [workflows.md](workflows.md) and [workflows/workflows.md](workflows/workflows.md)
-- Database layer: [databases/databases.md](databases/databases.md)
-- Shared helpers: [helper/helper.md](helper/helper.md)
-- Runtime utils: [utils/utils.md](utils/utils.md)
+- Setup and environment: [Setup guide](../getting-started/setup.md)
+- Command modules: [Modules](modules.md)
+- Workflows: [Workflow overview](../features/workflow-overview.md) and [Workflow internals](workflows.md)
+- Database layer: [Database layer](database.md)
+- Shared helpers: [Helper package](helpers.md)
+- Runtime utilities: [Runtime utilities](utilities.md)

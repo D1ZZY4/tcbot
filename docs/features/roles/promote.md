@@ -1,8 +1,12 @@
-# Promote Detailed Documentation
+# Promote
 
 This document describes the current promotion behavior implemented by `tcbot/modules/admins.py` (command + callback handlers) and `tcbot/modules/helper/workflows/promote_flow.py` (the `Promote` class and shared logic).
 
-For role hierarchy and rules, see [`role-detailed.md`](role-detailed.md). For demote (counterpart) flow, see [`demote-detailed.md`](demote-detailed.md). For shared helpers, see [`helper/helper.md`](helper/helper.md). For database layer, see [`databases/databases.md`](databases/databases.md).
+For role hierarchy and rules, see [`roles.md`](roles.md). For the demote flow,
+see [`demote.md`](demote.md). For shared helpers, see
+[`../../architecture/helpers.md`](../../architecture/helpers.md). For the
+database layer, see
+[`../../architecture/database.md`](../../architecture/database.md).
 
 ```mermaid
 flowchart TD

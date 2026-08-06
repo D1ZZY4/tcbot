@@ -16,9 +16,9 @@ Before invoking this skill, you must already have read [`.agents/rules/RULES.md`
 When you change *any* documentation file, update the related markdown in the same turn:
 
 - [`CHANGELOG.md`](../../../CHANGELOG.md): entry under `[Unreleased]` describing the doc change (use `### Documentation` or `### Added - Documentation`).
-- [`docs/README.md`](../../../docs/README.md): if a new doc was added, update the Quick navigation or Detailed feature guides table.
-- [`docs/mapping.md`](../../../docs/mapping.md): if the repository tree changed.
-- Any sibling docs whose content is now stale or whose cross-references would break.
+- [`docs/README.md`](../../../docs/README.md): if a new doc was added or the documentation structure changed, update the category index.
+- [`docs/architecture/repository-map.md`](../../../docs/architecture/repository-map.md): if the repository tree changed.
+- Any related docs whose content is now stale or whose cross-references would break.
 
 The user should NEVER have to ask "did you update CHANGELOG.md?" If they ask, you already failed.
 
@@ -28,7 +28,7 @@ Documentation normally lives in:
 
 - root docs: `README.md`, `AGENTS.md`, `replit.md`
 - agent/contributor rules: `.agents/rules/*.md`
-- developer docs: `docs/**/*.md`
+- developer docs: `docs/**/*.md`, grouped by category under `docs/`
 - project-local skills: `.agents/skills/**/SKILL.md` when the task explicitly mentions skills
 
 Do not edit `config.env` while doing documentation maintenance unless the user explicitly asks.
@@ -64,7 +64,7 @@ Recent project additions to keep accurate when editing docs:
 - Batch query helpers in `tcbot/database/users_cache.py` (`get_user_mention_data`, `get_mention_data_batch`, `get_first_names_batch`).
 - Partial-name search in `tcbot.modules.helper.extraction.extract_target`; resolution order is reply → args (full ID/username) → args (partial DB search) → text mention → @mention.
 - Username field on `Identity` and `member_cache` indexes on `username` and `first_name`.
-- CI/CD workflows: `.github/workflows/auto-fix.yml` (auto-PR for Ruff fixes on the fixed `auto-fix/ruff` branch), `.github/workflows/dependency-update.yml` (weekly auto-PR like dependabot), `.github/workflows/run-bot.yml` (self-chaining 24/7 runner with webhook-first transport), `.github/workflows/codeql.yml` (security scanning). All workflows are documented in [`docs/workflows-guide.md`](../../../docs/workflows-guide.md).
+- CI/CD workflows: `.github/workflows/auto-fix.yml` (auto-PR for Ruff fixes on the fixed `auto-fix/ruff` branch), `.github/workflows/dependency-update.yml` (weekly auto-PR like dependabot), `.github/workflows/run-bot.yml` (self-chaining 24/7 runner with webhook-first transport), `.github/workflows/codeql.yml` (security scanning). All workflows are documented in [`docs/operations/ci-cd.md`](../../../docs/operations/ci-cd.md).
 
 Core commands:
 
@@ -95,7 +95,7 @@ For docs-only changes, runtime validation is usually not required unless documen
 
 ## Detailed Guides
 
-When updating `docs/*-detailed.md`, include:
+When updating a detailed feature guide under `docs/features/`, include:
 
 - purpose and ownership,
 - commands/callbacks involved,

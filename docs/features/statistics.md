@@ -1,8 +1,11 @@
-# Stats Detailed Documentation
+# Statistics
 
 This document describes the unified federation statistics command implemented by `tcbot/modules/stats.py` and `tcbot/modules/helper/workflows/stats_flow.py`.
 
-For module structure, see [`modules/modules.md`](modules/modules.md). For shared helpers and decorators, see [`helper/helper.md`](helper/helper.md). For database access patterns, see [`databases/databases.md`](databases/databases.md). For check command which often complements stats, see [`check-detailed.md`](check-detailed.md).
+For module structure, see [`../architecture/modules.md`](../architecture/modules.md).
+For shared helpers and decorators, see [`../architecture/helpers.md`](../architecture/helpers.md).
+For database access patterns, see [`../architecture/database.md`](../architecture/database.md).
+For the check command, see [`moderation/check.md`](moderation/check.md).
 
 ```mermaid
 flowchart TD
@@ -14,12 +17,15 @@ flowchart TD
     Buttons --> Bans[Active bans<br/>batch query]
     Bans --> SearchPanel[Search panel]
     Staff & Users & Chats & Bans --> Detail[Detail callback]
-    Detail --> Profile[/check user profile/]
+    Detail --> Profile[Check/profile button]
 ```
 
 ## Purpose
 
-`/tcstats` is the federation's read-only situational awareness console. A single inline keyboard fans out into four drill-down panes (Staff Roster, Users, Connected Chats, User Bans) plus a search panel for active bans. Every pane returns to the same overview through a `« Back` button.
+`/tcstats` is the federation's read-only overview. A single inline keyboard
+opens four drill-down panes (Staff Roster, Users, Connected Chats, User Bans)
+plus a search panel for active bans. Every pane returns to the same overview
+through a `« Back` button.
 
 Aliases:
 
@@ -30,7 +36,7 @@ Aliases:
 
 | Command | Aliases | Who can use | Where |
 |---|---|---|---|
-| `/tcstats` | `/tcs` | Anyone | Bot PM, exec group, or any connected group |
+| `/tcstats` | `/tcs` | Anyone | Bot PM, exec group, or supported federation group context |
 
 ## Top-level overview
 
@@ -53,7 +59,9 @@ Inline keyboard:
 [ Connected Chats ] [ User Bans ]
 ```
 
-Every counter and the Founder mention are fetched in a single `asyncio.gather` so the card renders in one round-trip.
+Independent counters and the Founder mention are fetched concurrently with
+`asyncio.gather`; the Telegram response still depends on database and network
+latency.
 
 ## Drill-downs
 
@@ -93,10 +101,11 @@ Last name: <last_name or ->
 First seen: <utc>
 Last seen: <utc>
 
-Use /check <id> for the full profile.
+Use the Check/profile button for the full profile.
 ```
 
-The detail view links into `/check` so staff can transition from "who is this user" to "what is their federation history" in one tap.
+The detail view links to the Check/profile view, equivalent to `/check <id>`,
+so a user can move from identity details to federation history.
 
 ### Connected Chats (`stats_chats:<page>` and `stats_chat_item:<page>:<idx>`)
 
@@ -171,7 +180,10 @@ The previous `stats_chats_flow.py` has been removed; its responsibilities live e
 
 ## Async behaviour
 
-Every list view that needs more than one read parallelises with `asyncio.gather`. Per-item lookups (admin names, banned-user names) are pre-resolved in a single gather before the formatting loop runs, so the final string-building stays synchronous. The search input handler runs the search and the user's message-delete in parallel so the bot edits the existing card without any visible delay.
+Every list view that needs more than one independent read uses
+`asyncio.gather`. Per-item lookups are resolved before the formatting loop, so
+string construction remains synchronous. The search input handler also runs
+the search and message deletion concurrently.
 
 ## Edge cases
 

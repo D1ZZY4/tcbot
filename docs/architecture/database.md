@@ -2,7 +2,9 @@
 
 The database layer lives in `tcbot/database/` and is the only place that should perform MongoDB reads and writes. Command modules and workflows should call helper functions instead of calling `mongos.col()` directly.
 
-For modules that consume these database helpers, see [`../modules/modules.md`](../modules/modules.md). For shared helpers, see [`../helper/helper.md`](../helper/helper.md). For conversation flows, see [`../workflows/workflows.md`](../workflows/workflows.md).
+For modules that consume these database helpers, see [`modules.md`](modules.md).
+For shared helpers, see [`helpers.md`](helpers.md). For conversation flows, see
+[`workflows.md`](workflows.md).
 
 ```mermaid
 flowchart TD
@@ -49,7 +51,7 @@ flowchart TD
 | `queues_db.py` | `promotion_requests` | Queued Admin promotion requests and resolution status. |
 | `cache.py` | in-process + Redis | `TTLCache[T]` (L1 in-process) and `TwoLevelCache[T]` (L1 in-process + L2 Redis). Four public singletons: `effective_role_cache`, `connected_cache`, `active_groups_cache`, `owner_id_cache`. Key methods: `get`/`put`/`invalidate` (sync, L1 plus FIFO Redis mutation queue shared by each Redis prefix), `get_or_fetch` (async, L1 -> L2 -> DB, primary hot-path), `clear` (sync, L1 only; does **not** touch Redis), `clear_all` (async, L1 + Redis SCAN+UNLINK; use when the invalidation key is unknown). Redis keys use the `v2` namespace and tagged JSON values restore `datetime` and `ObjectId` types on cache hits. |
 | `redis_client.py` | Redis (optional) | Async Redis client singleton via `redis.asyncio.ConnectionPool`. `connect(url)` creates the pool and runs `PING`. `client()` returns the active client or `None` when Redis is not configured. `hiredis` C extension required. |
-| `scheduler.py` | MongoDB (APScheduler) | APScheduler 4.x `AsyncScheduler` backed by `MongoDBDataStore` and `CBORSerializer`. Persistent scheduled jobs (unban, warn expiry) survive bot restarts. Member-cache cleanup is handled by a MongoDB TTL index, not a scheduler job. Background asyncio task owns the cancel scope. `start()` reports readiness only after recurring schedules are registered and background execution starts; initialization failures propagate instead of leaving a dead scheduler. `is_ready()` returns `True` when that startup sequence has completed. |
+| `scheduler.py` | MongoDB (APScheduler) | APScheduler 4.x `AsyncScheduler` backed by `MongoDBDataStore` and `CBORSerializer`. The scheduler supports persistent one-off unban jobs and the optional recurring warn-expiry job; the current ban command does not create timed-ban schedules. Member-cache cleanup is handled by a MongoDB TTL index, not a scheduler job. Background asyncio task owns the cancel scope. `start()` reports readiness only after recurring schedules are registered and background execution starts; initialization failures propagate instead of leaving a dead scheduler. `is_ready()` returns `True` when that startup sequence has completed. |
 | `documents.py` | type-only | `TypedDict` document shapes and `Literal` aliases. |
 | `types.py` | type-only | `NewType` primitives such as `UserId`, `GroupId`, `ChatId`, and `BanId`. |
 | `groups_db.py` | `federated_groups`, `pending_joins` | Connected group state, pending connection requests, group cache invalidation. |
@@ -72,9 +74,13 @@ For group title lookups across multiple chat IDs, use `groups_db.get_group_title
 | `upsert_user(user_id, username, first_name, last_name)` | All fields | Unconditional DB write (used on first-seen and forced refresh) |
 | `upsert_user_if_changed(user_id, username, first_name, last_name)` | All fields | Change-detection write: checks L1 mention cache; skips MongoDB write when `(first_name, username)` matches cached data. Returns `True` when a write occurred. Use this on every hot-path update (e.g. per-message member cache harvesting). |
 
-**Performance tip:** Use batch functions whenever you need data for more than one user in a list view or fan-out result. Calling single-user functions inside a loop is an N+1 anti-pattern. Both batch functions rely on the `(user_id, first_name, username)` covered-query index in `member_cache`. For partial-name target resolution, always use `search_by_name` instead of `all_users` to avoid a full collection transfer.
+**Performance tip:** Use batch functions whenever you need data for more than one user in a list view or fan-out result. Calling single-user functions inside a loop is an N+1 anti-pattern. Both batch functions use the `(user_id, first_name, username)` index in `member_cache`. For partial-name target resolution, use `search_by_name` instead of `all_users` to avoid transferring the full collection.
 
-**Hot-path harvest pattern:** On every observed Telegram update, call `upsert_user_if_changed` (not `upsert_user`). When the user's identity has not changed since the last observation the function returns in sub-microsecond time without any I/O. A MongoDB write only occurs when `first_name` or `username` has changed. Fire the call as a background `asyncio.Task` so the handler chain is never blocked by the DB write; keep a strong reference to the task in a module-level `set` with a `discard` done-callback to satisfy RUF006.
+**Hot-path harvest pattern:** On every observed Telegram update, call
+`upsert_user_if_changed` (not `upsert_user`). When the cached identity has not
+changed, the helper skips the MongoDB write. The update handlers schedule this
+harvest in the background so the main handler is not held up by an unnecessary
+write.
 
 ## Startup indexes
 
@@ -158,7 +164,11 @@ Warnings are stored per user and chat:
 
 - `warns` stores each warning event.
 - `warn_counts` stores a counter document for fast limit checks with `unique (user_id, chat_id)` index.
-- `warning_flow.WARN_LIMIT` is currently `3`. A second threshold `FED_WARN_LIMIT` (env var `FED_WARN_LIMIT`, default 0 = disabled) triggers auto-ban when a user's total warns across all groups reaches or exceeds the configured value. See `docs/warnings-detailed.md`.
+- `warning_flow.WARN_LIMIT` is currently `3`. A second threshold
+  `FED_WARN_LIMIT` (env var `FED_WARN_LIMIT`, default 0 = disabled) triggers
+  auto-ban when a user's total warns across all groups reaches or exceeds the
+  configured value. See
+  [`../features/moderation/warnings.md`](../features/moderation/warnings.md).
 
 Key helper functions:
 
@@ -197,9 +207,18 @@ Mutes use an append-only audit trail (`mutes`) plus a live-state store (`active_
 
 ### Cache types
 
-`TTLCache[T]`: pure in-process TTL cache. All operations are synchronous and sub-microsecond (no I/O). Suitable for caches that do not need Redis distribution.
+`TTLCache[T]`: pure in-process TTL cache. Operations are synchronous and do
+not perform network I/O. Suitable for caches that do not need Redis
+distribution.
 
-`TwoLevelCache[T]`: wraps `TTLCache[T]` and adds an optional Redis L2 layer. When Redis is available, `get_or_fetch` checks L1, then L2 (single Redis GET), then calls the DB fetch coroutine and populates both layers. `put` and `invalidate` operate on L1 synchronously and enqueue FIFO Redis writes/deletes shared by cache objects using the same prefix. `clear_all` enqueues a prefix-wide `SCAN` and `UNLINK` after earlier mutations. Redis keys use the `v2` namespace, and tagged JSON restores `datetime` and `ObjectId` values while untagged legacy JSON remains readable. When Redis is not configured, the cache degrades transparently to pure in-process behaviour.
+`TwoLevelCache[T]`: wraps `TTLCache[T]` and adds an optional Redis L2 layer.
+When Redis is available, `get_or_fetch` checks L1, then L2, then calls the DB
+fetch coroutine and populates both layers. `put` and `invalidate` operate on
+L1 synchronously and enqueue FIFO Redis writes/deletes shared by cache objects
+using the same prefix. `clear_all` enqueues a prefix-wide `SCAN` and `UNLINK`
+after earlier mutations. Redis keys use the `v2` namespace, and tagged JSON
+restores `datetime` and `ObjectId` values while untagged legacy JSON remains
+readable. When Redis is not configured, the cache uses in-process behavior.
 
 `CACHE_MISS` sentinel: compare with `is CACHE_MISS` to detect a miss. Distinct from `None` because `None` is a valid cached value (for example, a user with no role).
 

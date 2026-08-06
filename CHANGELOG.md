@@ -1,8 +1,8 @@
 # Changelog
 
-For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
+For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
-## [Unreleased] - 2026-08-05 (audit continuation)
+## [Unreleased] - 2026-08-06 (audit continuation)
 
 ### Fixed
 
@@ -18,6 +18,8 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 ### Documentation
 
 - Synchronized runtime, Replit, setup, agent-rule, workflow, and database documentation with webhook-first transport, optional generated webhook secrets, active skills, and the Redis cache contract. Added focused runtime verification coverage.
+
+- Reorganized `docs/` into professional public categories: `getting-started`, `architecture`, `features`, `operations`, and `reference`. Removed the agent-specific commit guide and the empty contribution category, renamed ambiguous documents, removed the former flat and duplicated directory structure, updated active cross-references, and made `docs/README.md` the category-based documentation index. Corrected setup, backup, health, workflow, feature, and performance guidance to match the current implementation.
 
 ## [Unreleased] - 2026-07-11 (session 194+, cont. 2)
 
@@ -3114,10 +3116,10 @@ Extracted all static user-facing reply strings from `tcbot/modules/helper/workfl
 
 ### Changed - Skills Content Audit
 - **`.agents/skills/mongodb-query-optimizer/SKILL.md`**: Updated the "current critical indexes" list to match the actual indexes in `tcbot/database/mongos.py::ensure_indexes()`. Added missing indexes that previously could lead an agent to recommend duplicates: `bans` (`is_active + timestamp desc + ban_id desc`, `banned_user_id + timestamp desc`), `tc_roles` (`role` for staff roster lookups), `pending_joins` (unique `chat_id`), `member_cache` (`username`, `first_name` for smart-mention/batch-query helpers), `warns` (`user_id + timestamp desc` for cross-chat history), `kicks` (`user_id + timestamp desc`), `mutes` (`user_id + timestamp desc`).
-- **`.agents/skills/docs-maintainer/SKILL.md`**: "Project Facts To Keep Current" now lists the recent additions agents must keep accurate when editing docs: smart mention system with `mention(user_id, name, username=None)`, batch query helpers (`get_user_mention_data`, `get_mention_data_batch`, `get_first_names_batch`), partial-name search in `extract_target` and the new resolution order, `username` field on `Identity` and `member_cache` indexes, and the four CI/CD workflows (`auto-fix.yml`, `dependency-update.yml`, `performance.yml`, enhanced `verification.yml`) with a pointer to [`docs/workflows-guide.md`](docs/workflows-guide.md). Test inventory line updated to "125 tests across 14 files".
+- **`.agents/skills/docs-maintainer/SKILL.md`**: "Project Facts To Keep Current" now lists the recent additions agents must keep accurate when editing docs: smart mention system with `mention(user_id, name, username=None)`, batch query helpers (`get_user_mention_data`, `get_mention_data_batch`, `get_first_names_batch`), partial-name search in `extract_target` and the new resolution order, `username` field on `Identity` and `member_cache` indexes, and the four CI/CD workflows (`auto-fix.yml`, `dependency-update.yml`, `performance.yml`, enhanced `verification.yml`) with a pointer to [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md). Test inventory line updated to "125 tests across 14 files".
 - **Legacy Telegram handler skill documentation**: Handler skeleton now uses the new `mention(user.id, user.first_name, user.username)` signature so generated handlers include the username for global cross-group mentions.
 - **General-purpose agent skill documentation**: "Prefer a more specific local skill" list now includes documentation, runtime, and feature-review skills so the fallback skill always points to the better-scoped option.
-- **`.agents/skills/feature-reviewer/SKILL.md`**: Review checklist now requires reviewers to flag missing `CHANGELOG.md` entries and adds a "CI/CD and Workflows" section so workflow YAML changes are checked against [`docs/workflows-guide.md`](docs/workflows-guide.md), the auto-fix PR-only policy, and the Telegram notification fallback.
+- **`.agents/skills/feature-reviewer/SKILL.md`**: Review checklist now requires reviewers to flag missing `CHANGELOG.md` entries and adds a "CI/CD and Workflows" section so workflow YAML changes are checked against [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md), the auto-fix PR-only policy, and the Telegram notification fallback.
 - **All skills**: Updated `Last updated` / `Last refreshed` to 2026-05-29 to reflect the audit.
 
 ### Added - Mermaid Diagrams

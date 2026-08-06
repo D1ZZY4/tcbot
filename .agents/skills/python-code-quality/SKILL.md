@@ -7,7 +7,7 @@ Last updated: 2026-05-29
 
 # Python Code Quality for TCBot
 
-Before invoking this skill, confirm the read/update rules in [`.agents/rules/RULES.md`](../../rules/RULES.md#mandatory-read-before-work-and-update-after-work). After any code change, update [`CHANGELOG.md`](../../../CHANGELOG.md) and the matching `docs/*.md` in the same turn.
+Before invoking this skill, confirm the read/update rules in [`.agents/rules/RULES.md`](../../rules/RULES.md#mandatory-read-before-work-and-update-after-work). After any code change, update [`CHANGELOG.md`](../../../CHANGELOG.md) and the matching document under `docs/` in the same turn.
 
 Use this skill when improving or validating Python code quality in the TCF Bot repository. The project uses Python 3.12, `uv`, and Ruff. It does not currently configure a separate type checker in `pyproject.toml`, so type-quality guidance should focus on clear annotations, Ruff-compatible style, and practical review rather than inventing a type-check command.
 

@@ -1,4 +1,4 @@
-# TCF Bot: Backup and Restore Runbook
+# Backup and Restore Runbook
 
 Federation bans, staff roles, and connected groups are irreplaceable operational
 data. Loss of any of these collections requires manual reconstruction from
@@ -9,26 +9,25 @@ recover that data.
 
 | Collection | Contents | Loss impact |
 |---|---|---|
-| `tc_bans` | All active and historical federation bans | Critical: bans cannot be reconstructed from Telegram |
+| `bans` | All active and historical federation bans | Critical: bans cannot be reconstructed from Telegram |
 | `tc_owners` / `tc_admins` / `tc_roles` | Staff role assignments | Critical: roles must be re-granted manually |
-| `tc_groups` | Connected group registry | High: reconnecting requires each group admin to re-run `/tcconnect` |
-| `warn_counts` / `tc_warns` | Warning records | Medium: warn history lost; users get a clean slate |
-| `apscheduler_jobs` | Persistent scheduled jobs (e.g. timed unbans) | Medium: jobs must be re-created manually on restore |
+| `federated_groups` | Connected group registry | High: reconnecting requires each group admin to re-run `/tcconnect` |
+| `warns` / `warn_counts` | Warning records and counters | Medium: warn history lost; users get a clean slate |
+| `apscheduler_jobs` | Persistent scheduler data | Medium: scheduler state may need verification after restore |
 
 ---
 
-## MongoDB Atlas (recommended)
+## MongoDB Atlas or another managed provider
 
-Atlas Continuous Backup or Shared/Dedicated Snapshot Backup is the easiest
-and most reliable option.
+Atlas backup products or scheduled `mongodump` archives can protect the
+database. The exact backup features, retention, and eligible cluster tiers
+depend on the Atlas plan currently in use.
 
 ### Enable backup
 
 1. In the Atlas console, open your cluster → **Backup**.
-2. Enable **Continuous Cloud Backup** (M10+) or **On-Demand Snapshots** (any
-   tier).
-3. Set retention: at minimum **7 days** for continuous backup, **3 snapshots**
-   for on-demand.
+2. Enable the backup option available for the cluster and plan.
+3. Choose retention that matches the recovery requirements of your deployment.
 4. Verify that backup is **Active** in the cluster overview.
 
 ### Point-in-time restore
@@ -41,16 +40,19 @@ and most reliable option.
 4. Monitor progress in the **Restore Jobs** tab.
 5. After restore, verify counts:
    ```
-   db.tc_bans.countDocuments()
-   db.tc_groups.countDocuments()
+    db.bans.countDocuments()
+    db.federated_groups.countDocuments()
    db.tc_roles.countDocuments()
+    db.warns.countDocuments()
+    db.warn_counts.countDocuments()
    ```
 
 ---
 
-## Self-hosted or Atlas free tier: `mongodump` cron
+## Scheduled `mongodump` archives
 
-For deployments without Atlas paid backup, schedule a nightly `mongodump`.
+For deployments without a suitable managed backup, schedule a nightly
+`mongodump` or use the backup tooling provided by your MongoDB host.
 
 ### Prerequisites
 
@@ -119,16 +121,19 @@ rclone copy "${DEST}.tar.gz" remote:tcbot-backups/
 ## Restore from `mongodump` archive
 
 ```bash
-# 1. Extract the archive
-tar -xzf /opt/tcbot/backups/20260101T020000.tar.gz -C /tmp/
+# 1. Extract the archive into a temporary directory
+DB_NAME="${DB_NAME:-tcbot}"
+RESTORE_DIR="$(mktemp -d)"
+trap 'rm -rf "${RESTORE_DIR}"' EXIT
+tar -xzf /opt/tcbot/backups/20260101T020000.tar.gz -C "${RESTORE_DIR}"
 
 # 2. Restore (additive; does not drop existing data)
 mongorestore --uri="${MONGODB_URI}" --db="${DB_NAME}" \
-  /tmp/20260101T020000/${DB_NAME}/
+  "${RESTORE_DIR}/20260101T020000/${DB_NAME}/"
 
 # 3. To replace existing data entirely, add --drop
 mongorestore --uri="${MONGODB_URI}" --db="${DB_NAME}" --drop \
-  /tmp/20260101T020000/${DB_NAME}/
+  "${RESTORE_DIR}/20260101T020000/${DB_NAME}/"
 ```
 
 ---
@@ -142,34 +147,30 @@ uv run python -m tcbot &
 curl http://localhost:${PORT:-5000}/health
 ```
 
-Expected response shape (HTTP 200):
+Expected response shape (HTTP 200 when all core subsystems are ready):
 ```json
 {
+  "status": "ok",
   "mongodb": "ok",
   "redis": "ok",
   "scheduler": "ok",
-  "status": "ok",
-  "ts": "2026-01-01T02:00:00.000000"
+  "circuit_telegram": "closed",
+  "circuit_mongodb": "closed",
+  "ts": "2026-01-01T02:00:00+00:00"
 }
 ```
 
-If `scheduler` is `degraded`, APScheduler's `apscheduler_jobs` collection may
-be partially restored. Re-create any time-critical jobs (e.g. timed unbans) via
-the bot commands that originally created them.
+`redis` is `"disabled"` when `REDIS_URL` is not configured. A degraded response
+uses HTTP `503`; inspect the individual fields before deciding whether a
+restore or a restart is required. The current ban command does not create
+timed-ban schedules, so do not assume that every restore contains unban jobs.
 
 ---
 
-## Scheduler CVE note
+## Scheduler dependency note
 
-APScheduler 4.0.0a6 (CVE-2026-31072, CVSS 9.8) deserializes job payloads from
-MongoDB. A tampered `apscheduler_jobs` document could trigger arbitrary code
-execution on the bot host. Access controls that reduce backup-restore risk also
-reduce CVE reachability:
-
-- Restrict `MONGODB_URI` to a dedicated database user with
-  **read/write on `tcbot` only** (no `admin` or `local` access).
-- Enable MongoDB Atlas IP Access List or network peering.
-- Rotate `MONGODB_URI` immediately if a breach is suspected.
-
-The accepted-risk rationale is recorded in the scheduler documentation and
-the current changelog entry.
+The project pins APScheduler to `4.0.0a6` because the scheduler integration is
+version-sensitive. Before changing that pin, review the APScheduler release
+notes and security advisories, test scheduler startup and restore behavior, and
+verify the MongoDB data-store compatibility. Protect the MongoDB account and
+backup archives with least-privilege access and network restrictions.

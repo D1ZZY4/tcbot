@@ -1,8 +1,11 @@
-# Warnings Detailed Documentation
+# Warnings
 
 This document describes the current warning behavior implemented by `tcbot/modules/warnings.py`, `tcbot/modules/helper/workflows/warning_flow.py`, `tcbot/modules/helper/workflows/reason_flow.py`, and `tcbot/database/warns_db.py`.
 
-For ban flow triggered by warning limit, see [`banning-detailed.md`](banning-detailed.md). For check command showing warning history, see [`check-detailed.md`](check-detailed.md). For shared helpers, see [`helper/helper.md`](helper/helper.md). For database layer, see [`databases/databases.md`](databases/databases.md).
+For the ban flow triggered by a warning limit, see [`banning.md`](banning.md).
+For the check command showing warning history, see [`check.md`](check.md). For
+shared helpers, see [`../../architecture/helpers.md`](../../architecture/helpers.md).
+For the database layer, see [`../../architecture/database.md`](../../architecture/database.md).
 
 ```mermaid
 flowchart TD

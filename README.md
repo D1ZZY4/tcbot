@@ -49,7 +49,7 @@ Never commit real credentials. At minimum, the bot needs:
 - `MONGODB_URI`: MongoDB connection string.
 - `OWNER_ID`: Telegram user ID for the initial federation founder.
 
-See [Configuration](#configuration) below and `config.env.example` for the complete list. For detailed setup instructions, see [`docs/setup.md`](docs/setup.md). For Replit-specific setup, see [`replit.md`](replit.md).
+See [Configuration](#configuration) below and `config.env.example` for the complete list. For detailed setup instructions, see [`docs/getting-started/setup.md`](docs/getting-started/setup.md). For Replit-specific setup, see [`replit.md`](replit.md).
 
 ### 3. Run the bot
 
@@ -65,7 +65,7 @@ docker-compose up --build
 
 The compose setup starts the bot and a local `mongo:7` service. The bot reads `config.env` and waits for MongoDB to pass its health check.
 
-See [`docs/setup.md`](docs/setup.md) for detailed Docker setup instructions.
+See [`docs/getting-started/setup.md`](docs/getting-started/setup.md) for detailed Docker setup instructions.
 
 ## Replit / Hosted Deployment
 
@@ -85,7 +85,7 @@ See [`replit.md`](replit.md) for Replit-specific setup notes and deployment chec
 
 Configuration is loaded from environment variables in `tcbot/__init__.py`. For local development, `python-dotenv` reads `config.env` if it exists. Startup fails fast when required runtime values such as `BOT_TOKEN`, `MONGODB_URI`, or `OWNER_ID` are missing.
 
-For detailed environment variable formats and validation, see [`docs/setup.md`](docs/setup.md). For Replit-specific deployment, see [`replit.md`](replit.md).
+For detailed environment variable formats and validation, see [`docs/getting-started/setup.md`](docs/getting-started/setup.md). For Replit-specific deployment, see [`replit.md`](replit.md).
 
 | Variable | Required | Description |
 |---|---:|---|
@@ -142,7 +142,7 @@ Key runtime pieces:
 - `tcbot/utils/dispatch.py` provides bounded concurrent fan-out for multi-group Telegram API calls.
 - `tcbot/utils/error_reporter.py` receives handler, asyncio, and logging errors for reporting to the configured error destination.
 
-For detailed architecture, see [`docs/mapping.md`](docs/mapping.md). For module breakdown, see [`docs/modules/modules.md`](docs/modules/modules.md). For database details, see [`docs/databases/databases.md`](docs/databases/databases.md).
+For detailed architecture, see [`docs/architecture/repository-map.md`](docs/architecture/repository-map.md). For module breakdown, see [`docs/architecture/modules.md`](docs/architecture/modules.md). For database details, see [`docs/architecture/database.md`](docs/architecture/database.md).
 
 ## Repository Layout
 
@@ -154,8 +154,8 @@ For detailed architecture, see [`docs/mapping.md`](docs/mapping.md). For module 
 │   │   └── helper/           Formatters, decorators, keyboards, workflows
 │   │       └── workflows/    Conversation flows (`*_flow.py`)
 │   └── utils/                Logging, prefixes, dispatch, datetime helpers
-├── docs/                     Developer subsystem documentation
-├── .agents/                   Detailed agent and contributor rules
+├── docs/                     Developer documentation grouped by category
+├── .agents/                   Optional repository maintenance guidance
 ├── config.env.example        Environment template
 ├── docker-compose.yml        Bot + MongoDB local compose setup
 ├── pyproject.toml            Project metadata, dependencies, Ruff
@@ -177,13 +177,14 @@ Ruff targets Python 3.12 and line length 88. GitHub Actions install dependencies
 
 The project uses **5 automated GitHub Actions workflows** for continuous integration, code quality, and maintenance:
 
-### Lint (CI Gate)
+### Lint
 **File:** `.github/workflows/lint.yml`
 
-Blocking CI check that must pass before any PR can be merged:
+CI check that reports whether the following validations pass:
 - Runs on push to `main`, `feat/**`, `fix/**` branches and on all PRs to `main`
 - Runs `ruff format --check .` (format check), `ruff check .` (lint), and `python -c "import tcbot"` (import check)
-- **Fails the PR** if any step has an error; auto-fix handles actual fixes
+- The workflow run fails if any step has an error. Branch protection can use
+  this result as a merge requirement.
 
 ### Auto-Fix Code Quality
 **File:** `.github/workflows/auto-fix.yml`
@@ -191,9 +192,10 @@ Blocking CI check that must pass before any PR can be merged:
 Automatically fixes code style and linting issues with Ruff:
 - Runs on push to `main`, `feat/**`, `fix/**` branches
 - Runs on pull requests and weekly (Monday 04:00 UTC)
-- **Creates PR with fixes** for review before merge
-- **Never commits directly to main** - always requires review
-- Zero manual intervention for code style
+- **Creates or updates an auto-fix PR** for review when fixes are found outside
+  a pull-request run
+- Does not commit fixes directly to `main`
+- Reduces manual work for code style
 
 ### Dependency Updates (Like Dependabot)
 **File:** `.github/workflows/dependency-update.yml`
@@ -201,16 +203,19 @@ Automatically fixes code style and linting issues with Ruff:
 Weekly automated dependency updates:
 - Runs every Monday 04:00 UTC
 - Executes `uv lock --upgrade` to update all dependencies
-- **Auto-creates PR** with the updated lockfile
-- **Telegram notifications** with results
-- Zero manual work for routine updates
+- **Creates a PR** with the updated lockfile
+- Sends **Telegram status notifications** when configured
+- Reduces manual work for routine updates
 
 ### Other Workflows
 - **CodeQL** (`.github/workflows/codeql.yml`) - Security analysis
-- **Run Bot** (`.github/workflows/run-bot.yml`) - Self-chaining 24/7 runner. Each run stays active for a ~5 hour window (GitHub caps a job at 6h), then dispatches its successor ~10 minutes before the window ends (retried up to 3 times) for continuous coverage. A `concurrency` group keeps a single instance active, and an every-15-minute cron acts as a resurrection fallback.
+- **Run Bot** (`.github/workflows/run-bot.yml`) - Long-running runner. Each
+  run stays active for a ~5 hour window (GitHub caps a job at 6h), attempts to
+  dispatch its successor ~10 minutes before the window ends, and has an
+  every-15-minute cron fallback. A concurrency group prevents overlapping runs.
 
 ### Full Documentation
-For detailed workflow descriptions, trigger conditions, notification format examples, troubleshooting, and best practices, see [`docs/workflows-guide.md`](docs/workflows-guide.md). For changelog of all CI/CD additions, see [`CHANGELOG.md`](CHANGELOG.md).
+For detailed workflow descriptions, trigger conditions, notification format examples, troubleshooting, and best practices, see [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md). For changelog of all CI/CD additions, see [`CHANGELOG.md`](CHANGELOG.md).
 
 ### Required Secrets
 Configure in GitHub repository settings → Secrets:
@@ -225,14 +230,14 @@ Configure in GitHub repository settings → Secrets:
 - For project guide and contributor rules, see [`AGENTS.md`](AGENTS.md).
 - For Replit deployment notes, see [`replit.md`](replit.md).
 - For developer documentation overview and detailed guide index, see [`docs/README.md`](docs/README.md).
-- For local, Docker, and hosted setup workflow, see [`docs/setup.md`](docs/setup.md).
-- For module boundaries and command ownership, see [`docs/modules/modules.md`](docs/modules/modules.md).
-- For database layer notes and indexes, see [`docs/databases/databases.md`](docs/databases/databases.md).
-- For shared helper documentation, see [`docs/helper/helper.md`](docs/helper/helper.md).
-- For utility module notes, see [`docs/utils/utils.md`](docs/utils/utils.md).
-- For user-facing flow overview, see [`docs/workflows.md`](docs/workflows.md). For conversation internals, see [`docs/workflows/workflows.md`](docs/workflows/workflows.md).
-- For appeals flow, see [`docs/appeal-detailed.md`](docs/appeal-detailed.md). For banning flow, see [`docs/banning-detailed.md`](docs/banning-detailed.md). For roles, see [`docs/role-detailed.md`](docs/role-detailed.md). For warnings, see [`docs/warnings-detailed.md`](docs/warnings-detailed.md).
-- For detailed engineering rules, see [`.agents/rules/RULES.md`](.agents/rules/RULES.md), [`.agents/rules/RUFF.md`](.agents/rules/RUFF.md), [`.agents/rules/STYLE-CODE.md`](.agents/rules/STYLE-CODE.md), and [`.agents/rules/STYLE-COMMENTS.md`](.agents/rules/STYLE-COMMENTS.md).
+- For local, Docker, and hosted setup workflow, see [`docs/getting-started/setup.md`](docs/getting-started/setup.md).
+- For module boundaries and command ownership, see [`docs/architecture/modules.md`](docs/architecture/modules.md).
+- For database layer notes and indexes, see [`docs/architecture/database.md`](docs/architecture/database.md).
+- For shared helper documentation, see [`docs/architecture/helpers.md`](docs/architecture/helpers.md).
+- For utility module notes, see [`docs/architecture/utilities.md`](docs/architecture/utilities.md).
+- For user-facing flow overview, see [`docs/features/workflow-overview.md`](docs/features/workflow-overview.md). For conversation internals, see [`docs/architecture/workflows.md`](docs/architecture/workflows.md).
+- For appeals flow, see [`docs/features/appeals.md`](docs/features/appeals.md). For banning flow, see [`docs/features/moderation/banning.md`](docs/features/moderation/banning.md). For roles, see [`docs/features/roles/roles.md`](docs/features/roles/roles.md). For warnings, see [`docs/features/moderation/warnings.md`](docs/features/moderation/warnings.md).
+- For detailed engineering rules used by repository maintainers, see [`.agents/rules/RULES.md`](.agents/rules/RULES.md), [`.agents/rules/RUFF.md`](.agents/rules/RUFF.md), [`.agents/rules/STYLE-CODE.md`](.agents/rules/STYLE-CODE.md), and [`.agents/rules/STYLE-COMMENTS.md`](.agents/rules/STYLE-COMMENTS.md).
 
 ## Current Status
 

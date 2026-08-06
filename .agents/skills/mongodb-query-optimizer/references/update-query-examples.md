@@ -1,6 +1,6 @@
 # Update Query Examples
 
-For the parent skill instructions, see [`../SKILL.md`](../SKILL.md). For project database layer, see [`../../../../docs/databases/databases.md`](../../../../docs/databases/databases.md).
+For the parent skill instructions, see [`../SKILL.md`](../SKILL.md). For the project database layer, see [`../../../../docs/architecture/database.md`](../../../../docs/architecture/database.md).
 
 ## replaceOne vs. updateOne with $replaceWith
 

@@ -1,39 +1,62 @@
 # TCF Bot Documentation
 
-This directory documents the internal architecture and developer workflows for TCF Bot, a Python Telegram bot for Transsion Core Federation community moderation.
+This directory contains the maintained documentation for TCF Bot, a Python
+Telegram bot for Transsion Core Federation community moderation. It is written
+for people who run, use, maintain, or contribute to the project.
 
-For user-facing setup, see [`../README.md`](../README.md). For contributor rules and style, see [`../AGENTS.md`](../AGENTS.md). For Replit deployment, see [`../replit.md`](../replit.md). For CI/CD automation details, see [workflows-guide.md](workflows-guide.md).
+Use this page as the documentation index. Documents are grouped by purpose so
+setup instructions, architecture notes, feature behavior, operations, and
+stable reference material remain easy to find.
 
-## Quick navigation
+For the project overview, see [`../README.md`](../README.md). For Replit
+deployment, see [`../replit.md`](../replit.md).
 
-| Document | Purpose |
-|---|---|
-| [Setup](setup.md) | Local, Docker, and hosted setup; environment variable formats; validation commands. |
-| [Project mapping](mapping.md) | Repository map, package ownership, startup flow, and cross-package boundaries. |
-| [Modules](modules/modules.md) | Command modules, dynamic module discovery, handler registration, and command ownership. |
-| [Workflows overview](workflows.md) | High-level user and moderation flows. |
-| [Workflow internals](workflows/workflows.md) | `ConversationHandler` factories, state constants, callback patterns, and flow-specific behavior. |
-| [Database layer](databases/databases.md) | MongoDB collections, helper modules, indexes, document shapes, and cache rules. |
-| [Helper utilities](helper/helper.md) | Shared formatting, decorators, target extraction, keyboards, role guards, and log-message builders. |
-| [Runtime utils](utils/utils.md) | Circuit breaker, dispatch, prefixes, logging, error reporting, and datetime utilities. |
-| [Button styles](button-styles.md) | Inline keyboard layout and callback-data naming conventions. |
-| [Git commit style](git-commit.md) | Commit message conventions for this repository. |
-| [Performance notes](performance.md) | Batch query patterns, optimization rules, and benchmarking. |
-| [GitHub Actions workflows](workflows-guide.md) | All 5 CI/CD workflows: lint gate, auto-fix PR, dependency updates, CodeQL, and the self-chaining 24/7 bot runner. |
+## Documentation map
 
-## Detailed feature guides
+### Getting started
 
 | Document | Purpose |
 |---|---|
-| [Backup and restore](backup-restore.md) | MongoDB backup setup (Atlas or `mongodump` cron), restore procedure, post-restore health check, and CVE mitigation notes. |
-| [Appeals detailed](appeal-detailed.md) | Appeal deep links, private DM submission, review buttons, approval/rejection behavior, and edge cases. |
-| [Banning detailed](banning-detailed.md) | Federation ban flow, proof collection, ban updates, unban checks, logs, and appeal links. |
-| [Check detailed](check-detailed.md) | `/check` user-profile command, drill-down views, pagination, parallel DB reads, and edge cases. |
-| [Demote detailed](demote-detailed.md) | Manual `/tcdemote`, auto-demote on ban/kick, the `Demote` class, permission rules, and unified log format. |
-| [Promote detailed](promote-detailed.md) | `/tcpromote`, the `Promote` class, role hierarchy, direct vs request flow, callbacks, and edge cases. |
-| [Roles detailed](role-detailed.md) | Founder/Admin/Developer/Tester hierarchy, promotion/demotion behavior, and role safety rules. |
-| [Stats detailed](stats-detailed.md) | `/tcstats`, the `Stats` class, drill-downs (Staff / Users / Chats / Bans), search panel, and async design. |
-| [Warnings detailed](warnings-detailed.md) | Per-group warnings, optional proof, warn-limit auto-ban behavior, and warning storage. |
+| [Setup guide](getting-started/setup.md) | Local, Docker, and hosted setup, environment variables, and validation commands. |
+
+### Architecture
+
+| Document | Purpose |
+|---|---|
+| [Repository map](architecture/repository-map.md) | Repository structure, package ownership, startup flow, and service boundaries. |
+| [Modules](architecture/modules.md) | Command modules, dynamic discovery, handler registration, and command ownership. |
+| [Database layer](architecture/database.md) | MongoDB collections, helper modules, indexes, document shapes, and cache rules. |
+| [Helper package](architecture/helpers.md) | Formatting, decorators, target extraction, keyboards, role guards, and log builders. |
+| [Runtime utilities](architecture/utilities.md) | Circuit breaker, dispatch, prefixes, logging, error reporting, and datetime utilities. |
+| [Workflow internals](architecture/workflows.md) | Conversation factories, state constants, callback patterns, and flow internals. |
+
+### Features
+
+| Document | Purpose |
+|---|---|
+| [Workflow overview](features/workflow-overview.md) | User-visible moderation, appeal, connection, role, statistics, and maintenance flows. |
+| [Appeals](features/appeals.md) | Appeal deep links, private DM submission, review actions, and edge cases. |
+| [Statistics](features/statistics.md) | `/tcstats`, drill-down views, search, and asynchronous design. |
+| [Banning](features/moderation/banning.md) | Federation ban flow, proof collection, updates, unban checks, logs, and appeal links. |
+| [Check](features/moderation/check.md) | `/check`, profile drill-downs, pagination, parallel reads, and edge cases. |
+| [Warnings](features/moderation/warnings.md) | Per-group warnings, proof handling, automatic bans, and warning storage. |
+| [Roles](features/roles/roles.md) | Founder, Admin, Developer, and Tester hierarchy and safety rules. |
+| [Promote](features/roles/promote.md) | `/tcpromote`, direct and request-based promotion, callbacks, and edge cases. |
+| [Demote](features/roles/demote.md) | `/tcdemote`, automatic demotion, permission rules, and audit logging. |
+
+### Operations
+
+| Document | Purpose |
+|---|---|
+| [Backup and restore](operations/backup-and-restore.md) | MongoDB backup, restore, post-restore checks, and security notes. |
+| [CI/CD workflows](operations/ci-cd.md) | GitHub Actions triggers, required secrets, notifications, and troubleshooting. |
+| [Performance](operations/performance.md) | Batch query patterns, cache and concurrency guidance, and measurement practices. |
+
+### Reference
+
+| Document | Purpose |
+|---|---|
+| [Keyboard styles](reference/keyboard-styles.md) | Inline keyboard layouts and callback-data naming conventions. |
 
 ## Architecture at a glance
 
@@ -64,7 +87,8 @@ Runtime starts with `uv run python -m tcbot`. The entry point loads configuratio
 - Keep MongoDB reads and writes behind `tcbot/database/*_db.py` helpers.
 - Keep runtime utilities in `tcbot/utils/`.
 - Use HTML parse mode for bot messages and escape user-provided text through formatter helpers.
-- Do not commit real bot tokens, MongoDB URIs, private chat IDs, passwords, or API keys.
+- Keep bot tokens, MongoDB URIs, private chat IDs, passwords, and API keys out
+  of the repository.
 
 ## Development commands
 

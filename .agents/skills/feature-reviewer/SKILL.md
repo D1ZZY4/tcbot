@@ -65,7 +65,7 @@ Keep feedback practical. Prioritize actionable issues over style preferences.
 
 ### CI/CD and Workflows
 
-- Changes to `.github/workflows/*.yml` are documented in [`docs/workflows-guide.md`](../../../docs/workflows-guide.md).
+- Changes to `.github/workflows/*.yml` are documented in [`docs/operations/ci-cd.md`](../../../docs/operations/ci-cd.md).
 - Auto-fix workflow still creates a PR (does not commit directly to main) and uses the fixed `auto-fix/ruff` branch.
 - Dependency-update, performance, and verification workflows still gate on validation before opening a PR or issue.
 - Telegram notifications still use `BOT_TOKEN`/`OWNER_ID` secrets and skip cleanly when absent.

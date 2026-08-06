@@ -1,18 +1,20 @@
-# GitHub Workflows Documentation
+# CI/CD Workflows
 
 This document describes all GitHub Actions workflows configured for the TCF Bot project.
 
-For user-facing overview of CI/CD, see [`../README.md`](../README.md#cicd--automation). For contributor commit and PR guidance, see [`../AGENTS.md`](../AGENTS.md#commit-and-pull-request-guidance). For changelog of CI/CD additions, see [`../CHANGELOG.md`](../CHANGELOG.md).
+For the user-facing CI/CD overview, see [`../../README.md`](../../README.md#cicd--automation).
+For the changelog of CI/CD additions, see
+[`../../CHANGELOG.md`](../../CHANGELOG.md).
 
 ## Overview
 
 The project uses 5 automated workflows for continuous integration, code quality, and maintenance:
 
-1. **Lint** - Blocking lint, format, and import check (CI gate)
+1. **Lint** - Lint, format, and import check
 2. **Auto-Fix Code Quality** - Automatically fix linting issues
 3. **Dependency Updates** - Weekly dependency updates with auto-PR
 4. **CodeQL** - Security analysis
-5. **Run Bot** - Self-chaining 24/7 bot runner (webhook or polling depending on env vars)
+5. **Run Bot** - Long-running bot runner with handover and cron fallback
 
 ---
 
@@ -31,7 +33,9 @@ The project uses 5 automated workflows for continuous integration, code quality,
 - **Fails the PR** if any step exits with a non-zero code
 
 **Why this exists:**
-`auto-fix.yml` creates fix PRs when code needs corrections, but it does not block a PR that still has problems. `lint.yml` is the hard gate: a PR cannot be merged until formatting, linting, and import checks all pass.
+`lint.yml` provides a repeatable CI result for formatting, lint, and import
+checks. Whether it blocks merging depends on the repository's branch
+protection settings.
 
 ---
 
@@ -48,16 +52,17 @@ The project uses 5 automated workflows for continuous integration, code quality,
 **What it does:**
 - Runs `ruff format .` to auto-format code
 - Runs `ruff check --fix .` to auto-fix linting issues
-- **Auto-commits fixes** to the branch (if not a PR)
+- Creates or updates an `auto-fix/ruff` branch and pull request when fixes are
+  found outside a pull-request run
 - **Comments on PR** with fix suggestions (if PR)
 - Creates detailed summary of changes
 
 **Benefits:**
-- Zero manual intervention for code style
-- Consistent formatting across all commits
+- Reduces manual work for code style
+- Consistent formatting across reviewed changes
 - Catches common issues automatically
 
-**Example Auto-Commit:**
+**Example generated commit:**
 ```
 chore: Auto-fix code quality issues
 
@@ -85,9 +90,9 @@ Auto-applied by GitHub Actions
 - **Sends Telegram notification** with result
 
 **Benefits:**
-- Always up-to-date dependencies
-- Zero manual work for routine updates
-- Immediate notification of breaking changes
+- Regular dependency review
+- Less manual work for routine updates
+- Telegram status notifications when configured
 
 **Example PR:**
 ```
@@ -102,7 +107,7 @@ This PR updates project dependencies to their latest compatible versions.
 - python-telegram-bot: <old> → <new>
 - motor: <old> → <new>
 
-Safe to merge with new versions.
+Review the dependency changes and CI results before merging.
 ```
 
 ---
@@ -133,9 +138,9 @@ Safe to merge with new versions.
 
 **What it does:**
 - Runs the bot for a ~5 hour window per run (GitHub caps a job at 6h). When `WEBHOOK_URL` is set the bot uses webhook mode; otherwise it falls back to polling. `WEBHOOK_SECRET` is optional because the runtime generates one when absent
-- **Self-chains:** roughly 10 minutes before the window ends (`HANDOVER_LEAD=600`), it dispatches the next run so coverage is continuous. The dispatch is retried up to 3 times (10s apart) so a single transient API failure does not break the chain. This requires a repository secret `BOT_PAT` (a Personal Access Token with the `workflow` scope), because the built-in `GITHUB_TOKEN` cannot trigger workflows
-- The cron schedule (every 15 minutes) acts as a resurrection fallback that restarts the bot if the chain ever breaks or no PAT is configured. The `concurrency` group serializes runs, so only one run is active at a time; any other is queued and discarded once the active run ends
-- A `concurrency` group (`tcf-bot-runner`, `cancel-in-progress: false`) ensures only one bot instance runs at a time, with at most one queued to take over seamlessly. This avoids duplicate update processing in polling mode and keeps webhook ownership unambiguous
+- **Self-chains:** roughly 10 minutes before the window ends (`HANDOVER_LEAD=600`), it dispatches the next run. The dispatch is retried up to 3 times (10s apart). This requires a repository secret `BOT_PAT` (a Personal Access Token with the `workflow` scope), because the built-in `GITHUB_TOKEN` cannot trigger workflows
+- The cron schedule (every 15 minutes) acts as a resurrection fallback if the chain breaks or no PAT is configured. The `concurrency` group allows only one active run and one pending run; a newer pending run can replace an older one
+- A `concurrency` group (`tcf-bot-runner`, `cancel-in-progress: false`) prevents overlapping bot instances. This avoids duplicate update processing in polling mode and keeps webhook ownership unambiguous
 - Bot configuration comes from repository secrets (`BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`, `WEBHOOK_URL`, `WEBHOOK_SECRET`, etc.), plus the optional `BOT_PAT` for self-chaining
 
 ---
@@ -149,7 +154,7 @@ Pass: PR can merge / Fail: PR is blocked
 
 Auto-Fix Code Quality
     ↓
-Auto-commit (main) OR PR Comment (PR)
+Auto-fix branch and PR OR PR Comment (PR)
 
 Dependency Updates
     ↓
@@ -202,14 +207,17 @@ View workflow
 
 ### For Developers
 
-1. **Let auto-fix handle style** - Don't manually format, the workflow will do it
-2. **Review dependency PRs weekly** - Auto-created PRs are safe to merge
-3. **Read Telegram notifications** - Get instant feedback
+1. Run the same checks locally before opening a pull request:
+   `uv run ruff format --check .`, `uv run ruff check .`, and
+   `uv run python -c "import tcbot"`.
+2. Review auto-fix and dependency pull requests before merging them.
+3. Treat Telegram notifications as status updates, not as a substitute for
+   reviewing the workflow result.
 
 ### For Maintainers
 
 1. **Monitor GitHub issues** - Auto-created issues need triage
-2. **Review auto-fix commits** - Verify changes are correct
+2. **Review auto-fix pull requests** - Verify changes are correct
 3. **Keep `BOT_PAT` valid** - An expired token breaks Run Bot self-chaining; the cron fallback still resurrects the bot, but with brief gaps
 4. **Check workflow runs** - Weekly scheduled runs keep dependencies fresh
 
@@ -221,7 +229,7 @@ View workflow
 - Verify `BOT_TOKEN` and `OWNER_ID` secrets are set
 - Verify bot can send messages to your user ID
 
-### Auto-fix not committing
+### Auto-fix pull request not created
 - Check branch protection rules allow bot commits
 - Verify workflow has `contents: write` permission
 
@@ -248,9 +256,6 @@ View workflow
 
 ---
 
-## Future Improvements
-
-Potential additions:
-- Docker image builds and pushes
-- Deployment automation
-- Security scanning with additional tools
+The workflows documented here are the workflows currently present in
+`.github/workflows/`. New automation should be documented here when it is
+added.

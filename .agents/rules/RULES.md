@@ -18,7 +18,7 @@ These two rules are non-negotiable and apply to every task. The user should NEVE
 **After any work**, in the same turn:
 
 - Add an entry to [`CHANGELOG.md`](../../CHANGELOG.md) under `[Unreleased]` (Added / Changed / Fixed / Removed / Documentation).
-- Update every related `docs/*.md`, `.agents/*.md`, `README.md`, or `replit.md` whose content is now stale.
+- Update every related `docs/**/*.md`, `.agents/**/*.md`, `README.md`, or `replit.md` whose content is now stale.
 
 Skipping either step is a serious defect.
 

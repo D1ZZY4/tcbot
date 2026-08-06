@@ -2,7 +2,10 @@
 
 Command and callback modules live in `tcbot/modules/`. They define user-facing entry points, attach decorators, and export PTB handlers through `__handlers__`.
 
-For shared helpers consumed by these modules, see [`../helper/helper.md`](../helper/helper.md). For conversation flows, see [`../workflows/workflows.md`](../workflows/workflows.md). For database access, see [`../databases/databases.md`](../databases/databases.md). For runtime utilities, see [`../utils/utils.md`](../utils/utils.md).
+For shared helpers consumed by these modules, see [`helpers.md`](helpers.md).
+For conversation flows, see [`workflows.md`](workflows.md). For database
+access, see [`database.md`](database.md). For runtime utilities, see
+[`utilities.md`](utilities.md).
 
 ## Dynamic discovery
 
@@ -41,7 +44,10 @@ __help_text__ = "<b>Commands & Aliases</b>\n..."
 __handlers__ = [ ... ]
 ```
 
-Set `__module_name__ = None` for internal/menu modules hidden from `/help`.
+The help builder includes a module only when it has a non-empty unified
+`__help__` entry or legacy `__module_name__` and `__help_text__` values. Modules
+with `__module_name__ = None` are therefore omitted from `/help`; this is a
+help-discovery convention, not a handler-registration switch.
 
 `types.py` is not a command module. It holds shared `typing` aliases such as
 `CommandHandlerFn`, `CallbackHandlerFn`, and `DataCoroutine` for cross-module handler

@@ -2,7 +2,9 @@
 
 Shared handler helpers live in `tcbot/modules/helper/`. These modules support command modules and workflow files but do not perform top-level module discovery.
 
-For command modules that consume these helpers, see [`../modules/modules.md`](../modules/modules.md). For conversation flows, see [`../workflows/workflows.md`](../workflows/workflows.md). For database helpers used by these helpers, see [`../databases/databases.md`](../databases/databases.md).
+For command modules that consume these helpers, see [`modules.md`](modules.md).
+For conversation flows, see [`workflows.md`](workflows.md). For database
+helpers used by these helpers, see [`database.md`](database.md).
 
 ```mermaid
 flowchart TD
@@ -54,7 +56,8 @@ async def cmd_example(update, ctx):
 
 This file is a **backward-compatible re-export shim**. All formatter logic lives in `tcbot/utils/formatter.py` (the single source of truth). The shim re-exports every public name so that existing callers using `from tcbot.modules.helper.formatter import bold` continue to work unchanged.
 
-All bot messages use Telegram HTML parse mode. Functions are documented in full at [`../utils/utils.md#formatterpy`](../utils/utils.md).
+All bot messages use Telegram HTML parse mode. Functions are documented in full
+in [`utilities.md#formatterpy`](utilities.md).
 
 | Function | Output/use |
 |---|---|
@@ -104,7 +107,7 @@ Main groups:
 | Groups | `groups_menu_kb`, `tcgroups_kb` |
 | Stats | `main_kb` (in `stats_flow`), `back_kb` (in `stats_flow`) |
 
-See [button styles](../button-styles.md) for layout and callback-data conventions.
+See [keyboard styles](../reference/keyboard-styles.md) for layout and callback-data conventions.
 
 ## `identity.py`
 

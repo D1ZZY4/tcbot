@@ -2,7 +2,8 @@
 
 This guide explains how to run TCF Bot locally, with Docker, or in a hosted environment without committing secrets.
 
-For project overview, see [`../README.md`](../README.md). For Replit-specific deployment, see [`../replit.md`](../replit.md). For contributor rules, see [`../AGENTS.md`](../AGENTS.md).
+For the project overview, see [`../../README.md`](../../README.md). For
+Replit-specific deployment, see [`../../replit.md`](../../replit.md).
 
 ## Prerequisites
 
@@ -22,6 +23,9 @@ cp config.env.example config.env
 uv run python -m tcbot
 ```
 
+The local command loads `config.env` through `python-dotenv`. Fill in the
+required values before starting the bot.
+
 Use `uv run python -m tcbot` if your platform exposes Python as `python3`.
 
 Format and lint after edits:
@@ -34,13 +38,20 @@ uv run ruff check --fix .
 ## Docker setup
 
 The repository includes a Docker Compose stack with the bot, `mongo:7`, and Redis.
+Compose reads `.env`, not `config.env`, and maps the bot's port as `5000:5000`.
+Create a Docker-specific environment file before starting the stack:
 
 ```bash
+cp config.env.example .env
+# Edit .env and set at least:
+# MONGODB_URI=mongodb://mongo:27017
+# REDIS_URL=redis://redis:6379/0
 docker compose up --build
 ```
 
-The `bot` service reads `.env`, exposes port `5000`, and waits for both MongoDB
-and Redis health checks before startup. The image runs:
+Set `BOT_TOKEN`, `OWNER_ID`, and the destination variables required by the
+features you enable in `.env`. The `bot` service waits for both MongoDB and
+Redis health checks before startup. The image runs:
 
 ```bash
 uv run --frozen python -m tcbot
@@ -50,8 +61,11 @@ uv run --frozen python -m tcbot
 
 For Replit or another hosting platform:
 
-1. Store `BOT_TOKEN` and `MONGODB_URI` in the platform secret manager.
-2. Store non-secret runtime values as environment variables.
+1. Store `BOT_TOKEN`, `MONGODB_URI`, and `OWNER_ID` in the platform secret
+   manager or its environment configuration.
+2. Store the required destination values (`LOGS`, plus `PROOFS`, `APPEALS`,
+   and `APPEAL_DISCUSSION_TOPIC` when those features are enabled) as
+   environment variables or secrets.
 3. Start the bot with `uv run python -m tcbot`.
 4. Make sure the Flask health endpoint port matches `PORT`.
 
@@ -127,7 +141,7 @@ PROOFS="-1001234567890"
 | `MODULES_LOAD` | No | comma-separated module names | Optional whitelist, e.g. `banning,appeals`. |
 | `MODULES_NO_LOAD` | No | comma-separated module names | Optional blacklist, e.g. `maintenance,broadcasting`. |
 | `REDIS_URL` | No | Redis URI | L2 cache connection string, e.g. `redis://localhost:6379/0`. When absent the bot uses in-process L1 cache only. |
-| `WEBHOOK_URL` | No | HTTPS URL | Base URL for webhook transport, e.g. `https://yourdomain.example.com`. When set, the bot runs in webhook mode; absent falls back to polling (local development only). On Replit, `REPLIT_DEV_DOMAIN` is auto-detected and takes precedence. |
+| `WEBHOOK_URL` | No | URL | Base URL for webhook transport, e.g. `https://yourdomain.example.com`. An explicit value takes precedence over the automatically detected `REPLIT_DEV_DOMAIN`; when neither is available, the bot falls back to polling for local development. |
 | `WEBHOOK_SECRET` | No | random string | Secret token sent in the `X-Telegram-Bot-Api-Secret-Token` header by Telegram on every webhook POST. Auto-generated with `secrets.token_hex(32)` if absent. Set it explicitly for a stable deployment token. |
 | `WARN_LIMIT` | No | integer >= 1 | Per-group warning threshold that triggers automatic federation ban. Default `3`. When a user's warn count in one group reaches exactly this value, they are federation-banned and their group warns cleared. |
 | `FED_WARN_LIMIT` | No | integer >= 0 | Federation-wide warning threshold: sum of warn counts across all groups triggers an automatic federation ban when >= this value. Default `0` (disabled). Set to a positive integer to enable cross-group warn aggregation. |
@@ -142,8 +156,8 @@ PROOFS="-1001234567890"
 5. `tcbot.modules.get_handlers()` imports active modules and stops startup if an enabled module fails to import.
 6. Signal handlers (`SIGTERM`, `SIGINT`) are registered immediately before the PTB lifecycle begins.
 7. `_post_init()` connects MongoDB, ensures indexes, seeds the initial owner, and attaches the error reporter.
-8. **Webhook mode** (default on Replit and any host with `WEBHOOK_URL` / `REPLIT_DEV_DOMAIN`): `bot.set_webhook()` registers the URL, `register_webhook()` wires Flask's `POST /webhook` to PTB's update queue, and the bot waits for `SIGTERM`/`SIGINT`.
-9. **Polling mode** (local dev fallback when no webhook URL is detected): `run_polling()` starts with `drop_pending_updates=True`. A `WARNING` log is emitted to make the fallback visible.
+8. **Webhook mode** (when `WEBHOOK_URL` or `REPLIT_DEV_DOMAIN` resolves to a URL): `bot.set_webhook()` registers the URL, `register_webhook()` wires Flask's `POST /webhook` to PTB's update queue, and the bot waits for `SIGTERM`/`SIGINT`.
+9. **Polling mode** (when no webhook URL is available): `run_polling()` starts with `drop_pending_updates=True`. A `WARNING` log identifies this local-development fallback.
 
 ## Troubleshooting
 

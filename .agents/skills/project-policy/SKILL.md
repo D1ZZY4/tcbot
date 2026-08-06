@@ -17,7 +17,7 @@ Before invoking this skill, you must already have read [`.agents/rules/RULES.md`
 After any code change in `tcbot/`, in the same turn:
 
 - Add an entry to [`CHANGELOG.md`](../../../CHANGELOG.md) under `[Unreleased]`.
-- Update the matching `docs/<area>/<area>.md` and `docs/<feature>-detailed.md` if the area or feature changed.
+- Update the matching document in the relevant `docs/architecture/` or `docs/features/` category if the area or feature changed.
 
 Skipping the doc sweep is a defect.
 

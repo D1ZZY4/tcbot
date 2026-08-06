@@ -19,7 +19,7 @@ Every new conversation in this repository must start by reading the canonical ru
 **Update in the same turn after every change:**
 
 - [`CHANGELOG.md`](CHANGELOG.md): entry under `[Unreleased]` (Added / Changed / Fixed / Removed / Documentation)
-- Every related `docs/*.md`, `.agents/*.md`, [`README.md`](README.md), [`replit.md`](replit.md) whose content is now stale
+- Every related `docs/**/*.md`, `.agents/**/*.md`, [`README.md`](README.md), [`replit.md`](replit.md) whose content is now stale
 
 See [`.agents/rules/RULES.md`](.agents/rules/RULES.md#mandatory-read-before-work-and-update-after-work) for the complete read/update rules. Skipping either step is a serious defect.
 
@@ -65,7 +65,7 @@ Current stack:
 │   │   └── helper/           Shared helper code and conversation workflows
 │   │       └── workflows/    ConversationHandler flows (`*_flow.py` only)
 │   └── utils/                Logging, dispatch, prefixes, datetime helpers
-├── docs/                     Developer documentation by subsystem
+├── docs/                     Developer documentation grouped by category
 ├── .agents/                   Coding skills and style rules
 ├── config.env.example        Environment variable template
 ├── docker-compose.yml        Local bot + MongoDB + Redis compose setup
@@ -78,11 +78,11 @@ Current stack:
 
 Core ownership rules:
 
-- Command handlers live in `tcbot/modules/`. See [`docs/modules/modules.md`](docs/modules/modules.md) for module boundaries.
-- Shared handler helpers live in `tcbot/modules/helper/`. See [`docs/helper/helper.md`](docs/helper/helper.md) for helper docs.
-- Conversation flows live in `tcbot/modules/helper/workflows/` and must be named `*_flow.py`. See [`docs/workflows/workflows.md`](docs/workflows/workflows.md) for conversation internals.
-- MongoDB access lives in `tcbot/database/`; keep new database helpers in `*_db.py` files. See [`docs/databases/databases.md`](docs/databases/databases.md) for database layer notes.
-- Runtime utilities live in `tcbot/utils/`. See [`docs/utils/utils.md`](docs/utils/utils.md) for utility docs.
+- Command handlers live in `tcbot/modules/`. See [`docs/architecture/modules.md`](docs/architecture/modules.md) for module boundaries.
+- Shared handler helpers live in `tcbot/modules/helper/`. See [`docs/architecture/helpers.md`](docs/architecture/helpers.md) for helper docs.
+- Conversation flows live in `tcbot/modules/helper/workflows/` and must be named `*_flow.py`. See [`docs/architecture/workflows.md`](docs/architecture/workflows.md) for conversation internals.
+- MongoDB access lives in `tcbot/database/`; keep new database helpers in `*_db.py` files. See [`docs/architecture/database.md`](docs/architecture/database.md) for database layer notes.
+- Runtime utilities live in `tcbot/utils/`. See [`docs/architecture/utilities.md`](docs/architecture/utilities.md) for utility docs.
 
 ## Development Commands
 
@@ -113,7 +113,7 @@ docker compose up --build
 
 ## Configuration and Secrets
 
-Configuration is loaded from environment variables. For local development, `python-dotenv` loads `config.env` when present. For Replit or hosted deployment, store secrets in the platform secret manager instead of committing them. See [`docs/setup.md`](docs/setup.md) for detailed setup instructions and [`replit.md`](replit.md) for Replit-specific notes.
+Configuration is loaded from environment variables. For local development, `python-dotenv` loads `config.env` when present. For Replit or hosted deployment, store secrets in the platform secret manager instead of committing them. See [`docs/getting-started/setup.md`](docs/getting-started/setup.md) for detailed setup instructions and [`replit.md`](replit.md) for Replit-specific notes.
 
 Never commit real credentials. Required secret values include:
 
@@ -164,7 +164,7 @@ Repository conventions:
 
 ## Commit and Pull Request Guidance
 
-For commit message conventions, see [`docs/git-commit.md`](docs/git-commit.md) for more details. For automated CI/CD and auto-PR workflows, see [`docs/workflows-guide.md`](docs/workflows-guide.md) for more details.
+For automated CI/CD and auto-PR workflows, see [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md) for more details. Commit-specific instructions belong to the active repository workflow, not to the public `docs/` category.
 
 Use focused commits and conventional prefixes when appropriate:
 

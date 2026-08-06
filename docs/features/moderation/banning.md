@@ -1,8 +1,13 @@
-# Banning Detailed Documentation
+# Banning
 
 This document describes the current federation ban, ban lookup, and unban behavior implemented by `tcbot/modules/banning.py`, `tcbot/modules/helper/workflows/ban_flow.py`, `tcbot/modules/checking.py`, `tcbot/modules/unbanning.py`, and `tcbot/database/bans_db.py`.
 
-For appeal flow following a ban, see [`appeal-detailed.md`](appeal-detailed.md). For check command used to lookup bans, see [`check-detailed.md`](check-detailed.md). For warnings that may auto-ban, see [`warnings-detailed.md`](warnings-detailed.md). For role auto-demotion on ban, see [`role-detailed.md`](role-detailed.md). For shared helpers, see [`helper/helper.md`](helper/helper.md). For database layer, see [`databases/databases.md`](databases/databases.md).
+For the appeal flow following a ban, see [`../appeals.md`](../appeals.md). For
+the check command used to look up bans, see [`check.md`](check.md). For warnings
+that may auto-ban, see [`warnings.md`](warnings.md). For role auto-demotion on
+ban, see [`../roles/roles.md`](../roles/roles.md). For shared helpers, see
+[`../../architecture/helpers.md`](../../architecture/helpers.md). For the
+database layer, see [`../../architecture/database.md`](../../architecture/database.md).
 
 ```mermaid
 flowchart TD
@@ -290,7 +295,7 @@ Flow:
 4. Founder and staff targets are treated as not federation-bannable and no unban is attempted.
 5. `bans_db.get_active_ban(target_id)` must return a record.
 6. All active bans for the target are deactivated atomically with `bans_db.deactivate_all_active_bans(target_id)`, which handles any duplicate active records in one operation.
-7. Any pending scheduled unban job is cancelled defensively with `scheduler.cancel_schedule(f"unban.{ban_id}")`. This is a no-op when no timed-ban schedule exists and future-proofs the flow for when timed bans are added.
+7. Any pending scheduled unban job is cancelled defensively with `scheduler.cancel_schedule(f"unban.{ban_id}")`. This is a no-op when no schedule exists; the current ban command does not create timed-ban schedules.
 8. The target is unbanned from all active connected groups with `only_if_banned=True`.
 9. An unban log is sent to `cfg.logs`.
 10. The command reply reports the success count.

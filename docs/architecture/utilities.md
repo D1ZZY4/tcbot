@@ -2,7 +2,9 @@
 
 Runtime utilities live in `tcbot/utils/`. They provide infrastructure used across command modules, workflows, database helpers, and startup.
 
-For modules that consume these utilities, see [`../modules/modules.md`](../modules/modules.md). For shared helpers, see [`../helper/helper.md`](../helper/helper.md). For database helpers, see [`../databases/databases.md`](../databases/databases.md).
+For modules that consume these utilities, see [`modules.md`](modules.md). For
+shared helpers, see [`helpers.md`](helpers.md). For database helpers, see
+[`database.md`](database.md).
 
 ```mermaid
 flowchart TD
@@ -90,7 +92,7 @@ Command prefix support is centralized here.
 | `register_command(name, callback)` | Registers an async callback for alternate-prefix dispatch. |
 | `dispatch_alt_prefix(update, context)` | Dispatches configured non-slash prefix commands from the registry. |
 | `ANY_CMD_FILTER` | Matches any custom-prefix command (e.g. `!`, `.`); excludes Telegram-native `/` commands. Used in `__main__.py` member-cache guard. |
-| `ALL_PREFIXES_CMD_FILTER` | Matches any prefixed command across all configured prefixes including `/`. Used in `ConversationHandler` fallbacks to catch all commands and cancel conversations. |
+| `ALL_PREFIXES_CMD_FILTER` | Matches any configured prefixed command across all configured prefixes including `/`. Used in `ConversationHandler` fallbacks to catch a new command and cancel the active conversation. |
 
 `PREFIXES` supports a Python-style list such as `["/", "!", "."]` and falls back to common prefixes when unset. Prefix filters are case-sensitive, accept lowercase ASCII command names, and only accept `@BotName` suffixes that target the current bot.
 

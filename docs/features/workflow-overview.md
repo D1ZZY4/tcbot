@@ -1,6 +1,8 @@
 # Workflow Overview
 
-This page describes the user-visible flows in TCF Bot. For state constants, factories, and callback details, see [workflow internals](workflows/workflows.md).
+This page describes the user-visible flows in TCF Bot. For state constants,
+factories, and callback details, see
+[Workflow internals](../architecture/workflows.md).
 
 ## Moderation flows
 
@@ -122,5 +124,6 @@ Disconnected groups are marked inactive rather than deleted, preserving historic
 ## Maintenance and broadcast flows
 
 - `/tcbroadcast` sends a message to every active connected group through bounded fan-out and logs success/failure counts.
-- `/cleanup` performs staff cleanup actions.
+- Staff-only `/cleanup` (aliases `/tcclean`, `/tcc`) checks active groups and
+  deactivates groups the bot can no longer access.
 - `/leaveall`, `/exitall`, and `/tcleave` are Founder-only emergency commands that make the bot leave connected groups and mark them inactive.

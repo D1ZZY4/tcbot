@@ -90,7 +90,8 @@ for changed JSON files, and `git diff --check`.
 ## Commit policy
 
 - Make one focused Conventional Commit for the completed logical change.
-- Read `docs/git-commit.md` before committing.
+- Read `.agents/skills/dizzy-commit/SKILL.md` and its relevant references before
+  committing; do not create a second commit-policy document under `docs/`.
 - Use author `D1ZZY4 <176969112+D1ZZY4@users.noreply.github.com>`.
 - Include the required `Author-by` and `Signed-off-by` trailers.
 - Never push unless the user explicitly asks.

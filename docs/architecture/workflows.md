@@ -1,6 +1,13 @@
 # Workflow Internals
 
-For modules that register these conversation handlers, see [`../modules/modules.md`](../modules/modules.md). For shared helpers (formatter, decorators, extraction), see [`../helper/helper.md`](../helper/helper.md). For database helpers consumed by these flows, see [`../databases/databases.md`](../databases/databases.md). For per-feature flow details, see [`../banning-detailed.md`](../banning-detailed.md), [`../warnings-detailed.md`](../warnings-detailed.md), [`../appeal-detailed.md`](../appeal-detailed.md), [`../promote-detailed.md`](../promote-detailed.md), [`../demote-detailed.md`](../demote-detailed.md).
+For modules that register these conversation handlers, see [`modules.md`](modules.md).
+For shared helpers, see [`helpers.md`](helpers.md). For database helpers
+consumed by these flows, see [`database.md`](database.md). For per-feature flow
+details, see [`../features/moderation/banning.md`](../features/moderation/banning.md),
+[`../features/moderation/warnings.md`](../features/moderation/warnings.md),
+[`../features/appeals.md`](../features/appeals.md),
+[`../features/roles/promote.md`](../features/roles/promote.md), and
+[`../features/roles/demote.md`](../features/roles/demote.md).
 
 Conversation and multi-step logic lives in `tcbot/modules/helper/workflows/`. New conversation files must be named `*_flow.py`; do not create `*_conv.py` files.
 
@@ -231,7 +238,13 @@ Demotion is not a conversation. `Demote.execute(...)` in `workflows/demote_flow.
 
 ## Stats: `stats_flow.py`
 
-`stats_flow.py` exposes the unified `Stats` class used by `/tcstats`. Every drill-down (overview, staff roster, users, connected chats, active bans, and the search panel) is a classmethod on `Stats` returning `(text, InlineKeyboardMarkup)`. Callbacks pair `q.answer()` with `safe_edit_cb` so the same view can be re-tapped without raising `Message is not modified`. See `docs/stats-detailed.md` for the full method list and callback namespaces.
+`stats_flow.py` exposes the unified `Stats` class used by `/tcstats`. Every
+drill-down (overview, staff roster, users, connected chats, active bans, and
+the search panel) is a classmethod on `Stats` returning
+`(text, InlineKeyboardMarkup)`. Callbacks pair `q.answer()` with `safe_edit_cb`
+so the same view can be re-tapped without raising `Message is not modified`.
+See [`../features/statistics.md`](../features/statistics.md) for the full
+method list and callback namespaces.
 
 ## Check: `check_flow.py`
 
@@ -248,4 +261,7 @@ Demotion is not a conversation. `Demote.execute(...)` in `workflows/demote_flow.
 | `Check.mutes_list(target_id, page)` | `check_mutes:<uid>:<page>` | Paginated mute records: same shape as kicks. |
 | `Check.appeals_list(target_id, page)` | `check_appeals:<uid>:<page>` | Paginated list of bans that have an associated appeal; items drill into `Check.ban_detail`. |
 
-All drill-down views include a `« Back` button that returns to `Check.profile` via `check_main:<uid>`. See `docs/check-detailed.md` for the full behavior reference.
+All drill-down views include a `« Back` button that returns to `Check.profile`
+via `check_main:<uid>`. See
+[`../features/moderation/check.md`](../features/moderation/check.md) for the
+full behavior reference.

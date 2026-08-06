@@ -1,8 +1,11 @@
-# Demote Detailed Documentation
+# Demote
 
 This document describes the current demotion behavior implemented by `tcbot/modules/admins.py` (command + callback handlers) and `tcbot/modules/helper/workflows/demote_flow.py` (the `Demote` class shared by manual demotion and auto-demote on ban/kick).
 
-For role hierarchy and rules, see [`role-detailed.md`](role-detailed.md). For promote (counterpart) flow, see [`promote-detailed.md`](promote-detailed.md). For ban flow that triggers auto-demotion, see [`banning-detailed.md`](banning-detailed.md). For shared helpers, see [`helper/helper.md`](helper/helper.md).
+For role hierarchy and rules, see [`roles.md`](roles.md). For the promote flow,
+see [`promote.md`](promote.md). For the ban flow that triggers auto-demotion,
+see [`../moderation/banning.md`](../moderation/banning.md). For shared helpers,
+see [`../../architecture/helpers.md`](../../architecture/helpers.md).
 
 ```mermaid
 flowchart TD

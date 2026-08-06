@@ -1,8 +1,12 @@
-# Check Detailed Documentation
+# Check
 
 This document describes the `/check` user-profile command implemented by `tcbot/modules/checking.py` (command + callback handlers) and `tcbot/modules/helper/workflows/check_flow.py` (the `Check` class that builds every view).
 
-For ban data shown in check, see [`banning-detailed.md`](banning-detailed.md). For warnings shown in check, see [`warnings-detailed.md`](warnings-detailed.md). For stats command which often complements check, see [`stats-detailed.md`](stats-detailed.md). For shared helpers, see [`helper/helper.md`](helper/helper.md). For database batch query patterns, see [`databases/databases.md`](databases/databases.md).
+For ban data shown in check, see [`banning.md`](banning.md). For warnings
+shown in check, see [`warnings.md`](warnings.md). For the stats command, see
+[`../statistics.md`](../statistics.md). For shared helpers, see
+[`../../architecture/helpers.md`](../../architecture/helpers.md). For database
+batch query patterns, see [`../../architecture/database.md`](../../architecture/database.md).
 
 ```mermaid
 flowchart TD
@@ -145,7 +149,7 @@ All callbacks are registered in `checking.py` and run safely on repeated taps th
 | `mutes_db.user_mute_count(uid)` | Mute count. |
 | `groups_db.get_group_titles([chat_ids])` | Bulk title lookup for kicks / mutes / warnings lists. |
 
-## Async behavior: zero-delay design
+## Async behavior and parallel reads
 
 The profile view performs eleven independent reads in a single `asyncio.gather`:
 

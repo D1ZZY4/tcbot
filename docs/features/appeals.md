@@ -1,8 +1,12 @@
-# Appeal Detailed Documentation
+# Appeals
 
 This document describes the current ban appeal behavior implemented by `tcbot/modules/appeals.py` and `tcbot/modules/helper/workflows/appeal_flow.py`.
 
-For ban flow that triggers appeals, see [`banning-detailed.md`](banning-detailed.md). For check command often used during appeals, see [`check-detailed.md`](check-detailed.md). For shared helpers, see [`helper/helper.md`](helper/helper.md). For database layer, see [`databases/databases.md`](databases/databases.md).
+For the ban flow that triggers appeals, see
+[`moderation/banning.md`](moderation/banning.md). For the check command often
+used during appeals, see [`moderation/check.md`](moderation/check.md). For
+shared helpers, see [`../architecture/helpers.md`](../architecture/helpers.md).
+For the database layer, see [`../architecture/database.md`](../architecture/database.md).
 
 ```mermaid
 flowchart TD
@@ -233,10 +237,11 @@ Federation staff in anonymous admin mode (GroupAnonymousBot, `user_id = 10879688
 `effective_user.id == 1087968824` and return an error.
 
 However, staff **can still click Approve or Reject** on the appeal review card.
-Telegram always sends the real Telegram user ID as `effective_user` for callback queries
-(button presses), even when the user is in anonymous admin mode. The bot never
-substitutes GroupAnonymousBot for callback senders, so `is_staff()` receives the
-presser's actual account ID and the decision proceeds normally.
+The callback path uses `effective_user` for the account associated with the
+button press. In the callback behavior supported by this project, staff can
+therefore use the appeal decision buttons even when their group messages are
+anonymous; the bot does not replace the callback sender with
+`GroupAnonymousBot`.
 
 Practical consequence: an admin in anonymous mode cannot issue `/tcban` or `/tcwarn`,
 but they can open the appeal review card in the main group and use the Approve/Reject
