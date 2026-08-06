@@ -2,10 +2,6 @@
 __pycache__/
 *.py[cod]
 *$py.class
-tests/*
-!tests/
-!tests/test_runtime_audit.py
-
 # Environment variables (real credentials)
 *.env
 config.env

@@ -7,7 +7,7 @@ Last updated: 2026-05-29
 
 # Feature Reviewer
 
-Before invoking this skill, confirm the read/update rules in [`.agents/rules/CLAUDE.md`](../../rules/CLAUDE.md#mandatory-read-these-files-before-any-work). When reviewing, flag missing [`CHANGELOG.md`](../../../CHANGELOG.md) and [`PLAN.md`](../../../PLAN.md) updates as a review finding; those are required, not optional.
+Before invoking this skill, confirm the read/update rules in [`.agents/rules/RULES.md`](../../rules/RULES.md#mandatory-read-before-work-and-update-after-work). When reviewing, flag a missing [`CHANGELOG.md`](../../../CHANGELOG.md) entry as a review finding.
 
 Use this skill when the user asks for a code review, final check, regression review, or "is this ready?" review of project changes.
 
@@ -61,7 +61,7 @@ Keep feedback practical. Prioritize actionable issues over style preferences.
 ### Documentation
 
 - Behavior changes update related docs in `docs/`, `README.md`, or `.agents/` when appropriate.
-- The change adds an entry to [`CHANGELOG.md`](../../../CHANGELOG.md) under `[Unreleased]` and updates [`PLAN.md`](../../../PLAN.md) when project state, runtime, or priorities changed.
+- The change adds an entry to [`CHANGELOG.md`](../../../CHANGELOG.md) under `[Unreleased]`.
 
 ### CI/CD and Workflows
 

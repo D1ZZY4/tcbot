@@ -1,6 +1,6 @@
 # Comment Style: TCF Bot
 
-Read [`CLAUDE.md`](CLAUDE.md) first. This file defines comments, docstrings, and section divider conventions for the project. For code style, see [`STYLE-CODE.md`](STYLE-CODE.md). For project rules, see [`RULES.md`](RULES.md).
+Read [`RULES.md`](RULES.md) first. This file defines comments, docstrings, and section divider conventions for the project. For code style, see [`STYLE-CODE.md`](STYLE-CODE.md).
 
 ---
 
@@ -201,7 +201,7 @@ For files under `.agents/` and `docs/`:
 - Use fenced code blocks with language tags when helpful.
 - Use project-relative paths in backticks.
 - Do not include real credentials, private chat IDs, or production-only links.
-- Keep docs aligned with `.agents/rules/CLAUDE.md` as the source of truth.
+- Keep docs aligned with `.agents/rules/RULES.md` as the source of truth.
 
 ---
 
@@ -212,4 +212,4 @@ For files under `.agents/` and `docs/`:
 - Do not use Sphinx-style docstring tags.
 - Do not explain obvious code.
 - Do not hand-type malformed section dividers.
-- Do not add comments that contradict `.agents/rules/CLAUDE.md` or `.agents/rules/RULES.md`.
+- Do not add comments that contradict `.agents/rules/RULES.md`.

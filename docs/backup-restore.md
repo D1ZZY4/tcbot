@@ -171,5 +171,5 @@ reduce CVE reachability:
 - Enable MongoDB Atlas IP Access List or network peering.
 - Rotate `MONGODB_URI` immediately if a breach is suspected.
 
-See PLAN.md → Core Subsystem Design / Persistent Scheduler for full CVE
-analysis and the accepted-risk rationale.
+The accepted-risk rationale is recorded in the scheduler documentation and
+the current changelog entry.

@@ -1,8 +1,8 @@
 # Project Rules: TCF Bot
 
-Read [`CLAUDE.md`](CLAUDE.md) first. This file lists hard constraints for all AI agents and maintainers. These rules apply to code, documentation, and configuration unless a task explicitly narrows the allowed scope.
+This file lists hard constraints for all AI agents and maintainers. These rules apply to code, documentation, and configuration unless a task explicitly narrows the allowed scope.
 
-For code style enforcement, see [`STYLE-CODE.md`](STYLE-CODE.md). For comment conventions, see [`STYLE-COMMENTS.md`](STYLE-COMMENTS.md). For development workflow, see [`WORKFLOW.md`](WORKFLOW.md). For Ruff and validation commands, see [`RUFF.md`](RUFF.md).
+For code style enforcement, see [`STYLE-CODE.md`](STYLE-CODE.md). For comment conventions, see [`STYLE-COMMENTS.md`](STYLE-COMMENTS.md). For Ruff and validation commands, see [`RUFF.md`](RUFF.md).
 
 ---
 
@@ -12,17 +12,13 @@ These two rules are non-negotiable and apply to every task. The user should NEVE
 
 **Before any work**, read these files at the start of every new conversation:
 
-- [`.agents/rules/CLAUDE.md`](CLAUDE.md), [`.agents/rules/RULES.md`](RULES.md) (this file)
-- [`AGENTS.md`](../AGENTS.md), [`PLAN.md`](../PLAN.md), [`CHANGELOG.md`](../CHANGELOG.md)
-- The relevant files in [`.agents/`](.), [`docs/`](../docs/), and the root project folder for the area you are touching.
+- [`.agents/rules/RULES.md`](RULES.md) (this file), [`AGENTS.md`](../../AGENTS.md), and [`CHANGELOG.md`](../../CHANGELOG.md)
+- The relevant files in [`.agents/skills/`](../skills/), [`docs/`](../../docs/), and the root project folder for the area you are touching.
 
 **After any work**, in the same turn:
 
-- Add an entry to [`CHANGELOG.md`](../CHANGELOG.md) under `[Unreleased]` (Added / Changed / Fixed / Removed / Documentation).
-- Update [`PLAN.md`](../PLAN.md) when the change affects runtime, project state, or priorities.
+- Add an entry to [`CHANGELOG.md`](../../CHANGELOG.md) under `[Unreleased]` (Added / Changed / Fixed / Removed / Documentation).
 - Update every related `docs/*.md`, `.agents/*.md`, `README.md`, or `replit.md` whose content is now stale.
-
-See the **MANDATORY** sections at the top of [`CLAUDE.md`](CLAUDE.md#mandatory-read-these-files-before-any-work) for the full read/update tables.
 
 Skipping either step is a serious defect.
 
@@ -30,10 +26,7 @@ Skipping either step is a serious defect.
 
 ## Skills and Sub-Agents Policy
 
-**Skills (`.agents/skills/`) auto-invoke whenever their trigger matches.** The user does not want to type "use the X skill". If you are about to write code in `tcbot/`, the [`project-policy`](skills/project-policy/SKILL.md) skill applies. If you are about to edit docs, the [`docs-maintainer`](skills/docs-maintainer/SKILL.md) skill applies. The same is true for `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `feature-reviewer`, and `general-sub-agent`; invoke them silently as part of doing the task, and compose multiple skills when a single task spans multiple areas. See the full table in [`CLAUDE.md`](CLAUDE.md#mandatory-auto-invoke-skills-use-sub-agents-sparingly).
-
-
-**Sub-agents (`.agents/agents/`) are expensive and only used when the work is genuinely heavy.** The default is to do the work yourself in the main agent. Only delegate to a sub-agent when the task is large, the scopes are genuinely independent, and the parallelism or independent-perspective value justifies the token cost. Sub-agents can drift off-task; prefer one focused main agent over many noisy sub-agents.
+**Skills (`.agents/skills/`) auto-invoke whenever their trigger matches.** The user does not want to type "use the X skill". If you are about to write code in `tcbot/`, the [`project-policy`](../skills/project-policy/SKILL.md) skill applies. If you are about to edit docs, the [`docs-maintainer`](../skills/docs-maintainer/SKILL.md) skill applies. The same is true for `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `feature-reviewer`, and `general-sub-agent`; invoke them silently as part of doing the task and compose multiple skills when a single task spans multiple areas.
 
 ---
 
@@ -271,7 +264,7 @@ Rules:
 
 ## Always Update Docs After Refactors
 
-1. After every rename / move / replace, grep the repo for the old name and update every match in `docs/`, `.agents/` (including `.agents/skills/` and `.agents/agents/`), `PLAN.md`, `AGENTS.md`, and `README.md` in the same change.
+1. After every rename / move / replace, grep the repo for the old name and update every match in `docs/`, `.agents/`, `AGENTS.md`, and `README.md` in the same change.
 2. New features ship with their `docs/<feature>-detailed.md` and a row in `docs/README.md`.
 3. Removed APIs lose every doc reference; no "see also" stubs to vanished symbols.
 4. Restart the bot and confirm clean startup before declaring done.

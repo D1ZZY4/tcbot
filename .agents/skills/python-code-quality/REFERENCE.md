@@ -1,6 +1,6 @@
 # Python Code Quality: TCBot Reference
 
-For the parent skill instructions, see [`SKILL.md`](SKILL.md). For the canonical project rules this reference enforces, see [`../../rules/CLAUDE.md`](../../rules/CLAUDE.md) and [`../../rules/RULES.md`](../../rules/RULES.md).
+For the parent skill instructions, see [`SKILL.md`](SKILL.md). For the canonical project rules this reference enforces, see [`../../rules/RULES.md`](../../rules/RULES.md).
 
 Updated: 2026-06-11
 

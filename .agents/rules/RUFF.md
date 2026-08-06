@@ -1,6 +1,6 @@
 # Ruff and Validation: TCF Bot
 
-Read [`CLAUDE.md`](CLAUDE.md) first. This file defines validation commands and quality checks for the project. For code style enforced by Ruff, see [`STYLE-CODE.md`](STYLE-CODE.md). For development workflow, see [`WORKFLOW.md`](WORKFLOW.md). For CI/CD that runs these commands automatically, see [`../docs/workflows-guide.md`](../docs/workflows-guide.md).
+Read [`RULES.md`](RULES.md) first. This file defines validation commands and quality checks for the project. For code style enforced by Ruff, see [`STYLE-CODE.md`](STYLE-CODE.md). For CI/CD that runs these commands automatically, see [`../../docs/workflows-guide.md`](../../docs/workflows-guide.md).
 
 ---
 

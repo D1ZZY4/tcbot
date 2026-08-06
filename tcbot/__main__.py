@@ -496,7 +496,7 @@ def main() -> None:
             asyncio.run(_run_webhook_mode(app))
         else:
             # * Polling fallback: only for local development where no public URL exists.
-            # * Accepted risk: documented in .agents/memory/decisions.md.
+            # * Accepted risk: documented in the scheduler and deployment docs.
             log.warning(
                 "No WEBHOOK_URL or REPLIT_DEV_DOMAIN found. "
                 "Falling back to long-polling (local development only). "

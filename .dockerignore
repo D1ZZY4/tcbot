@@ -47,7 +47,6 @@ docs/
 attached_assets/
 README.md
 AGENTS.md
-PLAN.md
 CHANGELOG.md
 replit.md
 
@@ -57,11 +56,6 @@ replit.md
 .cache/
 .config/
 replit.nix
-
-# Test files
-tests/
-test_*.py
-*_test.py
 
 # Temporary files
 *.tmp

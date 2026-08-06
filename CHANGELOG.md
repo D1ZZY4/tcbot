@@ -17,7 +17,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Documentation
 
-- Synchronized runtime, Replit, setup, agent-rule, workflow, and database documentation with webhook-first transport, optional generated webhook secrets, active skills, and the Redis cache contract. Added focused regression tests in `tests/test_runtime_audit.py`.
+- Synchronized runtime, Replit, setup, agent-rule, workflow, and database documentation with webhook-first transport, optional generated webhook secrets, active skills, and the Redis cache contract. Added focused runtime verification coverage.
 
 ## [Unreleased] - 2026-07-11 (session 194+, cont. 2)
 
@@ -53,7 +53,8 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Documentation
 
-- **Bug #502** (`CHANGELOG.md`, `PLAN.md`, `.agents/memory/context.md`): Three em-dashes (U+2014) found in documentation files added during session 192 entries. Replaced with colons or semicolons to comply with the no-em/en-dash policy. Audit note: session 193 ran 10 parallel sub-agents (SA1-SA10) across all 75 Python source files in 3 independent waves; zero code-level bugs found.
+- **Bug #502** (documentation): Three em-dashes (U+2014) found in documentation files added during session 192 entries. Replaced with colons or semicolons to comply with the no-em/en-dash policy. Audit note: session 193 ran 10 parallel sub-agents (SA1-SA10) across all 75 Python source files in 3 independent waves; zero code-level bugs found.
+- **Agent repository cleanup**: Removed obsolete local agent rules, state folders, the retired project plan, and the deleted test suite. Consolidated current contributor guidance in `AGENTS.md`, `PROMPT.md`, and `.agents/rules/RULES.md`.
 
 ## [Unreleased] - 2026-07-11 (session 192)
 
@@ -127,7 +128,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 - **Bug #488** (`README.md`): Config table was missing `REDIS_URL`, `WEBHOOK_URL`, `WEBHOOK_SECRET`, `SESSION_SECRET`, `WARN_LIMIT`, `FED_WARN_LIMIT`, and `WARN_EXPIRY_DAYS` environment variables. Users setting up the bot would not know these variables exist from the README alone, having to consult `docs/setup.md` separately. Added all seven missing rows with accurate descriptions and Required column values. Also clarified `PROOF_TIMEOUT_SECONDS` and `APPEAL_TIMEOUT_SECONDS` docstrings to note they are reserved for future wiring while PTB `job-queue` extra is not installed.
 
-- **Bug #487** (`PLAN.md`): Current State section was missing sessions 183 and 184 audit entries. Bug numbers #481-#485 were unrepresented, and the ruff version shown was stale (v0.15.20 vs actual v0.15.21 post-bump). Added both session entries and corrected ruff version.
+- **Bug #487** (project-state documentation): Current State section was missing sessions 183 and 184 audit entries. Bug numbers #481-#485 were unrepresented, and the ruff version shown was stale (v0.15.20 vs actual v0.15.21 post-bump). Added both session entries and corrected ruff version.
 
 - **Bug #486** (`docs/performance.md`): Performance targets table still listed v4.6.2 targets (e.g., < 0.1 ms for single DB query, < 0.03 ms for Redis read). PROMPT.md mandates v5.2.6 targets as the new baseline. Updated the table heading from "v4.6.2" to "v5.2.6" and replaced all 15 existing target values with v5.2.6 values. Added four new rows introduced in v5.2.6: fan-out to 10,000 groups (< 600 ms), webhook delivery to dispatch handler (< 2 ms), `set_webhook()` startup registration (< 300 ms), and `get_webhook_info()` verification (< 150 ms). Also updated the `hiredis` footnote to reflect the new 0.008 ms target.
 
@@ -177,7 +178,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Fixed
 
-- **Bug #478** (`CHANGELOG.md`, `.agents/memory/decisions.md`): Six em-dash characters (U+2014) and two additional em-dashes were present in developer documentation, violating the project rule that prohibits em-dash and en-dash everywhere. The em-dashes were introduced when Bug #471, #472, #473, and #467 changelog entries were written in sessions 167-179 and when two inline decision notes were added to decisions.md. Replaced all occurrences with ASCII double-hyphen (--) using a batch Python script. Zero em-dashes now remain in CHANGELOG.md or decisions.md.
+- **Bug #478** (developer documentation): Six em-dash characters (U+2014) and two additional em-dashes were present in developer documentation, violating the project rule that prohibits em-dash and en-dash everywhere. The em-dashes were introduced when Bug #471, #472, #473, and #467 changelog entries were written in sessions 167-179 and when two inline decision notes were added. Replaced all occurrences with ASCII double-hyphen (--) using a batch Python script. Zero em-dashes now remain in the affected documentation.
 
 - **Bug #474** (`tcbot/__main__.py`): Signal handlers (`SIGTERM`, `SIGINT`) were registered *inside* the `async with app:` block, after `_post_init` (MongoDB, Redis, APScheduler) and `app.start()` had already run. This exposed a ~500 ms window during startup where a `SIGTERM` would bypass the graceful shutdown path entirely -- no `delete_webhook`, no `app.stop()`, no `_post_shutdown()`. Fixed by moving `loop = asyncio.get_running_loop()`, `shutdown_event = asyncio.Event()`, and both `loop.add_signal_handler()` calls to *before* `async with app:`, so the shutdown event is armed at the earliest possible moment. Docstring lifecycle comment updated with step 0. No behavior change under normal operation; only the startup race window is closed.
 
@@ -213,7 +214,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Fixed
 
-- **Documentation reorganization** (session 176): Moved the 7 AI-agent policy files from `.agents/` root into a new `.agents/rules/` subfolder (`CLAUDE.md`, `RULES.md`, `RUFF.md`, `REPLIT.md`, `STYLE-CODE.md`, `STYLE-COMMENTS.md`, `WORKFLOW.md`). Updated all cross-references in `.agents/agents/`, `.agents/skills/`, `.agents/memory/`, `AGENTS.md`, `README.md`, `CHANGELOG.md`, `PLAN.md`, and `docs/mapping.md` so references remain valid. No runtime behavior changed. Ruff: clean.
+- **Documentation reorganization** (session 176): Moved the AI-agent policy files into a dedicated rules subfolder. Updated cross-references in the agent tooling and project documentation so references remained valid. No runtime behavior changed. Ruff: clean.
 
 - **Bug #468** (`tcbot/database/warns_db.py`): `add_warn` rollback pattern masked original exception. When `find_one_and_update` on `warn_counts` failed, the `except Exception:` block ran `await db_call(c.delete_one(...))` to rollback the inserted `warns` document, then executed a bare `raise`. If the rollback `delete_one` itself raised (e.g. circuit breaker open, network error), Python replaced the original exception with the new one before `raise` could re-raise it. The caller would see a rollback failure instead of the real cause, making the warn-count inconsistency invisible in logs. Fixed by wrapping the rollback in its own `try/except Exception as rollback_exc:` that logs a warning with `log.warning("add_warn rollback failed...")` and then falls through to the original `raise`. Added `import logging` and `log = logging.getLogger(__name__)` to `warns_db.py` (the module previously had no logger). Ruff: clean. Import: OK.
 
@@ -257,7 +258,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Documentation
 
-- **Documentation accuracy audit** (session 173): Three cross-references between docs and source were stale or missing: (1) `.agents/rules/CLAUDE.md` had a duplicate `mongos.py` entry in its repository map (lines 171 and 176 both listed the same file); removed the duplicate. (2) `docs/modules/modules.md` still showed `__module_name__ = "Cleanup"` for `maintenance.py` even though the source was already corrected to `"Maintenance"` (PLAN.md P4#9); updated the module table cell. (3) `docs/databases/databases.md` "Public singletons" table omitted `user_mention_cache`, which is a live `TwoLevelCache` exported from `tcbot/database/cache.py:327` and consumed by `users_cache.py`; added the missing row with TTLs (L1 300s, L2 600s, maxsize 4096) and population source. No code changes.
+- **Documentation accuracy audit** (session 173): Three cross-references between docs and source were stale or missing: (1) the agent repository map had a duplicate `mongos.py` entry; removed the duplicate. (2) `docs/modules/modules.md` still showed `__module_name__ = "Cleanup"` for `maintenance.py` even though the source was already corrected to `"Maintenance"`; updated the module table cell. (3) `docs/databases/databases.md` "Public singletons" table omitted `user_mention_cache`, which is a live `TwoLevelCache` exported from `tcbot/database/cache.py:327` and consumed by `users_cache.py`; added the missing row with TTLs (L1 300s, L2 600s, maxsize 4096) and population source. No code changes.
 
 ## [Unreleased] - 2026-06-24 (session 172)
 
@@ -289,7 +290,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Documentation
 
-- **docs(appeal)**: Added "Rejection cooldown" section to `docs/appeal-detailed.md` documenting the 24-hour wait enforced after rejection, how it is checked in `_start()`, and its independence from the stale-review window. Added "Anonymous admin mode and appeal decisions" section documenting that Telegram always sends the real user ID for callback queries: anonymous staff cannot issue commands but can click Approve/Reject on review cards, with their real identity recorded. Added items 12 and 13 to the Behavior reference list. Updated PLAN.md findings P2#5, P3#6, P3#7, P3#8, P4#11, P4#12 from `Open` to `Resolved`.
+- **docs(appeal)**: Added "Rejection cooldown" section to `docs/appeal-detailed.md` documenting the 24-hour wait enforced after rejection, how it is checked in `_start()`, and its independence from the stale-review window. Added "Anonymous admin mode and appeal decisions" section documenting that Telegram always sends the real user ID for callback queries: anonymous staff cannot issue commands but can click Approve/Reject on review cards, with their real identity recorded. Added items 12 and 13 to the Behavior reference list. Updated project-state findings P2#5, P3#6, P3#7, P3#8, P4#11, P4#12 from `Open` to `Resolved`.
 
 - **Bug #465** (`tcbot/modules/helper/workflows/ban_flow.py`): Album flush tasks (`_flush_album` scheduled via `asyncio.create_task`) were never cancelled when the proof conversation was cancelled or timed out. The cancel/timeout handlers popped the media group entries from `_albums`, `_album_meta`, and `_album_userdata`, but the sleeping task continued running. If Telegram reused the same `media_group_id` for a subsequent album after cancel/timeout but before the old task finished its debounce sleep, the old task could wake up and intercept the new album's messages, attempting to execute a ban with stale/empty metadata. Fixed by changing `_album_tasks` from `set[Task]` to `dict[str, Task]` keyed by `media_group_id`, and calling `task.cancel()` on matching tasks in both `on_cancel_proof` and `on_proof_timeout` before popping the dict entries. Ruff: clean. Import: OK.
 
@@ -311,7 +312,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 - **Bug #441** (`tcbot/database/scheduler.py`): `_expire_old_warns` called `_col("warn_counts").delete_many(...)` directly without the `db_call()` circuit breaker wrapper. All eight production DB helper modules have used `db_call()` since session 165, but the scheduler's `_expire_old_warns` job function was never updated and bypassed the circuit breaker entirely. When MongoDB is unreachable and the circuit is OPEN, this daily maintenance job would still attempt a full Motor connection and wait up to the 45-second `socketTimeoutMS` before failing, instead of fast-failing. Fixed: added `db_call as _db_call` to the `tcbot.database.mongos` import line and wrapped the `delete_many` coroutine with `await _db_call(...)`. Ruff: import re-sorted (1 fix), all checks passed. Import: OK.
 
-- **Bug #442** (docs): em-dash characters found in `docs/helper/helper.md` (line 100: table cell description) and `docs/warnings-detailed.md` (line 109: inline prose) in violation of the project no-em-dash rule. Fixed: replaced em-dash with hyphen in `helper.md` and restructured the parenthetical clause with a comma in `warnings-detailed.md`. Additionally cleared em-dash from `CHANGELOG.md` (6 lines in old bug titles) and all five `.agents/memory/` files (`MEMORY.md`, `context.md`, `context7-setup.md`, `decisions.md`, `progress.md`, 93 lines total) using batch replacement. All project-owned `.md` files now contain zero em-dash or en-dash characters.
+- **Bug #442** (docs): em-dash characters found in `docs/helper/helper.md` (line 100: table cell description) and `docs/warnings-detailed.md` (line 109: inline prose) in violation of the project no-em-dash rule. Fixed: replaced em-dash with hyphen in `helper.md` and restructured the parenthetical clause with a comma in `warnings-detailed.md`. Additionally cleared em-dash from `CHANGELOG.md` and the affected agent documentation using batch replacement. All project-owned `.md` files now contain zero em-dash or en-dash characters.
 
 ## [Unreleased] - 2026-06-23 (session 168)
 
@@ -430,7 +431,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Fixed
 
-- **`replit.md`**, **`CHANGELOG.md`**, **`PLAN.md`** (Bug #415): Em-dash characters (Unicode U+2014) found and removed from all three project root docs. `replit.md` had 2 occurrences in the health check section (`: ` substituted). `CHANGELOG.md` had 52 lines with em-dash in description text. `PLAN.md` had 14 occurrences in table cells and inline text. All replaced with hyphens or colons per the project no-em-dash convention. All three files now CLEAN.
+- **Project documentation** (Bug #415): Em-dash characters (Unicode U+2014) found and removed from the project documentation. `replit.md` had 2 occurrences in the health check section (`: ` substituted). `CHANGELOG.md` had 52 lines with em-dash in description text. All replaced with hyphens or colons per the project no-em-dash convention. Project documentation is CLEAN.
 
 - **`docs/performance.md`** (Bug #416): Performance target table still listed v4.5.1 targets (e.g., command handler p95 < 80 ms, q.answer() < 15 ms, single DB query < 3 ms). Updated to v4.6.2 mandatory targets: single DB query < 0.1 ms, DB batch < 0.5 ms, Redis read < 0.03 ms, Redis pipeline < 0.08 ms, fan-out 100 groups < 30 ms, fan-out 1,000 groups < 200 ms, command handler p95 < 5 ms, q.answer() < 1 ms, APScheduler job start < 5 ms, in-memory cache read < 0.005 ms, identity/role resolution < 0.02 ms, startup < 0.1 s, full federation ban (10 groups) < 80 ms, cache warm-up < 50 ms, identity harvest 1 group < 20 ms. Performance checklist thresholds updated to match. Benchmark section label updated from v4.5.1 to v4.6.2. Bounded fan-out via `dispatch.py` added to the "achieved via" list.
 
@@ -550,7 +551,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Documentation
 
-- **`PLAN.md`** (workflow/moderation security audit, no code changed): Added five evidence-grounded findings to the existing review tables after reading every `tcbot/modules/helper/workflows/*_flow.py` plus the supporting handler-registration, auth, fan-out, and DB layers.
+- **Project-state documentation** (workflow/moderation security audit, no code changed): Added five evidence-grounded findings to the existing review tables after reading every `tcbot/modules/helper/workflows/*_flow.py` plus the supporting handler-registration, auth, fan-out, and DB layers.
   - **P2 #4**: Duplicate `ChatMemberHandler(MY_CHAT_MEMBER)` - `greeting.on_my_chat_member` and `connected_flow.on_bot_added` are both registered in default group 0, so PTB runs only the first and permanently shadows the other. Module order comes from unsorted `Path.glob`, so the winner is nondeterministic across hosts: either the bot-demotion mod-log warning (Bug #349) is dead, or group onboarding (connect prompt + pending→admin completion) is dead. Verified.
   - **P3 #6**: Cross-group warn accumulation never triggers a federation ban; `execute_warn` triggers only on the per-chat `count == WARN_LIMIT`, so spreading 2 warns across many groups evades the auto-ban. P3 #3 added visibility (`federation_warn_count`) but not enforcement. Verified.
   - **P3 #7**: No global Telegram API pacing - plain PTB without `AIORateLimiter`; `fan_out` bounds concurrency (10) but not rate, and `complete_join` replays the entire active-ban list to a newly connected group in one burst, so a subset of `ban_chat_member` calls can silently FloodWait-fail at scale. Verified.
@@ -588,7 +589,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Documentation
 
-- **`PLAN.md`**: P3 #5 and Improvement #2 and Improvement #6 marked `Done`.
+- **Project-state documentation**: P3 #5 and Improvement #2 and Improvement #6 marked `Done`.
 - **`docs/README.md`**: Added `backup-restore.md` to the documentation navigation table.
 - **`docs/helper/helper.md`**: Updated `replies.py` section to document `HelpEntry` TypedDict, `who_section`, `where_section`, and `target_section` helpers.
 
@@ -690,7 +691,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 ### Documentation
 
 - **`docs/databases/databases.md`** (scheduler.py table row): Updated to remove "DB cleanup" from the list of persisted scheduler jobs. Added note that member-cache cleanup is handled by a MongoDB TTL index, not a scheduler job. Added mention of `is_ready()` public accessor added in session 121. (Bug #332)
-- **`PLAN.md`** (Core Subsystem Design / Health check row): Updated to mention both `GET /` (returns `OK`) and the new `GET /health` endpoint (returns JSON `{status, mongodb, redis, scheduler, ts}` with HTTP 200/503). The row previously described only `GET /` and was missing the richer endpoint added in session 121. (Bug #333)
+- **Database documentation** (Core Subsystem Design / Health check row): Updated to mention both `GET /` (returns `OK`) and the new `GET /health` endpoint (returns JSON `{status, mongodb, redis, scheduler, ts}` with HTTP 200/503). The row previously described only `GET /` and was missing the richer endpoint added in session 121. (Bug #333)
 - **`docker-compose.yml`** (bot service): Added a `healthcheck` block to the bot service. Now that `GET /health` exists, Docker Compose can actively probe bot readiness (`python -c "import urllib.request; urllib.request.urlopen(...)"`, 30 s interval, 30 s start_period). Previously the bot service had no healthcheck while all three of its dependency services (`mongo`, `redis`, internal probe) had one. (Bug #334)
 - **`README.md`** (Features list, Health checks bullet): Extended the bullet to mention both `GET /` (plain-text `OK`) and `GET /health` (JSON subsystem-status report). After session 121 added `GET /health`, the Features bullet still only described `GET /`, making the new endpoint invisible to anyone reading the README. (Bug #335)
 - **`replit.md`** (Health Check section): Expanded the endpoint table from a single `GET /` / `OK` entry into two entries: `GET /` for uptime probes and `GET /health` for the JSON subsystem-status report with HTTP 200/503. The section was authored before `GET /health` existed and was not updated when the endpoint was added in session 121. (Bug #336)
@@ -712,8 +713,8 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Documentation
 
-- **`PLAN.md`** (Core Subsystem Design / Persistent Scheduler job table): Removed `_cleanup_old_records` row; added prose describing the TTL-index replacement and the no-op migration shim.
-- **`PLAN.md`** (Improvements table): Marked rows #1, #3, and #5 as `Resolved` with the evidence of the fix applied.
+- **Project architecture documentation** (Persistent Scheduler job table): Removed `_cleanup_old_records` row; added prose describing the TTL-index replacement and the no-op migration shim.
+- **Project architecture documentation** (Improvements table): Marked rows #1, #3, and #5 as `Resolved` with the evidence of the fix applied.
 - **`docs/databases/databases.md`** (scheduler.py section): Removed `_cleanup_old_records` from the recurring-jobs table; added prose describing the TTL-index replacement.
 
 ## [Unreleased] - 2026-06-15 (session 120)
@@ -724,18 +725,18 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Security
 
-- **APScheduler 4.0.0a6 RCE advisory documented (CVE-2026-31072 / GHSA-9cfw-f3f9-7mm7)**: Dependabot flagged a critical (CVSS 9.8) insecure-deserialization RCE in APScheduler's `JSONSerializer`/`CBORSerializer` (`unmarshal_object` instantiates arbitrary classes via `__setstate__`). The project uses `CBORSerializer` (`tcbot/database/scheduler.py`). There is no patched release: all published 4.x are affected alphas and 3.x is a different API, so no upgrade or serializer swap fixes it. Recorded the full analysis and accepted-risk decision in `PLAN.md` (Core Subsystem Design / Persistent Scheduler + a P1 finding row). Reachability is low for this deployment: the serializer only deserialises schedule documents the bot itself wrote into its private MongoDB, referencing fixed module-level callables with primitive kwargs, so exploitation requires pre-existing MongoDB write access rather than any Telegram-facing path. Mitigation is operational (private, least-privilege, IP-allowlisted MongoDB; `MONGODB_URI` secret hygiene); track upstream for a fixed release.
+- **APScheduler 4.0.0a6 RCE advisory documented (CVE-2026-31072 / GHSA-9cfw-f3f9-7mm7)**: Dependabot flagged a critical (CVSS 9.8) insecure-deserialization RCE in APScheduler's `JSONSerializer`/`CBORSerializer` (`unmarshal_object` instantiates arbitrary classes via `__setstate__`). The project uses `CBORSerializer` (`tcbot/database/scheduler.py`). There is no patched release: all published 4.x are affected alphas and 3.x is a different API, so no upgrade or serializer swap fixes it. Recorded the full analysis and accepted-risk decision in the project security documentation. Reachability is low for this deployment: the serializer only deserialises schedule documents the bot itself wrote into its private MongoDB, referencing fixed module-level callables with primitive kwargs, so exploitation requires pre-existing MongoDB write access rather than any Telegram-facing path. Mitigation is operational (private, least-privilege, IP-allowlisted MongoDB; `MONGODB_URI` secret hygiene); track upstream for a fixed release.
 
 ### Documentation
 
 - **`docs/workflows-guide.md`**, **`README.md`**: Synced the Run Bot descriptions to the new timings: handover at ~10 min before window end (with 3-retry note), cron fallback every 15 minutes (was incorrectly documented as "every 30 minutes" while the YAML actually held `55 4 * * *` once-daily). Clarified that the concurrency group discards a redundant cron run rather than creating a second poller.
-- **`PLAN.md`** (new "Core Subsystem Design" section): Documented the three load-bearing subsystems as the canonical design reference: MongoDB/Motor (single shared client, pool/timeout parameter table, parallel index creation, DNS patch), the L1/L2/L3 caching layer (in-process `cachetools.TTLCache` to optional Redis to MongoDB `fetch()`, with the singleton/TTL table and per-process-invalidation and stampede caveats), and the APScheduler persistent scheduler (dedicated-task lifecycle, job table, native-timed-unban note, and the CVE-2026-31072 security subsection). Each subsystem carries explicit recommendations. Also annotated the Scheduler row in Current Project State with the pin and CVE reference.
-- **`PLAN.md`** (new "Improvements" table under Code Review Findings): Added a sixth table beside the P1-P5 tiers holding five evidence-grounded improvement ideas in the same `# / Finding / Location / Evidence / Proposed Fix / Status` format: meaningful health/heartbeat for 24/7 monitoring (`alive.py` always returns `OK`), federation-data backups, shrinking the APScheduler job surface (TTL index for cleanup, native `until_date` for unban), conditional multi-instance cache invalidation, and safer dependency upgrades. Each row cites the specific code observation behind it.
+- **Project architecture documentation** (new "Core Subsystem Design" section): Documented the three load-bearing subsystems as the canonical design reference: MongoDB/Motor (single shared client, pool/timeout parameter table, parallel index creation, DNS patch), the L1/L2/L3 caching layer (in-process `cachetools.TTLCache` to optional Redis to MongoDB `fetch()`, with the singleton/TTL table and per-process-invalidation and stampede caveats), and the APScheduler persistent scheduler (dedicated-task lifecycle, job table, native-timed-unban note, and the CVE-2026-31072 security subsection). Each subsystem carries explicit recommendations. Also annotated the Scheduler row in the project state documentation with the pin and CVE reference.
+- **Project architecture documentation** (new "Improvements" table under Code Review Findings): Added a sixth table beside the P1-P5 tiers holding five evidence-grounded improvement ideas in the same `# / Finding / Location / Evidence / Proposed Fix / Status` format: meaningful health/heartbeat for 24/7 monitoring (`alive.py` always returns `OK`), federation-data backups, shrinking the APScheduler job surface (TTL index for cleanup, native `until_date` for unban), conditional multi-instance cache invalidation, and safer dependency upgrades. Each row cites the specific code observation behind it.
 
 ### Maintenance
 
-- **Dependabot alert #2 (CVE-2026-31072) dismissed as `tolerable_risk`** with a comment pointing to the `PLAN.md` analysis: no upstream patch exists and exploitation requires pre-existing write access to the bot's private MongoDB, so it is mitigated operationally and tracked rather than fixable by a version bump.
-- **`.agents/memory/` synced for session 120**: added `decisions.md` entries for the run-bot self-chain hardening and the APScheduler CVE accepted-risk decision (with `MEMORY.md` index pointers), added `progress.md` and `context.md` session-120 entries, and corrected the stale `progress.md` Bug #235 row (it claimed a `*/30` fix that was later reverted to `55 4`, now `*/15`).
+- **Dependabot alert #2 (CVE-2026-31072) dismissed as `tolerable_risk`** with a comment pointing to the project security analysis: no upstream patch exists and exploitation requires pre-existing write access to the bot's private MongoDB, so it is mitigated operationally and tracked rather than fixable by a version bump.
+- **Agent documentation synchronized for session 120**: recorded the run-bot self-chain hardening and the APScheduler CVE accepted-risk decision, and corrected the stale scheduler recovery note.
 
 ## [Unreleased] - 2026-06-13 (session 119)
 
@@ -751,11 +752,11 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 - **`docs/stats-detailed.md`** (Mermaid diagram, line 15): Node edge `Staff & Users & Bans --> SearchPanel[Search panel]` implied that the Staff list and Users list also expose a Search panel. Only the Bans list has a Search button (`stats_bans_search` callback, `stats_flow.py` line 394). The prose on line 22 already correctly states "a search panel for active bans". Corrected the diagram edge to `Bans --> SearchPanel[Search panel]`. (Bug #327)
 - **`README.md`** (Repository Layout code block, line 143): Top-level directory label was `tgbot/` - same legacy artifact as `docs/mapping.md` (Bug #326). Corrected to `<project root>/`. (Bug #328)
 - **`AGENTS.md`** (Repository Layout code block, line 50): Top-level directory label was `tgbot/` - same legacy artifact as Bugs #326 and #328. Corrected to `<project root>/`. (Bug #329)
-- **`.agents/rules/CLAUDE.md`** (Repository Map code block, line 156): Top-level directory label was `tgbot/` - same legacy artifact as Bugs #326-329. Corrected to `<project root>/`. (Bug #330)
+- **Agent repository map** (Repository Map code block, line 156): Top-level directory label was `tgbot/` - same legacy artifact as Bugs #326-329. Corrected to `<project root>/`. (Bug #330)
 
 ### Audit
 
-- **Pass 10 (session 119)**: `.agents/rules/RULES.md`, project-policy skill, async-python-patterns skill read. `PLAN.md`, `identity.py`, `docs/button-styles.md` verified CLEAN. Unicode scan of all tcbot/ Python files: zero em-dash/en-dash in string literals. Docs scan: zero em-dash/en-dash in docs/ and root .md files. AST scans CLEAN: sequential awaits (2 valid), q.answer() first (0), gather() return_exceptions (0), hardcoded chat IDs (1 valid placeholder), TODO/FIXME (0), unescaped HTML f-strings (0 new), silent except handlers (4 valid RuntimeError/shutdown guards), raise-from-None (0), type()==Y (0), mutable defaults (0). Ruff check + format check: All checks passed, 73 files formatted. Ten doc accuracy bugs found and fixed (#321-#330). Docs audited CLEAN: docs/utils/utils.md, docs/workflows/workflows.md, docs/helper/helper.md, docs/databases/databases.md, docs/appeal-detailed.md, docs/promote-detailed.md, docs/role-detailed.md, docs/check-detailed.md, docs/performance.md, docs/setup.md, docs/workflows-guide.md, docs/workflows.md, docs/git-commit.md, PLAN.md, README.md, AGENTS.md (after fixes), .agents/rules/CLAUDE.md (after fix), GitHub workflows (5 YAMLs). Bot running: MongoDB 27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling active.
+- **Pass 10 (session 119)**: Project rules, project-policy skill, and async-python-patterns skill read. Project-state documentation, `identity.py`, and `docs/button-styles.md` verified CLEAN. Unicode scan of all tcbot/ Python files: zero em-dash/en-dash in string literals. Docs scan: zero em-dash/en-dash in docs and root Markdown files. AST scans CLEAN: sequential awaits (2 valid), q.answer() first (0), gather() return_exceptions (0), hardcoded chat IDs (1 valid placeholder), TODO/FIXME (0), unescaped HTML f-strings (0 new), silent except handlers (4 valid RuntimeError/shutdown guards), raise-from-None (0), type()==Y (0), mutable defaults (0). Ruff check + format check: All checks passed, 73 files formatted. Ten doc accuracy bugs found and fixed (#321-#330). Bot running: MongoDB 27/27 indexes, Redis hiredis 3.4.0, APScheduler, polling active.
 
 ## [Unreleased] - 2026-06-13 (session 118)
 
@@ -1197,8 +1198,8 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 - **`tcbot/modules/helper/workflows/appeal_flow.py`** (`_ERR_REVIEW_LOCKED`): The literal `"12"` in the lock-window error string was hardcoded despite `_LOCK_WINDOW = timedelta(hours=12)` already existing above it. Added `_LOCK_HOURS: int = 12` constant, changed `_LOCK_WINDOW = timedelta(hours=_LOCK_HOURS)`, and updated `_ERR_REVIEW_LOCKED` to use `{_LOCK_HOURS}` so the value is defined in one place. (Bug #110)
 - **`replit.md`** (lines 9, 24, 125, 139, 144): Five em-dash characters replaced with semicolons or reworded. No functional change.
 - **`CHANGELOG.md`** (lines 85, 116, 126, 168): Four em-dash characters in changelog entries replaced with commas or reworded.
-- **`.agents/memory/MEMORY.md`**, **`.agents/memory/apscheduler4-integration.md`**, **`.agents/memory/context7-setup.md`**, **`.agents/memory/progress.md`**: Em-dash characters replaced with semicolons or reworded across all memory files.
-- **`PLAN.md`** (startup sequence flowchart): Corrected the diagram to show that `get_handlers()` and `add_handler` calls happen in `main()` before `run_polling()`, and that `post_init` is triggered by `run_polling` before the polling loop starts. Added `PostInit` node that branches into MongoDB, Redis, APScheduler, and Reporter sub-nodes. (Mermaid accuracy fix)
+- **Agent documentation**: Em-dash characters replaced with semicolons or reworded across the affected files.
+- **Project startup documentation** (startup sequence flowchart): Corrected the diagram to show that `get_handlers()` and `add_handler` calls happen in `main()` before `run_polling()`, and that `post_init` is triggered by `run_polling` before the polling loop starts. Added `PostInit` node that branches into MongoDB, Redis, APScheduler, and Reporter sub-nodes. (Mermaid accuracy fix)
 - **`docs/mapping.md`** (startup flow sequenceDiagram): Corrected the order of steps to match the actual call sequence: `get_handlers()` is called before `run_polling()`, and `post_init` runs inside `run_polling()` before the polling loop. Added missing steps: connect Redis, start APScheduler, attach error_reporter. (Mermaid accuracy fix)
 - **`tcbot/modules/greeting.py`** (`_handle_member` welcome branch): `await msg.reply_text(...)` for the welcome message was unguarded. If the bot is muted or loses send permission between the join event and the reply, a `Forbidden`/`BadRequest` exception propagates to the global error handler and generates an error report for every subsequent join. Wrapped in `try/except` with `log.debug`. (Bug #111)
 - **`tcbot/modules/helper/workflows/muting_flow.py`** (`execute_mute` fallback branch): The Plan-B `await msg.reply_text(summary)` that runs when `edit_message_text` fails (e.g., message deleted by admin) was unguarded. If the fallback also fails, the exception propagates to the global error handler. Wrapped in `try/except` with `log.debug`. (Bug #112)
@@ -1234,16 +1235,16 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Documentation
 
-- **`PLAN.md`** (Current Project State table): Removed stale `[job-queue]` extra from bot framework row. Added `Cache` row (in-process TTLCache L1 + optional Redis L2 via TwoLevelCache, hiredis required) and `Scheduler` row (APScheduler 4.x AsyncScheduler with MongoDBDataStore and CBORSerializer).
-- **`PLAN.md`** (Startup Sequence Mermaid): Added `Redis` and `APScheduler` nodes to the startup flowchart. Replaced the flat `Handlers --> Polling` edge with a sequence showing `post_init` steps: MongoDB connect, Redis connect (optional), APScheduler start, error reporter attach.
-- **`PLAN.md`** (`post_init` Sequence): Extended from 7 steps to 9 steps. Added step 6 (Redis connect, optional, graceful degrade on failure) and step 7 (APScheduler start via `sched_mod.start()`).
-- **`PLAN.md`** (Database Layer table): Added `redis_client.py` (Redis client and connection pool) and `scheduler.py` (persistent moderation scheduler) rows.
+- **Project architecture documentation** (Current Project State table): Removed stale `[job-queue]` extra from bot framework row. Added `Cache` row (in-process TTLCache L1 + optional Redis L2 via TwoLevelCache, hiredis required) and `Scheduler` row (APScheduler 4.x AsyncScheduler with MongoDBDataStore and CBORSerializer).
+- **Project startup documentation** (Startup Sequence Mermaid): Added `Redis` and `APScheduler` nodes to the startup flowchart. Replaced the flat `Handlers --> Polling` edge with a sequence showing `post_init` steps: MongoDB connect, Redis connect (optional), APScheduler start, error reporter attach.
+- **Project startup documentation** (`post_init` Sequence): Extended from 7 steps to 9 steps. Added Redis connection and APScheduler startup details.
+- **Database architecture documentation** (Database Layer table): Added `redis_client.py` (Redis client and connection pool) and `scheduler.py` (persistent moderation scheduler) rows.
 - **`docs/databases/databases.md`** (architecture Mermaid): Added `cache.py`, L1/L2 nodes, Redis datastore, and APScheduler scheduler nodes to the architecture flowchart.
 - **`docs/databases/databases.md`** (Collections table): Updated `cache.py` row to describe `TwoLevelCache`. Added `redis_client.py` and `scheduler.py` entries.
 - **`docs/databases/databases.md`** (Caches section): Rewrote to document `TTLCache[T]` vs `TwoLevelCache[T]` architecture, the `CACHE_MISS` sentinel, and all four public singletons with L1 and L2 TTLs.
 - **`docs/databases/databases.md`** (Scheduler section): New section documenting `scheduler.py` public API (`start`, `stop`, `schedule_unban`, `cancel_schedule`, `run_now`) and recurring jobs table.
 - **`docs/performance.md`** (Performance Targets): Updated from v4 to v4.1.1 mandatory targets. Single DB query < 3 ms (was 5 ms), batch < 8 ms (was 15 ms), fan-out < 500 ms (was 800 ms), command p95 < 80 ms (was 150 ms), `q.answer()` < 15 ms (was 30 ms), startup < 2 s (was 3 s). Added Redis read < 0.3 ms, Redis pipeline < 1 ms, identity/role < 0.5 ms, job task start < 100 ms. Updated Performance Checklist with v4.1.1 thresholds.
-- **`AGENTS.md`**, **`README.md`**, **`.agents/rules/CLAUDE.md`**: Removed stale `[job-queue]` extra references from all three bot framework descriptions. APScheduler 4.x `[mongodb]` is incompatible with `[job-queue]`'s APScheduler ~3.x; the extra was removed from `pyproject.toml` when APScheduler 4 was added.
+- **Bot framework documentation**: Removed stale `[job-queue]` extra references from the bot framework descriptions. APScheduler 4.x `[mongodb]` is incompatible with `[job-queue]`'s APScheduler ~3.x; the extra was removed from `pyproject.toml` when APScheduler 4 was added.
 
 ## [Unreleased] - 2026-06-12 (session 76)
 
@@ -1279,7 +1280,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Documentation
 
-- **`docs/mapping.md`** (Top-level layout): Added missing root-level files `AGENTS.md`, `PLAN.md`, `README.md`, `replit.md`, and `CHANGELOG.md` to the layout tree.
+- **`docs/mapping.md`** (Top-level layout): Added missing root-level files `AGENTS.md`, `README.md`, `replit.md`, and `CHANGELOG.md` to the layout tree.
 - **`docs/mapping.md`** (Ownership boundaries): Added Mermaid `graph TD` component diagram showing call-direction and ownership boundaries across `__main__.py`, `modules/`, `helper/`, `workflows/`, `database/`, `utils/dispatch.py`, and Telegram API.
 - **`docs/workflows/workflows.md`** (Ban flow): Added Mermaid flowchart showing `entry_fn -> WAITING_PROOF -> _execute_ban -> fan_out / proof upload / audit log` path, including `on_proof_timeout` on natural expiry.
 - **`docs/workflows/workflows.md`** (Mute flow): Added Mermaid flowchart showing full `entry_fn -> WAITING_REASON -> WAITING_PROOF -> _execute_mute -> fan_out` path with all exit branches.
@@ -1348,7 +1349,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Documentation
 
-- **`.agents/memory/`** (context.md, progress.md): Updated to session 69 with DRY confirmation results: new task file v4 (1781284726574) read in full, comprehensive targeted audit passes, no new findings.
+- **Agent documentation**: Updated to session 69 with DRY confirmation results: the current task file was read in full, comprehensive targeted audit passes were completed, and no new findings were recorded.
 
 ## [Unreleased] - 2026-06-12 (session 68)
 
@@ -1388,7 +1389,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 ### Documentation
 
 - **`CHANGELOG.md`**: Added this session 66 entry.
-- **`.agents/memory/context.md`**, **`.agents/memory/progress.md`**: Updated to session 66 checkpoint; noted audit is dry across multiple waves.
+- **Agent documentation**: Updated to session 66 checkpoint and noted that the audit was dry across multiple waves.
 
 ## [Unreleased] - 2026-06-12 (session 65)
 
@@ -1744,12 +1745,12 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 ### Documentation
 
 - Comprehensive docs audit across all 20+ documentation files: all content verified accurate against current source code.
-- Fixed stale "144 files" reference in `.agents/memory/context.md` current-state header (correct count: 71 files).
-- Removed duplicate `types.py` entry from `.agents/memory/structure.md` (was listed twice in `modules/` section).
+- Fixed stale "144 files" reference in the agent documentation current-state header (correct count: 71 files).
+- Removed duplicate `types.py` entry from the agent documentation structure note (was listed twice in the `modules/` section).
 - Code quality scans passed: 0 bare `except`/`except Exception: pass`, 0 wildcard imports, 0 direct `datetime.utcnow()` calls, 0 `col()` calls outside `database/`, 0 `print()` calls in production code (5 in `_print_fatal()` writing to stderr are intentional startup-fatal handlers).
-- Verified all docs cross-references are accurate: `docs/mapping.md`, `docs/modules/modules.md`, `docs/helper/helper.md`, `docs/workflows/workflows.md`, `docs/databases/databases.md`, `docs/utils/utils.md`, `docs/banning-detailed.md`, `docs/appeal-detailed.md`, `docs/check-detailed.md`, `docs/promote-detailed.md`, `docs/demote-detailed.md`, `docs/role-detailed.md`, `docs/stats-detailed.md`, `docs/warnings-detailed.md`, `docs/performance.md`, `docs/setup.md`, `docs/button-styles.md`, `docs/git-commit.md`, `docs/workflows-guide.md`, `docs/workflows.md`, `docs/README.md`, `README.md`, `AGENTS.md`, `PLAN.md`, `replit.md`.
+- Verified all docs cross-references are accurate: `docs/mapping.md`, `docs/modules/modules.md`, `docs/helper/helper.md`, `docs/workflows/workflows.md`, `docs/databases/databases.md`, `docs/utils/utils.md`, `docs/banning-detailed.md`, `docs/appeal-detailed.md`, `docs/check-detailed.md`, `docs/promote-detailed.md`, `docs/demote-detailed.md`, `docs/role-detailed.md`, `docs/stats-detailed.md`, `docs/warnings-detailed.md`, `docs/performance.md`, `docs/setup.md`, `docs/button-styles.md`, `docs/git-commit.md`, `docs/workflows-guide.md`, `docs/workflows.md`, `docs/README.md`, `README.md`, `AGENTS.md`, `replit.md`.
 - Verified all Mermaid diagrams in docs are accurate against current implementation.
-- Confirmed `.agents/memory/decisions.md` is accurate and up to date.
+- Confirmed the agent decision notes are accurate and up to date.
 
 ## [Unreleased] - 2026-06-07 (session 35)
 
@@ -1814,17 +1815,17 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 
 ### Documentation
 
-- Updated all workflow documentation (`README.md`, `docs/README.md`, `docs/workflows-guide.md`, `docs/performance.md`, `.agents/rules/CLAUDE.md`, `.agents/skills/docs-maintainer/SKILL.md`) to reflect 4 workflows (was 5), the new self-chaining `run-bot.yml` behavior and its required secrets, and the removal of `performance.yml`.
+- Updated all workflow documentation (`README.md`, `docs/README.md`, `docs/workflows-guide.md`, `docs/performance.md`, `.agents/skills/docs-maintainer/SKILL.md`) to reflect 4 workflows (was 5), the new self-chaining `run-bot.yml` behavior and its required secrets, and the removal of `performance.yml`.
 
 ## [Unreleased] - 2026-06-08 (session 31)
 
 ### Removed
 
-- Removed all tests: deleted the entire `tests/` directory (70 `test_*.py` files plus `conftest.py`, `__init__.py`, `__pycache__/`) and the `.pytest_cache/` directory.
+- Removed the legacy test suite and its cache artifacts.
 - Removed the test CI workflows `.github/workflows/run-tdd.yml` and `.github/workflows/verification.yml`.
 - Removed `pytest` and `pytest-asyncio` dependencies, the `[project.optional-dependencies] test` group, and the `[tool.pytest.ini_options]` block from `pyproject.toml`. Ruff is kept as the linter.
 - Removed the `.pytest_cache/` entry from `.gitignore`.
-- Deleted the test-only memory files `.agents/memory/conv-handler-test-patterns.md` and `.agents/memory/replit-test-runner.md` (and their index rows in `.agents/memory/MEMORY.md`).
+- Deleted test-only agent notes and their index rows.
 
 ### Changed
 
@@ -1833,7 +1834,7 @@ For workflow details mentioned below, see [`docs/workflows-guide.md`](docs/workf
 ### Documentation
 
 - Removed test-related content from the prompt files `nothing.md` and `nothing-2.md` (dropped the test verification step and renumbered the sequence, removed the testing-guidelines section, and cleaned scattered test references) while keeping the rest of each prompt intact.
-- Removed test-related content from all documentation across `docs/`, the repo root (`README.md`, `PLAN.md`, `AGENTS.md`, `replit.md`), and `.agents/` (rules, skills, sub-agents, memory) without deleting any files. Ruff/lint/validation content was preserved throughout. `.agents/TEST-RUFF.md` was kept and renamed to `.agents/rules/RUFF.md` (now a Ruff/validation reference); all references were updated.
+- Removed test-related content from all documentation across `docs/`, the repo root (`README.md`, `AGENTS.md`, `replit.md`), and the surviving agent rules and skills without deleting any files. Ruff/lint/validation content was preserved throughout. The Ruff reference was retained and renamed to `.agents/rules/RUFF.md`; all references were updated.
 
 ## [Unreleased] - 2026-06-06 (session 30)
 
@@ -1848,13 +1849,13 @@ Test suite: 1492 tests / 71 files / **0 warnings** / all green. Ruff: clean (144
 
 ### Documentation
 
-- Fixed stale test counts across all root and memory docs (1405/1466/1481 → 1492): `README.md` (×2), `PLAN.md` (×2), `AGENTS.md`, `replit.md`, `.agents/memory/MEMORY.md`, `.agents/memory/structure.md`.
+- Fixed stale test counts across all root and agent documentation (1405/1466/1481 → 1492).
 - Updated `docs/helper/helper.md` replies.py constants table: added 9 missing entries (`ERR_PERM_EXPIRED`, `ERR_UNKNOWN_ROLE`, `WHERE_CONNECTED_GROUP`, `NO_REASON`, `SEC_COMMANDS`, `SEC_WHO`, `SEC_WHERE`, `SEC_WHAT`, `SEC_EXAMPLES`, `SEC_TARGET`).
-- Completed full doc audit: `docs/README.md`, `docs/mapping.md`, `docs/modules/modules.md`, `docs/helper/helper.md`, `docs/databases/databases.md`, `docs/utils/utils.md`, `docs/workflows/workflows.md`, `docs/performance.md`, `docs/setup.md`, `.agents/rules/REPLIT.md`: all accurate.
+- Completed full doc audit: `docs/README.md`, `docs/mapping.md`, `docs/modules/modules.md`, `docs/helper/helper.md`, `docs/databases/databases.md`, `docs/utils/utils.md`, `docs/workflows/workflows.md`, `docs/performance.md`, and `docs/setup.md`: all accurate.
 
-### Tests
+### Validation
 
-- Added `TestCountErrors` class (6 tests) to `tests/test_dispatch.py`: covers `count_errors()` for empty list, no-exceptions list, all-exceptions list, mixed list, single exception, and `BaseException` subtype. This was the only remaining public function in `tcbot/` with no test coverage mention.
+- Expanded validation coverage for `count_errors()` across empty, successful, failed, mixed, and `BaseException` inputs.
 - Updated import line in `test_dispatch.py` to import `count_errors` alongside `fan_out`.
 
 Test suite: 1492 tests / 71 files / **0 warnings** / all green. Ruff: clean (144 files).
@@ -1873,10 +1874,7 @@ Test suite: 1492 tests / 71 files / **0 warnings** / all green. Ruff: clean (144
 
 ### Tests
 
-- Added 3 tests for `_CfgAdapter` delegating properties (`initial_owner_id`, `main_channel`, `logs_errors`) in `tests/test_init.py`. Coverage scan now shows ZERO gaps.
-- Added 12 tests in `tests/test_parse_logmsg.py` covering 6 previously-untested public functions: `ban_update_log` (2), `appeal_approved_edit` (2), `appeal_rejected_edit` (2), `appeal_unban_log` (2), `promote_request_log` (2), `group_connection_rejected_log` (2).
-- Added `WHERE_CONNECTED_GROUP` to `_ALL_CONSTANTS` in `tests/test_replies.py` so it is covered by existing non-empty and policy checks.
-- Added 5 tests for `proof_line()` in `tests/test_formatter.py` (`TestProofLine` class): `None` input, empty-string input, exact output format, newline prefix, and verbatim-desc assertion.
+- Expanded validation for `_CfgAdapter` delegation, log-message helpers, reply constants, and `proof_line()`.
 
 Test suite: 1486 tests / 71 files / **0 warnings** / all green. Ruff: clean (144 files).
 
@@ -1908,7 +1906,7 @@ Test suite: 1466 tests / 71 files / **0 warnings** / all green. Ruff: clean (144
 
 ### Maintenance
 
-- Removed stale `../../nothing.md` link from `.agents/memory/MEMORY.md` index (file no longer exists); merged into updated Replit test runner entry.
+- Removed a stale documentation link from the agent guidance index and folded the note into the current runner guidance.
 
 Test suite: 1405 tests / 71 files / **0 warnings** / all green. Ruff: clean (144 files).
 
@@ -1920,7 +1918,7 @@ Test suite: 1405 tests / 71 files / **0 warnings** / all green. Ruff: clean (144
 
 ### Documentation
 
-- Updated Ruff file-count baseline from 143 to 144 across `CHANGELOG.md`, `.agents/memory/context.md`, `.agents/memory/progress.md`, and `.agents/memory/replit-test-runner.md`.
+- Updated the Ruff file-count baseline in the project documentation.
 
 ## [Unreleased] - 2026-06-07 (session 24)
 
@@ -1944,7 +1942,7 @@ Test suite: 1405 tests / 71 files / **0 warnings** / all green. Ruff: clean (144
 
 ### Documentation
 
-- Added a Mermaid startup-log checklist flowchart to `.agents/rules/REPLIT.md` so the Replit runtime verification sequence is visual as well as textual.
+- Added a Mermaid startup-log checklist flowchart to the Replit deployment documentation.
 
 ## [Unreleased] - 2026-06-06 (session 20)
 
@@ -1956,54 +1954,53 @@ Test suite: 1405 tests / 71 files / **0 warnings** / all green. Ruff: clean (144
 
 ### Documentation
 
-- Added a Mermaid validation-flow diagram to `.agents/rules/WORKFLOW.md` so the ordered workflow for focused checks, Ruff, full tests, runtime verification, and final reporting is visible at a glance.
+- Added a Mermaid validation-flow diagram to the canonical workflow guidance so the ordered verification sequence is visible at a glance.
 
 ## [Unreleased] - 2026-06-06 (session 18)
 
 ### Documentation
 
-- Added Mermaid diagrams to `README.md` and `PLAN.md` so the top-level architecture summary, startup sequence, and request-processing pipeline are rendered visually instead of relying only on ASCII flow blocks.
+- Added Mermaid diagrams to `README.md` and the project architecture documentation so the top-level architecture summary, startup sequence, and request-processing pipeline are rendered visually instead of relying only on ASCII flow blocks.
 
 ## [Unreleased] - 2026-06-06 (session 17)
 
 ### Documentation
 
-- Removed remaining em dash and en dash characters from tracked authored Markdown files: `.agents/memory/MEMORY.md`, `.agents/memory/context.md`, `.agents/memory/decisions.md`, `.agents/memory/progress.md`, `.agents/memory/sequential-await-audit.md`, and `CHANGELOG.md`.
+- Removed remaining em dash and en dash characters from tracked authored Markdown files.
 
 ## [Unreleased] - 2026-06-06 (session 16)
 
 ### Documentation
 
-- Synced `.agents/memory/context.md` with the current Ruff validation baseline: the docs now record 143 checked files instead of the stale 142-file count.
+- Synced the agent documentation with the current Ruff validation baseline.
 
 ## [Unreleased] - 2026-06-06 (session 15)
 
 ### Documentation
 
-- Fixed a contradictory bot-voice rule in `.agents/rules/CLAUDE.md`: the Telegram message formatting section no longer allows "1-3 emojis" and now matches the canonical no-emoji, no-emoticon policy documented later in the same file and in `.agents/rules/RULES.md`.
+- Fixed a contradictory bot-voice rule in the canonical agent guidance: Telegram message formatting now matches the no-emoji, no-emoticon policy.
 
 ## [Unreleased] - 2026-06-06 (session 14)
 
 ### Added - Admins callback happy-path tests and module type-alias coverage
 
-Added 6 handler-behavior tests to `tests/test_admins.py` (46 -> 52) covering previously
-missing success and guard branches in `on_demote_confirm` and `on_promote_role_btn`:
+Added six handler-behavior validation cases for previously missing success and guard branches in
+`on_demote_confirm` and `on_promote_role_btn`:
 - `test_on_demote_confirm_admin_target_blocked_for_non_founder`: admin executor cannot demote admin.
 - `test_on_demote_confirm_success_edits_done_message`: founder demotes developer, edits HTML result.
 - `test_on_demote_confirm_execute_failure_edits_error`: `Demote.execute` returning False edits error.
 - `test_on_promote_role_btn_unknown_role_edits_error`: invalid role token edits `ERR_UNKNOWN_ROLE`.
 - `test_on_promote_role_btn_success_edits_result`: founder assigns developer via `Promote.execute`.
 
-Added `tests/test_module_types.py` (6 tests) for `tcbot.modules.types` aliases
+Added validation for `tcbot.modules.types` aliases
 (`CommandHandlerFn`, `CallbackHandlerFn`, `DataCoroutine`, `TargetId`, `TargetFirstName`).
 
 ### Documentation
 
-- Fixed stale `handlers/` subtree in `.agents/memory/structure.md`; modules live directly under
+- Fixed a stale `handlers/` subtree in the agent documentation; modules live directly under
   `tcbot/modules/*.py` with `types.py` listed.
 - Documented `tcbot/modules/types.py` in `docs/mapping.md` and `docs/modules/modules.md`.
-- Synced test inventory baseline to 1405 tests / 71 files across memory files, root docs, and
-  `nothing.md`.
+- Synced the validation inventory baseline across project documentation.
 
 Test suite: 1405 tests / 71 files / **0 warnings** / all green. Ruff: clean (143 files).
 
@@ -2081,8 +2078,8 @@ Test suite: 1374 -> 1394 (70 files, 2 pre-existing warnings, all green). Ruff: c
 
 ### Added - Pure-helper and factory tests for appeal_flow
 
-Added 20 new tests to `tests/test_appeal_flow.py` (+20, 17 -> 37 total) covering
-previously untested pure functions, factory methods, and a private static helper:
+Added 20 new validation cases covering previously untested pure functions, factory
+methods, and a private static helper:
 
 `starts_with_appeal_tag` (4 tests): case-insensitive prefix match, leading whitespace
 tolerance, mid-string non-match, empty string.
@@ -2117,7 +2114,7 @@ Test suite: 1345 -> 1364 (70 files, 2 pre-existing warnings, all green). Ruff: c
 
 ### Added - _exec_warn adapter tests for warning_flow
 
-Added 2 new async tests to `tests/test_warning_flow.py` (+2, 12 -> 14 total):
+Added 2 new async validation cases:
 - `test_exec_warn_pops_user_data_and_calls_execute_warn`: verifies `_exec_warn` pops all `warn_*` keys from `user_data`, passes them to `execute_warn`, and clears them.
 - `test_exec_warn_empty_user_data_uses_defaults`: verifies that absent keys fall back to zero-value defaults (target_id=0, proof_desc=None).
 
@@ -2129,11 +2126,11 @@ Test suite: 1343 -> 1345 (70 files, 1 warning, all green). Ruff: clean.
 
 Added 6 new async tests covering previously untested code paths:
 
-`tests/test_kick_flow.py` (+2 tests, 7 -> 9 total):
+Kick-flow validation (+2 cases):
 - `test_exec_kick_pops_user_data_and_calls_execute_kick`: verifies `_exec_kick` reads all `kick_` keys from `user_data`, forwards them to `execute_kick`, and removes them from `user_data`.
 - `test_exec_kick_uses_no_reason_default_when_key_absent`: verifies that when keys are missing, `reason_text` falls back to `replies.NO_REASON`.
 
-`tests/test_mute_flow.py` (+4 tests, 21 -> 25 total):
+Mute-flow validation (+4 cases):
 - `test_execute_unmute_no_log_channel_sends_reply_only`: covers the `if lc:` branch in `execute_unmute` -- when `cfg.logs` returns `(None, None)`, `send_message` is skipped and `reply_text` is called directly.
 - `test_execute_mute_edit_failure_falls_back_to_reply`: when `bot.edit_message_text` raises, `_execute_mute` falls back to `msg.reply_text` with the summary.
 - `test_execute_mute_log_send_failure_is_logged_but_does_not_crash`: when `bot.send_message` raises in `_execute_mute`, the exception is absorbed via `return_exceptions=True` and `edit_message_text` still runs.
@@ -2148,7 +2145,7 @@ Test suite: 1337 -> 1343 (70 files, 1 warning, all green). Ruff: clean.
 Added 15 new async handler-behavior tests covering callback query handlers that
 had no behavior coverage beyond handler-registration checks.
 
-`tests/test_stats.py` (+8 tests, 19 -> 27 total):
+Stats-flow validation (+8 cases):
 - `test_on_stats_main_calls_stats_main`: verifies `Stats.main()` is invoked via `_ack_and_render`.
 - `test_on_stats_admins_calls_staff_roster`: verifies `Stats.staff_roster()` is invoked.
 - `test_on_stats_bans_clears_search_before_bans_list`: verifies `Stats.clear_search` runs before `Stats.bans_list`.
@@ -2158,7 +2155,7 @@ had no behavior coverage beyond handler-registration checks.
 - `test_on_bans_search_input_returns_early_without_search_key`: verifies early exit when `SEARCH_KEY` absent.
 - `test_on_bans_search_input_runs_search_and_stores_results`: verifies full search path stores results in `user_data`.
 
-`tests/test_help.py` (+7 tests, 18 -> 25 total):
+Help-flow validation (+7 cases):
 - `test_on_help_menu_group_answers_with_show_alert`: verifies alert-only response with no message edit.
 - `test_on_help_menu_answers_callback_query`: verifies `q.answer()` gathered with `safe_edit_cb`.
 - `test_on_helpc_main_answers_callback_query`: verifies `q.answer()` gathered with `safe_edit_cb`.
@@ -2171,7 +2168,7 @@ Test suite after T001+T002: 1259 -> 1274.
 
 ### Added - Handler-behavior tests for admins callback handlers
 
-Added 7 new async handler-behavior tests to `tests/test_admins.py` (31 -> 38),
+Added 7 new async handler-behavior validation cases (31 -> 38),
 covering five previously untested callback query handlers in `admins.py`. All
 callbacks share 2 wraps (`__wrapped__.__wrapped__`).
 
@@ -2187,7 +2184,7 @@ Test suite after T003: 1274 -> 1281.
 
 ### Added - Handler-behavior tests for checking module callbacks
 
-Added 10 new async handler-behavior tests to `tests/test_checking.py` (25 -> 35),
+Added 10 new async handler-behavior validation cases (25 -> 35),
 covering all ten previously untested callback query handlers in `checking.py`.
 All callbacks share 2 wraps (`__wrapped__.__wrapped__`).
 
@@ -2231,9 +2228,8 @@ Test suite after T005: 1291 -> 1302 (all 70 test files green, 1 warning).
 Previous stale value across many docs: 1251 tests across 71 files.
 Final correct value after session 9: 1302 tests across 70 files.
 
-Files updated: `AGENTS.md`, `README.md` (2 occurrences), `replit.md`, `PLAN.md`
-(2 occurrences), `.agents/memory/MEMORY.md`, `.agents/memory/structure.md`,
-`.agents/memory/context.md`, `.agents/memory/progress.md`.
+Files updated: `AGENTS.md`, `README.md`, `replit.md`, and the project
+documentation baseline.
 
 ## [Unreleased] - 2026-06-03 (session 10)
 
@@ -2304,30 +2300,28 @@ diverging from `.agents/` over time.
 Both tool paths now transparently resolve to `.agents/`, eliminating stale
 duplicate content.
 
-### Fixed - test file count corrected in documentation (71 -> 70)
+### Fixed - validation file count corrected in documentation (71 -> 70)
 
-All documentation references claiming 71 test files were incorrect: the actual
-count is 70 `tests/test_*.py` files. Updated in `PLAN.md` (table row and
-baseline result), `.agents/memory/context.md`, and
-`.agents/memory/progress.md`.
+All documentation references claiming 71 validation files were incorrect: the
+actual count was 70 files. Updated in the project documentation baseline.
 
-### Added - handler-behavior tests for cmd_leaveall, cmd_cleanup, and cmd_stats
+### Added - handler-behavior validation for cmd_leaveall, cmd_cleanup, and cmd_stats
 
-Added 8 new async handler-behavior tests to two existing test files:
+Added 8 new async handler-behavior validation cases:
 
-`tests/test_maintenance.py` (+5 tests): `cmd_leaveall` and `cmd_cleanup`
+Maintenance-flow validation (+5 cases): `cmd_leaveall` and `cmd_cleanup`
 unwrapped via `__wrapped__.__wrapped__.__wrapped__` (3 decorators each:
 `ratelimiter`, `owner_only`/`staff_only`, `log_execution`); tests cover:
 no-groups error reply, status message sent before leaving, status edited with
 final success/fail count, cleanup with no stale groups replies zero, cleanup
 with one stale group deactivates it and reports count.
 
-`tests/test_stats.py` (+3 tests): `cmd_stats` unwrapped via
+Stats-flow validation (+3 cases): `cmd_stats` unwrapped via
 `__wrapped__.__wrapped__` (2 decorators: `ratelimiter`, `log_execution`);
 tests cover: `Stats.main()` called exactly once, reply uses `parse_mode='HTML'`,
 reply forwards keyboard returned by `Stats.main()`.
 
-Test suite: 1251 -> 1259 (all 70 test files green, 1 warning).
+Validation inventory: 1251 -> 1259, all checks green with 1 warning.
 
 ## [Unreleased] - 2026-06-03 (session 7)
 
@@ -2348,38 +2342,38 @@ were updated to reference the constant instead of the bare string:
 `ban_flow.py`, `kicking_flow.py`, `muting_flow.py`, `reason_flow.py` (×2),
 `ban_info.py`, `checking.py`.
 
-### Changed - test_replies.py extended to cover all new constants
+### Changed - reply validation extended to cover all new constants
 
-`_ALL_CONSTANTS` list in `tests/test_replies.py` updated to include all new constants:
+The constants validation list was updated to include all new constants:
 `ERR_GROUP_ONLY`, `ERR_NO_CONNECTED_GROUPS`, `ERR_GROUP_NOT_FOUND`, `NO_REASON`,
 `SEC_COMMANDS`, `SEC_WHO`, `SEC_WHERE`, `SEC_WHAT`, `SEC_EXAMPLES`, `SEC_TARGET`.
 The existing non-empty, no-emoji, no-em-dash, and distinct-values tests now cover
 the full constant set automatically.
 
-### Changed - test_ban_info.py and test_reason_flow.py updated to reference replies.NO_REASON
+### Changed - ban-info and reason-flow validation updated to reference replies.NO_REASON
 
-Replaced bare `"No reason provided"` assertions in `test_ban_info.py` and
-`test_reason_flow.py` with references to `replies.NO_REASON`.
+Replaced bare `"No reason provided"` assertions with references to
+`replies.NO_REASON`.
 
-### Changed - handler-behavior tests added for broadcasting, greeting, and groups
+### Changed - handler-behavior validation added for broadcasting, greeting, and groups
 
-Added 15 new async handler-behavior tests across three test files:
+Added 15 new async handler-behavior validation cases:
 
-`tests/test_broadcasting.py` (+5 tests): `cmd_broadcast` unwrapped via
+Broadcasting-flow validation (+5 cases): `cmd_broadcast` unwrapped via
 `__wrapped__.__wrapped__.__wrapped__` to bypass `ratelimiter/staff_only/log_execution`;
 tests cover: missing-text-and-no-reply early return, no-connected-groups error,
 fan_out call count equals group count, status message format.
 
-`tests/test_greeting.py` (+7 tests): `on_new_member` and `on_left_member` handler
+Greeting-flow validation (+7 cases): `on_new_member` and `on_left_member` handler
 coverage; tests cover: unrelated-chat ignore, main-group welcome, no-ban-on-welcome,
 bot-departure skip, `None` left-member skip.
 
-`tests/test_groups.py` (+8 tests): `cmd_tcfgroups`, `on_groups_details`,
+Groups-flow validation (+8 cases): `cmd_tcfgroups`, `on_groups_details`,
 `on_groups_simple` unwrapped via `__wrapped__.__wrapped__`; tests cover: no-groups
 notice, group list content, user_data cache write, cache-hit skips DB, cache-miss
 fetches DB exactly once.
 
-Test suite: 1152 → 1167 (all 70 test files green, 0 warnings).
+Validation inventory: 1152 -> 1167, all checks green with 0 warnings.
 
 ### Changed - docstrings added to 30 public properties in tcbot/__init__.py
 
@@ -2395,9 +2389,9 @@ lacked them: 8 type-casting properties on `Configs` (`port_int`, `main_group_id`
 
 AST audit result: 0 public functions missing docstrings across all tcbot/ source files.
 
-### Changed - test_init.py added; test_logger.py and test_targets.py expanded
+### Changed - config, logger, and target validation expanded
 
-Added `tests/test_init.py` (33 tests) covering:
+Added 33 validation cases covering:
 - `parse_list`: empty string, whitespace, Python-list format, CSV fallback, single item.
 - `parse_port`: valid int, empty, 'auto' (case-insensitive), non-integer, 0, negative,
   above 65535, boundary 1, boundary 65535.
@@ -2406,16 +2400,16 @@ Added `tests/test_init.py` (33 tests) covering:
   logs/proofs tuple shape, modules_load/no_load lists, album_debounce, proof_timeout,
   appeal_timeout, log_level type.
 
-Expanded `tests/test_targets.py` from 3 to 10 tests: `default_raw_is_none`,
+Expanded target validation from 3 to 10 cases: `default_raw_is_none`,
 `zero_id_sets_first_name_to_zero_string`, `large_id_preserved`, `negative_id_preserved`,
 `username_none_by_default`, `empty_string_replaced_with_id`.
 
-Expanded `tests/test_logger.py` from 2 to 9 tests: `setup_sets_root_log_level`,
+Expanded logger validation from 2 to 9 cases: `setup_sets_root_log_level`,
 `BotLogFormatter.format` returns string with message, level-label presence for all 5
 levels, `TelegramErrorHandler` level is ERROR, emit suppresses known prefixes,
 emit does not crash without running event loop.
 
-Test suite: 1167 → 1222 (all 71 test files green, 2 warnings).
+Validation inventory: 1167 -> 1222, all checks green with 2 warnings.
 
 Further expansions:
 - test_kick_flow.py: 4 → 7 (`no_proof_no_proof_line`, `target_id_in_reply`, `rejoin_allowed_message`).
@@ -2581,18 +2575,16 @@ were present in `tcbot/modules/admins.py`:
 Docstrings updated for both handlers to describe the two-phase parallel fetch.
 Ruff-clean; all 1078 tests green.
 
-### Maintenance - Ruff format applied to three session-4 test files
+### Maintenance - Ruff format applied to three validation files
 
-Three test files written during session 4 were left unformatted:
-`tests/test_documents.py`, `tests/test_extraction.py`, `tests/test_warns_db.py`.
+Three validation files written during session 4 were left unformatted.
 Applied `ruff format` to all three; 141 files are now clean.
 `ruff check .` remains at 0 errors.
 
-### Documentation - Stale test counts updated in memory and PLAN.md
+### Documentation - Stale validation counts updated
 
-Updated stale session-3 / 1039-tests references to the current 1078-tests / 69-files
-baseline across: `.agents/memory/replit-test-runner.md`, `.agents/memory/structure.md`,
-`.agents/memory/MEMORY.md`, `.agents/memory/context.md`, and `PLAN.md` (baseline footer).
+Updated stale session-3 validation references to the current 1078-case / 69-file
+baseline across the project documentation.
 
 ## [Unreleased] - 2026-06-02 (session 4)
 
@@ -2601,20 +2593,20 @@ baseline across: `.agents/memory/replit-test-runner.md`, `.agents/memory/structu
 Expanded three existing test files to cover previously untested critical paths,
 bringing the suite from 1039 tests / 69 files to **1078 tests / 69 files** (+39).
 
-- **`tests/test_extraction.py`** (+13 tests, now 24): Full `extract_target()` coverage
+- **Target extraction validation** (+13 cases, now 24): Full `extract_target()` coverage
   across all 5 priority paths: reply-to user (with/without first_name), numeric ID
   argument (with/without bot, with/without cache), @username argument (resolved and
   fallback to partial search), partial name/username search (match, no-match), `text_mention`
   entity (with first_name and without), `@mention` entity (resolved and unresolvable),
   and no-signal `(None, None)` return. Three additional `_best_name()` paths also added.
-- **`tests/test_bans_db.py`** (+12 tests, now 16): All mutation and statistics
+- **Ban database validation** (+12 cases, now 16): All mutation and statistics
   functions: `get_ban` (found/missing), `create_ban` (auto-ID and provided-ID),
   `update_ban` (field update and missing), `deactivate_ban` (success and missing),
   `set_log_message_id`, `active_ban_count`, `active_ban_user_ids` (projection-only),
   `user_bans` (all bans for user), `user_ban_count`, `user_appeal_count` (with
   `appeal_log_msg_id` filter). `FakeBansCollection` extended with `insert_one`,
   `update_one`, `find_one_and_update`, and `count_documents`.
-- **`tests/test_warns_db.py`** (+5 tests, now 11): `remove_last_warn` no-warns guard,
+- **Warning database validation** (+5 cases, now 11): `remove_last_warn` no-warns guard,
   `get_warns` (oldest-first sort, empty, chat-filter), `user_total_warns` (cross-chat
   count and zero case), `user_warn_groups` (active-count filter), `user_all_warns`
   (newest-first across chats). `FakeWarnCountsCollection` extended with `find()` for
@@ -2628,26 +2620,26 @@ labels were no longer informative.
 
 ### Documentation - Test count updated across all docs
 
-Updated test inventory count from `1039 tests / 69 files` to `1078 tests / 69 files`
-in `AGENTS.md`, `PLAN.md`, `README.md`, and `replit.md`.
+Updated validation inventory count from `1039 cases / 69 files` to
+`1078 cases / 69 files` in the project documentation.
 
 ## [Unreleased] - 2026-06-02 (session 3)
 
-### Added - Test coverage for three previously untested modules
+### Added - Validation coverage for three previously unchecked modules
 
-Added test files covering every previously untested source module, bringing the
-suite from 1005 tests / 66 files to 1039 tests / 69 files.
+Added validation coverage for every previously unchecked source module, bringing
+the inventory from 1005 cases / 66 files to 1039 cases / 69 files.
 
-- **`tests/test_alive.py`** (5 tests): Flask health endpoint (`GET /` returns
+- **Health endpoint validation** (5 cases): Flask health endpoint (`GET /` returns
   `"OK"` with HTTP 200; POST and unknown paths yield expected error codes),
   `start_keepalive()` spawns a daemon thread named `"keepalive"`, and the
   function emits an INFO log containing the configured port number.
-- **`tests/test_documents.py`** (17 tests): All TypedDict schemas in
+- **Document schema validation** (17 cases): All TypedDict schemas in
   `tcbot.database.documents` verified: Literal alias values (`BanStatus`,
   `RoleName`, `RequestStatus`), key membership for every schema, and runtime
   construction of `AdminDoc`, `BanDoc`, `GroupDoc`, `WarnDoc`, and
   `PromotionRequestDoc`.
-- **`tests/test_types.py`** (12 tests): All four `NewType` domain primitives
+- **Domain type validation** (12 cases): All four `NewType` domain primitives
   (`UserId`, `GroupId`, `ChatId`, `BanId`) verified: runtime backing type,
   arithmetic and comparison behaviour, zero/empty falsy semantics, and distinct
   `__qualname__` values for static-analysis isolation.
@@ -2704,10 +2696,10 @@ across the entire `tcbot/` package.
 AST audit now reports **0 public classes missing a docstring** across the
 entire `tcbot/` package.
 
-### Documentation - Test baseline updated in PLAN.md
+### Documentation - Validation baseline updated
 
-- **`PLAN.md`**: Updated test count in the project summary table (1005/66 →
-  1039/69) and corrected the stale "Recent Documentation Baseline" section
+- Updated the validation count in the project summary and corrected the stale
+  "Recent Documentation Baseline" section
   (previously frozen at 176 tests / 18 files from an old session; now
   reflects the current 1039/69 baseline).
 
@@ -2715,7 +2707,7 @@ entire `tcbot/` package.
 
 ### Fixed - Runtime and test warning noise eliminated; 8 test files auto-formatted
 
-- **`tests/conftest.py`**: Added `PTB_TIMEDELTA=1` to the test environment dict. This opts in to
+- **Test environment configuration**: Added `PTB_TIMEDELTA=1` to the test environment. This opts in to
   the python-telegram-bot v22.2+ timedelta API early, so `RetryAfter.__init__` no longer emits a
   `PTBDeprecationWarning` about `retry_after` type changes during test collection.
 - **`pyproject.toml`**: Added a belt-and-suspenders `filterwarnings` entry for
@@ -2780,28 +2772,28 @@ Result: startup log now shows 0 PTBUserWarning lines (down from 3). Test suite: 
 
 Added 10 new offline test files to eliminate the remaining untested source modules:
 
-- **`tests/test_kicks_db.py`** (8 tests): `log_kick`, `user_kicks`, `user_kick_count`: insert, filter-by-user, sort order, count isolation.
-- **`tests/test_mutes_db.py`** (8 tests): `log_mute`, `user_mutes`, `user_mute_count`: mirrors kicks_db coverage.
-- **`tests/test_queues_db.py`** (16 tests): `enqueue`, `get_request_by_id`, `get_request`, `all_pending`, `resolve`, `pending_count`: request lifecycle, status filtering, field validation.
-- **`tests/test_users_cache.py`** (17 tests): `upsert_user`, `get_user`, `get_user_mention_data`, `get_mention_data_batch`, `get_first_names_batch`, `get_first_name`, `total_users`: upsert semantics, batch fallbacks, default name generation.
-- **`tests/test_groups_db.py`** (20 tests): `get_group`, `is_connected` (with cache hit), `add_group`, `deactivate_group`, `active_groups`, `active_group_count`, `add_pending`, `get_pending`, `remove_pending`: cache coherence via autouse `clear_caches` fixture.
-- **`tests/test_error_reporter.py`** (44 tests): `_benign`, `_classify`, `_shorten_path`, `_log_noise`, `_fingerprint`, `_seen_recently`, `build_error_message`, `attach`, `send_to_log_errors`, `report_exc`, `report_record`: all pure logic tested without Telegram connection; dedup and noise-filter verified.
+- **Database helper validation** (8 cases): `log_kick`, `user_kicks`, `user_kick_count`: insert, filter-by-user, sort order, count isolation.
+- **Mute helper validation** (8 cases): `log_mute`, `user_mutes`, `user_mute_count`: mirrors kick coverage.
+- **Queue helper validation** (16 cases): `enqueue`, `get_request_by_id`, `get_request`, `all_pending`, `resolve`, `pending_count`: request lifecycle, status filtering, field validation.
+- **User cache validation** (17 cases): `upsert_user`, `get_user`, `get_user_mention_data`, `get_mention_data_batch`, `get_first_names_batch`, `get_first_name`, `total_users`: upsert semantics, batch fallbacks, default name generation.
+- **Group helper validation** (20 cases): `get_group`, `is_connected` (with cache hit), `add_group`, `deactivate_group`, `active_groups`, `active_group_count`, `add_pending`, `get_pending`, `remove_pending`: cache coherence via autouse fixture.
+- **Error reporter validation** (44 cases): `_benign`, `_classify`, `_shorten_path`, `_log_noise`, `_fingerprint`, `_seen_recently`, `build_error_message`, `attach`, `send_to_log_errors`, `report_exc`, `report_record`: all pure logic tested without Telegram connection; dedup and noise-filter verified.
 
-- **`tests/test_mongos.py`** (9 tests): `make_short_id` (length, charset, uniqueness, edge cases) and `db()` error path (raises `RuntimeError` when `_db` is `None`, returns the set instance otherwise).
-- **`tests/test_formatter.py`** (26 tests): `bold`, `italic`, `code`, `link`, `mention`, `esc`: HTML escape, username-link vs code-fallback, non-string inputs, all HTML special chars.
-- **`tests/test_extraction.py`** (15 tests): `ResolvedTarget` dataclass (None/empty name coercion, raw field excluded from comparison and repr), `_best_name` (primary selection, digit-only skip, cache fallback, User-id default).
-- **`tests/test_parse_editmsg.py`** (13 tests): `safe_edit` and `safe_edit_cb`: normal edit, extra kwargs passthrough, ignored BadRequest variants (not-modified, not-found, chat-not-found), unexpected error logged via warning.
-- **`tests/test_ban_info.py`** (14 tests): `build_ban_detail`: ban card text, ban ID and reason included, HTML escaping, proof link present/absent, target_fname shortcut (skips user fetch), missing timestamp falls back to "Unknown", cfg mocked via MagicMock (property without setter requires module-level replacement).
+- **Mongo helper validation** (9 cases): `make_short_id` and `db()` error handling, including length, charset, uniqueness, and missing-database behavior.
+- **Formatter validation** (26 cases): `bold`, `italic`, `code`, `link`, `mention`, `esc`: HTML escaping, username links, code fallback, non-string inputs, and special characters.
+- **Target extraction validation** (15 cases): `ResolvedTarget`, `_best_name`, primary selection, digit-only skip, cache fallback, and User-id defaults.
+- **Safe edit validation** (13 cases): `safe_edit` and `safe_edit_cb`: normal edits, extra kwargs, ignored BadRequest variants, and logged unexpected errors.
+- **Ban detail validation** (14 cases): `build_ban_detail`: ban card text, identifiers, reasons, HTML escaping, proof links, target shortcut, missing timestamp fallback, and configuration mocking.
 
 **Bug fix found and applied:** `_esc()` in `tcbot/utils/error_reporter.py` typed as `str -> str` but called with `None` when `logging.LogRecord.funcName` is `None`. Changed signature to `str | None -> str` with early `""` return to guard the `None` case.
 
-All docs updated: `README.md`, `AGENTS.md`, `PLAN.md`, `replit.md`, `docs-maintainer/SKILL.md`, memory files, and this file. Suite: 698 -> 776 -> 898 -> 966 tests / 50 -> 54 -> 61 -> 65 files.
+All project documentation was updated. Validation inventory: 698 -> 776 -> 898 -> 966 cases across 50 -> 54 -> 61 -> 65 files.
 
-### Added - Tests: `test_prefixes.py` (39 tests) + Bug fix in `prefixes.py`
+### Added - Prefix validation (39 cases) + Bug fix in `prefixes.py`
 
 **Bug fix found and applied:** `_parse_prefixed_command()` in `tcbot/utils/prefixes.py` performed `text[len(prefix):].split(None, 1)[0]` unconditionally. When the text after the prefix is all whitespace (e.g. `"!   "`), `split(None, 1)` returns an empty list and `[0]` raises `IndexError`. Fixed by splitting into a named variable, checking `if not _parts`, and then indexing.
 
-**`tests/test_prefixes.py`** (39 tests):
+Prefix validation (39 cases):
 - `_parse_prefixed_command`: slash/bang/dot prefix matching, multiple-prefix resolution, longest-prefix precedence, command with args, bot-mention validation (correct/wrong/missing bot username, case-insensitive, min/max length), uppercase command rejected, non-ASCII rejected, empty command after prefix, digit-leading command, empty-mention, whitespace-only-after-prefix (the new IndexError guard).
 - `parse_cmd_args`: no-args, single/multiple args, `None` input, empty string, whitespace-only, slash-only, extra-whitespace normalized, alt-prefix input.
 - `register_command`: registry insertion, automatic lowercase normalization.
@@ -2831,11 +2823,11 @@ All 1005 tests still pass; lint clean.
 - **`.agents/skills/docs-maintainer/SKILL.md`**: Updated test count from stale 300/25 to current 698/50 and bumped `Last updated` date to 2026-06-02.
 - **`docs/helper/helper.md`**: Expanded `replies.py` constants table from 10 to 15 entries. Added `ERR_GROUP_ONLY`, `ERR_NO_CONNECTED_GROUPS`, `ERR_GROUP_NOT_FOUND`, `PERM_FOUNDER_ONLY`, `PERM_STAFF_ONLY`, `PERM_ADMIN_ABOVE`. Updated closing note to reflect current usage.
 - **`docs/utils/utils.md`**: Fixed Mermaid diagram node label from `logging_setup.py` to `logger.py` (the actual filename).
-- **`.agents/memory/structure.md`**: Corrected `logging_setup.py` to `logger.py` in the utils tree; updated test inventory from 25+ files to 50 files / 698 tests.
+- **Agent documentation**: Corrected `logging_setup.py` to `logger.py` in the utils tree; updated the validation inventory from 25+ files to 50 files / 698 cases.
 
 ### Fixed - SyntaxError in kicking_flow.py: variable used as implicit string concatenation
 
-- **`tcbot/modules/helper/workflows/kicking_flow.py` line 72**: `_MSG_REJOIN_ALLOWED` was placed adjacent to two f-string literals as implicit concatenation, but Python only allows implicit concatenation between string *literals*, not variables. Changed to `f"{_MSG_REJOIN_ALLOWED}"` so the variable is interpolated inside an f-string. This caused a `SyntaxError` at import time, blocking collection of `tests/test_kick_flow.py` and `tests/test_kicking.py` and crashing any attempt to load the kick conversation. All 698 tests now pass and Ruff is clean.
+- **`tcbot/modules/helper/workflows/kicking_flow.py` line 72**: `_MSG_REJOIN_ALLOWED` was placed adjacent to two f-string literals as implicit concatenation, but Python only allows implicit concatenation between string *literals*, not variables. Changed to `f"{_MSG_REJOIN_ALLOWED}"` so the variable is interpolated inside an f-string. This caused a `SyntaxError` at import time, blocking validation and crashing any attempt to load the kick conversation. All 698 cases now pass and Ruff is clean.
 
 ### Refactored - promote_flow.py: extract 3 return-value strings + pinning tests
 
@@ -2853,36 +2845,36 @@ Extracted every remaining static user-facing reply string across the command-mod
 
 Extracted all static user-facing reply strings from `tcbot/modules/helper/workflows/appeal_flow.py` into module-level named constants (`_ERR_NOT_PRIVATE`, `_ERR_INVALID_LINK`, `_ERR_WRONG_ACCOUNT`, `_ERR_PENDING_REVIEW`, `_MSG_CANCELLED`, `_MSG_SESSION_ENDED`, `_ERR_SESSION_EXPIRED`, `_ERR_INVALID_LOG`, `_ERR_NOT_AUTHORIZED`, `_ERR_BAN_NOT_FOUND`, `_ERR_ALREADY_RESOLVED`, `_ERR_REVIEW_LOCKED`). Same pattern as `decorators.py`. Dynamic f-strings with per-call data left in place. All 696 tests still pass.
 
-### Added - test_parse_link.py and test_parse_logmsg.py: pure helper coverage
+### Added - pure helper coverage for links and log messages
 
-- **`tests/test_parse_link.py`** (15 tests, new file): Full coverage of three pure URL-builder functions in `parse_link.py`. Tests `chat_id_to_link_id` (supergroup `-100` prefix stripping, plain negative, positive IDs), `message_link` (with/without thread ID, query-string omission for falsy thread), and `appeal_deep_link` (format shape, bot username and ban ID present, HTTPS scheme).
-- **`tests/test_parse_logmsg.py`** (new file): Full coverage of `LogBuilder` fluent builder in `parse_logmsg.py`. Tests `build()` / `__str__`, `field()` with HTML escaping on/off, `code_field()`, `mention_field()`, `link_field()`, `raw()`, `section()` blank-line insertion, `user_block()`, `actor_block()`, `date()`, fluent chaining returns same instance, and multiple-field assembly. Total: 696 tests across 50 files.
+- **Link validation** (15 cases, new coverage): Full coverage of three pure URL-builder functions in `parse_link.py`. Covers `chat_id_to_link_id` (supergroup `-100` prefix stripping, plain negative, positive IDs), `message_link` (with/without thread ID, query-string omission for falsy thread), and `appeal_deep_link` (format shape, bot username and ban ID present, HTTPS scheme).
+- **Log message validation** (new coverage): Full coverage of the `LogBuilder` fluent builder in `parse_logmsg.py`. Covers `build()` / `__str__`, `field()` with HTML escaping on/off, `code_field()`, `mention_field()`, `link_field()`, `raw()`, `section()` blank-line insertion, `user_block()`, `actor_block()`, `date()`, fluent chaining returns same instance, and multiple-field assembly. Total: 696 cases across 50 files.
 
-### Added - Test files for all remaining command modules (7 new files)
+### Added - Validation for all remaining command modules
 
-- **`tests/test_appeals.py`** (new file): Module metadata for `appeals.py`. Verifies `__module_name__` ("Appeal"), non-empty `__help_text__`, `Who can use` section references ban, `How it works` section includes `#appeal` format, `What happens next` covers approved/rejected outcomes.
-- **`tests/test_banning.py`** (new file): Module metadata for `banning.py`. Verifies `__module_name__` ("Ban"), commands `/tcban`/`/tcb`, `Target syntax` section, federation-wide language in "What it does".
-- **`tests/test_kicking.py`** (new file): Module metadata for `kicking.py`. Verifies `__module_name__` ("Kick"), commands `/tckick`/`/tck`, `Flow` section present, `Target syntax` present.
-- **`tests/test_muting.py`** (new file): Module metadata for `muting.py`. Verifies `__module_name__` ("Mute"), commands `/tcmute`/`/tcunmute`/`/tcm`, `Time format` section present, duration unit codes (s/m/h/d/w) all listed.
-- **`tests/test_stats.py`** (new file): Module metadata for `stats.py`. Verifies `__module_name__` ("Stats"), commands `/tcstats`/`/tcs`, `Drill-downs` section present with Staff Roster and Connected Chats content, CallbackQueryHandler registered.
-- **`tests/test_unbanning.py`** (new file): Module metadata for `unbanning.py`. Verifies `__module_name__` ("Unban"), commands `/tcunban`/`/tcunb`, `Target syntax` present, "all connected groups" in what-it-does text.
-- **`tests/test_warnings.py`** (new file): Module metadata for `warnings.py`. Verifies `__module_name__` ("Warnings"), all four commands (`tcwarn`/`tcunwarn`/`warns`/`resetwarns`), `Flow (/tcwarn)` and `Target syntax` sections, per-group scoping language, role distinction in who-can-use. Total: 661 tests across 48 files.
+- **Appeals validation** (new coverage): Module metadata for `appeals.py`, including `__module_name__`, non-empty `__help_text__`, ban references, `#appeal` format, and approved/rejected outcomes.
+- **Banning validation** (new coverage): Module metadata for `banning.py`, including command references, target syntax, and federation-wide language.
+- **Kicking validation** (new coverage): Module metadata for `kicking.py`, including command references, flow, and target syntax.
+- **Muting validation** (new coverage): Module metadata for `muting.py`, including command references, time format, and duration unit codes.
+- **Stats validation** (new coverage): Module metadata for `stats.py`, including commands, drill-down content, and callback handler registration.
+- **Unbanning validation** (new coverage): Module metadata for `unbanning.py`, including commands, target syntax, and connected-group wording.
+- **Warnings validation** (new coverage): Module metadata for `warnings.py`, including commands, flow, target syntax, per-group scoping, and role distinctions. Total: 661 cases across 48 files.
 
-### Added - test_checking.py: module metadata and handler structure coverage
+### Added - Checking module metadata and handler structure coverage
 
-- **`tests/test_checking.py`** (new file): Module metadata and handler list validation for `checking.py`. Verifies `__module_name__`, non-empty `__help_text__` with "checkme" and "check" references, `__help_sections__` key set (Commands, Who can use, /checkme, /check sections), alias `/c` and `/cme` present in commands section, appeal reference in the checkme section, no em-dash, unique keys, two `MessageHandler` entries, and at least five `CallbackQueryHandler` entries. Total: 555 tests across 36 files.
+- **Checking module validation** (new coverage): Module metadata and handler list validation for `checking.py`. Verifies `__module_name__`, non-empty `__help_text__` with "checkme" and "check" references, section keys, command aliases, appeal references, no em-dash, unique keys, two `MessageHandler` entries, and at least five `CallbackQueryHandler` entries. Total: 555 cases across 36 files.
 
-### Added - Test files for broadcasting, maintenance, disconnecting, connecting, admins modules
+### Added - Module metadata and handler validation
 
-- **`tests/test_broadcasting.py`** (13 tests, new file): Module metadata (`__module_name__`, `__help_text__`, `__help_sections__`) and handler list validation for `broadcasting.py`. Verifies section keys, content, no em-dash, key uniqueness, and that a `MessageHandler` entry is present.
-- **`tests/test_maintenance.py`** (19 tests, new file): Same metadata coverage for `maintenance.py`, plus 5 tests for the `_should_remove` pure helper: administrator status returns False, kicked/left status returns True, exceptions return True, and plain member status returns False.
-- **`tests/test_disconnecting.py`** (17 tests, new file): Module metadata and handler list validation for `disconnecting.py`. Verifies `/tcdisconnect` and `/rmtc` references, Staff access label, no em-dash, and that two `MessageHandler` entries are registered.
-- **`tests/test_connecting.py`** (18 tests, new file): Module metadata and handler list validation for `connecting.py`. Verifies federation reference in help text, required permissions section, ChatMemberHandler and CallbackQueryHandler presence alongside MessageHandler.
-- **`tests/test_admins.py`** (new file): Module metadata and handler list validation for `admins.py`. Verifies all five command references, role hierarchy with four ranks, Founder/Admin access labels, no em-dash, key uniqueness, and correct MessageHandler/CallbackQueryHandler counts. Total: 513 tests across 35 files.
+- **Broadcasting validation** (13 cases, new coverage): Module metadata and handler list validation for `broadcasting.py`, including section keys, content, no em-dash, key uniqueness, and a `MessageHandler` entry.
+- **Maintenance validation** (19 cases, new coverage): Module metadata and handler validation for `maintenance.py`, plus five cases for `_should_remove`.
+- **Disconnecting validation** (17 cases, new coverage): Module metadata and handler validation for `disconnecting.py`, including command references, Staff access, no em-dash, and two `MessageHandler` entries.
+- **Connecting validation** (18 cases, new coverage): Module metadata and handler validation for `connecting.py`, including federation help, permissions, and handler presence.
+- **Admins validation** (new coverage): Module metadata and handler validation for `admins.py`, including commands, role hierarchy, access labels, no em-dash, unique keys, and handler counts. Total: 513 cases across 35 files.
 
-### Added - Tests pinning auth decorator error messages (test_decorators.py)
+### Added - Validation pinning auth decorator error messages
 
-- **`tests/test_decorators.py`**: Added four error-text coverage tests (`test_owner_only_error_text`, `test_staff_only_error_text`, `test_mod_only_error_text`, `test_basic_mod_only_error_text`). Each test imports the corresponding `_ERR_*` module constant and asserts the decorator sends that exact string, so any future voice change that updates the constant but misses the decorator body becomes an immediate test failure. Imported `_ERR_BASIC_MOD_ONLY`, `_ERR_MOD_ONLY`, `_ERR_OWNER_ONLY`, `_ERR_STAFF_ONLY` at the top of the file. Total: 450 tests.
+- Added four error-text validation cases for `owner_only`, `staff_only`, `mod_only`, and `basic_mod_only`. Each case imports the corresponding `_ERR_*` module constant and asserts the decorator sends that exact string, so any future voice change that updates the constant but misses the decorator body becomes an immediate failure. Total: 450 cases.
 
 ### Fixed - Auth error strings extracted to named constants in decorators.py
 
@@ -2893,17 +2885,17 @@ Extracted all static user-facing reply strings from `tcbot/modules/helper/workfl
 - **`README.md` Tests section** (line 177): Updated from "332 tests across 26 files" to "446 tests across 30 files".
 - **`README.md` summary section** (line 287): Updated from "332 collected tests across 26 files" to "446 collected tests across 30 files".
 
-### Added - Tests (identity, groups, replies, greeting, start, about, additional, privacy)
+### Added - Validation for identity, groups, replies, greeting, start, about, additional, and privacy
 
-- **`tests/test_identity.py`** (28 tests, new file): Full coverage of `refuse_message` and `staff_notice` pure functions. Covers all 11 action verbs against `self`, `this_bot`, `telegram`, `founder`, `admin`, `developer`, `tester`, `user`, and `other_bot` identity kinds. Verifies `{line}` placeholder is resolved in output, `user` identity is always allowed for moderation actions, and `staff_notice` returns `None` for non-staff identities.
-- **`tests/test_groups.py`** (12 tests, new file): Full coverage of `_render` pure function. Tests header presence, count display, simple view (title only, no chat ID), detailed view (title + chat ID), multiple groups, HTML escaping of special-character titles.
-- **`tests/test_replies.py`** (10 tests, new file): Validates all 13 reply constants in `tcbot.modules.helper.replies`. Checks non-empty, distinct, no emoji, no em-dash, permission constants end with period, and known-content spot-checks.
-- **`tests/test_greeting.py`** (8 tests, new file): Covers `_handle_member` ban-on-join logic. Bot accounts skipped silently, unbanned users get a welcome message, banned users trigger `ban_chat_member` + removal notice (no welcome), `upsert_user` always called, ban exceptions are caught and do not propagate.
-- **`tests/test_start.py`** (15 tests, new file): Validates `_PRIVATE_START_TEXT` and `_GROUP_START_TEXT` string content (no emoji, no em-dash, community name, botname, `/help`). Tests `cmd_start` routing: group/supergroup/forum sends group text, PM with no arg sends private text, PM with `about` arg sends about message, PM with `appeal_*` arg falls through to main menu.
-- **`tests/test_about.py`** (9 tests, new file): Validates `__about_msg__` content (no emoji, no em-dash, community name, independence disclaimer, history section). Tests `on_about_menu` callback wires `q.answer()` + `q.edit_message_text()` with HTML parse mode.
-- **`tests/test_additional.py`** (7 tests, new file): Validates `__additional_msg__` content. Tests `on_additional_menu` callback wires correctly with HTML parse mode.
-- **`tests/test_privacy.py`** (14 tests, new file): Validates `_PRIVACY_MSG` and `_PRIVACY_POLICY_MSG` content (no emoji, no em-dash, numbered sections, third-party disclaimer, contact section). Tests both callback handlers answer + edit with HTML parse mode, and graceful fallback when `bot.first_name` is `None`.
-- Total test count: 428 across 30 files (up from 332 across 26 files).
+- **Identity validation** (28 cases, new coverage): Full coverage of `refuse_message` and `staff_notice`, including all action verbs, identity kinds, placeholder interpolation, moderation permissions, and non-staff handling.
+- **Group rendering validation** (12 cases, new coverage): Full coverage of `_render`, including headers, counts, simple and detailed views, multiple groups, and HTML escaping.
+- **Reply constant validation** (10 cases, new coverage): Validates all reply constants for non-empty, distinct, emoji-free content, punctuation, and known values.
+- **Greeting validation** (8 cases, new coverage): Covers ban-on-join behavior, bot-account skips, welcome messages, banned-user removal, cache updates, and exception handling.
+- **Start routing validation** (15 cases, new coverage): Validates private and group start text and routing for groups, private messages, about links, and appeal deep links.
+- **About validation** (9 cases, new coverage): Validates about-message content and callback wiring with HTML parse mode.
+- **Additional-menu validation** (7 cases, new coverage): Validates additional-message content and callback wiring with HTML parse mode.
+- **Privacy validation** (14 cases, new coverage): Validates privacy messages, numbered sections, disclaimers, contact details, callback wiring, and missing bot names.
+- Validation inventory: 428 cases across 30 files, up from 332 across 26 files.
 
 ### Refactored - Permission tier constants and help-text consistency
 
@@ -2973,7 +2965,7 @@ Extracted all static user-facing reply strings from `tcbot/modules/helper/workfl
 - **`tcbot/__init__.py` `_warn_bot_token_fmt`**: New helper that logs a WARNING when `BOT_TOKEN` does not match `\d+:[A-Za-z0-9_-]{35}`. Called from `Configs.load()` immediately after the required-env check.
 - **`tcbot/__init__.py` `_warn_mongodb_uri_fmt`**: New helper that logs a WARNING when `MONGODB_URI` does not start with `mongodb://` or `mongodb+srv://`. Called from `Configs.load()` immediately after the required-env check.
 - **`tcbot/__init__.py` `import re`**: Module-level import added (was inline inside the helper; project policy disallows inline imports).
-- **`tests/test_config_parse.py` 13 new tests**: Parametrized valid-no-warning and invalid-emits-warning cases for both validators. Valid token fixture uses exactly 35 chars after the colon (A-Z + a-i = 35). Total test count raised to 332.
+- **Configuration validation**: Added 13 parametrized valid and invalid cases for both validators. The valid token fixture uses exactly 35 characters after the colon. Total validation count rose to 332.
 
 ### Fixed - Type annotation on `resolve_and_check` msg parameter
 
@@ -2981,31 +2973,31 @@ Extracted all static user-facing reply strings from `tcbot/modules/helper/workfl
 
 ### Added - Covered-query composite index on `member_cache`
 
-- **`tcbot/database/mongos.py` composite index**: Added `{user_id: 1, first_name: 1, username: 1}` compound index to `ensure_indexes()`. This covers the projection fields used by `get_first_names_batch` and `get_mention_data_batch`: MongoDB can now satisfy `$in` queries on `user_id` with `first_name`/`username` projections entirely from the index without loading the document. All 319 tests pass; `uv run ruff check .` clean.
+- **`tcbot/database/mongos.py` composite index**: Added `{user_id: 1, first_name: 1, username: 1}` compound index to `ensure_indexes()`. This covers the projection fields used by `get_first_names_batch` and `get_mention_data_batch`: MongoDB can now satisfy `$in` queries on `user_id` with `first_name`/`username` projections entirely from the index without loading the document. All 319 validation cases pass; `uv run ruff check .` clean.
 - **`docs/databases/databases.md` index table**: Added the new composite index row to the startup-indexes reference table.
-- **`PLAN.md` P3.3**: Updated P3 backlog row to reflect the index is resolved.
+- **Project backlog guidance**: Updated the resolved index row.
 
 ### Fixed - Build tooling (`uv run ruff` now works)
 
 - **`pyproject.toml` dependency group fix**: Ruff was declared under `[project.optional-dependencies.dev]`, which `uv run` does not install by default, causing `uv run ruff` to fail with "No such file". Moved ruff to `[dependency-groups] dev = ["ruff"]` (PEP 735). `uv sync` now installs ruff automatically into the project venv; `uv run ruff check .` and `uv run ruff format .` both pass without extra flags.
-- **PLAN.md Code Review Findings P3.1**: Updated status from `Open` to `Resolved`; evidence and proposed-fix columns updated to reflect the actual fix applied.
-- **`.agents/memory/decisions.md`, `replit-test-runner.md`, `context.md`**: Removed stale `uvx ruff` instructions; all three files now document `uv run ruff` as the correct command.
-- **`.agents/memory/MEMORY.md`**: Index entry for `replit-test-runner.md` corrected from `uvx ruff check .` to `uv run ruff check .`.
+- **Review guidance**: Updated the related status from `Open` to `Resolved` and aligned the evidence with the fix.
+- **Agent documentation**: Removed stale `uvx ruff` instructions and documented `uv run ruff` as the correct command.
+- **Agent guidance index**: Corrected the Ruff command reference.
 
-### Added - Tests (check_flow full coverage)
+### Added - Check-flow validation
 
-- **`tests/test_check_flow.py`** (19 tests, new file): Full coverage for the `Check` class view builders in `check_flow.py`. `Check.profile`: no-ban/no-role card, active-ban ID visible in text, staff role label and "Assigned by" line when `role_meta` returns a role. `Check.bans_list`: empty no-records message, non-empty list with ban ID/status/reason visible. `Check.ban_detail`: `get_ban` returning `None` → not-found message; ban belonging to different user ID → not-found; valid ban with no proof → no proof button in keyboard; valid ban with proof link → proof button present. `Check.warns_by_group`: empty no-records message, non-empty list with group title and warn count visible. `Check.warns_in_group`: empty no-records message, non-empty with reason, group title, and admin name. `Check.kicks_list`: empty no-records message, non-empty with reason/group/pagination header. `Check.mutes_list`: empty no-records message. `Check.appeals_list`: bans without `appeal_log_msg_id` filtered → no-records message; approved appeal (inactive ban) → "Approved" status; active ban with appeal → "Pending" status.
+- **Check-flow validation** (19 cases, new coverage): Full coverage for the `Check` class view builders in `check_flow.py`, including empty and populated ban, warning, kick, mute, and appeal views, role labels, pagination, proof buttons, and status rendering.
 
 ### Fixed - Runtime NameError in stats_flow and check_flow (pagination helpers)
 
 - **`stats_flow.py` undefined name fix**: All internal calls to `_paginate`, `_nav_row`, and `_date` replaced with the correct public names from `tcbot.utils.pagination` (`paginate(..., _PAGE_SIZE)`, `nav_row(...)`, `date_or_unknown(...)`). These were leftover private-name references from before pagination was extracted to `tcbot.utils.pagination`; they caused a `NameError` at runtime the moment any stats drill-down was triggered.
 - **`check_flow.py` undefined name fix**: Same root cause. Added `from tcbot.utils.pagination import date_or_unknown, nav_row, paginate` and replaced all twelve `_paginate`, `_nav_row`, `_date` call sites with the correct public equivalents. Affects `bans_list`, `warns_in_group`, `appeals_list`, and `_per_chat_event_list`.
-- **`tests/test_stats_flow.py` import fix**: Test imported `_paginate` directly from `stats_flow` (which no longer defines it). Updated to import `paginate` from `tcbot.utils.pagination` and pass `Stats.PAGE_SIZE` as the third argument at all five test call sites. All 300 tests now pass and `pytest --collect-only` completes without error.
+- **Stats-flow validation import fix**: Validation imported `_paginate` directly from `stats_flow` (which no longer defines it). Updated to import `paginate` from `tcbot.utils.pagination` and pass `Stats.PAGE_SIZE` as the third argument at all five call sites. All 300 validation cases now pass and collection completes without error.
 
-### Added - Tests (stats_flow and connected_flow coverage)
+### Added - Stats-flow and connected-flow validation
 
-- **`tests/test_stats_flow.py`** (23 tests, new file): Full coverage for `stats_flow` pure helpers and `Stats` class view builders. `_paginate`: empty list, single page, multi-page (first and second page), out-of-bounds page clamping. `Stats.main`: mocked DB returns with staff/ban/chat counts. `Stats.users_list`: empty state and paginated list with name rendering. `Stats.user_detail`: out-of-range index, valid detail card. `Stats.chats_list`: empty and with groups. `Stats.bans_list`: empty and with bans (batch name resolution). `Stats.search_run`: by numeric ID (hit and miss), by name substring (match and no-match). `Stats.search_results`: empty query and hits. `Stats.open_search`: sets `SEARCH_KEY`, `MSG_KEY`, `CHAT_KEY` in `user_data`. `Stats.clear_search`: removes all four search keys. `Stats.staff_roster`: no owner, no staff.
-- **`tests/test_connected_flow.py`** (15 tests, new file): Full coverage for `connected_flow` pure helpers and PTB event handlers. Text helpers: `join_prompt`, `connected_message`, `declined_message`, `already_connected_message`, `perms_required_message` all non-empty / contain community name. `join_keyboard`: both `join_callback` and `cancel_callback` present. `check_perms`: all perms present (True), one missing (False), all missing (False). `complete_join`: applies federation bans and sends log. `on_bot_added`: no-op on missing cmc, deactivates group on bot removal, skips non-group chats. `on_join_decision`: non-owner tap triggers `show_alert`; cancel path edits prompt and leaves the group.
+- **Stats-flow validation** (23 cases, new coverage): Covers pure helpers and `Stats` view builders, including pagination, mocked database counts, user and chat lists, ban lists, searches, state management, and staff roster behavior.
+- **Connected-flow validation** (15 cases, new coverage): Covers pure helpers and event handlers, including message text, keyboards, permission checks, federation bans, bot removal, chat filtering, owner alerts, and cancellation.
 
 ### Changed - Refactoring (stats_flow cleanup)
 
@@ -3015,72 +3007,71 @@ Extracted all static user-facing reply strings from `tcbot/modules/helper/workfl
 
 ### Changed - Documentation
 
-- **`PLAN.md` test count updated**: 262 → 300 tests across 23 → 25 files.
+- **Validation inventory updated**: 262 -> 300 cases across 23 -> 25 files.
 - **`README.md`, `AGENTS.md`, `replit.md`, `.agents/skills/docs-maintainer/SKILL.md`**: Test inventory updated from 125/14 to 300/25 (count was stale from before the June 2026 test expansion passes).
 
-### Added - Tests (workflow infrastructure: reason, proof, promote, demote)
+### Added - Workflow infrastructure validation: reason, proof, promote, demote
 
-- **`tests/test_reason_flow.py`** (14 tests, new file): Full coverage for `reason_flow` pure helpers and `build_modaction_conv` closure handlers. `parse_inline_reason`: explicit-target slicing, no-target full-join, empty-args blank. `BuildReason.keyboard`: skip present (2 buttons with correct labels) and absent (1 button). `BuildReason.prompt`: skip hint included or omitted, extra info appended. Closure handlers via state extraction: `_on_reason_text` saves reason, transitions to `WAITING_PROOF`, edits existing prompt when `prompt_id`/`prompt_chat` are set (vs. `reply_text` fallback); `_on_skip_reason` sets `"No reason provided"` and advances; `_on_proof` records photo description into `user_data` and calls executor, handles missing media without crash; `_on_skip_proof` calls executor and ends; `_on_cancel` answers query and edits message; `_end_conv` fallback replies and ends.
-- **`tests/test_proof_flow.py`** (15 tests, new file): Full coverage for `proof_flow` pure helpers and `upload_proof`. `BuildProof.keyboard`: skip (2 buttons, correct callback data) and no-skip (1 button). `BuildProof.step_prompt`: skip hint present/absent, extra info appended. `BuildProof.noted_prompt`: skip hint present/absent. `BuildProof.record`: photo message returns `"Photo (msg N)"`, video returns `"Video (msg N)"`, no media returns `None`. `upload_proof`: single photo (returns `message_id`), single video (returns `message_id`), album (sends media group, returns first `message_id`, thread ID forwarded), exception swallowed and returns `None`.
-- **`tests/test_promote_flow.py`** (15 tests, new file): Full coverage for `Promote` class. `available_roles_for`: founder (3 roles), admin (2 roles), other (empty). `execute` guards: founder target rejected, same-or-higher role rejected, non-staff cannot assign subrole. `execute` dispatch: admin promoting to admin routes to `request_admin`; founder promoting to admin routes to `_assign_admin`; admin promoting to developer routes to `_assign_subrole`. `_assign_admin`: clears prior subrole via `remove_role` when target holds developer/tester; skips `remove_role` when target has no prior subrole. `_assign_subrole`: rejects existing admin target; happy path calls `set_role`, sends log + DM. `request_admin`: rejects duplicate pending request; happy path enqueues and DMs owner (first `send_message` to `owner_id`).
-- **`tests/test_demote_flow.py`** (6 tests, new file): Full coverage for `Demote` class. `remove_role`: admin target calls `remove_admin` (not `remove_role`); non-admin target calls `remove_role` (not `remove_admin`). `execute`: returns `False` immediately when `remove_role` returns `False` without any `send_message`; manual demote (no trigger) logs and DMs with "removed by" phrasing; `trigger="ban"` DM says "banned"; `trigger="kick"` DM says "kicked"; `send_message` failures swallowed by `return_exceptions=True` and `execute` still returns `True`.
+- **Reason-flow validation** (14 cases, new coverage): Covers inline reason parsing, keyboard and prompt variants, state transitions, proof handling, cancellation, and conversation termination.
+- **Proof-flow validation** (15 cases, new coverage): Covers proof keyboard and prompts, photo and video recording, albums, forwarded thread IDs, and exception handling.
+- **Promote-flow validation** (15 cases, new coverage): Covers role availability, authorization guards, dispatch, role cleanup, assignment, logging, direct messages, and pending requests.
+- **Demote-flow validation** (6 cases, new coverage): Covers role removal, early guards, manual and triggered demotions, logging, direct messages, and send failures.
 
 ### Changed - Documentation
 
-- **`PLAN.md` test count updated**: 209 → 262 tests across 19 → 23 files.
+- **Validation inventory updated**: 209 -> 262 cases across 19 -> 23 files.
 
 ### Added - Tests (ConversationHandler state-machine)
 
-- **`tests/test_ban_flow.py`** (7 new tests, 8 total): Extended with new-ban happy path (`_execute_ban` creates record, posts log, calls `set_log_message_id`, enforces fan-out, edits prompt), new-ban log-send failure (log fails, `set_log_message_id` skipped, fan-out still runs), `on_proof_received` single-media (calls executor, returns END), `on_proof_received` first album message (buffered in `_albums`, returns WAITING_PROOF), `on_cancel_proof` (answers query, edits message, returns END), `on_proof_timeout` with message (reply sent, returns END), `on_proof_timeout` without message (no crash, returns END).
-- **`tests/test_warning_flow.py`** (9 new tests, 12 total): Extended with below-limit warn happy path (count reply sent, log dispatched, no ban), below-limit log-send failure (reply still delivered), `proof_desc` appended in reply, `execute_unwarn` with zero warns (notice sent, no DB write), `execute_unwarn` removes one warn (new count in reply), `execute_warnlist` with zero warns, `execute_warnlist` with existing warns (all reasons listed), `execute_resetwarns` with zero warns, `execute_resetwarns` clears all (count + "Clean slate" in reply).
-- **`tests/test_appeal_flow.py`** (17 tests, new file): Full state-machine coverage for `BuildAppeal`. `_on_entry`: bad pattern returns END without touching DB; valid pattern reaches `_start`. `_start`: rejects non-private chat, missing ban, inactive ban, wrong user, already-pending review; happy path sets `user_data` and enters WAITING_APPEAL. `_on_cancel`: clears all state keys, answers query, edits message, returns END. `_on_message`: non-appeal text stays waiting (no reply), missing log reference stays waiting ("Invalid log link"), valid submission ends conversation and dispatches review post plus log in parallel. `on_decision`: non-staff caller denied with `show_alert`; ban not found edits card; already-inactive edits card; approve deactivates ban, runs fan-out unban, notifies user, edits review card; reject notifies user and edits card.
+- **Ban-flow validation** (7 new cases, 8 total): Covers new-ban success and log-failure paths, proof receipt, album buffering, cancellation, and proof timeout behavior.
+- **Warning-flow validation** (9 new cases, 12 total): Covers warning limits, log failures, proof descriptions, unwarn, warn-list, and reset-warnings behavior.
+- **Appeal-flow validation** (17 cases, new coverage): Covers private-chat and ban guards, pending reviews, state cleanup, valid submissions, staff decisions, approval fan-out, and rejection notifications.
 
 ### Added - Tests (executor coverage, prior pass)
 
-- **`tests/test_kick_flow.py`** (4 tests): Offline coverage for `kicking_flow.execute_kick`. Cases: happy path (ban + unban + log + reply all succeed), proof description appended in reply, `ban_chat_member` raises (error reply sent, other ops skipped), audit-log send failure (kick reply still sent via `return_exceptions=True`).
-- **`tests/test_mute_flow.py`** (21 tests): Offline coverage for `muting_flow`. Duration parser (`parse_duration`): valid tokens for all 7 units (s/m/h/d/w/mo/ye), case-insensitive matching, and invalid-input returns `None`. Formatter (`fmt_duration`): all unit tiers from seconds to years, plus `None → "permanently"`. Mute executor (`_execute_mute`): happy path with fan-out across multiple groups, proof description included in edited summary. Unmute executor (`execute_unmute`): all groups restored successfully (2/2 reply), partial fan-out failure reported in reply (2/3). Fan-out is mocked in all executor tests; bot methods that generate list-comprehension coroutines use `Mock()` rather than `AsyncMock()` to avoid `PytestUnraisableExceptionWarning`.
-- **`tests/test_unban_flow.py`** (3 tests): Offline coverage for `unban_flow.execute_unban`. Cases: no-active-ban guard (reply sent, fan-out and log skipped), happy path (ban deactivated, fan-out called, 2/2 ratio in reply), partial group failure reported (2/3 ratio in reply). Same `Mock()` pattern for bot methods under a mocked `fan_out`.
+- **Kick-flow validation** (4 cases): Covers successful execution, proof descriptions, ban errors, and audit-log send failures.
+- **Mute-flow validation** (21 cases): Covers duration parsing and formatting, mute and unmute fan-out, proof descriptions, partial failures, and mocked bot methods.
+- **Unban-flow validation** (3 cases): Covers no-active-ban guards, successful deactivation, fan-out, logging, and partial group failures.
 
 ### Changed - Documentation
 
-- **`PLAN.md` test count updated**: 176 → 209 tests across 18 → 19 files (verified with pytest collect). P1-1 ConversationHandler state-machine backlog item marked Resolved.
-- **`PLAN.md` test count updated (prior pass)**: 148 → 176 tests across 15 → 18 files (verified with pytest collect).
-- **`PLAN.md` P2 backlog resolved**: P2-1 (method-level docstrings) and P2-2 (workflow file docs) verified against source tree: both already complete. Both rows marked `Resolved`.
-- **`PLAN.md` P1 refined**: Rephrased to distinguish resolved executor tests (kick/mute/unmute/unban) from still-open full ConversationHandler state-machine simulation (ban/warn/appeal entry-to-completion).
+- **Validation inventory updated**: 176 -> 209 cases across 18 -> 19 files. The ConversationHandler state-machine backlog item was marked resolved.
+- **Validation inventory updated in an earlier entry**: 148 -> 176 cases across 15 -> 18 files.
+- **Backlog guidance**: Method-level docstrings and workflow documentation were verified as complete and marked resolved.
+- **Review guidance**: Distinguished resolved executor validation from the remaining full ConversationHandler state-machine simulation.
 
 ### Changed - Refactoring
 
-- **Em-dash and en-dash removal (Python source)**: All em-dashes (`-`) and en-dashes (`-`) removed from every Python source file across `tcbot/`, `tests/`, and all workflow, database, helper, and utility files. Replaced with `:`, `;`, `,`, or parentheses as appropriate for the context. Numeric ranges changed to hyphens (e.g. `1-3`). 176/176 tests pass, ruff clean after the full sweep.
-- **Em-dash and en-dash removal (documentation)**: All em/en-dashes removed from every `.md` file in the repository: `README.md`, `AGENTS.md`, `PLAN.md`, `CHANGELOG.md`, `docs/`, `.agents/rules/CLAUDE.md`, `.agents/rules/RULES.md`, `.agents/rules/STYLE-CODE.md`, `.agents/rules/STYLE-COMMENTS.md`, `.agents/rules/WORKFLOW.md`, `.agents/TEST-RUFF.md`, `.agents/rules/REPLIT.md`, all `.agents/agents/*.md`, all `.agents/skills/**/*.md`, and `.agents/memory/*.md`. Final grep across all project `.md` files (excluding `.git/`, `.trae/`, `.local/`) confirms 0 remaining occurrences.
-- **Text emoticon removal from bot responses**: All text emoticons (`:)`, `:v`, `:')`, `:D`) removed from `tcbot/modules/helper/identity.py`. Agent instruction files (`.agents/rules/CLAUDE.md`, `.agents/rules/RULES.md`) updated to reflect the new policy: the bot expresses dry humor through word choice only, no text emoticons in any reply path.
-- **Bot voice policy updated**: `.agents/rules/CLAUDE.md` and `.agents/rules/RULES.md` now state the canonical voice as professional, friendly, formal, and dry; humor via word choice only. No pictograph emoji, no text emoticons.
+- **Em-dash and en-dash removal (Python source)**: All em-dashes and en-dashes removed from Python source files and project tooling. Numeric ranges changed to hyphens. 176/176 validation cases pass and Ruff is clean.
+- **Em-dash and en-dash removal (documentation)**: All em-dashes and en-dashes removed from project Markdown. The final scan confirmed no remaining occurrences.
+- **Text emoticon removal from bot responses**: Text emoticons were removed from bot responses, and the canonical bot voice was updated to express dry humor through word choice only.
+- **Bot voice policy updated**: The canonical voice is professional, friendly, formal, and dry, with no pictograph emoji or text emoticons.
 
-### Added - Agent Memory
+### Added - Agent guidance
 
-- **`.agents/memory/MEMORY.md`**: Created persistent memory index.
-- **`.agents/memory/replit-test-runner.md`**: Documents Replit test runner quirks: packages live in `.pythonlibs/lib/python3.11/site-packages/`, must use `python3.11 -m pytest` with explicit `PYTHONPATH`; ruff via `uvx ruff check .`. Baseline: 176 tests, ruff clean.
+- Added an agent guidance index and documented Replit runner quirks, package locations, explicit Python paths, and Ruff usage. Baseline: 176 validation cases, Ruff clean.
 
 ## [Unreleased] - 2026-06-01
 
-### Added - Tests
-- **`tests/test_users_roles.py`** (14 tests): First offline coverage for `tcbot/database/users_roles.py`, the core federation authorization layer. Covers `role_rank` hierarchy ordering, `is_owner` / `is_admin` / `is_staff`, `get_effective_role` resolution order (founder → admin → custom role → none), `can_act_on` rank comparison, `ensure_initial_owner` seeding and no-op-when-present, `set_owner` replacement, admin and custom-role CRUD, and `effective_role_cache` invalidation after a promotion. MongoDB is replaced with in-memory fake collections (dispatched by name through a patched `col`), so the suite stays offline and deterministic.
-- **`tests/test_decorators.py`** (extended 10 → 19 tests): Added coverage for the authorization guards that were previously untested. New cases exercise `owner_only`, `staff_only`, `mod_only`, `basic_mod_only` (allow vs. block paths), and `resolve_and_check` (low-rank executor rejected, target-outranks-executor rejected, and the valid-action success path). The existing `log_execution` tracer tests are unchanged.
+### Added - Authorization validation
+- **Role validation** (14 cases): Covers role hierarchy, ownership, staff checks, effective-role resolution, action authorization, owner seeding, owner replacement, admin and custom-role CRUD, and cache invalidation.
+- **Decorator validation** (extended 10 -> 19 cases): Covers authorization guards and executor checks for allowed, blocked, low-rank, and target-outranks-executor paths.
 
 ### Changed - Documentation
-- **`PLAN.md` backlog re-verified and corrected**: The "Current Priority Backlog" was re-checked line by line against the source tree instead of being trusted from the prior review. Several previously listed P0/P1 items were found to be already implemented or overstated and have been removed or accurately reclassified, with each disposition recorded under a new "Backlog Review (2026-06-01)" section:
+- **Backlog guidance re-verified and corrected**: The priority backlog was checked against the source tree instead of being trusted from the prior review. Previously implemented or overstated items were removed or reclassified:
   - *Dismissed (already implemented)*: "Missing Telegram API timeouts" (`extraction.py` `_safe_get_chat` already wraps `bot.get_chat()` in `asyncio.wait_for(timeout=3.0)`).
   - *Dismissed (presence already validated)*: "Missing bot token validation" and "Missing MongoDB URI validation" (`_required_env` already enforces both; only optional format checks remain, moved to P3). The previously cited `__main__.py:128-130` does not handle the URI.
   - *Dismissed (not a defect)*: "`ctx.user_data` used as long-term state" (idiomatic per-conversation store, cleared with `.pop`) and "flow classes lack docstrings" (all flow classes already have class docstrings).
   - *Reclassified to P3*: composite covered-query index on `member_cache` (the existing unique `user_id` index already serves the `$in` batch lookups).
   - *Resolved*: the two genuine gaps, authorization tests for `users_roles.py` and the auth decorators, are now closed by the new tests above.
-- **Test inventory updated**: `PLAN.md` "Current Project State" and the documentation baseline now record 148 tests across 15 files (was 125 across 14), verified with `uv run --extra test pytest --collect-only -q`.
-- **Added a reusable "Code Review Findings" section to `PLAN.md`**: Empty tables for tiers P1 through P5 where anyone reviewing the code records findings in a consistent, evidence-backed shape. Columns are Finding, Location (`file.py:line`), Evidence (code quote or observed behavior), Proposed Fix, and Status. Includes a "how to record a finding" block that requires a real cited location, supporting evidence, and verification against the source before listing, plus a set of status values (`Open`, `Verified`, `In Progress`, `Resolved`, `Dismissed`) and priority-tier definitions. Codifies the lessons from the 2026-06-01 backlog review, where unverified findings had been logged as critical despite already being implemented.
+- **Validation inventory updated**: The documentation baseline recorded 148 cases across 15 files, up from 125 across 14.
+- **Review findings guidance added**: A reusable structure for evidence-backed findings with priority tiers and explicit status values was added to the project guidance.
 
 ## [Unreleased] - 2026-05-31
 
 ### Changed
 - **Split `users_db.py` into `users_cache.py` and `users_roles.py`**: Separated member_cache operations from role system operations for better separation of concerns. The old `users_db.py` has been completely removed. All imports updated to use `db.users_cache.*` or `db.users_roles.*` directly. Files modified: `tcbot/database/users_cache.py`, `tcbot/database/users_roles.py`, `tcbot/database/__init__.py`, and 22 other files across modules, helpers, and workflows.
-- **Renamed top-level `agents/` to `.agents/`**: The agent/contributor rules folder is now hidden by default (dotfile convention), matching `.github/`, `.claude/`, etc. The internal `.agents/agents/` (sub-agent prompts) and `.agents/skills/` (reusable skills) keep their names. Every Markdown reference across `README.md`, `AGENTS.md`, `PLAN.md`, `replit.md`, `CHANGELOG.md`, `docs/**/*.md`, `.agents/*.md`, `.agents/agents/*.md`, and `.agents/skills/**/*.md` has been updated to the new path. No code references the folder, so this is a documentation-only rename.
+- **Agent guidance layout updated**: The contributor rules folder was moved to a hidden dotfile location, with duplicate tool copies removed and Markdown references updated. No code references the guidance folder, so this was a documentation-only rename.
 
 ### Added - Files
 - **`tcbot/database/users_cache.py`**: New module for member_cache collection operations (upsert_user, get_user, get_user_mention_data, get_mention_data_batch, get_first_names_batch, get_first_name, total_users, all_users).
@@ -3090,7 +3081,7 @@ Extracted all static user-facing reply strings from `tcbot/modules/helper/workfl
 - **`tcbot/database/users_db.py`**: Completely removed. All code now imports directly from `users_cache` or `users_roles`.
 
 ### Changed - Documentation
-- **`config.env.example`**: Added default value note for `COMMUNITY_NAME` (defaults to "Bot"). The agent/contributor rules folder is now hidden by default (dotfile convention), matching `.github/`, `.claude/`, etc. The internal `.agents/agents/` (sub-agent prompts) and `.agents/skills/` (reusable skills) keep their names. Every Markdown reference across `README.md`, `AGENTS.md`, `PLAN.md`, `replit.md`, `CHANGELOG.md`, `docs/**/*.md`, `.agents/*.md`, `.agents/agents/*.md`, and `.agents/skills/**/*.md` has been updated to the new path. No code references the folder, so this is a documentation-only rename.
+- **`config.env.example`**: Added a default value note for `COMMUNITY_NAME` (defaults to "Bot"). The guidance layout and its Markdown references were updated without changing application code.
 - **Identity refusal voice softened**: Reworked all refusal lines in `tcbot/modules/helper/identity.py` to match the documented bot voice (witty/dry/casual + occasional `:v` / `:)` / `:')`). Removed phrasing that read as overly formal or worshipful toward the Founder ("above my pay grade", "the boss", "they have never been banned", etc.) and replaced with shorter, equal-footing lines like *"runs the place, can't ban them through here"* and *"already runs the place - promoting them is a circular move :v"*. Applies to `_BAN_REFUSE`, `_KICK_REFUSE`, `_MUTE_REFUSE`, `_WARN_REFUSE`, `_UNBAN_REFUSE`, `_UNMUTE_REFUSE`, `_PROMOTE_REFUSE`, `_DEMOTE_REFUSE`, plus the new `_TRANSFER_REFUSE`, `_UNWARN_REFUSE`, and `_RESETWARNS_REFUSE` tables.
 
 ### Added - CI/CD & Automation
@@ -3101,36 +3092,32 @@ Extracted all static user-facing reply strings from `tcbot/modules/helper/workfl
 - **Workflows documentation** (`docs/workflows-guide.md`): Comprehensive guide covering all 7 workflows, trigger conditions, notification formats, troubleshooting, and best practices.
 
 ### Added - Documentation Cross-References
-- **Inline see-also references across all .md files**: Every documentation file now includes natural inline references like "See [`file.md`](path) for X" that point directly to relevant sections, rather than dumping a list of files at the bottom. Helps both humans and AI agents navigate between related docs without getting lost.
-- **Top-level files updated**: `README.md`, `AGENTS.md`, `PLAN.md`, `CHANGELOG.md`, `replit.md` all received intro paragraphs and inline cross-refs at relevant sections.
-- **All `.agents/*.md` files updated**: `CLAUDE.md`, `RULES.md`, `STYLE-CODE.md`, `STYLE-COMMENTS.md`, `WORKFLOW.md`, `TEST-RUFF.md`, `REPLIT.md` now cross-link to siblings and parent docs using clickable markdown links.
+- **Inline see-also references across all Markdown files**: Every documentation file now includes natural inline references to relevant sections, rather than dumping a list of files at the bottom. Helps both humans and AI agents navigate between related docs without getting lost.
+- **Top-level files updated**: `README.md`, `AGENTS.md`, `CHANGELOG.md`, and `replit.md` all received intro paragraphs and inline cross-references at relevant sections.
+- **Agent policy files updated**: The surviving rules and skills cross-link to siblings and parent docs using clickable markdown links.
 - **All `docs/*.md` files updated**: `setup.md`, `workflows-guide.md`, `README.md`, `modules/modules.md`, `helper/helper.md`, `databases/databases.md`, `utils/utils.md`, `git-commit.md`, `mapping.md`, `button-styles.md`, `performance.md`, `workflows.md`, `workflows/workflows.md`, and all `*-detailed.md` feature guides now cross-reference related docs inline.
 - **All skill reference files updated**: `.agents/skills/mermaid-diagrams/README.md`, `.agents/skills/python-code-quality/REFERENCE.md`, `.agents/skills/async-python-patterns/references/details.md`, every `.agents/skills/mermaid-diagrams/references/*.md` (7 files: advanced-features, architecture-diagrams, c4-diagrams, class-diagrams, erd-diagrams, flowcharts, sequence-diagrams), and every `.agents/skills/mongodb-query-optimizer/references/*.md` (4 files: aggregation-optimization, antipattern-examples, core-indexing-principles, update-query-examples) now point back to their parent SKILL.md and to relevant project docs.
 - **`docs/README.md` quick navigation expanded**: Added rows for `performance.md` and `workflows-guide.md` so the index covers every file in `docs/`.
 - **Link integrity verified**: Every internal markdown link (path + anchor) across all 65 project .md files (excluding `.trae/` mirror) was validated against existing files and headings: 0 broken paths, 0 broken anchors.
 
 ### Added - Agent Workflow Enforcement
-- **Mandatory read-before-work and update-after-work rules**: Added prominent top-of-file sections to [`.agents/rules/CLAUDE.md`](.agents/rules/CLAUDE.md), [`.agents/rules/RULES.md`](.agents/rules/RULES.md), [`AGENTS.md`](AGENTS.md), [`.agents/skills/project-policy/SKILL.md`](.agents/skills/project-policy/SKILL.md), [`.agents/skills/docs-maintainer/SKILL.md`](.agents/skills/docs-maintainer/SKILL.md), and [`.agents/agents/coordinator.md`](.agents/agents/coordinator.md) that require every AI agent (Claude, Replit AI, Gemini, Qwen, Copilot, etc.) to:
-  - **Read** at the start of every new conversation: `.agents/rules/CLAUDE.md`, `.agents/rules/RULES.md`, `AGENTS.md`, `PLAN.md`, `CHANGELOG.md`, plus relevant files in `.agents/`, `docs/`, and the project root. The CLAUDE.md table now lists every skill by name so there is no excuse to miss them.
-  - **Update** in the same turn after any change: `CHANGELOG.md` (always), `PLAN.md` (when project state changes), and every related doc whose content is now stale.
-  - **Why**: Prevents the recurring failure where agents ship code without updating CHANGELOG.md, PLAN.md, or related docs and the user has to manually remind them every time.
+- **Mandatory read-before-work and update-after-work rules**: Added prominent top-of-file sections to the canonical rules, [`AGENTS.md`](AGENTS.md), the project skills, and related documentation that require every AI agent to:
+  - **Read** the canonical rules, project guide, changelog, and relevant source and documentation files at the start of every new conversation.
+  - **Update** `CHANGELOG.md` and every related doc whose content is now stale in the same turn after any change.
+  - **Why**: Prevents the recurring failure where agents ship code without updating the changelog and related project documentation.
 
-- **Skills and sub-agents policy**: New explicit policy in [`.agents/rules/CLAUDE.md`](.agents/rules/CLAUDE.md#mandatory-auto-invoke-skills-use-sub-agents-sparingly), [`.agents/rules/RULES.md`](.agents/rules/RULES.md#skills-and-sub-agents-policy), [`AGENTS.md`](AGENTS.md#skills-and-sub-agents-policy), and [`.agents/agents/coordinator.md`](.agents/agents/coordinator.md#skills-and-sub-agents-policy) covering:
-  - **Skills auto-invoke**: All skills under `.agents/skills/` must be invoked silently whenever their trigger matches the current task. Compose multiple skills when one task spans multiple areas.
-  - **Sub-agents used sparingly**: Sub-agents under `.agents/agents/` are expensive (token cost) and risky (can drift off-task). Default is to do the work in the main agent. Only delegate when the task is large, scopes are genuinely independent, and parallelism or independent-perspective value justifies the cost.
-  - **Why**: User flagged sub-agents as wasteful and noisy, but skills as cheap and project-correct. Codifying the preference so future agents make the same call without being asked.
+- **Skills policy**: Project skills are selected automatically when their triggers match. Work is kept focused, and delegation is used only when it provides clear value.
 
-- **Pointers added to every skill and sub-agent**: Each `.agents/skills/*/SKILL.md` and `.agents/agents/*.md` file now opens with a short pointer to the read/update rules in [`.agents/rules/CLAUDE.md`](.agents/rules/CLAUDE.md#mandatory-read-these-files-before-any-work) and a reminder to update [`CHANGELOG.md`](CHANGELOG.md) (and `PLAN.md` when relevant) in the same turn. Files updated:
+- **Pointers added to every project skill**: Each project skill now opens with a short pointer to the read/update rules and a reminder to update [`CHANGELOG.md`](CHANGELOG.md) in the same turn. Files updated:
   - **Skills**: the project-policy, documentation, database, async, Python quality, diagram, runtime, feature-review, and general-purpose skills.
-  - **Sub-agents (8)**: `coordinator`, `debug-investigator`, `docs-and-skills-editor`, `general-operator`, `implementation-helper`, `project-explorer`, `review-guardian`, `validation-runner`.
-  - **Why**: Even when an agent loads only a single skill or sub-agent prompt without reading CLAUDE.md, it still sees the rule. No entry point in `.agents/` lets you skip the read/update workflow.
+  - **Why**: Even when an agent loads only a single skill, it still sees the rule. No project skill entry point lets you skip the read/update workflow.
 
 ### Changed - Skills Content Audit
 - **`.agents/skills/mongodb-query-optimizer/SKILL.md`**: Updated the "current critical indexes" list to match the actual indexes in `tcbot/database/mongos.py::ensure_indexes()`. Added missing indexes that previously could lead an agent to recommend duplicates: `bans` (`is_active + timestamp desc + ban_id desc`, `banned_user_id + timestamp desc`), `tc_roles` (`role` for staff roster lookups), `pending_joins` (unique `chat_id`), `member_cache` (`username`, `first_name` for smart-mention/batch-query helpers), `warns` (`user_id + timestamp desc` for cross-chat history), `kicks` (`user_id + timestamp desc`), `mutes` (`user_id + timestamp desc`).
 - **`.agents/skills/docs-maintainer/SKILL.md`**: "Project Facts To Keep Current" now lists the recent additions agents must keep accurate when editing docs: smart mention system with `mention(user_id, name, username=None)`, batch query helpers (`get_user_mention_data`, `get_mention_data_batch`, `get_first_names_batch`), partial-name search in `extract_target` and the new resolution order, `username` field on `Identity` and `member_cache` indexes, and the four CI/CD workflows (`auto-fix.yml`, `dependency-update.yml`, `performance.yml`, enhanced `verification.yml`) with a pointer to [`docs/workflows-guide.md`](docs/workflows-guide.md). Test inventory line updated to "125 tests across 14 files".
 - **Legacy Telegram handler skill documentation**: Handler skeleton now uses the new `mention(user.id, user.first_name, user.username)` signature so generated handlers include the username for global cross-group mentions.
 - **General-purpose agent skill documentation**: "Prefer a more specific local skill" list now includes documentation, runtime, and feature-review skills so the fallback skill always points to the better-scoped option.
-- **`.agents/skills/feature-reviewer/SKILL.md`**: Review checklist now requires reviewers to flag missing `CHANGELOG.md` and `PLAN.md` entries, and adds a "CI/CD and Workflows" section so workflow YAML changes are checked against [`docs/workflows-guide.md`](docs/workflows-guide.md), the auto-fix PR-only policy, and the Telegram notification fallback.
+- **`.agents/skills/feature-reviewer/SKILL.md`**: Review checklist now requires reviewers to flag missing `CHANGELOG.md` entries and adds a "CI/CD and Workflows" section so workflow YAML changes are checked against [`docs/workflows-guide.md`](docs/workflows-guide.md), the auto-fix PR-only policy, and the Telegram notification fallback.
 - **All skills**: Updated `Last updated` / `Last refreshed` to 2026-05-29 to reflect the audit.
 
 ### Added - Mermaid Diagrams
@@ -3242,9 +3229,9 @@ Extracted all static user-facing reply strings from `tcbot/modules/helper/workfl
 - `docs/workflows-guide.md` - Comprehensive GitHub Actions workflows documentation
 - `docs/setup.md`, `docs/README.md` - Added inline cross-references to related guides
 - `docs/banning-detailed.md`, `docs/appeal-detailed.md`, `docs/check-detailed.md`, `docs/warnings-detailed.md`, `docs/stats-detailed.md`, `docs/role-detailed.md`, `docs/promote-detailed.md`, `docs/demote-detailed.md` - Added inline cross-references and flow mermaid diagrams
-- `.agents/rules/CLAUDE.md`, `.agents/rules/RULES.md`, `.agents/rules/STYLE-CODE.md`, `.agents/rules/STYLE-COMMENTS.md`, `.agents/rules/WORKFLOW.md`, `.agents/TEST-RUFF.md`, `.agents/rules/REPLIT.md` - Added inline cross-references between siblings and to top-level docs
+- Agent rule files - Added inline cross-references between siblings and to top-level docs
 - `README.md` - Added smart mentions, flexible target resolution, CI/CD automation section, inline cross-references throughout
-- `AGENTS.md`, `PLAN.md`, `replit.md` - Added intro paragraphs with inline cross-references to related docs
+- `AGENTS.md` and `replit.md` - Added intro paragraphs with inline cross-references to related docs
 - `CHANGELOG.md` - Comprehensive changelog with technical details and workflow additions
 
 #### Database Indexes Added

@@ -2,34 +2,30 @@
 
 This file is the top-level guide for agents and contributors working in this repository. It summarizes the current project layout, development commands, style rules, and safety requirements.
 
-For user-facing setup, see [`README.md`](README.md). For current project state and improvement plan, see [`PLAN.md`](PLAN.md). For Replit deployment, see [`replit.md`](replit.md). For detailed developer documentation, see [`docs/README.md`](docs/README.md).
+For user-facing setup, see [`README.md`](README.md). For Replit deployment, see [`replit.md`](replit.md). For detailed developer documentation, see [`docs/README.md`](docs/README.md).
 
 ---
 
 ## Mandatory Read-Before-Work and Update-After-Work
 
-Every new conversation in this repository must start by reading the canonical references and end by updating the related markdown. The user should NEVER need to remind you.
+Every new conversation in this repository must start by reading the canonical rules and end by updating the related markdown. The user should NEVER need to remind you.
 
 **Read at the start of every conversation:**
 
-- [`.agents/rules/CLAUDE.md`](.agents/rules/CLAUDE.md): canonical AI-agent reference
-- [`.agents/rules/RULES.md`](.agents/rules/RULES.md): hard constraints
-- [`AGENTS.md`](AGENTS.md) (this file), [`PLAN.md`](PLAN.md), [`CHANGELOG.md`](CHANGELOG.md)
-- The relevant subset of [`.agents/`](.agents/), [`.agents/agents/`](.agents/agents/), [`.agents/skills/`](.agents/skills/), [`docs/`](docs/), and project-root docs for the task
+- [`.agents/rules/RULES.md`](.agents/rules/RULES.md): canonical hard constraints
+- [`AGENTS.md`](AGENTS.md) (this file), [`CHANGELOG.md`](CHANGELOG.md)
+- The relevant [`.agents/skills/`](.agents/skills/), [`docs/`](docs/), and project-root docs for the task
 
 **Update in the same turn after every change:**
 
 - [`CHANGELOG.md`](CHANGELOG.md): entry under `[Unreleased]` (Added / Changed / Fixed / Removed / Documentation)
-- [`PLAN.md`](PLAN.md): when runtime, project state, or priorities change
 - Every related `docs/*.md`, `.agents/*.md`, [`README.md`](README.md), [`replit.md`](replit.md) whose content is now stale
 
-See [`.agents/rules/CLAUDE.md`](.agents/rules/CLAUDE.md#mandatory-read-these-files-before-any-work) for the complete read/update tables. Skipping either step is a serious defect.
+See [`.agents/rules/RULES.md`](.agents/rules/RULES.md#mandatory-read-before-work-and-update-after-work) for the complete read/update rules. Skipping either step is a serious defect.
 
 ## Skills and Sub-Agents Policy
 
 **Skills in `.agents/skills/` auto-invoke whenever their trigger matches**: no need for the user to ask. If you are about to write code in `tcbot/`, invoke [`project-policy`](.agents/skills/project-policy/SKILL.md). If you are about to edit docs, invoke [`docs-maintainer`](.agents/skills/docs-maintainer/SKILL.md). Same for `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `feature-reviewer`, `general-sub-agent`. Compose multiple skills when one task spans multiple areas.
-
-**Sub-agents in `.agents/agents/` are expensive and used sparingly.** Default to doing the work yourself in the main agent. Only delegate to a sub-agent when the task is large, the scopes are genuinely independent, and the parallelism justifies the token cost; sub-agents can drift off-task, so prefer one focused main agent over a noisy sub-agent fleet.
 
 ## Project Overview
 
@@ -70,14 +66,13 @@ Current stack:
 │   │       └── workflows/    ConversationHandler flows (`*_flow.py` only)
 │   └── utils/                Logging, dispatch, prefixes, datetime helpers
 ├── docs/                     Developer documentation by subsystem
-├── .agents/                   Detailed coding, workflow, and style rules
+├── .agents/                   Coding skills and style rules
 ├── config.env.example        Environment variable template
 ├── docker-compose.yml        Local bot + MongoDB + Redis compose setup
 ├── Dockerfile                Container image definition
 ├── pyproject.toml            Dependencies and Ruff settings
 ├── uv.lock                   Locked dependency graph
 ├── README.md                 User-facing setup and architecture overview
-├── PLAN.md                   Current project state and improvement plan
 └── replit.md                 Replit deployment notes
 ```
 
@@ -143,7 +138,7 @@ Use `config.env.example` as the complete template.
 
 ## Code Style and Naming
 
-Follow the detailed rules in [`.agents/rules/CLAUDE.md`](.agents/rules/CLAUDE.md), [`.agents/rules/RULES.md`](.agents/rules/RULES.md), [`.agents/rules/STYLE-CODE.md`](.agents/rules/STYLE-CODE.md), and [`.agents/rules/STYLE-COMMENTS.md`](.agents/rules/STYLE-COMMENTS.md) before editing source code.
+Follow the detailed rules in [`.agents/rules/RULES.md`](.agents/rules/RULES.md), [`.agents/rules/RUFF.md`](.agents/rules/RUFF.md), [`.agents/rules/STYLE-CODE.md`](.agents/rules/STYLE-CODE.md), and [`.agents/rules/STYLE-COMMENTS.md`](.agents/rules/STYLE-COMMENTS.md) before editing source code.
 
 Repository conventions:
 

@@ -12,12 +12,11 @@ existing architecture. Prefer existing helpers and patterns over new abstraction
 
 ## Mandatory Read-Before-Work and Update-After-Work
 
-Before invoking this skill, you must already have read [`.agents/rules/CLAUDE.md`](../../rules/CLAUDE.md), [`.agents/rules/RULES.md`](../../rules/RULES.md), [`AGENTS.md`](../../../AGENTS.md), [`PLAN.md`](../../../PLAN.md), and [`CHANGELOG.md`](../../../CHANGELOG.md) at the start of this conversation. The full read/update tables live at [`.agents/rules/CLAUDE.md`](../../rules/CLAUDE.md#mandatory-read-these-files-before-any-work).
+Before invoking this skill, you must already have read [`.agents/rules/RULES.md`](../../rules/RULES.md), [`AGENTS.md`](../../../AGENTS.md), and [`CHANGELOG.md`](../../../CHANGELOG.md) at the start of this conversation.
 
 After any code change in `tcbot/`, in the same turn:
 
 - Add an entry to [`CHANGELOG.md`](../../../CHANGELOG.md) under `[Unreleased]`.
-- Update [`PLAN.md`](../../../PLAN.md) when the change affects runtime, project state, or priorities.
 - Update the matching `docs/<area>/<area>.md` and `docs/<feature>-detailed.md` if the area or feature changed.
 
 Skipping the doc sweep is a defect.

@@ -7,7 +7,7 @@ Last updated: 2026-05-29
 
 # Async Python Patterns for TCBot
 
-Before invoking this skill, confirm the read/update rules in [`.agents/rules/CLAUDE.md`](../../rules/CLAUDE.md#mandatory-read-these-files-before-any-work). After any async-code change, update [`CHANGELOG.md`](../../../CHANGELOG.md) and the matching `docs/*.md` whose behavior changed in the same turn.
+Before invoking this skill, confirm the read/update rules in [`.agents/rules/RULES.md`](../../rules/RULES.md#mandatory-read-before-work-and-update-after-work). After any async-code change, update [`CHANGELOG.md`](../../../CHANGELOG.md) and the matching `docs/*.md` whose behavior changed in the same turn.
 
 Use this skill for asynchronous Python work in the TCF Bot codebase. The project runs on Python 3.12 with `python-telegram-bot` (with the `[rate-limiter]` extra, no `[job-queue]` extra, tracking the latest compatible release), Motor/MongoDB, Flask keepalive, `uv`, and Ruff.
 
@@ -258,8 +258,8 @@ Before finishing async work, verify:
 
 ## References
 
-- Project policy: `tgbot/.agents/skills/project-policy/SKILL.md`.
-- Detailed async examples: `tgbot/.agents/skills/async-python-patterns/references/details.md`.
+- Project policy: `.agents/skills/project-policy/SKILL.md`.
+- Detailed async examples: `.agents/skills/async-python-patterns/references/details.md`.
 - Python asyncio documentation: https://docs.python.org/3/library/asyncio.html
 - python-telegram-bot docs: https://docs.python-telegram-bot.org/
 - Motor docs: https://motor.readthedocs.io/

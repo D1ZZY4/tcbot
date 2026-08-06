@@ -11,12 +11,11 @@ Use this skill when the user asks to update, fill in, review, or reorganize Mark
 
 ## Mandatory Read-Before-Work and Update-After-Work
 
-Before invoking this skill, you must already have read [`.agents/rules/CLAUDE.md`](../../rules/CLAUDE.md), [`.agents/rules/RULES.md`](../../rules/RULES.md), [`AGENTS.md`](../../../AGENTS.md), [`PLAN.md`](../../../PLAN.md), and [`CHANGELOG.md`](../../../CHANGELOG.md). The full read/update tables live at [`.agents/rules/CLAUDE.md`](../../rules/CLAUDE.md#mandatory-read-these-files-before-any-work).
+Before invoking this skill, you must already have read [`.agents/rules/RULES.md`](../../rules/RULES.md), [`AGENTS.md`](../../../AGENTS.md), and [`CHANGELOG.md`](../../../CHANGELOG.md).
 
 When you change *any* documentation file, update the related markdown in the same turn:
 
 - [`CHANGELOG.md`](../../../CHANGELOG.md): entry under `[Unreleased]` describing the doc change (use `### Documentation` or `### Added - Documentation`).
-- [`PLAN.md`](../../../PLAN.md): if the doc change reflects a runtime or project-state change.
 - [`docs/README.md`](../../../docs/README.md): if a new doc was added, update the Quick navigation or Detailed feature guides table.
 - [`docs/mapping.md`](../../../docs/mapping.md): if the repository tree changed.
 - Any sibling docs whose content is now stale or whose cross-references would break.
@@ -27,8 +26,8 @@ The user should NEVER have to ask "did you update CHANGELOG.md?" If they ask, yo
 
 Documentation normally lives in:
 
-- root docs: `README.md`, `AGENTS.md`, `PLAN.md`, `replit.md`
-- agent/contributor rules: `.agents/*.md`
+- root docs: `README.md`, `AGENTS.md`, `replit.md`
+- agent/contributor rules: `.agents/rules/*.md`
 - developer docs: `docs/**/*.md`
 - project-local skills: `.agents/skills/**/SKILL.md` when the task explicitly mentions skills
 

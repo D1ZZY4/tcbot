@@ -1,6 +1,6 @@
 # Project Mapping
 
-For project overview, see [`../README.md`](../README.md). For runtime state and priorities, see [`../PLAN.md`](../PLAN.md). For module breakdown, see [`modules/modules.md`](modules/modules.md). For database layer, see [`databases/databases.md`](databases/databases.md). For shared helpers, see [`helper/helper.md`](helper/helper.md). For runtime utilities, see [`utils/utils.md`](utils/utils.md).
+For project overview, see [`../README.md`](../README.md). For module breakdown, see [`modules/modules.md`](modules/modules.md). For database layer, see [`databases/databases.md`](databases/databases.md). For shared helpers, see [`helper/helper.md`](helper/helper.md). For runtime utilities, see [`utils/utils.md`](utils/utils.md).
 
 This page maps the repository structure and the service boundaries between packages.
 
@@ -10,12 +10,11 @@ This page maps the repository structure and the service boundaries between packa
 <project root>/
 ├── tcbot/                  Main Python package
 ├── docs/                   Developer documentation
-├── .agents/                Agent config (rules/, skills/, agents/)
+├── .agents/                Agent config (rules/ and skills/)
 ├── pyproject.toml          Dependencies and Ruff config
 ├── uv.lock                 Locked dependency graph
 ├── config.env.example      Environment variable template
 ├── AGENTS.md               Contributor and agent guidelines
-├── PLAN.md                 Project plan and backlog
 ├── README.md               Project overview
 ├── replit.md               Replit deployment notes
 ├── CHANGELOG.md            Version history

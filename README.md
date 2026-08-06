@@ -142,7 +142,7 @@ Key runtime pieces:
 - `tcbot/utils/dispatch.py` provides bounded concurrent fan-out for multi-group Telegram API calls.
 - `tcbot/utils/error_reporter.py` receives handler, asyncio, and logging errors for reporting to the configured error destination.
 
-For detailed architecture, see [`docs/mapping.md`](docs/mapping.md) and [`PLAN.md`](PLAN.md). For module breakdown, see [`docs/modules/modules.md`](docs/modules/modules.md). For database details, see [`docs/databases/databases.md`](docs/databases/databases.md).
+For detailed architecture, see [`docs/mapping.md`](docs/mapping.md). For module breakdown, see [`docs/modules/modules.md`](docs/modules/modules.md). For database details, see [`docs/databases/databases.md`](docs/databases/databases.md).
 
 ## Repository Layout
 
@@ -160,8 +160,7 @@ For detailed architecture, see [`docs/mapping.md`](docs/mapping.md) and [`PLAN.m
 ├── docker-compose.yml        Bot + MongoDB local compose setup
 ├── pyproject.toml            Project metadata, dependencies, Ruff
 ├── uv.lock                   Locked dependency graph
-├── AGENTS.md                 Project guide for .agents/contributors
-├── PLAN.md                   Current project state and improvement plan
+├── AGENTS.md                 Project guide for contributors
 └── replit.md                 Replit deployment notes
 ```
 
@@ -172,7 +171,7 @@ uv run ruff format .
 uv run ruff check --fix .
 ```
 
-Ruff targets Python 3.12 and line length 88. GitHub Actions install dependencies through `uv sync --frozen` so CI follows `pyproject.toml` and `uv.lock`. Project code should follow the detailed rules in [`.agents/rules/CLAUDE.md`](.agents/rules/CLAUDE.md), [`.agents/rules/RULES.md`](.agents/rules/RULES.md), [`.agents/rules/STYLE-CODE.md`](.agents/rules/STYLE-CODE.md), and [`.agents/rules/STYLE-COMMENTS.md`](.agents/rules/STYLE-COMMENTS.md).
+Ruff targets Python 3.12 and line length 88. GitHub Actions install dependencies through `uv sync --frozen` so CI follows `pyproject.toml` and `uv.lock`. Project code should follow the detailed rules in [`.agents/rules/RULES.md`](.agents/rules/RULES.md), [`.agents/rules/RUFF.md`](.agents/rules/RUFF.md), [`.agents/rules/STYLE-CODE.md`](.agents/rules/STYLE-CODE.md), and [`.agents/rules/STYLE-COMMENTS.md`](.agents/rules/STYLE-COMMENTS.md).
 
 ## CI/CD & Automation
 
@@ -224,7 +223,6 @@ Configure in GitHub repository settings → Secrets:
 ## Where to look next
 
 - For project guide and contributor rules, see [`AGENTS.md`](AGENTS.md).
-- For current project state, runtime flow, priorities, and maintenance plan, see [`PLAN.md`](PLAN.md).
 - For Replit deployment notes, see [`replit.md`](replit.md).
 - For developer documentation overview and detailed guide index, see [`docs/README.md`](docs/README.md).
 - For local, Docker, and hosted setup workflow, see [`docs/setup.md`](docs/setup.md).
@@ -234,7 +232,7 @@ Configure in GitHub repository settings → Secrets:
 - For utility module notes, see [`docs/utils/utils.md`](docs/utils/utils.md).
 - For user-facing flow overview, see [`docs/workflows.md`](docs/workflows.md). For conversation internals, see [`docs/workflows/workflows.md`](docs/workflows/workflows.md).
 - For appeals flow, see [`docs/appeal-detailed.md`](docs/appeal-detailed.md). For banning flow, see [`docs/banning-detailed.md`](docs/banning-detailed.md). For roles, see [`docs/role-detailed.md`](docs/role-detailed.md). For warnings, see [`docs/warnings-detailed.md`](docs/warnings-detailed.md).
-- For detailed engineering rules, see [`.agents/rules/CLAUDE.md`](.agents/rules/CLAUDE.md), [`.agents/rules/RULES.md`](.agents/rules/RULES.md), [`.agents/rules/STYLE-CODE.md`](.agents/rules/STYLE-CODE.md), [`.agents/rules/STYLE-COMMENTS.md`](.agents/rules/STYLE-COMMENTS.md), and [`.agents/rules/WORKFLOW.md`](.agents/rules/WORKFLOW.md).
+- For detailed engineering rules, see [`.agents/rules/RULES.md`](.agents/rules/RULES.md), [`.agents/rules/RUFF.md`](.agents/rules/RUFF.md), [`.agents/rules/STYLE-CODE.md`](.agents/rules/STYLE-CODE.md), and [`.agents/rules/STYLE-COMMENTS.md`](.agents/rules/STYLE-COMMENTS.md).
 
 ## Current Status
 
