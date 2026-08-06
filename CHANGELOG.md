@@ -26,6 +26,11 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
   comment-style guidance. Updated contributor docs, repository maps, and
   skills to use the new paths.
 
+- Added an explicit root `.config/` ignore rule and documented a bounded
+  autonomous engineering loop for inspection, Context7 verification, modular
+  implementation, async safety, validation, and requirement review. Clarified
+  that `asyncio.gather()` is for independent operations only.
+
 ## [Unreleased] - 2026-07-11 (session 194+, cont. 2)
 
 ### Fixed

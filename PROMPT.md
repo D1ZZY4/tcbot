@@ -7,6 +7,35 @@ autonomously through the requested scope, inspect the real implementation
 before making claims, preserve existing behavior unless the task requires a
 change, and stop only after the requested work is verified.
 
+## Autonomous Engineering Loop
+
+For every requested improvement, update, fix, or audit, run this bounded loop
+without waiting for another prompt:
+
+1. **Scope**: translate the request into one focused concern and identify the
+   affected runtime, documentation, configuration, and validation surfaces.
+2. **Inspect**: read the canonical rules, search for existing helpers and
+   duplicate paths, inspect the current implementation, and check repository
+   status before editing.
+3. **Verify**: confirm external library APIs and version-sensitive behavior with
+   Context7 latest. Resolve the library first, query one concept at a time,
+   never include secrets, and stop after the documented call budget.
+4. **Design**: choose the smallest modular change. Reuse and centralize shared
+   behavior in the owning helper or domain module instead of adding parallel
+   abstractions.
+5. **Implement**: make the focused change with current Python, typed async
+   code, accurate comments, and no speculative fallback or placeholder.
+6. **Validate**: run targeted checks first, then the project verification suite,
+   inspect logs for runtime changes, and scan for stale paths, dead code, and
+   duplicated logic.
+7. **Review**: compare the result with every explicit requirement, update
+   related documentation and changelog entries, and repeat the loop only when a
+   concrete issue remains. Stop when checks are clean or report the exact
+   blocker after the bounded attempts.
+
+Avoid unsupported latency guarantees. Prefer measurable improvements, bounded
+concurrency, and clear failure behavior over unsafe shortcuts.
+
 ## Canonical project references
 
 Read the following before changing the project:
@@ -55,6 +84,9 @@ rules elsewhere.
   async task error handling, and explicit PTB lifecycle management.
 - Use Context7 through `.agents/skills/context7-expert/` for current library
   APIs, or inspect the installed source when Context7 is unavailable.
+- For Context7 CLI mode, use `npx ctx7@latest`, resolve the library before
+  fetching docs, query one concept at a time, and report quota or lookup
+  failures instead of silently using stale assumptions.
 - Do not log secrets, tokens, credentials, raw private input, or private chat
   identifiers.
 - Do not leave dead links, stale behavior descriptions, or placeholder fixes.

@@ -33,6 +33,26 @@ Use the relevant skill before editing code, documentation, database helpers,
 workflows, diagrams, or other specialized areas. Compose skills when a task
 spans more than one area.
 
+## Autonomous Improvement Loop
+
+For each requested improvement, update, fix, or audit:
+
+1. Scope one concern and identify its affected files and validation surfaces.
+2. Inspect current code, existing helpers, repository status, and duplicate or
+   dead paths before editing.
+3. Verify version-sensitive library behavior with `npx ctx7@latest`: resolve
+   the library first, query one concept at a time, and never send credentials
+   or private project data.
+4. Design and implement the smallest modular change using the owning helper or
+   domain module as the single source of truth.
+5. Run targeted checks, then the relevant full validation and runtime logs.
+6. Review requirements, docs, stale paths, dead code, and duplicate logic.
+7. Repeat only for a concrete remaining defect; stop after bounded attempts and
+   report blockers precisely.
+
+Performance claims require measurements. Prefer bounded concurrency and explicit
+failure behavior.
+
 ## Dependency and Tooling Policy
 
 - Target Python 3.12.

@@ -36,6 +36,33 @@ for the complete read/update rules. Skipping either step is a serious defect.
 
 **Skills in `.agents/skills/` auto-invoke whenever their trigger matches**: no need for the user to ask. If you are about to write code in `tcbot/`, invoke [`project-policy`](.agents/skills/project-policy/SKILL.md). If you are about to edit docs, invoke [`docs-maintainer`](.agents/skills/docs-maintainer/SKILL.md). Same for `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `mermaid-diagrams`, `feature-reviewer`, `general-sub-agent`. Compose multiple skills when one task spans multiple areas.
 
+## Autonomous Engineering Loop
+
+For each improvement, update, fix, or audit, work through this bounded loop
+autonomously:
+
+1. **Scope** the concern and list the affected runtime, docs, configuration, and
+   validation surfaces.
+2. **Inspect** the canonical rules, current implementation, repository status,
+   existing helpers, and possible duplicate or dead paths.
+3. **Verify** version-sensitive library behavior with Context7 latest. Resolve
+   the exact library before querying docs, use one concept per query, and never
+   put credentials or private project data in a query.
+4. **Design** the smallest modular change and centralize shared behavior in its
+   owning helper or domain module. Do not create parallel utilities for logic
+   that already has a project owner.
+5. **Implement** focused typed Python 3.12 code with HTML-safe output,
+   intentional comments, and explicit error handling.
+6. **Validate** targeted behavior, the full relevant checks, startup logs for
+   runtime changes, and stale/dead/duplicate paths.
+7. **Review** every explicit requirement, synchronize related docs and
+   changelog entries, and repeat only if a concrete defect remains. Stop when
+   the checks are clean or report the exact blocker after bounded attempts.
+
+Optimize for measured efficiency and bounded concurrency, not unverified
+performance guarantees. Preserve correctness when ordering, dependencies,
+authorization, or side effects require sequential execution.
+
 ## Project Overview
 
 TCF Bot is a Python Telegram bot for the Transsion Core Federation community. It manages federation-wide moderation actions, appeal workflows, staff roles, connected groups, audit logging, and health checks.

@@ -65,6 +65,9 @@ Rules:
 - Remove unused imports, variables, functions, and commented-out code.
 - Extract shared renderers, parsers, keyboards, database helpers, and workflows
   instead of duplicating logic.
+- Keep one source of truth for cross-cutting behavior. Extend the existing
+  owning helper or domain module before creating another utility or parallel
+  abstraction.
 - Do not use bare `except:` or swallow exceptions with `except Exception: pass`.
 - Use module loggers instead of `print()` in application code.
 - Log I/O failures with actionable context.
@@ -164,7 +167,10 @@ Rules:
 - Use `fmt_dt(dt)` or `utc_now_str()` for user-visible timestamps.
 - All database operations are async.
 - Do not call `asyncio.run()` inside handlers.
-- Combine independent operations with `asyncio.gather()`.
+- Combine independent operations with `asyncio.gather()` when their failure
+  behavior is clear. Preserve sequential awaits when a later operation depends
+  on an earlier result, ordering is part of the contract, or side effects must
+  be serialized.
 - Use `fan_out()` for bounded multi-group operations.
 - Supervise background tasks and log or report their errors.
 - Wrap external Telegram lookups in `asyncio.wait_for(timeout=...)`.
