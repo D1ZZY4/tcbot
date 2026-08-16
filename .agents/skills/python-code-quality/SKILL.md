@@ -14,7 +14,7 @@ Before invoking this skill, confirm the read/update rules in
 update [`CHANGELOG.md`](../../../CHANGELOG.md) and the matching document under
 `docs/` in the same turn.
 
-Use this skill when improving or validating Python code quality in the TCF Bot repository. The project uses Python 3.14, `uv`, and Ruff. It does not currently configure a separate type checker in `pyproject.toml`, so type-quality guidance should focus on clear annotations, Ruff-compatible style, and practical review rather than inventing a type-check command.
+Use this skill when improving or validating Python code quality in the TCF Bot repository. The project uses Python 3.14, `uv`, Ruff, and pyright.
 
 ## When to Use This Skill
 
@@ -56,7 +56,13 @@ select = ["B", "C4", "D", "E4", "E7", "E9", "F", "FBT", "I", "PERF", "PIE", "PLC
 
 Ruff is in `[dependency-groups] dev` (PEP 735), installed automatically by `uv sync`. Use `uv run ruff format .` and `uv run ruff check .` directly; `uvx ruff` is not needed.
 
-Do not claim `mypy`, `pyright`, or `ty` validation exists unless it is added to the project.
+Run pyright after code changes that touch type annotations or imports:
+
+```bash
+uv run pyright .
+```
+
+`pyrightconfig.json` pins the project venv and enables `reportMissingImports` with `reportMissingTypeStubs` disabled.
 
 ## Standard Commands
 

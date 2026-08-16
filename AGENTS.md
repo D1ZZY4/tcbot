@@ -70,11 +70,15 @@ TCF Bot is a Python Telegram bot for the Transsion Core Federation community. It
 Current stack:
 
 - Python 3.14 project target (`pyproject.toml` requires `>=3.13`)
-- `python-telegram-bot` (plain, no `[job-queue]` extra), tracking the latest compatible release
-- MongoDB through Motor (latest)
+- `python-telegram-bot[rate-limiter]>=22.8,<23`, tracking the latest compatible release
+- APScheduler 3.11.3 with `AsyncIOScheduler` + `MongoDBJobStore` for persistent scheduled jobs
+- Motor async MongoDB driver with connection pool configuration
 - Flask keep-alive / health-check server
+- Optional Redis L2 cache (`redis[hiredis]>=8.0,<9`) with in-memory L1 fallback
+- `cbor2` for Redis serialization, `cachetools` for L1 TTLCache
 - `uv` for dependency management and lockfile-based installs
 - Ruff for formatting and lint checks
+- pyright for static type checking
 
 ## Repository Layout
 
@@ -93,14 +97,50 @@ Current stack:
 │   │   ├── kicks_db.py       Kicks
 │   │   ├── mutes_db.py       Mutes
 │   │   ├── queues_db.py      Promotion requests
-│   │   ├── cache.py          In-memory caches
+│   │   ├── cache.py          TwoLevelCache (L1 in-memory + L2 Redis)
+│   │   ├── redis_client.py   Optional Redis client
+│   │   ├── scheduler.py      APScheduler background task + MongoDBJobStore
 │   │   ├── mongos.py         MongoDB client/indexes
 │   │   ├── documents.py      Typed document shapes
 │   │   └── types.py          Domain primitive types
 │   ├── modules/              Telegram command modules and handlers
-│   │   └── helper/           Shared helper code and conversation workflows
-│   │       └── workflows/    ConversationHandler flows (`*_flow.py` only)
+│   │   ├── helper/           Shared helper code and conversation workflows
+│   │   │   ├── workflows/    ConversationHandler flows (`*_flow.py` only)
+│   │   │   ├── formatter.py  HTML-safe Telegram message formatting
+│   │   │   ├── keyboards.py  Inline keyboard builders
+│   │   │   ├── decorators.py  Rate limiter, role checks, execution logging
+│   │   │   ├── extraction.py Target/user extraction helpers
+│   │   │   └── identity.py   Self/bot/Telegram/Founder/staff classification
+│   │   ├── banning.py        /ban command
+│   │   ├── kicking.py        /kick command
+│   │   ├── muting.py         /mute command
+│   │   ├── warnings.py       /warn command
+│   │   ├── appeals.py        /appeal command
+│   │   ├── admins.py         /admin command
+│   │   ├── connecting.py     /connect command
+│   │   ├── disconnecting.py  /disconnect command
+│   │   ├── groups.py         Group management
+│   │   ├── checking.py       /check command
+│   │   ├── unbanning.py      /unban command
+│   │   ├── broadcasting.py   /broadcast command
+│   │   ├── greeting.py       Greeting messages
+│   │   ├── about.py          /about command
+│   │   ├── additional.py     Additional menu
+│   │   ├── help.py           Help command
+│   │   ├── stats.py          Statistics
+│   │   ├── maintenance.py    Maintenance commands
+│   │   ├── netspeed.py       Network speed test
+│   │   ├── privacy.py        Privacy commands
+│   │   └── start.py          /start command
 │   └── utils/                Logging, dispatch, prefixes, datetime helpers
+│       ├── circuit_breaker.py  Telegram/MongoDB circuit breaker
+│       ├── dispatch.py        fan_out() bounded concurrency dispatcher
+│       ├── error_reporter.py  Error reporting to LOGS_ERRORS
+│       ├── formatter.py       HTML-safe formatter (esc, code, mention, bold)
+│       ├── logger.py          Logging setup
+│       ├── pagination.py      Paginated message rendering
+│       ├── prefixes.py        Command prefix resolution
+│       └── timedate_format.py UTC timestamp helpers
 ├── docs/                     Developer documentation grouped by category
 ├── .agents/                   Coding skills and style rules
 ├── config.env.example        Environment variable template
@@ -108,8 +148,10 @@ Current stack:
 ├── Dockerfile                Container image definition
 ├── pyproject.toml            Dependencies and Ruff settings
 ├── uv.lock                   Locked dependency graph
+├── pyrightconfig.json        pyright type checker configuration
 ├── CONTRIBUTING.md           Contribution workflow and review checklist
 ├── README.md                 User-facing setup and architecture overview
+├── AGENTS.md                 Top-level project guide (this file)
 └── replit.md                 Replit deployment notes
 ```
 
@@ -135,11 +177,12 @@ Run the bot locally:
 uv run python -m tcbot
 ```
 
-Format and lint:
+Format, lint, and type-check:
 
 ```bash
 uv run ruff format .
 uv run ruff check --fix .
+uv run pyright .
 ```
 
 Run with Docker Compose:
@@ -170,6 +213,13 @@ Important non-secret/runtime variables include:
 - `PROOF_TIMEOUT_SECONDS`, `APPEAL_TIMEOUT_SECONDS`, `ALBUM_DEBOUNCE_SECONDS`: conversation timing settings.
 - `LOG_LEVEL`: bot log level.
 - `MODULES_LOAD`, `MODULES_NO_LOAD`: optional module allowlist/denylist.
+- `WEBHOOK_URL`: explicit webhook URL for production; overrides `REPLIT_DEV_DOMAIN`.
+- `WEBHOOK_SECRET`: optional webhook secret for Telegram to sign update payloads.
+- `REDIS_URL`: optional Redis connection URL for L2 cache.
+- `WARN_LIMIT`: per-group warn threshold that triggers auto-ban; default `3`.
+- `WARN_EXPIRY_DAYS`: days after which warn records expire; default `0` (disabled).
+- `FED_WARN_LIMIT`: federation-wide warn threshold that triggers auto-ban; default `0` (disabled).
+- `COMMUNITY_CHANNEL_URL`, `COMMUNITY_GROUP_URL`, `COMMUNITY_LOGS_URL`, `COMMUNITY_EXEC_URL`, `COMMUNITY_TRAVEL_URL`: optional community links shown in the additional menu.
 
 Use `config.env.example` as the complete template.
 
@@ -188,6 +238,7 @@ Repository conventions:
 - Prefer built-in generics such as `list[str]`, `dict[str, int]`, and `int | None`.
 - Avoid inline imports and wildcard imports.
 - Use Ruff for formatting and import cleanup.
+- Use pyright for static type checking.
 - Name async command handlers `cmd_*` and event handlers `on_*`.
 - Name conversation states `WAITING_*`.
 - Keep all bot messages HTML-only (`parse_mode='HTML'`) and escape user-provided text through the formatter helpers.
@@ -195,13 +246,16 @@ Repository conventions:
 
 ## Architecture Rules
 
-- `tcbot/__main__.py` builds the PTB application, starts Flask keep-alive, registers the global rate limiter, loads module handlers, and starts the native webhook transport when a public URL is available. Local development without a public URL falls back to polling.
+- `tcbot/__main__.py` builds the PTB application with `ApplicationBuilder`, configures HTTP timeouts and connection pools, starts Flask keep-alive, registers the global rate limiter, loads module handlers, connects to MongoDB, ensures indexes, seeds the initial owner, attaches the error reporter, and starts webhook transport when a public URL is available. Local development without a public URL falls back to polling.
+- `tcbot/alive.py` runs Flask in a daemon thread, exposing `GET /` (plain-text `OK`) and `GET /health` (JSON subsystem status), and receives webhook updates at `POST /webhook`.
 - `tcbot/modules/__init__.py` discovers top-level module files, applies `MODULES_LOAD` / `MODULES_NO_LOAD` filters, and fails startup if an enabled module cannot be imported.
 - Handlers should use database helper modules instead of calling `mongos.col()` directly.
-- Multi-group actions should use `tcbot.utils.dispatch.fan_out()` to bound concurrent Telegram API calls.
+- Multi-group actions should use `tcbot.utils.dispatch.fan_out()` to bound concurrent Telegram API calls, integrating the Telegram circuit breaker so network errors trip the circuit but expected API refusals (403, 400) do not.
 - Role checks should use the canonical role helpers in `tcbot.database.users_roles` and `tcbot.modules.helper.decorators.resolve_and_check`.
-- Ban/kick flows must auto-demote users who currently hold a federation role.
+- Ban/kick flows must auto-demote users who currently hold a federation role via `Demote.execute()`.
 - New conversation logic belongs in `tcbot/modules/helper/workflows/*_flow.py`.
+- The scheduler (`tcbot/database/scheduler.py`) runs APScheduler 3.11.3 `AsyncIOScheduler` with `MongoDBJobStore` inside a dedicated asyncio background task, providing persistent scheduled unbans and warn-expiry jobs across restarts.
+- `TwoLevelCache` (`tcbot/database/cache.py`) provides L1 in-memory TTLCache with optional L2 Redis, serializing mutations through a FIFO queue for consistency across processes.
 
 ## Commit and Pull Request Guidance
 
@@ -219,7 +273,7 @@ Pull requests should include:
 
 - A short summary of the change.
 - For a long or detailed or short description submit to [`CHANGELOG.md`](CHANGELOG.md).
-- Validation commands run (e.g. Ruff format and lint).
+- Validation commands run (e.g. Ruff format and lint, pyright).
 - Any configuration, database, or deployment impact.
 - Screenshots or log excerpts only when user-visible behavior changed.
 
@@ -230,3 +284,4 @@ Pull requests should include:
 - Do not change `config.env` as part of normal code or documentation work.
 - Keep database schema changes backward-compatible unless a migration plan is included.
 - Update every read path if a stored MongoDB field is added, renamed, or removed.
+- The webhook route in `alive.py` rejects non-JSON content types at the parser level; do not weaken this without a security review.

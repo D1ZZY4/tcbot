@@ -55,6 +55,14 @@ Auto-fix safe lint issues:
 uv run ruff check --fix .
 ```
 
+Type-check:
+
+```bash
+uv run pyright .
+```
+
+`pyrightconfig.json` pins the project venv and enables `reportMissingImports` with `reportMissingTypeStubs` disabled.
+
 ## Python Module Checklist
 
 For Python source files, verify:
