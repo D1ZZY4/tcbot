@@ -168,7 +168,7 @@ async def _scheduler_background(
     ``scheduler.shutdown()``.
     """
     global _scheduler, _sched_error
-    jobstores = {"mongodb": MongoDBJobStore(database=db_name, client=mongodb_uri)}
+    jobstores = {"mongodb": MongoDBJobStore(database=db_name, host=mongodb_uri)}
     scheduler = AsyncIOScheduler(jobstores=jobstores)
     _scheduler = scheduler
     try:

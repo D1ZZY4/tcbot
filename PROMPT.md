@@ -75,18 +75,13 @@ rules elsewhere.
 
 ## Implementation standards
 
-- Use Python 3.12 syntax, `uv`, and Ruff.
+- Use Python 3.14 syntax, `uv`, and Ruff and Pyright.
 - Follow the module boundaries and handler conventions in `AGENTS.md`.
 - Use database helpers instead of direct collection access from handlers.
 - Bound cross-group Telegram fan-out with the shared dispatch helper.
 - Escape user-controlled text and keep bot messages in HTML parse mode.
 - Preserve role checks, anonymous-admin handling, callback acknowledgement,
   async task error handling, and explicit PTB lifecycle management.
-- Use Context7 through `.agents/skills/context7-expert/` for current library
-  APIs, or inspect the installed source when Context7 is unavailable.
-- For Context7 CLI mode, use `npx ctx7@latest`, resolve the library before
-  fetching docs, query one concept at a time, and report quota or lookup
-  failures instead of silently using stale assumptions.
 - Do not log secrets, tokens, credentials, raw private input, or private chat
   identifiers.
 - Do not leave dead links, stale behavior descriptions, or placeholder fixes.
@@ -121,13 +116,3 @@ For runtime changes, restart the configured `Start Application` workflow and
 inspect its logs. Confirm that startup reaches the expected readiness state.
 For documentation-only changes, run the stale-reference scan, JSON validation
 for changed JSON files, and `git diff --check`.
-
-## Commit policy
-
-- Make one focused Conventional Commit for the completed logical change.
-- Read `.agents/skills/dizzy-commit/SKILL.md` and its relevant references before
-  committing; do not create a second commit-policy document under `docs/`.
-- Use author `D1ZZY4 <176969112+D1ZZY4@users.noreply.github.com>`.
-- Include the required `Author-by` and `Signed-off-by` trailers.
-- Never push unless the user explicitly asks.
-- Review the final diff and status before committing.

@@ -2,7 +2,7 @@
 
 For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md). For project overview, see [`README.md`](README.md). For contributor rules, see [`AGENTS.md`](AGENTS.md).
 
-## [Unreleased] - 2026-08-17
+## [6.2.0] - 2026-08-17
 
 ### Fixed
 
