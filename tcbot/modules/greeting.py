@@ -128,6 +128,8 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """
     msg = update.effective_message
     chat = update.effective_chat
+    assert msg is not None
+    assert chat is not None
 
     is_primary = chat.id in (cfg.main_group, cfg.exec_group)
 
@@ -315,6 +317,8 @@ async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     """Announce when a non-bot member leaves the main or exec group."""
     msg = update.effective_message
     chat = update.effective_chat
+    assert msg is not None
+    assert chat is not None
 
     if chat.id not in (cfg.main_group, cfg.exec_group):
         return

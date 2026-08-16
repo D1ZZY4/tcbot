@@ -8,10 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
-from telegram import Message
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
+
+if TYPE_CHECKING:
+    from collections.abc import Coroutine
+
+    from telegram import Message
 
 from tcbot import cfg
 from tcbot import database as db
@@ -50,10 +54,8 @@ __help_sections__: list[tuple[str, str]] = [
     replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
     (
         replies.SEC_WHAT,
-        f"Lists all groups currently connected to {_CNAME}, along with the total "
-        f"count.\n\n"
-        f"The default view shows group names only. Tap {bold('Details')} to expand the list and "
-        f"show each group's chat ID alongside its name. Tap {bold('Simple')} to collapse back.",
+        f"Lists all groups currently connected to {_CNAME}, along with the total count.\n\n"
+        f"The default view shows group names only. Tap {bold('Details')} to expand the list and show each group's chat ID alongside its name. Tap {bold('Simple')} to collapse back.",
     ),
     (
         "Example",
@@ -74,10 +76,11 @@ __help__: replies.HelpEntry = {
 def _render(groups: list[GroupDoc], *, detailed: bool) -> str:
     lines = [f"{bold('Connected Groups')}\n\nCount: {len(groups)}\n"]
     for g in groups:
+        title = g.get("title", "Unknown")
         if detailed:
-            lines.append(f"- {esc(g['title'])} - {code(str(g['chat_id']))}")
+            lines.append(f"- {esc(title)} - {code(str(g.get('chat_id', 0)))}")
         else:
-            lines.append(f"- {esc(g['title'])}")
+            lines.append(f"- {esc(title)}")
     return "\n".join(lines)
 
 
@@ -125,12 +128,13 @@ async def _toggle(
     if q is None or q.message is None:
         return
 
+    cbq_msg: Message = cast("Message", q.message)
     groups = ctx.user_data.get("groups_cache") if ctx.user_data is not None else None
     if groups:
         await asyncio.gather(
             q.answer(),
             safe_edit(
-                q.message,
+                cbq_msg,
                 _render(groups, detailed=detailed),
                 reply_markup=tcgroups_kb(detailed=detailed),
             ),
@@ -146,7 +150,7 @@ async def _toggle(
         if ctx.user_data is not None:
             ctx.user_data["groups_cache"] = groups
         await safe_edit(
-            q.message,
+            cbq_msg,
             _render(groups, detailed=detailed),
             reply_markup=tcgroups_kb(detailed=detailed),
         )
@@ -154,16 +158,20 @@ async def _toggle(
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
-async def on_groups_details(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_groups_details(
+    update: Update, ctx: ContextTypes.DEFAULT_TYPE
+) -> Coroutine[Any, Any, None]:
     """Switch the groups listing to detailed view (shows full chat IDs)."""
-    await _toggle(update, ctx, detailed=True)
+    return _toggle(update, ctx, detailed=True)
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
-async def on_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_groups_simple(
+    update: Update, ctx: ContextTypes.DEFAULT_TYPE
+) -> Coroutine[Any, Any, None]:
     """Switch the groups listing to simple view (condensed, no full chat IDs)."""
-    await _toggle(update, ctx, detailed=False)
+    return _toggle(update, ctx, detailed=False)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

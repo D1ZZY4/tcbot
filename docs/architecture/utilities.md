@@ -74,10 +74,9 @@ The Telegram circuit state (`closed`, `open`, or `half_open`) is exposed in the 
 Use it for multi-group actions such as ban, unban, mute, broadcast, and cleanup.
 
 ```python
-results = await fan_out([
-    ctx.bot.ban_chat_member(group["chat_id"], target_id)
-    for group in groups
-])
+results = await fan_out(
+    [ctx.bot.ban_chat_member(group["chat_id"], target_id) for group in groups]
+)
 errors = count_errors(results)
 ```
 

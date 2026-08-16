@@ -2,16 +2,15 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Studio
 
-"""Persistent moderation scheduler backed by APScheduler 4.x + MongoDB.
+"""Persistent moderation scheduler backed by APScheduler 3.x + MongoDB.
 
 All scheduled moderation actions (warn expiry) survive bot restarts
-because APScheduler stores its schedule state in MongoDB via MongoDBDataStore.
+because APScheduler stores its job state in MongoDB via MongoDBJobStore.
 Member-cache cleanup is handled by a MongoDB TTL index on ``last_updated``,
 not by a scheduler job.
 
-The scheduler runs inside a dedicated asyncio background task so that the
-``async with AsyncScheduler()`` context manager is entered *and* exited in the
-same task (AnyIO cancel-scope semantics requires this).
+The scheduler runs inside a dedicated asyncio background task so that
+``scheduler.start()`` is called inside the running event loop.
 
 Usage pattern (lifecycle managed by ``tcbot/__main__.py``)::
 
@@ -31,10 +30,10 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta
+from typing import Any, cast
 
-from apscheduler import AsyncScheduler, ConflictPolicy
-from apscheduler.datastores.mongodb import MongoDBDataStore
-from apscheduler.serializers.cbor import CBORSerializer
+from apscheduler.jobstores.mongodb import MongoDBJobStore
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -49,7 +48,7 @@ log = logging.getLogger(__name__)
 
 # ──────────────── Recurring job schedule IDs ──────────────────── #
 # * Stable IDs prevent duplicate schedules across restarts.
-# * (conflict_policy=replace updates the trigger without creating duplicates)
+# * (replace_existing=True updates the trigger without creating duplicates)
 
 _WARN_EXPIRY_SCHEDULE_ID: str = "tcbot.warn_expiry_daily"
 # * Legacy ID kept so _register_periodic_schedules can remove the old schedule
@@ -61,12 +60,13 @@ _CLEANUP_SCHEDULE_ID: str = "tcbot.db_cleanup_weekly"
 _STOP_TIMEOUT_S: float = 10.0
 
 # ──────────────── Module-level scheduler state ──────────────────── #
-# * _scheduler:   live AsyncScheduler reference (set inside background task)
-# * _sched_task:  the asyncio Task that keeps async-with context alive
+# * _scheduler:   live AsyncIOScheduler reference (set inside background task)
+# * _sched_task:  the asyncio Task that runs scheduler.start() + stop wait
 # * _sched_ready: event set when the scheduler is initialised and available
 # * _sched_stop:  event set by stop() to trigger graceful shutdown
+# * _sched_error: captured exception if background task crashes
 
-_scheduler: AsyncScheduler | None = None
+_scheduler: AsyncIOScheduler | None = None
 _sched_task: asyncio.Task | None = None  # type: ignore[type-arg]
 _sched_ready: asyncio.Event | None = None
 _sched_stop: asyncio.Event | None = None
@@ -154,39 +154,39 @@ async def _execute_scheduled_unban(ban_id: str, user_id: int) -> None:
 
 
 # ══════════════════════════════════════════════════════════════════ #
-#  Background task: keeps async-with context alive
+#  Background task: owns the scheduler lifecycle
 # ══════════════════════════════════════════════════════════════════ #
 
 
 async def _scheduler_background(
     mongodb_uri: str, db_name: str, warn_expiry_days: int
 ) -> None:
-    """Long-running background task that owns the AsyncScheduler context.
+    """Long-running background task that owns the AsyncIOScheduler lifecycle.
 
-    AnyIO requires that the cancel scope created by ``async with AsyncScheduler()``
-    is entered and exited in the *same* asyncio task.  Running this entire
-    lifecycle inside a dedicated task satisfies that requirement.
+    Calls ``scheduler.start()`` (synchronous, must be in the running event loop),
+    registers periodic schedules, then waits for the stop event before calling
+    ``scheduler.shutdown()``.
     """
     global _scheduler, _sched_error
-    serializer = CBORSerializer()
-    data_store = MongoDBDataStore(mongodb_uri, database=db_name, serializer=serializer)
+    jobstores = {"mongodb": MongoDBJobStore(database=db_name, client=mongodb_uri)}
+    scheduler = AsyncIOScheduler(jobstores=jobstores)
+    _scheduler = scheduler
     try:
-        async with AsyncScheduler(data_store) as sched:
-            _scheduler = sched
-            if _sched_ready is None:
-                raise RuntimeError(
-                    "_sched_ready event not initialised before _scheduler_background ran"
-                )
-            await _register_periodic_schedules(sched, warn_expiry_days)
-            await sched.start_in_background()
-            if _sched_stop is None:
-                raise RuntimeError(
-                    "_sched_stop event not initialised before _scheduler_background ran"
-                )
-            # Signal readiness only after the recurring schedules are registered
-            # and the scheduler has accepted background execution.
-            _sched_ready.set()
-            await _sched_stop.wait()
+        _register_periodic_schedules(scheduler, warn_expiry_days)
+        scheduler.start()
+        if _sched_ready is None:
+            raise RuntimeError(
+                "_sched_ready event not initialised before _scheduler_background ran"
+            )
+        if _sched_stop is None:
+            raise RuntimeError(
+                "_sched_stop event not initialised before _scheduler_background ran"
+            )
+        # Signal readiness only after the recurring schedules are registered
+        # and the scheduler has accepted background execution.
+        _sched_ready.set()
+        await _sched_stop.wait()
+        scheduler.shutdown(wait=False)
     except Exception as exc:
         log.exception("APScheduler background task crashed.")
         _sched_error = exc
@@ -198,27 +198,27 @@ async def _scheduler_background(
 
 
 # ══════════════════════════════════════════════════════════════════ #
-#  Periodic schedule registration (takes sched as explicit param)
+#  Periodic schedule registration
 # ══════════════════════════════════════════════════════════════════ #
 
 
-async def _register_periodic_schedules(
-    sched: AsyncScheduler, warn_expiry_days: int
+def _register_periodic_schedules(
+    scheduler: AsyncIOScheduler, warn_expiry_days: int
 ) -> None:
-    """Register recurring maintenance schedules (idempotent via ConflictPolicy.replace)."""
+    """Register recurring maintenance schedules (idempotent via replace_existing)."""
     if warn_expiry_days > 0:
-        await sched.add_schedule(
+        scheduler.add_job(
             _expire_old_warns,
-            IntervalTrigger(hours=24),
+            trigger=IntervalTrigger(hours=24),
             id=_WARN_EXPIRY_SCHEDULE_ID,
-            kwargs={"warn_expiry_days": warn_expiry_days},
-            conflict_policy=ConflictPolicy.replace,
+            args=[warn_expiry_days],
+            replace_existing=True,
         )
         log.info("Scheduled warn expiry: every 24h, expiry_days=%d.", warn_expiry_days)
     else:
         # * Warn expiry disabled: remove stale schedule if previously active.
         try:
-            await sched.remove_schedule(_WARN_EXPIRY_SCHEDULE_ID)
+            scheduler.remove_job(_WARN_EXPIRY_SCHEDULE_ID)
             log.info("Warn expiry schedule removed (WARN_EXPIRY_DAYS=0).")
         except Exception as exc:
             log.debug("Warn expiry schedule not present, skipping removal: %s", exc)
@@ -226,7 +226,7 @@ async def _register_periodic_schedules(
     # * member_cache cleanup is now handled by a MongoDB TTL index on last_updated.
     # * Remove the legacy weekly schedule if it was persisted from a prior bot version.
     try:
-        await sched.remove_schedule(_CLEANUP_SCHEDULE_ID)
+        scheduler.remove_job(_CLEANUP_SCHEDULE_ID)
         log.info("Removed legacy weekly cleanup schedule (now handled by TTL index).")
     except Exception as exc:
         log.debug("Legacy cleanup schedule not present, nothing to remove: %s", exc)
@@ -240,9 +240,9 @@ async def _register_periodic_schedules(
 async def start(mongodb_uri: str, db_name: str, warn_expiry_days: int) -> None:
     """Initialise and start the APScheduler background scheduler.
 
-    Spawns a dedicated asyncio task that owns the ``async with AsyncScheduler()``
-    context (required by AnyIO cancel-scope semantics).  Uses ``MongoDBDataStore``
-    with ``CBORSerializer`` so all schedules and job state survive bot restarts.
+    Spawns a dedicated asyncio task that calls ``scheduler.start()`` inside the
+    running event loop.  Uses ``MongoDBJobStore`` so all schedules and job state
+    survive bot restarts.
 
     Blocks until the scheduler is ready to accept schedule operations.
 
@@ -270,14 +270,14 @@ async def start(mongodb_uri: str, db_name: str, warn_expiry_days: int) -> None:
         _sched_stop = None
         _sched_error = None
         raise RuntimeError("APScheduler failed to start.") from startup_error
-    log.info("APScheduler ready (MongoDBDataStore + CBORSerializer → %s).", db_name)
+    log.info("APScheduler ready (MongoDBJobStore → %s).", db_name)
 
 
 async def stop() -> None:
     """Stop the scheduler and release all resources.
 
-    Sets the stop event so the background task can exit the ``async with`` block
-    cleanly.  Safe to call even if :func:`start` was never called.
+    Sets the stop event so the background task can exit cleanly.
+    Safe to call even if :func:`start` was never called.
     """
     global _sched_task, _sched_ready, _sched_stop, _sched_error
     if _sched_stop is not None:
@@ -297,7 +297,7 @@ async def stop() -> None:
     log.info("APScheduler stopped.")
 
 
-def _get() -> AsyncScheduler:
+def _get() -> AsyncIOScheduler:
     """Return the active scheduler; raises if not started."""
     if _scheduler is None:
         raise RuntimeError("Scheduler not started; call start() first.")
@@ -328,12 +328,12 @@ async def schedule_unban(ban_id: str, user_id: int, run_at: datetime) -> str:
     The schedule is stored in MongoDB so it survives bot restarts.
     """
     schedule_id = f"unban.{ban_id}"
-    await _get().add_schedule(
+    _get().add_job(
         _execute_scheduled_unban,
-        DateTrigger(run_at),
+        trigger=DateTrigger(run_at),
         id=schedule_id,
-        kwargs={"ban_id": ban_id, "user_id": user_id},
-        conflict_policy=ConflictPolicy.replace,
+        args=[ban_id, user_id],
+        replace_existing=True,
     )
     log.info(
         "Scheduled persistent unban: ban_id=%s user_id=%d run_at=%s.",
@@ -350,7 +350,7 @@ async def cancel_schedule(schedule_id: str) -> bool:
     Safe to call with a non-existent ID (returns False, does not raise).
     """
     try:
-        await _get().remove_schedule(schedule_id)
+        _get().remove_job(schedule_id)
         log.info("Cancelled schedule: %s.", schedule_id)
         return True
     except Exception:
@@ -371,10 +371,10 @@ async def run_now(
 
     Useful for triggering a job on demand (e.g. admin-triggered action).
     """
-    await _get().add_schedule(
-        func,
-        DateTrigger(utc_now()),
+    _get().add_job(
+        cast("Any", func),
+        trigger=DateTrigger(utc_now()),
         args=args or (),
         kwargs=kwargs or {},
-        conflict_policy=ConflictPolicy.replace,
+        replace_existing=True,
     )

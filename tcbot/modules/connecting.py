@@ -106,6 +106,9 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """
     chat = update.effective_chat
     user = update.effective_user
+    assert chat is not None
+    assert user is not None
+    assert update.effective_message is not None
 
     if chat.type == "private":
         try:

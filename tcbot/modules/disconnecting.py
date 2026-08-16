@@ -94,6 +94,9 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     """
     chat = update.effective_chat
     user = update.effective_user
+    assert chat is not None
+    assert user is not None
+    assert update.effective_message is not None
 
     if chat.type == "private":
         try:
@@ -191,6 +194,8 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """
     msg = update.effective_message
     admin = update.effective_user
+    assert msg is not None
+    assert admin is not None
     args = parse_cmd_args(msg.text)
     if not args or not args[0].lstrip("-").isdigit():
         try:

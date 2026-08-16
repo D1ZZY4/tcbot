@@ -196,6 +196,9 @@ class BuildConnection:
             db.groups_db.remove_pending(chat_id),
             return_exceptions=True,
         )
+        admins_list = (
+            list(admins_result) if not isinstance(admins_result, BaseException) else []
+        )
         # * add_group is the critical write; if it failed the group is not in the DB.
         # * Re-raise so callers can detect failure and avoid sending a false confirmation.
         if isinstance(add_group_r, BaseException):
@@ -215,7 +218,7 @@ class BuildConnection:
         if not isinstance(admins_result, BaseException) and admins_result:
             try:
                 task = asyncio.get_running_loop().create_task(
-                    _harvest_admin_identities(chat_id, admins_result)
+                    _harvest_admin_identities(chat_id, admins_list)
                 )
                 _harvest_tasks.add(task)
                 task.add_done_callback(_harvest_tasks.discard)
@@ -232,7 +235,7 @@ class BuildConnection:
             [
                 bot.restrict_chat_member(
                     chat_id,
-                    doc["user_id"],
+                    doc.get("user_id", 0),
                     permissions=_mute_perms,
                     until_date=doc.get("until_date"),
                 )
@@ -359,7 +362,7 @@ class BuildConnection:
             if pending and new_status == ChatMemberStatus.ADMINISTRATOR:
                 if self.check_perms(cmc.new_chat_member):
                     owner_fname = await db.users_cache.get_first_name(
-                        pending["owner_id"], "Owner"
+                        pending.get("owner_id", 0), "Owner"
                     )
                     # * complete_join (applies bans/mutes, sends log) and
                     # * edit_message_text (updates the join prompt) are independent;
@@ -368,14 +371,14 @@ class BuildConnection:
                         self.complete_join(
                             chat.id,
                             chat.title or "",
-                            pending["owner_id"],
+                            pending.get("owner_id", 0),
                             owner_fname,
                             ctx.bot,
                         ),
                         ctx.bot.edit_message_text(
                             self.connected_message(),
                             chat_id=chat.id,
-                            message_id=pending["message_id"],
+                            message_id=pending.get("message_id", 0),
                             reply_markup=None,
                         ),
                         return_exceptions=True,

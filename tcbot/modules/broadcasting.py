@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
+from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.formatter import code, esc
 from tcbot.utils.dispatch import count_errors, fan_out
@@ -84,6 +85,8 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """
     msg = update.effective_message
     admin = update.effective_user
+    assert msg is not None
+    assert admin is not None
 
     args = parse_cmd_args(msg.text)
     broadcast_text: str | None = " ".join(args).strip() if args else None
@@ -113,13 +116,14 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.debug("cmd_broadcast status reply failed: %s", exc)
 
     # * Build per-group send coroutines, then fan out with semaphore limiting
-    async def _send_one(grp: dict) -> None:
+    async def _send_one(grp: GroupDoc) -> None:
+        chat_id = grp.get("chat_id")
+        if chat_id is None:
+            return
         if has_reply and msg.reply_to_message:
-            await msg.reply_to_message.forward(grp["chat_id"])
+            await msg.reply_to_message.forward(chat_id)
         elif broadcast_text:
-            await ctx.bot.send_message(
-                grp["chat_id"], broadcast_text, parse_mode="HTML"
-            )
+            await ctx.bot.send_message(chat_id, broadcast_text, parse_mode="HTML")
 
     results = await fan_out([_send_one(grp) for grp in groups])
     failed = count_errors(results)
@@ -127,7 +131,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     for grp, r in zip(groups, results, strict=False):
         if isinstance(r, BaseException):
-            log.warning("Broadcast failed for %d: %s", grp["chat_id"], r)
+            log.warning("Broadcast failed for %d: %s", grp.get("chat_id", "?"), r)
 
     if broadcast_text:
         preview = broadcast_text

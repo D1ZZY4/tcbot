@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from tcbot import cfg
 from tcbot import database as db
+from tcbot.database import documents as docs
 from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.formatter import user_ref
 from tcbot.utils.dispatch import count_errors, fan_out
@@ -32,7 +33,7 @@ async def execute_unban(
     target_id: int,
     target_fname: str,
     *,
-    pre_ban: dict[str, Any] | None = None,
+    pre_ban: docs.BanDoc | None = None,
 ) -> None:
     """Lift a federation ban: deactivate the DB record and unban across all connected groups.
 
@@ -49,23 +50,26 @@ async def execute_unban(
     admin = update.effective_user
 
     # * Use the caller-supplied record when available; fall back to a DB fetch.
-    ban: dict[str, Any] | None
+    ban: docs.BanDoc | None
     if pre_ban is not None:
         ban = pre_ban
     else:
         ban = await db.bans_db.get_active_ban(target_id)
 
     if not ban:
-        try:
-            await msg.reply_text(
-                f"{user_ref(target_id, target_fname)} has no active federation ban.",
-                parse_mode="HTML",
-            )
-        except Exception as exc:
-            log.debug("Unban no-record reply failed for user %d: %s", target_id, exc)
+        if msg is not None:
+            try:
+                await msg.reply_text(
+                    f"{user_ref(target_id, target_fname)} has no active federation ban.",
+                    parse_mode="HTML",
+                )
+            except Exception as exc:
+                log.debug(
+                    "Unban no-record reply failed for user %d: %s", target_id, exc
+                )
         return
 
-    ban_id = ban["ban_id"]
+    ban_id = ban.get("ban_id", "")
 
     # * Deactivate ALL active bans for this user (not only the one found by
     # * get_active_ban), fetch active groups, and cancel any pending APScheduler
@@ -89,7 +93,7 @@ async def execute_unban(
 
     # * Include primary groups not already in the connected list
     _primary_ids = [cid for cid in (cfg.main_group, cfg.exec_group) if cid]
-    _existing_ids = {grp["chat_id"] for grp in groups}
+    _existing_ids = {grp.get("chat_id", 0) for grp in groups}
     for _pid in _primary_ids:
         if _pid not in _existing_ids:
             groups = [*groups, {"chat_id": _pid, "title": ""}]
@@ -97,32 +101,46 @@ async def execute_unban(
     # * unban from all groups - semaphore-bounded for rate safety
     results = await fan_out(
         [
-            ctx.bot.unban_chat_member(grp["chat_id"], target_id, only_if_banned=True)
+            ctx.bot.unban_chat_member(
+                grp.get("chat_id", 0), target_id, only_if_banned=True
+            )
             for grp in groups
         ]
     )
     failed = count_errors(results)
 
     lc, lt = cfg.logs
+    # * effective_user can be None for anonymous admins; fall back to target info.
+    if admin is not None:
+        _log_admin_id: int = admin.id
+        _log_admin_fname: str = admin.first_name
+    else:
+        _log_admin_id = target_id
+        _log_admin_fname = target_fname
     log_text = parse_logmsg.unban_log(
         target_id,
         target_fname,
-        admin.id,
-        admin.first_name,
+        _log_admin_id,
+        _log_admin_fname,
         ban_id,
     )
 
-    # * send log and reply in parallel
-    log_r, reply_r = await asyncio.gather(
-        ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
-        msg.reply_text(
-            f"{user_ref(target_id, target_fname)} has been unbanned - "
-            f"removed from {len(groups) - failed}/{len(groups)} groups.",
-            parse_mode="HTML",
-        ),
-        return_exceptions=True,
-    )
+    # * send log; reply only if we have an effective_message.
+    if msg is not None:
+        log_r, reply_r = await asyncio.gather(
+            ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+            msg.reply_text(
+                f"{user_ref(target_id, target_fname)} has been unbanned - "
+                f"removed from {len(groups) - failed}/{len(groups)} groups.",
+                parse_mode="HTML",
+            ),
+            return_exceptions=True,
+        )
+        if isinstance(reply_r, BaseException):
+            log.debug("Unban reply failed for user %d: %s", target_id, reply_r)
+    else:
+        log_r = await ctx.bot.send_message(
+            lc, log_text, parse_mode="HTML", message_thread_id=lt
+        )
     if isinstance(log_r, BaseException):
         log.error("Unban log send failed for user %d: %s", target_id, log_r)
-    if isinstance(reply_r, BaseException):
-        log.debug("Unban reply failed for user %d: %s", target_id, reply_r)

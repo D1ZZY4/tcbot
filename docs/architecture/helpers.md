@@ -48,8 +48,7 @@ Typical command decorator order:
 @decorators.ratelimiter(limit=5, period=60)
 @decorators.mod_only
 @decorators.log_execution
-async def cmd_example(update, ctx):
-    ...
+async def cmd_example(update, ctx): ...
 ```
 
 ## `formatter.py`
@@ -142,9 +141,9 @@ Shared bot-reply string constants and typed help-entry interface used by multipl
 
 ```python
 class HelpEntry(TypedDict):
-    name: str                       # display name (matches __module_name__)
-    overview: str                   # one-line or short paragraph overview
-    sections: list[tuple[str, str]] # (section_header, section_body) pairs
+    name: str  # display name (matches __module_name__)
+    overview: str  # one-line or short paragraph overview
+    sections: list[tuple[str, str]]  # (section_header, section_body) pairs
 ```
 
 Each help-bearing module declares exactly one `__help__: replies.HelpEntry = {...}` instead of three separate attributes. `help.py` reads this dict via `_builder_help()` and falls back to the legacy `__help_text__` / `__help_sections__` attributes for backward compatibility during migration.

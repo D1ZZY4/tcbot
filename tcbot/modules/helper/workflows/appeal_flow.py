@@ -207,7 +207,7 @@ class BuildAppeal:
                 )
             return ConversationHandler.END
 
-        if ban["banned_user_id"] != uid:
+        if ban.get("banned_user_id") != uid:
             try:
                 await msg.reply_text(_ERR_WRONG_ACCOUNT)
             except Exception as exc:
@@ -558,7 +558,7 @@ class BuildAppeal:
 
         review_ts = ban.get("review_timestamp")
         if review_ts and reviewer_locked_out(
-            review_ts, ban.get("admin_user_id"), admin.id
+            review_ts, ban.get("admin_user_id") or 0, admin.id
         ):
             # * q.answer() was already called in the gather above; use
             # * edit_message_text to surface the lock message instead.
@@ -568,7 +568,7 @@ class BuildAppeal:
                 log.debug("Appeal review-locked edit failed: %s", exc)
             return
 
-        target_id = ban["banned_user_id"]
+        target_id = ban.get("banned_user_id", 0)
         lc, lt = cfg.logs
 
         if action == "approve":
@@ -607,7 +607,7 @@ class BuildAppeal:
             # * and are not stored in federated_groups, so active_groups() never
             # * returns them. The appeal approve unban must cover them explicitly.
             _primary_ids = [cid for cid in (cfg.main_group, cfg.exec_group) if cid]
-            _existing_ids = {grp["chat_id"] for grp in groups}
+            _existing_ids = {grp.get("chat_id", 0) for grp in groups}
             for _pid in _primary_ids:
                 if _pid not in _existing_ids:
                     groups = [*groups, {"chat_id": _pid, "title": ""}]
@@ -616,7 +616,7 @@ class BuildAppeal:
             await fan_out(
                 [
                     ctx.bot.unban_chat_member(
-                        grp["chat_id"], target_id, only_if_banned=True
+                        grp.get("chat_id", 0), target_id, only_if_banned=True
                     )
                     for grp in groups
                 ]
@@ -624,6 +624,7 @@ class BuildAppeal:
 
             # * Notify user, edit review message, update appeal log, and send
             # * unban log - all four are independent; run in one gather.
+            appeal_link = ban.get("appeal_link") or ""
             await asyncio.gather(
                 ctx.bot.send_message(
                     target_id,
@@ -647,7 +648,7 @@ class BuildAppeal:
                         admin.id,
                         admin.first_name,
                         ban_id,
-                        ban.get("appeal_link", ""),
+                        appeal_link,
                         ban.get("appeal_submitted_at"),
                     ),
                 ),
@@ -708,7 +709,7 @@ class BuildAppeal:
                     admin.id,
                     admin.first_name,
                     ban_id,
-                    ban.get("appeal_link", ""),
+                    ban.get("appeal_link") or "",
                     ban.get("appeal_submitted_at"),
                 ),
             )

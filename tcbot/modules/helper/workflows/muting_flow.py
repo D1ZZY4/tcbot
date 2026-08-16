@@ -113,7 +113,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict) -> None:
     # * Apply across all connected groups + primary groups - semaphore-bounded
     groups = await db.groups_db.active_groups()
     _primary_ids = [cid for cid in (cfg.main_group, cfg.exec_group) if cid]
-    _existing_ids = {grp["chat_id"] for grp in groups}
+    _existing_ids = {cid for cid in (grp.get("chat_id") for grp in groups) if cid}
     groups = groups + [
         {"chat_id": pid, "title": ""}
         for pid in _primary_ids
@@ -122,7 +122,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict) -> None:
     results = await fan_out(
         [
             bot.restrict_chat_member(
-                grp["chat_id"],
+                grp.get("chat_id", 0),
                 target_id,
                 permissions=perms,
                 until_date=until,
@@ -166,7 +166,9 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict) -> None:
     )
 
     # * Log to DB, persist active mute, post to log channel, and edit summary - all in parallel
-    chat_id = update.effective_chat.id
+    chat_id = update.effective_chat.id if update.effective_chat else None
+    if chat_id is None:
+        return
     results2 = await asyncio.gather(
         db.mutes_db.log_mute(
             target_id, chat_id, reason_text, admin_id, duration_secs=duration_secs
@@ -214,6 +216,8 @@ async def execute_unmute(
     record exists, mirroring the ``get_active_ban`` guard in ``execute_unban``.
     """
     msg = update.effective_message
+    if msg is None:
+        return
 
     # * Guard: only proceed if an active mute record exists.
     # * Without this check, execute_unmute would fan restrict_chat_member to all
@@ -243,14 +247,14 @@ async def execute_unmute(
     # * Unrestrict across all connected groups + primary groups - semaphore-bounded
     groups = await db.groups_db.active_groups()
     _pri_ids = [cid for cid in (cfg.main_group, cfg.exec_group) if cid]
-    _ex_ids = {grp["chat_id"] for grp in groups}
+    _ex_ids = {cid for cid in (grp.get("chat_id") for grp in groups) if cid}
     groups = groups + [
         {"chat_id": pid, "title": ""} for pid in _pri_ids if pid not in _ex_ids
     ]
     results = await fan_out(
         [
             ctx.bot.restrict_chat_member(
-                grp["chat_id"],
+                grp.get("chat_id", 0),
                 target_id,
                 permissions=full_perms,
             )
@@ -260,6 +264,8 @@ async def execute_unmute(
     failed = count_errors(results)
 
     admin = update.effective_user
+    if admin is None:
+        return
     lc, lt = cfg.logs
     log_text = parse_logmsg.unmute_log(
         target_id,
@@ -308,9 +314,11 @@ async def execute_unmute(
 
 async def _exec_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Copy mute data from user_data, clean up, then call _execute_mute."""
-    meta = {k: v for k, v in ctx.user_data.items() if k.startswith("mute_")}
-    for k in list(meta):
-        ctx.user_data.pop(k, None)
+    meta: dict[str, Any] = {}
+    if ctx.user_data is not None:
+        meta = {k: v for k, v in ctx.user_data.items() if k.startswith("mute_")}
+        for k in list(meta):
+            ctx.user_data.pop(k, None)
     await _execute_mute(ctx.bot, update, meta)
 
 

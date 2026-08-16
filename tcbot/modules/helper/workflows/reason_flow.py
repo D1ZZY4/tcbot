@@ -127,6 +127,8 @@ def build_modaction_conv(
     _prompt_id_key = f"{action}_prompt_id"
 
     def _get_target(ctx: ContextTypes.DEFAULT_TYPE) -> str:
+        if ctx.user_data is None:
+            return "target"
         raw: str = (
             ctx.user_data.get(f"{action}_target_name")
             or ctx.user_data.get(f"{action}_target_fname")
@@ -141,18 +143,23 @@ def build_modaction_conv(
 
     async def _on_reason_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         msg = update.effective_message
-        if msg is None or msg.text is None:
+        if msg is None:
+            return WAITING_REASON
+        assert msg is not None
+        if msg.text is None:
             return WAITING_REASON
 
         text = msg.text.strip()
         if len(text) > _MAX_REASON_LEN:
             try:
-                await update.effective_message.reply_text(
+                await msg.reply_text(
                     f"Reason is too long (max {_MAX_REASON_LEN} characters, "
                     f"you sent {len(text)}). Please shorten it."
                 )
             except Exception as exc:
                 log.debug("%s reason-too-long reply failed: %s", action, exc)
+            return WAITING_REASON
+        if ctx.user_data is None:
             return WAITING_REASON
         ctx.user_data[_reason_key] = text
         extra_info = ctx.user_data.get(_extra_info_key, "")
@@ -160,7 +167,7 @@ def build_modaction_conv(
         prompt_chat = ctx.user_data.get(_prompt_chat_key)
         prompt_id = ctx.user_data.get(_prompt_id_key)
         prompt_sent = False
-        if prompt_id and prompt_chat:
+        if prompt_id is not None and prompt_chat is not None:
             try:
                 await ctx.bot.edit_message_text(
                     prompt_txt,
@@ -174,7 +181,7 @@ def build_modaction_conv(
                 log.exception("%s prompt edit failed (reason step)", action)
         else:
             try:
-                await update.effective_message.reply_text(
+                await msg.reply_text(
                     prompt_txt,
                     parse_mode="HTML",
                     reply_markup=proof.keyboard(),
@@ -190,6 +197,8 @@ def build_modaction_conv(
     async def _on_skip_reason(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         q = update.callback_query
         if q is None:
+            return WAITING_REASON
+        if ctx.user_data is None:
             return WAITING_REASON
 
         ctx.user_data[_reason_key] = replies.NO_REASON
@@ -224,6 +233,8 @@ def build_modaction_conv(
         msg = update.effective_message
         if msg is None:
             return WAITING_PROOF
+        if ctx.user_data is None:
+            return WAITING_PROOF
 
         # * Double-submit guard: a previous _on_proof or _on_skip_proof call is
         # * already running the executor.  Discard this duplicate update silently.
@@ -253,7 +264,7 @@ def build_modaction_conv(
 
     async def _on_skip_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         q = update.callback_query
-        if q is None:
+        if q is None or ctx.user_data is None:
             return WAITING_PROOF
 
         # * Double-submit guard: user tapped Skip twice before the first call
@@ -277,6 +288,8 @@ def build_modaction_conv(
 
     def _clear_user_data(ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Remove all ``{action}_*`` keys from user_data on cancel / timeout."""
+        if ctx.user_data is None:
+            return
         prefix = f"{action}_"
         for key in [k for k in ctx.user_data if k.startswith(prefix)]:
             ctx.user_data.pop(key, None)

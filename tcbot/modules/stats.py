@@ -90,10 +90,10 @@ __help__: replies.HelpEntry = {
 async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Send the federation overview message."""
     text, kb = await Stats.main()
+    msg = update.effective_message
+    assert msg is not None
     try:
-        await update.effective_message.reply_text(
-            text, parse_mode="HTML", reply_markup=kb
-        )
+        await msg.reply_text(text, parse_mode="HTML", reply_markup=kb)
     except Exception as exc:
         log.debug("cmd_stats reply failed: %s", exc)
 
@@ -126,6 +126,8 @@ async def _ack_and_render(
 async def on_stats_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the top-level stats menu."""
     q = update.callback_query
+    if q is None:
+        return
     # * q.answer() and Stats.main() are independent; run in parallel.
     await _ack_and_render(q, Stats.main())
 
@@ -135,6 +137,8 @@ async def on_stats_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the current staff roster page."""
     q = update.callback_query
+    if q is None:
+        return
     await _ack_and_render(q, Stats.staff_roster())
 
 
@@ -143,8 +147,10 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of cached users."""
     q = update.callback_query
+    if q is None:
+        return
     try:
-        page = int(q.data.split(":")[1])
+        page = int((q.data or "").split(":")[1])
     except (ValueError, IndexError):
         await q.answer()
         return
@@ -156,8 +162,10 @@ async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 async def on_stats_user_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the detail view for a single cached user entry."""
     q = update.callback_query
+    if q is None:
+        return
     try:
-        _, page_str, idx_str = q.data.split(":")
+        _, page_str, idx_str = (q.data or "").split(":")
         page, idx = int(page_str), int(idx_str)
     except (ValueError, IndexError):
         await q.answer()
@@ -170,8 +178,10 @@ async def on_stats_user_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
 async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of connected groups."""
     q = update.callback_query
+    if q is None:
+        return
     try:
-        page = int(q.data.split(":")[1])
+        page = int((q.data or "").split(":")[1])
     except (ValueError, IndexError):
         await q.answer()
         return
@@ -183,8 +193,10 @@ async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 async def on_stats_chat_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the detail view for a single connected group entry."""
     q = update.callback_query
+    if q is None:
+        return
     try:
-        _, page_str, idx_str = q.data.split(":")
+        _, page_str, idx_str = (q.data or "").split(":")
         page, idx = int(page_str), int(idx_str)
     except (ValueError, IndexError):
         await q.answer()
@@ -197,8 +209,10 @@ async def on_stats_chat_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
 async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated ban-list page and clear any active search state."""
     q = update.callback_query
+    if q is None:
+        return
     try:
-        page = int(q.data.split(":")[1])
+        page = int((q.data or "").split(":")[1])
     except (ValueError, IndexError):
         await q.answer()
         return
@@ -211,8 +225,10 @@ async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the detail view for a single ban entry from the stats list."""
     q = update.callback_query
+    if q is None:
+        return
     try:
-        _, page_str, idx_str = q.data.split(":")
+        _, page_str, idx_str = (q.data or "").split(":")
         page, idx = int(page_str), int(idx_str)
     except (ValueError, IndexError):
         await q.answer()
@@ -228,6 +244,8 @@ async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 async def on_stats_bans_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Open the user search prompt within the stats ban view."""
     q = update.callback_query
+    if q is None:
+        return
     # * Stats.open_search is synchronous; answer and edit run in parallel.
     text, kb = Stats.open_search(ctx, q)
     await asyncio.gather(
@@ -246,6 +264,7 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     ctx.user_data.pop(SEARCH_KEY, None)
 
     msg = update.effective_message
+    assert msg is not None
     query = (msg.text or "").strip()
 
     # * Run the search and delete the user's input message in parallel.
@@ -281,8 +300,10 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
 async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the detail view for a search result selected by the user."""
     q = update.callback_query
+    if q is None:
+        return
     try:
-        idx = int(q.data.split(":")[1])
+        idx = int((q.data or "").split(":")[1])
     except (ValueError, IndexError):
         await q.answer()
         return
@@ -295,6 +316,8 @@ async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
 async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Return to search results (or the open-search prompt) without re-running the query."""
     q = update.callback_query
+    if q is None:
+        return
     results = ctx.user_data.get(RESULTS_KEY, []) if ctx.user_data else []
     if not results:
         # * open_search is synchronous; data is already available, so answer + edit
@@ -320,6 +343,8 @@ async def on_stats_search_cancel(
 ) -> None:
     """Clear the active search and return to the first page of the ban list."""
     q = update.callback_query
+    if q is None:
+        return
     Stats.clear_search(ctx)
     await _ack_and_render(q, Stats.bans_list(0))
 

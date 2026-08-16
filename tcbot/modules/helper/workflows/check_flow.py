@@ -8,11 +8,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 
 from tcbot import database as db
+from tcbot.database.documents import BanDoc
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.formatter import bold, code, esc, italic, mention
 from tcbot.utils.pagination import date_or_unknown, nav_row, paginate
@@ -93,19 +94,7 @@ class Check:
         # * fed_warn_total gives the federation-wide aggregate that user_total_warns hides
         # * (user_total_warns counts all historical warn docs; fed_warn_total sums active
         # * counters from warn_counts across all chats and is the staff-relevant number).
-        (
-            r_user_info,
-            r_role_meta,
-            active_ban,
-            active_mute,
-            ban_total,
-            appeal_total,
-            warn_total,
-            warn_groups,
-            fed_warn_total,
-            kick_total,
-            mute_total,
-        ) = await asyncio.gather(
+        _results = await asyncio.gather(
             _resolve_user_info(bot, target_id),
             db.users_roles.role_meta(target_id),
             db.bans_db.get_active_ban(target_id),
@@ -119,42 +108,50 @@ class Check:
             db.mutes_db.user_mute_count(target_id),
             return_exceptions=True,
         )
+        r_user_info = _results[0]
+        r_role_meta = _results[1]
+        active_ban = _results[2] if not isinstance(_results[2], BaseException) else None
+        active_mute = (
+            _results[3] if not isinstance(_results[3], BaseException) else None
+        )
+        ban_total = _results[4] if not isinstance(_results[4], BaseException) else 0
+        appeal_total = _results[5] if not isinstance(_results[5], BaseException) else 0
+        warn_total = _results[6] if not isinstance(_results[6], BaseException) else 0
+        _wg = _results[7] if not isinstance(_results[7], BaseException) else None
+        warn_groups: list[tuple[int, int]] = (
+            cast("list[tuple[int, int]]", _wg) if _wg is not None else []
+        )
+        fed_warn_total = (
+            _results[8] if not isinstance(_results[8], BaseException) else 0
+        )
+        kick_total = _results[9] if not isinstance(_results[9], BaseException) else 0
+        mute_total = _results[10] if not isinstance(_results[10], BaseException) else 0
+
         if isinstance(r_user_info, BaseException):
             log.error("_resolve_user_info failed for %d: %s", target_id, r_user_info)
             fname, uname = str(target_id), None
         else:
-            fname, uname = r_user_info
+            fname, uname = cast("tuple[str, str | None]", r_user_info)
         if isinstance(r_role_meta, BaseException):
             log.error("role_meta failed for %d: %s", target_id, r_role_meta)
             role, role_by_id, role_at = None, None, None
         else:
-            role, role_by_id, role_at = r_role_meta
-        if isinstance(active_ban, BaseException):
-            active_ban = None
-        if isinstance(active_mute, BaseException):
-            active_mute = None
-        if isinstance(ban_total, BaseException):
-            ban_total = 0
-        if isinstance(appeal_total, BaseException):
-            appeal_total = 0
-        if isinstance(warn_total, BaseException):
-            warn_total = 0
-        if isinstance(warn_groups, BaseException):
-            warn_groups = []
-        if isinstance(fed_warn_total, BaseException):
-            fed_warn_total = 0
-        if isinstance(kick_total, BaseException):
-            kick_total = 0
-        if isinstance(mute_total, BaseException):
-            mute_total = 0
+            role, role_by_id, role_at = cast(
+                "tuple[str | None, int | None, Any]", r_role_meta
+            )
 
         role_label = (
-            db.users_roles.ROLE_LABEL.get(role, "Regular user")
+            db.users_roles.ROLE_LABEL.get(role or "", "Regular user")
             if role
             else "Regular user"
         )
-        uname_part = f"@{esc(uname)}" if uname else "(none)"
-        active_part = f"Yes ({code(active_ban['ban_id'])})" if active_ban else "No"
+        uname_part = f"@{esc(uname or '')}" if uname else "(none)"
+        active_ban_doc = cast("BanDoc | None", active_ban)
+        active_part = (
+            f"Yes ({code(active_ban_doc.get('ban_id', '') if isinstance(active_ban_doc, dict) else '')})"
+            if active_ban_doc
+            else "No"
+        )
         active_mute_part = "Yes" if active_mute else "No"
 
         # * Build the rich role line with assignment metadata where available.
@@ -176,7 +173,7 @@ class Check:
             f"Active Ban: {active_part}\n"
             f"Active Mute: {active_mute_part}\n"
             f"Total Bans: {ban_total}\n"
-            f"Warnings: {fed_warn_total} active across {len(warn_groups)} group(s)"
+            f"Warnings: {fed_warn_total} active across {len(warn_groups) if warn_groups is not None else 0} group(s)"
             f" ({warn_total} total historical)\n"
             f"Kicks: {kick_total}\n"
             f"Mutes: {mute_total}\n"
@@ -298,7 +295,7 @@ class Check:
                 ]
             )
 
-        text, proof_link = await build_ban_detail(ban)
+        text, proof_link = await build_ban_detail(cast("dict[str, Any]", ban))
         rows: list[list[InlineKeyboardButton]] = []
         if proof_link:
             rows.append([InlineKeyboardButton("View Proof", url=proof_link)])

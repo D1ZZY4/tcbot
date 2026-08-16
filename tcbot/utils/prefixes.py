@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from telegram.ext import filters
 
@@ -50,7 +50,7 @@ def _never_match_filter() -> filters.BaseFilter:
     return filters.Regex(re.compile(r"a^"))
 
 
-def _bot_username_from_message(message: _MessageLike) -> str | None:
+def _bot_username_from_message(message: Any) -> str | None:
     """Return the current bot username from a PTB message when available."""
     try:
         bot = message.get_bot()

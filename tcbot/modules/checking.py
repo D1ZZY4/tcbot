@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from telegram.error import BadRequest
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
@@ -91,7 +91,7 @@ __help__: replies.HelpEntry = {
 
 
 async def _ban_summary(
-    ban: dict,
+    ban: dict[str, Any],
     user_id: int,
     user_fname: str,
     admin_fname: str | None = None,
@@ -115,12 +115,12 @@ async def _ban_summary(
         admin_fname_cached, admin_uname = _admin_r
 
     if admin_fname is None:
-        admin_fname = admin_fname_cached
+        admin_fname = admin_fname_cached or str(aid)
 
     proof_chat, proof_thread = cfg.proofs
     proof_link = (
         message_link(proof_chat, ban["proof_message_id"], proof_thread)
-        if ban.get("proof_message_id")
+        if ban.get("proof_message_id") is not None
         else None
     )
 
@@ -164,6 +164,8 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """
     user = update.effective_user
     msg = update.effective_message
+    if user is None or msg is None:
+        return
     fname = user.first_name or str(user.id)
 
     # * Fetch owner ID, user role, and active ban all in parallel
@@ -177,6 +179,8 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         owner_id = None
     if isinstance(user_role, BaseException):
         user_role = None
+    if isinstance(ban, BaseException):
+        ban = None
 
     ident = await identity.classify(
         ctx.bot, user.id, user.id, fname, target_is_bot=user.is_bot
@@ -185,7 +189,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if ident.kind == "founder":
         try:
             await msg.reply_text(
-                f"Bro, {mention(user.id, fname, user.username)}... seriously?\n\n"
+                f"Bro, {mention(user.id, fname, user.username or '')}... seriously?\n\n"
                 "You're the Founder - you built this whole place. "
                 "The ban list doesn't apply to you, you run it. "
                 "Go touch grass, you're fine.",
@@ -198,7 +202,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if ident.kind == "admin":
         try:
             await msg.reply_text(
-                f"Hey {mention(user.id, fname, user.username)}, checking yourself?\n\n"
+                f"Hey {mention(user.id, fname, user.username or '')}, checking yourself?\n\n"
                 "You're on the staff team - you handle bans, not receive them. "
                 "No active ban on your end. You're good.",
                 parse_mode="HTML",
@@ -207,10 +211,10 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.debug("checkme admin reply failed for user %d: %s", user.id, exc)
         return
     if ident.kind in ("developer", "tester"):
-        role_label = ident.role_label
+        role_label = ident.role_label or ""
         try:
             await msg.reply_text(
-                f"Hey {mention(user.id, fname, user.username)}, all good.\n\n"
+                f"Hey {mention(user.id, fname, user.username or '')}, all good.\n\n"
                 f"You're a {esc(cfg.community_name)} {esc(role_label)} - on the team, not on the ban list. "
                 "Nothing to worry about.",
                 parse_mode="HTML",
@@ -252,9 +256,15 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.debug("checkme clean reply failed for user %d: %s", user.id, exc)
         return
 
-    ban_id = ban["ban_id"]
+    ban_id = ban.get("ban_id", "")
+    if not ban_id:
+        try:
+            await msg.reply_text(_ERR_BAN_NOT_FOUND)
+        except Exception as exc:
+            log.debug("checkme missing ban_id reply failed: %s", exc)
+        return
 
-    text, proof_link = await _ban_summary(ban, user.id, fname)
+    text, proof_link = await _ban_summary(cast("dict[str, Any]", ban), user.id, fname)
 
     try:
         await msg.reply_text(
@@ -280,6 +290,11 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     parallel, then edits the message to the full detail card with a back button.
     """
     q = update.callback_query
+    if q is None:
+        return
+    if q.data is None:
+        await q.answer()
+        return
     try:
         ban_id = q.data.split(":")[1]
     except IndexError:
@@ -298,7 +313,7 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             log.debug("checkme_detail error edit failed: %s", exc)
         return
 
-    text, proof_link = await build_ban_detail(ban)
+    text, proof_link = await build_ban_detail(cast("dict[str, Any]", ban))
     await _safe_edit(q, text, keyboards.checkme_detail_back_kb(ban_id, proof_link))
 
 
@@ -312,6 +327,11 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     and detail keyboard.
     """
     q = update.callback_query
+    if q is None:
+        return
+    if q.data is None:
+        await q.answer()
+        return
     try:
         ban_id = q.data.split(":")[1]
     except IndexError:
@@ -330,7 +350,7 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
             log.debug("checkme_back error edit failed: %s", exc)
         return
 
-    uid = ban["banned_user_id"]
+    uid = ban.get("banned_user_id", 0)
     aid = ban.get("admin_user_id", 0)
     fname, admin_fname = await asyncio.gather(
         db.users_cache.get_first_name(uid, str(uid)),
@@ -341,7 +361,9 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         fname = str(uid)
     if isinstance(admin_fname, BaseException):
         admin_fname = "Admin"
-    text, proof_link = await _ban_summary(ban, uid, fname, admin_fname)
+    text, proof_link = await _ban_summary(
+        cast("dict[str, Any]", ban), uid, fname, admin_fname
+    )
     await _safe_edit(
         q, text, keyboards.checkme_ban_kb(ctx.bot.username or "", ban_id, proof_link)
     )
@@ -354,11 +376,14 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 @decorators.log_execution
 async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Show a comprehensive profile (identity + bans + warns + kicks + mutes + appeals)."""
-    args = parse_cmd_args(update.effective_message.text)
+    msg = update.effective_message
+    if msg is None:
+        return
+    args = parse_cmd_args(msg.text)
     target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
         try:
-            await update.effective_message.reply_text(replies.ERR_CANNOT_RESOLVE)
+            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
         except Exception as exc:
             log.debug("check resolve-fail reply failed: %s", exc)
         return
@@ -376,9 +401,7 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     text, kb = await Check.profile(ctx.bot, target_id)
     try:
-        await update.effective_message.reply_text(
-            text, parse_mode="HTML", reply_markup=kb
-        )
+        await msg.reply_text(text, parse_mode="HTML", reply_markup=kb)
     except Exception as exc:
         log.debug("check reply_text failed for target=%d: %s", target_id, exc)
 
@@ -391,6 +414,8 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the top-level profile summary for the checked user."""
     q = update.callback_query
+    if q is None or q.data is None:
+        return
     try:
         target_id = int(q.data.split(":", 1)[1])
     except (ValueError, IndexError):
@@ -411,6 +436,8 @@ async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of federation bans for the checked user."""
     q = update.callback_query
+    if q is None or q.data is None:
+        return
     try:
         _, target_id_str, page_str = q.data.split(":")
         target_id = int(target_id_str)
@@ -433,6 +460,8 @@ async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the full detail view for a single federation ban record."""
     q = update.callback_query
+    if q is None or q.data is None:
+        return
     try:
         _, target_id_str, ban_id = q.data.split(":", 2)
         target_id = int(target_id_str)
@@ -454,6 +483,8 @@ async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the per-group warning summary for the checked user."""
     q = update.callback_query
+    if q is None or q.data is None:
+        return
     try:
         target_id = int(q.data.split(":", 1)[1])
     except (ValueError, IndexError):
@@ -474,6 +505,8 @@ async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of warnings for the checked user in a specific group."""
     q = update.callback_query
+    if q is None or q.data is None:
+        return
     try:
         _, target_id_str, chat_id_str, page_str = q.data.split(":")
         target_id = int(target_id_str)
@@ -499,6 +532,8 @@ async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
 async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of kick records for the checked user."""
     q = update.callback_query
+    if q is None or q.data is None:
+        return
     try:
         _, target_id_str, page_str = q.data.split(":")
         target_id = int(target_id_str)
@@ -521,6 +556,8 @@ async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of mute records for the checked user."""
     q = update.callback_query
+    if q is None or q.data is None:
+        return
     try:
         _, target_id_str, page_str = q.data.split(":")
         target_id = int(target_id_str)
@@ -543,6 +580,8 @@ async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 async def on_check_appeals(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of appeal records for the checked user."""
     q = update.callback_query
+    if q is None or q.data is None:
+        return
     try:
         _, target_id_str, page_str = q.data.split(":")
         target_id = int(target_id_str)

@@ -118,7 +118,12 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     failure.
     """
     msg = update.effective_message
+    if msg is None:
+        return ConversationHandler.END
     admin = update.effective_user
+    if admin is None:
+        return ConversationHandler.END
+    assert ctx.user_data is not None
 
     args = parse_cmd_args(msg.text)
     has_explicit_target = bool(args) and (
@@ -221,7 +226,11 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     staff-action notice, then delegates to ``execute_unwarn``.
     """
     msg = update.effective_message
+    if msg is None:
+        return
     admin = update.effective_user
+    if admin is None:
+        return
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
@@ -274,6 +283,8 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Reply with a paginated warning history for the specified target user."""
     msg = update.effective_message
+    if msg is None:
+        return
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
@@ -298,7 +309,11 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     staff-action notice, then delegates to ``execute_resetwarns``.
     """
     msg = update.effective_message
+    if msg is None:
+        return
     admin = update.effective_user
+    if admin is None:
+        return
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:

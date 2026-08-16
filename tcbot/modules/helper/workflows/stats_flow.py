@@ -7,9 +7,9 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
-from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from tcbot import cfg
 from tcbot import database as db
@@ -136,12 +136,15 @@ class Stats:
         )
         if isinstance(owner_id, BaseException):
             owner_id = None
-        if isinstance(admin_count, BaseException):
-            admin_count = 0
+        owner_id = cast("int | None", owner_id)
+        admin_count = 0 if isinstance(admin_count, BaseException) else admin_count
+        admin_count = cast("int", admin_count)
         if isinstance(developers, BaseException):
-            developers = []
+            developers = [] if isinstance(developers, BaseException) else developers
+        developers = cast("list", developers)
         if isinstance(testers, BaseException):
-            testers = []
+            testers = [] if isinstance(testers, BaseException) else testers
+        testers = cast("list", testers)
         if isinstance(ban_count, BaseException):
             ban_count = 0
         if isinstance(group_count, BaseException):
@@ -151,13 +154,14 @@ class Stats:
 
         # Fetch owner mention data in parallel with building the response
         if owner_id:
+            owner_id_int = cast("int", owner_id)
             try:
                 owner_fname, owner_uname = await db.users_cache.get_user_mention_data(
-                    owner_id
+                    owner_id_int
                 )
             except Exception:
-                owner_fname, owner_uname = str(owner_id), None
-            owner_line = mention(owner_id, owner_fname, owner_uname)
+                owner_fname, owner_uname = str(owner_id_int), None
+            owner_line = mention(owner_id_int, owner_fname, owner_uname)
         else:
             owner_line = "Not set"
 
@@ -191,21 +195,22 @@ class Stats:
         if isinstance(owner_id, BaseException):
             owner_id = None
         if isinstance(admins, BaseException):
-            admins = []
+            admins = [] if isinstance(admins, BaseException) else admins
         if isinstance(developers, BaseException):
-            developers = []
+            developers = [] if isinstance(developers, BaseException) else developers
         if isinstance(testers, BaseException):
-            testers = []
+            testers = [] if isinstance(testers, BaseException) else testers
 
         # * Resolve user mention data in one batch query instead of individual queries
         all_user_ids = []
         owner_idx = None
         if owner_id:
+            owner_id_int = cast("int", owner_id)
             owner_idx = 0
-            all_user_ids.append(owner_id)
-        all_user_ids.extend(a["user_id"] for a in admins)
-        all_user_ids.extend(d["user_id"] for d in developers)
-        all_user_ids.extend(t["user_id"] for t in testers)
+            all_user_ids.append(owner_id_int)
+        all_user_ids.extend(a.get("user_id", 0) for a in admins)
+        all_user_ids.extend(d.get("user_id", 0) for d in developers)
+        all_user_ids.extend(t.get("user_id", 0) for t in testers)
 
         # Single batch query for all users
         mention_data_map = await db.users_cache.get_mention_data_batch(all_user_ids)
@@ -214,14 +219,14 @@ class Stats:
 
         if owner_idx is not None:
             lines.append(bold("Founder"))
-            owner_fname, owner_uname = mention_data_map[owner_id]
-            lines.append(f"- {mention(owner_id, owner_fname, owner_uname)}\n")
+            owner_fname, owner_uname = mention_data_map[owner_id_int]
+            lines.append(f"- {mention(owner_id_int, owner_fname, owner_uname)}\n")
 
         def _section(label: str, docs: list) -> None:
             lines.append(bold(f"{label} ({len(docs)})"))
             if docs:
                 for doc in docs:
-                    uid = doc["user_id"]
+                    uid = doc.get("user_id", 0)
                     fname, uname = mention_data_map[uid]
                     lines.append(f"- {mention(uid, fname, uname)}")
             else:
@@ -460,17 +465,20 @@ class Stats:
         cls, ctx: ContextTypes.DEFAULT_TYPE, q: CallbackQuery
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Open the search prompt; remember chat/message so input edits the right card."""
-        ctx.user_data[SEARCH_KEY] = True
-        ctx.user_data[MSG_KEY] = q.message.message_id
-        ctx.user_data[CHAT_KEY] = q.message.chat_id
+        msg = cast("Message", q.message)
+        ud = cast("dict[str, object]", ctx.user_data)
+        ud[SEARCH_KEY] = True
+        ud[MSG_KEY] = msg.message_id
+        ud[CHAT_KEY] = msg.chat_id
         text = f"{bold('Search User Bans')}\n\nSend a name or user ID in the chat."
         return text, cls._search_panel_kb()
 
     @staticmethod
     def clear_search(ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Forget any in-flight search context."""
+        ud = cast("dict[str, object]", ctx.user_data)
         for key in (SEARCH_KEY, RESULTS_KEY, MSG_KEY, CHAT_KEY, "stats_last_query"):
-            ctx.user_data.pop(key, None)
+            ud.pop(key, None)
 
     @classmethod
     async def search_run(
@@ -481,7 +489,7 @@ class Stats:
         q = query.strip()
         if q.isdigit():
             ban = await db.bans_db.get_active_ban(int(q))
-            return [ban] if ban else []
+            return [cast("dict[str, object]", ban)] if ban else []
 
         bans = await db.bans_db.active_bans()
         if not bans:
@@ -492,7 +500,7 @@ class Stats:
         fname_map = await db.users_cache.get_first_names_batch(uids)
         needle = q.lower()
         return [
-            b
+            cast("dict[str, object]", b)
             for b in bans
             if needle in fname_map.get(b.get("banned_user_id", 0), "").lower()
         ]

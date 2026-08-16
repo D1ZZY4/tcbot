@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from telegram.ext import ContextTypes, MessageHandler
 
@@ -20,6 +20,8 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
     from telegram import Update
+
+    from tcbot.database.documents import BanDoc
 
 log = logging.getLogger(__name__)
 
@@ -82,6 +84,8 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """
     msg = update.effective_message
     admin = update.effective_user
+    if msg is None or admin is None:
+        return
     args = parse_cmd_args(msg.text)
     target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
@@ -96,7 +100,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * If classify returns a refusal the pre-fetched ban is discarded; when it
     # * passes, execute_unban gets the record without an extra DB round-trip.
     ident, pre_ban = await asyncio.gather(
-        identity.classify(ctx.bot, admin.id, target_id, target_fname),
+        identity.classify(ctx.bot, admin.id, target_id, target_fname or str(target_id)),
         db.bans_db.get_active_ban(target_id),
         return_exceptions=True,
     )
@@ -120,7 +124,13 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     try:
-        await execute_unban(update, ctx, target_id, target_fname, pre_ban=pre_ban)
+        await execute_unban(
+            update,
+            ctx,
+            target_id,
+            target_fname or str(target_id),
+            pre_ban=cast("BanDoc | None", pre_ban),
+        )
     except Exception:
         log.exception("execute_unban failed for target=%s", target_id)
 

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from tcbot import database as db
 
 if TYPE_CHECKING:
-    from telegram import Bot, Chat, Message, Update, User
+    from telegram import Bot, Chat, ChatFullInfo, Message, Update, User
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ _TELEGRAM_USER_ID = 777000
 _GET_CHAT_TIMEOUT = 3.0
 
 
-async def _safe_get_chat(bot: Bot, ident: str | int) -> Chat | None:
+async def _safe_get_chat(bot: Bot, ident: str | int) -> Chat | ChatFullInfo | None:
     """Call ``bot.get_chat`` with a bounded timeout; returns ``None`` on failure."""
     try:
         return await asyncio.wait_for(bot.get_chat(ident), timeout=_GET_CHAT_TIMEOUT)
@@ -95,7 +95,9 @@ async def extract_target(
     numeric ID string (``str(uid)``) so callers using ``user_ref()`` can detect
     the numeric fallback and avoid displaying the ID twice.
     """
-    msg: Message = update.effective_message
+    msg: Message | None = update.effective_message
+    if msg is None:
+        return None, None
 
     # * Priority 1: Reply target (most common use case)
     # * Skip GroupAnonymousBot (id 1087968824): it is a Telegram pseudo-user

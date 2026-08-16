@@ -114,6 +114,9 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """
     msg = update.effective_message
     admin = update.effective_user
+    assert msg is not None
+    assert admin is not None
+    assert ctx.user_data is not None
 
     raw_args = parse_cmd_args(msg.text)
     has_explicit_target = bool(raw_args) and (
@@ -142,6 +145,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if isinstance(role_result, BaseException):
         log.exception("resolve_and_check failed in cmd_mute: %s", role_result)
         return ConversationHandler.END
+    assert role_result is not None
     executor_role, target_role = role_result
     # * Guard first: if resolve_and_check already replied and rejected (e.g. target
     # * outranks executor), skip the identity refusal to avoid sending two replies.
@@ -253,6 +257,8 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """
     msg = update.effective_message
     admin = update.effective_user
+    assert msg is not None
+    assert admin is not None
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
@@ -275,6 +281,7 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if isinstance(role_result, BaseException):
         log.exception("resolve_and_check failed in cmd_unmute: %s", role_result)
         return
+    assert role_result is not None
     executor_role, _ = role_result
     # * Guard first: if resolve_and_check already replied and rejected (e.g. target
     # * outranks executor), skip the identity refusal to avoid sending two replies.

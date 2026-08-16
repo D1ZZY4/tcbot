@@ -41,7 +41,7 @@ Visible help modules expose:
 ```python
 __module_name__ = "Ban"
 __help_text__ = "<b>Commands & Aliases</b>\n..."
-__handlers__ = [ ... ]
+__handlers__ = [...]
 ```
 
 The help builder includes a module only when it has a non-empty unified

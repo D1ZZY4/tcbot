@@ -237,7 +237,9 @@ class Promote:
             return False, _ERR_TARGET_IS_FOUNDER
 
         if db.users_roles.role_rank(current_role) >= db.users_roles.role_rank(role):
-            label = db.users_roles.ROLE_LABEL.get(current_role, current_role)
+            label = db.users_roles.ROLE_LABEL.get(
+                current_role or "", current_role or ""
+            )
             return False, f"That user already holds the {esc(label)} role or higher."
 
         if role == "admin":

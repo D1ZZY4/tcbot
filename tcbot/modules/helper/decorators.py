@@ -11,15 +11,18 @@ import functools
 import logging
 import time
 from collections import deque
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from telegram.ext import ApplicationHandlerStop, ContextTypes
+
+if TYPE_CHECKING:
+    from collections.abc import Coroutine
 
 from tcbot import cfg
 from tcbot import database as db
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Callable
 
     from telegram import Message, Update
 
@@ -197,7 +200,12 @@ async def global_rate_limit_handler(
 # ──────────────────── Per-handler rate limiter factory ──────────────────── #
 
 
-def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
+def ratelimiter(
+    limit: int = 5, period: float = 60.0
+) -> Callable[
+    [Callable[..., Coroutine[Any, Any, R]]],
+    Callable[..., Coroutine[Any, Any, R | None]],
+]:
     """Per-handler sliding-window rate limiter factory.
 
     Backed by Redis when available; falls through to in-process sliding window
@@ -206,8 +214,8 @@ def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
     """
 
     def decorator(
-        func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R]],
-    ) -> Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R | None]]:
+        func: Callable[..., Coroutine[Any, Any, R]],
+    ) -> Callable[..., Coroutine[Any, Any, R | None]]:
         """Wrap ``func`` with a sliding-window per-user rate check."""
         _limiter = _AsyncRateLimiter(
             max_calls=limit, window=period, prefix=f"h:{func.__name__}"
@@ -248,8 +256,8 @@ def ratelimiter(limit: int = 5, period: float = 60.0) -> Callable:
 
 
 def log_execution(
-    func: Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R]],
-) -> Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[R]]:
+    func: Callable[..., Coroutine[Any, Any, R]],
+) -> Callable[..., Coroutine[Any, Any, R]]:
     """Wrap a handler to emit entry / exit / exception traces at DEBUG level."""
 
     @functools.wraps(func)

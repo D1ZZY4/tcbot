@@ -16,7 +16,7 @@ from tcbot.modules.helper import decorators, keyboards
 from tcbot.modules.helper.formatter import bold, esc
 
 if TYPE_CHECKING:
-    from telegram import CallbackQuery, Update
+    from telegram import Update
 
 __module_name__ = None
 
@@ -42,7 +42,8 @@ __additional_msg__ = (
 @decorators.log_execution
 async def on_additional_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the Additional Info page when the button is tapped."""
-    q: CallbackQuery = update.callback_query
+    assert update.callback_query is not None
+    q = update.callback_query
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(

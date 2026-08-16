@@ -96,6 +96,9 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """
     msg = update.effective_message
     admin = update.effective_user
+    assert msg is not None
+    assert admin is not None
+    assert ctx.user_data is not None
     raw_args = parse_cmd_args(msg.text)
 
     has_explicit_target = bool(raw_args) and (
@@ -133,6 +136,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if isinstance(role_result, BaseException):
         log.exception("resolve_and_check failed in cmd_ban_start: %s", role_result)
         return ConversationHandler.END
+    assert role_result is not None
     executor_role, target_role = role_result
     # * Guard first: if resolve_and_check already replied and rejected (e.g. target
     # * outranks executor), skip the identity refusal to avoid sending two replies.

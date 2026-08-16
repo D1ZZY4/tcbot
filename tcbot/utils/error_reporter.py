@@ -256,7 +256,7 @@ def _location(
         frames = traceback.extract_tb(exc.__traceback__)
         if frames:
             last = frames[-1]
-            return _shorten_path(last.filename or "?"), last.name, last.lineno
+            return _shorten_path(last.filename or "?"), last.name, last.lineno or 0
     return "?", "?", 0
 
 

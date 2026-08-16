@@ -51,9 +51,15 @@ async def execute_kick(
 ) -> None:
     """Kick (ban then immediately unban) a user from the current group."""
     msg = update.effective_message
-    chat_id = update.effective_chat.id
-    admin_id = update.effective_user.id
-    admin_fname = update.effective_user.first_name
+    effective_user = update.effective_user
+    effective_chat = update.effective_chat
+    if effective_user is None or effective_chat is None:
+        log.warning("Kick executor called without effective_user or effective_chat")
+        return
+    assert msg is not None
+    chat_id = effective_chat.id
+    admin_id = effective_user.id
+    admin_fname = effective_user.first_name
 
     proof_link: str | None = None
     if proof_msgs:
@@ -72,7 +78,7 @@ async def execute_kick(
 
     try:
         await ctx.bot.ban_chat_member(chat_id, target_id)
-        chat_title = update.effective_chat.title or str(chat_id)
+        chat_title = effective_chat.title or str(chat_id)
         lc, lt = cfg.logs
         log_text = parse_logmsg.kick_log(
             target_id,
@@ -121,7 +127,7 @@ async def execute_kick(
         log.exception("Kick failed for %s in %s", target_id, chat_id)
         try:
             await msg.reply_text(
-                f"Couldn't kick {mention(target_id, target_name)}: {esc(exc)}",
+                f"Couldn't kick {mention(target_id, target_name)}: {esc(str(exc))}",
                 parse_mode="HTML",
             )
         except Exception as reply_exc:
@@ -133,6 +139,7 @@ async def execute_kick(
 
 async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Pop kick data from user_data and call execute_kick."""
+    assert ctx.user_data is not None
     target_id = ctx.user_data.pop("kick_target_id", 0)
     target_name = ctx.user_data.pop("kick_target_name", "")
     reason_text = ctx.user_data.pop("kick_reason", replies.NO_REASON)

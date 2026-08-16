@@ -66,10 +66,18 @@ async def execute_warn(
     only the per-group threshold applies (backward-compatible default).
     """
     msg = update.effective_message
-    chat_id = update.effective_chat.id
-    admin_id = update.effective_user.id
-    admin_fname = update.effective_user.first_name
-    chat_title = update.effective_chat.title or str(chat_id)
+    if msg is None:
+        return
+    chat = update.effective_chat
+    if chat is None:
+        return
+    chat_id = chat.id
+    chat_title = chat.title or str(chat_id)
+    admin = update.effective_user
+    if admin is None:
+        return
+    admin_id = admin.id
+    admin_fname = admin.first_name
     lc, lt = cfg.logs
 
     proof_link: str | None = None
@@ -336,7 +344,12 @@ async def execute_unwarn(
     reply concurrently.
     """
     msg = update.effective_message
-    chat_id = update.effective_chat.id
+    if msg is None:
+        return
+    chat = update.effective_chat
+    if chat is None:
+        return
+    chat_id = chat.id
 
     count = await db.warns_db.warn_count(target_id, chat_id)
     if count == 0:
@@ -350,8 +363,10 @@ async def execute_unwarn(
         return
 
     new_count = max(count - 1, 0)
-    chat_title = update.effective_chat.title or str(chat_id)
+    chat_title = chat.title or str(chat_id)
     admin = update.effective_user
+    if admin is None:
+        return
     lc, lt = cfg.logs
     log_text = parse_logmsg.unwarn_log(
         target_id,
@@ -397,7 +412,12 @@ async def execute_warnlist(
     formatted list. Replies early if no warnings exist.
     """
     msg = update.effective_message
-    chat_id = update.effective_chat.id
+    if msg is None:
+        return
+    chat = update.effective_chat
+    if chat is None:
+        return
+    chat_id = chat.id
 
     warns = await db.warns_db.get_warns(target_id, chat_id)
     count = len(warns)
@@ -437,9 +457,16 @@ async def execute_resetwarns(
     Logs the action to the mod log channel on success.
     """
     msg = update.effective_message
+    if msg is None:
+        return
     admin = update.effective_user
-    chat_id = update.effective_chat.id
-    chat_title = update.effective_chat.title or str(chat_id)
+    if admin is None:
+        return
+    chat = update.effective_chat
+    if chat is None:
+        return
+    chat_id = chat.id
+    chat_title = chat.title or str(chat_id)
     lc, lt = cfg.logs
 
     removed = await db.warns_db.clear_warns(target_id, chat_id)
@@ -481,6 +508,7 @@ async def execute_resetwarns(
 
 async def _exec_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Pop warn data from user_data and call execute_warn."""
+    assert ctx.user_data is not None
     target_id = ctx.user_data.pop("warn_target_id", 0)
     target_name = ctx.user_data.pop("warn_target_name", "")
     reason_text = ctx.user_data.pop("warn_reason", "")

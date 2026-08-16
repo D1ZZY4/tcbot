@@ -114,10 +114,10 @@ def _cancel_proof_session(user_data: dict[str, Any] | None) -> None:
 
 
 async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> None:
-    target_id: int = meta.get("ban_target_id")
+    target_id: int = meta.get("ban_target_id") or 0
     target_fname: str = meta.get("ban_target_fname", str(target_id))
     reason: str = meta.get("ban_reason", replies.NO_REASON)
-    admin_id: int = meta.get("ban_admin_id")
+    admin_id: int = meta.get("ban_admin_id") or 0
     admin_fname: str = meta.get("ban_admin_fname", "Admin")
     prompt_msg_id: int = meta.get("ban_prompt_msg_id", 0)
     prompt_chat_id: int = meta.get("ban_prompt_chat_id", 0)
@@ -143,7 +143,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         # * a re-ban that failed to find the prior active record before creating a new
         # * one. Cleaning them here ensures a single active ban at all times.
         extras = await db.bans_db.deactivate_extra_active_bans(
-            target_id, existing["ban_id"]
+            target_id, existing.get("ban_id", "")
         )
         if extras > 0:
             log.warning(
@@ -191,11 +191,15 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     logs_chat, logs_thread = cfg.logs
 
     if is_update:
-        ban_id = existing["ban_id"]
+        ban_id = existing.get("ban_id", "")
         old_admin_id = existing.get("admin_user_id", admin_id)
         bot_username = bot.username or ""
         try:
-            old_admin_fname = await _old_admin_fname_task
+            old_admin_fname = (
+                await _old_admin_fname_task
+                if _old_admin_fname_task is not None
+                else "Admin"
+            )
         except Exception:
             old_admin_fname = "Admin"
         old_proof_msg_id = existing.get("proof_message_id", 0)
@@ -453,7 +457,7 @@ async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
 
     if msg.media_group_id:
         mgid = msg.media_group_id
-        if mgid not in _albums:
+        if mgid not in _albums and ctx.user_data is not None:
             meta_snapshot = dict(ctx.user_data)
             _albums[mgid] = []
             _album_meta[mgid] = meta_snapshot
@@ -470,6 +474,8 @@ async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
     # * Double-submit guard: the album path already deduplicates via mgid; for
     # * single-media we guard with an executing flag so a rapid second proof
     # * message (e.g. two quick photo sends) cannot invoke _execute_ban twice.
+    if ctx.user_data is None:
+        return ConversationHandler.END
     if ctx.user_data.get("ban_executing"):
         return ConversationHandler.END
     ctx.user_data["ban_executing"] = True

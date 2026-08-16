@@ -85,21 +85,24 @@ __help__: replies.HelpEntry = {
 
 async def _leave_one(
     bot: Bot,
-    grp: dict,
+    grp: GroupDoc,
     lc: int,
     lt: int | None,
     admin_id: int,
     admin_name: str,
-) -> list:
+) -> tuple:
     """Leave one group, deactivate it in DB, and post a disconnection log - all in parallel."""
+    chat_id = grp.get("chat_id")
+    title = grp.get("title", "Unknown")
+    assert chat_id is not None
     return await asyncio.gather(
-        bot.leave_chat(grp["chat_id"]),
-        db.groups_db.deactivate_group(grp["chat_id"]),
+        bot.leave_chat(chat_id),
+        db.groups_db.deactivate_group(chat_id),
         bot.send_message(
             lc,
             parse_logmsg.group_disconnected_log(
-                grp["chat_id"],
-                grp["title"],
+                chat_id,
+                title,
                 admin_id,
                 admin_name,
             ),
@@ -112,14 +115,17 @@ async def _leave_one(
 
 async def _should_remove(bot: Bot, grp: GroupDoc) -> bool:
     """Return True if the bot has left or been kicked from the group."""
+    chat_id = grp.get("chat_id")
+    if chat_id is None:
+        return True
     try:
         member = await asyncio.wait_for(
-            bot.get_chat_member(grp["chat_id"], bot.id),
+            bot.get_chat_member(chat_id, bot.id),
             timeout=_MEMBERSHIP_CHECK_TIMEOUT,
         )
         return member.status in ("left", "kicked")
     except Exception as exc:
-        log.debug("Could not verify membership for %d: %s", grp["chat_id"], exc)
+        log.debug("Could not verify membership for %d: %s", chat_id, exc)
         return True
 
 
@@ -137,21 +143,24 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     success/failure counts.
     """
     admin = update.effective_user
+    assert admin is not None
     groups = await db.groups_db.active_groups()
     if not groups:
-        try:
-            await update.effective_message.reply_text(replies.ERR_NO_CONNECTED_GROUPS)
-        except Exception as exc:
-            log.debug("leaveall no-groups reply failed: %s", exc)
+        status_msg = update.effective_message
+        if status_msg is not None:
+            try:
+                await status_msg.reply_text(replies.ERR_NO_CONNECTED_GROUPS)
+            except Exception as exc:
+                log.debug("leaveall no-groups reply failed: %s", exc)
         return
 
-    try:
-        status = await update.effective_message.reply_text(
-            f"Leaving {len(groups)} groups..."
-        )
-    except Exception as exc:
-        log.debug("leaveall status reply failed: %s", exc)
-        status = None
+    status_msg = update.effective_message
+    status = None
+    if status_msg is not None:
+        try:
+            status = await status_msg.reply_text(f"Leaving {len(groups)} groups...")
+        except Exception as exc:
+            log.debug("leaveall status reply failed: %s", exc)
     lc, lt = cfg.logs
 
     # * All groups processed concurrently - no sequential sleep between them
@@ -190,6 +199,8 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     identified stale records in parallel, then replies with the count of removed
     groups.
     """
+    reply_msg = update.effective_message
+    assert reply_msg is not None
     groups = await db.groups_db.active_groups()
 
     # * Check all groups concurrently - one network round-trip per group, all in parallel
@@ -202,12 +213,12 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     if to_remove:
         await asyncio.gather(
-            *(db.groups_db.deactivate_group(g["chat_id"]) for g in to_remove),
+            *(db.groups_db.deactivate_group(g.get("chat_id", 0)) for g in to_remove),
             return_exceptions=True,
         )
 
     try:
-        await update.effective_message.reply_text(
+        await reply_msg.reply_text(
             f"Cleaned up {code(str(len(to_remove)))} inaccessible group(s).",
             parse_mode="HTML",
         )

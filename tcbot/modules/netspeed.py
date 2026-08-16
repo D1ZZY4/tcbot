@@ -95,6 +95,7 @@ def _run_speedtest() -> dict:
                 log.warning("Speedtest config retrieval failed (attempt 1/2): %s", exc)
             else:
                 raise
+    return {}
 
 
 # ──────────────────────── Command handlers ──────────────────────── #
@@ -106,6 +107,8 @@ def _run_speedtest() -> dict:
 async def cmd_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Reply with Telegram API round-trip latency in milliseconds."""
     msg = update.effective_message
+    if msg is None:
+        return
     t0 = time.monotonic()
     try:
         sent = await msg.reply_text("Pinging...")
@@ -128,6 +131,8 @@ async def cmd_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Run a full network speed test and reply with detailed results."""
     msg = update.effective_message
+    if msg is None:
+        return
     try:
         notice = await msg.reply_text("Running speed test, please wait...")
     except Exception as exc:

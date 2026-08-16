@@ -62,14 +62,20 @@ Omitting the role triggers the inline button menu built by `keyboards.promote_ro
 ```python
 from tcbot.modules.helper.workflows.promote_flow import ROLE_ALIASES, Promote
 
-Promote.available_roles_for(executor_role)        # list[str]
-await Promote.execute(bot, admin_id, admin_fname,
-                      executor_role,
-                      target_id, target_fname,
-                      current_role, role)         # tuple[ok, reply_text]
-await Promote.request_admin(bot, admin_id,
-                            target_id, target_fname,
-                            target_username=None) # tuple[ok, reply_text]
+Promote.available_roles_for(executor_role)  # list[str]
+await Promote.execute(
+    bot,
+    admin_id,
+    admin_fname,
+    executor_role,
+    target_id,
+    target_fname,
+    current_role,
+    role,
+)  # tuple[ok, reply_text]
+await Promote.request_admin(
+    bot, admin_id, target_id, target_fname, target_username=None
+)  # tuple[ok, reply_text]
 ```
 
 | Member | Purpose |

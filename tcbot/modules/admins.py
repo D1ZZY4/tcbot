@@ -143,6 +143,8 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """
     admin = update.effective_user
     msg = update.effective_message
+    if admin is None or msg is None:
+        return
     args = parse_cmd_args(msg.text)
 
     has_explicit_target = bool(args) and (
@@ -155,6 +157,8 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return_exceptions=True,
     )
     executor_role = None if isinstance(_exec_r, BaseException) else _exec_r
+    if executor_role is None:
+        return
     if isinstance(_target_r, BaseException):
         log.error("extract_target failed during promote: %s", _target_r)
         try:
@@ -250,7 +254,12 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     ``Promote.execute`` and edits the prompt to the result.
     """
     q = update.callback_query
+    if q is None or q.data is None:
+        return
     admin = update.effective_user
+    if admin is None:
+        await q.answer()
+        return
     parts = q.data.split(":", 2)
     if len(parts) != 3:
         await q.answer()
@@ -318,6 +327,8 @@ async def on_promote_role_cancel(
 ) -> None:
     """Acknowledge the cancel button and replace the role-selection prompt with a cancellation notice."""
     q = update.callback_query
+    if q is None:
+        return
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(_MSG_PROMOTE_CANCELLED, reply_markup=None),
@@ -342,6 +353,8 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """
     admin = update.effective_user
     msg = update.effective_message
+    if admin is None or msg is None:
+        return
     args = parse_cmd_args(msg.text)
 
     # * Executor role (founder/admin guaranteed by @staff_only) + target run in parallel
@@ -351,6 +364,10 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return_exceptions=True,
     )
     executor_role = None if isinstance(_exec_r, BaseException) else _exec_r
+    if executor_role is None:
+        return
+    # staff_only guarantees a valid role; assert narrows str | None → str for pyright
+    assert executor_role is not None
     if isinstance(_target_r, BaseException):
         log.error("extract_target failed during demote: %s", _target_r)
         try:
@@ -431,7 +448,12 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     parallel, then executes ``Demote.execute`` and edits the prompt to the result.
     """
     q = update.callback_query
+    if q is None or q.data is None:
+        return
     admin = update.effective_user
+    if admin is None:
+        await q.answer()
+        return
     try:
         target_id = int(q.data.split(":", 1)[1])
     except (ValueError, IndexError):
@@ -453,6 +475,8 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         except Exception as exc:
             log.debug("on_demote_confirm perm-expired edit failed: %s", exc)
         return
+    # Narrow executor_role to str after passing the "founder"/"admin" check
+    assert executor_role is not None
 
     target_role, mention_data = await asyncio.gather(
         db.users_roles.get_effective_role(target_id),
@@ -519,6 +543,8 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Acknowledge the cancel button and collapse the demotion confirmation prompt."""
     q = update.callback_query
+    if q is None:
+        return
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(_MSG_CANCELLED, reply_markup=None),
@@ -572,16 +598,16 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     lc, lt = cfg.logs
     log_text = parse_logmsg.ownership_transferred(
         target_id,
-        target_fname,
+        target_fname or str(target_id),
         current_owner.id,
-        current_owner.first_name,
+        current_owner.first_name or "unknown",
     )
     # * log and reply in parallel
     transfer_log_r, transfer_reply_r = await asyncio.gather(
         ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
         msg.reply_text(
             f"Done. Ownership has been transferred to "
-            f"{user_ref(target_id, target_fname, target_uname)}.",
+            f"{user_ref(target_id, target_fname or str(target_id), target_uname)}.",
             parse_mode="HTML",
         ),
         return_exceptions=True,
@@ -624,7 +650,8 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     if isinstance(existing, BaseException):
         existing = None
     if existing_role:
-        label = db.users_roles.ROLE_LABEL.get(existing_role, existing_role.capitalize())
+        label = db.users_roles.ROLE_LABEL.get(existing_role, existing_role or "unknown")
+        label = label.capitalize()
         try:
             await msg.reply_text(f"You're already a {label} - no request needed.")
         except Exception as exc:
@@ -634,14 +661,14 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     if existing:
         try:
             await msg.reply_text(
-                f"You already have a pending request (ID: {code(existing['request_id'])}).",
+                f"You already have a pending request (ID: {code(existing.get('request_id', 'unknown'))}).",
                 parse_mode="HTML",
             )
         except Exception as exc:
             log.debug("cmd_promote_request existing-request reply failed: %s", exc)
         return
     _, reply = await Promote.request_admin(
-        ctx.bot, user.id, user.id, user.first_name, user.username
+        ctx.bot, user.id, user.id, user.first_name or "unknown", user.username or ""
     )
     try:
         await msg.reply_text(reply, parse_mode="HTML")
@@ -657,22 +684,28 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
 @decorators.log_execution
 async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Reply with a formatted list of all pending promotion requests."""
+    msg = update.effective_message
+    if msg is None:
+        return
     pending = await db.queues_db.all_pending()
     if not pending:
         try:
-            await update.effective_message.reply_text(_MSG_NO_PENDING)
+            await msg.reply_text(_MSG_NO_PENDING)
         except Exception as exc:
             log.debug("cmd_promote_list no-pending reply failed: %s", exc)
         return
     lines = [f"{bold(f'Pending Promotion Requests ({len(pending)})')}\n"]
     for req in pending:
-        uname = f"@{req['username']}" if req.get("username") else "no username"
+        target_id = req.get("target_id", 0)
+        target_fname = req.get("first_name", "unknown")
+        uname_val = req.get("username")
+        uname = f"@{uname_val}" if uname_val else "no username"
         lines.append(
-            f"- {mention(req['target_id'], req['first_name'], req.get('username'))} "
-            f"{code(str(req['target_id']))} | {esc(uname)} | ID: {code(req['request_id'])}"
+            f"- {mention(target_id, target_fname, uname_val)} "
+            f"{code(str(target_id))} | {esc(uname)} | ID: {code(req.get('request_id', 'unknown'))}"
         )
     try:
-        await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
+        await msg.reply_text("\n".join(lines), parse_mode="HTML")
     except Exception as exc:
         log.debug("cmd_promote_list result reply failed: %s", exc)
 
@@ -690,7 +723,12 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     reject, marks the request resolved and edits the card to show the rejection.
     """
     q = update.callback_query
+    if q is None or q.data is None:
+        return
     admin = update.effective_user
+    if admin is None:
+        await q.answer()
+        return
     try:
         action, request_id = q.data.split(":", 1)
     except ValueError:
@@ -724,7 +762,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             log.debug("on_promo_decision not-found edit failed: %s", exc)
         return
     req = req_result
-    target_id = req["target_id"]
+    target_id = req.get("target_id", 0)
     target_fname = req.get("first_name", str(target_id))
     lc, lt = cfg.logs
 
@@ -755,10 +793,13 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             request_id,
         )
         # * notify target, send log, and edit review message all in parallel
+        existing_text = ""
+        if q.message is not None:
+            # text_html is unavailable on MaybeInaccessibleMessage; use a safe fallback
+            existing_text = getattr(q.message, "text_html", "") or ""
         notify_results = await asyncio.gather(
             q.edit_message_text(
-                (q.message.text_html if q.message else "")
-                + f"\n\n- Approved by {esc(admin.first_name)}",
+                existing_text + f"\n\n- Approved by {esc(admin.first_name)}",
                 parse_mode="HTML",
                 reply_markup=None,
             ),
@@ -784,10 +825,12 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         # * resolve DB + notify + send log + edit review message all in parallel
         # * check results - if resolve fails the request stays pending while the UI
         # * already shows "Rejected", which would leave the queue in an inconsistent state.
+        existing_text = ""
+        if q.message is not None:
+            existing_text = getattr(q.message, "text_html", "") or ""
         reject_results = await asyncio.gather(
             q.edit_message_text(
-                (q.message.text_html if q.message else "")
-                + f"\n\n- Rejected by {esc(admin.first_name)}",
+                existing_text + f"\n\n- Rejected by {esc(admin.first_name)}",
                 parse_mode="HTML",
                 reply_markup=None,
             ),
