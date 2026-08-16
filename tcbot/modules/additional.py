@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-import asyncio
+import logging
 from typing import TYPE_CHECKING
 
 from telegram.ext import CallbackQueryHandler, ContextTypes
@@ -17,6 +17,8 @@ from tcbot.modules.helper.formatter import bold, esc
 
 if TYPE_CHECKING:
     from telegram import Update
+
+log = logging.getLogger(__name__)
 
 __module_name__ = None
 
@@ -44,15 +46,18 @@ async def on_additional_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     """Render the Additional Info page when the button is tapped."""
     assert update.callback_query is not None
     q = update.callback_query
-    await asyncio.gather(
-        q.answer(),
-        q.edit_message_text(
+    try:
+        await q.answer()
+    except Exception as exc:
+        log.debug("additional_menu q.answer failed: %s", exc)
+    try:
+        await q.edit_message_text(
             __additional_msg__,
             parse_mode="HTML",
             reply_markup=keyboards.additional_menu_kb(),
-        ),
-        return_exceptions=True,
-    )
+        )
+    except Exception as exc:
+        log.debug("additional_menu edit failed: %s", exc)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

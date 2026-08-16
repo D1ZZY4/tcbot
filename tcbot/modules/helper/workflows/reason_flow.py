@@ -114,9 +114,9 @@ def build_modaction_conv(
 
     Note: ``conversation_timeout`` is intentionally absent.  PTB's timeout
     support requires the ``job-queue`` extra (APScheduler 3.x backend) which
-    conflicts with this project's APScheduler 4 dependency.  Conversations
-    are ended via the ``_end_conv`` fallback (triggered on any command) or
-    by the user pressing the Cancel button.
+    is already used by this project's persistent MongoDBJobStore setup.
+    Conversations are ended via the ``_end_conv`` fallback (triggered on any
+    command) or by the user pressing the Cancel button.
     """
     action = reason.action
     _reason_key = f"{action}_reason"

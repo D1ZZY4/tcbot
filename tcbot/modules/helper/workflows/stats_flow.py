@@ -134,17 +134,16 @@ class Stats:
             db.users_cache.total_users(),
             return_exceptions=True,
         )
-        if isinstance(owner_id, BaseException):
-            owner_id = None
-        owner_id = cast("int | None", owner_id)
-        admin_count = 0 if isinstance(admin_count, BaseException) else admin_count
-        admin_count = cast("int", admin_count)
-        if isinstance(developers, BaseException):
-            developers = [] if isinstance(developers, BaseException) else developers
-        developers = cast("list", developers)
-        if isinstance(testers, BaseException):
-            testers = [] if isinstance(testers, BaseException) else testers
-        testers = cast("list", testers)
+        owner_id = (
+            0 if isinstance(owner_id, BaseException) else cast("int | None", owner_id)
+        )
+        admin_count = (
+            0 if isinstance(admin_count, BaseException) else cast("int", admin_count)
+        )
+        developers = (
+            [] if isinstance(developers, BaseException) else cast("list", developers)
+        )
+        testers = [] if isinstance(testers, BaseException) else cast("list", testers)
         if isinstance(ban_count, BaseException):
             ban_count = 0
         if isinstance(group_count, BaseException):

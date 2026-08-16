@@ -559,7 +559,7 @@ def ban_conversation(
 
     Note: ``conversation_timeout`` is intentionally omitted.  PTB's timeout
     support requires the ``job-queue`` extra (APScheduler 3.x backend) which
-    conflicts with this project's APScheduler 4 dependency.  Conversations
+    conflicts with this project's persistent MongoDBJobStore setup.  Conversations
     are ended via the fallback ``on_proof_timeout`` handler (triggered on any
     command) or by the user pressing Cancel.
     """
