@@ -9,6 +9,7 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 - **Security** (`tcbot/alive.py`): remove `force=True` from `request.get_json()` in the webhook route. Flask now rejects non-`application/json` content types at the parser level, reducing the webhook attack surface without affecting legitimate Telegram delivery (which always sends `application/json`).
 - **Error handler context** (`tcbot/__main__.py`): include user/chat/text context string in the console `log.error()` call for the PTB global error handler. Previously the context was only forwarded to the `error_reporter`; console logs now carry the same detail for faster debugging without waiting for the LOG_ERRORS channel.
 - **Memory leak** (`tcbot/modules/helper/decorators.py`): `_RateLimiter._buckets` now performs periodic cleanup when bucket count exceeds 10,000, removing entries whose oldest timestamp is older than `window * 2`. Mirrors the Redis PEXPIRE behavior of the primary rate limiter and prevents unbounded growth during long-running sessions.
+- **Dead code** (`tcbot/modules/groups.py`): removed redundant `isinstance(q.message, Message)` guard in `_toggle`. `CallbackQuery.message` is always `Message` at this call site; the check added no safety and was never triggered.
 
 ## [Unreleased] - 2026-08-06 (audit continuation)
 

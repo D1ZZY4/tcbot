@@ -122,10 +122,7 @@ async def _toggle(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE, *, detailed: bool
 ) -> None:
     q = update.callback_query
-    if q is None or q.message is None or q.message.chat is None:
-        return
-
-    if not isinstance(q.message, Message):
+    if q is None or q.message is None:
         return
 
     groups = ctx.user_data.get("groups_cache") if ctx.user_data is not None else None
