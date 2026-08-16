@@ -2,7 +2,7 @@
 name = "tcbot"
 version = "6.2.0"
 description = "TCF | Transsion Core Federation - Telegram Bot"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     "python-telegram-bot[rate-limiter]>=22.8,<23",
     "motor>=3.7,<4",
@@ -23,7 +23,7 @@ include = ["tcbot*"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py312"
+target-version = "py314"
 exclude = [".local/", ".agents/", ".kilo/", ".trae/", ".roo/", ".claude/", "attached_assets/"]
 
 [tool.ruff.lint]

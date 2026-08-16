@@ -14,7 +14,7 @@ Before invoking this skill, confirm the read/update rules in
 change, update [`CHANGELOG.md`](../../../CHANGELOG.md) and the matching document
 under `docs/` whose behavior changed in the same turn.
 
-Use this skill for asynchronous Python work in the TCF Bot codebase. The project runs on Python 3.12 with `python-telegram-bot` (with the `[rate-limiter]` extra, no `[job-queue]` extra, tracking the latest compatible release), Motor/MongoDB, Flask keepalive, `uv`, and Ruff.
+Use this skill for asynchronous Python work in the TCF Bot codebase. The project runs on Python 3.14 with `python-telegram-bot` (with the `[rate-limiter]` extra, no `[job-queue]` extra, tracking the latest compatible release), Motor/MongoDB, Flask keepalive, `uv`, and Ruff.
 
 This skill is intentionally project-specific. Prefer the conventions below over generic asyncio examples.
 
@@ -33,7 +33,7 @@ Do not use this skill for CPU-bound optimization unless the async code is direct
 
 ## Project Baseline
 
-- Python target: `>=3.12`.
+- Python target: `>=3.13`.
 - Telegram framework: `python-telegram-bot` (latest), async-first API.
 - Database driver: Motor (latest).
 - Runtime entry point: `uv run python -m tcbot` on Windows, `uv run python -m tcbot` elsewhere.
@@ -157,7 +157,7 @@ Project expectations:
 
 ## Timeouts and Cancellation
 
-Use `asyncio.timeout()` for local async operation bounds in Python 3.12. Use `ConversationHandler` timeouts and project config for workflow deadlines.
+Use `asyncio.timeout()` for local async operation bounds in Python 3.14. Use `ConversationHandler` timeouts and project config for workflow deadlines.
 
 ```python
 import asyncio

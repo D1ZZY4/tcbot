@@ -53,7 +53,7 @@ Good documentation should:
 
 As of 2026-06-02, TCF Bot uses:
 
-- Python 3.12 project target
+- Python 3.14 project target
 - `python-telegram-bot` (with the `[rate-limiter]` extra, no `[job-queue]` extra), tracking the latest compatible release
 - Motor/MongoDB
 - Flask keep-alive server

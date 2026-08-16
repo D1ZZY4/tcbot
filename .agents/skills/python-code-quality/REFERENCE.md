@@ -8,7 +8,7 @@ canonical project rules this reference enforces, see
 
 Updated: 2026-06-11
 
-This reference supports the `python-code-quality` skill for the TCF Bot repository. It reflects the current project stack: Python 3.12, `uv`, Ruff, `python-telegram-bot` (latest), Motor/MongoDB, and Flask keepalive.
+This reference supports the `python-code-quality` skill for the TCF Bot repository. It reflects the current project stack: Python 3.14, `uv`, Ruff, `python-telegram-bot` (latest), Motor/MongoDB, and Flask keepalive.
 
 ## Tooling Snapshot
 
@@ -16,11 +16,11 @@ Current `pyproject.toml` essentials:
 
 ```toml
 [project]
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 
 [tool.ruff]
 line-length = 88
-target-version = "py312"
+target-version = "py314"
 exclude = [".local/", ".agents/", ".kilo/", ".trae/", ".claude/", "attached_assets/"]
 
 [tool.ruff.lint]
@@ -72,7 +72,7 @@ For Python source files, verify:
 
 ## Type Patterns
 
-Use Python 3.12 style:
+Use Python 3.14 style:
 
 ```python
 from __future__ import annotations
@@ -101,7 +101,7 @@ Avoid:
 
 - `Any` without a clear boundary reason.
 - Type comments.
-- Importing old typing aliases solely for Python versions below 3.12.
+- Importing old typing aliases solely for Python versions below 3.14.
 
 ## Ruff Rule Notes
 

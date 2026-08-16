@@ -55,7 +55,7 @@ failure behavior.
 
 ## Dependency and Tooling Policy
 
-- Target Python 3.12.
+- Target Python 3.14.
 - Use `uv` for dependency installation, locking, and tool execution.
 - Keep `pyproject.toml` and `uv.lock` synchronized.
 - Do not add dependencies to `requirements.txt`.

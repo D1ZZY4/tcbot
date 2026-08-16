@@ -26,7 +26,7 @@ Skipping the doc sweep is a defect.
 ## Project Snapshot
 
 - Project: TCF Bot, a Telegram moderation and federation management bot.
-- Runtime: Python 3.12.
+- Runtime: Python 3.14.
 - Telegram framework: `python-telegram-bot` (with the `[rate-limiter]` extra, no `[job-queue]` extra), tracking the latest compatible release.
 - Database: MongoDB through async Motor helpers.
 - Keepalive: Flask health/keep-alive server.
@@ -48,7 +48,7 @@ owning area.
 ## Python and Style Rules
 
 - Put `from __future__ import annotations` as the first non-comment line in Python modules.
-- Use Python 3.12 syntax and built-in generics: `list[str]`, `dict[str, int]`, `int | None`.
+- Use Python 3.14 syntax and built-in generics: `list[str]`, `dict[str, int]`, `int | None`.
 - Use 4-space indentation and keep diffs minimal.
 - Avoid wildcard imports and inline imports.
 - Use `logging.getLogger(__name__)`; do not use `print()`.

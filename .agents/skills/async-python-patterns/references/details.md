@@ -8,7 +8,7 @@ patterns referenced here, see
 
 Updated: 2026-05-29
 
-This reference expands the `async-python-patterns` skill with practical examples for TCBot's Python 3.12, `python-telegram-bot` (latest), and Motor/MongoDB stack.
+This reference expands the `async-python-patterns` skill with practical examples for TCBot's Python 3.14, `python-telegram-bot` (latest), and Motor/MongoDB stack.
 
 ## Choosing the Right Async Pattern
 
@@ -115,7 +115,7 @@ except Exception:
 
 ## Timeouts
 
-Use Python 3.12 `asyncio.timeout()` for local bounds around an operation.
+Use Python 3.14 `asyncio.timeout()` for local bounds around an operation.
 
 ```python
 async def safe_lookup(user_id: int) -> dict[str, object] | None:

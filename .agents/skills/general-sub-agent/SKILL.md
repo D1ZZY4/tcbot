@@ -20,7 +20,7 @@ This skill was copied from the user's global `general-sub-agent` skill and adapt
 
 ## Project Context
 
-TCF Bot is a Python 3.12 Telegram moderation bot built with:
+TCF Bot is a Python 3.14 Telegram moderation bot built with:
 
 - `python-telegram-bot` (with the `[rate-limiter]` extra, no `[job-queue]` extra), tracking the latest compatible release
 - Motor/MongoDB for persistence

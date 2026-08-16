@@ -51,7 +51,7 @@ autonomously:
 4. **Design** the smallest modular change and centralize shared behavior in its
    owning helper or domain module. Do not create parallel utilities for logic
    that already has a project owner.
-5. **Implement** focused typed Python 3.12 code with HTML-safe output,
+5. **Implement** focused typed Python 3.14 code with HTML-safe output,
    intentional comments, and explicit error handling.
 6. **Validate** targeted behavior, the full relevant checks, startup logs for
    runtime changes, and stale/dead/duplicate paths.
@@ -69,7 +69,7 @@ TCF Bot is a Python Telegram bot for the Transsion Core Federation community. It
 
 Current stack:
 
-- Python 3.12 project target (`pyproject.toml` requires `>=3.12`)
+- Python 3.14 project target (`pyproject.toml` requires `>=3.13`)
 - `python-telegram-bot` (plain, no `[job-queue]` extra), tracking the latest compatible release
 - MongoDB through Motor (latest)
 - Flask keep-alive / health-check server
@@ -183,7 +183,7 @@ editing source code.
 
 Repository conventions:
 
-- Use Python 3.12 syntax and 4-space indentation.
+- Use Python 3.14 syntax and 4-space indentation.
 - Place `from __future__ import annotations` as the first non-comment line in Python modules.
 - Prefer built-in generics such as `list[str]`, `dict[str, int]`, and `int | None`.
 - Avoid inline imports and wildcard imports.

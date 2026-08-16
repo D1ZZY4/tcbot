@@ -1,6 +1,6 @@
 ---
 name: python-code-quality
-description: Use when formatting, linting, typing, or reviewing Python quality in TCBot with Python 3.12, Ruff, uv, and the project's handler/database conventions.
+description: Use when formatting, linting, typing, or reviewing Python quality in TCBot with Python 3.14, Ruff, uv, and the project's handler/database conventions.
 ---
 Last updated: 2026-05-29
 
@@ -14,7 +14,7 @@ Before invoking this skill, confirm the read/update rules in
 update [`CHANGELOG.md`](../../../CHANGELOG.md) and the matching document under
 `docs/` in the same turn.
 
-Use this skill when improving or validating Python code quality in the TCF Bot repository. The project uses Python 3.12, `uv`, and Ruff. It does not currently configure a separate type checker in `pyproject.toml`, so type-quality guidance should focus on clear annotations, Ruff-compatible style, and practical review rather than inventing a type-check command.
+Use this skill when improving or validating Python code quality in the TCF Bot repository. The project uses Python 3.14, `uv`, and Ruff. It does not currently configure a separate type checker in `pyproject.toml`, so type-quality guidance should focus on clear annotations, Ruff-compatible style, and practical review rather than inventing a type-check command.
 
 ## When to Use This Skill
 
@@ -34,7 +34,7 @@ From `pyproject.toml` as of 2026-06-11:
 
 ```toml
 [project]
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     "python-telegram-bot[rate-limiter]",
     "motor",
@@ -47,7 +47,7 @@ dev = ["ruff"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py312"
+target-version = "py314"
 exclude = [".local/", ".agents/", ".kilo/", ".trae/", ".claude/", "attached_assets/"]
 
 [tool.ruff.lint]
@@ -97,7 +97,7 @@ For documentation-only or skill-only changes, Python validation is usually unnec
 
 Project-specific conventions take precedence over generic style advice.
 
-- Python 3.12 syntax.
+- Python 3.14 syntax.
 - `from __future__ import annotations` as the first non-comment line in Python modules.
 - Built-in generics: `list[str]`, `dict[str, int]`, `tuple[int, ...]`.
 - Union operator: `str | None`, not `Optional[str]`.

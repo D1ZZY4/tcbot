@@ -9,7 +9,7 @@ conventions live in [`comment-style.md`](comment-style.md).
 
 ## Language and File Structure
 
-- Use Python 3.12 syntax and four-space indentation.
+- Use Python 3.14 syntax and four-space indentation.
 - Every Python module starts with the project copyright header, a one-line
   module docstring, and `from __future__ import annotations` as the first
   non-comment code line.
