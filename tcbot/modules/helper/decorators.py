@@ -47,6 +47,13 @@ class _RateLimiter:
 
         if dq is None:
             self._buckets[uid] = deque([now])
+            # * Periodic cleanup to bound memory; mirrors Redis PEXPIRE behavior.
+            # * Only runs when bucket count grows past threshold to avoid O(n) on every call.
+            if len(self._buckets) > 10_000:
+                cutoff = now - self.window * 2
+                self._buckets = {
+                    k: v for k, v in self._buckets.items() if v and v[0] > cutoff
+                }
             return 0.0
 
         # * drop timestamps outside the current window

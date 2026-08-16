@@ -135,7 +135,7 @@ def webhook_route() -> tuple[str, int]:
         log.warning("Webhook: received update before PTB is ready.")
         return "Service unavailable", 503
 
-    data = request.get_json(force=True, silent=True)
+    data = request.get_json(silent=True)
     if not data:
         log.warning("Webhook: received request with empty or non-JSON body.")
         return "Bad request", 400

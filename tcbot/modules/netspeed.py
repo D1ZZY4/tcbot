@@ -11,7 +11,7 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
-from speedtest import Speedtest
+from speedtest import ConfigRetrievalError, Speedtest
 from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot.modules.helper import decorators, replies
@@ -81,12 +81,20 @@ def _readable_size(size_bytes: float) -> str:
 
 def _run_speedtest() -> dict:
     """Run a full speedtest synchronously; intended for thread-executor use only."""
-    st = Speedtest()
-    st.get_best_server()
-    st.download()
-    st.upload()
-    st.results.share()
-    return st.results.dict()
+    # * Retry config fetch once; Ookla sometimes returns transient 403s.
+    for attempt in range(2):
+        try:
+            st = Speedtest()
+            st.get_best_server()
+            st.download()
+            st.upload()
+            st.results.share()
+            return st.results.dict()
+        except ConfigRetrievalError as exc:
+            if attempt == 0:
+                log.warning("Speedtest config retrieval failed (attempt 1/2): %s", exc)
+            else:
+                raise
 
 
 # ──────────────────────── Command handlers ──────────────────────── #

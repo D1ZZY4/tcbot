@@ -169,10 +169,11 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
     context_str = " | ".join(context_parts) if context_parts else None
 
-    # * Log to console as well (existing behaviour)
+    # * Log to console as well (existing behaviour), including context when available
     log.error(
-        "Unhandled exception for update %s",
+        "Unhandled exception for update %s%s",
         update,
+        f" | {context_str}" if context_str else "",
         exc_info=exc,
     )
 
