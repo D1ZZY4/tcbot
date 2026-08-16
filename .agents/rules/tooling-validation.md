@@ -112,6 +112,7 @@ For the full runtime check:
 ```bash
 ruff format --check .
 ruff check .
+uv run pyright .
 uv run python -m compileall -q tcbot
 uv run python -c "import tcbot"
 git diff --check

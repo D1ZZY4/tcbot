@@ -203,6 +203,7 @@ class Stats:
         # * Resolve user mention data in one batch query instead of individual queries
         all_user_ids = []
         owner_idx = None
+        owner_id_int = 0
         if owner_id:
             owner_id_int = cast("int", owner_id)
             owner_idx = 0
