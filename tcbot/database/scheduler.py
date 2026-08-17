@@ -140,7 +140,15 @@ async def _execute_scheduled_unban(ban_id: str, user_id: int) -> None:
     Telegram unban is handled by the timed ``restrict_chat_member`` call with
     ``until_date`` at ban time, which Telegram enforces natively.
     """
-    deactivated = await _bans_deactivate(ban_id)
+    try:
+        deactivated = await _bans_deactivate(ban_id)
+    except Exception:
+        log.exception(
+            "Scheduled unban DB failure for ban_id=%s user_id=%d",
+            ban_id,
+            user_id,
+        )
+        return
     if deactivated:
         log.info(
             "Scheduled unban: deactivated ban_id=%s for user_id=%d.", ban_id, user_id

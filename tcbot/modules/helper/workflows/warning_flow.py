@@ -133,8 +133,9 @@ async def execute_warn(
                 auto_ban_trigger = "fed_global"
 
     if auto_ban_trigger is not None:
-        # * If the target somehow holds a federation role (e.g. promoted mid-warn-cycle),
-        # * remove the role before the auto-ban so they don't keep staff perms after exile.
+        # * If the target holds a federation role (e.g. promoted mid-warn-cycle),
+        # * do NOT auto-ban staff members through the warn threshold; remove the
+        # * role only so they lose staff perms without being exiled.
         target_role = await db.users_roles.get_effective_role(target_id)
         if target_role:
             try:
@@ -148,7 +149,20 @@ async def execute_warn(
                     trigger="ban",
                 )
             except Exception:
-                log.exception("Auto-demote on warn limit failed")
+                log.exception(
+                    "Auto-demote on warn limit failed for role=%s", target_role
+                )
+            # * Staff targets are demoted but not auto-banned; warn record is already saved.
+            try:
+                await msg.reply_text(
+                    f"{user_ref(target_id, target_name)} is a {target_role} and was "
+                    f"demoted, but staff are not auto-banned via warnings.",
+                    parse_mode="HTML",
+                    reply_markup=proof_kb,
+                )
+            except Exception as exc:
+                log.debug("Warn auto-ban staff exemption reply failed: %s", exc)
+            return
 
         # * Federation ban: fetch active groups + check existing ban + send log in parallel.
         # * Overlapping the DB reads with the log send keeps total latency low.

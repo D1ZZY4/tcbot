@@ -162,6 +162,13 @@ async def clear_warns(user_id: int, chat_id: int) -> int:
         db_call(_warn_counts().delete_one(_warn_key(user_id, chat_id))),
         return_exceptions=True,
     )
+    if isinstance(_cnt_del, BaseException):
+        log.warning(
+            "clear_warns counter delete failed for user=%d chat=%d: %s",
+            user_id,
+            chat_id,
+            _cnt_del,
+        )
     return warn_del.deleted_count if not isinstance(warn_del, BaseException) else 0
 
 
@@ -177,6 +184,12 @@ async def clear_all_warns(user_id: int) -> int:
         db_call(_warn_counts().delete_many({"user_id": user_id})),
         return_exceptions=True,
     )
+    if isinstance(_cnt_del, BaseException):
+        log.warning(
+            "clear_all_warns counter delete failed for user=%d: %s",
+            user_id,
+            _cnt_del,
+        )
     return warn_del.deleted_count if not isinstance(warn_del, BaseException) else 0
 
 

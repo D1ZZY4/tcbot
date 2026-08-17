@@ -23,10 +23,6 @@ def _requests() -> AsyncIOMotorCollection:
     return col("promotion_requests")
 
 
-def _new_request_id() -> str:
-    return make_short_id()
-
-
 # ──────────────────────────── Mutations ─────────────────────────── #
 # * Functions that create or modify promotion request records
 # * Manages the queue's state for pending and resolved requests
@@ -39,7 +35,7 @@ async def enqueue(
     promoted_by: int,
 ) -> str:
     """Add a new promotion request to the queue."""
-    request_id = _new_request_id()
+    request_id = make_short_id()
     await db_call(
         _requests().insert_one(
             {

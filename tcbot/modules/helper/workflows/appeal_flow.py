@@ -41,9 +41,8 @@ WAITING_APPEAL = 0
 
 # * Maximum character length for an appeal message.
 _MAX_APPEAL_LEN: int = 2000
-_LOCK_HOURS: int = 12
-LOCK_HOURS: int = _LOCK_HOURS
-_LOCK_WINDOW = timedelta(hours=_LOCK_HOURS)
+LOCK_HOURS: int = 12
+_LOCK_WINDOW = timedelta(hours=LOCK_HOURS)
 _STALE_REVIEW_HOURS: int = 72
 _STALE_REVIEW_WINDOW = timedelta(hours=_STALE_REVIEW_HOURS)
 _REJECTION_COOLDOWN_HOURS: int = 24
@@ -66,13 +65,16 @@ _ERR_REJECTION_COOLDOWN = (
     f" Please wait {_REJECTION_COOLDOWN_HOURS} hours before submitting a new one."
 )
 _MSG_CANCELLED = "Appeal cancelled. Nothing was submitted."
+_MSG_CANCELLED_UNEXPECTED = "Please send your appeal message, or press Cancel."
 _MSG_SESSION_ENDED = "Appeal session ended."
 _ERR_SESSION_EXPIRED = "Session expired - please start the appeal again."
 _ERR_INVALID_LOG = "Invalid log link. Please check and try again."
 _ERR_NOT_AUTHORIZED = "You are not authorized."
 _ERR_BAN_NOT_FOUND = "Ban record not found."
 _ERR_ALREADY_RESOLVED = "Appeal already resolved (ban is no longer active)."
-_ERR_REVIEW_LOCKED = f"Only the admin who issued this ban can review it within the first {_LOCK_HOURS} hours."
+_ERR_REVIEW_LOCKED = (
+    f"Only the admin who issued this ban can review it within the first {LOCK_HOURS}h."
+)
 _MSG_APPEAL_SUBMITTED = "Your appeal has been submitted. The team will review it shortly - we'll get back to you."
 
 
@@ -355,6 +357,10 @@ class BuildAppeal:
         text = msg.text.strip()
 
         if not starts_with_appeal_tag(text):
+            try:
+                await msg.reply_text(_MSG_CANCELLED_UNEXPECTED)
+            except Exception as exc:
+                log.debug("Appeal unexpected-text reply failed: %s", exc)
             return WAITING_APPEAL
 
         if len(text) > _MAX_APPEAL_LEN:

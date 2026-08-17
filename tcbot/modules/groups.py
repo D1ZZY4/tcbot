@@ -8,26 +8,21 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING
 
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
-if TYPE_CHECKING:
-    from collections.abc import Coroutine
-
-    from telegram import Message
-
 from tcbot import cfg
 from tcbot import database as db
+
+if TYPE_CHECKING:
+    from telegram import Update
 from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.formatter import bold, code, esc
 from tcbot.modules.helper.keyboards import tcgroups_kb
 from tcbot.modules.helper.parse_editmsg import safe_edit
 from tcbot.utils.prefixes import build_prefixed_filters
-
-if TYPE_CHECKING:
-    from telegram import Update
 
 log = logging.getLogger(__name__)
 
@@ -128,13 +123,13 @@ async def _toggle(
     if q is None or q.message is None:
         return
 
-    cbq_msg: Message = cast("Message", q.message)
+    cbq_msg = q.message  # type: ignore[assignment]
     groups = ctx.user_data.get("groups_cache") if ctx.user_data is not None else None
     if groups:
         await asyncio.gather(
             q.answer(),
             safe_edit(
-                cbq_msg,
+                cbq_msg,  # type: ignore[arg-type]
                 _render(groups, detailed=detailed),
                 reply_markup=tcgroups_kb(detailed=detailed),
             ),
@@ -150,7 +145,7 @@ async def _toggle(
         if ctx.user_data is not None:
             ctx.user_data["groups_cache"] = groups
         await safe_edit(
-            cbq_msg,
+            cbq_msg,  # type: ignore[arg-type]
             _render(groups, detailed=detailed),
             reply_markup=tcgroups_kb(detailed=detailed),
         )
@@ -158,20 +153,16 @@ async def _toggle(
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
-async def on_groups_details(
-    update: Update, ctx: ContextTypes.DEFAULT_TYPE
-) -> Coroutine[Any, Any, None]:
+async def on_groups_details(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Switch the groups listing to detailed view (shows full chat IDs)."""
-    return _toggle(update, ctx, detailed=True)
+    await _toggle(update, ctx, detailed=True)
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
-async def on_groups_simple(
-    update: Update, ctx: ContextTypes.DEFAULT_TYPE
-) -> Coroutine[Any, Any, None]:
+async def on_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Switch the groups listing to simple view (condensed, no full chat IDs)."""
-    return _toggle(update, ctx, detailed=False)
+    await _toggle(update, ctx, detailed=False)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

@@ -260,6 +260,8 @@ def build_modaction_conv(
             existing: list = ctx.user_data.get(_proof_msgs_key, [])
             ctx.user_data[_proof_msgs_key] = [*existing, msg]
         await executor(update, ctx)
+        # * Clear state so the conversation does not leak keys across sessions.
+        _clear_user_data(ctx)
         return ConversationHandler.END
 
     async def _on_skip_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -282,6 +284,7 @@ def build_modaction_conv(
             executor(update, ctx),
             return_exceptions=True,
         )
+        _clear_user_data(ctx)
         return ConversationHandler.END
 
     # ── Cancel / fallback ────────────────────────────────────────── #

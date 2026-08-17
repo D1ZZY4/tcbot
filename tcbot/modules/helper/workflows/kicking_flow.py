@@ -46,7 +46,6 @@ async def execute_kick(
     target_id: int,
     target_name: str,
     reason_text: str,
-    proof_desc: str | None = None,
     proof_msgs: list | None = None,
 ) -> None:
     """Kick (ban then immediately unban) a user from the current group."""
@@ -143,7 +142,6 @@ async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     target_id = ctx.user_data.pop("kick_target_id", 0)
     target_name = ctx.user_data.pop("kick_target_name", "")
     reason_text = ctx.user_data.pop("kick_reason", replies.NO_REASON)
-    proof_desc = ctx.user_data.pop("kick_proof_desc", None)
     proof_msgs = ctx.user_data.pop("kick_proof_msgs", None)
     ctx.user_data.pop("kick_extra_info", None)
     await execute_kick(
@@ -152,7 +150,6 @@ async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         target_id,
         target_name,
         reason_text,
-        proof_desc=proof_desc,
         proof_msgs=proof_msgs,
     )
 

@@ -21,7 +21,7 @@ from telegram.error import NetworkError, TimedOut
 from tcbot.utils import circuit_breaker as _cb
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Sequence
+    from collections.abc import Awaitable, Callable, Sequence
 
 log = logging.getLogger(__name__)
 
@@ -44,13 +44,20 @@ async def fan_out[T](
     of firing a Telegram request that will time out.  TimedOut and
     NetworkError results trip the circuit; all other exceptions (403, 400,
     etc.) are treated as expected API refusals and do not affect the circuit.
+
+    Coroutines are created lazily (thunk factories) so the semaphore truly
+    bounds the number of in-flight tasks rather than eagerly materialising
+    the entire list before any slot runs.
     """
     if not coros:
         return []
 
+    if max_concurrent < 1:
+        max_concurrent = 1
+
     sem = asyncio.Semaphore(max_concurrent)
 
-    async def _slot(coro: Awaitable[T]) -> T | BaseException:
+    async def _slot(thunk: Callable[[], Awaitable[T]]) -> T | BaseException:
         async with sem:
             if _cb.telegram.is_open:
                 log.warning(
@@ -58,7 +65,7 @@ async def fan_out[T](
                 )
                 return _cb.CircuitOpenError("Telegram circuit is OPEN; call skipped.")
             try:
-                result = await coro
+                result = await thunk()
                 _cb.telegram.record_success()
                 return result
             except (TimedOut, NetworkError) as exc:
@@ -74,7 +81,9 @@ async def fan_out[T](
                 return exc
 
     return list(
-        await asyncio.gather(*(_slot(c) for c in coros), return_exceptions=True)
+        await asyncio.gather(
+            *(_slot(lambda c=c: c) for c in coros), return_exceptions=True
+        )
     )
 
 

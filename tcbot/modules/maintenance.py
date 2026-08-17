@@ -166,17 +166,13 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     # * Semaphore-bounded to respect Telegram rate limits on large federations.
     all_results = await fan_out(
-        [
-            _leave_one(ctx.bot, g, lc, lt, admin.id, admin.first_name)
-            for g in groups
-        ]
+        [_leave_one(ctx.bot, g, lc, lt, admin.id, admin.first_name) for g in groups]
     )
 
     left = sum(
         1
         for r in all_results
-        if not isinstance(r, BaseException)
-        and not isinstance(r[0], BaseException)
+        if not isinstance(r, BaseException) and not isinstance(r[0], BaseException)
     )
     failed = len(groups) - left
 

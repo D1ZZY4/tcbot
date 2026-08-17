@@ -177,7 +177,6 @@ class CircuitBreaker:
 
     def _record_failure(self) -> None:
         self._failure_count += 1
-        self._opened_at = time.monotonic()
         if self._state is CircuitState.HALF_OPEN:
             log.warning(
                 "Circuit [%s]: HALF_OPEN -> OPEN (probe failed; retry in %.0fs).",
@@ -185,6 +184,7 @@ class CircuitBreaker:
                 self._recovery_timeout,
             )
             self._state = CircuitState.OPEN
+            self._opened_at = time.monotonic()
         elif self._failure_count >= self._failure_threshold:
             log.warning(
                 "Circuit [%s]: CLOSED -> OPEN (%d consecutive failures; "
@@ -194,6 +194,7 @@ class CircuitBreaker:
                 self._recovery_timeout,
             )
             self._state = CircuitState.OPEN
+            self._opened_at = time.monotonic()
 
 
 # ── module-level singletons ── #

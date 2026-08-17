@@ -32,5 +32,7 @@ ignore = [
     "D203",    # Conflicts with D211 (no-blank-line-before-class); D211 is preferred
     "D213",    # Conflicts with D212 (multi-line-summary-first-line); D212 is preferred
     "TC001",   # Application imports in TYPE_CHECKING: internal TypedDicts used in runtime dict ops
+    "TC002",   # Runtime import needed for cast() and local type annotations
+    "TC004",   # Same: runtime import for local annotations on runtime values
     "UP047",   # Generic functions: TypeVar-based style kept for ratelimiter compatibility
 ]

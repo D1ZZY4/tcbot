@@ -120,13 +120,14 @@ class TTLCache[T]:
     reached, preventing unbounded memory growth that would occur with a plain dict.
     """
 
-    __slots__ = ("_store",)
+    __slots__ = ("_locks", "_store")
 
     def __init__(self, ttl: float, maxsize: int = 512) -> None:
         """Initialise the cache with a time-to-live in seconds and a maximum size."""
         self._store: _cachetools.TTLCache = _cachetools.TTLCache(
             maxsize=maxsize, ttl=ttl
         )
+        self._locks: dict[Any, asyncio.Lock] = {}
 
     def get(self, key: Any) -> T | object:
         """Return the cached value, or CACHE_MISS if absent or expired."""
@@ -153,13 +154,24 @@ class TTLCache[T]:
         key: Any,
         fetch: Callable[[], Awaitable[T]],
     ) -> T:
-        """Return cached value, or call *fetch()*, cache the result, and return it."""
+        """Return cached value, or call *fetch()*, cache the result, and return it.
+
+        A per-key ``asyncio.Lock`` serialises concurrent misses for the same key
+        so that only one ``fetch()`` runs; the winner populates the cache and all
+        waiters read the same result.  Different keys remain fully parallel.
+        """
         val = self.get(key)
         if val is not CACHE_MISS:
             return cast("T", val)
-        val = await fetch()
-        self.put(key, val)
-        return val
+
+        lock = self._locks.setdefault(key, asyncio.Lock())
+        async with lock:
+            val = self.get(key)
+            if val is not CACHE_MISS:
+                return cast("T", val)
+            val = await fetch()
+            self.put(key, val)
+            return val
 
 
 # ────────────────────── Two-Level Cache Class ───────────────────── #
