@@ -88,7 +88,7 @@ Suggested commands:
 ```bash
 git --no-pager diff --stat
 git --no-pager diff --check
-uv run ruff check .
+ruff check .
 ```
 
 ## Finding Format

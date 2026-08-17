@@ -36,9 +36,9 @@ Do not use this skill for CPU-bound optimization unless the async code is direct
 - Python target: `>=3.13`.
 - Telegram framework: `python-telegram-bot` (latest), async-first API.
 - Database driver: Motor (latest).
-- Runtime entry point: `uv run python -m tcbot` on Windows, `uv run python -m tcbot` elsewhere.
+- Runtime entry point: `python -m tcbot` on all platforms.
 - Keepalive: Flask runs alongside the bot; do not add blocking work to keepalive routes.
-- Dependency workflow: `uv sync`, `uv run ...`.
+- Dependency workflow: `uv sync` on Replit; bare `pip install` or `uv pip install` on local machines.
 
 ## Core Rules
 
@@ -245,8 +245,8 @@ This avoids Telegram client spinners and keeps UX responsive.
 ## Validation
 
 ```bash
-uv run ruff format .
-uv run ruff check --fix .
+ruff format .
+ruff check --fix .
 ```
 
 ## Review Checklist

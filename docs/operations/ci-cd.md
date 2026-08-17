@@ -208,8 +208,8 @@ View workflow
 ### For Developers
 
 1. Run the same checks locally before opening a pull request:
-   `uv run ruff format --check .`, `uv run ruff check .`, and
-   `uv run python -c "import tcbot"`.
+   `ruff format --check .`, `ruff check .`, and
+   `python -c "import tcbot"`.
 2. Review auto-fix and dependency pull requests before merging them.
 3. Treat Telegram notifications as status updates, not as a substitute for
    reviewing the workflow result.

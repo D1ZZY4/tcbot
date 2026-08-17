@@ -32,7 +32,7 @@ TCF Bot is a Telegram federation management bot for the Transsion Core Federatio
 ### 1. Install dependencies
 
 ```bash
-uv sync
+uv sync --frozen
 ```
 
 ### 2. Configure environment
@@ -54,7 +54,7 @@ See [Configuration](#configuration) below and `config.env.example` for the compl
 ### 3. Run the bot
 
 ```bash
-uv run python -m tcbot
+python -m tcbot
 ```
 
 ## Docker Compose
@@ -74,7 +74,7 @@ Use Replit Secrets or the hosting platform's secret manager for credentials. Do 
 Recommended run command:
 
 ```bash
-uv run python -m tcbot
+python -m tcbot
 ```
 
 The Flask keep-alive server binds to `0.0.0.0:${PORT}`. If `PORT` is unset, invalid, or outside `1..65535`, the application defaults to `5000`.
@@ -167,8 +167,9 @@ For detailed architecture, see [`docs/architecture/repository-map.md`](docs/arch
 ## Code Quality
 
 ```bash
-uv run ruff format .
-uv run ruff check --fix .
+ruff format .
+ruff check --fix .
+pyright tcbot/
 ```
 
 Ruff targets Python 3.14 and line length 88. GitHub Actions install dependencies through `uv sync --frozen` so CI follows `pyproject.toml` and `uv.lock`. Project code should follow the detailed rules in [tooling and validation](.agents/rules/tooling-validation.md), [code style and architecture](.agents/rules/code-style.md), and [comment and documentation style](.agents/rules/comment-style.md).
@@ -242,7 +243,7 @@ Configure in GitHub repository settings → Secrets:
 
 ## Current Status
 
-- Runtime entry point: `uv run python -m tcbot`.
+- Runtime entry point: `python -m tcbot`.
 - Dependency management: `uv` and `uv.lock`.
 - Database: MongoDB/Motor with startup index creation.
 - Health check: Flask `GET /` endpoint on `PORT`.

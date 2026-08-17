@@ -31,34 +31,28 @@ Ruff enforces a broad suite: pyflakes/syntax (`E`, `F`), import order (`I`), bug
 
 ## Commands
 
-Install dependencies:
-
-```bash
-uv sync
-```
-
 Format:
 
 ```bash
-uv run ruff format .
+ruff format .
 ```
 
 Lint:
 
 ```bash
-uv run ruff check .
+ruff check .
 ```
 
 Auto-fix safe lint issues:
 
 ```bash
-uv run ruff check --fix .
+ruff check --fix .
 ```
 
 Type-check:
 
 ```bash
-uv run pyright .
+pyright .
 ```
 
 `pyrightconfig.json` pins the project venv and enables `reportMissingImports` with `reportMissingTypeStubs` disabled.
@@ -128,7 +122,7 @@ Common fixes:
 - `F401`: remove unused imports unless part of a public re-export.
 - `F821`: import or define the missing name; do not silence it.
 - `F841`: remove unused locals or use the value meaningfully.
-- `I001`: run `uv run ruff check --fix .`.
+- `I001`: run `ruff check --fix .`.
 
 ## Review Strategy
 

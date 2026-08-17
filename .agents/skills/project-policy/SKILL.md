@@ -30,8 +30,8 @@ Skipping the doc sweep is a defect.
 - Telegram framework: `python-telegram-bot` (with the `[rate-limiter]` extra, no `[job-queue]` extra), tracking the latest compatible release.
 - Database: MongoDB through async Motor helpers.
 - Keepalive: Flask health/keep-alive server.
-- Tooling: `uv` for dependency management, Ruff for format/lint.
-- Entry point: `uv run python -m tcbot` on Windows, `uv run python -m tcbot` elsewhere.
+- Tooling: `uv` for dependency management on Replit; bare `ruff`/`pyright`/`python` on local machines. Ruff for format/lint.
+- Entry point: `python -m tcbot` on all platforms.
 
 ## Repository Boundaries
 
@@ -146,8 +146,8 @@ owning area.
 
 Choose the narrowest useful validation first, then broaden when appropriate.
 
-- Source changes: run `uv run ruff format .` and `uv run ruff check --fix .`, then confirm the bot still starts cleanly.
-- Formatting/lint changes: run `uv run ruff format .` and `uv run ruff check --fix .` when safe.
+- Source changes: run `ruff format .` and `ruff check --fix .`, then confirm the bot still starts cleanly.
+- Formatting/lint changes: run `ruff format .` and `ruff check --fix .` when safe.
 - Documentation or skill-only changes: runtime validation is usually unnecessary; state that no runtime
   validation was run.
 - Do not claim validation passed unless the command was run and succeeded.

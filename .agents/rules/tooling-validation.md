@@ -64,7 +64,7 @@ failure behavior.
 - Keep runtime secrets in environment variables or the platform secret manager.
 - Never edit or commit `config.env` during normal work.
 
-Install dependencies from the lockfile:
+Install dependencies from the lockfile (Replit only):
 
 ```bash
 uv sync --frozen
@@ -92,8 +92,7 @@ ruff check .
 ```
 
 Replit note: if `ruff` is not on PATH, use `uv run ruff` instead. The
-invocations above are the project's primary commands; the `uv run` prefix is
-only a fallback for environments that resolve tools through the project venv.
+invocations above are the project's primary bare commands.
 
 Recommended minimum validation by change type:
 
@@ -104,7 +103,7 @@ Recommended minimum validation by change type:
 | Command handler change | Ruff checks, then start the bot and inspect startup logs. |
 | Database helper change | Ruff checks and an import check of the changed module. |
 | Workflow change | Ruff checks and an import check of the changed flow. |
-| Dependency or configuration change | `uv sync --frozen`, Ruff checks, and an import check. |
+| Dependency or configuration change | `uv sync --frozen` (Replit), Ruff checks, and an import check. |
 | Runtime change | Ruff checks, compileall, import check, and a clean application startup. |
 
 For the full runtime check:
@@ -112,9 +111,9 @@ For the full runtime check:
 ```bash
 ruff format --check .
 ruff check .
-uv run pyright .
-uv run python -m compileall -q tcbot
-uv run python -c "import tcbot"
+pyright .
+python -m compileall -q tcbot
+python -c "import tcbot"
 git diff --check
 ```
 

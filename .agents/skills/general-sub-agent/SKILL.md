@@ -83,9 +83,9 @@ Prefer a more specific local skill when available:
 Choose commands based on the scope:
 
 ```bash
-uv run ruff check .
-uv run ruff format .
-uv run python -m tcbot
+ruff check .
+ruff format .
+python -m tcbot
 ```
 
 Notes:

@@ -71,10 +71,9 @@ Recent project additions to keep accurate when editing docs:
 Core commands:
 
 ```bash
-uv sync
-uv run ruff check .
-uv run ruff format .
-uv run python -m tcbot
+ruff check .
+ruff format .
+python -m tcbot
 ```
 
 ## Update Workflow

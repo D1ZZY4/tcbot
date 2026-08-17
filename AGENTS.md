@@ -165,7 +165,7 @@ Core ownership rules:
 
 ## Development Commands
 
-Install dependencies from the lockfile:
+Install dependencies from the lockfile (Replit only):
 
 ```bash
 uv sync --frozen
@@ -174,15 +174,15 @@ uv sync --frozen
 Run the bot locally:
 
 ```bash
-uv run python -m tcbot
+python -m tcbot
 ```
 
 Format, lint, and type-check:
 
 ```bash
-uv run ruff format .
-uv run ruff check --fix .
-uv run pyright .
+ruff format .
+ruff check --fix .
+pyright .
 ```
 
 Run with Docker Compose:

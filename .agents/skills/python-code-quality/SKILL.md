@@ -54,47 +54,39 @@ exclude = [".local/", ".agents/", ".kilo/", ".trae/", ".claude/", "attached_asse
 select = ["B", "C4", "D", "E4", "E7", "E9", "F", "FBT", "I", "PERF", "PIE", "PLC", "PLE", "PTH", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]
 ```
 
-Ruff is in `[dependency-groups] dev` (PEP 735), installed automatically by `uv sync`. Use `uv run ruff format .` and `uv run ruff check .` directly; `uvx ruff` is not needed.
-
 Run pyright after code changes that touch type annotations or imports:
 
 ```bash
-uv run pyright .
+pyright .
 ```
 
 `pyrightconfig.json` pins the project venv and enables `reportMissingImports` with `reportMissingTypeStubs` disabled.
 
 ## Standard Commands
 
-Install dependencies:
-
-```bash
-uv sync
-```
-
 Format:
 
 ```bash
-uv run ruff format .
+ruff format .
 ```
 
 Lint:
 
 ```bash
-uv run ruff check .
+ruff check .
 ```
 
 Auto-fix safe lint issues:
 
 ```bash
-uv run ruff check --fix .
+ruff check --fix .
 ```
 
 Recommended source-change validation order:
 
 ```bash
-uv run ruff format .
-uv run ruff check --fix .
+ruff format .
+ruff check --fix .
 ```
 
 For documentation-only or skill-only changes, Python validation is usually unnecessary unless Python snippets or project commands were changed.
