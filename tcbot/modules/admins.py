@@ -592,9 +592,14 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     target_uname = ident.username
 
-    # * add_admin must complete before set_owner (set_owner does delete_many + insert)
-    await db.users_roles.add_admin(current_owner.id, current_owner.id)
+    # * set_owner first: it is atomic (upsert + delete_many). If it fails, the
+    # * old founder is untouched. add_admin is non-fatal and runs second so a
+    # * transient failure there does not leave the federation ownerless.
     await db.users_roles.set_owner(target_id)
+    try:
+        await db.users_roles.add_admin(current_owner.id, current_owner.id)
+    except Exception as exc:
+        log.warning("cmd_transfer add_admin failed after set_owner: %s", exc)
     lc, lt = cfg.logs
     log_text = parse_logmsg.ownership_transferred(
         target_id,

@@ -262,7 +262,9 @@ async def search_by_name(needle: str, limit: int = 5) -> list[UserDoc]:
     """
     if not needle:
         return []
-    pattern = {"$regex": re.escape(needle), "$options": "i"}
+    # * Anchored so "dan" matches a name that starts with "dan" (e.g. "daniel"),
+    # * not one that merely contains "dan" mid-string (e.g. "randy").
+    pattern = {"$regex": f"^{re.escape(needle)}", "$options": "i"}
     return await db_call(
         _members()
         .find(

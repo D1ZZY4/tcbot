@@ -22,7 +22,7 @@ For deployment, use [`replit.md`](replit.md) and
 
 Requirements:
 
-- Python 3.12
+- Python 3.14
 - `uv`
 - MongoDB for runtime work
 - Redis only when testing the optional L2 cache

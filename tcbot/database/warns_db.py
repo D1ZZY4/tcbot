@@ -157,13 +157,12 @@ async def warn_count(user_id: int, chat_id: int) -> int:
 
 async def clear_warns(user_id: int, chat_id: int) -> int:
     """Remove ALL warnings for a user in a specific chat."""
-    results = await asyncio.gather(
+    warn_del, _cnt_del = await asyncio.gather(
         db_call(_warns().delete_many(_warn_key(user_id, chat_id))),
         db_call(_warn_counts().delete_one(_warn_key(user_id, chat_id))),
         return_exceptions=True,
     )
-    r0 = results[0]
-    return r0.deleted_count if not isinstance(r0, BaseException) else 0
+    return warn_del.deleted_count if not isinstance(warn_del, BaseException) else 0
 
 
 async def clear_all_warns(user_id: int) -> int:
@@ -173,13 +172,12 @@ async def clear_all_warns(user_id: int) -> int:
     slate in every group after a potential unban, preventing immediate re-ban
     from stale per-group counts accumulated before the federation ban.
     """
-    results = await asyncio.gather(
+    warn_del, _cnt_del = await asyncio.gather(
         db_call(_warns().delete_many({"user_id": user_id})),
         db_call(_warn_counts().delete_many({"user_id": user_id})),
         return_exceptions=True,
     )
-    r0 = results[0]
-    return r0.deleted_count if not isinstance(r0, BaseException) else 0
+    return warn_del.deleted_count if not isinstance(warn_del, BaseException) else 0
 
 
 async def get_warns(user_id: int, chat_id: int) -> list[WarnDoc]:

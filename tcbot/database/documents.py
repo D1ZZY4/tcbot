@@ -13,7 +13,6 @@ from tcbot.database.types import BanId, ChatId, GroupId, UserId
 if TYPE_CHECKING:
     from datetime import datetime
 
-BanStatus = Literal["active", "expired", "revoked"]
 RoleName = Literal["founder", "admin", "developer", "tester"]
 RequestStatus = Literal["pending", "approved", "rejected"]
 

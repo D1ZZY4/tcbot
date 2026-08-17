@@ -107,6 +107,7 @@ def _owner_only(exc: BaseException | None) -> bool:
 # * a fingerprinted TTL set keeps the channel to ONE report per incident.
 
 _DEDUPE_WINDOW = 30.0
+_RECENT_MAX: int = 1000
 _recent: dict[tuple, float] = {}
 
 # * Maximum characters captured from an exception or log message in a fingerprint.
@@ -145,6 +146,11 @@ def _seen_recently(fp: tuple) -> bool:
     now = time.monotonic()
     for k in list(_recent):
         if now - _recent[k] > _DEDUPE_WINDOW:
+            del _recent[k]
+    if len(_recent) >= _RECENT_MAX:
+        # * Evict the oldest 10% when the cap is hit to avoid unbounded memory growth
+        # * during storm scenarios with many distinct error fingerprints.
+        for k, _ in sorted(_recent.items(), key=lambda x: x[1])[: _RECENT_MAX // 10]:
             del _recent[k]
     if fp in _recent:
         return True

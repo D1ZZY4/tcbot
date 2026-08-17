@@ -14,6 +14,19 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Security** (CVE-2026-31072, `pyproject.toml`): `apscheduler==3.11.3` is flagged by GitHub Dependabot as vulnerable to RCE via insecure deserialization in `JSONSerializer`/`CBORSerializer`. This project uses `MongoDBJobStore` exclusively (no file-based job store), so the vulnerable serializers are never instantiated. The exact pin is retained as an accepted exception until APScheduler publishes a patched release; monitor PyPI for `3.11.4` or later and update promptly.
 
+- **Correctness** (`tcbot/modules/admins.py`): `cmd_transfer` ownership transfer now calls `set_owner()` first (atomic upsert + delete_many), then `add_admin()` second inside a `try/except`. Previously `add_admin` ran first; if it succeeded and `set_owner` crashed, the federation was left ownerless. The new order guarantees the old founder stays in place on any failure.
+- **Resource bounds** (`tcbot/modules/maintenance.py`): `cmd_leaveall` and `cmd_cleanup` now use `fan_out()` (semaphore-bounded to 10) instead of unbounded `asyncio.gather()`, matching the project's multi-group concurrency policy.
+- **Correctness** (`tcbot/database/warns_db.py`): `clear_warns` and `clear_all_warns` return the warns delete count, not the counter delete count. The counter document delete is best-effort (the counter is rebuilt from warn history on next read); surfacing its result as the warn count was misleading.
+- **Correctness** (`tcbot/database/bans_db.py`): `deactivate_ban` now uses `modified_count` instead of `matched_count`. A ban that is already inactive was incorrectly reported as "deactivated" because the filter matched but the update was a no-op.
+- **Robustness** (`tcbot/__init__.py`): `parse_chat_id` wraps `int()` conversions in `try/except (ValueError, TypeError)`. A malformed env string (e.g. `abc` or `abc/def`) no longer crashes config loading; it falls back to `(0, None)` with a warning.
+- **Correctness** (`tcbot/database/users_roles.py`): `get_effective_role` now re-raises DB exceptions instead of caching degraded results. Previously a transient MongoDB failure was cached as `founder`/`admin`/`None`, silently bypassing authorization checks for every subsequent call until TTL expiry.
+- **Memory** (`tcbot/utils/error_reporter.py`): `_recent` dedupe dict is now capped at 1000 entries. Previously unbounded growth during error storms retained every distinct fingerprint indefinitely.
+- **Search quality** (`tcbot/database/users_cache.py`): `search_by_name` regex is now anchored (`^`) so a needle like "dan" matches names that start with "dan" (e.g. "daniel") instead of names that merely contain it mid-string (e.g. "randy").
+- **Correctness** (`tcbot/utils/pagination.py`): `paginate` returns an empty chunk immediately when `page_size <= 0`, preventing a division-by-zero crash from bad caller input.
+- **Dead code** (`tcbot/database/documents.py`): removed unused `BanStatus` Literal alias. `RoleName` retained (used by `RoleDoc`).
+- **Validation** (`.github/workflows/*`): all CI workflows now use `python-version: "3.14"` (previously `"3.12"`).
+- **Tooling** (`pyproject.toml`, `pyrightconfig.json`, `.agents/skills/python-code-quality/`): added pyright to the validation pipeline alongside ruff. Updated Python target to 3.14 across project config, docs, and CI workflows.
+
 ## [Unreleased] - 2026-08-06 (audit continuation)
 
 ### Fixed

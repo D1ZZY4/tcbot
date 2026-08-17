@@ -17,6 +17,7 @@ from tcbot import database as db
 from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.formatter import bold, code
+from tcbot.utils.dispatch import fan_out
 from tcbot.utils.prefixes import build_prefixed_filters
 
 if TYPE_CHECKING:
@@ -163,16 +164,19 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.debug("leaveall status reply failed: %s", exc)
     lc, lt = cfg.logs
 
-    # * All groups processed concurrently - no sequential sleep between them
-    all_results = await asyncio.gather(
-        *(_leave_one(ctx.bot, g, lc, lt, admin.id, admin.first_name) for g in groups),
-        return_exceptions=True,
+    # * Semaphore-bounded to respect Telegram rate limits on large federations.
+    all_results = await fan_out(
+        [
+            _leave_one(ctx.bot, g, lc, lt, admin.id, admin.first_name)
+            for g in groups
+        ]
     )
 
     left = sum(
         1
         for r in all_results
-        if not isinstance(r, BaseException) and not isinstance(r[0], BaseException)
+        if not isinstance(r, BaseException)
+        and not isinstance(r[0], BaseException)
     )
     failed = len(groups) - left
 
@@ -203,18 +207,14 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     assert reply_msg is not None
     groups = await db.groups_db.active_groups()
 
-    # * Check all groups concurrently - one network round-trip per group, all in parallel
-    checks = await asyncio.gather(
-        *(_should_remove(ctx.bot, g) for g in groups),
-        return_exceptions=True,
-    )
+    # * Semaphore-bounded to respect Telegram rate limits on large federations.
+    checks = await fan_out([_should_remove(ctx.bot, g) for g in groups])
 
     to_remove = [g for g, remove in zip(groups, checks, strict=False) if remove is True]
 
     if to_remove:
-        await asyncio.gather(
-            *(db.groups_db.deactivate_group(g.get("chat_id", 0)) for g in to_remove),
-            return_exceptions=True,
+        await fan_out(
+            [db.groups_db.deactivate_group(g.get("chat_id", 0)) for g in to_remove]
         )
 
     try:

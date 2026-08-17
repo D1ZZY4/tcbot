@@ -16,7 +16,7 @@ from tcbot.utils.timedate_format import fmt_dt
 def paginate(items: list, page: int, page_size: int) -> tuple[list, int, int]:
     """Slice ``items`` for ``page`` (0-based). Returns ``(chunk, total_pages, clamped_page)``."""
     total = len(items)
-    if total == 0:
+    if total == 0 or page_size <= 0:
         return [], 1, 0
     total_pages = max(1, (total + page_size - 1) // page_size)
     page = max(0, min(page, total_pages - 1))

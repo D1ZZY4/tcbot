@@ -241,6 +241,9 @@ async def get_effective_role(user_id: int) -> str | None:
     """Resolve a user's full effective role including owner/admin status (L1->L2->DB cached)."""
 
     async def _fetch() -> str | None:
+        # * Propagate DB errors so get_or_fetch does not cache a degraded role result.
+        # * A false "founder" or "admin" cached for a real error would silently bypass
+        # * authorization checks for every subsequent call until TTL expiry.
         owner, admin, role = await asyncio.gather(
             is_owner(user_id),
             is_admin(user_id),
@@ -248,20 +251,11 @@ async def get_effective_role(user_id: int) -> str | None:
             return_exceptions=True,
         )
         if isinstance(owner, BaseException):
-            log.warning(
-                "get_effective_role owner check failed for %d: %s", user_id, owner
-            )
-            owner = False
+            raise owner
         if isinstance(admin, BaseException):
-            log.warning(
-                "get_effective_role admin check failed for %d: %s", user_id, admin
-            )
-            admin = False
+            raise admin
         if isinstance(role, BaseException):
-            log.warning(
-                "get_effective_role role fetch failed for %d: %s", user_id, role
-            )
-            role = None
+            raise role
         return "founder" if owner else "admin" if admin else role
 
     return cast("str | None", await effective_role_cache.get_or_fetch(user_id, _fetch))

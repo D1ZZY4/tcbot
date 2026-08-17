@@ -70,10 +70,14 @@ def parse_chat_id(raw: str) -> tuple[int, int | None]:
     """Parse a CHAT_ID or CHAT_ID/THREAD_ID env string into (chat_id, thread_id | None)."""
     if not raw:
         return 0, None
-    if "/" in raw:
-        chat_str, thread_str = raw.split("/", 1)
-        return int(chat_str), int(thread_str)
-    return int(raw), None
+    try:
+        if "/" in raw:
+            chat_str, thread_str = raw.split("/", 1)
+            return int(chat_str), int(thread_str)
+        return int(raw), None
+    except (ValueError, TypeError):
+        log.warning("Invalid CHAT_ID format '%s', defaulting to 0.", raw)
+        return 0, None
 
 
 def _owner_id_from_env() -> int:

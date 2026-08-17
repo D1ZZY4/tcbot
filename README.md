@@ -19,7 +19,7 @@ TCF Bot is a Telegram federation management bot for the Transsion Core Federatio
 
 | Component | Current project setting |
 |---|---|
-| Python | 3.12 project target (`requires-python = ">=3.12"`) |
+| Python | 3.14 project target (`requires-python = ">=3.13"`) |
 | Bot framework | `python-telegram-bot` (plain, no `[job-queue]` extra), tracking the latest compatible release |
 | Database | MongoDB through Motor (latest) |
 | Health server | Flask (latest) |
@@ -171,7 +171,7 @@ uv run ruff format .
 uv run ruff check --fix .
 ```
 
-Ruff targets Python 3.12 and line length 88. GitHub Actions install dependencies through `uv sync --frozen` so CI follows `pyproject.toml` and `uv.lock`. Project code should follow the detailed rules in [tooling and validation](.agents/rules/tooling-validation.md), [code style and architecture](.agents/rules/code-style.md), and [comment and documentation style](.agents/rules/comment-style.md).
+Ruff targets Python 3.14 and line length 88. GitHub Actions install dependencies through `uv sync --frozen` so CI follows `pyproject.toml` and `uv.lock`. Project code should follow the detailed rules in [tooling and validation](.agents/rules/tooling-validation.md), [code style and architecture](.agents/rules/code-style.md), and [comment and documentation style](.agents/rules/comment-style.md).
 
 ## CI/CD & Automation
 

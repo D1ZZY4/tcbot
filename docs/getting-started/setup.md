@@ -7,7 +7,7 @@ Replit-specific deployment, see [`../../replit.md`](../../replit.md).
 
 ## Prerequisites
 
-- Python 3.12 or newer. The project metadata targets `>=3.12`.
+- Python 3.14 or newer. The project metadata targets `>=3.13`.
 - [`uv`](https://docs.astral.sh/uv/) for dependency and lockfile management.
 - A Telegram bot token from BotFather.
 - A MongoDB deployment, local or hosted.

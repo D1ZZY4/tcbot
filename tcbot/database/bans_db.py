@@ -141,11 +141,11 @@ async def set_log_message_id(ban_id: str, log_msg_id: int) -> None:
 
 
 async def deactivate_ban(ban_id: str) -> bool:
-    """Mark a ban as inactive (user is unbanned). Returns True if the ban exists."""
+    """Mark a ban as inactive (user is unbanned). Returns True if the ban was active."""
     r = await db_call(
         _bans().update_one({"ban_id": ban_id}, {"$set": {"is_active": False}})
     )
-    return r.matched_count > 0
+    return r.modified_count > 0
 
 
 async def deactivate_all_active_bans(user_id: int) -> int:
