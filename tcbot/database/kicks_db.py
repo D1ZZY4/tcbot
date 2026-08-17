@@ -47,7 +47,9 @@ async def log_kick(user_id: int, chat_id: int, reason: str, admin_id: int) -> No
 async def user_kicks(user_id: int) -> list[KickDoc]:
     """Return every kick record for a user, newest first."""
     return await db_call(
-        _kicks().find({"user_id": user_id}, sort=[("timestamp", -1)]).to_list(None)
+        _kicks()
+        .find({"user_id": user_id}, {"_id": 0}, sort=[("timestamp", -1)])
+        .to_list(None)
     )
 
 

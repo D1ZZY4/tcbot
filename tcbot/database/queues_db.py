@@ -72,8 +72,23 @@ async def get_request(user_id: int) -> PromotionRequestDoc | None:
 
 
 async def all_pending() -> list[PromotionRequestDoc]:
-    """Get all currently pending promotion requests."""
-    return await db_call(_requests().find({"status": "pending"}).to_list(None))
+    """Get all currently pending promotion requests, oldest first."""
+    return await db_call(
+        _requests()
+        .find(
+            {"status": "pending"},
+            {
+                "_id": 0,
+                "request_id": 1,
+                "target_id": 1,
+                "username": 1,
+                "first_name": 1,
+                "requested_date": 1,
+            },
+            sort=[("requested_date", 1)],
+        )
+        .to_list(200)
+    )
 
 
 async def resolve(request_id: str, status: str, resolved_by: int) -> None:

@@ -240,15 +240,33 @@ async def total_users() -> int:
     return await db_call(_members().estimated_document_count())
 
 
-async def all_users(*, sort_by: str = "first_name") -> list[UserDoc]:
-    """Return every cached user, sorted by ``sort_by`` (default: first name).
+_PAGE_LIMIT = 200
 
-    Used by the ``/tcstats`` Users drill-down. Sorted server-side so the
-    paginated view does not need to sort in-process for large caches.
+
+async def all_users(*, sort_by: str = "first_name") -> list[UserDoc]:
+    """Return cached users capped at ``_PAGE_LIMIT``, sorted by ``sort_by`` (default: first name).
+
+    Used by the ``/tcstats`` Users drill-down. The cap prevents unbounded
+    scans on large caches; pagination in the caller handles the rest.
     """
     sort_dir = 1 if sort_by != "last_updated" else -1
     return await db_call(
-        _members().find({}, {"_id": 0}).sort(sort_by, sort_dir).to_list(length=None)
+        _members()
+        .find(
+            {},
+            {
+                "_id": 0,
+                "user_id": 1,
+                "username": 1,
+                "first_name": 1,
+                "last_name": 1,
+                "commit_date": 1,
+                "last_updated": 1,
+            },
+        )
+        .sort(sort_by, sort_dir)
+        .limit(_PAGE_LIMIT)
+        .to_list(length=None)
     )
 
 

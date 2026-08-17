@@ -38,7 +38,11 @@ def _warn_key(user_id: int, chat_id: int) -> dict[str, int]:
 
 
 async def _sync_warn_count(user_id: int, chat_id: int) -> int:
-    """Read the counter doc, or backfill it from warn history when missing."""
+    """Read the counter doc, or backfill it from warn history when missing.
+
+    Uses an atomic ``find_one_and_update`` upsert so concurrent callers cannot
+    double-backfill the same missing counter document.
+    """
     doc: WarnCountDoc | None = await db_call(
         _warn_counts().find_one(
             _warn_key(user_id, chat_id),
@@ -50,22 +54,26 @@ async def _sync_warn_count(user_id: int, chat_id: int) -> int:
 
     count = await db_call(_warns().count_documents(_warn_key(user_id, chat_id)))
     if count > 0:
-        await db_call(
-            _warn_counts().update_one(
+        # * Atomic upsert: only one concurrent caller wins the insert; others
+        # * get the newly inserted doc back and re-read its count.
+        updated = await db_call(
+            _warn_counts().find_one_and_update(
                 _warn_key(user_id, chat_id),
                 {
-                    "$set": {
-                        "count": count,
-                        "updated_at": utc_now(),
-                    },
                     "$setOnInsert": {
                         "user_id": user_id,
                         "chat_id": chat_id,
+                        "count": count,
+                        "updated_at": utc_now(),
                     },
                 },
                 upsert=True,
+                return_document=ReturnDocument.AFTER,
+                projection={"_id": 0, "count": 1},
             )
         )
+        if updated is not None:
+            return int(updated.get("count", count))
     return count
 
 
@@ -131,6 +139,7 @@ async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> in
             )
         )
     except Exception:
+        log.exception("add_warn counter update failed; rolling back warn insert")
         try:
             await db_call(c.delete_one({"_id": inserted.inserted_id}))
         except Exception as rollback_exc:
@@ -199,6 +208,14 @@ async def get_warns(user_id: int, chat_id: int) -> list[WarnDoc]:
         _warns()
         .find(
             {"user_id": user_id, "chat_id": chat_id},
+            {
+                "_id": 0,
+                "user_id": 1,
+                "reason": 1,
+                "admin_id": 1,
+                "chat_id": 1,
+                "timestamp": 1,
+            },
             sort=[("timestamp", 1)],
         )
         .to_list(length=None)
@@ -210,6 +227,7 @@ async def remove_last_warn(user_id: int, chat_id: int) -> bool:
     doc = await db_call(
         _warns().find_one(
             _warn_key(user_id, chat_id),
+            {"_id": 1},
             sort=[("timestamp", -1), ("_id", -1)],
         )
     )
@@ -265,7 +283,18 @@ async def user_all_warns(user_id: int) -> list[WarnDoc]:
     """Every warn document for a user across all chats, newest first."""
     return await db_call(
         _warns()
-        .find({"user_id": user_id}, sort=[("timestamp", -1)])
+        .find(
+            {"user_id": user_id},
+            {
+                "_id": 0,
+                "user_id": 1,
+                "reason": 1,
+                "admin_id": 1,
+                "chat_id": 1,
+                "timestamp": 1,
+            },
+            sort=[("timestamp", -1)],
+        )
         .to_list(length=None)
     )
 

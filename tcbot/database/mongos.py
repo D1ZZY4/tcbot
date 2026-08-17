@@ -131,8 +131,13 @@ async def connect() -> None:
 async def ensure_indexes() -> None:
     """Create all critical collection indexes in parallel. No-op if they already exist."""
     results = await asyncio.gather(
-        col("bans").create_index([("banned_user_id", 1), ("is_active", 1)]),
+        # * Serves get_active_ban(): filter on banned_user_id + is_active, sort on
+        # * timestamp + ban_id. Compound index replaces the separate prefix index below.
+        col("bans").create_index(
+            [("banned_user_id", 1), ("is_active", 1), ("timestamp", -1), ("ban_id", -1)]
+        ),
         col("bans").create_index([("ban_id", 1)], unique=True),
+        col("tc_owners").create_index([("user_id", 1)], unique=True),
         # * Serves user_appeal_count() which filters on banned_user_id + appeal_log_msg_id presence
         col("bans").create_index(
             [("banned_user_id", 1), ("appeal_log_msg_id", 1)], sparse=True

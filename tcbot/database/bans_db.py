@@ -263,7 +263,11 @@ async def active_bans() -> list[BanDoc]:
     """Get all active ban records in the database."""
     return await db_call(
         _bans()
-        .find({"is_active": True}, sort=[("timestamp", -1), ("ban_id", -1)])
+        .find(
+            {"is_active": True},
+            {"_id": 0},
+            sort=[("timestamp", -1), ("ban_id", -1)],
+        )
         .to_list(None)
     )
 
@@ -291,6 +295,7 @@ async def user_bans(user_id: int) -> list[BanDoc]:
         _bans()
         .find(
             {"banned_user_id": user_id},
+            {"_id": 0},
             sort=[("timestamp", -1), ("ban_id", -1)],
         )
         .to_list(None)

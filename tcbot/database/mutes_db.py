@@ -131,7 +131,9 @@ async def active_mute_docs() -> list[ActiveMuteDoc]:
 async def user_mutes(user_id: int) -> list[MuteDoc]:
     """Return every mute record for a user, newest first."""
     return await db_call(
-        _mutes().find({"user_id": user_id}, sort=[("timestamp", -1)]).to_list(None)
+        _mutes()
+        .find({"user_id": user_id}, {"_id": 0}, sort=[("timestamp", -1)])
+        .to_list(None)
     )
 
 
