@@ -69,7 +69,7 @@ include:
 
 ```text
 member_cache: user_id, first_name, username
-bans: banned_user_id + is_active
+bans: (banned_user_id, is_active, timestamp desc, ban_id desc) compound for get_active_ban filter+sort
 warns: user_id + chat_id + timestamp
 warn_counts: unique user_id + chat_id
 ```
