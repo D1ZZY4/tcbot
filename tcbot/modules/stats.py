@@ -151,7 +151,7 @@ async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         return
     try:
         page = int((q.data or "").split(":")[1])
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         await q.answer()
         return
     await _ack_and_render(q, Stats.users_list(page))
@@ -167,7 +167,7 @@ async def on_stats_user_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     try:
         _, page_str, idx_str = (q.data or "").split(":")
         page, idx = int(page_str), int(idx_str)
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         await q.answer()
         return
     await _ack_and_render(q, Stats.user_detail(page, idx))
@@ -182,7 +182,7 @@ async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         return
     try:
         page = int((q.data or "").split(":")[1])
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         await q.answer()
         return
     await _ack_and_render(q, Stats.chats_list(page))
@@ -198,7 +198,7 @@ async def on_stats_chat_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     try:
         _, page_str, idx_str = (q.data or "").split(":")
         page, idx = int(page_str), int(idx_str)
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         await q.answer()
         return
     await _ack_and_render(q, Stats.chat_detail(page, idx))
@@ -213,7 +213,7 @@ async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     try:
         page = int((q.data or "").split(":")[1])
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         await q.answer()
         return
     Stats.clear_search(ctx)
@@ -230,7 +230,7 @@ async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     try:
         _, page_str, idx_str = (q.data or "").split(":")
         page, idx = int(page_str), int(idx_str)
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         await q.answer()
         return
     await _ack_and_render(q, Stats.ban_detail(page, idx))
@@ -304,7 +304,7 @@ async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         return
     try:
         idx = int((q.data or "").split(":")[1])
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         await q.answer()
         return
     results = ctx.user_data.get(RESULTS_KEY, []) if ctx.user_data else []

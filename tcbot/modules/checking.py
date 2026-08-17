@@ -418,7 +418,7 @@ async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     try:
         target_id = int(q.data.split(":", 1)[1])
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         await q.answer()
         return
     _, result = await asyncio.gather(
@@ -442,7 +442,7 @@ async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         _, target_id_str, page_str = q.data.split(":")
         target_id = int(target_id_str)
         page = int(page_str)
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         await q.answer()
         return
     _, result = await asyncio.gather(
@@ -465,7 +465,7 @@ async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     try:
         _, target_id_str, ban_id = q.data.split(":", 2)
         target_id = int(target_id_str)
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         await q.answer()
         return
     _, result = await asyncio.gather(
@@ -487,7 +487,7 @@ async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         return
     try:
         target_id = int(q.data.split(":", 1)[1])
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         await q.answer()
         return
     _, result = await asyncio.gather(
@@ -512,7 +512,7 @@ async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         target_id = int(target_id_str)
         chat_id = int(chat_id_str)
         page = int(page_str)
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         await q.answer()
         return
     _, result = await asyncio.gather(
@@ -538,7 +538,7 @@ async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         _, target_id_str, page_str = q.data.split(":")
         target_id = int(target_id_str)
         page = int(page_str)
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         await q.answer()
         return
     _, result = await asyncio.gather(
@@ -562,7 +562,7 @@ async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         _, target_id_str, page_str = q.data.split(":")
         target_id = int(target_id_str)
         page = int(page_str)
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         await q.answer()
         return
     _, result = await asyncio.gather(
@@ -586,7 +586,7 @@ async def on_check_appeals(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         _, target_id_str, page_str = q.data.split(":")
         target_id = int(target_id_str)
         page = int(page_str)
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         await q.answer()
         return
     _, result = await asyncio.gather(

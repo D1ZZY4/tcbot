@@ -12,7 +12,6 @@ import hmac
 import json
 import logging
 import threading
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from flask import Flask, request
@@ -22,6 +21,7 @@ from tcbot import cfg
 from tcbot.database import mongos, redis_client
 from tcbot.database import scheduler as sched_mod
 from tcbot.utils import circuit_breaker as _cb
+from tcbot.utils.timedate_format import utc_now
 
 if TYPE_CHECKING:
     import telegram
@@ -79,7 +79,7 @@ def health() -> tuple[str, int, dict[str, str]]:
         "scheduler": "ok" if scheduler_ok else "error",
         "circuit_telegram": tg_circuit,
         "circuit_mongodb": db_circuit,
-        "ts": datetime.now(UTC).isoformat(timespec="seconds"),
+        "ts": utc_now().isoformat(timespec="seconds"),
     }
     code = 200 if overall == "ok" else 503
     return json.dumps(payload), code, {"Content-Type": "application/json"}

@@ -150,6 +150,7 @@ async def _show_groups(q: CallbackQuery, *, detailed: bool) -> None:
     if isinstance(groups, BaseException):
         groups = []
     if not groups:
+        await q.answer()
         try:
             await q.edit_message_text(
                 f"No groups are currently connected to {cfg.community_name}.",

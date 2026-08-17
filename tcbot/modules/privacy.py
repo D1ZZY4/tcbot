@@ -169,7 +169,7 @@ async def on_privacy_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
 
     try:
         idx = int(q.data[len("privacy_section_") :])
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         await q.answer("Invalid section.", show_alert=True)
         return
 

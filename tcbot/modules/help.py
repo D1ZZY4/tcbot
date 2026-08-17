@@ -380,7 +380,7 @@ async def on_help_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     try:
         mod_slug, idx_str = body.split(":", 1)
         idx = int(idx_str)
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         await q.answer(_ERR_INVALID_SECTION, show_alert=True)
         return
     await _show_section(q, mod_slug, idx, is_menu_path=is_menu_path)

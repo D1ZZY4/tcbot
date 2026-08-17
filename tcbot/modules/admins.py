@@ -456,7 +456,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         return
     try:
         target_id = int(q.data.split(":", 1)[1])
-    except (ValueError, IndexError):
+    except ValueError, IndexError:
         await q.answer()
         return
     # * Gather role check + q.answer() in parallel so the spinner disappears

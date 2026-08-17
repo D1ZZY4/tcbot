@@ -180,7 +180,7 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             f"{bold('Latitude:')} {code(str(server['lat']))}\n"
             f"{bold('Longitude:')} {code(str(server['lon']))}"
         )
-    except (KeyError, TypeError):
+    except KeyError, TypeError:
         log.exception("Speedtest result parsing failed")
         try:
             await notice.edit_text(

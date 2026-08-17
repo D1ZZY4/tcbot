@@ -279,6 +279,7 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 @decorators.ratelimiter(limit=_RL_READ_LIMIT, period=_RL_PERIOD_S)
+@decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Reply with a paginated warning history for the specified target user."""
