@@ -12,6 +12,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 - **Dead code** (`tcbot/modules/groups.py`): removed redundant `isinstance(q.message, Message)` guard in `_toggle`. `CallbackQuery.message` is always `Message` at this call site; the check added no safety and was never triggered.
 - **Type safety** (`tcbot/`): resolved all pyright type-check errors across the project (0 errors, 0 warnings). Added None guards for `effective_message`/`effective_chat`/`effective_user` in 14+ handler modules, fixed TypedDict subscript access with `.get()` fallbacks, added `cast()` expressions for `asyncio.gather` results with `return_exceptions=True`, and moved runtime-only imports into `TYPE_CHECKING` blocks in `groups.py`, `decorators.py`, and `prefixes.py`. Created `pyrightconfig.json` to pin the project venv for consistent type-checking.
 
+- **Security** (CVE-2026-31072, `pyproject.toml`): `apscheduler==3.11.3` is flagged by GitHub Dependabot as vulnerable to RCE via insecure deserialization in `JSONSerializer`/`CBORSerializer`. This project uses `MongoDBJobStore` exclusively (no file-based job store), so the vulnerable serializers are never instantiated. The exact pin is retained as an accepted exception until APScheduler publishes a patched release; monitor PyPI for `3.11.4` or later and update promptly.
+
 ## [Unreleased] - 2026-08-06 (audit continuation)
 
 ### Fixed
