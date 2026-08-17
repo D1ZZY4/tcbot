@@ -14,7 +14,14 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (
+    Bot,
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Update,
+    User,
+)
 from telegram.ext import (
     CallbackQueryHandler,
     ContextTypes,
@@ -25,6 +32,7 @@ from telegram.ext import (
 
 from tcbot import cfg
 from tcbot import database as db
+from tcbot.database.documents import BanDoc
 from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.formatter import bold, code, esc, mention, pre
 from tcbot.modules.helper.parse_link import message_link
@@ -578,147 +586,161 @@ class BuildAppeal:
         lc, lt = cfg.logs
 
         if action == "approve":
-            # * Deactivate ALL active bans for the user (not only the appeal ban_id)
-            # * in parallel with fetching active groups, target name, and cancelling
-            # * any pending timed-unban APScheduler job (future-proofing: no-op when
-            # * no timed ban exists, same pattern as execute_unban in unban_flow.py).
-            # * deactivate_all_active_bans ensures any duplicate active bans are also
-            # * cleared, preventing a "still-banned" state from leftover duplicates.
-            deactivate_result, groups, target_fname, _ = await asyncio.gather(
-                db.bans_db.deactivate_all_active_bans(target_id),
-                db.groups_db.active_groups(),
-                db.users_cache.get_first_name(target_id, str(target_id)),
-                db.scheduler.cancel_schedule(f"unban.{ban_id}"),
-                return_exceptions=True,
+            await self._approve_appeal(
+                ctx.bot, q, ban, ban_id, target_id, admin, lc, lt
             )
-            if isinstance(deactivate_result, BaseException):
-                log.error(
-                    "deactivate_all_active_bans failed for user=%d: user may remain"
-                    " marked banned in DB despite being unbanned in groups: %s",
-                    target_id,
-                    deactivate_result,
-                )
-            if isinstance(groups, BaseException):
-                log.error(
-                    "active_groups failed during appeal unban of %d: %s",
-                    target_id,
-                    groups,
-                )
-                groups = []
-            if isinstance(target_fname, BaseException):
-                target_fname = str(target_id)
-
-            # * Include primary groups not already in the connected list.
-            # * Primary groups (MAIN_GROUP, EXTEND_GROUP) are configured via env vars
-            # * and are not stored in federated_groups, so active_groups() never
-            # * returns them. The appeal approve unban must cover them explicitly.
-            _primary_ids = [cid for cid in (cfg.main_group, cfg.exec_group) if cid]
-            _existing_ids = {grp.get("chat_id", 0) for grp in groups}
-            for _pid in _primary_ids:
-                if _pid not in _existing_ids:
-                    groups = [*groups, {"chat_id": _pid, "title": ""}]
-
-            # * Unban from all groups + primary groups - semaphore-bounded for rate safety
-            await fan_out(
-                [
-                    ctx.bot.unban_chat_member(
-                        grp.get("chat_id", 0), target_id, only_if_banned=True
-                    )
-                    for grp in groups
-                ]
-            )
-
-            # * Notify user, edit review message, update appeal log, and send
-            # * unban log - all four are independent; run in one gather.
-            appeal_link = ban.get("appeal_link") or ""
-            await asyncio.gather(
-                ctx.bot.send_message(
-                    target_id,
-                    f"Your appeal for ban {code(ban_id)} has been approved - "
-                    f"you're now unbanned from {esc(self.community_name)}. Welcome back.",
-                    parse_mode="HTML",
-                ),
-                q.edit_message_text(
-                    f"Appeal approved by {mention(admin.id, admin.first_name)}. User unbanned.",
-                    parse_mode="HTML",
-                    reply_markup=None,
-                ),
-                self._update_or_send_log(
-                    ctx.bot,
-                    lc,
-                    lt,
-                    ban.get("appeal_log_msg_id"),
-                    parse_logmsg.appeal_approved_edit(
-                        target_id,
-                        target_fname,
-                        admin.id,
-                        admin.first_name,
-                        ban_id,
-                        appeal_link,
-                        ban.get("appeal_submitted_at"),
-                    ),
-                ),
-                ctx.bot.send_message(
-                    lc,
-                    parse_logmsg.appeal_unban_log(
-                        target_id,
-                        target_fname,
-                        admin.id,
-                        admin.first_name,
-                        ban_id,
-                    ),
-                    parse_mode="HTML",
-                    message_thread_id=lt,
-                ),
-                return_exceptions=True,
-            )
-
         elif action == "reject":
-            # * Fetch target name + notify user + edit review message +
-            # * clear review lock + persist rejector identity - all in parallel.
-            # * clear_review is critical: without it the user is permanently
-            # * locked out from submitting a second appeal (P2 #2).
-            # * set_rejected_by preserves the audit trail in the ban document
-            # * even if the log message is later deleted (P2 #3).
-            target_fname_result, *_ = await asyncio.gather(
-                db.users_cache.get_first_name(target_id, str(target_id)),
-                ctx.bot.send_message(
-                    target_id,
-                    f"Your appeal for ban {code(ban_id)} has been reviewed and not approved. "
-                    "The ban remains in place.",
-                    parse_mode="HTML",
-                ),
-                q.edit_message_text(
-                    f"Appeal rejected by {mention(admin.id, admin.first_name)}.",
-                    parse_mode="HTML",
-                    reply_markup=None,
-                ),
-                db.bans_db.clear_review(ban_id),
-                db.bans_db.set_rejected_by(ban_id, admin.id, admin.first_name),
-                return_exceptions=True,
-            )
-            target_fname = (
-                target_fname_result
-                if not isinstance(target_fname_result, BaseException)
-                else str(target_id)
-            )
+            await self._reject_appeal(ctx.bot, q, ban, ban_id, target_id, admin, lc, lt)
 
-            # * Edit the submitted appeal log message in LOG_CHANNEL
-            await self._update_or_send_log(
-                ctx.bot,
+    # ── Appeal decision helpers ────────────────────────────────────────── #
+
+    async def _approve_appeal(
+        self,
+        bot: Bot,
+        q: CallbackQuery,
+        ban: BanDoc,
+        ban_id: str,
+        target_id: int,
+        admin: User,
+        lc: int,
+        lt: int | None,
+    ) -> None:
+        # * Deactivate ALL active bans for the user (not only the appeal ban_id)
+        # * in parallel with fetching active groups, target name, and cancelling
+        # * any pending timed-unban APScheduler job (future-proofing: no-op when
+        # * no timed ban exists, same pattern as execute_unban in unban_flow.py).
+        deactivate_result, groups, target_fname, _ = await asyncio.gather(
+            db.bans_db.deactivate_all_active_bans(target_id),
+            db.groups_db.active_groups(),
+            db.users_cache.get_first_name(target_id, str(target_id)),
+            db.scheduler.cancel_schedule(f"unban.{ban_id}"),
+            return_exceptions=True,
+        )
+        if isinstance(deactivate_result, BaseException):
+            log.error(
+                "deactivate_all_active_bans failed for user=%d: user may remain"
+                " marked banned in DB despite being unbanned in groups: %s",
+                target_id,
+                deactivate_result,
+            )
+        if isinstance(groups, BaseException):
+            log.error(
+                "active_groups failed during appeal unban of %d: %s",
+                target_id,
+                groups,
+            )
+            groups = []
+        if isinstance(target_fname, BaseException):
+            target_fname = str(target_id)
+
+        _primary_ids = [cid for cid in (cfg.main_group, cfg.exec_group) if cid]
+        _existing_ids = {grp.get("chat_id", 0) for grp in groups}
+        for _pid in _primary_ids:
+            if _pid not in _existing_ids:
+                groups = [*groups, {"chat_id": _pid, "title": ""}]
+
+        await fan_out(
+            [
+                bot.unban_chat_member(
+                    grp.get("chat_id", 0), target_id, only_if_banned=True
+                )
+                for grp in groups
+            ]
+        )
+
+        appeal_link = ban.get("appeal_link") or ""
+        appeal_submitted_at = ban.get("appeal_submitted_at")
+        await asyncio.gather(
+            bot.send_message(
+                target_id,
+                f"Your appeal for ban {code(ban_id)} has been approved - "
+                f"you're now unbanned from {esc(self.community_name)}. Welcome back.",
+                parse_mode="HTML",
+            ),
+            q.edit_message_text(
+                f"Appeal approved by {mention(admin.id, admin.first_name)}. Unbanned.",
+                parse_mode="HTML",
+                reply_markup=None,
+            ),
+            self._update_or_send_log(
+                bot,
                 lc,
                 lt,
-                ban.get("appeal_log_msg_id"),
-                parse_logmsg.appeal_rejected_edit(
+                int(ban.get("appeal_log_msg_id") or 0) or None,
+                parse_logmsg.appeal_approved_edit(
                     target_id,
                     target_fname,
                     admin.id,
                     admin.first_name,
                     ban_id,
-                    ban.get("appeal_link") or "",
-                    ban.get("appeal_submitted_at"),
+                    str(appeal_link),
+                    appeal_submitted_at,
                 ),
-            )
+            ),
+            bot.send_message(
+                lc,
+                parse_logmsg.appeal_unban_log(
+                    target_id,
+                    target_fname,
+                    admin.id,
+                    admin.first_name,
+                    ban_id,
+                ),
+                parse_mode="HTML",
+                message_thread_id=lt,
+            ),
+            return_exceptions=True,
+        )
+
+    async def _reject_appeal(
+        self,
+        bot: Bot,
+        q: CallbackQuery,
+        ban: BanDoc,
+        ban_id: str,
+        target_id: int,
+        admin: User,
+        lc: int,
+        lt: int | None,
+    ) -> None:
+        target_fname_result, *_ = await asyncio.gather(
+            db.users_cache.get_first_name(target_id, str(target_id)),
+            bot.send_message(
+                target_id,
+                f"Your appeal for ban {code(ban_id)} was not approved. "
+                "The ban remains in place.",
+                parse_mode="HTML",
+            ),
+            q.edit_message_text(
+                f"Appeal rejected by {mention(admin.id, admin.first_name)}.",
+                parse_mode="HTML",
+                reply_markup=None,
+            ),
+            db.bans_db.clear_review(ban_id),
+            db.bans_db.set_rejected_by(ban_id, admin.id, admin.first_name),
+            return_exceptions=True,
+        )
+        target_fname = (
+            target_fname_result
+            if not isinstance(target_fname_result, BaseException)
+            else str(target_id)
+        )
+
+        await self._update_or_send_log(
+            bot,
+            lc,
+            lt,
+            int(ban.get("appeal_log_msg_id") or 0) or None,
+            parse_logmsg.appeal_rejected_edit(
+                target_id,
+                target_fname,
+                admin.id,
+                admin.first_name,
+                ban_id,
+                str(ban.get("appeal_link") or ""),
+                ban.get("appeal_submitted_at"),
+            ),
+        )
 
     # ── ConversationHandler factory ────────────────────────────────────────
 

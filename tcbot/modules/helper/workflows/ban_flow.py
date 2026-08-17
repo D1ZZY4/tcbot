@@ -28,13 +28,16 @@ from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
 from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
 from tcbot.utils.dispatch import fan_out
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
-from tcbot.utils.timedate_format import utc_now
+from tcbot.utils.timedate_format import to_utc, utc_now
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from datetime import datetime
 
     from telegram import Bot, Message
     from telegram.ext.filters import BaseFilter
+
+from tcbot.database.documents import BanDoc
 
 log = logging.getLogger(__name__)
 
@@ -135,6 +138,8 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
 
     existing = await db.bans_db.get_active_ban(target_id)
     is_update = existing is not None
+    bot_username = bot.username or ""
+    ban_id = str(existing.get("ban_id", "")) if is_update else db.bans_db.make_ban_id()
 
     if is_update:
         # * Suppress any stale duplicate active bans for this user, keeping only the
@@ -191,112 +196,15 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     logs_chat, logs_thread = cfg.logs
 
     if is_update:
-        ban_id = existing.get("ban_id", "")
-        old_admin_id = existing.get("admin_user_id", admin_id)
-        bot_username = bot.username or ""
-        try:
-            old_admin_fname = (
-                await _old_admin_fname_task
-                if _old_admin_fname_task is not None
-                else "Admin"
-            )
-        except Exception:
-            old_admin_fname = "Admin"
-        old_proof_msg_id = existing.get("proof_message_id", 0)
-        old_log_msg_id = existing.get("log_message_id", 0)
-        new_proof_msg_id = proof_msg_id or old_proof_msg_id
-
-        log_text = parse_logmsg.ban_update_log(
-            target_id,
-            target_fname,
-            admin_id,
-            admin_fname,
-            old_admin_id,
-            old_admin_fname,
-            reason,
-            ban_id,
-            existing.get("timestamp", now),
-            proof_link,
-            prev_proof_link,
+        log_msg_id = await _execute_ban_update(
+            bot, existing, meta, proof_link, prev_proof_link, logs_chat, logs_thread
         )
-        _appeal_url = appeal_deep_link(bot_username, ban_id)
-        kb = (
-            keyboards.ban_log_update(
-                target_id,
-                proof_link,
-                prev_proof_link,
-                _appeal_url,
-            )
-            if proof_link and prev_proof_link
-            else (
-                keyboards.ban_log_new(target_id, proof_link, _appeal_url)
-                if proof_link
-                else None
-            )
-        )
-
-        send_kwargs: dict = {"parse_mode": "HTML", "message_thread_id": logs_thread}
-        if kb:
-            send_kwargs["reply_markup"] = kb
-        db_result, log_result = await asyncio.gather(
-            db.bans_db.update_ban(
-                ban_id,
-                reason,
-                admin_id,
-                new_proof_msg_id,
-                0,
-                old_proof_msg_id,
-                old_log_msg_id,
-            ),
-            bot.send_message(logs_chat, log_text, **send_kwargs),
-            return_exceptions=True,
-        )
-        if isinstance(db_result, BaseException):
-            log.error("update_ban failed for ban_id=%s: %s", ban_id, db_result)
     else:
-        ban_id = db.bans_db.make_ban_id()
-        bot_username = bot.username or ""
-
-        log_text = parse_logmsg.ban_log(
-            target_id,
-            target_fname,
-            admin_id,
-            admin_fname,
-            reason,
-            ban_id,
-            proof_link,
-            now,
-        )
-        kb = (
-            keyboards.ban_log_new(
-                target_id,
-                proof_link,
-                appeal_deep_link(bot_username, ban_id),
-            )
-            if proof_link
-            else None
+        log_msg_id = await _execute_new_ban(
+            bot, meta, proof_link, now, logs_chat, logs_thread
         )
 
-        send_kwargs = {"parse_mode": "HTML", "message_thread_id": logs_thread}
-        if kb:
-            send_kwargs["reply_markup"] = kb
-        db_result, log_result = await asyncio.gather(
-            db.bans_db.create_ban(
-                target_id, reason, admin_id, proof_msg_id or 0, 0, ban_id
-            ),
-            bot.send_message(logs_chat, log_text, **send_kwargs),
-            return_exceptions=True,
-        )
-        if isinstance(db_result, BaseException):
-            log.error("create_ban failed for ban_id=%s: %s", ban_id, db_result)
-
-    # * Extract log_msg_id from parallel result
-    log_msg_id: int = 0
-    if not isinstance(log_result, BaseException):
-        log_msg_id = log_result.message_id
-        log.info("Ban log posted: ban_id=%s msg_id=%s", ban_id, log_msg_id)
-    else:
-        log.error("Ban log send failed: %s", log_result)
+    # * log_msg_id returned from _execute_ban_update / _execute_new_ban
 
     # * set_log_message_id and pre-fetched active_groups in parallel.
     # * _groups_task was started at the top of this function and has been
@@ -444,6 +352,149 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         )
     elif isinstance(pm_result, BaseException):
         log.warning("Failed to send ban PM to user %d: %s", target_id, pm_result)
+
+
+# ──────────────────────── Ban update / create helpers ───────────────── #
+# * Extracted from _execute_ban to keep the main flow under 200 lines.
+
+
+async def _execute_ban_update(
+    bot: Bot,
+    existing: BanDoc,
+    meta: dict[str, Any],
+    proof_link: str | None,
+    prev_proof_link: str | None,
+    logs_chat: int,
+    logs_thread: int | None,
+) -> int:
+    """Build log text, keyboard, and DB update for an existing ban re-enforcement."""
+    target_id: int = meta.get("ban_target_id") or 0
+    target_fname: str = meta.get("ban_target_fname", str(target_id))
+    admin_id: int = meta.get("ban_admin_id") or 0
+    admin_fname: str = meta.get("ban_admin_fname", "Admin")
+    reason: str = meta.get("ban_reason", replies.NO_REASON)
+    ban_id = str(existing.get("ban_id", ""))
+    old_admin_id = int(existing.get("admin_user_id", admin_id))
+    bot_username = bot.username or ""
+    old_proof_msg_id = int(existing.get("proof_message_id", 0))
+    old_log_msg_id = int(existing.get("log_message_id", 0))
+    new_proof_msg_id = int(proof_link) if proof_link else old_proof_msg_id
+
+    _old_admin_fname_task = asyncio.create_task(
+        db.users_cache.get_first_name(old_admin_id, "Admin")
+    )
+    try:
+        old_admin_fname = await _old_admin_fname_task
+    except Exception:
+        old_admin_fname = "Admin"
+
+    log_text = parse_logmsg.ban_update_log(
+        target_id,
+        target_fname,
+        admin_id,
+        admin_fname,
+        old_admin_id,
+        old_admin_fname,
+        reason,
+        ban_id,
+        to_utc(existing.get("timestamp", utc_now())),
+        proof_link,
+        prev_proof_link,
+    )
+    _appeal_url = appeal_deep_link(bot_username, ban_id)
+    kb = (
+        keyboards.ban_log_update(target_id, proof_link, prev_proof_link, _appeal_url)
+        if proof_link and prev_proof_link
+        else (
+            keyboards.ban_log_new(target_id, proof_link, _appeal_url)
+            if proof_link
+            else None
+        )
+    )
+
+    send_kwargs: dict = {"parse_mode": "HTML", "message_thread_id": logs_thread}
+    if kb:
+        send_kwargs["reply_markup"] = kb
+    db_result, log_result = await asyncio.gather(
+        db.bans_db.update_ban(
+            ban_id,
+            reason,
+            admin_id,
+            new_proof_msg_id,
+            0,
+            old_proof_msg_id,
+            old_log_msg_id,
+        ),
+        bot.send_message(logs_chat, log_text, **send_kwargs),
+        return_exceptions=True,
+    )
+    if isinstance(db_result, BaseException):
+        log.error("update_ban failed for ban_id=%s: %s", ban_id, db_result)
+
+    log_msg_id: int = 0
+    if not isinstance(log_result, BaseException):
+        log_msg_id = log_result.message_id
+        log.info("Ban log posted: ban_id=%s msg_id=%s", ban_id, log_msg_id)
+    else:
+        log.error("Ban log send failed: %s", log_result)
+    return log_msg_id
+
+
+async def _execute_new_ban(
+    bot: Bot,
+    meta: dict[str, Any],
+    proof_link: str | None,
+    now: datetime,
+    logs_chat: int,
+    logs_thread: int | None,
+) -> int:
+    """Build log text, keyboard, and DB insert for a fresh ban."""
+    target_id: int = meta.get("ban_target_id") or 0
+    target_fname: str = meta.get("ban_target_fname", str(target_id))
+    admin_id: int = meta.get("ban_admin_id") or 0
+    admin_fname: str = meta.get("ban_admin_fname", "Admin")
+    reason: str = meta.get("ban_reason", replies.NO_REASON)
+    ban_id = db.bans_db.make_ban_id()
+    bot_username = bot.username or ""
+
+    log_text = parse_logmsg.ban_log(
+        target_id,
+        target_fname,
+        admin_id,
+        admin_fname,
+        reason,
+        ban_id,
+        proof_link,
+        now,
+    )
+    kb = (
+        keyboards.ban_log_new(
+            target_id, proof_link, appeal_deep_link(bot_username, ban_id)
+        )
+        if proof_link
+        else None
+    )
+
+    send_kwargs = {"parse_mode": "HTML", "message_thread_id": logs_thread}
+    if kb:
+        send_kwargs["reply_markup"] = kb
+    db_result, log_result = await asyncio.gather(
+        db.bans_db.create_ban(
+            target_id, reason, admin_id, int(proof_link) if proof_link else 0, 0, ban_id
+        ),
+        bot.send_message(logs_chat, log_text, **send_kwargs),
+        return_exceptions=True,
+    )
+    if isinstance(db_result, BaseException):
+        log.error("create_ban failed for ban_id=%s: %s", ban_id, db_result)
+
+    log_msg_id: int = 0
+    if not isinstance(log_result, BaseException):
+        log_msg_id = log_result.message_id
+        log.info("Ban log posted: ban_id=%s msg_id=%s", ban_id, log_msg_id)
+    else:
+        log.error("Ban log send failed: %s", log_result)
+    return log_msg_id
 
 
 # ───────────────── Proof collection state handlers ──────────────── #

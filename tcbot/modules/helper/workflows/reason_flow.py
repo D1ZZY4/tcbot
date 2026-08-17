@@ -28,7 +28,7 @@ from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from telegram.ext.filters import BaseFilter
+from telegram.ext.filters import BaseFilter
 
 log = logging.getLogger(__name__)
 
@@ -102,51 +102,67 @@ class BuildReason:
 # ─────────────── Generic ConversationHandler factory ────────────── #
 
 
-def build_modaction_conv(
-    reason: BuildReason,
-    proof: BuildProof,
-    entry_fn: Callable[..., Any],
-    executor: Callable[..., Any],
-    entry_filter: BaseFilter,
-    escape_filter: BaseFilter | None = None,
-) -> ConversationHandler:
-    """Build a generic reason + proof ConversationHandler.
+class _ModActionFlow:
+    """Per-action ConversationHandler state and callback container.
 
-    Note: ``conversation_timeout`` is intentionally absent.  PTB's timeout
-    support requires the ``job-queue`` extra (APScheduler 3.x backend) which
-    is already used by this project's persistent MongoDBJobStore setup.
-    Conversations are ended via the ``_end_conv`` fallback (triggered on any
-    command) or by the user pressing the Cancel button.
+    Replaces the previous closure-heavy ``build_modaction_conv`` body so that
+    each handler is a named method on an explicit state object.  This keeps the
+    public factory function under 10 lines and makes individual handlers
+    testable without reproducing the full closure environment.
     """
-    action = reason.action
-    _reason_key = f"{action}_reason"
-    _proof_key = f"{action}_proof_desc"
-    _proof_msgs_key = f"{action}_proof_msgs"
-    _extra_info_key = f"{action}_extra_info"
-    _prompt_chat_key = f"{action}_prompt_chat"
-    _prompt_id_key = f"{action}_prompt_id"
 
-    def _get_target(ctx: ContextTypes.DEFAULT_TYPE) -> str:
+    def __init__(
+        self,
+        action: str,
+        reason: BuildReason,
+        proof: BuildProof,
+        executor: Callable[..., Any],
+    ) -> None:
+        self.action = action
+        self.reason = reason
+        self.proof = proof
+        self.executor = executor
+        self._reason_key = f"{action}_reason"
+        self._proof_key = f"{action}_proof_desc"
+        self._proof_msgs_key = f"{action}_proof_msgs"
+        self._extra_info_key = f"{action}_extra_info"
+        self._prompt_chat_key = f"{action}_prompt_chat"
+        self._prompt_id_key = f"{action}_prompt_id"
+        self._exec_key = f"{action}_executing"
+        self._mgid_key = f"{action}_seen_mgid"
+
+    # ── Helpers ───────────────────────────────────────────────────── #
+
+    def _get_target(self, ctx: ContextTypes.DEFAULT_TYPE) -> str:
         if ctx.user_data is None:
             return "target"
         raw: str = (
-            ctx.user_data.get(f"{action}_target_name")
-            or ctx.user_data.get(f"{action}_target_fname")
+            ctx.user_data.get(f"{self.action}_target_name")
+            or ctx.user_data.get(f"{self.action}_target_fname")
             or "target"
         )
-        tid: int | None = ctx.user_data.get(f"{action}_target_id")
+        tid: int | None = ctx.user_data.get(f"{self.action}_target_id")
         if tid:
             return mention(tid, raw)
         return esc(raw)
 
+    def _clear_user_data(self, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Remove all ``{action}_*`` keys from user_data on cancel / timeout."""
+        if ctx.user_data is None:
+            return
+        prefix = f"{self.action}_"
+        for key in [k for k in ctx.user_data if k.startswith(prefix)]:
+            ctx.user_data.pop(key, None)
+
     # ── WAITING_REASON handlers ──────────────────────────────────── #
 
-    async def _on_reason_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def _on_reason_text(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> int:
         msg = update.effective_message
-        if msg is None:
+        if msg is None or msg.text is None:
             return WAITING_REASON
-        assert msg is not None
-        if msg.text is None:
+        if ctx.user_data is None:
             return WAITING_REASON
 
         text = msg.text.strip()
@@ -157,15 +173,16 @@ def build_modaction_conv(
                     f"you sent {len(text)}). Please shorten it."
                 )
             except Exception as exc:
-                log.debug("%s reason-too-long reply failed: %s", action, exc)
+                log.debug("%s reason-too-long reply failed: %s", self.action, exc)
             return WAITING_REASON
-        if ctx.user_data is None:
-            return WAITING_REASON
-        ctx.user_data[_reason_key] = text
-        extra_info = ctx.user_data.get(_extra_info_key, "")
-        prompt_txt = proof.step_prompt(_get_target(ctx), action, text, extra_info)
-        prompt_chat = ctx.user_data.get(_prompt_chat_key)
-        prompt_id = ctx.user_data.get(_prompt_id_key)
+
+        ctx.user_data[self._reason_key] = text
+        extra_info = ctx.user_data.get(self._extra_info_key, "")
+        prompt_txt = self.proof.step_prompt(
+            self._get_target(ctx), self.action, text, extra_info
+        )
+        prompt_chat = ctx.user_data.get(self._prompt_chat_key)
+        prompt_id = ctx.user_data.get(self._prompt_id_key)
         prompt_sent = False
         if prompt_id is not None and prompt_chat is not None:
             try:
@@ -174,71 +191,65 @@ def build_modaction_conv(
                     chat_id=prompt_chat,
                     message_id=prompt_id,
                     parse_mode="HTML",
-                    reply_markup=proof.keyboard(),
+                    reply_markup=self.proof.keyboard(),
                 )
                 prompt_sent = True
             except Exception:
-                log.exception("%s prompt edit failed (reason step)", action)
+                log.exception("%s prompt edit failed (reason step)", self.action)
         else:
             try:
                 await msg.reply_text(
                     prompt_txt,
                     parse_mode="HTML",
-                    reply_markup=proof.keyboard(),
+                    reply_markup=self.proof.keyboard(),
                 )
                 prompt_sent = True
             except Exception as exc:
-                log.debug("%s reason-text fallback reply failed: %s", action, exc)
+                log.debug("%s reason-text fallback reply failed: %s", self.action, exc)
         if not prompt_sent:
-            _clear_user_data(ctx)
+            self._clear_user_data(ctx)
             return ConversationHandler.END
         return WAITING_PROOF
 
-    async def _on_skip_reason(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def _on_skip_reason(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> int:
         q = update.callback_query
-        if q is None:
-            return WAITING_REASON
-        if ctx.user_data is None:
+        if q is None or ctx.user_data is None:
             return WAITING_REASON
 
-        ctx.user_data[_reason_key] = replies.NO_REASON
-        extra_info = ctx.user_data.get(_extra_info_key, "")
-        prompt_txt = proof.step_prompt(
-            _get_target(ctx), action, replies.NO_REASON, extra_info
+        ctx.user_data[self._reason_key] = replies.NO_REASON
+        extra_info = ctx.user_data.get(self._extra_info_key, "")
+        prompt_txt = self.proof.step_prompt(
+            self._get_target(ctx), self.action, replies.NO_REASON, extra_info
         )
         results = await asyncio.gather(
             q.answer(),
             q.edit_message_text(
-                prompt_txt, parse_mode="HTML", reply_markup=proof.keyboard()
+                prompt_txt, parse_mode="HTML", reply_markup=self.proof.keyboard()
             ),
             return_exceptions=True,
         )
         if isinstance(results[1], BaseException):
             log.debug(
-                "%s prompt edit failed (skip-reason step): %s", action, results[1]
+                "%s prompt edit failed (skip-reason step): %s", self.action, results[1]
             )
-            # * Proof prompt is invisible to the user; clear state to avoid locking
+            # * Proof prompt is invisible; clear state to avoid locking
             # * them in WAITING_PROOF with no visible UI element to interact with.
-            _clear_user_data(ctx)
+            self._clear_user_data(ctx)
             return ConversationHandler.END
         return WAITING_PROOF
 
     # ── WAITING_PROOF handlers ───────────────────────────────────── #
 
-    # * Per-action keys used by the double-submit guard and album dedup.
-    _exec_key = f"{action}_executing"
-    _mgid_key = f"{action}_seen_mgid"
-
-    async def _on_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def _on_proof(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         msg = update.effective_message
-        if msg is None:
-            return WAITING_PROOF
-        if ctx.user_data is None:
+        if msg is None or ctx.user_data is None:
             return WAITING_PROOF
 
         # * Double-submit guard: a previous _on_proof or _on_skip_proof call is
         # * already running the executor.  Discard this duplicate update silently.
-        if ctx.user_data.get(_exec_key):
+        if ctx.user_data.get(self._exec_key):
             return ConversationHandler.END
 
         # * Album dedup: Telegram delivers each photo in a multi-photo album as a
@@ -247,71 +258,65 @@ def build_modaction_conv(
         # * We record the media_group_id of the first photo we process and discard
         # * any further photos from the same album.
         if msg.media_group_id:
-            if ctx.user_data.get(_mgid_key) == msg.media_group_id:
+            if ctx.user_data.get(self._mgid_key) == msg.media_group_id:
                 return ConversationHandler.END
-            ctx.user_data[_mgid_key] = msg.media_group_id
+            ctx.user_data[self._mgid_key] = msg.media_group_id
 
         # * Set the executing flag before the first await to close the race window.
-        ctx.user_data[_exec_key] = True
+        ctx.user_data[self._exec_key] = True
 
-        p = proof.record(msg)
+        p = self.proof.record(msg)
         if p:
-            ctx.user_data[_proof_key] = p
-            existing: list = ctx.user_data.get(_proof_msgs_key, [])
-            ctx.user_data[_proof_msgs_key] = [*existing, msg]
-        await executor(update, ctx)
+            ctx.user_data[self._proof_key] = p
+            existing: list = ctx.user_data.get(self._proof_msgs_key, [])
+            ctx.user_data[self._proof_msgs_key] = [*existing, msg]
+        await self.executor(update, ctx)
         # * Clear state so the conversation does not leak keys across sessions.
-        _clear_user_data(ctx)
+        self._clear_user_data(ctx)
         return ConversationHandler.END
 
-    async def _on_skip_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def _on_skip_proof(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> int:
         q = update.callback_query
         if q is None or ctx.user_data is None:
             return WAITING_PROOF
 
         # * Double-submit guard: user tapped Skip twice before the first call
         # * returned END.  Acknowledge and discard the duplicate.
-        if ctx.user_data.get(_exec_key):
+        if ctx.user_data.get(self._exec_key):
             try:
                 await q.answer()
             except Exception as exc:
-                log.debug("%s skip-proof dup q.answer failed: %s", action, exc)
+                log.debug("%s skip-proof dup q.answer failed: %s", self.action, exc)
             return ConversationHandler.END
-        ctx.user_data[_exec_key] = True
+        ctx.user_data[self._exec_key] = True
 
         await asyncio.gather(
             q.answer(),
-            executor(update, ctx),
+            self.executor(update, ctx),
             return_exceptions=True,
         )
-        _clear_user_data(ctx)
+        self._clear_user_data(ctx)
         return ConversationHandler.END
 
     # ── Cancel / fallback ────────────────────────────────────────── #
 
-    def _clear_user_data(ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        """Remove all ``{action}_*`` keys from user_data on cancel / timeout."""
-        if ctx.user_data is None:
-            return
-        prefix = f"{action}_"
-        for key in [k for k in ctx.user_data if k.startswith(prefix)]:
-            ctx.user_data.pop(key, None)
-
     async def _on_reason_unexpected(
-        update: Update, ctx: ContextTypes.DEFAULT_TYPE
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
     ) -> int:
         """Reject non-text messages during reason collection."""
         if update.effective_message:
             try:
                 await update.effective_message.reply_text(
-                    f"Please type your {action} reason as text, or press Skip / Cancel."
+                    f"Please type your {self.action} reason as text, or press Skip / Cancel."
                 )
             except Exception as exc:
-                log.debug("%s reason-unexpected reply failed: %s", action, exc)
+                log.debug("%s reason-unexpected reply failed: %s", self.action, exc)
         return WAITING_REASON
 
     async def _on_proof_unexpected(
-        update: Update, ctx: ContextTypes.DEFAULT_TYPE
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
     ) -> int:
         """Reject unexpected message types during proof collection."""
         if update.effective_message:
@@ -320,83 +325,112 @@ def build_modaction_conv(
                     "Please send a photo or video as proof, or press Skip / Cancel."
                 )
             except Exception as exc:
-                log.debug("%s proof-unexpected reply failed: %s", action, exc)
+                log.debug("%s proof-unexpected reply failed: %s", self.action, exc)
         return WAITING_PROOF
 
-    async def _on_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def _on_cancel(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         q = update.callback_query
         if q is None:
             return ConversationHandler.END
 
-        _clear_user_data(ctx)
+        self._clear_user_data(ctx)
         results = await asyncio.gather(
             q.answer(),
-            q.edit_message_text(f"Got it, {action} cancelled. No action was taken."),
+            q.edit_message_text(
+                f"Got it, {self.action} cancelled. No action was taken."
+            ),
             return_exceptions=True,
         )
         if isinstance(results[1], BaseException):
             log.debug(
                 "%s cancel edit failed (message may already be gone): %s",
-                action,
+                self.action,
                 results[1],
             )
         return ConversationHandler.END
 
-    async def _end_conv(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        _clear_user_data(ctx)
+    async def _on_end_conv(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+        self._clear_user_data(ctx)
         if update.effective_message:
             try:
                 await update.effective_message.reply_text(
-                    f"{action.capitalize()} operation cancelled."
+                    f"{self.action.capitalize()} operation cancelled."
                 )
             except Exception as exc:
-                log.debug("%s cancel-via-command reply failed: %s", action, exc)
+                log.debug("%s cancel-via-command reply failed: %s", self.action, exc)
         return ConversationHandler.END
 
     # ── Build states ─────────────────────────────────────────────── #
 
-    reason_state: list = [
-        MessageHandler(filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, _on_reason_text),
-        CallbackQueryHandler(_on_cancel, pattern=rf"^{action}_cancel$"),
-        MessageHandler(
-            ~filters.TEXT & ~ALL_PREFIXES_CMD_FILTER,
-            _on_reason_unexpected,
-        ),
-    ]
-    if reason.skip_allowed:
-        reason_state.insert(
-            1,
-            CallbackQueryHandler(
-                _on_skip_reason,
-                pattern=rf"^{action}_skip_reason$",
+    def build(
+        self,
+        entry_fn: Callable[..., Any],
+        entry_filter: BaseFilter,
+        escape_filter: BaseFilter | None = None,
+    ) -> ConversationHandler:
+        """Assemble the ConversationHandler from bound callbacks."""
+        reason_state: list = [
+            MessageHandler(
+                filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, self._on_reason_text
             ),
+            CallbackQueryHandler(self._on_cancel, pattern=rf"^{self.action}_cancel$"),
+            MessageHandler(
+                ~filters.TEXT & ~ALL_PREFIXES_CMD_FILTER,
+                self._on_reason_unexpected,
+            ),
+        ]
+        if self.reason.skip_allowed:
+            reason_state.insert(
+                1,
+                CallbackQueryHandler(
+                    self._on_skip_reason,
+                    pattern=rf"^{self.action}_skip_reason$",
+                ),
+            )
+
+        proof_state = [
+            MessageHandler(filters.PHOTO | filters.VIDEO, self._on_proof),
+            CallbackQueryHandler(
+                self._on_skip_proof, pattern=rf"^{self.action}_skip_proof$"
+            ),
+            CallbackQueryHandler(self._on_cancel, pattern=rf"^{self.action}_cancel$"),
+            MessageHandler(
+                ~filters.PHOTO & ~filters.VIDEO & ~ALL_PREFIXES_CMD_FILTER,
+                self._on_proof_unexpected,
+            ),
+        ]
+
+        fallback_filter = ALL_PREFIXES_CMD_FILTER
+        if escape_filter is not None:
+            fallback_filter = fallback_filter & ~escape_filter
+
+        return ConversationHandler(
+            entry_points=[MessageHandler(entry_filter, entry_fn)],
+            states={
+                WAITING_REASON: reason_state,
+                WAITING_PROOF: proof_state,
+            },
+            fallbacks=[
+                CallbackQueryHandler(
+                    self._on_cancel, pattern=rf"^{self.action}_cancel$"
+                ),
+                MessageHandler(fallback_filter, self._on_end_conv),
+            ],
+            per_user=True,
+            per_chat=True,
+            per_message=False,
         )
 
-    proof_state = [
-        MessageHandler(filters.PHOTO | filters.VIDEO, _on_proof),
-        CallbackQueryHandler(_on_skip_proof, pattern=rf"^{action}_skip_proof$"),
-        CallbackQueryHandler(_on_cancel, pattern=rf"^{action}_cancel$"),
-        MessageHandler(
-            ~filters.PHOTO & ~filters.VIDEO & ~ALL_PREFIXES_CMD_FILTER,
-            _on_proof_unexpected,
-        ),
-    ]
 
-    fallback_filter = ALL_PREFIXES_CMD_FILTER
-    if escape_filter is not None:
-        fallback_filter = fallback_filter & ~escape_filter
-
-    return ConversationHandler(
-        entry_points=[MessageHandler(entry_filter, entry_fn)],
-        states={
-            WAITING_REASON: reason_state,
-            WAITING_PROOF: proof_state,
-        },
-        fallbacks=[
-            CallbackQueryHandler(_on_cancel, pattern=rf"^{action}_cancel$"),
-            MessageHandler(fallback_filter, _end_conv),
-        ],
-        per_user=True,
-        per_chat=True,
-        per_message=False,
+def build_modaction_conv(
+    reason: BuildReason,
+    proof: BuildProof,
+    entry_fn: Callable[..., Any],
+    executor: Callable[..., Any],
+    entry_filter: BaseFilter,
+    escape_filter: BaseFilter | None = None,
+) -> ConversationHandler:
+    """Build a generic reason + proof ConversationHandler."""
+    return _ModActionFlow(reason.action, reason, proof, executor).build(
+        entry_fn, entry_filter, escape_filter
     )

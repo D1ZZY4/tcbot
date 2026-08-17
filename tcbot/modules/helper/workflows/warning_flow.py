@@ -24,9 +24,10 @@ from tcbot.utils.timedate_format import utc_now
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from telegram import Update
     from telegram.ext import ContextTypes
     from telegram.ext.filters import BaseFilter
+
+from telegram import Bot, InlineKeyboardMarkup, Message, Update
 
 log = logging.getLogger(__name__)
 
@@ -133,196 +134,24 @@ async def execute_warn(
                 auto_ban_trigger = "fed_global"
 
     if auto_ban_trigger is not None:
-        # * If the target holds a federation role (e.g. promoted mid-warn-cycle),
-        # * do NOT auto-ban staff members through the warn threshold; remove the
-        # * role only so they lose staff perms without being exiled.
-        target_role = await db.users_roles.get_effective_role(target_id)
-        if target_role:
-            try:
-                await Demote.execute(
-                    ctx.bot,
-                    target_id,
-                    target_name,
-                    target_role,
-                    admin_id,
-                    admin_fname,
-                    trigger="ban",
-                )
-            except Exception:
-                log.exception(
-                    "Auto-demote on warn limit failed for role=%s", target_role
-                )
-            # * Staff targets are demoted but not auto-banned; warn record is already saved.
-            try:
-                await msg.reply_text(
-                    f"{user_ref(target_id, target_name)} is a {target_role} and was "
-                    f"demoted, but staff are not auto-banned via warnings.",
-                    parse_mode="HTML",
-                    reply_markup=proof_kb,
-                )
-            except Exception as exc:
-                log.debug("Warn auto-ban staff exemption reply failed: %s", exc)
-            return
-
-        # * Federation ban: fetch active groups + check existing ban + send log in parallel.
-        # * Overlapping the DB reads with the log send keeps total latency low.
-        groups_result, existing_ban, log_result = await asyncio.gather(
-            db.groups_db.active_groups(),
-            db.bans_db.get_active_ban(target_id),
-            ctx.bot.send_message(
-                lc,
-                log_text,
-                parse_mode="HTML",
-                message_thread_id=lt,
-                reply_markup=proof_kb,
-            ),
-            return_exceptions=True,
-        )
-        if isinstance(log_result, BaseException):
-            log.error("Warn-auto-ban log send failed: %s", log_result)
-        log_msg_id: int = (
-            log_result.message_id if not isinstance(log_result, BaseException) else 0
-        )
-        groups: list = (
-            groups_result if not isinstance(groups_result, BaseException) else []
-        )
-        already_banned = (
-            not isinstance(existing_ban, BaseException) and existing_ban is not None
-        )
-
-        # * Ensure the originating chat and primary groups are included even if they
-        # * are not in federated_groups (primary groups are env-var-configured only).
-        _all_group_ids: set[int] = {grp["chat_id"] for grp in groups}
-        for _extra in [chat_id] + [
-            cid for cid in (cfg.main_group, cfg.exec_group) if cid
-        ]:
-            if _extra not in _all_group_ids:
-                groups = [*groups, {"chat_id": _extra}]
-                _all_group_ids.add(_extra)
-
-        # * Create DB ban record only when the user is not already federation-banned.
-        # * proof_msg_id=0 because warn auto-bans have no uploaded proof media.
-        if not already_banned:
-            try:
-                await db.bans_db.create_ban(
-                    target_id, reason_text, admin_id, 0, log_msg_id
-                )
-            except Exception:
-                log.exception(
-                    "Failed to create federation ban record on warn limit for user %d",
-                    target_id,
-                )
-
-        # * Fan-out ban to all federation groups concurrently (rate-limited by fan_out).
-        ban_results = await fan_out(
-            [ctx.bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
-        )
-
-        total_groups = len(groups)
-        failed_groups = [
-            (grp, r)
-            for grp, r in zip(groups, ban_results, strict=False)
-            if isinstance(r, BaseException)
-        ]
-        failed = len(failed_groups)
-        applied = total_groups - failed
-        any_ban_ok = applied > 0
-
-        for grp, exc in failed_groups:
-            log.warning(
-                "Warn auto-ban enforcement failed for user=%d in group=%s (%d): %s",
-                target_id,
-                grp.get("title", ""),
-                grp["chat_id"],
-                exc,
-            )
-        log.info(
-            "Warn auto-ban enforced (%s): target=%d applied=%d/%d",
-            auto_ban_trigger,
+        await _execute_warn_auto_ban(
+            ctx.bot,
+            msg,
             target_id,
-            applied,
-            total_groups,
+            target_name,
+            admin_id,
+            admin_fname,
+            reason_text,
+            count,
+            warn_limit,
+            fed_count,
+            auto_ban_trigger,
+            proof_kb,
+            chat_id,
+            lc,
+            lt,
+            log_text,
         )
-
-        # * Build the applied-to summary line (mirrors ban_flow.py style).
-        if total_groups == 0:
-            applied_line = " No connected groups configured."
-        elif failed == total_groups:
-            sample = ", ".join(
-                grp.get("title") or str(grp["chat_id"]) for grp, _ in failed_groups[:5]
-            )
-            applied_line = (
-                f" WARNING: ban not enforced in any group ({total_groups}/{total_groups} failed)."
-                f" Check bot admin rights in: {esc(sample)}"
-                + (" ..." if len(failed_groups) > 5 else "")
-            )
-        elif failed > 0:
-            sample = ", ".join(
-                grp.get("title") or str(grp["chat_id"]) for grp, _ in failed_groups[:3]
-            )
-            applied_line = (
-                f" Applied to {applied}/{total_groups} groups"
-                f" ({failed} failed: {esc(sample)}"
-                + (" ..." if len(failed_groups) > 3 else ")")
-            )
-        else:
-            applied_line = f" Applied to {total_groups}/{total_groups} groups."
-
-        # * Build reply text based on which threshold fired.
-        if auto_ban_trigger == "per_group":
-            ban_notice = (
-                f"{user_ref(target_id, target_name)} "
-                f"hit {warn_limit} warnings "
-                f"and has been federation-banned."
-            )
-            ban_fail_notice = (
-                f"{user_ref(target_id, target_name)} "
-                f"hit {warn_limit} warnings "
-                f"but federation-ban failed - please ban them manually."
-            )
-        else:
-            ban_notice = (
-                f"{user_ref(target_id, target_name)} "
-                f"hit {fed_count}/{cfg.fed_warn_limit} warnings across the federation "
-                f"and has been federation-banned."
-            )
-            ban_fail_notice = (
-                f"{user_ref(target_id, target_name)} "
-                f"hit {fed_count}/{cfg.fed_warn_limit} federation-wide warnings "
-                f"but federation-ban failed - please ban them manually."
-            )
-
-        if any_ban_ok:
-            # * Clear warns across ALL federation groups (not just the originating chat)
-            # * so the user starts fresh after a potential unban, preventing immediate
-            # * re-ban from stale per-group counts accumulated before this federation ban.
-            clear_result, reply_result = await asyncio.gather(
-                db.warns_db.clear_all_warns(target_id),
-                msg.reply_text(
-                    f"{ban_notice}{applied_line}",
-                    parse_mode="HTML",
-                    reply_markup=proof_kb,
-                ),
-                return_exceptions=True,
-            )
-            if isinstance(clear_result, BaseException):
-                log.error(
-                    "Warn clear after auto-ban failed for target=%d chat=%d: %s",
-                    target_id,
-                    chat_id,
-                    clear_result,
-                )
-            if isinstance(reply_result, BaseException):
-                log.debug("Auto-ban notification reply failed: %s", reply_result)
-        else:
-            try:
-                await msg.reply_text(
-                    f"{ban_fail_notice}{applied_line}",
-                    parse_mode="HTML",
-                    reply_markup=proof_kb,
-                )
-            except Exception as exc:
-                log.debug("Auto-ban failure notice reply failed: %s", exc)
     else:
         # * federation log + reply in parallel
         results2 = await asyncio.gather(
@@ -515,6 +344,197 @@ async def execute_resetwarns(
         log.error(
             "Reset-warns log send failed for target=%d: %s", target_id, results[0]
         )
+
+
+# ──────────────────────── Warn auto-ban helper ───────────────────── #
+# * Extracted from execute_warn to keep the main flow under 200 lines.
+
+
+async def _execute_warn_auto_ban(
+    bot: Bot,
+    msg: Message,
+    target_id: int,
+    target_name: str,
+    admin_id: int,
+    admin_fname: str,
+    reason_text: str,
+    count: int,
+    warn_limit: int,
+    fed_count: int,
+    auto_ban_trigger: str,
+    proof_kb: InlineKeyboardMarkup | None,
+    chat_id: int,
+    lc: int,
+    lt: int | None,
+    log_text: str,
+) -> None:
+    """Handle warn-threshold auto-ban: staff demotion, DB record, fan-out, reply."""
+    target_role = await db.users_roles.get_effective_role(target_id)
+    if target_role:
+        try:
+            await Demote.execute(
+                bot,
+                target_id,
+                target_name,
+                target_role,
+                admin_id,
+                admin_fname,
+                trigger="ban",
+            )
+        except Exception:
+            log.exception("Auto-demote on warn limit failed for role=%s", target_role)
+        try:
+            await msg.reply_text(
+                f"{user_ref(target_id, target_name)} is a {target_role} and was "
+                f"demoted, but staff are not auto-banned via warnings.",
+                parse_mode="HTML",
+                reply_markup=proof_kb,
+            )
+        except Exception as exc:
+            log.debug("Warn auto-ban staff exemption reply failed: %s", exc)
+        return
+
+    groups_result, existing_ban, log_result = await asyncio.gather(
+        db.groups_db.active_groups(),
+        db.bans_db.get_active_ban(target_id),
+        bot.send_message(
+            lc,
+            log_text,
+            parse_mode="HTML",
+            message_thread_id=lt,
+            reply_markup=proof_kb,
+        ),
+        return_exceptions=True,
+    )
+    if isinstance(log_result, BaseException):
+        log.error("Warn-auto-ban log send failed: %s", log_result)
+    log_msg_id: int = (
+        log_result.message_id if not isinstance(log_result, BaseException) else 0
+    )
+    groups: list = groups_result if not isinstance(groups_result, BaseException) else []
+    already_banned = (
+        not isinstance(existing_ban, BaseException) and existing_ban is not None
+    )
+
+    _all_group_ids: set[int] = {grp["chat_id"] for grp in groups}
+    for _extra in [chat_id] + [cid for cid in (cfg.main_group, cfg.exec_group) if cid]:
+        if _extra not in _all_group_ids:
+            groups = [*groups, {"chat_id": _extra}]
+            _all_group_ids.add(_extra)
+
+    if not already_banned:
+        try:
+            await db.bans_db.create_ban(target_id, reason_text, admin_id, 0, log_msg_id)
+        except Exception:
+            log.exception(
+                "Failed to create federation ban record on warn limit for user %d",
+                target_id,
+            )
+
+    ban_results = await fan_out(
+        [bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
+    )
+
+    total_groups = len(groups)
+    failed_groups = [
+        (grp, r)
+        for grp, r in zip(groups, ban_results, strict=False)
+        if isinstance(r, BaseException)
+    ]
+    failed = len(failed_groups)
+    applied = total_groups - failed
+    any_ban_ok = applied > 0
+
+    for grp, exc in failed_groups:
+        log.warning(
+            "Warn auto-ban enforcement failed for user=%d in group=%s (%d): %s",
+            target_id,
+            grp.get("title", ""),
+            grp["chat_id"],
+            exc,
+        )
+    log.info(
+        "Warn auto-ban enforced (%s): target=%d applied=%d/%d",
+        auto_ban_trigger,
+        target_id,
+        applied,
+        total_groups,
+    )
+
+    if total_groups == 0:
+        applied_line = " No connected groups configured."
+    elif failed == total_groups:
+        sample = ", ".join(
+            grp.get("title") or str(grp["chat_id"]) for grp, _ in failed_groups[:5]
+        )
+        applied_line = (
+            f" WARNING: ban not enforced in any group ({total_groups}/{total_groups} failed)."
+            f" Check bot admin rights in: {esc(sample)}"
+            + (" ..." if len(failed_groups) > 5 else "")
+        )
+    elif failed > 0:
+        sample = ", ".join(
+            grp.get("title") or str(grp["chat_id"]) for grp, _ in failed_groups[:3]
+        )
+        applied_line = (
+            f" Applied to {applied}/{total_groups} groups"
+            f" ({failed} failed: {esc(sample)}"
+            + (" ..." if len(failed_groups) > 3 else ")")
+        )
+    else:
+        applied_line = f" Applied to {total_groups}/{total_groups} groups."
+
+    if auto_ban_trigger == "per_group":
+        ban_notice = (
+            f"{user_ref(target_id, target_name)} "
+            f"hit {warn_limit} warnings "
+            f"and has been federation-banned."
+        )
+        ban_fail_notice = (
+            f"{user_ref(target_id, target_name)} "
+            f"hit {warn_limit} warnings "
+            f"but federation-ban failed - please ban them manually."
+        )
+    else:
+        ban_notice = (
+            f"{user_ref(target_id, target_name)} "
+            f"hit {fed_count}/{cfg.fed_warn_limit} warnings across the federation "
+            f"and has been federation-banned."
+        )
+        ban_fail_notice = (
+            f"{user_ref(target_id, target_name)} "
+            f"hit {fed_count}/{cfg.fed_warn_limit} federation-wide warnings "
+            f"but federation-ban failed - please ban them manually."
+        )
+
+    if any_ban_ok:
+        clear_result, reply_result = await asyncio.gather(
+            db.warns_db.clear_all_warns(target_id),
+            msg.reply_text(
+                f"{ban_notice}{applied_line}",
+                parse_mode="HTML",
+                reply_markup=proof_kb,
+            ),
+            return_exceptions=True,
+        )
+        if isinstance(clear_result, BaseException):
+            log.error(
+                "Warn clear after auto-ban failed for target=%d chat=%d: %s",
+                target_id,
+                chat_id,
+                clear_result,
+            )
+        if isinstance(reply_result, BaseException):
+            log.debug("Auto-ban notification reply failed: %s", reply_result)
+    else:
+        try:
+            await msg.reply_text(
+                f"{ban_fail_notice}{applied_line}",
+                parse_mode="HTML",
+                reply_markup=proof_kb,
+            )
+        except Exception as exc:
+            log.debug("Auto-ban failure notice reply failed: %s", exc)
 
 
 # ──────────────────────── Executor adapter ──────────────────────── #
