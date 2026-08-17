@@ -31,6 +31,14 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Fixed
 
+- **Syntax** (`tcbot/`): replaced 21 instances of Python 2 `except X, Y:` syntax with Python 3.14 parenthesized form `except (X, Y):` across 8 files: `__init__.py`, `admins.py`, `checking.py`, `help.py`, `netspeed.py`, `privacy.py`, `stats.py`, `prefixes.py`. Python 2 syntax is a `SyntaxError` on Python 3.14 and would prevent the bot from starting.
+
+- **Logging** (`tcbot/__main__.py`): the `_print_fatal` startup-error helper intentionally uses `print()` because it runs before the logging system is initialized; added a docstring clarifying this.
+
+- **Silent failures** (`tcbot/__main__.py`, `tcbot/modules/helper/workflows/connected_flow.py`): replaced 2 bare `pass` statements in `except RuntimeError` handlers with `log.debug()` so failures are observable. The `_print_fatal` helper remains as-is (intentional `print()` before logging is available).
+
+- **Tooling** (ruff 0.16.3 workaround): `ruff format` incorrectly reverts `except (X, Y):` to Python 2 `except X, Y:` syntax. The project `ruff check` and `pyright` both catch this, so the workaround is: run `ruff format .`, then run `ruff check .` and `pyright tcbot/` to verify no regressions. See `pyproject.toml` for pinned configuration.
+
 - **Webhook delivery** (`tcbot/alive.py`): wait for the PTB update queue to accept each webhook update and return retryable HTTP `503` responses for queue timeouts, event-loop rejection, or enqueue failures instead of acknowledging undelivered updates.
 - **Scheduler readiness** (`tcbot/database/scheduler.py`): expose readiness only after recurring schedules are registered and background execution starts; propagate initialization failures to startup.
 - **Redis cache ordering** (`tcbot/database/cache.py`): serialize `set`, `delete`, and `clear_all` mutations through a FIFO queue shared by cache objects using the same prefix, so a slow write cannot complete after a newer invalidation. Completed queue tails are released to avoid retaining task chains.
