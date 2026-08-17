@@ -129,7 +129,7 @@ async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         _member_cache_tasks.add(task)
         task.add_done_callback(_member_cache_tasks.discard)
     except RuntimeError:
-        pass
+        log.debug("Member cache warmup skipped: no running event loop.")
 
 
 # ─────────────────── PTB Error Handler (Layer 2) ────────────────── #
@@ -442,7 +442,11 @@ async def _run_webhook_mode(app: Application) -> None:
 
 
 def _print_fatal(stage: str, exc: BaseException) -> None:
-    """Print a fatal startup error with stage label and full traceback to stderr."""
+    """Print a fatal startup error with stage label and full traceback to stderr.
+
+    Uses ``print`` intentionally: this runs before the event loop and logging
+    are available, so stderr is the only reliable output path.
+    """
     border = "=" * _FATAL_BORDER_WIDTH
     print(f"\n{border}", file=sys.stderr)
     print(f" FATAL STARTUP ERROR in stage: {stage}", file=sys.stderr)

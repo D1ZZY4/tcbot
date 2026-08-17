@@ -152,7 +152,6 @@ def webhook_route() -> tuple[str, int]:
         try:
             future = asyncio.run_coroutine_threadsafe(put_coro, _wh_loop)
         except Exception:
-            put_coro.close()
             log.exception("Webhook: PTB event loop rejected the update.")
             return "Service unavailable", 503
         try:

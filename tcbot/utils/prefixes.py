@@ -36,8 +36,12 @@ class _MessageLike(Protocol):
 
 
 def _get_prefixes() -> list[str]:
-    """Return command prefixes from the already-validated runtime configuration."""
-    return cfg.prefixes or ["/"]
+    """Return command prefixes from the already-validated runtime configuration.
+
+    Filters out empty strings and whitespace-only entries so a misconfigured
+    ``PREFIXES`` value cannot produce a prefix that matches every message.
+    """
+    return [p for p in (cfg.prefixes or ["/"]) if p and p.strip()]
 
 
 def _get_custom_prefixes() -> list[str]:

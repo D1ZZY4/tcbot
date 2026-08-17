@@ -223,7 +223,7 @@ class BuildConnection:
                 _harvest_tasks.add(task)
                 task.add_done_callback(_harvest_tasks.discard)
             except RuntimeError:
-                pass
+                log.debug("Harvest task skipped: no running event loop.")
 
         # * Apply all existing federation bans concurrently - semaphore-bounded
         results = await fan_out([bot.ban_chat_member(chat_id, uid) for uid in ban_uids])
