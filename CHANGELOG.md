@@ -27,7 +27,17 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 - **Validation** (`.github/workflows/*`): all CI workflows now use `python-version: "3.14"` (previously `"3.12"`).
 - **Tooling** (`pyproject.toml`, `pyrightconfig.json`, `.agents/skills/python-code-quality/`): added pyright to the validation pipeline alongside ruff. Updated Python target to 3.14 across project config, docs, and CI workflows.
 
-## [Unreleased] - 2026-08-06 (audit continuation)
+## [Unreleased]
+
+### Added
+
+- **User mentions** (`tcbot/utils/formatter.py`): all user references now include a clickable `tg://user?id=...` link. With username: `Name | @username (tg://user?id=ID)`. Without username: `Name (tg://user?id=ID)`. The bare numeric fallback shows only the `tg://` link. This applies to welcome/greeting messages, ban/kick/mute/warn logs, check profiles, appeal messages, and all action summaries.
+
+### Fixed
+
+- **Log formatting** (`tcbot/modules/helper/parse_logmsg.py`): `User ID`, `Admin ID`, `Ban ID`, `Request ID`, and all numeric ID fields now use `<code>` formatting for consistency. `user_block` and `actor_block` docstrings updated to reflect the new format.
+
+## [6.2.0] - 2026-08-17
 
 ### Fixed
 

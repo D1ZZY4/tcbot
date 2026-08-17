@@ -89,11 +89,11 @@ class LogBuilder:
         user_label: str = "User",
         id_label: str = "User ID",
     ) -> LogBuilder:
-        """Append the canonical `Label: mention` + `User ID: <id>` pair."""
+        """Append the canonical `Label: mention` + `User ID: <code>id</code>` pair."""
         self._lines.append(
             f"{user_label}: {mention(target_id, target_fname, target_username)}"
         )
-        self._lines.append(f"{id_label}: {target_id}")
+        self._lines.append(f"{id_label}: {code(str(target_id))}")
         return self
 
     def actor_block(
@@ -105,9 +105,9 @@ class LogBuilder:
         label: str = "Admin",
         id_label: str = "ID",
     ) -> LogBuilder:
-        """Append the canonical `Label: mention` + `ID: <id>` pair for an actor."""
+        """Append the canonical `Label: mention` + `ID: <code>id</code>` pair for an actor."""
         self._lines.append(f"{label}: {mention(actor_id, actor_fname, actor_username)}")
-        self._lines.append(f"{id_label}: {actor_id}")
+        self._lines.append(f"{id_label}: {code(str(actor_id))}")
         return self
 
     def date(self, ts: datetime | None = None, *, label: str = "Date") -> LogBuilder:
@@ -146,8 +146,8 @@ def ban_log(
         .mention_field("Admin", admin_id, admin_fname)
         .section()
         .mention_field("User", target_id, target_fname)
-        .field("User ID", target_id, escape=False)
-        .field("Ban ID", ban_id, escape=False)
+        .code_field("User ID", target_id)
+        .code_field("Ban ID", ban_id)
         .field("Reason", reason)
         .section()
         .date(timestamp, label="Commit at")
@@ -178,8 +178,8 @@ def ban_update_log(
         .mention_field("Previous Admin", old_admin_id, old_admin_fname)
         .section()
         .mention_field("User", target_id, target_fname)
-        .field("User ID", target_id, escape=False)
-        .field("Ban ID", ban_id, escape=False)
+        .code_field("User ID", target_id)
+        .code_field("Ban ID", ban_id)
         .field("Reason", reason)
         .section()
         .date(original_ts, label="Commit at")
@@ -202,7 +202,7 @@ def proof_caption_new(
         LogBuilder(f"ID: {target_id}")
         .section()
         .mention_field("Admin", admin_id, admin_fname)
-        .field("Admin ID", admin_id, escape=False)
+        .code_field("Admin ID", admin_id)
         .section()
         .date(timestamp, label="Commit at")
         .build()
@@ -221,7 +221,7 @@ def proof_caption_update(
         LogBuilder(f"ID: {target_id}")
         .section()
         .mention_field("Admin", admin_id, admin_fname)
-        .field("Admin ID", admin_id, escape=False)
+        .code_field("Admin ID", admin_id)
     )
     if prev_proof_lnk:
         b.section().field("Previous", link("Click Here", prev_proof_lnk), escape=False)
@@ -246,7 +246,7 @@ def mute_log(
         LogBuilder(f"{cfg.community_name} Muted")
         .mention_field("Admin", admin_id, admin_fname)
         .mention_field("User", target_id, target_fname)
-        .field("User ID", target_id, escape=False)
+        .code_field("User ID", target_id)
         .field("Reason", reason)
         .field("Duration", duration_str)
         .section()
@@ -266,7 +266,7 @@ def unmute_log(
         LogBuilder(f"{cfg.community_name} Federation Unmute")
         .mention_field("Admin", admin_id, admin_fname)
         .mention_field("User", target_id, target_fname)
-        .field("User ID", target_id, escape=False)
+        .code_field("User ID", target_id)
         .section()
         .date()
         .build()
@@ -290,7 +290,7 @@ def kick_log(
         LogBuilder(f"{cfg.community_name} Kicked")
         .mention_field("Admin", admin_id, admin_fname)
         .mention_field("User", target_id, target_fname)
-        .field("User ID", target_id, escape=False)
+        .code_field("User ID", target_id)
         .field("Reason", reason)
         .raw(f"Group: {esc(chat_title)} ({code(str(chat_id))})")
         .section()
@@ -316,8 +316,8 @@ def resetwarns_log(
         LogBuilder(f"{cfg.community_name} Reset Warns")
         .mention_field("Admin", admin_id, admin_fname)
         .mention_field("User", target_id, target_fname)
-        .field("User ID", target_id, escape=False)
-        .field("Warnings cleared", str(removed), escape=False)
+        .code_field("User ID", target_id)
+        .field("Warnings cleared", str(removed))
         .raw(f"Group: {esc(chat_title)} ({code(str(chat_id))})")
         .section()
         .date()
@@ -341,9 +341,9 @@ def warn_log(
         LogBuilder(f"{cfg.community_name} Warn")
         .mention_field("Admin", admin_id, admin_fname)
         .mention_field("User", target_id, target_fname)
-        .field("User ID", target_id, escape=False)
+        .code_field("User ID", target_id)
         .field("Reason", reason)
-        .field("Warnings", f"{count}/{warn_limit}", escape=False)
+        .field("Warnings", f"{count}/{warn_limit}")
         .raw(f"Group: {esc(chat_title)} ({code(str(chat_id))})")
         .section()
         .date()
@@ -366,8 +366,8 @@ def unwarn_log(
         LogBuilder(f"{cfg.community_name} Unwarn")
         .mention_field("Admin", admin_id, admin_fname)
         .mention_field("User", target_id, target_fname)
-        .field("User ID", target_id, escape=False)
-        .field("Warnings now", f"{new_count}/{warn_limit}", escape=False)
+        .code_field("User ID", target_id)
+        .field("Warnings now", f"{new_count}/{warn_limit}")
         .raw(f"Group: {esc(chat_title)} ({code(str(chat_id))})")
         .section()
         .date()
@@ -391,7 +391,7 @@ def unban_log(
         LogBuilder(f"{cfg.community_name} Unban")
         .mention_field("Admin", admin_id, admin_fname)
         .mention_field("User", target_id, target_fname)
-        .field("User ID", target_id, escape=False)
+        .code_field("User ID", target_id)
     )
     if reason:
         b.field("Unban Reason", reason)
@@ -409,13 +409,13 @@ def appeal_received_log(
 ) -> str:
     """Review card posted to APPEAL_DISCUSSION_TOPIC."""
     b = LogBuilder(f"New {cfg.community_name} Appeal Request").raw(
-        f"User: {mention(target_id, target_fname)} (ID: {target_id})"
+        f"User: {mention(target_id, target_fname)} (ID: {code(str(target_id))})"
     )
-    b.field("Ban ID", ban_id, escape=False)
+    b.code_field("Ban ID", ban_id)
     if appeal_link:
         b.link_field("Appeal", "View", appeal_link)
     else:
-        b.field("Appeal", "N/A", escape=False)
+        b.field("Appeal", "N/A")
     return (
         b.date(label="Submitted")
         .section()
@@ -434,14 +434,14 @@ def appeal_submitted_log(
     b = (
         LogBuilder(f"New {cfg.community_name} Appeal Submitted")
         .mention_field("User", target_id, target_fname)
-        .field("ID", target_id, escape=False)
+        .code_field("ID", target_id)
         .section()
-        .field("Ban ID", ban_id, escape=False)
+        .code_field("Ban ID", ban_id)
     )
     if appeal_link:
         b.link_field("Appeal", "View", appeal_link)
     else:
-        b.field("Appeal", "N/A", escape=False)
+        b.field("Appeal", "N/A")
     return b.section().date(label="Submitted").build()
 
 
@@ -460,17 +460,17 @@ def _appeal_decision_edit(
     b = (
         LogBuilder(title)
         .mention_field("User", target_id, target_fname)
-        .field("ID", target_id, escape=False)
+        .code_field("ID", target_id)
         .section()
-        .field("Ban ID", ban_id, escape=False)
+        .code_field("Ban ID", ban_id)
     )
     if appeal_link:
         b.link_field("Appeal", "View", appeal_link)
     else:
-        b.field("Appeal", "N/A", escape=False)
+        b.field("Appeal", "N/A")
     return (
         b.section()
-        .field("Submitted", submitted_str, escape=False)
+        .field("Submitted", submitted_str)
         .raw(f"{decision_label}: {mention(admin_id, admin_fname)}")
         .date(label=f"{decision_label} at")
         .build()
@@ -535,8 +535,8 @@ def appeal_unban_log(
         LogBuilder(f"{cfg.community_name} Unban (via Appeal)")
         .mention_field("Admin", admin_id, admin_fname)
         .mention_field("User", target_id, target_fname)
-        .field("User ID", target_id, escape=False)
-        .field("Ban ID", ban_id, escape=False)
+        .code_field("User ID", target_id)
+        .code_field("Ban ID", ban_id)
         .section()
         .date()
         .build()
@@ -566,11 +566,11 @@ def promoted(
     return (
         LogBuilder(f"New {cfg.community_name} Promoted")
         .mention_field("User", target_id, target_fname)
-        .field("User ID", target_id, escape=False)
-        .field("Role", role_label, escape=False)
+        .code_field("User ID", target_id)
+        .field("Role", role_label)
         .section()
         .mention_field("Promoted by", by_id, by_fname)
-        .field("ID", by_id, escape=False)
+        .code_field("ID", by_id)
         .section()
         .date()
         .build()
@@ -591,11 +591,11 @@ def demoted(
     return (
         LogBuilder(f"{cfg.community_name} Demoted")
         .mention_field("User", target_id, target_fname)
-        .field("User ID", target_id, escape=False)
-        .field("Role removed", role_label, escape=False)
+        .code_field("User ID", target_id)
+        .field("Role removed", role_label)
         .section()
         .mention_field("Demoted by", by_id, by_fname)
-        .field("ID", by_id, escape=False)
+        .code_field("ID", by_id)
         .section()
         .date()
         .build()
@@ -612,10 +612,10 @@ def ownership_transferred(
     return (
         LogBuilder(f"{cfg.community_name} Ownership Transferred")
         .mention_field("New Owner", new_owner_id, new_owner_fname)
-        .field("ID", new_owner_id, escape=False)
+        .code_field("ID", new_owner_id)
         .section()
         .mention_field("Previous Owner", old_owner_id, old_owner_fname)
-        .field("ID", old_owner_id, escape=False)
+        .code_field("ID", old_owner_id)
         .section()
         .date()
         .build()
@@ -636,10 +636,10 @@ def promote_request_log(
     return (
         LogBuilder(f"{cfg.community_name} Promotion Request")
         .mention_field("User", user_id, user_fname)
-        .field("ID", user_id, escape=False)
+        .code_field("ID", user_id)
         .field("Username", uname_part)
         .section()
-        .field("Request ID", request_id, escape=False)
+        .code_field("Request ID", request_id)
         .date()
         .build()
     )
@@ -656,12 +656,12 @@ def promote_approved_log(
     return (
         LogBuilder(f"New {cfg.community_name} Admin Promoted")
         .mention_field("Admin", target_id, target_fname)
-        .field("ID", target_id, escape=False)
+        .code_field("ID", target_id)
         .section()
         .mention_field("Promoted by", admin_id, admin_fname)
-        .field("ID", admin_id, escape=False)
+        .code_field("ID", admin_id)
         .section()
-        .field("Request ID", request_id, escape=False)
+        .code_field("Request ID", request_id)
         .date()
         .build()
     )
@@ -678,12 +678,12 @@ def promote_rejected_log(
     return (
         LogBuilder(f"{cfg.community_name} Promotion Request Rejected")
         .mention_field("User", target_id, target_fname)
-        .field("ID", target_id, escape=False)
+        .code_field("ID", target_id)
         .section()
         .mention_field("Rejected by", admin_id, admin_fname)
-        .field("ID", admin_id, escape=False)
+        .code_field("ID", admin_id)
         .section()
-        .field("Request ID", request_id, escape=False)
+        .code_field("Request ID", request_id)
         .date()
         .build()
     )
@@ -709,10 +709,10 @@ def group_connected_log(
     return (
         LogBuilder(f"New {cfg.community_name} Connected Group")
         .raw(f"Group: {group_display}")
-        .field("ID", chat_id, escape=False)
+        .code_field("ID", chat_id)
         .section()
         .mention_field("Added by Owner", owner_id, owner_fname)
-        .field("ID", owner_id, escape=False)
+        .code_field("ID", owner_id)
         .section()
         .date()
         .build()
@@ -730,7 +730,9 @@ def group_connection_rejected_log(
         LogBuilder(f"{cfg.community_name} Connection Rejected")
         .raw(f"Group: {esc(chat_title)} (ID: {chat_id})")
         .section()
-        .raw(f"Rejected by Owner: {mention(owner_id, owner_fname)} (ID: {owner_id})")
+        .raw(
+            f"Rejected by Owner: {mention(owner_id, owner_fname)} (ID: {code(str(owner_id))})"
+        )
         .section()
         .date()
         .build()
@@ -747,10 +749,10 @@ def group_disconnected_log(
     return (
         LogBuilder(f"{cfg.community_name} Group Disconnected")
         .field("Group", chat_title)
-        .field("ID", chat_id, escape=False)
+        .code_field("ID", chat_id)
         .section()
         .mention_field("Removed by", actor_id, actor_fname)
-        .field("ID", actor_id, escape=False)
+        .code_field("ID", actor_id)
         .section()
         .date()
         .build()
@@ -765,7 +767,7 @@ def group_bot_removed_log(
     return (
         LogBuilder(f"{cfg.community_name} Group Removed Bot")
         .field("Group", chat_title)
-        .field("ID", chat_id, escape=False)
+        .code_field("ID", chat_id)
         .section()
         .date()
         .build()
@@ -789,8 +791,8 @@ def broadcast_log(
         .mention_field("Admin", admin_id, admin_fname)
         .field("Message", preview)
         .section()
-        .field("Groups reached", success, escape=False)
-        .field("Failed groups", failed, escape=False)
+        .field("Groups reached", str(success))
+        .field("Failed groups", str(failed))
         .section()
         .date()
         .build()

@@ -40,18 +40,23 @@ def link(text: str, url: str) -> str:
 
 
 def mention(user_id: int, name: str, username: str | None = None) -> str:
-    """Create a user mention with username fallback.
+    """Create a user mention with username link and always-included user ID link.
 
-    If username is available, creates a global mention link (works everywhere).
-    When name equals the user ID string (numeric fallback), only the
-    code-formatted ID is returned to avoid the redundant ``"123 123"`` display.
-    Otherwise, falls back to plain text name with copyable user ID.
+    When a username is available: ``Name | Username (tg://user?id=ID)``.
+    When no username: ``Name (tg://user?id=ID)``.
+    When the name is the bare numeric ID: just the ``tg://user?id=ID`` link,
+    avoiding a redundant display.
     """
+    id_link = f'<a href="tg://user?id={user_id}">{user_id}</a>'
     if username:
-        return f'<a href="https://t.me/{html.escape(str(username))}">{html.escape(str(name))}</a>'
+        return (
+            f"{html.escape(str(name))} | "
+            f'<a href="https://t.me/{html.escape(str(username))}">'
+            f"{html.escape(str(username))}</a> ({id_link})"
+        )
     if str(name) == str(user_id):
-        return f"<code>{user_id}</code>"
-    return f"{html.escape(str(name))} <code>{user_id}</code>"
+        return id_link
+    return f"{html.escape(str(name))} ({id_link})"
 
 
 def esc(text: str) -> str:
@@ -62,18 +67,21 @@ def esc(text: str) -> str:
 def user_ref(user_id: int, name: str, username: str | None = None) -> str:
     """Format a complete user reference for action confirmation messages.
 
-    Produces a clickable link with a separate code-formatted ID when a
-    username is available, a plain escaped name followed by the ID when the
-    name differs from the numeric ID, or just the code-formatted ID when the
-    name is the raw numeric string (avoiding triple-ID display when the
-    fallback name equals the user ID).
+    When a username is available: ``Name | @username (tg://user?id=ID)``.
+    When no username: ``Name (tg://user?id=ID)``.
+    When the name is the bare numeric ID: just the ``tg://user?id=ID`` link.
 
     Use this helper instead of the ``mention() - code(id)`` inline pattern so
     that every action summary (ban, unban, warn, kick, mute) formats the
     target consistently and without duplication.
     """
+    id_link = f'<a href="tg://user?id={user_id}">{user_id}</a>'
     if username:
-        return f'<a href="https://t.me/{html.escape(username)}">{html.escape(str(name))}</a> - {code(str(user_id))}'
+        return (
+            f"{html.escape(str(name))} | "
+            f'<a href="https://t.me/{html.escape(username)}">'
+            f"{html.escape(str(username))}</a> ({id_link})"
+        )
     if str(name) == str(user_id):
-        return code(str(user_id))
-    return f"{html.escape(str(name))} - {code(str(user_id))}"
+        return id_link
+    return f"{html.escape(str(name))} ({id_link})"

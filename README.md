@@ -10,7 +10,7 @@ TCF Bot is a Telegram federation management bot for the Transsion Core Federatio
 - **Connected groups**: approve group joins, track active groups, and run multi-group actions safely.
 - **Staff roles**: Founder, Admin, Developer, and Tester hierarchy with promotion/demotion workflows.
 - **Moderation actions**: ban, unban, kick, mute, warn, warning reset, checks, stats, and broadcast helpers.
-- **Smart mentions**: global username-based mentions with automatic fallback to plain text + ID for users without usernames.
+- **Smart mentions**: every user reference includes a clickable `tg://user?id=...` link. With username: `Name | @username (tg://user?id=ID)`. Without username: `Name (tg://user?id=ID)`. Works in welcome messages, ban/kick/mute/warn logs, check profiles, and all action summaries.
 - **Flexible target resolution**: reply-first priority with partial name search support for natural command usage.
 - **Audit logging**: moderation, appeal, role, and error reports to configured log destinations.
 - **Health checks**: Flask keep-alive server on `PORT` with `GET /` returning `OK` and `GET /health` returning a JSON subsystem-status report.
