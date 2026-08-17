@@ -75,7 +75,7 @@ def parse_chat_id(raw: str) -> tuple[int, int | None]:
             chat_str, thread_str = raw.split("/", 1)
             return int(chat_str), int(thread_str)
         return int(raw), None
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         log.warning("Invalid CHAT_ID format '%s', defaulting to 0.", raw)
         return 0, None
 
