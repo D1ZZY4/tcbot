@@ -58,7 +58,7 @@ def _bot_username_from_message(message: Any) -> str | None:
     """Return the current bot username from a PTB message when available."""
     try:
         bot = message.get_bot()
-    except (AttributeError, RuntimeError):
+    except AttributeError, RuntimeError:
         return None
     return (getattr(bot, "username", None) or "").lstrip("@") or None
 

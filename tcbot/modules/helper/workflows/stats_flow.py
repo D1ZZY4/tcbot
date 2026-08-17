@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import TYPE_CHECKING, cast
 
 from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
@@ -16,6 +17,8 @@ from tcbot import database as db
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.formatter import bold, code, esc, mention, user_ref
 from tcbot.utils.pagination import date_or_unknown, nav_row, paginate
+
+log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from telegram.ext import ContextTypes
@@ -158,7 +161,12 @@ class Stats:
                 owner_fname, owner_uname = await db.users_cache.get_user_mention_data(
                     owner_id_int
                 )
-            except Exception:
+            except Exception as exc:
+                log.debug(
+                    "stats main: get_user_mention_data failed for owner %d: %s",
+                    owner_id_int,
+                    exc,
+                )
                 owner_fname, owner_uname = str(owner_id_int), None
             owner_line = mention(owner_id_int, owner_fname, owner_uname)
         else:
@@ -194,7 +202,7 @@ class Stats:
         if isinstance(owner_id, BaseException):
             owner_id = None
         if isinstance(admins, BaseException):
-            admins = [] if isinstance(admins, BaseException) else admins
+            admins = []
         if isinstance(developers, BaseException):
             developers = [] if isinstance(developers, BaseException) else developers
         if isinstance(testers, BaseException):
