@@ -88,7 +88,7 @@ write.
 
 | Collection | Index |
 |---|---|
-| `bans` | `(banned_user_id, is_active)` |
+| `bans` | `(banned_user_id, is_active, timestamp desc, ban_id desc)` compound (serves get_active_ban filter+sort), unique `(ban_id)`, `(banned_user_id, appeal_log_msg_id)` sparse, `(is_active, timestamp desc, ban_id desc)` (serves active_bans / active_ban_count), `(banned_user_id, timestamp desc, ban_id desc)` (serves /check ban history) |
 | `bans` | unique `(ban_id)` |
 | `tc_owners` | unique `(user_id)` |
 | `tc_admins` | unique `(user_id)` |
