@@ -51,7 +51,11 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 - **Query optimization** (`tcbot/database/queues_db.py`): `all_pending()` now uses a projection limiting returned fields and a `_PAGE_LIMIT=200` cap, reducing wire payload for the pending-requests list.
 - **Query optimization** (`tcbot/database/warns_db.py`): `remove_last_warn()` now fetches only `{_id: 1}` for the most-recent warn lookup, making it a covered index query instead of fetching the full document.
 - **Code quality** (`tcbot/modules/helper/workflows/ban_flow.py`): moved `datetime` into the `TYPE_CHECKING` block and collapsed the `if`/`else` ban_id assignment to a ternary expression, resolving TC003 and SIM108.
-- **Query optimization** (`tcbot/database/mongos.py`): added compound index `[("banned_user_id", 1), ("is_active", 1), ("timestamp", -1), ("ban_id", -1)]` to serve `get_active_ban()` as a covered query (filter + sort in one index). Removed the now-redundant prefix index `[("banned_user_id", 1), ("is_active", 1)]`.
+- **Query optimization** (`tcbot/database/mongos.py`): added compound index `[("banned_user_id", 1), ("is_active", 1), ("timestamp", -1), ("ban_id", -1)]` to serve `get_active_ban()` as a covered query (filter + sort in one index). Removed the now-redundant prefix index `[("banned_user_id", 1), ("is_active", 1)]].
+
+### Documentation
+
+- **Documentation** (`docs/architecture/database.md`, `docs/features/moderation/banning.md`, `docs/operations/performance.md`): updated all `bans` index references from the removed prefix index `(banned_user_id, is_active)` to the current compound index set in `mongos.ensure_indexes()`: `(banned_user_id, is_active, timestamp desc, ban_id desc)` for `get_active_ban()`, `(is_active, timestamp desc, ban_id desc)` for `active_bans()`, and `(banned_user_id, timestamp desc, ban_id desc)` for `/check` ban history.
 
 ## [6.2.0] - 2026-08-17
 
