@@ -169,8 +169,8 @@ timed-ban schedules, so do not assume that every restore contains unban jobs.
 
 ## Scheduler dependency note
 
-The project pins APScheduler to `4.0.0a6` because the scheduler integration is
+The project pins APScheduler to `3.11.3` because the scheduler integration is
 version-sensitive. Before changing that pin, review the APScheduler release
 notes and security advisories, test scheduler startup and restore behavior, and
-verify the MongoDB data-store compatibility. Protect the MongoDB account and
+verify the MongoDB job-store compatibility. Protect the MongoDB account and
 backup archives with least-privilege access and network restrictions.

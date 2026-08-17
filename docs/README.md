@@ -100,7 +100,7 @@ Runtime starts with `python -m tcbot`. The entry point loads configuration, star
 ## Development commands
 
 ```bash
-uv sync
+uv sync --frozen
 ruff format .
 ruff check --fix .
 python -m tcbot

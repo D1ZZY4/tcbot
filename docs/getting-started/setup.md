@@ -18,7 +18,7 @@ Replit-specific deployment, see [`../../replit.md`](../../replit.md).
 ```bash
 git clone <repo-url>
 cd tcbot
-uv sync
+uv sync --frozen
 cp config.env.example config.env
 python -m tcbot
 ```
