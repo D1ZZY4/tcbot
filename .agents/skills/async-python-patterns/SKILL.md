@@ -33,7 +33,7 @@ Do not use this skill for CPU-bound optimization unless the async code is direct
 
 ## Project Baseline
 
-- Python target: `>=3.13`.
+- Python target: `>=3.14`.
 - Telegram framework: `python-telegram-bot` (latest), async-first API.
 - Database driver: Motor (latest).
 - Runtime entry point: `python -m tcbot` on all platforms.
