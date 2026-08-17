@@ -210,7 +210,7 @@ Ban records are stored in the `bans` collection. New records include:
 
 Indexes are ensured for:
 
-- `bans`: `banned_user_id + is_active`
+- `bans`: `(banned_user_id, is_active, timestamp desc, ban_id desc)` compound (serves `get_active_ban` filter+sort)
 - `bans`: unique `ban_id`
 
 Active-ban reads are deterministic: when duplicate active records exist for the same user, `get_active_ban` returns the newest by `timestamp` and then `ban_id`.
