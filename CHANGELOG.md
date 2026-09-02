@@ -4,6 +4,16 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ## [Unreleased]
 
+### Removed
+
+- **Dead code** (`tcbot/database/users_roles.py`, `tcbot/database/scheduler.py`, `tcbot/modules/helper/extraction.py`, `tcbot/modules/helper/workflows/stats_flow.py`): removed four symbols that had no callers in the repository, confirmed by `grep`:
+  - `users_roles.all_roles()` -- listed all custom role assignments; never called.
+  - `scheduler.run_now()` -- one-shot immediate scheduler trigger; never called.
+  - `extraction.ResolvedTarget` dataclass -- defined but `extract_target` returns `tuple[int, str]`, not this dataclass; the dataclass was never instantiated anywhere in the codebase.
+  - `stats_flow.ROLE_LABEL` re-export -- listed in `__all__` but every real consumer imports `db.users_roles.ROLE_LABEL` directly; the re-export was dead.
+
+  Followed each removal with a `ruff check` pass: `users_roles.RoleDoc` import, `scheduler.Any` and `scheduler.cast` imports, and `extraction.dataclass`/`field` imports all became unused as a direct consequence and were removed in the same commit. No behaviour change.
+
 ## [6.3.0] - 2026-09-02
 
 ### Changed

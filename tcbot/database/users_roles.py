@@ -21,7 +21,7 @@ from tcbot.database.cache import (
     effective_role_cache,
     owner_id_cache,
 )
-from tcbot.database.documents import AdminDoc, RoleDoc, RoleRefDoc
+from tcbot.database.documents import AdminDoc, RoleRefDoc
 from tcbot.database.mongos import col, db_call
 from tcbot.utils.timedate_format import utc_now
 
@@ -209,11 +209,6 @@ async def all_by_role(role: str) -> list[RoleRefDoc]:
     return await db_call(
         col("tc_roles").find({"role": role}, {"_id": 0, "user_id": 1}).to_list(None)
     )
-
-
-async def all_roles() -> list[RoleDoc]:
-    """Get all custom role assignments in the database."""
-    return await db_call(col("tc_roles").find({}).to_list(None))
 
 
 # ──────────────────── Effective role resolution ────────────────── #

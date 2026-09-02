@@ -549,6 +549,4 @@ class Stats:
         return text, cls._search_detail_kb(proof_link)
 
 
-ROLE_LABEL = db.users_roles.ROLE_LABEL
-
-__all__ = ("CHAT_KEY", "MSG_KEY", "RESULTS_KEY", "ROLE_LABEL", "SEARCH_KEY", "Stats")
+__all__ = ("CHAT_KEY", "MSG_KEY", "RESULTS_KEY", "SEARCH_KEY", "Stats")

@@ -30,7 +30,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Any, cast
 
 from apscheduler.jobstores.mongodb import MongoDBJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -367,22 +366,3 @@ async def cancel_schedule(schedule_id: str) -> bool:
             schedule_id,
         )
         return False
-
-
-async def run_now(
-    func: object,
-    *,
-    args: tuple | None = None,
-    kwargs: dict | None = None,
-) -> None:
-    """Queue *func* for immediate one-shot execution via the scheduler.
-
-    Useful for triggering a job on demand (e.g. admin-triggered action).
-    """
-    _get().add_job(
-        cast("Any", func),
-        trigger=DateTrigger(utc_now()),
-        args=args or (),
-        kwargs=kwargs or {},
-        replace_existing=True,
-    )

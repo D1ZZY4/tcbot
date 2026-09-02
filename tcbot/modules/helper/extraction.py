@@ -2,13 +2,12 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Studio
 
-"""Target extraction helpers: ResolvedTarget and extract_target()."""
+"""Target extraction helpers: extract_target()."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from tcbot import database as db
@@ -34,21 +33,6 @@ async def _safe_get_chat(bot: Bot, ident: str | int) -> Chat | ChatFullInfo | No
 
 
 # ──────────────────────── Target resolution ─────────────────────── #
-
-
-@dataclass
-class ResolvedTarget:
-    """A resolved Telegram user target with a guaranteed display name."""
-
-    id: int
-    first_name: str | None
-    username: str | None = None
-    raw: object = field(default=None, compare=False, repr=False)
-
-    def __post_init__(self) -> None:
-        """Fall back to a string representation of id when first_name is empty."""
-        if not self.first_name:
-            self.first_name = str(self.id)
 
 
 async def _best_name(uid: int, *primary: str | None) -> str:
