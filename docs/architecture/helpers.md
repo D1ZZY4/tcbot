@@ -66,8 +66,8 @@ in [`utilities.md#formatterpy`](utilities.md).
 | `code(text)` | `<code>...</code>` with escaped content. |
 | `pre(text)` | `<pre>...</pre>` monospace block with escaped content. |
 | `link(text, url)` | HTML link. Escape or validate URLs before passing untrusted values. |
-| `mention(user_id, name, username=None)` | Smart mention with username fallback. |
-| `user_ref(user_id, name, username=None)` | Action-summary reference: omits redundant ID when name equals numeric fallback. |
+| `mention(user_id, name, username=None)` | Smart mention with username link and always-included `tg://user?id=...` link. Backward-compatible alias for `user_ref()`. |
+| `user_ref(user_id, name, username=None)` | Action-summary reference: omits the redundant numeric ID when the name is the bare fallback. Renders `Name \| @username (tg://user?id=ID)` when a username is available, `Name (tg://user?id=ID)` otherwise, or just the `tg://` link when the name is the numeric fallback. |
 | `proof_caption_new(target_id, admin_id, admin_fname, timestamp)` | Generates a proof channel caption for newly uploaded proof. |
 
 Use `esc()`, `code()`, `mention()`, or `user_ref()` for any user-provided value in HTML messages. Use `user_ref()` in action summaries and audit logs where both name and ID are displayed.
@@ -78,7 +78,6 @@ Target resolution for moderation commands.
 
 | Export | Purpose |
 |---|---|
-| `ResolvedTarget` | Dataclass: resolved target with `user_id`, `fname`, optional `username`, and raw `user` object. Used internally; not returned by `extract_target`. |
 | `extract_target(update, args, bot=None)` | Resolves targets; returns `tuple[int, str]` (user_id, fname) on success or `tuple[None, None]` on failure. Priority: reply to sender_chat-aware → args (ID/username) → args (partial name search in DB) → text mentions → @mentions. |
 
 **Resolution priority for `extract_target()`:**
