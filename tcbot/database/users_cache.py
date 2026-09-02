@@ -38,19 +38,30 @@ async def upsert_user(
     first_name: str,
     last_name: str | None = None,
 ) -> None:
-    """Update or insert a user's profile information into the cache."""
+    """Update or insert a user's profile information into the cache.
+
+    ``username`` and ``last_name`` are treated as "unknown, preserve existing":
+    when a caller passes ``None`` for either field, the previous stored value
+    is left intact. This lets moderator-side flows (ban, kick, promote, /check)
+    refresh the displayed name without wiping the username the user may have
+    set later. Pass an explicit empty string only if you intend to clear the
+    field.
+    """
     now = utc_now()
+    update: dict[str, object] = {
+        "user_id": user_id,
+        "first_name": first_name,
+        "last_updated": now,
+    }
+    if username is not None:
+        update["username"] = username
+    if last_name is not None:
+        update["last_name"] = last_name
     await db_call(
         _members().update_one(
             {"user_id": user_id},
             {
-                "$set": {
-                    "user_id": user_id,
-                    "username": username,
-                    "first_name": first_name,
-                    "last_name": last_name,
-                    "last_updated": now,
-                },
+                "$set": update,
                 "$setOnInsert": {
                     "commit_date": now,
                 },
