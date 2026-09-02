@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
 from tcbot import cfg
 from tcbot import database as db
+from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -281,10 +282,11 @@ def log_execution(
 
 # ───────────────────────── Auth decorators ──────────────────────── #
 
-# * Telegram internal ID for the GroupAnonymousBot placeholder, which appears as
-# * the sender when a real admin posts using "send message as group" mode.
-# * The true identity is unknown to the bot, so federation commands are refused.
-_ANON_BOT_ID = 1087968824
+# * `ANONYMOUS_BOT_ID` is defined in `tcbot.modules.helper.identity` as the
+# * single source of truth for the GroupAnonymousBot placeholder. Re-exported
+# * under the historical name `_ANON_BOT_ID` so existing in-module references
+# * stay valid; new code should import from `identity` directly.
+_ANON_BOT_ID = ANONYMOUS_BOT_ID
 
 # * User-facing refusal messages for each auth tier. Centralised here so voice
 # * changes and translations only need to happen in one place.

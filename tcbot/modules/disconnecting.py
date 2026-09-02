@@ -16,6 +16,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.formatter import bold, code, esc
+from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -136,7 +137,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     is_group_owner = member.status == "creator"
 
     if not is_tc_staff and not is_group_owner:
-        if user.id == decorators._ANON_BOT_ID:
+        if user.id == ANONYMOUS_BOT_ID:
             msg_text = (
                 "Anonymous admin mode is active. Please send this command from your "
                 "personal account, or ask TC Staff to run /rmtc."

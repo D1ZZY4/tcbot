@@ -12,20 +12,12 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from tcbot import database as db
+from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID, TELEGRAM_USER_ID
 
 if TYPE_CHECKING:
     from telegram import Bot, Chat, ChatFullInfo, Message, Update, User
 
 log = logging.getLogger(__name__)
-
-# * Telegram's pseudo-user that represents an anonymous group admin.
-# * Its user_id is fixed and well-known. We must skip it as a reply target
-# * because acting on it would attempt to ban/kick/mute the bot placeholder,
-# * not the real human behind the anonymous admin title.
-_ANONYMOUS_BOT_ID = 1087968824
-
-# * Telegram's official service / system account ID.
-_TELEGRAM_USER_ID = 777000
 
 # * Telegram lookups are wrapped in wait_for so a stalled API call never blocks
 # * the user-facing reply. Three seconds is the standard project-wide budget.
@@ -109,13 +101,13 @@ async def extract_target(
         _skip_sender_chat = False
         if target_msg.from_user:
             u: User = target_msg.from_user
-            if u.id not in (_ANONYMOUS_BOT_ID, _TELEGRAM_USER_ID):
+            if u.id not in (ANONYMOUS_BOT_ID, TELEGRAM_USER_ID):
                 return u.id, u.first_name or await _best_name(u.id)
             # * When from_user is GroupAnonymousBot (1087968824), sender_chat is the
             # * group itself (not an individual user). Returning it as the target would
             # * cause downstream fan-out to try to ban a group ID from itself, which
             # * always fails. Skip sender_chat so we fall through to args/entities.
-            if u.id == _ANONYMOUS_BOT_ID:
+            if u.id == ANONYMOUS_BOT_ID:
                 _skip_sender_chat = True
 
         if not _skip_sender_chat and target_msg.sender_chat:
@@ -161,7 +153,7 @@ async def extract_target(
     for ent in msg.entities or []:
         if ent.type == "text_mention" and ent.user:
             u = ent.user
-            if u.id in (_ANONYMOUS_BOT_ID, _TELEGRAM_USER_ID):
+            if u.id in (ANONYMOUS_BOT_ID, TELEGRAM_USER_ID):
                 continue
             return u.id, u.first_name or await _best_name(u.id)
 
