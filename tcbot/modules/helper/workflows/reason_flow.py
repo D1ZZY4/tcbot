@@ -292,11 +292,26 @@ class _ModActionFlow:
             return ConversationHandler.END
         ctx.user_data[self._exec_key] = True
 
-        await asyncio.gather(
+        # * The executor may raise (DB outage, Telegram API failure on a DM,
+        # * a runtime bug). The q.answer() must always run; the executor
+        # * exception must NOT be silently discarded -- PTB's global error
+        # * handler reports it to LOGS_ERRORS. We gather them in parallel
+        # * for speed but inspect the executor result and re-raise if it
+        # * failed. The q.answer() is best-effort: its failure is logged
+        # * at debug and does not block the executor failure propagation.
+        qa_result, exec_result = await asyncio.gather(
             q.answer(),
             self.executor(update, ctx),
             return_exceptions=True,
         )
+        if isinstance(qa_result, BaseException):
+            log.debug("%s skip-proof q.answer failed: %s", self.action, qa_result)
+        if isinstance(exec_result, BaseException):
+            # * Surface the executor failure to PTB's error handler instead
+            # * of swallowing it. Re-raise after clearing state so the
+            # * conversation is properly ended.
+            self._clear_user_data(ctx)
+            raise exec_result
         self._clear_user_data(ctx)
         return ConversationHandler.END
 
