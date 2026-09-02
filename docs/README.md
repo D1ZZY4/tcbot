@@ -45,8 +45,14 @@ deployment, see [`../replit.md`](../replit.md). For contribution workflow, see
 | [Appeals](features/appeals.md) | Appeal deep links, private DM submission, review actions, and edge cases. |
 | [Statistics](features/statistics.md) | `/tcstats`, drill-down views, search, and asynchronous design. |
 | [Banning](features/moderation/banning.md) | Federation ban flow, proof collection, updates, unban checks, logs, and appeal links. |
+| [Kicking](features/moderation/kicking.md) | `/tckick` group kick flow, auto-demote before kick, reason/proof conversation, and audit log. |
+| [Muting](features/moderation/muting.md) | Federation-wide mute, optional duration tokens, unmute, replay on group connect, and edge cases. |
+| [Unbanning](features/moderation/unbanning.md) | `/tcunban` deactivation flow, parallel pre-fetch, scheduler cancel, and edge cases. |
 | [Check](features/moderation/check.md) | `/check`, profile drill-downs, pagination, parallel reads, and edge cases. |
 | [Warnings](features/moderation/warnings.md) | Per-group warnings, proof handling, automatic bans, and warning storage. |
+| [Connecting](features/moderation/connecting.md) | `/tcconnect` and bot-added prompt, complete_join behavior, ban/mute replay, and edge cases. |
+| [Disconnecting](features/moderation/disconnecting.md) | `/tcdisconnect` and `/rmtc` group disconnect, parallel deactivation, and edge cases. |
+| [Groups](features/moderation/groups.md) | `/tcgroups` connected-groups list, keyboard navigation, and edge cases. |
 | [Roles](features/roles/roles.md) | Founder, Admin, Developer, and Tester hierarchy and safety rules. |
 | [Promote](features/roles/promote.md) | `/tcpromote`, direct and request-based promotion, callbacks, and edge cases. |
 | [Demote](features/roles/demote.md) | `/tcdemote`, automatic demotion, permission rules, and audit logging. |
