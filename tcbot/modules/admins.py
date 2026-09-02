@@ -24,6 +24,7 @@ from tcbot.modules.helper import (
 )
 from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.formatter import bold, code, esc, mention, user_ref
+from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.promote_flow import ROLE_ALIASES, Promote
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
@@ -678,6 +679,22 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     user = update.effective_user
     msg = update.effective_message
     if user is None or msg is None:
+        return
+
+    # * Reject anonymous admins (the GroupAnonymousBot placeholder, id
+    # * 1087968824). Without this, a real admin posting "as the group" could
+    # * submit a promotion request attributed to the pseudo-user, which the
+    # * Founder would then DM-respond to without ever knowing who really
+    # * sent it. Real humans send the command from their own account.
+    if user.id == ANONYMOUS_BOT_ID:
+        try:
+            await msg.reply_text(
+                "This command must be sent from your personal account, not as "
+                "the group. Anonymous-admin commands are not accepted here.",
+                parse_mode="HTML",
+            )
+        except Exception as exc:
+            log.debug("cmd_promote_request anon-admin reply failed: %s", exc)
         return
 
     existing_role, existing = await asyncio.gather(
