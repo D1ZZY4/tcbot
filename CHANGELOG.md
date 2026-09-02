@@ -14,6 +14,11 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
   Followed each removal with a `ruff check` pass: `users_roles.RoleDoc` import, `scheduler.Any` and `scheduler.cast` imports, and `extraction.dataclass`/`field` imports all became unused as a direct consequence and were removed in the same commit. No behaviour change.
 
+### Changed
+
+- **Duplication** (`tcbot/utils/formatter.py`): `mention()` and `user_ref()` had byte-equivalent bodies (the only difference was `html.escape(str(username))` vs `html.escape(username)`, which produce identical output). Replaced the `mention()` body with a one-line delegation to `user_ref()` so there is now a single implementation. The `mention` name is kept as a backward-compatible alias for the 20+ call sites in command modules; new code should prefer `user_ref`. Verified both names produce identical output for the four input shapes (with-username, no-username, bare-id, None-username).
+- **Type safety** (`tcbot/modules/helper/parse_editmsg.py`): `safe_edit` previously took `Message` directly, so any object with a compatible `edit_text` method had to be cast. Replaced the concrete `Message` annotation with a `_EditableMessage` Protocol that captures the minimum surface area (an `async def edit_text(...)` method). The two concrete call paths (`msg.edit_text` for `Message` and `q.edit_message_text` for `CallbackQuery`) are now visible from the type signature. Also removed the now-unused `Message` import under `TYPE_CHECKING`.
+
 ## [6.3.0] - 2026-09-02
 
 ### Changed

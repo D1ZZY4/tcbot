@@ -42,21 +42,10 @@ def link(text: str, url: str) -> str:
 def mention(user_id: int, name: str, username: str | None = None) -> str:
     """Create a user mention with username link and always-included user ID link.
 
-    When a username is available: ``Name | Username (tg://user?id=ID)``.
-    When no username: ``Name (tg://user?id=ID)``.
-    When the name is the bare numeric ID: just the ``tg://user?id=ID`` link,
-    avoiding a redundant display.
+    Historical alias for :func:`user_ref`; both names format the same
+    output. New code should prefer :func:`user_ref` directly.
     """
-    id_link = f'<a href="tg://user?id={user_id}">{user_id}</a>'
-    if username:
-        return (
-            f"{html.escape(str(name))} | "
-            f'<a href="https://t.me/{html.escape(str(username))}">'
-            f"{html.escape(str(username))}</a> ({id_link})"
-        )
-    if str(name) == str(user_id):
-        return id_link
-    return f"{html.escape(str(name))} ({id_link})"
+    return user_ref(user_id, name, username)
 
 
 def esc(text: str) -> str:

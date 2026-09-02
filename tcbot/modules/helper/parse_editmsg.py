@@ -7,12 +7,12 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from telegram.error import BadRequest
 
 if TYPE_CHECKING:
-    from telegram import CallbackQuery, Message
+    from telegram import CallbackQuery
 
 log = logging.getLogger(__name__)
 
@@ -26,8 +26,20 @@ _IGNORED = {
 # ──────────────────────── safe_edit helper ──────────────────────── #
 
 
-async def safe_edit(msg: Message, text: str, **kwargs: Any) -> None:
-    """Edit a message via msg.edit_text; swallow harmless not-modified errors."""
+class _EditableMessage(Protocol):
+    """Anything that exposes the ``edit_text`` coroutine used by ``safe_edit``.
+
+    Both :class:`telegram.Message` and the ``Message`` half of a
+    :class:`telegram.CallbackQuery` satisfy this protocol; the bot client
+    half of a callback query exposes ``edit_message_text`` instead, so
+    :func:`safe_edit_cb` uses a different code path.
+    """
+
+    async def edit_text(self, text: str, **kwargs: Any) -> object: ...
+
+
+async def safe_edit(msg: _EditableMessage, text: str, **kwargs: Any) -> None:
+    """Edit a message via ``msg.edit_text``; swallow harmless not-modified errors."""
     try:
         await msg.edit_text(text, parse_mode="HTML", **kwargs)
     except BadRequest as e:
