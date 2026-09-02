@@ -39,7 +39,7 @@ jobs:
         id: update
         run: |
           echo "Updating dependencies..."
-          uv lock --upgrade --frozen 2>&1 | tee update.log
+          uv lock --upgrade 2>&1 | tee update.log
 
           if diff -q uv.lock uv.lock.backup > /dev/null; then
             echo "has_updates=false" >> "$GITHUB_OUTPUT"
