@@ -22,6 +22,7 @@ from tcbot.modules.helper import (
     parse_logmsg,
     replies,
 )
+from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.formatter import bold, code, esc, mention, user_ref
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.promote_flow import ROLE_ALIASES, Promote
@@ -594,6 +595,37 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     target_uname = ident.username
+
+    # * Resolve and rank-check the target. Without this, a Developer could
+    # * transfer ownership to a Founder, an Admin could be promoted past the
+    # * rank they should be eligible for, or the new owner could keep a
+    # * residual Developer/Tester role from before the transfer (which would
+    # * leave the federation with a user who is simultaneously Founder and
+    # * Developer -- a state the rest of the codebase does not handle).
+    role_check = await resolve_and_check(
+        msg, current_owner.id, target_id, min_role="developer"
+    )
+    if role_check == (None, None):
+        # * resolve_and_check already replied and rejected.
+        return
+    _executor_role, target_role = role_check
+    if target_role and target_role != "founder":
+        # * Clear any non-Founder role the target currently holds so the
+        # * post-transfer state has exactly one Founder and zero Developer
+        # * /Tester records pointing at the new owner.
+        try:
+            await db.users_roles.remove_role(target_id)
+            log.info(
+                "cmd_transfer cleared pre-existing role %s from new owner %d",
+                target_role,
+                target_id,
+            )
+        except Exception as exc:
+            log.warning(
+                "cmd_transfer remove_role failed for new owner %d: %s",
+                target_id,
+                exc,
+            )
 
     # * set_owner first: it is atomic (upsert + delete_many). If it fails, the
     # * old founder is untouched. add_admin is non-fatal and runs second so a
