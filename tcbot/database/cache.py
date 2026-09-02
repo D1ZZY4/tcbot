@@ -144,10 +144,20 @@ class TTLCache[T]:
         """Remove *key* from the cache (no-op if absent or already expired)."""
         with contextlib.suppress(KeyError):
             del self._store[key]
+        # * Drop the per-key lock so high-cardinality callers (e.g. member
+        # * profile lookups) don't accumulate a stale lock for every user
+        # * ever fetched. The lock object is only re-created on the next miss.
+        self._locks.pop(key, None)
 
     def clear(self) -> None:
         """Remove all entries immediately."""
         self._store.clear()
+        # * Locks from in-flight fetches remain in use; leave them. The next
+        # * miss for any key will reuse the existing lock. Subsequent misses
+        # * after the in-flight fetch completes will repopulate _locks with
+        # * fresh entries, and stale ones for absent keys get cleared by
+        # * invalidate(). A full lock purge is unnecessary here.
+        # * If a true memory purge is required, restart the process.
 
     async def get_or_fetch(
         self,
@@ -187,7 +197,7 @@ class TwoLevelCache[T]:
     sites.
     """
 
-    __slots__ = ("_mem", "_redis_prefix", "_redis_ttl")
+    __slots__ = ("_locks", "_mem", "_redis_prefix", "_redis_ttl")
 
     def __init__(
         self,
@@ -200,6 +210,11 @@ class TwoLevelCache[T]:
         self._mem: TTLCache[T] = TTLCache(ttl=memory_ttl, maxsize=maxsize)
         self._redis_ttl: int = max(1, int(redis_ttl))
         self._redis_prefix: str = redis_prefix
+        # * Per-key lock to serialise concurrent fetches for the same key
+        # * across L1 + L2 + DB. Mirrors TTLCache.get_or_fetch semantics.
+        # * Cleared in invalidate() and clear() to prevent unbounded growth
+        # * for high-cardinality callers (e.g. member profile lookups).
+        self._locks: dict[Any, asyncio.Lock] = {}
 
     # ── Sync operations (in-memory layer only) ── #
 
@@ -215,6 +230,10 @@ class TwoLevelCache[T]:
     def invalidate(self, key: Any) -> None:
         """Remove from memory and enqueue an ordered Redis delete."""
         self._mem.invalidate(key)
+        # * Drop the per-key lock so high-cardinality callers (e.g. member
+        # * profile lookups) don't accumulate a stale lock for every key
+        # * ever fetched.
+        self._locks.pop(key, None)
         self._redis_del_background(key)
 
     def clear(self) -> None:
@@ -274,38 +293,59 @@ class TwoLevelCache[T]:
         2. Redis (single round-trip, returns cached value from another process
            or previous bot run).
         3. ``fetch()`` coroutine (DB query); result is written to both layers.
+
+        A per-key ``asyncio.Lock`` serialises concurrent misses for the same
+        key so that only one ``fetch()`` runs; the winner populates the cache
+        and all waiters read the same result. Different keys remain fully
+        parallel. Mirrors ``TTLCache.get_or_fetch`` semantics.
         """
-        # L1: in-memory
+        # Fast path: in-memory hit, no lock needed.
         val = self._mem.get(key)
         if val is not CACHE_MISS:
             return cast("T", val)
 
-        # L2: Redis
-        rc = _redis_client()
-        if rc is not None:
-            rkey = self._rkey(key)
-            try:
-                raw = await rc.get(rkey)
-                if raw is not None:
-                    loaded: T = json.loads(raw, object_hook=_mongo_object_hook)
-                    self._mem.put(key, loaded)
-                    return loaded
-            except Exception as exc:
-                log.debug("Redis get failed for %s: %s", rkey, exc)
+        # * Slow path: take a per-key lock so concurrent misses for the same
+        # * key do not all run the DB fetch. Re-check L1 inside the lock to
+        # * catch a winner that just populated it.
+        lock = self._locks.setdefault(key, asyncio.Lock())
+        try:
+            async with lock:
+                val = self._mem.get(key)
+                if val is not CACHE_MISS:
+                    return cast("T", val)
 
-        # L3: DB fetch
-        val = await fetch()
-        self._mem.put(key, val)
-        if rc is not None:
-            rkey = self._rkey(key)
-            payload = json.dumps(val, cls=_MongoJSONEncoder)
-            task = self._enqueue_redis_mutation(
-                lambda: self._redis_set(rc, rkey, payload)
-            )
-            if task is not None:
-                await asyncio.shield(task)
+                # L2: Redis
+                rc = _redis_client()
+                if rc is not None:
+                    rkey = self._rkey(key)
+                    try:
+                        raw = await rc.get(rkey)
+                        if raw is not None:
+                            loaded: T = json.loads(raw, object_hook=_mongo_object_hook)
+                            self._mem.put(key, loaded)
+                            return loaded
+                    except Exception as exc:
+                        log.debug("Redis get failed for %s: %s", rkey, exc)
 
-        return cast("T", val)
+                # L3: DB fetch
+                val = await fetch()
+                self._mem.put(key, val)
+                if rc is not None:
+                    rkey = self._rkey(key)
+                    payload = json.dumps(val, cls=_MongoJSONEncoder)
+                    task = self._enqueue_redis_mutation(
+                        lambda: self._redis_set(rc, rkey, payload)
+                    )
+                    if task is not None:
+                        await asyncio.shield(task)
+
+                return cast("T", val)
+        finally:
+            # * Drop the per-key lock so a high-cardinality caller does not
+            # * accumulate a stale lock for every key ever fetched. The next
+            # * miss will create a fresh lock; the value itself is in
+            # * ``self._mem`` already and is served by the fast path.
+            self._locks.pop(key, None)
 
     # ── Internal helpers ── #
 
