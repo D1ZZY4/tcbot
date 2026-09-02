@@ -441,10 +441,20 @@ async def _execute_warn_auto_ban(
         try:
             await db.bans_db.create_ban(target_id, reason_text, admin_id, 0, log_msg_id)
         except Exception:
+            # * Do not silently continue: the user has been banned in some or
+            # * all groups above, but the DB has no record of it. Future
+            # * get_active_ban() calls will return None, unban attempts will
+            # * look like no-ops, and `/check` will not show the ban. Surface
+            # * this in the admin's reply so they know to retry the DB write.
             log.exception(
                 "Failed to create federation ban record on warn limit for user %d",
                 target_id,
             )
+            db_record_failed = True
+        else:
+            db_record_failed = False
+    else:
+        db_record_failed = False
 
     ban_results = await fan_out(
         [bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
@@ -522,11 +532,22 @@ async def _execute_warn_auto_ban(
             f"but federation-ban failed - please ban them manually."
         )
 
+    # * Append a heads-up when the enforcement fan-out succeeded but the
+    # * bans collection write failed. The user is banned in chats but
+    # * get_active_ban() will return None until the DB record is repaired.
+    db_record_warning = ""
+    if db_record_failed:
+        db_record_warning = (
+            " WARNING: the federation ban record was not written to the "
+            "database; unban and /check will not see this ban until it is "
+            "repaired. See logs and consider a manual write."
+        )
+
     if any_ban_ok:
         clear_result, reply_result = await asyncio.gather(
             db.warns_db.clear_all_warns(target_id),
             msg.reply_text(
-                f"{ban_notice}{applied_line}",
+                f"{ban_notice}{applied_line}{db_record_warning}",
                 parse_mode="HTML",
                 reply_markup=proof_kb,
             ),
@@ -544,7 +565,7 @@ async def _execute_warn_auto_ban(
     else:
         try:
             await msg.reply_text(
-                f"{ban_fail_notice}{applied_line}",
+                f"{ban_fail_notice}{applied_line}{db_record_warning}",
                 parse_mode="HTML",
                 reply_markup=proof_kb,
             )
