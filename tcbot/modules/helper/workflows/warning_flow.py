@@ -371,6 +371,7 @@ async def _execute_warn_auto_ban(
     """Handle warn-threshold auto-ban: staff demotion, DB record, fan-out, reply."""
     target_role = await db.users_roles.get_effective_role(target_id)
     if target_role:
+        demoted = True
         try:
             await Demote.execute(
                 bot,
@@ -382,11 +383,25 @@ async def _execute_warn_auto_ban(
                 trigger="ban",
             )
         except Exception:
+            demoted = False
             log.exception("Auto-demote on warn limit failed for role=%s", target_role)
+        # * Only tell the admin the user was demoted when the demotion actually
+        # * succeeded. If it failed (DB outage, race, etc.) the user still
+        # * holds the role and the message must reflect that, otherwise the
+        # * admin believes the role is gone and may forget to retry.
+        exemption_text = (
+            f"{user_ref(target_id, target_name)} is a {target_role} and was "
+            "demoted, but staff are not auto-banned via warnings."
+            if demoted
+            else (
+                f"{user_ref(target_id, target_name)} is a {target_role}, but "
+                "the auto-demote step failed; staff are not auto-banned via "
+                "warnings. See logs and retry manually if needed."
+            )
+        )
         try:
             await msg.reply_text(
-                f"{user_ref(target_id, target_name)} is a {target_role} and was "
-                f"demoted, but staff are not auto-banned via warnings.",
+                exemption_text,
                 parse_mode="HTML",
                 reply_markup=proof_kb,
             )
