@@ -27,6 +27,7 @@ from tcbot.modules.helper.formatter import bold, code, esc, mention, user_ref
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.promote_flow import ROLE_ALIASES, Promote
+from tcbot.utils import error_reporter
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -632,6 +633,9 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * old founder is untouched. add_admin is non-fatal and runs second so a
     # * transient failure there does not leave the federation ownerless.
     await db.users_roles.set_owner(target_id)
+    # * Refresh the in-process error_reporter owner so subsequent infra
+    # * errors go to the new owner via DM instead of the old one.
+    error_reporter.set_owner(target_id)
     try:
         await db.users_roles.add_admin(current_owner.id, current_owner.id)
     except Exception as exc:

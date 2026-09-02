@@ -4,6 +4,20 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ## [Unreleased]
 
+### Changed
+
+- **Error reporter** (`tcbot/utils/error_reporter.py`):
+  - `attach()` now logs a `WARNING` at startup when `chat_id` or `owner_id` is non-positive, so a misconfiguration is visible on first boot rather than producing silent no-ops at error-report time. Previously a zero `chat_id` would only show up much later when an error went unshipped.
+  - New `set_owner(owner_id)` function lets the in-process owner-DM target be refreshed at runtime. `cmd_transfer` (`/tfowner`) calls it after `set_owner(target_id)` so the next infra error DM goes to the new owner instead of the old one. Previously the owner-DM target was frozen at startup.
+  - Split the unified `_fingerprint()` into `_fingerprint_exc()` and `_fingerprint_record()`, with the explicit `"exc"` / `"log"` prefix as the first tuple element. The two fingerprints can never collide, so the same exception traveling through both `log_execution` and the PTB global error handler is now deduped under a single key. Previously the prefixes were the second element, which made collisions possible and could post the same exception twice within the dedupe window.
+  - New private `_dedup(exc, record)` wrapper selects between the two fingerprints and centralises the dedupe logic. The two public functions `report_exc()` and `report_record()` both call it.
+  - `send_to_log_errors()` and `send_to_owner()` now log their own send-failure via `logging.getLogger()` (the root logger) instead of `tcbot.utils.error_reporter` (which is in the suppress list in `logger.py`). The root logger is the documented fallback for ship-failure visibility, and the original code was relying on a side effect of the suppress-prefix list rather than an explicit contract.
+  - `send_to_owner()` log message was renamed from "Failed to send owner DM" to "Failed to send owner DM for infra error" so a grep for owner-DM failures is unambiguous.
+
+- **Skill manifest** (`skills-lock.json`): removed the three skills that are no longer in `.agents/skills/` (`find-skills`, `mermaid-diagrams`, `skill-creator`). Added the three project-local skills that were not in the manifest (`docs-maintainer`, `feature-reviewer`, `project-policy`) so the file now reflects the actual six skills in the directory. The `project-local` source type marks entries that are not from a third-party skill registry.
+
+- **Docs** (`AGENTS.md`): removed the references to `find-skills`, `general-sub-agent`, `skill-creator`, and `mermaid-diagrams` from the skills-list paragraph (the first three are no longer in the directory; the fourth was never in the directory but was mentioned in the prose). Added a sentence explaining that meta-tools for the agent itself were intentionally removed.
+
 ### Fixed
 
 - **Moderation integrity** (`tcbot/modules/banning.py`, `kicking.py`, `muting.py`): if the auto-demote step before a ban/kick/mute raised (DB outage, race, etc.), the conversation proceeded and the user was banned/kicked/muted while still holding a federation role, breaking the role-vs-state invariant. The recent `7dcff34` fix added the same surfacing for the warn auto-ban path. Applied the same Option-A behaviour to user-requested moderation: when `Demote.execute()` fails, the conversation is ended immediately and the admin is told the moderation cannot proceed until they manually demote the target. The kick/mute/ban fans-out paths are no longer reached with a target that still holds a staff role.

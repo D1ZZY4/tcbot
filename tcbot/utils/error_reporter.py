@@ -28,7 +28,8 @@ log = logging.getLogger(__name__)
 
 
 # ─────────────────────── Module-Level State ─────────────────────── #
-# * Set once during bot post-init via attach(); never mutated after that
+# * Set once during bot post-init via attach(); owner_id is refreshable
+# * via set_owner() so that ownership-transfer DMs route to the new owner.
 
 _bot: Bot | None = None
 _chat_id: int = 0
@@ -43,11 +44,42 @@ def attach(
     *,
     owner_id: int = 0,
 ) -> None:
-    """Inject live bot instance, log channel config, and owner DM target."""
+    """Inject live bot instance, log channel config, and owner DM target.
+
+    Validates the inputs at attach-time so a misconfiguration is logged
+    at startup rather than producing silent no-ops at error-report time.
+    A zero or negative ``chat_id`` / ``owner_id`` is accepted (the bot
+    may legitimately be deployed without a log channel or before the
+    initial owner is seeded) but is logged at WARNING so the operator
+    notices on first boot.
+    """
     global _bot, _chat_id, _thread_id, _owner_id
     _bot = bot
     _chat_id = chat_id
     _thread_id = thread_id
+    _owner_id = owner_id
+    if chat_id <= 0:
+        log.warning(
+            "error_reporter.attach called with chat_id=%d; LOG_ERRORS "
+            "shipping is disabled until a positive chat_id is configured",
+            chat_id,
+        )
+    if owner_id <= 0:
+        log.warning(
+            "error_reporter.attach called with owner_id=%d; owner-DM "
+            "shipping of infra errors is disabled until a positive owner_id "
+            "is configured (typically after OWNER_ID env var is read)",
+            owner_id,
+        )
+
+
+def set_owner(owner_id: int) -> None:
+    """Update the owner-DM target after a runtime ownership transfer.
+
+    Called from ``cmd_transfer`` after the new founder is set, so that the
+    next infra error DM goes to the new owner instead of the old one.
+    """
+    global _owner_id
     _owner_id = owner_id
 
 
@@ -64,9 +96,11 @@ _BENIGN_PATTERNS: tuple[str, ...] = (
     "message can't be edited",
 )
 
-_LOG_NOISE_PATTERNS: tuple[str, ...] = (
-    " raised after ",  # log_execution's per-handler exception summary
-)
+# * log_execution emits a per-handler exception summary of the form
+# * "<action> raised after <delta>s: <type>". PTB's global error handler
+# * then follows up with a richer report. The substring is a stable,
+# * documented contract between the two paths (see decorators.py).
+_LOG_NOISE_PATTERNS: tuple[str, ...] = (" raised after ",)
 
 # * Owner-only errors: infra-level issues that should reach the owner
 # * privately via DM, but must NOT be posted to the shared logs_errors
@@ -114,31 +148,35 @@ _recent: dict[tuple, float] = {}
 _MAX_CONTEXT_LEN: int = 120
 
 
-def _fingerprint(
-    exc: BaseException | None,
-    record: logging.LogRecord | None,
-) -> tuple:
-    """Build a coarse identity that matches across log_execution + PTB handler paths."""
-    if exc is not None:
-        tb = exc.__traceback__
-        last = None
-        while tb is not None:
-            last = tb
-            tb = tb.tb_next
-        line = last.tb_lineno if last else 0
-        file_part = ""
-        if last is not None:
-            with contextlib.suppress(AttributeError):
-                file_part = last.tb_frame.f_code.co_filename
-        return (type(exc).__name__, file_part, line, str(exc)[:_MAX_CONTEXT_LEN])
-    if record is not None:
-        return (
-            "log",
-            record.name,
-            record.lineno,
-            record.getMessage()[:_MAX_CONTEXT_LEN],
-        )
-    return ("?",)
+def _fingerprint_exc(exc: BaseException) -> tuple:
+    """Build a coarse identity for an exception that survives class+location+message."""
+    tb = exc.__traceback__
+    last = None
+    while tb is not None:
+        last = tb
+        tb = tb.tb_next
+    line = last.tb_lineno if last else 0
+    file_part = ""
+    if last is not None:
+        with contextlib.suppress(AttributeError):
+            file_part = last.tb_frame.f_code.co_filename
+    return (
+        "exc",
+        type(exc).__name__,
+        file_part,
+        line,
+        str(exc)[:_MAX_CONTEXT_LEN],
+    )
+
+
+def _fingerprint_record(record: logging.LogRecord) -> tuple:
+    """Build a coarse identity for a log record."""
+    return (
+        "log",
+        record.name,
+        record.lineno,
+        record.getMessage()[:_MAX_CONTEXT_LEN],
+    )
 
 
 def _seen_recently(fp: tuple) -> bool:
@@ -155,6 +193,22 @@ def _seen_recently(fp: tuple) -> bool:
     if fp in _recent:
         return True
     _recent[fp] = now
+    return False
+
+
+def _dedup(exc: BaseException | None, record: logging.LogRecord | None) -> bool:
+    """Return True if (exc, record) has been reported within the dedupe window.
+
+    Accepts both shapes so callers don't have to re-implement the
+    fingerprint selection. When both are present (typical for
+    ``log.exception()`` which produces a record with embedded exc_info)
+    the exception fingerprint is preferred because it carries more
+    identifying context.
+    """
+    if exc is not None:
+        return _seen_recently(_fingerprint_exc(exc))
+    if record is not None:
+        return _seen_recently(_fingerprint_record(record))
     return False
 
 
@@ -331,9 +385,13 @@ async def send_to_log_errors(text: str) -> None:
             message_thread_id=_thread_id,
         )
     except Exception as exc:
-        # * Use a quiet logger name so the failure is not re-shipped.
-        logging.getLogger("tcbot.utils.error_reporter").warning(
-            "Failed to ship error to Telegram: %s", exc
+        # * Log via the root logger at WARNING, not through the dedicated
+        # * error_reporter logger (which is in the _SUPPRESS_PREFIXES list
+        # * in logger.py to prevent recursion). Falling back to the root
+        # * logger ensures the failure surfaces in console output even if
+        # * the Telegram error handler is misconfigured.
+        logging.getLogger().warning(
+            "Failed to ship error to Telegram LOG_ERRORS: %s", exc
         )
 
 
@@ -348,9 +406,7 @@ async def send_to_owner(text: str) -> None:
             parse_mode="HTML",
         )
     except Exception as exc:
-        logging.getLogger("tcbot.utils.error_reporter").warning(
-            "Failed to send owner DM: %s", exc
-        )
+        logging.getLogger().warning("Failed to send owner DM for infra error: %s", exc)
 
 
 # ────────────────────── Convenience Wrappers ────────────────────── #
@@ -363,7 +419,7 @@ async def report_exc(
     """Report an exception; owner-only errors go to owner DM, others to log channel."""
     if _benign(exc):
         return
-    if _seen_recently(_fingerprint(exc, None)):
+    if _dedup(exc, None):
         return
     text = build_error_message(exc=exc, context=context)
     if _owner_only(exc):
@@ -381,7 +437,7 @@ async def report_record(record: logging.LogRecord) -> None:
         # * log_execution emits a per-handler summary that the PTB error handler
         # * follows up with a richer report; skip the noisier first one.
         return
-    if _seen_recently(_fingerprint(exc, record)):
+    if _dedup(exc, record):
         return
     text = build_error_message(record=record)
     if _owner_only(exc):
