@@ -16,9 +16,8 @@ flowchart TD
     Permission -->|allowed| Target[Resolve target]
     Target --> RoleCheck{Has federation role?}
     RoleCheck -->|yes| AutoDemote[Auto-demote first]
-    RoleCheck -->|no| ReasonStep[WAITING_REASON]
-    AutoDemote --> ReasonStep
-    ReasonStep --> ProofStep[WAITING_PROOF]
+    RoleCheck -->|no| ProofStep[WAITING_PROOF]
+    AutoDemote --> ProofStep
     ProofStep --> StoreBan[Store ban in bans_db]
     StoreBan --> FanOut[Fan-out to all groups]
     FanOut --> Log[Write log message]

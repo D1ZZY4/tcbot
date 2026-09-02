@@ -110,7 +110,12 @@ Current stack:
 │   │   │   ├── keyboards.py  Inline keyboard builders
 │   │   │   ├── decorators.py  Rate limiter, role checks, execution logging
 │   │   │   ├── extraction.py Target/user extraction helpers
-│   │   │   └── identity.py   Self/bot/Telegram/Founder/staff classification
+│   │   │   ├── identity.py   Self/bot/Telegram/Founder/staff classification
+│   │   │   ├── parse_link.py  `t.me/c/...` deep-link builders
+│   │   │   ├── parse_logmsg.py  Federation log message renderers
+│   │   │   ├── parse_editmsg.py  Safe `edit_text` / `edit_message_text` wrappers
+│   │   │   ├── ban_info.py    Shared ban-detail builder for /check and /checkme
+│   │   │   └── replies.py     User-facing reply constants (HelpEntry, error strings)
 │   │   ├── banning.py        /ban command
 │   │   ├── kicking.py        /kick command
 │   │   ├── muting.py         /mute command

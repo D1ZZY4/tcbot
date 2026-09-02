@@ -111,8 +111,8 @@ For detailed environment variable formats and validation, see [`docs/getting-sta
 | `WARN_LIMIT` | No | Warn count that triggers an automatic federation ban, default `3`, minimum `1`. |
 | `FED_WARN_LIMIT` | No | Federation-wide warn threshold (across all groups), default `0` (disabled). |
 | `WARN_EXPIRY_DAYS` | No | Days after which warn counts expire and are deleted, default `0` (disabled). |
-| `PROOF_TIMEOUT_SECONDS` | No | Ban proof conversation timeout, default `100`; values below `1` fall back to default. |
-| `APPEAL_TIMEOUT_SECONDS` | No | Appeal DM conversation timeout, default `600`; values below `1` fall back to default. |
+| `PROOF_TIMEOUT_SECONDS` | No | Parsed and stored in `cfg.proof_timeout`; **not currently enforced** (PTB `conversation_timeout` is not wired because the `[job-queue]` extra conflicts with this project's APScheduler setup). Conversations end via the command-fallback handler or the Cancel button. Default `100`; values below `1` fall back to default. |
+| `APPEAL_TIMEOUT_SECONDS` | No | Parsed and stored in `cfg.appeal_timeout`; **not currently enforced** (same reason as `PROOF_TIMEOUT_SECONDS`). Default `600`; values below `1` fall back to default. |
 | `ALBUM_DEBOUNCE_SECONDS` | No | Album media grouping window, default `2`; values below `1` fall back to default. |
 | `LOG_LEVEL` | No | Logging level, default `INFO`. |
 | `MODULES_LOAD` | No | Comma-separated module allowlist. |

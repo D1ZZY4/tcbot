@@ -155,7 +155,7 @@ Each help-bearing module declares exactly one `__help__: replies.HelpEntry = {..
 | `where_section(ctx)` | `tuple[str, str]` | Builds a `(SEC_WHERE, ctx)` section entry. |
 | `target_section()` | `tuple[str, str]` | Builds a `(SEC_TARGET, TARGET_SYNTAX)` section entry. |
 
-All 15 command modules use these helpers rather than raw inline tuple literals.
+All command modules that expose user-facing commands use these helpers rather than raw inline tuple literals.
 
 ### String constants
 

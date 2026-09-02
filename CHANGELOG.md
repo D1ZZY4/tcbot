@@ -4,6 +4,15 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ## [Unreleased]
 
+### Documentation
+
+- **Docs** (`README.md`, `docs/getting-started/setup.md`): clarified that `PROOF_TIMEOUT_SECONDS` and `APPEAL_TIMEOUT_SECONDS` are parsed into `cfg.proof_timeout` / `cfg.appeal_timeout` but **not currently enforced**. The previous wording described them as "Ban proof conversation timeout" / "Appeal conversation timeout", which misleads an operator into expecting an actual inactivity-timeout. PTB's `conversation_timeout` is intentionally not wired because the `[job-queue]` extra conflicts with this project's APScheduler 4 setup (per `tcbot/__init__.py:417-436` and `config.env.example:86-98`); conversations end via the command-fallback handler or the Cancel button. The new rows match the canonical wording already in `config.env.example`.
+- **Docs** (`config.env.example`): corrected the inline comment on `PREFIXES` from "Defaults to `["/"]` if not set" to "Defaults to `["/", "!", "."]` if not set" to match `tcbot/__init__.py:280-281` (and the example value on the line above).
+- **Docs** (`docs/features/moderation/banning.md`): removed the spurious `ReasonStep[WAITING_REASON]` node from the ban-flow mermaid diagram. The ban flow has only one state, `WAITING_PROOF = 0` (verified in `tcbot/modules/helper/workflows/ban_flow.py:62`); reason must be supplied inline in the command message. The previous diagram implied a two-state conversation that does not exist. The warnings-flow diagram (which uses the shared `reason_flow.py` and does have `WAITING_REASON`) is unchanged.
+- **Docs** (`AGENTS.md`): added five missing helper files to the repository-layout block: `parse_link.py`, `parse_logmsg.py`, `parse_editmsg.py`, `ban_info.py`, `replies.py`. The previous layout only listed `formatter.py`, `keyboards.py`, `decorators.py`, `extraction.py`, and `identity.py`; the other five are real and referenced from workflows.
+- **Docs** (`docs/architecture/modules.md`): added the `/tcs` alias for `/tcstats` in the `stats.py` row. Verified against `tcbot/modules/stats.py:375`.
+- **Docs** (`docs/architecture/helpers.md`): removed the literal "15" from the "All 15 command modules use these helpers" line. The count is in fact 15 today, but the literal ages badly and is verified by `grep -l "_CMDS = build_prefixed_filters" tcbot/modules/ | wc -l`; rephrased to "All command modules that expose user-facing commands" so the doc no longer needs updating when a module is added or removed.
+
 ### Removed
 
 - **Dead code** (`tcbot/database/users_roles.py`, `tcbot/database/scheduler.py`, `tcbot/modules/helper/extraction.py`, `tcbot/modules/helper/workflows/stats_flow.py`): removed four symbols that had no callers in the repository, confirmed by `grep`:
