@@ -244,9 +244,8 @@ Write helpers must invalidate or refresh related cache entries. Role writes inva
 | `stop()` | Sets the stop event; waits up to 10 s for graceful shutdown. |
 | `schedule_unban(ban_id, user_id, run_at)` | Registers a persistent one-off `DateTrigger` unban job. Returns the schedule ID. |
 | `cancel_schedule(schedule_id)` | Removes a schedule by ID. Returns `True` if found, `False` if already fired or never created. |
-| `run_now(func, *, args, kwargs)` | Queues a one-shot immediate execution via the scheduler. |
 
-Recurring jobs registered on every startup (idempotent via `ConflictPolicy.replace`):
+Recurring jobs registered on every startup (idempotent via `replace_existing=True` on each `add_job` call):
 
 | Job | Trigger | Purpose |
 |---|---|---|
