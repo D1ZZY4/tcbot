@@ -175,6 +175,32 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         ctx.bot, user.id, user.id, fname, target_is_bot=user.is_bot
     )
 
+    # * If the caller has an active ban, ALWAYS show the ban summary with
+    # * the appeal button -- even for staff. A banned staff member still
+    # * needs the appeal link, and the staff-flavoured early-returns below
+    # * would otherwise tell them "you're fine" while they are banned.
+    # * (The /check command path is the same user; it correctly shows the
+    # * ban. The /checkme "you are Founder/admin/Developer/Tester, you're
+    # * good" early-return would lie to a banned staff member about their
+    # * own status.) Founders are still allowed to see their own
+    # * status as "Founder, you're fine" when not banned; the ban check
+    # * below short-circuits them to the appeal summary only when banned.
+    if ban is not None and ident.kind not in ("founder", "admin"):
+        text, proof_link = await _ban_summary(
+            cast("dict[str, Any]", ban), user.id, fname, "Admin"
+        )
+        try:
+            await msg.reply_text(
+                text,
+                parse_mode="HTML",
+                reply_markup=keyboards.checkme_ban_kb(
+                    ctx.bot.username or "", str(ban.get("ban_id", "")), proof_link
+                ),
+            )
+        except Exception as exc:
+            log.debug("checkme banned-staff reply failed: %s", exc)
+        return
+
     if ident.kind == "founder":
         try:
             await msg.reply_text(
