@@ -4,6 +4,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ## [Unreleased]
 
+### Fixed
+
+- **Correctness** (`tcbot/__init__.py`): split `except (ValueError, TypeError):` in `parse_chat_id` into two separate `except` clauses. The previous tuple form is semantically correct, but Ruff 0.16.x has a formatter bug that rewrites it to Python 2 syntax (`except ValueError, TypeError:`), which in Python 3 does not actually catch either exception -- it aliases the caught exception to the name `TypeError` and runs the body unconditionally. The split form is identical at runtime and is not affected by the formatter bug. All ruff checks (format + lint) and pyright pass; `tcbot` imports cleanly.
+
 ## [6.3.0] - 2026-09-02
 
 ### Changed
