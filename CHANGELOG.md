@@ -4,6 +4,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ## [Unreleased]
 
+### Changed
+
+- **Duplication** (`tcbot/modules/checking.py`): removed the local `_safe_edit()` wrapper that duplicated `helpers/parse_editmsg.safe_edit_cb`. The wrapper had a different signature (`(q, text, reply_markup)` vs `(q, text, **kwargs)`) and a less forgiving error policy (re-raised on non-`BadRequest` errors instead of logging). All 10 call sites in this file were rewritten to call `safe_edit_cb` with `reply_markup=` as a keyword argument; `safe_edit_cb` already has the right error-handling policy and matches the convention used by the other command modules. The unused `BadRequest`, `CallbackQuery`, and `InlineKeyboardMarkup` imports under `TYPE_CHECKING` were dropped as a consequence.
+
 ### Documentation
 
 - **Docs** (`README.md`, `docs/getting-started/setup.md`): clarified that `PROOF_TIMEOUT_SECONDS` and `APPEAL_TIMEOUT_SECONDS` are parsed into `cfg.proof_timeout` / `cfg.appeal_timeout` but **not currently enforced**. The previous wording described them as "Ban proof conversation timeout" / "Appeal conversation timeout", which misleads an operator into expecting an actual inactivity-timeout. PTB's `conversation_timeout` is intentionally not wired because the `[job-queue]` extra conflicts with this project's APScheduler 4 setup (per `tcbot/__init__.py:417-436` and `config.env.example:86-98`); conversations end via the command-fallback handler or the Cancel button. The new rows match the canonical wording already in `config.env.example`.

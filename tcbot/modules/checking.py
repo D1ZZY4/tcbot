@@ -10,7 +10,6 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, cast
 
-from telegram.error import BadRequest
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
@@ -18,13 +17,14 @@ from tcbot import database as db
 from tcbot.modules.helper import decorators, extraction, identity, keyboards, replies
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.formatter import bold, code, esc, mention
+from tcbot.modules.helper.parse_editmsg import safe_edit_cb
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.check_flow import Check
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.timedate_format import fmt_dt
 
 if TYPE_CHECKING:
-    from telegram import CallbackQuery, InlineKeyboardMarkup, Update
+    from telegram import Update
 
 log = logging.getLogger(__name__)
 
@@ -137,17 +137,6 @@ async def _ban_summary(
         "Tap a button below for more details."
     )
     return text, proof_link
-
-
-async def _safe_edit(
-    q: CallbackQuery, text: str, reply_markup: InlineKeyboardMarkup | None
-) -> None:
-    """Edit message text; ignore 'message is not modified' errors."""
-    try:
-        await q.edit_message_text(text, parse_mode="HTML", reply_markup=reply_markup)
-    except BadRequest as e:
-        if "not modified" not in str(e).lower():
-            raise
 
 
 # ─────────── Command Check Ban for User Self </checkme> ─────────── #
@@ -314,7 +303,9 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         return
 
     text, proof_link = await build_ban_detail(cast("dict[str, Any]", ban))
-    await _safe_edit(q, text, keyboards.checkme_detail_back_kb(ban_id, proof_link))
+    await safe_edit_cb(
+        q, text, reply_markup=keyboards.checkme_detail_back_kb(ban_id, proof_link)
+    )
 
 
 @decorators.ratelimiter(limit=_RL_CHECKME_CB_LIMIT, period=_RL_PERIOD_S)
@@ -364,8 +355,12 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     text, proof_link = await _ban_summary(
         cast("dict[str, Any]", ban), uid, fname, admin_fname
     )
-    await _safe_edit(
-        q, text, keyboards.checkme_ban_kb(ctx.bot.username or "", ban_id, proof_link)
+    await safe_edit_cb(
+        q,
+        text,
+        reply_markup=keyboards.checkme_ban_kb(
+            ctx.bot.username or "", ban_id, proof_link
+        ),
     )
 
 
@@ -431,7 +426,7 @@ async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.debug("on_check_main failed: %s", result)
         return
     text, kb = result
-    await _safe_edit(q, text, kb)
+    await safe_edit_cb(q, text, reply_markup=kb)
 
 
 @decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
@@ -458,7 +453,7 @@ async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.debug("on_check_bans failed: %s", result)
         return
     text, kb = result
-    await _safe_edit(q, text, kb)
+    await safe_edit_cb(q, text, reply_markup=kb)
 
 
 @decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
@@ -484,7 +479,7 @@ async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         log.debug("on_check_ban_item failed: %s", result)
         return
     text, kb = result
-    await _safe_edit(q, text, kb)
+    await safe_edit_cb(q, text, reply_markup=kb)
 
 
 @decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
@@ -509,7 +504,7 @@ async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         log.debug("on_check_warns failed: %s", result)
         return
     text, kb = result
-    await _safe_edit(q, text, kb)
+    await safe_edit_cb(q, text, reply_markup=kb)
 
 
 @decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
@@ -539,7 +534,7 @@ async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         log.debug("on_check_warn_chat failed: %s", result)
         return
     text, kb = result
-    await _safe_edit(q, text, kb)
+    await safe_edit_cb(q, text, reply_markup=kb)
 
 
 @decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
@@ -566,7 +561,7 @@ async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         log.debug("on_check_kicks failed: %s", result)
         return
     text, kb = result
-    await _safe_edit(q, text, kb)
+    await safe_edit_cb(q, text, reply_markup=kb)
 
 
 @decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
@@ -593,7 +588,7 @@ async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         log.debug("on_check_mutes failed: %s", result)
         return
     text, kb = result
-    await _safe_edit(q, text, kb)
+    await safe_edit_cb(q, text, reply_markup=kb)
 
 
 @decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
@@ -620,7 +615,7 @@ async def on_check_appeals(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         log.debug("on_check_appeals failed: %s", result)
         return
     text, kb = result
-    await _safe_edit(q, text, kb)
+    await safe_edit_cb(q, text, reply_markup=kb)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #
