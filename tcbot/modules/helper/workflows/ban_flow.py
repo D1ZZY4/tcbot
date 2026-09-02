@@ -197,11 +197,18 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
 
     if is_update:
         log_msg_id = await _execute_ban_update(
-            bot, existing, meta, proof_link, prev_proof_link, logs_chat, logs_thread
+            bot,
+            existing,
+            meta,
+            proof_msg_id,
+            proof_link,
+            prev_proof_link,
+            logs_chat,
+            logs_thread,
         )
     else:
         log_msg_id = await _execute_new_ban(
-            bot, meta, proof_link, now, logs_chat, logs_thread
+            bot, meta, proof_msg_id, proof_link, now, logs_chat, logs_thread
         )
 
     # * log_msg_id returned from _execute_ban_update / _execute_new_ban
@@ -362,6 +369,7 @@ async def _execute_ban_update(
     bot: Bot,
     existing: BanDoc,
     meta: dict[str, Any],
+    proof_msg_id: int | None,
     proof_link: str | None,
     prev_proof_link: str | None,
     logs_chat: int,
@@ -378,7 +386,7 @@ async def _execute_ban_update(
     bot_username = bot.username or ""
     old_proof_msg_id = int(existing.get("proof_message_id", 0))
     old_log_msg_id = int(existing.get("log_message_id", 0))
-    new_proof_msg_id = int(proof_link) if proof_link else old_proof_msg_id
+    new_proof_msg_id = proof_msg_id if proof_msg_id else old_proof_msg_id
 
     _old_admin_fname_task = asyncio.create_task(
         db.users_cache.get_first_name(old_admin_id, "Admin")
@@ -443,6 +451,7 @@ async def _execute_ban_update(
 async def _execute_new_ban(
     bot: Bot,
     meta: dict[str, Any],
+    proof_msg_id: int | None,
     proof_link: str | None,
     now: datetime,
     logs_chat: int,
@@ -480,7 +489,7 @@ async def _execute_new_ban(
         send_kwargs["reply_markup"] = kb
     db_result, log_result = await asyncio.gather(
         db.bans_db.create_ban(
-            target_id, reason, admin_id, int(proof_link) if proof_link else 0, 0, ban_id
+            target_id, reason, admin_id, proof_msg_id or 0, 0, ban_id
         ),
         bot.send_message(logs_chat, log_text, **send_kwargs),
         return_exceptions=True,
