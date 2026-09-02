@@ -180,7 +180,7 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             f"{bold('Latitude:')} {code(str(server['lat']))}\n"
             f"{bold('Longitude:')} {code(str(server['lon']))}"
         )
-    except KeyError, TypeError:
+    except KeyError:
         log.exception("Speedtest result parsing failed")
         try:
             await notice.edit_text(
@@ -189,7 +189,15 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         except Exception as edit_exc:
             log.debug("cmd_speedtest parse-fail edit failed: %s", edit_exc)
         return
-
+    except TypeError:
+        log.exception("Speedtest result parsing failed")
+        try:
+            await notice.edit_text(
+                "Speed test completed but result parsing failed. Check bot logs."
+            )
+        except Exception as edit_exc:
+            log.debug("cmd_speedtest parse-fail edit failed: %s", edit_exc)
+        return
     share_url: str | None = result.get("share")
     try:
         if share_url:
