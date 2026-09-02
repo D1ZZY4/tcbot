@@ -152,6 +152,11 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     if target_role:
+        # * Auto-demote is required before the ban to preserve the role-vs-state
+        # * invariant: a banned user must not still hold a federation role. If
+        # * the demote fails (DB outage, race, etc.) we must NOT proceed with
+        # * the ban, otherwise the target becomes a banned user who still
+        # * appears as staff in the DB, breaking future permission checks.
         try:
             await Demote.execute(
                 ctx.bot,
@@ -163,7 +168,22 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
                 trigger="ban",
             )
         except Exception:
-            log.exception("Auto-demote before ban failed for target=%d", target_id)
+            log.exception(
+                "Auto-demote before ban failed for target=%d role=%s",
+                target_id,
+                target_role,
+            )
+            try:
+                await msg.reply_text(
+                    f"{mention(target_id, target_fname or str(target_id))} "
+                    f"holds a federation role ({target_role}) and the auto-demote "
+                    "step failed, so the ban cannot proceed safely. Demote them "
+                    "manually with /tcdemote and retry the ban.",
+                    parse_mode="HTML",
+                )
+            except Exception as exc:
+                log.debug("cmd_ban_start demote-fail reply failed: %s", exc)
+            return ConversationHandler.END
 
     ctx.user_data["ban_target_id"] = target_id
     ctx.user_data["ban_target_fname"] = target_fname or str(target_id)

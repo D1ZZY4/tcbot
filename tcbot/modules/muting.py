@@ -161,6 +161,11 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     if target_role:
+        # * Auto-demote must succeed before the federation-wide mute to
+        # * preserve the role-vs-state invariant: a muted user must not
+        # * still hold a federation role (the mute restriction is a
+        # * side-effect; the role grants privileges). If the demote fails,
+        # * do not proceed with the mute.
         try:
             await Demote.execute(
                 ctx.bot,
@@ -172,7 +177,22 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
                 trigger="mute",
             )
         except Exception:
-            log.exception("Auto-demote before mute failed for target=%d", target_id)
+            log.exception(
+                "Auto-demote before mute failed for target=%d role=%s",
+                target_id,
+                target_role,
+            )
+            try:
+                await msg.reply_text(
+                    f"{mention(target_id, target_fname or str(target_id))} "
+                    f"holds a federation role ({target_role}) and the auto-demote "
+                    "step failed, so the mute cannot proceed safely. Demote them "
+                    "manually with /tcdemote and retry the mute.",
+                    parse_mode="HTML",
+                )
+            except Exception as exc:
+                log.debug("cmd_mute demote-fail reply failed: %s", exc)
+            return ConversationHandler.END
 
     duration = None
     if remaining_args and _DURATION_RE.match(remaining_args[0]):
