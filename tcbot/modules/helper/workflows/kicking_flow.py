@@ -88,8 +88,13 @@ async def execute_kick(
             chat_id,
             chat_title,
         )
-        # * unban + log_kick + federation log + reply all run in parallel
-        results = await asyncio.gather(
+        # * Three independent side-effects run in parallel: the unban that
+        # * converts the ban into a "kick" (user can rejoin), the DB kick
+        # * log, and the federation log-channel post. The user-facing reply
+        # * runs *after* the unban completes so we can append a warning if
+        # * the unban failed -- otherwise the admin would see "kicked" while
+        # * the user is still banned.
+        unban_result, log_kick_result, log_send_result = await asyncio.gather(
             ctx.bot.unban_chat_member(chat_id, target_id, only_if_banned=True),
             db.kicks_db.log_kick(target_id, chat_id, reason_text, admin_id),
             ctx.bot.send_message(
@@ -99,29 +104,37 @@ async def execute_kick(
                 message_thread_id=lt,
                 reply_markup=proof_kb,
             ),
-            msg.reply_text(
-                f"{user_ref(target_id, target_name)} has been kicked.\n"
-                f"Reason: {esc(reason_text)}\n"
-                f"{_MSG_REJOIN_ALLOWED}",
-                parse_mode="HTML",
-                reply_markup=proof_kb,
-            ),
             return_exceptions=True,
         )
-        if isinstance(results[0], BaseException):
+        if isinstance(unban_result, BaseException):
             log.warning(
                 "unban_chat_member failed after kick for target=%d: %s",
                 target_id,
-                results[0],
+                unban_result,
             )
-        if isinstance(results[1], BaseException):
+        if isinstance(log_kick_result, BaseException):
             log.error(
-                "log_kick DB write failed for target=%d: %s", target_id, results[1]
+                "log_kick DB write failed for target=%d: %s", target_id, log_kick_result
             )
-        if isinstance(results[2], BaseException):
-            log.error("Kick log send failed: %s", results[2])
-        if isinstance(results[3], BaseException):
-            log.debug("Kick reply_text failed: %s", results[3])
+        if isinstance(log_send_result, BaseException):
+            log.error("Kick log send failed: %s", log_send_result)
+        unban_warning = (
+            " WARNING: the post-kick unban step failed; the user is "
+            "still banned in this chat and cannot rejoin. Demote them "
+            "manually if needed and unban from the chat member list."
+            if isinstance(unban_result, BaseException)
+            else ""
+        )
+        try:
+            await msg.reply_text(
+                f"{user_ref(target_id, target_name)} has been kicked.\n"
+                f"Reason: {esc(reason_text)}\n"
+                f"{_MSG_REJOIN_ALLOWED}{unban_warning}",
+                parse_mode="HTML",
+                reply_markup=proof_kb,
+            )
+        except Exception as exc:
+            log.debug("Kick reply_text failed: %s", exc)
     except Exception as exc:
         log.exception("Kick failed for %s in %s", target_id, chat_id)
         try:
