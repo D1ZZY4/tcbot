@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot import database as db
 from tcbot.modules.helper import decorators, extraction, identity, replies
+from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.formatter import bold, code
 from tcbot.modules.helper.workflows.unban_flow import execute_unban
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
@@ -95,13 +96,18 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.debug("unban no-target reply failed: %s", exc)
         return
 
-    # * Classify and pre-fetch the active ban record in parallel. Both depend only
-    # * on the already-resolved target_id, so there is no sequential dependency.
-    # * If classify returns a refusal the pre-fetched ban is discarded; when it
-    # * passes, execute_unban gets the record without an extra DB round-trip.
-    ident, pre_ban = await asyncio.gather(
+    # * Classify, pre-fetch the active ban record, and run the
+    # * executor-vs-target rank check in parallel. All three depend only on
+    # * already-resolved IDs so there is no need to wait for them sequentially.
+    # * return_exceptions=True prevents a DB failure from aborting the others.
+    # * The rank check (min_role="developer") prevents a low-rank mod from
+    # * unbanning a Founder or Admin -- unbanning a higher-ranked target would
+    # * silently invert the role-vs-state invariant because unban also clears
+    # * all active bans for the user, which is irreversible.
+    ident, pre_ban, role_result = await asyncio.gather(
         identity.classify(ctx.bot, admin.id, target_id, target_fname or str(target_id)),
         db.bans_db.get_active_ban(target_id),
+        resolve_and_check(msg, admin.id, target_id, min_role="developer"),
         return_exceptions=True,
     )
     if isinstance(ident, BaseException):
@@ -114,6 +120,13 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             pre_ban,
         )
         pre_ban = None
+    if isinstance(role_result, BaseException):
+        log.exception("resolve_and_check failed in cmd_unban: %s", role_result)
+        return
+    if role_result == (None, None):
+        # * resolve_and_check already replied and rejected (insufficient rank
+        # * or target outranks executor); end the handler.
+        return
 
     refusal = identity.refuse_message("unban", ident)
     if refusal is not None:
