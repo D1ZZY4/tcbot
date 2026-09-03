@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from telegram.ext import ContextTypes, MessageHandler
@@ -84,6 +85,41 @@ __help__: replies.HelpEntry = {
 # ──────────────────────── Helper Functions ──────────────────────── #
 
 
+# * Primary groups (main_group, exec_group) are managed separately from the
+# * federated_groups collection. They are always-required destinations for
+# * primary-group enforcement (ban / unban / mute / warn fan-out) and for the
+# * federation log channel. They must not be torn down by leaveall / cleanup
+# * / disconnect / rmtc paths. Centralised here so all four call sites agree.
+def _is_primary_group(chat_id: int | None) -> bool:
+    """Return True if the chat is the main or exec group (never disconnect)."""
+    if chat_id is None or chat_id <= 0:
+        return False
+    return chat_id in (cfg.main_group, cfg.exec_group)
+
+
+@dataclass(frozen=True)
+class _LeaveResult:
+    """Result of a single ``_leave_one`` operation, one field per side-effect.
+
+    The structured fields let ``cmd_leaveall`` count success and failure
+    per side-effect instead of inspecting a raw ``gather`` tuple. The DB
+    deactivation is the authoritative state write; a successful
+    ``leave_chat`` with a failed ``deactivate_group`` would leave a
+    "ghost" group in the database (still active but the bot has left),
+    so the leave counts as failed when either side-effect fails.
+    """
+
+    chat_id: int
+    left: bool
+    deactivated: bool
+    log_sent: bool
+
+    @property
+    def ok(self) -> bool:
+        """A leave is considered successful only when BOTH Telegram and DB agree."""
+        return self.left and self.deactivated
+
+
 async def _leave_one(
     bot: Bot,
     grp: GroupDoc,
@@ -91,12 +127,19 @@ async def _leave_one(
     lt: int | None,
     admin_id: int,
     admin_name: str,
-) -> tuple:
-    """Leave one group, deactivate it in DB, and post a disconnection log - all in parallel."""
+) -> _LeaveResult:
+    """Leave one group, deactivate it in DB, and post a disconnection log.
+
+    The three operations fire in parallel; the result is wrapped in a
+    structured :class:`_LeaveResult` so the caller can count each
+    side-effect independently. ``deactivate_group`` is the authoritative
+    state write -- a "ghost" group (bot left, DB still active) is
+    counted as failed.
+    """
     chat_id = grp.get("chat_id")
     title = grp.get("title", "Unknown")
     assert chat_id is not None
-    return await asyncio.gather(
+    leave_result, deactivate_result, log_result = await asyncio.gather(
         bot.leave_chat(chat_id),
         db.groups_db.deactivate_group(chat_id),
         bot.send_message(
@@ -112,13 +155,39 @@ async def _leave_one(
         ),
         return_exceptions=True,
     )
+    if isinstance(leave_result, BaseException):
+        log.debug("leave_chat failed for chat %d: %s", chat_id, leave_result)
+    if isinstance(deactivate_result, BaseException):
+        log.warning(
+            "deactivate_group failed for chat %d during leaveall: %s",
+            chat_id,
+            deactivate_result,
+        )
+    if isinstance(log_result, BaseException):
+        log.warning(
+            "group_disconnected log send failed for %d: %s", chat_id, log_result
+        )
+    return _LeaveResult(
+        chat_id=chat_id,
+        left=not isinstance(leave_result, BaseException),
+        deactivated=not isinstance(deactivate_result, BaseException),
+        log_sent=not isinstance(log_result, BaseException),
+    )
 
 
 async def _should_remove(bot: Bot, grp: GroupDoc) -> bool:
-    """Return True if the bot has left or been kicked from the group."""
+    """Return True if the bot has left or been kicked from the group.
+
+    Primary groups are never "removable" -- they are managed separately
+    and must never be deactivated by cleanup. If ``_should_remove``
+    is called for a primary group, it short-circuits to ``False`` so
+    ``cmd_cleanup`` skips it.
+    """
     chat_id = grp.get("chat_id")
     if chat_id is None:
         return True
+    if _is_primary_group(chat_id):
+        return False
     try:
         member = await asyncio.wait_for(
             bot.get_chat_member(chat_id, bot.id),
@@ -139,13 +208,23 @@ async def _should_remove(bot: Bot, grp: GroupDoc) -> bool:
 async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Leave all active connected groups and deactivate their DB records.
 
-    Fetches active groups, fans out individual leave-and-deactivate coroutines
-    concurrently (``_leave_one``), then edits the status message with the final
-    success/failure counts.
+    Fetches active groups (excluding the primary groups, which are
+    managed separately), fans out individual leave-and-deactivate
+    coroutines concurrently (``_leave_one``), then edits the status
+    message with the final success/failure counts. A leave counts as
+    successful only when both ``leave_chat`` and ``deactivate_group``
+    succeed; a partial success (one succeeded, the other failed) is
+    counted as a failure so the operator can investigate the ghost.
     """
     admin = update.effective_user
     assert admin is not None
-    groups = await db.groups_db.active_groups()
+    all_groups = await db.groups_db.active_groups()
+    # * Never tear down the primary groups. They are not in
+    # * ``federated_groups`` today, but the explicit guard is defence in
+    # * depth: if a future change ever adds them to the collection, or if
+    # * ``cfg.main_group`` is misconfigured, this prevents a global leaveall
+    # * from cutting the bot out of its required enforcement destinations.
+    groups = [g for g in all_groups if not _is_primary_group(g.get("chat_id"))]
     if not groups:
         status_msg = update.effective_message
         if status_msg is not None:
@@ -169,17 +248,32 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         [_leave_one(ctx.bot, g, lc, lt, admin.id, admin.first_name) for g in groups]
     )
 
-    left = sum(
-        1
-        for r in all_results
-        if not isinstance(r, BaseException) and not isinstance(r[0], BaseException)
-    )
-    failed = len(groups) - left
+    # * ``fan_out`` returns a list of ``T | BaseException`` so any single
+    # * coroutine that raises (e.g. a transport error before the gather
+    # * starts) shows up as an entry. ``_leave_one`` itself only raises
+    # * the ``assert chat_id is not None``; if that fires we still treat
+    # * the group as failed. Filter BaseException out before unpacking
+    # * structured fields, then count each side-effect independently.
+    ok_results = [r for r in all_results if isinstance(r, _LeaveResult)]
+
+    # * Count success per side-effect. A leave is "fully successful" only
+    # * when BOTH ``leave_chat`` and ``deactivate_group`` succeed. A
+    # * partial state (one succeeded, the other failed) is a ghost and
+    # * counts as a failure so the operator can reconcile manually.
+    left_ok = sum(1 for r in ok_results if r.ok)
+    partial = sum(1 for r in ok_results if (r.left or r.deactivated) and not r.ok)
+    log_failed = sum(1 for r in ok_results if not r.log_sent)
+    failed = len(groups) - left_ok
 
     if status is not None:
+        detail = ""
+        if partial:
+            detail += f" ({partial} partial: bot left but DB deactivation failed)"
+        if log_failed:
+            detail += f" ({log_failed} log posts failed)"
         try:
             await status.edit_text(
-                f"Left {code(str(left))} groups. Failed: {code(str(failed))}.",
+                f"Left {code(str(left_ok))} groups. Failed: {code(str(failed))}.{detail}",
                 parse_mode="HTML",
             )
         except Exception:
@@ -195,9 +289,9 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Prune inaccessible groups from the active federation list.
 
-    Checks all groups concurrently via ``_should_remove``, deactivates the
-    identified stale records in parallel, then replies with the count of removed
-    groups.
+    Checks all groups concurrently via ``_should_remove`` (which excludes
+    primary groups), deactivates the identified stale records in parallel,
+    then replies with the count of removed groups.
     """
     reply_msg = update.effective_message
     assert reply_msg is not None
