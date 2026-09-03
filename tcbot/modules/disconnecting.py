@@ -17,6 +17,7 @@ from tcbot import database as db
 from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.formatter import bold, code, esc
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
+from tcbot.modules.maintenance import _is_primary_group
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -27,6 +28,11 @@ log = logging.getLogger(__name__)
 # ──────────────── User-facing reply constants ──────────────────── #
 
 _MSG_RMTC_USAGE = "Usage: /rmtc <chat_id>"
+_MSG_PRIMARY_REFUSED = (
+    "This is a primary group of the federation (main or exec). It cannot "
+    "be disconnected. The bot is required in primary groups for ban / unban "
+    "/ mute / warn fan-out and the federation log channel."
+)
 
 _TG_TIMEOUT = 3.0
 
@@ -104,6 +110,17 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             await update.effective_message.reply_text(replies.ERR_GROUP_ONLY)
         except Exception as exc:
             log.debug("cmd_tcleave group-only reply failed: %s", exc)
+        return
+
+    # * Primary groups (main, exec) are required destinations for ban /
+    # * unban / mute / warn fan-out and the federation log channel. They
+    # * must never be disconnected by the group owner; the bot would
+    # * lose primary-group enforcement and log delivery.
+    if _is_primary_group(chat.id):
+        try:
+            await update.effective_message.reply_text(_MSG_PRIMARY_REFUSED)
+        except Exception as exc:
+            log.debug("cmd_tcleave primary-group reply failed: %s", exc)
         return
 
     # * Pre-fetch all three in parallel: is_connected (cache-backed), staff check,
@@ -206,6 +223,18 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     chat_id = int(args[0])
+
+    # * Primary groups (main, exec) are required destinations for ban /
+    # * unban / mute / warn fan-out and the federation log channel. They
+    # * must never be force-disconnected by /rmtc; the bot would lose
+    # * primary-group enforcement and log delivery.
+    if _is_primary_group(chat_id):
+        try:
+            await msg.reply_text(_MSG_PRIMARY_REFUSED)
+        except Exception as exc:
+            log.debug("cmd_rmtc primary-group reply failed: %s", exc)
+        return
+
     removed = await db.groups_db.deactivate_group(chat_id)
     if removed:
         lc, lt = cfg.logs
