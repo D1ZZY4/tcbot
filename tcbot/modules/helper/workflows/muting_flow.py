@@ -25,7 +25,7 @@ from tcbot.modules.helper.formatter import (
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
-from tcbot.utils.dispatch import count_errors, fan_out
+from tcbot.utils.dispatch import count_transient_errors, fan_out
 from tcbot.utils.timedate_format import utc_now
 
 if TYPE_CHECKING:
@@ -130,7 +130,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict) -> None:
             for grp in groups
         ]
     )
-    failed = count_errors(results)
+    failed = count_transient_errors(results)
 
     admin_fname = meta.get("mute_admin_fname", "Admin")
 
@@ -261,7 +261,7 @@ async def execute_unmute(
             for grp in groups
         ]
     )
-    failed = count_errors(results)
+    failed = count_transient_errors(results)
 
     admin = update.effective_user
     if admin is None:

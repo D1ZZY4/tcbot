@@ -26,7 +26,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.formatter import bold, code
-from tcbot.utils.dispatch import count_errors, fan_out
+from tcbot.utils.dispatch import count_transient_errors, fan_out
 
 if TYPE_CHECKING:
     from telegram.ext import ContextTypes
@@ -225,11 +225,19 @@ class BuildConnection:
             except RuntimeError:
                 log.debug("Harvest task skipped: no running event loop.")
 
-        # * Apply all existing federation bans concurrently - semaphore-bounded
+        # * Apply all existing federation bans concurrently - semaphore-bounded.
+        # * Use count_transient_errors (not count_errors) so a "user was not in
+        # * this chat" BadRequest does not count as a real failure. For a
+        # * ban-replay, the user not being in the chat is the desired end
+        # * state -- counting it as a failure would overstate the failure rate.
         results = await fan_out([bot.ban_chat_member(chat_id, uid) for uid in ban_uids])
-        applied_bans = len(results) - count_errors(results)
+        applied_bans = len(results) - count_transient_errors(results)
 
-        # * Apply all existing federation mutes concurrently - semaphore-bounded
+        # * Apply all existing federation mutes concurrently - semaphore-bounded.
+        # * Use count_transient_errors (not count_errors) so a benign
+        # * "user not in chat" or "user is a bot" BadRequest does not count
+        # * as a real failure -- the desired end state is that the user is
+        # * restricted, and they were never in the chat to begin with.
         _mute_perms = ChatPermissions(can_send_messages=False)
         mute_results = await fan_out(
             [
@@ -242,7 +250,7 @@ class BuildConnection:
                 for doc in mute_docs
             ]
         )
-        applied_mutes = len(mute_results) - count_errors(mute_results)
+        applied_mutes = len(mute_results) - count_transient_errors(mute_results)
 
         lc, lt = cfg.logs
         try:

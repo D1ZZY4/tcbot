@@ -15,7 +15,7 @@ from tcbot import database as db
 from tcbot.database import documents as docs
 from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.formatter import user_ref
-from tcbot.utils.dispatch import count_errors, fan_out
+from tcbot.utils.dispatch import count_transient_errors, fan_out
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -127,7 +127,7 @@ async def execute_unban(
             for grp in groups
         ]
     )
-    failed = count_errors(results)
+    failed = count_transient_errors(results)
 
     lc, lt = cfg.logs
     # * effective_user can be None for anonymous admins; fall back to target info.
