@@ -84,6 +84,11 @@ _ERR_REVIEW_LOCKED = (
     f"Only the admin who issued this ban can review it within the first {LOCK_HOURS}h."
 )
 _MSG_APPEAL_SUBMITTED = "Your appeal has been submitted. The team will review it shortly - we'll get back to you."
+_MSG_APPEAL_DELIVERY_FAILED = (
+    "We could not deliver your appeal to the moderation team right now. "
+    "Please try again in a few minutes; if this keeps happening, contact "
+    "a staff member directly."
+)
 
 
 # ─────────────────────── Appeal pure helpers ────────────────────── #
@@ -500,6 +505,32 @@ class BuildAppeal:
         else:
             await upsert_coro
 
+        # * If BOTH the review post (line 441 ``rv``) and the log post
+        # * (line 449 ``sent_log``) failed, staff will never see the appeal
+        # * and the user is left waiting for a reply that will never come.
+        # * Edit the instruction message to a clear "we could not deliver
+        # * your appeal" reply -- otherwise the user believes the appeal
+        # * was received and may not re-submit for a long time.
+        if review_msg_id is None and appeal_log_sent_id is None:
+            log.error(
+                "submit_appeal: BOTH review post and appeal log post failed "
+                "for user=%d ban=%s; the appeal was not delivered to staff",
+                uid,
+                ban_id,
+            )
+            if instr_mid and update.effective_chat:
+                try:
+                    await ctx.bot.edit_message_text(
+                        _MSG_APPEAL_DELIVERY_FAILED,
+                        chat_id=update.effective_chat.id,
+                        message_id=instr_mid,
+                    )
+                except Exception as exc:
+                    log.debug("submit_appeal delivery-failed reply failed: %s", exc)
+            # * Do NOT clear user_data; the user should be able to retry the
+            # * appeal from the same conversation state.
+            return ConversationHandler.END
+
         # * Clear appeal keys so user_data is clean after successful submission.
         for key in (
             "appeal_ban_id",
@@ -617,12 +648,32 @@ class BuildAppeal:
             return_exceptions=True,
         )
         if isinstance(deactivate_result, BaseException):
+            # * Same trade-off as execute_unban in unban_flow.py: when the
+            # * DB deactivation fails we must NOT continue to the fan-out,
+            # * otherwise the user is unbanned in chats but the DB still
+            # * marks them banned. The greeting handler's join-auto-ban
+            # * would then re-ban them the next time they join any
+            # * connected group. Surface the failure to the operator and
+            # * tell the user that the appeal is in progress but the DB
+            # * write failed.
             log.error(
-                "deactivate_all_active_bans failed for user=%d: user may remain"
-                " marked banned in DB despite being unbanned in groups: %s",
+                "approve_appeal: deactivate_all_active_bans failed for "
+                "user=%d; aborting fan-out to avoid split-brain state: %s",
                 target_id,
                 deactivate_result,
             )
+            try:
+                await q.edit_message_text(
+                    f"Appeal DB write failed for ban {code(ban_id)}. "
+                    "The user is still marked as banned in the database "
+                    "even though chats will be un-banned. Check the logs "
+                    "and retry.",
+                    parse_mode="HTML",
+                    reply_markup=None,
+                )
+            except Exception as exc:
+                log.debug("approve_appeal DB-fail reply failed: %s", exc)
+            return
         if isinstance(groups, BaseException):
             log.error(
                 "active_groups failed during appeal unban of %d: %s",
@@ -703,7 +754,13 @@ class BuildAppeal:
         lc: int,
         lt: int | None,
     ) -> None:
-        target_fname_result, *_ = await asyncio.gather(
+        # * The four side-effects (DM, review-card edit, clear_review, audit-log
+        # * record) are independent. Each is captured separately so failures
+        # * are surfaced: a missing DM is a transient Telegram problem; a
+        # * failed clear_review means the user could re-appeal within the
+        # * 72-hour window; a failed set_rejected_by means the audit
+        # * trail is incomplete.
+        results = await asyncio.gather(
             db.users_cache.get_first_name(target_id, str(target_id)),
             bot.send_message(
                 target_id,
@@ -720,6 +777,30 @@ class BuildAppeal:
             db.bans_db.set_rejected_by(ban_id, admin.id, admin.first_name),
             return_exceptions=True,
         )
+        target_fname_result = results[0]
+        if isinstance(results[1], BaseException):
+            log.warning("reject_appeal DM to %d failed: %s", target_id, results[1])
+        if isinstance(results[2], BaseException):
+            log.debug("reject_appeal review-card edit failed: %s", results[2])
+        if isinstance(results[3], BaseException):
+            # * ``clear_review`` failure is more serious: the user could
+            # * re-submit an appeal within the 72-hour stale-review window
+            # * because the DB still has the pending review. Log loudly.
+            log.error(
+                "reject_appeal clear_review failed for ban %s: user %d may "
+                "re-appeal within the 72-hour window",
+                ban_id,
+                target_id,
+            )
+        if isinstance(results[4], BaseException):
+            # * ``set_rejected_by`` failure is an audit-trail gap: the
+            # * ban record has no rejected_by field, which admin tools
+            # * may rely on. Log loudly so the operator can re-run.
+            log.error(
+                "reject_appeal set_rejected_by failed for ban %s: %s",
+                ban_id,
+                results[4],
+            )
         target_fname = (
             target_fname_result
             if not isinstance(target_fname_result, BaseException)
