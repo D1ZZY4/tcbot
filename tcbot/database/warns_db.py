@@ -128,9 +128,14 @@ async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> in
                     "$inc": {"count": 1},
                     "$set": {"updated_at": utc_now()},
                     "$setOnInsert": {
+                        # * On insert the missing ``count`` field is treated
+                        # * as zero by MongoDB; ``$inc`` then sets it to 1.
+                        # * Do NOT add ``count: 0`` here -- it would conflict
+                        # * with the ``$inc`` modifier and raise
+                        # * ``OperationFailure: ConflictingUpdateOperators``
+                        # * (MongoDB error code 40) on every first warn.
                         "user_id": user_id,
                         "chat_id": chat_id,
-                        "count": 0,
                     },
                 },
                 upsert=True,
