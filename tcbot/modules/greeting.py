@@ -24,6 +24,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.formatter import esc, mention
+from tcbot.modules.helper.workflows.demote_flow import Demote
 
 if TYPE_CHECKING:
     from telegram import Bot, Chat, Message, Update, User
@@ -65,6 +66,32 @@ async def _handle_member(
         mute = None
 
     if ban:
+        # * Auto-demote before enforcing the chat-level ban, matching the
+        # * role-vs-state invariant upheld by banning.py / kicking.py / muting.py
+        # * (commit 0bbc3cc). A banned user must not still hold a federation
+        # * role; if they do, demote them here so the role is consistent with
+        # * the ban. The demote is best-effort: if it fails (DB outage, race,
+        # * etc.) we still proceed with the chat-level ban because the user IS
+        # already banned in the DB -- the chat-level ban is just the side-effect
+        # enforcement. The reply below surfaces the partial state.
+        target_role = await db.users_roles.get_effective_role(member.id)
+        if target_role:
+            try:
+                await Demote.execute(
+                    bot,
+                    member.id,
+                    member.first_name or str(member.id),
+                    target_role,
+                    0,
+                    "",
+                    trigger="ban",
+                )
+            except Exception:
+                log.exception(
+                    "Auto-demote on join-auto-ban failed for uid=%d role=%s",
+                    member.id,
+                    target_role,
+                )
         coros: list = [bot.ban_chat_member(chat.id, member.id)]
         if greet:
             coros.append(
