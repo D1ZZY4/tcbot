@@ -60,3 +60,49 @@ async def safe_edit_cb(q: CallbackQuery, text: str, **kwargs: Any) -> None:
         if any(i in str(e).lower() for i in _IGNORED):
             return
         log.warning("callback edit failed: %s", e)
+
+
+# ──────────────────────── safe_reply helper ─────────────────────── #
+
+
+class _ReplyableMessage(Protocol):
+    """Anything that exposes the ``reply_text`` coroutine used by ``safe_reply``.
+
+    :class:`telegram.Message` satisfies this. The bot client half of a
+    callback query does not (use :func:`safe_edit_cb` instead for
+    callback messages).
+    """
+
+    async def reply_text(self, text: str, **kwargs: Any) -> object: ...
+
+
+async def safe_reply(
+    msg: _ReplyableMessage,
+    text: str,
+    *,
+    log_label: str = "reply",
+    **kwargs: Any,
+) -> None:
+    """Send a reply via ``msg.reply_text``; log failures at debug.
+
+    Replaces the recurring 3-line pattern of
+
+        try:
+            await msg.reply_text(...)
+        except Exception as exc:
+            log.debug("...reply failed: %s", exc)
+
+    which is duplicated across the command modules and workflows. The
+    ``log_label`` parameter is the human-readable name of the call site
+    (e.g. ``"mute summary fallback"``); it appears in the debug log line
+    so the operator can find the source of a given failure without
+    grepping for the function name.
+
+    Failures are logged at ``debug`` rather than ``warning`` because a
+    failed ``reply_text`` is almost always benign: the user blocked
+    the bot, deleted the chat, or the message thread was closed.
+    """
+    try:
+        await msg.reply_text(text, parse_mode="HTML", **kwargs)
+    except Exception as exc:
+        log.debug("%s reply failed: %s", log_label, exc)
