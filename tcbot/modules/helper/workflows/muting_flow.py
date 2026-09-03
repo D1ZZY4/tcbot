@@ -23,6 +23,7 @@ from tcbot.modules.helper.formatter import (
     user_ref,
 )
 from tcbot.modules.helper.parse_link import message_link
+from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
 from tcbot.utils.dispatch import count_transient_errors, fan_out
@@ -109,6 +110,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict) -> None:
     until = utc_now() + duration if duration else None
     perms = ChatPermissions(can_send_messages=False)
     duration_secs = int(duration.total_seconds()) if duration else None
+    admin_fname = meta.get("mute_admin_fname", "Admin")
 
     # * Apply across all connected groups + primary groups - semaphore-bounded
     groups = await db.groups_db.active_groups()
@@ -119,6 +121,38 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict) -> None:
         for pid in _primary_ids
         if pid not in _existing_ids
     ]
+    # * Re-check the target's effective role immediately before the
+    # * restrict fan-out. The auto-demote in ``cmd_mute`` ran before the
+    # * proof collection window; if the target was re-promoted by a
+    # * concurrent command during that window, the role cache and the
+    # * live DB would both report them as staff. Demote again here to
+    # * preserve the role-vs-state invariant right up to the restrict
+    # * fan-out. Best-effort like the entry-point demote.
+    pre_fanout_role = await db.users_roles.get_effective_role(target_id)
+    if pre_fanout_role:
+        try:
+            await Demote.execute(
+                bot,
+                target_id,
+                target_fname,
+                pre_fanout_role,
+                admin_id,
+                admin_fname,
+                trigger="mute",
+            )
+            log.info(
+                "_execute_mute: re-demoted target %d (role=%s) before "
+                "fan-out to close the proof-collection TOCTOU window",
+                target_id,
+                pre_fanout_role,
+            )
+        except Exception:
+            log.exception(
+                "_execute_mute: re-demote before fan-out failed for target %d "
+                "(role=%s); proceeding with mute anyway",
+                target_id,
+                pre_fanout_role,
+            )
     results = await fan_out(
         [
             bot.restrict_chat_member(

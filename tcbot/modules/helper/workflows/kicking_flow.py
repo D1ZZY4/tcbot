@@ -15,6 +15,7 @@ from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg, replies
 from tcbot.modules.helper.formatter import esc, mention, user_ref
 from tcbot.modules.helper.parse_link import message_link
+from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
 from tcbot.utils.timedate_format import utc_now
@@ -94,6 +95,38 @@ async def execute_kick(
         # * runs *after* the unban completes so we can append a warning if
         # * the unban failed -- otherwise the admin would see "kicked" while
         # * the user is still banned.
+        # * Re-check the target's effective role immediately before the
+        # * ban-then-unban fan-out. The auto-demote in ``cmd_kick`` ran
+        # * before the proof collection window; if the target was
+        # * re-promoted by a concurrent command during that window, the
+        # * role cache and the live DB would both report them as staff.
+        # * Demote again here to preserve the role-vs-state invariant right
+        # * up to the kick fan-out. Best-effort like the entry-point demote.
+        pre_fanout_role = await db.users_roles.get_effective_role(target_id)
+        if pre_fanout_role:
+            try:
+                await Demote.execute(
+                    ctx.bot,
+                    target_id,
+                    target_name,
+                    pre_fanout_role,
+                    admin_id,
+                    admin_fname,
+                    trigger="kick",
+                )
+                log.info(
+                    "execute_kick: re-demoted target %d (role=%s) before "
+                    "fan-out to close the proof-collection TOCTOU window",
+                    target_id,
+                    pre_fanout_role,
+                )
+            except Exception:
+                log.exception(
+                    "execute_kick: re-demote before fan-out failed for target "
+                    "%d (role=%s); proceeding with kick anyway",
+                    target_id,
+                    pre_fanout_role,
+                )
         unban_result, log_kick_result, log_send_result = await asyncio.gather(
             ctx.bot.unban_chat_member(chat_id, target_id, only_if_banned=True),
             db.kicks_db.log_kick(target_id, chat_id, reason_text, admin_id),

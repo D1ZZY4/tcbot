@@ -25,6 +25,7 @@ from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg, replies
 from tcbot.modules.helper.formatter import esc, user_ref
 from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
+from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
 from tcbot.utils.dispatch import fan_out
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
@@ -237,6 +238,40 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             groups = []
 
     # * Enforce across all connected groups + primary groups - semaphore-bounded
+    # * Re-check the target's effective role immediately before the fan-out.
+    # * The auto-demote in ``cmd_ban_start`` ran before the proof
+    # * collection window; if the target was re-promoted by a concurrent
+    # * command during that window, the role cache and the live DB would
+    # * both report them as staff. Demote again here to preserve the
+    # * role-vs-state invariant right up to the ban fan-out. Best-effort
+    # * like the entry-point demote: a failure logs and the ban still
+    # * proceeds because the user IS already banned in the DB; the chat
+    # * enforcement is the side-effect.
+    pre_fanout_role = await db.users_roles.get_effective_role(target_id)
+    if pre_fanout_role:
+        try:
+            await Demote.execute(
+                bot,
+                target_id,
+                target_fname,
+                pre_fanout_role,
+                admin_id,
+                admin_fname,
+                trigger="ban",
+            )
+            log.info(
+                "_execute_ban: re-demoted target %d (role=%s) before fan-out to "
+                "close the proof-collection TOCTOU window",
+                target_id,
+                pre_fanout_role,
+            )
+        except Exception:
+            log.exception(
+                "_execute_ban: re-demote before fan-out failed for target %d "
+                "(role=%s); proceeding with ban anyway",
+                target_id,
+                pre_fanout_role,
+            )
     _primary_ids = [cid for cid in (cfg.main_group, cfg.exec_group) if cid]
     _existing_ids = {grp["chat_id"] for grp in groups}
     for _pid in _primary_ids:
