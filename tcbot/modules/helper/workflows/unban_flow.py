@@ -82,11 +82,31 @@ async def execute_unban(
         return_exceptions=True,
     )
     if isinstance(deactivate_r, BaseException):
+        # * The DB deactivation is the only authoritative state write for the
+        # * unban. If it fails, the user is still banned in the DB even if
+        # * we proceed to unban from chats. This produces a split-brain state
+        # * that `get_active_ban` will treat as still banned, so the join-auto-
+        # * ban path in `greeting.py` will re-ban the user the next time they
+        # * join. Do not produce a false "unbanned" reply: bail out and tell
+        # * the operator that manual cleanup is needed.
         log.error(
-            "deactivate_all_active_bans failed for user=%d: %s",
+            "deactivate_all_active_bans failed for user=%d; aborting unban to "
+            "avoid split-brain state: %s",
             target_id,
             deactivate_r,
         )
+        if msg is not None:
+            try:
+                await msg.reply_text(
+                    f"{user_ref(target_id, target_fname)} could not be unbanned: "
+                    "the database deactivation failed, so the user is still "
+                    "marked as banned even if they are now unmuted in chats. "
+                    "Check the logs and retry.",
+                    parse_mode="HTML",
+                )
+            except Exception as exc:
+                log.debug("Unban DB-fail reply failed: %s", exc)
+        return
     if isinstance(groups, BaseException):
         log.error("active_groups failed during unban of %d: %s", target_id, groups)
         groups = []
