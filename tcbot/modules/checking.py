@@ -409,7 +409,12 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.debug("check resolve-fail reply failed: %s", exc)
         return
 
-    # * Refresh cache with whatever we just resolved so future renders have a real name.
+    # * Refresh cache with whatever we just resolved so future renders
+    # * have a real name. Skip when the resolved name is a bare numeric ID
+    # * (extract_target fell back to str(target_id) because bot.get_chat
+    # * returned nothing) -- in that case we let Check.profile do the
+    # * heavy lifting via _resolve_user_info (which tries get_chat_member
+    # * on each connected group) and we trust its lookup result.
     if (
         target_fname
         and not target_fname.startswith("User ")
