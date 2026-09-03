@@ -614,9 +614,13 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if target_role and target_role != "founder":
         # * Clear any non-Founder role the target currently holds so the
         # * post-transfer state has exactly one Founder and zero Developer
-        # * /Tester records pointing at the new owner.
+        # * /Tester records pointing at the new owner. Use ``Demote.remove_role``
+        # * (not ``db.users_roles.remove_role`` directly) so an Admin target
+        # * is removed from ``tc_admins`` rather than ``tc_roles``: the bare
+        # * ``remove_role`` helper only touches ``tc_roles`` and would leave
+        # * a stale Admin record on the new owner.
         try:
-            await db.users_roles.remove_role(target_id)
+            await Demote.remove_role(target_id, target_role)
             log.info(
                 "cmd_transfer cleared pre-existing role %s from new owner %d",
                 target_role,
