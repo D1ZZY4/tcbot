@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from telegram.error import BadRequest
 
 if TYPE_CHECKING:
-    from telegram import CallbackQuery
+    from telegram import CallbackQuery, Message
 
 log = logging.getLogger(__name__)
 
@@ -65,19 +65,8 @@ async def safe_edit_cb(q: CallbackQuery, text: str, **kwargs: Any) -> None:
 # ──────────────────────── safe_reply helper ─────────────────────── #
 
 
-class _ReplyableMessage(Protocol):
-    """Anything that exposes the ``reply_text`` coroutine used by ``safe_reply``.
-
-    :class:`telegram.Message` satisfies this. The bot client half of a
-    callback query does not (use :func:`safe_edit_cb` instead for
-    callback messages).
-    """
-
-    async def reply_text(self, text: str, **kwargs: Any) -> object: ...
-
-
 async def safe_reply(
-    msg: _ReplyableMessage,
+    msg: Message,
     text: str,
     *,
     log_label: str = "reply",
@@ -95,12 +84,12 @@ async def safe_reply(
     which is duplicated across the command modules and workflows. The
     ``log_label`` parameter is the human-readable name of the call site
     (e.g. ``"mute summary fallback"``); it appears in the debug log line
-    so the operator can find the source of a given failure without
-    grepping for the function name.
+    so the operator can identify the source without grepping for the
+    function name.
 
-    Failures are logged at ``debug`` rather than ``warning`` because a
-    failed ``reply_text`` is almost always benign: the user blocked
-    the bot, deleted the chat, or the message thread was closed.
+    Failures are logged at ``debug`` (not ``warning``) because a failed
+    ``reply_text`` is almost always benign: the user blocked the bot,
+    the chat was deleted, or the message thread was closed.
     """
     try:
         await msg.reply_text(text, parse_mode="HTML", **kwargs)

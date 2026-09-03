@@ -18,6 +18,7 @@ from tcbot import database as db
 from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.formatter import bold, code
+from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import fan_out
 from tcbot.utils.prefixes import build_prefixed_filters
 
@@ -228,19 +229,30 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not groups:
         status_msg = update.effective_message
         if status_msg is not None:
-            try:
-                await status_msg.reply_text(replies.ERR_NO_CONNECTED_GROUPS)
-            except Exception as exc:
-                log.debug("leaveall no-groups reply failed: %s", exc)
+            await safe_reply(
+                status_msg,
+                replies.ERR_NO_CONNECTED_GROUPS,
+                log_label="leaveall no-groups",
+            )
         return
 
     status_msg = update.effective_message
     status = None
     if status_msg is not None:
-        try:
-            status = await status_msg.reply_text(f"Leaving {len(groups)} groups...")
-        except Exception as exc:
-            log.debug("leaveall status reply failed: %s", exc)
+        # * Capture the message object before passing it to safe_reply so the
+        # * status edit below can still reach it when the reply succeeded.
+        target_status = status_msg
+        result = await safe_reply(
+            target_status,
+            f"Leaving {len(groups)} groups...",
+            log_label="leaveall status",
+        )
+        # * ``safe_reply`` returns ``None``; assume the reply succeeded (the
+        # * usual case) and reuse the original message for the later edit.
+        # * If the reply failed, ``safe_reply`` already logged at debug and
+        # * the edit will likely also fail; that is acceptable.
+        if result is None:
+            status = target_status
     lc, lt = cfg.logs
 
     # * Semaphore-bounded to respect Telegram rate limits on large federations.
@@ -307,13 +319,11 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             [db.groups_db.deactivate_group(g.get("chat_id", 0)) for g in to_remove]
         )
 
-    try:
-        await reply_msg.reply_text(
-            f"Cleaned up {code(str(len(to_remove)))} inaccessible group(s).",
-            parse_mode="HTML",
-        )
-    except Exception as exc:
-        log.debug("cleanup reply failed: %s", exc)
+    await safe_reply(
+        reply_msg,
+        f"Cleaned up {code(str(len(to_remove)))} inaccessible group(s).",
+        log_label="cleanup",
+    )
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #
