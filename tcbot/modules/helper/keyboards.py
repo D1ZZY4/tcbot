@@ -6,10 +6,30 @@
 
 from __future__ import annotations
 
+import logging
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from tcbot import cfg
 from tcbot import database as db
+
+log = logging.getLogger(__name__)
+
+
+def _https_url(url: str, label: str) -> str | None:
+    """Return ``url`` only for http(s) community links.
+
+    Operator-supplied env URLs reach ``InlineKeyboardButton(url=...)``
+    verbatim; a non-http(s) value would fail late at the Telegram API.
+    Reject it here so the button is omitted and the misconfiguration is
+    visible in logs instead of a broken menu.
+    """
+    if url and url.startswith(("https://", "http://")):
+        return url
+    if url:
+        log.warning("Ignoring non-http(s) community URL for %s: %s", label, url)
+    return None
+
 
 # ──────────────────────────── Ban flow ──────────────────────────── #
 
@@ -295,38 +315,31 @@ def additional_menu_kb() -> InlineKeyboardMarkup:
     """
     rows: list[list[InlineKeyboardButton]] = []
 
+    channel_url = _https_url(cfg.community_channel_url, "channel")
+    group_url = _https_url(cfg.community_group_url, "group")
     channel_btn = (
-        InlineKeyboardButton("Main Channel", url=cfg.community_channel_url)
-        if cfg.community_channel_url
-        else None
+        InlineKeyboardButton("Main Channel", url=channel_url) if channel_url else None
     )
     group_btn = (
-        InlineKeyboardButton("Discussion Group", url=cfg.community_group_url)
-        if cfg.community_group_url
-        else None
+        InlineKeyboardButton("Discussion Group", url=group_url) if group_url else None
     )
     if channel_btn or group_btn:
         rows.append([b for b in (channel_btn, group_btn) if b is not None])
 
-    logs_btn = (
-        InlineKeyboardButton("Logs Channel", url=cfg.community_logs_url)
-        if cfg.community_logs_url
-        else None
-    )
-    exec_btn = (
-        InlineKeyboardButton("Exec Group", url=cfg.community_exec_url)
-        if cfg.community_exec_url
-        else None
-    )
+    logs_url = _https_url(cfg.community_logs_url, "logs")
+    exec_url = _https_url(cfg.community_exec_url, "exec")
+    logs_btn = InlineKeyboardButton("Logs Channel", url=logs_url) if logs_url else None
+    exec_btn = InlineKeyboardButton("Exec Group", url=exec_url) if exec_url else None
     if logs_btn or exec_btn:
         rows.append([b for b in (logs_btn, exec_btn) if b is not None])
 
-    if cfg.community_travel_url:
+    travel_url = _https_url(cfg.community_travel_url, "travel")
+    if travel_url:
         rows.append(
             [
                 InlineKeyboardButton(
                     "TRAVEL - Transsion Development (Community)",
-                    url=cfg.community_travel_url,
+                    url=travel_url,
                 )
             ]
         )

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper.formatter import code, esc, link, mention
+from tcbot.modules.helper.formatter import code, esc, link, mention, safe_username
 from tcbot.utils.timedate_format import fmt_dt, utc_now
 
 if TYPE_CHECKING:
@@ -700,10 +700,9 @@ def group_connected_log(
     chat_username: str | None = None,
 ) -> str:
     """Return a new federation-connected-group audit-log message."""
-    if chat_username:
-        group_display = (
-            f'<a href="https://t.me/{esc(chat_username)}">{esc(chat_title)}</a>'
-        )
+    uname = safe_username(chat_username)
+    if uname:
+        group_display = f'<a href="https://t.me/{esc(uname)}">{esc(chat_title)}</a>'
     else:
         group_display = esc(chat_title)
     return (

@@ -143,10 +143,22 @@ async def extract_target(
 
     # * Priority 5: @Mention entity
     if bot:
-        text = msg.text or ""
+        # * Telegram entity offsets are UTF-16 code units, not Python str
+        # * indices. Slicing the str directly misaligns past any emoji
+        # * (surrogate pair) before the mention and may resolve the wrong
+        # * username. Slice the UTF-16-LE bytes instead; a split surrogate
+        # * fails to decode and the entity is skipped (fail closed).
+        raw = (msg.text or "").encode("utf-16-le")
         for ent in msg.entities or []:
             if ent.type == "mention":
-                uname = text[ent.offset + 1 : ent.offset + ent.length]
+                try:
+                    uname = raw[
+                        (ent.offset + 1) * 2 : (ent.offset + ent.length) * 2
+                    ].decode("utf-16-le")
+                except UnicodeDecodeError:
+                    continue
+                except ValueError:
+                    continue
                 if uname.lstrip("@") in (
                     "GroupAnonymousBot",
                     "Telegram",

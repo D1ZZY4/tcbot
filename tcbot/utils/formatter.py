@@ -12,6 +12,19 @@ compatibility with the modules layer import paths.
 from __future__ import annotations
 
 import html
+import re
+
+# * Telegram usernames are restricted to ASCII letters, digits, and
+# * underscores (5-32 chars). Anything else in a cached username means the
+# * value did not come from Telegram intact, so never put it into a URL.
+_USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{5,32}$")
+
+
+def safe_username(username: str | None) -> str | None:
+    """Return ``username`` only when it is a valid Telegram username shape."""
+    if username and _USERNAME_RE.match(username):
+        return username
+    return None
 
 
 def bold(text: str) -> str:
@@ -65,6 +78,7 @@ def user_ref(user_id: int, name: str, username: str | None = None) -> str:
     target consistently and without duplication.
     """
     id_link = f'<a href="tg://user?id={user_id}">{user_id}</a>'
+    username = safe_username(username)
     if username:
         return (
             f"{html.escape(str(name))} | "
