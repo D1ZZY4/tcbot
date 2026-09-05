@@ -2,10 +2,10 @@
 
 ## Mission
 
-Maintain and improve TCF Bot as a production Telegram federation bot. Work
-autonomously through the requested scope, inspect the real implementation
-before making claims, preserve existing behavior unless the task requires a
-change, and stop only after the requested work is verified.
+Maintain and improve TCF Bot as a production Telegram federation moderation
+bot. Work autonomously through the requested scope, inspect the real
+implementation before making claims, preserve existing behavior unless the
+task requires a change, and stop only after the requested work is verified.
 
 ## Autonomous Engineering Loop
 
@@ -43,14 +43,28 @@ Read the following before changing the project:
 1. `.agents/rules/tooling-validation.md`
 2. `.agents/rules/code-style.md`
 3. `.agents/rules/comment-style.md`
-4. `AGENTS.md`
-5. `CHANGELOG.md`
-6. The relevant skill in `.agents/skills/`
-7. The relevant source and documentation files
+4. `.agents/rules/docs-rules.md`
+5. `.agents/rules/security-rules.md`
+6. `.agents/rules/asyncio-gather-rules.md`
+7. `AGENTS.md`
+8. `CHANGELOG.md`
+9. The relevant skill in `.agents/skills/`
+10. The relevant source and documentation files
 
-The three files under `.agents/rules/` are the canonical sources for engineering
+The six files under `.agents/rules/` are the canonical sources for engineering
 constraints. Do not invent a second project-state tracker or duplicate project
 rules elsewhere.
+
+## Rules hygiene
+
+- One rule lives in exactly one file. Before adding a rule, check all six
+  rules files for an existing equivalent.
+- Cross-link instead of copying: a checklist may reference another file, but
+  must not restate its bullets verbatim.
+- Summaries are allowed only where their purpose is an index (e.g. Forbidden
+  Patterns, read-before-work lists). Mark them as pointers, not copies.
+- When a section grows outside its file's scope, split it into a new or
+  existing rules file by category instead of letting scopes drift.
 
 ## Technical priorities
 
@@ -66,7 +80,7 @@ rules elsewhere.
   retry it.
 - Preserve FIFO ordering for Redis mutations sharing a prefix and event loop.
 - Keep the Redis `v2` namespace and typed JSON serialization compatible with
-  existing untagged values.
+  existing untracked values.
 - Use `clear_all()` for prefix-wide cache invalidation and `clear()` only for
   L1 invalidation.
 - Do not add dependencies unless the task explicitly requires one.
@@ -85,6 +99,25 @@ rules elsewhere.
 - Do not log secrets, tokens, credentials, raw private input, or private chat
   identifiers.
 - Do not leave dead links, stale behavior descriptions, or placeholder fixes.
+- Never write tuple-`except` clauses: Ruff 0.16.x reformats
+  `except (A, B):` into invalid Python 2 syntax. Always use separate `except`
+  clauses, then re-run `ruff format --check` and `compileall` to confirm.
+- Verify every edit after applying it: re-read the edited region or check
+  `git diff` before moving on. An edit tool reporting success is not proof
+  the result is correct.
+- When changing callback-data formats, keep old formats parseable so
+  in-flight keyboards do not break.
+- When changing user-visible counts or summaries, keep per-group detail logs
+  intact so operators can still diagnose.
+
+## Evidence before action
+
+- Verify sub-agent or review findings against the real code before fixing.
+  Downgrade anything unproven to Potential Risk instead of changing behavior.
+- Check design intent first: public-by-design surfaces (e.g. `/check`,
+  `/tcstats`) are not vulnerabilities just because they disclose data.
+- Classify every finding as exactly one of Confirmed Bug, Potential Risk, or
+  Improvement. Never call an improvement a bug or a guess a vulnerability.
 
 ## Documentation and cleanup
 
@@ -95,8 +128,17 @@ When behavior or structure changes:
   `.agents/` as needed.
 - Update Mermaid diagrams when their described flow or structure changes.
 - Sweep the repository for stale paths, broken links, and obsolete instructions.
+- Keep one `###` heading per category under each release in `CHANGELOG.md`.
 - Keep project documentation in professional English. Agent responses may use
   the user's language.
+
+## Commits
+
+- One commit per logical fix. Group interconnected files that form one atomic
+  change; never bundle unrelated fixes.
+- Each commit carries its own `CHANGELOG.md` slice and related doc updates.
+- Review the staged diff before committing. Never commit secrets or unrelated
+  files.
 
 ## Verification
 
@@ -113,7 +155,23 @@ python -c "import tcbot"
 git diff --check
 ```
 
+Never claim a check passed unless it actually ran and exited successfully.
+If a check cannot run, report the exact command and error.
+
 For runtime changes, restart the configured `Start Application` workflow and
 inspect its logs. Confirm that startup reaches the expected readiness state.
 For documentation-only changes, run the stale-reference scan, JSON validation
 for changed JSON files, and `git diff --check`.
+
+## Audit reports
+
+After a repository-wide audit, report in the user's language with this
+structure: executive summary; architecture; cleanup per file; findings split
+into confirmed bugs (file, root cause, fix, verification, impact), potential
+risks (why credible, why unconfirmed, follow-up), and improvements; security
+and moderation audit with severity and blast radius; duplicate and dead code;
+documentation audit; per-flow status (`UNCHANGED`, `INTERNAL REFACTOR`,
+`BUG FIX`, `BEHAVIOR CHANGED`); breaking changes (or an explicit none-found
+statement); behavior changes; large or risky changes; dependencies; commit
+structure; files changed; verification log; remaining issues; risk rating;
+final assessment. Support every conclusion with concrete evidence.
