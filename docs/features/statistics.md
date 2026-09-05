@@ -86,7 +86,7 @@ Testers (n)
 - None assigned
 ```
 
-### Users (`stats_users:<page>` and `stats_user_item:<page>:<idx>`)
+### Users (`stats_users:<page>` and `stats_user_item:<page>:<idx>[:stable]`)
 
 `Stats.users_list(page)` paginates `users_cache.all_users()` (sorted by `first_name`). Each row shows the cached display name, ID, and `@username` when present. Numbered buttons open `Stats.user_detail(page, idx)` which renders:
 
@@ -107,7 +107,7 @@ Use the Check/profile button for the full profile.
 The detail view links to the Check/profile view, equivalent to `/check <id>`,
 so a user can move from identity details to federation history.
 
-### Connected Chats (`stats_chats:<page>` and `stats_chat_item:<page>:<idx>`)
+### Connected Chats (`stats_chats:<page>` and `stats_chat_item:<page>:<idx>[:stable]`)
 
 `Stats.chats_list(page)` paginates `groups_db.active_groups()`. Each row shows the chat title and ID. Numbered buttons open `Stats.chat_detail(page, idx)` which renders:
 
@@ -121,7 +121,7 @@ Connected by: <mention>
 Date: <utc>
 ```
 
-### User Bans (`stats_bans:<page>` and `stats_ban_item:<page>:<idx>`)
+### User Bans (`stats_bans:<page>` and `stats_ban_item:<page>:<idx>[:stable]`)
 
 `Stats.bans_list(page)` paginates `bans_db.active_bans()`. The list is ordered newest first via the existing index. The page footer adds a `[ Search ]` button that opens the search panel. Numbered buttons open `Stats.ban_detail(page, idx)`, which reuses `helper/ban_info.build_ban_detail` and exposes a `View Proof` URL when proof exists.
 

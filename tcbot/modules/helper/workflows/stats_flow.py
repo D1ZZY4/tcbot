@@ -78,15 +78,28 @@ def _list_kb(
     item_cb_prefix: str,
     *,
     extra_row: list[InlineKeyboardButton] | None = None,
+    item_ids: list[str] | None = None,
 ) -> InlineKeyboardMarkup:
-    """Compose nav + numbered detail buttons + optional extra row + back."""
+    """Compose nav + numbered detail buttons + optional extra row + back.
+
+    ``item_ids`` carries one stable entity ID per button (user ID, chat ID,
+    or ban ID). Detail handlers verify the resolved record still carries
+    that ID so a list mutation between render and tap cannot silently show
+    a different record. Older buttons without the segment keep working.
+    """
     rows: list[list[InlineKeyboardButton]] = []
     nav = nav_row(page, total_pages, cb_prefix)
     if nav:
         rows.append(nav)
 
+    def _callback(i: int) -> str:
+        base = f"{item_cb_prefix}:{page}:{i}"
+        if item_ids is not None and i < len(item_ids):
+            return f"{base}:{item_ids[i]}"
+        return base
+
     num_btns = [
-        InlineKeyboardButton(str(i + 1), callback_data=f"{item_cb_prefix}:{page}:{i}")
+        InlineKeyboardButton(str(i + 1), callback_data=_callback(i))
         for i in range(n_items)
     ]
     rows.extend(
@@ -278,10 +291,13 @@ class Stats:
             len(chunk),
             cb_prefix="stats_users",
             item_cb_prefix="stats_user_item",
+            item_ids=[str(u.get("user_id", 0)) for u in chunk],
         )
 
     @classmethod
-    async def user_detail(cls, page: int, idx: int) -> tuple[str, InlineKeyboardMarkup]:
+    async def user_detail(
+        cls, page: int, idx: int, stable: str | None = None
+    ) -> tuple[str, InlineKeyboardMarkup]:
         """Detail card for a single cached user, with a link back into the list page."""
         users = await db.users_cache.all_users()
         chunk, _total, page = paginate(users, page, _PAGE_SIZE)
@@ -294,6 +310,12 @@ class Stats:
 
         u = chunk[idx]
         uid = u.get("user_id", 0)
+        if stable is not None and str(uid) != stable:
+            text = _ERR_USER_NOT_FOUND
+            kb = InlineKeyboardMarkup(
+                [[InlineKeyboardButton("« Back", callback_data=f"stats_users:{page}")]]
+            )
+            return text, kb
         fname = u.get("first_name") or str(uid)
         uname = u.get("username")
         last_name = u.get("last_name") or "-"
@@ -343,10 +365,13 @@ class Stats:
             len(chunk),
             cb_prefix="stats_chats",
             item_cb_prefix="stats_chat_item",
+            item_ids=[str(grp.get("chat_id", 0)) for grp in chunk],
         )
 
     @classmethod
-    async def chat_detail(cls, page: int, idx: int) -> tuple[str, InlineKeyboardMarkup]:
+    async def chat_detail(
+        cls, page: int, idx: int, stable: str | None = None
+    ) -> tuple[str, InlineKeyboardMarkup]:
         """Detail card for a connected group."""
         groups = await db.groups_db.active_groups()
         chunk, _total, page = paginate(groups, page, _PAGE_SIZE)
@@ -359,6 +384,12 @@ class Stats:
 
         grp = chunk[idx]
         chat_id = grp.get("chat_id", 0)
+        if stable is not None and str(chat_id) != stable:
+            text = _ERR_GROUP_NOT_FOUND
+            kb = InlineKeyboardMarkup(
+                [[InlineKeyboardButton("« Back", callback_data=f"stats_chats:{page}")]]
+            )
+            return text, kb
         title = grp.get("title", "Unknown")
         added_by = grp.get("added_by", 0)
         adder_fname, adder_uname = await db.users_cache.get_user_mention_data(added_by)
@@ -411,10 +442,13 @@ class Stats:
             cb_prefix="stats_bans",
             item_cb_prefix="stats_ban_item",
             extra_row=search_row,
+            item_ids=[str(ban.get("ban_id", "")) for ban in chunk],
         )
 
     @classmethod
-    async def ban_detail(cls, page: int, idx: int) -> tuple[str, InlineKeyboardMarkup]:
+    async def ban_detail(
+        cls, page: int, idx: int, stable: str | None = None
+    ) -> tuple[str, InlineKeyboardMarkup]:
         """Detail card for a banned user, reusing ``build_ban_detail``."""
         bans = await db.bans_db.active_bans()
         chunk, _total, page = paginate(bans, page, _PAGE_SIZE)
@@ -425,6 +459,12 @@ class Stats:
             )
             return text, kb
         ban = chunk[idx]
+        if stable is not None and str(ban.get("ban_id", "")) != stable:
+            text = _ERR_BAN_NOT_FOUND
+            kb = InlineKeyboardMarkup(
+                [[InlineKeyboardButton("« Back", callback_data=f"stats_bans:{page}")]]
+            )
+            return text, kb
         text, proof_link = await build_ban_detail(ban)
         rows: list[list[InlineKeyboardButton]] = []
         if proof_link:

@@ -59,7 +59,7 @@ prefix; subsequent segments are typed positional fields.
 | `promo_approve:<request_id>` / `promo_reject:<request_id>` | Founder DM | request | Founder resolves a pending Admin promotion request. |
 | `demote_confirm:<target_id>` / `demote_cancel:<target_id>` | demote prompt | target | Confirm or cancel a demotion. |
 | `checkme_detail:<ban_id>` / `checkme_back:<ban_id>` | `/checkme` | ban | Toggle the `/checkme` summary and detail views. |
-| `stats_main` / `stats_admins` / `stats_users:<page>` / `stats_user_item:<page>:<idx>` / `stats_chats:<page>` / `stats_chat_item:<page>:<idx>` / `stats_bans:<page>` / `stats_ban_item:<page>:<idx>` | `/tcstats` | varies | Federation stats drill-downs (`Stats` class). |
+| `stats_main` / `stats_admins` / `stats_users:<page>` / `stats_user_item:<page>:<idx>[:stable]` / `stats_chats:<page>` / `stats_chat_item:<page>:<idx>[:stable]` / `stats_bans:<page>` / `stats_ban_item:<page>:<idx>[:stable]` | `/tcstats` | varies | Federation stats drill-downs (`Stats` class). |
 | `stats_bans_search` / `stats_search_cancel` / `stats_search_back` / `stats_search_item:<idx>` | stats search | varies | Search panel for the active-ban list. |
 | `check_main:<uid>` | `/check` | target | Top-level profile (used by every drill-down's `« Back`). |
 | `check_bans:<uid>:<page>` / `check_ban_item:<uid>:<ban_id>` | `/check` | target, page or ban | Bans drill-down list and per-record detail. |

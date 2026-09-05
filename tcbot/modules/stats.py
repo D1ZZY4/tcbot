@@ -101,6 +101,29 @@ async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ──────────────────────── Callback Helpers ──────────────────────── #
 
 
+def _parse_item_callback(
+    q: CallbackQuery,
+) -> tuple[int, int, str | None] | None:
+    """Parse ``prefix:page:idx[:stable]`` item callbacks.
+
+    Four-part callbacks carry the stable entity ID so detail views can
+    reject a record shifted by a concurrent list mutation. Three-part
+    callbacks from older keyboards keep working without the check.
+    """
+    try:
+        parts = (q.data or "").split(":")
+        if len(parts) == 4:
+            _, page_str, idx_str, stable = parts
+        else:
+            _, page_str, idx_str = parts
+            stable = None
+        return int(page_str), int(idx_str), stable
+    except ValueError:
+        return None
+    except IndexError:
+        return None
+
+
 async def _ack_and_render(
     q: CallbackQuery, data_coro: Awaitable[tuple[str, InlineKeyboardMarkup | None]]
 ) -> None:
@@ -167,16 +190,12 @@ async def on_stats_user_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     q = update.callback_query
     if q is None:
         return
-    try:
-        _, page_str, idx_str = (q.data or "").split(":")
-        page, idx = int(page_str), int(idx_str)
-    except ValueError:
+    parsed = _parse_item_callback(q)
+    if parsed is None:
         await q.answer()
         return
-    except IndexError:
-        await q.answer()
-        return
-    await _ack_and_render(q, Stats.user_detail(page, idx))
+    page, idx, stable = parsed
+    await _ack_and_render(q, Stats.user_detail(page, idx, stable))
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -204,16 +223,12 @@ async def on_stats_chat_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     q = update.callback_query
     if q is None:
         return
-    try:
-        _, page_str, idx_str = (q.data or "").split(":")
-        page, idx = int(page_str), int(idx_str)
-    except ValueError:
+    parsed = _parse_item_callback(q)
+    if parsed is None:
         await q.answer()
         return
-    except IndexError:
-        await q.answer()
-        return
-    await _ack_and_render(q, Stats.chat_detail(page, idx))
+    page, idx, stable = parsed
+    await _ack_and_render(q, Stats.chat_detail(page, idx, stable))
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -242,16 +257,12 @@ async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     q = update.callback_query
     if q is None:
         return
-    try:
-        _, page_str, idx_str = (q.data or "").split(":")
-        page, idx = int(page_str), int(idx_str)
-    except ValueError:
+    parsed = _parse_item_callback(q)
+    if parsed is None:
         await q.answer()
         return
-    except IndexError:
-        await q.answer()
-        return
-    await _ack_and_render(q, Stats.ban_detail(page, idx))
+    page, idx, stable = parsed
+    await _ack_and_render(q, Stats.ban_detail(page, idx, stable))
 
 
 # ── Search panel ─────────────────────────────────────────────────────
@@ -379,11 +390,17 @@ __handlers__ = [
     CallbackQueryHandler(on_stats_main, pattern=r"^stats_main$"),
     CallbackQueryHandler(on_stats_admins, pattern=r"^stats_admins$"),
     CallbackQueryHandler(on_stats_users, pattern=r"^stats_users:\d+$"),
-    CallbackQueryHandler(on_stats_user_item, pattern=r"^stats_user_item:\d+:\d+$"),
+    CallbackQueryHandler(
+        on_stats_user_item, pattern=r"^stats_user_item:\d+:\d+(:[^:]+)?$"
+    ),
     CallbackQueryHandler(on_stats_chats, pattern=r"^stats_chats:\d+$"),
-    CallbackQueryHandler(on_stats_chat_item, pattern=r"^stats_chat_item:\d+:\d+$"),
+    CallbackQueryHandler(
+        on_stats_chat_item, pattern=r"^stats_chat_item:\d+:\d+(:[^:]+)?$"
+    ),
     CallbackQueryHandler(on_stats_bans, pattern=r"^stats_bans:\d+$"),
-    CallbackQueryHandler(on_stats_ban_item, pattern=r"^stats_ban_item:\d+:\d+$"),
+    CallbackQueryHandler(
+        on_stats_ban_item, pattern=r"^stats_ban_item:\d+:\d+(:[^:]+)?$"
+    ),
     CallbackQueryHandler(on_stats_bans_search, pattern=r"^stats_bans_search$"),
     CallbackQueryHandler(on_stats_search_item, pattern=r"^stats_search_item:\d+$"),
     CallbackQueryHandler(on_stats_search_back, pattern=r"^stats_search_back$"),
