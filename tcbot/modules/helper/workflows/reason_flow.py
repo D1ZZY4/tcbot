@@ -270,7 +270,14 @@ class _ModActionFlow:
             ctx.user_data[self._proof_key] = p
             existing: list = ctx.user_data.get(self._proof_msgs_key, [])
             ctx.user_data[self._proof_msgs_key] = [*existing, msg]
-        await self.executor(update, ctx)
+        try:
+            await self.executor(update, ctx)
+        except BaseException:
+            # * Mirror _on_skip_proof: clear state before propagating so a
+            # * failed executor does not leak {action}_* keys into the next
+            # * conversation. CancelledError is re-raised unchanged.
+            self._clear_user_data(ctx)
+            raise
         # * Clear state so the conversation does not leak keys across sessions.
         self._clear_user_data(ctx)
         return ConversationHandler.END
