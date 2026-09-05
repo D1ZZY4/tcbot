@@ -3,8 +3,8 @@
 Deploying TCF Bot on Replit requires specific configuration for secrets,
 keep-alive, and webhook transport. This guide covers Replit-only setup.
 
-For general project documentation, see [`README.md`](../README.md).
-For contributor rules and code style, see [`AGENTS.md`](../AGENTS.md).
+For general project documentation, see [`README.md`](README.md).
+For contributor rules and code style, see [`AGENTS.md`](AGENTS.md).
 
 ---
 

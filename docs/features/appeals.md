@@ -13,7 +13,7 @@ flowchart TD
     DeepLink[/start appeal_BANID/] --> Validate{Valid ban_id?}
     Validate -->|no| Reject[Show error]
     Validate -->|yes| DM[Open private DM]
-    DM --> Reason[WAITING_APPEAL_REASON]
+    DM --> Reason[WAITING_APPEAL]
     Reason --> Submit[Submit to APPEALS chat]
     Submit --> ReviewCard[Post review card<br/>in MAIN_GROUP topic]
     ReviewCard --> Decision{Staff decision}

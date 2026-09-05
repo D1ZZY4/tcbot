@@ -59,6 +59,8 @@ tcbot/
 │   ├── mutes_db.py         Mute audit records (incl. per-user history)
 │   ├── queues_db.py        Promotion request queue
 │   ├── cache.py            L1 TTL caches with optional Redis L2
+│   ├── redis_client.py     Optional async Redis client
+│   ├── scheduler.py        APScheduler background jobs with MongoDB store
 │   ├── documents.py        TypedDict document shapes
 │   └── types.py            NewType ID primitives
 ├── modules/
@@ -79,6 +81,7 @@ tcbot/
     ├── circuit_breaker.py  Async circuit breaker for Telegram + MongoDB
     ├── dispatch.py         Bounded concurrent fan-out (integrates Telegram circuit)
     ├── error_reporter.py   Telegram error classification and reporting
+    ├── formatter.py        HTML escaping and formatting (single source of truth)
     ├── logger.py           Console formatter and error log handler
     ├── pagination.py       Shared paginate(), nav_row(), date_or_unknown() helpers
     ├── prefixes.py         Prefix parsing and command filters

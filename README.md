@@ -63,7 +63,7 @@ python -m tcbot
 docker-compose up --build
 ```
 
-The compose setup starts the bot and a local `mongo:7` service. The bot reads `config.env` and waits for MongoDB to pass its health check.
+The compose setup starts the bot plus local `mongo:7` and `redis:7-alpine` services. The bot reads `.env` (copy from `config.env.example`) and waits for both dependencies to pass health checks.
 
 See [`docs/getting-started/setup.md`](docs/getting-started/setup.md) for detailed Docker setup instructions.
 
