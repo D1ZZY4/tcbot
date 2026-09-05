@@ -84,8 +84,6 @@ Before editing TCF Bot code, verify:
 - Do not add dependencies to `requirements.txt`.
 - Do not change pinned dependencies blindly, especially the accepted
   APScheduler `4.0.0a6` integration risk.
-- Keep runtime secrets in environment variables or the platform secret manager.
-- Never edit or commit `config.env` during normal work.
 
 Install dependencies from the lockfile (Replit only):
 
@@ -162,7 +160,6 @@ Authorization boundaries, secret handling, and compatibility guarantees live
 in [`security-rules.md`](security-rules.md). For this workflow:
 
 - Do not edit unrelated files or refactor outside the requested scope.
-- Do not remove meaningful behavior merely to silence a warning.
 
 ## Final Review
 

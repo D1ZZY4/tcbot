@@ -121,7 +121,9 @@ Rules:
 8. Do not store `Update`, `Message`, or `CallbackQuery` objects beyond the
    handler call lifetime.
 9. Wrap repeated Telegram calls so one failure does not stop a fan-out.
-10. Use `tcbot.utils.dispatch.fan_out()` for multi-group Telegram operations.
+10. Use `tcbot.utils.dispatch.fan_out()` for multi-group Telegram operations;
+    concurrency and failure-count details live in
+    [`asyncio-gather-rules.md`](asyncio-gather-rules.md).
 
 ## Database and Cache Access
 

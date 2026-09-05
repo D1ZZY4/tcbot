@@ -48,8 +48,6 @@ Rules:
   can be absent.
 - Keep handler call paths async end-to-end.
 - Always `await` Telegram API calls and Motor calls.
-- Do not store `Update`, `Message`, or `CallbackQuery` objects beyond the
-  handler call lifetime.
 - Do not call `asyncio.run()` inside handlers; the application already owns
   the event loop.
 
@@ -100,7 +98,6 @@ Rules:
   Telegram refusals do not look like failed groups.
 - Report partial failures in staff-facing summaries and audit logs when the
   action is federation-wide.
-- Wrap repeated Telegram calls so one failure does not stop a fan-out.
 
 ## Timeouts and Cancellation
 
@@ -156,8 +153,8 @@ helper modules; helpers call Motor collections.
 
 Rules:
 
-- Keep all MongoDB writes and collection access in `tcbot/database/` helpers.
-- Keep database helpers async and fully typed.
+- Module boundaries and collection ownership follow `code-style.md`; the rules
+  below cover async behavior only.
 - Avoid returning Motor cursors to handlers; convert to plain lists inside
   helpers when practical.
 - Use projection when large documents do not need every field.

@@ -240,9 +240,12 @@ Use `config.env.example` as the complete template.
 
 Follow the detailed rules in
 [`.agents/rules/tooling-validation.md`](.agents/rules/tooling-validation.md),
-[`.agents/rules/code-style.md`](.agents/rules/code-style.md), and
-[`.agents/rules/comment-style.md`](.agents/rules/comment-style.md) before
-editing source code.
+[`.agents/rules/code-style.md`](.agents/rules/code-style.md),
+[`.agents/rules/comment-style.md`](.agents/rules/comment-style.md),
+[`.agents/rules/docs-rules.md`](.agents/rules/docs-rules.md),
+[`.agents/rules/security-rules.md`](.agents/rules/security-rules.md), and
+[`.agents/rules/asyncio-gather-rules.md`](.agents/rules/asyncio-gather-rules.md)
+before editing source code.
 
 Repository conventions:
 
