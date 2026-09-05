@@ -27,7 +27,11 @@ from tcbot.modules.helper.formatter import esc, user_ref
 from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
-from tcbot.utils.dispatch import fan_out
+from tcbot.utils.dispatch import (
+    count_transient_errors,
+    fan_out,
+    is_benign_telegram_error,
+)
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 from tcbot.utils.timedate_format import to_utc, utc_now
 
@@ -280,13 +284,19 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     results = await fan_out(
         [bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
     )
-    # * Collect per-group failures for transparent reporting to the admin
+    # * Collect per-group failures for transparent reporting to the admin.
+    # * Benign Telegram refusals (user not in chat, chat gone, bot demoted)
+    # * are logged but excluded from the operator-facing failed count so a
+    # * ban does not look partially failed when there was nothing to enforce.
     failed_groups = [
         (grp, r)
         for grp, r in zip(groups, results, strict=False)
         if isinstance(r, BaseException)
     ]
-    failed = len(failed_groups)
+    transient_groups = [
+        (grp, r) for grp, r in failed_groups if not is_benign_telegram_error(r)
+    ]
+    failed = count_transient_errors(results)
     for grp, exc in failed_groups:
         log.warning(
             "Ban enforcement failed for user=%d in group=%s (%d): %s",
@@ -308,21 +318,21 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         applied_line = "No connected groups configured."
     elif failed == total_groups:
         sample = ", ".join(
-            grp.get("title") or str(grp["chat_id"]) for grp, _ in failed_groups[:5]
+            grp.get("title") or str(grp["chat_id"]) for grp, _ in transient_groups[:5]
         )
         applied_line = (
             f"WARNING: ban not enforced in any group ({total_groups}/{total_groups} failed)."
             f" Check bot admin rights in: {esc(sample)}"
-            + (" ..." if len(failed_groups) > 5 else "")
+            + (" ..." if len(transient_groups) > 5 else "")
         )
     elif failed > 0:
         sample = ", ".join(
-            grp.get("title") or str(grp["chat_id"]) for grp, _ in failed_groups[:3]
+            grp.get("title") or str(grp["chat_id"]) for grp, _ in transient_groups[:3]
         )
         applied_line = (
             f"Applied to {total_groups - failed}/{total_groups} groups"
             f" ({failed} failed: {esc(sample)}"
-            + (" ..." if len(failed_groups) > 3 else ")")
+            + (" ..." if len(transient_groups) > 3 else ")")
         )
     else:
         applied_line = f"Applied to {total_groups}/{total_groups} groups."

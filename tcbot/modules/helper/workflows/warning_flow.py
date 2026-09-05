@@ -18,7 +18,11 @@ from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
-from tcbot.utils.dispatch import fan_out
+from tcbot.utils.dispatch import (
+    count_transient_errors,
+    fan_out,
+    is_benign_telegram_error,
+)
 from tcbot.utils.timedate_format import utc_now
 
 if TYPE_CHECKING:
@@ -466,7 +470,10 @@ async def _execute_warn_auto_ban(
         for grp, r in zip(groups, ban_results, strict=False)
         if isinstance(r, BaseException)
     ]
-    failed = len(failed_groups)
+    transient_groups = [
+        (grp, r) for grp, r in failed_groups if not is_benign_telegram_error(r)
+    ]
+    failed = count_transient_errors(ban_results)
     applied = total_groups - failed
     any_ban_ok = applied > 0
 
@@ -490,21 +497,21 @@ async def _execute_warn_auto_ban(
         applied_line = " No connected groups configured."
     elif failed == total_groups:
         sample = ", ".join(
-            grp.get("title") or str(grp["chat_id"]) for grp, _ in failed_groups[:5]
+            grp.get("title") or str(grp["chat_id"]) for grp, _ in transient_groups[:5]
         )
         applied_line = (
             f" WARNING: ban not enforced in any group ({total_groups}/{total_groups} failed)."
             f" Check bot admin rights in: {esc(sample)}"
-            + (" ..." if len(failed_groups) > 5 else "")
+            + (" ..." if len(transient_groups) > 5 else "")
         )
     elif failed > 0:
         sample = ", ".join(
-            grp.get("title") or str(grp["chat_id"]) for grp, _ in failed_groups[:3]
+            grp.get("title") or str(grp["chat_id"]) for grp, _ in transient_groups[:3]
         )
         applied_line = (
             f" Applied to {applied}/{total_groups} groups"
             f" ({failed} failed: {esc(sample)}"
-            + (" ..." if len(failed_groups) > 3 else ")")
+            + (" ..." if len(transient_groups) > 3 else ")")
         )
     else:
         applied_line = f" Applied to {total_groups}/{total_groups} groups."
