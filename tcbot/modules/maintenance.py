@@ -239,20 +239,16 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     status_msg = update.effective_message
     status = None
     if status_msg is not None:
-        # * Capture the message object before passing it to safe_reply so the
-        # * status edit below can still reach it when the reply succeeded.
-        target_status = status_msg
-        result = await safe_reply(
-            target_status,
-            f"Leaving {len(groups)} groups...",
-            log_label="leaveall status",
-        )
-        # * ``safe_reply`` returns ``None``; assume the reply succeeded (the
-        # * usual case) and reuse the original message for the later edit.
-        # * If the reply failed, ``safe_reply`` already logged at debug and
-        # * the edit will likely also fail; that is acceptable.
-        if result is None:
-            status = target_status
+        # * Send a fresh status message and keep it: the final counts edit
+        # * this bot-owned message. Editing the user's command message would
+        # * always fail (bots cannot edit messages sent by others).
+        try:
+            status = await status_msg.reply_text(
+                f"Leaving {len(groups)} groups...",
+                parse_mode="HTML",
+            )
+        except Exception as exc:
+            log.debug("leaveall status reply failed: %s", exc)
     lc, lt = cfg.logs
 
     # * Semaphore-bounded to respect Telegram rate limits on large federations.
@@ -315,13 +311,31 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     to_remove = [g for g, remove in zip(groups, checks, strict=False) if remove is True]
 
     if to_remove:
-        await fan_out(
-            [db.groups_db.deactivate_group(g.get("chat_id", 0)) for g in to_remove]
+        # * Pure database writes: plain gather, not fan_out. fan_out wraps
+        # * the Telegram circuit breaker, which must not gate DB work.
+        deact_results = await asyncio.gather(
+            *[db.groups_db.deactivate_group(g.get("chat_id", 0)) for g in to_remove],
+            return_exceptions=True,
         )
+        deactivated = sum(1 for r in deact_results if r is True)
+        for grp, result in zip(to_remove, deact_results, strict=False):
+            if isinstance(result, BaseException):
+                log.error(
+                    "cleanup deactivate failed for chat=%s: %s",
+                    grp.get("chat_id", 0),
+                    result,
+                )
+            elif result is not True:
+                log.warning(
+                    "cleanup deactivate no-op for chat=%s (record already gone?)",
+                    grp.get("chat_id", 0),
+                )
+    else:
+        deactivated = 0
 
     await safe_reply(
         reply_msg,
-        f"Cleaned up {code(str(len(to_remove)))} inaccessible group(s).",
+        f"Cleaned up {code(str(deactivated))} inaccessible group(s).",
         log_label="cleanup",
     )
 

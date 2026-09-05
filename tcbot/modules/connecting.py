@@ -22,6 +22,7 @@ from tcbot import database as db
 from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.formatter import bold, code, esc
 from tcbot.modules.helper.workflows.connected_flow import connection
+from tcbot.modules.maintenance import _is_primary_group
 from tcbot.utils.prefixes import build_prefixed_filters
 
 if TYPE_CHECKING:
@@ -144,6 +145,19 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             await update.effective_message.reply_text(_ERR_ADMIN_REQUIRED)
         except Exception as exc:
             log.debug("cmd_tctc admin-required reply failed: %s", exc)
+        return
+
+    # * Primary groups are required enforcement destinations, not federation
+    # * members; connecting them would pollute federated_groups with an ID
+    # * that fan-out paths unconditionally include.
+    if _is_primary_group(chat.id):
+        try:
+            await update.effective_message.reply_text(
+                "This is a primary group of the federation (main or exec). "
+                "Primary groups are not connected via /tcconnect."
+            )
+        except Exception as exc:
+            log.debug("cmd_tctc primary-group reply failed: %s", exc)
         return
 
     if isinstance(is_connected, BaseException):

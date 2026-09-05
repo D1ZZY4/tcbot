@@ -355,6 +355,11 @@ class BuildConnection:
             return
 
         if new_status in (ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR):
+            # * Primary groups must never enter the federation join flow: no
+            # * prompt, no pending row. They are required enforcement
+            # * destinations, not connectable members.
+            if chat.id in (cfg.main_group, cfg.exec_group):
+                return
             # * Speculatively pre-fetch both reads in parallel; is_already_connected
             # * is only consumed if the pending+ADMINISTRATOR fast path is not taken.
             pending, is_already_connected = await asyncio.gather(
@@ -487,18 +492,29 @@ class BuildConnection:
 
             if not self.check_perms(bot_member):
                 prompt_msg_id = q.message.message_id if q.message else 0
-                await asyncio.gather(
-                    db.groups_db.add_pending(
+                # * Persist the pending row before overwriting the prompt: if
+                # * add_pending fails there is nothing to approve later, so
+                # * report the error instead of showing perms-required.
+                try:
+                    await db.groups_db.add_pending(
                         chat.id,
                         chat.title or "",
                         user.id,
                         prompt_msg_id,
-                    ),
-                    q.edit_message_text(
+                    )
+                except Exception:
+                    log.exception("add_pending failed for chat %d", chat.id)
+                    try:
+                        await q.edit_message_text(_ERR_COMPLETE_JOIN, reply_markup=None)
+                    except Exception as exc:
+                        log.debug("Join decision db-error edit failed: %s", exc)
+                    return
+                try:
+                    await q.edit_message_text(
                         self.perms_required_message(), reply_markup=None
-                    ),
-                    return_exceptions=True,
-                )
+                    )
+                except Exception as exc:
+                    log.debug("Join decision perms-required edit failed: %s", exc)
                 return
 
             if await db.groups_db.is_connected(chat.id):
@@ -526,9 +542,14 @@ class BuildConnection:
                 await q.edit_message_text(self.connected_message(), reply_markup=None)
 
         elif action == self.cancel_callback:
-            # * All four ops are independent: remove pending, edit prompt, log, leave.
+            # * Remove the pending row first: if it survives while the bot
+            # * leaves, the next on_bot_added sees a stale pending and drops
+            # * the join silently (deadlock with no prompt).
+            try:
+                await db.groups_db.remove_pending(chat.id)
+            except Exception:
+                log.exception("remove_pending failed for chat %d on cancel", chat.id)
             await asyncio.gather(
-                db.groups_db.remove_pending(chat.id),
                 q.edit_message_text(self.declined_message(), reply_markup=None),
                 ctx.bot.send_message(
                     lc,

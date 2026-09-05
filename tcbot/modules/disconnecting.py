@@ -168,9 +168,23 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     lc, lt = cfg.logs
-    # * deactivate, log, reply, and leave all run in parallel
-    deact_r, log_r, reply_r, leave_r = await asyncio.gather(
-        db.groups_db.deactivate_group(chat.id),
+    # * Deactivate first: only leave after the DB confirms, otherwise a
+    # * deactivate failure leaves a ghost (bot gone, DB still active).
+    try:
+        deactivated = await db.groups_db.deactivate_group(chat.id)
+    except Exception:
+        log.exception("deactivate_group failed for chat %d during tcleave", chat.id)
+        deactivated = False
+    if not deactivated:
+        try:
+            await update.effective_message.reply_text(
+                "Failed to disconnect the group due to a server error. "
+                "The bot is still here; please try again."
+            )
+        except Exception as exc:
+            log.debug("cmd_tcleave deactivate-failed reply failed: %s", exc)
+        return
+    log_r, reply_r, leave_r = await asyncio.gather(
         ctx.bot.send_message(
             lc,
             parse_logmsg.group_disconnected_log(
@@ -185,10 +199,6 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         ctx.bot.leave_chat(chat.id),
         return_exceptions=True,
     )
-    if isinstance(deact_r, BaseException):
-        log.error(
-            "deactivate_group failed for chat %d during tcleave: %s", chat.id, deact_r
-        )
     if isinstance(log_r, BaseException):
         log.debug("tcleave log send failed for chat %d: %s", chat.id, log_r)
     if isinstance(reply_r, BaseException):
