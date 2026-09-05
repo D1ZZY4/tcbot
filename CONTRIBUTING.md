@@ -7,10 +7,11 @@ for code, documentation, configuration, and review contributions.
 
 1. Read [`README.md`](README.md) for the project overview.
 2. Read [`AGENTS.md`](AGENTS.md) for repository architecture and conventions.
-3. Read the three canonical engineering rule files:
+3. Read the four canonical engineering rule files:
    - [Tooling and validation](.agents/rules/tooling-validation.md)
    - [Code style and architecture](.agents/rules/code-style.md)
    - [Comment and documentation style](.agents/rules/comment-style.md)
+   - [Documentation style and maintenance](.agents/rules/docs-style.md)
 4. Check [`CHANGELOG.md`](CHANGELOG.md) and existing documentation for the area
    you plan to change.
 

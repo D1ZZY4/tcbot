@@ -19,12 +19,6 @@
       "skillPath": "python-plugin/skills/python-code-quality/SKILL.md",
       "computedHash": "c5571ac20c1160ce4387a1e7f364f6400a1e9c53c1a88debfd0cd8028513ccc5"
     },
-    "docs-maintainer": {
-      "source": "project-local",
-      "sourceType": "filesystem",
-      "skillPath": ".agents/skills/docs-maintainer/SKILL.md",
-      "computedHash": null
-    },
     "feature-reviewer": {
       "source": "project-local",
       "sourceType": "filesystem",

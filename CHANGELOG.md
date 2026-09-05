@@ -6,6 +6,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Changed
 
+- **Docs skill converted to rules** (`.agents/rules/docs-style.md`): converted the `docs-maintainer` skill into a fourth canonical rules file formatted like `code-style.md` (title, scope, style, workflow, detailed-guide sections). Removed `.agents/skills/docs-maintainer/SKILL.md` and its `skills-lock.json` entry. Updated `AGENTS.md`, `CONTRIBUTING.md`, and `tooling-validation.md` references from three to four canonical rule files. No behavior change.
+
+### Changed
+
 - **Dependency refresh** (`uv.lock`): `uv lock --upgrade` to latest within pinned bounds. Bumped `anyio` 4.14.2 -> 4.15.1, `click` 8.4.2 -> 8.5.0, `idna` 3.18 -> 3.19, `pymongo` 4.17.0 -> 4.18.0, `ruff` 0.16.3 -> 0.16.6; added `typing-extensions` 4.16.0, dropped unneeded `colorama`. Direct dependencies were already latest in range. `apscheduler` stays pinned at `==3.11.3` (accepted CVE-2026-31072 exception; v4 API is incompatible with `scheduler.py`).
 
 ## [6.4.0] - 2026-09-05

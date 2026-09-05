@@ -21,6 +21,8 @@ Every new conversation in this repository must start by reading the canonical ru
   architecture, handler, database, and async rules
 - [`.agents/rules/comment-style.md`](.agents/rules/comment-style.md): comments,
   docstrings, section dividers, and Markdown rules
+- [`.agents/rules/docs-style.md`](.agents/rules/docs-style.md): documentation
+  scope, style, maintenance workflow, and detailed-guide rules
 - [`AGENTS.md`](AGENTS.md) (this file), [`CHANGELOG.md`](CHANGELOG.md)
 - The relevant [`.agents/skills/`](.agents/skills/), [`docs/`](docs/), and project-root docs for the task
 
@@ -34,7 +36,7 @@ for the complete read/update rules. Skipping either step is a serious defect.
 
 ## Skills and Sub-Agents Policy
 
-**Skills in `.agents/skills/` auto-invoke whenever their trigger matches**: no need for the user to ask. If you are about to write code in `tcbot/`, invoke [`project-policy`](.agents/skills/project-policy/SKILL.md). If you are about to edit docs, invoke [`docs-maintainer`](.agents/skills/docs-maintainer/SKILL.md). Same for `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `feature-reviewer`. Compose multiple skills when one task spans multiple areas.
+**Skills in `.agents/skills/` auto-invoke whenever their trigger matches**: no need for the user to ask. If you are about to write code in `tcbot/`, invoke [`project-policy`](.agents/skills/project-policy/SKILL.md). If you are about to edit docs, read [`docs-style`](.agents/rules/docs-style.md). Same for `mongodb-query-optimizer`, `async-python-patterns`, `python-code-quality`, `feature-reviewer`. Compose multiple skills when one task spans multiple areas.
 
 The skills directory also previously included meta-tools for the agent itself (`find-skills`, `general-sub-agent`, `skill-creator`) that have been removed: they were tooling for the agent harness, not for the bot codebase, and had no project-specific value.
 

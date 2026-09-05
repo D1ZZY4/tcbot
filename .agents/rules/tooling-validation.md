@@ -22,7 +22,7 @@ These rules apply to every task:
    content or paths became stale.
 5. Search for old paths and broken links before finalizing.
 
-The three files in this directory are the canonical engineering rules. Public
+The four files in this directory are the canonical engineering rules. Public
 contributor guidance belongs in [`CONTRIBUTING.md`](../../CONTRIBUTING.md);
 deployment and feature documentation belongs under `docs/`.
 
