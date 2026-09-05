@@ -253,6 +253,13 @@ async def total_users() -> int:
 
 _PAGE_LIMIT = 200
 
+# * Allowed sort keys for all_users(). Unvalidated strings would force an
+# * unindexed COLLSCAN plus an in-memory sort, then silently truncate at
+# * _PAGE_LIMIT. Keep the set aligned with UserDoc fields and existing indexes.
+_ALLOWED_USER_SORTS: frozenset[str] = frozenset(
+    {"user_id", "username", "first_name", "last_name", "commit_date", "last_updated"}
+)
+
 
 async def all_users(*, sort_by: str = "first_name") -> list[UserDoc]:
     """Return cached users capped at ``_PAGE_LIMIT``, sorted by ``sort_by`` (default: first name).
@@ -260,6 +267,8 @@ async def all_users(*, sort_by: str = "first_name") -> list[UserDoc]:
     Used by the ``/tcstats`` Users drill-down. The cap prevents unbounded
     scans on large caches; pagination in the caller handles the rest.
     """
+    if sort_by not in _ALLOWED_USER_SORTS:
+        sort_by = "first_name"
     sort_dir = 1 if sort_by != "last_updated" else -1
     return await db_call(
         _members()
