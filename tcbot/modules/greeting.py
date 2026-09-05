@@ -24,6 +24,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.formatter import esc, mention
+from tcbot.modules.helper.parse_link import appeal_deep_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
 
 if TYPE_CHECKING:
@@ -92,26 +93,63 @@ async def _handle_member(
                     member.id,
                     target_role,
                 )
-        coros: list = [bot.ban_chat_member(chat.id, member.id)]
+        coros: list = []
+        try:
+            await bot.ban_chat_member(chat.id, member.id)
+        except Exception:
+            log.exception(
+                "Auto-ban on join failed for uid=%d in chat=%d",
+                member.id,
+                chat.id,
+            )
+            return
         if greet:
+            notice = (
+                f"{mention(member.id, member.first_name, member.username)}"
+                " is federation-banned and was removed."
+            )
+            ban_id = ban.get("ban_id", "")
+            if ban_id:
+                notice += f" Ban ID: {esc(str(ban_id))}."
+                if bot.username:
+                    appeal_url = appeal_deep_link(bot.username, str(ban_id))
+                    notice += f' <a href="{appeal_url}">Submit Appeal</a>'
             coros.append(
                 msg.reply_text(
-                    f"{mention(member.id, member.first_name, member.username)}"
-                    " is federation-banned and was removed.",
+                    notice,
                     parse_mode="HTML",
                 )
             )
         results = await asyncio.gather(*coros, return_exceptions=True)
-        if isinstance(results[0], BaseException):
-            log.error(
-                "Auto-ban on join failed for uid=%d in chat=%d: %s",
-                member.id,
-                chat.id,
-                results[0],
-            )
+        for result in results:
+            if isinstance(result, BaseException):
+                log.debug(
+                    "Join-auto-ban notice failed for uid=%d: %s", member.id, result
+                )
         return
 
     if mute:
+        # * Muted staff must not keep their role while restricted, matching
+        # * the ban branch above. Best-effort: a demote failure still leaves
+        # * the restrict below as the enforcement side-effect.
+        mute_role = await db.users_roles.get_effective_role(member.id)
+        if mute_role:
+            try:
+                await Demote.execute(
+                    bot,
+                    member.id,
+                    member.first_name or str(member.id),
+                    mute_role,
+                    0,
+                    "",
+                    trigger="mute",
+                )
+            except Exception:
+                log.exception(
+                    "Auto-demote on join-mute failed for uid=%d role=%s",
+                    member.id,
+                    mute_role,
+                )
         until = mute.get("until_date") if mute else None
         perms = ChatPermissions(can_send_messages=False)
         try:
@@ -187,7 +225,7 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_join_request_approved(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    """Re-apply an active federation mute when a join request is approved.
+    """Re-apply an active federation mute or ban when a join request is approved.
 
     ``on_join_request`` declines banned users at request time, but an active
     *mute* is not grounds for declining (the user is allowed in, just
@@ -225,13 +263,14 @@ async def on_join_request_approved(
         if not connected:
             return
 
-    # * Identity harvest in parallel with mute lookup.
+    # * Identity harvest in parallel with mute/ban lookups.
     # * upsert_user_if_changed skips the DB write when identity is unchanged (L1 hit).
-    _, mute = await asyncio.gather(
+    _, mute, ban = await asyncio.gather(
         db.users_cache.upsert_user_if_changed(
             user.id, user.username, user.first_name, user.last_name or None
         ),
         db.mutes_db.get_active_mute(user.id),
+        db.bans_db.get_active_ban(user.id),
         return_exceptions=True,
     )
     if isinstance(mute, BaseException):
@@ -241,6 +280,27 @@ async def on_join_request_approved(
             chat.id,
             mute,
         )
+        return
+    if isinstance(ban, BaseException):
+        log.error(
+            "get_active_ban failed for uid=%d on join_request_approved in chat=%d: %s",
+            user.id,
+            chat.id,
+            ban,
+        )
+        ban = None
+    if ban:
+        # * The request-time decline in on_join_request can be beaten by a
+        # * ban created after approval or a failed decline. Enforce here as
+        # * well; ban_chat_member on an already-removed user is benign.
+        try:
+            await ctx.bot.ban_chat_member(chat.id, user.id)
+        except Exception:
+            log.exception(
+                "Auto-ban on join_request_approved failed for uid=%d in chat=%d",
+                user.id,
+                chat.id,
+            )
         return
     if not mute:
         return
