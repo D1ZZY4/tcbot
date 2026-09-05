@@ -372,33 +372,36 @@ class BuildConnection:
                     owner_fname = await db.users_cache.get_first_name(
                         pending.get("owner_id", 0), "Owner"
                     )
-                    # * complete_join (applies bans/mutes, sends log) and
-                    # * edit_message_text (updates the join prompt) are independent;
-                    # * fire them in parallel for lower perceived latency.
-                    _join_r, _edit_r = await asyncio.gather(
-                        self.complete_join(
+                    # * complete_join (applies bans/mutes, sends log) is the
+                    # * authoritative state write; run it first so we only
+                    # * edit the join prompt to "connected" when the DB write
+                    # * actually succeeded. Editing the prompt optimistically
+                    # * in parallel was a bug: a complete_join failure would
+                    # * leave the owner with a false confirmation while the
+                    # * group remained absent from federated_groups.
+                    try:
+                        await self.complete_join(
                             chat.id,
                             chat.title or "",
                             pending.get("owner_id", 0),
                             owner_fname,
                             ctx.bot,
-                        ),
-                        ctx.bot.edit_message_text(
+                        )
+                    except Exception:
+                        log.exception(
+                            "complete_join failed in on_bot_added for chat %d",
+                            chat.id,
+                        )
+                        return
+                    try:
+                        await ctx.bot.edit_message_text(
                             self.connected_message(),
                             chat_id=chat.id,
                             message_id=pending.get("message_id", 0),
                             reply_markup=None,
-                        ),
-                        return_exceptions=True,
-                    )
-                    if isinstance(_join_r, BaseException):
-                        log.error(
-                            "complete_join failed in on_bot_added for chat %d: %s",
-                            chat.id,
-                            _join_r,
                         )
-                    if isinstance(_edit_r, BaseException):
-                        log.debug("Failed to edit pending connect prompt: %s", _edit_r)
+                    except Exception as exc:
+                        log.debug("Failed to edit pending connect prompt: %s", exc)
                 return
 
             if is_already_connected:
