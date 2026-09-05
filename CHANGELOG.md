@@ -4,6 +4,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ## [Unreleased]
 
+### Changed
+
+- **Dependency refresh** (`uv.lock`): `uv lock --upgrade` to latest within pinned bounds. Bumped `anyio` 4.14.2 -> 4.15.1, `click` 8.4.2 -> 8.5.0, `idna` 3.18 -> 3.19, `pymongo` 4.17.0 -> 4.18.0, `ruff` 0.16.3 -> 0.16.6; added `typing-extensions` 4.16.0, dropped unneeded `colorama`. Direct dependencies were already latest in range. `apscheduler` stays pinned at `==3.11.3` (accepted CVE-2026-31072 exception; v4 API is incompatible with `scheduler.py`).
+
 ## [6.4.0] - 2026-09-05
 
 ### Changed
