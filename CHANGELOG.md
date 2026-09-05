@@ -12,6 +12,14 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Dependency refresh** (`uv.lock`): `uv lock --upgrade` to latest within pinned bounds. Bumped `anyio` 4.14.2 -> 4.15.1, `click` 8.4.2 -> 8.5.0, `idna` 3.18 -> 3.19, `pymongo` 4.17.0 -> 4.18.0, `ruff` 0.16.3 -> 0.16.6; added `typing-extensions` 4.16.0, dropped unneeded `colorama`. Direct dependencies were already latest in range. `apscheduler` stays pinned at `==3.11.3` (accepted CVE-2026-31072 exception; v4 API is incompatible with `scheduler.py`).
 
+### Fixed
+
+- **Join-path moderation gaps** (`tcbot/modules/greeting.py`): the join notice was sent in parallel with the ban so a failed `ban_chat_member` still showed "was removed"; the notice now fires only after a successful ban and includes the ban ID plus appeal link. The mute re-apply branch now auto-demotes staff targets like the ban branch. `on_join_request_approved` now also enforces active bans (previously only mutes), closing the approve-after-ban race.
+- **Disconnect ghost and primary pollution** (`tcbot/modules/disconnecting.py`, `connecting.py`, `helper/workflows/connected_flow.py`): `/tcleave` replied "disconnected" and left before the DB confirmed; it now deactivates first and aborts without leaving on failure, mirroring `/rmtc`. `/tcconnect` and the bot-added join prompt now refuse primary groups via `_is_primary_group`. `/leaveall` status edit targeted the user's command message (uneditable); it now edits the bot's own status message. `cmd_cleanup` uses `gather` with per-group logging for DB writes instead of the Telegram circuit-gated `fan_out`, and reports actual deactivated counts.
+- **Stats detail cursor** (`tcbot/modules/stats.py`, `helper/workflows/stats_flow.py`): detail buttons carried only `page:idx`, so a list mutation between render and tap silently showed a different record. Buttons now carry the stable entity ID (`user_id`/`chat_id`/`ban_id`) and detail views reject mismatches; old three-part callbacks keep working.
+- **Target and output hardening** (`tcbot/modules/helper/extraction.py`, `tcbot/utils/formatter.py`, `helper/parse_logmsg.py`, `helper/keyboards.py`): `@mention` slicing used Python indices while Telegram offsets are UTF-16 code units (wrong user after emoji); now slices UTF-16 bytes and skips undecodable entities. `t.me/` links now require a valid username shape via `safe_username()`. Community menu URLs must be http(s), otherwise the button is omitted with a warning.
+- **Error reporting hygiene** (`tcbot/utils/error_reporter.py`): `CancelledError` is now benign (no more shutdown reports); error messages scrub bot-token and Mongo credential patterns before shipping. `check_flow` identity sweep has a 15s overall deadline. Demote/promote log+DM sends are now inspected and logged. `groups_cache` in `tcbot/modules/groups.py` expires after 120s and `_toggle` answers the callback first.
+
 ## [6.4.0] - 2026-09-05
 
 ### Changed

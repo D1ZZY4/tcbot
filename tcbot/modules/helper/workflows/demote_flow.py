@@ -89,9 +89,13 @@ class Demote:
                 f"you were {verb} from the federation."
             )
 
-        await asyncio.gather(
+        for result in await asyncio.gather(
             bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             bot.send_message(target_id, user_msg, parse_mode="HTML"),
             return_exceptions=True,
-        )
+        ):
+            if isinstance(result, BaseException):
+                log.warning(
+                    "Demote log/DM send failed for target=%d: %s", target_id, result
+                )
         return True

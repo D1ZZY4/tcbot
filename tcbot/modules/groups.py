@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import TYPE_CHECKING
 
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
@@ -30,6 +31,10 @@ log = logging.getLogger(__name__)
 _RL_PERIOD_S: int = 30
 _RL_CMD_LIMIT: int = 8
 _RL_CB_LIMIT: int = 15
+
+# * Per-user groups snapshot: invalidated by age so connect / disconnect /
+# * cleanup / migration become visible without restarting the conversation.
+_GROUPS_CACHE_TTL_S: float = 120.0
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -100,6 +105,7 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     if ctx.user_data is not None:
         ctx.user_data["groups_cache"] = groups
+        ctx.user_data["groups_cache_at"] = time.monotonic()
 
     try:
         await msg.reply_text(
@@ -122,16 +128,23 @@ async def _toggle(
         return
 
     cbq_msg = q.message  # type: ignore[assignment]
-    groups = ctx.user_data.get("groups_cache") if ctx.user_data is not None else None
+    groups = None
+    if ctx.user_data is not None:
+        cached_at = ctx.user_data.get("groups_cache_at", 0.0)
+        if time.monotonic() - float(cached_at) < _GROUPS_CACHE_TTL_S:
+            groups = ctx.user_data.get("groups_cache")
     if groups:
-        await asyncio.gather(
-            q.answer(),
-            safe_edit(
-                cbq_msg,  # type: ignore[arg-type]
-                _render(groups, detailed=detailed),
-                reply_markup=tcgroups_kb(detailed=detailed),
-            ),
-            return_exceptions=True,
+        # * Answer first so an expired query surfaces immediately instead of
+        # * hiding behind the edit result.
+        try:
+            await q.answer()
+        except Exception as exc:
+            log.debug("tcgroups toggle answer failed: %s", exc)
+            return
+        await safe_edit(
+            cbq_msg,  # type: ignore[arg-type]
+            _render(groups, detailed=detailed),
+            reply_markup=tcgroups_kb(detailed=detailed),
         )
     else:
         # * q.answer() and active_groups() are independent; run in parallel.
@@ -142,6 +155,7 @@ async def _toggle(
             groups = []
         if ctx.user_data is not None:
             ctx.user_data["groups_cache"] = groups
+            ctx.user_data["groups_cache_at"] = time.monotonic()
         await safe_edit(
             cbq_msg,  # type: ignore[arg-type]
             _render(groups, detailed=detailed),

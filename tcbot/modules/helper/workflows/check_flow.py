@@ -26,6 +26,9 @@ log = logging.getLogger(__name__)
 
 _PAGE_SIZE = 5
 _GET_CHAT_TIMEOUT = 3.0
+# * Overall deadline for the per-group get_chat_member sweep in
+# * _resolve_user_info: bounds /check latency on large federations.
+_RESOLVE_SWEEP_TIMEOUT = 15.0
 _REASON_PREVIEW_LEN = 80
 _BAN_LIST_REASON_LEN = 60
 _BUTTON_TITLE_MAX = 24
@@ -73,47 +76,59 @@ async def _resolve_user_info(bot: Bot, target_id: int) -> tuple[str, str | None]
         # * least one connected group (the bot banned/muted/warned them
         # * there at some point), so the lookup succeeds.
         groups = await db.groups_db.active_groups()
-        for grp in groups:
-            chat_id = grp.get("chat_id")
-            if not chat_id:
-                continue
-            try:
-                member = await asyncio.wait_for(
-                    bot.get_chat_member(chat_id, target_id),
-                    timeout=_GET_CHAT_TIMEOUT,
-                )
-            except Exception as exc:
-                log.debug(
-                    "get_chat_member(%s, %s) failed: %s",
-                    chat_id,
-                    target_id,
-                    exc,
-                )
-                continue
-            user = getattr(member, "user", None)
-            if user is None:
-                continue
-            if user.is_bot or not user.first_name:
-                # * Banned/kicked user or a bot: keep trying the next group.
-                continue
-            fname = user.first_name
-            uname = user.username
-            # * Persist the resolved identity so future /check / /checkme
-            # * / /tcstats calls hit the cache and skip the per-group
-            # * get_chat_member loop. Best-effort: a DB failure here is
-            # * logged at debug and falls through to the function's normal
-            # * fallback (str(target_id)).
-            try:
-                await db.users_cache.upsert_user(
-                    target_id, uname, fname, user.last_name
-                )
-            except Exception as exc:
-                log.debug(
-                    "users_cache upsert after get_chat_member failed for %d: %s",
-                    target_id,
-                    exc,
-                )
-            break
+        # * Bound the whole sweep: without an overall deadline a large
+        # * federation turns one /check on an unknown ID into O(G) x 3s of
+        # * handler latency. On timeout the normal numeric fallback below
+        # * still replies.
+        try:
+            async with asyncio.timeout(_RESOLVE_SWEEP_TIMEOUT):
+                for grp in groups:
+                    chat_id = grp.get("chat_id")
+                    if not chat_id:
+                        continue
+                    try:
+                        member = await asyncio.wait_for(
+                            bot.get_chat_member(chat_id, target_id),
+                            timeout=_GET_CHAT_TIMEOUT,
+                        )
+                    except Exception as exc:
+                        log.debug(
+                            "get_chat_member(%s, %s) failed: %s",
+                            chat_id,
+                            target_id,
+                            exc,
+                        )
+                        continue
+                    user = getattr(member, "user", None)
+                    if user is None:
+                        continue
+                    if user.is_bot or not user.first_name:
+                        # * Banned/kicked user or a bot: keep trying the next group.
+                        continue
+                    fname = user.first_name
+                    uname = user.username
+                    # * Persist the resolved identity so future /check / /checkme
+                    # * / /tcstats calls hit the cache and skip the per-group
+                    # * get_chat_member loop. Best-effort: a DB failure here is
+                    # * logged at debug and falls through to the function's normal
+                    # * fallback (str(target_id)).
+                    try:
+                        await db.users_cache.upsert_user(
+                            target_id, uname, fname, user.last_name
+                        )
+                    except Exception as exc:
+                        log.debug(
+                            "users_cache upsert after get_chat_member failed for %d: %s",
+                            target_id,
+                            exc,
+                        )
+                    break
+        except TimeoutError:
+            log.debug(
+                "get_chat_member sweep timed out for target=%d after %ds",
+                target_id,
+                _RESOLVE_SWEEP_TIMEOUT,
+            )
 
     if not fname:
         fname = str(target_id)

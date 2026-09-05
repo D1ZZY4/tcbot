@@ -91,14 +91,20 @@ class Promote:
         log_text = parse_logmsg.promoted(
             target_id, target_fname, "admin", admin_id, admin_fname
         )
-        await asyncio.gather(
+        for result in await asyncio.gather(
             bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             bot.send_message(
                 target_id,
                 f"You've been promoted to Admin in {cfg.community_name} - welcome to the staff team.",
             ),
             return_exceptions=True,
-        )
+        ):
+            if isinstance(result, BaseException):
+                log.warning(
+                    "_assign_admin log/DM send failed for target=%d: %s",
+                    target_id,
+                    result,
+                )
         return True, (
             f"Done. {user_ref(target_id, target_fname)} "
             f"is now a {esc(cfg.community_name)} Admin."
@@ -145,14 +151,20 @@ class Promote:
         log_text = parse_logmsg.promoted(
             target_id, target_fname, role, admin_id, admin_fname
         )
-        await asyncio.gather(
+        for result in await asyncio.gather(
             bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             bot.send_message(
                 target_id,
                 f"You've been assigned the {role_label} role in {cfg.community_name} - welcome to the team.",
             ),
             return_exceptions=True,
-        )
+        ):
+            if isinstance(result, BaseException):
+                log.warning(
+                    "_assign_subrole log/DM send failed for target=%d: %s",
+                    target_id,
+                    result,
+                )
         return (
             True,
             f"Done. {user_ref(target_id, target_fname)} "

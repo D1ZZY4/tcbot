@@ -11,6 +11,7 @@ import contextlib
 import html
 import logging
 import platform
+import re
 import sys
 import time
 import traceback
@@ -117,6 +118,9 @@ def _benign(exc: BaseException | None) -> bool:
     """Return True when the exception is a recoverable, well-known no-op."""
     if exc is None:
         return False
+    # * Shutdown cancellation is normal lifecycle, not a reportable error.
+    if isinstance(exc, asyncio.CancelledError):
+        return True
     msg = str(exc).lower()
     return any(p in msg for p in _BENIGN_PATTERNS)
 
@@ -320,6 +324,22 @@ def _location(
     return "?", "?", 0
 
 
+_TOKEN_RE = re.compile(r"\b\d{6,}:[A-Za-z0-9_-]{20,}\b")
+_MONGO_AUTH_RE = re.compile(r"://[^:@/\s]+:[^@/\s]+@")
+
+
+def _scrub_secrets(text: str) -> str:
+    """Redact credential-shaped substrings before shipping to the log channel.
+
+    Mongo auth/network errors can echo connection strings, and any bug that
+    interpolates config may leak the bot token. Redaction is pattern-based
+    (bot ``id:hash`` shape, URI ``user:pass@`` authority), so legitimate
+    surrounding text is preserved.
+    """
+    text = _TOKEN_RE.sub("[REDACTED_TOKEN]", text)
+    return _MONGO_AUTH_RE.sub("://[REDACTED]@", text)
+
+
 def build_error_message(
     *,
     exc: BaseException | None = None,
@@ -340,6 +360,7 @@ def build_error_message(
         raw_msg = str(exc)
     else:
         raw_msg = "No detail available."
+    raw_msg = _scrub_secrets(raw_msg)
 
     file_part, func_name, line_no = _location(exc, record)
     label = _classify(exc)
@@ -350,7 +371,9 @@ def build_error_message(
 
     ctx_block = ""
     if context:
-        ctx_block = f"\n\n{bold('Context:')}\n{code(str(context)[:_MAX_CTX])}"
+        ctx_block = (
+            f"\n\n{bold('Context:')}\n{code(_scrub_secrets(str(context))[:_MAX_CTX])}"
+        )
 
     py_ver = sys.version.split()[0]
     host = platform.node() or "?"
