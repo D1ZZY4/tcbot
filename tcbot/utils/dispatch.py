@@ -13,6 +13,7 @@ counted against the circuit; expected API refusals (403, 400) are not.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 from typing import TYPE_CHECKING
 
@@ -67,9 +68,9 @@ async def fan_out[T](
     NetworkError results trip the circuit; all other exceptions (403, 400,
     etc.) are treated as expected API refusals and do not affect the circuit.
 
-    Coroutines are created lazily (thunk factories) so the semaphore truly
-    bounds the number of in-flight tasks rather than eagerly materialising
-    the entire list before any slot runs.
+    Tasks are admitted lazily through the semaphore so the number of in-flight
+    Telegram calls stays bounded. Callers may pass already-created coroutine
+    objects; a coroutine skipped by the open circuit is explicitly closed.
     """
     if not coros:
         return []
@@ -81,10 +82,13 @@ async def fan_out[T](
 
     async def _slot(thunk: Callable[[], Awaitable[T]]) -> T | BaseException:
         async with sem:
-            if _cb.telegram.is_open:
+            if not _cb.telegram.try_acquire():
                 log.warning(
                     "fan_out: Telegram circuit OPEN; skipping slot to avoid timeout."
                 )
+                skipped = thunk()
+                if inspect.iscoroutine(skipped):
+                    skipped.close()
                 return _cb.CircuitOpenError("Telegram circuit is OPEN; call skipped.")
             try:
                 result = await thunk()
@@ -95,8 +99,10 @@ async def fan_out[T](
                 log.debug("fan_out: network error (counted against circuit): %s", exc)
                 return exc
             except asyncio.CancelledError:
+                _cb.telegram.release_probe()
                 raise
             except Exception as exc:
+                _cb.telegram.release_probe()
                 log.debug(
                     "fan_out: coroutine failed (not counted against circuit): %s", exc
                 )

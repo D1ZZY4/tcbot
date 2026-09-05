@@ -76,6 +76,7 @@ class CircuitBreaker:
     __slots__ = (
         "_failure_count",
         "_failure_threshold",
+        "_half_open_probe_in_flight",
         "_name",
         "_opened_at",
         "_recovery_timeout",
@@ -95,6 +96,7 @@ class CircuitBreaker:
         self._recovery_timeout = recovery_timeout
         self._state: CircuitState = CircuitState.CLOSED
         self._failure_count: int = 0
+        self._half_open_probe_in_flight: bool = False
         self._opened_at: float = 0.0
 
     # ── public API ── #
@@ -133,7 +135,10 @@ class CircuitBreaker:
                 failure; the exception propagates to the caller unchanged).
 
         """
-        if self.state is CircuitState.OPEN:
+        if not self.try_acquire():
+            close = getattr(coro, "close", None)
+            if callable(close):
+                close()
             raise CircuitOpenError(f"Circuit [{self._name}] is OPEN; call rejected.")
 
         try:
@@ -141,9 +146,28 @@ class CircuitBreaker:
         except Exception as exc:
             self._record_failure()
             raise exc from None
+        except BaseException:
+            # * Cancellation must not leave a HALF_OPEN probe permanently reserved.
+            self._release_probe()
+            raise
 
         self._record_success()
         return result
+
+    def try_acquire(self) -> bool:
+        """Reserve permission for one call, allowing only one HALF_OPEN probe."""
+        state = self.state
+        if state is CircuitState.OPEN:
+            return False
+        if state is CircuitState.HALF_OPEN:
+            if self._half_open_probe_in_flight:
+                return False
+            self._half_open_probe_in_flight = True
+        return True
+
+    def release_probe(self) -> None:
+        """Release a HALF_OPEN probe without changing the circuit state."""
+        self._release_probe()
 
     def record_success(self) -> None:
         """Record a successful outcome (use when not wrapping via call()).
@@ -165,6 +189,7 @@ class CircuitBreaker:
         """Force-close the circuit (useful after operator confirms service recovery)."""
         self._state = CircuitState.CLOSED
         self._failure_count = 0
+        self._release_probe()
         log.info("Circuit [%s]: manually reset to CLOSED.", self._name)
 
     # ── private helpers ── #
@@ -174,6 +199,7 @@ class CircuitBreaker:
             log.info("Circuit [%s]: HALF_OPEN -> CLOSED (probe succeeded).", self._name)
         self._state = CircuitState.CLOSED
         self._failure_count = 0
+        self._release_probe()
 
     def _record_failure(self) -> None:
         self._failure_count += 1
@@ -195,6 +221,10 @@ class CircuitBreaker:
             )
             self._state = CircuitState.OPEN
             self._opened_at = time.monotonic()
+        self._release_probe()
+
+    def _release_probe(self) -> None:
+        self._half_open_probe_in_flight = False
 
 
 # ── module-level singletons ── #

@@ -53,7 +53,7 @@ HALF_OPEN --[probe fails]--> OPEN
 
 `record_success()` and `record_failure()` are public methods for callers that manage their own try/except (for example, `dispatch.fan_out` which only counts network errors, not expected API refusals).
 
-The Telegram circuit state (`closed`, `open`, or `half_open`) is exposed in the `/health` endpoint under `circuit_telegram` and `circuit_mongodb`.
+The Telegram circuit state (`closed`, `open`, or `half_open`) is exposed in the `/health` endpoint under `circuit_telegram` and `circuit_mongodb`. After recovery, `CircuitBreaker.try_acquire()` admits only one `HALF_OPEN` probe; concurrent callers are rejected until that probe completes.
 
 ## `dispatch.py`
 
@@ -70,6 +70,7 @@ The Telegram circuit state (`closed`, `open`, or `half_open`) is exposed in the 
 - defaults to 10 concurrent tasks, which is safe for Telegram API fan-out operations;
 - integrates the `telegram` circuit breaker: slots that run while the circuit is OPEN return `CircuitOpenError` immediately instead of issuing a Telegram request that will time out;
 - only `TimedOut` and `NetworkError` are counted against the circuit; expected API refusals (403 Forbidden, 400 Bad Request) are not.
+- closes an already-created coroutine when the OPEN circuit skips its slot, preventing an un-awaited coroutine warning.
 
 Use it for multi-group actions such as ban, unban, mute, broadcast, and cleanup.
 
