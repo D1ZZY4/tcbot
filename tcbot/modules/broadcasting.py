@@ -10,6 +10,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot import cfg
@@ -115,7 +116,9 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as exc:
         log.debug("cmd_broadcast status reply failed: %s", exc)
 
-    # * Build per-group send coroutines, then fan out with semaphore limiting
+    # * Build per-group send coroutines, then fan out with semaphore limiting.
+    # * A malformed HTML tag in staff text raises BadRequest per group; fall
+    # * back to plain text so one typo does not fail the whole broadcast.
     async def _send_one(grp: GroupDoc) -> None:
         chat_id = grp.get("chat_id")
         if chat_id is None:
@@ -123,7 +126,14 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if has_reply and msg.reply_to_message:
             await msg.reply_to_message.forward(chat_id)
         elif broadcast_text:
-            await ctx.bot.send_message(chat_id, broadcast_text, parse_mode="HTML")
+            try:
+                await ctx.bot.send_message(chat_id, broadcast_text, parse_mode="HTML")
+            except BadRequest:
+                log.info(
+                    "Broadcast HTML rejected in chat=%d; retrying as plain text",
+                    chat_id,
+                )
+                await ctx.bot.send_message(chat_id, broadcast_text)
 
     results = await fan_out([_send_one(grp) for grp in groups])
     failed = count_errors(results)
