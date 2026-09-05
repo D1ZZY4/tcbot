@@ -1,9 +1,11 @@
 # Code Style and Architecture Rules
 
 This file defines Python style, module boundaries, handler safety, database
-access, workflows, and runtime behavior for TCF Bot. Validation commands live in
-[`tooling-validation.md`](tooling-validation.md), and comment and Markdown
-conventions live in [`comment-style.md`](comment-style.md).
+access, workflows, and runtime behavior for TCF Bot. Authorization and secret
+handling live in [`security-rules.md`](security-rules.md), async patterns live
+in [`asyncio-gather-rules.md`](asyncio-gather-rules.md). Validation commands
+live in [`tooling-validation.md`](tooling-validation.md), and comment and
+Markdown conventions live in [`comment-style.md`](comment-style.md).
 
 ---
 
@@ -42,6 +44,8 @@ Rules:
 
 - Use one blank line between import groups.
 - Do not use wildcard imports or inline imports inside functions.
+- Let Ruff's `I` rules handle import sorting; do not fight the formatter with
+  manual spacing.
 - Prefer `from tcbot import cfg` for configuration.
 - Prefer `from tcbot import database as db` in feature modules.
 - Do not import raw environment variables outside `tcbot/__init__.py`.
@@ -55,6 +59,12 @@ Rules:
 - Use `NewType` primitives from `tcbot/database/types.py` when the database API
   already uses them.
 - Public functions and methods require explicit parameter and return types.
+- Use `str | None`, not `Optional[str]`, and built-in generics over legacy
+  typing aliases.
+- Return `None` explicitly for not-found lookups.
+- Keep handler return type `None` unless the framework requires otherwise.
+- Do not use `Any` as a shortcut for unclear data shapes, and do not use
+  `cast()` to silence a problem that should be modeled or checked.
 - Use `_snake_case` for private helpers and `_UPPER_CASE` for private constants.
 - Use `snake_case` for public functions and `PascalCase` for classes.
 - Name async command handlers `cmd_*`, event and callback handlers `on_*`, and
@@ -63,6 +73,7 @@ Rules:
 ## Code Quality
 
 - Remove unused imports, variables, functions, and commented-out code.
+- Never remove meaningful code only to silence a diagnostic.
 - Extract shared renderers, parsers, keyboards, database helpers, and workflows
   instead of duplicating logic.
 - Keep one source of truth for cross-cutting behavior. Extend the existing
@@ -112,21 +123,6 @@ Rules:
 9. Wrap repeated Telegram calls so one failure does not stop a fan-out.
 10. Use `tcbot.utils.dispatch.fan_out()` for multi-group Telegram operations.
 
-## Role and Identity Safety
-
-- Resolve roles with `users_roles.get_effective_role(user_id)`.
-- Use `users_roles.can_act_on()` or
-  `decorators.resolve_and_check()` for executor-versus-target checks.
-- Do not chain owner, admin, and role checks manually in handlers.
-- Do not compare role ranks inline in command modules.
-- Use `ROLE_LABEL` for user-facing role labels.
-- Use `identity.classify`, `identity.refuse_message`, and
-  `identity.staff_notice` for self, bot, Telegram, Founder, and staff branches.
-- Call `Demote.execute(..., trigger="ban"|"kick")` before banning or kicking a
-  target who holds a federation role.
-- Developer and Tester roles live in `tc_roles`.
-- Admin promotion requests use `queues_db` and the existing promotion workflow.
-
 ## Database and Cache Access
 
 - Keep all MongoDB writes and collection access in `tcbot/database/` helpers.
@@ -157,7 +153,7 @@ Rules:
 - Define inline keyboard builders only in `tcbot/modules/helper/keyboards.py`.
 - Use formatter helpers from `tcbot/modules/helper/formatter.py`.
 
-## Datetime and Async Operations
+## Datetime Handling
 
 - Do not use `datetime.utcnow()`.
 - Do not inline `datetime.now(timezone.utc)` outside
@@ -165,18 +161,9 @@ Rules:
 - Use `utc_now()` for database timestamps and elapsed-time checks.
 - Use `to_utc(dt)` before arithmetic when a database value may be naive.
 - Use `fmt_dt(dt)` or `utc_now_str()` for user-visible timestamps.
-- All database operations are async.
-- Do not call `asyncio.run()` inside handlers.
-- Combine independent operations with `asyncio.gather()` when their failure
-  behavior is clear. Preserve sequential awaits when a later operation depends
-  on an earlier result, ordering is part of the contract, or side effects must
-  be serialized.
-- Use `fan_out()` for bounded multi-group operations.
-- Supervise background tasks and log or report their errors.
-- Wrap external Telegram lookups in `asyncio.wait_for(timeout=...)`.
-- Use `return_exceptions=True` for fan-out writes such as DMs, logs, and
-  per-chat enforcement.
-- Pre-resolve per-item lookups for paginated views before formatting.
+
+Concurrency, `asyncio.gather()`, fan-out, timeouts, and cancellation follow
+[`asyncio-gather-rules.md`](asyncio-gather-rules.md).
 
 ## Runtime Architecture
 

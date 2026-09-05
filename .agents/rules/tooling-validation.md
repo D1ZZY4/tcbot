@@ -3,7 +3,8 @@
 This file defines the project workflow, dependency, documentation-maintenance,
 and validation requirements for TCF Bot. Code conventions live in
 [`code-style.md`](code-style.md), and comment and Markdown conventions live in
-[`comment-style.md`](comment-style.md).
+[`comment-style.md`](comment-style.md). Documentation maintenance workflow
+lives in [`docs-rules.md`](docs-rules.md).
 
 ---
 
@@ -12,17 +13,19 @@ and validation requirements for TCF Bot. Code conventions live in
 These rules apply to every task:
 
 1. Before changing the repository, read this file, [`code-style.md`](code-style.md),
-   [`comment-style.md`](comment-style.md), [`AGENTS.md`](../../AGENTS.md), and
-   [`CHANGELOG.md`](../../CHANGELOG.md).
-2. Read the relevant skill in [`.agents/skills/`](../skills/), source files,
-   configuration, and documentation for the requested scope.
+   [`comment-style.md`](comment-style.md), [`docs-rules.md`](docs-rules.md),
+   [`AGENTS.md`](../../AGENTS.md), and [`CHANGELOG.md`](../../CHANGELOG.md).
+2. Read the rules file matching the scope ([`security-rules.md`](security-rules.md)
+   for authorization and secrets, [`asyncio-gather-rules.md`](asyncio-gather-rules.md)
+   for async and fan-out), the relevant skill in [`.agents/skills/`](../skills/),
+   source files, configuration, and documentation for the requested scope.
 3. After a change, add an entry under `[Unreleased]` in
    [`CHANGELOG.md`](../../CHANGELOG.md).
 4. Update related documentation, repository maps, skills, and guidance whose
    content or paths became stale.
 5. Search for old paths and broken links before finalizing.
 
-The four files in this directory are the canonical engineering rules. Public
+The six files in this directory are the canonical engineering rules. Public
 contributor guidance belongs in [`CONTRIBUTING.md`](../../CONTRIBUTING.md);
 deployment and feature documentation belongs under `docs/`.
 
@@ -32,6 +35,10 @@ Skills in `.agents/skills/` apply automatically when their trigger matches.
 Use the relevant skill before editing code, documentation, database helpers,
 workflows, diagrams, or other specialized areas. Compose skills when a task
 spans more than one area.
+
+Remaining skill files use YAML frontmatter with `name` matching the skill
+directory and an actionable `description` explaining when to use it. Keep
+skill content project-specific and current.
 
 ## Autonomous Improvement Loop
 
@@ -52,6 +59,22 @@ For each requested improvement, update, fix, or audit:
 
 Performance claims require measurements. Prefer bounded concurrency and explicit
 failure behavior.
+
+## Pre-Edit Checklist
+
+Before editing TCF Bot code, verify:
+
+- The change belongs in the selected file and not in an existing helper,
+  workflow, or domain module.
+- Handlers stay in `tcbot/modules/`, workflows stay in `*_flow.py`, and
+  database access stays in `tcbot/database/`.
+- Messages are HTML-only and user content is escaped.
+- Role checks use canonical helpers and destructive actions preserve
+  auto-demotion behavior.
+- Multi-group actions use `fan_out()`.
+- Datetimes use project datetime helpers.
+- No secrets, credentials, or private IDs are introduced.
+- The validation plan fits the scope of the change.
 
 ## Dependency and Tooling Policy
 
@@ -94,6 +117,19 @@ ruff check .
 Replit note: if `ruff` is not on PATH, use `uv run ruff` instead. The
 invocations above are the project's primary bare commands.
 
+Common diagnostics:
+
+- `F401`: unused import. Remove it unless it is part of a documented public
+  API.
+- `F841`: unused local variable. Remove it or use the value meaningfully.
+- `I001`: imports are unsorted. Let `ruff check --fix` correct it.
+- `E4`, `E7`, `E9`: syntax, indentation, or parse problems. Fix manually.
+
+Safe to auto-fix: import sorting, unused imports, formatting, and simple
+unused-variable cleanup. Review manually before deleting unused functions or
+modules, changing database fields, handler registration, exception handling,
+or moderation behavior.
+
 Recommended minimum validation by change type:
 
 | Change type | Minimum validation |
@@ -120,25 +156,13 @@ git diff --check
 Do not claim a validation command passed unless it actually ran and exited
 successfully. If a check cannot run, report the exact command and error.
 
-## Documentation Maintenance
-
-- Keep Markdown in professional English.
-- Describe implemented behavior, not unverified targets or guarantees.
-- Keep public contributor and operator guidance separate from agent-only rules.
-- Update `docs/README.md` when adding or reorganizing public documentation.
-- Update `docs/architecture/repository-map.md` when the repository structure changes.
-- Do not include credentials, private chat IDs, production-only links, or tokens.
-
 ## Security and Scope
 
-- Preserve backward compatibility for production moderation, role, and database
-  behavior.
-- Do not log or document secrets, tokens, credentials, raw private input, or
-  private chat identifiers.
+Authorization boundaries, secret handling, and compatibility guarantees live
+in [`security-rules.md`](security-rules.md). For this workflow:
+
 - Do not edit unrelated files or refactor outside the requested scope.
 - Do not remove meaningful behavior merely to silence a warning.
-- Keep database schema changes backward-compatible unless a migration plan is
-  included.
 
 ## Final Review
 
