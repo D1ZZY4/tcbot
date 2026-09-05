@@ -240,7 +240,7 @@ async def remove_last_warn(user_id: int, chat_id: int) -> bool:
         return False
 
     # Delete warn and update counter in parallel
-    _, counter = await asyncio.gather(
+    del_res, counter = await asyncio.gather(
         db_call(_warns().delete_one({"_id": doc["_id"]})),
         db_call(
             _warn_counts().find_one_and_update(
@@ -255,6 +255,21 @@ async def remove_last_warn(user_id: int, chat_id: int) -> bool:
         ),
         return_exceptions=True,
     )
+
+    if isinstance(del_res, BaseException):
+        log.warning(
+            "remove_last_warn delete failed for user=%d chat=%d: %s",
+            user_id,
+            chat_id,
+            del_res,
+        )
+        count = await db_call(_warns().count_documents(_warn_key(user_id, chat_id)))
+        await _store_warn_count(user_id, chat_id, count)
+        return False
+    if del_res.deleted_count == 0:
+        count = await db_call(_warns().count_documents(_warn_key(user_id, chat_id)))
+        await _store_warn_count(user_id, chat_id, count)
+        return False
 
     if isinstance(counter, BaseException) or counter is None:
         count = await db_call(_warns().count_documents(_warn_key(user_id, chat_id)))
