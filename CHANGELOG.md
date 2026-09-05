@@ -4,6 +4,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ## [Unreleased]
 
+## [6.4.0] - 2026-09-05
+
 ### Changed
 
 - **Error reporter** (`tcbot/utils/error_reporter.py`):

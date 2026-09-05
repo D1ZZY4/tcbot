@@ -449,7 +449,7 @@ wheels = [
 
 [[package]]
 name = "tcbot"
-version = "6.3.0"
+version = "6.4.0"
 source = { virtual = "." }
 dependencies = [
     { name = "apscheduler", extra = ["mongodb"] },
