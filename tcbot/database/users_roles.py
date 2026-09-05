@@ -221,14 +221,18 @@ async def can_act_on(executor_id: int, target_id: int) -> bool:
         get_effective_role(target_id),
         return_exceptions=True,
     )
+    if isinstance(executor_role, asyncio.CancelledError):
+        raise executor_role
+    if isinstance(target_role, asyncio.CancelledError):
+        raise target_role
     if isinstance(executor_role, BaseException):
         log.warning(
             "can_act_on executor role failed for %d: %s", executor_id, executor_role
         )
-        executor_role = None
+        return False
     if isinstance(target_role, BaseException):
         log.warning("can_act_on target role failed for %d: %s", target_id, target_role)
-        target_role = None
+        return False
     return role_rank(executor_role) > role_rank(target_role)
 
 

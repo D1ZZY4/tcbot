@@ -295,6 +295,9 @@ _ERR_STAFF_ONLY = "Staff and Founder only for this one - you don't have the rank
 _ERR_MOD_ONLY = "You need Developer rank or above for this - not your call."
 _ERR_BASIC_MOD_ONLY = "You need at least a Tester role for this - not your call."
 _ERR_RANK_INSUFFICIENT = "You don't have the rank for this one."
+_ERR_ROLE_LOOKUP = (
+    "I couldn't verify federation roles right now. Please try again in a moment."
+)
 _ERR_ANON_ADMIN = (
     "Anonymous admin mode is not supported for federation commands. "
     "Please send this command from your personal account."
@@ -437,10 +440,32 @@ async def resolve_and_check(
         db.users_roles.get_effective_role(target_id),
         return_exceptions=True,
     )
+    if isinstance(executor_role, asyncio.CancelledError):
+        raise executor_role
+    if isinstance(target_role, asyncio.CancelledError):
+        raise target_role
+    executor_lookup_failed = isinstance(executor_role, BaseException)
+    target_lookup_failed = isinstance(target_role, BaseException)
     if isinstance(executor_role, BaseException):
+        log.warning(
+            "resolve_and_check executor role lookup failed for %d: %s",
+            executor_id,
+            executor_role,
+        )
         executor_role = None
     if isinstance(target_role, BaseException):
+        log.warning(
+            "resolve_and_check target role lookup failed for %d: %s",
+            target_id,
+            target_role,
+        )
         target_role = None
+    if executor_lookup_failed or target_lookup_failed:
+        try:
+            await msg.reply_text(_ERR_ROLE_LOOKUP)
+        except Exception as exc:
+            log.debug("resolve_and_check role-lookup reply failed: %s", exc)
+        return None, None
     if db.users_roles.role_rank(executor_role) < db.users_roles.role_rank(min_role):
         try:
             await msg.reply_text(_ERR_RANK_INSUFFICIENT)

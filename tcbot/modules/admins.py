@@ -43,6 +43,9 @@ _ERR_NO_REMOVABLE_ROLE = "That user doesn't hold a role that can be removed."
 _ERR_FOUNDER_DEMOTE_ONLY = "Only the Founder can demote an Admin."
 _ERR_NO_LONGER_REMOVABLE = "That user no longer holds a removable role."
 _ERR_ROLE_CLEAR_FAILED = "Couldn't remove the role - it may have already been cleared."
+_ERR_ROLE_LOOKUP_FAILED = (
+    "I couldn't verify federation roles right now. Please try again in a moment."
+)
 _MSG_CANCELLED = "Cancelled. No changes were made."
 _MSG_NO_PENDING = "No pending promotion requests."
 _ERR_REQUEST_NOT_FOUND = "Request not found or already resolved."
@@ -159,6 +162,10 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         extraction.extract_target(update, args, ctx.bot),
         return_exceptions=True,
     )
+    if isinstance(_exec_r, asyncio.CancelledError):
+        raise _exec_r
+    if isinstance(_target_r, asyncio.CancelledError):
+        raise _target_r
     executor_role = None if isinstance(_exec_r, BaseException) else _exec_r
     if executor_role is None:
         return
@@ -187,6 +194,8 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return_exceptions=True,
     )
     if isinstance(ident, BaseException):
+        if isinstance(ident, asyncio.CancelledError):
+            raise ident
         log.error(
             "identity.classify failed during promote for target=%d: %s",
             target_id,
@@ -197,8 +206,19 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         except Exception as exc:
             log.debug("cmd_promote classify-failed reply failed: %s", exc)
         return
+    if isinstance(current_role, asyncio.CancelledError):
+        raise current_role
     if isinstance(current_role, BaseException):
-        current_role = None
+        log.error(
+            "target role lookup failed during promote for target=%d: %s",
+            target_id,
+            current_role,
+        )
+        try:
+            await msg.reply_text(_ERR_ROLE_LOOKUP_FAILED)
+        except Exception as exc:
+            log.debug("cmd_promote role-lookup-failed reply failed: %s", exc)
+        return
     refusal = identity.refuse_message("promote", ident)
     if refusal is not None:
         try:
@@ -281,6 +301,8 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         q.answer(),
         return_exceptions=True,
     )
+    if isinstance(executor_role, asyncio.CancelledError):
+        raise executor_role
     if isinstance(executor_role, BaseException) or executor_role not in (
         "founder",
         "admin",
@@ -302,10 +324,21 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         db.users_roles.get_effective_role(target_id),
         return_exceptions=True,
     )
+    if isinstance(current_role, asyncio.CancelledError):
+        raise current_role
     if isinstance(target_fname, BaseException):
         target_fname = str(target_id)
     if isinstance(current_role, BaseException):
-        current_role = None
+        log.error(
+            "target role lookup failed during promote callback for target=%d: %s",
+            target_id,
+            current_role,
+        )
+        try:
+            await q.edit_message_text(_ERR_ROLE_LOOKUP_FAILED, reply_markup=None)
+        except Exception as exc:
+            log.debug("on_promote_role_btn role-lookup-failed edit failed: %s", exc)
+        return
 
     _, text = await Promote.execute(
         ctx.bot,
@@ -366,6 +399,10 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         extraction.extract_target(update, args, ctx.bot),
         return_exceptions=True,
     )
+    if isinstance(_exec_r, asyncio.CancelledError):
+        raise _exec_r
+    if isinstance(_target_r, asyncio.CancelledError):
+        raise _target_r
     executor_role = None if isinstance(_exec_r, BaseException) else _exec_r
     if executor_role is None:
         return
@@ -394,6 +431,8 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return_exceptions=True,
     )
     if isinstance(ident, BaseException):
+        if isinstance(ident, asyncio.CancelledError):
+            raise ident
         log.error(
             "identity.classify failed during demote for target=%d: %s", target_id, ident
         )
@@ -402,8 +441,19 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         except Exception as exc:
             log.debug("cmd_demote classify-failed reply failed: %s", exc)
         return
+    if isinstance(target_role, asyncio.CancelledError):
+        raise target_role
     if isinstance(target_role, BaseException):
-        target_role = None
+        log.error(
+            "target role lookup failed during demote for target=%d: %s",
+            target_id,
+            target_role,
+        )
+        try:
+            await msg.reply_text(_ERR_ROLE_LOOKUP_FAILED)
+        except Exception as exc:
+            log.debug("cmd_demote role-lookup-failed reply failed: %s", exc)
+        return
     refusal = identity.refuse_message("demote", ident)
     if refusal is not None:
         try:
@@ -472,6 +522,8 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         q.answer(),
         return_exceptions=True,
     )
+    if isinstance(executor_role, asyncio.CancelledError):
+        raise executor_role
     if isinstance(executor_role, BaseException) or executor_role not in (
         "founder",
         "admin",
@@ -489,8 +541,19 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         db.users_cache.get_user_mention_data(target_id),
         return_exceptions=True,
     )
+    if isinstance(target_role, asyncio.CancelledError):
+        raise target_role
     if isinstance(target_role, BaseException):
-        target_role = None
+        log.error(
+            "target role lookup failed during demote callback for target=%d: %s",
+            target_id,
+            target_role,
+        )
+        try:
+            await q.edit_message_text(_ERR_ROLE_LOOKUP_FAILED, reply_markup=None)
+        except Exception as exc:
+            log.debug("on_demote_confirm role-lookup-failed edit failed: %s", exc)
+        return
     if isinstance(mention_data, BaseException):
         target_fname, target_uname = str(target_id), None
     else:

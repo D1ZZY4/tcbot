@@ -128,7 +128,7 @@ The `decorators.py` module centralizes both auth-guard decorators and the shared
 
 | Export | Purpose |
 |---|---|
-| `resolve_and_check(msg, executor_id, target_id, min_role=...)` | Resolves executor and target roles, checks minimum executor rank, checks executor outranks target, and replies on failure. |
+| `resolve_and_check(msg, executor_id, target_id, min_role=...)` | Resolves executor and target roles, checks minimum executor rank, checks executor outranks target, and replies on failure. Role lookup errors fail closed and do not become a no-role result. |
 
 Ban and kick entry points pair this with `Demote.execute(..., trigger="ban"/"kick")` from `workflows/demote_flow.py` to remove the target's role before the moderation action.
 

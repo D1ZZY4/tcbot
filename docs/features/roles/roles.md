@@ -62,7 +62,7 @@ Only `developer` and `tester` are valid custom roles in `tc_roles`. Founder and 
 
 ## Permission model
 
-The helper `role_rank(role)` converts an effective role into its numeric rank. `can_act_on(executor_id, target_id)` returns true only when the executor rank is strictly greater than the target rank.
+The helper `role_rank(role)` converts an effective role into its numeric rank. `can_act_on(executor_id, target_id)` returns true only when the executor rank is strictly greater than the target rank. If either role lookup fails, the check returns false rather than treating the failed lookup as a user with no role.
 
 Common moderation thresholds:
 
