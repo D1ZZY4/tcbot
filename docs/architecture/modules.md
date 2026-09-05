@@ -49,10 +49,6 @@ The help builder includes a module only when it has a non-empty unified
 with `__module_name__ = None` are therefore omitted from `/help`; this is a
 help-discovery convention, not a handler-registration switch.
 
-`types.py` is not a command module. It holds shared `typing` aliases such as
-`CommandHandlerFn`, `CallbackHandlerFn`, and `DataCoroutine` for cross-module handler
-signatures.
-
 ## Command modules
 
 | Module | Visible help topic | Main handlers/commands | Notes |

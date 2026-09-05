@@ -148,7 +148,6 @@ async def ensure_indexes() -> None:
         col("bans").create_index(
             [("banned_user_id", 1), ("timestamp", -1), ("ban_id", -1)]
         ),
-        col("tc_owners").create_index([("user_id", 1)], unique=True),
         col("tc_admins").create_index([("user_id", 1)], unique=True),
         col("tc_roles").create_index([("user_id", 1)], unique=True),
         # * Serves users_roles.all_by_role() which filters by role only
