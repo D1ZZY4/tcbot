@@ -13,6 +13,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **L2 cache write can no longer fail the fetch** (`tcbot/database/cache.py`, `docs/architecture/database.md`): a payload-encode failure in `get_or_fetch` now degrades to L1-only instead of raising after the value was already fetched and served from L1.
 
+- **Prefix hot-path modernization, match-identical** (`tcbot/utils/prefixes.py`): `_parse_prefixed_command` drops two subsumed gates (`command != command.lower()`, `isascii()`; the `[a-z][a-z0-9]*` fullmatch already rejects both) plus one unreachable empty-token check (`split()` never yields empty strings), and both filter classes resolve the bot username lazily only when the text contains `@` (the username is consumed solely by the mention-suffix branch, so mention-less commands skip the lookup entirely). Verified: 34,608 parse-level plus 138,432 filter-level old-vs-new cases (overlapping prefixes, case/unicode variants, matching/wrong/short/long mentions, bot-less messages) with zero mismatches; lookup counter confirms 0 username resolutions on plain commands. No match-behavior change: every command that responded before responds identically.
+
 - **Absolute full-read rule** (`.agents/rules/tooling-validation.md`): the read-before-work rule now forbids `limit`/`offset` parameters outright instead of merely discouraging partial reads, so every edit is made against full surrounding context.
 
 - **Removed stale `.roo` and `.trae` symlinks** (`pyproject.toml`): deleted the `.roo` and `.trae` symlinks to `.agents` and their now-dead Ruff exclude entries. `.agents` itself is untouched; remaining sibling symlinks (`.claude`, `.kilo`) intentionally left alone.

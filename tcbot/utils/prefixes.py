@@ -85,13 +85,14 @@ def _parse_prefixed_command(
     _parts = text[len(prefix) :].split(None, 1)
     if not _parts:
         return None
+    # * split() never yields empty strings, so _parts[0] is always non-empty.
     token = _parts[0]
-    if not token:
-        return None
 
     command, separator, mention = token.partition("@")
-    if not command or command != command.lower() or not command.isascii():
+    if not command:
         return None
+    # * The fullmatch below subsumes lowercase and ASCII checks: only
+    # * [a-z0-9] can pass, so separate lower()/isascii() gates would be dead.
     if not _COMMAND_RE.fullmatch(command):
         return None
     if separator:
@@ -114,10 +115,13 @@ class _PrefixedCommandFilter(filters.MessageFilter):
     def filter(self, message: Message) -> bool:
         """Return True when the message matches this filter's specific command."""
         text = message.text or ""
+        # * The username is only consumed for @mention-suffixed commands, so
+        # * skip the lookup when the text holds no "@" (the common case).
+        bot_username = _bot_username_from_message(message) if "@" in text else None
         parsed = _parse_prefixed_command(
             text,
             self.prefixes,
-            _bot_username_from_message(message),
+            bot_username,
         )
         return parsed is not None and parsed[0] == self.command
 
@@ -132,11 +136,13 @@ class _AnyPrefixedCommandFilter(filters.MessageFilter):
     def filter(self, message: Message) -> bool:
         """Return True when the message is any valid prefixed command."""
         text = message.text or ""
+        # * Same lazy username lookup as _PrefixedCommandFilter.filter above.
+        bot_username = _bot_username_from_message(message) if "@" in text else None
         return (
             _parse_prefixed_command(
                 text,
                 self.prefixes,
-                _bot_username_from_message(message),
+                bot_username,
             )
             is not None
         )
