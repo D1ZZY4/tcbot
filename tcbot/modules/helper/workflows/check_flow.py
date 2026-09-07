@@ -21,6 +21,7 @@ from tcbot.modules.helper.extraction import (
     launch_identity_refresh,
 )
 from tcbot.modules.helper.identity import Identity, classify, profile_note
+from tcbot.modules.helper.keyboards import paged_drill_kb
 from tcbot.utils.formatter import bold, code, esc, italic, mention
 from tcbot.utils.pagination import date_or_unknown, nav_row, paginate
 from tcbot.utils.time_and_date import fmt_dt
@@ -295,7 +296,7 @@ class Check:
             return text, InlineKeyboardMarkup([_back_to_check(target_id)])
 
         lines = [f"{bold('Bans')}: {len(bans)} total, page {page + 1}/{total_pages}\n"]
-        item_btns: list[InlineKeyboardButton] = []
+        items: list[tuple[str, str]] = []
         base_idx = page * _PAGE_SIZE
         for i, ban in enumerate(chunk, start=1):
             status = bold("Active") if ban.get("is_active") else "Inactive"
@@ -305,24 +306,21 @@ class Check:
                 f"{base_idx + i}. {status} | {code(ban.get('ban_id', ''))} | {ts}\n"
                 f"   {italic(reason_short)}"
             )
-            item_btns.append(
-                InlineKeyboardButton(
+            items.append(
+                (
                     str(base_idx + i),
-                    callback_data=f"check_ban_item:{target_id}:{ban.get('ban_id', '')}",
-                    style=KeyboardButtonStyle.PRIMARY,
+                    f"check_ban_item:{target_id}:{ban.get('ban_id', '')}",
                 )
             )
 
-        # * pair item buttons _BTNS_PER_ROW per row
-        rows: list[list[InlineKeyboardButton]] = [
-            item_btns[i : i + _BTNS_PER_ROW]
-            for i in range(0, len(item_btns), _BTNS_PER_ROW)
-        ]
-        nav = nav_row(page, total_pages, f"check_bans:{target_id}")
-        if nav:
-            rows.append(nav)
-        rows.append(_back_to_check(target_id))
-        return "\n".join(lines), InlineKeyboardMarkup(rows)
+        return "\n".join(lines), paged_drill_kb(
+            items,
+            page=page,
+            total_pages=total_pages,
+            nav_prefix=f"check_bans:{target_id}",
+            back_callback=f"check_main:{target_id}",
+            per_row=_BTNS_PER_ROW,
+        )
 
     @classmethod
     async def ban_detail(
@@ -560,7 +558,7 @@ class Check:
         lines = [
             f"{bold('Appeals')}: {len(bans)} total, page {page + 1}/{total_pages}\n"
         ]
-        item_btns: list[InlineKeyboardButton] = []
+        items: list[tuple[str, str]] = []
         base_idx = page * _PAGE_SIZE
         for i, ban in enumerate(chunk, start=1):
             ts = date_or_unknown(ban.get("appeal_submitted_at") or ban.get("timestamp"))
@@ -573,23 +571,21 @@ class Check:
                 f"{base_idx + i}. {status}\n"
                 f"   Ban ID: {code(ban.get('ban_id', ''))} | {ts}"
             )
-            item_btns.append(
-                InlineKeyboardButton(
+            items.append(
+                (
                     str(base_idx + i),
-                    callback_data=f"check_ban_item:{target_id}:{ban.get('ban_id', '')}",
-                    style=KeyboardButtonStyle.PRIMARY,
+                    f"check_ban_item:{target_id}:{ban.get('ban_id', '')}",
                 )
             )
 
-        rows: list[list[InlineKeyboardButton]] = [
-            item_btns[i : i + _BTNS_PER_ROW]
-            for i in range(0, len(item_btns), _BTNS_PER_ROW)
-        ]
-        nav = nav_row(page, total_pages, f"check_appeals:{target_id}")
-        if nav:
-            rows.append(nav)
-        rows.append(_back_to_check(target_id))
-        return "\n".join(lines), InlineKeyboardMarkup(rows)
+        return "\n".join(lines), paged_drill_kb(
+            items,
+            page=page,
+            total_pages=total_pages,
+            nav_prefix=f"check_appeals:{target_id}",
+            back_callback=f"check_main:{target_id}",
+            per_row=_BTNS_PER_ROW,
+        )
 
 
 # ─────────────────────── Shared list helper ─────────────────────── #

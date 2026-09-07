@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
@@ -14,6 +15,10 @@ from telegram.constants import KeyboardButtonStyle
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper.parse_link import appeal_deep_link
+from tcbot.utils.pagination import nav_row
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 log = logging.getLogger(__name__)
 
@@ -518,6 +523,75 @@ def tcgroups_kb(*, detailed: bool) -> InlineKeyboardMarkup:
                     callback_data=callback,
                     style=KeyboardButtonStyle.PRIMARY,
                 )
+            ]
+        ]
+    )
+
+
+# ─────────────────── Paginated drill-down lists ─────────────────── #
+
+
+def paged_drill_kb(
+    items: Sequence[tuple[str, str]],
+    *,
+    page: int,
+    total_pages: int,
+    nav_prefix: str,
+    back_callback: str,
+    extra_rows: Sequence[Sequence[InlineKeyboardButton]] | None = None,
+    per_row: int = 3,
+) -> InlineKeyboardMarkup:
+    """Numbered drill-in grid plus nav row, optional extra rows, and back.
+
+    ``items`` carries (label, callback_data) per drill-in button; labels are
+    caller-chosen (page-relative ``1..N`` or absolute record numbers) while
+    the grid shape is shared. Single owner for the numbered-grid look (also
+    the one place numbered buttons gain their PRIMARY style), used by the
+    stats and check drill-downs instead of three local copies.
+    """
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                label, callback_data=cb, style=KeyboardButtonStyle.PRIMARY
+            )
+            for label, cb in items[i : i + per_row]
+        ]
+        for i in range(0, len(items), per_row)
+    ]
+    nav = nav_row(page, total_pages, nav_prefix)
+    if nav:
+        rows.append(nav)
+    if extra_rows:
+        rows.extend([list(row) for row in extra_rows])
+    rows.append([InlineKeyboardButton("« Back", callback_data=back_callback)])
+    return InlineKeyboardMarkup(rows)
+
+
+# ───────────────────────── Appeal flow ─────────────────────────── #
+
+
+def appeal_cancel_kb(
+    label: str = "Cancel", callback: str = "cancel_appeal"
+) -> InlineKeyboardMarkup:
+    """Single-button keyboard attached to the appeal instruction prompt."""
+    return InlineKeyboardMarkup([[InlineKeyboardButton(label, callback_data=callback)]])
+
+
+def appeal_review_kb(ban_id: str) -> InlineKeyboardMarkup:
+    """Approve / Reject keyboard attached to the staff review card."""
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "Approve",
+                    callback_data=f"appeal_approve_{ban_id}",
+                    style=KeyboardButtonStyle.SUCCESS,
+                ),
+                InlineKeyboardButton(
+                    "Reject",
+                    callback_data=f"appeal_reject_{ban_id}",
+                    style=KeyboardButtonStyle.DANGER,
+                ),
             ]
         ]
     )

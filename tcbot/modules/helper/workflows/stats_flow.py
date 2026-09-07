@@ -26,8 +26,9 @@ from tcbot.modules.helper.extraction import (
     identity_needs_refresh,
     launch_identity_refresh,
 )
+from tcbot.modules.helper.keyboards import paged_drill_kb
 from tcbot.utils.formatter import bold, code, esc, mention, user_ref
-from tcbot.utils.pagination import date_or_unknown, nav_row, paginate
+from tcbot.utils.pagination import date_or_unknown, paginate
 from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
 
 log = logging.getLogger(__name__)
@@ -166,10 +167,6 @@ def _list_kb(
     that ID so a list mutation between render and tap cannot silently show
     a different record. Older buttons without the segment keep working.
     """
-    rows: list[list[InlineKeyboardButton]] = []
-    nav = nav_row(page, total_pages, cb_prefix)
-    if nav:
-        rows.append(nav)
 
     def _callback(i: int) -> str:
         base = f"{item_cb_prefix}:{page}:{i}"
@@ -177,22 +174,15 @@ def _list_kb(
             return f"{base}:{item_ids[i]}"
         return base
 
-    num_btns = [
-        InlineKeyboardButton(
-            str(i + 1),
-            callback_data=_callback(i),
-            style=KeyboardButtonStyle.PRIMARY,
-        )
-        for i in range(n_items)
-    ]
-    rows.extend(
-        num_btns[i : i + _BTNS_PER_ROW] for i in range(0, len(num_btns), _BTNS_PER_ROW)
+    return paged_drill_kb(
+        [(str(i + 1), _callback(i)) for i in range(n_items)],
+        page=page,
+        total_pages=total_pages,
+        nav_prefix=cb_prefix,
+        back_callback="stats_main",
+        extra_rows=[extra_row] if extra_row is not None else None,
+        per_row=_BTNS_PER_ROW,
     )
-
-    if extra_row:
-        rows.append(extra_row)
-    rows.append(_back_main())
-    return InlineKeyboardMarkup(rows)
 
 
 # ────────────────────────── Stats class ─────────────────────────── #

@@ -114,7 +114,12 @@ record type.
 ```
 
 Used by `/tcstats` bans and `/check` drill-downs. Numbered buttons open the
-record detail; `« Back` returns to the parent.
+record detail; `« Back` returns to the parent. One shared factory owns this
+shape: `keyboards.paged_drill_kb(items, page=..., total_pages=...,
+nav_prefix=..., back_callback=..., extra_rows=...)` builds the numbered grid
+(`PRIMARY`, 3 per row), the `nav_row`, optional extra rows, and the neutral
+`« Back` last; stats and check drill-downs pass their own labels, callbacks,
+and back targets instead of rebuilding it locally.
 
 ### Detail view with optional URL buttons
 
