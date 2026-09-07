@@ -10,9 +10,12 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
+from telegram.error import Forbidden
+
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
+from tcbot.utils.dispatch import is_benign_telegram_error
 from tcbot.utils.formatter import bold, esc, mention
 
 if TYPE_CHECKING:
@@ -99,17 +102,30 @@ class Demote:
                 f"you were {verb} from the federation."
             )
 
-        for result in await asyncio.gather(
+        log_result, dm_result = await asyncio.gather(
             bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
             bot.send_message(target_id, user_msg, parse_mode="HTML"),
             return_exceptions=True,
-        ):
-            if isinstance(result, BaseException):
-                # * Error-level so a silent audit/DM gap ships to LOG_ERRORS
-                # * like other moderation log-send failures; the role itself
-                # * was already removed, so this never blocks the caller.
-                log.error(
-                    "Demote log/DM send failed for target=%d: %s", target_id, result
+        )
+        if isinstance(log_result, BaseException):
+            # * Error-level so a silent audit gap ships to LOG_ERRORS; the
+            # * role itself was already removed, so this never blocks the caller.
+            log.error("Demote log send failed for target=%d: %s", target_id, log_result)
+        if isinstance(dm_result, BaseException):
+            if isinstance(dm_result, Forbidden) or is_benign_telegram_error(dm_result):
+                # * Expected when the target never started the bot, blocked
+                # * it, or deleted the account ("Chat not found"): info-level
+                # * only, mirroring the ban-flow PM handling. Error-level here
+                # * would ship a no-action-needed report to LOG_ERRORS.
+                log.info(
+                    "Cannot DM demoted user %d "
+                    "(never started the bot or blocked it): %s",
+                    target_id,
+                    dm_result,
+                )
+            else:
+                log.warning(
+                    "Demote DM send failed for target=%d: %s", target_id, dm_result
                 )
         return True
 
