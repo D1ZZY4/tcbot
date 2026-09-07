@@ -9,6 +9,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Changed
 
+- **Absolute full-read rule** (`.agents/rules/tooling-validation.md`): the read-before-work rule now forbids `limit`/`offset` parameters outright instead of merely discouraging partial reads, so every edit is made against full surrounding context.
+
+- **Removed stale `.roo` and `.trae` symlinks** (`pyproject.toml`): deleted the `.roo` and `.trae` symlinks to `.agents` and their now-dead Ruff exclude entries. `.agents` itself is untouched; remaining sibling symlinks (`.claude`, `.kilo`) intentionally left alone.
+
 - **Single formatter source, helper shim removed** (36 files under `tcbot/modules/`, `tcbot/utils/formatter.py`, `docs/architecture/helpers.md`, `utilities.md`, `repository-map.md`, `AGENTS.md`, `.agents/rules/code-style.md`, `docs-rules.md`): every `from tcbot.modules.helper.formatter import ...` now imports from `tcbot.utils.formatter` directly and the thin re-export shim is deleted, so formatting has exactly one owner and one import path. No function changed, no call site changed beyond the import line; `error_reporter.py` already used the utils path. Verified: zero remaining references, full suite green.
 
 - **Staff global throttle tier plus honest retry countdown** (`tcbot/modules/helper/decorators.py`, `replies.py`, `docs/architecture/helpers.md`): the global command bucket is now identity-aware via `_throttle_tier()` in a single cached role read (zero round trips on hits): Founder skips it, Tester and above share a roomier `_cmd_staff_limiter` (16 calls / 30 s) for mixed incident-response bursts, everyone else keeps `_cmd_limiter` (8 calls / 30 s). A failed lookup lands on the strict bucket and cancellation propagates. Per-handler quotas still pace each destructive command and the callback bucket is unchanged for all tiers, so flood protection is retained everywhere. `rate_limit_text()` clamps to a minimum of 1 second so sub-second waits no longer render as "try again in 0 seconds". Verified: staff throttles at the 17th call, regulars at the 9th, Founder unlimited, outage lands strict.
