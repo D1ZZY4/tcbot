@@ -234,9 +234,11 @@ View workflow
 ### Auto-fix pull request not created
 - Check branch protection rules allow bot commits
 - Verify workflow has `contents: write` permission
+- If the log says `GitHub Actions is not permitted to create or approve pull requests`, enable Settings → Actions → General → Workflow permissions → `Allow GitHub Actions to create and approve pull requests` (the fix branch is already pushed, so re-running or opening the PR manually recovers)
 
 ### Dependency PR not created
 - Verify `pull-requests: write` permission
+- Same repository toggle as above: without `Allow GitHub Actions to create and approve pull requests`, `gh pr create` fails even with the right permissions (the `deps/auto-update-*` branch is already pushed, so re-running or opening the PR manually recovers)
 
 ### Bot not staying online (Run Bot)
 - Verify `BOT_TOKEN`, `MONGODB_URI`, and `OWNER_ID` secrets are set

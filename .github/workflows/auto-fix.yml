@@ -106,7 +106,11 @@ jobs:
           Auto-applied by GitHub Actions"
             git push origin "$BRANCH"
 
-            gh pr create \
+            # * Same PR-permission diagnostics as dependency-update.yml: a raw
+            # * "not permitted to create or approve pull requests" failure is
+            # * the repository toggle, not this workflow. Fail loud with the
+            # * exact toggle path; the branch above is already pushed.
+            if ! gh pr create \
               --title "chore: Auto-fix code quality issues" \
               --body "## Auto-Fix Code Quality
 
@@ -135,7 +139,10 @@ jobs:
 
           **Safe to merge** - all fixes are automated and follow project style guide." \
                --base ${{ github.ref_name }} \
-               --head "$BRANCH"
+               --head "$BRANCH"; then
+              echo "::error::gh pr create failed. If the log says 'GitHub Actions is not permitted to create or approve pull requests', enable Settings → Actions → General → Workflow permissions → 'Allow GitHub Actions to create and approve pull requests', then re-run (branch $BRANCH is already pushed) or open the PR manually."
+              exit 1
+            fi
           fi
 
       - name: Comment on PR

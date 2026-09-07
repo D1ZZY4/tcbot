@@ -95,7 +95,12 @@ jobs:
 
           git push origin "$BRANCH"
 
-          gh pr create \
+          # * gh's raw GraphQL error ("not permitted to create or approve
+          # * pull requests") means the repository toggle is off, not that
+          # * this workflow lacks permission. Fail loud but point at the
+          # * exact toggle; the branch above is already pushed, so flipping
+          # * it and re-running (or opening the PR manually) recovers.
+          if ! gh pr create \
             --title "chore: Auto-update dependencies" \
             --body "$(cat <<EOF
           ## Automated Dependency Update
@@ -108,7 +113,10 @@ jobs:
           )" \
             --label "dependencies" \
             --base main \
-            --head "$BRANCH"
+            --head "$BRANCH"; then
+            echo "::error::gh pr create failed. If the log says 'GitHub Actions is not permitted to create or approve pull requests', enable Settings → Actions → General → Workflow permissions → 'Allow GitHub Actions to create and approve pull requests', then re-run (branch $BRANCH is already pushed) or open the PR manually."
+            exit 1
+          fi
 
       - name: Telegram notification
         if: always() && steps.update.outputs.has_updates == 'true'
