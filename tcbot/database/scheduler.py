@@ -109,6 +109,11 @@ async def expire_old_warns(warn_expiry_days: int) -> None:
         _db_call(_col("warns").delete_many({"timestamp": {"$lt": cutoff}})),
         return_exceptions=True,
     )
+    # ! CRITICAL: a cancelled expiry must propagate, not report success.
+    if isinstance(counts_res, asyncio.CancelledError):
+        raise counts_res
+    if isinstance(warns_res, asyncio.CancelledError):
+        raise warns_res
     if isinstance(counts_res, BaseException):
         log.error("Warn expiry: warn_counts delete failed: %s", counts_res)
     if isinstance(warns_res, BaseException):

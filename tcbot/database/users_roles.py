@@ -258,6 +258,16 @@ async def get_effective_role(user_id: int) -> str | None:
             get_role(user_id),
             return_exceptions=True,
         )
+        # * Explicit cancellation checks first: CancelledError is a
+        # * BaseException, so the generic branches below would re-raise it
+        # * anyway, but spelling it out keeps a future ``except Exception``
+        # * refactor from silently swallowing shutdown here.
+        if isinstance(owner, asyncio.CancelledError):
+            raise owner
+        if isinstance(admin, asyncio.CancelledError):
+            raise admin
+        if isinstance(role, asyncio.CancelledError):
+            raise role
         if isinstance(owner, BaseException):
             raise owner
         if isinstance(admin, BaseException):

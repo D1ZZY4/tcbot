@@ -380,7 +380,13 @@ class TwoLevelCache[T]:
         if rc is None:
             return
         rkey = self._rkey(key)
-        payload = json.dumps(val, cls=_MongoJSONEncoder)
+        # * L1 already serves this value: a serialization failure must
+        # * skip the L2 write, never raise into a post-DB-write caller.
+        try:
+            payload = json.dumps(val, cls=_MongoJSONEncoder)
+        except Exception as exc:
+            log.debug("Redis payload encode failed for %s: %s", rkey, exc)
+            return
         self._enqueue_redis_mutation(lambda: self._redis_set(rc, rkey, payload))
 
     def _redis_del_background(self, key: Any) -> None:
@@ -428,6 +434,11 @@ class TwoLevelCache[T]:
             if previous is not None:
                 try:
                     await previous
+                except asyncio.CancelledError:
+                    # ! CRITICAL: the chain is being torn down; running the
+                    # ! queued mutation anyway would delay shutdown and risk
+                    # ! writing stale state after a newer invalidation.
+                    raise
                 except BaseException as exc:
                     log.debug(
                         "Previous Redis mutation failed for prefix %s: %s",

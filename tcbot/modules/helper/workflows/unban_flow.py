@@ -108,6 +108,10 @@ async def execute_unban(
         db.scheduler.cancel_schedule(f"unban.{ban_id}"),
         return_exceptions=True,
     )
+    # ! CRITICAL: a cancelled deactivation must propagate instead of being
+    # ! reported as a DB failure; shutdown must not render as a verdict.
+    if isinstance(deactivate_r, asyncio.CancelledError):
+        raise deactivate_r
     if isinstance(deactivate_r, BaseException):
         # * The DB deactivation is the only authoritative state write for the
         # * unban. If it fails, the user is still banned in the DB even if

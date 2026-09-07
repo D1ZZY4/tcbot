@@ -166,6 +166,8 @@ async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
     matched_any = False
     group_matched = False
     for i, r in enumerate(results):
+        if isinstance(r, asyncio.CancelledError):
+            raise r
         if isinstance(r, BaseException):
             log.error(
                 "migrate_group (%d -> %d) DB call failed: %s",

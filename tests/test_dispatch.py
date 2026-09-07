@@ -6,11 +6,15 @@
 
 from __future__ import annotations
 
+import asyncio
+
+import pytest
 from telegram.error import BadRequest, Forbidden, TimedOut
 
 from tcbot.utils.dispatch import (
     count_errors,
     count_transient_errors,
+    fan_out,
     is_benign_telegram_error,
 )
 
@@ -41,3 +45,26 @@ def test_counters_split_benign_from_transient() -> None:
     ]
     assert count_errors(results) == 3
     assert count_transient_errors(results) == 2
+
+
+def test_fan_out_returns_regular_errors_as_data() -> None:
+    async def _ok() -> str:
+        return "ok"
+
+    async def _fail() -> str:
+        raise BadRequest("other")
+
+    results = asyncio.run(fan_out([_ok(), _fail()]))
+    assert results[0] == "ok"
+    assert isinstance(results[1], BadRequest)
+
+
+def test_fan_out_propagates_cancellation() -> None:
+    async def _cancelled() -> str:
+        raise asyncio.CancelledError
+
+    async def _main() -> None:
+        await fan_out([_cancelled()])
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(_main())

@@ -256,6 +256,10 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             log.error(
                 "set_log_message_id failed for ban_id=%s: %s", ban_id, set_log_result
             )
+        # ! CRITICAL: a cancelled groups fetch must propagate, not shrink
+        # ! enforcement to primaries-only mid-shutdown with a success summary.
+        if isinstance(groups, asyncio.CancelledError):
+            raise groups
         if isinstance(groups, BaseException):
             log.error("active_groups failed during ban of %d: %s", target_id, groups)
             groups = []

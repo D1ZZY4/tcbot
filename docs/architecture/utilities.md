@@ -58,7 +58,7 @@ The Telegram circuit state (`closed`, `open`, or `half_open`) is exposed in the 
 
 | Export | Purpose |
 |---|---|
-| `fan_out(coros, max_concurrent=10)` | Run awaitables concurrently up to `max_concurrent` at once; never raises; returns exceptions as list elements. |
+| `fan_out(coros, max_concurrent=10)` | Run awaitables concurrently up to `max_concurrent` at once; regular failures return as list elements, `asyncio.CancelledError` always propagates. |
 | `count_errors(results)` | Count every `BaseException` item in a `fan_out` result list. Strict primitive for callers where any refusal means "not reached"; current broadcast, maintenance, and moderation fan-outs all count via `count_transient_errors` or structured results instead. |
 | `is_benign_telegram_error(exc)` | Return True for known-benign Telegram refusals (user not participant, chat gone, bot demoted). |
 | `count_transient_errors(results)` | Count only non-benign failures. Used by moderation fan-outs (ban, unban, mute, warn auto-ban) so benign refusals do not look like failed groups. |
@@ -66,7 +66,8 @@ The Telegram circuit state (`closed`, `open`, or `half_open`) is exposed in the 
 `fan_out` behavior:
 
 - preserves input order in the returned list;
-- returns exceptions as list elements instead of raising;
+- returns regular exceptions as list elements instead of raising;
+- re-raises `asyncio.CancelledError` instead of capturing it as data, so shutdown is never misreported as per-group failures;
 - returns an empty list for empty input;
 - defaults to 10 concurrent tasks, which is safe for Telegram API fan-out operations;
 - integrates the `telegram` circuit breaker: slots that run while the circuit is OPEN return `CircuitOpenError` immediately instead of issuing a Telegram request that will time out;

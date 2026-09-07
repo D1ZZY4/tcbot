@@ -183,6 +183,8 @@ async def clear_warns(user_id: int, chat_id: int) -> int:
         db_call(_warn_counts().delete_one(_warn_key(user_id, chat_id))),
         return_exceptions=True,
     )
+    if isinstance(_cnt_del, asyncio.CancelledError):
+        raise _cnt_del
     if isinstance(_cnt_del, BaseException):
         # * Error-level: a surviving counter keeps stale counts that later
         # * warns increment from, so this needs operator repair, not silence.
@@ -219,6 +221,8 @@ async def clear_all_warns(user_id: int) -> int:
         db_call(_warn_counts().delete_many({"user_id": user_id})),
         return_exceptions=True,
     )
+    if isinstance(_cnt_del, asyncio.CancelledError):
+        raise _cnt_del
     if isinstance(_cnt_del, BaseException):
         # * Error-level: same stale-counter repair need as clear_warns above.
         log.error(
@@ -285,6 +289,8 @@ async def remove_last_warn(user_id: int, chat_id: int) -> bool:
         return_exceptions=True,
     )
 
+    if isinstance(del_res, asyncio.CancelledError):
+        raise del_res
     if isinstance(del_res, BaseException):
         log.warning(
             "remove_last_warn delete failed for user=%d chat=%d: %s",
@@ -300,6 +306,8 @@ async def remove_last_warn(user_id: int, chat_id: int) -> bool:
         await _store_warn_count(user_id, chat_id, count)
         return False
 
+    if isinstance(counter, asyncio.CancelledError):
+        raise counter
     if isinstance(counter, BaseException) or counter is None:
         count = await db_call(_warns().count_documents(_warn_key(user_id, chat_id)))
         await _store_warn_count(user_id, chat_id, count)
@@ -354,6 +362,8 @@ async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:
     )
     matched_any = False
     for r in results:
+        if isinstance(r, asyncio.CancelledError):
+            raise r
         if isinstance(r, BaseException):
             log.error(
                 "warns_db.migrate_records (%d -> %d) DB call failed: %s",

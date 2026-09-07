@@ -60,13 +60,17 @@ async def fan_out[T](
     *,
     max_concurrent: int = _MAX_CONCURRENT,
 ) -> list[T | BaseException]:
-    """Run coros concurrently up to max_concurrent at once; never raises.
+    """Run coros concurrently up to max_concurrent at once.
 
     Integrates the Telegram circuit breaker: slots that run while the circuit
     is OPEN are skipped immediately (returning a ``CircuitOpenError``) instead
     of firing a Telegram request that will time out.  TimedOut and
     NetworkError results trip the circuit; all other exceptions (403, 400,
     etc.) are treated as expected API refusals and do not affect the circuit.
+
+    Regular failures are returned as list elements instead of raising, but
+    ``asyncio.CancelledError`` always propagates so task cancellation (for
+    example during shutdown) is never coerced into per-group failure data.
 
     Tasks are admitted lazily through the semaphore so the number of in-flight
     Telegram calls stays bounded. Callers may pass already-created coroutine
@@ -123,11 +127,18 @@ async def fan_out[T](
                 )
                 return exc
 
-    return list(
+    results = list(
         await asyncio.gather(
             *(_slot(lambda c=c: c) for c in coros), return_exceptions=True
         )
     )
+    # ! CRITICAL: gather(return_exceptions=True) captures per-slot
+    # ! cancellation as data. A cancelled slot must propagate so shutdown
+    # ! is never misreported as per-group failures by the counters below.
+    for result in results:
+        if isinstance(result, asyncio.CancelledError):
+            raise result
+    return results
 
 
 def count_errors(results: Sequence[object]) -> int:
