@@ -93,8 +93,8 @@ The Developer minimum is intentional: unbanning a higher-ranked target would sil
 6. Fans `ctx.bot.unban_chat_member(grp.chat_id, target_id, only_if_banned=True)` across the resulting list with `fan_out(...)`.
 7. Builds an `unban_log` via `parse_logmsg.unban_log`.
 8. Runs two parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
-   - `bot.send_message(cfg.logs, log_text, parse_mode="HTML", message_thread_id=lt)`.
-   - `msg.reply_text("<user> has been unbanned - removed from <ok>/<total> groups.")`.
+    - `bot.send_message(cfg.logs, log_text, parse_mode="HTML", message_thread_id=lt)`.
+    - `msg.reply_text("<user> has been unbanned - removed from <ok>/<total> groups.")`, plus a `WARNING: still banned in: <titles>` suffix naming up to 5 missed groups when the fan-out had transient failures (a re-run of `/tcunban` would report "no active ban" since the record is gone; only a targeted re-drive or `/tcsync` run reaches those chats).
 
 The reply does not include an appeal-resolution message; the appeal-approve path handles that separately.
 
@@ -155,7 +155,7 @@ Key behaviors to keep in mind:
 9. `deactivate_all_active_bans` clears every active ban for the target in one write, not just the one returned by `get_active_ban`.
 10. `cancel_schedule(f"unban.{ban_id}")` cancels any pending APScheduler unban job for this ban; it is currently always a no-op.
 11. The unban fan-out uses `only_if_banned=True`; missing chat memberships are silent no-ops.
-12. The reply reads `<user> has been unbanned - removed from <ok>/<total> groups.`.
+12. The reply reads `<user> has been unbanned - removed from <ok>/<total> groups.`, with a `WARNING: still banned in: <up-to-5 titles>` suffix when transient failures remain.
 13. The unban log is sent to `cfg.logs` with `parse_logmsg.unban_log`.
 14. `/tcunban` does not edit any pending appeal review card.
 15. Federation log send failure does not roll back the ban deactivation.
