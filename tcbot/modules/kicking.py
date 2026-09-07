@@ -98,7 +98,19 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """
     msg = update.effective_message
     admin = update.effective_user
-    if msg is None or admin is None or ctx.user_data is None:
+    chat = update.effective_chat
+    if msg is None or admin is None or chat is None or ctx.user_data is None:
+        return ConversationHandler.END
+
+    # * Kick is a current-chat ban-then-unban: Telegram rejects it in private
+    # * chats ("Can't ban members in private chats"), so refuse up front
+    # * instead of failing in the executor after role I/O and demote work.
+    # * Mirrors the connecting/disconnecting group-only guards.
+    if chat.type == "private":
+        try:
+            await msg.reply_text(replies.ERR_GROUP_ONLY)
+        except Exception as exc:
+            log.debug("cmd_kick group-only reply failed: %s", exc)
         return ConversationHandler.END
 
     args = parse_cmd_args(msg.text)
@@ -177,21 +189,28 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         {
             "kick_target_id": target_id,
             "kick_target_name": target_name or str(target_id),
+            "kick_prompt_chat": msg.chat.id,
         }
     )
 
     target_mention = mention(target_id, target_name or str(target_id))
 
-    _KICK_KEYS = ("kick_target_id", "kick_target_name")
+    _KICK_KEYS = (
+        "kick_target_id",
+        "kick_target_name",
+        "kick_prompt_chat",
+        "kick_prompt_id",
+    )
 
     if inline_reason:
         ctx.user_data["kick_reason"] = inline_reason
         try:
-            await msg.reply_text(
+            prompt = await msg.reply_text(
                 proof.noted_prompt("kick", inline_reason, target_mention),
                 parse_mode="HTML",
                 reply_markup=proof.keyboard(),
             )
+            ctx.user_data["kick_prompt_id"] = prompt.message_id
         except Exception as exc:
             log.debug("cmd_kick proof-prompt reply failed: %s", exc)
             for key in (*_KICK_KEYS, "kick_reason"):
@@ -200,11 +219,12 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return WAITING_PROOF
 
     try:
-        await msg.reply_text(
+        prompt = await msg.reply_text(
             reason.prompt(target_mention, "kick"),
             parse_mode="HTML",
             reply_markup=reason.keyboard(),
         )
+        ctx.user_data["kick_prompt_id"] = prompt.message_id
     except Exception as exc:
         log.debug("cmd_kick reason-prompt reply failed: %s", exc)
         for key in _KICK_KEYS:

@@ -121,7 +121,7 @@ The kick is not attempted in this case; previously this exception was swallowed 
 
 ## `execute_kick` behavior
 
-`execute_kick(update, ctx, target_id, target_name, reason_text, proof_msgs)` lives in `tcbot/modules/helper/workflows/kicking_flow.py`. The implementation is a single Telegram `ban_chat_member` followed by `unban_chat_member(chat_id, target_id, only_if_banned=True)`. The "kick" is therefore not a separate Telegram primitive, but the visible effect of ban-then-unban in the same chat.
+`execute_kick(update, ctx, target_id, target_name, reason_text, proof_msgs, prompt_chat=None, prompt_id=None)` lives in `tcbot/modules/helper/workflows/kicking_flow.py`. The prompt chat/ID are stashed by the entry (`kick_prompt_chat`, `kick_prompt_id`) so the summary edits the proof prompt in place. The implementation is a single Telegram `ban_chat_member` followed by `unban_chat_member(chat_id, target_id, only_if_banned=True)`. The "kick" is therefore not a separate Telegram primitive, but the visible effect of ban-then-unban in the same chat.
 
 Execution order:
 
@@ -134,7 +134,8 @@ Execution order:
    - `db.kicks_db.log_kick(target_id, chat_id, reason_text, admin_id)` - audit row.
    - `ctx.bot.send_message(cfg.logs, kick_log, ..., reply_markup=proof_kb)` - federation log post.
 6. If the unban call raises, the reply text is appended with a `WARNING:` line so the moderator is told the user is still banned in this chat.
-7. The reply reads `<user> has been kicked. Reason: <reason>. They can rejoin via invite link.` plus the optional `WARNING:` line.
+7. Edit the proof prompt in place with the kick summary (same pattern as the mute executor), falling back to a fresh reply when the prompt is gone. No more double message.
+8. The reply reads `<user> has been kicked. Reason: <reason>. They can rejoin via invite link.` plus the optional `WARNING:` line.
 
 If `ban_chat_member` itself raises (the chat-level exception, not the parallelized children), `execute_kick` catches it, logs the full traceback, and replies with a generic permissions/retry hint (raw error text is never echoed to the chat).
 

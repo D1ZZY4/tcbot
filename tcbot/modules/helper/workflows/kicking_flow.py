@@ -48,6 +48,8 @@ async def execute_kick(
     target_name: str,
     reason_text: str,
     proof_msgs: list[Message] | None = None,
+    prompt_chat: int | None = None,
+    prompt_id: int | None = None,
 ) -> None:
     """Kick (ban then immediately unban) a user from the current group."""
     msg = update.effective_message
@@ -150,16 +152,36 @@ async def execute_kick(
             if isinstance(unban_result, BaseException)
             else ""
         )
-        try:
-            await msg.reply_text(
-                f"{user_ref(target_id, target_name)} has been kicked.\n"
-                f"Reason: {esc(reason_text)}\n"
-                f"{_MSG_REJOIN_ALLOWED}{unban_warning}",
-                parse_mode="HTML",
-                reply_markup=proof_kb,
-            )
-        except Exception as exc:
-            log.debug("Kick reply_text failed: %s", exc)
+        summary = (
+            f"{user_ref(target_id, target_name)} has been kicked.\n"
+            f"Reason: {esc(reason_text)}\n"
+            f"{_MSG_REJOIN_ALLOWED}{unban_warning}"
+        )
+        # * Edit the proof prompt in place like the mute executor: a fresh
+        # * reply for every kick doubles the chat noise and buries the
+        # * prompt. Falls back to a reply when the prompt is gone/unknown.
+        if prompt_chat is not None and prompt_id is not None:
+            try:
+                await ctx.bot.edit_message_text(
+                    summary,
+                    chat_id=prompt_chat,
+                    message_id=prompt_id,
+                    parse_mode="HTML",
+                    reply_markup=proof_kb,
+                )
+            except Exception as exc:
+                log.debug("Kick summary prompt edit failed: %s", exc)
+                try:
+                    await msg.reply_text(
+                        summary, parse_mode="HTML", reply_markup=proof_kb
+                    )
+                except Exception as reply_exc:
+                    log.debug("Kick summary fallback reply failed: %s", reply_exc)
+        else:
+            try:
+                await msg.reply_text(summary, parse_mode="HTML", reply_markup=proof_kb)
+            except Exception as exc:
+                log.debug("Kick reply_text failed: %s", exc)
     except Exception:
         # * Ban failed while the proof upload may still be in flight: cancel
         # * it so no orphan upload outlives this executor.
@@ -189,6 +211,8 @@ async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     target_name = ctx.user_data.pop("kick_target_name", "")
     reason_text = ctx.user_data.pop("kick_reason", replies.NO_REASON)
     proof_msgs = ctx.user_data.pop("kick_proof_msgs", None)
+    prompt_chat = ctx.user_data.pop("kick_prompt_chat", None)
+    prompt_id = ctx.user_data.pop("kick_prompt_id", None)
     ctx.user_data.pop("kick_extra_info", None)
     await execute_kick(
         update,
@@ -197,6 +221,8 @@ async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         target_name,
         reason_text,
         proof_msgs=proof_msgs,
+        prompt_chat=prompt_chat,
+        prompt_id=prompt_id,
     )
 
 

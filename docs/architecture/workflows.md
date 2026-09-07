@@ -109,7 +109,7 @@ flowchart TD
 |---|---|
 | Factory | `kick_conversation(entry_fn, entry_filter)` |
 | Module instances | `reason = BuildReason("kick")`, `proof = BuildProof("kick")` |
-| Executor | `execute_kick(update, ctx, target_id, target_name, reason_text, proof_msgs=None)` |
+| Executor | `execute_kick(update, ctx, target_id, target_name, reason_text, proof_msgs=None, prompt_chat=None, prompt_id=None)` |
 
 Kick is current-group-only. It bans the user from the current chat and immediately unbans them so the action behaves as a kick rather than a permanent group ban. If `proof_msgs` is provided, the proof upload starts before enforcement and runs concurrently with `ban_chat_member`, so the kick never waits for the proof-channel round trip; the resulting link is shown as an inline keyboard button on the reply and log messages. A ban failure cancels the in-flight upload and replies with a permissions/retry hint.
 
