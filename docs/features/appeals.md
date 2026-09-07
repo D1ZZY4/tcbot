@@ -1,6 +1,6 @@
 # Appeals
 
-This document describes the current ban appeal behavior implemented by `tcbot/modules/appeals.py` and `tcbot/modules/helper/workflows/appeal_flow.py`.
+This document describes the current ban appeal behavior implemented by `tcbot/modules/appeals.py`, `tcbot/modules/helper/workflows/appeal_flow.py` (facade), `appeal_submit_flow.py` (user submission), and `appeal_review_flow.py` (staff decisions).
 
 For the ban flow that triggers appeals, see
 [`moderation/banning.md`](moderation/banning.md). For the check command often

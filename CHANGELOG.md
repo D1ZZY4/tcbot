@@ -9,6 +9,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Changed
 
+- **Appeal flow split into submit and review modules** (`tcbot/modules/helper/workflows/appeal_submit_flow.py`, `appeal_review_flow.py`, `appeal_flow.py`, `keyboards.py`, `docs/architecture/workflows.md`, `docs/features/appeals.md`): `BuildAppeal` is now a thin facade combining `AppealSubmitMixin` (DM entry, gates, posting, cancel, handler factory) with `AppealReviewMixin` (decisions, approve/reject executors); both keyboards moved into `keyboards.py` (`appeal_cancel_kb`, `appeal_review_kb`) per the builders-live-in-keyboards rule. `appeals.py`, all `appeal_flow` imports, callback data, replies, and ordering are unchanged (verified: facade exposes every method, 2 handlers registered, full suite green).
+
 - **Promotion enqueue survives random-ID collision** (`tcbot/database/queues_db.py`, `docs/architecture/database.md`): `enqueue` retries once with a fresh ID on `DuplicateKeyError` (mirrors `bans_db.create_ban`); a second failure propagates so the caller still reports a real pending duplicate. One extra insert attempt only on failure.
 
 - **L2 cache write can no longer fail the fetch** (`tcbot/database/cache.py`, `docs/architecture/database.md`): a payload-encode failure in `get_or_fetch` now degrades to L1-only instead of raising after the value was already fetched and served from L1.

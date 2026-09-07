@@ -176,14 +176,20 @@ Warns are tracked per `(user_id, chat_id)`. At `cfg.warn_limit` (per-group) or `
 
 `execute_unban(update, ctx, target_id, target_fname, *, pre_ban=None)` is a direct executor, not a `ConversationHandler`. It finds the active ban (or uses a caller-supplied `pre_ban` record to skip the DB round-trip), deactivates it, unbans the user from all active groups with `fan_out()`, and posts an audit log.
 
-## Appeal: `appeal_flow.py`
+## Appeal: `appeal_flow.py` + `appeal_submit_flow.py` + `appeal_review_flow.py`
 
 | Item | Value |
 |---|---|
-| State | `WAITING_APPEAL = 0` |
-| Factory | `BuildAppeal.build_handler(entry_filter)` |
-| Decision handler | `BuildAppeal.on_decision(update, ctx)` |
-| Lock helper | `reviewer_locked_out(review_timestamp, ban_admin_id, reviewer_id)` |
+| State | `WAITING_APPEAL = 0` (in `appeal_submit_flow.py`) |
+| Factory | `BuildAppeal.build_handler(entry_filter)` (submit mixin) |
+| Decision handler | `BuildAppeal.on_decision(update, ctx)` (review mixin) |
+| Lock helper | `reviewer_locked_out(review_timestamp, ban_admin_id, reviewer_id)` (in `appeal_review_flow.py`) |
+
+`appeal_flow.py` is a thin facade: `BuildAppeal` combines `AppealSubmitMixin`
+(user DM entry, gates, posting, cancel) with `AppealReviewMixin` (staff
+decisions) and re-exports the shared names, so `appeals.py` and existing
+importers keep working unchanged. Both keyboards live in `keyboards.py`
+(`appeal_cancel_kb`, `appeal_review_kb`).
 
 Appeal flow requirements:
 
