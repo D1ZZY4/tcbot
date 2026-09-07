@@ -59,8 +59,12 @@ async def execute_warn(
     Two thresholds can trigger an automatic federation ban:
 
     1. **Per-group threshold** (``cfg.warn_limit``): fires when a user's warn count
-       in the *current* group reaches exactly the configured limit.  Uses ``==`` so
-       that concurrent warns at limit+1 don't double-fire.
+       in the *current* group reaches or exceeds the configured limit. Uses
+       ``>=`` so that a retry after a total enforcement failure still fires:
+       warns are cleared only after successful enforcement, so a 0/N fan-out
+       leaves the count at the limit and the next warn must re-drive the ban
+       instead of wedging at limit+1. The ``already_banned`` guard in the
+       auto-ban helper skips re-creation when the record already exists.
 
     2. **Federation-wide threshold** (``cfg.fed_warn_limit``, default 0 = off):
        fires when the user's total warns *across all groups* reach or exceed the
@@ -153,16 +157,21 @@ async def execute_warn(
     # * "fed_global": federation-wide FED_WARN_LIMIT reached across all groups.
     # * None: below both thresholds; issue a plain warning only.
     #
-    # * Per-group uses == (not >=) so that only the exact hit triggers the ban;
-    # * a concurrent second warn returns warn_limit+1 and is silently skipped,
-    # * preventing a double-ban race condition.
+    # * Per-group uses >= (not ==) so that a retry after a total enforcement
+    # * failure still fires: warns are cleared only after successful
+    # * enforcement, so a 0/N fan-out leaves the count at the limit and the
+    # * next warn must re-drive the ban instead of wedging at limit+1 with
+    # * no recovery path. A concurrent double-fire is safe: the auto-ban
+    # * helper skips creation when an active ban already exists, and any
+    # * duplicate active records are cleaned by deactivate_all_active_bans
+    # * on unban.
     # * Federation-wide uses >= because the aggregation is a separate DB read
     # * and has no atomicity guarantee across chat boundaries; >= ensures no
     # * trigger is missed, and the already_banned guard below prevents double bans.
     auto_ban_trigger: str | None = None
     fed_count: int = 0
 
-    if count == warn_limit:
+    if count >= warn_limit:
         auto_ban_trigger = "per_group"
     else:
         fed_limit = cfg.fed_warn_limit

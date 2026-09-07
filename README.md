@@ -100,7 +100,7 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 
 | Variable | Default | Description |
 |---|---|---|
-| `WARN_LIMIT` | `3` | Per-group warns triggering auto-ban (minimum `1`, exact match). |
+| `WARN_LIMIT` | `3` | Per-group warns triggering auto-ban (minimum `1`, fires at or above the limit). |
 | `FED_WARN_LIMIT` | `0` (disabled) | Federation-wide warns triggering auto-ban. |
 | `WARN_EXPIRY_DAYS` | `0` (disabled) | Days after which warn counts expire via a daily job. |
 

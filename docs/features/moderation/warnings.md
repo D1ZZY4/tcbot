@@ -14,7 +14,7 @@ flowchart TD
     Permission -->|allowed| Reason[WAITING_REASON]
     Reason --> Proof[WAITING_PROOF]
     Proof --> AddWarn[warns_db.add_warn<br/>atomic counter]
-    AddWarn --> CheckPerGroup{count == cfg.warn_limit?}
+    AddWarn --> CheckPerGroup{count >= cfg.warn_limit?}
     CheckPerGroup -->|yes| RoleCheck{target holds federation role?}
     RoleCheck -->|yes| Exempt[Auto-demote target, exempt from auto-ban]
     RoleCheck -->|no| AutoBan[Federation-wide auto-ban via fan_out]
@@ -30,7 +30,7 @@ flowchart TD
 
 Warnings are per-group moderation records. Each warn is keyed by `(user_id, chat_id)`. Two automatic federation-ban thresholds exist:
 
-1. **Per-group threshold** (`cfg.warn_limit`, env var `WARN_LIMIT`, default 3, minimum 1): fires when a user's warn count in the current group reaches exactly `cfg.warn_limit`. Uses `==` to prevent double-ban race conditions when two concurrent warns bracket the limit.
+1. **Per-group threshold** (`cfg.warn_limit`, env var `WARN_LIMIT`, default 3, minimum 1): fires when a user's warn count in the current group reaches or exceeds `cfg.warn_limit`. Uses `>=` so a retry after a total enforcement failure still fires: warns are cleared only after successful enforcement, so a 0/N fan-out leaves the count at the limit and the next warn must re-drive the ban instead of wedging above the threshold. The `already_banned` guard skips re-creation when the ban record already exists.
 2. **Federation-wide threshold** (`FED_WARN_LIMIT`, env var, default 0 = disabled): fires when the user's total warns across all groups reaches or exceeds the configured value, even if no single group has reached its per-group limit. Uses `>=` because the cross-group aggregate is a separate DB read with no atomicity guarantee. Set to a positive integer to close the evasion path of spreading warns thinly across many groups.
 
 In both cases a non-staff user is issued a **federation-wide ban** across all active connected groups, a ban document is created in the `bans` collection (appealable), and warnings are cleared across all groups (`clear_all_warns`). A target holding a federation role is auto-demoted and exempted from the auto-ban instead (staff are never auto-banned via warnings); the threshold warn itself is still recorded.
@@ -136,7 +136,7 @@ Rules for `/tcwarn`:
 - Founder targets are protected.
 - Targets with rank equal to or higher than the executor are protected.
 - A higher-ranked executor can warn a lower-ranked staff target.
-- A single warning below the warn limit does not auto-demote the target. However, if the target holds a federation role when their warn count reaches exactly `cfg.warn_limit` (checked with `==`, not `>=`, to prevent race conditions), the auto-demote (`Demote.execute(trigger="ban")`) fires and the staff target is exempted from the auto-ban; the warn itself is still recorded. Staff are never auto-banned via warnings.
+- A single warning below the warn limit does not auto-demote the target. However, if the target holds a federation role when their warn count reaches or exceeds `cfg.warn_limit` (checked with `>=`, so a post-failure retry still demotes), the auto-demote (`Demote.execute(trigger="ban")`) fires and the staff target is exempted from the auto-ban; the warn itself is still recorded. Staff are never auto-banned via warnings.
 
 `/tcunwarn` and `/resetwarns` handle staff targets differently:
 
@@ -197,7 +197,7 @@ Executor database reads fail closed with a retry notice instead of ending the co
 
 When `execute_warn(...)` adds a warning, it receives the new warning count. Two thresholds are then evaluated in order:
 
-**Step 1: Per-group check.** If `count == cfg.warn_limit`, the auto-ban trigger is set to `"per_group"`. The `==` operator (not `>=`) ensures that only the call that gets exactly `cfg.warn_limit` from the atomic `$inc` enters the auto-ban path; a concurrent warn returning `cfg.warn_limit+1` takes the plain warn-notice path.
+**Step 1: Per-group check.** If `count >= cfg.warn_limit`, the auto-ban trigger is set to `"per_group"`. The `>=` operator (not `==`) ensures a retry after a total enforcement failure still fires: warns are cleared only on success, so a 0/N fan-out leaves the count at the limit and the next warn re-drives the ban; the `already_banned` guard skips re-creation when the record already exists, and duplicate active records from a true concurrent race are cleaned by `deactivate_all_active_bans` on unban.
 
 **Step 2: Federation-wide check (only if step 1 did not fire).** If `cfg.fed_warn_limit > 0`, the bot reads `federation_warn_count(target_id)` (total warns across all groups). If `fed_count >= cfg.fed_warn_limit`, the auto-ban trigger is set to `"fed_global"`. This `>=` is intentional: the aggregate is not atomic across groups, so `>=` ensures no trigger is missed; the already-banned guard prevents double bans.
 
@@ -209,7 +209,7 @@ If `auto_ban_trigger is None` (both checks below threshold):
 
 If `auto_ban_trigger == "per_group"` or `auto_ban_trigger == "fed_global"`:
 
-The trigger uses `==` for per-group (race-condition-safe) and `>=` for federation-wide (cross-group aggregate with no atomicity guarantee).
+The trigger uses `>=` for per-group (retry-safe after total enforcement failure) and `>=` for federation-wide (cross-group aggregate with no atomicity guarantee).
 
 1. Active federation groups, any existing active ban, and the audit log are fetched/sent in parallel via `asyncio.gather`.
 2. If the user does not already hold an active federation ban, `bans_db.create_ban()` creates a ban document in the `bans` collection (the same document used by `/tcban`). This makes the ban appealable via the standard appeal flow. If the write fails, the auto-ban aborts before any group is touched (fail-closed, mirroring `execute_unban`): the threshold warn stays recorded and the admin is told to ban manually with `/tcban` once the database recovers.
@@ -223,7 +223,7 @@ The trigger uses `==` for per-group (race-condition-safe) and `>=` for federatio
 Both auto-ban branches behave as follows:
 
 - On successful auto-ban (at least one group), warnings are cleared across all groups.
-- On complete fan-out failure, warnings are kept.
+- On complete fan-out failure, warnings are kept and the next warn re-fires the auto-ban via the `>=` per-group check.
 
 ## `/tcunwarn` behavior
 
@@ -350,12 +350,12 @@ Key warning behaviors to keep in mind:
 4. `/tcwarn` without inline reason asks for a reason and does not offer `Skip` for reason.
 5. Proof step offers `Skip` and `Cancel`.
 6. Warning count increments per `(user_id, chat_id)`.
-7. Warning counts are stored per group but two auto-ban thresholds exist: `cfg.warn_limit` (env var `WARN_LIMIT`, per-group, default 3, minimum 1, uses `==` to prevent race condition) and `FED_WARN_LIMIT` (federation-wide, default 0 = disabled, uses `>=` because the cross-group aggregate is not atomic).
+7. Warning counts are stored per group but two auto-ban thresholds exist: `cfg.warn_limit` (env var `WARN_LIMIT`, per-group, default 3, minimum 1, uses `>=` so a post-failure retry still fires) and `FED_WARN_LIMIT` (federation-wide, default 0 = disabled, uses `>=` because the cross-group aggregate is not atomic).
 8. `/warns` lists reasons oldest first.
 9. `/tcunwarn` removes the newest warning and decrements the counter.
 10. `/resetwarns` clears history and counter without banning.
 11. At `cfg.warn_limit` per-group, successful federation-wide auto-ban clears warnings across all groups.
-12. At `cfg.warn_limit`, failed auto-ban (all groups) keeps warnings and tells moderators to ban manually.
+12. At `cfg.warn_limit`, failed auto-ban (all groups) keeps warnings and tells moderators to ban manually; the next warn re-fires the auto-ban.
 13. When `FED_WARN_LIMIT > 0`: if `federation_warn_count(target_id)` reaches or exceeds the limit (but the per-group limit was not hit), the same federation-wide auto-ban fires via the `"fed_global"` trigger path.
 14. Equal/higher staff targets are protected from `/tcwarn`.
 15. Lower-ranked staff targets can be warned by higher-ranked executors. A single warning below the limit does not auto-demote them. At the warn limit, if the target holds a federation role, they are auto-demoted (`trigger="ban"`) and exempted from the auto-ban; the warn itself is still recorded.

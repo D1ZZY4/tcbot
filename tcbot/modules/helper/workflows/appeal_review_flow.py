@@ -34,6 +34,9 @@ _ERR_ROLE_LOOKUP = (
 )
 _ERR_BAN_NOT_FOUND = "Ban record not found."
 _ERR_ALREADY_RESOLVED = "Appeal already resolved (ban is no longer active)."
+_ERR_DB_RETRY = (
+    "The database write failed. The review card is unchanged, tap again to retry."
+)
 _ERR_REVIEW_LOCKED = (
     f"Only the admin who issued this ban can review it within the first {LOCK_HOURS}h."
 )
@@ -291,9 +294,10 @@ class AppealReviewMixin:
             # * otherwise the user is unbanned in chats but the DB still
             # * marks them banned. The greeting handler's join-auto-ban
             # * would then re-ban them the next time they join any
-            # * connected group. Surface the failure to the operator and
-            # * tell the user that the appeal is in progress but the DB
-            # * write failed.
+            # * connected group. Abort with the review card untouched (a
+            # * re-tap retries the full sequence) instead of editing it
+            # * into a dead failure card with no recovery path, mirroring
+            # * the groups-fetch failure path above.
             log.error(
                 "approve_appeal: deactivate_all_active_bans failed for "
                 "user=%d; aborting fan-out to avoid split-brain state: %s",
@@ -301,16 +305,9 @@ class AppealReviewMixin:
                 deactivate_result,
             )
             try:
-                await q.edit_message_text(
-                    f"Appeal DB write failed for ban {code(ban_id)}. "
-                    "The user is still marked as banned in the database "
-                    "even though chats will be un-banned. Check the logs "
-                    "and retry.",
-                    parse_mode="HTML",
-                    reply_markup=None,
-                )
+                await q.answer(_ERR_DB_RETRY, show_alert=True)
             except Exception as exc:
-                log.debug("approve_appeal DB-fail reply failed: %s", exc)
+                log.debug("approve_appeal DB-fail answer failed: %s", exc)
             return
         if isinstance(target_fname, BaseException):
             # * Display-only fallback (covers a cancelled name read too):
