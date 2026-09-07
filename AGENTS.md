@@ -143,6 +143,7 @@ Current stack:
 │   │   ├── additional.py     Additional menu
 │   │   ├── help.py           Help command
 │   │   ├── stats.py          Statistics
+│   │   ├── syncing.py        Enforcement reconciliation (/tcsync)
 │   │   ├── maintenance.py    Maintenance commands
 │   │   ├── netspeed.py       Network speed test
 │   │   ├── privacy.py        Privacy commands
@@ -155,7 +156,8 @@ Current stack:
 │       ├── logger.py          Logging setup
 │       ├── pagination.py      Paginated message rendering
 │       ├── prefixes.py        Command prefix resolution
-│       └── time_and_date.py    Central clock: UTC storage/display + monotonic measure
+│       ├── time_and_date.py    Central clock: UTC storage/display + monotonic measure
+│       └── transport.py        Shared PTB HTTP timeouts and pool size
 ├── docs/                     Developer documentation grouped by category
 ├── .agents/                   Coding skills and style rules
 ├── api/                       Vercel serverless endpoints (webhook, cron)

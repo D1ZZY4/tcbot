@@ -152,6 +152,7 @@ PROOFS="-1001234567890"
 | `WARN_LIMIT` | No | integer >= 1 | Per-group warning threshold that triggers automatic federation ban. Default `3`. When a user's warn count in one group reaches or exceeds this value, they are federation-banned and their group warns cleared (on success). |
 | `FED_WARN_LIMIT` | No | integer >= 0 | Federation-wide warning threshold: sum of warn counts across all groups triggers an automatic federation ban when >= this value. Default `0` (disabled). Set to a positive integer to enable cross-group warn aggregation. |
 | `WARN_EXPIRY_DAYS` | No | positive integer | Days after which `warn_counts` records are deleted by the daily scheduler job. Default `0` (disabled). Set to a positive integer to enable automatic warn expiry. |
+| `SYNC_INTERVAL_HOURS` | No | integer >= 0 | Hours between scheduled enforcement-sync sweeps (`/tcsync` core on a timer, log-only). Default `0` (disabled, manual `/tcsync` only). |
 
 ## Startup sequence
 

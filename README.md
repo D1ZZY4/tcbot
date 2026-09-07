@@ -40,6 +40,7 @@ Fill in at least `BOT_TOKEN`, `OWNER_ID`, and `MONGODB_URI` in `config.env` befo
 | `/check`, `/checkme` | Ban-history lookup for a target or for yourself, with appeal links. |
 | `/tcconnect`, `/tcdisconnect`, `/rmtc`, `/tcgroups` | Connect or remove groups and list the federation roster. |
 | `/tcpromote`, `/tcdemote`, `/transferowner` | Manage Founder, Admin, Developer, and Tester roles. |
+| `/tcsync` | Reconcile enforcement state across groups (bounded sweep, plus single-user check). |
 | `/tcstats` | Federation statistics with drill-down views. |
 
 Appeals are submitted by the banned user in bot DM through a deep link. Command prefixes are configurable (default `/`, `!`, `.`).
@@ -103,6 +104,7 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 | `WARN_LIMIT` | `3` | Per-group warns triggering auto-ban (minimum `1`, fires at or above the limit). |
 | `FED_WARN_LIMIT` | `0` (disabled) | Federation-wide warns triggering auto-ban. |
 | `WARN_EXPIRY_DAYS` | `0` (disabled) | Days after which warn counts expire via a daily job. |
+| `SYNC_INTERVAL_HOURS` | `0` (disabled) | Hours between scheduled enforcement-sync sweeps (manual `/tcsync` only when disabled). |
 
 ### Timeouts and modules
 

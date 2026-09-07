@@ -173,6 +173,17 @@ Single source of truth for all Telegram HTML markup. Both the utils layer (e.g. 
 
 Always import from `tcbot.utils.formatter`.
 
+## `transport.py`
+
+Single owner for the outbound Telegram transport tuning used by every runtime entry point.
+
+| Constant | Purpose |
+|---|---|
+| `HTTP_READ_TIMEOUT` / `HTTP_WRITE_TIMEOUT` / `HTTP_CONNECT_TIMEOUT` / `HTTP_POOL_TIMEOUT` | Seconds for the PTB `ApplicationBuilder` HTTP timeouts. |
+| `API_POOL_SIZE` | Connection pool size for the underlying httpx client. |
+
+Both `tcbot/__main__.py` (webhook and polling) and `tcbot/serverless.py` (Vercel) import these instead of redefining them, so timeout and pool behavior stays identical across transports.
+
 ## Utility boundaries
 
 - Keep generic runtime concerns in `utils/`.

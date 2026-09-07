@@ -53,6 +53,7 @@ deployment, see [`../replit.md`](../replit.md). For contribution workflow, see
 | [Connecting](features/moderation/connecting.md) | `/tcconnect` and bot-added prompt, complete_join behavior, ban/mute replay, and edge cases. |
 | [Disconnecting](features/moderation/disconnecting.md) | `/tcdisconnect` and `/rmtc` group disconnect, parallel deactivation, and edge cases. |
 | [Groups](features/moderation/groups.md) | `/tcgroups` connected-groups list, keyboard navigation, and edge cases. |
+| [Sync](features/moderation/sync.md) | `/tcsync` enforcement reconciliation sweep, single-user verification, and scheduling. |
 | [Roles](features/roles/roles.md) | Founder, Admin, Developer, and Tester hierarchy and safety rules. |
 | [Promote](features/roles/promote.md) | `/tcpromote`, direct and request-based promotion, callbacks, and edge cases. |
 | [Demote](features/roles/demote.md) | `/tcdemote`, automatic demotion, permission rules, and audit logging. |

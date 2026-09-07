@@ -69,6 +69,7 @@ help-discovery convention, not a handler-registration switch.
 | `maintenance.py` | `Maintenance` | `/leaveall`, `/exitall`, `/tcleave`, `/cleanup`, `/tcclean`, `/tcc` | Emergency leave-all and staff cleanup operations. |
 | `muting.py` | `Mute` | `/tcmute`, `/tcm`, `/tcunmute`, `/tcunm`, `/tcum` | Federation-wide mute conversation and direct unmute. |
 | `stats.py` | `Stats` | `/tcstats`, `/tcs` plus stats callbacks | Summary, staff list, active bans, connected chats, search/detail callbacks. |
+| `syncing.py` | `Sync` | `/tcsync`, `/tcsynchronize` | Bounded enforcement reconciliation sweep plus single-user verification; shares its core with the optional scheduled sync job. |
 | `unbanning.py` | `Unban` | `/tcunban`, `/tcunb` | Developer+ federation unban. |
 | `warnings.py` | `Warnings` | `/tcwarn`, `/tcw`, `/tcunwarn`, `/tcunw`, `/warns`, `/warnlist`, `/resetwarns`, `/clearwarns` | Warning conversation and direct warning management commands. |
 | `netspeed.py` | `Netspeed` | `/ping`, `/p`, `/speedtest`, `/st` | Founder-only network diagnostics: API round-trip latency ping and full bandwidth speed test via `speedtest-cli` in a thread executor. |
