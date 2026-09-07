@@ -318,6 +318,11 @@ async def stop() -> None:
                 "APScheduler background task did not stop within %.0fs.",
                 _STOP_TIMEOUT_S,
             )
+            # * A stuck task left running would own a second live scheduler
+            # * next start(): cancel it so shutdown never orphans execution.
+            # * wait_for already gave up awaiting; cancel only signals.
+            if not _sched_task.done():
+                _sched_task.cancel()
     _sched_task = None
     _sched_ready = None
     _sched_stop = None

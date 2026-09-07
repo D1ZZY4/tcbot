@@ -33,8 +33,13 @@ log = logging.getLogger(__name__)
 
 # ────────────────────── Module-level state ──────────────────────── #
 # * Single shared async client; None until connect() succeeds.
+# * The pool is tracked separately because redis-py leaves pool
+# * lifecycle to the caller when a pool is passed explicitly to
+# * Redis(connection_pool=...): client.aclose() alone does not
+# * disconnect it (verified against the installed redis-py source).
 
 _client: aioredis.Redis | None = None
+_pool: aioredis.ConnectionPool | None = None
 
 # ─────────────── Connection pool / socket parameters ────────────── #
 
@@ -63,7 +68,7 @@ async def connect(url: str) -> None:
             "hiredis C extension is required when REDIS_URL is set. "
             "Install with: pip install 'redis[hiredis]'"
         )
-    global _client
+    global _client, _pool
     pool = aioredis.ConnectionPool.from_url(
         url,
         decode_responses=True,
@@ -73,17 +78,41 @@ async def connect(url: str) -> None:
         health_check_interval=_HEALTH_CHECK_INTERVAL_S,
     )
     c = aioredis.Redis(connection_pool=pool)
-    await c.ping()
+    try:
+        await c.ping()
+    except Exception:
+        # * A failed PING must not orphan the pool's sockets: the pool was
+        # * passed explicitly, so client.aclose() would leave it behind.
+        try:
+            await pool.aclose()
+        except Exception as exc:
+            log.debug("Redis pool cleanup after failed PING: %s", exc)
+        raise
     _client = c
+    _pool = pool
     log.info("Redis connected (hiredis %s).", _HIREDIS_VERSION)
 
 
 async def close() -> None:
     """Close the Redis client and release all pooled connections."""
-    global _client
+    global _client, _pool
     if _client is not None:
-        await _client.aclose()
-        _client = None
+        try:
+            await _client.aclose()
+        except Exception as exc:
+            # * Debug-level: close() runs on the shutdown path where the
+            # * pool disconnect below matters more than a client error.
+            log.debug("Redis client aclose failed: %s", exc)
+        finally:
+            _client = None
+    # * Explicit pool disconnect: with an explicitly passed pool the
+    # * client does not own it, so this is what actually releases sockets.
+    pool, _pool = _pool, None
+    if pool is not None:
+        try:
+            await pool.aclose()
+        except Exception as exc:
+            log.debug("Redis pool disconnect failed: %s", exc)
         log.info("Redis disconnected.")
 
 
