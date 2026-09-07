@@ -135,87 +135,110 @@ async def extract_target(
     if msg is None:
         return None, None
 
-    # * Priority 1: Reply target (most common use case)
+    # * Each stage returns a hit or None (fall through to the next
+    # * stage). The order below is the documented priority; stages are
+    # * split out so each is independently testable with fakes.
+    hit = await _reply_target(msg)
+    if hit is not None:
+        return hit
+    if args:
+        hit = await _args_target(args, bot)
+        if hit is not None:
+            return hit
+    hit = await _entity_target(msg, bot)
+    if hit is not None:
+        return hit
+    return None, None
+
+
+async def _reply_target(msg: Message) -> tuple[int, str] | None:
+    """Priority 1: reply sender, skipping placeholders and channel posts."""
     # * Skip GroupAnonymousBot (id 1087968824): it is a Telegram pseudo-user
     # * that appears as `from_user` when an anonymous admin sends a message.
     # * Targeting it would attempt to act on the placeholder, not a real user.
     # * Similarly skip the Telegram service account (777000) and channel posts.
-    if msg.reply_to_message:
-        target_msg = msg.reply_to_message
-        _skip_sender_chat = False
-        if target_msg.from_user:
-            u: User = target_msg.from_user
-            if u.id not in (ANONYMOUS_BOT_ID, TELEGRAM_USER_ID):
-                return u.id, u.first_name or await _best_name(u.id)
-            # * When from_user is GroupAnonymousBot (1087968824), sender_chat is the
-            # * group itself (not an individual user). Returning it as the target would
-            # * cause downstream fan-out to try to ban a group ID from itself, which
-            # * always fails. Skip sender_chat so we fall through to args/entities.
-            if u.id == ANONYMOUS_BOT_ID:
-                _skip_sender_chat = True
+    if not msg.reply_to_message:
+        return None
+    target_msg = msg.reply_to_message
+    _skip_sender_chat = False
+    if target_msg.from_user:
+        u: User = target_msg.from_user
+        if u.id not in (ANONYMOUS_BOT_ID, TELEGRAM_USER_ID):
+            return u.id, u.first_name or await _best_name(u.id)
+        # * When from_user is GroupAnonymousBot (1087968824), sender_chat is the
+        # * group itself (not an individual user). Returning it as the target would
+        # * cause downstream fan-out to try to ban a group ID from itself, which
+        # * always fails. Skip sender_chat so we fall through to args/entities.
+        if u.id == ANONYMOUS_BOT_ID:
+            _skip_sender_chat = True
 
-        if not _skip_sender_chat and target_msg.sender_chat:
-            c: Chat = target_msg.sender_chat
-            # * Channel senders are not actionable moderation targets:
-            # * ban/restrict expect user IDs, so a channel ID would only
-            # * create an unenforceable DB row. Fall through to args and
-            # * entities instead of returning it (mirrors has_reply_target).
-            if c.type != Chat.CHANNEL:
-                return c.id, c.title or await _best_name(c.id)
+    if not _skip_sender_chat and target_msg.sender_chat:
+        c: Chat = target_msg.sender_chat
+        # * Channel senders are not actionable moderation targets:
+        # * ban/restrict expect user IDs, so a channel ID would only
+        # * create an unenforceable DB row. Fall through to args and
+        # * entities instead of returning it (mirrors has_reply_target).
+        if c.type != Chat.CHANNEL:
+            return c.id, c.title or await _best_name(c.id)
+    return None
 
-    # * Priority 2 & 3: Explicit args (full ID/username or partial name search)
-    if args:
-        arg = args[0].lstrip("@")
 
-        # * Priority 2a: Numeric ID
-        if arg.lstrip("-").isdigit():
-            uid = int(arg)
-            # * Fast path: IDs are immutable, so a cached identity is
-            # * authoritative for resolution and the live get_chat round
-            # * trip (a full _GET_CHAT_TIMEOUT on a blip) can be skipped.
-            # * Only real cached names count: bare-numeric and legacy
-            # * "User <id>" fallbacks fall through to the live lookup,
-            # * exactly like the outage path below already does.
-            try:
-                cached_name = await db.users_cache.get_first_name(uid, "")
-            except Exception as exc:
-                log.debug("numeric fast-path cache read failed for %d: %s", uid, exc)
-                cached_name = ""
-            if (
-                cached_name
-                and not cached_name.lstrip("-").isdigit()
-                and not cached_name.startswith("User ")
-            ):
-                return uid, cached_name
-            chat_first: str | None = None
-            chat_username: str | None = None
-            if bot:
-                chat = await _safe_get_chat(bot, uid)
-                if chat is not None:
-                    chat_first = chat.first_name
-                    chat_username = chat.username
-            return uid, await _best_name(uid, chat_first, chat_username)
+async def _args_target(args: list[str], bot: Bot | None) -> tuple[int, str] | None:
+    """Priorities 2-3: numeric ID, @username, then partial name search."""
+    arg = args[0].lstrip("@")
 
-        # * Priority 2b: @username lookup
-        if bot and arg:
-            chat = await _safe_get_chat(bot, f"@{arg}")
+    # * Priority 2a: Numeric ID
+    if arg.lstrip("-").isdigit():
+        uid = int(arg)
+        # * Fast path: IDs are immutable, so a cached identity is
+        # * authoritative for resolution and the live get_chat round
+        # * trip (a full _GET_CHAT_TIMEOUT on a blip) can be skipped.
+        # * Only real cached names count: bare-numeric and legacy
+        # * "User <id>" fallbacks fall through to the live lookup,
+        # * exactly like the outage path below already does.
+        try:
+            cached_name = await db.users_cache.get_first_name(uid, "")
+        except Exception as exc:
+            log.debug("numeric fast-path cache read failed for %d: %s", uid, exc)
+            cached_name = ""
+        if (
+            cached_name
+            and not cached_name.lstrip("-").isdigit()
+            and not cached_name.startswith("User ")
+        ):
+            return uid, cached_name
+        chat_first: str | None = None
+        chat_username: str | None = None
+        if bot:
+            chat = await _safe_get_chat(bot, uid)
             if chat is not None:
-                return chat.id, await _best_name(
-                    chat.id, chat.first_name, chat.username, arg
-                )
+                chat_first = chat.first_name
+                chat_username = chat.username
+        return uid, await _best_name(uid, chat_first, chat_username)
 
-        # * Priority 3: Partial name search in users_cache
-        # * Uses a server-side regex query capped at 5 results; avoids loading
-        # * the entire user cache into Python for a linear scan.
-        if arg:
-            matches = await db.users_cache.search_by_name(arg)
-            if matches:
-                user = matches[0]
-                uid = user.get("user_id")
-                if uid:
-                    return uid, user.get("first_name") or await _best_name(uid)
+    # * Priority 2b: @username lookup
+    if bot and arg:
+        chat = await _safe_get_chat(bot, f"@{arg}")
+        if chat is not None:
+            return chat.id, await _best_name(
+                chat.id, chat.first_name, chat.username, arg
+            )
 
-    # * Priority 4: Text mention entity
+    # * Priority 3: Partial name search in users_cache
+    # * Uses a server-side regex query capped at 5 results; avoids loading
+    # * the entire user cache into Python for a linear scan.
+    if arg:
+        matches = await db.users_cache.search_by_name(arg)
+        if matches:
+            user = matches[0]
+            uid = user.get("user_id")
+            if uid:
+                return uid, user.get("first_name") or await _best_name(uid)
+    return None
+
+
+async def _entity_target(msg: Message, bot: Bot | None) -> tuple[int, str] | None:
+    """Priorities 4-5: text-mention entity, then @mention entity."""
     for ent in msg.entities or []:
         if ent.type == "text_mention" and ent.user:
             u = ent.user
@@ -223,7 +246,6 @@ async def extract_target(
                 continue
             return u.id, u.first_name or await _best_name(u.id)
 
-    # * Priority 5: @Mention entity
     if bot:
         # * Telegram entity offsets are UTF-16 code units, not Python str
         # * indices. Slicing the str directly misaligns past any emoji
@@ -250,7 +272,7 @@ async def extract_target(
                 if chat is not None:
                     return chat.id, await _best_name(chat.id, chat.first_name, uname)
 
-    return None, None
+    return None
 
 
 async def _fetch_live_identity(
