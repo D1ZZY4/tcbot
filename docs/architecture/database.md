@@ -48,9 +48,9 @@ flowchart TD
 | `warns_db.py` | `warns`, `warn_counts` | Warning history, warning counters, backfill/sync, remove latest warning, clear warnings. |
 | `kicks_db.py` | `kicks` | Kick audit records. |
 | `mutes_db.py` | `mutes`, `active_mutes` | Mute audit records (`mutes`). Active-mute store (`active_mutes`): one document per muted user, used to re-apply restrictions on join and on group connect. `set_active_mute` / `clear_active_mute` / `get_active_mute` / `active_mute_docs`. |
-| `queues_db.py` | `promotion_requests` | Queued Admin promotion requests and resolution status. |
+| `queues_db.py` | `promotion_requests` | Queued Admin promotion requests and resolution status. `enqueue` retries once with a fresh ID on a random-ID collision (mirrors `bans_db.create_ban`); a second `DuplicateKeyError` propagates so the caller reports a real pending duplicate. |
 | `cache.py` | in-process + Redis | `TTLCache[T]` (L1 in-process) and `TwoLevelCache[T]` (L1 in-process + L2 Redis). Five public singletons: `effective_role_cache`, `connected_cache`, `active_groups_cache`, `owner_id_cache`, `user_mention_cache`. Key methods: `get`/`put`/`invalidate` (sync, L1 plus FIFO Redis mutation queue shared by each Redis prefix), `get_or_fetch` (async, L1 -> L2 -> DB, primary hot-path), `clear` (sync, L1 only; does **not** touch Redis), `clear_all` (async, L1 + Redis SCAN+UNLINK; use when the invalidation key is unknown). Redis keys use the `v2` namespace and tagged JSON values restore `datetime` and `ObjectId` types on cache hits. |
-| `redis_client.py` | Redis (optional) | Async Redis client singleton via `redis.asyncio.ConnectionPool`. `connect(url)` creates the pool and runs `PING`. `client()` returns the active client or `None` when Redis is not configured. `hiredis` C extension is optional and only used when `REDIS_URL` is set. |
+| `redis_client.py` | Redis (optional) | Async Redis client singleton via `redis.asyncio.ConnectionPool`. `connect(url)` creates the pool and runs `PING`. `client()` returns the active client or `None` when Redis is not configured. `hiredis` C extension is optional and only used when `REDIS_URL` is set. The pool is tracked separately and disconnected explicitly on `close()` and on a failed `PING`: with an explicitly passed pool the client does not own it, so `aclose()` alone would leak sockets. |
 | `scheduler.py` | MongoDB (APScheduler) | APScheduler 3.11.3 `AsyncIOScheduler` backed by `MongoDBJobStore`. The scheduler supports persistent one-off unban jobs and the optional recurring warn-expiry job; the current ban command does not create timed-ban schedules. Member-cache cleanup is handled by a MongoDB TTL index, not a scheduler job. Background asyncio task owns the stop event and shutdown sequence (`_sched_stop` + `scheduler.shutdown(wait=False)` with a 10 s join). `start()` reports readiness only after recurring schedules are registered and background execution starts; initialization failures propagate instead of leaving a dead scheduler. `is_ready()` returns `True` when that startup sequence has completed. |
 | `documents.py` | type-only | `TypedDict` document shapes and `Literal` aliases. |
 | `types.py` | type-only | `NewType` primitives such as `UserId`, `GroupId`, `ChatId`, and `BanId`. |
@@ -226,12 +226,14 @@ distribution.
 `TwoLevelCache[T]`: wraps `TTLCache[T]` and adds an optional Redis L2 layer.
 When Redis is available, `get_or_fetch` checks L1, then L2 (bounded by a
 1.0 s timeout so a stalled Redis falls through to the DB fetch), then calls
-the DB fetch coroutine and populates both layers. `put` and `invalidate` operate on
-L1 synchronously and enqueue FIFO Redis writes/deletes shared by cache objects
-using the same prefix. `clear_all` enqueues a prefix-wide `SCAN` and `UNLINK`
-after earlier mutations. Redis keys use the `v2` namespace, and tagged JSON
-restores `datetime` and `ObjectId` values while untagged legacy JSON remains
-readable. When Redis is not configured, the cache uses in-process behavior.
+the DB fetch coroutine and populates both layers. A payload-encode failure
+degrades to L1-only instead of failing the fetch that just succeeded. `put`
+and `invalidate` operate on L1 synchronously and enqueue FIFO Redis
+writes/deletes shared by cache objects using the same prefix. `clear_all`
+enqueues a prefix-wide `SCAN` and `UNLINK` after earlier mutations. Redis keys
+use the `v2` namespace, and tagged JSON restores `datetime` and `ObjectId`
+values while untagged legacy JSON remains readable. When Redis is not
+configured, the cache uses in-process behavior.
 
 `CACHE_MISS` sentinel: compare with `is CACHE_MISS` to detect a miss. Distinct from `None` because `None` is a valid cached value (for example, a user with no role).
 
@@ -254,7 +256,7 @@ Write helpers must invalidate or refresh related cache entries. Role writes inva
 | Export | Purpose |
 |---|---|
 | `start(mongodb_uri, db_name, warn_expiry_days)` | Spawns the background asyncio task, waits until the scheduler is ready. |
-| `stop()` | Sets the stop event; waits up to 10 s for graceful shutdown. |
+| `stop()` | Sets the stop event; waits up to 10 s for graceful shutdown, then cancels a stuck task so shutdown never orphans a live scheduler into the next `start()`. |
 | `schedule_unban(ban_id, user_id, run_at)` | Registers a persistent one-off `DateTrigger` unban job. Returns the schedule ID. |
 | `cancel_schedule(schedule_id)` | Removes a schedule by ID. Returns `True` if found, `False` if already fired or never created. |
 

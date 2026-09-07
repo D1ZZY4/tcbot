@@ -55,6 +55,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Documentation
 
+- **Database doc sync** (`docs/architecture/database.md`): `redis_client.py` row notes explicit pool ownership, `stop()` row notes stuck-task cancellation, `queues_db.py` row notes the enqueue ID-collision retry, and the cache section notes L1-only degradation on payload-encode failure.
+
 - **Appeal doc sync** (`docs/features/appeals.md`, `docs/architecture/workflows.md`): removed the duplicated approval sentence; rejection steps now state the parallel cooldown-write plus name-read and the parallel DM/edit/clear batch; workflows appeal bullet notes the cancel-propagates contract; behavior reference gains the shared-gate bullet.
 
 - **GitHub Actions automation tutorial** (`README.md`): new collapsible block in the `Deployment` section covering all four CI workflows (Lint triggers and gate steps, Auto-Fix branch-versus-comment behavior with its permissions, Dependency Updates cadence plus PR branch/label and conditional Telegram DM, CodeQL languages and schedule), each verified against the workflow files. Points at `docs/operations/ci-cd.md` for the full reference. No code or behavior change.
