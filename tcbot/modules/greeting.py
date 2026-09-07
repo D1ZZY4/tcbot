@@ -40,6 +40,67 @@ log = logging.getLogger(__name__)
 _MAX_CONCURRENT_JOINS: int = 10
 
 
+async def _in_federation(chat_id: int, *, action: str) -> bool | None:
+    """Return True when join events in ``chat_id`` must be enforced.
+
+    Primary groups always qualify; other chats qualify only while their
+    connected row is active (cache-backed, negligible latency). Returns
+    ``None`` on a lookup outage so the caller stays silent instead of
+    enforcing blind or greeting an unverified joiner.
+    """
+    if cfg.is_primary_group(chat_id):
+        return True
+    try:
+        return await db.groups_db.is_connected(chat_id)
+    except Exception as exc:
+        log.warning(
+            "is_connected check failed for chat=%d on %s: %s", chat_id, action, exc
+        )
+        return None
+
+
+async def _auto_demote_for_enforcement(
+    bot: Bot, user_id: int, first_name: str, *, trigger: str
+) -> None:
+    """Best-effort demote of a role-holding target before join enforcement.
+
+    Shared by the ban and mute branches of both join paths
+    (``_handle_member`` and ``on_join_request_approved``), which carried
+    four identical copies: guarded role lookup, ``Demote.execute``, loud
+    logs. A lookup or demote failure never skips enforcement below (the
+    DB record already exists; enforcement is the side effect), it only
+    logs loudly and proceeds as non-staff.
+    """
+    try:
+        target_role = await db.users_roles.get_effective_role(user_id)
+    except Exception:
+        log.exception(
+            "Role lookup failed on join %s for uid=%d; proceeding anyway",
+            trigger,
+            user_id,
+        )
+        return
+    if not target_role:
+        return
+    try:
+        await Demote.execute(
+            bot,
+            user_id,
+            first_name or str(user_id),
+            target_role,
+            0,
+            "",
+            trigger=trigger,
+        )
+    except Exception:
+        log.exception(
+            "Auto-demote on join %s failed for uid=%d role=%s",
+            trigger,
+            user_id,
+            target_role,
+        )
+
+
 # ───────────────────────── Member Handlers ──────────────────────── #
 
 
@@ -80,43 +141,12 @@ async def _handle_member(
         _enforcement_blind = True
 
     if ban:
-        # * Auto-demote before enforcing the chat-level ban, matching the
-        # * role-vs-state invariant upheld by banning.py / kicking.py / muting.py
-        # * (commit 0bbc3cc). A banned user must not still hold a federation
-        # * role; if they do, demote them here so the role is consistent with
-        # * the ban. The demote is best-effort: if it fails (DB outage, race,
-        # * etc.) we still proceed with the chat-level ban because the user IS
-        # already banned in the DB -- the chat-level ban is just the side-effect
-        # enforcement. The reply below surfaces the partial state.
-        # * The role lookup is guarded too: a transient failure must not skip
-        # * the chat-level ban below (the user IS banned in the DB). Demote is
-        # * best-effort here, so proceed as non-staff with a loud log instead.
-        try:
-            target_role = await db.users_roles.get_effective_role(member.id)
-        except Exception:
-            log.exception(
-                "Role lookup failed on join-auto-ban for uid=%d; "
-                "proceeding with ban anyway",
-                member.id,
-            )
-            target_role = None
-        if target_role:
-            try:
-                await Demote.execute(
-                    bot,
-                    member.id,
-                    member.first_name or str(member.id),
-                    target_role,
-                    0,
-                    "",
-                    trigger="ban",
-                )
-            except Exception:
-                log.exception(
-                    "Auto-demote on join-auto-ban failed for uid=%d role=%s",
-                    member.id,
-                    target_role,
-                )
+        # * Best-effort auto-demote keeps the role-vs-state invariant (a
+        # * banned user must not hold a federation role); enforcement below
+        # * runs regardless because the DB record already exists.
+        await _auto_demote_for_enforcement(
+            bot, member.id, member.first_name, trigger="ban"
+        )
         coros: list = []
         try:
             await bot.ban_chat_member(chat.id, member.id)
@@ -153,38 +183,10 @@ async def _handle_member(
         return
 
     if mute:
-        # * Muted staff must not keep their role while restricted, matching
-        # * the ban branch above. Best-effort: a demote failure still leaves
-        # * the restrict below as the enforcement side-effect. The lookup
-        # * itself is guarded for the same reason: a transient failure must
-        # * not skip the re-apply, so proceed as non-staff with a loud log.
-        try:
-            mute_role = await db.users_roles.get_effective_role(member.id)
-        except Exception:
-            log.exception(
-                "Role lookup failed on join-mute for uid=%d; "
-                "proceeding with restrict anyway",
-                member.id,
-            )
-            mute_role = None
-        if mute_role:
-            try:
-                await Demote.execute(
-                    bot,
-                    member.id,
-                    member.first_name or str(member.id),
-                    mute_role,
-                    0,
-                    "",
-                    trigger="mute",
-                )
-            except Exception:
-                log.exception(
-                    "Auto-demote on join-mute failed for uid=%d role=%s",
-                    member.id,
-                    mute_role,
-                )
-        until = mute.get("until_date") if mute else None
+        await _auto_demote_for_enforcement(
+            bot, member.id, member.first_name, trigger="mute"
+        )
+        until = mute.get("until_date")
         perms = ChatPermissions(can_send_messages=False)
         try:
             await bot.restrict_chat_member(
@@ -232,18 +234,9 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     is_primary = cfg.is_primary_group(chat.id)
 
-    if not is_primary:
-        # * Only act in connected federation groups; skip all other chats.
-        # * is_connected is cache-backed so this adds negligible latency.
-        try:
-            connected = await db.groups_db.is_connected(chat.id)
-        except Exception as exc:
-            log.warning(
-                "is_connected check failed for chat=%d on new_member: %s", chat.id, exc
-            )
-            return
-        if not connected:
-            return
+    # * Only act in connected federation groups; skip all other chats.
+    if not await _in_federation(chat.id, action="new_member"):
+        return
 
     # * Process all new members concurrently but bounded; handles batch
     # * joins via invite links without exhausting the MongoDB pool or
@@ -289,19 +282,8 @@ async def on_join_request_approved(
         return
 
     chat = cmu.chat
-    is_primary = cfg.is_primary_group(chat.id)
-    if not is_primary:
-        try:
-            connected = await db.groups_db.is_connected(chat.id)
-        except Exception as exc:
-            log.warning(
-                "is_connected check failed for chat=%d on join_request_approved: %s",
-                chat.id,
-                exc,
-            )
-            return
-        if not connected:
-            return
+    if not await _in_federation(chat.id, action="join_request_approved"):
+        return
 
     # * Identity harvest in parallel with mute/ban lookups.
     # * harvest_user_identity skips the DB write when identity is unchanged (L1 hit).
@@ -327,36 +309,9 @@ async def on_join_request_approved(
         # * well; ban_chat_member on an already-removed user is benign.
         # * Checked before the mute-failure early-return below so a mute-DB
         # * outage cannot disable ban enforcement on this path.
-        # * Auto-demote first (best-effort), matching _handle_member: a banned
-        # * user must not keep a federation role. The lookup is guarded: a
-        # * transient failure must not skip the ban below, so proceed as
-        # * non-staff with a loud log instead.
-        try:
-            target_role = await db.users_roles.get_effective_role(user.id)
-        except Exception:
-            log.exception(
-                "Role lookup failed on join_request_approved ban for uid=%d; "
-                "proceeding with ban anyway",
-                user.id,
-            )
-            target_role = None
-        if target_role:
-            try:
-                await Demote.execute(
-                    ctx.bot,
-                    user.id,
-                    user.first_name or str(user.id),
-                    target_role,
-                    0,
-                    "",
-                    trigger="ban",
-                )
-            except Exception:
-                log.exception(
-                    "Auto-demote on join_request_approved ban failed for uid=%d role=%s",
-                    user.id,
-                    target_role,
-                )
+        await _auto_demote_for_enforcement(
+            ctx.bot, user.id, user.first_name, trigger="ban"
+        )
         try:
             await ctx.bot.ban_chat_member(chat.id, user.id)
         except Exception:
@@ -377,36 +332,9 @@ async def on_join_request_approved(
     if not mute:
         return
 
-    # * Muted staff must not keep their role while restricted (best-effort),
-    # * matching _handle_member and the ban branch above. The lookup is
-    # * guarded for the same reason: proceed as non-staff with a loud log
-    # * instead of skipping the re-apply.
-    try:
-        mute_role = await db.users_roles.get_effective_role(user.id)
-    except Exception:
-        log.exception(
-            "Role lookup failed on join_request_approved mute for uid=%d; "
-            "proceeding with restrict anyway",
-            user.id,
-        )
-        mute_role = None
-    if mute_role:
-        try:
-            await Demote.execute(
-                ctx.bot,
-                user.id,
-                user.first_name or str(user.id),
-                mute_role,
-                0,
-                "",
-                trigger="mute",
-            )
-        except Exception:
-            log.exception(
-                "Auto-demote on join_request_approved mute failed for uid=%d role=%s",
-                user.id,
-                mute_role,
-            )
+    await _auto_demote_for_enforcement(
+        ctx.bot, user.id, user.first_name, trigger="mute"
+    )
     until = mute.get("until_date")
     perms = ChatPermissions(can_send_messages=False)
     try:
@@ -449,20 +377,8 @@ async def on_join_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     chat = request.chat
-    is_primary = cfg.is_primary_group(chat.id)
-
-    if not is_primary:
-        try:
-            connected = await db.groups_db.is_connected(chat.id)
-        except Exception as exc:
-            log.warning(
-                "is_connected check failed for chat=%d on join_request: %s",
-                chat.id,
-                exc,
-            )
-            return
-        if not connected:
-            return
+    if not await _in_federation(chat.id, action="join_request"):
+        return
 
     # * Opportunistic identity harvest + ban check in parallel.
     # * harvest_user_identity skips the DB write when identity is unchanged (L1 hit).

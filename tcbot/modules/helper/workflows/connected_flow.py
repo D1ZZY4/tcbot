@@ -32,6 +32,8 @@ from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
 if TYPE_CHECKING:
     from telegram.ext import ContextTypes
 
+    from tcbot.database.documents import ActiveMuteDoc
+
 log = logging.getLogger(__name__)
 
 
@@ -183,6 +185,43 @@ class BuildConnection:
 
     # ── Connection executor ────────────────────────────────────────────────
 
+    @staticmethod
+    async def _replay_bans(bot: Bot, chat_id: int, ban_uids: list[int]) -> int:
+        """Fan out every active federation ban into the new group.
+
+        Returns the applied count. Uses ``count_transient_errors`` (not
+        ``count_errors``) so a "user was not in this chat" BadRequest does
+        not count as a real failure: for a ban-replay, the user not being
+        in the chat is the desired end state.
+        """
+        results = await fan_out([bot.ban_chat_member(chat_id, uid) for uid in ban_uids])
+        return len(results) - count_transient_errors(results)
+
+    @staticmethod
+    async def _replay_mutes(
+        bot: Bot, chat_id: int, mute_docs: list[ActiveMuteDoc]
+    ) -> int:
+        """Fan out every active federation mute into the new group.
+
+        Returns the applied count. Benign "user not in chat" or "user is
+        a bot" refusals do not count as failures: the desired end state
+        is that the user is restricted, and they were never in the chat
+        to begin with.
+        """
+        _mute_perms = ChatPermissions(can_send_messages=False)
+        mute_results = await fan_out(
+            [
+                bot.restrict_chat_member(
+                    chat_id,
+                    int(doc.get("user_id", 0)),
+                    permissions=_mute_perms,
+                    until_date=doc.get("until_date"),
+                )
+                for doc in mute_docs
+            ]
+        )
+        return len(mute_results) - count_transient_errors(mute_results)
+
     async def complete_join(
         self,
         chat_id: int,
@@ -246,32 +285,10 @@ class BuildConnection:
             except RuntimeError:
                 log.debug("Harvest task skipped: no running event loop.")
 
-        # * Apply all existing federation bans concurrently - semaphore-bounded.
-        # * Use count_transient_errors (not count_errors) so a "user was not in
-        # * this chat" BadRequest does not count as a real failure. For a
-        # * ban-replay, the user not being in the chat is the desired end
-        # * state -- counting it as a failure would overstate the failure rate.
-        results = await fan_out([bot.ban_chat_member(chat_id, uid) for uid in ban_uids])
-        applied_bans = len(results) - count_transient_errors(results)
-
-        # * Apply all existing federation mutes concurrently - semaphore-bounded.
-        # * Use count_transient_errors (not count_errors) so a benign
-        # * "user not in chat" or "user is a bot" BadRequest does not count
-        # * as a real failure -- the desired end state is that the user is
-        # * restricted, and they were never in the chat to begin with.
-        _mute_perms = ChatPermissions(can_send_messages=False)
-        mute_results = await fan_out(
-            [
-                bot.restrict_chat_member(
-                    chat_id,
-                    doc.get("user_id", 0),
-                    permissions=_mute_perms,
-                    until_date=doc.get("until_date"),
-                )
-                for doc in mute_docs
-            ]
-        )
-        applied_mutes = len(mute_results) - count_transient_errors(mute_results)
+        # * Replay stages run back to back: bans first, then mutes. Each
+        # * stage is semaphore-bounded internally via fan_out().
+        applied_bans = await self._replay_bans(bot, chat_id, ban_uids)
+        applied_mutes = await self._replay_mutes(bot, chat_id, mute_docs)
 
         lc, lt = cfg.logs
         try:
