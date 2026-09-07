@@ -27,6 +27,10 @@ line-length = 88
 target-version = "py314"
 exclude = [".local/", ".agents/", ".kilo/", ".claude/", "attached_assets/"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
 [tool.ruff.lint]
 select = ["B", "C4", "D", "E4", "E7", "E9", "F", "FBT", "I", "PERF", "PIE", "PLC", "PLE", "PTH", "RET", "RUF", "SIM", "TC", "TRY400", "TRY401", "UP", "W"]
 ignore = [
@@ -37,3 +41,6 @@ ignore = [
     "TC004",   # Same: runtime import for local annotations on runtime values
     "UP047",   # Generic functions: TypeVar-based style kept for ratelimiter compatibility
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]  # Test functions need no docstrings; module docs stay required
