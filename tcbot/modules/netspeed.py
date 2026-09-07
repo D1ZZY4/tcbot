@@ -147,6 +147,18 @@ def _run_speedtest() -> dict:
     return {}
 
 
+# * Ookla builds the share link as plain http
+# * (``http://www.speedtest.net/result/<id>.png`` in speedtest-cli 2.1.x),
+# * which Telegram fetches server-side for sendPhoto, so both schemes are
+# * accepted and only non-http(s) values fall back to text.
+def _share_photo_url(result: dict) -> str | None:
+    """Return the Ookla share image URL when it uses http(s), else None."""
+    share_url = result.get("share")
+    if isinstance(share_url, str) and share_url.startswith(("http://", "https://")):
+        return share_url
+    return None
+
+
 # ──────────────────────── Command handlers ──────────────────────── #
 
 
@@ -258,10 +270,9 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     except TypeError:
         await _parse_failed()
         return
-    share_url: str | None = result.get("share")
-    if share_url and not share_url.startswith("https://"):
-        log.warning("Speedtest returned non-https share URL; sending text only")
-        share_url = None
+    share_url = _share_photo_url(result)
+    if result.get("share") and not share_url:
+        log.warning("Speedtest returned non-http(s) share URL; sending text only")
     try:
         if share_url:
             # * Edit the "please wait" notice to the result text and send the
