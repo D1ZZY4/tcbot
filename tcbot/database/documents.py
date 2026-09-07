@@ -13,6 +13,8 @@ from tcbot.database.types import BanId, ChatId, GroupId, UserId
 if TYPE_CHECKING:
     from datetime import datetime
 
+    from bson import ObjectId
+
 RoleName = Literal["founder", "admin", "developer", "tester"]
 RequestStatus = Literal["pending", "approved", "rejected"]
 
@@ -144,7 +146,7 @@ class ActiveMuteDoc(TypedDict, total=False):
 class WarnDoc(TypedDict, total=False):
     """MongoDB document for a single warning issued to a user."""
 
-    _id: object
+    _id: ObjectId
     user_id: UserId
     reason: str
     admin_id: UserId

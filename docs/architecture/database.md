@@ -164,7 +164,7 @@ Key helper functions:
 - `bans_db.deactivate_extra_active_bans(user_id, keep_ban_id)`: marks all active bans for a user inactive except the one matching `keep_ban_id`. Used by the ban-update path to clean up duplicate active records before writing the canonical update.
 - `bans_db.set_review(...)` / `bans_db.set_appeal_log_msg(...)`: store appeal/review metadata on an existing ban.
 - `bans_db.set_review_if_absent(...)`: atomic variant used by appeal submission; claims the pending-review slot only when none is stored and returns whether this submit won, so concurrent duplicate submits cannot overwrite each other.
-- `bans_db.active_bans()` / `bans_db.active_ban_count()` / `bans_db.active_ban_user_ids()`: federation-wide active ban queries.
+- `bans_db.active_ban_count()` / `bans_db.active_ban_user_ids()`: federation-wide active ban queries. List views page through `bans_db.active_bans_page(skip, limit)` so only the visible slice travels over the wire; the unbounded `active_bans()` full-list helper was removed once every caller used the paged path.
 - `bans_db.active_bans_page(skip, limit)` / `bans_db.active_bans_for_users(ids)` / `bans_db.user_appealable_bans(user_id)`: server-side paged/filtered variants for list views, name search, and the appeals drill-down.
 - `bans_db.user_bans(user_id)` / `bans_db.user_ban_count(user_id)`: per-user ban history (all records, active and inactive).
 - `bans_db.user_appeal_count(user_id)`: count of submitted appeals for a user.

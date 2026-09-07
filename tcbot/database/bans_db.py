@@ -291,25 +291,11 @@ async def active_ban_count() -> int:
     return await db_call(_bans().count_documents({"is_active": True}))
 
 
-async def active_bans() -> list[BanDoc]:
-    """Get all active ban records in the database."""
-    return await db_call(
-        _bans()
-        .find(
-            {"is_active": True},
-            {"_id": 0},
-            sort=[("timestamp", -1), ("ban_id", -1)],
-        )
-        .to_list(None)
-    )
-
-
 async def active_bans_page(skip: int, limit: int) -> list[BanDoc]:
     """Return one page of active bans, newest first (server-side skip/limit).
 
-    Prefer this over :func:`active_bans` for paginated views: only the
-    visible slice travels over the wire regardless of federation size.
-    Uses the ``(is_active, timestamp, ban_id)`` index.
+    Only the visible slice travels over the wire regardless of federation
+    size. Uses the ``(is_active, timestamp, ban_id)`` index.
     """
     return await db_call(
         _bans()

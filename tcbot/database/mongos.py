@@ -211,7 +211,7 @@ async def ensure_indexes() -> None:
         col("bans").create_index(
             [("banned_user_id", 1), ("appeal_log_msg_id", 1)], sparse=True
         ),
-        # * Serves active_bans()/active_ban_count() which filter on is_active only
+        # * Serves active_ban_count()/active_bans_page() which filter on is_active only
         col("bans").create_index([("is_active", 1), ("timestamp", -1), ("ban_id", -1)]),
         # * Serves /check history: every ban (active+inactive) for a user, newest first
         col("bans").create_index(
