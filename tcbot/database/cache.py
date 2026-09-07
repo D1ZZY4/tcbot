@@ -349,10 +349,17 @@ class TwoLevelCache[T]:
                 self._mem.put(key, val)
                 if rc is not None:
                     rkey = self._rkey(key)
-                    payload = json.dumps(val, cls=_MongoJSONEncoder)
-                    self._enqueue_redis_mutation(
-                        lambda: self._redis_set(rc, rkey, payload)
-                    )
+                    try:
+                        payload = json.dumps(val, cls=_MongoJSONEncoder)
+                    except Exception as exc:
+                        # * L1 already serves this value: a serialization
+                        # * failure must degrade to L1-only, never fail the
+                        # * hot path that just fetched successfully.
+                        log.debug("Redis payload encode failed for %s: %s", rkey, exc)
+                    else:
+                        self._enqueue_redis_mutation(
+                            lambda: self._redis_set(rc, rkey, payload)
+                        )
 
                 return cast("T", val)
         finally:
