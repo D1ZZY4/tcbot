@@ -9,6 +9,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Changed
 
+- **Promotion enqueue survives random-ID collision** (`tcbot/database/queues_db.py`, `docs/architecture/database.md`): `enqueue` retries once with a fresh ID on `DuplicateKeyError` (mirrors `bans_db.create_ban`); a second failure propagates so the caller still reports a real pending duplicate. One extra insert attempt only on failure.
+
 - **Absolute full-read rule** (`.agents/rules/tooling-validation.md`): the read-before-work rule now forbids `limit`/`offset` parameters outright instead of merely discouraging partial reads, so every edit is made against full surrounding context.
 
 - **Removed stale `.roo` and `.trae` symlinks** (`pyproject.toml`): deleted the `.roo` and `.trae` symlinks to `.agents` and their now-dead Ruff exclude entries. `.agents` itself is untouched; remaining sibling symlinks (`.claude`, `.kilo`) intentionally left alone.

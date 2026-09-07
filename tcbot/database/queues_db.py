@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from pymongo.errors import DuplicateKeyError
+
 from tcbot.database.documents import PromotionRequestDoc
 from tcbot.database.mongos import col, db_call, make_short_id
 from tcbot.utils.time_and_date import utc_now
@@ -34,23 +36,38 @@ async def enqueue(
     first_name: str,
     promoted_by: int,
 ) -> str:
-    """Add a new promotion request to the queue."""
-    request_id = make_short_id()
-    await db_call(
-        _requests().insert_one(
-            {
-                "request_id": request_id,
-                "target_id": user_id,
-                "username": username,
-                "first_name": first_name,
-                "promoted_by": promoted_by,
-                "status": "pending",
-                "requested_date": utc_now(),
-                "resolved_date": None,
-                "resolved_by": None,
-            }
+    """Add a new promotion request to the queue.
+
+    Retries once with a fresh ID on ``DuplicateKeyError``: a 10-char
+    random ID collision must not fail the request (mirrors
+    ``bans_db.create_ban``). A second failure propagates, which then
+    means the partial-unique pending index rejected a real duplicate
+    and the caller reports "already pending".
+    """
+
+    async def _insert(request_id: str) -> None:
+        await db_call(
+            _requests().insert_one(
+                {
+                    "request_id": request_id,
+                    "target_id": user_id,
+                    "username": username,
+                    "first_name": first_name,
+                    "promoted_by": promoted_by,
+                    "status": "pending",
+                    "requested_date": utc_now(),
+                    "resolved_date": None,
+                    "resolved_by": None,
+                }
+            )
         )
-    )
+
+    request_id = make_short_id()
+    try:
+        await _insert(request_id)
+    except DuplicateKeyError:
+        request_id = make_short_id()
+        await _insert(request_id)
     return request_id
 
 
