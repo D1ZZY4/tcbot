@@ -288,7 +288,16 @@ async def _post_init(app: Application) -> None:
         log.warning("ensure_initial_owner failed (non-fatal): %s", owner_r)
 
     # * APScheduler 3.11.3 with MongoDBJobStore - persistent scheduled jobs.
-    await sched_mod.start(cfg.mongodb_uri, cfg.db_name, cfg.warn_expiry_days)
+    # * app.bot is live here (post_init runs inside the initialised app), so
+    # * the optional enforcement-sync sweep gets a real Bot reference; a
+    # * SYNC_INTERVAL_HOURS of 0 keeps the sweep disabled.
+    await sched_mod.start(
+        cfg.mongodb_uri,
+        cfg.db_name,
+        cfg.warn_expiry_days,
+        bot=app.bot,
+        sync_interval_hours=cfg.sync_interval_hours,
+    )
 
     # * Pre-warm hot caches (owner ID + active groups) as a background task so
     # * the first real user command hits L1 instead of going all the way to MongoDB.

@@ -227,6 +227,7 @@ class Configs:
     modules_no_load: list[str]
     redis_url: str | None
     warn_expiry_days: int
+    sync_interval_hours: int
     fed_warn_limit: int
     warn_limit: int
     webhook_url: str
@@ -349,6 +350,7 @@ class Configs:
             modules_no_load=_env_list("MODULES_NO_LOAD"),
             redis_url=os.getenv("REDIS_URL", "").strip() or None,
             warn_expiry_days=_int_from_env("WARN_EXPIRY_DAYS", 0, minimum=0),
+            sync_interval_hours=_int_from_env("SYNC_INTERVAL_HOURS", 0, minimum=0),
             fed_warn_limit=_int_from_env("FED_WARN_LIMIT", 0, minimum=0),
             warn_limit=_int_from_env("WARN_LIMIT", 3, minimum=1),
             webhook_url=_auto_webhook_url(),
@@ -529,6 +531,11 @@ class _CfgAdapter:
     def warn_expiry_days(self) -> int:
         """Days after which warn_counts expire; 0 = disabled."""
         return self._c.warn_expiry_days
+
+    @property
+    def sync_interval_hours(self) -> int:
+        """Hours between scheduled enforcement-sync sweeps; 0 = disabled."""
+        return self._c.sync_interval_hours
 
     @property
     def fed_warn_limit(self) -> int:

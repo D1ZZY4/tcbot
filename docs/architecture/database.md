@@ -255,7 +255,7 @@ Write helpers must invalidate or refresh related cache entries. Role writes inva
 
 | Export | Purpose |
 |---|---|
-| `start(mongodb_uri, db_name, warn_expiry_days)` | Spawns the background asyncio task, waits until the scheduler is ready. |
+| `start(mongodb_uri, db_name, warn_expiry_days, *, bot=None, sync_interval_hours=0)` | Spawns the background asyncio task, waits until the scheduler is ready. `bot` plus a positive interval registers the `tcbot.enforcement_sync` sweep (`/tcsync` core on a timer, log-only); `0` removes a stale schedule. |
 | `stop()` | Sets the stop event; waits up to 10 s for graceful shutdown, then cancels a stuck task so shutdown never orphans a live scheduler into the next `start()`. |
 | `schedule_unban(ban_id, user_id, run_at)` | Registers a persistent one-off `DateTrigger` unban job. Returns the schedule ID. |
 | `cancel_schedule(schedule_id)` | Removes a schedule by ID. Returns `True` if found, `False` if already fired or never created. |
@@ -265,6 +265,7 @@ Recurring jobs registered on every startup (idempotent via `replace_existing=Tru
 | Job | Trigger | Purpose |
 |---|---|---|
 | `expire_old_warns` | every 24 h | Deletes `warn_count` records older than `WARN_EXPIRY_DAYS` days via `db_call()` (circuit-breaker protected). Only registered when `WARN_EXPIRY_DAYS > 0`. On Vercel the same function runs on demand through `GET /api/cron` (see [`../operations/vercel.md`](../operations/vercel.md)) because no persistent scheduler exists there. |
+| `_run_scheduled_sync` | every `SYNC_INTERVAL_HOURS` h | Bounded enforcement sweep (`run_ban_sync`, 200 checks) with log-only summary. Only registered when the interval is positive and a bot reference was passed; failures log and the next interval re-drives. See [`../features/moderation/sync.md`](../features/moderation/sync.md). |
 
 `member_cache` cleanup is now handled automatically by a MongoDB TTL index on `last_updated` (`expireAfterSeconds=7776000`, equivalent to 90 days), created in `mongos.ensure_indexes()`. The former `_cleanup_old_records` weekly job has been retired; any persisted schedule from a previous run is removed from the APScheduler datastore on first startup after the upgrade.
 

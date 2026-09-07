@@ -30,6 +30,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 from apscheduler.jobstores.mongodb import MongoDBJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -44,6 +45,9 @@ from tcbot.database.mongos import db_call as _db_call
 from tcbot.database.mongos import mongo_client_kwargs as _mongo_client_kwargs
 from tcbot.utils.time_and_date import utc_now
 
+if TYPE_CHECKING:
+    from telegram import Bot
+
 log = logging.getLogger(__name__)
 
 # ──────────────── Recurring job schedule IDs ──────────────────── #
@@ -51,6 +55,9 @@ log = logging.getLogger(__name__)
 # * (replace_existing=True updates the trigger without creating duplicates)
 
 _WARN_EXPIRY_SCHEDULE_ID: str = "tcbot.warn_expiry_daily"
+# * Stable ID for the optional enforcement-sync sweep (/tcsync core on a
+# * timer). Same replace_existing idempotency as the warn-expiry schedule.
+_SYNC_SCHEDULE_ID: str = "tcbot.enforcement_sync"
 # * Legacy ID kept so _register_periodic_schedules can remove the old schedule
 # * from any MongoDB datastore that was created before the TTL-index migration.
 _CLEANUP_SCHEDULE_ID: str = "tcbot.db_cleanup_weekly"
@@ -65,12 +72,15 @@ _STOP_TIMEOUT_S: float = 10.0
 # * _sched_ready: event set when the scheduler is initialised and available
 # * _sched_stop:  event set by stop() to trigger graceful shutdown
 # * _sched_error: captured exception if background task crashes
+# * _sync_bot: live Bot for the scheduled sync sweep (set via start(bot=...));
+# * None disables the sweep even when an interval is configured.
 
 _scheduler: AsyncIOScheduler | None = None
 _sched_task: asyncio.Task | None = None  # type: ignore[type-arg]
 _sched_ready: asyncio.Event | None = None
 _sched_stop: asyncio.Event | None = None
 _sched_error: BaseException | None = None
+_sync_bot: Bot | None = None
 
 
 # ══════════════════════════════════════════════════════════════════ #
@@ -135,6 +145,37 @@ async def _cleanup_old_records() -> None:
     )
 
 
+async def _run_scheduled_sync() -> None:
+    """Run one bounded enforcement sweep (the ``/tcsync`` core on a timer).
+
+    Module-level so APScheduler can serialise its import path into MongoDB.
+    Results go to the log only: there is no operator message to edit here.
+    A missing bot (or any failure) logs and returns; the next interval
+    re-drives, so one bad run never wedges the schedule.
+    """
+    # * Lazy import: tcbot.modules.* must never be imported at this module's
+    # * top level (database/__init__ → scheduler → modules → database cycle).
+    from tcbot.modules import syncing as _syncing  # noqa: PLC0415
+
+    bot = _sync_bot
+    if bot is None:
+        log.debug("Scheduled sync skipped: no bot reference.")
+        return
+    try:
+        counts = await _syncing.run_ban_sync(bot)
+    except Exception:
+        log.exception("Scheduled enforcement sync failed.")
+        return
+    log.info(
+        "Scheduled enforcement sync: checked=%d enforced=%d skipped=%d failed=%d truncated=%s.",
+        counts.checked,
+        counts.enforced_bans,
+        counts.skipped,
+        counts.failed,
+        counts.truncated,
+    )
+
+
 async def _execute_scheduled_unban(ban_id: str, user_id: int) -> None:
     """Deactivate a timed ban record in MongoDB when its scheduled expiry fires.
 
@@ -169,7 +210,10 @@ async def _execute_scheduled_unban(ban_id: str, user_id: int) -> None:
 
 
 async def _scheduler_background(
-    mongodb_uri: str, db_name: str, warn_expiry_days: int
+    mongodb_uri: str,
+    db_name: str,
+    warn_expiry_days: int,
+    sync_interval_hours: int = 0,
 ) -> None:
     """Long-running background task that owns the AsyncIOScheduler lifecycle.
 
@@ -193,7 +237,9 @@ async def _scheduler_background(
     scheduler = AsyncIOScheduler(jobstores=jobstores)
     _scheduler = scheduler
     try:
-        _register_periodic_schedules(scheduler, warn_expiry_days)
+        _register_periodic_schedules(
+            scheduler, warn_expiry_days, sync_interval_hours=sync_interval_hours
+        )
         scheduler.start()
         if _sched_ready is None:
             raise RuntimeError(
@@ -224,7 +270,7 @@ async def _scheduler_background(
 
 
 def _register_periodic_schedules(
-    scheduler: AsyncIOScheduler, warn_expiry_days: int
+    scheduler: AsyncIOScheduler, warn_expiry_days: int, *, sync_interval_hours: int = 0
 ) -> None:
     """Register recurring maintenance schedules (idempotent via replace_existing)."""
     if warn_expiry_days > 0:
@@ -259,13 +305,41 @@ def _register_periodic_schedules(
     except Exception as exc:
         log.debug("Legacy cleanup schedule not present, nothing to remove: %s", exc)
 
+    if sync_interval_hours > 0 and _sync_bot is not None:
+        scheduler.add_job(
+            _run_scheduled_sync,
+            trigger=IntervalTrigger(hours=sync_interval_hours),
+            id=_SYNC_SCHEDULE_ID,
+            replace_existing=True,
+            # * Same misfire reasoning as warn expiry: a restart straddling
+            # * the fire must still run the sweep once instead of dropping it.
+            misfire_grace_time=86400,
+            coalesce=True,
+        )
+        log.info("Scheduled enforcement sync: every %dh.", sync_interval_hours)
+    else:
+        # * Sync sweep disabled (or no bot reference): remove a stale schedule
+        # * left by a previous enabled run so nothing fires without a bot.
+        try:
+            scheduler.remove_job(_SYNC_SCHEDULE_ID)
+            log.info("Enforcement sync schedule removed (disabled).")
+        except Exception as exc:
+            log.debug("Sync schedule not present, skipping removal: %s", exc)
+
 
 # ══════════════════════════════════════════════════════════════════ #
 #  Lifecycle helpers
 # ══════════════════════════════════════════════════════════════════ #
 
 
-async def start(mongodb_uri: str, db_name: str, warn_expiry_days: int) -> None:
+async def start(
+    mongodb_uri: str,
+    db_name: str,
+    warn_expiry_days: int,
+    *,
+    bot: Bot | None = None,
+    sync_interval_hours: int = 0,
+) -> None:
     """Initialise and start the APScheduler background scheduler.
 
     Spawns a dedicated asyncio task that calls ``scheduler.start()`` inside the
@@ -278,14 +352,20 @@ async def start(mongodb_uri: str, db_name: str, warn_expiry_days: int) -> None:
         mongodb_uri: MongoDB connection string (same as ``MONGODB_URI``).
         db_name: MongoDB database name (same as ``DB_NAME``).
         warn_expiry_days: Days after which warn_counts are expired (0 = disabled).
+        bot: Live bot for the optional enforcement-sync sweep (same as
+            ``SYNC_INTERVAL_HOURS``); ``None`` disables the sweep.
+        sync_interval_hours: Hours between enforcement sweeps (0 = disabled).
 
     """
-    global _sched_task, _sched_ready, _sched_stop, _sched_error
+    global _sched_task, _sched_ready, _sched_stop, _sched_error, _sync_bot
     _sched_ready = asyncio.Event()
     _sched_stop = asyncio.Event()
     _sched_error = None
+    _sync_bot = bot
     _sched_task = asyncio.create_task(
-        _scheduler_background(mongodb_uri, db_name, warn_expiry_days),
+        _scheduler_background(
+            mongodb_uri, db_name, warn_expiry_days, sync_interval_hours
+        ),
         name="tcbot.scheduler",
     )
     await _sched_ready.wait()
@@ -307,7 +387,7 @@ async def stop() -> None:
     Sets the stop event so the background task can exit cleanly.
     Safe to call even if :func:`start` was never called.
     """
-    global _sched_task, _sched_ready, _sched_stop, _sched_error
+    global _sched_task, _sched_ready, _sched_stop, _sched_error, _sync_bot
     if _sched_stop is not None:
         _sched_stop.set()
     if _sched_task is not None:
@@ -327,6 +407,7 @@ async def stop() -> None:
     _sched_ready = None
     _sched_stop = None
     _sched_error = None
+    _sync_bot = None
     log.info("APScheduler stopped.")
 
 
