@@ -8,7 +8,7 @@ config.env
 config.env.backup
 
 # Exported GPG keys (private key material must never be committed)
-gpg-key-export/
+gpg-key-backup/
 
 # Virtual environment
 venv/
