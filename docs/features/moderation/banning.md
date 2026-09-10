@@ -81,7 +81,7 @@ Reason parsing depends on whether the first argument is an explicit target:
 
 If no reason remains after parsing, the bot ends the conversation and asks for `/tcban <target> <reason>`.
 
-When the command replies to a user message, every argument is treated as reason text. A leading numeric or `@username` token in a reply (for example `/tcb 12345 spamming` as a reply) stays part of the reason instead of being mistaken for an explicit target. The shared `extraction.has_explicit_target(msg, args)` helper owns this check, and the reason is parsed with `reason_flow.parse_inline_reason` like the kick, mute, and warn entries.
+When the command replies to a user message, every argument is treated as reason text. A leading numeric or `@username` token in a reply (for example `/tcb 12345 spamming` as a reply) stays part of the reason instead of being mistaken for an explicit target. The one exception is a restated ID: when the first token is the numeric ID of the replied-to user themself (reply + `/tcb 1419172317 spamming` aimed at 1419172317), that duplicate token is dropped so the reason is just `spamming`. The shared `extraction.has_explicit_target(msg, args)` helper owns this check, and the reason is parsed with `reason_flow.parse_inline_reason` like the kick, mute, and warn entries.
 
 Ban reasons share the same 1000-character cap as the other moderation flows (`reason_flow.MAX_REASON_LEN`). Overlong inline input fails fast with the shared retry notice before any role lookup or demote work.
 

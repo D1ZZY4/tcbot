@@ -111,7 +111,14 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     has_explicit_target = extraction.has_explicit_target(msg, raw_args)
     target_id, target_fname = await extraction.extract_target(update, raw_args, ctx.bot)
 
-    ban_reason = parse_inline_reason(raw_args, has_explicit_target=has_explicit_target)
+    ban_reason = parse_inline_reason(
+        raw_args,
+        has_explicit_target=has_explicit_target,
+        # * Reply path only: a leading numeric token equal to the replied-to
+        # * user is the ID restated, not reason text (None otherwise, so the
+        # * explicit path can never strip a reason token that happens to match).
+        reply_target_id=target_id if not has_explicit_target else None,
+    )
 
     if not target_id:
         try:

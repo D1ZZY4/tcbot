@@ -85,7 +85,7 @@ Reason parsing in `cmd_kick` uses `reason_flow.parse_inline_reason(args, has_exp
 
 When no inline reason remains after parsing, the bot enters `WAITING_REASON` and asks for text or `Skip`.
 
-When the command replies to a user message, the reply wins in `extract_target`, so every argument is reason text: a leading numeric or `@username` token is never consumed as a target (e.g. reply + `/tck 12345 spamming` keeps `12345` in the reason). The shared `extraction.has_explicit_target(msg, args)` helper owns this check (reply-wins via `has_reply_target`, mirroring `extract_target` priority 1 including the anonymous-admin skip) and is used by the kick, mute, warn, and ban entries.
+When the command replies to a user message, the reply wins in `extract_target`, so every argument is reason text: a leading numeric or `@username` token is never consumed as a target (e.g. reply + `/tck 12345 spamming` keeps `12345` in the reason). The one exception is a restated ID: when the first token is the numeric ID of the replied-to user themself, that duplicate token is dropped from the reason. The shared `extraction.has_explicit_target(msg, args)` helper owns this check (reply-wins via `has_reply_target`, mirroring `extract_target` priority 1 including the anonymous-admin skip) and is used by the kick, mute, warn, and ban entries.
 
 Inline reasons share the same 1000-character cap as typed reasons (`reason_flow.MAX_REASON_LEN`). Overlong inline input fails fast with the shared retry notice before any role lookup or demote work; typed input exceeding the cap stays in `WAITING_REASON` with the same text.
 

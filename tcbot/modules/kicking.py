@@ -120,7 +120,12 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     has_explicit_target = extraction.has_explicit_target(msg, args)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
 
-    inline_reason = parse_inline_reason(args, has_explicit_target=has_explicit_target)
+    inline_reason = parse_inline_reason(
+        args,
+        has_explicit_target=has_explicit_target,
+        # * Reply path only (see banning.py): strip a restated target ID.
+        reply_target_id=target_id if not has_explicit_target else None,
+    )
 
     if not target_id:
         try:

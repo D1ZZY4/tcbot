@@ -192,7 +192,15 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             duration = parsed
             remaining_args.pop(0)
 
-    inline_reason = parse_inline_reason(remaining_args, has_explicit_target=False)
+    inline_reason = parse_inline_reason(
+        remaining_args,
+        has_explicit_target=False,
+        # * Reply path only (see banning.py): strip a restated target ID.
+        # * Uses the shape check, not the hardcoded False above, so the
+        # * explicit path (target already popped into remaining_args) can
+        # * never strip a reason token that happens to match.
+        reply_target_id=target_id if not has_explicit_target else None,
+    )
     # * Fail fast on overlong inline reasons with the shared cap and text,
     # * before any prompt is sent or state is stored.
     if inline_reason and is_reason_too_long(inline_reason):
