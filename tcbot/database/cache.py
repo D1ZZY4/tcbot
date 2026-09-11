@@ -470,7 +470,7 @@ def _redis_client() -> Any:
     return _redis_mod.client()
 
 
-def _log_redis_task_error(task: asyncio.Task) -> None:  # type: ignore[type-arg]
+def _log_redis_task_error(task: asyncio.Task[None]) -> None:
     """Done-callback: log Redis background task errors without raising."""
     if not task.cancelled() and task.exception() is not None:
         log.debug("Redis background task failed: %s", task.exception())

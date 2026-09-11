@@ -76,7 +76,7 @@ _STOP_TIMEOUT_S: float = 10.0
 # * None disables the sweep even when an interval is configured.
 
 _scheduler: AsyncIOScheduler | None = None
-_sched_task: asyncio.Task | None = None  # type: ignore[type-arg]
+_sched_task: asyncio.Task[None] | None = None
 _sched_ready: asyncio.Event | None = None
 _sched_stop: asyncio.Event | None = None
 _sched_error: BaseException | None = None
@@ -236,7 +236,7 @@ async def _scheduler_background(
         "mongodb": MongoDBJobStore(
             database=db_name,
             host=mongodb_uri,
-            **_mongo_client_kwargs(),  # type: ignore[arg-type]
+            **_mongo_client_kwargs(),
         )
     }
     scheduler = AsyncIOScheduler(jobstores=jobstores)

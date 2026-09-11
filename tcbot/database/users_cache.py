@@ -91,12 +91,13 @@ async def upsert_user_if_changed(
     Returns True when a DB write was performed, False when skipped.
     """
     cached = user_mention_cache.get(user_id)
-    if cached is not CACHE_MISS:
-        # * Compare the full triple: last_name-only changes must also write.
-        data: list[str | None] = cached  # type: ignore[assignment]
-        current = _cached_triple(data)
-        if current == (first_name, username, last_name):
-            return False
+    # * Compare the full triple: last_name-only changes must also write.
+    if isinstance(cached, list) and _cached_triple(cached) == (
+        first_name,
+        username,
+        last_name,
+    ):
+        return False
     await upsert_user(user_id, username, first_name, last_name)
     return True
 
@@ -141,6 +142,30 @@ def _cached_triple(data: list[str | None]) -> tuple[str | None, str | None, str 
         data[1] if len(data) > 1 else None,
         data[2] if len(data) > 2 else None,
     )
+
+
+async def _fetch_mention_triple(user_id: int) -> list[str | None]:
+    """Read (first_name, username, last_name) for the mention cache.
+
+    Single owner for the projection and the not-found sentinel so the
+    cached mention readers cannot drift apart.
+    """
+    doc = await db_call(
+        _members().find_one(
+            {"user_id": user_id}, {"first_name": 1, "username": 1, "last_name": 1}
+        )
+    )
+    if doc:
+        return [
+            doc.get("first_name") or str(user_id),
+            doc.get("username"),
+            doc.get("last_name"),
+        ]
+    # * Sentinel: user has no member_cache document. All-None is used
+    # * (not [str(user_id), None, None]) so the not-found case is unambiguous:
+    # * a real first_name is never None, but str(user_id) could coincide
+    # * with an actual numeric display name and would suppress fallback.
+    return list(_NOT_FOUND_SENTINEL)
 
 
 def has_recent_identity_attempt(user_id: int) -> bool:
@@ -190,21 +215,7 @@ async def get_user_mention_data(user_id: int) -> tuple[str, str | None]:
     """
 
     async def _fetch() -> list[str | None]:
-        doc = await db_call(
-            _members().find_one(
-                {"user_id": user_id}, {"first_name": 1, "username": 1, "last_name": 1}
-            )
-        )
-        if doc:
-            return [
-                doc.get("first_name") or str(user_id),
-                doc.get("username"),
-                doc.get("last_name"),
-            ]
-        # * Sentinel: user has no member_cache document.  Stored as all-None
-        # * so get_first_name() can distinguish "real name" from "no record" and
-        # * return the caller's fallback instead of a raw numeric ID string.
-        return list(_NOT_FOUND_SENTINEL)
+        return await _fetch_mention_triple(user_id)
 
     data = await user_mention_cache.get_or_fetch(user_id, _fetch)
     # * data[0] is None when the user has no member_cache document (sentinel).
@@ -325,22 +336,7 @@ async def get_first_name(user_id: int, fallback: str = "") -> str:
     """
 
     async def _fetch() -> list[str | None]:
-        doc = await db_call(
-            _members().find_one(
-                {"user_id": user_id}, {"first_name": 1, "username": 1, "last_name": 1}
-            )
-        )
-        if doc:
-            return [
-                doc.get("first_name") or str(user_id),
-                doc.get("username"),
-                doc.get("last_name"),
-            ]
-        # * Sentinel: user has no member_cache document.  All-None is used
-        # * (not [str(user_id), None, None]) so the not-found case is unambiguous --
-        # * a real first_name is never None, but str(user_id) could coincide
-        # * with an actual numeric display name and would suppress fallback.
-        return list(_NOT_FOUND_SENTINEL)
+        return await _fetch_mention_triple(user_id)
 
     data = await user_mention_cache.get_or_fetch(user_id, _fetch)
     # * data[0] is None when the sentinel is in cache (user not in member_cache DB).

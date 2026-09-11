@@ -7,6 +7,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 <details open>
 <summary>Unreleased changes (click to collapse)</summary>
 
+### Changed
+
+- **Database deduplication and modern typing** (`tcbot/database/users_cache.py`, `warns_db.py`, `mutes_db.py`, `mongos.py`, `scheduler.py`, `cache.py`): `get_user_mention_data` and `get_first_name` shared one duplicated 15-line fetch closure, now the single `_fetch_mention_triple` owner; the triplicated recount-from-history fallback in `remove_last_warn` is now `_recount_and_store`; `clear_warns` / `clear_all_warns` share the gather plus fail-closed error handling via `_clear_warn_docs` (history-delete still raises, counter-delete stays error-logged, cancellation propagates); the active-mute expiry predicate lives in one `_not_expired_clause` matching the TTL semantics. Five `type: ignore` workarounds removed (`dict[str, Any]` TLS kwargs, `Task[None]` annotations, `isinstance` narrowing instead of casting `CACHE_MISS`). Verified with Context7 MCP against installed Motor 3.7 (`find_one` accepts `sort` via `**kwargs` pass-through) and redis-py 8.1 (`scan` returns `(cursor, keys)` tuple); full pytest suite passes (92 passed). No success-path behavior change; no new indexes (every helper predicate already has ESR-ordered index support, re-audited per collection).
+
 </details>
 
 ## [6.6.0] - 2026-09-11

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pymongo import ReturnDocument
 
@@ -100,6 +100,16 @@ async def _store_warn_count(user_id: int, chat_id: int, count: int) -> None:
     )
 
 
+async def _recount_and_store(user_id: int, chat_id: int) -> None:
+    """Rebuild the counter from warn history after a failed atomic update.
+
+    Single owner for the repair path shared by every counter-write failure
+    below, so a fix to the recount logic cannot drift between call sites.
+    """
+    count = await db_call(_warns().count_documents(_warn_key(user_id, chat_id)))
+    await _store_warn_count(user_id, chat_id, count)
+
+
 # ──────────────────────────── Mutations ─────────────────────────── #
 # * Functions that modify warning records in the database
 # * Includes adding, removing, and clearing warnings
@@ -178,31 +188,13 @@ async def clear_warns(user_id: int, chat_id: int) -> int:
     error-logged but non-fatal (the stale counter is flagged for repair
     while the requested clear itself succeeded).
     """
-    warn_del, _cnt_del = await asyncio.gather(
-        db_call(_warns().delete_many(_warn_key(user_id, chat_id))),
-        db_call(_warn_counts().delete_one(_warn_key(user_id, chat_id))),
-        return_exceptions=True,
+    key = _warn_key(user_id, chat_id)
+    return await _clear_warn_docs(
+        key,
+        key,
+        delete_all_counts=False,
+        scope=f"clear_warns user={user_id} chat={chat_id}",
     )
-    if isinstance(_cnt_del, asyncio.CancelledError):
-        raise _cnt_del
-    if isinstance(_cnt_del, BaseException):
-        # * Error-level: a surviving counter keeps stale counts that later
-        # * warns increment from, so this needs operator repair, not silence.
-        log.error(
-            "clear_warns counter delete failed for user=%d chat=%d: %s",
-            user_id,
-            chat_id,
-            _cnt_del,
-        )
-    if isinstance(warn_del, BaseException):
-        log.error(
-            "clear_warns warns delete failed for user=%d chat=%d: %s",
-            user_id,
-            chat_id,
-            warn_del,
-        )
-        raise warn_del
-    return warn_del.deleted_count
 
 
 async def clear_all_warns(user_id: int) -> int:
@@ -216,26 +208,43 @@ async def clear_all_warns(user_id: int) -> int:
     means "nothing cleared"); callers running inside ``gather`` inspect the
     captured exception instead.
     """
-    warn_del, _cnt_del = await asyncio.gather(
-        db_call(_warns().delete_many({"user_id": user_id})),
-        db_call(_warn_counts().delete_many({"user_id": user_id})),
+    filt: dict[str, Any] = {"user_id": user_id}
+    return await _clear_warn_docs(
+        filt, filt, delete_all_counts=True, scope=f"clear_all_warns user={user_id}"
+    )
+
+
+async def _clear_warn_docs(
+    warns_filter: dict[str, Any],
+    counts_filter: dict[str, Any],
+    *,
+    delete_all_counts: bool,
+    scope: str,
+) -> int:
+    """Delete warn history plus counter docs; shared by both clear paths.
+
+    Returns the history deleted count. Raises the history-delete failure
+    (a 0 return means "nothing to clear"); counter-delete failures are
+    error-logged for operator repair while the clear itself succeeded.
+    Cancellation propagates instead of reporting success.
+    """
+    warn_del, cnt_del = await asyncio.gather(
+        db_call(_warns().delete_many(warns_filter)),
+        db_call(
+            _warn_counts().delete_many(counts_filter)
+            if delete_all_counts
+            else _warn_counts().delete_one(counts_filter)
+        ),
         return_exceptions=True,
     )
-    if isinstance(_cnt_del, asyncio.CancelledError):
-        raise _cnt_del
-    if isinstance(_cnt_del, BaseException):
-        # * Error-level: same stale-counter repair need as clear_warns above.
-        log.error(
-            "clear_all_warns counter delete failed for user=%d: %s",
-            user_id,
-            _cnt_del,
-        )
+    if isinstance(cnt_del, asyncio.CancelledError):
+        raise cnt_del
+    if isinstance(cnt_del, BaseException):
+        # * Error-level: a surviving counter keeps stale counts that later
+        # * warns increment from, so this needs operator repair, not silence.
+        log.error("%s counter delete failed: %s", scope, cnt_del)
     if isinstance(warn_del, BaseException):
-        log.error(
-            "clear_all_warns warns delete failed for user=%d: %s",
-            user_id,
-            warn_del,
-        )
+        log.error("%s warns delete failed: %s", scope, warn_del)
         raise warn_del
     return warn_del.deleted_count
 
@@ -298,19 +307,16 @@ async def remove_last_warn(user_id: int, chat_id: int) -> bool:
             chat_id,
             del_res,
         )
-        count = await db_call(_warns().count_documents(_warn_key(user_id, chat_id)))
-        await _store_warn_count(user_id, chat_id, count)
+        await _recount_and_store(user_id, chat_id)
         return False
     if del_res.deleted_count == 0:
-        count = await db_call(_warns().count_documents(_warn_key(user_id, chat_id)))
-        await _store_warn_count(user_id, chat_id, count)
+        await _recount_and_store(user_id, chat_id)
         return False
 
     if isinstance(counter, asyncio.CancelledError):
         raise counter
     if isinstance(counter, BaseException) or counter is None:
-        count = await db_call(_warns().count_documents(_warn_key(user_id, chat_id)))
-        await _store_warn_count(user_id, chat_id, count)
+        await _recount_and_store(user_id, chat_id)
     return True
 
 

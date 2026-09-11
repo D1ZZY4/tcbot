@@ -30,6 +30,15 @@ def _active_mutes() -> AsyncIOMotorCollection:
     return col("active_mutes")
 
 
+def _not_expired_clause(now: datetime) -> dict[str, object]:
+    """Match permanent (``None``/missing ``until_date``) or still-valid timed mutes.
+
+    Single owner for the expiry predicate so the query-time filter cannot
+    drift from the TTL index semantics (permanent rows never expire).
+    """
+    return {"$or": [{"until_date": None}, {"until_date": {"$gt": now}}]}
+
+
 # ──────────────────────────── Mutations ─────────────────────────── #
 # * Functions that create or modify mute log records
 # * Primarily used for audit logging of moderation actions
@@ -104,7 +113,7 @@ async def get_active_mute(user_id: int) -> ActiveMuteDoc | None:
         _active_mutes().find_one(
             {
                 "user_id": UserId(user_id),
-                "$or": [{"until_date": None}, {"until_date": {"$gt": now}}],
+                **_not_expired_clause(now),
             }
         )
     )
@@ -119,7 +128,7 @@ async def active_mute_docs() -> list[ActiveMuteDoc]:
     return await db_call(
         _active_mutes()
         .find(
-            {"$or": [{"until_date": None}, {"until_date": {"$gt": now}}]},
+            _not_expired_clause(now),
             {"user_id": 1, "until_date": 1, "_id": 0},
         )
         .to_list(None)

@@ -11,7 +11,7 @@ import logging
 import secrets
 import string
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import certifi
 from motor.motor_asyncio import (
@@ -99,7 +99,7 @@ def db() -> AsyncIOMotorDatabase:
 # ! CRITICAL: Must be called before any database operations
 
 
-def mongo_client_kwargs() -> dict[str, object]:
+def mongo_client_kwargs() -> dict[str, Any]:
     """Extra MongoClient kwargs shared by every MongoDB client in the process.
 
     Pins TLS trust to the certifi Mozilla bundle. Sandboxes without a
@@ -135,7 +135,7 @@ async def connect() -> None:
         compressors=["zlib"],
         retryWrites=True,
         retryReads=True,
-        **client_kwargs,  # type: ignore[arg-type]
+        **client_kwargs,
     )
     await _mongo_cb.call(client.admin.command("ping"))
     _db = client[cfg.db_name]
