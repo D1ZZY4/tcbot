@@ -7,6 +7,13 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 <details open>
 <summary>Unreleased changes (click to collapse)</summary>
 
+</details>
+
+## [6.6.1] - 2026-09-11
+
+<details>
+<summary>6.6.1 changes (click to expand)</summary>
+
 ### Changed
 
 - **Shared back-button factory for drill-down error cards** (`tcbot/modules/helper/workflows/stats_flow.py`, `check_flow.py`, `tcbot/modules/helper/keyboards.py`): the eleven inline `[[« Back]]` single-button markups on stats/check not-found cards now use the existing `keyboards.back_to_module_kb(callback)` instead of rebuilding the shape locally (row-composed layouts with proof/appeal/nav buttons stay inline, as do the `_back_main` / `_back_to_check` row builders used inside larger markups); `checkme_detail_back_kb` gains the missing `rows` annotation. Circuit-breaker usage example no longer demonstrates the forbidden `except Exception: pass` pattern. Verified: labels, callbacks, and styles identical at every site; Ruff, Pyright, full pytest suite green. No user-visible change.
