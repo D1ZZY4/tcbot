@@ -257,7 +257,7 @@ def checkme_detail_back_kb(
     proof_link: str | None = None,
 ) -> InlineKeyboardMarkup:
     """Detail view keyboard - optional Proof (row 1), Back (row 2)."""
-    rows = []
+    rows: list[list[InlineKeyboardButton]] = []
     if proof_link:
         rows.append(
             [

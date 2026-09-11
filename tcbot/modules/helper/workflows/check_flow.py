@@ -21,7 +21,7 @@ from tcbot.modules.helper.extraction import (
     launch_identity_refresh,
 )
 from tcbot.modules.helper.identity import Identity, classify, profile_note
-from tcbot.modules.helper.keyboards import paged_drill_kb
+from tcbot.modules.helper.keyboards import back_to_module_kb, paged_drill_kb
 from tcbot.utils.formatter import bold, code, esc, italic, mention
 from tcbot.utils.pagination import date_or_unknown, nav_row, paginate
 from tcbot.utils.time_and_date import fmt_dt
@@ -332,16 +332,7 @@ class Check:
         ban = await db.bans_db.get_ban(ban_id)
         if not ban or ban.get("banned_user_id") != target_id:
             text = f"Ban {code(ban_id)} not found."
-            return text, InlineKeyboardMarkup(
-                [
-                    [
-                        InlineKeyboardButton(
-                            "« Back",
-                            callback_data=f"check_bans:{target_id}:0",
-                        )
-                    ]
-                ]
-            )
+            return text, back_to_module_kb(f"check_bans:{target_id}:0")
 
         text, proof_link = await build_ban_detail(ban)
         rows: list[list[InlineKeyboardButton]] = []

@@ -22,8 +22,10 @@ Usage::
         result = await tg_cb.call(bot.send_message(chat_id=..., text=...))
     except CircuitOpenError:
         log.warning("Telegram circuit is OPEN; call skipped.")
-    except Exception:
-        pass  # downstream error already counted against the circuit
+    except Exception as exc:
+        # * The failure is already counted against the circuit; log it
+        # * with context instead of swallowing it silently.
+        log.debug("Telegram call failed after circuit accounting: %s", exc)
 
 Module-level singletons ``telegram`` and ``mongodb`` are ready to use without
 instantiation.  Import additional ``CircuitBreaker`` instances for other

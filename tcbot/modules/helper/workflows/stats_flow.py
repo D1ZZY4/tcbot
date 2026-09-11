@@ -26,7 +26,7 @@ from tcbot.modules.helper.extraction import (
     identity_needs_refresh,
     launch_identity_refresh,
 )
-from tcbot.modules.helper.keyboards import paged_drill_kb
+from tcbot.modules.helper.keyboards import back_to_module_kb, paged_drill_kb
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, code, esc, mention, user_ref
 from tcbot.utils.pagination import date_or_unknown, paginate
@@ -402,18 +402,14 @@ class Stats:
         )
         if idx < 0 or idx >= len(chunk):
             text = _ERR_USER_NOT_FOUND
-            kb = InlineKeyboardMarkup(
-                [[InlineKeyboardButton("« Back", callback_data=f"stats_users:{page}")]]
-            )
+            kb = back_to_module_kb(f"stats_users:{page}")
             return text, kb
 
         u = chunk[idx]
         uid = u.get("user_id", 0)
         if stable is not None and str(uid) != stable:
             text = _ERR_USER_NOT_FOUND
-            kb = InlineKeyboardMarkup(
-                [[InlineKeyboardButton("« Back", callback_data=f"stats_users:{page}")]]
-            )
+            kb = back_to_module_kb(f"stats_users:{page}")
             return text, kb
         fname = u.get("first_name") or str(uid)
         uname = u.get("username")
@@ -435,9 +431,7 @@ class Stats:
             f"Last seen: {seen}\n\n"
             f"Use {code(f'/check {uid}')} for the full profile."
         )
-        kb = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("« Back", callback_data=f"stats_users:{page}")]]
-        )
+        kb = back_to_module_kb(f"stats_users:{page}")
         return text, kb
 
     # ── Connected chats drill-down ───────────────────────────────────────
@@ -480,18 +474,14 @@ class Stats:
         chunk, _total, page = paginate(groups, page, _PAGE_SIZE)
         if idx < 0 or idx >= len(chunk):
             text = _ERR_GROUP_NOT_FOUND
-            kb = InlineKeyboardMarkup(
-                [[InlineKeyboardButton("« Back", callback_data=f"stats_chats:{page}")]]
-            )
+            kb = back_to_module_kb(f"stats_chats:{page}")
             return text, kb
 
         grp = chunk[idx]
         chat_id = grp.get("chat_id", 0)
         if stable is not None and str(chat_id) != stable:
             text = _ERR_GROUP_NOT_FOUND
-            kb = InlineKeyboardMarkup(
-                [[InlineKeyboardButton("« Back", callback_data=f"stats_chats:{page}")]]
-            )
+            kb = back_to_module_kb(f"stats_chats:{page}")
             return text, kb
         title = grp.get("title", "Unknown")
         # * Stale-while-revalidate: render instantly; renames persist in
@@ -508,9 +498,7 @@ class Stats:
             f"Connected by: {mention(added_by, adder_fname, adder_uname)}\n"
             f"Date: {date_str}"
         )
-        kb = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("« Back", callback_data=f"stats_chats:{page}")]]
-        )
+        kb = back_to_module_kb(f"stats_chats:{page}")
         return text, kb
 
     # ── Bans drill-down ──────────────────────────────────────────────────
@@ -576,15 +564,7 @@ class Stats:
             ban = await db.bans_db.get_ban(stable)
             if not ban or not ban.get("is_active"):
                 text = _ERR_BAN_NOT_FOUND
-                kb = InlineKeyboardMarkup(
-                    [
-                        [
-                            InlineKeyboardButton(
-                                "« Back", callback_data=f"stats_bans:{page}"
-                            )
-                        ]
-                    ]
-                )
+                kb = back_to_module_kb(f"stats_bans:{page}")
                 return text, kb
             text, proof_link = await build_ban_detail(ban)
             rows: list[list[InlineKeyboardButton]] = []
@@ -607,9 +587,7 @@ class Stats:
         chunk = await db.bans_db.active_bans_page(page * _PAGE_SIZE, _PAGE_SIZE)
         if idx < 0 or idx >= len(chunk):
             text = _ERR_BAN_NOT_FOUND
-            kb = InlineKeyboardMarkup(
-                [[InlineKeyboardButton("« Back", callback_data=f"stats_bans:{page}")]]
-            )
+            kb = back_to_module_kb(f"stats_bans:{page}")
             return text, kb
         ban = chunk[idx]
         text, proof_link = await build_ban_detail(ban)
@@ -757,9 +735,7 @@ class Stats:
         """Detail card for a single search hit."""
         if idx < 0 or idx >= len(results):
             text = _ERR_RESULT_UNAVAILABLE
-            kb = InlineKeyboardMarkup(
-                [[InlineKeyboardButton("« Back", callback_data="stats_search_back")]]
-            )
+            kb = back_to_module_kb("stats_search_back")
             return text, kb
         text, proof_link = await build_ban_detail(results[idx])
         return text, cls._search_detail_kb(proof_link)
