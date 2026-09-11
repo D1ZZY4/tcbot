@@ -35,7 +35,7 @@ flowchart TD
     I --> J[Edit prompt summary + DM appeal link]
 ```
 
-Ban proof supports Telegram media albums. Album items are buffered for `ALBUM_DEBOUNCE_SECONDS` before processing.
+Ban proof supports Telegram media albums as well as sequential sends: photos, videos, GIFs, and files accumulate in one proof session flushed by `Done`, `ALBUM_DEBOUNCE_SECONDS` of silence, or a 60 s cap.
 
 ## Reason + proof flows
 

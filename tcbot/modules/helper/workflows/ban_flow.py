@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import telegram.error
@@ -17,7 +18,6 @@ from telegram.ext import (
     ContextTypes,
     ConversationHandler,
     MessageHandler,
-    filters,
 )
 
 from tcbot import cfg
@@ -25,7 +25,11 @@ from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg, replies
 from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
-from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
+from tcbot.modules.helper.workflows.proof_flow import (
+    PROOF_MEDIA_FILTER,
+    BuildProof,
+    upload_proof,
+)
 from tcbot.utils.dispatch import (
     count_transient_errors,
     fan_out,
@@ -33,7 +37,7 @@ from tcbot.utils.dispatch import (
 )
 from tcbot.utils.formatter import esc, user_ref
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
-from tcbot.utils.time_and_date import to_utc, utc_now
+from tcbot.utils.time_and_date import monotonic, to_utc, utc_now
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -50,7 +54,9 @@ log = logging.getLogger(__name__)
 
 _MSG_CANCELLED = "Cancelled. No ban was issued."
 _MSG_TIMEOUT = "Timed out waiting for proof. No ban was issued."
-_MSG_PROOF_EXPECTED = "Please send a photo or video as proof, or press Cancel."
+_MSG_PROOF_EXPECTED = (
+    "Please send a photo, video, GIF, or file as proof, or press Cancel."
+)
 
 _BAN_USER_DATA_KEYS = (
     "ban_target_id",
@@ -70,16 +76,38 @@ WAITING_PROOF = 0
 # * skip_allowed=False: ban proof is required; there is no Skip option
 proof = BuildProof("ban", skip_allowed=False)
 
-# * Module-level album accumulators (keyed by media_group_id)
-_albums: dict[str, list[Message]] = {}
-_album_meta: dict[str, dict[str, Any]] = {}
+# * Hard cap on one proof-collection session: the silence window below
+# * slides with every arrival, so without a cap a steady trickle of media
+# * would never flush. Far above any legitimate multi-send burst.
+_PROOF_COLLECT_MAX_S: float = 60.0
 
-# * Weak references to user_data dicts for post-flush cleanup (keyed by media_group_id).
-# * Stored as a reference (not a copy) so we can clear ban keys after execution.
-_album_userdata: dict[str, dict[str, Any]] = {}
 
-# * Strong references to in-flight album flush tasks (prevents GC)
-_album_tasks: dict[str, asyncio.Task[None]] = {}
+@dataclass
+class _ProofSession:
+    """One in-progress proof collection, keyed by (chat_id, user_id).
+
+    Gathers every proof message (album parts and sequential sends alike)
+    until the Done button or a silence window flushes it. ``flushing`` is
+    claimed with a synchronous check-and-set so a Done tap and the flush
+    task can never execute the same session twice. The session stays
+    visible (with ``flushing`` set) through execution so late arrivals
+    are dropped exactly like the old executing-flag guard.
+    """
+
+    msgs: list[Message] = field(default_factory=list)
+    meta: dict[str, Any] = field(default_factory=dict)
+    user_data: dict[str, Any] | None = None
+    deadline: float = 0.0
+    last_arrival: float = 0.0
+    flushing: bool = False
+    cancelled: bool = False
+    flush_task: asyncio.Task[None] | None = None
+
+
+# * Live proof sessions keyed by (chat_id, user_id). user_data is per
+# * (chat, user) under per_chat/per_user routing, so one key maps to one
+# * conversation exactly.
+_proof_sessions: dict[tuple[int, int], _ProofSession] = {}
 
 
 # ─────────────────── Album state helpers ────────────────────────── #
@@ -97,25 +125,21 @@ def _clear_ban_state(user_data: dict[str, Any] | None) -> None:
 
 
 def _cancel_proof_session(user_data: dict[str, Any] | None) -> None:
-    """Cancel any in-flight album flush tasks and clear all ban state.
+    """Cancel any in-flight proof flush tasks and clear all ban state.
 
-    Clears ban keys from ``user_data`` and cancels every album flush task
-    whose ``user_data`` reference matches the given dict.  Called from
-    both ``on_cancel_proof`` and ``on_proof_timeout`` so the cleanup path
-    is defined exactly once.
+    Clears ban keys from ``user_data`` and cancels every flush task whose
+    session references the given dict. Called from ``on_cancel_proof`` and
+    ``on_proof_timeout`` so the cleanup path is defined exactly once.
+    (``on_done_proof`` cleans its own claimed session inline instead.)
     """
     _clear_ban_state(user_data)
     if user_data is None:
         return
-    for mgid in [k for k, ud in _album_userdata.items() if ud is user_data]:
-        if mgid in _album_meta:
-            _album_meta[mgid]["_cancelled"] = True
-        task = _album_tasks.pop(mgid, None)
-        if task is not None:
-            task.cancel()
-        _albums.pop(mgid, None)
-        _album_meta.pop(mgid, None)
-        _album_userdata.pop(mgid, None)
+    for key in [k for k, s in _proof_sessions.items() if s.user_data is user_data]:
+        session = _proof_sessions.pop(key)
+        session.cancelled = True
+        if session.flush_task is not None:
+            session.flush_task.cancel()
 
 
 # ────────────────────────── Ban executor ────────────────────────── #
@@ -572,77 +596,129 @@ async def _execute_new_ban(
 
 
 async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-    """Handle incoming proof media: buffer albums or execute the ban immediately."""
+    """Buffer proof media into the live session; flush on Done or silence."""
     msg = update.effective_message
-    if msg is None:
+    chat = update.effective_chat
+    user = update.effective_user
+    if msg is None or chat is None or user is None:
         return WAITING_PROOF
-
-    # * Double-submit guard for albums mirrors the single-media flag below: a
-    # * rapid second album (distinct media_group_id) must not invoke
-    # * _execute_ban twice (double fan-out, double PM/log). The check-and-set
-    # * is synchronous, so concurrent updates cannot interleave between them.
-    # * First submission wins; _flush_album clears the flag when it finishes.
-    if ctx.user_data is not None and ctx.user_data.get("ban_executing"):
-        return ConversationHandler.END
-
-    if msg.media_group_id:
-        mgid = msg.media_group_id
-        if mgid not in _albums and ctx.user_data is not None:
-            ctx.user_data["ban_executing"] = True
-            meta_snapshot = dict(ctx.user_data)
-            _albums[mgid] = []
-            _album_meta[mgid] = meta_snapshot
-            _album_userdata[mgid] = ctx.user_data
-            task = asyncio.create_task(
-                _flush_album(mgid, ctx.bot, meta_snapshot, ctx.user_data)
-            )
-            _album_tasks[mgid] = task
-            task.add_done_callback(lambda t, mgid=mgid: _album_tasks.pop(mgid, None))
-        _albums[mgid].append(msg)
-        return WAITING_PROOF
-
-    # * Single media file - execute immediately.
-    # * Double-submit guard: the album path already deduplicates via mgid; for
-    # * single-media we guard with an executing flag so a rapid second proof
-    # * message (e.g. two quick photo sends) cannot invoke _execute_ban twice.
     if ctx.user_data is None:
         return ConversationHandler.END
-    if ctx.user_data.get("ban_executing"):
+
+    key = (chat.id, user.id)
+    session = _proof_sessions.get(key)
+    if session is not None and session.flushing:
+        # * A flush already claimed this session (Done tap or silence
+        # * window won the race): first submission wins, drop the rest.
         return ConversationHandler.END
-    ctx.user_data["ban_executing"] = True
-    # * Clear state even when the executor raises so the next proof is not
-    # * wedged by a stale ban_executing flag; mirrors _flush_album try/finally.
+    if session is None:
+        ctx.user_data["ban_executing"] = True
+        now = monotonic()
+        session = _ProofSession(
+            meta=dict(ctx.user_data),
+            user_data=ctx.user_data,
+            deadline=now + _PROOF_COLLECT_MAX_S,
+            last_arrival=now,
+        )
+        _proof_sessions[key] = session
+        task = asyncio.create_task(_flush_session(key, ctx.bot))
+        session.flush_task = task
+    else:
+        session.last_arrival = monotonic()
+    session.msgs.append(msg)
+    return WAITING_PROOF
+
+
+async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    """Flush collected proof immediately when the moderator taps Done."""
+    q = update.callback_query
+    if q is None or ctx.user_data is None:
+        return ConversationHandler.END
+    chat = update.effective_chat
+    user = update.effective_user
+    key = (chat.id, user.id) if chat is not None and user is not None else None
+    if key is None:
+        return ConversationHandler.END
+    session = _proof_sessions.get(key)
+    if session is None or session.flushing or not session.msgs:
+        # * Nothing to flush (or the auto-flush already claimed it):
+        # * nudge instead of executing an empty proof.
+        try:
+            await q.answer(
+                "Send a photo, video, GIF, or file first, then tap Done.",
+                show_alert=True,
+            )
+        except Exception as exc:
+            log.debug("Ban done-proof empty answer failed: %s", exc)
+        return WAITING_PROOF
+    # * Synchronous claim without popping: the session stays visible with
+    # * flushing set, so arrivals during execution still drop via the
+    # * flushing check in on_proof_received instead of double-executing.
+    session.flushing = True
+    if session.flush_task is not None:
+        session.flush_task.cancel()
     try:
-        await _execute_ban(ctx.bot, [msg], dict(ctx.user_data))
+        await q.answer()
+    except Exception as exc:
+        log.debug("Ban done-proof answer failed: %s", exc)
+    if not session.meta.get("ban_target_id") or not session.meta.get("ban_admin_id"):
+        log.warning("Done-proof flush aborted: meta missing target_id or admin_id")
+        _proof_sessions.pop(key, None)
+        _clear_ban_state(session.user_data)
+        return ConversationHandler.END
+    try:
+        await _execute_ban(ctx.bot, session.msgs, session.meta)
+    except Exception:
+        log.exception("Done-proof _execute_ban raised")
     finally:
-        _clear_ban_state(ctx.user_data)
+        _proof_sessions.pop(key, None)
+        _clear_ban_state(session.user_data)
     return ConversationHandler.END
 
 
-async def _flush_album(
-    mgid: str, bot: Bot, meta: dict[str, Any], user_data: dict[str, Any] | None
-) -> None:
-    await asyncio.sleep(cfg.album_debounce)
-    if meta.get("_cancelled"):
-        log.info("Album flush aborted: cancelled flag set for %s", mgid)
-        return
-    msgs = _albums.pop(mgid, [])
-    if not msgs:
-        _clear_ban_state(user_data)
-        return
-    if not meta.get("ban_target_id") or not meta.get("ban_admin_id"):
-        log.warning(
-            "Album flush aborted for %s: meta missing target_id or admin_id", mgid
-        )
-        _clear_ban_state(user_data)
-        return
-    log.info("Flushing album %s with %d media items", mgid, len(msgs))
+async def _flush_session(key: tuple[int, int], bot: Bot) -> None:
+    """Flush one proof session after a silence window or the hard cap."""
     try:
-        await _execute_ban(bot, msgs, meta)
-    except Exception:
-        log.exception("_execute_ban raised in _flush_album for album %s", mgid)
+        while True:
+            await asyncio.sleep(cfg.album_debounce)
+            session = _proof_sessions.get(key)
+            if session is None or session.cancelled or session.flushing:
+                return
+            if (
+                monotonic() - session.last_arrival >= cfg.album_debounce
+                or monotonic() >= session.deadline
+            ):
+                break
+        # * Synchronous claim, mirroring on_done_proof above: exactly one
+        # * of the two paths proceeds, and the session stays visible with
+        # * flushing set so late arrivals drop instead of double-executing.
+        session = _proof_sessions.get(key)
+        if session is None or session.flushing or session.cancelled:
+            return
+        session.flushing = True
+        if (
+            not session.msgs
+            or not session.meta.get("ban_target_id")
+            or not session.meta.get("ban_admin_id")
+        ):
+            if session.msgs:
+                log.warning("Session flush aborted: meta missing target or admin")
+            return
+        log.info(
+            "Flushing proof session %s with %d media items", key, len(session.msgs)
+        )
+        try:
+            await _execute_ban(bot, session.msgs, session.meta)
+        except Exception:
+            log.exception("_execute_ban raised in _flush_session for %s", key)
+    except asyncio.CancelledError:
+        # * Done tap or cancel/timeout path took over; propagate so the
+        # * task ends, with shared cleanup below.
+        raise
     finally:
-        _clear_ban_state(user_data)
+        session = _proof_sessions.pop(key, None)
+        if session is not None:
+            _clear_ban_state(session.user_data)
 
 
 async def on_proof_unexpected(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -705,9 +781,12 @@ def ban_conversation(
                 CallbackQueryHandler(
                     on_cancel_proof, pattern=rf"^{proof.action}_cancel$"
                 ),
-                MessageHandler(filters.PHOTO | filters.VIDEO, on_proof_received),
+                CallbackQueryHandler(
+                    on_done_proof, pattern=rf"^{proof.action}_done_proof$"
+                ),
+                MessageHandler(PROOF_MEDIA_FILTER, on_proof_received),
                 MessageHandler(
-                    ~filters.PHOTO & ~filters.VIDEO & ~ALL_PREFIXES_CMD_FILTER,
+                    ~PROOF_MEDIA_FILTER & ~ALL_PREFIXES_CMD_FILTER,
                     on_proof_unexpected,
                 ),
             ],

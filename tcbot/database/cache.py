@@ -97,7 +97,7 @@ def _mongo_object_hook(value: dict[str, Any]) -> Any:
 
 
 # * Strong references to in-flight Redis background tasks; prevents GC before completion.
-# * Mirrors the pattern used in __main__._asyncio_report_tasks and ban_flow._album_tasks.
+# * Mirrors the pattern used in __main__._asyncio_report_tasks and ban_flow flush tasks.
 _redis_bg_tasks: set[asyncio.Task[None]] = set()
 # * Redis namespaces must be ordered across cache instances sharing a prefix.
 # * Scope by event loop because asyncio tasks cannot be awaited across loops.

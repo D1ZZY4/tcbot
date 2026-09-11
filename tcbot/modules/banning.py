@@ -61,8 +61,9 @@ __help_sections__: list[tuple[str, str]] = [
         replies.SEC_WHAT,
         f"Issues a {bold('federation-wide ban')} on the target, applied across all connected "
         "groups automatically. A reason is required - provide it directly after the target.\n\n"
-        "After the command, the bot walks you through the proof step: send one or more "
-        "photos or videos as evidence. Proof is required and is logged with the ban record "
+        "After the command, the bot walks you through the proof step: send photos, "
+        "videos, GIFs, or files as evidence, at once as one album or one by one, "
+        "then tap Done. Proof is required and is logged with the ban record "
         "to the federation log channel.\n\n"
         "If the user already has an active ban, the existing record is updated with the new "
         "reason and proof rather than creating a duplicate.\n"

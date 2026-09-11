@@ -93,11 +93,13 @@ Ban proof is required. The ban proof builder is created as:
 proof = BuildProof("ban", skip_allowed=False)
 ```
 
-That means the proof keyboard only provides `Cancel`; there is no `Skip` button for bans. The state accepts only photo or video messages:
+That means the proof keyboard provides `Done` and `Cancel`; there is no `Skip` button for bans. The state accepts photo, video, GIF (animation), and file messages (voice notes, video notes, and stickers stay rejected):
 
 - Single photo: uploaded with `send_photo` to the configured proof destination.
 - Single video: uploaded with `send_video` to the configured proof destination.
-- Media album: collected by `media_group_id`, debounced using `cfg.album_debounce`, and uploaded with `send_media_group`.
+- Single GIF or file: uploaded with `send_document`.
+- Mixed collection: every item sent before the flush lands in one proof session (album parts and sequential sends alike). Photos and videos travel together with `send_media_group` (caption on the first item); GIFs and files are sent individually after the gallery.
+- The session flushes when the moderator taps `Done`, after `cfg.album_debounce` seconds of silence, or at the 60 s collection cap.
 
 If the moderator cancels, the bot edits the prompt to `Cancelled. No ban was issued.` and ends the conversation.
 
@@ -331,7 +333,7 @@ Key behaviors to keep in mind:
 7. The proof prompt has no `Skip` option for bans.
 8. Cancel during proof collection issues no ban.
 9. A single photo proof creates a ban, uploads proof, logs the ban, and bans active groups.
-10. A media album proof is debounced and uploaded as an album.
+10. Proof media accumulate in one session (album or sequential sends, photos/videos/GIFs/files) and flush on `Done`, after `cfg.album_debounce` seconds of silence, or at the 60 s cap; photos and videos upload as one album, GIFs and files individually.
 11. A second ban against an already active-banned target updates the existing ban and preserves previous proof/log IDs.
 12. Failed group bans are counted in the final summary but do not roll back the DB record.
 13. `/checkme` on an active ban shows `Details`, optional `Proof`, and `Appeal` buttons.

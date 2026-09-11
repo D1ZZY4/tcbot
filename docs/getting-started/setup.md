@@ -141,7 +141,7 @@ PROOFS="-1001234567890"
 | `APPEAL_DISCUSSION_TOPIC` | Yes for reviews | integer thread ID | Topic inside `MAIN_GROUP` where review cards are posted. |
 | `PROOF_TIMEOUT_SECONDS` | No | integer seconds | Parsed into `cfg.proof_timeout`; **not currently enforced** (PTB `conversation_timeout` is not wired because the `[job-queue]` extra conflicts with this project's APScheduler setup). Conversations end via the command-fallback handler or the Cancel button. Default `100`; values below `1` fall back to default. |
 | `APPEAL_TIMEOUT_SECONDS` | No | integer seconds | Parsed into `cfg.appeal_timeout`; **not currently enforced** (same reason as `PROOF_TIMEOUT_SECONDS`). Default `600`; values below `1` fall back to default. |
-| `ALBUM_DEBOUNCE_SECONDS` | No | integer seconds | Album buffering window for ban proof media. Default `2`; values below `1` fall back to default. |
+| `ALBUM_DEBOUNCE_SECONDS` | No | integer seconds | Proof silence window for ban proof media. Default `4`; values below `1` fall back to default. |
 | `LOG_LEVEL` | No | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | Runtime logging level. Default `INFO`. |
 | `MODULES_LOAD` | No | comma-separated module names | Optional whitelist, e.g. `banning,appeals`. |
 | `MODULES_NO_LOAD` | No | comma-separated module names | Optional blacklist, e.g. `maintenance,broadcasting`. |

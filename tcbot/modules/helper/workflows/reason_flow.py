@@ -22,7 +22,7 @@ from telegram.ext import (
 )
 
 from tcbot.modules.helper import replies
-from tcbot.modules.helper.workflows.proof_flow import BuildProof
+from tcbot.modules.helper.workflows.proof_flow import PROOF_MEDIA_FILTER, BuildProof
 from tcbot.utils.formatter import bold, esc, mention
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 
@@ -167,7 +167,6 @@ class _ModActionFlow:
         self._prompt_chat_key = f"{action}_prompt_chat"
         self._prompt_id_key = f"{action}_prompt_id"
         self._exec_key = f"{action}_executing"
-        self._mgid_key = f"{action}_seen_mgid"
 
     # ── Helpers ───────────────────────────────────────────────────── #
 
@@ -282,40 +281,60 @@ class _ModActionFlow:
         if msg is None or ctx.user_data is None:
             return WAITING_PROOF
 
-        # * Double-submit guard: a previous _on_proof or _on_skip_proof call is
-        # * already running the executor.  Discard this duplicate update silently.
+        # * Double-submit guard: Done, Skip, or a racing duplicate is
+        # * already running the executor. Discard this update silently.
         if ctx.user_data.get(self._exec_key):
             return ConversationHandler.END
 
-        # * Album dedup: Telegram delivers each photo in a multi-photo album as a
-        # * separate update.  Without this guard every photo would invoke the
-        # * executor independently, producing duplicate DB records and log messages.
-        # * We record the media_group_id of the first photo we process and discard
-        # * any further photos from the same album.
-        if msg.media_group_id:
-            if ctx.user_data.get(self._mgid_key) == msg.media_group_id:
-                return ConversationHandler.END
-            ctx.user_data[self._mgid_key] = msg.media_group_id
-
-        # * Set the executing flag before the first await to close the race window.
-        ctx.user_data[self._exec_key] = True
-
-        # * Fast path: only photo/video reach here via the filter. Store the
-        # * Message for the proof-channel upload. The short text description
-        # * from BuildProof.record() has no reader, so it stays out of
-        # * user_data to keep conversation state lean.
-        if msg.photo or msg.video:
+        # * Buffer every proof item (album parts arrive as separate updates;
+        # * sequential sends accumulate too). Execution waits for the Done
+        # * button below, so multi-photo/video/GIF/file proof lands whole.
+        if msg.photo or msg.video or msg.animation or msg.document:
             existing: list = ctx.user_data.get(self._proof_msgs_key, [])
             ctx.user_data[self._proof_msgs_key] = [*existing, msg]
+        return WAITING_PROOF
+
+    async def _on_done_proof(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> int:
+        """Execute with everything collected once the moderator taps Done."""
+        q = update.callback_query
+        if q is None or ctx.user_data is None:
+            return ConversationHandler.END
+        msgs: list = ctx.user_data.get(self._proof_msgs_key, [])
+        if not msgs:
+            # * Nothing collected: nudge instead of silently skipping
+            # * (Skip exists for that) or executing an empty proof.
+            try:
+                await q.answer(
+                    "Send a photo, video, GIF, or file first, then tap Done.",
+                    show_alert=True,
+                )
+            except Exception as exc:
+                log.debug("%s done-proof empty answer failed: %s", self.action, exc)
+            return WAITING_PROOF
+        if ctx.user_data.get(self._exec_key):
+            try:
+                await q.answer()
+            except Exception as exc:
+                log.debug("%s done-proof dup q.answer failed: %s", self.action, exc)
+            return ConversationHandler.END
+        # * Set the executing flag before the first await to close the race
+        # * window; the update here is the live Done tap, so the executor
+        # * below never touches a stale stored Update object.
+        ctx.user_data[self._exec_key] = True
+        try:
+            await q.answer()
+        except Exception as exc:
+            log.debug("%s done-proof q.answer failed: %s", self.action, exc)
         try:
             await self.executor(update, ctx)
         except BaseException:
-            # * Mirror _on_skip_proof: clear state before propagating so a
-            # * failed executor does not leak {action}_* keys into the next
-            # * conversation. CancelledError is re-raised unchanged.
+            # * Mirror the old immediate contract: clear state before
+            # * propagating so a failed executor does not leak keys.
+            # * CancelledError is re-raised unchanged.
             self._clear_user_data(ctx)
             raise
-        # * Clear state so the conversation does not leak keys across sessions.
         self._clear_user_data(ctx)
         return ConversationHandler.END
 
@@ -381,7 +400,7 @@ class _ModActionFlow:
         if update.effective_message:
             try:
                 await update.effective_message.reply_text(
-                    "Please send a photo or video as proof, or press Skip / Cancel."
+                    "Please send a photo, video, GIF, or file as proof, or press Skip / Cancel."
                 )
             except Exception as exc:
                 log.debug("%s proof-unexpected reply failed: %s", self.action, exc)
@@ -448,13 +467,16 @@ class _ModActionFlow:
             )
 
         proof_state = [
-            MessageHandler(filters.PHOTO | filters.VIDEO, self._on_proof),
+            MessageHandler(PROOF_MEDIA_FILTER, self._on_proof),
             CallbackQueryHandler(
                 self._on_skip_proof, pattern=rf"^{self.action}_skip_proof$"
             ),
+            CallbackQueryHandler(
+                self._on_done_proof, pattern=rf"^{self.action}_done_proof$"
+            ),
             CallbackQueryHandler(self._on_cancel, pattern=rf"^{self.action}_cancel$"),
             MessageHandler(
-                ~filters.PHOTO & ~filters.VIDEO & ~ALL_PREFIXES_CMD_FILTER,
+                ~PROOF_MEDIA_FILTER & ~ALL_PREFIXES_CMD_FILTER,
                 self._on_proof_unexpected,
             ),
         ]

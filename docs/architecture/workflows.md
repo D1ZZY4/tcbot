@@ -29,8 +29,8 @@ Conversation and multi-step logic lives in `tcbot/modules/helper/workflows/`. Ne
 | `BuildProof.keyboard()` | Returns `[Skip] [Cancel]` when skipping is allowed, otherwise `[Cancel]`. |
 | `BuildProof.step_prompt(...)` | Prompt after an in-conversation reason. |
 | `BuildProof.noted_prompt(...)` | Prompt when a reason was provided inline. |
-| `BuildProof.record(msg)` | Returns a short proof description for photo/video messages. Kept for backward compatibility; the shared reason flow no longer stores its result because no executor reads it. |
-| `upload_proof(bot, msgs, caption, proof_chat, proof_thread)` | Uploads one proof item or an album and returns the uploaded message ID. Returns `None` fast without Telegram I/O on empty input or an album with no photo/video item. |
+| `BuildProof.record(msg)` | Returns a short proof description for photo/video/GIF/file messages. Kept for backward compatibility; the shared reason flow no longer stores its result because no executor reads it. |
+| `upload_proof(bot, msgs, caption, proof_chat, proof_thread)` | Uploads proof media and returns the first uploaded message ID. Photos and videos travel as one media group (caption on the first item); GIFs and files are sent individually after the gallery. Returns `None` fast without Telegram I/O on empty input or a batch with no usable item; a failed document is logged and skipped. |
 
 ## Shared reason factory: `reason_flow.py`
 
@@ -54,12 +54,11 @@ Exports:
 
 The shared factory stores action-specific values in `ctx.user_data`, then calls the supplied executor adapter. When a moderator submits proof media, `_on_proof` stores the actual `Message` objects (`{action}_proof_msgs`) in `user_data`. Executors pop `{action}_proof_msgs` and upload them to the proof channel via `upload_proof()`; the resulting URL is shown as an inline keyboard button via `keyboards.action_proof_kb()`. The short text description from `BuildProof.record()` has no reader and is intentionally kept out of `user_data` to keep conversation state lean.
 
-`_on_proof` and `_on_skip_proof` include two in-flight guards stored in `ctx.user_data`:
+`_on_proof` buffers every proof item (`{action}_proof_msgs`) until the moderator taps `Done`; `_on_done_proof` runs the executor with the live tap update. Tapping `Done` with nothing collected answers with a retry alert and stays put.
 
-- `{action}_executing` - set to `True` before the first `await` in either handler; any duplicate call (double-tap, rapid proof send) that arrives while the executor is running returns `ConversationHandler.END` immediately.
-- `{action}_seen_mgid` - records the `media_group_id` of the first photo in an album; subsequent photos from the same album are discarded so the executor fires only once.
+- `{action}_executing` - set to `True` before the first `await` in the Done/Skip handlers; any duplicate call (double-tap, racing media) that arrives while the executor is running returns `ConversationHandler.END` immediately.
 
-Both keys are cleared automatically by `_clear_user_data` (prefix `{action}_`) on cancel, timeout, and END.
+The key is cleared automatically by `_clear_user_data` (prefix `{action}_`) on cancel, timeout, and END.
 
 ```mermaid
 flowchart TD
@@ -67,7 +66,7 @@ flowchart TD
     Entry --> Proof[WAITING_PROOF]
     Reason -->|text reason| Proof
     Reason -->|skip reason| Proof
-    Proof -->|photo/video| Exec[executor]
+    Proof -->|media, then Done| Exec[executor]
     Proof -->|skip proof| Exec
     Reason -->|cancel| End[ConversationHandler.END]
     Proof -->|cancel| End
@@ -87,13 +86,13 @@ Ban differs from the shared reason flow:
 
 - The reason must be supplied in the command message.
 - Proof is required by UI (`skip_allowed=False`).
-- Photo/video albums are buffered by `media_group_id` and flushed after `cfg.album_debounce`.
+- Proof media accumulate in one session keyed by `(chat_id, user_id)` and flush on `Done`, after `cfg.album_debounce` seconds of silence, or at the 60 s collection cap; the flush claim is a synchronous check-and-set so Done and the timer can never double-execute.
 - `_execute_ban()` uploads proof, then writes the `bans` document and posts the audit log in parallel (`_execute_new_ban` / `_execute_ban_update` return `(log_msg_id, db_ok)`). When the database write fails the flow aborts before `fan_out()` so no group is touched. Only after the record lands does it fan out bans to active groups with `fan_out()`, then edit the prompt summary and DM the appeal link.
 
 ```mermaid
 flowchart TD
     Entry[entry_fn - reason inline] --> Proof[WAITING_PROOF]
-    Proof -->|photo/video/album| Exec[_execute_ban]
+    Proof -->|media, then Done (or silence window)| Exec[_execute_ban]
     Proof -->|cancel| End[ConversationHandler.END]
     Proof -->|timeout| Timeout[on_proof_timeout]
     Timeout --> End
@@ -149,7 +148,7 @@ flowchart TD
     Reason -->|text reason| Proof
     Reason -->|skip| Proof
     Reason -->|cancel| End[ConversationHandler.END]
-    Proof -->|photo/video| Exec[_execute_mute]
+    Proof -->|media, then Done| Exec[_execute_mute]
     Proof -->|skip| Exec
     Proof -->|cancel| End
     Exec -->|persist record first, abort on DB failure| Stored[log_mute + set_active_mute]

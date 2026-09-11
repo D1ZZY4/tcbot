@@ -136,12 +136,12 @@ Inline reasons share the same 1000-character cap as typed reasons (`reason_flow.
 
 ## Reason and proof behavior
 
-The mute conversation uses `BuildReason("mute")` and `BuildProof("mute")` (both default to `skip_allowed=True`). Both keyboards expose `Skip` (when allowed) and `Cancel`:
+The mute conversation uses `BuildReason("mute")` and `BuildProof("mute")` (both default to `skip_allowed=True`). The reason keyboard exposes `Skip` and `Cancel`; the proof keyboard exposes `Skip`, `Done`, and `Cancel`:
 
 - Reason: text, `Skip`, `Cancel`.
-- Proof: photo, video, `Skip`, `Cancel`.
+- Proof: photo, video, GIF, file, `Skip`, `Done`, `Cancel`.
 
-The `_ModActionFlow` class in `reason_flow.py` enforces the same race-safe semantics described in [`kicking.md`](kicking.md): album dedup via `media_group_id`, double-submit guard via `ctx.user_data[mute_executing]`, fallback cancel on any unrecognized command.
+The `_ModActionFlow` class in `reason_flow.py` enforces the same race-safe semantics described in [`kicking.md`](kicking.md): proof buffering until `Done`, double-submit guard via `ctx.user_data[mute_executing]`, fallback cancel on any unrecognized command.
 
 ## Auto-demote before mute
 

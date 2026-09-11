@@ -343,7 +343,7 @@ class Configs:
             ),
             extend_group=os.getenv("EXTEND_GROUP", "").strip(),
             album_debounce_seconds=_int_from_env(
-                "ALBUM_DEBOUNCE_SECONDS", 2, minimum=1
+                "ALBUM_DEBOUNCE_SECONDS", 4, minimum=1
             ),
             log_level=_parse_log_level(os.getenv("LOG_LEVEL", "INFO")),
             modules_load=_env_list("MODULES_LOAD"),

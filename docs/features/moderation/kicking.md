@@ -91,17 +91,17 @@ Inline reasons share the same 1000-character cap as typed reasons (`reason_flow.
 
 ## Reason and proof behavior
 
-The kick conversation uses `BuildReason("kick")` and `BuildProof("kick")` (both default to `skip_allowed=True`). Both keyboards expose `Skip` (when allowed) and `Cancel`:
+The kick conversation uses `BuildReason("kick")` and `BuildProof("kick")` (both default to `skip_allowed=True`). The reason keyboard exposes `Skip` and `Cancel`; the proof keyboard exposes `Skip`, `Done`, and `Cancel`:
 
 - Reason: text, `Skip`, `Cancel`.
-- Proof: photo, video, `Skip`, `Cancel`.
+- Proof: photo, video, GIF, file, `Skip`, `Done`, `Cancel`.
 
 The reason keyboard is built by `reason.keyboard()` and the proof keyboard by `proof.keyboard()`; each only contains `Skip` when its builder allows skipping.
 
 `WAITING_REASON` and `WAITING_PROOF` use the `_ModActionFlow` class in `reason_flow.py`. Its key invariants:
 
-- `_on_proof` sets `ctx.user_data[action_executing]` before the first await to close the race window. A second concurrent proof update returns `ConversationHandler.END` immediately.
-- Album dedup: each photo in a multi-photo album shares a `media_group_id`; only the first photo invokes the executor.
+- `_on_proof` buffers every proof item (album parts and sequential sends alike) and the executor runs only when the moderator taps `Done`. A second concurrent update while executing returns `ConversationHandler.END` immediately.
+- Tapping `Done` with nothing collected answers with a retry alert and stays in `WAITING_PROOF` instead of executing an empty proof.
 - The proof prompt message ID is stashed in `ctx.user_data` so the reason step can edit it in place when transitioning to `WAITING_PROOF`.
 - The fallback filter swallows any other command during the conversation unless the user types a recognized command, in which case the conversation ends with `<action> operation cancelled.`
 
@@ -192,8 +192,8 @@ Key behaviors to keep in mind:
 6. Role-holding targets are auto-demoted before the kick; if the demote fails the kick is aborted with an error reply.
 7. Reason is skippable; skipped reason records as `replies.NO_REASON`.
 8. Proof is skippable; skipped proof records nothing.
-9. The `WAITING_PROOF` step accepts photos and videos; non-media messages bounce with a friendly prompt.
-10. Albums are deduped by `media_group_id`; only the first photo invokes the executor.
+9. The `WAITING_PROOF` step accepts photos, videos, GIFs, and files; other messages bounce with a friendly prompt.
+10. Proof items accumulate until the moderator taps `Done` (an empty `Done` answers with a retry alert); the executor then runs once with everything collected.
 11. The proof prompt edits in place across the reason-to-proof transition when a prompt ID is stashed in `ctx.user_data`.
 12. `execute_kick` runs `ban_chat_member` then `unban_chat_member(..., only_if_banned=True)` so the user can rejoin via invite link.
 13. The federation log post and the DB `log_kick` happen in parallel with the post-ban unban; partial failures are logged but the kick still completes.

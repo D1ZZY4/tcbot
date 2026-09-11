@@ -71,7 +71,7 @@ The warning command uses the shared reason/proof conversation infrastructure.
 6. The target role is checked against the executor role.
 7. If a reason was supplied inline, the bot skips directly to proof collection.
 8. If no reason was supplied, the bot asks for a reason.
-9. Proof is optional; the moderator can send photo/video proof or tap `Skip`.
+9. Proof is optional; the moderator can send photo/video/GIF/file proof then tap `Done`, or tap `Skip`.
 10. The bot writes the warning, sends a federation log, and replies with the new count or auto-ban result.
 
 ## Target resolution and reason parsing
@@ -111,8 +111,7 @@ Warning proof is optional. The proof step uses `BuildProof("warn")`, which allow
 
 Proof options:
 
-- Send a photo.
-- Send a video.
+- Send photos, videos, GIFs, or files (one album or one by one), then tap `Done`.
 - Tap `Skip` to warn without proof.
 - Tap `Cancel` to stop the operation.
 
@@ -315,6 +314,7 @@ The warning conversation uses callback buttons from the shared reason/proof buil
 |---|---|---|---|
 | Reason | `Cancel` | `warn_cancel` | Cancels the warning. |
 | Proof | `Skip` | `warn_skip_proof` | Executes the warning without proof. |
+| Proof | `Done` | `warn_done_proof` | Executes the warning with everything collected. Empty tap answers with a retry alert. |
 | Proof | `Cancel` | `warn_cancel` | Cancels the warning. |
 
 There is no `warn_skip_reason` callback because warning reasons are required.
@@ -348,7 +348,7 @@ Key warning behaviors to keep in mind:
 2. `/tcwarn` without a target is rejected.
 3. `/tcwarn` with inline reason skips the reason prompt and asks for proof.
 4. `/tcwarn` without inline reason asks for a reason and does not offer `Skip` for reason.
-5. Proof step offers `Skip` and `Cancel`.
+5. Proof step offers `Skip`, `Done`, and `Cancel`.
 6. Warning count increments per `(user_id, chat_id)`.
 7. Warning counts are stored per group but two auto-ban thresholds exist: `cfg.warn_limit` (env var `WARN_LIMIT`, per-group, default 3, minimum 1, uses `>=` so a post-failure retry still fires) and `FED_WARN_LIMIT` (federation-wide, default 0 = disabled, uses `>=` because the cross-group aggregate is not atomic).
 8. `/warns` lists reasons oldest first.
