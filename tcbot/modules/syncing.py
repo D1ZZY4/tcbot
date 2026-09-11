@@ -17,6 +17,7 @@ from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot import database as db
 from tcbot.modules.helper import decorators, extraction, replies
+from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import (
     fan_out,
     is_benign_telegram_error,
@@ -368,10 +369,7 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             return
         except Exception as exc:
             log.debug("sync status edit failed: %s", exc)
-    try:
-        await msg.reply_text(text, parse_mode="HTML")
-    except Exception as exc:
-        log.debug("sync summary reply failed: %s", exc)
+    await safe_reply(msg, text, log_label="sync summary")
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

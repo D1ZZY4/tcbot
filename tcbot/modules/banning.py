@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
+from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.ban_flow import (
     WAITING_PROOF,
     ban_conversation,
@@ -25,6 +26,7 @@ from tcbot.modules.helper.workflows.reason_flow import (
     parse_inline_reason,
     reason_too_long_text,
 )
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, code, mention
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -122,26 +124,32 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     )
 
     if not target_id:
-        try:
-            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
-        except Exception as exc:
-            log.debug("cmd_ban_start no-target reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            replies.ERR_CANNOT_RESOLVE,
+            log_label="cmd_ban_start no-target",
+            parse_mode=None,
+        )
         return ConversationHandler.END
 
     if not ban_reason:
-        try:
-            await msg.reply_text(_ERR_REASON_REQUIRED)
-        except Exception as exc:
-            log.debug("cmd_ban_start no-reason reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            _ERR_REASON_REQUIRED,
+            log_label="cmd_ban_start no-reason",
+            parse_mode=None,
+        )
         return ConversationHandler.END
 
     # * Fail fast on overlong inline reasons with the same cap and text as
     # * the typed-reason path, before any role I/O or demote work.
     if is_reason_too_long(ban_reason):
-        try:
-            await msg.reply_text(reason_too_long_text(len(ban_reason)))
-        except Exception as exc:
-            log.debug("cmd_ban_start reason-too-long reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            reason_too_long_text(len(ban_reason)),
+            log_label="cmd_ban_start reason-too-long",
+            parse_mode=None,
+        )
         return ConversationHandler.END
 
     # * Identity check + role lookup happen in parallel; both depend only on
@@ -152,10 +160,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         resolve_and_check(msg, admin.id, target_id, min_role="developer"),
         return_exceptions=True,
     )
-    if isinstance(ident, asyncio.CancelledError):
-        raise ident
-    if isinstance(role_result, asyncio.CancelledError):
-        raise role_result
+    throw_if_cancelled((ident, role_result))
     if isinstance(ident, BaseException):
         log.exception("identity.classify failed in cmd_ban_start: %s", ident)
         return ConversationHandler.END
@@ -172,10 +177,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     refusal = identity.refuse_message("ban", ident)
     if refusal is not None:
-        try:
-            await msg.reply_text(refusal, parse_mode="HTML")
-        except Exception as exc:
-            log.debug("cmd_ban_start refusal reply failed: %s", exc)
+        await safe_reply(msg, refusal, log_label="cmd_ban_start refusal")
         return ConversationHandler.END
 
     # * Auto-demote is required before the ban to preserve the

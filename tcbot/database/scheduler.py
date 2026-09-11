@@ -43,6 +43,7 @@ from tcbot.database.bans_db import deactivate_ban as _bans_deactivate
 from tcbot.database.mongos import col as _col
 from tcbot.database.mongos import db_call as _db_call
 from tcbot.database.mongos import mongo_client_kwargs as _mongo_client_kwargs
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
@@ -110,10 +111,7 @@ async def expire_old_warns(warn_expiry_days: int) -> None:
         return_exceptions=True,
     )
     # ! CRITICAL: a cancelled expiry must propagate, not report success.
-    if isinstance(counts_res, asyncio.CancelledError):
-        raise counts_res
-    if isinstance(warns_res, asyncio.CancelledError):
-        raise warns_res
+    throw_if_cancelled((counts_res, warns_res))
     if isinstance(counts_res, BaseException):
         log.error("Warn expiry: warn_counts delete failed: %s", counts_res)
     if isinstance(warns_res, BaseException):

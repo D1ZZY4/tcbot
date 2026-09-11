@@ -14,6 +14,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.database import documents as docs
 from tcbot.modules.helper import parse_logmsg
+from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import (
     count_transient_errors,
     fan_out,
@@ -63,15 +64,11 @@ async def execute_unban(
 
     if not ban:
         if msg is not None:
-            try:
-                await msg.reply_text(
-                    f"{user_ref(target_id, target_fname)} has no active federation ban.",
-                    parse_mode="HTML",
-                )
-            except Exception as exc:
-                log.debug(
-                    "Unban no-record reply failed for user %d: %s", target_id, exc
-                )
+            await safe_reply(
+                msg,
+                f"{user_ref(target_id, target_fname)} has no active federation ban.",
+                log_label=f"Unban no-record for user {target_id}",
+            )
         return
 
     ban_id = ban.get("ban_id", "")
@@ -88,15 +85,13 @@ async def execute_unban(
     except Exception:
         log.exception("active_groups failed during unban of %d", target_id)
         if msg is not None:
-            try:
-                await msg.reply_text(
-                    f"{user_ref(target_id, target_fname)} could not be unbanned: "
-                    "the group list could not be loaded from the database, so "
-                    "nothing was changed. Check the logs and retry.",
-                    parse_mode="HTML",
-                )
-            except Exception as exc:
-                log.debug("Unban groups-fail reply failed: %s", exc)
+            await safe_reply(
+                msg,
+                f"{user_ref(target_id, target_fname)} could not be unbanned: "
+                "the group list could not be loaded from the database, so "
+                "nothing was changed. Check the logs and retry.",
+                log_label="Unban groups-fail",
+            )
         return
 
     # * Deactivate ALL active bans for this user (not only the one found by
@@ -127,16 +122,14 @@ async def execute_unban(
             deactivate_r,
         )
         if msg is not None:
-            try:
-                await msg.reply_text(
-                    f"{user_ref(target_id, target_fname)} could not be unbanned: "
-                    "the database deactivation failed, so the user is still "
-                    "marked as banned even if they are now unmuted in chats. "
-                    "Check the logs and retry.",
-                    parse_mode="HTML",
-                )
-            except Exception as exc:
-                log.debug("Unban DB-fail reply failed: %s", exc)
+            await safe_reply(
+                msg,
+                f"{user_ref(target_id, target_fname)} could not be unbanned: "
+                "the database deactivation failed, so the user is still "
+                "marked as banned even if they are now unmuted in chats. "
+                "Check the logs and retry.",
+                log_label="Unban DB-fail",
+            )
         return
 
     # * Include primary groups not already in the connected list

@@ -16,6 +16,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
+from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.formatter import bold, code, esc
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
@@ -104,10 +105,12 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     if chat.type == "private":
-        try:
-            await msg.reply_text(replies.ERR_GROUP_ONLY)
-        except Exception as exc:
-            log.debug("cmd_tcleave group-only reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            replies.ERR_GROUP_ONLY,
+            log_label="cmd_tcleave group-only",
+            parse_mode=None,
+        )
         return
 
     # * Primary groups (main, exec) are required destinations for ban /
@@ -115,10 +118,12 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     # * must never be disconnected by the group owner; the bot would
     # * lose primary-group enforcement and log delivery.
     if cfg.is_primary_group(chat.id):
-        try:
-            await msg.reply_text(_MSG_PRIMARY_REFUSED)
-        except Exception as exc:
-            log.debug("cmd_tcleave primary-group reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            _MSG_PRIMARY_REFUSED,
+            log_label="cmd_tcleave primary-group",
+            parse_mode=None,
+        )
         return
 
     # * Pre-fetch all three in parallel: is_connected (cache-backed), staff check,
@@ -134,28 +139,30 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     )
     if isinstance(is_connected, BaseException):
         log.warning("is_connected check failed for chat=%d: %s", chat.id, is_connected)
-        try:
-            await msg.reply_text(
-                "Could not verify the group status due to a server error. "
-                "Please try again."
-            )
-        except Exception as exc:
-            log.debug("cmd_tcleave status-check-failed reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            "Could not verify the group status due to a server error. "
+            "Please try again.",
+            log_label="cmd_tcleave status-check-failed",
+            parse_mode=None,
+        )
         return
     if not is_connected:
-        try:
-            await msg.reply_text(
-                f"This group is not connected to {cfg.community_name}."
-            )
-        except Exception as exc:
-            log.debug("cmd_tcleave not-connected reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            f"This group is not connected to {cfg.community_name}.",
+            log_label="cmd_tcleave not-connected",
+            parse_mode=None,
+        )
         return
     if isinstance(member, BaseException):
         log.debug("Disconnect: get_chat_member failed for %d: %s", chat.id, member)
-        try:
-            await msg.reply_text(replies.ERR_ROLE_VERIFY)
-        except Exception as exc:
-            log.debug("cmd_tcleave role-verify reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            replies.ERR_ROLE_VERIFY,
+            log_label="cmd_tcleave role-verify",
+            parse_mode=None,
+        )
         return
     if isinstance(is_tc_staff, BaseException):
         is_tc_staff = False
@@ -169,10 +176,9 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             )
         else:
             msg_text = "Only the group owner or TC admins can disconnect this group."
-        try:
-            await msg.reply_text(msg_text)
-        except Exception as exc:
-            log.debug("cmd_tcleave not-authorized reply failed: %s", exc)
+        await safe_reply(
+            msg, msg_text, log_label="cmd_tcleave not-authorized", parse_mode=None
+        )
         return
 
     lc, lt = cfg.logs
@@ -184,13 +190,13 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         log.exception("deactivate_group failed for chat %d during tcleave", chat.id)
         deactivated = False
     if not deactivated:
-        try:
-            await msg.reply_text(
-                "Failed to disconnect the group due to a server error. "
-                "The bot is still here; please try again."
-            )
-        except Exception as exc:
-            log.debug("cmd_tcleave deactivate-failed reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            "Failed to disconnect the group due to a server error. "
+            "The bot is still here; please try again.",
+            log_label="cmd_tcleave deactivate-failed",
+            parse_mode=None,
+        )
         return
     log_r, reply_r, leave_r = await asyncio.gather(
         ctx.bot.send_message(
@@ -232,10 +238,9 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     args = parse_cmd_args(msg.text)
     if not args or not args[0].lstrip("-").isdigit():
-        try:
-            await msg.reply_text(_MSG_RMTC_USAGE)
-        except Exception as exc:
-            log.debug("cmd_rmtc usage reply failed: %s", exc)
+        await safe_reply(
+            msg, _MSG_RMTC_USAGE, log_label="cmd_rmtc usage", parse_mode=None
+        )
         return
 
     chat_id = int(args[0])
@@ -245,10 +250,12 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * must never be force-disconnected by /rmtc; the bot would lose
     # * primary-group enforcement and log delivery.
     if cfg.is_primary_group(chat_id):
-        try:
-            await msg.reply_text(_MSG_PRIMARY_REFUSED)
-        except Exception as exc:
-            log.debug("cmd_rmtc primary-group reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            _MSG_PRIMARY_REFUSED,
+            log_label="cmd_rmtc primary-group",
+            parse_mode=None,
+        )
         return
 
     # * Mirror cmd_tcdisconnect: never leave on an unconfirmed DB write,
@@ -257,13 +264,12 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         removed = await db.groups_db.deactivate_group(chat_id)
     except Exception:
         log.exception("deactivate_group failed for chat %d during rmtc", chat_id)
-        try:
-            await msg.reply_text(
-                "Failed to disconnect the group due to a server error. "
-                "Please try again."
-            )
-        except Exception as exc:
-            log.debug("cmd_rmtc deactivate-failed reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            "Failed to disconnect the group due to a server error. Please try again.",
+            log_label="cmd_rmtc deactivate-failed",
+            parse_mode=None,
+        )
         return
     if removed:
         lc, lt = cfg.logs
@@ -294,10 +300,12 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if isinstance(reply_r, BaseException):
             log.debug("rmtc reply failed for chat %d: %s", chat_id, reply_r)
     else:
-        try:
-            await msg.reply_text(replies.ERR_GROUP_NOT_FOUND)
-        except Exception as exc:
-            log.debug("cmd_rmtc not-found reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            replies.ERR_GROUP_NOT_FOUND,
+            log_label="cmd_rmtc not-found",
+            parse_mode=None,
+        )
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

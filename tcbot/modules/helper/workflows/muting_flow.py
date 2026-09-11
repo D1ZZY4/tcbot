@@ -17,6 +17,7 @@ from telegram import Bot, ChatPermissions, Update
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg, replies
+from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
@@ -296,10 +297,9 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
     if isinstance(edit_r, BaseException):
         msg = update.effective_message
         if msg:
-            try:
-                await msg.reply_text(summary, parse_mode="HTML", reply_markup=proof_kb)
-            except Exception as exc:
-                log.debug("Mute summary fallback reply failed: %s", exc)
+            await safe_reply(
+                msg, summary, log_label="Mute summary fallback", reply_markup=proof_kb
+            )
 
 
 # ───────────────────────── Unmute executor ──────────────────────── #
@@ -331,19 +331,16 @@ async def execute_unmute(
         active_mute = await db.mutes_db.get_active_mute(target_id)
     except Exception:
         log.exception("get_active_mute failed for target=%d", target_id)
-        try:
-            await msg.reply_text(_ERR_DB_RETRY)
-        except Exception as exc:
-            log.debug("execute_unmute DB-fail reply failed: %s", exc)
+        await safe_reply(
+            msg, _ERR_DB_RETRY, log_label="execute_unmute DB-fail", parse_mode=None
+        )
         return
     if active_mute is None:
-        try:
-            await msg.reply_text(
-                f"{user_ref(target_id, target_name)} has no active federation mute.",
-                parse_mode="HTML",
-            )
-        except Exception as exc:
-            log.debug("execute_unmute no-mute reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            f"{user_ref(target_id, target_name)} has no active federation mute.",
+            log_label="execute_unmute no-mute",
+        )
         return
 
     full_perms = ChatPermissions(
@@ -363,10 +360,9 @@ async def execute_unmute(
         groups = await db.groups_db.active_groups()
     except Exception:
         log.exception("active_groups failed during unmute of %d", target_id)
-        try:
-            await msg.reply_text(_ERR_DB_RETRY)
-        except Exception as exc:
-            log.debug("execute_unmute groups-fail reply failed: %s", exc)
+        await safe_reply(
+            msg, _ERR_DB_RETRY, log_label="execute_unmute groups-fail", parse_mode=None
+        )
         return
     # * Unrestrict across all connected groups + primary groups - semaphore-bounded
     _pri_ids = [cid for cid in (cfg.main_group, cfg.exec_group) if cid]

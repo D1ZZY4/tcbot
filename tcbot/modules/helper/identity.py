@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from tcbot import database as db
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import esc, user_ref
 
 if TYPE_CHECKING:
@@ -103,10 +104,7 @@ async def classify(
         db.users_roles.get_effective_role(target_id),
         return_exceptions=True,
     )
-    if isinstance(mention_data, asyncio.CancelledError):
-        raise mention_data
-    if isinstance(role_result, asyncio.CancelledError):
-        raise role_result
+    throw_if_cancelled((mention_data, role_result))
     (cached_fname, target_username) = (
         mention_data if not isinstance(mention_data, BaseException) else (None, None)
     )

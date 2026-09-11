@@ -17,6 +17,7 @@ from tcbot import database as db
 from tcbot.modules.about import __about_msg__
 from tcbot.modules.groups import _render
 from tcbot.modules.helper import decorators, keyboards, replies
+from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.formatter import bold, esc
 from tcbot.utils.prefixes import build_prefixed_filters
 
@@ -84,37 +85,31 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * Group / supergroup context - send a minimal message with PM link
     if chat.type in ("group", "supergroup", "forum"):
         bot_username = ctx.bot.username or ""
-        try:
-            await msg.reply_text(
-                _group_start_text(botname),
-                parse_mode="HTML",
-                reply_markup=keyboards.group_start_kb(bot_username),
-            )
-        except Exception as exc:
-            log.debug("cmd_start group reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            _group_start_text(botname),
+            log_label="cmd_start group",
+            reply_markup=keyboards.group_start_kb(bot_username),
+        )
         return
 
     # * PM context below
     if arg == "about":
-        try:
-            await msg.reply_text(
-                __about_msg__,
-                parse_mode="HTML",
-                reply_markup=keyboards.back_to_start_kb(),
-            )
-        except Exception as exc:
-            log.debug("cmd_start about reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            __about_msg__,
+            log_label="cmd_start about",
+            reply_markup=keyboards.back_to_start_kb(),
+        )
         return
 
     # * appeal<ban_id> deep links are handled by the ConversationHandler in appeals.py
-    try:
-        await msg.reply_text(
-            _private_start_text(botname),
-            parse_mode="HTML",
-            reply_markup=keyboards.main_menu_kb(),
-        )
-    except Exception as exc:
-        log.debug("cmd_start PM reply failed: %s", exc)
+    await safe_reply(
+        msg,
+        _private_start_text(botname),
+        log_label="cmd_start PM",
+        reply_markup=keyboards.main_menu_kb(),
+    )
 
 
 # ──────────────────────── Callback Handlers ─────────────────────── #

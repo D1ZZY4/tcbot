@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg, replies
+from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
@@ -171,17 +172,14 @@ async def execute_kick(
                 )
             except Exception as exc:
                 log.debug("Kick summary prompt edit failed: %s", exc)
-                try:
-                    await msg.reply_text(
-                        summary, parse_mode="HTML", reply_markup=proof_kb
-                    )
-                except Exception as reply_exc:
-                    log.debug("Kick summary fallback reply failed: %s", reply_exc)
+                await safe_reply(
+                    msg,
+                    summary,
+                    log_label="Kick summary fallback",
+                    reply_markup=proof_kb,
+                )
         else:
-            try:
-                await msg.reply_text(summary, parse_mode="HTML", reply_markup=proof_kb)
-            except Exception as exc:
-                log.debug("Kick reply_text failed: %s", exc)
+            await safe_reply(msg, summary, log_label="Kick", reply_markup=proof_kb)
     except Exception:
         # * Ban failed while the proof upload may still be in flight: cancel
         # * it so no orphan upload outlives this executor.
@@ -189,14 +187,12 @@ async def execute_kick(
             proof_task.cancel()
             await asyncio.gather(proof_task, return_exceptions=True)
         log.exception("Kick failed for %s in %s", target_id, chat_id)
-        try:
-            await msg.reply_text(
-                f"Couldn't kick {mention(target_id, target_name)}. "
-                "Please check bot permissions and retry.",
-                parse_mode="HTML",
-            )
-        except Exception as reply_exc:
-            log.debug("Kick error reply failed: %s", reply_exc)
+        await safe_reply(
+            msg,
+            f"Couldn't kick {mention(target_id, target_name)}. "
+            "Please check bot permissions and retry.",
+            log_label="Kick error",
+        )
 
 
 # ──────────────────────── Executor adapter ──────────────────────── #

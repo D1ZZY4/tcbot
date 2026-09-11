@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.keyboards import tcgroups_kb
-from tcbot.modules.helper.parse_editmsg import safe_edit
+from tcbot.modules.helper.parse_editmsg import safe_edit, safe_reply
 from tcbot.utils.formatter import bold, code, esc
 from tcbot.utils.prefixes import build_prefixed_filters
 
@@ -111,26 +111,28 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         groups = await db.groups_db.active_groups()
     except Exception:
         log.exception("active_groups failed during tcgroups")
-        try:
-            await msg.reply_text(replies.ERR_GROUPS_LOAD_FAILED)
-        except Exception as exc:
-            log.debug("tcgroups groups-failed reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            replies.ERR_GROUPS_LOAD_FAILED,
+            log_label="tcgroups groups-failed",
+            parse_mode=None,
+        )
         return
     if not groups:
-        try:
-            await msg.reply_text(f"No groups are currently connected to {_CNAME}.")
-        except Exception as exc:
-            log.debug("tcgroups no-groups reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            f"No groups are currently connected to {_CNAME}.",
+            log_label="tcgroups no-groups",
+            parse_mode=None,
+        )
         return
 
-    try:
-        await msg.reply_text(
-            _render(groups, detailed=False),
-            parse_mode="HTML",
-            reply_markup=tcgroups_kb(detailed=False),
-        )
-    except Exception as exc:
-        log.debug("tcgroups list reply failed: %s", exc)
+    await safe_reply(
+        msg,
+        _render(groups, detailed=False),
+        log_label="tcgroups list",
+        reply_markup=tcgroups_kb(detailed=False),
+    )
 
 
 # ────────────── Callback Handlers (Details & Simple) ────────────── #

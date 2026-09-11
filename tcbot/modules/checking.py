@@ -16,7 +16,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, extraction, keyboards, replies
 from tcbot.modules.helper.ban_info import build_ban_detail
-from tcbot.modules.helper.parse_editmsg import safe_edit_cb
+from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.check_flow import Check
 from tcbot.utils.formatter import bold, code, esc, mention
@@ -169,10 +169,9 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * without this guard an anonymous-admin /checkme would get a misleading
     # * "You're clean" verdict for an ID that can never be banned or staffed.
     if user.is_bot:
-        try:
-            await msg.reply_text(_ERR_BOT_SENDER)
-        except Exception as exc:
-            log.debug("checkme bot-sender reply failed: %s", exc)
+        await safe_reply(
+            msg, _ERR_BOT_SENDER, log_label="checkme bot-sender", parse_mode=None
+        )
         return
     fname = user.first_name or str(user.id)
 
@@ -194,10 +193,12 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * this path because nothing about the caller could be verified.
     if isinstance(ban, BaseException):
         log.warning("checkme ban lookup failed for user=%d: %s", user.id, ban)
-        try:
-            await msg.reply_text(_ERR_STATUS_RETRY)
-        except Exception as exc:
-            log.debug("checkme retry reply failed for user %d: %s", user.id, exc)
+        await safe_reply(
+            msg,
+            _ERR_STATUS_RETRY,
+            log_label=f"checkme retry for user {user.id}",
+            parse_mode=None,
+        )
         return
 
     # * If the caller has an active ban, ALWAYS show the ban summary with
@@ -206,51 +207,47 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * would otherwise tell them "you're fine" while they are banned.
     if ban is not None:
         text, proof_link = await _ban_summary(ban, user.id, fname, None)
-        try:
-            await msg.reply_text(
-                text,
-                parse_mode="HTML",
-                reply_markup=keyboards.checkme_ban_kb(
-                    ctx.bot.username or "", str(ban.get("ban_id", "")), proof_link
-                ),
-            )
-        except Exception as exc:
-            log.debug("checkme banned-staff reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            text,
+            log_label="checkme banned-staff",
+            reply_markup=keyboards.checkme_ban_kb(
+                ctx.bot.username or "", str(ban.get("ban_id", "")), proof_link
+            ),
+        )
         return
 
     if user_role == "admin":
-        try:
-            await msg.reply_text(
-                f"Hey {mention(user.id, fname, user.username)}, checking yourself?\n\n"
-                "You're on the staff team - you handle bans, not receive them. "
-                "No active ban on your end. You're good.",
-                parse_mode="HTML",
-            )
-        except Exception as exc:
-            log.debug("checkme admin reply failed for user %d: %s", user.id, exc)
+        await safe_reply(
+            msg,
+            f"Hey {mention(user.id, fname, user.username)}, checking yourself?\n\n"
+            "You're on the staff team - you handle bans, not receive them. "
+            "No active ban on your end. You're good.",
+            log_label=f"checkme admin for user {user.id}",
+        )
         return
     if user_role in ("developer", "tester"):
         role_label = db.users_roles.ROLE_LABEL.get(user_role, user_role)
-        try:
-            await msg.reply_text(
-                f"Hey {mention(user.id, fname, user.username)}, all good.\n\n"
-                f"You're a {esc(cfg.community_name)} {esc(role_label)} - on the team, not on the ban list. "
-                "Nothing to worry about.",
-                parse_mode="HTML",
-            )
-        except Exception as exc:
-            log.debug("checkme subrole reply failed for user %d: %s", user.id, exc)
+        await safe_reply(
+            msg,
+            f"Hey {mention(user.id, fname, user.username)}, all good.\n\n"
+            f"You're a {esc(cfg.community_name)} {esc(role_label)} - on the team, not on the ban list. "
+            "Nothing to worry about.",
+            log_label=f"checkme subrole for user {user.id}",
+        )
         return
 
     # * ban is None on this path: the active-ban branch above always returns,
     # * so the second ban-detail block that used to follow was unreachable
     # * dead code (removed). The clean reply below is live for non-staff,
     # * non-banned callers.
-    try:
-        await msg.reply_text(f"You're clean - no active ban in {cfg.community_name}.")
-    except Exception as exc:
-        log.debug("checkme clean reply failed for user %d: %s", user.id, exc)
-        return
+    await safe_reply(
+        msg,
+        f"You're clean - no active ban in {cfg.community_name}.",
+        log_label=f"checkme clean for user {user.id}",
+        parse_mode=None,
+    )
+    return
 
 
 # ──────────────────────── Callback Handlers ─────────────────────── #
@@ -379,10 +376,12 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
     target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        try:
-            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
-        except Exception as exc:
-            log.debug("check resolve-fail reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            replies.ERR_CANNOT_RESOLVE,
+            log_label="check resolve-fail",
+            parse_mode=None,
+        )
         return
 
     # * Refresh cache with whatever we just resolved so future renders
@@ -404,10 +403,9 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     text, kb = await Check.profile(
         ctx.bot, target_id, executor_id=user.id if user is not None else None
     )
-    try:
-        await msg.reply_text(text, parse_mode="HTML", reply_markup=kb)
-    except Exception as exc:
-        log.debug("check reply_text failed for target=%d: %s", target_id, exc)
+    await safe_reply(
+        msg, text, log_label=f"check for target={target_id}", reply_markup=kb
+    )
 
 
 # ─────────────── Callback Handlers for /check views ─────────────── #

@@ -22,6 +22,7 @@ from telegram.ext import (
 )
 
 from tcbot.modules.helper import replies
+from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.proof_flow import PROOF_MEDIA_FILTER, BuildProof
 from tcbot.utils.formatter import bold, esc, mention
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
@@ -204,10 +205,12 @@ class _ModActionFlow:
 
         text = msg.text.strip()
         if is_reason_too_long(text):
-            try:
-                await msg.reply_text(reason_too_long_text(len(text)))
-            except Exception as exc:
-                log.debug("%s reason-too-long reply failed: %s", self.action, exc)
+            await safe_reply(
+                msg,
+                reason_too_long_text(len(text)),
+                log_label=f"{self.action} reason-too-long",
+                parse_mode=None,
+            )
             return WAITING_REASON
 
         ctx.user_data[self._reason_key] = text
@@ -385,12 +388,12 @@ class _ModActionFlow:
     ) -> int:
         """Reject non-text messages during reason collection."""
         if update.effective_message:
-            try:
-                await update.effective_message.reply_text(
-                    f"Please type your {self.action} reason as text, or press Skip / Cancel."
-                )
-            except Exception as exc:
-                log.debug("%s reason-unexpected reply failed: %s", self.action, exc)
+            await safe_reply(
+                update.effective_message,
+                f"Please type your {self.action} reason as text, or press Skip / Cancel.",
+                log_label=f"{self.action} reason-unexpected",
+                parse_mode=None,
+            )
         return WAITING_REASON
 
     async def _on_proof_unexpected(
@@ -398,12 +401,12 @@ class _ModActionFlow:
     ) -> int:
         """Reject unexpected message types during proof collection."""
         if update.effective_message:
-            try:
-                await update.effective_message.reply_text(
-                    "Please send a photo, video, GIF, or file as proof, or press Skip / Cancel."
-                )
-            except Exception as exc:
-                log.debug("%s proof-unexpected reply failed: %s", self.action, exc)
+            await safe_reply(
+                update.effective_message,
+                "Please send a photo, video, GIF, or file as proof, or press Skip / Cancel.",
+                log_label=f"{self.action} proof-unexpected",
+                parse_mode=None,
+            )
         return WAITING_PROOF
 
     async def _on_cancel(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -430,12 +433,12 @@ class _ModActionFlow:
     async def _on_end_conv(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         self._clear_user_data(ctx)
         if update.effective_message:
-            try:
-                await update.effective_message.reply_text(
-                    f"{self.action.capitalize()} operation cancelled."
-                )
-            except Exception as exc:
-                log.debug("%s cancel-via-command reply failed: %s", self.action, exc)
+            await safe_reply(
+                update.effective_message,
+                f"{self.action.capitalize()} operation cancelled.",
+                log_label=f"{self.action} cancel-via-command",
+                parse_mode=None,
+            )
         return ConversationHandler.END
 
     # ── Build states ─────────────────────────────────────────────── #

@@ -23,6 +23,7 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators
+from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import appeal_deep_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.utils.formatter import esc, mention
@@ -205,15 +206,13 @@ async def _handle_member(
             )
 
     if greet and not _enforcement_blind:
-        try:
-            await msg.reply_text(
-                f"Welcome, {mention(member.id, member.first_name, member.username)}. "
-                f"This is an official {esc(cfg.community_name)} group. "
-                "Please go through the group rules before participating.",
-                parse_mode="HTML",
-            )
-        except Exception as exc:
-            log.debug("Welcome reply failed for uid=%d: %s", member.id, exc)
+        await safe_reply(
+            msg,
+            f"Welcome, {mention(member.id, member.first_name, member.username)}. "
+            f"This is an official {esc(cfg.community_name)} group. "
+            "Please go through the group rules before participating.",
+            log_label=f"Welcome for uid={member.id}",
+        )
 
 
 @decorators.log_execution
@@ -430,13 +429,11 @@ async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
     member = msg.left_chat_member
     if member and not member.is_bot:
-        try:
-            await msg.reply_text(
-                f"{mention(member.id, member.first_name, member.username)} has left.",
-                parse_mode="HTML",
-            )
-        except Exception as exc:
-            log.debug("left-member reply_text failed: %s", exc)
+        await safe_reply(
+            msg,
+            f"{mention(member.id, member.first_name, member.username)} has left.",
+            log_label="left-member",
+        )
 
 
 @decorators.log_execution

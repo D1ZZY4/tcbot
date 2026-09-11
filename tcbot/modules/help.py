@@ -16,7 +16,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot.modules import ALL_MODULES
 from tcbot.modules.helper import decorators, keyboards
-from tcbot.modules.helper.parse_editmsg import safe_edit_cb
+from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
 from tcbot.utils.formatter import bold, code, esc
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -287,14 +287,12 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 kb = keyboards.module_help_kb(section_btns, back_callback="helpc_main")
             else:
                 kb = keyboards.back_to_help_cmd_kb()
-            try:
-                await msg.reply_text(
-                    _module_text(name, overview),
-                    parse_mode="HTML",
-                    reply_markup=kb,
-                )
-            except Exception as exc:
-                log.debug("cmd_help module reply failed: %s", exc)
+            await safe_reply(
+                msg,
+                _module_text(name, overview),
+                log_label="cmd_help module",
+                reply_markup=kb,
+            )
             return
 
         candidates = sorted(
@@ -303,24 +301,20 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )[:3]
         suggestion = ", ".join(code(f"/help {c}") for c in candidates if c)
         hint = f"\n\nDid you mean: {suggestion}?" if suggestion else ""
-        try:
-            await msg.reply_text(
-                f"Module {bold(query)} not found.{hint}",
-                parse_mode="HTML",
-                reply_markup=keyboards.help_topics_kb(HELP_TOPICS_CMD),
-            )
-        except Exception as exc:
-            log.debug("cmd_help not-found reply failed: %s", exc)
-        return
-
-    try:
-        await msg.reply_text(
-            _help_index_text(botname),
-            parse_mode="HTML",
+        await safe_reply(
+            msg,
+            f"Module {bold(query)} not found.{hint}",
+            log_label="cmd_help not-found",
             reply_markup=keyboards.help_topics_kb(HELP_TOPICS_CMD),
         )
-    except Exception as exc:
-        log.debug("cmd_help index reply failed: %s", exc)
+        return
+
+    await safe_reply(
+        msg,
+        _help_index_text(botname),
+        log_label="cmd_help index",
+        reply_markup=keyboards.help_topics_kb(HELP_TOPICS_CMD),
+    )
 
 
 # ──────────────────────── Callback Handlers ─────────────────────── #

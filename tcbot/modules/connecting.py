@@ -20,6 +20,7 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, replies
+from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.connected_flow import connection
 from tcbot.utils.formatter import bold, code, esc
 from tcbot.utils.prefixes import build_prefixed_filters
@@ -110,10 +111,12 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if chat.type == "private":
-        try:
-            await msg.reply_text(replies.ERR_GROUP_ONLY)
-        except Exception as exc:
-            log.debug("cmd_tctc group-only reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            replies.ERR_GROUP_ONLY,
+            log_label="cmd_tctc group-only",
+            parse_mode=None,
+        )
         return
 
     # * All four calls are independent; fire them in one round-trip.
@@ -133,30 +136,34 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
     if isinstance(member, BaseException):
         log.debug("get_chat_member failed for %d/%d: %s", chat.id, user.id, member)
-        try:
-            await msg.reply_text(replies.ERR_ROLE_VERIFY)
-        except Exception as exc:
-            log.debug("cmd_tctc role-verify reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            replies.ERR_ROLE_VERIFY,
+            log_label="cmd_tctc role-verify",
+            parse_mode=None,
+        )
         return
 
     if member.status not in ("administrator", "creator"):
-        try:
-            await msg.reply_text(_ERR_ADMIN_REQUIRED)
-        except Exception as exc:
-            log.debug("cmd_tctc admin-required reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            _ERR_ADMIN_REQUIRED,
+            log_label="cmd_tctc admin-required",
+            parse_mode=None,
+        )
         return
 
     # * Primary groups are required enforcement destinations, not federation
     # * members; connecting them would pollute federated_groups with an ID
     # * that fan-out paths unconditionally include.
     if cfg.is_primary_group(chat.id):
-        try:
-            await msg.reply_text(
-                "This is a primary group of the federation (main or exec). "
-                "Primary groups are not connected via /tcconnect."
-            )
-        except Exception as exc:
-            log.debug("cmd_tctc primary-group reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            "This is a primary group of the federation (main or exec). "
+            "Primary groups are not connected via /tcconnect.",
+            log_label="cmd_tctc primary-group",
+            parse_mode=None,
+        )
         return
 
     if isinstance(is_connected, BaseException):
@@ -165,32 +172,40 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         pending = None
 
     if is_connected:
-        try:
-            await msg.reply_text(connection.already_connected_message())
-        except Exception as exc:
-            log.debug("cmd_tctc already-connected reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            connection.already_connected_message(),
+            log_label="cmd_tctc already-connected",
+            parse_mode=None,
+        )
         return
 
     if pending:
-        try:
-            await msg.reply_text(_ERR_PENDING_REQUEST)
-        except Exception as exc:
-            log.debug("cmd_tctc pending-request reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            _ERR_PENDING_REQUEST,
+            log_label="cmd_tctc pending-request",
+            parse_mode=None,
+        )
         return
 
     if isinstance(bot_member, BaseException):
         log.debug("Could not verify bot permissions for %d: %s", chat.id, bot_member)
-        try:
-            await msg.reply_text(replies.ERR_ROLE_VERIFY)
-        except Exception as exc:
-            log.debug("cmd_tctc perms-verify reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            replies.ERR_ROLE_VERIFY,
+            log_label="cmd_tctc perms-verify",
+            parse_mode=None,
+        )
         return
 
     if not connection.check_perms(bot_member):
-        try:
-            await msg.reply_text(connection.perms_required_message())
-        except Exception as exc:
-            log.debug("cmd_tctc perms-required reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            connection.perms_required_message(),
+            log_label="cmd_tctc perms-required",
+            parse_mode=None,
+        )
         return
 
     # * Run complete_join first so that we only send a "connected" confirmation
@@ -203,17 +218,19 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
     except Exception:
         log.exception("complete_join failed for chat %d", chat.id)
-        try:
-            await msg.reply_text(
-                "Failed to connect the group due to a server error. Please try again."
-            )
-        except Exception as reply_exc:
-            log.debug("connect failure reply failed: %s", reply_exc)
+        await safe_reply(
+            msg,
+            "Failed to connect the group due to a server error. Please try again.",
+            log_label="connect failure",
+            parse_mode=None,
+        )
         return
-    try:
-        await msg.reply_text(connection.connected_message())
-    except Exception as exc:
-        log.debug("connected reply failed for chat %d: %s", chat.id, exc)
+    await safe_reply(
+        msg,
+        connection.connected_message(),
+        log_label=f"connected for chat {chat.id}",
+        parse_mode=None,
+    )
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

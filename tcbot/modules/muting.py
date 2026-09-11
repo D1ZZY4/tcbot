@@ -15,6 +15,7 @@ from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 from tcbot import cfg
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
+from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.muting_flow import (
     _DURATION_RE,
@@ -32,6 +33,7 @@ from tcbot.modules.helper.workflows.reason_flow import (
     parse_inline_reason,
     reason_too_long_text,
 )
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, code, mention
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -127,10 +129,12 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     remaining_args = list(raw_args[1:] if has_explicit_target else raw_args)
 
     if not target_id:
-        try:
-            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
-        except Exception as exc:
-            log.debug("cmd_mute no-target reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            replies.ERR_CANNOT_RESOLVE,
+            log_label="cmd_mute no-target",
+            parse_mode=None,
+        )
         return ConversationHandler.END
 
     # * return_exceptions=True prevents a DB failure from leaving the ConversationHandler open.
@@ -139,10 +143,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         resolve_and_check(msg, admin.id, target_id, min_role="tester"),
         return_exceptions=True,
     )
-    if isinstance(ident, asyncio.CancelledError):
-        raise ident
-    if isinstance(role_result, asyncio.CancelledError):
-        raise role_result
+    throw_if_cancelled((ident, role_result))
     if isinstance(ident, BaseException):
         log.exception("identity.classify failed in cmd_mute: %s", ident)
         return ConversationHandler.END
@@ -159,10 +160,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     refusal = identity.refuse_message("mute", ident)
     if refusal is not None:
-        try:
-            await msg.reply_text(refusal, parse_mode="HTML")
-        except Exception as exc:
-            log.debug("cmd_mute refusal reply failed: %s", exc)
+        await safe_reply(msg, refusal, log_label="cmd_mute refusal")
         return ConversationHandler.END
 
     # * Auto-demote must succeed before the federation-wide mute to
@@ -204,10 +202,12 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     # * Fail fast on overlong inline reasons with the shared cap and text,
     # * before any prompt is sent or state is stored.
     if inline_reason and is_reason_too_long(inline_reason):
-        try:
-            await msg.reply_text(reason_too_long_text(len(inline_reason)))
-        except Exception as exc:
-            log.debug("cmd_mute reason-too-long reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            reason_too_long_text(len(inline_reason)),
+            log_label="cmd_mute reason-too-long",
+            parse_mode=None,
+        )
         return ConversationHandler.END
     target_mention = mention(target_id, target_fname or str(target_id))
     dur_str = fmt_duration(duration)
@@ -290,10 +290,12 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        try:
-            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
-        except Exception as exc:
-            log.debug("cmd_unmute no-target reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            replies.ERR_CANNOT_RESOLVE,
+            log_label="cmd_unmute no-target",
+            parse_mode=None,
+        )
         return
 
     # * Run identity classification and rank check in parallel.
@@ -303,10 +305,7 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         resolve_and_check(msg, admin.id, target_id, min_role="tester"),
         return_exceptions=True,
     )
-    if isinstance(ident, asyncio.CancelledError):
-        raise ident
-    if isinstance(role_result, asyncio.CancelledError):
-        raise role_result
+    throw_if_cancelled((ident, role_result))
     if isinstance(ident, BaseException):
         log.exception("identity.classify failed in cmd_unmute: %s", ident)
         return
@@ -323,18 +322,12 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     refusal = identity.refuse_message("unmute", ident)
     if refusal is not None:
-        try:
-            await msg.reply_text(refusal, parse_mode="HTML")
-        except Exception as exc:
-            log.debug("cmd_unmute refusal reply failed: %s", exc)
+        await safe_reply(msg, refusal, log_label="cmd_unmute refusal")
         return
 
     notice = identity.staff_notice("unmute", ident, cfg.community_name)
     if notice is not None:
-        try:
-            await msg.reply_text(notice, parse_mode="HTML")
-        except Exception as exc:
-            log.debug("cmd_unmute notice reply failed: %s", exc)
+        await safe_reply(msg, notice, log_label="cmd_unmute notice")
 
     await execute_unmute(update, ctx, target_id, target_name or str(target_id))
 

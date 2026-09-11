@@ -14,7 +14,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, fil
 
 from tcbot import database as db
 from tcbot.modules.helper import decorators, replies
-from tcbot.modules.helper.parse_editmsg import safe_edit_cb
+from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
 from tcbot.modules.helper.workflows.stats_flow import (
     CHAT_KEY,
     MSG_KEY,
@@ -139,10 +139,7 @@ async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     user = update.effective_user
     text, kb = await Stats.main(viewer_id=user.id if user is not None else None)
-    try:
-        await msg.reply_text(text, parse_mode="HTML", reply_markup=kb)
-    except Exception as exc:
-        log.debug("cmd_stats reply failed: %s", exc)
+    await safe_reply(msg, text, log_label="cmd_stats", reply_markup=kb)
 
 
 # ──────────────────────── Callback Helpers ──────────────────────── #
@@ -386,10 +383,9 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         # * No result card to edit (message-less search panel): the query was
         # * already deleted above, so reply with the results instead of
         # * dropping them silently. The stored RESULTS_KEY keeps paging working.
-        try:
-            await msg.reply_text(text, parse_mode="HTML", reply_markup=kb)
-        except Exception as exc:
-            log.debug("Stats search result fallback reply failed: %s", exc)
+        await safe_reply(
+            msg, text, log_label="Stats search result fallback", reply_markup=kb
+        )
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)

@@ -25,6 +25,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.keyboards import appeal_cancel_kb, appeal_review_kb
+from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.utils.formatter import bold, code, esc, pre
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
@@ -172,10 +173,9 @@ class AppealSubmitMixin:
         uid = user.id
 
         if update.effective_chat is None or update.effective_chat.type != "private":
-            try:
-                await msg.reply_text(_ERR_NOT_PRIVATE)
-            except Exception as exc:
-                log.debug("Appeal not-private reply failed: %s", exc)
+            await safe_reply(
+                msg, _ERR_NOT_PRIVATE, log_label="Appeal not-private", parse_mode=None
+            )
             return ConversationHandler.END
 
         try:
@@ -186,19 +186,21 @@ class AppealSubmitMixin:
                 await msg.reply_text(_ERR_INVALID_LINK)
             return ConversationHandler.END
         if not ban or not ban.get("is_active"):
-            try:
-                await msg.reply_text(_ERR_INVALID_LINK)
-            except Exception as exc:
-                log.debug(
-                    "Appeal invalid-link reply failed for ban_id=%s: %s", ban_id, exc
-                )
+            await safe_reply(
+                msg,
+                _ERR_INVALID_LINK,
+                log_label=f"Appeal invalid-link for ban_id={ban_id}",
+                parse_mode=None,
+            )
             return ConversationHandler.END
 
         if ban.get("banned_user_id") != uid:
-            try:
-                await msg.reply_text(_ERR_WRONG_ACCOUNT)
-            except Exception as exc:
-                log.debug("Appeal wrong-account reply failed for user %d: %s", uid, exc)
+            await safe_reply(
+                msg,
+                _ERR_WRONG_ACCOUNT,
+                log_label=f"Appeal wrong-account for user {uid}",
+                parse_mode=None,
+            )
             return ConversationHandler.END
 
         if ban.get("review_message_id"):
@@ -227,22 +229,22 @@ class AppealSubmitMixin:
                     ban.get("review_timestamp"),
                 )
             else:
-                try:
-                    await msg.reply_text(_ERR_PENDING_REVIEW)
-                except Exception as exc:
-                    log.debug(
-                        "Appeal pending-review reply failed for user %d: %s", uid, exc
-                    )
+                await safe_reply(
+                    msg,
+                    _ERR_PENDING_REVIEW,
+                    log_label=f"Appeal pending-review for user {uid}",
+                    parse_mode=None,
+                )
                 return ConversationHandler.END
 
         remaining_h = _cooldown_remaining_h(ban.get("rejected_at"))
         if remaining_h is not None:
-            try:
-                await msg.reply_text(
-                    f"{_ERR_REJECTION_COOLDOWN} ({remaining_h}h remaining)"
-                )
-            except Exception as exc:
-                log.debug("Appeal cooldown reply failed for user %d: %s", uid, exc)
+            await safe_reply(
+                msg,
+                f"{_ERR_REJECTION_COOLDOWN} ({remaining_h}h remaining)",
+                log_label=f"Appeal cooldown for user {uid}",
+                parse_mode=None,
+            )
             return ConversationHandler.END
 
         if ctx.user_data is None:
@@ -305,10 +307,9 @@ class AppealSubmitMixin:
         _clear_appeal_state(ctx.user_data)
         msg = update.effective_message
         if msg:
-            try:
-                await msg.reply_text(_MSG_SESSION_ENDED)
-            except Exception as exc:
-                log.debug("Appeal _end reply failed: %s", exc)
+            await safe_reply(
+                msg, _MSG_SESSION_ENDED, log_label="Appeal _end", parse_mode=None
+            )
         return ConversationHandler.END
 
     async def _on_message(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -320,20 +321,22 @@ class AppealSubmitMixin:
         text = msg.text.strip()
 
         if not starts_with_appeal_tag(text):
-            try:
-                await msg.reply_text(_MSG_CANCELLED_UNEXPECTED)
-            except Exception as exc:
-                log.debug("Appeal unexpected-text reply failed: %s", exc)
+            await safe_reply(
+                msg,
+                _MSG_CANCELLED_UNEXPECTED,
+                log_label="Appeal unexpected-text",
+                parse_mode=None,
+            )
             return WAITING_APPEAL
 
         if len(text) > _MAX_APPEAL_LEN:
-            try:
-                await msg.reply_text(
-                    f"Your appeal message is too long (max {_MAX_APPEAL_LEN} characters). "
-                    "Please shorten it and try again.",
-                )
-            except Exception as exc:
-                log.debug("Appeal too-long reply failed: %s", exc)
+            await safe_reply(
+                msg,
+                f"Your appeal message is too long (max {_MAX_APPEAL_LEN} characters). "
+                "Please shorten it and try again.",
+                log_label="Appeal too-long",
+                parse_mode=None,
+            )
             return WAITING_APPEAL
 
         if ctx.user_data is None:
@@ -344,10 +347,12 @@ class AppealSubmitMixin:
         log_msg_id = ctx.user_data.get("appeal_log_msg_id", 0)
 
         if not ban_id:
-            try:
-                await msg.reply_text(_ERR_SESSION_EXPIRED)
-            except Exception as exc:
-                log.debug("Appeal _on_message session-expired reply failed: %s", exc)
+            await safe_reply(
+                msg,
+                _ERR_SESSION_EXPIRED,
+                log_label="Appeal _on_message session-expired",
+                parse_mode=None,
+            )
             return ConversationHandler.END
 
         # * Revalidate against a fresh ban record: the ban may have been
@@ -360,10 +365,12 @@ class AppealSubmitMixin:
             log.exception("Appeal _on_message get_ban failed for %s", ban_id)
             fresh_ban = None
         if not fresh_ban or not fresh_ban.get("is_active"):
-            try:
-                await msg.reply_text(_ERR_SESSION_EXPIRED)
-            except Exception as exc:
-                log.debug("Appeal _on_message expired-ban reply failed: %s", exc)
+            await safe_reply(
+                msg,
+                _ERR_SESSION_EXPIRED,
+                log_label="Appeal _on_message expired-ban",
+                parse_mode=None,
+            )
             _clear_appeal_state(ctx.user_data)
             return ConversationHandler.END
 
@@ -389,21 +396,23 @@ class AppealSubmitMixin:
                     _clear_appeal_state(ctx.user_data)
                     return ConversationHandler.END
             else:
-                try:
-                    await msg.reply_text(_ERR_PENDING_REVIEW)
-                except Exception as exc:
-                    log.debug("Appeal _on_message pending-review reply failed: %s", exc)
+                await safe_reply(
+                    msg,
+                    _ERR_PENDING_REVIEW,
+                    log_label="Appeal _on_message pending-review",
+                    parse_mode=None,
+                )
                 _clear_appeal_state(ctx.user_data)
                 return ConversationHandler.END
 
         remaining_h = _cooldown_remaining_h(fresh_ban.get("rejected_at"))
         if remaining_h is not None:
-            try:
-                await msg.reply_text(
-                    f"{_ERR_REJECTION_COOLDOWN} ({remaining_h}h remaining)"
-                )
-            except Exception as exc:
-                log.debug("Appeal _on_message cooldown reply failed: %s", exc)
+            await safe_reply(
+                msg,
+                f"{_ERR_REJECTION_COOLDOWN} ({remaining_h}h remaining)",
+                log_label="Appeal _on_message cooldown",
+                parse_mode=None,
+            )
             _clear_appeal_state(ctx.user_data)
             return ConversationHandler.END
 
@@ -411,10 +420,12 @@ class AppealSubmitMixin:
             log_msg_id = fresh_ban.get("log_message_id", 0)
 
         if log_msg_id and not text_references_log_message(text, log_msg_id):
-            try:
-                await msg.reply_text(_ERR_INVALID_LOG)
-            except Exception as exc:
-                log.debug("Appeal _on_message invalid-log reply failed: %s", exc)
+            await safe_reply(
+                msg,
+                _ERR_INVALID_LOG,
+                log_label="Appeal _on_message invalid-log",
+                parse_mode=None,
+            )
             return WAITING_APPEAL
 
         user = update.effective_user
@@ -503,10 +514,12 @@ class AppealSubmitMixin:
                         ban_id,
                         exc,
                     )
-                try:
-                    await msg.reply_text(_ERR_PENDING_REVIEW)
-                except Exception as exc:
-                    log.debug("Appeal race-loser reply failed: %s", exc)
+                await safe_reply(
+                    msg,
+                    _ERR_PENDING_REVIEW,
+                    log_label="Appeal race-loser",
+                    parse_mode=None,
+                )
                 _clear_appeal_state(ctx.user_data)
                 return ConversationHandler.END
         if appeal_log_sent_id and ban_id:

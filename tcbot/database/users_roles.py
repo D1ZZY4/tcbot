@@ -23,6 +23,7 @@ from tcbot.database.cache import (
 )
 from tcbot.database.documents import AdminDoc, RoleRefDoc
 from tcbot.database.mongos import col, db_call
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.time_and_date import utc_now
 
 log = logging.getLogger(__name__)
@@ -230,10 +231,7 @@ async def can_act_on(executor_id: int, target_id: int) -> bool:
         get_effective_role(target_id),
         return_exceptions=True,
     )
-    if isinstance(executor_role, asyncio.CancelledError):
-        raise executor_role
-    if isinstance(target_role, asyncio.CancelledError):
-        raise target_role
+    throw_if_cancelled((executor_role, target_role))
     if isinstance(executor_role, BaseException):
         log.warning(
             "can_act_on executor role failed for %d: %s", executor_id, executor_role
@@ -258,16 +256,11 @@ async def get_effective_role(user_id: int) -> str | None:
             get_role(user_id),
             return_exceptions=True,
         )
-        # * Explicit cancellation checks first: CancelledError is a
+        # * Explicit cancellation check first: CancelledError is a
         # * BaseException, so the generic branches below would re-raise it
         # * anyway, but spelling it out keeps a future ``except Exception``
         # * refactor from silently swallowing shutdown here.
-        if isinstance(owner, asyncio.CancelledError):
-            raise owner
-        if isinstance(admin, asyncio.CancelledError):
-            raise admin
-        if isinstance(role, asyncio.CancelledError):
-            raise role
+        throw_if_cancelled((owner, admin, role))
         if isinstance(owner, BaseException):
             raise owner
         if isinstance(admin, BaseException):

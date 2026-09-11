@@ -62,6 +62,7 @@ The Telegram circuit state (`closed`, `open`, or `half_open`) is exposed in the 
 | `count_errors(results)` | Count every `BaseException` item in a `fan_out` result list. Strict primitive for callers where any refusal means "not reached"; current broadcast, maintenance, and moderation fan-outs all count via `count_transient_errors` or structured results instead. |
 | `is_benign_telegram_error(exc)` | Return True for known-benign Telegram refusals (user not participant, chat gone, bot demoted). |
 | `count_transient_errors(results)` | Count only non-benign failures. Used by moderation fan-outs (ban, unban, mute, warn auto-ban) so benign refusals do not look like failed groups. |
+| `throw_if_cancelled(results)` | Re-raise the first `asyncio.CancelledError` in `gather(return_exceptions=True)` results; other exceptions pass through untouched. Single owner for the cancellation check repeated at every gather site so shutdown is never coerced into data. |
 
 `fan_out` behavior:
 

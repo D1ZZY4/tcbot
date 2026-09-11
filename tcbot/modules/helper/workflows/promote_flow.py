@@ -15,6 +15,7 @@ from pymongo.errors import DuplicateKeyError
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import esc, user_ref
 
 if TYPE_CHECKING:
@@ -207,10 +208,7 @@ class Promote:
         )
         # * Cancellation is never a queue verdict: propagate before the
         # * DuplicateKeyError / generic-error branches below coerce it.
-        if isinstance(request_id, asyncio.CancelledError):
-            raise request_id
-        if isinstance(owner_id, asyncio.CancelledError):
-            raise owner_id
+        throw_if_cancelled((request_id, owner_id))
         if isinstance(request_id, DuplicateKeyError):
             # * Lost the insert race: another promote queued first under the
             # * pending-unique index. Report the existing request, not an error.

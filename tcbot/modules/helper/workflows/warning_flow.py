@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg
+from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
@@ -120,10 +121,9 @@ async def execute_warn(
         log.exception(
             "add_warn DB write failed for target=%d chat=%d", target_id, chat_id
         )
-        try:
-            await msg.reply_text(_ERR_DB_RETRY)
-        except Exception as exc:
-            log.debug("execute_warn DB-fail reply failed: %s", exc)
+        await safe_reply(
+            msg, _ERR_DB_RETRY, log_label="execute_warn DB-fail", parse_mode=None
+        )
         return
 
     proof_link: str | None = None
@@ -183,17 +183,15 @@ async def execute_warn(
                 fed_count = await db.warns_db.federation_warn_count(target_id)
             except Exception:
                 log.exception("federation_warn_count failed for target=%d", target_id)
-                try:
-                    await msg.reply_text(
-                        f"{user_ref(target_id, target_name)} has been warned "
-                        f"({count}/{warn_limit}) - {esc(reason_text)}. The "
-                        "federation-wide threshold check is unavailable right "
-                        "now; ban them manually with /tcban if needed.",
-                        parse_mode="HTML",
-                        reply_markup=proof_kb,
-                    )
-                except Exception as exc:
-                    log.debug("execute_warn fed-count-fail reply failed: %s", exc)
+                await safe_reply(
+                    msg,
+                    f"{user_ref(target_id, target_name)} has been warned "
+                    f"({count}/{warn_limit}) - {esc(reason_text)}. The "
+                    "federation-wide threshold check is unavailable right "
+                    "now; ban them manually with /tcban if needed.",
+                    log_label="execute_warn fed-count-fail",
+                    reply_markup=proof_kb,
+                )
                 return
             if fed_count >= fed_limit:
                 auto_ban_trigger = "fed_global"
@@ -266,19 +264,16 @@ async def execute_unwarn(
         log.exception(
             "warn_count read failed for target=%d chat=%d", target_id, chat_id
         )
-        try:
-            await msg.reply_text(_ERR_DB_RETRY)
-        except Exception as exc:
-            log.debug("execute_unwarn DB-fail reply failed: %s", exc)
+        await safe_reply(
+            msg, _ERR_DB_RETRY, log_label="execute_unwarn DB-fail", parse_mode=None
+        )
         return
     if count == 0:
-        try:
-            await msg.reply_text(
-                f"{user_ref(target_id, target_name)} has no warnings in this group.",
-                parse_mode="HTML",
-            )
-        except Exception as exc:
-            log.debug("execute_unwarn no-warns reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            f"{user_ref(target_id, target_name)} has no warnings in this group.",
+            log_label="execute_unwarn no-warns",
+        )
         return
 
     new_count = max(count - 1, 0)
@@ -311,13 +306,11 @@ async def execute_unwarn(
         )
         removed = False
     if not removed:
-        try:
-            await msg.reply_text(
-                f"{user_ref(target_id, target_name)} has no warnings in this group.",
-                parse_mode="HTML",
-            )
-        except Exception as exc:
-            log.debug("execute_unwarn empty reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            f"{user_ref(target_id, target_name)} has no warnings in this group.",
+            log_label="execute_unwarn empty",
+        )
         return
     # * Re-read the count after the delete so concurrent unwarns report
     # * the true remaining total instead of a stale computed value.
@@ -377,21 +370,18 @@ async def execute_warnlist(
         warns = await db.warns_db.get_warns(target_id, chat_id)
     except Exception:
         log.exception("get_warns read failed for target=%d chat=%d", target_id, chat_id)
-        try:
-            await msg.reply_text(_ERR_DB_RETRY)
-        except Exception as exc:
-            log.debug("execute_warnlist DB-fail reply failed: %s", exc)
+        await safe_reply(
+            msg, _ERR_DB_RETRY, log_label="execute_warnlist DB-fail", parse_mode=None
+        )
         return
     count = len(warns)
 
     if count == 0:
-        try:
-            await msg.reply_text(
-                f"{user_ref(target_id, target_name)} has no warnings in this group.",
-                parse_mode="HTML",
-            )
-        except Exception as exc:
-            log.debug("execute_warnlist no-warns reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            f"{user_ref(target_id, target_name)} has no warnings in this group.",
+            log_label="execute_warnlist no-warns",
+        )
         return
 
     lines = [
@@ -400,10 +390,7 @@ async def execute_warnlist(
     for i, w in enumerate(warns, 1):
         lines.append(f"  {i}. {esc(w.get('reason', 'No reason'))}")
 
-    try:
-        await msg.reply_text("\n".join(lines), parse_mode="HTML")
-    except Exception as exc:
-        log.debug("execute_warnlist reply failed: %s", exc)
+    await safe_reply(msg, "\n".join(lines), log_label="execute_warnlist")
 
 
 async def execute_resetwarns(
@@ -436,19 +423,16 @@ async def execute_resetwarns(
         removed = await db.warns_db.clear_warns(target_id, chat_id)
     except Exception:
         log.exception("clear_warns failed for target=%d chat=%d", target_id, chat_id)
-        try:
-            await msg.reply_text(_ERR_DB_RETRY)
-        except Exception as exc:
-            log.debug("execute_resetwarns DB-fail reply failed: %s", exc)
+        await safe_reply(
+            msg, _ERR_DB_RETRY, log_label="execute_resetwarns DB-fail", parse_mode=None
+        )
         return
     if removed == 0:
-        try:
-            await msg.reply_text(
-                f"{user_ref(target_id, target_name)} has no warnings to clear.",
-                parse_mode="HTML",
-            )
-        except Exception as exc:
-            log.debug("execute_resetwarns no-warns reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            f"{user_ref(target_id, target_name)} has no warnings to clear.",
+            log_label="execute_resetwarns no-warns",
+        )
         return
 
     log_text = parse_logmsg.resetwarns_log(
@@ -539,14 +523,12 @@ async def _execute_warn_auto_ban(
                 "warnings. See logs and retry manually if needed."
             )
         )
-        try:
-            await msg.reply_text(
-                exemption_text,
-                parse_mode="HTML",
-                reply_markup=proof_kb,
-            )
-        except Exception as exc:
-            log.debug("Warn auto-ban staff exemption reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            exemption_text,
+            log_label="Warn auto-ban staff exemption",
+            reply_markup=proof_kb,
+        )
         return
 
     groups_result, existing_ban, log_result = await asyncio.gather(
@@ -602,18 +584,16 @@ async def _execute_warn_auto_ban(
                 "Failed to create federation ban record on warn limit for user %d",
                 target_id,
             )
-            try:
-                await msg.reply_text(
-                    f"{user_ref(target_id, target_name)} reached the warning "
-                    "threshold but the federation ban record could not be "
-                    "written to the database, so no groups were touched. "
-                    "Check the logs and ban them manually with /tcban once "
-                    "the database recovers.",
-                    parse_mode="HTML",
-                    reply_markup=proof_kb,
-                )
-            except Exception as exc:
-                log.debug("Warn auto-ban DB-fail reply failed: %s", exc)
+            await safe_reply(
+                msg,
+                f"{user_ref(target_id, target_name)} reached the warning "
+                "threshold but the federation ban record could not be "
+                "written to the database, so no groups were touched. "
+                "Check the logs and ban them manually with /tcban once "
+                "the database recovers.",
+                log_label="Warn auto-ban DB-fail",
+                reply_markup=proof_kb,
+            )
             return
 
     ban_results = await fan_out(
@@ -721,14 +701,12 @@ async def _execute_warn_auto_ban(
         if isinstance(reply_result, BaseException):
             log.debug("Auto-ban notification reply failed: %s", reply_result)
     else:
-        try:
-            await msg.reply_text(
-                f"{ban_fail_notice}{applied_line}",
-                parse_mode="HTML",
-                reply_markup=proof_kb,
-            )
-        except Exception as exc:
-            log.debug("Auto-ban failure notice reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            f"{ban_fail_notice}{applied_line}",
+            log_label="Auto-ban failure notice",
+            reply_markup=proof_kb,
+        )
 
 
 # ──────────────────────── Executor adapter ──────────────────────── #

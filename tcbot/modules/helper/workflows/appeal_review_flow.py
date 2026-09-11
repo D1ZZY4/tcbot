@@ -17,7 +17,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import BanDoc
 from tcbot.modules.helper import parse_logmsg, replies
-from tcbot.utils.dispatch import count_transient_errors, fan_out
+from tcbot.utils.dispatch import count_transient_errors, fan_out, throw_if_cancelled
 from tcbot.utils.formatter import code, esc, mention
 from tcbot.utils.time_and_date import to_utc, utc_now
 
@@ -141,12 +141,7 @@ class AppealReviewMixin:
         # ! CRITICAL: cancellation must never render as a verdict. A cancelled
         # ! ban read coerced into "not found" would destroy the shared review
         # ! card on shutdown; a cancelled answer must propagate, not silence.
-        if isinstance(role_result, asyncio.CancelledError):
-            raise role_result
-        if isinstance(ban_result, asyncio.CancelledError):
-            raise ban_result
-        if isinstance(answer_r, asyncio.CancelledError):
-            raise answer_r
+        throw_if_cancelled((role_result, ban_result, answer_r))
         if isinstance(answer_r, BaseException):
             log.debug("Appeal decision answer failed: %s", answer_r)
         if isinstance(role_result, BaseException):

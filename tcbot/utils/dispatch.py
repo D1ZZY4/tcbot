@@ -22,7 +22,7 @@ from telegram.error import BadRequest, NetworkError, TimedOut
 from tcbot.utils import circuit_breaker as _cb
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Sequence
+    from collections.abc import Awaitable, Callable, Iterable, Sequence
 
 log = logging.getLogger(__name__)
 
@@ -135,10 +135,21 @@ async def fan_out[T](
     # ! CRITICAL: gather(return_exceptions=True) captures per-slot
     # ! cancellation as data. A cancelled slot must propagate so shutdown
     # ! is never misreported as per-group failures by the counters below.
+    throw_if_cancelled(results)
+    return results
+
+
+def throw_if_cancelled(results: Iterable[object]) -> None:
+    """Re-raise the first ``asyncio.CancelledError`` in gather results.
+
+    Every ``asyncio.gather(..., return_exceptions=True)`` site that must not
+    coerce shutdown into data repeats this loop; centralising it keeps
+    cancellation semantics identical everywhere. Regular exceptions are left
+    untouched for the caller to inspect.
+    """
     for result in results:
         if isinstance(result, asyncio.CancelledError):
             raise result
-    return results
 
 
 def count_errors(results: Sequence[object]) -> int:

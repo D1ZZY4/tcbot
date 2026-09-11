@@ -27,6 +27,7 @@ from tcbot.modules.helper.extraction import (
     launch_identity_refresh,
 )
 from tcbot.modules.helper.keyboards import paged_drill_kb
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, code, esc, mention, user_ref
 from tcbot.utils.pagination import date_or_unknown, paginate
 from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
@@ -257,10 +258,7 @@ class Stats:
         show_users = False
         if viewer_reads:
             owner_check, role_check = viewer_reads
-            if isinstance(owner_check, asyncio.CancelledError):
-                raise owner_check
-            if isinstance(role_check, asyncio.CancelledError):
-                raise role_check
+            throw_if_cancelled((owner_check, role_check))
             show_users = (owner_check is True) or (role_check == "founder")
 
         # Fetch owner mention data in parallel with building the response

@@ -15,6 +15,7 @@ from telegram.error import Forbidden
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
+from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import is_benign_telegram_error
 from tcbot.utils.formatter import bold, esc, mention
 
@@ -230,15 +231,13 @@ class Demote:
                 target_id,
                 target_role,
             )
-            try:
-                await msg.reply_text(
-                    f"{mention(target_id, target_display)} "
-                    f"holds a federation role ({target_role}) and the auto-demote "
-                    f"step failed, so the {trigger} cannot proceed safely. Demote "
-                    f"them manually with /tcdemote and retry the {trigger}.",
-                    parse_mode="HTML",
-                )
-            except Exception as exc:
-                log.debug("auto-demote-fail reply failed: %s", exc)
+            await safe_reply(
+                msg,
+                f"{mention(target_id, target_display)} "
+                f"holds a federation role ({target_role}) and the auto-demote "
+                f"step failed, so the {trigger} cannot proceed safely. Demote "
+                f"them manually with /tcdemote and retry the {trigger}.",
+                log_label="auto-demote-fail",
+            )
             return False
         return True

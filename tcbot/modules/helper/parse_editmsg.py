@@ -70,6 +70,7 @@ async def safe_reply(
     text: str,
     *,
     log_label: str = "reply",
+    parse_mode: str | None = "HTML",
     **kwargs: Any,
 ) -> None:
     """Send a reply via ``msg.reply_text``; log failures at debug.
@@ -87,11 +88,16 @@ async def safe_reply(
     so the operator can identify the source without grepping for the
     function name.
 
+    ``parse_mode`` defaults to ``"HTML"`` for formatted replies; pass
+    ``None`` for plain-text replies (error strings, constants, community
+    names) so Telegram performs no entity parsing, exactly like a bare
+    ``reply_text`` call without the parameter.
+
     Failures are logged at ``debug`` (not ``warning``) because a failed
     ``reply_text`` is almost always benign: the user blocked the bot,
     the chat was deleted, or the message thread was closed.
     """
     try:
-        await msg.reply_text(text, parse_mode="HTML", **kwargs)
+        await msg.reply_text(text, parse_mode=parse_mode, **kwargs)
     except Exception as exc:
         log.debug("%s reply failed: %s", log_label, exc)

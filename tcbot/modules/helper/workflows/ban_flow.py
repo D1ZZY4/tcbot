@@ -23,6 +23,7 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg, replies
+from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import (
@@ -724,10 +725,12 @@ async def _flush_session(key: tuple[int, int], bot: Bot) -> None:
 async def on_proof_unexpected(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Reject unexpected message types during proof collection."""
     if update.effective_message:
-        try:
-            await update.effective_message.reply_text(_MSG_PROOF_EXPECTED)
-        except Exception as exc:
-            log.debug("Ban proof-unexpected reply failed: %s", exc)
+        await safe_reply(
+            update.effective_message,
+            _MSG_PROOF_EXPECTED,
+            log_label="Ban proof-unexpected",
+            parse_mode=None,
+        )
     return WAITING_PROOF
 
 
@@ -741,10 +744,12 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
     _cancel_proof_session(ctx.user_data)
 
     if update.effective_message:
-        try:
-            await update.effective_message.reply_text(_MSG_CANCELLED)
-        except Exception as exc:
-            log.debug("Ban cancel reply failed: %s", exc)
+        await safe_reply(
+            update.effective_message,
+            _MSG_CANCELLED,
+            log_label="Ban cancel",
+            parse_mode=None,
+        )
     return ConversationHandler.END
 
 
@@ -753,10 +758,12 @@ async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
     _cancel_proof_session(ctx.user_data)
 
     if update.effective_message:
-        try:
-            await update.effective_message.reply_text(_MSG_TIMEOUT)
-        except Exception as exc:
-            log.debug("Ban proof-timeout reply failed: %s", exc)
+        await safe_reply(
+            update.effective_message,
+            _MSG_TIMEOUT,
+            log_label="Ban proof-timeout",
+            parse_mode=None,
+        )
     return ConversationHandler.END
 
 

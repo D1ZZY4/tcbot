@@ -231,6 +231,7 @@ Use the `LogBuilder` class in this module to compose new audit-log messages; avo
 |---|---|
 | `safe_edit(msg, text, **kwargs)` | Edit a `Message` object with `parse_mode="HTML"`; swallows harmless `BadRequest` cases such as `message is not modified`, `message to edit not found`, and `chat not found`. Unexpected failures are logged as warnings. |
 | `safe_edit_cb(q, text, **kwargs)` | Edit a `CallbackQuery` message via `q.edit_message_text`; same error-swallow policy as `safe_edit`. Use when a user can re-tap a button that lands them on the same content to avoid `BadRequest: message is not modified` noise. |
+| `safe_reply(msg, text, *, log_label="reply", parse_mode="HTML", **kwargs)` | Fire-and-forget `Message` reply with debug-only failure logging; `log_label` names the call site. The single owner for all fire-and-forget replies across commands and workflows. Defaults to `parse_mode="HTML"`; pass `parse_mode=None` for plain-text replies (error strings, constants) so Telegram performs no entity parsing. Sites whose failure drives control flow (prompt cleanup, wedged-conversation guards) stay raw. |
 
 ## Helper usage rules
 

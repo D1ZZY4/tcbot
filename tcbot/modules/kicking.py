@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
+from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.kicking_flow import kick_conversation, proof, reason
 from tcbot.modules.helper.workflows.reason_flow import (
@@ -23,6 +24,7 @@ from tcbot.modules.helper.workflows.reason_flow import (
     parse_inline_reason,
     reason_too_long_text,
 )
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, code, mention
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -107,10 +109,12 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     # * instead of failing in the executor after role I/O and demote work.
     # * Mirrors the connecting/disconnecting group-only guards.
     if chat.type == "private":
-        try:
-            await msg.reply_text(replies.ERR_GROUP_ONLY)
-        except Exception as exc:
-            log.debug("cmd_kick group-only reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            replies.ERR_GROUP_ONLY,
+            log_label="cmd_kick group-only",
+            parse_mode=None,
+        )
         return ConversationHandler.END
 
     args = parse_cmd_args(msg.text)
@@ -128,19 +132,23 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     )
 
     if not target_id:
-        try:
-            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
-        except Exception as exc:
-            log.debug("cmd_kick no-target reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            replies.ERR_CANNOT_RESOLVE,
+            log_label="cmd_kick no-target",
+            parse_mode=None,
+        )
         return ConversationHandler.END
 
     # * Fail fast on overlong inline reasons with the shared cap and text,
     # * before any role I/O or demote work.
     if inline_reason and is_reason_too_long(inline_reason):
-        try:
-            await msg.reply_text(reason_too_long_text(len(inline_reason)))
-        except Exception as exc:
-            log.debug("cmd_kick reason-too-long reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            reason_too_long_text(len(inline_reason)),
+            log_label="cmd_kick reason-too-long",
+            parse_mode=None,
+        )
         return ConversationHandler.END
 
     # * return_exceptions=True prevents a DB failure from leaving the ConversationHandler open.
@@ -149,10 +157,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         resolve_and_check(msg, admin.id, target_id, min_role="tester"),
         return_exceptions=True,
     )
-    if isinstance(ident, asyncio.CancelledError):
-        raise ident
-    if isinstance(role_result, asyncio.CancelledError):
-        raise role_result
+    throw_if_cancelled((ident, role_result))
     if isinstance(ident, BaseException):
         log.exception("identity.classify failed in cmd_kick: %s", ident)
         return ConversationHandler.END
@@ -169,10 +174,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     refusal = identity.refuse_message("kick", ident)
     if refusal is not None:
-        try:
-            await msg.reply_text(refusal, parse_mode="HTML")
-        except Exception as exc:
-            log.debug("cmd_kick refusal reply failed: %s", exc)
+        await safe_reply(msg, refusal, log_label="cmd_kick refusal")
         return ConversationHandler.END
 
     # * Auto-demote must succeed before the kick to preserve the

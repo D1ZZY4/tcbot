@@ -24,9 +24,11 @@ from tcbot.modules.helper import (
 )
 from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
+from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.promote_flow import ROLE_ALIASES, Promote
 from tcbot.utils import error_reporter
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, code, esc, mention, user_ref
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -167,37 +169,40 @@ async def _resolve_executor_target(
         extraction.extract_target(update, args, bot),
         return_exceptions=True,
     )
-    if isinstance(_exec_r, asyncio.CancelledError):
-        raise _exec_r
-    if isinstance(_target_r, asyncio.CancelledError):
-        raise _target_r
+    throw_if_cancelled((_exec_r, _target_r))
     if isinstance(_exec_r, BaseException):
         # * Transient outage between the staff_only check and this read:
         # * answer instead of going silently dead. A genuinely role-less
         # * caller (revoked in the gap) gets None below and returns; the
         # * decorator denies them properly on retry.
         log.warning("cmd_%s executor role lookup failed: %s", action, _exec_r)
-        try:
-            await msg.reply_text(_ERR_ROLE_LOOKUP_FAILED)
-        except Exception as exc:
-            log.debug("cmd_%s lookup-fail reply failed: %s", action, exc)
+        await safe_reply(
+            msg,
+            _ERR_ROLE_LOOKUP_FAILED,
+            log_label=f"cmd_{action} lookup-fail",
+            parse_mode=None,
+        )
         return None
     executor_role = _exec_r
     if executor_role is None:
         return None
     if isinstance(_target_r, BaseException):
         log.error("extract_target failed during %s: %s", action, _target_r)
-        try:
-            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
-        except Exception as exc:
-            log.debug("cmd_%s no-target reply failed: %s", action, exc)
+        await safe_reply(
+            msg,
+            replies.ERR_CANNOT_RESOLVE,
+            log_label=f"cmd_{action} no-target",
+            parse_mode=None,
+        )
         return None
     target_id, target_fname = _target_r
     if not target_id:
-        try:
-            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
-        except Exception as exc:
-            log.debug("cmd_%s no-target-id reply failed: %s", action, exc)
+        await safe_reply(
+            msg,
+            replies.ERR_CANNOT_RESOLVE,
+            log_label=f"cmd_{action} no-target-id",
+            parse_mode=None,
+        )
         return None
     return executor_role, target_id, target_fname
 
@@ -221,10 +226,7 @@ async def _classify_and_load_role(
         db.users_roles.get_effective_role(target_id),
         return_exceptions=True,
     )
-    if isinstance(ident_r, asyncio.CancelledError):
-        raise ident_r
-    if isinstance(role_r, asyncio.CancelledError):
-        raise role_r
+    throw_if_cancelled((ident_r, role_r))
     if isinstance(ident_r, BaseException):
         log.error(
             "identity.classify failed during %s for target=%d: %s",
@@ -232,10 +234,12 @@ async def _classify_and_load_role(
             target_id,
             ident_r,
         )
-        try:
-            await msg.reply_text(_ERR_CLASSIFY_FAILED)
-        except Exception as exc:
-            log.debug("cmd_%s classify-failed reply failed: %s", action, exc)
+        await safe_reply(
+            msg,
+            _ERR_CLASSIFY_FAILED,
+            log_label=f"cmd_{action} classify-failed",
+            parse_mode=None,
+        )
         return None
     if isinstance(role_r, BaseException):
         log.error(
@@ -244,10 +248,12 @@ async def _classify_and_load_role(
             target_id,
             role_r,
         )
-        try:
-            await msg.reply_text(_ERR_ROLE_LOOKUP_FAILED)
-        except Exception as exc:
-            log.debug("cmd_%s role-lookup-failed reply failed: %s", action, exc)
+        await safe_reply(
+            msg,
+            _ERR_ROLE_LOOKUP_FAILED,
+            log_label=f"cmd_{action} role-lookup-failed",
+            parse_mode=None,
+        )
         return None
     return ident_r, role_r
 
@@ -264,10 +270,7 @@ async def _check_callback_staff(admin_id: int, q: CallbackQuery) -> str | None:
         q.answer(),
         return_exceptions=True,
     )
-    if isinstance(role_r, asyncio.CancelledError):
-        raise role_r
-    if isinstance(answer_r, asyncio.CancelledError):
-        raise answer_r
+    throw_if_cancelled((role_r, answer_r))
     if isinstance(answer_r, BaseException):
         log.debug("callback answer failed: %s", answer_r)
     if isinstance(role_r, BaseException) or role_r not in ("founder", "admin"):
@@ -315,10 +318,12 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         and not extraction.has_reply_target(msg)
         and args[0].lstrip("@").lower() in ROLE_ALIASES
     ):
-        try:
-            await msg.reply_text(_ERR_PROMOTE_NEEDS_TARGET)
-        except Exception as exc:
-            log.debug("cmd_promote needs-target reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            _ERR_PROMOTE_NEEDS_TARGET,
+            log_label="cmd_promote needs-target",
+            parse_mode=None,
+        )
         return
     resolved = await _resolve_executor_target(
         msg, admin.id, update, args, ctx.bot, action="promote"
@@ -337,10 +342,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ident, current_role = classified
     refusal = identity.refuse_message("promote", ident)
     if refusal is not None:
-        try:
-            await msg.reply_text(refusal, parse_mode="HTML")
-        except Exception as exc:
-            log.debug("cmd_promote refusal reply failed: %s", exc)
+        await safe_reply(msg, refusal, log_label="cmd_promote refusal")
         return
 
     role = ROLE_ALIASES.get(role_arg)
@@ -356,28 +358,22 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             current_role,
             role,
         )
-        try:
-            await msg.reply_text(text, parse_mode="HTML")
-        except Exception as exc:
-            log.debug("cmd_promote result reply failed: %s", exc)
+        await safe_reply(msg, text, log_label="cmd_promote result")
         return
 
     # * No role arg - show selection buttons
     available = Promote.available_roles_for(executor_role)
     if not available:
-        try:
-            await msg.reply_text(_ERR_NO_ASSIGN_PERMS)
-        except Exception as exc:
-            log.debug("cmd_promote no-perms reply failed: %s", exc)
-        return
-    try:
-        await msg.reply_text(
-            f"Choose a role to assign to {mention(target_id, target_fname or str(target_id), ident.username)}:",
-            parse_mode="HTML",
-            reply_markup=keyboards.promote_role_kb(target_id, available),
+        await safe_reply(
+            msg, _ERR_NO_ASSIGN_PERMS, log_label="cmd_promote no-perms", parse_mode=None
         )
-    except Exception as exc:
-        log.debug("cmd_promote role-picker reply failed: %s", exc)
+        return
+    await safe_reply(
+        msg,
+        f"Choose a role to assign to {mention(target_id, target_fname or str(target_id), ident.username)}:",
+        log_label="cmd_promote role-picker",
+        reply_markup=keyboards.promote_role_kb(target_id, available),
+    )
 
 
 # ──────────────────────── Callback Handlers ─────────────────────── #
@@ -428,10 +424,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         db.users_roles.get_effective_role(target_id),
         return_exceptions=True,
     )
-    if isinstance(target_fname_r, asyncio.CancelledError):
-        raise target_fname_r
-    if isinstance(current_role, asyncio.CancelledError):
-        raise current_role
+    throw_if_cancelled((target_fname_r, current_role))
     target_fname = (
         target_fname_r
         if not isinstance(target_fname_r, BaseException)
@@ -517,36 +510,32 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ident, target_role = classified
     refusal = identity.refuse_message("demote", ident)
     if refusal is not None:
-        try:
-            await msg.reply_text(refusal, parse_mode="HTML")
-        except Exception as exc:
-            log.debug("cmd_demote refusal reply failed: %s", exc)
+        await safe_reply(msg, refusal, log_label="cmd_demote refusal")
         return
 
     if not target_role:
-        try:
-            await msg.reply_text(_ERR_NO_REMOVABLE_ROLE)
-        except Exception as exc:
-            log.debug("cmd_demote no-role reply failed: %s", exc)
+        await safe_reply(
+            msg, _ERR_NO_REMOVABLE_ROLE, log_label="cmd_demote no-role", parse_mode=None
+        )
         return
 
     if target_role == "admin" and executor_role != "founder":
-        try:
-            await msg.reply_text(_ERR_FOUNDER_DEMOTE_ONLY)
-        except Exception as exc:
-            log.debug("cmd_demote founder-only reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            _ERR_FOUNDER_DEMOTE_ONLY,
+            log_label="cmd_demote founder-only",
+            parse_mode=None,
+        )
         return
 
     role_label = db.users_roles.ROLE_LABEL.get(target_role, target_role)
-    try:
-        await msg.reply_text(
-            f"{mention(target_id, target_fname or str(target_id), ident.username)} is currently a "
-            f"{bold(role_label)}.\nConfirm to remove their role.",
-            parse_mode="HTML",
-            reply_markup=keyboards.demote_confirm_kb(target_id),
-        )
-    except Exception as exc:
-        log.debug("cmd_demote confirm-prompt reply failed: %s", exc)
+    await safe_reply(
+        msg,
+        f"{mention(target_id, target_fname or str(target_id), ident.username)} is currently a "
+        f"{bold(role_label)}.\nConfirm to remove their role.",
+        log_label="cmd_demote confirm-prompt",
+        reply_markup=keyboards.demote_confirm_kb(target_id),
+    )
 
 
 # ──────────────────────── Callback Handlers ─────────────────────── #
@@ -585,10 +574,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         db.users_cache.get_user_mention_data(target_id),
         return_exceptions=True,
     )
-    if isinstance(target_role, asyncio.CancelledError):
-        raise target_role
-    if isinstance(mention_data, asyncio.CancelledError):
-        raise mention_data
+    throw_if_cancelled((target_role, mention_data))
     if isinstance(target_role, BaseException):
         log.error(
             "target role lookup failed during demote callback for target=%d: %s",
@@ -693,16 +679,20 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
     except Exception:
         log.exception("extract_target failed during transfer")
-        try:
-            await msg.reply_text(replies.ERR_ROLE_VERIFY)
-        except Exception as reply_exc:
-            log.debug("cmd_transfer extract-failed reply failed: %s", reply_exc)
+        await safe_reply(
+            msg,
+            replies.ERR_ROLE_VERIFY,
+            log_label="cmd_transfer extract-failed",
+            parse_mode=None,
+        )
         return
     if not target_id:
-        try:
-            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
-        except Exception as exc:
-            log.debug("cmd_transfer no-target reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            replies.ERR_CANNOT_RESOLVE,
+            log_label="cmd_transfer no-target",
+            parse_mode=None,
+        )
         return
 
     try:
@@ -711,17 +701,16 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
     except Exception:
         log.exception("identity.classify failed during transfer")
-        try:
-            await msg.reply_text(replies.ERR_ROLE_VERIFY)
-        except Exception as reply_exc:
-            log.debug("cmd_transfer classify-failed reply failed: %s", reply_exc)
+        await safe_reply(
+            msg,
+            replies.ERR_ROLE_VERIFY,
+            log_label="cmd_transfer classify-failed",
+            parse_mode=None,
+        )
         return
     refusal = identity.refuse_message("transfer", ident)
     if refusal is not None:
-        try:
-            await msg.reply_text(refusal, parse_mode="HTML")
-        except Exception as exc:
-            log.debug("cmd_transfer refusal reply failed: %s", exc)
+        await safe_reply(msg, refusal, log_label="cmd_transfer refusal")
         return
 
     target_uname = ident.username
@@ -768,13 +757,13 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await db.users_roles.set_owner(target_id)
     except Exception:
         log.exception("cmd_transfer set_owner failed for target %d", target_id)
-        try:
-            await msg.reply_text(
-                "Couldn't transfer ownership due to a server error. "
-                "No changes were made; please try again."
-            )
-        except Exception as exc:
-            log.debug("cmd_transfer set-owner-failed reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            "Couldn't transfer ownership due to a server error. "
+            "No changes were made; please try again.",
+            log_label="cmd_transfer set-owner-failed",
+            parse_mode=None,
+        )
         return
     # * Refresh the in-process error_reporter owner so subsequent infra
     # * errors go to the new owner via DM instead of the old one.
@@ -848,14 +837,12 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     # * Founder would then DM-respond to without ever knowing who really
     # * sent it. Real humans send the command from their own account.
     if user.id == ANONYMOUS_BOT_ID:
-        try:
-            await msg.reply_text(
-                "This command must be sent from your personal account, not as "
-                "the group. Anonymous-admin commands are not accepted here.",
-                parse_mode="HTML",
-            )
-        except Exception as exc:
-            log.debug("cmd_promote_request anon-admin reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            "This command must be sent from your personal account, not as "
+            "the group. Anonymous-admin commands are not accepted here.",
+            log_label="cmd_promote_request anon-admin",
+        )
         return
 
     existing_role, existing = await asyncio.gather(
@@ -875,36 +862,35 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
             existing_role,
             existing,
         )
-        try:
-            await msg.reply_text(_ERR_ROLE_LOOKUP_FAILED)
-        except Exception as exc:
-            log.debug("cmd_promote_request lookup-fail reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            _ERR_ROLE_LOOKUP_FAILED,
+            log_label="cmd_promote_request lookup-fail",
+            parse_mode=None,
+        )
         return
     if existing_role:
         label = db.users_roles.ROLE_LABEL.get(existing_role, existing_role or "unknown")
         label = label.capitalize()
-        try:
-            await msg.reply_text(f"You're already a {label} - no request needed.")
-        except Exception as exc:
-            log.debug("cmd_promote_request already-role reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            f"You're already a {label} - no request needed.",
+            log_label="cmd_promote_request already-role",
+            parse_mode=None,
+        )
         return
 
     if existing:
-        try:
-            await msg.reply_text(
-                f"You already have a pending request (ID: {code(existing.get('request_id', 'unknown'))}).",
-                parse_mode="HTML",
-            )
-        except Exception as exc:
-            log.debug("cmd_promote_request existing-request reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            f"You already have a pending request (ID: {code(existing.get('request_id', 'unknown'))}).",
+            log_label="cmd_promote_request existing-request",
+        )
         return
     _, reply = await Promote.request_admin(
         ctx.bot, user.id, user.id, user.first_name or "unknown", user.username or ""
     )
-    try:
-        await msg.reply_text(reply, parse_mode="HTML")
-    except Exception as exc:
-        log.debug("cmd_promote_request result reply failed: %s", exc)
+    await safe_reply(msg, reply, log_label="cmd_promote_request result")
 
 
 # ──────── Command Promotion Requests List </tcpromotelist> ──────── #
@@ -922,16 +908,20 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         pending = await db.queues_db.all_pending()
     except Exception:
         log.exception("all_pending failed during promote_list")
-        try:
-            await msg.reply_text(_ERR_ROLE_LOOKUP_FAILED)
-        except Exception as exc:
-            log.debug("cmd_promote_list db-error reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            _ERR_ROLE_LOOKUP_FAILED,
+            log_label="cmd_promote_list db-error",
+            parse_mode=None,
+        )
         return
     if not pending:
-        try:
-            await msg.reply_text(_MSG_NO_PENDING)
-        except Exception as exc:
-            log.debug("cmd_promote_list no-pending reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            _MSG_NO_PENDING,
+            log_label="cmd_promote_list no-pending",
+            parse_mode=None,
+        )
         return
     lines = [f"{bold(f'Pending Promotion Requests ({len(pending)})')}\n"]
     for req in pending:
@@ -943,10 +933,7 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             f"- {mention(target_id, target_fname, uname_val)} "
             f"{code(str(target_id))} | {esc(uname)} | ID: {code(req.get('request_id', 'unknown'))}"
         )
-    try:
-        await msg.reply_text("\n".join(lines), parse_mode="HTML")
-    except Exception as exc:
-        log.debug("cmd_promote_list result reply failed: %s", exc)
+    await safe_reply(msg, "\n".join(lines), log_label="cmd_promote_list result")
 
 
 # ──────────────────────── Callback Handlers ─────────────────────── #
@@ -981,12 +968,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         q.answer(),
         return_exceptions=True,
     )
-    if isinstance(is_owner, asyncio.CancelledError):
-        raise is_owner
-    if isinstance(req_result, asyncio.CancelledError):
-        raise req_result
-    if isinstance(answer_r, asyncio.CancelledError):
-        raise answer_r
+    throw_if_cancelled((is_owner, req_result, answer_r))
     if isinstance(answer_r, BaseException):
         log.debug("on_promo_decision answer failed: %s", answer_r)
     if isinstance(is_owner, BaseException):

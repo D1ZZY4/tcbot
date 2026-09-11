@@ -15,8 +15,10 @@ from telegram.ext import ContextTypes, MessageHandler
 from tcbot import database as db
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
+from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.unban_flow import execute_unban
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, code, mention
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -92,10 +94,12 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
     target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        try:
-            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
-        except Exception as exc:
-            log.debug("unban no-target reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            replies.ERR_CANNOT_RESOLVE,
+            log_label="unban no-target",
+            parse_mode=None,
+        )
         return
 
     # * Classify, pre-fetch the active ban record, and run the
@@ -112,12 +116,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         resolve_and_check(msg, admin.id, target_id, min_role="developer"),
         return_exceptions=True,
     )
-    if isinstance(ident, asyncio.CancelledError):
-        raise ident
-    if isinstance(pre_ban, asyncio.CancelledError):
-        raise pre_ban
-    if isinstance(role_result, asyncio.CancelledError):
-        raise role_result
+    throw_if_cancelled((ident, pre_ban, role_result))
     if isinstance(ident, BaseException):
         log.exception("identity.classify failed in cmd_unban: %s", ident)
         return
@@ -138,10 +137,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     refusal = identity.refuse_message("unban", ident)
     if refusal is not None and ident.kind not in ("admin", "developer", "tester"):
-        try:
-            await msg.reply_text(refusal, parse_mode="HTML")
-        except Exception as exc:
-            log.debug("unban refusal reply failed: %s", exc)
+        await safe_reply(msg, refusal, log_label="unban refusal")
         return
 
     if refusal is not None:
@@ -165,10 +161,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 )
                 ban_record = None
         if ban_record is None:
-            try:
-                await msg.reply_text(refusal, parse_mode="HTML")
-            except Exception as exc:
-                log.debug("unban refusal reply failed: %s", exc)
+            await safe_reply(msg, refusal, log_label="unban refusal")
             return
         if target_role:
             try:
@@ -187,16 +180,14 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                     target_id,
                     target_role,
                 )
-                try:
-                    await msg.reply_text(
-                        f"{mention(target_id, target_fname or str(target_id))} "
-                        f"holds a federation role ({target_role}) and the demote "
-                        "step failed, so the unban cannot proceed safely. Demote "
-                        "them manually with /tcdemote and retry the unban.",
-                        parse_mode="HTML",
-                    )
-                except Exception as exc:
-                    log.debug("unban demote-fail reply failed: %s", exc)
+                await safe_reply(
+                    msg,
+                    f"{mention(target_id, target_fname or str(target_id))} "
+                    f"holds a federation role ({target_role}) and the demote "
+                    "step failed, so the unban cannot proceed safely. Demote "
+                    "them manually with /tcdemote and retry the unban.",
+                    log_label="unban demote-fail",
+                )
                 return
 
     try:
@@ -213,12 +204,12 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         # * speculative pre-fetch above failed, so an outage would
         # * otherwise end with no operator feedback.
         log.exception("execute_unban failed for target=%s", target_id)
-        try:
-            await msg.reply_text(
-                "I couldn't reach the database right now. Please try again in a moment."
-            )
-        except Exception as exc:
-            log.debug("unban DB-fail reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            "I couldn't reach the database right now. Please try again in a moment.",
+            log_label="unban DB-fail",
+            parse_mode=None,
+        )
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

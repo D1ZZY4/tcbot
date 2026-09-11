@@ -15,6 +15,7 @@ from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 from tcbot import cfg
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
+from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.reason_flow import (
     WAITING_PROOF,
     WAITING_REASON,
@@ -30,6 +31,7 @@ from tcbot.modules.helper.workflows.warning_flow import (
     reason,
     warn_conversation,
 )
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, code, mention
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -142,19 +144,23 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     )
 
     if not target_id:
-        try:
-            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
-        except Exception as exc:
-            log.debug("cmd_warn_entry no-target reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            replies.ERR_CANNOT_RESOLVE,
+            log_label="cmd_warn_entry no-target",
+            parse_mode=None,
+        )
         return ConversationHandler.END
 
     # * Fail fast on overlong inline reasons with the shared cap and text,
     # * before any role I/O or notice work.
     if inline_reason and is_reason_too_long(inline_reason):
-        try:
-            await msg.reply_text(reason_too_long_text(len(inline_reason)))
-        except Exception as exc:
-            log.debug("cmd_warn_entry reason-too-long reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            reason_too_long_text(len(inline_reason)),
+            log_label="cmd_warn_entry reason-too-long",
+            parse_mode=None,
+        )
         return ConversationHandler.END
 
     ident, role_result = await asyncio.gather(
@@ -162,10 +168,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         resolve_and_check(msg, admin.id, target_id, min_role="tester"),
         return_exceptions=True,
     )
-    if isinstance(ident, asyncio.CancelledError):
-        raise ident
-    if isinstance(role_result, asyncio.CancelledError):
-        raise role_result
+    throw_if_cancelled((ident, role_result))
     if isinstance(ident, BaseException):
         log.exception("identity.classify failed in cmd_warn: %s", ident)
         return ConversationHandler.END
@@ -180,18 +183,12 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     refusal = identity.refuse_message("warn", ident)
     if refusal is not None:
-        try:
-            await msg.reply_text(refusal, parse_mode="HTML")
-        except Exception as exc:
-            log.debug("cmd_warn_entry refusal reply failed: %s", exc)
+        await safe_reply(msg, refusal, log_label="cmd_warn_entry refusal")
         return ConversationHandler.END
 
     notice = identity.staff_notice("warn", ident, cfg.community_name)
     if notice is not None:
-        try:
-            await msg.reply_text(notice, parse_mode="HTML")
-        except Exception as exc:
-            log.debug("cmd_warn_entry staff notice reply failed: %s", exc)
+        await safe_reply(msg, notice, log_label="cmd_warn_entry staff notice")
 
     ctx.user_data.update(
         {
@@ -254,10 +251,12 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        try:
-            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
-        except Exception as exc:
-            log.debug("cmd_unwarn no-target reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            replies.ERR_CANNOT_RESOLVE,
+            log_label="cmd_unwarn no-target",
+            parse_mode=None,
+        )
         return
 
     ident, role_result = await asyncio.gather(
@@ -265,10 +264,7 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         resolve_and_check(msg, admin.id, target_id, min_role="tester"),
         return_exceptions=True,
     )
-    if isinstance(ident, asyncio.CancelledError):
-        raise ident
-    if isinstance(role_result, asyncio.CancelledError):
-        raise role_result
+    throw_if_cancelled((ident, role_result))
     if isinstance(ident, BaseException):
         log.exception("identity.classify failed in cmd_unwarn: %s", ident)
         return
@@ -283,18 +279,12 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     refusal = identity.refuse_message("unwarn", ident)
     if refusal is not None:
-        try:
-            await msg.reply_text(refusal, parse_mode="HTML")
-        except Exception as exc:
-            log.debug("cmd_unwarn refusal reply failed: %s", exc)
+        await safe_reply(msg, refusal, log_label="cmd_unwarn refusal")
         return
 
     notice = identity.staff_notice("unwarn", ident, cfg.community_name)
     if notice is not None:
-        try:
-            await msg.reply_text(notice, parse_mode="HTML")
-        except Exception as exc:
-            log.debug("cmd_unwarn notice reply failed: %s", exc)
+        await safe_reply(msg, notice, log_label="cmd_unwarn notice")
 
     await execute_unwarn(update, ctx, target_id, target_name or str(target_id))
 
@@ -316,10 +306,12 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        try:
-            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
-        except Exception as exc:
-            log.debug("cmd_warnlist no-target reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            replies.ERR_CANNOT_RESOLVE,
+            log_label="cmd_warnlist no-target",
+            parse_mode=None,
+        )
         return
 
     role_result = await resolve_and_check(msg, admin.id, target_id, min_role="tester")
@@ -352,10 +344,12 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        try:
-            await msg.reply_text(replies.ERR_CANNOT_RESOLVE)
-        except Exception as exc:
-            log.debug("cmd_resetwarns no-target reply failed: %s", exc)
+        await safe_reply(
+            msg,
+            replies.ERR_CANNOT_RESOLVE,
+            log_label="cmd_resetwarns no-target",
+            parse_mode=None,
+        )
         return
 
     ident, role_result = await asyncio.gather(
@@ -363,10 +357,7 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         resolve_and_check(msg, admin.id, target_id, min_role="tester"),
         return_exceptions=True,
     )
-    if isinstance(ident, asyncio.CancelledError):
-        raise ident
-    if isinstance(role_result, asyncio.CancelledError):
-        raise role_result
+    throw_if_cancelled((ident, role_result))
     if isinstance(ident, BaseException):
         log.exception("identity.classify failed in cmd_resetwarns: %s", ident)
         return
@@ -381,18 +372,12 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
     refusal = identity.refuse_message("resetwarns", ident)
     if refusal is not None:
-        try:
-            await msg.reply_text(refusal, parse_mode="HTML")
-        except Exception as exc:
-            log.debug("cmd_resetwarns refusal reply failed: %s", exc)
+        await safe_reply(msg, refusal, log_label="cmd_resetwarns refusal")
         return
 
     notice = identity.staff_notice("resetwarns", ident, cfg.community_name)
     if notice is not None:
-        try:
-            await msg.reply_text(notice, parse_mode="HTML")
-        except Exception as exc:
-            log.debug("cmd_resetwarns notice reply failed: %s", exc)
+        await safe_reply(msg, notice, log_label="cmd_resetwarns notice")
 
     await execute_resetwarns(update, ctx, target_id, target_name or str(target_id))
 
