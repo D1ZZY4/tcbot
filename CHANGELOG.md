@@ -7,6 +7,13 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 <details open>
 <summary>Unreleased changes (click to collapse)</summary>
 
+</details>
+
+## [6.6.0] - 2026-09-11
+
+<details>
+<summary>6.6.0 changes (click to expand)</summary>
+
 ### Changed
 
 - **`/tcsync` enforcement reconciliation plus optional scheduled sweep** (`tcbot/modules/syncing.py`, `tcbot/database/scheduler.py`, `tcbot/__init__.py`, `tcbot/__main__.py`, `config.env.example`, `AGENTS.md`, `docs/features/moderation/sync.md`, `docs/architecture/database.md`, `tests/test_syncing.py`): new `mod_only` `/tcsync` (`/tcsynchronize`) re-drives missed enforcement bounded per run (200 membership checks, semaphore-bounded fan-out, 3 s probes): bare runs sweep active bans against connected groups, targeted runs verify one user both directions (re-ban unenforced bans, clear stale kicks). Present-but-unkicked users are enforced; already-kicked, absent, and privileged users are skipped, never failures; benign refusals count as absent. New `SYNC_INTERVAL_HOURS` (default 0, disabled) registers a log-only `tcbot.enforcement_sync` interval job through `scheduler.start(bot=..., sync_interval_hours=...)`; a stale schedule is removed when disabled. Outcome classification and pair bounding are unit-tested with fakes. No ban records are created, modified, or deactivated by a sync run.
