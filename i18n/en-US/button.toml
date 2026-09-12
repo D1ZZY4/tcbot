@@ -3,6 +3,4 @@
 back = "« Back"
 cancel = "Cancel"
 done = "Done"
-
-# Display name of this locale, shown on language buttons.
 language_name = "English (US)"

@@ -1,5 +1,3 @@
 # Shared generic errors and notices. Templates stay raw: the engine
 # escapes MarkdownV2 at render time.
-
-# Generic retry notice for flows whose DB write failed.
 retry = "Something went wrong on our side. Please try again in a moment."

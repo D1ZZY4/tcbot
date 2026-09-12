@@ -2,18 +2,14 @@
 # Placeholders use {name} and are filled by the caller; only the listed
 # placeholders may appear. Templates stay raw: no manual backslashes.
 
-# Panel titles.
 title_user = "Language settings"
 title_group = "Group language"
-
-# Current-setting lines. Placeholders: {language} = display name.
+# Placeholders: {language} = display name.
 current_user = "Your language: {language}."
 current_group = "This group language: {language}."
 
-# Selection hint shown above the language buttons.
 prompt = "Tap a language below."
 
-# Confirmations. Placeholders: {language} = display name.
 updated_user = "Your language is now {language}."
 updated_group = "This group language is now {language}."
 
