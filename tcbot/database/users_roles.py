@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, cast
+from typing import TYPE_CHECKING, cast
 
 from pymongo.errors import DuplicateKeyError
 
@@ -25,6 +25,9 @@ from tcbot.database.documents import AdminDoc, RoleRefDoc
 from tcbot.database.mongos import col, db_call
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.time_and_date import utc_now
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 log = logging.getLogger(__name__)
 
@@ -272,7 +275,7 @@ async def get_effective_role(user_id: int) -> str | None:
     return cast("str | None", await effective_role_cache.get_or_fetch(user_id, _fetch))
 
 
-async def role_meta(user_id: int) -> tuple[str | None, int | None, Any]:
+async def role_meta(user_id: int) -> tuple[str | None, int | None, datetime | None]:
     """Return ``(role, assigned_by, assigned_at)``; owner has no metadata."""
     role = await get_effective_role(user_id)
     if role is None:

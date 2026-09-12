@@ -59,15 +59,19 @@ async def refresh_group_title(chat_id: int, title: str) -> bool:
 
     Returns True when a change was written (and the groups cache
     invalidated), False when already current or the group is unknown.
+    Single atomic update: the ``$ne`` filter skips the write when the
+    stored title already matches, so the common no-change path costs one
+    round trip instead of two and a concurrent refresh cannot clobber a
+    newer title with a stale read.
     """
-    doc = await db_call(
-        _groups().find_one({"chat_id": chat_id}, {"_id": 0, "title": 1})
+    r = await db_call(
+        _groups().update_one(
+            {"chat_id": chat_id, "title": {"$ne": title}},
+            {"$set": {"title": title}},
+        )
     )
-    if doc is None or doc.get("title") == title:
+    if r.matched_count == 0:
         return False
-    await db_call(
-        _groups().update_one({"chat_id": chat_id}, {"$set": {"title": title}})
-    )
     active_groups_cache.invalidate(_ALL_GROUPS_KEY)
     return True
 

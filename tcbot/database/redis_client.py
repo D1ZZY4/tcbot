@@ -69,6 +69,10 @@ async def connect(url: str) -> None:
             "Install with: pip install 'redis[hiredis]'"
         )
     global _client, _pool
+    # * Reconnect must not orphan the previous pool: with an explicitly
+    # * passed pool the client does not own it, so close first (silent
+    # * when nothing is connected yet).
+    await close()
     pool = aioredis.ConnectionPool.from_url(
         url,
         decode_responses=True,

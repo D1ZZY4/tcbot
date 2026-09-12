@@ -36,7 +36,7 @@ _RESOLV_CONF = "/etc/resolv.conf"
 
 
 def _patch_dns_if_needed() -> None:
-    """Write a fallback nameserver config when /etc/resolv.conf is absent."""
+    """Install an in-process fallback resolver when /etc/resolv.conf is absent."""
     if not Path(_RESOLV_CONF).exists():
         try:
             import dns.resolver  # noqa: PLC0415 (optional dependency; lazy import avoids ImportError when dnspython is absent)

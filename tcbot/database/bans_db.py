@@ -297,6 +297,9 @@ async def active_bans_page(skip: int, limit: int) -> list[BanDoc]:
     Only the visible slice travels over the wire regardless of federation
     size. Uses the ``(is_active, timestamp, ban_id)`` index.
     """
+    # * Clamp once so cursor limit and fetch length can never disagree;
+    # * callers always pass positive values, this only pins the edge.
+    page_size = max(1, limit)
     return await db_call(
         _bans()
         .find(
@@ -305,8 +308,8 @@ async def active_bans_page(skip: int, limit: int) -> list[BanDoc]:
             sort=[("timestamp", -1), ("ban_id", -1)],
         )
         .skip(max(0, skip))
-        .limit(max(1, limit))
-        .to_list(length=limit)
+        .limit(page_size)
+        .to_list(length=page_size)
     )
 
 

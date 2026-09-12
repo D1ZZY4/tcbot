@@ -238,7 +238,9 @@ async def get_mention_data_batch(
     missing: list[int] = []
 
     # * Check L1 in-memory cache for each user_id before hitting MongoDB.
-    for uid in user_ids:
+    # * dict.fromkeys drops repeat IDs so one render pass never checks or
+    # * queries the same user twice.
+    for uid in dict.fromkeys(user_ids):
         cached = user_mention_cache.get(uid)
         if cached is not CACHE_MISS:
             data = cast("list[str | None]", cached)
@@ -296,7 +298,9 @@ async def get_first_names_batch(user_ids: list[int]) -> dict[int, str]:
         return {}
     result: dict[int, str] = {}
     missing: list[int] = []
-    for uid in user_ids:
+    # * dict.fromkeys drops repeat IDs so one render pass never checks or
+    # * queries the same user twice.
+    for uid in dict.fromkeys(user_ids):
         cached = user_mention_cache.get(uid)
         if cached is not CACHE_MISS:
             data = cast("list[str | None]", cached)
@@ -368,6 +372,9 @@ async def all_users_page(
     if sort_by not in _ALLOWED_USER_SORTS:
         sort_by = "first_name"
     sort_dir = 1 if sort_by != "last_updated" else -1
+    # * Clamp once so cursor limit and fetch length can never disagree;
+    # * callers always pass positive values, this only pins the edge.
+    page_size = max(1, limit)
     return await db_call(
         _members()
         .find(
@@ -384,8 +391,8 @@ async def all_users_page(
         )
         .sort(sort_by, sort_dir)
         .skip(max(0, skip))
-        .limit(max(1, limit))
-        .to_list(length=limit)
+        .limit(page_size)
+        .to_list(length=page_size)
     )
 
 

@@ -28,6 +28,7 @@ from tcbot.utils.time_and_date import fmt_dt
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+    from datetime import datetime
 
 log = logging.getLogger(__name__)
 
@@ -156,7 +157,7 @@ class Check:
             role, role_by_id, role_at = None, None, None
         else:
             role, role_by_id, role_at = cast(
-                "tuple[str | None, int | None, Any]", r_role_meta
+                "tuple[str | None, int | None, datetime | None]", r_role_meta
             )
 
         # * Recognition note for special identities, owned by

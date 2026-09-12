@@ -7,6 +7,13 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 <details open>
 <summary>Unreleased changes (click to collapse)</summary>
 
+### Changed
+
+- **Database hot-path hardening and precise typing** (`tcbot/database/bans_db.py`, `users_cache.py`, `groups_db.py`, `redis_client.py`, `mongos.py`, `users_roles.py`, `tcbot/modules/helper/workflows/check_flow.py`): paged list helpers clamp the page size once so cursor limit and fetch length can never disagree; batch mention helpers skip repeat IDs via `dict.fromkeys`; `refresh_group_title` is one atomic `$ne`-filtered update (one round trip on the common path, no stale-read clobber); Redis `connect()` closes a previous client/pool first so reconnects cannot orphan sockets; `role_meta` returns `datetime | None` instead of `Any` (call-site cast updated to match); the DNS patch docstring no longer claims to write `resolv.conf`. Verified: Ruff, Pyright (0 errors), compileall, full pytest suite. No success-path behavior change; index coverage re-audited, no new indexes needed.
+
+### Documentation
+
+
 </details>
 
 ## [6.6.1] - 2026-09-11
