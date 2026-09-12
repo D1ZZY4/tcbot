@@ -7,6 +7,15 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 <details open>
 <summary>Unreleased changes (click to collapse)</summary>
 
+No unreleased changes yet.
+
+</details>
+
+## [6.7.0] - 2026-09-12
+
+<details>
+<summary>6.7.0 changes (click to expand)</summary>
+
 ### Changed
 
 - **MarkdownV2 follow-up polish** (`tcbot/modules/helper/decorators.py`, `maintenance.py`, `parse_logmsg.py`): `decorators.py` uses PEP 695 `def f[R]` generics (matching the `cache.py` precedent) instead of the legacy `TypeVar`, with the duplicated `TYPE_CHECKING` import block merged; two awkward comments reworded (`maintenance.py` transport-error note, `owner_only` fail-closed note); two `parse_logmsg` docstrings no longer reference `<code>` tags. Verified: Ruff, Pyright 0 errors, full pytest suite. No behavior change.
