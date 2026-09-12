@@ -1,4 +1,4 @@
-# TCF Bot Project Guide
+# TC BOT
 
 This file is the top-level guide for agents and contributors working in this repository. It summarizes the current project layout, development commands, style rules, and safety requirements.
 
