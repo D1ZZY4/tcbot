@@ -131,11 +131,14 @@ class BuildReason:
         extra_info: str = "",
     ) -> str:
         """Prompt asking the moderator to type a reason."""
+        # * target_mention/extra_info must already be MarkdownV2-ready
+        # * (mention/code/bold output): the single producer (muting.py
+        # * code() ID plus fmt_duration) is verified, so no re-escaping here.
         suffix = f" {extra_info}" if extra_info else ""
         skip_hint = f", or tap {bold(self.skip_label)}" if self.skip_allowed else ""
         return (
-            f"About to {action_label} {target_mention}{suffix}.\n"
-            f"What's the reason? Type it below{skip_hint}."
+            f"About to {action_label} {target_mention}{suffix}\\.\n"
+            f"What's the reason? Type it below{skip_hint}\\."
         )
 
 
@@ -227,7 +230,7 @@ class _ModActionFlow:
                     prompt_txt,
                     chat_id=prompt_chat,
                     message_id=prompt_id,
-                    parse_mode="HTML",
+                    parse_mode="MarkdownV2",
                     reply_markup=self.proof.keyboard(),
                 )
                 prompt_sent = True
@@ -237,7 +240,7 @@ class _ModActionFlow:
             try:
                 await msg.reply_text(
                     prompt_txt,
-                    parse_mode="HTML",
+                    parse_mode="MarkdownV2",
                     reply_markup=self.proof.keyboard(),
                 )
                 prompt_sent = True
@@ -263,7 +266,7 @@ class _ModActionFlow:
         results = await asyncio.gather(
             q.answer(),
             q.edit_message_text(
-                prompt_txt, parse_mode="HTML", reply_markup=self.proof.keyboard()
+                prompt_txt, parse_mode="MarkdownV2", reply_markup=self.proof.keyboard()
             ),
             return_exceptions=True,
         )

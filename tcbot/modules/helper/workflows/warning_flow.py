@@ -186,9 +186,9 @@ async def execute_warn(
                 await safe_reply(
                     msg,
                     f"{user_ref(target_id, target_name)} has been warned "
-                    f"({count}/{warn_limit}) - {esc(reason_text)}. The "
-                    "federation-wide threshold check is unavailable right "
-                    "now; ban them manually with /tcban if needed.",
+                    f"\\({count}/{warn_limit}\\) \\- {esc(reason_text)}\\. The "
+                    "federation\\-wide threshold check is unavailable right "
+                    "now; ban them manually with /tcban if needed\\.",
                     log_label="execute_warn fed-count-fail",
                     reply_markup=proof_kb,
                 )
@@ -221,14 +221,14 @@ async def execute_warn(
             ctx.bot.send_message(
                 lc,
                 log_text,
-                parse_mode="HTML",
+                parse_mode="MarkdownV2",
                 message_thread_id=lt,
                 reply_markup=proof_kb,
             ),
             msg.reply_text(
                 f"{user_ref(target_id, target_name)} has been warned "
-                f"({count}/{warn_limit}) - {esc(reason_text)}",
-                parse_mode="HTML",
+                f"\\({count}/{warn_limit}\\) \\- {esc(reason_text)}",
+                parse_mode="MarkdownV2",
                 reply_markup=proof_kb,
             ),
             return_exceptions=True,
@@ -271,13 +271,14 @@ async def execute_unwarn(
     if count == 0:
         await safe_reply(
             msg,
-            f"{user_ref(target_id, target_name)} has no warnings in this group.",
+            f"{user_ref(target_id, target_name)} has no warnings in this group\\.",
             log_label="execute_unwarn no-warns",
         )
         return
 
     new_count = max(count - 1, 0)
     chat_title = chat.title or str(chat_id)
+    warn_limit = cfg.warn_limit
     admin = update.effective_user
     if admin is None:
         return
@@ -308,7 +309,7 @@ async def execute_unwarn(
     if not removed:
         await safe_reply(
             msg,
-            f"{user_ref(target_id, target_name)} has no warnings in this group.",
+            f"{user_ref(target_id, target_name)} has no warnings in this group\\.",
             log_label="execute_unwarn empty",
         )
         return
@@ -334,11 +335,13 @@ async def execute_unwarn(
         chat_title,
     )
     results = await asyncio.gather(
-        ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+        ctx.bot.send_message(
+            lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
+        ),
         msg.reply_text(
-            f"One warning removed from {user_ref(target_id, target_name)}. "
-            f"They're now at {new_count}/{cfg.warn_limit}.",
-            parse_mode="HTML",
+            f"One warning removed from {user_ref(target_id, target_name)}\\. "
+            f"They're now at {new_count}/{warn_limit}\\.",
+            parse_mode="MarkdownV2",
         ),
         return_exceptions=True,
     )
@@ -379,7 +382,7 @@ async def execute_warnlist(
     if count == 0:
         await safe_reply(
             msg,
-            f"{user_ref(target_id, target_name)} has no warnings in this group.",
+            f"{user_ref(target_id, target_name)} has no warnings in this group\\.",
             log_label="execute_warnlist no-warns",
         )
         return
@@ -388,7 +391,7 @@ async def execute_warnlist(
         f"{user_ref(target_id, target_name)} has {count}/{cfg.warn_limit} warnings:\n"
     ]
     for i, w in enumerate(warns, 1):
-        lines.append(f"  {i}. {esc(w.get('reason', 'No reason'))}")
+        lines.append(f"  {i}\\. {esc(w.get('reason', 'No reason'))}")
 
     await safe_reply(msg, "\n".join(lines), log_label="execute_warnlist")
 
@@ -430,7 +433,7 @@ async def execute_resetwarns(
     if removed == 0:
         await safe_reply(
             msg,
-            f"{user_ref(target_id, target_name)} has no warnings to clear.",
+            f"{user_ref(target_id, target_name)} has no warnings to clear\\.",
             log_label="execute_resetwarns no-warns",
         )
         return
@@ -445,10 +448,12 @@ async def execute_resetwarns(
         chat_title,
     )
     results = await asyncio.gather(
-        ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+        ctx.bot.send_message(
+            lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
+        ),
         msg.reply_text(
-            f"All {removed} warning(s) cleared for {user_ref(target_id, target_name)}. Clean slate.",
-            parse_mode="HTML",
+            f"All {removed} warning\\(s\\) cleared for {user_ref(target_id, target_name)}\\. Clean slate\\.",
+            parse_mode="MarkdownV2",
         ),
         return_exceptions=True,
     )
@@ -481,6 +486,7 @@ async def _execute_warn_auto_ban(
     log_text: str,
 ) -> None:
     """Handle warn-threshold auto-ban: staff demotion, DB record, fan-out, reply."""
+    fed_warn_limit = cfg.fed_warn_limit
     # * The role lookup is guarded: the warn above is already recorded and the
     # * per-group trigger fires on exact equality, so letting a transient
     # * lookup failure propagate would both skip this threshold's auto-ban and
@@ -515,12 +521,12 @@ async def _execute_warn_auto_ban(
         # * admin believes the role is gone and may forget to retry.
         exemption_text = (
             f"{user_ref(target_id, target_name)} is a {target_role} and was "
-            "demoted, but staff are not auto-banned via warnings."
+            "demoted, but staff are not auto\\-banned via warnings\\."
             if demoted
             else (
-                f"{user_ref(target_id, target_name)} is a {target_role}, but "
-                "the auto-demote step failed; staff are not auto-banned via "
-                "warnings. See logs and retry manually if needed."
+                f"{user_ref(target_id, target_name)} is a {esc(target_role)}, but "
+                "the auto\\-demote step failed; staff are not auto\\-banned via "
+                "warnings\\. See logs and retry manually if needed\\."
             )
         )
         await safe_reply(
@@ -537,7 +543,7 @@ async def _execute_warn_auto_ban(
         bot.send_message(
             lc,
             log_text,
-            parse_mode="HTML",
+            parse_mode="MarkdownV2",
             message_thread_id=lt,
             reply_markup=proof_kb,
         ),
@@ -588,9 +594,9 @@ async def _execute_warn_auto_ban(
                 msg,
                 f"{user_ref(target_id, target_name)} reached the warning "
                 "threshold but the federation ban record could not be "
-                "written to the database, so no groups were touched. "
+                "written to the database, so no groups were touched\\. "
                 "Check the logs and ban them manually with /tcban once "
-                "the database recovers.",
+                "the database recovers\\.",
                 log_label="Warn auto-ban DB-fail",
                 reply_markup=proof_kb,
             )
@@ -630,15 +636,15 @@ async def _execute_warn_auto_ban(
     )
 
     if total_groups == 0:
-        applied_line = " No connected groups configured."
+        applied_line = " No connected groups configured\\."
     elif failed == total_groups:
         sample = ", ".join(
             grp.get("title") or str(grp["chat_id"]) for grp, _ in transient_groups[:5]
         )
         applied_line = (
-            f" WARNING: ban not enforced in any group ({total_groups}/{total_groups} failed)."
+            f" WARNING: ban not enforced in any group \\({total_groups}/{total_groups} failed\\)\\."
             f" Check bot admin rights in: {esc(sample)}"
-            + (" ..." if len(transient_groups) > 5 else "")
+            + (" \\.\\.\\.\\)" if len(transient_groups) > 5 else "")
         )
     elif failed > 0:
         sample = ", ".join(
@@ -646,39 +652,39 @@ async def _execute_warn_auto_ban(
         )
         applied_line = (
             f" Applied to {applied}/{total_groups} groups"
-            f" ({failed} failed: {esc(sample)}"
-            + (" ..." if len(transient_groups) > 3 else ")")
+            f" \\({failed} failed: {esc(sample)}"
+            + (" \\.\\.\\.\\)" if len(transient_groups) > 3 else "\\)")
         )
     else:
-        applied_line = f" Applied to {total_groups}/{total_groups} groups."
+        applied_line = f" Applied to {total_groups}/{total_groups} groups\\."
     if groups_fetch_failed:
         applied_line += (
             " WARNING: the group list could not be loaded, so some groups "
-            "may have been skipped. Check the logs and re-ban manually with "
-            "/tcban if needed."
+            "may have been skipped\\. Check the logs and re\\-ban manually with "
+            "/tcban if needed\\."
         )
 
     if auto_ban_trigger == "per_group":
         ban_notice = (
             f"{user_ref(target_id, target_name)} "
             f"hit {warn_limit} warnings "
-            f"and has been federation-banned."
+            f"and has been federation\\-banned\\."
         )
         ban_fail_notice = (
             f"{user_ref(target_id, target_name)} "
             f"hit {warn_limit} warnings "
-            f"but federation-ban failed - please ban them manually."
+            f"but federation\\-ban failed \\- please ban them manually\\."
         )
     else:
         ban_notice = (
             f"{user_ref(target_id, target_name)} "
-            f"hit {fed_count}/{cfg.fed_warn_limit} warnings across the federation "
-            f"and has been federation-banned."
+            f"hit {fed_count}/{fed_warn_limit} warnings across the federation "
+            f"and has been federation\\-banned\\."
         )
         ban_fail_notice = (
             f"{user_ref(target_id, target_name)} "
-            f"hit {fed_count}/{cfg.fed_warn_limit} federation-wide warnings "
-            f"but federation-ban failed - please ban them manually."
+            f"hit {fed_count}/{fed_warn_limit} federation\\-wide warnings "
+            f"but federation\\-ban failed \\- please ban them manually\\."
         )
 
     if any_ban_ok:
@@ -686,7 +692,7 @@ async def _execute_warn_auto_ban(
             db.warns_db.clear_all_warns(target_id),
             msg.reply_text(
                 f"{ban_notice}{applied_line}",
-                parse_mode="HTML",
+                parse_mode="MarkdownV2",
                 reply_markup=proof_kb,
             ),
             return_exceptions=True,

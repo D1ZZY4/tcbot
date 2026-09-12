@@ -19,7 +19,7 @@ from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import fan_out
-from tcbot.utils.formatter import bold, code
+from tcbot.utils.formatter import bold, code, esc
 from tcbot.utils.prefixes import build_prefixed_filters
 
 if TYPE_CHECKING:
@@ -41,14 +41,14 @@ _MEMBERSHIP_CHECK_TIMEOUT = 3.0
 __module_name__ = "Maintenance"
 __help_text__ = (
     "Maintenance commands for managing connected groups: clean up inaccessible ones "
-    "or leave all in an emergency."
+    "or leave all in an emergency\\."
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/leaveall')} (aliases: {code('/exitall')}, {code('/tcleave')})\n"
-        f"{code('/cleanup')} (aliases: {code('/tcclean')}, {code('/tcc')})",
+        f"{code('/leaveall')} \\(aliases: {code('/exitall')}, {code('/tcleave')}\\)\n"
+        f"{code('/cleanup')} \\(aliases: {code('/tcclean')}, {code('/tcc')}\\)",
     ),
     replies.who_section(
         f"{bold('/leaveall')}: {replies.PERM_FOUNDER_ONLY}\n"
@@ -58,21 +58,21 @@ __help_sections__: list[tuple[str, str]] = [
     (
         "/leaveall",
         "Makes the bot leave every connected group simultaneously, marks them all as "
-        "disconnected in the database, and posts a log entry for each group. "
-        f"This is irreversible - each group must be manually reconnected with "
-        f"{code('/tcconnect')}. Use only in emergencies.",
+        "disconnected in the database, and posts a log entry for each group\\. "
+        f"This is irreversible \\- each group must be manually reconnected with "
+        f"{code('/tcconnect')}\\. Use only in emergencies\\.",
     ),
     (
         "/cleanup",
-        "Scans all groups in the database and attempts to verify the bot still has access. "
+        "Scans all groups in the database and attempts to verify the bot still has access\\. "
         "Any group where the bot was kicked, removed, or can no longer reach is marked as "
-        "disconnected and removed from the active list. "
-        "Run this periodically to keep the group list accurate.",
+        "disconnected and removed from the active list\\. "
+        "Run this periodically to keep the group list accurate\\.",
     ),
     (
         replies.SEC_EXAMPLES,
-        f"{code('/cleanup')}: remove stale or inaccessible groups.\n"
-        f"{code('/leaveall')}: emergency withdrawal from all connected groups.",
+        f"{code('/cleanup')}: remove stale or inaccessible groups\\.\n"
+        f"{code('/leaveall')}: emergency withdrawal from all connected groups\\.",
     ),
 ]
 
@@ -152,7 +152,7 @@ async def _leave_one(
                 admin_id,
                 admin_name,
             ),
-            parse_mode="HTML",
+            parse_mode="MarkdownV2",
             message_thread_id=lt,
         ),
         return_exceptions=True,
@@ -233,7 +233,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if status_msg is not None:
             await safe_reply(
                 status_msg,
-                replies.ERR_GROUPS_LOAD_FAILED,
+                esc(replies.ERR_GROUPS_LOAD_FAILED),
                 log_label="leaveall groups-failed",
             )
         return
@@ -248,7 +248,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if status_msg is not None:
             await safe_reply(
                 status_msg,
-                replies.ERR_NO_CONNECTED_GROUPS,
+                esc(replies.ERR_NO_CONNECTED_GROUPS),
                 log_label="leaveall no-groups",
             )
         return
@@ -261,8 +261,8 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         # * always fail (bots cannot edit messages sent by others).
         try:
             status = await status_msg.reply_text(
-                f"Leaving {len(groups)} groups...",
-                parse_mode="HTML",
+                f"Leaving {len(groups)} groups\\.\\.\\.",
+                parse_mode="MarkdownV2",
             )
         except Exception as exc:
             log.debug("leaveall status reply failed: %s", exc)
@@ -292,13 +292,13 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if status is not None:
         detail = ""
         if partial:
-            detail += f" ({partial} partial: bot left but DB deactivation failed)"
+            detail += f" \\({partial} partial: bot left but DB deactivation failed\\)"
         if log_failed:
-            detail += f" ({log_failed} log posts failed)"
+            detail += f" \\({log_failed} log posts failed\\)"
         try:
             await status.edit_text(
-                f"Left {code(str(left_ok))} groups. Failed: {code(str(failed))}.{detail}",
-                parse_mode="HTML",
+                f"Left {code(str(left_ok))} groups\\. Failed: {code(str(failed))}\\.{detail}",
+                parse_mode="MarkdownV2",
             )
         except Exception:
             log.exception("Leaveall status edit failed")
@@ -326,7 +326,7 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.exception("active_groups failed during cleanup")
         await safe_reply(
             reply_msg,
-            replies.ERR_GROUPS_LOAD_FAILED,
+            esc(replies.ERR_GROUPS_LOAD_FAILED),
             log_label="cleanup groups-failed",
         )
         return
@@ -361,7 +361,7 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     await safe_reply(
         reply_msg,
-        f"Cleaned up {code(str(deactivated))} inaccessible group(s).",
+        f"Cleaned up {code(str(deactivated))} inaccessible group\\(s\\)\\.",
         log_label="cleanup",
     )
 

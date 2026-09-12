@@ -32,31 +32,31 @@ __all__ = (
 __module_name__ = "Appeal"
 
 __help_text__ = (
-    "Submit an appeal for an active federation ban. Staff review with a "
-    f"{bold(f'{LOCK_HOURS}-hour priority window')} for the banning admin."
+    "Submit an appeal for an active federation ban\\. Staff review with a "
+    f"{bold(f'{LOCK_HOURS}-hour priority window')} for the banning admin\\."
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         "How to start",
-        f"Tap the {bold('Submit Appeal')} button on your ban notification (sent by the bot in PM), "
-        f"or use {code('/checkme')} and tap the appeal button that appears.",
+        f"Tap the {bold('Submit Appeal')} button on your ban notification \\(sent by the bot in PM\\), "
+        f"or use {code('/checkme')} and tap the appeal button that appears\\.",
     ),
     replies.who_section(
         "Anyone with an active federation ban. You can only have one active appeal at a time."
     ),
     (
         "Where to start",
-        "Bot PM only.",
+        "Bot PM only\\.",
     ),
     (
         "How it works",
         f"Once the appeal flow is open, send a single message starting with {code('#appeal')} "
         "that includes all three of the following sections:\n\n"
-        f"- {bold('Log link')}: the link to your ban log entry in the federation logs channel\n"
-        f"- {bold('Clarification')}: your honest explanation of why the ban was issued or was a "
+        f"\\- {bold('Log link')}: the link to your ban log entry in the federation logs channel\n"
+        f"\\- {bold('Clarification')}: your honest explanation of why the ban was issued or was a "
         "mistake\n"
-        f"- {bold('Agreement')}: your commitment to follow community rules going forward",
+        f"\\- {bold('Agreement')}: your commitment to follow community rules going forward",
     ),
     (
         "Format example",
@@ -69,11 +69,11 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "What happens next",
-        "Your appeal is forwarded to TC admins for review. The admin who issued the original "
-        f"ban has a {bold(f'{LOCK_HOURS}-hour priority window')} to respond; after that, any admin can act.\n\n"
-        "If approved: your ban is lifted immediately across all connected groups.\n"
-        "If rejected: your ban remains in place.\n"
-        "You will be notified by the bot either way.",
+        "Your appeal is forwarded to TC admins for review\\. The admin who issued the original "
+        f"ban has a {bold(f'{LOCK_HOURS}-hour priority window')} to respond; after that, any admin can act\\.\n\n"
+        "If approved: your ban is lifted immediately across all connected groups\\.\n"
+        "If rejected: your ban remains in place\\.\n"
+        "You will be notified by the bot either way\\.",
     ),
 ]
 

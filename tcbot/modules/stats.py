@@ -42,13 +42,13 @@ _RL_CB_LIMIT: int = 15
 __module_name__ = "Stats"
 __help_text__ = (
     "Live federation overview: Founder, staff, users, active bans, and "
-    "connected groups, with drill-down menus for every section."
+    "connected groups, with drill\\-down menus for every section\\."
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tcstats')} (alias: {code('/tcs')})",
+        f"{code('/tcstats')} \\(alias: {code('/tcs')}\\)",
     ),
     replies.who_section(replies.CONTEXT_ANYONE),
     replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
@@ -56,20 +56,20 @@ __help_sections__: list[tuple[str, str]] = [
         replies.SEC_WHAT,
         "Shows a live federation summary: Founder, total staff broken down by "
         "role, the number of cached users, active federation bans, and "
-        "connected chats.",
+        "connected chats\\.",
     ),
     (
         "Drill-downs",
         f"{bold('Staff Roster')}: Founder, Admins, Developers, Testers, all listed "
-        "with mentions.\n"
-        f"{bold('Users')}: paginated list of every cached user (Owner/Founder "
-        "only - the button and the list are hidden from everyone else). "
-        "Numbered buttons open a per-user detail card.\n"
+        "with mentions\\.\n"
+        f"{bold('Users')}: paginated list of every cached user \\(Owner/Founder "
+        "only \\- the button and the list are hidden from everyone else\\)\\. "
+        "Numbered buttons open a per\\-user detail card\\.\n"
         f"{bold('Connected Chats')}: paginated list of every active group; "
-        "drill-in shows owner, ID, and connect date.\n"
+        "drill\\-in shows owner, ID, and connect date\\.\n"
         f"{bold('User Bans')}: paginated list of every active ban with a "
-        f"{bold('Search')} shortcut to look up a user by name or ID.\n\n"
-        f"Every view ends with a {bold('Back')} button to the main summary.",
+        f"{bold('Search')} shortcut to look up a user by name or ID\\.\n\n"
+        f"Every view ends with a {bold('Back')} button to the main summary\\.",
     ),
     (
         replies.SEC_EXAMPLES,
@@ -374,7 +374,7 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
                 text,
                 chat_id=chat_id,
                 message_id=msg_id,
-                parse_mode="HTML",
+                parse_mode="MarkdownV2",
                 reply_markup=kb,
             )
         except Exception as exc:

@@ -66,7 +66,7 @@ async def execute_unban(
         if msg is not None:
             await safe_reply(
                 msg,
-                f"{user_ref(target_id, target_fname)} has no active federation ban.",
+                f"{user_ref(target_id, target_fname)} has no active federation ban\\.",
                 log_label=f"Unban no-record for user {target_id}",
             )
         return
@@ -89,7 +89,7 @@ async def execute_unban(
                 msg,
                 f"{user_ref(target_id, target_fname)} could not be unbanned: "
                 "the group list could not be loaded from the database, so "
-                "nothing was changed. Check the logs and retry.",
+                "nothing was changed\\. Check the logs and retry\\.",
                 log_label="Unban groups-fail",
             )
         return
@@ -126,8 +126,8 @@ async def execute_unban(
                 msg,
                 f"{user_ref(target_id, target_fname)} could not be unbanned: "
                 "the database deactivation failed, so the user is still "
-                "marked as banned even if they are now unmuted in chats. "
-                "Check the logs and retry.",
+                "marked as banned even if they are now unmuted in chats\\. "
+                "Check the logs and retry\\.",
                 log_label="Unban DB-fail",
             )
         return
@@ -192,20 +192,22 @@ async def execute_unban(
             for grp in transient_groups[:5]
         )
         unban_note = (
-            f"removed from {len(groups) - failed}/{len(groups)} groups. "
+            f"removed from {len(groups) - failed}/{len(groups)} groups\\. "
             f"WARNING: still banned in: {esc(sample)}"
-            + (" ..." if len(transient_groups) > 5 else "")
+            + (" \\.\\.\\." if len(transient_groups) > 5 else "")
         )
     else:
-        unban_note = f"removed from {len(groups)}/{len(groups)} groups."
+        unban_note = f"removed from {len(groups)}/{len(groups)} groups\\."
 
     # * send log; reply only if we have an effective_message.
     if msg is not None:
         log_r, reply_r = await asyncio.gather(
-            ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+            ctx.bot.send_message(
+                lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
+            ),
             msg.reply_text(
-                f"{user_ref(target_id, target_fname)} has been unbanned - {unban_note}",
-                parse_mode="HTML",
+                f"{user_ref(target_id, target_fname)} has been unbanned \\- {unban_note}",
+                parse_mode="MarkdownV2",
             ),
             return_exceptions=True,
         )
@@ -213,7 +215,7 @@ async def execute_unban(
             log.debug("Unban reply failed for user %d: %s", target_id, reply_r)
     else:
         log_r = await ctx.bot.send_message(
-            lc, log_text, parse_mode="HTML", message_thread_id=lt
+            lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
         )
     if isinstance(log_r, BaseException):
         log.error("Unban log send failed for user %d: %s", target_id, log_r)

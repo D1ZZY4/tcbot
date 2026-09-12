@@ -56,10 +56,10 @@ CHAT_KEY = "stats_search_chat_id"
 
 # ──────────────── User-facing reply constants ──────────────────── #
 
-_ERR_USER_NOT_FOUND = "User not found in this page."
-_ERR_GROUP_NOT_FOUND = "Group not found in this page."
-_ERR_BAN_NOT_FOUND = "Ban record not found in this page."
-_ERR_RESULT_UNAVAILABLE = "Result no longer available."
+_ERR_USER_NOT_FOUND = "User not found in this page\\."
+_ERR_GROUP_NOT_FOUND = "Group not found in this page\\."
+_ERR_BAN_NOT_FOUND = "Ban record not found in this page\\."
+_ERR_RESULT_UNAVAILABLE = "Result no longer available\\."
 
 
 # * Strong references to in-flight background-refresh tasks; prevents GC
@@ -284,10 +284,10 @@ class Stats:
         )
 
         text = (
-            f"{bold(esc(cfg.community_name))} {bold('Stats')}\n\n"
+            f"{bold(cfg.community_name)} {bold('Stats')}\n\n"
             f"Founder: {owner_line}\n"
             f"Staff: {bold(str(staff_total))} "
-            f"(Admins {admin_count}, Devs {len(developers)}, Testers {len(testers)})\n"
+            f"\\(Admins {admin_count}, Devs {len(developers)}, Testers {len(testers)}\\)\n"
             f"Users tracked: {bold(str(user_count))}\n"
             f"Active bans: {bold(str(ban_count))}\n"
             f"Connected chats: {bold(str(group_count))}"
@@ -330,12 +330,12 @@ class Stats:
         # Single batch query for all users
         mention_data_map = await db.users_cache.get_mention_data_batch(all_user_ids)
 
-        lines = [f"{bold('Staff Roster')} - {esc(cfg.community_name)}\n"]
+        lines = [f"{bold('Staff Roster')} \\- {esc(cfg.community_name)}\n"]
 
         if owner_idx is not None:
             lines.append(bold("Founder"))
             owner_fname, owner_uname = mention_data_map[owner_id_int]
-            lines.append(f"- {mention(owner_id_int, owner_fname, owner_uname)}\n")
+            lines.append(f"\\- {mention(owner_id_int, owner_fname, owner_uname)}\n")
 
         def _section(label: str, docs: list) -> None:
             lines.append(bold(f"{label} ({len(docs)})"))
@@ -343,9 +343,9 @@ class Stats:
                 for doc in docs:
                     uid = doc.get("user_id", 0)
                     fname, uname = mention_data_map[uid]
-                    lines.append(f"- {mention(uid, fname, uname)}")
+                    lines.append(f"\\- {mention(uid, fname, uname)}")
             else:
-                lines.append("- No staff assigned")
+                lines.append("\\- No staff assigned")
             lines.append("")
 
         _section("Admins", admins)
@@ -370,18 +370,20 @@ class Stats:
 
         if total == 0:
             text = (
-                f"{bold('Users')}\n\nNo cached users yet. The bot caches users "
-                "as it sees them across connected groups."
+                f"{bold('Users')}\n\nNo cached users yet\\. The bot caches users "
+                "as it sees them across connected groups\\."
             )
             return text, back_kb()
 
-        lines = [f"{bold('Users')} - {total} total - page {page + 1}/{total_pages}\n"]
+        lines = [
+            f"{bold('Users')} \\- {total} total \\- page {page + 1}/{total_pages}\n"
+        ]
         base_idx = page * _PAGE_SIZE
         for i, u in enumerate(chunk, start=1):
             uid = u.get("user_id", 0)
             fname = u.get("first_name") or str(uid)
             uname = u.get("username")
-            lines.append(f"{base_idx + i}. {user_ref(uid, fname, uname)}")
+            lines.append(f"{base_idx + i}\\. {user_ref(uid, fname, uname)}")
 
         return "\n".join(lines), _list_kb(
             page,
@@ -425,7 +427,7 @@ class Stats:
             f"{bold('User Details')}\n\n"
             f"Name: {mention(uid, fname, uname)}\n"
             f"ID: {code(str(uid))}\n"
-            f"Username: {('@' + esc(uname)) if uname else '-'}\n"
+            f"Username: {('@' + esc(uname)) if uname else '\\-'}\n"
             f"Last name: {esc(str(last_name))}\n\n"
             f"First seen: {commit}\n"
             f"Last seen: {seen}\n\n"
@@ -443,17 +445,17 @@ class Stats:
         chunk, total_pages, page = paginate(groups, page, _PAGE_SIZE)
 
         if not groups:
-            text = f"{bold('Connected Chats')}\n\nNo connected groups yet."
+            text = f"{bold('Connected Chats')}\n\nNo connected groups yet\\."
             return text, back_kb()
 
         lines = [
-            f"{bold('Connected Chats')} - {len(groups)} total - page {page + 1}/{total_pages}\n"
+            f"{bold('Connected Chats')} \\- {len(groups)} total \\- page {page + 1}/{total_pages}\n"
         ]
         base_idx = page * _PAGE_SIZE
         for i, grp in enumerate(chunk, start=1):
             lines.append(
-                f"{base_idx + i}. {esc(grp.get('title', 'Unknown'))} "
-                f"- {code(str(grp.get('chat_id', 0)))}"
+                f"{base_idx + i}\\. {esc(grp.get('title', 'Unknown'))} "
+                f"\\- {code(str(grp.get('chat_id', 0)))}"
             )
 
         return "\n".join(lines), _list_kb(
@@ -493,7 +495,7 @@ class Stats:
 
         text = (
             f"{bold('Group Details')}\n\n"
-            f"Name: {bold(esc(title))}\n"
+            f"Name: {bold(title)}\n"
             f"Chat ID: {code(str(chat_id))}\n\n"
             f"Connected by: {mention(added_by, adder_fname, adder_uname)}\n"
             f"Date: {date_str}"
@@ -514,7 +516,7 @@ class Stats:
         chunk = await db.bans_db.active_bans_page(page * _PAGE_SIZE, _PAGE_SIZE)
 
         if total == 0:
-            text = f"{bold('User Bans')}\n\nNo active federation bans."
+            text = f"{bold('User Bans')}\n\nNo active federation bans\\."
             return text, back_kb()
 
         # * Pre-resolve banned-user names with batch query
@@ -522,13 +524,13 @@ class Stats:
         fname_map = await db.users_cache.get_first_names_batch(uids) if uids else {}
 
         lines = [
-            f"{bold('User Bans')} - {total} total - page {page + 1}/{total_pages}\n"
+            f"{bold('User Bans')} \\- {total} total \\- page {page + 1}/{total_pages}\n"
         ]
         base_idx = page * _PAGE_SIZE
         for i, ban in enumerate(chunk, start=1):
             uid = ban.get("banned_user_id", 0)
             fname = fname_map.get(uid, str(uid))
-            lines.append(f"{base_idx + i}. {esc(fname)} - {code(str(uid))}")
+            lines.append(f"{base_idx + i}\\. {esc(fname)} \\- {code(str(uid))}")
 
         search_row = [
             InlineKeyboardButton(
@@ -667,7 +669,7 @@ class Stats:
         the prompt still renders but no card IDs are stored, so a later search
         input degrades to a no-op edit instead of crashing on ``None``.
         """
-        text = f"{bold('Search User Bans')}\n\nSend a name or user ID in the chat."
+        text = f"{bold('Search User Bans')}\n\nSend a name or user ID in the chat\\."
         msg = q.message
         if not isinstance(msg, Message):
             return text, cls._search_panel_kb()
@@ -715,7 +717,7 @@ class Stats:
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Render search results: empty state or numbered hits."""
         if not results:
-            text = f'{bold("Search:")} "{esc(query)}"\n\nNo results found.'
+            text = f'{bold("Search:")} "{esc(query)}"\n\nNo results found\\.'
             return text, cls._search_results_kb(0)
 
         # Batch query for all user names
@@ -725,7 +727,7 @@ class Stats:
         for i, ban in enumerate(results, start=1):
             uid = ban.get("banned_user_id", 0)
             fname = fname_map.get(uid, str(uid))
-            lines.append(f"{i}. {esc(fname)} - {code(str(uid))}")
+            lines.append(f"{i}\\. {esc(fname)} \\- {code(str(uid))}")
         return "\n".join(lines), cls._search_results_kb(len(results))
 
     @classmethod

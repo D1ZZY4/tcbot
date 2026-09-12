@@ -47,14 +47,14 @@ _CNAME = esc(cfg.community_name)
 
 __module_name__ = "Disconnect"
 __help_text__ = (
-    f"Removes a group from {_CNAME}. Use {code('/tcdisconnect')} from "
-    f"inside the group, or {code('/rmtc')} remotely with a chat ID."
+    f"Removes a group from {_CNAME}\\. Use {code('/tcdisconnect')} from "
+    f"inside the group, or {code('/rmtc')} remotely with a chat ID\\."
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tcdisconnect')} (alias: {code('/tcdiscon')})\n{code('/rmtc')}",
+        f"{code('/tcdisconnect')} \\(alias: {code('/tcdiscon')}\\)\n{code('/rmtc')}",
     ),
     replies.who_section(
         f"{bold('/tcdisconnect')}: the group owner or TC Staff (Admin and above).\n"
@@ -67,15 +67,15 @@ __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_WHAT,
         f"{bold('/tcdisconnect')}: removes the current group from {_CNAME}, posts a "
-        f"disconnection log entry, and causes the bot to leave the group.\n\n"
-        f"{bold('/rmtc')}: force-removes a group from the federation by chat ID. Use this for "
+        f"disconnection log entry, and causes the bot to leave the group\\.\n\n"
+        f"{bold('/rmtc')}: force\\-removes a group from the federation by chat ID\\. Use this for "
         f"groups the bot has already been kicked from, or to remove a group remotely without "
-        f"being inside it. A log entry is still posted.",
+        f"being inside it\\. A log entry is still posted\\.",
     ),
     (
         replies.SEC_EXAMPLES,
-        f"Run {code('/tcdisconnect')} inside the group to disconnect it.\n"
-        f"{code('/rmtc -1001234567890')}: force-remove a group by chat ID.",
+        f"Run {code('/tcdisconnect')} inside the group to disconnect it\\.\n"
+        f"{code('/rmtc -1001234567890')}: force\\-remove a group by chat ID\\.",
     ),
 ]
 
@@ -204,7 +204,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             parse_logmsg.group_disconnected_log(
                 chat.id, chat.title or "Unknown", user.id, user.first_name
             ),
-            parse_mode="HTML",
+            parse_mode="MarkdownV2",
             message_thread_id=lt,
         ),
         msg.reply_text(f"This group has been disconnected from {cfg.community_name}."),
@@ -283,13 +283,13 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                     admin.id,
                     admin.first_name,
                 ),
-                parse_mode="HTML",
+                parse_mode="MarkdownV2",
                 message_thread_id=lt,
             ),
             ctx.bot.leave_chat(chat_id),
             msg.reply_text(
-                f"Group {code(str(chat_id))} has been disconnected from {esc(cfg.community_name)}.",
-                parse_mode="HTML",
+                f"Group {code(str(chat_id))} has been disconnected from {esc(cfg.community_name)}\\.",
+                parse_mode="MarkdownV2",
             ),
             return_exceptions=True,
         )

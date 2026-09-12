@@ -73,17 +73,17 @@ _RL_BULK_LIMIT: int = 3
 __module_name__ = "Admin"
 __help_text__ = (
     "Promote and demote staff, transfer ownership, and manage promotion requests "
-    "across the federation."
+    "across the federation\\."
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tcpromote')} (alias: {code('/tcp')})\n"
-        f"{code('/tcdemote')} (alias: {code('/tcd')})\n"
-        f"{code('/transferowner')} (alias: {code('/tfowner')})\n"
-        f"{code('/tcpromoterequests')} (alias: {code('/tcreqs')})\n"
-        f"{code('/tcpromotelist')} (alias: {code('/tcplist')})",
+        f"{code('/tcpromote')} \\(alias: {code('/tcp')}\\)\n"
+        f"{code('/tcdemote')} \\(alias: {code('/tcd')}\\)\n"
+        f"{code('/transferowner')} \\(alias: {code('/tfowner')}\\)\n"
+        f"{code('/tcpromoterequests')} \\(alias: {code('/tcreqs')}\\)\n"
+        f"{code('/tcpromotelist')} \\(alias: {code('/tcplist')}\\)",
     ),
     replies.who_section(
         f"{bold('/tcpromote')}, {bold('/tcdemote')}, {bold('/tcpromotelist')}: Founder and Admin.\n"
@@ -93,42 +93,42 @@ __help_sections__: list[tuple[str, str]] = [
     replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
     (
         "Role Hierarchy",
-        "Founder (rank 4) > Admin (rank 3) > Developer (rank 2) > Tester (rank 1)\n\n"
-        "You cannot promote a user to a rank equal to or above your own. "
-        "Admins promoting someone to Admin queues a request for the Founder.",
+        "Founder \\(rank 4\\) \\> Admin \\(rank 3\\) \\> Developer \\(rank 2\\) \\> Tester \\(rank 1\\)\n\n"
+        "You cannot promote a user to a rank equal to or above your own\\. "
+        "Admins promoting someone to Admin queues a request for the Founder\\.",
     ),
     replies.target_section(),
     (
         "/tcpromote",
-        "Assigns a role to a user. Omit the role argument to get an inline button menu.\n\n"
+        "Assigns a role to a user\\. Omit the role argument to get an inline button menu\\.\n\n"
         f"{bold('Usage:')} {code('/tcpromote <target> [admin|developer|tester]')}\n"
-        "- Founder can promote to any role directly.\n"
-        "- Admin can promote to Developer or Tester directly; promoting to Admin "
-        "sends a pending request to the Founder for approval.",
+        "\\- Founder can promote to any role directly\\.\n"
+        "\\- Admin can promote to Developer or Tester directly; promoting to Admin "
+        "sends a pending request to the Founder for approval\\.",
     ),
     (
         "/tcdemote",
-        "Removes a user's role. A confirmation button is shown before the action executes.\n\n"
+        "Removes a user's role\\. A confirmation button is shown before the action executes\\.\n\n"
         f"{bold('Usage:')} {code('/tcdemote <target>')}\n"
-        "- Founder can demote any role.\n"
-        "- Admin can demote Developer or Tester only.\n"
-        "- When a user with a role is banned or kicked, their role is automatically removed "
-        "and they are notified by DM.",
+        "\\- Founder can demote any role\\.\n"
+        "\\- Admin can demote Developer or Tester only\\.\n"
+        "\\- When a user with a role is banned or kicked, their role is automatically removed "
+        "and they are notified by DM\\.",
     ),
     (
         "/transferowner",
-        "Transfers federation ownership to another user. The current Founder steps down "
-        "to Admin. Founder only.\n\n"
+        "Transfers federation ownership to another user\\. The current Founder steps down "
+        "to Admin\\. Founder only\\.\n\n"
         f"{bold('Usage:')} {code('/transferowner <target>')}",
     ),
     (
         replies.SEC_EXAMPLES,
         f"{code('/tcpromote @username developer')}\n"
-        f"{code('/tcpromote 123456789')} - shows role selection menu\n"
+        f"{code('/tcpromote 123456789')} \\- shows role selection menu\n"
         f"{code('/tcdemote @username')}\n"
         f"{code('/transferowner @newowner')}\n"
-        f"{code('/tcpromoterequests')} - request promotion to Admin\n"
-        f"{code('/tcplist')} - list pending promotion requests",
+        f"{code('/tcpromoterequests')} \\- request promotion to Admin\n"
+        f"{code('/tcplist')} \\- list pending promotion requests",
     ),
 ]
 
@@ -453,7 +453,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         role,
     )
     try:
-        await q.edit_message_text(text, parse_mode="HTML", reply_markup=None)
+        await q.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=None)
     except Exception as exc:
         log.debug("on_promote_role_btn result edit failed: %s", exc)
 
@@ -532,7 +532,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await safe_reply(
         msg,
         f"{mention(target_id, target_fname or str(target_id), ident.username)} is currently a "
-        f"{bold(role_label)}.\nConfirm to remove their role.",
+        f"{bold(role_label)}\\.\nConfirm to remove their role\\.",
         log_label="cmd_demote confirm-prompt",
         reply_markup=keyboards.demote_confirm_kb(target_id),
     )
@@ -630,9 +630,9 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     role_label = db.users_roles.ROLE_LABEL.get(target_role, target_role)
     try:
         await q.edit_message_text(
-            f"Done. {user_ref(target_id, target_fname, target_uname)} "
-            f"has been removed from {esc(role_label)}.",
-            parse_mode="HTML",
+            f"Done\\. {user_ref(target_id, target_fname, target_uname)} "
+            f"has been removed from {esc(role_label)}\\.",
+            parse_mode="MarkdownV2",
             reply_markup=None,
         )
     except Exception as exc:
@@ -785,21 +785,23 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         current_owner.first_name or "unknown",
     )
     transfer_note = (
-        f"Done. Ownership has been transferred to "
-        f"{user_ref(target_id, target_fname or str(target_id), target_uname)}."
+        f"Done\\. Ownership has been transferred to "
+        f"{user_ref(target_id, target_fname or str(target_id), target_uname)}\\."
     )
     if not prev_owner_admin_ok:
         transfer_note += (
             f" WARNING: {user_ref(current_owner.id, current_owner.first_name or 'unknown')} "
             "could not be kept as Admin due to a server error; grant the role "
-            "manually with /tcpromote if needed."
+            "manually with /tcpromote if needed\\."
         )
     # * log and reply in parallel
     transfer_log_r, transfer_reply_r = await asyncio.gather(
-        ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+        ctx.bot.send_message(
+            lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
+        ),
         msg.reply_text(
             transfer_note,
-            parse_mode="HTML",
+            parse_mode="MarkdownV2",
         ),
         return_exceptions=True,
     )
@@ -840,7 +842,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         await safe_reply(
             msg,
             "This command must be sent from your personal account, not as "
-            "the group. Anonymous-admin commands are not accepted here.",
+            "the group\\. Anonymous\\-admin commands are not accepted here\\.",
             log_label="cmd_promote_request anon-admin",
         )
         return
@@ -883,7 +885,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     if existing:
         await safe_reply(
             msg,
-            f"You already have a pending request (ID: {code(existing.get('request_id', 'unknown'))}).",
+            f"You already have a pending request \\(ID: {code(existing.get('request_id', 'unknown'))}\\)\\.",
             log_label="cmd_promote_request existing-request",
         )
         return
@@ -930,7 +932,7 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         uname_val = req.get("username")
         uname = f"@{uname_val}" if uname_val else "no username"
         lines.append(
-            f"- {mention(target_id, target_fname, uname_val)} "
+            f"\\- {mention(target_id, target_fname, uname_val)} "
             f"{code(str(target_id))} | {esc(uname)} | ID: {code(req.get('request_id', 'unknown'))}"
         )
     await safe_reply(msg, "\n".join(lines), log_label="cmd_promote_list result")
@@ -1085,19 +1087,23 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         # * notify target, send log, and edit review message all in parallel
         existing_text = ""
         if q.message is not None:
-            # text_html is unavailable on MaybeInaccessibleMessage; use a safe fallback
-            existing_text = getattr(q.message, "text_html", "") or ""
+            # * Plain .text (not text_html): the edit below sends MarkdownV2,
+            # * so the display text is re-escaped here. Unavailable on
+            # * MaybeInaccessibleMessage; fall back to an empty base.
+            existing_text = esc(getattr(q.message, "text", "") or "")
         notify_results = await asyncio.gather(
             q.edit_message_text(
-                existing_text + f"\n\n- Approved by {esc(admin.first_name)}",
-                parse_mode="HTML",
+                existing_text + f"\n\n\\- Approved by {esc(admin.first_name)}",
+                parse_mode="MarkdownV2",
                 reply_markup=None,
             ),
             ctx.bot.send_message(
                 target_id,
-                f"Your promotion request has been approved - welcome to the {esc(cfg.community_name)} staff team, Admin.",
+                f"Your promotion request has been approved - welcome to the {cfg.community_name} staff team, Admin.",
             ),
-            ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+            ctx.bot.send_message(
+                lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
+            ),
             return_exceptions=True,
         )
         for i, r in enumerate(notify_results):
@@ -1134,18 +1140,20 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         # * best-effort now that the queue state is final.
         existing_text = ""
         if q.message is not None:
-            existing_text = getattr(q.message, "text_html", "") or ""
+            existing_text = esc(getattr(q.message, "text", "") or "")
         reject_results = await asyncio.gather(
             q.edit_message_text(
-                existing_text + f"\n\n- Rejected by {esc(admin.first_name)}",
-                parse_mode="HTML",
+                existing_text + f"\n\n\\- Rejected by {esc(admin.first_name)}",
+                parse_mode="MarkdownV2",
                 reply_markup=None,
             ),
             ctx.bot.send_message(
                 target_id,
                 "Your request was reviewed but wasn't approved this time. You're free to apply again later.",
             ),
-            ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+            ctx.bot.send_message(
+                lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
+            ),
             return_exceptions=True,
         )
         for i, r in enumerate(reject_results):

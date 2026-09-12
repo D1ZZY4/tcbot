@@ -286,8 +286,8 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         _db_fail_text = (
             f"{user_ref(target_id, target_fname)} could not be banned: "
             "the federation ban record could not be written to the database, "
-            "so no groups were touched. Check the logs and retry with /tcban "
-            "once the database recovers."
+            "so no groups were touched\\. Check the logs and retry with /tcban "
+            "once the database recovers\\."
         )
         if prompt_msg_id and prompt_chat_id:
             try:
@@ -295,7 +295,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
                     _db_fail_text,
                     chat_id=prompt_chat_id,
                     message_id=prompt_msg_id,
-                    parse_mode="HTML",
+                    parse_mode="MarkdownV2",
                     reply_markup=None,
                 )
             except Exception as exc:
@@ -404,15 +404,15 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     # * Build the applied-to line, surfacing a clear warning when no group was updated
     total_groups = len(groups)
     if total_groups == 0:
-        applied_line = "No connected groups configured."
+        applied_line = "No connected groups configured\\."
     elif failed == total_groups:
         sample = ", ".join(
             grp.get("title") or str(grp["chat_id"]) for grp, _ in transient_groups[:5]
         )
         applied_line = (
-            f"WARNING: ban not enforced in any group ({total_groups}/{total_groups} failed)."
+            f"WARNING: ban not enforced in any group \\({total_groups}/{total_groups} failed\\)\\."
             f" Check bot admin rights in: {esc(sample)}"
-            + (" ..." if len(transient_groups) > 5 else "")
+            + (" \\.\\.\\." if len(transient_groups) > 5 else "")
         )
     elif failed > 0:
         sample = ", ".join(
@@ -420,25 +420,25 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         )
         applied_line = (
             f"Applied to {total_groups - failed}/{total_groups} groups"
-            f" ({failed} failed: {esc(sample)}"
-            + (" ..." if len(transient_groups) > 3 else ")")
+            f" \\({failed} failed: {esc(sample)}"
+            + (" \\.\\.\\.\\)" if len(transient_groups) > 3 else "\\)")
         )
     else:
-        applied_line = f"Applied to {total_groups}/{total_groups} groups."
+        applied_line = f"Applied to {total_groups}/{total_groups} groups\\."
 
     # * Build PM content before the conditional so it can fire in parallel with
     # * both upsert_user and (optionally) edit_message_text.  All three operations
     # * are independent: no output of one is an input to another.
     _pm_text = (
-        f"You have been federation-banned from {esc(cfg.community_name)}.\n"
+        f"You have been federation\\-banned from {esc(cfg.community_name)}\\.\n"
         f"Reason: {esc(reason)}\n\n"
-        "You may submit an appeal using the button below."
+        "You may submit an appeal using the button below\\."
     )
     _pm_kb = keyboards.appeal_button_kb(bot_username, ban_id)
 
     # * Edit prompt summary + cache user + notify banned user in one round-trip.
     summary = (
-        f"{user_ref(target_id, target_fname)} has been banned.\n"
+        f"{user_ref(target_id, target_fname)} has been banned\\.\n"
         f"Reason: {esc(reason)}\n"
         f"{applied_line}"
     )
@@ -452,11 +452,11 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
                 summary,
                 chat_id=prompt_chat_id,
                 message_id=prompt_msg_id,
-                parse_mode="HTML",
+                parse_mode="MarkdownV2",
             ),
             db.users_cache.upsert_user(target_id, None, target_fname),
             bot.send_message(
-                target_id, _pm_text, parse_mode="HTML", reply_markup=_pm_kb
+                target_id, _pm_text, parse_mode="MarkdownV2", reply_markup=_pm_kb
             ),
             bot.edit_message_reply_markup(
                 chat_id=prompt_chat_id, message_id=prompt_msg_id
@@ -473,7 +473,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         upsert_result, pm_result = await asyncio.gather(
             db.users_cache.upsert_user(target_id, None, target_fname),
             bot.send_message(
-                target_id, _pm_text, parse_mode="HTML", reply_markup=_pm_kb
+                target_id, _pm_text, parse_mode="MarkdownV2", reply_markup=_pm_kb
             ),
             return_exceptions=True,
         )
@@ -552,7 +552,7 @@ async def _execute_ban_update(
         )
     )
 
-    send_kwargs: dict = {"parse_mode": "HTML", "message_thread_id": logs_thread}
+    send_kwargs: dict = {"parse_mode": "MarkdownV2", "message_thread_id": logs_thread}
     if kb:
         send_kwargs["reply_markup"] = kb
     # * Sequential, not gather: the DB row is authoritative and the log
@@ -623,7 +623,7 @@ async def _execute_new_ban(
         else None
     )
 
-    send_kwargs = {"parse_mode": "HTML", "message_thread_id": logs_thread}
+    send_kwargs = {"parse_mode": "MarkdownV2", "message_thread_id": logs_thread}
     if kb:
         send_kwargs["reply_markup"] = kb
     # * Sequential, not gather: same phantom-log rationale as
@@ -681,7 +681,7 @@ async def on_ban_update_continue(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
         return ConversationHandler.END
     text, kb = proof_prompt_content(target_id, target_fname, reason)
     try:
-        await q.edit_message_text(text, parse_mode="HTML", reply_markup=kb)
+        await q.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=kb)
     except Exception as exc:
         log.debug("Ban continue prompt edit failed: %s", exc)
         for key in _BAN_USER_DATA_KEYS:
@@ -840,7 +840,7 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
     # * Edit the prompt in place instead of a new reply, and strip its
     # * buttons: a text-only edit keeps the old keyboard, which would leave
     # * dead Cancel/Done buttons behind on an ended conversation.
-    await safe_edit_cb(q, _MSG_CANCELLED)
+    await safe_edit_cb(q, esc(_MSG_CANCELLED))
     await clear_markup_cb(q)
     return ConversationHandler.END
 

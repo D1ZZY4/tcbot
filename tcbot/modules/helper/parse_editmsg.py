@@ -41,7 +41,7 @@ class _EditableMessage(Protocol):
 async def safe_edit(msg: _EditableMessage, text: str, **kwargs: Any) -> None:
     """Edit a message via ``msg.edit_text``; swallow harmless not-modified errors."""
     try:
-        await msg.edit_text(text, parse_mode="HTML", **kwargs)
+        await msg.edit_text(text, parse_mode="MarkdownV2", **kwargs)
     except BadRequest as e:
         if any(i in str(e).lower() for i in _IGNORED):
             return
@@ -55,7 +55,7 @@ async def safe_edit_cb(q: CallbackQuery, text: str, **kwargs: Any) -> None:
     content (e.g. a section sub-button while already viewing that section).
     """
     try:
-        await q.edit_message_text(text, parse_mode="HTML", **kwargs)
+        await q.edit_message_text(text, parse_mode="MarkdownV2", **kwargs)
     except BadRequest as e:
         if any(i in str(e).lower() for i in _IGNORED):
             return
@@ -87,7 +87,7 @@ async def safe_reply(
     text: str,
     *,
     log_label: str = "reply",
-    parse_mode: str | None = "HTML",
+    parse_mode: str | None = "MarkdownV2",
     **kwargs: Any,
 ) -> None:
     """Send a reply via ``msg.reply_text``; log failures at debug.
@@ -105,7 +105,7 @@ async def safe_reply(
     so the operator can identify the source without grepping for the
     function name.
 
-    ``parse_mode`` defaults to ``"HTML"`` for formatted replies; pass
+    ``parse_mode`` defaults to ``"MarkdownV2"`` for formatted replies; pass
     ``None`` for plain-text replies (error strings, constants, community
     names) so Telegram performs no entity parsing, exactly like a bare
     ``reply_text`` call without the parameter.

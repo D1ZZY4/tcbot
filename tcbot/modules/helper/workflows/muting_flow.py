@@ -151,11 +151,11 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
             await bot.edit_message_text(
                 f"{user_ref(target_id, target_fname)} could not be muted: "
                 "the group list could not be loaded from the database, so no "
-                "groups were touched. Check the logs and retry with /tcmute "
-                "once the database recovers.",
+                "groups were touched\\. Check the logs and retry with /tcmute "
+                "once the database recovers\\.",
                 chat_id=prompt_chat,
                 message_id=prompt_id,
-                parse_mode="HTML",
+                parse_mode="MarkdownV2",
             )
         except Exception as exc:
             log.debug("_execute_mute groups-fail edit failed: %s", exc)
@@ -191,11 +191,11 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
             await bot.edit_message_text(
                 f"{user_ref(target_id, target_fname)} could not be muted: "
                 "the mute record could not be written to the database, so no "
-                "groups were touched. Check the logs and retry with /tcmute "
-                "once the database recovers.",
+                "groups were touched\\. Check the logs and retry with /tcmute "
+                "once the database recovers\\.",
                 chat_id=prompt_chat,
                 message_id=prompt_id,
-                parse_mode="HTML",
+                parse_mode="MarkdownV2",
             )
         except Exception as exc:
             log.debug("_execute_mute DB-fail edit failed: %s", exc)
@@ -261,9 +261,9 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
     proof_kb = keyboards.action_proof_kb(target_id, proof_link)
     summary = (
         f"{user_ref(target_id, target_fname)} "
-        f"has been muted {bold(dur_str)}.\n"
+        f"has been muted {bold(dur_str)}\\.\n"
         f"Reason: {esc(reason_text)}\n"
-        f"Applied to {len(groups) - failed}/{len(groups)} groups."
+        f"Applied to {len(groups) - failed}/{len(groups)} groups\\."
     )
 
     lc, lt = cfg.logs
@@ -281,13 +281,17 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
     # * fan-out above, so only Telegram deliveries remain here.
     log_send_r, edit_r = await asyncio.gather(
         bot.send_message(
-            lc, log_text, parse_mode="HTML", message_thread_id=lt, reply_markup=proof_kb
+            lc,
+            log_text,
+            parse_mode="MarkdownV2",
+            message_thread_id=lt,
+            reply_markup=proof_kb,
         ),
         bot.edit_message_text(
             summary,
             chat_id=prompt_chat,
             message_id=prompt_id,
-            parse_mode="HTML",
+            parse_mode="MarkdownV2",
             reply_markup=proof_kb,
         ),
         return_exceptions=True,
@@ -338,7 +342,7 @@ async def execute_unmute(
     if active_mute is None:
         await safe_reply(
             msg,
-            f"{user_ref(target_id, target_name)} has no active federation mute.",
+            f"{user_ref(target_id, target_name)} has no active federation mute\\.",
             log_label="execute_unmute no-mute",
         )
         return
@@ -398,16 +402,18 @@ async def execute_unmute(
     )
 
     reply = (
-        f"{user_ref(target_id, target_name)} has been unmuted - "
-        f"restored in {len(groups) - failed}/{len(groups)} groups."
+        f"{user_ref(target_id, target_name)} has been unmuted \\- "
+        f"restored in {len(groups) - failed}/{len(groups)} groups\\."
     )
 
     # * Clear active mute record, send log to channel, and reply - all in parallel
     if lc:
         results2 = await asyncio.gather(
             db.mutes_db.clear_active_mute(target_id),
-            ctx.bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
-            msg.reply_text(reply, parse_mode="HTML"),
+            ctx.bot.send_message(
+                lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
+            ),
+            msg.reply_text(reply, parse_mode="MarkdownV2"),
             return_exceptions=True,
         )
         if isinstance(results2[0], BaseException):
@@ -421,7 +427,7 @@ async def execute_unmute(
     else:
         results2 = await asyncio.gather(
             db.mutes_db.clear_active_mute(target_id),
-            msg.reply_text(reply, parse_mode="HTML"),
+            msg.reply_text(reply, parse_mode="MarkdownV2"),
             return_exceptions=True,
         )
         if isinstance(results2[0], BaseException):

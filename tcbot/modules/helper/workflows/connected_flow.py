@@ -297,7 +297,7 @@ class BuildConnection:
                 parse_logmsg.group_connected_log(
                     chat_id, chat_title, owner_id, owner_fname, chat_username
                 ),
-                parse_mode="HTML",
+                parse_mode="MarkdownV2",
                 message_thread_id=lt,
             )
         except Exception:
@@ -352,7 +352,7 @@ class BuildConnection:
                         parse_logmsg.group_bot_removed_log(
                             chat.id, chat.title or "Unknown"
                         ),
-                        parse_mode="HTML",
+                        parse_mode="MarkdownV2",
                         message_thread_id=lt,
                     )
                 except Exception:
@@ -373,15 +373,15 @@ class BuildConnection:
                 warning_text = (
                     f"Bot was demoted in group"
                     f" {bold(chat.title or str(chat.id))}"
-                    f" (id: {code(str(chat.id))})."
+                    f" \\(id: {code(str(chat.id))}\\)\\."
                     " Federation bans cannot be enforced there until"
-                    " admin rights are restored."
+                    " admin rights are restored\\."
                 )
                 try:
                     await ctx.bot.send_message(
                         lc,
                         warning_text,
-                        parse_mode="HTML",
+                        parse_mode="MarkdownV2",
                         message_thread_id=lt,
                     )
                 except Exception as exc:
@@ -624,7 +624,7 @@ class BuildConnection:
                         user.id,
                         user.first_name,
                     ),
-                    parse_mode="HTML",
+                    parse_mode="MarkdownV2",
                     message_thread_id=lt,
                 ),
                 ctx.bot.leave_chat(chat.id),

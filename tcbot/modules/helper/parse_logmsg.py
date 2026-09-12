@@ -21,23 +21,23 @@ if TYPE_CHECKING:
 _MAX_BROADCAST_PREVIEW_LEN: int = 100
 
 # ─────────────────────────── LogBuilder ─────────────────────────── #
-# * Fluent builder for HTML audit-log messages with consistent layout.
+# * Fluent builder for Markdown audit-log messages with consistent layout.
 # * Title is rendered on its own line, separated from fields by a blank line.
-# * All `field(...)` values are HTML-escaped by default; pass `escape=False`
+# * All `field(...)` values are escaped by default; pass `escape=False`
 # *   only when interpolating already-trusted markup (e.g. mention/link/code).
 # * Use `.section()` to start a new logical block (adds a blank separator).
 
 
 class LogBuilder:
-    """Fluent builder for HTML audit-log messages used by the parse_logmsg helpers."""
+    """Fluent builder for Markdown audit-log messages used by the parse_logmsg helpers."""
 
     __slots__ = ("_lines",)
 
     def __init__(self, title: str) -> None:
         """Start a new log message with the given title header.
 
-        The title is HTML-escaped so callers can pass raw config or user-facing
-        strings without risk of breaking the HTML markup sent to the log channel.
+        The title is escaped so callers can pass raw config or user-facing
+        strings without risk of breaking the Markdown markup sent to the log channel.
         """
         self._lines: list[str] = [esc(str(title)), ""]
 
@@ -48,13 +48,13 @@ class LogBuilder:
         *,
         escape: bool = True,
     ) -> LogBuilder:
-        """Append a `Label: value` line. The value is HTML-escaped by default."""
+        """Append a `Label: value` line. The value is escaped by default."""
         v = esc(str(value)) if escape else str(value)
         self._lines.append(f"{label}: {v}")
         return self
 
     def code_field(self, label: str, value: object) -> LogBuilder:
-        """Append a `Label: <code>value</code>` line."""
+        """Append a `Label: code(value)` line."""
         self._lines.append(f"{label}: {code(str(value))}")
         return self
 
@@ -66,12 +66,12 @@ class LogBuilder:
         return self
 
     def link_field(self, label: str, text: str, url: str) -> LogBuilder:
-        """Append a `Label: <a href=url>text</a>` line."""
+        """Append a `Label: [text](url)` line."""
         self._lines.append(f"{label}: {link(text, url)}")
         return self
 
     def raw(self, text: str) -> LogBuilder:
-        """Append a raw HTML line. Caller is responsible for escaping user input."""
+        """Append a raw Markdown line. Caller is responsible for escaping user input."""
         self._lines.append(text)
         return self
 
@@ -116,7 +116,7 @@ class LogBuilder:
         return self
 
     def build(self) -> str:
-        """Return the assembled HTML message."""
+        """Return the assembled Markdown message."""
         return "\n".join(self._lines)
 
     def __str__(self) -> str:
@@ -291,7 +291,7 @@ def kick_log(
         .mention_field("User", target_id, target_fname)
         .code_field("User ID", target_id)
         .field("Reason", reason)
-        .raw(f"Group: {esc(chat_title)} ({code(str(chat_id))})")
+        .raw(f"Group: {esc(chat_title)} \\({code(str(chat_id))}\\)")
         .section()
         .date()
         .build()
@@ -317,7 +317,7 @@ def resetwarns_log(
         .mention_field("User", target_id, target_fname)
         .code_field("User ID", target_id)
         .field("Warnings cleared", str(removed))
-        .raw(f"Group: {esc(chat_title)} ({code(str(chat_id))})")
+        .raw(f"Group: {esc(chat_title)} \\({code(str(chat_id))}\\)")
         .section()
         .date()
         .build()
@@ -343,7 +343,7 @@ def warn_log(
         .code_field("User ID", target_id)
         .field("Reason", reason)
         .field("Warnings", f"{count}/{warn_limit}")
-        .raw(f"Group: {esc(chat_title)} ({code(str(chat_id))})")
+        .raw(f"Group: {esc(chat_title)} \\({code(str(chat_id))}\\)")
         .section()
         .date()
         .build()
@@ -367,7 +367,7 @@ def unwarn_log(
         .mention_field("User", target_id, target_fname)
         .code_field("User ID", target_id)
         .field("Warnings now", f"{new_count}/{warn_limit}")
-        .raw(f"Group: {esc(chat_title)} ({code(str(chat_id))})")
+        .raw(f"Group: {esc(chat_title)} \\({code(str(chat_id))}\\)")
         .section()
         .date()
         .build()
@@ -409,7 +409,7 @@ def appeal_received_log(
 ) -> str:
     """Review card posted to APPEAL_DISCUSSION_TOPIC."""
     b = LogBuilder(f"New {cfg.community_name} Appeal Request").raw(
-        f"User: {mention(target_id, target_fname)} (ID: {code(str(target_id))})"
+        f"User: {mention(target_id, target_fname)} \\(ID: {code(str(target_id))}\\)"
     )
     b.code_field("Ban ID", ban_id)
     if appeal_link:
@@ -419,7 +419,7 @@ def appeal_received_log(
     return (
         b.date(label="Submitted")
         .section()
-        .raw("This appeal is pending review.")
+        .raw("This appeal is pending review\\.")
         .build()
     )
 
@@ -702,7 +702,7 @@ def group_connected_log(
     """Return a new federation-connected-group audit-log message."""
     uname = safe_username(chat_username)
     if uname:
-        group_display = f'<a href="https://t.me/{esc(uname)}">{esc(chat_title)}</a>'
+        group_display = link(chat_title, f"https://t.me/{uname}")
     else:
         group_display = esc(chat_title)
     return (
@@ -727,10 +727,10 @@ def group_connection_rejected_log(
     """Connection-rejected audit-log message."""
     return (
         LogBuilder(f"{cfg.community_name} Connection Rejected")
-        .raw(f"Group: {esc(chat_title)} (ID: {chat_id})")
+        .raw(f"Group: {esc(chat_title)} \\(ID: {chat_id}\\)")
         .section()
         .raw(
-            f"Rejected by Owner: {mention(owner_id, owner_fname)} (ID: {code(str(owner_id))})"
+            f"Rejected by Owner: {mention(owner_id, owner_fname)} \\(ID: {code(str(owner_id))}\\)"
         )
         .section()
         .date()

@@ -55,38 +55,38 @@ _RL_LIMIT: int = 3
 __module_name__ = "Ban"
 __help_text__ = (
     f"Issues a {bold('federation-wide ban')} on a user, applied across every connected "
-    "group at once. Auto-demotes staff targets and stores proof with the ban record."
+    "group at once\\. Auto\\-demotes staff targets and stores proof with the ban record\\."
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tcban')} (alias: {code('/tcb')})",
+        f"{code('/tcban')} \\(alias: {code('/tcb')}\\)",
     ),
     replies.who_section(replies.PERM_DEV_ABOVE),
     replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
     (
         replies.SEC_WHAT,
         f"Issues a {bold('federation-wide ban')} on the target, applied across all connected "
-        "groups automatically. A reason is required - provide it directly after the target.\n\n"
+        "groups automatically\\. A reason is required \\- provide it directly after the target\\.\n\n"
         "After the command, the bot walks you through the proof step: send photos, "
         "videos, GIFs, or files as evidence, at once as one album or one by one, "
-        "then tap Done. Proof is required and is logged with the ban record "
-        "to the federation log channel.\n\n"
+        "then tap Done\\. Proof is required and is logged with the ban record "
+        "to the federation log channel\\.\n\n"
         "If the user already has an active ban, the bot first asks for "
-        "confirmation (with View Log and View Proof links) instead of "
+        "confirmation \\(with View Log and View Proof links\\) instead of "
         "updating silently; only Continue leads to proof collection, and "
         "the existing record is then updated with the new reason and proof "
-        "rather than creating a duplicate.\n"
-        "If the target holds a federation role (Tester / Developer / Admin), that role is "
-        "automatically removed and they are notified by DM before the ban is enforced.",
+        "rather than creating a duplicate\\.\n"
+        "If the target holds a federation role \\(Tester / Developer / Admin\\), that role is "
+        "automatically removed and they are notified by DM before the ban is enforced\\.",
     ),
     replies.target_section(),
     (
         replies.SEC_EXAMPLES,
         f"{code('/tcban @username spamming in connected groups')}\n"
         f"{code('/tcban 123456789 scamming members')}\n"
-        f"Or reply to a message and run {code('/tcb reason here')}.",
+        f"Or reply to a message and run {code('/tcb reason here')}\\.",
     ),
 ]
 
@@ -234,7 +234,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         target_id, target_fname or str(target_id), ban_reason
     )
     try:
-        prompt = await msg.reply_text(text, parse_mode="HTML", reply_markup=kb)
+        prompt = await msg.reply_text(text, parse_mode="MarkdownV2", reply_markup=kb)
         ctx.user_data["ban_prompt_msg_id"] = prompt.message_id
         ctx.user_data["ban_prompt_chat_id"] = msg.chat.id
     except Exception as exc:
@@ -281,13 +281,13 @@ async def _ask_update_confirm(
     )
     text = (
         f"{mention(target_id, target_fname or str(target_id))} already has an "
-        f"active federation ban (Ban ID {code(str(existing.get('ban_id', '')))}).\n"
+        f"active federation ban \\(Ban ID {code(str(existing.get('ban_id', '')))}\\)\\.\n"
         f"Existing reason: {esc(str(existing.get('reason', '')))}\n"
         f"New reason: {esc(ban_reason)}\n\n"
         "Update the ban with the new reason and proof?"
     )
     try:
-        prompt = await msg.reply_text(text, parse_mode="HTML", reply_markup=kb)
+        prompt = await msg.reply_text(text, parse_mode="MarkdownV2", reply_markup=kb)
         ctx.user_data["ban_prompt_msg_id"] = prompt.message_id
         ctx.user_data["ban_prompt_chat_id"] = msg.chat.id
     except Exception as exc:

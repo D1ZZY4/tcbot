@@ -42,38 +42,38 @@ _RL_LIMIT: int = 5
 
 __module_name__ = "Kick"
 __help_text__ = (
-    f"Removes a user from the {bold('current group only')}. Federation roles are auto-removed "
-    "if the target is staff."
+    f"Removes a user from the {bold('current group only')}\\. Federation roles are auto\\-removed "
+    "if the target is staff\\."
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tckick')} (alias: {code('/tck')})",
+        f"{code('/tckick')} \\(alias: {code('/tck')}\\)",
     ),
     replies.who_section(replies.PERM_TESTER_ABOVE),
     replies.where_section(replies.WHERE_CONNECTED_GROUP),
     (
         replies.SEC_WHAT,
-        f"Removes a user from the {bold('current group only')}. This is not a federation-wide "
+        f"Removes a user from the {bold('current group only')}\\. This is not a federation\\-wide "
         "action; the user can rejoin via an invite link unless they are separately "
-        "federation-banned.\n\n"
-        "If the target holds a federation role (Tester / Developer / Admin), that role is "
-        "automatically removed and they are notified by DM. A log entry is posted to the "
-        "federation logs channel.",
+        "federation\\-banned\\.\n\n"
+        "If the target holds a federation role \\(Tester / Developer / Admin\\), that role is "
+        "automatically removed and they are notified by DM\\. A log entry is posted to the "
+        "federation logs channel\\.",
     ),
     (
         "Flow",
-        f"1. Run {code('/tckick')} with the target (and optional inline reason).\n"
-        f"2. If no reason was given, the bot asks: reply with text or tap {bold('Skip')}.\n"
-        f"3. The bot asks for proof: send a photo/video or tap {bold('Skip')}.",
+        f"1\\. Run {code('/tckick')} with the target \\(and optional inline reason\\)\\.\n"
+        f"2\\. If no reason was given, the bot asks: reply with text or tap {bold('Skip')}\\.\n"
+        f"3\\. The bot asks for proof: send a photo/video or tap {bold('Skip')}\\.",
     ),
     replies.target_section(),
     (
         replies.SEC_EXAMPLES,
         f"{code('/tckick @username being disruptive')}: reason inline\n"
         f"{code('/tck 123456789')}: bot will ask for reason\n"
-        f"Or reply to a message and run {code('/tck')}.",
+        f"Or reply to a message and run {code('/tck')}\\.",
     ),
 ]
 
@@ -214,7 +214,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         try:
             prompt = await msg.reply_text(
                 proof.noted_prompt("kick", inline_reason, target_mention),
-                parse_mode="HTML",
+                parse_mode="MarkdownV2",
                 reply_markup=proof.keyboard(),
             )
             ctx.user_data["kick_prompt_id"] = prompt.message_id
@@ -228,7 +228,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         prompt = await msg.reply_text(
             reason.prompt(target_mention, "kick"),
-            parse_mode="HTML",
+            parse_mode="MarkdownV2",
             reply_markup=reason.keyboard(),
         )
         ctx.user_data["kick_prompt_id"] = prompt.message_id

@@ -27,7 +27,7 @@ Look for issues that matter in production:
 - unsafe callback query handling,
 - missing permission or role checks,
 - raw database calls from modules,
-- unescaped HTML/user input,
+- unescaped MarkdownV2/user input,
 - unbounded multi-group API fan-out,
 - secrets or private IDs accidentally committed,
 - stale docs after behavior changes.
@@ -41,7 +41,7 @@ Keep feedback practical. Prioritize actionable issues over style preferences.
 - Command handlers are in `tcbot/modules/`.
 - Shared workflows are in `tcbot/modules/helper/workflows/*_flow.py`.
 - CallbackQuery handlers call `await q.answer()` before follow-up actions.
-- Bot responses use `parse_mode="HTML"` when formatting is present.
+- Bot responses use `parse_mode="MarkdownV2"` when formatting is present.
 - User-controlled text is escaped with formatter helpers.
 - Long-running or multi-chat operations handle exceptions.
 

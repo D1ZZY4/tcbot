@@ -26,10 +26,10 @@ log = logging.getLogger(__name__)
 # ──────────────── User-facing reply constants ──────────────────── #
 
 _MSG_REQUEST_SUBMITTED = (
-    "Submitted - the Founder has been notified and will review it shortly."
+    "Submitted \\- the Founder has been notified and will review it shortly\\."
 )
-_ERR_TARGET_IS_FOUNDER = "That's the Founder - can't assign a role over them."
-_ERR_NO_ASSIGN_PERMS = "You don't have permission to assign this role."
+_ERR_TARGET_IS_FOUNDER = "That's the Founder \\- can't assign a role over them\\."
+_ERR_NO_ASSIGN_PERMS = "You don't have permission to assign this role\\."
 
 # * Tokenised CLI aliases the /tcpromote command accepts.
 ROLE_ALIASES: dict[str, str] = {
@@ -78,7 +78,7 @@ class Promote:
             await db.users_roles.add_admin(target_id, admin_id)
         except Exception:
             log.exception("_assign_admin: add_admin failed for target=%d", target_id)
-            return False, "Failed to save the promotion. Please try again."
+            return False, "Failed to save the promotion\\. Please try again\\."
         # * Secondary cleanup: purge any old tc_roles entry and update the user cache.
         # * These are non-critical; a failure leaves the user correctly promoted so we
         # * log a warning instead of aborting.
@@ -95,7 +95,9 @@ class Promote:
             target_id, target_fname, "admin", admin_id, admin_fname
         )
         for result in await asyncio.gather(
-            bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+            bot.send_message(
+                lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
+            ),
             bot.send_message(
                 target_id,
                 f"You've been promoted to Admin in {cfg.community_name} - welcome to the staff team.",
@@ -109,8 +111,8 @@ class Promote:
                     result,
                 )
         return True, (
-            f"Done. {user_ref(target_id, target_fname)} "
-            f"is now a {esc(cfg.community_name)} Admin."
+            f"Done\\. {user_ref(target_id, target_fname)} "
+            f"is now a {esc(cfg.community_name)} Admin\\."
         )
 
     @staticmethod
@@ -128,7 +130,7 @@ class Promote:
             label = db.users_roles.ROLE_LABEL.get(role, role)
             return (
                 False,
-                f"That user is already an Admin. Demote them first before assigning {esc(label)}.",
+                f"That user is already an Admin\\. Demote them first before assigning {esc(label)}\\.",
             )
         # * set_role uses update_one(upsert=True) so it atomically replaces an existing
         # * developer/tester entry without a prior remove_role call.  This eliminates
@@ -141,7 +143,7 @@ class Promote:
                 target_id,
                 role,
             )
-            return False, "Failed to save the role assignment. Please try again."
+            return False, "Failed to save the role assignment\\. Please try again\\."
         # * Cache upsert is non-critical; log but do not abort.
         try:
             await db.users_cache.upsert_user(target_id, None, target_fname)
@@ -155,7 +157,9 @@ class Promote:
             target_id, target_fname, role, admin_id, admin_fname
         )
         for result in await asyncio.gather(
-            bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
+            bot.send_message(
+                lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
+            ),
             bot.send_message(
                 target_id,
                 f"You've been assigned the {role_label} role in {cfg.community_name} - welcome to the team.",
@@ -170,8 +174,8 @@ class Promote:
                 )
         return (
             True,
-            f"Done. {user_ref(target_id, target_fname)} "
-            f"is now a {esc(cfg.community_name)} {esc(role_label)}.",
+            f"Done\\. {user_ref(target_id, target_fname)} "
+            f"is now a {esc(cfg.community_name)} {esc(role_label)}\\.",
         )
 
     @classmethod
@@ -199,7 +203,7 @@ class Promote:
         if existing:
             return False, (
                 f"There's already a pending promotion request for "
-                f"{user_ref(target_id, target_fname)}."
+                f"{user_ref(target_id, target_fname)}\\."
             )
         request_id, owner_id = await asyncio.gather(
             db.queues_db.enqueue(target_id, target_username, target_fname, admin_id),
@@ -218,11 +222,11 @@ class Promote:
             )
             return False, (
                 f"There's already a pending promotion request for "
-                f"{user_ref(target_id, target_fname)}."
+                f"{user_ref(target_id, target_fname)}\\."
             )
         if isinstance(request_id, BaseException):
             log.error("Failed to enqueue promotion request: %s", request_id)
-            return False, "Failed to queue the promotion request. Please try again."
+            return False, "Failed to queue the promotion request\\. Please try again\\."
         if isinstance(owner_id, BaseException):
             log.warning("Failed to fetch owner id for promo notify: %s", owner_id)
             owner_id = None
@@ -236,7 +240,7 @@ class Promote:
                 await bot.send_message(
                     owner_id,
                     req_text,
-                    parse_mode="HTML",
+                    parse_mode="MarkdownV2",
                     reply_markup=keyboards.promo_decision_kb(request_id),
                 )
                 notified = True
@@ -247,7 +251,7 @@ class Promote:
                 await bot.send_message(
                     lc,
                     req_text,
-                    parse_mode="HTML",
+                    parse_mode="MarkdownV2",
                     message_thread_id=lt,
                     reply_markup=keyboards.promo_decision_kb(request_id),
                 )
@@ -280,7 +284,7 @@ class Promote:
             label = db.users_roles.ROLE_LABEL.get(
                 current_role or "", current_role or ""
             )
-            return False, f"That user already holds the {esc(label)} role or higher."
+            return False, f"That user already holds the {esc(label)} role or higher\\."
 
         if role == "admin":
             if executor_role == "founder":

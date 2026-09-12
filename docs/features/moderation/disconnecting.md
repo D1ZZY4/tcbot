@@ -64,7 +64,7 @@ Commands use the project's configured prefixes; slash commands are examples.
    - Otherwise: `Only the group owner or TC admins can disconnect this group.`
 7. Deactivates first via `db.groups_db.deactivate_group(chat.id)` and only leaves after the DB confirms; on failure replies `Failed to disconnect the group due to a server error. ...` and stops, so a DB error never leaves a ghost (bot gone, DB still active).
 8. Then runs three parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
-   - `bot.send_message(cfg.logs, group_disconnected_log(chat.id, chat.title or "Unknown", user.id, user.first_name), parse_mode="HTML", message_thread_id=lt)`.
+    - `bot.send_message(cfg.logs, group_disconnected_log(chat.id, chat.title or "Unknown", user.id, user.first_name), parse_mode="MarkdownV2", message_thread_id=lt)`.
    - `update.effective_message.reply_text("This group has been disconnected from <community>.")`.
    - `bot.leave_chat(chat.id)`.
 9. Each failure is logged at debug or error level but does not roll back the others.
@@ -80,9 +80,9 @@ The deactivation runs before the fan-out (not in parallel with it) precisely to 
 3. Call `db.groups_db.deactivate_group(chat_id)`. The return value indicates whether the record was matched.
 4. If no record matched, replies `replies.ERR_GROUP_NOT_FOUND` and stops.
 5. Otherwise runs three parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
-   - `bot.send_message(cfg.logs, group_disconnected_log(chat_id, str(chat_id), admin.id, admin.first_name), parse_mode="HTML", message_thread_id=lt)`.
-   - `bot.leave_chat(chat_id)`.
-   - `msg.reply_text("Group <chat_id> has been disconnected from <community>", parse_mode="HTML")`.
+    - `bot.send_message(cfg.logs, group_disconnected_log(chat_id, str(chat_id), admin.id, admin.first_name), parse_mode="MarkdownV2", message_thread_id=lt)`.
+    - `bot.leave_chat(chat_id)`.
+    - `msg.reply_text("Group <chat_id> has been disconnected from <community>", parse_mode="MarkdownV2")`.
 6. Each failure is logged at debug level but does not roll back the others.
 
 `leave_chat` for a chat the bot is no longer in raises a Telegram API error; the exception is caught and logged at debug level so it does not surface as a command failure.

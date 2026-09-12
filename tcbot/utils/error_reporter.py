@@ -314,9 +314,9 @@ def _classify(exc: BaseException | None) -> str:
 
 
 # ─────────────────────── Message Formatting ─────────────────────── #
-# * Telegram hard-caps a message at 4096 chars (incl. HTML). Budget below
-# * keeps the rendered output safely under that limit even with HTML tags.
-# * HTML escaping uses esc() from tcbot.utils.formatter (single source).
+# * Telegram hard-caps a message at 4096 chars (incl. markup). Budget below
+# * keeps the rendered output safely under that limit even with V2 escapes.
+# * MarkdownV2 escaping uses esc() from tcbot.utils.formatter (single source).
 
 _MAX_TB = 2200
 _MAX_MSG = 250
@@ -402,7 +402,7 @@ def build_error_message(
     record: logging.LogRecord | None = None,
     context: str | None = None,
 ) -> str:
-    """Build a complete HTML-formatted error message for Telegram."""
+    """Build a complete MarkdownV2-formatted error message for Telegram."""
     now = utc_now()
     time_str = now.strftime("%H:%M:%S UTC")
     date_str = now.strftime("%d-%m-%Y")
@@ -438,16 +438,16 @@ def build_error_message(
 
     py_ver = sys.version.split()[0]
     host = platform.node() or "?"
-    sep = "-" * _REPORT_SEP_LEN
+    sep = "\\-" * _REPORT_SEP_LEN
 
     return (
         f"{bold('Error Report')}\n"
         f"{sep}\n"
-        f"{bold('Type:')} {label}\n"
+        f"{bold('Type:')} {esc(label)}\n"
         f"{bold('Action:')} {esc(action)}\n"
         f"{bold('Where:')} {code(f'{file_part}:{line_no}')} in {code(func_name)}\n"
-        f"{bold('When:')} {time_str} - {date_str}\n"
-        f"{bold('Host:')} Python {py_ver} @ {esc(host)}\n"
+        f"{bold('When:')} {esc(time_str)} \\- {esc(date_str)}\n"
+        f"{bold('Host:')} Python {esc(py_ver)} @ {esc(host)}\n"
         f"{sep}\n"
         f"{bold('Message:')}\n{code(raw_msg[:_MAX_MSG])}"
         f"{tb_block}"
@@ -483,9 +483,9 @@ async def _ship_throttled(text: str) -> None:
             try:
                 await _bot.send_message(
                     _chat_id,
-                    f"Error reporter: {suppressed} further error(s) "
-                    f"suppressed in the last {_SEND_WINDOW:.0f}s window.",
-                    parse_mode="HTML",
+                    f"Error reporter: {suppressed} further error\\(s\\) "
+                    f"suppressed in the last {_SEND_WINDOW:.0f}s window\\.",
+                    parse_mode="MarkdownV2",
                     message_thread_id=_thread_id,
                 )
             except Exception as exc:
@@ -501,7 +501,7 @@ async def _ship_throttled(text: str) -> None:
         await _bot.send_message(
             _chat_id,
             text,
-            parse_mode="HTML",
+            parse_mode="MarkdownV2",
             message_thread_id=_thread_id,
         )
     except Exception as exc:
@@ -530,7 +530,7 @@ async def send_to_owner(text: str) -> None:
         await _bot.send_message(
             _owner_id,
             text,
-            parse_mode="HTML",
+            parse_mode="MarkdownV2",
         )
     except Exception as exc:
         logging.getLogger().warning("Failed to send owner DM for infra error: %s", exc)

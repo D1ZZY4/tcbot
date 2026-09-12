@@ -32,7 +32,7 @@ log = logging.getLogger(__name__)
 
 # ──────────────── User-facing reply constants ──────────────────── #
 
-_MSG_REJOIN_ALLOWED = "They can rejoin via invite link."
+_MSG_REJOIN_ALLOWED = "They can rejoin via invite link\\."
 
 # * Per-action BuildReason and BuildProof instances; imported by kicking.py
 reason = BuildReason("kick")
@@ -128,7 +128,7 @@ async def execute_kick(
             ctx.bot.send_message(
                 lc,
                 log_text,
-                parse_mode="HTML",
+                parse_mode="MarkdownV2",
                 message_thread_id=lt,
                 reply_markup=proof_kb,
             ),
@@ -147,14 +147,14 @@ async def execute_kick(
         if isinstance(log_send_result, BaseException):
             log.error("Kick log send failed: %s", log_send_result)
         unban_warning = (
-            " WARNING: the post-kick unban step failed; the user is "
-            "still banned in this chat and cannot rejoin. Demote them "
-            "manually if needed and unban from the chat member list."
+            " WARNING: the post\\-kick unban step failed; the user is "
+            "still banned in this chat and cannot rejoin\\. Demote them "
+            "manually if needed and unban from the chat member list\\."
             if isinstance(unban_result, BaseException)
             else ""
         )
         summary = (
-            f"{user_ref(target_id, target_name)} has been kicked.\n"
+            f"{user_ref(target_id, target_name)} has been kicked\\.\n"
             f"Reason: {esc(reason_text)}\n"
             f"{_MSG_REJOIN_ALLOWED}{unban_warning}"
         )
@@ -167,7 +167,7 @@ async def execute_kick(
                     summary,
                     chat_id=prompt_chat,
                     message_id=prompt_id,
-                    parse_mode="HTML",
+                    parse_mode="MarkdownV2",
                     reply_markup=proof_kb,
                 )
             except Exception as exc:
@@ -189,8 +189,8 @@ async def execute_kick(
         log.exception("Kick failed for %s in %s", target_id, chat_id)
         await safe_reply(
             msg,
-            f"Couldn't kick {mention(target_id, target_name)}. "
-            "Please check bot permissions and retry.",
+            f"Couldn't kick {mention(target_id, target_name)}\\. "
+            "Please check bot permissions and retry\\.",
             log_label="Kick error",
         )
 

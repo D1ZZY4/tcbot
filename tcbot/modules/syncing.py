@@ -56,14 +56,14 @@ _FAILED_SAMPLE_N: int = 5
 __module_name__ = "Sync"
 
 __help_text__ = (
-    "Reconcile enforcement state: re-apply bans the fan-out missed and "
-    "verify unbans actually landed."
+    "Reconcile enforcement state: re\\-apply bans the fan\\-out missed and "
+    "verify unbans actually landed\\."
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tcsync')} (alias: {code('/tcsynchronize')})\n"
+        f"{code('/tcsync')} \\(alias: {code('/tcsynchronize')}\\)\n"
         f"{code('/tcsync <target>')}",
     ),
     replies.who_section(
@@ -73,16 +73,16 @@ __help_sections__: list[tuple[str, str]] = [
     replies.target_section(),
     (
         "/tcsync",
-        "Sweeps active federation bans against connected groups (bounded, "
-        "200 membership checks per run) and re-bans users who are present "
-        "but not kicked. Users already kicked, absent, or privileged are "
-        "skipped, never treated as failures.",
+        "Sweeps active federation bans against connected groups \\(bounded, "
+        "200 membership checks per run\\) and re\\-bans users who are present "
+        "but not kicked\\. Users already kicked, absent, or privileged are "
+        "skipped, never treated as failures\\.",
     ),
     (
         "/tcsync <target>",
         "Verifies one user both directions across every connected group: "
-        "re-ban when an active ban is unenforced, unban when a stale kick "
-        "survived a deactivation.",
+        "re\\-ban when an active ban is unenforced, unban when a stale kick "
+        "survived a deactivation\\.",
     ),
     (
         replies.SEC_EXAMPLES,
@@ -307,9 +307,9 @@ async def verify_user(bot: Bot, user_id: int) -> SyncCounts:
 
 
 def _render_summary(counts: SyncCounts, *, target: str) -> str:
-    """Render the operator-facing sync summary (HTML, no parse of titles needed)."""
+    """Render the operator-facing sync summary (MarkdownV2; titles escaped)."""
     lines = [
-        f"{bold('Sync complete')} ({esc(target)})",
+        f"{bold('Sync complete')} \\({esc(target)}\\)",
         f"Checked: {code(str(counts.checked))}",
         f"Re-banned: {code(str(counts.enforced_bans))}",
         f"Re-unbanned: {code(str(counts.enforced_unbans))}",
@@ -320,7 +320,7 @@ def _render_summary(counts: SyncCounts, *, target: str) -> str:
         sample = ", ".join(counts.failed_titles)
         lines.append(f"Still failing in: {esc(sample)}")
     if counts.truncated:
-        lines.append("Note: pair cap reached; re-run to continue the sweep.")
+        lines.append("Note: pair cap reached; re\\-run to continue the sweep\\.")
     return "\n".join(lines)
 
 
@@ -358,14 +358,14 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             counts = await run_ban_sync(ctx.bot)
             text = _render_summary(counts, target="federation sweep")
     except ValueError:
-        text = replies.ERR_CANNOT_RESOLVE
+        text = esc(replies.ERR_CANNOT_RESOLVE)
     except Exception:
         log.exception("sync run failed")
-        text = replies.ERR_GROUPS_LOAD_FAILED
+        text = esc(replies.ERR_GROUPS_LOAD_FAILED)
 
     if status is not None:
         try:
-            await status.edit_text(text, parse_mode="HTML")
+            await status.edit_text(text, parse_mode="MarkdownV2")
             return
         except Exception as exc:
             log.debug("sync status edit failed: %s", exc)

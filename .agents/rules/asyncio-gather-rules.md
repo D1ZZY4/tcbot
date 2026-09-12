@@ -38,7 +38,7 @@ async def cmd_example(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     await msg.reply_text(
         f"User: {label}\nID: {code(str(user.id))}",
-        parse_mode="HTML",
+        parse_mode="MarkdownV2",
     )
 ```
 
@@ -193,7 +193,7 @@ if query is None:
     return
 
 await query.answer()
-await query.edit_message_text("Processing complete.", parse_mode="HTML")
+await query.edit_message_text("Processing complete.", parse_mode="MarkdownV2")
 ```
 
 This avoids Telegram client spinners and keeps UX responsive.

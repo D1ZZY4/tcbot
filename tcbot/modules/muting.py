@@ -51,44 +51,44 @@ _RL_LIMIT: int = 5
 
 __module_name__ = "Mute"
 __help_text__ = (
-    "Federation-wide mute and unmute: restricts a user from sending messages "
-    f"across {bold('all connected groups')} at once."
+    "Federation\\-wide mute and unmute: restricts a user from sending messages "
+    f"across {bold('all connected groups')} at once\\."
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tcmute')} (alias: {code('/tcm')})\n"
-        f"{code('/tcunmute')} (aliases: {code('/tcunm')}, {code('/tcum')})",
+        f"{code('/tcmute')} \\(alias: {code('/tcm')}\\)\n"
+        f"{code('/tcunmute')} \\(aliases: {code('/tcunm')}, {code('/tcum')}\\)",
     ),
     replies.who_section(replies.PERM_TESTER_ABOVE),
     replies.where_section(replies.WHERE_CONNECTED_GROUP),
     (
         replies.SEC_WHAT,
         f"{bold('/tcmute')}: restricts a user from sending messages, media, stickers, and GIFs "
-        f"across {bold('all connected groups')} simultaneously. After the command, the bot "
-        "asks for a reason and optionally proof - both steps can be skipped. If the user "
-        "is already muted, the existing restriction is replaced. A summary shows how many "
-        "groups the mute was applied in.\n\n"
+        f"across {bold('all connected groups')} simultaneously\\. After the command, the bot "
+        "asks for a reason and optionally proof \\- both steps can be skipped\\. If the user "
+        "is already muted, the existing restriction is replaced\\. A summary shows how many "
+        "groups the mute was applied in\\.\n\n"
         f"{bold('/tcunmute')}: restores the user's full send permissions across all connected "
-        "groups. A summary shows how many groups the unmute was applied in.",
+        "groups\\. A summary shows how many groups the unmute was applied in\\.",
     ),
     (
         "Time format",
-        "Place the duration before the reason. Omit a duration to apply a permanent mute.\n\n"
-        f"- {code('s')} Seconds: {code('30s')} = 30 seconds\n"
-        f"- {code('m')} Minutes: {code('15m')} = 15 minutes\n"
-        f"- {code('h')} Hours: {code('2h')} = 2 hours\n"
-        f"- {code('d')} Days: {code('7d')} = 7 days\n"
-        f"- {code('w')} Weeks: {code('2w')} = 2 weeks\n"
-        f"- {code('mo')} Months: {code('3mo')} = 3 months\n"
-        f"- {code('ye')} Years: {code('2ye')} = 2 years",
+        "Place the duration before the reason\\. Omit a duration to apply a permanent mute\\.\n\n"
+        f"\\- {code('s')} Seconds: {code('30s')} \\= 30 seconds\n"
+        f"\\- {code('m')} Minutes: {code('15m')} \\= 15 minutes\n"
+        f"\\- {code('h')} Hours: {code('2h')} \\= 2 hours\n"
+        f"\\- {code('d')} Days: {code('7d')} \\= 7 days\n"
+        f"\\- {code('w')} Weeks: {code('2w')} \\= 2 weeks\n"
+        f"\\- {code('mo')} Months: {code('3mo')} \\= 3 months\n"
+        f"\\- {code('ye')} Years: {code('2ye')} \\= 2 years",
     ),
     replies.target_section(),
     (
         replies.SEC_EXAMPLES,
-        f"{code('/tcmute @username 3d spamming')}: 3-day mute, reason inline\n"
-        f"{code('/tcm @username 1w')}: 1-week mute, bot will ask for reason\n"
+        f"{code('/tcmute @username 3d spamming')}: 3\\-day mute, reason inline\n"
+        f"{code('/tcm @username 1w')}: 1\\-week mute, bot will ask for reason\n"
         f"{code('/tcm @username')}: permanent mute, bot walks you through it\n"
         f"{code('/tcunmute @username')}: lift mute immediately across all groups",
     ),
@@ -244,7 +244,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
                 proof.noted_prompt(
                     "mute", inline_reason, target_mention, extra_info=extra_info
                 ),
-                parse_mode="HTML",
+                parse_mode="MarkdownV2",
                 reply_markup=proof.keyboard(),
             )
             ctx.user_data["mute_prompt_id"] = prompt.message_id
@@ -258,7 +258,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         prompt = await msg.reply_text(
             reason.prompt(target_mention, "mute", extra_info=extra_info),
-            parse_mode="HTML",
+            parse_mode="MarkdownV2",
             reply_markup=reason.keyboard(),
         )
         ctx.user_data["mute_prompt_id"] = prompt.message_id

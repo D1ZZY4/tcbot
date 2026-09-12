@@ -178,20 +178,20 @@ class Check:
             if role
             else "Regular user"
         )
-        uname_part = f"@{esc(uname or '')}" if uname else "(none)"
+        uname_part = f"@{esc(uname or '')}" if uname else "\\(none\\)"
         active_ban_doc = cast("BanDoc | None", active_ban)
         # * Never render a clean bill of health from a failed read: during a
         # * DB outage the lookups above coerce to None/0, which would show
         # * "Active Ban: No" and zero counts for a banned user. Surface
         # * Unknown instead so operators retry rather than trust the card.
         if ban_failed:
-            active_part = "Unknown (lookup failed - retry in a moment)"
+            active_part = "Unknown \\(lookup failed \\- retry in a moment\\)"
         elif active_ban_doc:
-            active_part = f"Yes ({code(active_ban_doc.get('ban_id', '') if isinstance(active_ban_doc, dict) else '')})"
+            active_part = f"Yes \\({code(active_ban_doc.get('ban_id', '') if isinstance(active_ban_doc, dict) else '')}\\)"
         else:
             active_part = "No"
         if mute_failed:
-            active_mute_part = "Unknown (lookup failed - retry in a moment)"
+            active_mute_part = "Unknown \\(lookup failed \\- retry in a moment\\)"
         else:
             active_mute_part = "Yes" if active_mute else "No"
 
@@ -214,8 +214,8 @@ class Check:
             f"Active Ban: {active_part}\n"
             f"Active Mute: {active_mute_part}\n"
             f"Total Bans: {ban_total}\n"
-            f"Warnings: {fed_warn_total} active across {len(warn_groups) if warn_groups is not None else 0} group(s)"
-            f" ({warn_total} total historical)\n"
+            f"Warnings: {fed_warn_total} active across {len(warn_groups) if warn_groups is not None else 0} group\\(s\\)"
+            f" \\({warn_total} total historical\\)\n"
             f"Kicks: {kick_total}\n"
             f"Mutes: {mute_total}\n"
             f"Appeals: {appeal_total}"
@@ -223,7 +223,7 @@ class Check:
         if counts_failed:
             text += (
                 "\n\nNote: some counters could not be loaded; "
-                "totals above may be incomplete."
+                "totals above may be incomplete\\."
             )
 
         rows: list[list[InlineKeyboardButton]] = []
@@ -292,7 +292,7 @@ class Check:
         if not bans:
             text = (
                 f"{bold('Bans')}\n\n"
-                f"No ban records for {mention(target_id, display_name)}."
+                f"No ban records for {mention(target_id, display_name)}\\."
             )
             return text, InlineKeyboardMarkup([_back_to_check(target_id)])
 
@@ -304,7 +304,7 @@ class Check:
             ts = date_or_unknown(ban.get("timestamp"))
             reason_short = str(ban.get("reason", "(no reason)"))[:_BAN_LIST_REASON_LEN]
             lines.append(
-                f"{base_idx + i}. {status} | {code(ban.get('ban_id', ''))} | {ts}\n"
+                f"{base_idx + i}\\. {status} | {code(ban.get('ban_id', ''))} | {ts}\n"
                 f"   {italic(reason_short)}"
             )
             items.append(
@@ -332,7 +332,7 @@ class Check:
         """Show a single ban's full detail (text + optional Proof button)."""
         ban = await db.bans_db.get_ban(ban_id)
         if not ban or ban.get("banned_user_id") != target_id:
-            text = f"Ban {code(ban_id)} not found."
+            text = f"Ban {code(ban_id)} not found\\."
             return text, back_to_module_kb(f"check_bans:{target_id}:0")
 
         text, proof_link = await build_ban_detail(ban)
@@ -388,18 +388,20 @@ class Check:
         if not groups:
             text = (
                 f"{bold('Warnings')}\n\n"
-                f"No warning records for {mention(target_id, display_name)}."
+                f"No warning records for {mention(target_id, display_name)}\\."
             )
             return text, InlineKeyboardMarkup([_back_to_check(target_id)])
 
         titles = await db.groups_db.get_group_titles([cid for cid, _ in groups])
         total = sum(c for _, c in groups)
 
-        lines = [f"{bold('Warnings')}: {total} total across {len(groups)} group(s)\n"]
+        lines = [
+            f"{bold('Warnings')}: {total} total across {len(groups)} group\\(s\\)\n"
+        ]
         rows: list[list[InlineKeyboardButton]] = []
         for cid, count in groups:
             title = titles.get(cid) or str(cid)
-            lines.append(f"- {esc(title)}: {bold(str(count))}")
+            lines.append(f"\\- {esc(title)}: {bold(str(count))}")
             rows.append(
                 [
                     InlineKeyboardButton(
@@ -436,7 +438,7 @@ class Check:
         title = titles.get(chat_id) or str(chat_id)
 
         if not warns:
-            text = f"{bold('Warnings in')} {esc(title)}\n\nNo warning records here."
+            text = f"{bold('Warnings in')} {esc(title)}\n\nNo warning records here\\."
             rows = [
                 [
                     InlineKeyboardButton(
@@ -464,7 +466,7 @@ class Check:
             admin_id = w.get("admin_id", 0)
             admin_name = admin_name_map.get(admin_id, "Admin") if admin_id else "Admin"
             lines.append(
-                f"{base_idx + i}. {ts}\n"
+                f"{base_idx + i}\\. {ts}\n"
                 f"   {italic(reason_short)}\n"
                 f"   By {mention(admin_id, admin_name)}"
             )
@@ -543,7 +545,7 @@ class Check:
         if not bans:
             text = (
                 f"{bold('Appeals')}\n\n"
-                f"No appeal records for {mention(target_id, display_name)}."
+                f"No appeal records for {mention(target_id, display_name)}\\."
             )
             return text, InlineKeyboardMarkup([_back_to_check(target_id)])
 
@@ -560,7 +562,7 @@ class Check:
                 else "Pending / Rejected"
             )
             lines.append(
-                f"{base_idx + i}. {status}\n"
+                f"{base_idx + i}\\. {status}\n"
                 f"   Ban ID: {code(ban.get('ban_id', ''))} | {ts}"
             )
             items.append(
@@ -607,7 +609,7 @@ async def _per_chat_event_list(
         text = (
             f"{bold(heading_name)}\n\n"
             f"No {heading_name.lower()} records for "
-            f"{mention(target_id, display_name)}."
+            f"{mention(target_id, display_name)}\\."
         )
         return text, InlineKeyboardMarkup([_back_to_check(target_id)])
 
@@ -639,7 +641,7 @@ async def _per_chat_event_list(
         admin_id = rec.get("admin_id", 0)
         admin_name = admin_name_map.get(admin_id, "Admin") if admin_id else "Admin"
         lines.append(
-            f"{base_idx + i}. {ts}\n"
+            f"{base_idx + i}\\. {ts}\n"
             f"   Group: {esc(title)}\n"
             f"   {italic(reason_short)}\n"
             f"   By {mention(admin_id, admin_name)}"

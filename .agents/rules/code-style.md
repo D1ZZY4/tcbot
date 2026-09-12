@@ -87,8 +87,8 @@ Rules:
 
 ## Telegram Messages and Handlers
 
-- Bot messages are English-only and use `parse_mode="HTML"`.
-- Never use Markdown parse mode.
+- Bot messages are English-only and use `parse_mode="MarkdownV2"`.
+- Never use HTML parse mode.
 - Escape user-provided text with `esc()`.
 - Use `mention()` for clickable user names, `code()` for IDs, and `bold()` for
   static bold labels.
@@ -188,7 +188,7 @@ Concurrency, `asyncio.gather()`, fan-out, timeouts, and cancellation follow
 - Creating `*_conv.py` files.
 - Writing to MongoDB from command modules.
 - Adding keyboard builders outside `keyboards.py`.
-- Using Markdown parse mode.
+- Using HTML parse mode.
 - Duplicating reason or proof workflow state handlers.
 - Calling raw `col()` from feature modules.
 - Leaving dead or commented-out code.

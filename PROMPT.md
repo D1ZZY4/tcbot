@@ -102,7 +102,7 @@ half. Compose multiple skills when one task spans multiple areas
 - Follow the module boundaries and handler conventions in `AGENTS.md`.
 - Use database helpers instead of direct collection access from handlers.
 - Bound cross-group Telegram fan-out with the shared dispatch helper.
-- Escape user-controlled text and keep bot messages in HTML parse mode.
+- Escape user-controlled text and keep bot messages in MarkdownV2 parse mode.
 - Preserve role checks, anonymous-admin handling, callback acknowledgement,
   async task error handling, and explicit PTB lifecycle management.
 - Do not log secrets, tokens, credentials, raw private input, or private chat
