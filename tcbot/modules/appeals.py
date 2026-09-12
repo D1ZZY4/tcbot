@@ -40,7 +40,7 @@ __help_sections__: list[tuple[str, str]] = [
     (
         "How to start",
         f"Tap the {bold('Submit Appeal')} button on your ban notification \\(sent by the bot in PM\\), "
-        f"or use {code('/checkme')} and tap the appeal button that appears\\.",
+        f"or use {code('/checkme')} and tap the {bold('Submit Appeal')} button that appears\\.",
     ),
     replies.who_section(
         "Anyone with an active federation ban. You can only have one active appeal at a time."
@@ -69,7 +69,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         "What happens next",
-        "Your appeal is forwarded to TC admins for review\\. The admin who issued the original "
+        "Your appeal is forwarded to TC Staff for review\\. The admin who issued the original "
         f"ban has a {bold(f'{LOCK_HOURS}-hour priority window')} to respond; after that, any admin can act\\.\n\n"
         "If approved: your ban is lifted immediately across all connected groups\\.\n"
         "If rejected: your ban remains in place\\.\n"

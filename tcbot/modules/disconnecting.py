@@ -62,7 +62,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     replies.where_section(
         f"{bold('/tcdisconnect')}: inside the group you want to disconnect.\n"
-        f"{bold('/rmtc')}: exec group or bot PM (works remotely by chat ID)."
+        f"{bold('/rmtc')}: exec group or Bot PM (works remotely by chat ID)."
     ),
     (
         replies.SEC_WHAT,

@@ -41,10 +41,7 @@ _RL_LIMIT: int = 5
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Kick"
-__help_text__ = (
-    f"Removes a user from the {bold('current group only')}\\. Federation roles are auto\\-removed "
-    "if the target is staff\\."
-)
+__help_text__ = f"Removes a user from the {bold('current group only')}\\. Auto\\-demotes staff targets\\."
 
 __help_sections__: list[tuple[str, str]] = [
     (
@@ -59,14 +56,15 @@ __help_sections__: list[tuple[str, str]] = [
         "action; the user can rejoin via an invite link unless they are separately "
         "federation\\-banned\\.\n\n"
         "If the target holds a federation role \\(Tester / Developer / Admin\\), that role is "
-        "automatically removed and they are notified by DM\\. A log entry is posted to the "
+        "auto\\-demoted and they are notified by DM\\. A log entry is posted to the "
         "federation logs channel\\.",
     ),
     (
         "Flow",
         f"1\\. Run {code('/tckick')} with the target \\(and optional inline reason\\)\\.\n"
         f"2\\. If no reason was given, the bot asks: reply with text or tap {bold('Skip')}\\.\n"
-        f"3\\. The bot asks for proof: send a photo/video or tap {bold('Skip')}\\.",
+        f"3\\. The bot asks for proof: send a photo/video, then tap {bold('Done')}, "
+        f"or tap {bold('Skip')}\\.",
     ),
     replies.target_section(),
     (

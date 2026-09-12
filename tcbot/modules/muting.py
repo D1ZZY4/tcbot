@@ -68,10 +68,18 @@ __help_sections__: list[tuple[str, str]] = [
         f"{bold('/tcmute')}: restricts a user from sending messages, media, stickers, and GIFs "
         f"across {bold('all connected groups')} simultaneously\\. After the command, the bot "
         "asks for a reason and optionally proof \\- both steps can be skipped\\. If the user "
-        "is already muted, the existing restriction is replaced\\. A summary shows how many "
-        "groups the mute was applied in\\.\n\n"
+        "is already muted, the existing restriction is replaced\\. If the target holds a "
+        "federation role \\(Tester / Developer / Admin\\), that role is auto\\-demoted and "
+        "they are notified by DM\\. A summary shows how many groups the mute was applied in\\.\n\n"
         f"{bold('/tcunmute')}: restores the user's full send permissions across all connected "
         "groups\\. A summary shows how many groups the unmute was applied in\\.",
+    ),
+    (
+        "Flow",
+        f"1\\. Run {code('/tcmute')} with the target \\(and optional inline reason\\)\\.\n"
+        f"2\\. If no reason was given, the bot asks: reply with text or tap {bold('Skip')}\\.\n"
+        f"3\\. The bot asks for proof: send a photo/video, then tap {bold('Done')}, "
+        f"or tap {bold('Skip')}\\.",
     ),
     (
         "Time format",

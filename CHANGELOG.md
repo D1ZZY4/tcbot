@@ -13,7 +13,7 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Changed
 
-- **Help menus standardized across modules** (`tcbot/modules/warnings.py`, `muting.py`, `groups.py`, `connecting.py`, `syncing.py`, `netspeed.py`, `maintenance.py`, `stats.py`, `language.py`): every overview is verb-led, `Examples` labels are uniform, per-command `Who can use` lines name the exact rank tier, example entries follow the `command: outcome` plus reply-variant pattern, and the warn flow label is plain `Flow`. Warn-limit wording renders from configuration instead of a hardcoded number. Verified against decorators, aliases, and flow behavior per module; MarkdownV2 audit zero findings. No behavior change.
+- **Help menus standardized across modules** (`tcbot/modules/warnings.py`, `muting.py`, `groups.py`, `connecting.py`, `syncing.py`, `netspeed.py`, `maintenance.py`, `stats.py`, `language.py`, `kicking.py`, `banning.py`, `disconnecting.py`, `appeals.py`, `admins.py`): every overview is verb-led, `Examples` labels are uniform, per-command `Who can use` lines name the exact rank tier, example entries follow the `command: outcome` plus reply-variant pattern, and the warn flow label is plain `Flow`. Warn-limit wording renders from configuration instead of a hardcoded number. Terminology unified (`auto-demoted` for role removal, `Submit Appeal` for the button, `TC Staff`, `Founder`, `federation logs channel`, `Bot PM`); kick/warn/ban/mute flows all document the `Done` step, and ban/mute gain the missing `Flow` sections. Verified against decorators, aliases, and flow behavior per module; MarkdownV2 audit zero findings. No behavior change.
 
 </details>
 

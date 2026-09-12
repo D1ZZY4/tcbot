@@ -62,7 +62,7 @@ __help_sections__: list[tuple[str, str]] = [
         "Drill-downs",
         f"{bold('Staff Roster')}: Founder, Admins, Developers, Testers, all listed "
         "with mentions\\.\n"
-        f"{bold('Users')}: paginated list of every cached user \\(Owner/Founder "
+        f"{bold('Users')}: paginated list of every cached user \\(Founder "
         "only \\- the button and the list are hidden from everyone else\\)\\. "
         "Numbered buttons open a per\\-user detail card\\.\n"
         f"{bold('Connected Chats')}: paginated list of every active group; "

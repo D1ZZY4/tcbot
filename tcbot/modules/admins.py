@@ -124,11 +124,11 @@ __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_EXAMPLES,
         f"{code('/tcpromote @username developer')}\n"
-        f"{code('/tcpromote 123456789')} \\- shows role selection menu\n"
+        f"{code('/tcpromote 123456789')}: shows the role selection menu\n"
         f"{code('/tcdemote @username')}\n"
         f"{code('/transferowner @newowner')}\n"
-        f"{code('/tcpromoterequests')} \\- request promotion to Admin\n"
-        f"{code('/tcplist')} \\- list pending promotion requests",
+        f"{code('/tcpromoterequests')}: request promotion to Admin\n"
+        f"{code('/tcplist')}: list pending promotion requests",
     ),
 ]
 

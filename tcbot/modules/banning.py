@@ -70,16 +70,23 @@ __help_sections__: list[tuple[str, str]] = [
         f"Issues a {bold('federation-wide ban')} on the target, applied across all connected "
         "groups automatically\\. A reason is required \\- provide it directly after the target\\.\n\n"
         "After the command, the bot walks you through the proof step: send photos, "
-        "videos, GIFs, or files as evidence, at once as one album or one by one, "
+        "videos, GIFs, or files as evidence in one album or one by one, "
         "then tap Done\\. Proof is required and is logged with the ban record "
-        "to the federation log channel\\.\n\n"
+        "to the federation logs channel\\.\n\n"
         "If the user already has an active ban, the bot first asks for "
         "confirmation \\(with View Log and View Proof links\\) instead of "
         "updating silently; only Continue leads to proof collection, and "
         "the existing record is then updated with the new reason and proof "
         "rather than creating a duplicate\\.\n"
         "If the target holds a federation role \\(Tester / Developer / Admin\\), that role is "
-        "automatically removed and they are notified by DM before the ban is enforced\\.",
+        "auto\\-demoted and they are notified by DM before the ban is enforced\\.",
+    ),
+    (
+        "Flow",
+        f"1\\. Run {code('/tcban')} with the target and reason\\. If the user is already "
+        "banned, confirm the update first\\.\n"
+        f"2\\. Send proof: photos, videos, GIFs, or files, then tap {bold('Done')}\\. "
+        "Proof is required\\.",
     ),
     replies.target_section(),
     (

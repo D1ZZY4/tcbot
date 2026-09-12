@@ -85,7 +85,8 @@ __help_sections__: list[tuple[str, str]] = [
         "Flow",
         f"1\\. Run {code('/tcwarn')} with the target \\(and optional inline reason\\)\\.\n"
         "2\\. If no reason was given, the bot asks \\- reply with text\\.\n"
-        f"3\\. The bot asks for proof \\- send a photo/video or tap {bold('Skip')}\\.",
+        f"3\\. The bot asks for proof \\- send a photo/video, then tap {bold('Done')}, "
+        f"or tap {bold('Skip')}\\.",
     ),
     replies.target_section(),
     (
