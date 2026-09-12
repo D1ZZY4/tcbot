@@ -130,5 +130,14 @@ def test_module_help_kb_pairs_sections_back_last() -> None:
 def test_main_menu_options_are_primary() -> None:
     rows = _cells(kb.main_menu_kb())
     options = [c for row in rows for c in row]
-    assert [c[0] for c in options] == ["About", "Help", "Additional", "Privacy"]
+    assert [c[0] for c in options] == [
+        "About",
+        "Help",
+        "Additional",
+        "Privacy",
+        "Language",
+    ]
     assert all(c[3] == KeyboardButtonStyle.PRIMARY for c in options)
+    assert rows[-1] == [
+        ("Language", "language_menu", None, KeyboardButtonStyle.PRIMARY)
+    ]

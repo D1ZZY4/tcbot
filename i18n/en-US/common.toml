@@ -1,0 +1,14 @@
+# Shared chrome for bot flows: buttons, generic errors, language names.
+# Rule: used by 2+ domains -> lives HERE, never duplicated.
+# Templates are raw text: the engine escapes MarkdownV2 at render time,
+# so translators never write backslashes.
+
+back = "« Back"
+cancel = "Cancel"
+done = "Done"
+
+# Display name of this locale, shown on language buttons.
+language_name = "English (US)"
+
+# Generic retry notice for flows whose DB write failed.
+retry = "Something went wrong on our side. Please try again in a moment."

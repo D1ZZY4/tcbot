@@ -1,0 +1,27 @@
+# Language preferences: personal (/start, PM) and per-group settings.
+# Placeholders use {name} and are filled by the caller; only the listed
+# placeholders may appear. Templates stay raw: no manual backslashes.
+
+# Panel titles.
+title_user = "Language settings"
+title_group = "Group language"
+
+# Current-setting lines. Placeholders: {language} = display name.
+current_user = "Your language: {language}."
+current_group = "This group language: {language}."
+
+# Selection hint shown above the language buttons.
+prompt = "Tap a language below."
+
+# Confirmations. Placeholders: {language} = display name.
+updated_user = "Your language is now {language}."
+updated_group = "This group language is now {language}."
+
+# Group permission refusal (viewer may read but not change).
+denied = "Only the group owner or staff can change the group language."
+
+# Group must be connected before it can hold a language setting.
+not_connected = "This group is not connected to the federation."
+
+# Locale code with no catalog (should not happen via UI; defensive).
+unavailable = "That language is not available yet."

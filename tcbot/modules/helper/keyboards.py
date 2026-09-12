@@ -306,7 +306,7 @@ def checkme_detail_back_kb(
 
 
 def main_menu_kb() -> InlineKeyboardMarkup:
-    """Top-level start-menu keyboard: About, Help, Additional, Privacy."""
+    """Top-level start-menu keyboard: About, Help, Additional, Privacy, Language."""
     return InlineKeyboardMarkup(
         [
             [
@@ -332,6 +332,13 @@ def main_menu_kb() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     "Privacy",
                     callback_data="privacy_menu",
+                    style=KeyboardButtonStyle.PRIMARY,
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "Language",
+                    callback_data="language_menu",
                     style=KeyboardButtonStyle.PRIMARY,
                 )
             ],
@@ -645,3 +652,36 @@ def back_to_module_kb(module_callback: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [[InlineKeyboardButton("« Back", callback_data=module_callback)]]
     )
+
+
+# ───────────────────────── Language menu ────────────────────────── #
+
+
+def language_list_kb(
+    scope: str,
+    items: list[tuple[str, str]],
+    *,
+    back_label: str = "« Back",
+    back_callback: str | None = None,
+) -> InlineKeyboardMarkup:
+    """Language options: one button per locale plus an optional Back row.
+
+    ``items`` carries (display_name, locale_code) and each button sends
+    ``lang:set:<scope>:<locale>``. The Back row (only when
+    ``back_callback`` is given) sends that callback verbatim, so the
+    start-menu path can return to ``back_to_start`` while the command
+    path omits it.
+    """
+    rows = [
+        [
+            InlineKeyboardButton(
+                name,
+                callback_data=f"lang:set:{scope}:{code}",
+                style=KeyboardButtonStyle.PRIMARY,
+            )
+        ]
+        for name, code in items
+    ]
+    if back_callback is not None:
+        rows.append([InlineKeyboardButton(back_label, callback_data=back_callback)])
+    return InlineKeyboardMarkup(rows)

@@ -13,6 +13,7 @@ from . import mutes_db as mutes_db
 from . import queues_db as queues_db
 from . import redis_client as redis_client
 from . import scheduler as scheduler
+from . import settings_db as settings_db
 from . import users_cache as users_cache
 from . import users_roles as users_roles
 from . import warns_db as warns_db
@@ -25,6 +26,7 @@ __all__ = [
     "queues_db",
     "redis_client",
     "scheduler",
+    "settings_db",
     "users_cache",
     "users_roles",
     "warns_db",

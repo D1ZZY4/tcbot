@@ -43,6 +43,7 @@ deployment, see [`../replit.md`](../replit.md). For contribution workflow, see
 |---|---|
 | [Workflow overview](features/workflow-overview.md) | User-visible moderation, appeal, connection, role, statistics, and maintenance flows. |
 | [Appeals](features/appeals.md) | Appeal deep links, private DM submission, review actions, and edge cases. |
+| [Language](features/language.md) | Per-user and per-group locale preferences, TOML catalog, and selection flow. |
 | [Statistics](features/statistics.md) | `/tcstats`, drill-down views, search, and asynchronous design. |
 | [Banning](features/moderation/banning.md) | Federation ban flow, proof collection, updates, unban checks, logs, and appeal links. |
 | [Kicking](features/moderation/kicking.md) | `/tckick` group kick flow, auto-demote before kick, reason/proof conversation, and audit log. |
