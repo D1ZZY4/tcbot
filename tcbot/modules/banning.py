@@ -33,7 +33,8 @@ from tcbot.modules.helper.workflows.reason_flow import (
     reason_too_long_text,
 )
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import bold, code, esc, mention
+from tcbot.utils.formatter import code, esc, mention
+from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -53,47 +54,27 @@ _RL_LIMIT: int = 3
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Ban"
-__help_text__ = (
-    f"Issues a {bold('federation-wide ban')} on a user, applied across every connected "
-    "group at once\\. Auto\\-demotes staff targets and stores proof with the ban record\\."
-)
+__help_text__ = t("ban.help.overview")
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tcban')} \\(alias: {code('/tcb')}\\)",
+        t("ban.help.commands.body"),
     ),
     replies.who_section(replies.PERM_DEV_ABOVE),
     replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
     (
         replies.SEC_WHAT,
-        f"Issues a {bold('federation-wide ban')} on the target, applied across all connected "
-        "groups automatically\\. A reason is required \\- provide it directly after the target\\.\n\n"
-        "After the command, the bot walks you through the proof step: send photos, "
-        "videos, GIFs, or files as evidence in one album or one by one, "
-        "then tap Done\\. Proof is required and is logged with the ban record "
-        "to the federation logs channel\\.\n\n"
-        "If the user already has an active ban, the bot first asks for "
-        "confirmation \\(with View Log and View Proof links\\) instead of "
-        "updating silently; only Continue leads to proof collection, and "
-        "the existing record is then updated with the new reason and proof "
-        "rather than creating a duplicate\\.\n"
-        "If the target holds a federation role \\(Tester / Developer / Admin\\), that role is "
-        "auto\\-demoted and they are notified by DM before the ban is enforced\\.",
+        t("ban.help.what.body"),
     ),
     (
         "Flow",
-        f"1\\. Run {code('/tcban')} with the target and reason\\. If the user is already "
-        "banned, confirm the update first\\.\n"
-        f"2\\. Send proof: photos, videos, GIFs, or files, then tap {bold('Done')}\\. "
-        "Proof is required\\.",
+        t("ban.help.flow.body"),
     ),
     replies.target_section(),
     (
         replies.SEC_EXAMPLES,
-        f"{code('/tcban @username spamming in connected groups')}\n"
-        f"{code('/tcban 123456789 scamming members')}\n"
-        f"Or reply to a message and run {code('/tcb reason here')}\\.",
+        t("ban.help.examples.body"),
     ),
 ]
 

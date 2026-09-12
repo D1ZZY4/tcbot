@@ -11,7 +11,8 @@ i18n/
 ├── en-US/              Source of truth. Must hold every key.
 │   ├── common.toml     Shared generic errors and notices.
 │   ├── button.toml     Every button label, never duplicated.
-│   └── language.toml   Language-preference flow strings.
+│   ├── language.toml   Language-preference flow strings.
+│   └── ban.toml        Ban help prose ([help] tables).
 ├── id/                 Example future locale (partial is legal).
 └── README.md           This file.
 ```
@@ -36,6 +37,18 @@ inside a file and extend the prefix (`[x]` + `y` = `file.x.y`).
    `en-US` entry does.
 5. Newlines are `\n` inside basic strings, literal line breaks are not
    allowed; keep messages to the same paragraph breaks as `en-US`.
+6. Mini-markup only: `` `code` `` and `*bold*` spans, balanced and
+   unnested, with no braces inside. Anything else (including a lone
+   `*` or backtick) fails tests. Close multi-line `"""` blocks tight
+   against the last content line so no trailing newline ships.
+
+## Help prose
+
+Help content moves per domain (`ban.toml` holds `[help]` tables for
+the ban module). Only prose moves: section order, labels, and dynamic
+values stay in Python, which composes them via the stable keys
+(`ban.help.overview`, `ban.help.what.body`, ...). Migrate one domain
+at a time; never leave prose duplicated between TOML and Python.
 
 ## Adding a locale
 

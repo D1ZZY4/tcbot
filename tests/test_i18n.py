@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 
 from tcbot.database import groups_db, settings_db, users_roles
-from tcbot.modules import language
+from tcbot.modules import banning, language
 from tcbot.modules.helper import keyboards
 from tcbot.utils.formatter import esc
 from tcbot.utils.i18n import (
@@ -148,11 +148,50 @@ def test_all_templates_render_v2_clean() -> None:
             # * parens are safe by construction, not by template escaping.
             if key.endswith(".language_name"):
                 continue
-            # * Any-valued: ** unpacking into t() must stay permissive here;
-            # * runtime values are always strings in this gate.
             dummy: dict[str, Any] = dict.fromkeys(placeholders(template), "x")
             rendered = t(key, locale, catalog=catalog, **dummy)
-            assert find_unescaped(rendered) == [], f"{locale}:{key}"
+            _assert_v2_render_clean(rendered, f"{locale}:{key}")
+
+
+def _strip_code_spans(text: str) -> tuple[str, list[str]]:
+    """Remove balanced code spans, returning (remainder, innards)."""
+    innards: list[str] = []
+    out: list[str] = []
+
+    i, n = 0, len(text)
+    while i < n:
+        if text[i] == "`":
+            j = text.find("`", i + 1)
+            assert j > i, "unbalanced code span in rendered output"
+            innards.append(text[i + 1 : j])
+            out.append("X")
+            i = j + 1
+        else:
+            out.append(text[i])
+            i += 1
+    return "".join(out), innards
+
+
+def _assert_v2_render_clean(rendered: str, where: str) -> None:
+    """Assert engine output is valid MarkdownV2, markup spans included.
+
+    Code-span innards may only carry doubled backslashes or escaped
+    backticks (the engine emits nothing else); bold-span innards and
+    the remaining literal text must be fully escaped.
+    """
+    no_code, code_innards = _strip_code_spans(rendered)
+    for inner in code_innards:
+        assert "`" not in inner, where
+        stripped = re.sub(r"\\\\", "", inner)
+        stripped = stripped.replace("\\`", "")
+        assert "\\" not in stripped, where
+    parts = re.split(r"(?<!\\)\*", no_code)
+    assert len(parts) % 2 == 1, f"{where}: unbalanced bold markers"
+    for idx, part in enumerate(parts):
+        if idx % 2 == 1:
+            assert find_unescaped(part) == [], f"{where}: bold inner"
+        else:
+            assert find_unescaped(part) == [], f"{where}: literal"
 
 
 def test_non_default_locales_subset_default_keys() -> None:
@@ -399,6 +438,135 @@ def test_panel_renders_v2_clean() -> None:
 
 def test_esc_import_used_by_engine() -> None:
     assert esc("a_b") == "a\\_b"
+
+
+# ─────────────────────── Mini-markup ──────────────────────── #
+
+
+def test_markup_code_and_bold() -> None:
+    catalog = {"en-US": {"m": "Run `/tcban` then tap *Done*."}}
+    out = t("m", "en-US", catalog=catalog)
+    assert out == "Run `/tcban` then tap *Done*\\."
+
+
+def test_markup_code_span() -> None:
+    catalog = {"en-US": {"m": "Tap `/tcb reason here`."}}
+    assert t("m", "en-US", catalog=catalog) == "Tap `/tcb reason here`\\."
+
+
+def test_markup_bold_span() -> None:
+    catalog = {"en-US": {"m": "A *federation-wide ban* on the target."}}
+    assert (
+        t("m", "en-US", catalog=catalog) == "A *federation\\-wide ban* on the target\\."
+    )
+
+
+def test_markup_plain_mode_strips_markers() -> None:
+    catalog = {"en-US": {"m": "Tap *Done* or `/skip` now."}}
+    assert t("m", "en-US", catalog=catalog, plain=True) == "Tap Done or /skip now."
+
+
+def test_markup_unbalanced_rejected() -> None:
+    for bad in ("Tap `code now.", "Tap *bold now.", "Tap code` now.", "Tap bold* now."):
+        with pytest.raises(I18nError):
+            t("m", "en-US", catalog={"en-US": {"m": bad}})
+
+
+def test_markup_empty_span_rejected() -> None:
+    for bad in ("Tap `` now.", "Tap ** now."):
+        with pytest.raises(I18nError):
+            t("m", "en-US", catalog={"en-US": {"m": bad}})
+
+
+def test_markup_nesting_rejected() -> None:
+    with pytest.raises(I18nError):
+        t("m", "en-US", catalog={"en-US": {"m": "*a `b` c*"}}, b="x")
+    with pytest.raises(I18nError):
+        t("m", "en-US", catalog={"en-US": {"m": "`a {b}`"}}, b="x")
+
+
+def test_markup_sequential_pairs_parse() -> None:
+    # * First-close-wins pairing (standard Markdown interpretation):
+    # * bold, literal, bold. Telegram parses the same shape.
+    catalog = {"en-US": {"m": "*a *b* c*"}}
+    assert t("m", "en-US", catalog=catalog) == "*a *b* c*"
+
+
+def test_markup_brace_in_span_rejected() -> None:
+    with pytest.raises(I18nError):
+        t("m", "en-US", catalog={"en-US": {"m": "`/x {y}`"}}, y="z")
+
+
+def test_markup_placeholder_beside_spans() -> None:
+    catalog = {"en-US": {"m": "Banned {user} - see *details* in `/log`."}}
+    out = t("m", "en-US", catalog=catalog, user="A_B")
+    assert out == "Banned A\\_B \\- see *details* in `/log`\\."
+
+
+def test_markup_stray_brace_rejected() -> None:
+    with pytest.raises(I18nError):
+        t("m", "en-US", catalog={"en-US": {"m": "Hi } there."}})
+    with pytest.raises(I18nError):
+        t("m", "en-US", catalog={"en-US": {"m": "Hi { there."}})
+
+
+def test_markup_escaped_braces_literal() -> None:
+    catalog = {"en-US": {"m": "Use {{x}} literally."}}
+    assert t("m", "en-US", catalog=catalog) == "Use \\{x\\} literally\\."
+
+
+# ─────────────────── Ban help pilot (Opsi B) ─────────────────── #
+
+
+def test_ban_help_overview_golden() -> None:
+    assert t("ban.help.overview") == (
+        "Issues a *federation\\-wide ban* on a user, applied across every "
+        "connected group at once\\. Auto\\-demotes staff targets and stores "
+        "proof with the ban record\\."
+    )
+
+
+def test_ban_help_commands_golden() -> None:
+    assert t("ban.help.commands.body") == "`/tcban` \\(alias: `/tcb`\\)"
+
+
+def test_ban_help_examples_golden() -> None:
+    assert t("ban.help.examples.body") == (
+        "`/tcban @username spamming in connected groups`\n"
+        "`/tcban 123456789 scamming members`\n"
+        "Or reply to a message and run `/tcb reason here`\\."
+    )
+
+
+def test_ban_help_fallback_unknown_locale() -> None:
+    assert t("ban.help.overview", "xx-YY") == t("ban.help.overview", "en-US")
+
+
+def test_ban_help_module_matches_catalog() -> None:
+    assert banning.__help_text__ == t("ban.help.overview")
+    by_label = dict(banning.__help_sections__)
+    assert by_label["Commands & Aliases"] == t("ban.help.commands.body")
+    assert by_label["What it does"] == t("ban.help.what.body")
+    assert by_label["Flow"] == t("ban.help.flow.body")
+    assert by_label["Examples"] == t("ban.help.examples.body")
+
+
+def test_ban_help_bodies_v2_clean() -> None:
+    catalog = _catalog()
+    for key in (
+        "ban.help.overview",
+        "ban.help.commands.body",
+        "ban.help.what.body",
+        "ban.help.flow.body",
+        "ban.help.examples.body",
+    ):
+        _assert_v2_render_clean(t(key, catalog=catalog), key)
+
+
+def test_markup_placeholder_inside_span_rejected() -> None:
+    catalog = {"en-US": {"m": "Hi {user}, see *{thing}* and `/go`."}}
+    with pytest.raises(I18nError):
+        t("m", "en-US", catalog=catalog, user="Ann", thing="x")
 
 
 # ─────────────── Handler flows with fakes ─────────────────── #

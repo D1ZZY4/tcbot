@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import string
 import tomllib
 from pathlib import Path
@@ -21,6 +22,10 @@ DEFAULT_LOCALE: str = "en-US"
 # * MarkdownV2 specials that must be backslash-escaped in regular text.
 # * Mirrors the formatter contract without importing its private table.
 _V2_SPECIAL: frozenset[str] = frozenset("_*[]()~`>#+-=|{}.!")
+
+# * Mini-markup field names: bare identifiers only, so format specs and
+# * conversions can never smuggle unescaped content past the renderer.
+_FIELD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 
 
 class Safe(str):
@@ -166,21 +171,85 @@ def _prepare_value(name: str, value: object, *, escape: bool) -> str:
 def _render_template(
     template: str, prepared: dict[str, str], *, key: str, escape: bool
 ) -> str:
-    """Substitute ``{name}`` placeholders, escaping literal segments in V2 mode.
+    """Substitute ``{name}`` placeholders and resolve mini-markup.
 
-    Format specs and conversions are rejected: translators must use bare
-    names so escaping stays predictable in both modes.
+    Only two markup forms exist, both strict: ```code` `` spans and
+    ``*bold*`` spans must be non-empty, balanced, unnested, and free of
+    braces (placeholder ambiguity). Anything else raises
+    :class:`I18nError` so malformed translator markup fails tests,
+    never production sends. Span contents escape exactly what
+    MarkdownV2 requires inside them (code: backtick/backslash only;
+    bold: full text set); plain mode strips the markers.
     """
     parts: list[str] = []
-    for literal, name, spec, conversion in string.Formatter().parse(template):
-        parts.append(esc(literal) if escape else literal)
-        if name is None:
-            continue
-        if spec or conversion:
-            raise I18nError(f"i18n template {key!r} must use bare {{name}} fields")
-        if name not in prepared:
-            raise I18nError(f"i18n template {key!r} missing value for {{{name}}}")
-        parts.append(prepared[name])
+    literal: list[str] = []
+
+    def flush_literal() -> None:
+        if literal:
+            text = "".join(literal)
+            parts.append(esc(text) if escape else text)
+            literal.clear()
+
+    def check_span(inner: str, kind: str) -> None:
+        if not inner:
+            raise I18nError(f"i18n template {key!r} has an empty {kind} span")
+        if "{" in inner or "}" in inner:
+            raise I18nError(f"i18n template {key!r} forbids braces inside {kind} spans")
+
+    i, n = 0, len(template)
+    while i < n:
+        ch = template[i]
+        if ch == "`":
+            j = template.find("`", i + 1)
+            if j < 0:
+                raise I18nError(f"i18n template {key!r} has an unbalanced backtick")
+            inner = template[i + 1 : j]
+            check_span(inner, "code")
+            flush_literal()
+            if escape:
+                parts.append(f"`{inner.replace(chr(92), chr(92) * 2)}`")
+            else:
+                parts.append(inner)
+            i = j + 1
+        elif ch == "*":
+            j = template.find("*", i + 1)
+            if j < 0:
+                raise I18nError(f"i18n template {key!r} has an unbalanced asterisk")
+            inner = template[i + 1 : j]
+            check_span(inner, "bold")
+            if "`" in inner or "*" in inner:
+                raise I18nError(
+                    f"i18n template {key!r} forbids nesting inside bold spans"
+                )
+            flush_literal()
+            parts.append(f"*{esc(inner)}*" if escape else inner)
+            i = j + 1
+        elif ch == "{":
+            if template.startswith("{{", i):
+                literal.append("{")
+                i += 2
+                continue
+            j = template.find("}", i + 1)
+            if j < 0:
+                raise I18nError(f"i18n template {key!r} has an unbalanced brace")
+            name = template[i + 1 : j]
+            if not _FIELD_RE.match(name):
+                raise I18nError(f"i18n template {key!r} must use bare {{name}} fields")
+            if name not in prepared:
+                raise I18nError(f"i18n template {key!r} missing value for {{{name}}}")
+            flush_literal()
+            parts.append(prepared[name])
+            i = j + 1
+        elif ch == "}":
+            if template.startswith("}}", i):
+                literal.append("}")
+                i += 2
+                continue
+            raise I18nError(f"i18n template {key!r} has an unbalanced brace")
+        else:
+            literal.append(ch)
+            i += 1
+    flush_literal()
     return "".join(parts)
 
 
@@ -197,6 +266,9 @@ def t(
     Templates are stored raw (no manual backslashes): literal segments
     are escaped here in MarkdownV2 mode and left verbatim with
     ``plain=True`` (callback alerts, which Telegram never parses).
+    Templates may also use strict mini-markup (```code` `` and
+    ``*bold*`` spans, balanced and unnested); malformed markup raises
+    :class:`I18nError`.
     Unknown locales fall back to :data:`DEFAULT_LOCALE`; keys missing in
     the locale fall back per key. A key missing everywhere is a
     programming error: it is logged and returned as ``[key]`` (never an
