@@ -663,19 +663,21 @@ def language_list_kb(
     *,
     back_label: str = "« Back",
     back_callback: str | None = None,
+    selected: str | None = None,
 ) -> InlineKeyboardMarkup:
     """Language options: one button per locale plus an optional Back row.
 
     ``items`` carries (display_name, locale_code) and each button sends
-    ``lang:set:<scope>:<locale>``. The Back row (only when
-    ``back_callback`` is given) sends that callback verbatim, so the
-    start-menu path can return to ``back_to_start`` while the command
-    path omits it.
+    ``lang:set:<scope>:<locale>``. The ``selected`` locale (the current
+    setting) gets a ``✓`` text prefix, which is a plain check character,
+    not an emoji. The Back row (only when ``back_callback`` is given)
+    sends that callback verbatim, so the start-menu path can return to
+    ``back_to_start`` while the command path omits it.
     """
     rows = [
         [
             InlineKeyboardButton(
-                name,
+                f"✓ {name}" if code == selected else name,
                 callback_data=f"lang:set:{scope}:{code}",
                 style=KeyboardButtonStyle.PRIMARY,
             )

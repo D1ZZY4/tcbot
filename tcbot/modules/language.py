@@ -140,8 +140,8 @@ async def _can_set_group(bot: object, chat_id: int, user_id: int) -> bool:
 def _options_kb(scope: str, locale: str) -> keyboards.InlineKeyboardMarkup:
     """Build the locale-option keyboard for ``scope`` in display ``locale``."""
     items = [(display_name(code_), code_) for code_ in available_locales()]
-    back = t("button.back", locale)
-    return keyboards.language_list_kb(scope, items, back_label=back)
+    back = t("common.back", locale)
+    return keyboards.language_list_kb(scope, items, back_label=back, selected=locale)
 
 
 def _panel_text(scope: str, locale: str) -> str:
@@ -214,8 +214,9 @@ async def on_language_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             reply_markup=keyboards.language_list_kb(
                 "user",
                 [(display_name(code_), code_) for code_ in available_locales()],
-                back_label=t("button.back", locale),
+                back_label=t("common.back", locale),
                 back_callback="back_to_start",
+                selected=locale,
             ),
         )
     except Exception as exc:
@@ -251,8 +252,9 @@ async def on_lang_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             reply_markup=keyboards.language_list_kb(
                 scope,
                 [(display_name(code_), code_) for code_ in available_locales()],
-                back_label=t("button.back", locale),
+                back_label=t("common.back", locale),
                 back_callback=back_callback,
+                selected=locale,
             ),
         )
     except Exception as exc:

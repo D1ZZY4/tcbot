@@ -4,6 +4,7 @@
 
 title_user = "Language settings"
 title_group = "Group language"
+
 # Placeholders: {language} = display name.
 current_user = "Your language: {language}."
 current_group = "This group language: {language}."

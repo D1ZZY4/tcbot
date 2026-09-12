@@ -376,6 +376,18 @@ def test_start_menu_has_language_bottom_row() -> None:
     assert bottom[0].callback_data == "language_menu"
 
 
+def test_language_list_marks_selected_locale() -> None:
+    kb = keyboards.language_list_kb(
+        "user",
+        [("English (US)", "en-US"), ("Bahasa Indonesia", "id")],
+        selected="en-US",
+    )
+    texts = [row[0].text for row in kb.inline_keyboard]
+    assert texts[0] == "✓ English (US)"
+    assert texts[1] == "Bahasa Indonesia"
+    assert kb.inline_keyboard[0][0].callback_data == "lang:set:user:en-US"
+
+
 def test_panel_renders_v2_clean() -> None:
     for scope in ("user", "group"):
         text = language._panel_text(scope, "en-US")
