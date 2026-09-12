@@ -77,6 +77,8 @@ authorization, or side effects require sequential execution.
 
 TCF Bot is a Python Telegram bot for the Transsion Core Federation community. It manages federation-wide moderation actions, appeal workflows, staff roles, connected groups, audit logging, and health checks.
 
+Treat it as large-scale infrastructure: the bot may serve 50+ groups with thousands of members each, so a small defect can fan out federation-wide. A moderation bypass is never "just an edge case" without a blast-radius evaluation.
+
 Current stack:
 
 - Python 3.14 project target (`pyproject.toml` requires `>=3.13`)

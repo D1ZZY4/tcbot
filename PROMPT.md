@@ -118,6 +118,8 @@ half. Compose multiple skills when one task spans multiple areas
   in-flight keyboards do not break.
 - When changing user-visible counts or summaries, keep per-group detail logs
   intact so operators can still diagnose.
+- Never disguise a behavior change as cleanup; report it explicitly as a
+  bug fix or an intentional change with its reason and impact.
 
 ## Evidence before action
 
@@ -125,6 +127,8 @@ half. Compose multiple skills when one task spans multiple areas
   Downgrade anything unproven to Potential Risk instead of changing behavior.
 - Check design intent first: public-by-design surfaces (e.g. `/check`,
   `/tcstats`) are not vulnerabilities just because they disclose data.
+- Evaluate blast radius across groups and users for every moderation
+  finding: this bot is large-scale infrastructure, never a single-chat bot.
 - Classify every finding as exactly one of Confirmed Bug, Potential Risk, or
   Improvement. Never call an improvement a bug or a guess a vulnerability.
 

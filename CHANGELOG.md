@@ -13,6 +13,7 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Documentation
 
+- **Agent contract alignment for scale and honesty** (`AGENTS.md`, `PROMPT.md`): the project overview now states the large-scale framing (50+ groups, federation-wide blast radius) and the working contract gains two rules: evaluate blast radius for every moderation finding, and never disguise a behavior change as cleanup.
 
 </details>
 
