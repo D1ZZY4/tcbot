@@ -175,7 +175,8 @@ an agent that skips the reading steps will not, regardless of wording.
 
 When behavior or structure changes:
 
-- Update `CHANGELOG.md` under `[Unreleased]`.
+- Update `CHANGELOG.md` under `[Unreleased]`, worded per
+  `.agents/rules/changelog-style.md`.
 - Update affected files in `docs/`, `README.md`, `AGENTS.md`, `replit.md`, and
   `.agents/` as needed.
 - Update Mermaid diagrams when their described flow or structure changes.

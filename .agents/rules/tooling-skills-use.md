@@ -21,7 +21,8 @@ These rules apply to every task:
    for async and fan-out), the relevant skill in [`.agents/skills/`](../skills/),
    source files, configuration, and documentation for the requested scope.
 3. After a change, add an entry under `[Unreleased]` in
-   [`CHANGELOG.md`](../../CHANGELOG.md).
+   [`CHANGELOG.md`](../../CHANGELOG.md), worded per
+   [`changelog-style.md`](changelog-style.md).
 4. Update related documentation, repository maps, skills, and guidance whose
    content or paths became stale.
 5. Search for old paths and broken links before finalizing.

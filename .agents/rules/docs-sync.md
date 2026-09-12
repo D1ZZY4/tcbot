@@ -19,7 +19,8 @@ When you change *any* documentation file, update the related markdown in the
 same turn:
 
 - [`CHANGELOG.md`](../../CHANGELOG.md): entry under `[Unreleased]`
-  describing the doc change.
+  describing the doc change, worded per
+  [`changelog-style.md`](changelog-style.md).
 - [`docs/README.md`](../../docs/README.md): if a new doc was added or the
   documentation structure changed, update the category index.
 - [`docs/architecture/repository-map.md`](../../docs/architecture/repository-map.md):
