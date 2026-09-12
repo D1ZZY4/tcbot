@@ -12,26 +12,32 @@ from typing import TYPE_CHECKING
 
 from telegram.ext import ContextTypes, ConversationHandler
 
+from tcbot import cfg
+from tcbot import database as db
+from tcbot.database.documents import BanDoc
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
+from tcbot.modules.helper.keyboards import ban_update_confirm_kb
 from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.ban_flow import (
     WAITING_PROOF,
+    WAITING_UPDATE_CONFIRM,
     ban_conversation,
-    proof,
+    demote_ban_target,
+    proof_prompt_content,
 )
-from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.reason_flow import (
     is_reason_too_long,
     parse_inline_reason,
     reason_too_long_text,
 )
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import bold, code, mention
+from tcbot.utils.formatter import bold, code, esc, mention
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
-    from telegram import Update
+    from telegram import Message, Update
 
 log = logging.getLogger(__name__)
 
@@ -67,8 +73,11 @@ __help_sections__: list[tuple[str, str]] = [
         "videos, GIFs, or files as evidence, at once as one album or one by one, "
         "then tap Done. Proof is required and is logged with the ban record "
         "to the federation log channel.\n\n"
-        "If the user already has an active ban, the existing record is updated with the new "
-        "reason and proof rather than creating a duplicate.\n"
+        "If the user already has an active ban, the bot first asks for "
+        "confirmation (with View Log and View Proof links) instead of "
+        "updating silently; only Continue leads to proof collection, and "
+        "the existing record is then updated with the new reason and proof "
+        "rather than creating a duplicate.\n"
         "If the target holds a federation role (Tester / Developer / Admin), that role is "
         "automatically removed and they are notified by DM before the ban is enforced.",
     ),
@@ -98,9 +107,11 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Entry point for the federation ban flow.
 
     Resolves the target, validates the inline reason, runs identity and role
-    checks in parallel, auto-demotes any federation role held by the target, then
-    stores ban metadata in ``user_data`` and shows the proof prompt. Returns
-    ``WAITING_PROOF`` or ``ConversationHandler.END`` on any failure.
+    checks in parallel, then either asks for re-ban confirmation (active ban
+    exists) or auto-demotes any federation role held by the target. Stores
+    ban metadata in ``user_data`` and shows the proof prompt. Returns
+    ``WAITING_UPDATE_CONFIRM``, ``WAITING_PROOF``, or
+    ``ConversationHandler.END`` on any failure.
     """
     msg = update.effective_message
     admin = update.effective_user
@@ -180,11 +191,35 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         await safe_reply(msg, refusal, log_label="cmd_ban_start refusal")
         return ConversationHandler.END
 
+    ctx.user_data["ban_target_id"] = target_id
+    ctx.user_data["ban_target_fname"] = target_fname or str(target_id)
+    ctx.user_data["ban_reason"] = ban_reason
+    ctx.user_data["ban_admin_id"] = admin.id
+    ctx.user_data["ban_admin_fname"] = admin.first_name
+
+    # * Re-ban check before any side effect: demotion must not land when
+    # * the admin may still cancel at the confirmation below. A lookup
+    # * outage degrades to the old straight-to-proof path; the executor
+    # * re-checks and stays fail-closed downstream.
+    try:
+        existing = await db.bans_db.get_active_ban(target_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("cmd_ban_start active-ban lookup failed; proceeding as fresh ban")
+        existing = None
+
+    if existing is not None:
+        ctx.user_data["ban_target_role"] = target_role
+        return await _ask_update_confirm(
+            msg, ctx, target_id, target_fname, ban_reason, existing
+        )
+
     # * Auto-demote is required before the ban to preserve the
     # * role-vs-state invariant: a banned user must not still hold a
     # * federation role. The helper replies and signals abort when the
     # * demote fails, so the ban never proceeds on a role holder.
-    if target_role and not await Demote.auto_demote_or_abort(
+    if not await demote_ban_target(
         msg,
         ctx.bot,
         target_id,
@@ -192,23 +227,14 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         target_role,
         admin.id,
         admin.first_name,
-        trigger="ban",
     ):
         return ConversationHandler.END
 
-    ctx.user_data["ban_target_id"] = target_id
-    ctx.user_data["ban_target_fname"] = target_fname or str(target_id)
-    ctx.user_data["ban_reason"] = ban_reason
-    ctx.user_data["ban_admin_id"] = admin.id
-    ctx.user_data["ban_admin_fname"] = admin.first_name
-
-    target_mention = mention(target_id, target_fname or str(target_id))
+    text, kb = proof_prompt_content(
+        target_id, target_fname or str(target_id), ban_reason
+    )
     try:
-        prompt = await msg.reply_text(
-            proof.noted_prompt("ban", ban_reason, target_mention),
-            parse_mode="HTML",
-            reply_markup=proof.keyboard(),
-        )
+        prompt = await msg.reply_text(text, parse_mode="HTML", reply_markup=kb)
         ctx.user_data["ban_prompt_msg_id"] = prompt.message_id
         ctx.user_data["ban_prompt_chat_id"] = msg.chat.id
     except Exception as exc:
@@ -219,11 +245,64 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             "ban_reason",
             "ban_admin_id",
             "ban_admin_fname",
+            "ban_target_role",
         ):
             ctx.user_data.pop(key, None)
         return ConversationHandler.END
 
     return WAITING_PROOF
+
+
+async def _ask_update_confirm(
+    msg: Message,
+    ctx: ContextTypes.DEFAULT_TYPE,
+    target_id: int,
+    target_fname: str | None,
+    ban_reason: str,
+    existing: BanDoc,
+) -> int:
+    """Show the re-ban confirmation card with log/proof links.
+
+    Returns ``WAITING_UPDATE_CONFIRM`` with the prompt IDs stored, or
+    ``ConversationHandler.END`` when the prompt cannot be delivered
+    (with the stored metadata cleaned up).
+    """
+    if ctx.user_data is None:
+        return ConversationHandler.END
+    logs_chat, logs_thread = cfg.logs
+    proofs_chat, proofs_thread = cfg.proofs
+    log_msg_id = int(existing.get("log_message_id", 0) or 0)
+    proof_msg_id = int(existing.get("proof_message_id", 0) or 0)
+    kb = ban_update_confirm_kb(
+        message_link(logs_chat, log_msg_id, logs_thread) if log_msg_id else None,
+        message_link(proofs_chat, proof_msg_id, proofs_thread)
+        if proof_msg_id
+        else None,
+    )
+    text = (
+        f"{mention(target_id, target_fname or str(target_id))} already has an "
+        f"active federation ban (Ban ID {code(str(existing.get('ban_id', '')))}).\n"
+        f"Existing reason: {esc(str(existing.get('reason', '')))}\n"
+        f"New reason: {esc(ban_reason)}\n\n"
+        "Update the ban with the new reason and proof?"
+    )
+    try:
+        prompt = await msg.reply_text(text, parse_mode="HTML", reply_markup=kb)
+        ctx.user_data["ban_prompt_msg_id"] = prompt.message_id
+        ctx.user_data["ban_prompt_chat_id"] = msg.chat.id
+    except Exception as exc:
+        log.debug("cmd_ban_start confirm-prompt reply failed: %s", exc)
+        for key in (
+            "ban_target_id",
+            "ban_target_fname",
+            "ban_reason",
+            "ban_admin_id",
+            "ban_admin_fname",
+            "ban_target_role",
+        ):
+            ctx.user_data.pop(key, None)
+        return ConversationHandler.END
+    return WAITING_UPDATE_CONFIRM
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

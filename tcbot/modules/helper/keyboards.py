@@ -111,6 +111,36 @@ def ban_log_update(
     )
 
 
+def ban_update_confirm_kb(
+    log_url: str | None,
+    proof_url: str | None,
+) -> InlineKeyboardMarkup:
+    """Re-ban confirmation: View Log / View Proof URLs, then Cancel / Continue.
+
+    URL buttons are omitted individually when their link is unavailable;
+    the Cancel / Continue decision row is always present.
+    """
+    rows: list[list[InlineKeyboardButton]] = []
+    links = []
+    if log_url:
+        links.append(InlineKeyboardButton("View Log", url=log_url))
+    if proof_url:
+        links.append(InlineKeyboardButton("View Proof", url=proof_url))
+    if links:
+        rows.append(links)
+    rows.append(
+        [
+            InlineKeyboardButton("Cancel", callback_data="ban_cancel"),
+            InlineKeyboardButton(
+                "Continue",
+                callback_data="ban_continue",
+                style=KeyboardButtonStyle.PRIMARY,
+            ),
+        ]
+    )
+    return InlineKeyboardMarkup(rows)
+
+
 def appeal_button_kb(
     bot_username: str,
     ban_id: str,

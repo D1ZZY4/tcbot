@@ -23,7 +23,7 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg, replies
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.parse_editmsg import clear_markup_cb, safe_edit_cb, safe_reply
 from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import (
@@ -36,7 +36,7 @@ from tcbot.utils.dispatch import (
     fan_out,
     is_benign_telegram_error,
 )
-from tcbot.utils.formatter import esc, user_ref
+from tcbot.utils.formatter import esc, mention, user_ref
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 from tcbot.utils.time_and_date import monotonic, to_utc, utc_now
 
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from datetime import datetime
 
-    from telegram import Bot, Message
+    from telegram import Bot, InlineKeyboardMarkup, Message
     from telegram.ext.filters import BaseFilter
 
 from tcbot.database.documents import BanDoc
@@ -67,11 +67,13 @@ _BAN_USER_DATA_KEYS = (
     "ban_admin_fname",
     "ban_prompt_msg_id",
     "ban_prompt_chat_id",
+    "ban_target_role",
     "ban_duration",
     "ban_executing",
 )
 
 WAITING_PROOF = 0
+WAITING_UPDATE_CONFIRM = 1
 
 # * Per-action BuildProof instance; imported by banning.py
 # * skip_allowed=False: ban proof is required; there is no Skip option
@@ -144,6 +146,49 @@ def _cancel_proof_session(user_data: dict[str, Any] | None) -> None:
 
 
 # ────────────────────────── Ban executor ────────────────────────── #
+
+
+async def demote_ban_target(
+    msg: Message,
+    bot: Bot,
+    target_id: int,
+    target_fname: str,
+    target_role: str | None,
+    admin_id: int,
+    admin_fname: str,
+) -> bool:
+    """Auto-demote a role-holding ban target; reply and abort on failure.
+
+    Shared by the entry fresh-ban path and the update-confirm Continue
+    handler so demotion always lands after the final confirmation. Returns
+    True when the caller may proceed.
+    """
+    if not target_role:
+        return True
+    return await Demote.auto_demote_or_abort(
+        msg,
+        bot,
+        target_id,
+        target_fname,
+        target_role,
+        admin_id,
+        admin_fname,
+        trigger="ban",
+    )
+
+
+def proof_prompt_content(
+    target_id: int, target_fname: str, reason: str
+) -> tuple[str, InlineKeyboardMarkup]:
+    """Build the proof-collection prompt text and keyboard (single owner).
+
+    Used by the entry fresh-ban path (as a reply) and the update-confirm
+    Continue handler (as an in-place edit of the confirm message).
+    """
+    return (
+        proof.noted_prompt("ban", reason, mention(target_id, target_fname)),
+        proof.keyboard(),
+    )
 
 
 async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> None:
@@ -398,20 +443,28 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         f"{applied_line}"
     )
     if prompt_msg_id and prompt_chat_id:
-        edit_result, upsert_result, pm_result = await asyncio.gather(
+        # * The text edit below keeps the old keyboard (the parameter is
+        # * omitted from the API call), so strip it explicitly: the
+        # * conversation ends here and the buttons would otherwise spin
+        # * forever on tap.
+        edit_result, upsert_result, pm_result, markup_result = await asyncio.gather(
             bot.edit_message_text(
                 summary,
                 chat_id=prompt_chat_id,
                 message_id=prompt_msg_id,
                 parse_mode="HTML",
-                reply_markup=None,
             ),
             db.users_cache.upsert_user(target_id, None, target_fname),
             bot.send_message(
                 target_id, _pm_text, parse_mode="HTML", reply_markup=_pm_kb
             ),
+            bot.edit_message_reply_markup(
+                chat_id=prompt_chat_id, message_id=prompt_msg_id
+            ),
             return_exceptions=True,
         )
+        if isinstance(markup_result, BaseException):
+            log.debug("Ban summary markup clear failed: %s", markup_result)
         if isinstance(edit_result, BaseException):
             log.debug("Ban summary prompt edit failed: %s", edit_result)
         if isinstance(upsert_result, BaseException):
@@ -596,6 +649,47 @@ async def _execute_new_ban(
 # ───────────────── Proof collection state handlers ──────────────── #
 
 
+async def on_ban_update_continue(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    """Proceed from the re-ban confirmation to proof collection."""
+    q = update.callback_query
+    msg = update.effective_message
+    if q is None or msg is None or ctx.user_data is None:
+        return ConversationHandler.END
+    await q.answer()
+    # * Entry-point authorization covers this tap like every other flow
+    # * callback: the tapping admin passed resolve_and_check moments ago,
+    # * and demotion below still runs before anything enforces.
+    target_id = int(ctx.user_data.get("ban_target_id", 0) or 0)
+    target_fname = str(ctx.user_data.get("ban_target_fname") or target_id)
+    reason = str(ctx.user_data.get("ban_reason") or "")
+    admin_id = int(ctx.user_data.get("ban_admin_id", 0) or 0)
+    admin_fname = str(ctx.user_data.get("ban_admin_fname") or "Admin")
+    target_role = ctx.user_data.get("ban_target_role")
+    if not target_id or not reason:
+        # * Keys cleared under us (e.g. a timeout raced the tap):
+        # * nothing actionable to continue with.
+        return ConversationHandler.END
+    if not await demote_ban_target(
+        msg,
+        ctx.bot,
+        target_id,
+        target_fname,
+        target_role if isinstance(target_role, str) else None,
+        admin_id,
+        admin_fname,
+    ):
+        return ConversationHandler.END
+    text, kb = proof_prompt_content(target_id, target_fname, reason)
+    try:
+        await q.edit_message_text(text, parse_mode="HTML", reply_markup=kb)
+    except Exception as exc:
+        log.debug("Ban continue prompt edit failed: %s", exc)
+        for key in _BAN_USER_DATA_KEYS:
+            ctx.user_data.pop(key, None)
+        return ConversationHandler.END
+    return WAITING_PROOF
+
+
 async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Buffer proof media into the live session; flush on Done or silence."""
     msg = update.effective_message
@@ -743,20 +837,35 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
 
     _cancel_proof_session(ctx.user_data)
 
-    if update.effective_message:
-        await safe_reply(
-            update.effective_message,
-            _MSG_CANCELLED,
-            log_label="Ban cancel",
-            parse_mode=None,
-        )
+    # * Edit the prompt in place instead of a new reply, and strip its
+    # * buttons: a text-only edit keeps the old keyboard, which would leave
+    # * dead Cancel/Done buttons behind on an ended conversation.
+    await safe_edit_cb(q, _MSG_CANCELLED)
+    await clear_markup_cb(q)
     return ConversationHandler.END
 
 
 async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Notify the user that the proof window expired and end the conversation."""
+    prompt_chat: int | None = None
+    prompt_msg_id: int | None = None
+    if ctx.user_data is not None:
+        raw_chat = ctx.user_data.get("ban_prompt_chat_id")
+        raw_msg = ctx.user_data.get("ban_prompt_msg_id")
+        prompt_chat = raw_chat if isinstance(raw_chat, int) else None
+        prompt_msg_id = raw_msg if isinstance(raw_msg, int) else None
     _cancel_proof_session(ctx.user_data)
 
+    # * Strip the stale prompt's buttons so a late Cancel/Done tap does not
+    # * spin forever on an ended conversation; the timeout notice below
+    # * answers the triggering command itself.
+    if prompt_chat and prompt_msg_id:
+        try:
+            await ctx.bot.edit_message_reply_markup(
+                chat_id=prompt_chat, message_id=prompt_msg_id
+            )
+        except Exception as exc:
+            log.debug("Ban proof-timeout markup clear failed: %s", exc)
     if update.effective_message:
         await safe_reply(
             update.effective_message,
@@ -795,6 +904,12 @@ def ban_conversation(
                 MessageHandler(
                     ~PROOF_MEDIA_FILTER & ~ALL_PREFIXES_CMD_FILTER,
                     on_proof_unexpected,
+                ),
+            ],
+            WAITING_UPDATE_CONFIRM: [
+                CallbackQueryHandler(on_ban_update_continue, pattern=r"^ban_continue$"),
+                CallbackQueryHandler(
+                    on_cancel_proof, pattern=rf"^{proof.action}_cancel$"
                 ),
             ],
         },

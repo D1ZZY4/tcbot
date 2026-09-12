@@ -62,6 +62,23 @@ async def safe_edit_cb(q: CallbackQuery, text: str, **kwargs: Any) -> None:
         log.warning("callback edit failed: %s", e)
 
 
+async def clear_markup_cb(q: CallbackQuery) -> None:
+    """Remove the inline keyboard from a callback-query message.
+
+    Editing message text without ``reply_markup`` keeps the old buttons
+    (the parameter is omitted from the API call), so ending a flow with
+    only an edit would leave dead buttons behind. Call this after the
+    edit; "not modified" (already removed) is swallowed like
+    :func:`safe_edit_cb`.
+    """
+    try:
+        await q.edit_message_reply_markup(reply_markup=None)
+    except BadRequest as e:
+        if any(i in str(e).lower() for i in _IGNORED):
+            return
+        log.warning("clear markup failed: %s", e)
+
+
 # ──────────────────────── safe_reply helper ─────────────────────── #
 
 

@@ -131,9 +131,9 @@ If `bot.username` is unavailable (e.g. before bot initialization completes), the
 
 ## Updating an existing active ban
 
-If the target already has an active ban, the bot updates the existing record instead of creating a duplicate.
+If the target already has an active ban, the bot first shows a confirmation card (existing Ban ID and reason, the new reason, plus `View Log` / `View Proof` links and `Cancel` / `Continue` buttons) instead of updating silently. Only `Continue` proceeds to proof collection (with auto-demote first when the target holds a role); `Cancel` aborts with no ban and no demotion. The confirmation lives in the `WAITING_UPDATE_CONFIRM` conversation state; a lookup outage degrades to the old straight-to-proof path.
 
-The update flow:
+The update flow (after `Continue`):
 
 1. Calls `bans_db.deactivate_extra_active_bans(target_id, keep_ban_id=existing_ban_id)` to clean up any duplicate active records, leaving only the canonical one active.
 2. Reuses the existing `ban_id`.
@@ -334,7 +334,7 @@ Key behaviors to keep in mind:
 8. Cancel during proof collection issues no ban.
 9. A single photo proof creates a ban, uploads proof, logs the ban, and bans active groups.
 10. Proof media accumulate in one session (album or sequential sends, photos/videos/GIFs/files) and flush on `Done`, after `cfg.album_debounce` seconds of silence, or at the 60 s cap; photos and videos upload as one album, GIFs and files individually.
-11. A second ban against an already active-banned target updates the existing ban and preserves previous proof/log IDs.
+11. A second ban against an already active-banned target asks for confirmation first, then updates the existing ban and preserves previous proof/log IDs.
 12. Failed group bans are counted in the final summary but do not roll back the DB record.
 13. `/checkme` on an active ban shows `Details`, optional `Proof`, and `Appeal` buttons.
 14. `/check` on a user shows full federation profile with bans/warns/kicks/mutes/appeals drill-down.

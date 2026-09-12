@@ -83,6 +83,33 @@ def test_action_proof_kb_guards() -> None:
     ]
 
 
+def test_ban_update_confirm_kb_rows_callbacks_and_links() -> None:
+    rows = _cells(
+        kb.ban_update_confirm_kb("https://t.me/x/log", "https://t.me/x/proof")
+    )
+    assert rows[0] == [
+        ("View Log", None, "https://t.me/x/log", None),
+        ("View Proof", None, "https://t.me/x/proof", None),
+    ]
+    assert rows[1] == [
+        ("Cancel", "ban_cancel", None, None),
+        ("Continue", "ban_continue", None, KeyboardButtonStyle.PRIMARY),
+    ]
+
+
+def test_ban_update_confirm_kb_omits_missing_urls() -> None:
+    rows = _cells(kb.ban_update_confirm_kb(None, None))
+    assert rows == [
+        [
+            ("Cancel", "ban_cancel", None, None),
+            ("Continue", "ban_continue", None, KeyboardButtonStyle.PRIMARY),
+        ]
+    ]
+    rows = _cells(kb.ban_update_confirm_kb("https://t.me/x/log", None))
+    assert [c[0] for c in rows[0]] == ["View Log"]
+    assert len(rows) == 2
+
+
 def test_groups_menu_pairs_toggle_with_back() -> None:
     rows = _cells(kb.groups_menu_kb(detailed=True))
     assert rows == [
