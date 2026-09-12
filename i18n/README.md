@@ -9,7 +9,8 @@ wording for localized surfaces.
 ```text
 i18n/
 ├── en-US/              Source of truth. Must hold every key.
-│   ├── common.toml     Shared chrome: buttons, generic errors, language names.
+│   ├── common.toml     Shared generic errors and notices.
+│   ├── button.toml     Every button label, never duplicated.
 │   └── language.toml   Language-preference flow strings.
 ├── id/                 Example future locale (partial is legal).
 └── README.md           This file.
@@ -39,9 +40,11 @@ inside a file and extend the prefix (`[x]` + `y` = `file.x.y`).
 ## Adding a locale
 
 1. Copy `en-US/` to `<locale>/` (BCP 47 shape, e.g. `id`, `pt-BR`).
-2. Set `common.language_name` to the locale display name.
+2. Set `button.language_name` to the locale display name.
 3. Translate values. Partial files are legal: missing keys fall back
-   to `en-US` per key at runtime.
+   to `en-US` per key at runtime. Button labels render as plain text;
+   message templates are escaped by the engine, so translators never
+   write backslashes in either file.
 4. Run `uv run --with pytest pytest tests/test_i18n.py -q`: placeholder
    mismatches and MarkdownV2 violations fail the suite.
 

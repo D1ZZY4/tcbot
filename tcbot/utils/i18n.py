@@ -142,7 +142,7 @@ def display_name(locale: str, catalog: dict[str, dict[str, str]] | None = None) 
     canonical = _canonical_locale(locale, data)
     if canonical is None:
         return locale
-    return data[canonical].get("common.language_name", canonical)
+    return data[canonical].get("button.language_name", canonical)
 
 
 def _prepare_value(name: str, value: object, *, escape: bool) -> str:

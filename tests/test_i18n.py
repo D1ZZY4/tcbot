@@ -46,8 +46,8 @@ def _catalog() -> dict[str, dict[str, str]]:
 def test_default_locale_catalog_loads() -> None:
     catalog = _catalog()
     assert DEFAULT_LOCALE in catalog
-    assert "common.back" in catalog[DEFAULT_LOCALE]
-    assert "common.language_name" in catalog[DEFAULT_LOCALE]
+    assert "button.back" in catalog[DEFAULT_LOCALE]
+    assert "button.language_name" in catalog[DEFAULT_LOCALE]
     assert "language.title_user" in catalog[DEFAULT_LOCALE]
 
 
@@ -77,11 +77,11 @@ def test_missing_catalog_root_raises() -> None:
 
 def test_t_default_and_explicit() -> None:
     catalog = _catalog()
-    assert t("common.cancel", None, catalog=catalog) == t(
-        "common.cancel", "en-US", catalog=catalog
+    assert t("button.cancel", None, catalog=catalog) == t(
+        "button.cancel", "en-US", catalog=catalog
     )
-    assert t("common.cancel", "xx-YY", catalog=catalog) == t(
-        "common.cancel", "en-US", catalog=catalog
+    assert t("button.cancel", "xx-YY", catalog=catalog) == t(
+        "button.cancel", "en-US", catalog=catalog
     )
 
 
@@ -117,7 +117,7 @@ def test_t_rejects_specs_and_positional() -> None:
     with pytest.raises(I18nError):
         t("b", "en-US", catalog=catalog, x=1)
     with pytest.raises(I18nError):
-        t("common.cancel", "en-US", _catalog(), "extra")
+        t("button.cancel", "en-US", _catalog(), "extra")
 
 
 def test_missing_key_returns_marker() -> None:
