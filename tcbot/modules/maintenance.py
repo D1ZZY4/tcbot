@@ -20,6 +20,7 @@ from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import fan_out
 from tcbot.utils.formatter import bold, code, esc
+from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters
 
 if TYPE_CHECKING:
@@ -39,16 +40,12 @@ _MEMBERSHIP_CHECK_TIMEOUT = 3.0
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Maintenance"
-__help_text__ = (
-    "Manage connected groups: clean up inaccessible ones, "
-    "or leave all groups at once in an emergency\\."
-)
+__help_text__ = t("maintenance.help.overview")
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/leaveall')} \\(aliases: {code('/exitall')}, {code('/tcleave')}\\)\n"
-        f"{code('/cleanup')} \\(aliases: {code('/tcclean')}, {code('/tcc')}\\)",
+        t("maintenance.help.commands.body"),
     ),
     replies.who_section(
         f"{bold('/leaveall')}: {replies.PERM_FOUNDER_ONLY}\n"
@@ -57,22 +54,15 @@ __help_sections__: list[tuple[str, str]] = [
     replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
     (
         "/leaveall",
-        "Makes the bot leave every connected group simultaneously, marks them all as "
-        "disconnected in the database, and posts a log entry for each group\\. "
-        f"This is irreversible \\- each group must be manually reconnected with "
-        f"{code('/tcconnect')}\\. Use only in emergencies\\.",
+        t("maintenance.help.leaveall.body"),
     ),
     (
         "/cleanup",
-        "Scans all groups in the database and attempts to verify the bot still has access\\. "
-        "Any group where the bot was kicked, removed, or can no longer reach is marked as "
-        "disconnected and removed from the active list\\. "
-        "Run this periodically to keep the group list accurate\\.",
+        t("maintenance.help.cleanup.body"),
     ),
     (
         replies.SEC_EXAMPLES,
-        f"{code('/cleanup')}: remove stale or inaccessible groups\\.\n"
-        f"{code('/leaveall')}: emergency withdrawal from all connected groups\\.",
+        t("maintenance.help.examples.body"),
     ),
 ]
 

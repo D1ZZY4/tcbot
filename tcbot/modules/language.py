@@ -16,7 +16,6 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 from tcbot import database as db
 from tcbot.modules.helper import decorators, keyboards, replies
 from tcbot.modules.helper.parse_editmsg import safe_reply
-from tcbot.utils.formatter import code
 from tcbot.utils.i18n import (
     DEFAULT_LOCALE,
     available_locales,
@@ -41,28 +40,25 @@ _RL_CB_LIMIT: int = 15
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Language"
-__help_text__ = "View or change language preferences for yourself or the group\\."
+__help_text__ = t("language.help.overview")
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/language')} \\(aliases: {code('/lang')}, {code('/langs')}\\)",
+        t("language.help.commands.body"),
     ),
     (
         replies.SEC_WHO,
-        "Anyone for their own preference\\. Group language needs the group "
-        "owner or staff rank\\.",
+        t("language.help.who.body"),
     ),
     replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
     (
         replies.SEC_WHAT,
-        "Shows the current language with one button per available locale\\. "
-        "Tapping a language saves it immediately and edits the panel into "
-        "a confirmation\\.",
+        t("language.help.what.body"),
     ),
     (
         replies.SEC_EXAMPLES,
-        f"{code('/lang')}",
+        t("language.help.examples.body"),
     ),
 ]
 

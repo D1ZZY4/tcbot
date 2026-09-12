@@ -1,0 +1,19 @@
+# Groups help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in groups.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+# Placeholders: {community} = raw community name.
+
+[help]
+overview = "Lists every group currently connected to {community}, with optional details view."
+
+[help.commands]
+body = "`/tcgroups` (alias: `/tcg`)"
+
+[help.what]
+body = """
+Lists all groups currently connected to {community}, along with the total count.
+
+The default view shows group names only. Tap *Details* to expand the list and show each group's chat ID alongside its name. Tap *Simple* to collapse back."""
+
+[help.examples]
+body = "`/tcgroups` or `/tcg`"

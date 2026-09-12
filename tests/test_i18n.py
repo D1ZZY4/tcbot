@@ -14,10 +14,31 @@ from typing import Any
 
 import pytest
 
+from tcbot import cfg
 from tcbot.database import groups_db, settings_db, users_roles
-from tcbot.modules import banning, language
-from tcbot.modules.helper import keyboards
-from tcbot.utils.formatter import esc
+from tcbot.modules import (
+    admins,
+    appeals,
+    banning,
+    broadcasting,
+    checking,
+    connecting,
+    disconnecting,
+    groups,
+    kicking,
+    language,
+    maintenance,
+    muting,
+    netspeed,
+    stats,
+    syncing,
+    unbanning,
+    warnings,
+)
+from tcbot.modules import help as helpmod
+from tcbot.modules.helper import keyboards, replies
+from tcbot.modules.helper.workflows.appeal_flow import LOCK_HOURS
+from tcbot.utils.formatter import bold, esc, pre
 from tcbot.utils.i18n import (
     DEFAULT_LOCALE,
     I18nError,
@@ -427,6 +448,99 @@ def test_language_list_marks_selected_locale() -> None:
     assert kb.inline_keyboard[0][0].callback_data == "lang:set:user:en-US"
 
 
+# ─────── Help rollout: broadcast/connect/groups ─────── #
+
+
+def test_broadcasting_help_golden() -> None:
+    assert broadcasting.__help_text__ == t(
+        "broadcasting.help.overview", community=cfg.community_name
+    )
+    sections = _module_sections(broadcasting)
+    assert sections["Commands & Aliases"] == t("broadcasting.help.commands.body")
+    assert sections["What it does"] == t(
+        "broadcasting.help.what.body", community=cfg.community_name
+    )
+    assert sections["Examples"] == t("broadcasting.help.examples.body")
+
+
+def test_connecting_help_golden() -> None:
+    assert connecting.__help_text__ == t(
+        "connecting.help.overview", community=cfg.community_name
+    )
+    sections = _module_sections(connecting)
+    assert sections["Commands & Aliases"] == t("connecting.help.commands.body")
+    assert sections["What it does"] == t(
+        "connecting.help.what.body", community=cfg.community_name
+    )
+    assert sections["Required permissions"] == t("connecting.help.permissions.body")
+    assert sections["Notes"] == t("connecting.help.notes.body")
+    assert sections["Examples"] == t("connecting.help.examples.body")
+
+
+def test_disconnecting_help_golden() -> None:
+    assert disconnecting.__help_text__ == t(
+        "disconnecting.help.overview", community=cfg.community_name
+    )
+    sections = _module_sections(disconnecting)
+    assert sections["Commands & Aliases"] == t("disconnecting.help.commands.body")
+    assert sections["What it does"] == t(
+        "disconnecting.help.what.body", community=cfg.community_name
+    )
+    assert sections["Examples"] == t("disconnecting.help.examples.body")
+
+
+def test_groups_help_golden() -> None:
+    assert groups.__help_text__ == t(
+        "groups.help.overview", community=cfg.community_name
+    )
+    sections = _module_sections(groups)
+    assert sections["Commands & Aliases"] == t("groups.help.commands.body")
+    assert sections["What it does"] == t(
+        "groups.help.what.body", community=cfg.community_name
+    )
+    assert sections["Examples"] == t("groups.help.examples.body")
+
+
+def test_netspeed_help_golden() -> None:
+    assert netspeed.__help_text__ == t("netspeed.help.overview")
+    sections = _module_sections(netspeed)
+    assert sections["Commands & Aliases"] == t("netspeed.help.commands.body")
+    assert sections["What it does"] == t("netspeed.help.what.body")
+    assert sections["Examples"] == t("netspeed.help.examples.body")
+
+
+# ─────── Help rollout: appeals/language/help index ─────── #
+
+
+def test_appeals_help_golden() -> None:
+    window = Safe(bold(f"{LOCK_HOURS}-hour priority window"))
+    assert appeals.__help_text__ == t("appeals.help.overview", window=window)
+    sections = _module_sections(appeals)
+    assert sections["How to start"] == t("appeals.help.start.body")
+    assert sections["Who can use"] == replies.who_section(t("appeals.help.who.body"))[1]
+    assert sections["Where to start"] == t("appeals.help.where.body")
+    assert sections["How it works"] == t("appeals.help.how.body")
+    assert sections["Format example"] == pre(t("appeals.help.format.body", plain=True))
+    assert sections["What happens next"] == t("appeals.help.next.body", window=window)
+
+
+def test_language_help_golden() -> None:
+    assert language.__help_text__ == t("language.help.overview")
+    sections = _module_sections(language)
+    assert sections["Commands & Aliases"] == t("language.help.commands.body")
+    assert sections["Who can use"] == t("language.help.who.body")
+    assert sections["What it does"] == t("language.help.what.body")
+    assert sections["Examples"] == t("language.help.examples.body")
+
+
+def test_help_index_golden() -> None:
+    assert helpmod._help_index_text("TestBot") == t(
+        "help.index.body",
+        title=Safe(bold("TestBot Help")),
+        community=cfg.community_name,
+    )
+
+
 def test_panel_renders_v2_clean() -> None:
     for scope in ("user", "group"):
         text = language._panel_text(scope, "en-US")
@@ -519,7 +633,7 @@ def test_markup_escaped_braces_literal() -> None:
 
 
 def test_ban_help_overview_golden() -> None:
-    assert t("ban.help.overview") == (
+    assert t("banning.help.overview") == (
         "Issues a *federation\\-wide ban* on a user, applied across every "
         "connected group at once\\. Auto\\-demotes staff targets and stores "
         "proof with the ban record\\."
@@ -527,11 +641,11 @@ def test_ban_help_overview_golden() -> None:
 
 
 def test_ban_help_commands_golden() -> None:
-    assert t("ban.help.commands.body") == "`/tcban` \\(alias: `/tcb`\\)"
+    assert t("banning.help.commands.body") == "`/tcban` \\(alias: `/tcb`\\)"
 
 
 def test_ban_help_examples_golden() -> None:
-    assert t("ban.help.examples.body") == (
+    assert t("banning.help.examples.body") == (
         "`/tcban @username spamming in connected groups`\n"
         "`/tcban 123456789 scamming members`\n"
         "Or reply to a message and run `/tcb reason here`\\."
@@ -539,26 +653,26 @@ def test_ban_help_examples_golden() -> None:
 
 
 def test_ban_help_fallback_unknown_locale() -> None:
-    assert t("ban.help.overview", "xx-YY") == t("ban.help.overview", "en-US")
+    assert t("banning.help.overview", "xx-YY") == t("banning.help.overview", "en-US")
 
 
 def test_ban_help_module_matches_catalog() -> None:
-    assert banning.__help_text__ == t("ban.help.overview")
+    assert banning.__help_text__ == t("banning.help.overview")
     by_label = dict(banning.__help_sections__)
-    assert by_label["Commands & Aliases"] == t("ban.help.commands.body")
-    assert by_label["What it does"] == t("ban.help.what.body")
-    assert by_label["Flow"] == t("ban.help.flow.body")
-    assert by_label["Examples"] == t("ban.help.examples.body")
+    assert by_label["Commands & Aliases"] == t("banning.help.commands.body")
+    assert by_label["What it does"] == t("banning.help.what.body")
+    assert by_label["Flow"] == t("banning.help.flow.body")
+    assert by_label["Examples"] == t("banning.help.examples.body")
 
 
 def test_ban_help_bodies_v2_clean() -> None:
     catalog = _catalog()
     for key in (
-        "ban.help.overview",
-        "ban.help.commands.body",
-        "ban.help.what.body",
-        "ban.help.flow.body",
-        "ban.help.examples.body",
+        "banning.help.overview",
+        "banning.help.commands.body",
+        "banning.help.what.body",
+        "banning.help.flow.body",
+        "banning.help.examples.body",
     ):
         _assert_v2_render_clean(t(key, catalog=catalog), key)
 
@@ -567,6 +681,125 @@ def test_markup_placeholder_inside_span_rejected() -> None:
     catalog = {"en-US": {"m": "Hi {user}, see *{thing}* and `/go`."}}
     with pytest.raises(I18nError):
         t("m", "en-US", catalog=catalog, user="Ann", thing="x")
+
+
+# ──────────── Help rollout: moderation domains ──────────── #
+
+
+def _module_sections(mod: Any) -> dict[str, str]:
+    return dict(mod.__help_sections__)
+
+
+def test_kicking_help_golden() -> None:
+
+    assert kicking.__help_text__ == t("kicking.help.overview")
+    assert t("kicking.help.overview") == (
+        "Removes a user from the *current group only*\\. Auto\\-demotes staff targets\\."
+    )
+    sections = _module_sections(kicking)
+    assert sections["Commands & Aliases"] == t("kicking.help.commands.body")
+    assert sections["What it does"] == t("kicking.help.what.body")
+    assert sections["Flow"] == t("kicking.help.flow.body")
+    assert sections["Examples"] == t("kicking.help.examples.body")
+
+
+def test_muting_help_golden() -> None:
+
+    assert muting.__help_text__ == t("muting.help.overview")
+    sections = _module_sections(muting)
+    assert sections["Commands & Aliases"] == t("muting.help.commands.body")
+    assert sections["What it does"] == t("muting.help.what.body")
+    assert sections["Flow"] == t("muting.help.flow.body")
+    assert sections["Time format"] == t("muting.help.time.body")
+    assert sections["Examples"] == t("muting.help.examples.body")
+    assert t("muting.help.time.body") == (
+        "Place the duration before the reason\\. Omit a duration to apply "
+        "a permanent mute\\.\n\n"
+        "\\- `s` Seconds: `30s` \\= 30 seconds\n"
+        "\\- `m` Minutes: `15m` \\= 15 minutes\n"
+        "\\- `h` Hours: `2h` \\= 2 hours\n"
+        "\\- `d` Days: `7d` \\= 7 days\n"
+        "\\- `w` Weeks: `2w` \\= 2 weeks\n"
+        "\\- `mo` Months: `3mo` \\= 3 months\n"
+        "\\- `ye` Years: `2ye` \\= 2 years"
+    )
+
+
+def test_unbanning_help_golden() -> None:
+
+    assert unbanning.__help_text__ == t("unbanning.help.overview")
+    sections = _module_sections(unbanning)
+    assert sections["Commands & Aliases"] == t("unbanning.help.commands.body")
+    assert sections["What it does"] == t("unbanning.help.what.body")
+    assert sections["Examples"] == t("unbanning.help.examples.body")
+
+
+def test_warnings_help_golden() -> None:
+    limit = Safe(bold(f"{cfg.warn_limit} warnings"))
+    assert warnings.__help_text__ == t("warnings.help.overview", limit=limit)
+    sections = _module_sections(warnings)
+    assert sections["Commands & Aliases"] == t("warnings.help.commands.body")
+    assert sections["What it does"] == t("warnings.help.what.body", limit=limit)
+    assert sections["Flow"] == t("warnings.help.flow.body")
+    assert sections["Examples"] == t("warnings.help.examples.body")
+
+
+# ─────── Help rollout: info and staff domains ─────── #
+
+
+def test_checking_help_golden() -> None:
+    assert checking.__help_text__ == t("checking.help.overview")
+    assert t("checking.help.overview") == (
+        "Look up your own ban status with `/checkme`, or pull a full "
+        "federation activity profile for any user with `/check`\\."
+    )
+    sections = _module_sections(checking)
+    assert sections["Commands & Aliases"] == t("checking.help.commands.body")
+    assert sections["/checkme"] == t("checking.help.checkme.body")
+    assert sections["/check"] == t("checking.help.check.body")
+    assert sections["Examples"] == t("checking.help.examples.body")
+
+
+def test_stats_help_golden() -> None:
+    assert stats.__help_text__ == t("stats.help.overview")
+    sections = _module_sections(stats)
+    assert sections["Commands & Aliases"] == t("stats.help.commands.body")
+    assert sections["What it does"] == t("stats.help.what.body")
+    assert sections["Drill-downs"] == t("stats.help.drills.body")
+    assert sections["Examples"] == t("stats.help.examples.body")
+
+
+def test_syncing_help_golden() -> None:
+    assert syncing.__help_text__ == t("syncing.help.overview")
+    sections = _module_sections(syncing)
+    assert sections["Commands & Aliases"] == t("syncing.help.commands.body")
+    assert sections["/tcsync"] == t("syncing.help.sync.body")
+    assert sections["/tcsync <target>"] == t("syncing.help.sync_target.body")
+    assert sections["Examples"] == t("syncing.help.examples.body")
+
+
+def test_maintenance_help_golden() -> None:
+    assert maintenance.__help_text__ == t("maintenance.help.overview")
+    sections = _module_sections(maintenance)
+    assert sections["Commands & Aliases"] == t("maintenance.help.commands.body")
+    assert sections["/leaveall"] == t("maintenance.help.leaveall.body")
+    assert sections["/cleanup"] == t("maintenance.help.cleanup.body")
+    assert sections["Examples"] == t("maintenance.help.examples.body")
+
+
+def test_admins_help_golden() -> None:
+    assert admins.__help_text__ == t("admins.help.overview")
+    assert t("admins.help.overview") == (
+        "Promote and demote staff, transfer ownership, and manage "
+        "promotion requests across the federation\\."
+    )
+    sections = _module_sections(admins)
+    assert sections["Commands & Aliases"] == t("admins.help.commands.body")
+    assert sections["Role Hierarchy"] == t("admins.help.roles.body")
+    assert sections["/tcpromote"] == t("admins.help.promote.body")
+    assert sections["/tcdemote"] == t("admins.help.demote.body")
+    assert sections["/transferowner"] == t("admins.help.transferowner.body")
+    assert sections["Examples"] == t("admins.help.examples.body")
 
 
 # ─────────────── Handler flows with fakes ─────────────────── #

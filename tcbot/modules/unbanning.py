@@ -19,7 +19,8 @@ from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.unban_flow import execute_unban
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import bold, code, esc, mention
+from tcbot.utils.formatter import esc, mention
+from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -37,33 +38,23 @@ _RL_LIMIT: int = 5
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Unban"
-__help_text__ = (
-    f"Lifts an active federation ban across {bold('all connected groups')} at once\\."
-)
+__help_text__ = t("unbanning.help.overview")
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tcunban')} \\(alias: {code('/tcunb')}\\)",
+        t("unbanning.help.commands.body"),
     ),
     replies.who_section(replies.PERM_DEV_ABOVE),
     replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
     (
         replies.SEC_WHAT,
-        "Lifts an active federation ban on the target user\\. The unban is applied across "
-        f"{bold('all connected groups')} simultaneously so they can rejoin freely\\. A log entry "
-        "is posted to the federation logs channel\\.\n\n"
-        "If the user has no active federation ban, the bot will let you know and take no "
-        "action\\.\n"
-        "A pending appeal review card is left untouched; resolving appeals stays on the appeal flow\\.\n"
-        "A staff member re\\-promoted while banned is demoted first so the stale ban can be cleared\\.",
+        t("unbanning.help.what.body"),
     ),
     replies.target_section(),
     (
         replies.SEC_EXAMPLES,
-        f"{code('/tcunban @username')}\n"
-        f"{code('/tcunb 123456789')}\n"
-        f"Or reply to a message and run {code('/tcunb')}\\.",
+        t("unbanning.help.examples.body"),
     ),
 ]
 

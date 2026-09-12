@@ -19,7 +19,8 @@ from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.check_flow import Check
-from tcbot.utils.formatter import bold, code, esc, mention
+from tcbot.utils.formatter import code, esc, mention
+from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.time_and_date import fmt_dt
 
@@ -51,41 +52,27 @@ _ERR_STATUS_RETRY = (
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Check"
-__help_text__ = (
-    f"Look up your own ban status with {code('/checkme')}, or pull a full "
-    f"federation activity profile for any user with {code('/check')}\\."
-)
+__help_text__ = t("checking.help.overview")
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/checkme')} \\(alias: {code('/cme')}\\)\n"
-        f"{code('/check')} \\(alias: {code('/c')}\\)",
+        t("checking.help.commands.body"),
     ),
     replies.who_section(replies.CONTEXT_ANYONE),
     replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
     (
         "/checkme",
-        "Checks your own federation ban status\\.\n\n"
-        f"\\- If you are {bold('not banned')}: the bot confirms your account is in good standing\\.\n"
-        f"\\- If you are {bold('banned')}: the bot shows the reason, the admin who issued the ban, "
-        f"the ban date, and gives you a {bold('Submit Appeal')} button to start the appeal "
-        "process\\.",
+        t("checking.help.checkme.body"),
     ),
     (
         "/check",
-        "Pulls a full federation profile for any user: identity, role, active ban, "
-        "ban history, warnings \\(by group\\), kicks, mutes, and appeals\\.\n\n"
-        "Each section opens a drill\\-down inline keyboard so you can inspect every "
-        "record individually\\.",
+        t("checking.help.check.body"),
     ),
     replies.target_section(),
     (
         replies.SEC_EXAMPLES,
-        f"{code('/checkme')}\n"
-        f"{code('/check @username')}\n"
-        f"{code('/c 123456789')}\n"
-        f"Or reply to a message and run {code('/c')}\\.",
+        t("checking.help.examples.body"),
     ),
 ]
 

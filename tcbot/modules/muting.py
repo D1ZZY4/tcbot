@@ -34,7 +34,8 @@ from tcbot.modules.helper.workflows.reason_flow import (
     reason_too_long_text,
 )
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import bold, code, mention
+from tcbot.utils.formatter import code, mention
+from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -50,56 +51,31 @@ _RL_LIMIT: int = 5
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Mute"
-__help_text__ = (
-    "Restrict a user from sending messages across "
-    f"{bold('all connected groups')} at once, or lift the restriction\\."
-)
+__help_text__ = t("muting.help.overview")
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tcmute')} \\(alias: {code('/tcm')}\\)\n"
-        f"{code('/tcunmute')} \\(aliases: {code('/tcunm')}, {code('/tcum')}\\)",
+        t("muting.help.commands.body"),
     ),
     replies.who_section(replies.PERM_TESTER_ABOVE),
     replies.where_section(replies.WHERE_CONNECTED_GROUP),
     (
         replies.SEC_WHAT,
-        f"{bold('/tcmute')}: restricts a user from sending messages, media, stickers, and GIFs "
-        f"across {bold('all connected groups')} simultaneously\\. After the command, the bot "
-        "asks for a reason and optionally proof \\- both steps can be skipped\\. If the user "
-        "is already muted, the existing restriction is replaced\\. If the target holds a "
-        "federation role \\(Tester / Developer / Admin\\), that role is auto\\-demoted and "
-        "they are notified by DM\\. A summary shows how many groups the mute was applied in\\.\n\n"
-        f"{bold('/tcunmute')}: restores the user's full send permissions across all connected "
-        "groups\\. A summary shows how many groups the unmute was applied in\\.",
+        t("muting.help.what.body"),
     ),
     (
         "Flow",
-        f"1\\. Run {code('/tcmute')} with the target \\(and optional inline reason\\)\\.\n"
-        f"2\\. If no reason was given, the bot asks: reply with text or tap {bold('Skip')}\\.\n"
-        f"3\\. The bot asks for proof: send a photo/video, then tap {bold('Done')}, "
-        f"or tap {bold('Skip')}\\.",
+        t("muting.help.flow.body"),
     ),
     (
         "Time format",
-        "Place the duration before the reason\\. Omit a duration to apply a permanent mute\\.\n\n"
-        f"\\- {code('s')} Seconds: {code('30s')} \\= 30 seconds\n"
-        f"\\- {code('m')} Minutes: {code('15m')} \\= 15 minutes\n"
-        f"\\- {code('h')} Hours: {code('2h')} \\= 2 hours\n"
-        f"\\- {code('d')} Days: {code('7d')} \\= 7 days\n"
-        f"\\- {code('w')} Weeks: {code('2w')} \\= 2 weeks\n"
-        f"\\- {code('mo')} Months: {code('3mo')} \\= 3 months\n"
-        f"\\- {code('ye')} Years: {code('2ye')} \\= 2 years",
+        t("muting.help.time.body"),
     ),
     replies.target_section(),
     (
         replies.SEC_EXAMPLES,
-        f"{code('/tcmute @username 3d spamming')}: 3\\-day mute, reason inline\n"
-        f"{code('/tcm @username 1w')}: 1\\-week mute, bot will ask for reason\n"
-        f"{code('/tcm @username')}: permanent mute, bot walks you through it\n"
-        f"{code('/tcunmute @username')}: lift mute immediately across all groups\n"
-        f"Or reply to a message and run {code('/tcm')}\\.",
+        t("muting.help.examples.body"),
     ),
 ]
 

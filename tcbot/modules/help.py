@@ -18,6 +18,7 @@ from tcbot.modules import ALL_MODULES
 from tcbot.modules.helper import decorators, keyboards
 from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
 from tcbot.utils.formatter import bold, code, esc
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -103,16 +104,13 @@ for _key, _entry in HELP_CONTENT.items():
     _MODULE_NAME_MAP[_module_slug.lower()] = _key
     _MODULE_NAME_MAP[_entry[0].lower()] = _key
 
-_CNAME = esc(cfg.community_name)
-
 
 def _help_index_text(botname: str) -> str:
     """Build the help index header for the given plain-text bot display name."""
-    return (
-        f"{bold(f'{botname} Help')}\n"
-        f"Federation management bot for {_CNAME}\\.\n\n"
-        f"Select a module below to read its overview and commands, "
-        f"or use {code('/help <module>')} to jump straight to a topic\\."
+    return t(
+        "help.index.body",
+        title=Safe(bold(f"{botname} Help")),
+        community=cfg.community_name,
     )
 
 
@@ -120,8 +118,8 @@ def _help_index_text(botname: str) -> str:
 
 
 # * Command prefixes come from frozen env config and never change at
-# * runtime, so render the footer once (same precedent as _CNAME above)
-# * instead of re-joining it on every module view.
+# * runtime, so render the footer once instead of re-joining it on every
+# * module view.
 _PREFIX_NOTE: str = f"\n{bold('Note:')} All commands also work with " + " ".join(
     code(p) for p in cfg.prefixes
 )

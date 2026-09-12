@@ -1,0 +1,54 @@
+# Admin help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in admins.py; only prose lives here.
+# The Who section composes shared permission constants, so it stays in
+# Python; everything below is static prose. Mini-markup only: `code`
+# and *bold*, balanced and unnested.
+
+[help]
+overview = "Promote and demote staff, transfer ownership, and manage promotion requests across the federation."
+
+[help.commands]
+body = """
+`/tcpromote` (alias: `/tcp`)
+`/tcdemote` (alias: `/tcd`)
+`/transferowner` (alias: `/tfowner`)
+`/tcpromoterequests` (alias: `/tcreqs`)
+`/tcpromotelist` (alias: `/tcplist`)"""
+
+[help.roles]
+body = """
+Founder (rank 4) > Admin (rank 3) > Developer (rank 2) > Tester (rank 1)
+
+You cannot promote a user to a rank equal to or above your own. Admins promoting someone to Admin queues a request for the Founder."""
+
+[help.promote]
+body = """
+Assigns a role to a user. Omit the role argument to get an inline button menu.
+
+*Usage:* `/tcpromote <target> [admin|developer|tester]`
+- Founder can promote to any role directly.
+- Admin can promote to Developer or Tester directly; promoting to Admin sends a pending request to the Founder for approval."""
+
+[help.demote]
+body = """
+Removes a user's role. A confirmation button is shown before the action executes.
+
+*Usage:* `/tcdemote <target>`
+- Founder can demote any role.
+- Admin can demote Developer or Tester only.
+- When a user with a role is banned or kicked, their role is automatically removed and they are notified by DM."""
+
+[help.transferowner]
+body = """
+Transfers federation ownership to another user. The current Founder steps down to Admin. Founder only.
+
+*Usage:* `/transferowner <target>`"""
+
+[help.examples]
+body = """
+`/tcpromote @username developer`
+`/tcpromote 123456789`: shows the role selection menu
+`/tcdemote @username`
+`/transferowner @newowner`
+`/tcpromoterequests`: request promotion to Admin
+`/tcplist`: list pending promotion requests"""

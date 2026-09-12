@@ -1,0 +1,32 @@
+# Disconnect help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in disconnecting.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Removes a group from {community}. Use `/tcdisconnect` from inside the group, or `/rmtc` remotely with a chat ID."
+
+[help.commands]
+body = """
+`/tcdisconnect` (alias: `/tcdiscon`)
+`/rmtc`"""
+
+[help.who]
+body = """
+*/tcdisconnect*: the group owner or TC Staff (Admin and above).
+*/rmtc*: TC Staff only."""
+
+[help.where]
+body = """
+*/tcdisconnect*: inside the group you want to disconnect.
+*/rmtc*: exec group or Bot PM (works remotely by chat ID)."""
+
+[help.what]
+body = """
+*/tcdisconnect*: removes the current group from {community}, posts a disconnection log entry, and causes the bot to leave the group.
+
+*/rmtc*: force-removes a group from the federation by chat ID. Use this for groups the bot has already been kicked from, or to remove a group remotely without being inside it. A log entry is still posted."""
+
+[help.examples]
+body = """
+`/tcdisconnect`: disconnect the current group.
+`/rmtc -1001234567890`: force-remove a group by chat ID."""

@@ -17,7 +17,8 @@ from tcbot import database as db
 from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
 from tcbot.modules.helper.parse_editmsg import safe_reply
-from tcbot.utils.formatter import bold, code, esc
+from tcbot.utils.formatter import code, esc
+from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
 
@@ -43,39 +44,23 @@ _RL_RMTC_LIMIT: int = 5
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
-_CNAME = esc(cfg.community_name)
-
 __module_name__ = "Disconnect"
-__help_text__ = (
-    f"Removes a group from {_CNAME}\\. Use {code('/tcdisconnect')} from "
-    f"inside the group, or {code('/rmtc')} remotely with a chat ID\\."
-)
+__help_text__ = t("disconnecting.help.overview", community=cfg.community_name)
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tcdisconnect')} \\(alias: {code('/tcdiscon')}\\)\n{code('/rmtc')}",
+        t("disconnecting.help.commands.body"),
     ),
-    replies.who_section(
-        f"{bold('/tcdisconnect')}: the group owner or TC Staff (Admin and above).\n"
-        f"{bold('/rmtc')}: TC Staff only."
-    ),
-    replies.where_section(
-        f"{bold('/tcdisconnect')}: inside the group you want to disconnect.\n"
-        f"{bold('/rmtc')}: exec group or Bot PM (works remotely by chat ID)."
-    ),
+    replies.who_section(t("disconnecting.help.who.body")),
+    replies.where_section(t("disconnecting.help.where.body")),
     (
         replies.SEC_WHAT,
-        f"{bold('/tcdisconnect')}: removes the current group from {_CNAME}, posts a "
-        f"disconnection log entry, and causes the bot to leave the group\\.\n\n"
-        f"{bold('/rmtc')}: force\\-removes a group from the federation by chat ID\\. Use this for "
-        f"groups the bot has already been kicked from, or to remove a group remotely without "
-        f"being inside it\\. A log entry is still posted\\.",
+        t("disconnecting.help.what.body", community=cfg.community_name),
     ),
     (
         replies.SEC_EXAMPLES,
-        f"{code('/tcdisconnect')}: disconnect the current group\\.\n"
-        f"{code('/rmtc -1001234567890')}: force\\-remove a group by chat ID\\.",
+        t("disconnecting.help.examples.body"),
     ),
 ]
 

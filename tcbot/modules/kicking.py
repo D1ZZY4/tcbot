@@ -25,7 +25,8 @@ from tcbot.modules.helper.workflows.reason_flow import (
     reason_too_long_text,
 )
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import bold, code, mention
+from tcbot.utils.formatter import mention
+from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -41,37 +42,27 @@ _RL_LIMIT: int = 5
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Kick"
-__help_text__ = f"Removes a user from the {bold('current group only')}\\. Auto\\-demotes staff targets\\."
+__help_text__ = t("kicking.help.overview")
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tckick')} \\(alias: {code('/tck')}\\)",
+        t("kicking.help.commands.body"),
     ),
     replies.who_section(replies.PERM_TESTER_ABOVE),
     replies.where_section(replies.WHERE_CONNECTED_GROUP),
     (
         replies.SEC_WHAT,
-        f"Removes a user from the {bold('current group only')}\\. This is not a federation\\-wide "
-        "action; the user can rejoin via an invite link unless they are separately "
-        "federation\\-banned\\.\n\n"
-        "If the target holds a federation role \\(Tester / Developer / Admin\\), that role is "
-        "auto\\-demoted and they are notified by DM\\. A log entry is posted to the "
-        "federation logs channel\\.",
+        t("kicking.help.what.body"),
     ),
     (
         "Flow",
-        f"1\\. Run {code('/tckick')} with the target \\(and optional inline reason\\)\\.\n"
-        f"2\\. If no reason was given, the bot asks: reply with text or tap {bold('Skip')}\\.\n"
-        f"3\\. The bot asks for proof: send a photo/video, then tap {bold('Done')}, "
-        f"or tap {bold('Skip')}\\.",
+        t("kicking.help.flow.body"),
     ),
     replies.target_section(),
     (
         replies.SEC_EXAMPLES,
-        f"{code('/tckick @username being disruptive')}: reason inline\n"
-        f"{code('/tck 123456789')}: bot will ask for reason\n"
-        f"Or reply to a message and run {code('/tck')}\\.",
+        t("kicking.help.examples.body"),
     ),
 ]
 

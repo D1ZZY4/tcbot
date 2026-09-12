@@ -20,6 +20,7 @@ from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import count_transient_errors, fan_out
 from tcbot.utils.formatter import code, esc
+from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -34,35 +35,23 @@ _RL_LIMIT: int = 3
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
-_CNAME = esc(cfg.community_name)
-
 __module_name__ = "Broadcast"
-__help_text__ = f"Sends a message to every group currently connected to {_CNAME}\\."
+__help_text__ = t("broadcasting.help.overview", community=cfg.community_name)
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tcbroadcast')} \\(alias: {code('/bc')}\\)",
+        t("broadcasting.help.commands.body"),
     ),
     replies.who_section(replies.PERM_STAFF_ONLY),
     replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
     (
         replies.SEC_WHAT,
-        f"Sends a message to every group currently connected to {_CNAME}\\.\n\n"
-        f"You can compose the message in two ways:\n"
-        f"\\- Type the message directly after the command \\(MarkdownV2 formatting "
-        f"is supported; markup that fails to parse is delivered as plain text\\)\\.\n"
-        f"\\- Reply to an existing message with {code('/bc')} to forward that message "
-        f"to all groups\\.\n\n"
-        f"When the broadcast is complete, the bot shows a summary of how many groups "
-        f"received the message and how many deliveries failed, and posts a log entry "
-        f"to the federation logs channel\\.",
+        t("broadcasting.help.what.body", community=cfg.community_name),
     ),
     (
         replies.SEC_EXAMPLES,
-        f"{code('/tcbroadcast Reminder: please review the community rules.')}\n"
-        f"{code('/bc *Event tonight* (join us at 8 PM UTC).')}\n"
-        f"Or reply to a message and run {code('/bc')} to forward it to all groups\\.",
+        t("broadcasting.help.examples.body"),
     ),
 ]
 

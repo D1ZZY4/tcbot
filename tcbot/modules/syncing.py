@@ -23,6 +23,7 @@ from tcbot.utils.dispatch import (
     is_benign_telegram_error,
 )
 from tcbot.utils.formatter import bold, code, esc
+from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -55,16 +56,12 @@ _FAILED_SAMPLE_N: int = 5
 
 __module_name__ = "Sync"
 
-__help_text__ = (
-    "Reconcile enforcement state: re\\-apply bans the fan\\-out missed and "
-    "verify unbans actually landed\\."
-)
+__help_text__ = t("syncing.help.overview")
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tcsync')} \\(alias: {code('/tcsynchronize')}\\)\n"
-        f"{code('/tcsync <target>')}",
+        t("syncing.help.commands.body"),
     ),
     replies.who_section(
         f"{bold('/tcsync')}: {replies.PERM_DEV_ABOVE}",
@@ -72,21 +69,16 @@ __help_sections__: list[tuple[str, str]] = [
     replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
     (
         "/tcsync",
-        "Sweeps active federation bans against connected groups \\(bounded, "
-        "200 membership checks per run\\) and re\\-bans users who are present "
-        "but not kicked\\. Users already kicked, absent, or privileged are "
-        "skipped, never treated as failures\\.",
+        t("syncing.help.sync.body"),
     ),
     (
         "/tcsync <target>",
-        "Verifies one user both directions across every connected group: "
-        "re\\-ban when an active ban is unenforced, unban when a stale kick "
-        "survived a deactivation\\.",
+        t("syncing.help.sync_target.body"),
     ),
     replies.target_section(),
     (
         replies.SEC_EXAMPLES,
-        f"{code('/tcsync')}\n{code('/tcsync @username')}\n{code('/tcsync 123456789')}",
+        t("syncing.help.examples.body"),
     ),
 ]
 

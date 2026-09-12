@@ -1,0 +1,23 @@
+# Sync help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in syncing.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Reconcile enforcement state: re-apply bans the fan-out missed and verify unbans actually landed."
+
+[help.commands]
+body = """
+`/tcsync` (alias: `/tcsynchronize`)
+`/tcsync <target>`"""
+
+[help.sync]
+body = "Sweeps active federation bans against connected groups (bounded, 200 membership checks per run) and re-bans users who are present but not kicked. Users already kicked, absent, or privileged are skipped, never treated as failures."
+
+[help.sync_target]
+body = "Verifies one user both directions across every connected group: re-ban when an active ban is unenforced, unban when a stale kick survived a deactivation."
+
+[help.examples]
+body = """
+`/tcsync`
+`/tcsync @username`
+`/tcsync 123456789`"""

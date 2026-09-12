@@ -22,7 +22,7 @@ from tcbot import database as db
 from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.connected_flow import connection
-from tcbot.utils.formatter import bold, code, esc
+from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters
 from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
 
@@ -43,44 +43,33 @@ _RL_LIMIT: int = 3
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
-_CNAME = esc(cfg.community_name)
-
 __module_name__ = "Connect"
-__help_text__ = (
-    f"Connects your group to the {_CNAME} federation so federation bans, "
-    f"mutes, and broadcasts are applied automatically\\."
-)
+__help_text__ = t("connecting.help.overview", community=cfg.community_name)
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tcconnect')} \\(alias: {code('/tccon')}\\)",
+        t("connecting.help.commands.body"),
     ),
-    replies.who_section("Group admins and creators only \\(checked per\\-group\\)\\."),
-    replies.where_section(f"Inside the group you want to connect to {_CNAME}\\."),
+    replies.who_section(t("connecting.help.who.body")),
+    replies.where_section(
+        t("connecting.help.where.body", community=cfg.community_name)
+    ),
     (
         replies.SEC_WHAT,
-        f"Connects your group to the {_CNAME} federation\\. Once connected:\n"
-        f"\\- Federation bans are automatically enforced: currently banned users are removed, "
-        f"and newly banned users are kicked on ban\\.\n"
-        f"\\- Federation mutes are applied when issued\\.\n"
-        f"\\- Broadcast messages from TC Staff are forwarded to your group\\.",
+        t("connecting.help.what.body", community=cfg.community_name),
     ),
     (
         "Required permissions",
-        f"Before running the command, make the bot a group admin with these three "
-        f"permissions: {bold('Delete Messages')}, {bold('Ban Users')}, and {bold('Invite Users via Link')}\\.",
+        t("connecting.help.permissions.body"),
     ),
     (
         "Notes",
-        "If a connect request is already pending for your group, a second request will be "
-        "rejected; wait for TC Staff to process the existing one\\.\n\n"
-        "When the bot is first added to a group, it automatically prompts the group owner "
-        "to connect, so you can also just add the bot and follow that prompt\\.",
+        t("connecting.help.notes.body"),
     ),
     (
         replies.SEC_EXAMPLES,
-        f"Make the bot a group admin, then run {code('/tcconnect')} inside the group\\.",
+        t("connecting.help.examples.body"),
     ),
 ]
 

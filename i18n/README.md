@@ -11,8 +11,10 @@ i18n/
 ├── en-US/              Source of truth. Must hold every key.
 │   ├── common.toml     Shared generic errors and notices.
 │   ├── button.toml     Every button label, never duplicated.
-│   ├── language.toml   Language-preference flow strings.
-│   └── ban.toml        Ban help prose ([help] tables).
+│   ├── language.toml   Language-preference flow strings plus its help prose.
+│   ├── help.toml       Help index header for help.py itself.
+│   └── <domain>.toml   One file per module (banning, kicking, appeals,
+│                       ...): each holds that module's [help] tables.
 ├── id/                 Example future locale (partial is legal).
 └── README.md           This file.
 ```
@@ -44,11 +46,12 @@ inside a file and extend the prefix (`[x]` + `y` = `file.x.y`).
 
 ## Help prose
 
-Help content moves per domain (`ban.toml` holds `[help]` tables for
-the ban module). Only prose moves: section order, labels, and dynamic
-values stay in Python, which composes them via the stable keys
-(`ban.help.overview`, `ban.help.what.body`, ...). Migrate one domain
-at a time; never leave prose duplicated between TOML and Python.
+Help content lives per domain (`banning.toml` holds `[help]` tables
+for the ban module, `help.toml` holds the help index header). Only prose
+moves: section order, labels, and dynamic values stay in Python, which
+composes them via the stable keys (`banning.help.overview`,
+`banning.help.what.body`, ...). Migrate one domain at a time; never
+leave prose duplicated between TOML and Python.
 
 ## Adding a locale
 

@@ -1,0 +1,10 @@
+# Help index prose for help.py itself: the topic-list header.
+# Structure stays in help.py; only prose lives here.
+# Placeholders: {title} carries pre-formatted bold markup from code,
+# {community} is the raw community name.
+
+[index]
+body = """{title}
+Federation management bot for {community}.
+
+Select a module below to read its overview and commands, or use `/help <module>` to jump straight to a topic."""

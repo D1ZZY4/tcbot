@@ -17,6 +17,7 @@ from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot.modules.helper import decorators, replies
 from tcbot.utils.formatter import bold, code
+from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters
 from tcbot.utils.time_and_date import elapsed_ms, monotonic
 
@@ -37,29 +38,22 @@ _SPEEDTEST_TIMEOUT: int = 180
 # ──────────────────────── Module metadata ───────────────────────── #
 
 __module_name__ = "Netspeed"
-__help_text__ = (
-    "Run network diagnostics: ping for Telegram API round\\-trip latency, "
-    "speedtest for full upload and download bandwidth measurement\\."
-)
+__help_text__ = t("netspeed.help.overview")
+
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/ping')} \\(alias: {code('/p')}\\)\n"
-        f"{code('/speedtest')} \\(alias: {code('/st')}\\)",
+        t("netspeed.help.commands.body"),
     ),
     replies.who_section(replies.PERM_FOUNDER_ONLY),
     replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
     (
         replies.SEC_WHAT,
-        f"{bold('/ping')}: Measures the round\\-trip time from the bot to "
-        "Telegram's servers\\.\n"
-        f"{bold('/speedtest')}: Runs a full network speed test and reports "
-        "ping, upload, download, bytes transferred, client IP, ISP, "
-        "and best\\-server details\\.",
+        t("netspeed.help.what.body"),
     ),
     (
         replies.SEC_EXAMPLES,
-        f"{code('/ping')}\n{code('/p')}\n{code('/speedtest')}\n{code('/st')}",
+        t("netspeed.help.examples.body"),
     ),
 ]
 

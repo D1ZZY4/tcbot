@@ -32,7 +32,8 @@ from tcbot.modules.helper.workflows.warning_flow import (
     warn_conversation,
 )
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import bold, code, mention
+from tcbot.utils.formatter import bold, mention
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -50,53 +51,32 @@ _RL_READ_LIMIT: int = 8
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Warnings"
-__help_text__ = (
-    "Issue formal warnings tracked per\\-group\\. At "
-    f"{bold(f'{cfg.warn_limit} warnings')} the user is automatically federation\\-banned "
-    "across all connected groups and their warnings are cleared\\."
-)
+
+# * Pre-formatted warn-limit fragment for help placeholders: markup
+# * around a dynamic value cannot come from TOML, so it is composed here.
+_WARN_LIMIT_LABEL = Safe(bold(f"{cfg.warn_limit} warnings"))
+
+__help_text__ = t("warnings.help.overview", limit=_WARN_LIMIT_LABEL)
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tcwarn')} \\(alias: {code('/tcw')}\\)\n"
-        f"{code('/tcunwarn')} \\(alias: {code('/tcunw')}\\)\n"
-        f"{code('/warns')} \\(alias: {code('/warnlist')}\\)\n"
-        f"{code('/resetwarns')} \\(alias: {code('/clearwarns')}\\)",
+        t("warnings.help.commands.body"),
     ),
-    replies.who_section(
-        f"{bold('/tcwarn')}, {bold('/tcunwarn')}, {bold('/resetwarns')}: Tester and above "
-        "\\(Founder / Admin / Developer / Tester\\)\\.\n"
-        f"{bold('/warns')}: Tester and above \\(Founder / Admin / Developer / Tester\\)\\."
-    ),
+    replies.who_section(t("warnings.help.who.body")),
     replies.where_section(replies.WHERE_CONNECTED_GROUP),
     (
         replies.SEC_WHAT,
-        f"{bold('/tcwarn')}: issues a formal warning\\. Warnings are tracked {bold('per-group')} and "
-        f"do not carry across connected groups\\. At {bold(f'{cfg.warn_limit} warnings')}, the user is "
-        f"automatically federation\\-banned across all connected groups and their warnings are cleared\\. "
-        f"Staff targets are demoted first and exempted from the auto\\-ban\\.\n\n"
-        f"{bold('/tcunwarn')}: removes the user's most recent warning in the current group\\.\n\n"
-        f"{bold('/warns')}: shows the current warning count and full list of reasons\\.\n\n"
-        f"{bold('/resetwarns')}: clears all warnings for a user in the current group at once, "
-        f"without triggering the ban threshold\\.",
+        t("warnings.help.what.body", limit=_WARN_LIMIT_LABEL),
     ),
     (
         "Flow",
-        f"1\\. Run {code('/tcwarn')} with the target \\(and optional inline reason\\)\\.\n"
-        "2\\. If no reason was given, the bot asks \\- reply with text\\.\n"
-        f"3\\. The bot asks for proof \\- send a photo/video, then tap {bold('Done')}, "
-        f"or tap {bold('Skip')}\\.",
+        t("warnings.help.flow.body"),
     ),
     replies.target_section(),
     (
         replies.SEC_EXAMPLES,
-        f"{code('/tcwarn @username spamming')}: reason inline\n"
-        f"{code('/tcw 123456789')}: bot will ask for reason\n"
-        f"{code('/tcunwarn @username')}\n"
-        f"{code('/warns @username')}\n"
-        f"{code('/resetwarns @username')}\n"
-        f"Or reply to a message and run {code('/tcw')}\\.",
+        t("warnings.help.examples.body"),
     ),
 ]
 

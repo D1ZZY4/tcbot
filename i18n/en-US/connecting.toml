@@ -1,0 +1,35 @@
+# Connect help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in connecting.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+# Placeholders: {community} = raw community name.
+
+[help]
+overview = "Connects your group to the {community} federation so federation bans, mutes, and broadcasts are applied automatically."
+
+[help.commands]
+body = "`/tcconnect` (alias: `/tccon`)"
+
+[help.who]
+body = "Group admins and creators only (checked per-group)."
+
+[help.where]
+body = "Inside the group you want to connect to {community}."
+
+[help.what]
+body = """
+Connects your group to the {community} federation. Once connected:
+- Federation bans are automatically enforced: currently banned users are removed, and newly banned users are kicked on ban.
+- Federation mutes are applied when issued.
+- Broadcast messages from TC Staff are forwarded to your group."""
+
+[help.permissions]
+body = "Before running the command, make the bot a group admin with these three permissions: *Delete Messages*, *Ban Users*, and *Invite Users via Link*."
+
+[help.notes]
+body = """
+If a connect request is already pending for your group, a second request will be rejected; wait for TC Staff to process the existing one.
+
+When the bot is first added to a group, it automatically prompts the group owner to connect, so you can also just add the bot and follow that prompt."""
+
+[help.examples]
+body = "Make the bot a group admin, then run `/tcconnect` inside the group."

@@ -1,0 +1,23 @@
+# Netspeed help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in netspeed.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Run network diagnostics: ping for Telegram API round-trip latency, speedtest for full upload and download bandwidth measurement."
+
+[help.commands]
+body = """
+`/ping` (alias: `/p`)
+`/speedtest` (alias: `/st`)"""
+
+[help.what]
+body = """
+*/ping*: Measures the round-trip time from the bot to Telegram's servers.
+*/speedtest*: Runs a full network speed test and reports ping, upload, download, bytes transferred, client IP, ISP, and best-server details."""
+
+[help.examples]
+body = """
+`/ping`
+`/p`
+`/speedtest`
+`/st`"""

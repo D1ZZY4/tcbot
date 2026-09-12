@@ -54,27 +54,27 @@ _RL_LIMIT: int = 3
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Ban"
-__help_text__ = t("ban.help.overview")
+__help_text__ = t("banning.help.overview")
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        t("ban.help.commands.body"),
+        t("banning.help.commands.body"),
     ),
     replies.who_section(replies.PERM_DEV_ABOVE),
     replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
     (
         replies.SEC_WHAT,
-        t("ban.help.what.body"),
+        t("banning.help.what.body"),
     ),
     (
         "Flow",
-        t("ban.help.flow.body"),
+        t("banning.help.flow.body"),
     ),
     replies.target_section(),
     (
         replies.SEC_EXAMPLES,
-        t("ban.help.examples.body"),
+        t("banning.help.examples.body"),
     ),
 ]
 

@@ -16,7 +16,8 @@ from tcbot.modules.helper.workflows.appeal_flow import (
     starts_with_appeal_tag,
     text_references_log_message,
 )
-from tcbot.utils.formatter import bold, code, pre
+from tcbot.utils.formatter import bold, pre
+from tcbot.utils.i18n import Safe, t
 
 # * Re-exported for backward-compatible imports.
 __all__ = (
@@ -31,49 +32,35 @@ __all__ = (
 
 __module_name__ = "Appeal"
 
-__help_text__ = (
-    "Submit an appeal for an active federation ban\\. Staff review with a "
-    f"{bold(f'{LOCK_HOURS}-hour priority window')} for the banning admin\\."
+__help_text__ = t(
+    "appeals.help.overview",
+    window=Safe(bold(f"{LOCK_HOURS}-hour priority window")),
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         "How to start",
-        f"Tap the {bold('Submit Appeal')} button on your ban notification \\(sent by the bot in PM\\), "
-        f"or use {code('/checkme')} and tap the {bold('Submit Appeal')} button that appears\\.",
+        t("appeals.help.start.body"),
     ),
-    replies.who_section(
-        "Anyone with an active federation ban. You can only have one active appeal at a time."
-    ),
+    replies.who_section(t("appeals.help.who.body")),
     (
         "Where to start",
-        "Bot PM only\\.",
+        t("appeals.help.where.body"),
     ),
     (
         "How it works",
-        f"Once the appeal flow is open, send a single message starting with {code('#appeal')} "
-        "that includes all three of the following sections:\n\n"
-        f"\\- {bold('Log link')}: the link to your ban log entry in the federation logs channel\n"
-        f"\\- {bold('Clarification')}: your honest explanation of why the ban was issued or was a "
-        "mistake\n"
-        f"\\- {bold('Agreement')}: your commitment to follow community rules going forward",
+        t("appeals.help.how.body"),
     ),
     (
         "Format example",
-        pre(
-            "#appeal\n"
-            "Log link: https://t.me/TranssionCoreFederationLogs/123\n"
-            "Clarification: I shared links in multiple groups without reading the rules.\n"
-            "Agreement: I will follow all community guidelines going forward."
-        ),
+        pre(t("appeals.help.format.body", plain=True)),
     ),
     (
         "What happens next",
-        "Your appeal is forwarded to TC Staff for review\\. The admin who issued the original "
-        f"ban has a {bold(f'{LOCK_HOURS}-hour priority window')} to respond; after that, any admin can act\\.\n\n"
-        "If approved: your ban is lifted immediately across all connected groups\\.\n"
-        "If rejected: your ban remains in place\\.\n"
-        "You will be notified by the bot either way\\.",
+        t(
+            "appeals.help.next.body",
+            window=Safe(bold(f"{LOCK_HOURS}-hour priority window")),
+        ),
     ),
 ]
 

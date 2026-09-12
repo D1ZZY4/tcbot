@@ -22,6 +22,7 @@ from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.keyboards import tcgroups_kb
 from tcbot.modules.helper.parse_editmsg import safe_edit, safe_reply
 from tcbot.utils.formatter import bold, code, esc
+from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters
 
 log = logging.getLogger(__name__)
@@ -37,28 +38,23 @@ _MAX_RENDER_CHARS: int = 3800
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
-_CNAME = esc(cfg.community_name)
-
 __module_name__ = "Groups"
-__help_text__ = (
-    f"Lists every group currently connected to {_CNAME}, with optional details view\\."
-)
+__help_text__ = t("groups.help.overview", community=cfg.community_name)
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tcgroups')} \\(alias: {code('/tcg')}\\)",
+        t("groups.help.commands.body"),
     ),
     replies.who_section(replies.CONTEXT_ANYONE),
     replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
     (
         replies.SEC_WHAT,
-        f"Lists all groups currently connected to {_CNAME}, along with the total count\\.\n\n"
-        f"The default view shows group names only\\. Tap {bold('Details')} to expand the list and show each group's chat ID alongside its name\\. Tap {bold('Simple')} to collapse back\\.",
+        t("groups.help.what.body", community=cfg.community_name),
     ),
     (
         replies.SEC_EXAMPLES,
-        f"{code('/tcgroups')} or {code('/tcg')}",
+        t("groups.help.examples.body"),
     ),
 ]
 

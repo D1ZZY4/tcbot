@@ -1,0 +1,31 @@
+# Check help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in checking.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Look up your own ban status with `/checkme`, or pull a full federation activity profile for any user with `/check`."
+
+[help.commands]
+body = """
+`/checkme` (alias: `/cme`)
+`/check` (alias: `/c`)"""
+
+[help.checkme]
+body = """
+Checks your own federation ban status.
+
+- If you are *not banned*: the bot confirms your account is in good standing.
+- If you are *banned*: the bot shows the reason, the admin who issued the ban, the ban date, and gives you a *Submit Appeal* button to start the appeal process."""
+
+[help.check]
+body = """
+Pulls a full federation profile for any user: identity, role, active ban, ban history, warnings (by group), kicks, mutes, and appeals.
+
+Each section opens a drill-down inline keyboard so you can inspect every record individually."""
+
+[help.examples]
+body = """
+`/checkme`
+`/check @username`
+`/c 123456789`
+Or reply to a message and run `/c`."""

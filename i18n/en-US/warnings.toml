@@ -1,0 +1,44 @@
+# Warn help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in warnings.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+# Placeholders: {limit} carries pre-formatted bold markup from code.
+
+[help]
+overview = "Issue formal warnings tracked per-group. At {limit} the user is automatically federation-banned across all connected groups and their warnings are cleared."
+
+[help.commands]
+body = """
+`/tcwarn` (alias: `/tcw`)
+`/tcunwarn` (alias: `/tcunw`)
+`/warns` (alias: `/warnlist`)
+`/resetwarns` (alias: `/clearwarns`)"""
+
+[help.who]
+body = """
+*/tcwarn*, */tcunwarn*, */resetwarns*: Tester and above (Founder / Admin / Developer / Tester).
+*/warns*: Tester and above (Founder / Admin / Developer / Tester)."""
+
+[help.what]
+body = """
+*/tcwarn*: issues a formal warning. Warnings are tracked *per-group* and do not carry across connected groups. At {limit}, the user is automatically federation-banned across all connected groups and their warnings are cleared. Staff targets are demoted first and exempted from the auto-ban.
+
+*/tcunwarn*: removes the user's most recent warning in the current group.
+
+*/warns*: shows the current warning count and full list of reasons.
+
+*/resetwarns*: clears all warnings for a user in the current group at once, without triggering the ban threshold."""
+
+[help.flow]
+body = """
+1. Run `/tcwarn` with the target (and optional inline reason).
+2. If no reason was given, the bot asks - reply with text.
+3. The bot asks for proof - send a photo/video, then tap *Done*, or tap *Skip*."""
+
+[help.examples]
+body = """
+`/tcwarn @username spamming`: reason inline
+`/tcw 123456789`: bot will ask for reason
+`/tcunwarn @username`
+`/warns @username`
+`/resetwarns @username`
+Or reply to a message and run `/tcw`."""

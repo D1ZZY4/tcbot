@@ -22,7 +22,7 @@ from tcbot.modules.helper.workflows.stats_flow import (
     SEARCH_KEY,
     Stats,
 )
-from tcbot.utils.formatter import bold, code
+from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
 
 if TYPE_CHECKING:
@@ -40,40 +40,26 @@ _RL_CMD_LIMIT: int = 8
 _RL_CB_LIMIT: int = 15
 
 __module_name__ = "Stats"
-__help_text__ = (
-    "See a live federation overview: Founder, staff, users, active bans, and "
-    "connected groups, with drill\\-down menus for every section\\."
-)
+__help_text__ = t("stats.help.overview")
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tcstats')} \\(alias: {code('/tcs')}\\)",
+        t("stats.help.commands.body"),
     ),
     replies.who_section(replies.CONTEXT_ANYONE),
     replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
     (
         replies.SEC_WHAT,
-        "Shows a live federation summary: Founder, total staff broken down by "
-        "role, the number of cached users, active federation bans, and "
-        "connected chats\\.",
+        t("stats.help.what.body"),
     ),
     (
         "Drill-downs",
-        f"{bold('Staff Roster')}: Founder, Admins, Developers, Testers, all listed "
-        "with mentions\\.\n"
-        f"{bold('Users')}: paginated list of every cached user \\(Founder "
-        "only \\- the button and the list are hidden from everyone else\\)\\. "
-        "Numbered buttons open a per\\-user detail card\\.\n"
-        f"{bold('Connected Chats')}: paginated list of every active group; "
-        "drill\\-in shows owner, ID, and connect date\\.\n"
-        f"{bold('User Bans')}: paginated list of every active ban with a "
-        f"{bold('Search')} shortcut to look up a user by name or ID\\.\n\n"
-        f"Every view ends with a {bold('Back')} button to the main summary\\.",
+        t("stats.help.drills.body"),
     ),
     (
         replies.SEC_EXAMPLES,
-        f"{code('/tcstats')}\n{code('/tcs')}",
+        t("stats.help.examples.body"),
     ),
 ]
 

@@ -30,6 +30,7 @@ from tcbot.modules.helper.workflows.promote_flow import ROLE_ALIASES, Promote
 from tcbot.utils import error_reporter
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, code, esc, mention, user_ref
+from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -71,19 +72,12 @@ _RL_BULK_LIMIT: int = 3
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Admin"
-__help_text__ = (
-    "Promote and demote staff, transfer ownership, and manage promotion requests "
-    "across the federation\\."
-)
+__help_text__ = t("admins.help.overview")
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tcpromote')} \\(alias: {code('/tcp')}\\)\n"
-        f"{code('/tcdemote')} \\(alias: {code('/tcd')}\\)\n"
-        f"{code('/transferowner')} \\(alias: {code('/tfowner')}\\)\n"
-        f"{code('/tcpromoterequests')} \\(alias: {code('/tcreqs')}\\)\n"
-        f"{code('/tcpromotelist')} \\(alias: {code('/tcplist')}\\)",
+        t("admins.help.commands.body"),
     ),
     replies.who_section(
         f"{bold('/tcpromote')}, {bold('/tcdemote')}, {bold('/tcpromotelist')}: Founder and Admin.\n"
@@ -93,42 +87,24 @@ __help_sections__: list[tuple[str, str]] = [
     replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
     (
         "Role Hierarchy",
-        "Founder \\(rank 4\\) \\> Admin \\(rank 3\\) \\> Developer \\(rank 2\\) \\> Tester \\(rank 1\\)\n\n"
-        "You cannot promote a user to a rank equal to or above your own\\. "
-        "Admins promoting someone to Admin queues a request for the Founder\\.",
+        t("admins.help.roles.body"),
     ),
     replies.target_section(),
     (
         "/tcpromote",
-        "Assigns a role to a user\\. Omit the role argument to get an inline button menu\\.\n\n"
-        f"{bold('Usage:')} {code('/tcpromote <target> [admin|developer|tester]')}\n"
-        "\\- Founder can promote to any role directly\\.\n"
-        "\\- Admin can promote to Developer or Tester directly; promoting to Admin "
-        "sends a pending request to the Founder for approval\\.",
+        t("admins.help.promote.body"),
     ),
     (
         "/tcdemote",
-        "Removes a user's role\\. A confirmation button is shown before the action executes\\.\n\n"
-        f"{bold('Usage:')} {code('/tcdemote <target>')}\n"
-        "\\- Founder can demote any role\\.\n"
-        "\\- Admin can demote Developer or Tester only\\.\n"
-        "\\- When a user with a role is banned or kicked, their role is automatically removed "
-        "and they are notified by DM\\.",
+        t("admins.help.demote.body"),
     ),
     (
         "/transferowner",
-        "Transfers federation ownership to another user\\. The current Founder steps down "
-        "to Admin\\. Founder only\\.\n\n"
-        f"{bold('Usage:')} {code('/transferowner <target>')}",
+        t("admins.help.transferowner.body"),
     ),
     (
         replies.SEC_EXAMPLES,
-        f"{code('/tcpromote @username developer')}\n"
-        f"{code('/tcpromote 123456789')}: shows the role selection menu\n"
-        f"{code('/tcdemote @username')}\n"
-        f"{code('/transferowner @newowner')}\n"
-        f"{code('/tcpromoterequests')}: request promotion to Admin\n"
-        f"{code('/tcplist')}: list pending promotion requests",
+        t("admins.help.examples.body"),
     ),
 ]
 

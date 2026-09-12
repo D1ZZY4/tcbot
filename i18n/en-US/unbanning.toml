@@ -1,0 +1,23 @@
+# Unban help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in unbanning.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Lifts an active federation ban across *all connected groups* at once."
+
+[help.commands]
+body = "`/tcunban` (alias: `/tcunb`)"
+
+[help.what]
+body = """
+Lifts an active federation ban on the target user. The unban is applied across *all connected groups* simultaneously so they can rejoin freely. A log entry is posted to the federation logs channel.
+
+If the user has no active federation ban, the bot will let you know and take no action.
+A pending appeal review card is left untouched; resolving appeals stays on the appeal flow.
+A staff member re-promoted while banned is demoted first so the stale ban can be cleared."""
+
+[help.examples]
+body = """
+`/tcunban @username`
+`/tcunb 123456789`
+Or reply to a message and run `/tcunb`."""
