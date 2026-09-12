@@ -62,7 +62,7 @@ __help_sections__: list[tuple[str, str]] = [
         replies.SEC_EXAMPLES,
         f"{code('/tcbroadcast Reminder: please review the community rules.')}\n"
         f"{code('/bc *Event tonight* (join us at 8 PM UTC).')}\n"
-        f"Or reply to any message and run {code('/bc')} to forward it to all groups\\.",
+        f"Or reply to a message and run {code('/bc')} to forward it to all groups\\.",
     ),
 ]
 

@@ -51,9 +51,9 @@ __help_sections__: list[tuple[str, str]] = [
     replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
     (
         replies.SEC_WHAT,
-        f"{bold('ping')}: Measures the round\\-trip time from the bot to "
+        f"{bold('/ping')}: Measures the round\\-trip time from the bot to "
         "Telegram's servers\\.\n"
-        f"{bold('speedtest')}: Runs a full network speed test and reports "
+        f"{bold('/speedtest')}: Runs a full network speed test and reports "
         "ping, upload, download, bytes transferred, client IP, ISP, "
         "and best\\-server details\\.",
     ),

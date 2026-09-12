@@ -70,7 +70,6 @@ __help_sections__: list[tuple[str, str]] = [
         f"{bold('/tcsync')}: {replies.PERM_DEV_ABOVE}",
     ),
     replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
-    replies.target_section(),
     (
         "/tcsync",
         "Sweeps active federation bans against connected groups \\(bounded, "
@@ -84,6 +83,7 @@ __help_sections__: list[tuple[str, str]] = [
         "re\\-ban when an active ban is unenforced, unban when a stale kick "
         "survived a deactivation\\.",
     ),
+    replies.target_section(),
     (
         replies.SEC_EXAMPLES,
         f"{code('/tcsync')}\n{code('/tcsync @username')}\n{code('/tcsync 123456789')}",

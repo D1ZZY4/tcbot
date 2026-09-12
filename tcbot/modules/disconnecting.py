@@ -74,7 +74,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     (
         replies.SEC_EXAMPLES,
-        f"Run {code('/tcdisconnect')} inside the group to disconnect it\\.\n"
+        f"{code('/tcdisconnect')}: disconnect the current group\\.\n"
         f"{code('/rmtc -1001234567890')}: force\\-remove a group by chat ID\\.",
     ),
 ]
