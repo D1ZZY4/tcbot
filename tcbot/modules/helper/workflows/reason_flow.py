@@ -25,6 +25,7 @@ from tcbot.modules.helper import replies
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.proof_flow import PROOF_MEDIA_FILTER, BuildProof
 from tcbot.utils.formatter import bold, esc, mention
+from tcbot.utils.i18n import DEFAULT_LOCALE, t
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 
 if TYPE_CHECKING:
@@ -258,10 +259,20 @@ class _ModActionFlow:
         if q is None or ctx.user_data is None:
             return WAITING_REASON
 
-        ctx.user_data[self._reason_key] = replies.NO_REASON
+        # * locale is resolved by the caller (command handler) at entry;
+        # * for conversation-flow prompts the default locale is safe since
+        # * the flow doesn't expose per-user locale choices (only commands do).
+        ctx.user_data[self._reason_key] = t(
+            "common.action.no_reason",
+            locale=DEFAULT_LOCALE,
+            plain=True,
+        )
         extra_info = ctx.user_data.get(self._extra_info_key, "")
         prompt_txt = self.proof.step_prompt(
-            self._get_target(ctx), self.action, replies.NO_REASON, extra_info
+            self._get_target(ctx),
+            self.action,
+            replies.no_reason(locale=DEFAULT_LOCALE, plain=True),
+            extra_info,
         )
         results = await asyncio.gather(
             q.answer(),

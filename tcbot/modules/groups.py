@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.keyboards import tcgroups_kb
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_edit, safe_reply
 from tcbot.utils.formatter import bold, code, esc
 from tcbot.utils.i18n import t
@@ -99,6 +100,7 @@ def _render(groups: list[GroupDoc], *, detailed: bool) -> str:
 @decorators.log_execution
 async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Reply with the list of all currently active connected groups (truncated to fit)."""
+    locale = await locale_for_update(update)
     msg = update.effective_message
     if msg is None:
         return
@@ -109,7 +111,7 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.exception("active_groups failed during tcgroups")
         await safe_reply(
             msg,
-            replies.ERR_GROUPS_LOAD_FAILED,
+            replies.err_groups_load_failed(locale, plain=False),
             log_label="tcgroups groups-failed",
             parse_mode=None,
         )
@@ -140,6 +142,7 @@ async def _toggle(
     q = update.callback_query
     if q is None or q.message is None:
         return
+    locale = await locale_for_update(update)
 
     cbq_msg = q.message  # type: ignore[assignment]
     # * No per-user snapshot: active_groups() is already L1+L2 cached
@@ -156,7 +159,7 @@ async def _toggle(
         log.warning("tcgroups toggle groups fetch failed: %s", groups_r)
         await safe_edit(
             cbq_msg,  # type: ignore[arg-type]
-            esc(replies.ERR_GROUPS_LOAD_FAILED),
+            esc(replies.err_groups_load_failed(locale, plain=False)),
             reply_markup=tcgroups_kb(detailed=detailed),
         )
         return

@@ -9,7 +9,9 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Added
 
-- **Runtime i18n begins: per-update locale plus netspeed** (`tcbot/modules/language.py`, `netspeed.py`, `i18n/en-US/netspeed.toml`, `tests/test_i18n.py`, `i18n/README.md`): handlers resolve the render locale once via `language.locale_for_update` (private chats use the sender's locale, groups use the group locale). Ping and speedtest replies, prompts, and result lines now load from TOML; plain sends render verbatim, MarkdownV2 sends render escaped. Output identical for the default locale.
+- **Shared reply texts follow the message language** (`i18n/en-US/common.toml`, `tcbot/modules/helper/replies.py`, 20 command and flow modules, `tests/test_i18n.py`): every shared notice (target errors, role and permission refusals, rate-limit waits, default reason, all five rank tiers) now loads from one catalog file in the render locale. Each call site states its send path, so plain alerts and formatted messages each render correctly. Help and message wording is identical for the default locale.
+
+- **Runtime i18n begins: per-update locale plus netspeed** (`tcbot/modules/helper/locale.py`, `tcbot/modules/language.py`, `netspeed.py`, `i18n/en-US/netspeed.toml`, `tests/test_i18n.py`, `i18n/README.md`): handlers resolve the render locale once via `locale_for_update` (private chats use the sender's locale, groups use the group locale). Ping and speedtest replies, prompts, and result lines now load from TOML; plain sends render verbatim, MarkdownV2 sends render escaped. Output identical for the default locale.
 
 - **All module help migrated to TOML** (`i18n/en-US/*.toml`, every module help block, `tests/test_i18n.py`, `i18n/README.md`): every `/help` topic now loads its prose from one catalog file per module, so translators work without touching code. Section order, labels, and shared constants stay in Python. Help output is identical for all modules.
 

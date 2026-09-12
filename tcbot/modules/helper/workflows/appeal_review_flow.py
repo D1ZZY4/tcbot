@@ -17,6 +17,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import BanDoc
 from tcbot.modules.helper import parse_logmsg, replies
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.utils.dispatch import count_transient_errors, fan_out, throw_if_cancelled
 from tcbot.utils.formatter import code, esc, mention
 from tcbot.utils.time_and_date import to_utc, utc_now
@@ -233,7 +234,7 @@ class AppealReviewMixin:
 
         if action == "approve":
             await self._approve_appeal(
-                ctx.bot, q, ban, ban_id, target_id, admin, lc, lt
+                ctx.bot, q, ban, ban_id, target_id, admin, lc, lt, update
             )
         elif action == "reject":
             await self._reject_appeal(ctx.bot, q, ban, ban_id, target_id, admin, lc, lt)
@@ -250,6 +251,7 @@ class AppealReviewMixin:
         admin: User,
         lc: int,
         lt: int | None,
+        update: Update,
     ) -> None:
         # * Fetch groups BEFORE deactivating, mirroring execute_unban: a
         # * groups-fetch failure with an already-deactivated record leaves
@@ -266,7 +268,11 @@ class AppealReviewMixin:
                 target_id,
             )
             try:
-                await q.answer(replies.ERR_GROUPS_LOAD_FAILED, show_alert=True)
+                locale = await locale_for_update(update)
+                await q.answer(
+                    replies.err_groups_load_failed(locale, plain=True),
+                    show_alert=True,
+                )
             except Exception as exc:
                 log.debug("approve_appeal groups-fail answer failed: %s", exc)
             return

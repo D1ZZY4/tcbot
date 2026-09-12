@@ -15,6 +15,7 @@ from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 from tcbot import cfg
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.reason_flow import (
     WAITING_PROOF,
@@ -113,6 +114,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
     if ctx.user_data is None:
         return ConversationHandler.END
+    locale = await locale_for_update(update)
 
     args = parse_cmd_args(msg.text)
     # * Single owner for the reply-wins plus shape check (see banning.py).
@@ -129,7 +131,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="cmd_warn_entry no-target",
             parse_mode=None,
         )
@@ -231,12 +233,13 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
     if admin is None:
         return
+    locale = await locale_for_update(update)
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="cmd_unwarn no-target",
             parse_mode=None,
         )
@@ -286,12 +289,13 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
     if admin is None:
         return
+    locale = await locale_for_update(update)
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="cmd_warnlist no-target",
             parse_mode=None,
         )
@@ -324,12 +328,13 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     admin = update.effective_user
     if admin is None:
         return
+    locale = await locale_for_update(update)
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="cmd_resetwarns no-target",
             parse_mode=None,
         )

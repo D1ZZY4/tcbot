@@ -16,7 +16,7 @@ from speedtest import ConfigRetrievalError, Speedtest, SpeedtestHTTPSHandler
 from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot.modules.helper import decorators, replies
-from tcbot.modules.language import locale_for_update
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.utils.formatter import code
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters
@@ -46,7 +46,7 @@ __help_sections__: list[tuple[str, str]] = [
         replies.SEC_COMMANDS,
         t("netspeed.help.commands.body"),
     ),
-    replies.who_section(replies.PERM_FOUNDER_ONLY),
+    replies.who_section(replies.perm_founder_only(plain=False)),
     replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
     (
         replies.SEC_WHAT,

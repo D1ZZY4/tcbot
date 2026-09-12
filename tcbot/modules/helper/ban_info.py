@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 async def build_ban_detail(
-    ban: BanDoc, target_fname: str | None = None
+    ban: BanDoc, target_fname: str | None = None, locale: str | None = None
 ) -> tuple[str, str | None]:
     """Return (formatted text, proof_link or None) for a ban document."""
     # * BanDoc is total=False: every key access below uses .get() with a
@@ -66,7 +66,7 @@ async def build_ban_detail(
         f"User ID: {code(str(uid))}\n\n"
         f"Banned by: {mention(aid, admin_fname, admin_uname)}\n"
         f"Admin ID: {code(str(aid))}\n\n"
-        f"Reason: {esc(ban.get('reason', replies.NO_REASON))}\n"
+        f"Reason: {esc(ban.get('reason', replies.no_reason(locale, plain=True)))}\n"
         f"Ban ID: {code(ban.get('ban_id', ''))}\n"
         f"Date: {date_str}"
     )

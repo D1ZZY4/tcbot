@@ -15,6 +15,7 @@ from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 from tcbot import cfg
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.muting_flow import (
@@ -58,7 +59,7 @@ __help_sections__: list[tuple[str, str]] = [
         replies.SEC_COMMANDS,
         t("muting.help.commands.body"),
     ),
-    replies.who_section(replies.PERM_TESTER_ABOVE),
+    replies.who_section(replies.perm_tester_above(plain=False)),
     replies.where_section(replies.WHERE_CONNECTED_GROUP),
     (
         replies.SEC_WHAT,
@@ -101,6 +102,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     reason skips the reason prompt and goes straight to proof collection).
     Returns ``ConversationHandler.END`` on validation failure.
     """
+    locale = await locale_for_update(update)
     msg = update.effective_message
     admin = update.effective_user
     if msg is None or admin is None or ctx.user_data is None:
@@ -116,7 +118,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="cmd_mute no-target",
             parse_mode=None,
         )
@@ -272,12 +274,13 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
     if msg is None or admin is None:
         return
+    locale = await locale_for_update(update)
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="cmd_unmute no-target",
             parse_mode=None,
         )

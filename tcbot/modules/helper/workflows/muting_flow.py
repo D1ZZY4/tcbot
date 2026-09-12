@@ -122,7 +122,8 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         log.warning("_execute_mute called with incomplete mute state; aborting")
         return
     target_fname = meta.get("mute_target_fname") or str(target_id)
-    reason_text = meta.get("mute_reason") or replies.NO_REASON
+    # TODO: Thread render locale through flow meta (Batch 3).
+    reason_text = meta.get("mute_reason") or replies.no_reason(None, plain=True)
     duration = meta.get("mute_duration")
     proof_msgs = meta.get("mute_proof_msgs")
     prompt_chat = meta.get("mute_prompt_chat")

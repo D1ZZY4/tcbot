@@ -15,6 +15,7 @@ from telegram.ext import ContextTypes, MessageHandler
 from tcbot import database as db
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.unban_flow import execute_unban
@@ -45,7 +46,7 @@ __help_sections__: list[tuple[str, str]] = [
         replies.SEC_COMMANDS,
         t("unbanning.help.commands.body"),
     ),
-    replies.who_section(replies.PERM_DEV_ABOVE),
+    replies.who_section(replies.perm_dev_above(plain=False)),
     replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
     (
         replies.SEC_WHAT,
@@ -78,6 +79,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     classification so that ``execute_unban`` skips a redundant DB round-trip when
     the refusal check passes.
     """
+    locale = await locale_for_update(update)
     msg = update.effective_message
     admin = update.effective_user
     if msg is None or admin is None:
@@ -87,7 +89,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="unban no-target",
             parse_mode=None,
         )

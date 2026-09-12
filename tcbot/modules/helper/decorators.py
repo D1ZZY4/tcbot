@@ -22,6 +22,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import replies
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.time_and_date import elapsed_ms, monotonic
@@ -242,7 +243,9 @@ async def global_rate_limit_handler(
         if wait:
             try:
                 await update.callback_query.answer(
-                    replies.rate_limit_text(wait),
+                    replies.rate_limit_text(
+                        wait, await locale_for_update(update), plain=True
+                    ),
                     show_alert=True,
                 )
             except Exception as exc:
@@ -271,7 +274,9 @@ async def global_rate_limit_handler(
         if msg:
             await safe_reply(
                 msg,
-                replies.rate_limit_text(wait),
+                replies.rate_limit_text(
+                    wait, await locale_for_update(update), plain=True
+                ),
                 log_label="Command rate-limit",
                 parse_mode=None,
             )
@@ -318,7 +323,9 @@ def ratelimiter[R](
                     if update.callback_query:
                         try:
                             await update.callback_query.answer(
-                                replies.rate_limit_text(wait),
+                                replies.rate_limit_text(
+                                    wait, await locale_for_update(update), plain=True
+                                ),
                                 show_alert=True,
                             )
                         except Exception as exc:
@@ -327,7 +334,9 @@ def ratelimiter[R](
                     if update.effective_message:
                         await safe_reply(
                             update.effective_message,
-                            replies.rate_limit_text(wait),
+                            replies.rate_limit_text(
+                                wait, await locale_for_update(update), plain=True
+                            ),
                             log_label="Message rate-limit",
                             parse_mode=None,
                         )

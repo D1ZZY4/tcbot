@@ -16,6 +16,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.formatter import code, esc
 from tcbot.utils.i18n import t
@@ -88,11 +89,12 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     msg = update.effective_message
     if chat is None or user is None or msg is None:
         return
+    locale = await locale_for_update(update)
 
     if chat.type == "private":
         await safe_reply(
             msg,
-            replies.ERR_GROUP_ONLY,
+            replies.err_group_only(locale, plain=True),
             log_label="cmd_tcleave group-only",
             parse_mode=None,
         )
@@ -144,7 +146,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         log.debug("Disconnect: get_chat_member failed for %d: %s", chat.id, member)
         await safe_reply(
             msg,
-            replies.ERR_ROLE_VERIFY,
+            replies.err_role_verify(locale, plain=True),
             log_label="cmd_tcleave role-verify",
             parse_mode=None,
         )
@@ -217,6 +219,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     record, then fans out a log message, a bot leave, and a confirmation reply
     in parallel.
     """
+    locale = await locale_for_update(update)
     msg = update.effective_message
     admin = update.effective_user
     if msg is None or admin is None:
@@ -287,7 +290,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         await safe_reply(
             msg,
-            replies.ERR_GROUP_NOT_FOUND,
+            replies.err_group_not_found(locale, plain=True),
             log_label="cmd_rmtc not-found",
             parse_mode=None,
         )

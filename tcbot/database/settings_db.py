@@ -8,10 +8,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import cachetools as _cachetools
+
 from tcbot.database.mongos import col, db_call
 
 if TYPE_CHECKING:
     from motor.motor_asyncio import AsyncIOMotorCollection
+
+# * L1 for locale reads: resolution runs on every command and callback,
+# * so hits must cost no I/O. Writes invalidate; TTL bounds staleness
+# * when another process changes the row. Unset (None) caches too.
+_LOCALE_L1: _cachetools.TTLCache = _cachetools.TTLCache(maxsize=4096, ttl=300)
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
 
@@ -29,13 +36,20 @@ def _settings() -> AsyncIOMotorCollection:
 
 async def get_user_locale(user_id: int) -> str | None:
     """Return the stored locale code for a user, or None when unset."""
+    try:
+        return _LOCALE_L1[user_id]
+    except KeyError:
+        pass
     doc = await db_call(
         _settings().find_one({"user_id": user_id}, {"_id": 0, "locale": 1})
     )
     if not doc:
+        _LOCALE_L1[user_id] = None
         return None
     locale = doc.get("locale")
-    return locale if isinstance(locale, str) and locale else None
+    value = locale if isinstance(locale, str) and locale else None
+    _LOCALE_L1[user_id] = value
+    return value
 
 
 async def set_user_locale(user_id: int, locale: str | None) -> None:
@@ -48,6 +62,7 @@ async def set_user_locale(user_id: int, locale: str | None) -> None:
     """
     if locale is None:
         await db_call(_settings().delete_one({"user_id": user_id}))
+        _LOCALE_L1.pop(user_id, None)
         return
     await db_call(
         _settings().update_one(
@@ -56,3 +71,4 @@ async def set_user_locale(user_id: int, locale: str | None) -> None:
             upsert=True,
         )
     )
+    _LOCALE_L1.pop(user_id, None)

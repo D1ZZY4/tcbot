@@ -17,9 +17,10 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, parse_logmsg, replies
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import fan_out
-from tcbot.utils.formatter import bold, code, esc
+from tcbot.utils.formatter import bold, code
 from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters
 
@@ -48,8 +49,8 @@ __help_sections__: list[tuple[str, str]] = [
         t("maintenance.help.commands.body"),
     ),
     replies.who_section(
-        f"{bold('/leaveall')}: {replies.PERM_FOUNDER_ONLY}\n"
-        f"{bold('/cleanup')}: {replies.PERM_STAFF_ONLY}"
+        f"{bold('/leaveall')}: {replies.perm_founder_only(plain=False)}\n"
+        f"{bold('/cleanup')}: {replies.perm_staff_only(plain=False)}"
     ),
     replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
     (
@@ -215,6 +216,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
     if admin is None:
         return
+    locale = await locale_for_update(update)
     try:
         all_groups = await db.groups_db.active_groups()
     except Exception:
@@ -223,7 +225,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if status_msg is not None:
             await safe_reply(
                 status_msg,
-                esc(replies.ERR_GROUPS_LOAD_FAILED),
+                replies.err_groups_load_failed(locale, plain=False),
                 log_label="leaveall groups-failed",
             )
         return
@@ -238,7 +240,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if status_msg is not None:
             await safe_reply(
                 status_msg,
-                esc(replies.ERR_NO_CONNECTED_GROUPS),
+                replies.err_no_connected_groups(locale, plain=False),
                 log_label="leaveall no-groups",
             )
         return
@@ -310,13 +312,14 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     reply_msg = update.effective_message
     if reply_msg is None:
         return
+    locale = await locale_for_update(update)
     try:
         groups = await db.groups_db.active_groups()
     except Exception:
         log.exception("active_groups failed during cleanup")
         await safe_reply(
             reply_msg,
-            esc(replies.ERR_GROUPS_LOAD_FAILED),
+            replies.err_groups_load_failed(locale, plain=False),
             log_label="cleanup groups-failed",
         )
         return

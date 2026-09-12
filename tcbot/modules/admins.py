@@ -24,6 +24,7 @@ from tcbot.modules.helper import (
 )
 from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.promote_flow import ROLE_ALIASES, Promote
@@ -81,7 +82,7 @@ __help_sections__: list[tuple[str, str]] = [
     ),
     replies.who_section(
         f"{bold('/tcpromote')}, {bold('/tcdemote')}, {bold('/tcpromotelist')}: Founder and Admin.\n"
-        f"{bold('/transferowner')}: {replies.PERM_FOUNDER_ONLY}\n"
+        f"{bold('/transferowner')}: {replies.perm_founder_only(plain=False)}\n"
         f"{bold('/tcpromoterequests')}: anyone (creates a self-request to the Founder)."
     ),
     replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
@@ -140,6 +141,7 @@ async def _resolve_executor_target(
     the caller must return (retry reply already sent, or a genuinely
     role-less executor denied silently like the decorator would).
     """
+    locale = await locale_for_update(update)
     _exec_r, _target_r = await asyncio.gather(
         db.users_roles.get_effective_role(admin_id),
         extraction.extract_target(update, args, bot),
@@ -166,7 +168,7 @@ async def _resolve_executor_target(
         log.error("extract_target failed during %s: %s", action, _target_r)
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label=f"cmd_{action} no-target",
             parse_mode=None,
         )
@@ -175,7 +177,7 @@ async def _resolve_executor_target(
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label=f"cmd_{action} no-target-id",
             parse_mode=None,
         )
@@ -234,7 +236,9 @@ async def _classify_and_load_role(
     return ident_r, role_r
 
 
-async def _check_callback_staff(admin_id: int, q: CallbackQuery) -> str | None:
+async def _check_callback_staff(
+    admin_id: int, q: CallbackQuery, update: Update
+) -> str | None:
     """Re-check Founder/Admin rank alongside ``q.answer()`` in parallel.
 
     Answers the spinner immediately regardless of DB latency. Returns the
@@ -251,7 +255,10 @@ async def _check_callback_staff(admin_id: int, q: CallbackQuery) -> str | None:
         log.debug("callback answer failed: %s", answer_r)
     if isinstance(role_r, BaseException) or role_r not in ("founder", "admin"):
         try:
-            await q.edit_message_text(replies.ERR_PERM_EXPIRED, reply_markup=None)
+            await q.edit_message_text(
+                replies.err_perm_expired(await locale_for_update(update), plain=True),
+                reply_markup=None,
+            )
         except Exception as exc:
             log.debug("callback perm-expired edit failed: %s", exc)
         return None
@@ -385,13 +392,16 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         await q.answer()
         return
 
-    executor_role = await _check_callback_staff(admin.id, q)
+    executor_role = await _check_callback_staff(admin.id, q, update)
     if executor_role is None:
         return
 
     if role not in ("admin", "developer", "tester"):
         try:
-            await q.edit_message_text(replies.ERR_UNKNOWN_ROLE, reply_markup=None)
+            await q.edit_message_text(
+                replies.err_unknown_role(await locale_for_update(update), plain=True),
+                reply_markup=None,
+            )
         except Exception as exc:
             log.debug("admins promote unknown-role edit failed: %s", exc)
         return
@@ -541,7 +551,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     except IndexError:
         await q.answer()
         return
-    executor_role = await _check_callback_staff(admin.id, q)
+    executor_role = await _check_callback_staff(admin.id, q, update)
     if executor_role is None:
         return
 
@@ -645,6 +655,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     stays visible as a WARNING line in the reply. Logs and confirmation
     reply run in parallel afterward.
     """
+    locale = await locale_for_update(update)
     current_owner = update.effective_user
     msg = update.effective_message
     if current_owner is None or msg is None:
@@ -657,7 +668,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.exception("extract_target failed during transfer")
         await safe_reply(
             msg,
-            replies.ERR_ROLE_VERIFY,
+            replies.err_role_verify(locale, plain=True),
             log_label="cmd_transfer extract-failed",
             parse_mode=None,
         )
@@ -665,7 +676,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="cmd_transfer no-target",
             parse_mode=None,
         )
@@ -679,7 +690,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.exception("identity.classify failed during transfer")
         await safe_reply(
             msg,
-            replies.ERR_ROLE_VERIFY,
+            replies.err_role_verify(locale, plain=True),
             log_label="cmd_transfer classify-failed",
             parse_mode=None,
         )
@@ -958,7 +969,9 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         return
     if not is_owner:
         try:
-            await q.edit_message_text(replies.PERM_FOUNDER_ONLY)
+            await q.edit_message_text(
+                replies.perm_founder_only(await locale_for_update(update), plain=True)
+            )
         except Exception as exc:
             log.debug("on_promo_decision perm-denied edit failed: %s", exc)
         return

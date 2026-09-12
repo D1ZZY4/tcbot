@@ -17,6 +17,7 @@ from tcbot import database as db
 from tcbot.modules.about import __about_msg__
 from tcbot.modules.groups import _render
 from tcbot.modules.helper import decorators, keyboards, replies
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.formatter import bold, esc
 from tcbot.utils.prefixes import build_prefixed_filters
@@ -136,8 +137,9 @@ async def on_back_to_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 
-async def _show_groups(q: CallbackQuery, *, detailed: bool) -> None:
+async def _show_groups(q: CallbackQuery, update: Update, *, detailed: bool) -> None:
     """Shared renderer for all group-menu callbacks."""
+    locale = await locale_for_update(update)
     # * q.answer() and active_groups() are independent; run in parallel.
     _, groups_r = await asyncio.gather(
         q.answer(), db.groups_db.active_groups(), return_exceptions=True
@@ -149,7 +151,7 @@ async def _show_groups(q: CallbackQuery, *, detailed: bool) -> None:
         log.warning("_show_groups groups fetch failed: %s", groups_r)
         try:
             await q.edit_message_text(
-                replies.ERR_GROUPS_LOAD_FAILED,
+                replies.err_groups_load_failed(locale, plain=False),
                 reply_markup=keyboards.back_to_start_kb(),
             )
         except Exception as exc:
@@ -186,7 +188,7 @@ async def on_menu_groups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     q = update.callback_query
     if q is None:
         return
-    await _show_groups(q, detailed=False)
+    await _show_groups(q, update, detailed=False)
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -198,7 +200,7 @@ async def on_menu_groups_details(
     q = update.callback_query
     if q is None:
         return
-    await _show_groups(q, detailed=True)
+    await _show_groups(q, update, detailed=True)
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -208,7 +210,7 @@ async def on_menu_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) 
     q = update.callback_query
     if q is None:
         return
-    await _show_groups(q, detailed=False)
+    await _show_groups(q, update, detailed=False)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

@@ -16,6 +16,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, extraction, keyboards, replies
 from tcbot.modules.helper.ban_info import build_ban_detail
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.check_flow import Check
@@ -128,7 +129,7 @@ async def _ban_summary(
         f"You are currently banned from {esc(cfg.community_name)}\\.\n\n"
         f"User: {mention(user_id, user_fname, user_uname)}\n"
         f"User ID: {code(str(user_id))}\n"
-        f"Reason: {esc(ban.get('reason', replies.NO_REASON))}\n\n"
+        f"Reason: {esc(ban.get('reason', replies.no_reason(None, plain=True)))}\n\n"
         f"Banned by: {mention(aid, admin_fname, admin_uname)}\n\n"
         f"Commit Date: {date_str}\n"
         "Tap a button below for more details\\."
@@ -359,13 +360,14 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.effective_message
     if msg is None:
         return
+    locale = await locale_for_update(update)
     user = update.effective_user
     args = parse_cmd_args(msg.text)
     target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="check resolve-fail",
             parse_mode=None,
         )

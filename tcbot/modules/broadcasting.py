@@ -17,9 +17,10 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, parse_logmsg, replies
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import count_transient_errors, fan_out
-from tcbot.utils.formatter import code, esc
+from tcbot.utils.formatter import code
 from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -43,7 +44,7 @@ __help_sections__: list[tuple[str, str]] = [
         replies.SEC_COMMANDS,
         t("broadcasting.help.commands.body"),
     ),
-    replies.who_section(replies.PERM_STAFF_ONLY),
+    replies.who_section(replies.perm_staff_only(plain=False)),
     replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
     (
         replies.SEC_WHAT,
@@ -75,6 +76,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     every active group via ``fan_out`` with semaphore limiting. Logs the result
     and edits the status message in parallel.
     """
+    locale = await locale_for_update(update)
     msg = update.effective_message
     admin = update.effective_user
     if msg is None or admin is None:
@@ -98,14 +100,14 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.exception("active_groups failed during broadcast")
         await safe_reply(
             msg,
-            esc(replies.ERR_GROUPS_LOAD_FAILED),
+            replies.err_groups_load_failed(locale, plain=False),
             log_label="cmd_broadcast groups-failed",
         )
         return
     if not groups:
         await safe_reply(
             msg,
-            esc(replies.ERR_NO_CONNECTED_GROUPS),
+            replies.err_no_connected_groups(locale, plain=False),
             log_label="cmd_broadcast no-groups",
         )
         return

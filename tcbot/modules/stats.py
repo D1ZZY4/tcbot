@@ -14,6 +14,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, fil
 
 from tcbot import database as db
 from tcbot.modules.helper import decorators, replies
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
 from tcbot.modules.helper.workflows.stats_flow import (
     CHAT_KEY,
@@ -78,7 +79,9 @@ _ERR_ACCESS_RETRY = (
 )
 
 
-async def _require_founder_list(q: CallbackQuery, user_id: int | None) -> bool:
+async def _require_founder_list(
+    q: CallbackQuery, user_id: int | None, update: Update
+) -> bool:
     """Return True when the tapper may open the Users list; alert-denies otherwise.
 
     Owner-or-Founder only: the list carries every cached user ID. Both checks
@@ -86,9 +89,12 @@ async def _require_founder_list(q: CallbackQuery, user_id: int | None) -> bool:
     trip. Lookup outages fail closed with a retry alert; cancellation
     propagates via the bare gather below.
     """
+    locale = await locale_for_update(update)
     if user_id is None:
         try:
-            await q.answer(replies.PERM_FOUNDER_ONLY, show_alert=True)
+            await q.answer(
+                replies.perm_founder_only(locale, plain=True), show_alert=True
+            )
         except Exception as exc:
             log.debug("stats users deny-answer failed: %s", exc)
         return False
@@ -106,7 +112,9 @@ async def _require_founder_list(q: CallbackQuery, user_id: int | None) -> bool:
         return False
     if owner_r is not True and role_r != "founder":
         try:
-            await q.answer(replies.PERM_FOUNDER_ONLY, show_alert=True)
+            await q.answer(
+                replies.perm_founder_only(locale, plain=True), show_alert=True
+            )
         except Exception as exc:
             log.debug("stats users deny-answer failed: %s", exc)
         return False
@@ -215,7 +223,9 @@ async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         await q.answer()
         return
     tapper = update.effective_user
-    if not await _require_founder_list(q, tapper.id if tapper is not None else None):
+    if not await _require_founder_list(
+        q, tapper.id if tapper is not None else None, update
+    ):
         return
     await _ack_and_render(q, Stats.users_list(page))
 
@@ -233,7 +243,9 @@ async def on_stats_user_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         return
     page, idx, stable = parsed
     tapper = update.effective_user
-    if not await _require_founder_list(q, tapper.id if tapper is not None else None):
+    if not await _require_founder_list(
+        q, tapper.id if tapper is not None else None, update
+    ):
         return
     await _ack_and_render(q, Stats.user_detail(ctx.bot, page, idx, stable))
 

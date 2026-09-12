@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.kicking_flow import kick_conversation, proof, reason
@@ -49,7 +50,7 @@ __help_sections__: list[tuple[str, str]] = [
         replies.SEC_COMMANDS,
         t("kicking.help.commands.body"),
     ),
-    replies.who_section(replies.PERM_TESTER_ABOVE),
+    replies.who_section(replies.perm_tester_above(plain=False)),
     replies.where_section(replies.WHERE_CONNECTED_GROUP),
     (
         replies.SEC_WHAT,
@@ -87,11 +88,13 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     reason) or opens the reason/proof conversation. Returns
     ``ConversationHandler.END`` on validation failure.
     """
+    locale = await locale_for_update(update)
     msg = update.effective_message
     admin = update.effective_user
     chat = update.effective_chat
     if msg is None or admin is None or chat is None or ctx.user_data is None:
         return ConversationHandler.END
+    locale = await locale_for_update(update)
 
     # * Kick is a current-chat ban-then-unban: Telegram rejects it in private
     # * chats ("Can't ban members in private chats"), so refuse up front
@@ -100,7 +103,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if chat.type == "private":
         await safe_reply(
             msg,
-            replies.ERR_GROUP_ONLY,
+            replies.err_group_only(locale, plain=True),
             log_label="cmd_kick group-only",
             parse_mode=None,
         )
@@ -123,7 +126,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="cmd_kick no-target",
             parse_mode=None,
         )

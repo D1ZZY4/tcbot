@@ -194,7 +194,9 @@ def proof_prompt_content(
 async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> None:
     target_id: int = meta.get("ban_target_id") or 0
     target_fname: str = meta.get("ban_target_fname", str(target_id))
-    reason: str = meta.get("ban_reason", replies.NO_REASON)
+    # TODO: Thread render locale through flow meta so state defaults
+    # TODO: render per-locale (Batch 3); raw default is identical today.
+    reason: str = meta.get("ban_reason", replies.no_reason(None, plain=True))
     admin_id: int = meta.get("ban_admin_id") or 0
     admin_fname: str = meta.get("ban_admin_fname", "Admin")
     prompt_msg_id: int = meta.get("ban_prompt_msg_id", 0)
@@ -515,7 +517,9 @@ async def _execute_ban_update(
     target_fname: str = meta.get("ban_target_fname", str(target_id))
     admin_id: int = meta.get("ban_admin_id") or 0
     admin_fname: str = meta.get("ban_admin_fname", "Admin")
-    reason: str = meta.get("ban_reason", replies.NO_REASON)
+    # TODO: Thread render locale through flow meta so state defaults
+    # TODO: render per-locale (Batch 3); raw default is identical today.
+    reason: str = meta.get("ban_reason", replies.no_reason(None, plain=True))
     ban_id = str(existing.get("ban_id", ""))
     old_admin_id = int(existing.get("admin_user_id", admin_id))
     bot_username = bot.username or ""
@@ -602,7 +606,9 @@ async def _execute_new_ban(
     target_fname: str = meta.get("ban_target_fname", str(target_id))
     admin_id: int = meta.get("ban_admin_id") or 0
     admin_fname: str = meta.get("ban_admin_fname", "Admin")
-    reason: str = meta.get("ban_reason", replies.NO_REASON)
+    # TODO: Thread render locale through flow meta so state defaults
+    # TODO: render per-locale (Batch 3); raw default is identical today.
+    reason: str = meta.get("ban_reason", replies.no_reason(None, plain=True))
     bot_username = bot.username or ""
 
     log_text = parse_logmsg.ban_log(

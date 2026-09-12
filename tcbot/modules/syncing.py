@@ -17,6 +17,7 @@ from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot import database as db
 from tcbot.modules.helper import decorators, extraction, replies
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import (
     fan_out,
@@ -64,7 +65,7 @@ __help_sections__: list[tuple[str, str]] = [
         t("syncing.help.commands.body"),
     ),
     replies.who_section(
-        f"{bold('/tcsync')}: {replies.PERM_DEV_ABOVE}",
+        f"{bold('/tcsync')}: {replies.perm_dev_above(plain=False)}",
     ),
     replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
     (
@@ -327,6 +328,7 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.effective_message
     if msg is None:
         return
+    locale = await locale_for_update(update)
     args = parse_cmd_args(msg.text)
 
     try:
@@ -350,10 +352,10 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             counts = await run_ban_sync(ctx.bot)
             text = _render_summary(counts, target="federation sweep")
     except ValueError:
-        text = esc(replies.ERR_CANNOT_RESOLVE)
+        text = replies.err_cannot_resolve(locale, plain=False)
     except Exception:
         log.exception("sync run failed")
-        text = esc(replies.ERR_GROUPS_LOAD_FAILED)
+        text = replies.err_groups_load_failed(locale, plain=False)
 
     if status is not None:
         try:

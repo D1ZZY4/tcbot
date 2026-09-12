@@ -205,7 +205,8 @@ async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     target_id = ctx.user_data.pop("kick_target_id", 0)
     target_name = ctx.user_data.pop("kick_target_name", "")
-    reason_text = ctx.user_data.pop("kick_reason", replies.NO_REASON)
+    # TODO: Thread render locale through flow state (Batch 3).
+    reason_text = ctx.user_data.pop("kick_reason", replies.no_reason(None, plain=True))
     proof_msgs = ctx.user_data.pop("kick_proof_msgs", None)
     prompt_chat = ctx.user_data.pop("kick_prompt_chat", None)
     prompt_id = ctx.user_data.pop("kick_prompt_id", None)

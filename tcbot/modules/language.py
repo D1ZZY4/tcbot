@@ -15,13 +15,13 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import database as db
 from tcbot.modules.helper import decorators, keyboards, replies
+from tcbot.modules.helper.locale import effective_locale
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.i18n import (
     DEFAULT_LOCALE,
     available_locales,
     display_name,
     is_known_locale,
-    resolve_locale,
     t,
 )
 from tcbot.utils.prefixes import build_prefixed_filters
@@ -82,41 +82,6 @@ _SET_PATTERN: str = rf"^lang:set:{_SCOPE_RE}:{_LOCALE_RE}$"
 def _chat_scope(chat_type: str | None) -> str:
     """Map a chat type to the locale scope it reads: user in PM, group otherwise."""
     return "user" if chat_type == "private" else "group"
-
-
-async def effective_locale(chat_type: str | None, user_id: int, chat_id: int) -> str:
-    """Resolve the locale used to render a panel in this chat."""
-    user_locale, group_locale = await asyncio.gather(
-        db.settings_db.get_user_locale(user_id),
-        db.groups_db.get_group_locale(chat_id),
-        return_exceptions=True,
-    )
-    if isinstance(user_locale, BaseException):
-        log.debug("language user-locale read failed for %d: %s", user_id, user_locale)
-        user_locale = None
-    if isinstance(group_locale, BaseException):
-        log.debug("language group-locale read failed for %d: %s", chat_id, group_locale)
-        group_locale = None
-    return resolve_locale(
-        chat_type=chat_type or "private",
-        user_locale=user_locale if isinstance(user_locale, str) else None,
-        group_locale=group_locale if isinstance(group_locale, str) else None,
-    )
-
-
-async def locale_for_update(update: Update) -> str:
-    """Resolve the render locale for one incoming update.
-
-    Private chats use the sender's personal locale, groups use the group
-    locale, so a shared audience always reads one language. Missing
-    chat/user info falls back to the default locale; resolution never
-    raises.
-    """
-    chat = update.effective_chat
-    user = update.effective_user
-    if chat is None or user is None:
-        return DEFAULT_LOCALE
-    return await effective_locale(chat.type, user.id, chat.id)
 
 
 async def _can_set_group(bot: object, chat_id: int, user_id: int) -> bool:

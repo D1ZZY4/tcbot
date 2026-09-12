@@ -20,6 +20,7 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, replies
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.connected_flow import connection
 from tcbot.utils.i18n import t
@@ -95,6 +96,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """
     chat = update.effective_chat
     user = update.effective_user
+    locale = await locale_for_update(update)
     msg = update.effective_message
     if chat is None or user is None or msg is None:
         return
@@ -102,7 +104,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if chat.type == "private":
         await safe_reply(
             msg,
-            replies.ERR_GROUP_ONLY,
+            replies.err_group_only(locale, plain=True),
             log_label="cmd_tctc group-only",
             parse_mode=None,
         )
@@ -127,7 +129,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.debug("get_chat_member failed for %d/%d: %s", chat.id, user.id, member)
         await safe_reply(
             msg,
-            replies.ERR_ROLE_VERIFY,
+            replies.err_role_verify(locale, plain=True),
             log_label="cmd_tctc role-verify",
             parse_mode=None,
         )
@@ -182,7 +184,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.debug("Could not verify bot permissions for %d: %s", chat.id, bot_member)
         await safe_reply(
             msg,
-            replies.ERR_ROLE_VERIFY,
+            replies.err_role_verify(locale, plain=True),
             log_label="cmd_tctc perms-verify",
             parse_mode=None,
         )

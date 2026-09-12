@@ -18,6 +18,7 @@ from tcbot.database.documents import BanDoc
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.keyboards import ban_update_confirm_kb
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.ban_flow import (
@@ -61,7 +62,7 @@ __help_sections__: list[tuple[str, str]] = [
         replies.SEC_COMMANDS,
         t("banning.help.commands.body"),
     ),
-    replies.who_section(replies.PERM_DEV_ABOVE),
+    replies.who_section(replies.perm_dev_above(plain=False)),
     replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
     (
         replies.SEC_WHAT,
@@ -101,6 +102,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ``WAITING_UPDATE_CONFIRM``, ``WAITING_PROOF``, or
     ``ConversationHandler.END`` on any failure.
     """
+    locale = await locale_for_update(update)
     msg = update.effective_message
     admin = update.effective_user
     if msg is None or admin is None or ctx.user_data is None:
@@ -125,7 +127,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="cmd_ban_start no-target",
             parse_mode=None,
         )

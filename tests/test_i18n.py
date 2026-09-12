@@ -37,6 +37,7 @@ from tcbot.modules import (
 )
 from tcbot.modules import help as helpmod
 from tcbot.modules.helper import keyboards, replies
+from tcbot.modules.helper.locale import effective_locale, locale_for_update
 from tcbot.modules.helper.workflows.appeal_flow import LOCK_HOURS
 from tcbot.utils.formatter import bold, code, esc, pre
 from tcbot.utils.i18n import (
@@ -283,6 +284,7 @@ class _FakeCollection:
 
     def __init__(self) -> None:
         self.docs: dict[int, dict[str, Any]] = {}
+        self.reads: int = 0
 
     def _key(self, filt: dict[str, Any]) -> int:
         return int(filt.get("user_id", filt.get("chat_id", 0)))
@@ -291,6 +293,7 @@ class _FakeCollection:
         self, filt: dict[str, Any], proj: dict[str, Any] | None = None
     ) -> dict[str, Any] | None:
         _ = proj
+        self.reads += 1
         doc = self.docs.get(self._key(filt))
         return dict(doc) if doc is not None else None
 
@@ -323,6 +326,7 @@ def fake_user_col(monkeypatch: pytest.MonkeyPatch) -> _FakeCollection:
 
     fake = _FakeCollection()
     monkeypatch.setattr(settings_db, "col", lambda _name: fake)
+    settings_db._LOCALE_L1.clear()
     return fake
 
 
@@ -331,11 +335,11 @@ def fake_group_col(monkeypatch: pytest.MonkeyPatch) -> _FakeCollection:
 
     fake = _FakeCollection()
     monkeypatch.setattr(groups_db, "col", lambda _name: fake)
+    groups_db._GROUP_LOCALE_L1.clear()
     return fake
 
 
 def test_user_locale_roundtrip(fake_user_col: _FakeCollection) -> None:
-
     async def run() -> None:
         assert await settings_db.get_user_locale(1) is None
         await settings_db.set_user_locale(1, "en-US")
@@ -541,6 +545,35 @@ def test_help_index_golden() -> None:
     )
 
 
+def test_user_locale_l1_serves_hits(fake_user_col: _FakeCollection) -> None:
+    async def run() -> None:
+        await settings_db.set_user_locale(9, "en-US")
+        assert fake_user_col.reads == 0
+        assert await settings_db.get_user_locale(9) == "en-US"
+        assert fake_user_col.reads == 1
+        assert await settings_db.get_user_locale(9) == "en-US"
+        assert fake_user_col.reads == 1
+        await settings_db.set_user_locale(9, None)
+        assert await settings_db.get_user_locale(9) is None
+        assert fake_user_col.reads == 2
+
+    asyncio.run(run())
+
+
+def test_group_locale_l1_serves_hits(fake_group_col: _FakeCollection) -> None:
+    async def run() -> None:
+        fake_group_col.docs[-100] = {"chat_id": -100, "locale": "en-US"}
+        assert await groups_db.get_group_locale(-100) == "en-US"
+        assert fake_group_col.reads == 1
+        assert await groups_db.get_group_locale(-100) == "en-US"
+        assert fake_group_col.reads == 1
+        await groups_db.set_group_locale(-100, None)
+        assert await groups_db.get_group_locale(-100) is None
+        assert fake_group_col.reads == 2
+
+    asyncio.run(run())
+
+
 # ─────── Runtime locale resolution ─────── #
 
 
@@ -578,7 +611,7 @@ def test_locale_for_update_pm_uses_user(monkeypatch: pytest.MonkeyPatch) -> None
     _stub_locales(monkeypatch, user_locale="en-US", group_locale="en-US")
 
     async def run() -> None:
-        assert await language.locale_for_update(_pm_update()) == "en-US"
+        assert await locale_for_update(_pm_update()) == "en-US"
 
     asyncio.run(run())
 
@@ -587,7 +620,7 @@ def test_locale_for_update_group_uses_group(monkeypatch: pytest.MonkeyPatch) -> 
     _stub_locales(monkeypatch, user_locale="en-US", group_locale="en-US")
 
     async def run() -> None:
-        assert await language.locale_for_update(_group_update()) == "en-US"
+        assert await locale_for_update(_group_update()) == "en-US"
 
     asyncio.run(run())
 
@@ -595,7 +628,7 @@ def test_locale_for_update_group_uses_group(monkeypatch: pytest.MonkeyPatch) -> 
 def test_locale_for_update_missing_info_defaults() -> None:
     async def run() -> None:
         empty: Any = SimpleNamespace(effective_chat=None, effective_user=None)
-        assert await language.locale_for_update(empty) == DEFAULT_LOCALE
+        assert await locale_for_update(empty) == DEFAULT_LOCALE
 
     asyncio.run(run())
 
@@ -610,8 +643,8 @@ def test_locale_for_update_db_failure_defaults(
     monkeypatch.setattr(groups_db, "get_group_locale", boom)
 
     async def run() -> None:
-        assert await language.locale_for_update(_pm_update()) == DEFAULT_LOCALE
-        assert await language.locale_for_update(_group_update()) == DEFAULT_LOCALE
+        assert await locale_for_update(_pm_update()) == DEFAULT_LOCALE
+        assert await locale_for_update(_group_update()) == DEFAULT_LOCALE
 
     asyncio.run(run())
 
@@ -666,6 +699,85 @@ def test_netspeed_pong_and_fields_v2_clean() -> None:
     ):
         line = t(f"netspeed.result.field.{key}", DEFAULT_LOCALE, value=Safe(code("x")))
         _assert_v2_render_clean(line, f"netspeed.field.{key}")
+
+
+# ─────── Shared replies goldens (default locale) ─────── #
+
+
+def test_replies_errors_golden() -> None:
+    pairs = [
+        (
+            replies.err_cannot_resolve(DEFAULT_LOCALE, plain=True),
+            "Cannot resolve target. Reply to a message or provide a user ID.",
+        ),
+        (
+            replies.err_role_verify(DEFAULT_LOCALE, plain=True),
+            "Could not verify your group role.",
+        ),
+        (
+            replies.err_group_only(DEFAULT_LOCALE, plain=True),
+            "Use this command in a group.",
+        ),
+        (
+            replies.err_no_connected_groups(DEFAULT_LOCALE, plain=True),
+            "No connected groups.",
+        ),
+        (
+            replies.err_group_not_found(DEFAULT_LOCALE, plain=True),
+            "Group not found or already removed.",
+        ),
+        (
+            replies.err_perm_expired(DEFAULT_LOCALE, plain=True),
+            "You no longer have permission to do this.",
+        ),
+        (
+            replies.err_unknown_role(DEFAULT_LOCALE, plain=True),
+            "Unknown role.",
+        ),
+        (
+            replies.err_groups_load_failed(DEFAULT_LOCALE, plain=True),
+            "Could not load the group list due to a server error. Please try again.",
+        ),
+    ]
+    for got, want in pairs:
+        assert got == want
+    assert (
+        replies.err_group_only(DEFAULT_LOCALE, plain=False)
+        == "Use this command in a group\\."
+    )
+    assert (
+        replies.err_groups_load_failed(DEFAULT_LOCALE, plain=False)
+        == "Could not load the group list due to a server error\\. Please try again\\."
+    )
+
+
+def test_replies_tiers_golden() -> None:
+    assert replies.perm_founder_only(DEFAULT_LOCALE, plain=False) == "Founder only\\."
+    assert (
+        replies.perm_staff_only(DEFAULT_LOCALE, plain=False)
+        == "TC Staff \\(Admin and above\\)\\."
+    )
+    assert (
+        replies.perm_admin_above(DEFAULT_LOCALE, plain=False)
+        == "Admin and above \\(Founder / Admin\\)\\."
+    )
+    assert (
+        replies.perm_dev_above(DEFAULT_LOCALE, plain=False)
+        == "Developer and above \\(Founder / Admin / Developer\\)\\."
+    )
+    assert (
+        replies.perm_tester_above(DEFAULT_LOCALE, plain=False)
+        == "Tester and above \\(Founder / Admin / Developer / Tester\\)\\."
+    )
+    assert (
+        replies.rate_limit_text(7, DEFAULT_LOCALE, plain=True)
+        == "Slow down - try again in 7 seconds."
+    )
+    assert (
+        replies.rate_limit_text(0.2, DEFAULT_LOCALE, plain=True)
+        == "Slow down - try again in 1 seconds."
+    )
+    assert replies.no_reason(DEFAULT_LOCALE, plain=True) == "No reason provided"
 
 
 def test_panel_renders_v2_clean() -> None:
@@ -994,10 +1106,10 @@ def test_effective_locale_pm_and_group(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(groups_db, "get_group_locale", fake_group)
 
     async def run() -> None:
-        assert await language.effective_locale("private", 1, 10) == "en-US"
-        assert await language.effective_locale("private", 2, 10) == "en-US"
-        assert await language.effective_locale("group", 1, 10) == "en-US"
-        assert await language.effective_locale("group", 1, 99) == "en-US"
+        assert await effective_locale("private", 1, 10) == "en-US"
+        assert await effective_locale("private", 2, 10) == "en-US"
+        assert await effective_locale("group", 1, 10) == "en-US"
+        assert await effective_locale("group", 1, 99) == "en-US"
 
     asyncio.run(run())
 
