@@ -273,8 +273,8 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         [_leave_one(ctx.bot, g, lc, lt, admin.id, admin.first_name) for g in groups]
     )
 
-    # * ``fan_out`` returns ``T | BaseException`` so a transport error that
-    # * escapes before the gather starts still shows up as an entry.
+    # * ``fan_out`` returns ``T | BaseException`` so a transport error raised
+    # * before the gather starts still shows up as an entry.
     # * ``_leave_one`` itself never raises (a malformed row yields a failed
     # * result), but filter defensively before unpacking structured fields,
     # * then count each side-effect independently.

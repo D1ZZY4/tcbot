@@ -89,7 +89,7 @@ class LogBuilder:
         user_label: str = "User",
         id_label: str = "User ID",
     ) -> LogBuilder:
-        """Append the canonical `Label: mention` + `User ID: <code>id</code>` pair."""
+        """Append the canonical `Label: mention` + `User ID: <id>` pair."""
         self._lines.append(
             f"{user_label}: {mention(target_id, target_fname, target_username)}"
         )
@@ -105,7 +105,7 @@ class LogBuilder:
         label: str = "Admin",
         id_label: str = "ID",
     ) -> LogBuilder:
-        """Append the canonical `Label: mention` + `ID: <code>id</code>` pair for an actor."""
+        """Append the canonical `Label: mention` + `ID: <id>` pair for an actor."""
         self._lines.append(f"{label}: {mention(actor_id, actor_fname, actor_username)}")
         self._lines.append(f"{id_label}: {code(str(actor_id))}")
         return self
