@@ -43,35 +43,38 @@ _RL_LIMIT: int = 5
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Kick"
-__help_text__ = t("kicking.help.overview")
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        t("kicking.help.commands.body"),
-    ),
-    replies.who_section(replies.perm_tester_above(plain=False)),
-    replies.where_section(replies.WHERE_CONNECTED_GROUP),
-    (
-        replies.SEC_WHAT,
-        t("kicking.help.what.body"),
-    ),
-    (
-        "Flow",
-        t("kicking.help.flow.body"),
-    ),
-    replies.target_section(),
-    (
-        replies.SEC_EXAMPLES,
-        t("kicking.help.examples.body"),
-    ),
-]
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("kicking.help.overview", locale)
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("kicking.help.commands.body", locale),
+        ),
+        replies.who_section(replies.perm_tester_above(locale, plain=False), locale),
+        replies.where_section(replies.where_connected_group(locale), locale),
+        (
+            replies.sec_what(locale),
+            t("kicking.help.what.body", locale),
+        ),
+        (
+            "Flow",
+            t("kicking.help.flow.body", locale),
+        ),
+        replies.target_section(locale),
+        (
+            replies.sec_examples(locale),
+            t("kicking.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ───────────────────── Command Kick </tckick> ───────────────────── #
@@ -94,7 +97,6 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     chat = update.effective_chat
     if msg is None or admin is None or chat is None or ctx.user_data is None:
         return ConversationHandler.END
-    locale = await locale_for_update(update)
 
     # * Kick is a current-chat ban-then-unban: Telegram rejects it in private
     # * chats ("Can't ban members in private chats"), so refuse up front
@@ -137,7 +139,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if inline_reason and is_reason_too_long(inline_reason):
         await safe_reply(
             msg,
-            reason_too_long_text(len(inline_reason)),
+            reason_too_long_text(len(inline_reason), locale),
             log_label="cmd_kick reason-too-long",
             parse_mode=None,
         )
@@ -164,7 +166,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if executor_role is None:
         return ConversationHandler.END
 
-    refusal = identity.refuse_message("kick", ident)
+    refusal = identity.refuse_message("kick", ident, locale)
     if refusal is not None:
         await safe_reply(msg, refusal, log_label="cmd_kick refusal")
         return ConversationHandler.END
@@ -205,9 +207,11 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         ctx.user_data["kick_reason"] = inline_reason
         try:
             prompt = await msg.reply_text(
-                proof.noted_prompt("kick", inline_reason, target_mention),
+                proof.noted_prompt(
+                    "kick", inline_reason, target_mention, locale=locale
+                ),
                 parse_mode="MarkdownV2",
-                reply_markup=proof.keyboard(),
+                reply_markup=proof.keyboard(locale),
             )
             ctx.user_data["kick_prompt_id"] = prompt.message_id
         except Exception as exc:
@@ -219,9 +223,9 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     try:
         prompt = await msg.reply_text(
-            reason.prompt(target_mention, "kick"),
+            reason.prompt(target_mention, "kick", locale=locale),
             parse_mode="MarkdownV2",
-            reply_markup=reason.keyboard(),
+            reply_markup=reason.keyboard(locale),
         )
         ctx.user_data["kick_prompt_id"] = prompt.message_id
     except Exception as exc:

@@ -2,7 +2,8 @@
 
 This document describes the per-user and per-group locale system: the TOML
 translation catalog, the `utils/i18n.py` engine, locale persistence, the
-`/language` command and selection flow, and the start-menu entry point.
+`/language` command and selection flow, the start-menu entry point, and
+how every user-facing surface renders in the resolved locale.
 
 For shared helpers, see [`../../architecture/helpers.md`](../../architecture/helpers.md).
 For runtime utilities, see [`../../architecture/utilities.md`](../../architecture/utilities.md).
@@ -48,6 +49,27 @@ implementation.
 locale first, then the user locale in private chats or the group locale
 in group-like chats, then `en-US`. Unknown or absent values fall through
 to `en-US`; resolution never raises.
+
+Handlers resolve once per update via `helper.locale.locale_for_update`
+(PM reads the sender, groups read the group row); direct messages use
+`locale_for_user`, updateless event paths use `locale_for_chat`. Locale
+reads are L1-cached (300 s TTL, invalidated on write). Flows carry the
+moderator locale in conversation state and resolve the target locale
+fresh for user DMs.
+
+## Coverage
+
+Every user-facing surface renders in the resolved locale: command
+replies and alerts, conversation prompts and keyboards, executor
+summaries and result cards, profile and drill-down views, the `/help`
+system (per-request rebuild via each module's `get_help(locale)`),
+identity refusals and notices, and all button labels (`button.toml`
+owns every label exactly once).
+
+Stays English by design: audit-log channel posts, staff operational
+messages (demotion warnings, enforcement logs), infra error reports,
+and log labels. Reason and proof records store the moderator's raw
+text; only the surrounding prose translates.
 
 ## Database impact
 

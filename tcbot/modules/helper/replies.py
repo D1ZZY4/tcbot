@@ -21,9 +21,10 @@ class HelpEntry(TypedDict):
 
 # ──────────────────────── Target Syntax ─────────────────────────── #
 
-TARGET_SYNTAX = (
-    "Reply to a message, or provide a user ID / @username after the command\\."
-)
+
+def target_syntax(locale: str | None = None) -> str:
+    """Target-syntax help body in the render locale (V2-escaped)."""
+    return t("common.target.syntax", locale, plain=False)
 
 
 def err_cannot_resolve(locale: str | None = None, *, plain: bool) -> str:
@@ -72,12 +73,34 @@ def err_groups_load_failed(locale: str | None = None, *, plain: bool) -> str:
     return t("common.err.groups_load_failed", locale, plain=plain)
 
 
-# ──────────────────────── Context / Scope ───────────────────────── #
+def err_db_retry(locale: str | None = None, *, plain: bool) -> str:
+    """Database-unreachable retry notice in the render locale."""
+    return t("common.err.db_retry", locale, plain=plain)
 
-CONTEXT_BOT_OR_GROUP = "Bot PM, exec group, or any connected group\\."
-CONTEXT_EXEC_OR_GROUP = "Exec group, any connected group, or bot PM\\."
-CONTEXT_ANYONE = "Anyone, no special permissions needed\\."
-WHERE_CONNECTED_GROUP = "Inside any connected group\\."
+
+# ──────────────────────── Context / Scope ───────────────────────── #
+# * V2-escaped bodies for help "Where" sections.
+
+
+def context_bot_or_group(locale: str | None = None) -> str:
+    """Bot-or-group scope body in the render locale."""
+    return t("common.context.bot_or_group", locale, plain=False)
+
+
+def context_exec_or_group(locale: str | None = None) -> str:
+    """Exec-or-group scope body in the render locale."""
+    return t("common.context.exec_or_group", locale, plain=False)
+
+
+def context_anyone(locale: str | None = None) -> str:
+    """Anyone scope body in the render locale."""
+    return t("common.context.anyone", locale, plain=False)
+
+
+def where_connected_group(locale: str | None = None) -> str:
+    """Connected-group scope body in the render locale."""
+    return t("common.context.connected_group", locale, plain=False)
+
 
 # ─────────────────────── Rate-limit replies ─────────────────────── #
 
@@ -100,9 +123,6 @@ def rate_limit_text(wait_s: float, locale: str | None = None, *, plain: bool) ->
 
 
 # ─────────────────────── Permission Tiers ───────────────────────── #
-# * Locale-aware functions first; legacy V2-escaped constants below stay
-# * for import-time help bodies until the help-label batch threads locale
-# * through help rendering.
 
 
 def perm_founder_only(locale: str | None = None, *, plain: bool) -> str:
@@ -130,13 +150,6 @@ def perm_tester_above(locale: str | None = None, *, plain: bool) -> str:
     return t("common.perm.tester_above", locale, plain=plain)
 
 
-# ──────────────── Legacy Tier Constants (help bodies) ───────────── #
-
-PERM_STAFF_ONLY = "TC Staff \\(Admin and above\\)\\."
-PERM_ADMIN_ABOVE = "Admin and above \\(Founder / Admin\\)\\."
-PERM_DEV_ABOVE = "Developer and above \\(Founder / Admin / Developer\\)\\."
-PERM_TESTER_ABOVE = "Tester and above \\(Founder / Admin / Developer / Tester\\)\\."
-
 # ─────────────────────── Action Defaults ────────────────────────── #
 
 
@@ -146,28 +159,53 @@ def no_reason(locale: str | None = None, *, plain: bool) -> str:
 
 
 # ────────────── Help-section header labels ───────────────────────── #
+# * Raw labels: section buttons show them plain, section titles escape
+# * them via bold().
 
-SEC_COMMANDS = "Commands & Aliases"
-SEC_WHO = "Who can use"
-SEC_WHERE = "Where to use"
-SEC_WHAT = "What it does"
-SEC_EXAMPLES = "Examples"
-SEC_TARGET = "Target syntax"
+
+def sec_commands(locale: str | None = None) -> str:
+    """Commands section label in the render locale."""
+    return t("common.section.commands", locale, plain=True)
+
+
+def sec_who(locale: str | None = None) -> str:
+    """Who section label in the render locale."""
+    return t("common.section.who", locale, plain=True)
+
+
+def sec_where(locale: str | None = None) -> str:
+    """Where section label in the render locale."""
+    return t("common.section.where", locale, plain=True)
+
+
+def sec_what(locale: str | None = None) -> str:
+    """Return the What section label in the render locale."""
+    return t("common.section.what", locale, plain=True)
+
+
+def sec_examples(locale: str | None = None) -> str:
+    """Examples section label in the render locale."""
+    return t("common.section.examples", locale, plain=True)
+
+
+def sec_target(locale: str | None = None) -> str:
+    """Target section label in the render locale."""
+    return t("common.section.target", locale, plain=True)
 
 
 # ─────────── Help-section constructor helpers ──────────────────── #
 
 
-def who_section(perm: str) -> tuple[str, str]:
+def who_section(perm: str, locale: str | None = None) -> tuple[str, str]:
     """Build a 'Who can use' section entry."""
-    return (SEC_WHO, perm)
+    return (sec_who(locale), perm)
 
 
-def where_section(ctx: str) -> tuple[str, str]:
+def where_section(ctx: str, locale: str | None = None) -> tuple[str, str]:
     """Build a 'Where to use' section entry."""
-    return (SEC_WHERE, ctx)
+    return (sec_where(locale), ctx)
 
 
-def target_section() -> tuple[str, str]:
+def target_section(locale: str | None = None) -> tuple[str, str]:
     """Build a standard 'Target syntax' section entry."""
-    return (SEC_TARGET, TARGET_SYNTAX)
+    return (sec_target(locale), target_syntax(locale))

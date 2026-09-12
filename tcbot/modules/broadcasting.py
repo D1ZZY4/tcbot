@@ -21,7 +21,7 @@ from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import count_transient_errors, fan_out
 from tcbot.utils.formatter import code
-from tcbot.utils.i18n import t
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -37,30 +37,33 @@ _RL_LIMIT: int = 3
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Broadcast"
-__help_text__ = t("broadcasting.help.overview", community=cfg.community_name)
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        t("broadcasting.help.commands.body"),
-    ),
-    replies.who_section(replies.perm_staff_only(plain=False)),
-    replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
-    (
-        replies.SEC_WHAT,
-        t("broadcasting.help.what.body", community=cfg.community_name),
-    ),
-    (
-        replies.SEC_EXAMPLES,
-        t("broadcasting.help.examples.body"),
-    ),
-]
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("broadcasting.help.overview", locale, community=cfg.community_name)
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("broadcasting.help.commands.body", locale),
+        ),
+        replies.who_section(replies.perm_staff_only(locale, plain=False), locale),
+        replies.where_section(replies.context_exec_or_group(locale), locale),
+        (
+            replies.sec_what(locale),
+            t("broadcasting.help.what.body", locale, community=cfg.community_name),
+        ),
+        (
+            replies.sec_examples(locale),
+            t("broadcasting.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ──────────────── Command Broadcast </tcbroadcast> ──────────────── #
@@ -89,7 +92,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not broadcast_text and not has_reply:
         await safe_reply(
             msg,
-            "Please provide a message to broadcast, or reply to a message\\.",
+            t("broadcasting.send.no_content", locale),
             log_label="cmd_broadcast no-content",
         )
         return
@@ -114,7 +117,9 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     status = None
     try:
-        status = await msg.reply_text(f"Broadcasting to {len(groups)} group(s)...")
+        status = await msg.reply_text(
+            t("broadcasting.send.sending", locale, n=len(groups), plain=True)
+        )
     except Exception as exc:
         log.debug("cmd_broadcast status reply failed: %s", exc)
 
@@ -176,8 +181,12 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if status is not None:
         edit_r, log_r = await asyncio.gather(
             status.edit_text(
-                f"Broadcast sent to {code(str(success))} groups\\. "
-                f"Failed: {code(str(failed))}\\.",
+                t(
+                    "broadcasting.send.done",
+                    locale,
+                    ok=Safe(code(str(success))),
+                    failed=Safe(code(str(failed))),
+                ),
                 parse_mode="MarkdownV2",
             ),
             log_coro,

@@ -21,3 +21,24 @@ body = """
 `/tcsync`
 `/tcsync @username`
 `/tcsync 123456789`"""
+
+# Runtime strings (syncing.py). [status] sends plain; the rest render
+# as MarkdownV2. Placeholders: {target} raw target words, counts as
+# pre-formatted code, {sample} raw group titles.
+
+[status]
+sending = "Syncing enforcement state..."
+
+[target]
+user = "user {id}"
+sweep = "federation sweep"
+
+[summary]
+title = "*Sync complete* ({target})"
+checked = "Checked: {n}"
+rebanned = "Re-banned: {n}"
+reunbanned = "Re-unbanned: {n}"
+skipped = "Skipped: {n}"
+failed = "Failed: {n}"
+failing = "Still failing in: {sample}"
+truncated = "Note: pair cap reached; re-run to continue the sweep."

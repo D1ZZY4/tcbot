@@ -20,8 +20,8 @@ from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.unban_flow import execute_unban
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import esc, mention
-from tcbot.utils.i18n import t
+from tcbot.utils.formatter import mention
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -39,31 +39,34 @@ _RL_LIMIT: int = 5
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Unban"
-__help_text__ = t("unbanning.help.overview")
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        t("unbanning.help.commands.body"),
-    ),
-    replies.who_section(replies.perm_dev_above(plain=False)),
-    replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
-    (
-        replies.SEC_WHAT,
-        t("unbanning.help.what.body"),
-    ),
-    replies.target_section(),
-    (
-        replies.SEC_EXAMPLES,
-        t("unbanning.help.examples.body"),
-    ),
-]
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("unbanning.help.overview", locale)
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("unbanning.help.commands.body", locale),
+        ),
+        replies.who_section(replies.perm_dev_above(locale, plain=False), locale),
+        replies.where_section(replies.context_exec_or_group(locale), locale),
+        (
+            replies.sec_what(locale),
+            t("unbanning.help.what.body", locale),
+        ),
+        replies.target_section(locale),
+        (
+            replies.sec_examples(locale),
+            t("unbanning.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ──────────────────── Command Unban </tcunban> ──────────────────── #
@@ -128,7 +131,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         # * or target outranks executor); end the handler.
         return
 
-    refusal = identity.refuse_message("unban", ident)
+    refusal = identity.refuse_message("unban", ident, locale)
     if refusal is not None and ident.kind not in ("admin", "developer", "tester"):
         await safe_reply(msg, refusal, log_label="unban refusal")
         return
@@ -175,10 +178,13 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 )
                 await safe_reply(
                     msg,
-                    f"{mention(target_id, target_fname or str(target_id))} "
-                    f"holds a federation role \\({esc(target_role)}\\) and the demote "
-                    "step failed, so the unban cannot proceed safely\\. Demote "
-                    "them manually with /tcdemote and retry the unban\\.",
+                    t(
+                        "demote.abort.body",
+                        locale,
+                        user=Safe(mention(target_id, target_fname or str(target_id))),
+                        target_role=target_role,
+                        action="unban",
+                    ),
                     log_label="unban demote-fail",
                 )
                 return
@@ -199,7 +205,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.exception("execute_unban failed for target=%s", target_id)
         await safe_reply(
             msg,
-            "I couldn't reach the database right now. Please try again in a moment.",
+            replies.err_db_retry(locale, plain=True),
             log_label="unban DB-fail",
             parse_mode=None,
         )

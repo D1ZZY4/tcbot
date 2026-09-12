@@ -48,19 +48,33 @@ inside a file and extend the prefix (`[x]` + `y` = `file.x.y`).
 
 Help content lives per domain (`banning.toml` holds `[help]` tables
 for the ban module, `help.toml` holds the help index header). Only prose
-moves: section order, labels, and dynamic values stay in Python, which
-composes them via the stable keys (`banning.help.overview`,
+moves: section order and dynamic values stay in Python, which composes
+them via the stable keys (`banning.help.overview`,
 `banning.help.what.body`, ...). Migrate one domain at a time; never
 leave prose duplicated between TOML and Python.
+
+Section labels and scope bodies are shared (`common.toml` `[section]`,
+`[context]`, `[target]`): labels render raw (plain buttons show them
+verbatim, section titles escape them via `bold()`), bodies render
+MarkdownV2. `who_section` / `where_section` / `target_section` take the
+locale alongside the body.
+
+Every module exposes `get_help(locale)` returning its `HelpEntry`;
+`__help__` stays as the default-locale entry for tests and fallbacks.
+`help.py` rebuilds content per request via `_builder_help(locale)`, so
+topics, overviews, sections, and keyboards all follow the tapper's
+locale. Module display names stay English identifiers.
 
 ## Runtime strings
 
 Command replies, prompts, and result lines migrate the same way: prose
 in TOML, structure in Python. Handlers resolve the render locale once
-via `language.locale_for_update(update)`: private chats use the
+via `helper.locale.locale_for_update(update)`: private chats use the
 sender's personal locale, groups use the group locale, so a shared
-audience always reads one language. Every `t()` call passes that
-locale explicitly; the default locale is only for tests and goldens.
+audience always reads one language. Direct messages to one user resolve
+via `locale_for_user`; event handlers without an update use
+`locale_for_chat`. Every `t()` call passes that locale explicitly; the
+default locale is only for tests and goldens.
 
 Each key documents its send path. Keys sent without `parse_mode` must
 render with `plain=True` (Telegram never parses them, so escaped text

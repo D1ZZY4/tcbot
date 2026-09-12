@@ -25,3 +25,20 @@ body = """
 `/tckick @username being disruptive`: reason inline
 `/tck 123456789`: bot will ask for reason
 Or reply to a message and run `/tck`."""
+
+# Runtime strings for the kick executor (kicking_flow.py).
+# [warn]/[summary]/[error] render as MarkdownV2.
+# Placeholders: {user} pre-formatted user reference, {reason} raw reason
+# text, {rejoin}/{warning} prebuilt lines.
+
+[rejoin]
+body = "They can rejoin via invite link."
+
+[warn]
+unban = " WARNING: the post-kick unban step failed; the user is still banned in this chat and cannot rejoin. Demote them manually if needed and unban from the chat member list."
+
+[summary]
+body = "{user} has been kicked.\nReason: {reason}\n{rejoin}{warning}"
+
+[error]
+body = "Couldn't kick {user}. Please check bot permissions and retry."

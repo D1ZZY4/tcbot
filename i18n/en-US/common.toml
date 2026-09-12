@@ -17,6 +17,7 @@ group_not_found = "Group not found or already removed."
 perm_expired = "You no longer have permission to do this."
 unknown_role = "Unknown role."
 groups_load_failed = "Could not load the group list due to a server error. Please try again."
+db_retry = "I couldn't reach the database right now. Please try again in a moment."
 
 [perm]
 founder_only = "Founder only."
@@ -31,3 +32,23 @@ text = "Slow down - try again in {wait} seconds."
 
 [action]
 no_reason = "No reason provided"
+
+# Help section labels (raw: buttons show them plain, titles escape them
+# via bold()) and scope bodies (V2-escaped prose).
+
+[section]
+commands = "Commands & Aliases"
+who = "Who can use"
+where = "Where to use"
+what = "What it does"
+examples = "Examples"
+target = "Target syntax"
+
+[context]
+bot_or_group = "Bot PM, exec group, or any connected group."
+exec_or_group = "Exec group, any connected group, or bot PM."
+anyone = "Anyone, no special permissions needed."
+connected_group = "Inside any connected group."
+
+[target]
+syntax = "Reply to a message, or provide a user ID / @username after the command."

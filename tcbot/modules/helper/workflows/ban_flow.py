@@ -23,6 +23,7 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg, replies
+from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.modules.helper.parse_editmsg import clear_markup_cb, safe_edit_cb, safe_reply
 from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
@@ -36,7 +37,8 @@ from tcbot.utils.dispatch import (
     fan_out,
     is_benign_telegram_error,
 )
-from tcbot.utils.formatter import esc, mention, user_ref
+from tcbot.utils.formatter import mention, user_ref
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 from tcbot.utils.time_and_date import monotonic, to_utc, utc_now
 
@@ -52,12 +54,8 @@ from tcbot.database.documents import BanDoc
 log = logging.getLogger(__name__)
 
 # ──────────────── User-facing reply constants ──────────────────── #
-
-_MSG_CANCELLED = "Cancelled. No ban was issued."
-_MSG_TIMEOUT = "Timed out waiting for proof. No ban was issued."
-_MSG_PROOF_EXPECTED = (
-    "Please send a photo, video, GIF, or file as proof, or press Cancel."
-)
+# * Ban-flow runtime prose lives in banning.toml [state]/[db_fail]/
+# * [applied]/[pm]/[summary]; only the key tuple below stays in code.
 
 _BAN_USER_DATA_KEYS = (
     "ban_target_id",
@@ -70,6 +68,7 @@ _BAN_USER_DATA_KEYS = (
     "ban_target_role",
     "ban_duration",
     "ban_executing",
+    "ban_locale",
 )
 
 WAITING_PROOF = 0
@@ -178,7 +177,7 @@ async def demote_ban_target(
 
 
 def proof_prompt_content(
-    target_id: int, target_fname: str, reason: str
+    target_id: int, target_fname: str, reason: str, locale: str | None = None
 ) -> tuple[str, InlineKeyboardMarkup]:
     """Build the proof-collection prompt text and keyboard (single owner).
 
@@ -186,22 +185,24 @@ def proof_prompt_content(
     Continue handler (as an in-place edit of the confirm message).
     """
     return (
-        proof.noted_prompt("ban", reason, mention(target_id, target_fname)),
-        proof.keyboard(),
+        proof.noted_prompt(
+            "ban", reason, mention(target_id, target_fname), locale=locale
+        ),
+        proof.keyboard(locale),
     )
 
 
 async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> None:
     target_id: int = meta.get("ban_target_id") or 0
     target_fname: str = meta.get("ban_target_fname", str(target_id))
-    # TODO: Thread render locale through flow meta so state defaults
-    # TODO: render per-locale (Batch 3); raw default is identical today.
-    reason: str = meta.get("ban_reason", replies.no_reason(None, plain=True))
+    locale: str | None = meta.get("ban_locale")
+    reason: str = meta.get("ban_reason", replies.no_reason(locale, plain=True))
     admin_id: int = meta.get("ban_admin_id") or 0
     admin_fname: str = meta.get("ban_admin_fname", "Admin")
     prompt_msg_id: int = meta.get("ban_prompt_msg_id", 0)
     prompt_chat_id: int = meta.get("ban_prompt_chat_id", 0)
     ban_duration = meta.get("ban_duration")
+    target_locale = await locale_for_user(target_id)
 
     now = utc_now()
     # * ban_duration is reserved for future timed-ban support; Telegram enforcement
@@ -285,11 +286,10 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     # * find it). No group is touched below; the operator retries via /tcban
     # * once the database recovers.
     if not db_ok:
-        _db_fail_text = (
-            f"{user_ref(target_id, target_fname)} could not be banned: "
-            "the federation ban record could not be written to the database, "
-            "so no groups were touched\\. Check the logs and retry with /tcban "
-            "once the database recovers\\."
+        _db_fail_text = t(
+            "banning.db_fail.body",
+            locale,
+            user=Safe(user_ref(target_id, target_fname)),
         )
         if prompt_msg_id and prompt_chat_id:
             try:
@@ -406,43 +406,52 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     # * Build the applied-to line, surfacing a clear warning when no group was updated
     total_groups = len(groups)
     if total_groups == 0:
-        applied_line = "No connected groups configured\\."
+        applied_line = t("banning.applied.empty", locale)
     elif failed == total_groups:
         sample = ", ".join(
             grp.get("title") or str(grp["chat_id"]) for grp, _ in transient_groups[:5]
         )
-        applied_line = (
-            f"WARNING: ban not enforced in any group \\({total_groups}/{total_groups} failed\\)\\."
-            f" Check bot admin rights in: {esc(sample)}"
-            + (" \\.\\.\\." if len(transient_groups) > 5 else "")
+        applied_line = t(
+            "banning.applied.none",
+            locale,
+            total=total_groups,
+            sample=sample,
+            more=" ..." if len(transient_groups) > 5 else "",
         )
     elif failed > 0:
         sample = ", ".join(
             grp.get("title") or str(grp["chat_id"]) for grp, _ in transient_groups[:3]
         )
-        applied_line = (
-            f"Applied to {total_groups - failed}/{total_groups} groups"
-            f" \\({failed} failed: {esc(sample)}"
-            + (" \\.\\.\\.\\)" if len(transient_groups) > 3 else "\\)")
+        applied_line = t(
+            "banning.applied.partial",
+            locale,
+            done=total_groups - failed,
+            total=total_groups,
+            failed=failed,
+            sample=sample,
+            more=" ...)" if len(transient_groups) > 3 else ")",
         )
     else:
-        applied_line = f"Applied to {total_groups}/{total_groups} groups\\."
+        applied_line = t("banning.applied.full", locale, total=total_groups)
 
     # * Build PM content before the conditional so it can fire in parallel with
     # * both upsert_user and (optionally) edit_message_text.  All three operations
     # * are independent: no output of one is an input to another.
-    _pm_text = (
-        f"You have been federation\\-banned from {esc(cfg.community_name)}\\.\n"
-        f"Reason: {esc(reason)}\n\n"
-        "You may submit an appeal using the button below\\."
+    _pm_text = t(
+        "banning.pm.body",
+        target_locale,
+        community=cfg.community_name,
+        reason=reason,
     )
-    _pm_kb = keyboards.appeal_button_kb(bot_username, ban_id)
+    _pm_kb = keyboards.appeal_button_kb(bot_username, ban_id, target_locale)
 
     # * Edit prompt summary + cache user + notify banned user in one round-trip.
-    summary = (
-        f"{user_ref(target_id, target_fname)} has been banned\\.\n"
-        f"Reason: {esc(reason)}\n"
-        f"{applied_line}"
+    summary = t(
+        "banning.summary.body",
+        locale,
+        user=Safe(user_ref(target_id, target_fname)),
+        reason=reason,
+        applied=Safe(applied_line),
     )
     if prompt_msg_id and prompt_chat_id:
         # * The text edit below keeps the old keyboard (the parameter is
@@ -519,7 +528,9 @@ async def _execute_ban_update(
     admin_fname: str = meta.get("ban_admin_fname", "Admin")
     # TODO: Thread render locale through flow meta so state defaults
     # TODO: render per-locale (Batch 3); raw default is identical today.
-    reason: str = meta.get("ban_reason", replies.no_reason(None, plain=True))
+    reason: str = meta.get(
+        "ban_reason", replies.no_reason(meta.get("ban_locale"), plain=True)
+    )
     ban_id = str(existing.get("ban_id", ""))
     old_admin_id = int(existing.get("admin_user_id", admin_id))
     bot_username = bot.username or ""
@@ -547,10 +558,14 @@ async def _execute_ban_update(
     )
     _appeal_url = appeal_deep_link(bot_username, ban_id)
     kb = (
-        keyboards.ban_log_update(target_id, proof_link, prev_proof_link, _appeal_url)
+        keyboards.ban_log_update(
+            target_id, proof_link, prev_proof_link, _appeal_url, meta.get("ban_locale")
+        )
         if proof_link and prev_proof_link
         else (
-            keyboards.ban_log_new(target_id, proof_link, _appeal_url)
+            keyboards.ban_log_new(
+                target_id, proof_link, _appeal_url, meta.get("ban_locale")
+            )
             if proof_link
             else None
         )
@@ -608,7 +623,9 @@ async def _execute_new_ban(
     admin_fname: str = meta.get("ban_admin_fname", "Admin")
     # TODO: Thread render locale through flow meta so state defaults
     # TODO: render per-locale (Batch 3); raw default is identical today.
-    reason: str = meta.get("ban_reason", replies.no_reason(None, plain=True))
+    reason: str = meta.get(
+        "ban_reason", replies.no_reason(meta.get("ban_locale"), plain=True)
+    )
     bot_username = bot.username or ""
 
     log_text = parse_logmsg.ban_log(
@@ -623,7 +640,10 @@ async def _execute_new_ban(
     )
     kb = (
         keyboards.ban_log_new(
-            target_id, proof_link, appeal_deep_link(bot_username, ban_id)
+            target_id,
+            proof_link,
+            appeal_deep_link(bot_username, ban_id),
+            meta.get("ban_locale"),
         )
         if proof_link
         else None
@@ -685,7 +705,9 @@ async def on_ban_update_continue(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
         admin_fname,
     ):
         return ConversationHandler.END
-    text, kb = proof_prompt_content(target_id, target_fname, reason)
+    text, kb = proof_prompt_content(
+        target_id, target_fname, reason, await locale_for_update(update)
+    )
     try:
         await q.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=kb)
     except Exception as exc:
@@ -745,8 +767,14 @@ async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         # * Nothing to flush (or the auto-flush already claimed it):
         # * nudge instead of executing an empty proof.
         try:
+            locale = await locale_for_update(update)
             await q.answer(
-                "Send a photo, video, GIF, or file first, then tap Done.",
+                t(
+                    "banning.state.empty",
+                    locale,
+                    done=t("button.done", locale, plain=True),
+                    plain=True,
+                ),
                 show_alert=True,
             )
         except Exception as exc:
@@ -827,7 +855,11 @@ async def on_proof_unexpected(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     if update.effective_message:
         await safe_reply(
             update.effective_message,
-            _MSG_PROOF_EXPECTED,
+            t(
+                "banning.state.proof_expected",
+                await locale_for_update(update),
+                plain=True,
+            ),
             log_label="Ban proof-unexpected",
             parse_mode=None,
         )
@@ -846,7 +878,9 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
     # * Edit the prompt in place instead of a new reply, and strip its
     # * buttons: a text-only edit keeps the old keyboard, which would leave
     # * dead Cancel/Done buttons behind on an ended conversation.
-    await safe_edit_cb(q, esc(_MSG_CANCELLED))
+    await safe_edit_cb(
+        q, t("banning.state.cancelled", await locale_for_update(update), plain=False)
+    )
     await clear_markup_cb(q)
     return ConversationHandler.END
 
@@ -875,7 +909,11 @@ async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
     if update.effective_message:
         await safe_reply(
             update.effective_message,
-            _MSG_TIMEOUT,
+            t(
+                "banning.state.timeout",
+                await locale_for_update(update),
+                plain=True,
+            ),
             log_label="Ban proof-timeout",
             parse_mode=None,
         )

@@ -37,3 +37,50 @@ Your appeal is forwarded to TC Staff for review. The admin who issued the origin
 If approved: your ban is lifted immediately across all connected groups.
 If rejected: your ban remains in place.
 You will be notified by the bot either way."""
+
+# Runtime strings for appeal submission (appeal_submit_flow.py).
+# All send plain (PM replies, alerts, plain edits): plain=True.
+# Placeholders: {hours}/{remaining}/{max} ints, {community}/{handle}/
+# {logs} raw config values.
+
+[submit]
+not_private = "Please open this link in my private messages."
+invalid_link = "This appeal link is invalid or has expired."
+wrong_account = "This appeal link doesn't belong to your account."
+pending_review = "You already have a pending appeal under review. If no decision is reached within {hours} hours, you may try again."
+cooldown = "Your previous appeal was rejected. Please wait {hours} hours before submitting a new one. ({remaining}h remaining)"
+cancelled = "Appeal cancelled. Nothing was submitted."
+unexpected = "Please send your appeal message, or press Cancel."
+session_ended = "Appeal session ended."
+too_long = "Your appeal message is too long (max {max} characters). Please shorten it and try again."
+session_expired = "Session expired - please start the appeal again."
+invalid_log = "Invalid log link. Please check and try again."
+submitted = "Your appeal has been submitted. The team will review it shortly - we'll get back to you."
+delivery_failed = "We could not deliver your appeal to the moderation team right now. Please try again in a few minutes; if this keeps happening, contact a staff member directly."
+
+[instruction]
+title = "{community} Ban Appeal"
+intro = "To submit your appeal, reply with a message starting with `#appeal`, containing:"
+log_item = "- *Log link:* (the link to your ban log from the log channel)"
+clarify_item = "- *Clarification:* (your honest explanation of what happened)"
+agree_item = "- *Agreement:* (your commitment not to repeat the violation)"
+example_label = "*Example:*"
+example_body = """#appeal
+Log link: https://t.me/{logs}/1
+Clarification: I spammed unintentionally due to an auto-clicker.
+Agreement: I will not use any automation tools in the group again."""
+channel = "Log Channel: {handle}"
+
+[review]
+not_authorized = "You are not authorized."
+role_lookup = "I couldn't verify federation roles right now. Please try again in a moment."
+ban_not_found = "Ban record not found."
+already_resolved = "Appeal already resolved (ban is no longer active)."
+db_retry = "The database write failed. The review card is unchanged, tap again to retry."
+review_locked = "Only the admin who issued this ban can review it within the first {hours}h."
+
+[decision]
+approve_dm = "Your appeal for ban {ban_id} has been approved - you're now unbanned from {community}. Welcome back."
+approve_card = "Appeal approved by {admin}. Unbanned."
+reject_dm = "Your appeal for ban {ban_id} was not approved. The ban remains in place."
+reject_card = "Appeal rejected by {admin}."

@@ -18,8 +18,8 @@ from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
-from tcbot.utils.formatter import code, esc
-from tcbot.utils.i18n import t
+from tcbot.utils.formatter import code
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
 
@@ -28,14 +28,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-# ──────────────── User-facing reply constants ──────────────────── #
-
-_MSG_RMTC_USAGE = "Usage: /rmtc <chat_id>"
-_MSG_PRIMARY_REFUSED = (
-    "This is a primary group of the federation (main or exec). It cannot "
-    "be disconnected. The bot is required in primary groups for ban / unban "
-    "/ mute / warn fan-out and the federation log channel."
-)
+# * Disconnect runtime prose lives in disconnecting.toml [state]/[removed].
 
 # ─────────────────────── Rate-limiter constants ──────────────────── #
 _RL_PERIOD_S: int = 60
@@ -46,30 +39,33 @@ _RL_RMTC_LIMIT: int = 5
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Disconnect"
-__help_text__ = t("disconnecting.help.overview", community=cfg.community_name)
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        t("disconnecting.help.commands.body"),
-    ),
-    replies.who_section(t("disconnecting.help.who.body")),
-    replies.where_section(t("disconnecting.help.where.body")),
-    (
-        replies.SEC_WHAT,
-        t("disconnecting.help.what.body", community=cfg.community_name),
-    ),
-    (
-        replies.SEC_EXAMPLES,
-        t("disconnecting.help.examples.body"),
-    ),
-]
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("disconnecting.help.overview", locale, community=cfg.community_name)
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("disconnecting.help.commands.body", locale),
+        ),
+        replies.who_section(t("disconnecting.help.who.body", locale), locale),
+        replies.where_section(t("disconnecting.help.where.body", locale), locale),
+        (
+            replies.sec_what(locale),
+            t("disconnecting.help.what.body", locale, community=cfg.community_name),
+        ),
+        (
+            replies.sec_examples(locale),
+            t("disconnecting.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ────────── Command to Disconnect a Group </tcdisconnect> ───────── #
@@ -107,7 +103,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     if cfg.is_primary_group(chat.id):
         await safe_reply(
             msg,
-            _MSG_PRIMARY_REFUSED,
+            t("disconnecting.state.primary_refused", locale, plain=True),
             log_label="cmd_tcleave primary-group",
             parse_mode=None,
         )
@@ -128,8 +124,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         log.warning("is_connected check failed for chat=%d: %s", chat.id, is_connected)
         await safe_reply(
             msg,
-            "Could not verify the group status due to a server error. "
-            "Please try again.",
+            t("disconnecting.state.status_failed", locale, plain=True),
             log_label="cmd_tcleave status-check-failed",
             parse_mode=None,
         )
@@ -137,7 +132,12 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     if not is_connected:
         await safe_reply(
             msg,
-            f"This group is not connected to {cfg.community_name}.",
+            t(
+                "disconnecting.state.not_connected",
+                locale,
+                community=cfg.community_name,
+                plain=True,
+            ),
             log_label="cmd_tcleave not-connected",
             parse_mode=None,
         )
@@ -157,12 +157,9 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
     if not is_tc_staff and not is_group_owner:
         if user.id == ANONYMOUS_BOT_ID:
-            msg_text = (
-                "Anonymous admin mode is active. Please send this command from your "
-                "personal account, or ask TC Staff to run /rmtc."
-            )
+            msg_text = t("disconnecting.state.anon_admin", locale, plain=True)
         else:
-            msg_text = "Only the group owner or TC admins can disconnect this group."
+            msg_text = t("disconnecting.state.not_authorized", locale, plain=True)
         await safe_reply(
             msg, msg_text, log_label="cmd_tcleave not-authorized", parse_mode=None
         )
@@ -179,8 +176,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     if not deactivated:
         await safe_reply(
             msg,
-            "Failed to disconnect the group due to a server error. "
-            "The bot is still here; please try again.",
+            t("disconnecting.state.deactivate_failed", locale, plain=True),
             log_label="cmd_tcleave deactivate-failed",
             parse_mode=None,
         )
@@ -194,7 +190,14 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             parse_mode="MarkdownV2",
             message_thread_id=lt,
         ),
-        msg.reply_text(f"This group has been disconnected from {cfg.community_name}."),
+        msg.reply_text(
+            t(
+                "disconnecting.state.disconnected",
+                locale,
+                community=cfg.community_name,
+                plain=True,
+            )
+        ),
         ctx.bot.leave_chat(chat.id),
         return_exceptions=True,
     )
@@ -227,7 +230,10 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
     if not args or not args[0].lstrip("-").isdigit():
         await safe_reply(
-            msg, _MSG_RMTC_USAGE, log_label="cmd_rmtc usage", parse_mode=None
+            msg,
+            t("disconnecting.state.usage", locale, plain=True),
+            log_label="cmd_rmtc usage",
+            parse_mode=None,
         )
         return
 
@@ -240,7 +246,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if cfg.is_primary_group(chat_id):
         await safe_reply(
             msg,
-            _MSG_PRIMARY_REFUSED,
+            t("disconnecting.state.primary_refused", locale, plain=True),
             log_label="cmd_rmtc primary-group",
             parse_mode=None,
         )
@@ -254,7 +260,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.exception("deactivate_group failed for chat %d during rmtc", chat_id)
         await safe_reply(
             msg,
-            "Failed to disconnect the group due to a server error. Please try again.",
+            t("disconnecting.state.rmtc_failed", locale, plain=True),
             log_label="cmd_rmtc deactivate-failed",
             parse_mode=None,
         )
@@ -276,7 +282,12 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             ),
             ctx.bot.leave_chat(chat_id),
             msg.reply_text(
-                f"Group {code(str(chat_id))} has been disconnected from {esc(cfg.community_name)}\\.",
+                t(
+                    "disconnecting.removed.body",
+                    locale,
+                    id=Safe(code(str(chat_id))),
+                    community=cfg.community_name,
+                ),
                 parse_mode="MarkdownV2",
             ),
             return_exceptions=True,

@@ -1,0 +1,26 @@
+# Reason-step strings shared by ban/kick/mute/warn flows.
+# Structure stays in reason_flow.py; only prose lives here.
+# [limit]/[unexpected] send plain (parse_mode=None): plain=True at call sites.
+# [prompt] renders as MarkdownV2.
+# Placeholders: {verb} bare action verb, {target} V2-ready mention,
+# {suffix} V2-ready extra, {skip_hint} prebuilt hint, {action}/{Action}
+# raw action stems, {skip}/{cancel} button labels, {max}/{actual} ints.
+
+[limit]
+text = "Reason is too long (max {max} characters, you sent {actual}). Please shorten it."
+
+[prompt]
+body = "About to {verb} {target}{suffix}.\nWhat's the reason? Type it below{skip_hint}."
+
+[hint]
+skip = ", or tap {label}"
+
+[unexpected]
+body = "Please type your {action} reason as text, or press {skip} / {cancel}."
+
+[cancel]
+body = "Got it, {action} cancelled. No action was taken."
+via_command = "{Action} operation cancelled."
+
+[target]
+fallback = "target"

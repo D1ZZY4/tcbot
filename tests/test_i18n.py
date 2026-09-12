@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 import re
 from pathlib import Path
 from types import SimpleNamespace
@@ -778,6 +779,40 @@ def test_replies_tiers_golden() -> None:
         == "Slow down - try again in 1 seconds."
     )
     assert replies.no_reason(DEFAULT_LOCALE, plain=True) == "No reason provided"
+
+
+# ─────── Per-locale help rendering ─────── #
+
+
+def test_get_help_matches_default_import() -> None:
+
+    for mod_name in (
+        "admins",
+        "appeals",
+        "banning",
+        "broadcasting",
+        "checking",
+        "connecting",
+        "disconnecting",
+        "groups",
+        "kicking",
+        "language",
+        "maintenance",
+        "muting",
+        "netspeed",
+        "stats",
+        "syncing",
+        "unbanning",
+        "warnings",
+    ):
+        mod = importlib.import_module(f"tcbot.modules.{mod_name}")
+        assert dict(mod.get_help()) == dict(mod.__help__), mod_name
+        assert dict(mod.get_help(DEFAULT_LOCALE)) == dict(mod.__help__), mod_name
+
+
+def test_builder_help_default_matches_import_content() -> None:
+    assert helpmod._builder_help(None) == helpmod.HELP_CONTENT
+    assert set(helpmod._builder_help(DEFAULT_LOCALE)) == set(helpmod.HELP_CONTENT)
 
 
 def test_panel_renders_v2_clean() -> None:

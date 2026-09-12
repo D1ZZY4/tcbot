@@ -32,10 +32,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-# ──────────────── User-facing reply constants ──────────────────── #
-
-_ERR_ADMIN_REQUIRED = "Only group admins can request to connect."
-_ERR_PENDING_REQUEST = "A connect request for this group is already pending."
+# * Connect runtime prose lives in connecting.toml [state].
 
 # ─────────────────────── Rate-limiter constants ──────────────────── #
 _RL_PERIOD_S: int = 60
@@ -45,40 +42,44 @@ _RL_LIMIT: int = 3
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Connect"
-__help_text__ = t("connecting.help.overview", community=cfg.community_name)
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        t("connecting.help.commands.body"),
-    ),
-    replies.who_section(t("connecting.help.who.body")),
-    replies.where_section(
-        t("connecting.help.where.body", community=cfg.community_name)
-    ),
-    (
-        replies.SEC_WHAT,
-        t("connecting.help.what.body", community=cfg.community_name),
-    ),
-    (
-        "Required permissions",
-        t("connecting.help.permissions.body"),
-    ),
-    (
-        "Notes",
-        t("connecting.help.notes.body"),
-    ),
-    (
-        replies.SEC_EXAMPLES,
-        t("connecting.help.examples.body"),
-    ),
-]
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("connecting.help.overview", locale, community=cfg.community_name)
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("connecting.help.commands.body", locale),
+        ),
+        replies.who_section(t("connecting.help.who.body", locale), locale),
+        replies.where_section(
+            t("connecting.help.where.body", locale, community=cfg.community_name),
+            locale,
+        ),
+        (
+            replies.sec_what(locale),
+            t("connecting.help.what.body", locale, community=cfg.community_name),
+        ),
+        (
+            "Required permissions",
+            t("connecting.help.permissions.body", locale),
+        ),
+        (
+            "Notes",
+            t("connecting.help.notes.body", locale),
+        ),
+        (
+            replies.sec_examples(locale),
+            t("connecting.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ───────────── Command to Connect a Group </tcconnect> ──────────── #
@@ -138,7 +139,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if member.status not in ("administrator", "creator"):
         await safe_reply(
             msg,
-            _ERR_ADMIN_REQUIRED,
+            t("connecting.state.admin_required", locale, plain=True),
             log_label="cmd_tctc admin-required",
             parse_mode=None,
         )
@@ -150,8 +151,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if cfg.is_primary_group(chat.id):
         await safe_reply(
             msg,
-            "This is a primary group of the federation (main or exec). "
-            "Primary groups are not connected via /tcconnect.",
+            t("connecting.state.primary_group", locale, plain=True),
             log_label="cmd_tctc primary-group",
             parse_mode=None,
         )
@@ -165,7 +165,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if is_connected:
         await safe_reply(
             msg,
-            connection.already_connected_message(),
+            connection.already_connected_message(locale),
             log_label="cmd_tctc already-connected",
             parse_mode=None,
         )
@@ -174,7 +174,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if pending:
         await safe_reply(
             msg,
-            _ERR_PENDING_REQUEST,
+            t("connecting.state.pending_request", locale, plain=True),
             log_label="cmd_tctc pending-request",
             parse_mode=None,
         )
@@ -193,7 +193,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not connection.check_perms(bot_member):
         await safe_reply(
             msg,
-            connection.perms_required_message(),
+            connection.perms_required_message(locale),
             log_label="cmd_tctc perms-required",
             parse_mode=None,
         )
@@ -211,14 +211,14 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.exception("complete_join failed for chat %d", chat.id)
         await safe_reply(
             msg,
-            "Failed to connect the group due to a server error. Please try again.",
+            t("connecting.state.connect_failed", locale, plain=True),
             log_label="connect failure",
             parse_mode=None,
         )
         return
     await safe_reply(
         msg,
-        connection.connected_message(),
+        connection.connected_message(locale),
         log_label=f"connected for chat {chat.id}",
         parse_mode=None,
     )

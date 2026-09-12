@@ -29,6 +29,7 @@ from tcbot.modules.helper.extraction import (
 from tcbot.modules.helper.keyboards import back_to_module_kb, paged_drill_kb
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, code, esc, mention, user_ref
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.pagination import date_or_unknown, paginate
 from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
 
@@ -54,12 +55,9 @@ RESULTS_KEY = "stats_search_results"
 MSG_KEY = "stats_search_msg_id"
 CHAT_KEY = "stats_search_chat_id"
 
-# ──────────────── User-facing reply constants ──────────────────── #
-
-_ERR_USER_NOT_FOUND = "User not found in this page\\."
-_ERR_GROUP_NOT_FOUND = "Group not found in this page\\."
-_ERR_BAN_NOT_FOUND = "Ban record not found in this page\\."
-_ERR_RESULT_UNAVAILABLE = "Result no longer available\\."
+# * Stats runtime prose lives in stats.toml [error]/[button]/[main]/
+# * [roster]/[users]/[user_detail]/[chats]/[chat_detail]/[bans_view]/
+# * [search]; only tunables stay in code.
 
 
 # * Strong references to in-flight background-refresh tasks; prevents GC
@@ -97,14 +95,20 @@ def launch_group_title_refresh(bot: Bot, chat_id: int) -> None:
     task.add_done_callback(_refresh_tasks.discard)
 
 
-def _back_main() -> list[InlineKeyboardButton]:
-    return [InlineKeyboardButton("« Back", callback_data="stats_main")]
+def _back_main(locale: str | None = None) -> list[InlineKeyboardButton]:
+    return [
+        InlineKeyboardButton(
+            t("button.back", locale, plain=True), callback_data="stats_main"
+        )
+    ]
 
 
 # ─────────────────────── Keyboard builders ──────────────────────── #
 
 
-def main_kb(*, show_users: bool = False) -> InlineKeyboardMarkup:
+def main_kb(
+    *, show_users: bool = False, locale: str | None = None
+) -> InlineKeyboardMarkup:
     """Top-level ``/tcstats`` menu: Staff / Bans / Chats drill-downs.
 
     The ``Users`` list carries every cached user ID, so its button is shown
@@ -115,19 +119,19 @@ def main_kb(*, show_users: bool = False) -> InlineKeyboardMarkup:
     rows = [
         [
             InlineKeyboardButton(
-                "Staff Roster",
+                t("stats.button.roster", locale, plain=True),
                 callback_data="stats_admins",
                 style=KeyboardButtonStyle.PRIMARY,
             ),
             InlineKeyboardButton(
-                "User Bans",
+                t("stats.button.bans", locale, plain=True),
                 callback_data="stats_bans:0",
                 style=KeyboardButtonStyle.PRIMARY,
             ),
         ],
         [
             InlineKeyboardButton(
-                "Connected Chats",
+                t("stats.button.chats", locale, plain=True),
                 callback_data="stats_chats:0",
                 style=KeyboardButtonStyle.PRIMARY,
             ),
@@ -137,7 +141,7 @@ def main_kb(*, show_users: bool = False) -> InlineKeyboardMarkup:
         rows.append(
             [
                 InlineKeyboardButton(
-                    "Users",
+                    t("stats.button.users", locale, plain=True),
                     callback_data="stats_users:0",
                     style=KeyboardButtonStyle.PRIMARY,
                 )
@@ -146,9 +150,9 @@ def main_kb(*, show_users: bool = False) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(rows)
 
 
-def back_kb() -> InlineKeyboardMarkup:
+def back_kb(locale: str | None = None) -> InlineKeyboardMarkup:
     """Single ``« Back`` returning to the stats main menu."""
-    return InlineKeyboardMarkup([_back_main()])
+    return InlineKeyboardMarkup([_back_main(locale)])
 
 
 def _list_kb(
@@ -205,7 +209,7 @@ class Stats:
 
     @classmethod
     async def main(
-        cls, *, viewer_id: int | None = None
+        cls, *, viewer_id: int | None = None, locale: str | None = None
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Federation overview: Founder, staff total, user cache, bans, chats.
 
@@ -275,29 +279,30 @@ class Stats:
                     exc,
                 )
                 owner_fname, owner_uname = str(owner_id_int), None
-            owner_line = mention(owner_id_int, owner_fname, owner_uname)
+            owner_line = Safe(mention(owner_id_int, owner_fname, owner_uname))
         else:
-            owner_line = "Not set"
+            owner_line = Safe(t("stats.main.owner_unset", locale))
 
         staff_total = (
             (1 if owner_id else 0) + admin_count + len(developers) + len(testers)
         )
 
         text = (
-            f"{bold(cfg.community_name)} {bold('Stats')}\n\n"
-            f"Founder: {owner_line}\n"
-            f"Staff: {bold(str(staff_total))} "
-            f"\\(Admins {admin_count}, Devs {len(developers)}, Testers {len(testers)}\\)\n"
-            f"Users tracked: {bold(str(user_count))}\n"
-            f"Active bans: {bold(str(ban_count))}\n"
-            f"Connected chats: {bold(str(group_count))}"
+            f"{t('stats.main.title', locale, community=Safe(bold(cfg.community_name)))}\n\n"
+            f"{t('stats.main.founder', locale, owner=owner_line)}\n"
+            f"{t('stats.main.staff', locale, n=Safe(bold(str(staff_total))), admins=admin_count, devs=len(developers), testers=len(testers))}\n"
+            f"{t('stats.main.users', locale, n=Safe(bold(str(user_count))))}\n"
+            f"{t('stats.main.bans', locale, n=Safe(bold(str(ban_count))))}\n"
+            f"{t('stats.main.chats', locale, n=Safe(bold(str(group_count))))}"
         )
-        return text, main_kb(show_users=show_users)
+        return text, main_kb(show_users=show_users, locale=locale)
 
     # ── Staff roster ─────────────────────────────────────────────────────
 
     @classmethod
-    async def staff_roster(cls) -> tuple[str, InlineKeyboardMarkup]:
+    async def staff_roster(
+        cls, locale: str | None = None
+    ) -> tuple[str, InlineKeyboardMarkup]:
         """Full staff breakdown: Founder, Admins, Developers, Testers."""
         owner_id, admins, developers, testers = await asyncio.gather(
             db.users_roles.get_owner_id(),
@@ -330,34 +335,62 @@ class Stats:
         # Single batch query for all users
         mention_data_map = await db.users_cache.get_mention_data_batch(all_user_ids)
 
-        lines = [f"{bold('Staff Roster')} \\- {esc(cfg.community_name)}\n"]
+        lines = [
+            t(
+                "stats.roster.title",
+                locale,
+                community=Safe(esc(cfg.community_name)),
+            )
+            + "\n"
+        ]
 
         if owner_idx is not None:
-            lines.append(bold("Founder"))
+            lines.append(t("stats.roster.founder", locale))
             owner_fname, owner_uname = mention_data_map[owner_id_int]
-            lines.append(f"\\- {mention(owner_id_int, owner_fname, owner_uname)}\n")
+            lines.append(
+                t(
+                    "stats.roster.member",
+                    locale,
+                    user=Safe(mention(owner_id_int, owner_fname, owner_uname)),
+                )
+                + "\n"
+            )
 
         def _section(label: str, docs: list) -> None:
-            lines.append(bold(f"{label} ({len(docs)})"))
+            lines.append(
+                t(
+                    "stats.roster.section",
+                    locale,
+                    label=Safe(bold(f"{label} ({len(docs)})")),
+                )
+            )
             if docs:
                 for doc in docs:
                     uid = doc.get("user_id", 0)
                     fname, uname = mention_data_map[uid]
-                    lines.append(f"\\- {mention(uid, fname, uname)}")
+                    lines.append(
+                        t(
+                            "stats.roster.member",
+                            locale,
+                            user=Safe(mention(uid, fname, uname)),
+                        )
+                    )
             else:
-                lines.append("\\- No staff assigned")
+                lines.append(t("stats.roster.empty", locale))
             lines.append("")
 
         _section("Admins", admins)
         _section("Developers", developers)
         _section("Testers", testers)
 
-        return "\n".join(lines).rstrip(), back_kb()
+        return "\n".join(lines).rstrip(), back_kb(locale)
 
     # ── Users drill-down ─────────────────────────────────────────────────
 
     @classmethod
-    async def users_list(cls, page: int) -> tuple[str, InlineKeyboardMarkup]:
+    async def users_list(
+        cls, page: int, locale: str | None = None
+    ) -> tuple[str, InlineKeyboardMarkup]:
         """Paginated list of every cached user."""
         # * Server-side count + page fetch: the 200-doc cap in all_users()
         # * made deeper pages unreachable; page from the full collection.
@@ -369,21 +402,32 @@ class Stats:
         )
 
         if total == 0:
-            text = (
-                f"{bold('Users')}\n\nNo cached users yet\\. The bot caches users "
-                "as it sees them across connected groups\\."
-            )
-            return text, back_kb()
+            text = t("stats.users.empty", locale)
+            return text, back_kb(locale)
 
         lines = [
-            f"{bold('Users')} \\- {total} total \\- page {page + 1}/{total_pages}\n"
+            t(
+                "stats.users.header",
+                locale,
+                n=total,
+                page=page + 1,
+                pages=total_pages,
+            )
+            + "\n"
         ]
         base_idx = page * _PAGE_SIZE
         for i, u in enumerate(chunk, start=1):
             uid = u.get("user_id", 0)
             fname = u.get("first_name") or str(uid)
             uname = u.get("username")
-            lines.append(f"{base_idx + i}\\. {user_ref(uid, fname, uname)}")
+            lines.append(
+                t(
+                    "stats.users.item",
+                    locale,
+                    i=base_idx + i,
+                    user=Safe(user_ref(uid, fname, uname)),
+                )
+            )
 
         return "\n".join(lines), _list_kb(
             page,
@@ -396,22 +440,27 @@ class Stats:
 
     @classmethod
     async def user_detail(
-        cls, bot: Bot, page: int, idx: int, stable: str | None = None
+        cls,
+        bot: Bot,
+        page: int,
+        idx: int,
+        stable: str | None = None,
+        locale: str | None = None,
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Detail card for a single cached user, with a link back into the list page."""
         chunk = await db.users_cache.all_users_page(
             skip=page * _PAGE_SIZE, limit=_PAGE_SIZE
         )
         if idx < 0 or idx >= len(chunk):
-            text = _ERR_USER_NOT_FOUND
-            kb = back_to_module_kb(f"stats_users:{page}")
+            text = t("stats.error.user_not_found", locale)
+            kb = back_to_module_kb(f"stats_users:{page}", locale)
             return text, kb
 
         u = chunk[idx]
         uid = u.get("user_id", 0)
         if stable is not None and str(uid) != stable:
-            text = _ERR_USER_NOT_FOUND
-            kb = back_to_module_kb(f"stats_users:{page}")
+            text = t("stats.error.user_not_found", locale)
+            kb = back_to_module_kb(f"stats_users:{page}", locale)
             return text, kb
         fname = u.get("first_name") or str(uid)
         uname = u.get("username")
@@ -423,39 +472,57 @@ class Stats:
         commit = date_or_unknown(u.get("commit_date"))
         seen = date_or_unknown(u.get("last_updated"))
 
+        if uname:
+            username_line = t("stats.user_detail.username", locale, name=uname)
+        else:
+            username_line = t("stats.user_detail.username_none", locale)
         text = (
-            f"{bold('User Details')}\n\n"
-            f"Name: {mention(uid, fname, uname)}\n"
-            f"ID: {code(str(uid))}\n"
-            f"Username: {('@' + esc(uname)) if uname else '\\-'}\n"
-            f"Last name: {esc(str(last_name))}\n\n"
-            f"First seen: {commit}\n"
-            f"Last seen: {seen}\n\n"
-            f"Use {code(f'/check {uid}')} for the full profile."
+            f"{t('stats.user_detail.title', locale)}\n\n"
+            f"{t('stats.user_detail.name', locale, user=Safe(mention(uid, fname, uname)))}\n"
+            f"{t('stats.user_detail.id', locale, id=Safe(code(str(uid))))}\n"
+            f"{username_line}\n"
+            f"{t('stats.user_detail.last_name', locale, name=str(last_name))}\n\n"
+            f"{t('stats.user_detail.first_seen', locale, date=Safe(commit))}\n"
+            f"{t('stats.user_detail.last_seen', locale, date=Safe(seen))}\n\n"
+            f"{t('stats.user_detail.check_hint', locale, command=Safe(code(f'/check {uid}')))}"
         )
-        kb = back_to_module_kb(f"stats_users:{page}")
+        kb = back_to_module_kb(f"stats_users:{page}", locale)
         return text, kb
 
     # ── Connected chats drill-down ───────────────────────────────────────
 
     @classmethod
-    async def chats_list(cls, page: int) -> tuple[str, InlineKeyboardMarkup]:
+    async def chats_list(
+        cls, page: int, locale: str | None = None
+    ) -> tuple[str, InlineKeyboardMarkup]:
         """Paginated list of every active connected group."""
         groups = await db.groups_db.active_groups()
         chunk, total_pages, page = paginate(groups, page, _PAGE_SIZE)
 
         if not groups:
-            text = f"{bold('Connected Chats')}\n\nNo connected groups yet\\."
-            return text, back_kb()
+            text = t("stats.chats.empty", locale)
+            return text, back_kb(locale)
 
         lines = [
-            f"{bold('Connected Chats')} \\- {len(groups)} total \\- page {page + 1}/{total_pages}\n"
+            t(
+                "stats.chats.header",
+                locale,
+                n=len(groups),
+                page=page + 1,
+                pages=total_pages,
+            )
+            + "\n"
         ]
         base_idx = page * _PAGE_SIZE
         for i, grp in enumerate(chunk, start=1):
             lines.append(
-                f"{base_idx + i}\\. {esc(grp.get('title', 'Unknown'))} "
-                f"\\- {code(str(grp.get('chat_id', 0)))}"
+                t(
+                    "stats.chats.item",
+                    locale,
+                    i=base_idx + i,
+                    title=grp.get("title", "Unknown"),
+                    id=Safe(code(str(grp.get("chat_id", 0)))),
+                )
             )
 
         return "\n".join(lines), _list_kb(
@@ -469,21 +536,26 @@ class Stats:
 
     @classmethod
     async def chat_detail(
-        cls, bot: Bot, page: int, idx: int, stable: str | None = None
+        cls,
+        bot: Bot,
+        page: int,
+        idx: int,
+        stable: str | None = None,
+        locale: str | None = None,
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Detail card for a connected group."""
         groups = await db.groups_db.active_groups()
         chunk, _total, page = paginate(groups, page, _PAGE_SIZE)
         if idx < 0 or idx >= len(chunk):
-            text = _ERR_GROUP_NOT_FOUND
-            kb = back_to_module_kb(f"stats_chats:{page}")
+            text = t("stats.error.group_not_found", locale)
+            kb = back_to_module_kb(f"stats_chats:{page}", locale)
             return text, kb
 
         grp = chunk[idx]
         chat_id = grp.get("chat_id", 0)
         if stable is not None and str(chat_id) != stable:
-            text = _ERR_GROUP_NOT_FOUND
-            kb = back_to_module_kb(f"stats_chats:{page}")
+            text = t("stats.error.group_not_found", locale)
+            kb = back_to_module_kb(f"stats_chats:{page}", locale)
             return text, kb
         title = grp.get("title", "Unknown")
         # * Stale-while-revalidate: render instantly; renames persist in
@@ -494,19 +566,21 @@ class Stats:
         date_str = date_or_unknown(grp.get("added_date"))
 
         text = (
-            f"{bold('Group Details')}\n\n"
-            f"Name: {bold(title)}\n"
-            f"Chat ID: {code(str(chat_id))}\n\n"
-            f"Connected by: {mention(added_by, adder_fname, adder_uname)}\n"
-            f"Date: {date_str}"
+            f"{t('stats.chat_detail.title', locale)}\n\n"
+            f"{t('stats.chat_detail.name', locale, name=Safe(bold(title)))}\n"
+            f"{t('stats.chat_detail.chat_id', locale, id=Safe(code(str(chat_id))))}\n\n"
+            f"{t('stats.chat_detail.connected_by', locale, user=Safe(mention(added_by, adder_fname, adder_uname)))}\n"
+            f"{t('stats.chat_detail.date', locale, date=Safe(date_str))}"
         )
-        kb = back_to_module_kb(f"stats_chats:{page}")
+        kb = back_to_module_kb(f"stats_chats:{page}", locale)
         return text, kb
 
     # ── Bans drill-down ──────────────────────────────────────────────────
 
     @classmethod
-    async def bans_list(cls, page: int) -> tuple[str, InlineKeyboardMarkup]:
+    async def bans_list(
+        cls, page: int, locale: str | None = None
+    ) -> tuple[str, InlineKeyboardMarkup]:
         """Paginated list of every active federation ban."""
         # * Server-side count + page fetch: only the visible slice travels
         # * over the wire regardless of federation size (no full-list load).
@@ -516,25 +590,40 @@ class Stats:
         chunk = await db.bans_db.active_bans_page(page * _PAGE_SIZE, _PAGE_SIZE)
 
         if total == 0:
-            text = f"{bold('User Bans')}\n\nNo active federation bans\\."
-            return text, back_kb()
+            text = t("stats.bans_view.empty", locale)
+            return text, back_kb(locale)
 
         # * Pre-resolve banned-user names with batch query
         uids = [b.get("banned_user_id", 0) for b in chunk]
         fname_map = await db.users_cache.get_first_names_batch(uids) if uids else {}
 
         lines = [
-            f"{bold('User Bans')} \\- {total} total \\- page {page + 1}/{total_pages}\n"
+            t(
+                "stats.bans_view.header",
+                locale,
+                n=total,
+                page=page + 1,
+                pages=total_pages,
+            )
+            + "\n"
         ]
         base_idx = page * _PAGE_SIZE
         for i, ban in enumerate(chunk, start=1):
             uid = ban.get("banned_user_id", 0)
             fname = fname_map.get(uid, str(uid))
-            lines.append(f"{base_idx + i}\\. {esc(fname)} \\- {code(str(uid))}")
+            lines.append(
+                t(
+                    "stats.bans_view.item",
+                    locale,
+                    i=base_idx + i,
+                    name=fname,
+                    id=Safe(code(str(uid))),
+                )
+            )
 
         search_row = [
             InlineKeyboardButton(
-                "Search",
+                t("stats.button.search", locale, plain=True),
                 callback_data="stats_bans_search",
                 style=KeyboardButtonStyle.PRIMARY,
             ),
@@ -551,7 +640,11 @@ class Stats:
 
     @classmethod
     async def ban_detail(
-        cls, page: int, idx: int, stable: str | None = None
+        cls,
+        page: int,
+        idx: int,
+        stable: str | None = None,
+        locale: str | None = None,
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Detail card for a banned user, reusing ``build_ban_detail``.
 
@@ -565,60 +658,77 @@ class Stats:
         if stable is not None:
             ban = await db.bans_db.get_ban(stable)
             if not ban or not ban.get("is_active"):
-                text = _ERR_BAN_NOT_FOUND
-                kb = back_to_module_kb(f"stats_bans:{page}")
+                text = t("stats.error.ban_not_found", locale)
+                kb = back_to_module_kb(f"stats_bans:{page}", locale)
                 return text, kb
-            text, proof_link = await build_ban_detail(ban)
+            text, proof_link = await build_ban_detail(ban, locale=locale)
             rows: list[list[InlineKeyboardButton]] = []
             if proof_link:
                 rows.append(
                     [
                         InlineKeyboardButton(
-                            "View Proof",
+                            t("button.view_proof", locale, plain=True),
                             url=proof_link,
                             style=KeyboardButtonStyle.PRIMARY,
                         )
                     ]
                 )
             rows.append(
-                [InlineKeyboardButton("« Back", callback_data=f"stats_bans:{page}")]
+                [
+                    InlineKeyboardButton(
+                        t("button.back", locale, plain=True),
+                        callback_data=f"stats_bans:{page}",
+                    )
+                ]
             )
             return text, InlineKeyboardMarkup(rows)
         # * Legacy list-index lookup: fetch only the tapped page
         # * server-side instead of the whole active-ban list.
         chunk = await db.bans_db.active_bans_page(page * _PAGE_SIZE, _PAGE_SIZE)
         if idx < 0 or idx >= len(chunk):
-            text = _ERR_BAN_NOT_FOUND
-            kb = back_to_module_kb(f"stats_bans:{page}")
+            text = t("stats.error.ban_not_found", locale)
+            kb = back_to_module_kb(f"stats_bans:{page}", locale)
             return text, kb
         ban = chunk[idx]
-        text, proof_link = await build_ban_detail(ban)
+        text, proof_link = await build_ban_detail(ban, locale=locale)
         rows: list[list[InlineKeyboardButton]] = []
         if proof_link:
             rows.append(
                 [
                     InlineKeyboardButton(
-                        "View Proof",
+                        t("button.view_proof", locale, plain=True),
                         url=proof_link,
                         style=KeyboardButtonStyle.PRIMARY,
                     )
                 ]
             )
         rows.append(
-            [InlineKeyboardButton("« Back", callback_data=f"stats_bans:{page}")]
+            [
+                InlineKeyboardButton(
+                    t("button.back", locale, plain=True),
+                    callback_data=f"stats_bans:{page}",
+                )
+            ]
         )
         return text, InlineKeyboardMarkup(rows)
 
     # ── Search panel ─────────────────────────────────────────────────────
 
     @staticmethod
-    def _search_panel_kb() -> InlineKeyboardMarkup:
+    def _search_panel_kb(locale: str | None = None) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Cancel", callback_data="stats_search_cancel")]]
+            [
+                [
+                    InlineKeyboardButton(
+                        t("button.cancel", locale, plain=True),
+                        callback_data="stats_search_cancel",
+                    )
+                ]
+            ]
         )
 
     @staticmethod
-    def _search_results_kb(n: int) -> InlineKeyboardMarkup:
+    def _search_results_kb(n: int, locale: str | None = None) -> InlineKeyboardMarkup:
         num_btns = [
             InlineKeyboardButton(
                 str(i + 1),
@@ -634,34 +744,49 @@ class Stats:
         rows.append(
             [
                 InlineKeyboardButton(
-                    "New Search",
+                    t("stats.button.new_search", locale, plain=True),
                     callback_data="stats_bans_search",
                     style=KeyboardButtonStyle.PRIMARY,
                 ),
-                InlineKeyboardButton("Cancel", callback_data="stats_search_cancel"),
+                InlineKeyboardButton(
+                    t("button.cancel", locale, plain=True),
+                    callback_data="stats_search_cancel",
+                ),
             ]
         )
         return InlineKeyboardMarkup(rows)
 
     @staticmethod
-    def _search_detail_kb(proof_link: str | None = None) -> InlineKeyboardMarkup:
+    def _search_detail_kb(
+        proof_link: str | None = None, locale: str | None = None
+    ) -> InlineKeyboardMarkup:
         rows: list[list[InlineKeyboardButton]] = []
         if proof_link:
             rows.append(
                 [
                     InlineKeyboardButton(
-                        "View Proof",
+                        t("button.view_proof", locale, plain=True),
                         url=proof_link,
                         style=KeyboardButtonStyle.PRIMARY,
                     )
                 ]
             )
-        rows.append([InlineKeyboardButton("« Back", callback_data="stats_search_back")])
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    t("button.back", locale, plain=True),
+                    callback_data="stats_search_back",
+                )
+            ]
+        )
         return InlineKeyboardMarkup(rows)
 
     @classmethod
     def open_search(
-        cls, ctx: ContextTypes.DEFAULT_TYPE, q: CallbackQuery
+        cls,
+        ctx: ContextTypes.DEFAULT_TYPE,
+        q: CallbackQuery,
+        locale: str | None = None,
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Open the search prompt; remember chat/message so input edits the right card.
 
@@ -669,15 +794,15 @@ class Stats:
         the prompt still renders but no card IDs are stored, so a later search
         input degrades to a no-op edit instead of crashing on ``None``.
         """
-        text = f"{bold('Search User Bans')}\n\nSend a name or user ID in the chat\\."
+        text = t("stats.search.title", locale)
         msg = q.message
         if not isinstance(msg, Message):
-            return text, cls._search_panel_kb()
+            return text, cls._search_panel_kb(locale)
         ud = cast("dict[str, object]", ctx.user_data)
         ud[SEARCH_KEY] = True
         ud[MSG_KEY] = msg.message_id
         ud[CHAT_KEY] = msg.chat_id
-        return text, cls._search_panel_kb()
+        return text, cls._search_panel_kb(locale)
 
     @staticmethod
     def clear_search(ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -714,33 +839,42 @@ class Stats:
         cls,
         query: str,
         results: list[BanDoc],
+        locale: str | None = None,
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Render search results: empty state or numbered hits."""
         if not results:
-            text = f'{bold("Search:")} "{esc(query)}"\n\nNo results found\\.'
-            return text, cls._search_results_kb(0)
+            text = t("stats.search.empty", locale, query=query)
+            return text, cls._search_results_kb(0, locale)
 
         # Batch query for all user names
         uids = [b.get("banned_user_id", 0) for b in results]
         fname_map = await db.users_cache.get_first_names_batch(uids)
-        lines = [f'{bold("Search:")} "{esc(query)}" ({len(results)} found)\n']
+        lines = [t("stats.search.header", locale, query=query, n=len(results)) + "\n"]
         for i, ban in enumerate(results, start=1):
             uid = ban.get("banned_user_id", 0)
             fname = fname_map.get(uid, str(uid))
-            lines.append(f"{i}\\. {esc(fname)} \\- {code(str(uid))}")
-        return "\n".join(lines), cls._search_results_kb(len(results))
+            lines.append(
+                t(
+                    "stats.search.item",
+                    locale,
+                    i=i,
+                    name=fname,
+                    id=Safe(code(str(uid))),
+                )
+            )
+        return "\n".join(lines), cls._search_results_kb(len(results), locale)
 
     @classmethod
     async def search_detail(
-        cls, results: list[BanDoc], idx: int
+        cls, results: list[BanDoc], idx: int, locale: str | None = None
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Detail card for a single search hit."""
         if idx < 0 or idx >= len(results):
-            text = _ERR_RESULT_UNAVAILABLE
+            text = t("stats.error.result_unavailable", locale)
             kb = back_to_module_kb("stats_search_back")
             return text, kb
-        text, proof_link = await build_ban_detail(results[idx])
-        return text, cls._search_detail_kb(proof_link)
+        text, proof_link = await build_ban_detail(results[idx], locale=locale)
+        return text, cls._search_detail_kb(proof_link, locale)
 
 
 __all__ = ("CHAT_KEY", "MSG_KEY", "RESULTS_KEY", "SEARCH_KEY", "Stats")

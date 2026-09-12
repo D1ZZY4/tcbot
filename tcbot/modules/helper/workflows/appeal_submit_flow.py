@@ -25,9 +25,11 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.keyboards import appeal_cancel_kb, appeal_review_kb
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import message_link
-from tcbot.utils.formatter import bold, code, esc, pre
+from tcbot.utils.formatter import pre
+from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 from tcbot.utils.time_and_date import to_utc, utc_now
 
@@ -49,30 +51,8 @@ _SECONDS_PER_HOUR: int = 3600
 
 _ID_RE = re.compile(r"^/start\s+appeal_([a-z0-9]{10})$")
 
-# ──────────────── User-facing reply constants ──────────────────── #
-
-_ERR_NOT_PRIVATE = "Please open this link in my private messages."
-_ERR_INVALID_LINK = "This appeal link is invalid or has expired."
-_ERR_WRONG_ACCOUNT = "This appeal link doesn't belong to your account."
-_ERR_PENDING_REVIEW = (
-    f"You already have a pending appeal under review."
-    f" If no decision is reached within {_STALE_REVIEW_HOURS} hours, you may try again."
-)
-_ERR_REJECTION_COOLDOWN = (
-    f"Your previous appeal was rejected."
-    f" Please wait {_REJECTION_COOLDOWN_HOURS} hours before submitting a new one."
-)
-_MSG_CANCELLED = "Appeal cancelled. Nothing was submitted."
-_MSG_CANCELLED_UNEXPECTED = "Please send your appeal message, or press Cancel."
-_MSG_SESSION_ENDED = "Appeal session ended."
-_ERR_SESSION_EXPIRED = "Session expired - please start the appeal again."
-_ERR_INVALID_LOG = "Invalid log link. Please check and try again."
-_MSG_APPEAL_SUBMITTED = "Your appeal has been submitted. The team will review it shortly - we'll get back to you."
-_MSG_APPEAL_DELIVERY_FAILED = (
-    "We could not deliver your appeal to the moderation team right now. "
-    "Please try again in a few minutes; if this keeps happening, contact "
-    "a staff member directly."
-)
+# * Appeal runtime prose lives in appeals.toml [submit]/[instruction];
+# * only numeric tunables stay in code.
 
 
 # ─────────────────────── Appeal pure helpers ────────────────────── #
@@ -139,24 +119,26 @@ class AppealSubmitMixin:
 
     # ── Text factory ─────────────────────────────────────────────────────────
 
-    def instruction_text(self) -> str:
+    def instruction_text(self, locale: str | None = None) -> str:
         """Multi-line MarkdownV2 instruction prompt sent when the user opens an appeal."""
         log_handle = self.log_channel.lstrip("@")
-        pre_content = (
-            f"#appeal\n"
-            f"Log link: https://t.me/{log_handle}/1\n"
-            "Clarification: I spammed unintentionally due to an auto-clicker.\n"
-            "Agreement: I will not use any automation tools in the group again."
+        example = pre(
+            t(
+                "appeals.instruction.example_body",
+                locale,
+                logs=log_handle,
+                plain=True,
+            )
         )
         return (
-            f"{esc(self.community_name)} Ban Appeal\n\n"
-            f"To submit your appeal, reply with a message starting with {code('#appeal')}, containing:\n"
-            f"\\- {bold('Log link:')} \\(the link to your ban log from the log channel\\)\n"
-            f"\\- {bold('Clarification:')} \\(your honest explanation of what happened\\)\n"
-            f"\\- {bold('Agreement:')} \\(your commitment not to repeat the violation\\)\n\n"
-            f"{bold('Example:')}\n"
-            f"{pre(pre_content)}\n\n"
-            f"Log Channel: {esc(self.log_channel)}"
+            f"{t('appeals.instruction.title', locale, community=self.community_name)}\n\n"
+            f"{t('appeals.instruction.intro', locale)}\n"
+            f"{t('appeals.instruction.log_item', locale)}\n"
+            f"{t('appeals.instruction.clarify_item', locale)}\n"
+            f"{t('appeals.instruction.agree_item', locale)}\n\n"
+            f"{t('appeals.instruction.example_label', locale)}\n"
+            f"{example}\n\n"
+            f"{t('appeals.instruction.channel', locale, handle=self.log_channel)}"
         )
 
     # ── ConversationHandler step methods ──────────────────────────────────
@@ -172,9 +154,13 @@ class AppealSubmitMixin:
 
         uid = user.id
 
+        locale = await locale_for_update(update)
         if update.effective_chat is None or update.effective_chat.type != "private":
             await safe_reply(
-                msg, _ERR_NOT_PRIVATE, log_label="Appeal not-private", parse_mode=None
+                msg,
+                t("appeals.submit.not_private", locale, plain=True),
+                log_label="Appeal not-private",
+                parse_mode=None,
             )
             return ConversationHandler.END
 
@@ -183,12 +169,14 @@ class AppealSubmitMixin:
         except Exception:
             log.exception("Appeal _start: DB error fetching ban_id=%s", ban_id)
             with contextlib.suppress(Exception):
-                await msg.reply_text(_ERR_INVALID_LINK)
+                await msg.reply_text(
+                    t("appeals.submit.invalid_link", locale, plain=True)
+                )
             return ConversationHandler.END
         if not ban or not ban.get("is_active"):
             await safe_reply(
                 msg,
-                _ERR_INVALID_LINK,
+                t("appeals.submit.invalid_link", locale, plain=True),
                 log_label=f"Appeal invalid-link for ban_id={ban_id}",
                 parse_mode=None,
             )
@@ -197,7 +185,7 @@ class AppealSubmitMixin:
         if ban.get("banned_user_id") != uid:
             await safe_reply(
                 msg,
-                _ERR_WRONG_ACCOUNT,
+                t("appeals.submit.wrong_account", locale, plain=True),
                 log_label=f"Appeal wrong-account for user {uid}",
                 parse_mode=None,
             )
@@ -219,7 +207,14 @@ class AppealSubmitMixin:
                         uid,
                     )
                     with contextlib.suppress(Exception):
-                        await msg.reply_text(_ERR_PENDING_REVIEW)
+                        await msg.reply_text(
+                            t(
+                                "appeals.submit.pending_review",
+                                locale,
+                                hours=_STALE_REVIEW_HOURS,
+                                plain=True,
+                            )
+                        )
                     return ConversationHandler.END
                 log.info(
                     "Appeal _start: stale review cleared for ban_id=%s user=%d"
@@ -231,7 +226,12 @@ class AppealSubmitMixin:
             else:
                 await safe_reply(
                     msg,
-                    _ERR_PENDING_REVIEW,
+                    t(
+                        "appeals.submit.pending_review",
+                        locale,
+                        hours=_STALE_REVIEW_HOURS,
+                        plain=True,
+                    ),
                     log_label=f"Appeal pending-review for user {uid}",
                     parse_mode=None,
                 )
@@ -241,7 +241,13 @@ class AppealSubmitMixin:
         if remaining_h is not None:
             await safe_reply(
                 msg,
-                f"{_ERR_REJECTION_COOLDOWN} ({remaining_h}h remaining)",
+                t(
+                    "appeals.submit.cooldown",
+                    locale,
+                    hours=_REJECTION_COOLDOWN_HOURS,
+                    remaining=remaining_h,
+                    plain=True,
+                ),
                 log_label=f"Appeal cooldown for user {uid}",
                 parse_mode=None,
             )
@@ -256,9 +262,13 @@ class AppealSubmitMixin:
 
         try:
             instr = await msg.reply_text(
-                self.instruction_text(),
+                self.instruction_text(locale),
                 parse_mode="MarkdownV2",
-                reply_markup=appeal_cancel_kb(self.cancel_label, self.cancel_callback),
+                reply_markup=appeal_cancel_kb(
+                    t("button.cancel", locale, plain=True),
+                    self.cancel_callback,
+                    locale,
+                ),
             )
             ctx.user_data["appeal_instruction_msg_id"] = instr.message_id
         except Exception as exc:
@@ -297,7 +307,8 @@ class AppealSubmitMixin:
         except Exception as exc:
             log.debug("appeal cancel answer failed: %s", exc)
         try:
-            await q.edit_message_text(_MSG_CANCELLED)
+            locale = await locale_for_update(update)
+            await q.edit_message_text(t("appeals.submit.cancelled", locale, plain=True))
         except Exception:
             log.debug("appeal cancel edit failed (message may already be gone)")
         return ConversationHandler.END
@@ -308,7 +319,14 @@ class AppealSubmitMixin:
         msg = update.effective_message
         if msg:
             await safe_reply(
-                msg, _MSG_SESSION_ENDED, log_label="Appeal _end", parse_mode=None
+                msg,
+                t(
+                    "appeals.submit.session_ended",
+                    await locale_for_update(update),
+                    plain=True,
+                ),
+                log_label="Appeal _end",
+                parse_mode=None,
             )
         return ConversationHandler.END
 
@@ -320,10 +338,11 @@ class AppealSubmitMixin:
 
         text = msg.text.strip()
 
+        locale = await locale_for_update(update)
         if not starts_with_appeal_tag(text):
             await safe_reply(
                 msg,
-                _MSG_CANCELLED_UNEXPECTED,
+                t("appeals.submit.unexpected", locale, plain=True),
                 log_label="Appeal unexpected-text",
                 parse_mode=None,
             )
@@ -332,8 +351,12 @@ class AppealSubmitMixin:
         if len(text) > _MAX_APPEAL_LEN:
             await safe_reply(
                 msg,
-                f"Your appeal message is too long (max {_MAX_APPEAL_LEN} characters). "
-                "Please shorten it and try again.",
+                t(
+                    "appeals.submit.too_long",
+                    locale,
+                    max=_MAX_APPEAL_LEN,
+                    plain=True,
+                ),
                 log_label="Appeal too-long",
                 parse_mode=None,
             )
@@ -349,7 +372,7 @@ class AppealSubmitMixin:
         if not ban_id:
             await safe_reply(
                 msg,
-                _ERR_SESSION_EXPIRED,
+                t("appeals.submit.session_expired", locale, plain=True),
                 log_label="Appeal _on_message session-expired",
                 parse_mode=None,
             )
@@ -367,7 +390,7 @@ class AppealSubmitMixin:
         if not fresh_ban or not fresh_ban.get("is_active"):
             await safe_reply(
                 msg,
-                _ERR_SESSION_EXPIRED,
+                t("appeals.submit.session_expired", locale, plain=True),
                 log_label="Appeal _on_message expired-ban",
                 parse_mode=None,
             )
@@ -392,13 +415,25 @@ class AppealSubmitMixin:
                         _who.id if _who is not None else 0,
                     )
                     with contextlib.suppress(Exception):
-                        await msg.reply_text(_ERR_PENDING_REVIEW)
+                        await msg.reply_text(
+                            t(
+                                "appeals.submit.pending_review",
+                                locale,
+                                hours=_STALE_REVIEW_HOURS,
+                                plain=True,
+                            )
+                        )
                     _clear_appeal_state(ctx.user_data)
                     return ConversationHandler.END
             else:
                 await safe_reply(
                     msg,
-                    _ERR_PENDING_REVIEW,
+                    t(
+                        "appeals.submit.pending_review",
+                        locale,
+                        hours=_STALE_REVIEW_HOURS,
+                        plain=True,
+                    ),
                     log_label="Appeal _on_message pending-review",
                     parse_mode=None,
                 )
@@ -409,7 +444,13 @@ class AppealSubmitMixin:
         if remaining_h is not None:
             await safe_reply(
                 msg,
-                f"{_ERR_REJECTION_COOLDOWN} ({remaining_h}h remaining)",
+                t(
+                    "appeals.submit.cooldown",
+                    locale,
+                    hours=_REJECTION_COOLDOWN_HOURS,
+                    remaining=remaining_h,
+                    plain=True,
+                ),
                 log_label="Appeal _on_message cooldown",
                 parse_mode=None,
             )
@@ -422,7 +463,7 @@ class AppealSubmitMixin:
         if log_msg_id and not text_references_log_message(text, log_msg_id):
             await safe_reply(
                 msg,
-                _ERR_INVALID_LOG,
+                t("appeals.submit.invalid_log", locale, plain=True),
                 log_label="Appeal _on_message invalid-log",
                 parse_mode=None,
             )
@@ -516,7 +557,12 @@ class AppealSubmitMixin:
                     )
                 await safe_reply(
                     msg,
-                    _ERR_PENDING_REVIEW,
+                    t(
+                        "appeals.submit.pending_review",
+                        locale,
+                        hours=_STALE_REVIEW_HOURS,
+                        plain=True,
+                    ),
                     log_label="Appeal race-loser",
                     parse_mode=None,
                 )
@@ -534,7 +580,7 @@ class AppealSubmitMixin:
         instr_mid = ctx.user_data.get("appeal_instruction_msg_id")
         edit_coro = (
             ctx.bot.edit_message_text(
-                _MSG_APPEAL_SUBMITTED,
+                t("appeals.submit.submitted", locale, plain=True),
                 chat_id=update.effective_chat.id if update.effective_chat else None,
                 message_id=instr_mid,
             )
@@ -581,7 +627,7 @@ class AppealSubmitMixin:
             if instr_mid and update.effective_chat:
                 try:
                     await ctx.bot.edit_message_text(
-                        _MSG_APPEAL_DELIVERY_FAILED,
+                        t("appeals.submit.delivery_failed", locale, plain=True),
                         chat_id=update.effective_chat.id,
                         message_id=instr_mid,
                     )

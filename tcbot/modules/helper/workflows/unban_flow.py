@@ -14,13 +14,15 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.database import documents as docs
 from tcbot.modules.helper import parse_logmsg
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import (
     count_transient_errors,
     fan_out,
     is_benign_telegram_error,
 )
-from tcbot.utils.formatter import esc, user_ref
+from tcbot.utils.formatter import user_ref
+from tcbot.utils.i18n import Safe, t
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -54,6 +56,7 @@ async def execute_unban(
     """
     msg = update.effective_message
     admin = update.effective_user
+    locale = await locale_for_update(update)
 
     # * Use the caller-supplied record when available; fall back to a DB fetch.
     ban: docs.BanDoc | None
@@ -66,7 +69,11 @@ async def execute_unban(
         if msg is not None:
             await safe_reply(
                 msg,
-                f"{user_ref(target_id, target_fname)} has no active federation ban\\.",
+                t(
+                    "unbanning.note.no_record",
+                    locale,
+                    user=Safe(user_ref(target_id, target_fname)),
+                ),
                 log_label=f"Unban no-record for user {target_id}",
             )
         return
@@ -87,9 +94,11 @@ async def execute_unban(
         if msg is not None:
             await safe_reply(
                 msg,
-                f"{user_ref(target_id, target_fname)} could not be unbanned: "
-                "the group list could not be loaded from the database, so "
-                "nothing was changed\\. Check the logs and retry\\.",
+                t(
+                    "unbanning.note.groups_fail",
+                    locale,
+                    user=Safe(user_ref(target_id, target_fname)),
+                ),
                 log_label="Unban groups-fail",
             )
         return
@@ -124,10 +133,11 @@ async def execute_unban(
         if msg is not None:
             await safe_reply(
                 msg,
-                f"{user_ref(target_id, target_fname)} could not be unbanned: "
-                "the database deactivation failed, so the user is still "
-                "marked as banned even if they are now unmuted in chats\\. "
-                "Check the logs and retry\\.",
+                t(
+                    "unbanning.note.db_fail",
+                    locale,
+                    user=Safe(user_ref(target_id, target_fname)),
+                ),
                 log_label="Unban DB-fail",
             )
         return
@@ -191,13 +201,16 @@ async def execute_unban(
             grp.get("title") or str(grp.get("chat_id", 0))
             for grp in transient_groups[:5]
         )
-        unban_note = (
-            f"removed from {len(groups) - failed}/{len(groups)} groups\\. "
-            f"WARNING: still banned in: {esc(sample)}"
-            + (" \\.\\.\\." if len(transient_groups) > 5 else "")
+        unban_note = t(
+            "unbanning.note.partial",
+            locale,
+            done=len(groups) - failed,
+            total=len(groups),
+            sample=sample,
+            more=" ..." if len(transient_groups) > 5 else "",
         )
     else:
-        unban_note = f"removed from {len(groups)}/{len(groups)} groups\\."
+        unban_note = t("unbanning.note.full", locale, total=len(groups))
 
     # * send log; reply only if we have an effective_message.
     if msg is not None:
@@ -206,7 +219,12 @@ async def execute_unban(
                 lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
             ),
             msg.reply_text(
-                f"{user_ref(target_id, target_fname)} has been unbanned \\- {unban_note}",
+                t(
+                    "unbanning.summary.body",
+                    locale,
+                    user=Safe(user_ref(target_id, target_fname)),
+                    note=Safe(unban_note),
+                ),
                 parse_mode="MarkdownV2",
             ),
             return_exceptions=True,

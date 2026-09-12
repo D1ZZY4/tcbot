@@ -39,30 +39,33 @@ _SPEEDTEST_TIMEOUT: int = 180
 # ──────────────────────── Module metadata ───────────────────────── #
 
 __module_name__ = "Netspeed"
-__help_text__ = t("netspeed.help.overview")
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        t("netspeed.help.commands.body"),
-    ),
-    replies.who_section(replies.perm_founder_only(plain=False)),
-    replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
-    (
-        replies.SEC_WHAT,
-        t("netspeed.help.what.body"),
-    ),
-    (
-        replies.SEC_EXAMPLES,
-        t("netspeed.help.examples.body"),
-    ),
-]
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("netspeed.help.overview", locale)
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("netspeed.help.commands.body", locale),
+        ),
+        replies.who_section(replies.perm_founder_only(locale, plain=False), locale),
+        replies.where_section(replies.context_bot_or_group(locale), locale),
+        (
+            replies.sec_what(locale),
+            t("netspeed.help.what.body", locale),
+        ),
+        (
+            replies.sec_examples(locale),
+            t("netspeed.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ──────────────────────── Size formatter ────────────────────────── #

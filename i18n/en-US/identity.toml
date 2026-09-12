@@ -1,0 +1,99 @@
+# Identity refusal lines, recognition notes, and staff notices.
+# All render as MarkdownV2. Placeholders: {line} pre-formatted user
+# reference, {community}/{role}/{action} raw values.
+
+[refuse.ban]
+self = "Self-ban? Creative, but no. Federation needs you here."
+this_bot = "I keep this place running. Banning me is a no-go."
+telegram = "Telegram itself? Bold move. Not happening."
+anon_admin = "Cannot ban the anonymous admin placeholder."
+founder = "{line} runs the place, can't ban them through here."
+
+[refuse.kick]
+self = "Kicking yourself? Just leave the group instead."
+this_bot = "Kick me? I run this place."
+telegram = "Pretty sure I can't kick Telegram from its own group."
+anon_admin = "Cannot kick the anonymous admin placeholder."
+founder = "{line} runs the place, not getting kicked here."
+
+[refuse.mute]
+self = "Mute yourself? That's not how this works."
+this_bot = "Muting me won't do much - I don't message on my own anyway."
+telegram = "Telegram service messages aren't muteable from here."
+anon_admin = "Cannot mute the anonymous admin placeholder."
+founder = "{line} runs the place, mute button doesn't apply."
+
+[refuse.warn]
+self = "Self-warning is just journaling. Ask a mod if needed."
+this_bot = "Warn me? I'm the one tracking warnings around here."
+telegram = "Telegram doesn't take warnings, sorry."
+other_bot = "{line} is a bot. Bots do not accumulate federation warnings."
+anon_admin = "Cannot warn the anonymous admin placeholder."
+founder = "{line} runs the place. Warnings do not apply to the Founder."
+
+[refuse.unban]
+self = "Can't unban yourself. Use /checkme and submit an appeal instead."
+this_bot = "{line} - I manage the bans, not collect them."
+telegram = "Telegram was never on the ban list anyway."
+anon_admin = "Anonymous admin was never on the ban list."
+founder = "{line} - never been banned, nothing to undo."
+admin = "{line} is an Admin. Staff aren't federation-bannable, nothing to undo."
+developer = "{line} is a Developer. Staff aren't federation-bannable, nothing to undo."
+tester = "{line} is a Tester. Staff aren't federation-bannable, nothing to undo."
+
+[refuse.unmute]
+self = "Can't unmute yourself - ask a mod."
+this_bot = "{line} - bots aren't muteable, nothing to undo."
+telegram = "Telegram service was never muted."
+other_bot = "{line} is a bot. Bots cannot be muted, so there is nothing to undo."
+anon_admin = "Anonymous admin was never muted."
+founder = "{line} - definitely not muted."
+
+[refuse.promote]
+self = "Promoting yourself? Nice try, the hierarchy doesn't bend for that."
+this_bot = "Already running things, no role needed."
+telegram = "Telegram doing fine without a role here."
+other_bot = "Other bots can't hold federation roles - humans only."
+anon_admin = "Anonymous admin cannot hold a federation role."
+founder = "{line} already runs the place, promoting them is a circular move."
+admin = "{line} is already an Admin. Use /tcpromote for a different role."
+
+[refuse.demote]
+self = "Demoting yourself? Bold. Ask a higher-up if you really mean it."
+this_bot = "No role to lose here."
+telegram = "Telegram has no role to take."
+other_bot = "{line} is a bot. Bots cannot hold federation roles, nothing to demote."
+anon_admin = "Anonymous admin has no role to take."
+founder = "{line} is the Founder - try /transferowner if you really mean it."
+
+[refuse.transfer]
+self = "Already the Founder, transferring to yourself is a no-op."
+this_bot = "Tempting, but I'm not running the place under my own name."
+telegram = "Telegram doesn't want my keys, sorry."
+other_bot = "Other bots can't hold the keys - humans only."
+anon_admin = "Cannot transfer ownership to the anonymous admin."
+
+[refuse.unwarn]
+self = "Erasing your own warnings? Nice try, ask a mod."
+this_bot = "{line} - zero warnings, ever. Nothing to undo."
+telegram = "Telegram doesn't get warned here."
+other_bot = "{line} - bots don't pile up warnings, nothing to remove."
+anon_admin = "Anonymous admin doesn't get warned here."
+founder = "{line} - clean record, nothing to undo."
+
+[refuse.resetwarns]
+self = "You don't get to reset your own warnings, ask a mod."
+this_bot = "{line} - already at zero, always was."
+telegram = "Nothing on Telegram to clear."
+other_bot = "{line} - bots stay at zero by default."
+anon_admin = "Nothing on anonymous admin to clear."
+founder = "{line} - nothing on the record to clear."
+
+[note]
+this_bot = "That's me - this bot. I run moderation here, not collect bans."
+self = "That's you - checking your own record, good habit."
+telegram = "That's Telegram itself - outside federation jurisdiction."
+anon_admin = "That's the anonymous-admin placeholder, not an individual user."
+
+[staff]
+notice = "Heads up - {line} is a {community} {role}. Proceeding with {action} anyway."

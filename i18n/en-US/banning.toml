@@ -27,3 +27,37 @@ body = """
 `/tcban @username spamming in connected groups`
 `/tcban 123456789 scamming members`
 Or reply to a message and run `/tcb reason here`."""
+
+# Runtime strings for the ban flow (ban_flow.py, banning.py).
+# [state] entries send plain (alerts, parse_mode=None replies, plain edits).
+# [db_fail]/[applied]/[pm]/[summary] render as MarkdownV2.
+# Placeholders: {user} pre-formatted user reference, {reason} raw reason
+# text, {applied} prebuilt applied line, {sample} raw group names,
+# {total}/{failed} ints, {community} raw community name.
+
+[state]
+cancelled = "Cancelled. No ban was issued."
+timeout = "Timed out waiting for proof. No ban was issued."
+proof_expected = "Please send a photo, video, GIF, or file as proof, or press Cancel."
+empty = "Send a photo, video, GIF, or file first, then tap Done."
+
+[db_fail]
+body = "{user} could not be banned: the federation ban record could not be written to the database, so no groups were touched. Check the logs and retry with /tcban once the database recovers."
+
+[applied]
+empty = "No connected groups configured."
+none = "WARNING: ban not enforced in any group ({total}/{total} failed). Check bot admin rights in: {sample}{more}"
+partial = "Applied to {done}/{total} groups ({failed} failed: {sample}{more}"
+full = "Applied to {total}/{total} groups."
+
+[pm]
+body = "You have been federation-banned from {community}.\nReason: {reason}\n\nYou may submit an appeal using the button below."
+
+[summary]
+body = "{user} has been banned.\nReason: {reason}\n{applied}"
+
+[confirm]
+body = "{user} already has an active federation ban (Ban ID {ban_id}).\nExisting reason: {old_reason}\nNew reason: {new_reason}\n\nUpdate the ban with the new reason and proof?"
+
+[error]
+reason_required = "A reason is required - /tcban <target> <reason>."

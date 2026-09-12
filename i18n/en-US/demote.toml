@@ -1,0 +1,15 @@
+
+# Runtime strings for demotion (demote_flow.py).
+# [dm] sends to the demoted user (their personal locale, resolved inside
+# execute); [abort] replies in the moderator's chat (resolved at call).
+# Both render as MarkdownV2.
+# Placeholders: {role} pre-formatted bold rank, {community}/{name} raw
+# values, {verb} banned/muted/kicked, {user} pre-formatted mention,
+# {target_role} raw role, {action} trigger noun.
+
+[dm]
+manual = "Your {role} role in {community} has been removed by {name}."
+auto = "Your {role} role in {community} has been removed - you were {verb} from the federation."
+
+[abort]
+body = "{user} holds a federation role ({target_role}) and the auto-demote step failed, so the {action} cannot proceed safely. Demote them manually with /tcdemote and retry the {action}."

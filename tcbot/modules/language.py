@@ -40,33 +40,36 @@ _RL_CB_LIMIT: int = 15
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Language"
-__help_text__ = t("language.help.overview")
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        t("language.help.commands.body"),
-    ),
-    (
-        replies.SEC_WHO,
-        t("language.help.who.body"),
-    ),
-    replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
-    (
-        replies.SEC_WHAT,
-        t("language.help.what.body"),
-    ),
-    (
-        replies.SEC_EXAMPLES,
-        t("language.help.examples.body"),
-    ),
-]
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("language.help.overview", locale)
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("language.help.commands.body", locale),
+        ),
+        (
+            replies.sec_who(locale),
+            t("language.help.who.body", locale),
+        ),
+        replies.where_section(replies.context_bot_or_group(locale), locale),
+        (
+            replies.sec_what(locale),
+            t("language.help.what.body", locale),
+        ),
+        (
+            replies.sec_examples(locale),
+            t("language.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 # ─────────────────────── Callback Data Shapes ────────────────────── #
 # * lang:list:<scope> opens the option list; lang:set:<scope>:<locale>
@@ -317,7 +320,7 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await q.edit_message_text(
             _confirmation_text(scope, locale),
             parse_mode="MarkdownV2",
-            reply_markup=keyboards.back_to_module_kb(f"lang:list:{scope}"),
+            reply_markup=keyboards.back_to_module_kb(f"lang:list:{scope}", locale),
         )
     except Exception as exc:
         log.debug("language confirm edit failed: %s", exc)

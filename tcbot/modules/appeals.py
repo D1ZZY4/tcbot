@@ -32,43 +32,40 @@ __all__ = (
 
 __module_name__ = "Appeal"
 
-__help_text__ = t(
-    "appeals.help.overview",
-    window=Safe(bold(f"{LOCK_HOURS}-hour priority window")),
-)
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        "How to start",
-        t("appeals.help.start.body"),
-    ),
-    replies.who_section(t("appeals.help.who.body")),
-    (
-        "Where to start",
-        t("appeals.help.where.body"),
-    ),
-    (
-        "How it works",
-        t("appeals.help.how.body"),
-    ),
-    (
-        "Format example",
-        pre(t("appeals.help.format.body", plain=True)),
-    ),
-    (
-        "What happens next",
-        t(
-            "appeals.help.next.body",
-            window=Safe(bold(f"{LOCK_HOURS}-hour priority window")),
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    window = Safe(bold(f"{LOCK_HOURS}-hour priority window"))
+    overview = t("appeals.help.overview", locale, window=window)
+    sections: list[tuple[str, str]] = [
+        (
+            "How to start",
+            t("appeals.help.start.body", locale),
         ),
-    ),
-]
+        replies.who_section(t("appeals.help.who.body", locale), locale),
+        (
+            "Where to start",
+            t("appeals.help.where.body", locale),
+        ),
+        (
+            "How it works",
+            t("appeals.help.how.body", locale),
+        ),
+        (
+            "Format example",
+            pre(t("appeals.help.format.body", locale, plain=True)),
+        ),
+        (
+            "What happens next",
+            t("appeals.help.next.body", locale, window=window),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

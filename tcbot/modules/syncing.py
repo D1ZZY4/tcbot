@@ -23,8 +23,8 @@ from tcbot.utils.dispatch import (
     fan_out,
     is_benign_telegram_error,
 )
-from tcbot.utils.formatter import bold, code, esc
-from tcbot.utils.i18n import t
+from tcbot.utils.formatter import bold, code
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -57,37 +57,40 @@ _FAILED_SAMPLE_N: int = 5
 
 __module_name__ = "Sync"
 
-__help_text__ = t("syncing.help.overview")
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        t("syncing.help.commands.body"),
-    ),
-    replies.who_section(
-        f"{bold('/tcsync')}: {replies.perm_dev_above(plain=False)}",
-    ),
-    replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
-    (
-        "/tcsync",
-        t("syncing.help.sync.body"),
-    ),
-    (
-        "/tcsync <target>",
-        t("syncing.help.sync_target.body"),
-    ),
-    replies.target_section(),
-    (
-        replies.SEC_EXAMPLES,
-        t("syncing.help.examples.body"),
-    ),
-]
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("syncing.help.overview", locale)
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("syncing.help.commands.body", locale),
+        ),
+        replies.who_section(
+            f"{bold('/tcsync')}: {replies.perm_dev_above(locale, plain=False)}",
+            locale,
+        ),
+        replies.where_section(replies.context_exec_or_group(locale), locale),
+        (
+            "/tcsync",
+            t("syncing.help.sync.body", locale),
+        ),
+        (
+            "/tcsync <target>",
+            t("syncing.help.sync_target.body", locale),
+        ),
+        replies.target_section(locale),
+        (
+            replies.sec_examples(locale),
+            t("syncing.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ──────────────────────── Sync outcome model ─────────────────────── #
@@ -299,21 +302,27 @@ async def verify_user(bot: Bot, user_id: int) -> SyncCounts:
     return counts
 
 
-def _render_summary(counts: SyncCounts, *, target: str) -> str:
+def _render_summary(
+    counts: SyncCounts, *, target: str, locale: str | None = None
+) -> str:
     """Render the operator-facing sync summary (MarkdownV2; titles escaped)."""
     lines = [
-        f"{bold('Sync complete')} \\({esc(target)}\\)",
-        f"Checked: {code(str(counts.checked))}",
-        f"Re-banned: {code(str(counts.enforced_bans))}",
-        f"Re-unbanned: {code(str(counts.enforced_unbans))}",
-        f"Skipped: {code(str(counts.skipped))}",
-        f"Failed: {code(str(counts.failed))}",
+        t("syncing.summary.title", locale, target=target),
+        t("syncing.summary.checked", locale, n=Safe(code(str(counts.checked)))),
+        t("syncing.summary.rebanned", locale, n=Safe(code(str(counts.enforced_bans)))),
+        t(
+            "syncing.summary.reunbanned",
+            locale,
+            n=Safe(code(str(counts.enforced_unbans))),
+        ),
+        t("syncing.summary.skipped", locale, n=Safe(code(str(counts.skipped)))),
+        t("syncing.summary.failed", locale, n=Safe(code(str(counts.failed)))),
     ]
     if counts.failed and counts.failed_titles:
         sample = ", ".join(counts.failed_titles)
-        lines.append(f"Still failing in: {esc(sample)}")
+        lines.append(t("syncing.summary.failing", locale, sample=sample))
     if counts.truncated:
-        lines.append("Note: pair cap reached; re\\-run to continue the sweep\\.")
+        lines.append(t("syncing.summary.truncated", locale))
     return "\n".join(lines)
 
 
@@ -332,7 +341,7 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
 
     try:
-        status = await msg.reply_text("Syncing enforcement state...")
+        status = await msg.reply_text(t("syncing.status.sending", locale, plain=True))
     except Exception as exc:
         log.debug("sync status reply failed: %s", exc)
         status = None
@@ -347,10 +356,18 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             if not target_id:
                 raise ValueError("unresolvable")
             counts = await verify_user(ctx.bot, target_id)
-            text = _render_summary(counts, target=f"user {target_id}")
+            text = _render_summary(
+                counts,
+                target=t("syncing.target.user", locale, id=target_id, plain=True),
+                locale=locale,
+            )
         else:
             counts = await run_ban_sync(ctx.bot)
-            text = _render_summary(counts, target="federation sweep")
+            text = _render_summary(
+                counts,
+                target=t("syncing.target.sweep", locale, plain=True),
+                locale=locale,
+            )
     except ValueError:
         text = replies.err_cannot_resolve(locale, plain=False)
     except Exception:

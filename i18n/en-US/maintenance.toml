@@ -20,3 +20,18 @@ body = "Scans all groups in the database and attempts to verify the bot still ha
 body = """
 `/cleanup`: remove stale or inaccessible groups.
 `/leaveall`: emergency withdrawal from all connected groups."""
+
+# Runtime strings (maintenance.py). All render as MarkdownV2.
+# Placeholders: counts as pre-formatted code, {detail} prebuilt suffix,
+# {partial}/{log_failed} ints.
+
+[status]
+sending = "Leaving {n} groups..."
+
+[leaveall]
+partial = " ({n} partial: bot left but DB deactivation failed)"
+log_failed = " ({n} log posts failed)"
+done = "Left {ok} groups. Failed: {failed}.{detail}"
+
+[cleanup]
+done = "Cleaned up {n} inaccessible group(s)."

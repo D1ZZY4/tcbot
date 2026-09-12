@@ -23,10 +23,12 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators
+from tcbot.modules.helper.locale import locale_for_chat, locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import appeal_deep_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
-from tcbot.utils.formatter import esc, link, mention
+from tcbot.utils.formatter import link, mention
+from tcbot.utils.i18n import Safe, t
 
 if TYPE_CHECKING:
     from telegram import Bot, Chat, Message, Update, User
@@ -116,6 +118,7 @@ async def _handle_member(
     """
     if member.is_bot:
         return
+    locale = await locale_for_chat(chat)
 
     _, ban, mute = await asyncio.gather(
         db.users_cache.harvest_user_identity(
@@ -159,16 +162,25 @@ async def _handle_member(
             )
             return
         if greet:
-            notice = (
-                f"{mention(member.id, member.first_name, member.username)}"
-                " is federation\\-banned and was removed\\."
+            notice = t(
+                "greeting.notice.banned",
+                locale,
+                user=Safe(mention(member.id, member.first_name, member.username)),
             )
             ban_id = ban.get("ban_id", "")
             if ban_id:
-                notice += f" Ban ID: {esc(str(ban_id))}."
+                notice += t(
+                    "greeting.notice.ban_id",
+                    locale,
+                    ban=str(ban_id),
+                )
                 if bot.username:
                     appeal_url = appeal_deep_link(bot.username, str(ban_id))
-                    notice += f" {link('Submit Appeal', appeal_url)}"
+                    notice += t(
+                        "greeting.notice.appeal",
+                        locale,
+                        link=Safe(link("Submit Appeal", appeal_url)),
+                    )
             coros.append(
                 msg.reply_text(
                     notice,
@@ -208,9 +220,12 @@ async def _handle_member(
     if greet and not _enforcement_blind:
         await safe_reply(
             msg,
-            f"Welcome, {mention(member.id, member.first_name, member.username)}\\. "
-            f"This is an official {esc(cfg.community_name)} group\\. "
-            "Please go through the group rules before participating\\.",
+            t(
+                "greeting.welcome.body",
+                locale,
+                user=Safe(mention(member.id, member.first_name, member.username)),
+                community=cfg.community_name,
+            ),
             log_label=f"Welcome for uid={member.id}",
         )
 
@@ -431,7 +446,11 @@ async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     if member and not member.is_bot:
         await safe_reply(
             msg,
-            f"{mention(member.id, member.first_name, member.username)} has left\\.",
+            t(
+                "greeting.left.body",
+                await locale_for_update(update),
+                user=Safe(mention(member.id, member.first_name, member.username)),
+            ),
             log_label="left-member",
         )
 

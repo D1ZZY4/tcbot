@@ -41,3 +41,22 @@ body = """
 `/tcm @username`: permanent mute, bot walks you through it
 `/tcunmute @username`: lift mute immediately across all groups
 Or reply to a message and run `/tcm`."""
+
+# Runtime strings for the mute/unmute executors (muting_flow.py).
+# [note] plain sends use plain=True; [summary]/[unmute] render MarkdownV2.
+# Placeholders: {user} pre-formatted user reference, {dur} pre-formatted
+# bold duration, {reason} raw reason text, {done}/{total} ints.
+
+[note]
+groups_fail = "{user} could not be muted: the group list could not be loaded from the database, so no groups were touched. Check the logs and retry with /tcmute once the database recovers."
+db_fail = "{user} could not be muted: the mute record could not be written to the database, so no groups were touched. Check the logs and retry with /tcmute once the database recovers."
+no_mute = "{user} has no active federation mute."
+
+[summary]
+body = "{user} has been muted {dur}.\nReason: {reason}\nApplied to {done}/{total} groups."
+
+[unmute]
+body = "{user} has been unmuted - restored in {done}/{total} groups."
+
+[duration]
+permanent = "permanently"

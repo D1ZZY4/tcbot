@@ -33,3 +33,23 @@ When the bot is first added to a group, it automatically prompts the group owner
 
 [help.examples]
 body = "Make the bot a group admin, then run `/tcconnect` inside the group."
+
+# Runtime strings for the connect flow (connected_flow.py).
+# All send plain (no parse_mode): plain=True at call sites.
+# Placeholders: {community} raw community name.
+
+[state]
+role_check_failed = "Could not verify your role."
+owner_only = "Only the group owner can decide."
+bot_perms_verify = "Could not verify my own permissions. Please promote me as admin and try again."
+complete_join = "Connection failed due to a database error. Please try again later."
+admin_required = "Only group admins can request to connect."
+pending_request = "A connect request for this group is already pending."
+primary_group = "This is a primary group of the federation (main or exec). Primary groups are not connected via /tcconnect."
+connect_failed = "Failed to connect the group due to a server error. Please try again."
+join_prompt = "Want to connect this group to {community}?"
+connected = "This community is now connected to {community}. Authorized staff can use federation commands here."
+declined = "Connection declined. I'll leave the group now."
+already_connected = "This group is already connected to {community}."
+connecting = "Connecting... applying existing federation bans and mutes. This can take a moment for large federations."
+perms_required = "Please make the bot an admin with the required permissions (delete messages, ban users, invite users) and try again."

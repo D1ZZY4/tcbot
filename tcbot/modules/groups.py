@@ -22,8 +22,8 @@ from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.keyboards import tcgroups_kb
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_edit, safe_reply
-from tcbot.utils.formatter import bold, code, esc
-from tcbot.utils.i18n import t
+from tcbot.utils.formatter import code
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters
 
 log = logging.getLogger(__name__)
@@ -40,53 +40,65 @@ _MAX_RENDER_CHARS: int = 3800
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Groups"
-__help_text__ = t("groups.help.overview", community=cfg.community_name)
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        t("groups.help.commands.body"),
-    ),
-    replies.who_section(replies.CONTEXT_ANYONE),
-    replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
-    (
-        replies.SEC_WHAT,
-        t("groups.help.what.body", community=cfg.community_name),
-    ),
-    (
-        replies.SEC_EXAMPLES,
-        t("groups.help.examples.body"),
-    ),
-]
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("groups.help.overview", locale, community=cfg.community_name)
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("groups.help.commands.body", locale),
+        ),
+        replies.who_section(replies.context_anyone(locale), locale),
+        replies.where_section(replies.context_bot_or_group(locale), locale),
+        (
+            replies.sec_what(locale),
+            t("groups.help.what.body", locale, community=cfg.community_name),
+        ),
+        (
+            replies.sec_examples(locale),
+            t("groups.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ──────────────────────── Helper Functions ──────────────────────── #
 
 
-def _render(groups: list[GroupDoc], *, detailed: bool) -> str:
+def _render(
+    groups: list[GroupDoc], *, detailed: bool, locale: str | None = None
+) -> str:
     """Render the group list, truncating to fit Telegram's message limit.
 
     Telegram rejects messages over ~4096 chars; an unbounded render raises
     BadRequest (swallowed by callers, leaving the user with nothing) on
     large federations. Cap the body and name the remainder instead.
     """
-    header = f"{bold('Connected Groups')}\n\nCount: {len(groups)}\n"
-    lines = [header.rstrip("\n")]
-    used = len(header)
+    header = t("groups.list.header", locale, n=len(groups))
+    lines = [header]
+    used = len(header) + 1
     for i, g in enumerate(groups):
         title = g.get("title", "Unknown")
         if detailed:
-            line = f"\\- {esc(title)} \\- {code(str(g.get('chat_id', 0)))}"
+            line = t(
+                "groups.list.item_detailed",
+                locale,
+                title=title,
+                id=Safe(code(str(g.get("chat_id", 0)))),
+            )
         else:
-            line = f"\\- {esc(title)}"
+            line = t("groups.list.item", locale, title=title)
         if used + len(line) + 1 > _MAX_RENDER_CHARS:
-            lines.append(f"\\.\\.\\.and {len(groups) - i} more not shown\\.")
+            lines.append(
+                t("groups.list.more", locale, n=len(groups) - i),
+            )
             break
         lines.append(line)
         used += len(line) + 1
@@ -111,7 +123,7 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.exception("active_groups failed during tcgroups")
         await safe_reply(
             msg,
-            replies.err_groups_load_failed(locale, plain=False),
+            replies.err_groups_load_failed(locale, plain=True),
             log_label="tcgroups groups-failed",
             parse_mode=None,
         )
@@ -119,7 +131,7 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not groups:
         await safe_reply(
             msg,
-            f"No groups are currently connected to {cfg.community_name}.",
+            t("groups.menu.empty", locale, community=cfg.community_name, plain=True),
             log_label="tcgroups no-groups",
             parse_mode=None,
         )
@@ -127,9 +139,9 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     await safe_reply(
         msg,
-        _render(groups, detailed=False),
+        _render(groups, detailed=False, locale=locale),
         log_label="tcgroups list",
-        reply_markup=tcgroups_kb(detailed=False),
+        reply_markup=tcgroups_kb(detailed=False, locale=locale),
     )
 
 
@@ -159,15 +171,15 @@ async def _toggle(
         log.warning("tcgroups toggle groups fetch failed: %s", groups_r)
         await safe_edit(
             cbq_msg,  # type: ignore[arg-type]
-            esc(replies.err_groups_load_failed(locale, plain=False)),
-            reply_markup=tcgroups_kb(detailed=detailed),
+            replies.err_groups_load_failed(locale, plain=False),
+            reply_markup=tcgroups_kb(detailed=detailed, locale=locale),
         )
         return
     groups = groups_r
     await safe_edit(
         cbq_msg,  # type: ignore[arg-type]
-        _render(groups, detailed=detailed),
-        reply_markup=tcgroups_kb(detailed=detailed),
+        _render(groups, detailed=detailed, locale=locale),
+        reply_markup=tcgroups_kb(detailed=detailed, locale=locale),
     )
 
 

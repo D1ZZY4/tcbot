@@ -15,6 +15,7 @@ from telegram.constants import KeyboardButtonStyle
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper.parse_link import appeal_deep_link
+from tcbot.utils.i18n import t
 from tcbot.utils.pagination import nav_row
 
 if TYPE_CHECKING:
@@ -52,20 +53,21 @@ def ban_log_new(
     target_id: int,
     proof_link: str,
     appeal_url: str,
+    locale: str | None = None,
 ) -> InlineKeyboardMarkup:
     """Ban-log keyboard with explicit appeal URL."""
     return InlineKeyboardMarkup(
         [
             [
                 InlineKeyboardButton(
-                    f"Proof {target_id}",
+                    t("button.proof_id", locale, id=target_id, plain=True),
                     url=proof_link,
                     style=KeyboardButtonStyle.PRIMARY,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    "Submit Appeal",
+                    t("button.submit_appeal", locale, plain=True),
                     url=appeal_url,
                     style=KeyboardButtonStyle.PRIMARY,
                 )
@@ -79,6 +81,7 @@ def ban_log_update(
     proof_link: str,
     previous_proof_link: str,
     appeal_url: str,
+    locale: str | None = None,
 ) -> InlineKeyboardMarkup:
     """Return the ban-log keyboard with a previous-proof button and explicit appeal URL."""
     # * One URL button per row (keyboard-styles "Detail view" convention):
@@ -88,21 +91,21 @@ def ban_log_update(
         [
             [
                 InlineKeyboardButton(
-                    f"Proof {target_id}",
+                    t("button.proof_id", locale, id=target_id, plain=True),
                     url=proof_link,
                     style=KeyboardButtonStyle.PRIMARY,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    f"Previous Proof {target_id}",
+                    t("button.prev_proof_id", locale, id=target_id, plain=True),
                     url=previous_proof_link,
                     style=KeyboardButtonStyle.PRIMARY,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    "Submit Appeal",
+                    t("button.submit_appeal", locale, plain=True),
                     url=appeal_url,
                     style=KeyboardButtonStyle.PRIMARY,
                 )
@@ -114,6 +117,7 @@ def ban_log_update(
 def ban_update_confirm_kb(
     log_url: str | None,
     proof_url: str | None,
+    locale: str | None = None,
 ) -> InlineKeyboardMarkup:
     """Re-ban confirmation: View Log / View Proof URLs, then Cancel / Continue.
 
@@ -123,16 +127,24 @@ def ban_update_confirm_kb(
     rows: list[list[InlineKeyboardButton]] = []
     links = []
     if log_url:
-        links.append(InlineKeyboardButton("View Log", url=log_url))
+        links.append(
+            InlineKeyboardButton(t("button.view_log", locale, plain=True), url=log_url)
+        )
     if proof_url:
-        links.append(InlineKeyboardButton("View Proof", url=proof_url))
+        links.append(
+            InlineKeyboardButton(
+                t("button.view_proof", locale, plain=True), url=proof_url
+            )
+        )
     if links:
         rows.append(links)
     rows.append(
         [
-            InlineKeyboardButton("Cancel", callback_data="ban_cancel"),
             InlineKeyboardButton(
-                "Continue",
+                t("button.cancel", locale, plain=True), callback_data="ban_cancel"
+            ),
+            InlineKeyboardButton(
+                t("button.continue", locale, plain=True),
                 callback_data="ban_continue",
                 style=KeyboardButtonStyle.PRIMARY,
             ),
@@ -144,6 +156,7 @@ def ban_update_confirm_kb(
 def appeal_button_kb(
     bot_username: str,
     ban_id: str,
+    locale: str | None = None,
 ) -> InlineKeyboardMarkup | None:
     """Single Submit Appeal URL button, or None when the bot username is unknown."""
     if not bot_username:
@@ -152,7 +165,7 @@ def appeal_button_kb(
         [
             [
                 InlineKeyboardButton(
-                    "Submit Appeal",
+                    t("button.submit_appeal", locale, plain=True),
                     url=appeal_deep_link(bot_username, ban_id),
                     style=KeyboardButtonStyle.PRIMARY,
                 )
@@ -167,6 +180,7 @@ def appeal_button_kb(
 def action_proof_kb(
     target_id: int,
     proof_link: str | None,
+    locale: str | None = None,
 ) -> InlineKeyboardMarkup | None:
     """Single-button keyboard with a proof URL, or None when no proof link is available."""
     if not proof_link:
@@ -175,7 +189,7 @@ def action_proof_kb(
         [
             [
                 InlineKeyboardButton(
-                    f"Proof {target_id}",
+                    t("button.proof_id", locale, id=target_id, plain=True),
                     url=proof_link,
                     style=KeyboardButtonStyle.PRIMARY,
                 )
@@ -187,7 +201,11 @@ def action_proof_kb(
 # ───────────────────────── Admin promotion ──────────────────────── #
 
 
-def promote_role_kb(target_id: int, available_roles: list[str]) -> InlineKeyboardMarkup:
+def promote_role_kb(
+    target_id: int,
+    available_roles: list[str],
+    locale: str | None = None,
+) -> InlineKeyboardMarkup:
     """Role selection keyboard shown when /tcpromote is used without a role argument."""
     buttons = [
         InlineKeyboardButton(
@@ -202,41 +220,51 @@ def promote_role_kb(target_id: int, available_roles: list[str]) -> InlineKeyboar
         buttons[i : i + 2] for i in range(0, len(buttons), 2)
     ]
     rows.append(
-        [InlineKeyboardButton("Cancel", callback_data=f"promo_role_cancel:{target_id}")]
+        [
+            InlineKeyboardButton(
+                t("button.cancel", locale, plain=True),
+                callback_data=f"promo_role_cancel:{target_id}",
+            )
+        ]
     )
     return InlineKeyboardMarkup(rows)
 
 
-def demote_confirm_kb(target_id: int) -> InlineKeyboardMarkup:
+def demote_confirm_kb(
+    target_id: int, locale: str | None = None
+) -> InlineKeyboardMarkup:
     """Confirm/Cancel keyboard for the demotion confirmation flow."""
     return InlineKeyboardMarkup(
         [
             [
                 InlineKeyboardButton(
-                    "Confirm",
+                    t("button.confirm", locale, plain=True),
                     callback_data=f"demote_confirm:{target_id}",
                     style=KeyboardButtonStyle.DANGER,
                 ),
                 InlineKeyboardButton(
-                    "Cancel", callback_data=f"demote_cancel:{target_id}"
+                    t("button.cancel", locale, plain=True),
+                    callback_data=f"demote_cancel:{target_id}",
                 ),
             ]
         ]
     )
 
 
-def promo_decision_kb(request_id: str) -> InlineKeyboardMarkup:
+def promo_decision_kb(
+    request_id: str, locale: str | None = None
+) -> InlineKeyboardMarkup:
     """Approve/Reject keyboard for promotion request review cards."""
     return InlineKeyboardMarkup(
         [
             [
                 InlineKeyboardButton(
-                    "Approve",
+                    t("button.approve", locale, plain=True),
                     callback_data=f"promo_approve:{request_id}",
                     style=KeyboardButtonStyle.SUCCESS,
                 ),
                 InlineKeyboardButton(
-                    "Reject",
+                    t("button.reject", locale, plain=True),
                     callback_data=f"promo_reject:{request_id}",
                     style=KeyboardButtonStyle.DANGER,
                 ),
@@ -252,6 +280,7 @@ def checkme_ban_kb(
     bot_username: str,
     ban_id: str,
     proof_link: str | None = None,
+    locale: str | None = None,
 ) -> InlineKeyboardMarkup | None:
     """Summary view keyboard - Details | Proof (row 1), Appeal (row 2)."""
     if not bot_username:
@@ -259,7 +288,7 @@ def checkme_ban_kb(
     appeal_url = appeal_deep_link(bot_username, ban_id)
     row1 = [
         InlineKeyboardButton(
-            "Details",
+            t("button.details", locale, plain=True),
             callback_data=f"checkme_detail:{ban_id}",
             style=KeyboardButtonStyle.PRIMARY,
         )
@@ -267,7 +296,9 @@ def checkme_ban_kb(
     if proof_link:
         row1.append(
             InlineKeyboardButton(
-                "Proof", url=proof_link, style=KeyboardButtonStyle.PRIMARY
+                t("button.proof", locale, plain=True),
+                url=proof_link,
+                style=KeyboardButtonStyle.PRIMARY,
             )
         )
     return InlineKeyboardMarkup(
@@ -275,7 +306,9 @@ def checkme_ban_kb(
             row1,
             [
                 InlineKeyboardButton(
-                    "Appeal", url=appeal_url, style=KeyboardButtonStyle.PRIMARY
+                    t("button.appeal", locale, plain=True),
+                    url=appeal_url,
+                    style=KeyboardButtonStyle.PRIMARY,
                 )
             ],
         ]
@@ -285,6 +318,7 @@ def checkme_ban_kb(
 def checkme_detail_back_kb(
     ban_id: str,
     proof_link: str | None = None,
+    locale: str | None = None,
 ) -> InlineKeyboardMarkup:
     """Detail view keyboard - optional Proof (row 1), Back (row 2)."""
     rows: list[list[InlineKeyboardButton]] = []
@@ -292,12 +326,19 @@ def checkme_detail_back_kb(
         rows.append(
             [
                 InlineKeyboardButton(
-                    "Proof", url=proof_link, style=KeyboardButtonStyle.PRIMARY
+                    t("button.proof", locale, plain=True),
+                    url=proof_link,
+                    style=KeyboardButtonStyle.PRIMARY,
                 )
             ]
         )
     rows.append(
-        [InlineKeyboardButton("« Back", callback_data=f"checkme_back:{ban_id}")]
+        [
+            InlineKeyboardButton(
+                t("button.back", locale, plain=True),
+                callback_data=f"checkme_back:{ban_id}",
+            )
+        ]
     )
     return InlineKeyboardMarkup(rows)
 
@@ -305,39 +346,39 @@ def checkme_detail_back_kb(
 # ─────────────────────── Start / Help menus ─────────────────────── #
 
 
-def main_menu_kb() -> InlineKeyboardMarkup:
+def main_menu_kb(locale: str | None = None) -> InlineKeyboardMarkup:
     """Top-level start-menu keyboard: About, Help, Additional, Privacy, Language."""
     return InlineKeyboardMarkup(
         [
             [
                 InlineKeyboardButton(
-                    "About",
+                    t("button.about", locale, plain=True),
                     callback_data="about_menu",
                     style=KeyboardButtonStyle.PRIMARY,
                 ),
                 InlineKeyboardButton(
-                    "Help",
+                    t("button.help", locale, plain=True),
                     callback_data="help_menu",
                     style=KeyboardButtonStyle.PRIMARY,
                 ),
             ],
             [
                 InlineKeyboardButton(
-                    "Additional",
+                    t("button.additional", locale, plain=True),
                     callback_data="additional_menu",
                     style=KeyboardButtonStyle.PRIMARY,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    "Privacy",
+                    t("button.privacy", locale, plain=True),
                     callback_data="privacy_menu",
                     style=KeyboardButtonStyle.PRIMARY,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    "Language",
+                    t("button.language", locale, plain=True),
                     callback_data="language_menu",
                     style=KeyboardButtonStyle.PRIMARY,
                 )
@@ -346,14 +387,16 @@ def main_menu_kb() -> InlineKeyboardMarkup:
     )
 
 
-def group_start_kb(bot_username: str) -> InlineKeyboardMarkup:
+def group_start_kb(
+    bot_username: str, locale: str | None = None
+) -> InlineKeyboardMarkup:
     """Keyboard for /start sent inside a group - sends user to PM."""
     rows: list[list[InlineKeyboardButton]] = []
     if bot_username:
         rows.append(
             [
                 InlineKeyboardButton(
-                    "Open in PM",
+                    t("button.open_pm", locale, plain=True),
                     url=f"https://t.me/{bot_username}?start=menu",
                     style=KeyboardButtonStyle.PRIMARY,
                 )
@@ -362,7 +405,7 @@ def group_start_kb(bot_username: str) -> InlineKeyboardMarkup:
     rows.append(
         [
             InlineKeyboardButton(
-                "Help",
+                t("button.help", locale, plain=True),
                 callback_data="help_menu_group",
                 style=KeyboardButtonStyle.PRIMARY,
             )
@@ -389,10 +432,18 @@ def _build_topic_rows(
     return rows
 
 
-def help_topics_menu_kb(topics: list[tuple[str, str]]) -> InlineKeyboardMarkup:
+def help_topics_menu_kb(
+    topics: list[tuple[str, str]], locale: str | None = None
+) -> InlineKeyboardMarkup:
     """Help index when reached via the start menu - includes « Back to start."""
     rows = _build_topic_rows(topics, style=KeyboardButtonStyle.PRIMARY)
-    rows.append([InlineKeyboardButton("« Back", callback_data="back_to_start")])
+    rows.append(
+        [
+            InlineKeyboardButton(
+                t("button.back", locale, plain=True), callback_data="back_to_start"
+            )
+        ]
+    )
     return InlineKeyboardMarkup(rows)
 
 
@@ -403,76 +454,103 @@ def help_topics_kb(topics: list[tuple[str, str]]) -> InlineKeyboardMarkup:
     )
 
 
-def back_to_start_kb() -> InlineKeyboardMarkup:
+def back_to_start_kb(locale: str | None = None) -> InlineKeyboardMarkup:
     """Single Back button that returns the user to the start menu."""
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("« Back", callback_data="back_to_start"),
+                InlineKeyboardButton(
+                    t("button.back", locale, plain=True),
+                    callback_data="back_to_start",
+                ),
             ]
         ]
     )
 
 
-def back_to_help_kb() -> InlineKeyboardMarkup:
+def back_to_help_kb(locale: str | None = None) -> InlineKeyboardMarkup:
     """Back to help index - used from menu-path topics (goes to help_menu)."""
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("« Back", callback_data="help_menu"),
+                InlineKeyboardButton(
+                    t("button.back", locale, plain=True), callback_data="help_menu"
+                ),
             ]
         ]
     )
 
 
-def back_to_help_cmd_kb() -> InlineKeyboardMarkup:
+def back_to_help_cmd_kb(locale: str | None = None) -> InlineKeyboardMarkup:
     """Back to help index - used from command-path topics (goes to helpc_main)."""
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("« Back", callback_data="helpc_main"),
+                InlineKeyboardButton(
+                    t("button.back", locale, plain=True), callback_data="helpc_main"
+                ),
             ]
         ]
     )
 
 
-def privacy_kb() -> InlineKeyboardMarkup:
+def privacy_kb(locale: str | None = None) -> InlineKeyboardMarkup:
     """Privacy section keyboard: policy link + Back to start."""
     return InlineKeyboardMarkup(
         [
             [
                 InlineKeyboardButton(
-                    "Privacy Policy",
+                    t("button.privacy_policy", locale, plain=True),
                     callback_data="privacy_policy_menu",
                     style=KeyboardButtonStyle.PRIMARY,
                 )
             ],
-            [InlineKeyboardButton("« Back", callback_data="back_to_start")],
+            [
+                InlineKeyboardButton(
+                    t("button.back", locale, plain=True),
+                    callback_data="back_to_start",
+                )
+            ],
         ]
     )
 
 
-def privacy_policy_sections_kb(section_labels: list[str]) -> InlineKeyboardMarkup:
+def privacy_policy_sections_kb(
+    section_labels: list[str], locale: str | None = None
+) -> InlineKeyboardMarkup:
     """Policy index keyboard: one button per section + Back to privacy data."""
     pairs: list[tuple[str, str]] = [
         (label, f"privacy_section_{idx}") for idx, label in enumerate(section_labels)
     ]
     rows = _build_topic_rows(pairs, style=KeyboardButtonStyle.PRIMARY)
-    rows.append([InlineKeyboardButton("« Back", callback_data="privacy_menu")])
+    rows.append(
+        [
+            InlineKeyboardButton(
+                t("button.back", locale, plain=True), callback_data="privacy_menu"
+            )
+        ]
+    )
     return InlineKeyboardMarkup(rows)
 
 
-def back_to_privacy_policy_kb() -> InlineKeyboardMarkup:
+def back_to_privacy_policy_kb(locale: str | None = None) -> InlineKeyboardMarkup:
     """Back to privacy policy section index from an individual section view."""
     return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("« Back", callback_data="privacy_policy_menu")]]
+        [
+            [
+                InlineKeyboardButton(
+                    t("button.back", locale, plain=True),
+                    callback_data="privacy_policy_menu",
+                )
+            ]
+        ]
     )
 
 
 # ─────────────────── Additional / Groups menus ──────────────────── #
 
 
-def additional_menu_kb() -> InlineKeyboardMarkup:
+def additional_menu_kb(locale: str | None = None) -> InlineKeyboardMarkup:
     """Return the community links menu shown from the start menu.
 
     Each button row is only included when the corresponding env var URL is
@@ -487,14 +565,18 @@ def additional_menu_kb() -> InlineKeyboardMarkup:
     group_url = _https_url(cfg.community_group_url, "group")
     channel_btn = (
         InlineKeyboardButton(
-            "Main Channel", url=channel_url, style=KeyboardButtonStyle.PRIMARY
+            t("button.main_channel", locale, plain=True),
+            url=channel_url,
+            style=KeyboardButtonStyle.PRIMARY,
         )
         if channel_url
         else None
     )
     group_btn = (
         InlineKeyboardButton(
-            "Discussion Group", url=group_url, style=KeyboardButtonStyle.PRIMARY
+            t("button.discussion_group", locale, plain=True),
+            url=group_url,
+            style=KeyboardButtonStyle.PRIMARY,
         )
         if group_url
         else None
@@ -506,14 +588,18 @@ def additional_menu_kb() -> InlineKeyboardMarkup:
     exec_url = _https_url(cfg.community_exec_url, "exec")
     logs_btn = (
         InlineKeyboardButton(
-            "Logs Channel", url=logs_url, style=KeyboardButtonStyle.PRIMARY
+            t("button.logs_channel", locale, plain=True),
+            url=logs_url,
+            style=KeyboardButtonStyle.PRIMARY,
         )
         if logs_url
         else None
     )
     exec_btn = (
         InlineKeyboardButton(
-            "Exec Group", url=exec_url, style=KeyboardButtonStyle.PRIMARY
+            t("button.exec_group", locale, plain=True),
+            url=exec_url,
+            style=KeyboardButtonStyle.PRIMARY,
         )
         if exec_url
         else None
@@ -526,31 +612,47 @@ def additional_menu_kb() -> InlineKeyboardMarkup:
         rows.append(
             [
                 InlineKeyboardButton(
-                    "TRAVEL - Transsion Development (Community)",
+                    t("button.travel", locale, plain=True),
                     url=travel_url,
                     style=KeyboardButtonStyle.PRIMARY,
                 )
             ]
         )
 
-    rows.append([InlineKeyboardButton("« Back", callback_data="back_to_start")])
+    rows.append(
+        [
+            InlineKeyboardButton(
+                t("button.back", locale, plain=True), callback_data="back_to_start"
+            )
+        ]
+    )
     return InlineKeyboardMarkup(rows)
 
 
-def groups_menu_kb(*, detailed: bool) -> InlineKeyboardMarkup:
+def groups_menu_kb(
+    *, detailed: bool, locale: str | None = None
+) -> InlineKeyboardMarkup:
     """Detailed/Simple toggle keyboard for the start-menu groups list."""
     toggle = InlineKeyboardButton(
-        "Simple" if detailed else "Details",
+        t("button.simple", locale, plain=True)
+        if detailed
+        else t("button.details_toggle", locale, plain=True),
         callback_data="menu_groups_simple" if detailed else "menu_groups_details",
         style=KeyboardButtonStyle.PRIMARY,
     )
-    back = InlineKeyboardButton("« Back", callback_data="back_to_start")
+    back = InlineKeyboardButton(
+        t("button.back", locale, plain=True), callback_data="back_to_start"
+    )
     return InlineKeyboardMarkup([[toggle, back]])
 
 
-def tcgroups_kb(*, detailed: bool) -> InlineKeyboardMarkup:
+def tcgroups_kb(*, detailed: bool, locale: str | None = None) -> InlineKeyboardMarkup:
     """Toggle keyboard for the /tcgroups command: Simple/Details switch."""
-    label = "Simple" if detailed else "Details"
+    label = (
+        t("button.simple", locale, plain=True)
+        if detailed
+        else t("button.details_toggle", locale, plain=True)
+    )
     callback = "groups_simple" if detailed else "groups_details"
     return InlineKeyboardMarkup(
         [
@@ -577,6 +679,7 @@ def paged_drill_kb(
     back_callback: str,
     extra_rows: Sequence[Sequence[InlineKeyboardButton]] | None = None,
     per_row: int = 3,
+    locale: str | None = None,
 ) -> InlineKeyboardMarkup:
     """Numbered drill-in grid plus nav row, optional extra rows, and back.
 
@@ -600,7 +703,13 @@ def paged_drill_kb(
         rows.append(nav)
     if extra_rows:
         rows.extend([list(row) for row in extra_rows])
-    rows.append([InlineKeyboardButton("« Back", callback_data=back_callback)])
+    rows.append(
+        [
+            InlineKeyboardButton(
+                t("button.back", locale, plain=True), callback_data=back_callback
+            )
+        ]
+    )
     return InlineKeyboardMarkup(rows)
 
 
@@ -608,25 +717,38 @@ def paged_drill_kb(
 
 
 def appeal_cancel_kb(
-    label: str = "Cancel", callback: str = "cancel_appeal"
+    label: str | None = None,
+    callback: str = "cancel_appeal",
+    locale: str | None = None,
 ) -> InlineKeyboardMarkup:
     """Single-button keyboard attached to the appeal instruction prompt."""
-    return InlineKeyboardMarkup([[InlineKeyboardButton(label, callback_data=callback)]])
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    label
+                    if label is not None
+                    else t("button.cancel", locale, plain=True),
+                    callback_data=callback,
+                )
+            ]
+        ]
+    )
 
 
-def appeal_review_kb(ban_id: str) -> InlineKeyboardMarkup:
+def appeal_review_kb(ban_id: str, locale: str | None = None) -> InlineKeyboardMarkup:
     """Approve / Reject keyboard attached to the staff review card."""
     return InlineKeyboardMarkup(
         [
             [
                 InlineKeyboardButton(
-                    "Approve",
+                    t("button.approve", locale, plain=True),
                     callback_data=f"appeal_approve_{ban_id}",
                     style=KeyboardButtonStyle.SUCCESS,
                 ),
                 InlineKeyboardButton(
-                    "Reject",
-                    callback_data=f"appeal_reject_{ban_id}",
+                    t("button.reject", locale, plain=True),
+                    callback_data=f"appeal_reject:{ban_id}",
                     style=KeyboardButtonStyle.DANGER,
                 ),
             ]
@@ -640,17 +762,33 @@ def appeal_review_kb(ban_id: str) -> InlineKeyboardMarkup:
 def module_help_kb(
     section_buttons: list[tuple[str, str]],
     back_callback: str,
+    locale: str | None = None,
 ) -> InlineKeyboardMarkup:
     """Per-module help view: pair sub-section buttons + Back, with Back last."""
     rows = _build_topic_rows(section_buttons, style=KeyboardButtonStyle.PRIMARY)
-    rows.append([InlineKeyboardButton("« Back", callback_data=back_callback)])
+    rows.append(
+        [
+            InlineKeyboardButton(
+                t("button.back", locale, plain=True), callback_data=back_callback
+            )
+        ]
+    )
     return InlineKeyboardMarkup(rows)
 
 
-def back_to_module_kb(module_callback: str) -> InlineKeyboardMarkup:
+def back_to_module_kb(
+    module_callback: str, locale: str | None = None
+) -> InlineKeyboardMarkup:
     """Single « Back button that returns to the module help view."""
     return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("« Back", callback_data=module_callback)]]
+        [
+            [
+                InlineKeyboardButton(
+                    t("button.back", locale, plain=True),
+                    callback_data=module_callback,
+                )
+            ]
+        ]
     )
 
 

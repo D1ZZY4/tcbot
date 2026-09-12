@@ -24,3 +24,12 @@ body = """
 `/tcbroadcast Reminder: please review the community rules.`
 `/bc *Event tonight* (join us at 8 PM UTC).`
 Or reply to a message and run `/bc` to forward it to all groups."""
+
+# Runtime strings (broadcasting.py). [no_content]/[done] render MarkdownV2;
+# [sending] sends plain (no parse_mode). Placeholders: {ok}/{failed}/
+# {n} pre-formatted code counts.
+
+[send]
+no_content = "Please provide a message to broadcast, or reply to a message."
+sending = "Broadcasting to {n} group(s)..."
+done = "Broadcast sent to {ok} groups. Failed: {failed}."

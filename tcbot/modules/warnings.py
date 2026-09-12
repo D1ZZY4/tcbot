@@ -53,39 +53,48 @@ _RL_READ_LIMIT: int = 8
 
 __module_name__ = "Warnings"
 
-# * Pre-formatted warn-limit fragment for help placeholders: markup
-# * around a dynamic value cannot come from TOML, so it is composed here.
-_WARN_LIMIT_LABEL = Safe(bold(f"{cfg.warn_limit} warnings"))
 
-__help_text__ = t("warnings.help.overview", limit=_WARN_LIMIT_LABEL)
+def _warn_limit_label(locale: str | None = None) -> Safe:
+    """Pre-formatted warn-limit fragment for help placeholders.
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        t("warnings.help.commands.body"),
-    ),
-    replies.who_section(t("warnings.help.who.body")),
-    replies.where_section(replies.WHERE_CONNECTED_GROUP),
-    (
-        replies.SEC_WHAT,
-        t("warnings.help.what.body", limit=_WARN_LIMIT_LABEL),
-    ),
-    (
-        "Flow",
-        t("warnings.help.flow.body"),
-    ),
-    replies.target_section(),
-    (
-        replies.SEC_EXAMPLES,
-        t("warnings.help.examples.body"),
-    ),
-]
+    Markup around a dynamic value cannot come from TOML, so it is
+    composed here per locale.
+    """
+    return Safe(
+        bold(f"{cfg.warn_limit} {t('warnings.help.limit_noun', locale, plain=True)}")
+    )
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("warnings.help.overview", locale, limit=_warn_limit_label(locale))
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("warnings.help.commands.body", locale),
+        ),
+        replies.who_section(t("warnings.help.who.body", locale), locale),
+        replies.where_section(replies.where_connected_group(locale), locale),
+        (
+            replies.sec_what(locale),
+            t("warnings.help.what.body", locale, limit=_warn_limit_label(locale)),
+        ),
+        (
+            "Flow",
+            t("warnings.help.flow.body", locale),
+        ),
+        replies.target_section(locale),
+        (
+            replies.sec_examples(locale),
+            t("warnings.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ──────────────────────── Helper Functions ──────────────────────── #
@@ -142,7 +151,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if inline_reason and is_reason_too_long(inline_reason):
         await safe_reply(
             msg,
-            reason_too_long_text(len(inline_reason)),
+            reason_too_long_text(len(inline_reason), locale),
             log_label="cmd_warn_entry reason-too-long",
             parse_mode=None,
         )
@@ -166,12 +175,12 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if executor_role is None:
         return ConversationHandler.END
 
-    refusal = identity.refuse_message("warn", ident)
+    refusal = identity.refuse_message("warn", ident, locale)
     if refusal is not None:
         await safe_reply(msg, refusal, log_label="cmd_warn_entry refusal")
         return ConversationHandler.END
 
-    notice = identity.staff_notice("warn", ident, cfg.community_name)
+    notice = identity.staff_notice("warn", ident, cfg.community_name, locale)
     if notice is not None:
         await safe_reply(msg, notice, log_label="cmd_warn_entry staff notice")
 
@@ -190,9 +199,11 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         ctx.user_data["warn_reason"] = inline_reason
         try:
             await msg.reply_text(
-                proof.noted_prompt("warn", inline_reason, target_mention),
+                proof.noted_prompt(
+                    "warn", inline_reason, target_mention, locale=locale
+                ),
                 parse_mode="MarkdownV2",
-                reply_markup=proof.keyboard(),
+                reply_markup=proof.keyboard(locale),
             )
         except Exception as exc:
             log.debug("cmd_warn_entry proof-prompt reply failed: %s", exc)
@@ -203,9 +214,9 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     try:
         await msg.reply_text(
-            reason.prompt(target_mention, "warn"),
+            reason.prompt(target_mention, "warn", locale=locale),
             parse_mode="MarkdownV2",
-            reply_markup=reason.keyboard(),
+            reply_markup=reason.keyboard(locale),
         )
     except Exception as exc:
         log.debug("cmd_warn_entry reason-prompt reply failed: %s", exc)
@@ -263,12 +274,12 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if executor_role is None:
         return
 
-    refusal = identity.refuse_message("unwarn", ident)
+    refusal = identity.refuse_message("unwarn", ident, locale)
     if refusal is not None:
         await safe_reply(msg, refusal, log_label="cmd_unwarn refusal")
         return
 
-    notice = identity.staff_notice("unwarn", ident, cfg.community_name)
+    notice = identity.staff_notice("unwarn", ident, cfg.community_name, locale)
     if notice is not None:
         await safe_reply(msg, notice, log_label="cmd_unwarn notice")
 
@@ -358,12 +369,12 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     if executor_role is None:
         return
 
-    refusal = identity.refuse_message("resetwarns", ident)
+    refusal = identity.refuse_message("resetwarns", ident, locale)
     if refusal is not None:
         await safe_reply(msg, refusal, log_label="cmd_resetwarns refusal")
         return
 
-    notice = identity.staff_notice("resetwarns", ident, cfg.community_name)
+    notice = identity.staff_notice("resetwarns", ident, cfg.community_name, locale)
     if notice is not None:
         await safe_reply(msg, notice, log_label="cmd_resetwarns notice")
 

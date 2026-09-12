@@ -21,7 +21,7 @@ from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import fan_out
 from tcbot.utils.formatter import bold, code
-from tcbot.utils.i18n import t
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters
 
 if TYPE_CHECKING:
@@ -41,37 +41,41 @@ _MEMBERSHIP_CHECK_TIMEOUT = 3.0
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Maintenance"
-__help_text__ = t("maintenance.help.overview")
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        t("maintenance.help.commands.body"),
-    ),
-    replies.who_section(
-        f"{bold('/leaveall')}: {replies.perm_founder_only(plain=False)}\n"
-        f"{bold('/cleanup')}: {replies.perm_staff_only(plain=False)}"
-    ),
-    replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
-    (
-        "/leaveall",
-        t("maintenance.help.leaveall.body"),
-    ),
-    (
-        "/cleanup",
-        t("maintenance.help.cleanup.body"),
-    ),
-    (
-        replies.SEC_EXAMPLES,
-        t("maintenance.help.examples.body"),
-    ),
-]
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("maintenance.help.overview", locale)
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("maintenance.help.commands.body", locale),
+        ),
+        replies.who_section(
+            f"{bold('/leaveall')}: {replies.perm_founder_only(locale, plain=False)}\n"
+            f"{bold('/cleanup')}: {replies.perm_staff_only(locale, plain=False)}",
+            locale,
+        ),
+        replies.where_section(replies.context_exec_or_group(locale), locale),
+        (
+            "/leaveall",
+            t("maintenance.help.leaveall.body", locale),
+        ),
+        (
+            "/cleanup",
+            t("maintenance.help.cleanup.body", locale),
+        ),
+        (
+            replies.sec_examples(locale),
+            t("maintenance.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ──────────────────────── Helper Functions ──────────────────────── #
@@ -253,7 +257,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         # * always fail (bots cannot edit messages sent by others).
         try:
             status = await status_msg.reply_text(
-                f"Leaving {len(groups)} groups\\.\\.\\.",
+                t("maintenance.status.sending", locale, n=len(groups)),
                 parse_mode="MarkdownV2",
             )
         except Exception as exc:
@@ -284,12 +288,18 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if status is not None:
         detail = ""
         if partial:
-            detail += f" \\({partial} partial: bot left but DB deactivation failed\\)"
+            detail += t("maintenance.leaveall.partial", locale, n=partial)
         if log_failed:
-            detail += f" \\({log_failed} log posts failed\\)"
+            detail += t("maintenance.leaveall.log_failed", locale, n=log_failed)
         try:
             await status.edit_text(
-                f"Left {code(str(left_ok))} groups\\. Failed: {code(str(failed))}\\.{detail}",
+                t(
+                    "maintenance.leaveall.done",
+                    locale,
+                    ok=Safe(code(str(left_ok))),
+                    failed=Safe(code(str(failed))),
+                    detail=Safe(detail),
+                ),
                 parse_mode="MarkdownV2",
             )
         except Exception:
@@ -354,7 +364,11 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     await safe_reply(
         reply_msg,
-        f"Cleaned up {code(str(deactivated))} inaccessible group\\(s\\)\\.",
+        t(
+            "maintenance.cleanup.done",
+            locale,
+            n=Safe(code(str(deactivated))),
+        ),
         log_label="cleanup",
     )
 

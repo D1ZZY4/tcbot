@@ -16,8 +16,9 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot.modules import ALL_MODULES
 from tcbot.modules.helper import decorators, keyboards
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
-from tcbot.utils.formatter import bold, code, esc
+from tcbot.utils.formatter import bold, code
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -26,11 +27,8 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-# ──────────────── User-facing reply constants ──────────────────── #
-
-_ERR_TOPIC_NOT_FOUND = "Topic not found."
-_ERR_SECTION_NOT_FOUND = "Section not found."
-_ERR_INVALID_SECTION = "Invalid section."
+# * Help runtime prose lives in help.toml [error]/[note]/[module]/
+# * [section]/[not_found]/[group].
 
 # ─────────────────────── Rate-limiter constants ──────────────────── #
 _RL_PERIOD_S: int = 30
@@ -43,22 +41,38 @@ __module_name__ = None
 # ────────────────────── Help Content Builder ────────────────────── #
 
 
-def _builder_help() -> dict[str, tuple[str, str, list[tuple[str, str]]]]:
-    """Collect help content from every loaded module.
+def _builder_help(
+    locale: str | None = None,
+) -> dict[str, tuple[str, str, list[tuple[str, str]]]]:
+    """Collect help content from every loaded module in the given locale.
 
     Returns a dict keyed by ``help_<module>`` mapping to
     ``(display_name, overview_text, sections)``.
 
-    Prefers the unified ``__help__: HelpEntry`` attribute introduced in P3 #5.
-    Falls back to legacy ``__module_name__`` / ``__help_text__`` / ``__help_sections__``
-    for modules that have not been migrated yet.
+    Prefers the per-locale ``get_help(locale)`` builder; falls back to the
+    default-locale ``__help__`` entry for modules that have not been
+    migrated yet, then to legacy ``__module_name__`` / ``__help_text__`` /
+    ``__help_sections__``.
     """
     content: dict[str, tuple[str, str, list[tuple[str, str]]]] = {}
     for mod_name in ALL_MODULES:
         try:
             mod = importlib.import_module(f"tcbot.modules.{mod_name}")
+            get_help = getattr(mod, "get_help", None)
+            if callable(get_help):
+                try:
+                    h: object = get_help(locale)
+                except Exception:
+                    h = None
+                if isinstance(h, dict):
+                    content[f"help_{mod_name}"] = (
+                        h["name"],
+                        h["overview"],
+                        list(h.get("sections", [])),
+                    )
+                    continue
             h = getattr(mod, "__help__", None)
-            if h is not None:
+            if isinstance(h, dict):
                 content[f"help_{mod_name}"] = (
                     h["name"],
                     h["overview"],
@@ -105,10 +119,11 @@ for _key, _entry in HELP_CONTENT.items():
     _MODULE_NAME_MAP[_entry[0].lower()] = _key
 
 
-def _help_index_text(botname: str) -> str:
+def _help_index_text(botname: str, locale: str | None = None) -> str:
     """Build the help index header for the given plain-text bot display name."""
     return t(
         "help.index.body",
+        locale,
         title=Safe(bold(f"{botname} Help")),
         community=cfg.community_name,
     )
@@ -119,9 +134,11 @@ def _help_index_text(botname: str) -> str:
 
 # * Command prefixes come from frozen env config and never change at
 # * runtime, so render the footer once instead of re-joining it on every
-# * module view.
-_PREFIX_NOTE: str = f"\n{bold('Note:')} All commands also work with " + " ".join(
-    code(p) for p in cfg.prefixes
+# * module view. The leading newline separates the note from the overview.
+_PREFIX_NOTE: str = "\n" + t(
+    "help.note.prefixes",
+    None,
+    prefixes=Safe(" ".join(code(p) for p in cfg.prefixes)),
 )
 
 
@@ -138,9 +155,15 @@ def _section_buttons(
     ]
 
 
-def _module_text(name: str, overview: str) -> str:
+def _module_text(name: str, overview: str, locale: str | None = None) -> str:
     """Compose the module-overview MarkdownV2 body."""
-    return f"{bold(f'Help for {name}')}\n\n{overview}\n{_PREFIX_NOTE}"
+    return t(
+        "help.module.body",
+        locale,
+        title=Safe(bold(f"Help for {name}")),
+        overview=Safe(overview),
+        note=Safe(_PREFIX_NOTE),
+    )
 
 
 async def _render_help_index(
@@ -155,106 +178,126 @@ async def _render_help_index(
         return
 
     botname = ctx.bot.first_name or ""
+    locale = await locale_for_update(update)
     kb = (
-        keyboards.help_topics_menu_kb(HELP_TOPICS_MENU)
+        keyboards.help_topics_menu_kb(HELP_TOPICS_MENU, locale)
         if with_back_to_start
         else keyboards.help_topics_kb(HELP_TOPICS_CMD)
     )
     # * q.answer() and safe_edit_cb() are independent; run in parallel.
     await asyncio.gather(
         q.answer(),
-        safe_edit_cb(q, _help_index_text(botname), reply_markup=kb),
+        safe_edit_cb(q, _help_index_text(botname, locale), reply_markup=kb),
         return_exceptions=True,
     )
 
 
 async def _show_module(
     q: CallbackQuery,
+    update: Update,
     menu_key: str,
     *,
     is_menu_path: bool,
 ) -> None:
     """Render a module overview with sub-section buttons + back to help index."""
-    if menu_key not in HELP_CONTENT:
+    locale = await locale_for_update(update)
+    content = _builder_help(locale)
+    if menu_key not in content:
         back_kb = (
-            keyboards.back_to_help_kb()
+            keyboards.back_to_help_kb(locale)
             if is_menu_path
-            else keyboards.back_to_help_cmd_kb()
+            else keyboards.back_to_help_cmd_kb(locale)
         )
         # * q.answer() and safe_edit_cb() are independent; run in parallel.
         await asyncio.gather(
             q.answer(),
-            safe_edit_cb(q, esc(_ERR_TOPIC_NOT_FOUND), reply_markup=back_kb),
+            safe_edit_cb(
+                q,
+                t("help.error.topic_not_found", locale, plain=False),
+                reply_markup=back_kb,
+            ),
             return_exceptions=True,
         )
         return
 
-    name, overview, sections = HELP_CONTENT[menu_key]
+    name, overview, sections = content[menu_key]
     mod_slug = menu_key[5:]  # strip "help_"
 
     back_cb = "help_menu" if is_menu_path else "helpc_main"
     if sections:
         section_btns = _section_buttons(mod_slug, sections, is_menu_path=is_menu_path)
-        kb = keyboards.module_help_kb(section_btns, back_callback=back_cb)
+        kb = keyboards.module_help_kb(
+            section_btns, back_callback=back_cb, locale=locale
+        )
     else:
         kb = (
-            keyboards.back_to_help_kb()
+            keyboards.back_to_help_kb(locale)
             if is_menu_path
-            else keyboards.back_to_help_cmd_kb()
+            else keyboards.back_to_help_cmd_kb(locale)
         )
 
     # * q.answer() and safe_edit_cb() are independent; run in parallel.
     await asyncio.gather(
         q.answer(),
-        safe_edit_cb(q, _module_text(name, overview), reply_markup=kb),
+        safe_edit_cb(q, _module_text(name, overview, locale), reply_markup=kb),
         return_exceptions=True,
     )
 
 
 async def _show_section(
     q: CallbackQuery,
+    update: Update,
     mod_slug: str,
     idx: int,
     *,
     is_menu_path: bool,
 ) -> None:
     """Render a single help section + back-to-module button."""
+    locale = await locale_for_update(update)
+    content = _builder_help(locale)
     menu_key = f"help_{mod_slug}"
     back_module_cb = ("help_" if is_menu_path else "helpc_") + mod_slug
 
-    if menu_key not in HELP_CONTENT:
+    if menu_key not in content:
         # * q.answer() and safe_edit_cb() are independent; run in parallel.
         await asyncio.gather(
             q.answer(),
             safe_edit_cb(
                 q,
-                esc(_ERR_TOPIC_NOT_FOUND),
-                reply_markup=keyboards.back_to_module_kb(back_module_cb),
+                t("help.error.topic_not_found", locale, plain=False),
+                reply_markup=keyboards.back_to_module_kb(back_module_cb, locale),
             ),
             return_exceptions=True,
         )
         return
 
-    name, _, sections = HELP_CONTENT[menu_key]
+    name, _, sections = content[menu_key]
     if idx < 0 or idx >= len(sections):
         # * q.answer() and safe_edit_cb() are independent; run in parallel.
         await asyncio.gather(
             q.answer(),
             safe_edit_cb(
                 q,
-                esc(_ERR_SECTION_NOT_FOUND),
-                reply_markup=keyboards.back_to_module_kb(back_module_cb),
+                t("help.error.section_not_found", locale, plain=False),
+                reply_markup=keyboards.back_to_module_kb(back_module_cb, locale),
             ),
             return_exceptions=True,
         )
         return
 
-    label, content = sections[idx]
-    body = f"{bold(f'{name} > {label}')}\n\n{content}"
+    label, section_content = sections[idx]
+    body = t(
+        "help.section.body",
+        locale,
+        title=Safe(bold(f"{name} > {label}")),
+        content=Safe(section_content),
+    )
     # * q.answer() and safe_edit_cb() are independent; run in parallel.
     await asyncio.gather(
         q.answer(),
-        safe_edit_cb(q, body, reply_markup=keyboards.back_to_module_kb(back_module_cb)),
+        safe_edit_cb(
+            q, body, reply_markup=keyboards.back_to_module_kb(back_module_cb, locale)
+        ),
         return_exceptions=True,
     )
 
@@ -272,22 +315,26 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     botname = ctx.bot.first_name or ""
     args = parse_cmd_args(msg.text)
+    locale = await locale_for_update(update)
+    content = _builder_help(locale)
 
     if args:
         query = " ".join(args).strip().lower()
         help_key = _MODULE_NAME_MAP.get(query)
 
-        if help_key and help_key in HELP_CONTENT:
-            name, overview, sections = HELP_CONTENT[help_key]
+        if help_key and help_key in content:
+            name, overview, sections = content[help_key]
             mod_slug = help_key[5:]
             if sections:
                 section_btns = _section_buttons(mod_slug, sections, is_menu_path=False)
-                kb = keyboards.module_help_kb(section_btns, back_callback="helpc_main")
+                kb = keyboards.module_help_kb(
+                    section_btns, back_callback="helpc_main", locale=locale
+                )
             else:
-                kb = keyboards.back_to_help_cmd_kb()
+                kb = keyboards.back_to_help_cmd_kb(locale)
             await safe_reply(
                 msg,
-                _module_text(name, overview),
+                _module_text(name, overview, locale),
                 log_label="cmd_help module",
                 reply_markup=kb,
             )
@@ -298,10 +345,25 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             key=lambda k: (query not in k, abs(len(k) - len(query))),
         )[:3]
         suggestion = ", ".join(code(f"/help {c}") for c in candidates if c)
-        hint = f"\n\nDid you mean: {suggestion}?" if suggestion else ""
+        hint = (
+            Safe(
+                t(
+                    "help.not_found.hint",
+                    locale,
+                    suggestions=Safe(suggestion),
+                )
+            )
+            if suggestion
+            else Safe("")
+        )
         await safe_reply(
             msg,
-            f"Module {bold(query)} not found\\.{hint}",
+            t(
+                "help.not_found.body",
+                locale,
+                query=Safe(bold(query)),
+                hint=hint,
+            ),
             log_label="cmd_help not-found",
             reply_markup=keyboards.help_topics_kb(HELP_TOPICS_CMD),
         )
@@ -309,7 +371,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     await safe_reply(
         msg,
-        _help_index_text(botname),
+        _help_index_text(botname, locale),
         log_label="cmd_help index",
         reply_markup=keyboards.help_topics_kb(HELP_TOPICS_CMD),
     )
@@ -334,7 +396,7 @@ async def on_help_menu_group(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     await q.answer(
-        "Run /help in this group to browse all modules and commands.",
+        t("help.group.alert", await locale_for_update(update), plain=True),
         show_alert=True,
     )
 
@@ -356,9 +418,11 @@ async def on_help_topic_any(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
     data = q.data
     if data.startswith("helpc_"):
-        await _show_module(q, "help_" + data[len("helpc_") :], is_menu_path=False)
+        await _show_module(
+            q, update, "help_" + data[len("helpc_") :], is_menu_path=False
+        )
     else:
-        await _show_module(q, data, is_menu_path=True)
+        await _show_module(q, update, data, is_menu_path=True)
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -377,9 +441,16 @@ async def on_help_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         idx = int(idx_str)
     except ValueError:
         # * split(":", 1) unpacking raises ValueError (never IndexError).
-        await q.answer(_ERR_INVALID_SECTION, show_alert=True)
+        await q.answer(
+            t(
+                "help.error.invalid_section",
+                await locale_for_update(update),
+                plain=True,
+            ),
+            show_alert=True,
+        )
         return
-    await _show_section(q, mod_slug, idx, is_menu_path=is_menu_path)
+    await _show_section(q, update, mod_slug, idx, is_menu_path=is_menu_path)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

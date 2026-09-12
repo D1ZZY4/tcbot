@@ -56,4 +56,50 @@ async def locale_for_update(update: Update) -> str:
     user = update.effective_user
     if chat is None or user is None:
         return DEFAULT_LOCALE
-    return await effective_locale(chat.type, user.id, chat.id)
+    return await effective_locale(
+        getattr(chat, "type", None),
+        getattr(user, "id", 0),
+        getattr(chat, "id", 0),
+    )
+
+
+async def locale_for_user(user_id: int) -> str:
+    """Resolve the personal locale for a direct message to one user.
+
+    Used for PMs where the audience is a single user rather than a chat
+    (ban notices, appeal updates). Falls back to the default locale;
+    resolution never raises.
+    """
+    try:
+        user_locale = await db.settings_db.get_user_locale(user_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.debug("locale user read failed for %d: %s", user_id, exc)
+        user_locale = None
+    return resolve_locale(
+        chat_type="private",
+        user_locale=user_locale if isinstance(user_locale, str) else None,
+    )
+
+
+async def locale_for_chat(chat: object) -> str:
+    """Resolve the render locale for a group chat object.
+
+    Used where no Update is available (join/leave events carry chat
+    directly). Reads only the group row; falls back to the default
+    locale. Resolution never raises.
+    """
+    chat_id = getattr(chat, "id", 0)
+    chat_type = getattr(chat, "type", None)
+    try:
+        group_locale = await db.groups_db.get_group_locale(chat_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.debug("locale group read failed for %d: %s", chat_id, exc)
+        group_locale = None
+    return resolve_locale(
+        chat_type=chat_type if isinstance(chat_type, str) else "group",
+        group_locale=group_locale if isinstance(group_locale, str) else None,
+    )

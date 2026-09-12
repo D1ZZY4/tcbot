@@ -5,6 +5,7 @@
 
 [help]
 overview = "Issue formal warnings tracked per-group. At {limit} the user is automatically federation-banned across all connected groups and their warnings are cleared."
+limit_noun = "warnings"
 
 [help.commands]
 body = """
@@ -42,3 +43,50 @@ body = """
 `/warns @username`
 `/resetwarns @username`
 Or reply to a message and run `/tcw`."""
+
+# Runtime strings for the warn executors (warning_flow.py).
+# [none]/[removed]/[list]/[cleared]/[fed_fail]/[issued]/[exempt]/
+# [autoban] render as MarkdownV2; db_retry sends plain.
+# Placeholders: {user} pre-formatted user reference, {reason} raw reason
+# text, {role} raw role name, {count}/{limit}/{new}/{removed}/{done}/
+# {total}/{failed}/{fed}/{fedlimit} ints/strings, {sample} raw group
+# names, {applied} prebuilt applied line.
+
+[issued]
+body = "{user} has been warned ({count}/{limit}) - {reason}"
+
+[fed_fail]
+body = "{user} has been warned ({count}/{limit}) - {reason}. The federation-wide threshold check is unavailable right now; ban them manually with /tcban if needed."
+
+[none]
+body = "{user} has no warnings in this group."
+
+[none_clear]
+body = "{user} has no warnings to clear."
+
+[removed]
+body = "One warning removed from {user}. They're now at {new}/{limit}."
+
+[cleared]
+body = "All {removed} warning(s) cleared for {user}. Clean slate."
+
+[list]
+header = "{user} has {count}/{limit} warnings:\n"
+item = "  {i}. {reason}"
+no_reason = "No reason"
+
+[exempt]
+demoted = "{user} is a {role} and was demoted, but staff are not auto-banned via warnings."
+failed = "{user} is a {role}, but the auto-demote step failed; staff are not auto-banned via warnings. See logs and retry manually if needed."
+
+[autoban]
+db_fail = "{user} reached the warning threshold but the federation ban record could not be written to the database, so no groups were touched. Check the logs and ban them manually with /tcban once the database recovers."
+empty = " No connected groups configured."
+none = " WARNING: ban not enforced in any group ({total}/{total} failed). Check bot admin rights in: {sample}{more}"
+partial = " Applied to {done}/{total} groups ({failed} failed: {sample}{more}"
+full = " Applied to {total}/{total} groups."
+scope_warn = " WARNING: the group list could not be loaded, so some groups may have been skipped. Check the logs and re-ban manually with /tcban if needed."
+notice_per_group = "{user} hit {limit} warnings and has been federation-banned."
+fail_per_group = "{user} hit {limit} warnings but federation-ban failed - please ban them manually."
+notice_fed = "{user} hit {fed}/{fedlimit} warnings across the federation and has been federation-banned."
+fail_fed = "{user} hit {fed}/{fedlimit} federation-wide warnings but federation-ban failed - please ban them manually."

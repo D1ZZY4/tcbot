@@ -22,6 +22,7 @@ from telegram.ext import filters
 from telegram.ext.filters import BaseFilter
 
 from tcbot.utils.formatter import bold
+from tcbot.utils.i18n import Safe, t
 
 log = logging.getLogger(__name__)
 
@@ -52,33 +53,47 @@ class BuildProof:
     done_label: str = field(default="Done", kw_only=True)
     cancel_label: str = field(default="Cancel", kw_only=True)
 
-    def keyboard(self) -> InlineKeyboardMarkup:
+    def keyboard(self, locale: str | None = None) -> InlineKeyboardMarkup:
         """Proof-step keyboard: optional Skip, Done flush, Cancel.
 
         Done executes with everything collected so far (albums in one
         send and sequential sends alike); without it the ban path
-        auto-flushes after a silence window instead.
+        auto-flushes after a silence window instead. Labels render from
+        the shared button catalog.
         """
         buttons: list[InlineKeyboardButton] = []
         if self.skip_allowed:
             buttons.append(
                 InlineKeyboardButton(
-                    self.skip_label,
+                    t("button.skip", locale, plain=True),
                     callback_data=f"{self.action}_skip_proof",
                     style=KeyboardButtonStyle.PRIMARY,
                 )
             )
         buttons.append(
             InlineKeyboardButton(
-                self.done_label, callback_data=f"{self.action}_done_proof"
+                t("button.done", locale, plain=True),
+                callback_data=f"{self.action}_done_proof",
             )
         )
         buttons.append(
             InlineKeyboardButton(
-                self.cancel_label, callback_data=f"{self.action}_cancel"
+                t("button.cancel", locale, plain=True),
+                callback_data=f"{self.action}_cancel",
             )
         )
         return InlineKeyboardMarkup([buttons])
+
+    def _skip_hint(self, locale: str | None) -> Safe:
+        if not self.skip_allowed:
+            return Safe("")
+        return Safe(
+            t(
+                "proof.hint.skip",
+                locale,
+                label=Safe(bold(t("button.skip", locale, plain=True))),
+            )
+        )
 
     def step_prompt(
         self,
@@ -86,18 +101,21 @@ class BuildProof:
         action_label: str,
         reason: str,
         extra_info: str = "",
+        locale: str | None = None,
     ) -> str:
         """Proof-step prompt after reason was collected in-conversation."""
         # * target_mention/extra_info must already be MarkdownV2-ready
         # * (mention/code output from the single muting.py producer).
-        suffix = f" {extra_info}" if extra_info else ""
-        skip_hint = (
-            f", or tap {bold(self.skip_label)} to proceed" if self.skip_allowed else ""
-        )
-        return (
-            f"Reason noted; {action_label.lower()}ing {target_mention}{suffix}\\.\n"
-            f"Reason: {bold(reason)}\n\n"
-            f"Got any proof? Send photos, videos, GIFs, or files, then tap Done{skip_hint}\\."
+        suffix = Safe(f" {extra_info}") if extra_info else Safe("")
+        return t(
+            "proof.prompt.step",
+            locale,
+            gerund=t(f"proof.action.{action_label}.doing", locale, plain=True),
+            target=Safe(target_mention),
+            suffix=suffix,
+            reason=Safe(bold(reason)),
+            done=t("button.done", locale, plain=True),
+            skip_hint=self._skip_hint(locale),
         )
 
     def noted_prompt(
@@ -106,17 +124,20 @@ class BuildProof:
         inline_reason: str,
         target_mention: str,
         extra_info: str = "",
+        locale: str | None = None,
     ) -> str:
         """Proof-step prompt when an inline reason was already provided."""
         # * Same MarkdownV2-ready contract as step_prompt above.
-        suffix = f" {extra_info}" if extra_info else ""
-        skip_hint = (
-            f", or tap {bold(self.skip_label)} to proceed" if self.skip_allowed else ""
-        )
-        return (
-            f"{action_label.capitalize()}ing {target_mention}{suffix}\\.\n"
-            f"Reason: {bold(inline_reason)}\n\n"
-            f"Got any proof? Send photos, videos, GIFs, or files, then tap Done{skip_hint}\\."
+        suffix = Safe(f" {extra_info}") if extra_info else Safe("")
+        return t(
+            "proof.prompt.noted",
+            locale,
+            Doing=t(f"proof.action.{action_label}.Doing", locale, plain=True),
+            target=Safe(target_mention),
+            suffix=suffix,
+            reason=Safe(bold(inline_reason)),
+            done=t("button.done", locale, plain=True),
+            skip_hint=self._skip_hint(locale),
         )
 
     @staticmethod

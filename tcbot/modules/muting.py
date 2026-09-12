@@ -52,39 +52,42 @@ _RL_LIMIT: int = 5
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Mute"
-__help_text__ = t("muting.help.overview")
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        t("muting.help.commands.body"),
-    ),
-    replies.who_section(replies.perm_tester_above(plain=False)),
-    replies.where_section(replies.WHERE_CONNECTED_GROUP),
-    (
-        replies.SEC_WHAT,
-        t("muting.help.what.body"),
-    ),
-    (
-        "Flow",
-        t("muting.help.flow.body"),
-    ),
-    (
-        "Time format",
-        t("muting.help.time.body"),
-    ),
-    replies.target_section(),
-    (
-        replies.SEC_EXAMPLES,
-        t("muting.help.examples.body"),
-    ),
-]
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("muting.help.overview", locale)
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("muting.help.commands.body", locale),
+        ),
+        replies.who_section(replies.perm_tester_above(locale, plain=False), locale),
+        replies.where_section(replies.where_connected_group(locale), locale),
+        (
+            replies.sec_what(locale),
+            t("muting.help.what.body", locale),
+        ),
+        (
+            "Flow",
+            t("muting.help.flow.body", locale),
+        ),
+        (
+            "Time format",
+            t("muting.help.time.body", locale),
+        ),
+        replies.target_section(locale),
+        (
+            replies.sec_examples(locale),
+            t("muting.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ───────────────────── Command Mute </tcmute> ───────────────────── #
@@ -145,7 +148,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if executor_role is None:
         return ConversationHandler.END
 
-    refusal = identity.refuse_message("mute", ident)
+    refusal = identity.refuse_message("mute", ident, locale)
     if refusal is not None:
         await safe_reply(msg, refusal, log_label="cmd_mute refusal")
         return ConversationHandler.END
@@ -191,13 +194,13 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if inline_reason and is_reason_too_long(inline_reason):
         await safe_reply(
             msg,
-            reason_too_long_text(len(inline_reason)),
+            reason_too_long_text(len(inline_reason), locale),
             log_label="cmd_mute reason-too-long",
             parse_mode=None,
         )
         return ConversationHandler.END
     target_mention = mention(target_id, target_fname or str(target_id))
-    dur_str = fmt_duration(duration)
+    dur_str = fmt_duration(duration, locale)
     extra_info = f"{code(str(target_id))}: {dur_str}"
 
     ctx.user_data.update(
@@ -229,10 +232,14 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         try:
             prompt = await msg.reply_text(
                 proof.noted_prompt(
-                    "mute", inline_reason, target_mention, extra_info=extra_info
+                    "mute",
+                    inline_reason,
+                    target_mention,
+                    extra_info=extra_info,
+                    locale=locale,
                 ),
                 parse_mode="MarkdownV2",
-                reply_markup=proof.keyboard(),
+                reply_markup=proof.keyboard(locale),
             )
             ctx.user_data["mute_prompt_id"] = prompt.message_id
         except Exception as exc:
@@ -244,9 +251,9 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     try:
         prompt = await msg.reply_text(
-            reason.prompt(target_mention, "mute", extra_info=extra_info),
+            reason.prompt(target_mention, "mute", extra_info=extra_info, locale=locale),
             parse_mode="MarkdownV2",
-            reply_markup=reason.keyboard(),
+            reply_markup=reason.keyboard(locale),
         )
         ctx.user_data["mute_prompt_id"] = prompt.message_id
     except Exception as exc:
@@ -308,12 +315,12 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if executor_role is None:
         return
 
-    refusal = identity.refuse_message("unmute", ident)
+    refusal = identity.refuse_message("unmute", ident, locale)
     if refusal is not None:
         await safe_reply(msg, refusal, log_label="cmd_unmute refusal")
         return
 
-    notice = identity.staff_notice("unmute", ident, cfg.community_name)
+    notice = identity.staff_notice("unmute", ident, cfg.community_name, locale)
     if notice is not None:
         await safe_reply(msg, notice, log_label="cmd_unmute notice")
 

@@ -30,3 +30,21 @@ body = """
 body = """
 `/tcdisconnect`: disconnect the current group.
 `/rmtc -1001234567890`: force-remove a group by chat ID."""
+
+# Runtime strings (disconnecting.py). [state] sends plain (parse_mode=None
+# replies); [removed] renders as MarkdownV2. Placeholders: {community}
+# raw name, {id} pre-formatted code chat ID.
+
+[state]
+usage = "Usage: /rmtc <chat_id>"
+primary_refused = "This is a primary group of the federation (main or exec). It cannot be disconnected. The bot is required in primary groups for ban / unban / mute / warn fan-out and the federation log channel."
+status_failed = "Could not verify the group status due to a server error. Please try again."
+not_connected = "This group is not connected to {community}."
+anon_admin = "Anonymous admin mode is active. Please send this command from your personal account, or ask TC Staff to run /rmtc."
+not_authorized = "Only the group owner or TC admins can disconnect this group."
+deactivate_failed = "Failed to disconnect the group due to a server error. The bot is still here; please try again."
+disconnected = "This group has been disconnected from {community}."
+rmtc_failed = "Failed to disconnect the group due to a server error. Please try again."
+
+[removed]
+body = "Group {id} has been disconnected from {community}."

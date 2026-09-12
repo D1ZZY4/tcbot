@@ -12,7 +12,8 @@ from typing import TYPE_CHECKING, Any
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import keyboards, parse_logmsg
+from tcbot.modules.helper import keyboards, parse_logmsg, replies
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
@@ -23,7 +24,8 @@ from tcbot.utils.dispatch import (
     fan_out,
     is_benign_telegram_error,
 )
-from tcbot.utils.formatter import esc, user_ref
+from tcbot.utils.formatter import user_ref
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
@@ -40,8 +42,6 @@ log = logging.getLogger(__name__)
 # * skip_allowed=False because warn requires a reason; Skip is not offered
 reason = BuildReason("warn", skip_allowed=False)
 proof = BuildProof("warn")
-
-_ERR_DB_RETRY = "I couldn't reach the database right now. Please try again in a moment."
 
 
 # ──────────────────────────── Executors ─────────────────────────── #
@@ -92,6 +92,7 @@ async def execute_warn(
     admin_id = admin.id
     admin_fname = admin.first_name
     lc, lt = cfg.logs
+    locale = await locale_for_update(update)
 
     # * Upload proof concurrently with the warn write: neither depends on the
     # * other, so awaiting them serially would add a full proof-channel round
@@ -122,7 +123,10 @@ async def execute_warn(
             "add_warn DB write failed for target=%d chat=%d", target_id, chat_id
         )
         await safe_reply(
-            msg, _ERR_DB_RETRY, log_label="execute_warn DB-fail", parse_mode=None
+            msg,
+            replies.err_db_retry(locale, plain=True),
+            log_label="execute_warn DB-fail",
+            parse_mode=None,
         )
         return
 
@@ -185,10 +189,14 @@ async def execute_warn(
                 log.exception("federation_warn_count failed for target=%d", target_id)
                 await safe_reply(
                     msg,
-                    f"{user_ref(target_id, target_name)} has been warned "
-                    f"\\({count}/{warn_limit}\\) \\- {esc(reason_text)}\\. The "
-                    "federation\\-wide threshold check is unavailable right "
-                    "now; ban them manually with /tcban if needed\\.",
+                    t(
+                        "warnings.fed_fail.body",
+                        locale,
+                        user=Safe(user_ref(target_id, target_name)),
+                        count=count,
+                        limit=warn_limit,
+                        reason=reason_text,
+                    ),
                     log_label="execute_warn fed-count-fail",
                     reply_markup=proof_kb,
                 )
@@ -214,6 +222,7 @@ async def execute_warn(
             lc,
             lt,
             log_text,
+            locale,
         )
     else:
         # * federation log + reply in parallel
@@ -226,8 +235,14 @@ async def execute_warn(
                 reply_markup=proof_kb,
             ),
             msg.reply_text(
-                f"{user_ref(target_id, target_name)} has been warned "
-                f"\\({count}/{warn_limit}\\) \\- {esc(reason_text)}",
+                t(
+                    "warnings.issued.body",
+                    locale,
+                    user=Safe(user_ref(target_id, target_name)),
+                    count=count,
+                    limit=warn_limit,
+                    reason=reason_text,
+                ),
                 parse_mode="MarkdownV2",
                 reply_markup=proof_kb,
             ),
@@ -256,6 +271,7 @@ async def execute_unwarn(
     if chat is None:
         return
     chat_id = chat.id
+    locale = await locale_for_update(update)
 
     # * Fail closed with a retry reply instead of ending silently on outage.
     try:
@@ -265,13 +281,20 @@ async def execute_unwarn(
             "warn_count read failed for target=%d chat=%d", target_id, chat_id
         )
         await safe_reply(
-            msg, _ERR_DB_RETRY, log_label="execute_unwarn DB-fail", parse_mode=None
+            msg,
+            replies.err_db_retry(locale, plain=True),
+            log_label="execute_unwarn DB-fail",
+            parse_mode=None,
         )
         return
     if count == 0:
         await safe_reply(
             msg,
-            f"{user_ref(target_id, target_name)} has no warnings in this group\\.",
+            t(
+                "warnings.none.body",
+                locale,
+                user=Safe(user_ref(target_id, target_name)),
+            ),
             log_label="execute_unwarn no-warns",
         )
         return
@@ -309,7 +332,11 @@ async def execute_unwarn(
     if not removed:
         await safe_reply(
             msg,
-            f"{user_ref(target_id, target_name)} has no warnings in this group\\.",
+            t(
+                "warnings.none.body",
+                locale,
+                user=Safe(user_ref(target_id, target_name)),
+            ),
             log_label="execute_unwarn empty",
         )
         return
@@ -339,8 +366,13 @@ async def execute_unwarn(
             lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
         ),
         msg.reply_text(
-            f"One warning removed from {user_ref(target_id, target_name)}\\. "
-            f"They're now at {new_count}/{warn_limit}\\.",
+            t(
+                "warnings.removed.body",
+                locale,
+                user=Safe(user_ref(target_id, target_name)),
+                new=new_count,
+                limit=warn_limit,
+            ),
             parse_mode="MarkdownV2",
         ),
         return_exceptions=True,
@@ -367,6 +399,7 @@ async def execute_warnlist(
     if chat is None:
         return
     chat_id = chat.id
+    locale = await locale_for_update(update)
 
     # * Fail closed with a retry reply instead of ending silently on outage.
     try:
@@ -374,7 +407,10 @@ async def execute_warnlist(
     except Exception:
         log.exception("get_warns read failed for target=%d chat=%d", target_id, chat_id)
         await safe_reply(
-            msg, _ERR_DB_RETRY, log_label="execute_warnlist DB-fail", parse_mode=None
+            msg,
+            replies.err_db_retry(locale, plain=True),
+            log_label="execute_warnlist DB-fail",
+            parse_mode=None,
         )
         return
     count = len(warns)
@@ -382,16 +418,33 @@ async def execute_warnlist(
     if count == 0:
         await safe_reply(
             msg,
-            f"{user_ref(target_id, target_name)} has no warnings in this group\\.",
+            t(
+                "warnings.none.body",
+                locale,
+                user=Safe(user_ref(target_id, target_name)),
+            ),
             log_label="execute_warnlist no-warns",
         )
         return
 
-    lines = [
-        f"{user_ref(target_id, target_name)} has {count}/{cfg.warn_limit} warnings:\n"
-    ]
+    header = t(
+        "warnings.list.header",
+        locale,
+        user=Safe(user_ref(target_id, target_name)),
+        count=count,
+        limit=cfg.warn_limit,
+    )
+    lines = [header]
     for i, w in enumerate(warns, 1):
-        lines.append(f"  {i}\\. {esc(w.get('reason', 'No reason'))}")
+        lines.append(
+            t(
+                "warnings.list.item",
+                locale,
+                i=i,
+                reason=w.get("reason", "")
+                or t("warnings.list.no_reason", locale, plain=True),
+            )
+        )
 
     await safe_reply(msg, "\n".join(lines), log_label="execute_warnlist")
 
@@ -420,6 +473,7 @@ async def execute_resetwarns(
     chat_id = chat.id
     chat_title = chat.title or str(chat_id)
     lc, lt = cfg.logs
+    locale = await locale_for_update(update)
 
     removed = 0
     try:
@@ -427,13 +481,20 @@ async def execute_resetwarns(
     except Exception:
         log.exception("clear_warns failed for target=%d chat=%d", target_id, chat_id)
         await safe_reply(
-            msg, _ERR_DB_RETRY, log_label="execute_resetwarns DB-fail", parse_mode=None
+            msg,
+            replies.err_db_retry(locale, plain=True),
+            log_label="execute_resetwarns DB-fail",
+            parse_mode=None,
         )
         return
     if removed == 0:
         await safe_reply(
             msg,
-            f"{user_ref(target_id, target_name)} has no warnings to clear\\.",
+            t(
+                "warnings.none_clear.body",
+                locale,
+                user=Safe(user_ref(target_id, target_name)),
+            ),
             log_label="execute_resetwarns no-warns",
         )
         return
@@ -452,7 +513,12 @@ async def execute_resetwarns(
             lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
         ),
         msg.reply_text(
-            f"All {removed} warning\\(s\\) cleared for {user_ref(target_id, target_name)}\\. Clean slate\\.",
+            t(
+                "warnings.cleared.body",
+                locale,
+                removed=removed,
+                user=Safe(user_ref(target_id, target_name)),
+            ),
             parse_mode="MarkdownV2",
         ),
         return_exceptions=True,
@@ -484,6 +550,7 @@ async def _execute_warn_auto_ban(
     lc: int,
     lt: int | None,
     log_text: str,
+    locale: str | None = None,
 ) -> None:
     """Handle warn-threshold auto-ban: staff demotion, DB record, fan-out, reply."""
     fed_warn_limit = cfg.fed_warn_limit
@@ -520,13 +587,18 @@ async def _execute_warn_auto_ban(
         # * holds the role and the message must reflect that, otherwise the
         # * admin believes the role is gone and may forget to retry.
         exemption_text = (
-            f"{user_ref(target_id, target_name)} is a {target_role} and was "
-            "demoted, but staff are not auto\\-banned via warnings\\."
+            t(
+                "warnings.exempt.demoted",
+                locale,
+                user=Safe(user_ref(target_id, target_name)),
+                role=target_role,
+            )
             if demoted
-            else (
-                f"{user_ref(target_id, target_name)} is a {esc(target_role)}, but "
-                "the auto\\-demote step failed; staff are not auto\\-banned via "
-                "warnings\\. See logs and retry manually if needed\\."
+            else t(
+                "warnings.exempt.failed",
+                locale,
+                user=Safe(user_ref(target_id, target_name)),
+                role=target_role,
             )
         )
         await safe_reply(
@@ -592,11 +664,11 @@ async def _execute_warn_auto_ban(
             )
             await safe_reply(
                 msg,
-                f"{user_ref(target_id, target_name)} reached the warning "
-                "threshold but the federation ban record could not be "
-                "written to the database, so no groups were touched\\. "
-                "Check the logs and ban them manually with /tcban once "
-                "the database recovers\\.",
+                t(
+                    "warnings.autoban.db_fail",
+                    locale,
+                    user=Safe(user_ref(target_id, target_name)),
+                ),
                 log_label="Warn auto-ban DB-fail",
                 reply_markup=proof_kb,
             )
@@ -636,55 +708,63 @@ async def _execute_warn_auto_ban(
     )
 
     if total_groups == 0:
-        applied_line = " No connected groups configured\\."
+        applied_line = t("warnings.autoban.empty", locale)
     elif failed == total_groups:
         sample = ", ".join(
             grp.get("title") or str(grp["chat_id"]) for grp, _ in transient_groups[:5]
         )
-        applied_line = (
-            f" WARNING: ban not enforced in any group \\({total_groups}/{total_groups} failed\\)\\."
-            f" Check bot admin rights in: {esc(sample)}"
-            + (" \\.\\.\\.\\)" if len(transient_groups) > 5 else "")
+        applied_line = t(
+            "warnings.autoban.none",
+            locale,
+            total=total_groups,
+            sample=sample,
+            more=" ..." if len(transient_groups) > 5 else "",
         )
     elif failed > 0:
         sample = ", ".join(
             grp.get("title") or str(grp["chat_id"]) for grp, _ in transient_groups[:3]
         )
-        applied_line = (
-            f" Applied to {applied}/{total_groups} groups"
-            f" \\({failed} failed: {esc(sample)}"
-            + (" \\.\\.\\.\\)" if len(transient_groups) > 3 else "\\)")
+        applied_line = t(
+            "warnings.autoban.partial",
+            locale,
+            done=applied,
+            total=total_groups,
+            failed=failed,
+            sample=sample,
+            more=" ...)" if len(transient_groups) > 3 else ")",
         )
     else:
-        applied_line = f" Applied to {total_groups}/{total_groups} groups\\."
+        applied_line = t("warnings.autoban.full", locale, total=total_groups)
     if groups_fetch_failed:
-        applied_line += (
-            " WARNING: the group list could not be loaded, so some groups "
-            "may have been skipped\\. Check the logs and re\\-ban manually with "
-            "/tcban if needed\\."
-        )
+        applied_line += t("warnings.autoban.scope_warn", locale)
 
     if auto_ban_trigger == "per_group":
-        ban_notice = (
-            f"{user_ref(target_id, target_name)} "
-            f"hit {warn_limit} warnings "
-            f"and has been federation\\-banned\\."
+        ban_notice = t(
+            "warnings.autoban.notice_per_group",
+            locale,
+            user=Safe(user_ref(target_id, target_name)),
+            limit=warn_limit,
         )
-        ban_fail_notice = (
-            f"{user_ref(target_id, target_name)} "
-            f"hit {warn_limit} warnings "
-            f"but federation\\-ban failed \\- please ban them manually\\."
+        ban_fail_notice = t(
+            "warnings.autoban.fail_per_group",
+            locale,
+            user=Safe(user_ref(target_id, target_name)),
+            limit=warn_limit,
         )
     else:
-        ban_notice = (
-            f"{user_ref(target_id, target_name)} "
-            f"hit {fed_count}/{fed_warn_limit} warnings across the federation "
-            f"and has been federation\\-banned\\."
+        ban_notice = t(
+            "warnings.autoban.notice_fed",
+            locale,
+            user=Safe(user_ref(target_id, target_name)),
+            fed=fed_count,
+            fedlimit=fed_warn_limit,
         )
-        ban_fail_notice = (
-            f"{user_ref(target_id, target_name)} "
-            f"hit {fed_count}/{fed_warn_limit} federation\\-wide warnings "
-            f"but federation\\-ban failed \\- please ban them manually\\."
+        ban_fail_notice = t(
+            "warnings.autoban.fail_fed",
+            locale,
+            user=Safe(user_ref(target_id, target_name)),
+            fed=fed_count,
+            fedlimit=fed_warn_limit,
         )
 
     if any_ban_ok:

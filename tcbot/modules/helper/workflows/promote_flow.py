@@ -15,21 +15,18 @@ from pymongo.errors import DuplicateKeyError
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg
+from tcbot.modules.helper.locale import locale_for_user
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import esc, user_ref
+from tcbot.utils.formatter import user_ref
+from tcbot.utils.i18n import Safe, t
 
 if TYPE_CHECKING:
     from telegram import Bot
 
 log = logging.getLogger(__name__)
 
-# ──────────────── User-facing reply constants ──────────────────── #
-
-_MSG_REQUEST_SUBMITTED = (
-    "Submitted \\- the Founder has been notified and will review it shortly\\."
-)
-_ERR_TARGET_IS_FOUNDER = "That's the Founder \\- can't assign a role over them\\."
-_ERR_NO_ASSIGN_PERMS = "You don't have permission to assign this role\\."
+# * Promotion runtime prose lives in admins.toml [promote]; only the
+# * role alias table stays in code.
 
 # * Tokenised CLI aliases the /tcpromote command accepts.
 ROLE_ALIASES: dict[str, str] = {
@@ -70,6 +67,7 @@ class Promote:
         target_id: int,
         target_fname: str,
         current_role: str | None,
+        locale: str | None = None,
     ) -> tuple[bool, str]:
         """Founder-only path: directly add the target to tc_admins and log it."""
         # * Write the primary record first; if this fails the target is never promoted,
@@ -78,7 +76,7 @@ class Promote:
             await db.users_roles.add_admin(target_id, admin_id)
         except Exception:
             log.exception("_assign_admin: add_admin failed for target=%d", target_id)
-            return False, "Failed to save the promotion\\. Please try again\\."
+            return False, t("admins.promote.save_fail", locale)
         # * Secondary cleanup: purge any old tc_roles entry and update the user cache.
         # * These are non-critical; a failure leaves the user correctly promoted so we
         # * log a warning instead of aborting.
@@ -94,13 +92,19 @@ class Promote:
         log_text = parse_logmsg.promoted(
             target_id, target_fname, "admin", admin_id, admin_fname
         )
+        target_locale = await locale_for_user(target_id)
         for result in await asyncio.gather(
             bot.send_message(
                 lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
             ),
             bot.send_message(
                 target_id,
-                f"You've been promoted to Admin in {cfg.community_name} - welcome to the staff team.",
+                t(
+                    "admins.promote.dm.admin",
+                    target_locale,
+                    community=cfg.community_name,
+                    plain=True,
+                ),
             ),
             return_exceptions=True,
         ):
@@ -110,9 +114,11 @@ class Promote:
                     target_id,
                     result,
                 )
-        return True, (
-            f"Done\\. {user_ref(target_id, target_fname)} "
-            f"is now a {esc(cfg.community_name)} Admin\\."
+        return True, t(
+            "admins.promote.done_admin",
+            locale,
+            user=Safe(user_ref(target_id, target_fname)),
+            community=cfg.community_name,
         )
 
     @staticmethod
@@ -124,13 +130,18 @@ class Promote:
         target_fname: str,
         current_role: str | None,
         role: str,
+        locale: str | None = None,
     ) -> tuple[bool, str]:
         """Founder/Admin path for Developer/Tester role assignment."""
         if current_role == "admin":
             label = db.users_roles.ROLE_LABEL.get(role, role)
             return (
                 False,
-                f"That user is already an Admin\\. Demote them first before assigning {esc(label)}\\.",
+                t(
+                    "admins.promote.already_admin",
+                    locale,
+                    role=label,
+                ),
             )
         # * set_role uses update_one(upsert=True) so it atomically replaces an existing
         # * developer/tester entry without a prior remove_role call.  This eliminates
@@ -143,7 +154,7 @@ class Promote:
                 target_id,
                 role,
             )
-            return False, "Failed to save the role assignment\\. Please try again\\."
+            return False, t("admins.promote.role_fail", locale)
         # * Cache upsert is non-critical; log but do not abort.
         try:
             await db.users_cache.upsert_user(target_id, None, target_fname)
@@ -156,13 +167,20 @@ class Promote:
         log_text = parse_logmsg.promoted(
             target_id, target_fname, role, admin_id, admin_fname
         )
+        target_locale = await locale_for_user(target_id)
         for result in await asyncio.gather(
             bot.send_message(
                 lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
             ),
             bot.send_message(
                 target_id,
-                f"You've been assigned the {role_label} role in {cfg.community_name} - welcome to the team.",
+                t(
+                    "admins.promote.dm.role",
+                    target_locale,
+                    role=role_label,
+                    community=cfg.community_name,
+                    plain=True,
+                ),
             ),
             return_exceptions=True,
         ):
@@ -174,8 +192,13 @@ class Promote:
                 )
         return (
             True,
-            f"Done\\. {user_ref(target_id, target_fname)} "
-            f"is now a {esc(cfg.community_name)} {esc(role_label)}\\.",
+            t(
+                "admins.promote.done_role",
+                locale,
+                user=Safe(user_ref(target_id, target_fname)),
+                community=cfg.community_name,
+                role=role_label,
+            ),
         )
 
     @classmethod
@@ -186,6 +209,7 @@ class Promote:
         target_id: int,
         target_fname: str,
         target_username: str | None = None,
+        locale: str | None = None,
     ) -> tuple[bool, str]:
         """Enqueue an Admin promotion request and notify the Founder (DM, then fallback to log)."""
         try:
@@ -201,9 +225,10 @@ class Promote:
             )
             existing = None
         if existing:
-            return False, (
-                f"There's already a pending promotion request for "
-                f"{user_ref(target_id, target_fname)}\\."
+            return False, t(
+                "admins.promote.pending",
+                locale,
+                user=Safe(user_ref(target_id, target_fname)),
             )
         request_id, owner_id = await asyncio.gather(
             db.queues_db.enqueue(target_id, target_username, target_fname, admin_id),
@@ -220,13 +245,14 @@ class Promote:
                 "Promotion request race for target=%d; using existing entry",
                 target_id,
             )
-            return False, (
-                f"There's already a pending promotion request for "
-                f"{user_ref(target_id, target_fname)}\\."
+            return False, t(
+                "admins.promote.pending",
+                locale,
+                user=Safe(user_ref(target_id, target_fname)),
             )
         if isinstance(request_id, BaseException):
             log.error("Failed to enqueue promotion request: %s", request_id)
-            return False, "Failed to queue the promotion request\\. Please try again\\."
+            return False, t("admins.promote.queue_fail", locale)
         if isinstance(owner_id, BaseException):
             log.warning("Failed to fetch owner id for promo notify: %s", owner_id)
             owner_id = None
@@ -257,7 +283,7 @@ class Promote:
                 )
             except Exception:
                 log.exception("Promo request notify failed")
-        return (True, _MSG_REQUEST_SUBMITTED)
+        return (True, t("admins.promote.submitted", locale))
 
     @classmethod
     async def execute(
@@ -270,6 +296,7 @@ class Promote:
         target_fname: str,
         current_role: str | None,
         role: str,
+        locale: str | None = None,
     ) -> tuple[bool, str]:
         """Execute a role assignment. Returns (success, reply_text).
 
@@ -278,24 +305,32 @@ class Promote:
         * Admin requesting Admin promotion creates a queue entry for the Founder.
         """
         if current_role == "founder":
-            return False, _ERR_TARGET_IS_FOUNDER
+            return False, t("admins.promote.target_is_founder", locale)
 
         if db.users_roles.role_rank(current_role) >= db.users_roles.role_rank(role):
             label = db.users_roles.ROLE_LABEL.get(
                 current_role or "", current_role or ""
             )
-            return False, f"That user already holds the {esc(label)} role or higher\\."
+            return False, t("admins.promote.holds_role", locale, role=label)
 
         if role == "admin":
             if executor_role == "founder":
                 return await cls._assign_admin(
-                    bot, admin_id, admin_fname, target_id, target_fname, current_role
+                    bot,
+                    admin_id,
+                    admin_fname,
+                    target_id,
+                    target_fname,
+                    current_role,
+                    locale,
                 )
             # * Admin promoting to Admin → request for Founder to approve.
-            return await cls.request_admin(bot, admin_id, target_id, target_fname)
+            return await cls.request_admin(
+                bot, admin_id, target_id, target_fname, locale=locale
+            )
 
         if executor_role not in ("founder", "admin"):
-            return False, _ERR_NO_ASSIGN_PERMS
+            return False, t("admins.promote.no_assign_perms", locale)
 
         return await cls._assign_subrole(
             bot,
@@ -305,4 +340,5 @@ class Promote:
             target_fname,
             current_role,
             role,
+            locale,
         )

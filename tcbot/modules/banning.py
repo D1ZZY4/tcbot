@@ -34,8 +34,8 @@ from tcbot.modules.helper.workflows.reason_flow import (
     reason_too_long_text,
 )
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import code, esc, mention
-from tcbot.utils.i18n import t
+from tcbot.utils.formatter import code, mention
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -44,8 +44,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 # ──────────────── User-facing reply constants ──────────────────── #
-
-_ERR_REASON_REQUIRED = "A reason is required - /tcban <target> <reason>."
+# * Ban runtime prose lives in banning.toml; no constants stay here.
 
 # ─────────────────────── Rate-limiter constants ──────────────────── #
 _RL_PERIOD_S: int = 60
@@ -55,35 +54,38 @@ _RL_LIMIT: int = 3
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Ban"
-__help_text__ = t("banning.help.overview")
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        t("banning.help.commands.body"),
-    ),
-    replies.who_section(replies.perm_dev_above(plain=False)),
-    replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
-    (
-        replies.SEC_WHAT,
-        t("banning.help.what.body"),
-    ),
-    (
-        "Flow",
-        t("banning.help.flow.body"),
-    ),
-    replies.target_section(),
-    (
-        replies.SEC_EXAMPLES,
-        t("banning.help.examples.body"),
-    ),
-]
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("banning.help.overview", locale)
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("banning.help.commands.body", locale),
+        ),
+        replies.who_section(replies.perm_dev_above(locale, plain=False), locale),
+        replies.where_section(replies.context_exec_or_group(locale), locale),
+        (
+            replies.sec_what(locale),
+            t("banning.help.what.body", locale),
+        ),
+        (
+            "Flow",
+            t("banning.help.flow.body", locale),
+        ),
+        replies.target_section(locale),
+        (
+            replies.sec_examples(locale),
+            t("banning.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ────────────────────── Command Ban </tcban> ────────────────────── #
@@ -136,7 +138,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if not ban_reason:
         await safe_reply(
             msg,
-            _ERR_REASON_REQUIRED,
+            t("banning.error.reason_required", locale, plain=True),
             log_label="cmd_ban_start no-reason",
             parse_mode=None,
         )
@@ -147,7 +149,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if is_reason_too_long(ban_reason):
         await safe_reply(
             msg,
-            reason_too_long_text(len(ban_reason)),
+            reason_too_long_text(len(ban_reason), locale),
             log_label="cmd_ban_start reason-too-long",
             parse_mode=None,
         )
@@ -176,7 +178,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if executor_role is None:
         return ConversationHandler.END
 
-    refusal = identity.refuse_message("ban", ident)
+    refusal = identity.refuse_message("ban", ident, locale)
     if refusal is not None:
         await safe_reply(msg, refusal, log_label="cmd_ban_start refusal")
         return ConversationHandler.END
@@ -186,6 +188,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ctx.user_data["ban_reason"] = ban_reason
     ctx.user_data["ban_admin_id"] = admin.id
     ctx.user_data["ban_admin_fname"] = admin.first_name
+    ctx.user_data["ban_locale"] = locale
 
     # * Re-ban check before any side effect: demotion must not land when
     # * the admin may still cancel at the confirmation below. A lookup
@@ -202,7 +205,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if existing is not None:
         ctx.user_data["ban_target_role"] = target_role
         return await _ask_update_confirm(
-            msg, ctx, target_id, target_fname, ban_reason, existing
+            msg, ctx, target_id, target_fname, ban_reason, existing, update
         )
 
     # * Auto-demote is required before the ban to preserve the
@@ -221,7 +224,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     text, kb = proof_prompt_content(
-        target_id, target_fname or str(target_id), ban_reason
+        target_id, target_fname or str(target_id), ban_reason, locale
     )
     try:
         prompt = await msg.reply_text(text, parse_mode="MarkdownV2", reply_markup=kb)
@@ -236,6 +239,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             "ban_admin_id",
             "ban_admin_fname",
             "ban_target_role",
+            "ban_locale",
         ):
             ctx.user_data.pop(key, None)
         return ConversationHandler.END
@@ -250,6 +254,7 @@ async def _ask_update_confirm(
     target_fname: str | None,
     ban_reason: str,
     existing: BanDoc,
+    update: Update,
 ) -> int:
     """Show the re-ban confirmation card with log/proof links.
 
@@ -259,6 +264,7 @@ async def _ask_update_confirm(
     """
     if ctx.user_data is None:
         return ConversationHandler.END
+    locale = await locale_for_update(update)
     logs_chat, logs_thread = cfg.logs
     proofs_chat, proofs_thread = cfg.proofs
     log_msg_id = int(existing.get("log_message_id", 0) or 0)
@@ -268,13 +274,15 @@ async def _ask_update_confirm(
         message_link(proofs_chat, proof_msg_id, proofs_thread)
         if proof_msg_id
         else None,
+        locale,
     )
-    text = (
-        f"{mention(target_id, target_fname or str(target_id))} already has an "
-        f"active federation ban \\(Ban ID {code(str(existing.get('ban_id', '')))}\\)\\.\n"
-        f"Existing reason: {esc(str(existing.get('reason', '')))}\n"
-        f"New reason: {esc(ban_reason)}\n\n"
-        "Update the ban with the new reason and proof?"
+    text = t(
+        "banning.confirm.body",
+        locale,
+        user=Safe(mention(target_id, target_fname or str(target_id))),
+        ban_id=Safe(code(str(existing.get("ban_id", "")))),
+        old_reason=str(existing.get("reason", "")),
+        new_reason=ban_reason,
     )
     try:
         prompt = await msg.reply_text(text, parse_mode="MarkdownV2", reply_markup=kb)
@@ -289,6 +297,7 @@ async def _ask_update_confirm(
             "ban_admin_id",
             "ban_admin_fname",
             "ban_target_role",
+            "ban_locale",
         ):
             ctx.user_data.pop(key, None)
         return ConversationHandler.END
