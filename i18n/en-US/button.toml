@@ -1,6 +1,8 @@
 # Button labels. Buttons render as plain text, so values stay raw.
 
+language_name = "English (US)"
+
+# Common buttons.
 back = "« Back"
 cancel = "Cancel"
 done = "Done"
-language_name = "English (US)"
