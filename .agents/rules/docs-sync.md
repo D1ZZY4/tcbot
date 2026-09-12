@@ -85,7 +85,10 @@ Recent project additions to keep accurate when editing docs:
   `get_first_names_batch`).
 - Partial-name search in `tcbot.modules.helper.extraction.extract_target`;
   resolution order is reply → args (full ID/username) → args (partial DB
-  search) → text mention → @mention.
+  search) → text mention → @mention, except a typed numeric ID or
+  `@username` that verifies as a real user different from the quoted
+  sender overrides the reply (`prefer_explicit=True` on read-only
+  `/check` prefers any resolving arg).
 - Username field on `Identity` and `member_cache` indexes on `username` and
   `first_name`.
 - CI/CD workflows: `.github/workflows/auto-fix.yml` (auto-PR for Ruff fixes

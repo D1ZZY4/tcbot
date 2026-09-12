@@ -111,11 +111,13 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
     raw_args = parse_cmd_args(msg.text)
 
-    # * Single owner for the reply-wins plus shape check: with a reply
-    # * target every arg is reason text, otherwise a leading numeric ID or
-    # * @username token is the explicit target. Sync, so no I/O cost here.
-    has_explicit_target = extraction.has_explicit_target(msg, raw_args)
-    target_id, target_fname = await extraction.extract_target(update, raw_args, ctx.bot)
+    # * Resolution plus consumption in one call: a verified explicit
+    # * ID/@username overrides the reply target, and the consumed flag
+    # * tells the reason parser to drop args[0] as the target token.
+    (
+        (target_id, target_fname),
+        has_explicit_target,
+    ) = await extraction.extract_mod_target(update, raw_args, ctx.bot)
 
     ban_reason = parse_inline_reason(
         raw_args,

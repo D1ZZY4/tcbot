@@ -387,7 +387,12 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     locale = await locale_for_update(update)
     user = update.effective_user
     args = parse_cmd_args(msg.text)
-    target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
+    # * Read-only view: a typed target always beats the quoted message,
+    # * so /check shows who was asked about, never who was quoted. When
+    # * the arg resolves to nobody, the reply target still stands.
+    target_id, target_fname = await extraction.extract_target(
+        update, args, ctx.bot, prefer_explicit=True
+    )
     if not target_id:
         await safe_reply(
             msg,

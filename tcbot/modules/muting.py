@@ -112,9 +112,11 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     raw_args = parse_cmd_args(msg.text)
-    # * Single owner for the reply-wins plus shape check (see banning.py).
-    has_explicit_target = extraction.has_explicit_target(msg, raw_args)
-    target_id, target_fname = await extraction.extract_target(update, raw_args, ctx.bot)
+    # * Resolution plus consumption in one call (see banning.py).
+    (
+        (target_id, target_fname),
+        has_explicit_target,
+    ) = await extraction.extract_mod_target(update, raw_args, ctx.bot)
 
     remaining_args = list(raw_args[1:] if has_explicit_target else raw_args)
 

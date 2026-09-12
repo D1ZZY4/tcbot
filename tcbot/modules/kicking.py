@@ -112,11 +112,12 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     args = parse_cmd_args(msg.text)
-    # * Single owner for the reply-wins plus shape check (see banning.py).
-    # * With a reply target every arg is reason text, so a leading
-    # * numeric/@ token stays in the reason instead of being consumed.
-    has_explicit_target = extraction.has_explicit_target(msg, args)
-    target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
+    # * Resolution plus consumption in one call (see banning.py): a
+    # * verified explicit ID/@username overrides the reply target, and the
+    # * consumed flag tells the reason parser to drop args[0] as target.
+    (target_id, target_name), has_explicit_target = await extraction.extract_mod_target(
+        update, args, ctx.bot
+    )
 
     inline_reason = parse_inline_reason(
         args,

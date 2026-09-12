@@ -126,9 +126,10 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     locale = await locale_for_update(update)
 
     args = parse_cmd_args(msg.text)
-    # * Single owner for the reply-wins plus shape check (see banning.py).
-    has_explicit_target = extraction.has_explicit_target(msg, args)
-    target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
+    # * Resolution plus consumption in one call (see banning.py).
+    (target_id, target_name), has_explicit_target = await extraction.extract_mod_target(
+        update, args, ctx.bot
+    )
 
     inline_reason = parse_inline_reason(
         args,

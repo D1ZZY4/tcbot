@@ -130,7 +130,7 @@ The target can be specified by:
 
 The reason prompt and proof prompt are stamped with `extra_info` (`<code id>: <duration>`) so the moderator sees the duration even when no reason was typed inline.
 
-When the command replies to a user message, the reply wins in `extract_target`, so every argument is duration/reason text: a leading numeric or `@username` token is never consumed as a target. The one exception is a restated ID: when the first token is the numeric ID of the replied-to user themself, that duplicate token is dropped from the reason. The shared `extraction.has_explicit_target(msg, args)` helper owns this check.
+When the command replies to a user message, the quoted sender is the default target, with one exception: a leading numeric ID or `@username` that verifies as a real user different from the quoted sender overrides the reply, because a typed ID is deliberate intent while a quote is often just context. That override token is consumed as the target before duration parsing. Anything unverified (a reason starting with a number, an unknown ID) or fuzzy (partial-name search) keeps the reply target, and a restated ID naming the quoted user themself is still dropped from the reason as a duplicate. The shared `extraction.extract_mod_target(update, args, bot)` helper owns both the resolution and the consumed-or-reason decision.
 
 Inline reasons share the same 1000-character cap as typed reasons (`reason_flow.MAX_REASON_LEN`). Overlong inline input fails fast with the shared retry notice before any prompt is sent; typed input exceeding the cap stays in `WAITING_REASON` with the same text.
 
