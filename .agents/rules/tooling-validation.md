@@ -114,6 +114,9 @@ Before editing TCF Bot code, verify:
 - Handlers stay in `tcbot/modules/`, workflows stay in `*_flow.py`, and
   database access stays in `tcbot/database/`.
 - Messages are Markdown-only and user content is escaped.
+- User-facing wording goes in `i18n/<locale>/*.toml`, never in Python;
+  the render mode matches the send path (`plain=True` for alerts and
+  `parse_mode=None` replies), and dynamics cross raw or `Safe`.
 - Role checks use canonical helpers and destructive actions preserve
   auto-demotion behavior.
 - Multi-group actions use `fan_out()`.
@@ -179,6 +182,7 @@ Recommended minimum validation by change type:
 | Documentation-only | Read changed docs, scan links and stale paths, then run `git diff --check`. |
 | Formatter or comment-only code change | `uv run ruff format --check .` and `uv run ruff check .` |
 | Command handler change | Ruff checks, then start the bot and inspect startup logs. |
+| User-facing wording or locale behavior change | Ruff checks, default-locale golden check (output byte-identical unless the change is intentional), the V2-clean template test, then the full pytest suite. |
 | Database helper change | Ruff checks and an import check of the changed module. |
 | Workflow change | Ruff checks and an import check of the changed flow. |
 | Dependency or configuration change | `uv sync --frozen` (Replit), Ruff checks, and an import check. |

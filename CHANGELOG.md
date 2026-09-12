@@ -21,6 +21,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Changed
 
+- **Agent rules now cover internationalization** (`.agents/rules/code-style.md`, `tooling-validation.md`, `docs-rules.md`, `CONTRIBUTING.md`): new i18n section with locale resolution and threading, template and placeholder contracts, render-mode matching, per-locale help, and button-label ownership; stale English-only message claims corrected; validation table and pre-edit checklist gain the i18n row; docs rules index the translation catalog and language guide.
+
 - **Help menus standardized across modules** (`tcbot/modules/warnings.py`, `muting.py`, `groups.py`, `connecting.py`, `syncing.py`, `netspeed.py`, `maintenance.py`, `stats.py`, `language.py`, `kicking.py`, `banning.py`, `disconnecting.py`, `appeals.py`, `admins.py`): every overview is verb-led, labels and example shapes are uniform, and each `Who can use` line names the exact rank. Warn-limit wording renders from configuration.
 
 </details>
