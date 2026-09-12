@@ -179,12 +179,17 @@ When behavior or structure changes:
 - Keep one `###` heading per category under each release in `CHANGELOG.md`.
 - Keep project documentation in professional English. Agent responses may use
   the user's language.
+- Keep `CONTRIBUTING.md` human-facing (setup, workflow, pull requests).
+  Agent-only rules live in `AGENTS.md` and `.agents/`; never move agent
+  contract text into contributor docs.
 
 ## Commits
 
 - One commit per logical fix. Group interconnected files that form one atomic
   change; never bundle unrelated fixes.
 - Each commit carries its own `CHANGELOG.md` slice and related doc updates.
+- Version bumps are separate `chore(release)` commits; the rule lives in
+  `AGENTS.md`.
 - Review the staged diff before committing. Never commit secrets or unrelated
   files.
 

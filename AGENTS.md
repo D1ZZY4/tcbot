@@ -2,6 +2,8 @@
 
 This file is the top-level guide for agents and contributors working in this repository. It summarizes the current project layout, development commands, style rules, and safety requirements.
 
+If you are a developer using AI assistants here, point them at this file first; the human contribution workflow lives in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
 For user-facing setup, see [`README.md`](README.md). For contribution workflow,
 see [`CONTRIBUTING.md`](CONTRIBUTING.md). For Replit deployment, see
 [`replit.md`](replit.md). For detailed developer documentation, see
@@ -27,7 +29,7 @@ Every new conversation in this repository must start by reading the canonical ru
   authorization boundaries, role safety, secrets, and compatibility
 - [`.agents/rules/asyncio-gather-rules.md`](.agents/rules/asyncio-gather-rules.md):
   async handlers, `gather()` use, bounded fan-out, timeouts, and cancellation
-- [`AGENTS.md`](AGENTS.md) (this file), [`CHANGELOG.md`](CHANGELOG.md)
+- [`CLAUDE.md`](CLAUDE.md) (this file), [`CHANGELOG.md`](CHANGELOG.md)
 - The relevant [`.agents/skills/`](.agents/skills/), [`docs/`](docs/), and project-root docs for the task
 
 **Update in the same turn after every change:**
@@ -275,7 +277,10 @@ For automated CI/CD and auto-PR workflows, see [`docs/operations/ci-cd.md`](docs
 
 Use focused commits and scoped conventional prefixes (see
 [`CONTRIBUTING.md`](CONTRIBUTING.md#pull-requests)); keep one logical fix
-per commit with its own `CHANGELOG.md` slice.
+per commit with its own `CHANGELOG.md` slice. Cut releases as separate
+`chore(release): bump version to X.Y.Z` commits touching `pyproject.toml`,
+`uv.lock`, and a dated `CHANGELOG.md` section; never bundle a version bump
+with a fix.
 
 Pull requests should include:
 
