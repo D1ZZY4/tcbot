@@ -64,15 +64,15 @@ than reverse-engineering the codebase.
   kick, warn, role, and authorization changes can affect every connected
   group. Verify success and failure paths, alternate entry points, and
   state transitions; never dismiss a moderation bypass as an edge case.
-
-  > [!CAUTION]
-  > A small bug in moderation logic can affect thousands of users across
-  > dozens of groups. When in doubt, ask a maintainer before merging.
 - **Never commit secrets.** No `config.env`, tokens, passwords, database
   URIs, webhook secrets, or private chat IDs. Not in code, not in logs,
   not in screenshots.
 - **Keep bot messages English-only** and in HTML parse mode (never
   Markdown), with user-provided text escaped.
+
+> [!CAUTION]
+> A small bug in moderation logic can affect thousands of users across
+> dozens of groups. When in doubt, ask a maintainer before merging.
 
 ## Local Setup
 
