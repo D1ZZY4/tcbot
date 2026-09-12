@@ -1,6 +1,4 @@
-# Button labels: every tap target in one place, never duplicated.
-# Buttons render as plain text (Telegram never parses them), so values
-# stay raw here; message paths escape them via placeholder rules.
+# Button labels. Buttons render as plain text, so values stay raw.
 
 back = "« Back"
 cancel = "Cancel"

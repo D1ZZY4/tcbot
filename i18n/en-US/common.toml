@@ -1,8 +1,5 @@
-# Shared generic errors and notices.
-# Rule: used by 2+ domains -> lives HERE, never duplicated. Button
-# labels live in button.toml instead. Templates are raw text: the
-# engine escapes MarkdownV2 at render time, so translators never
-# write backslashes.
+# Shared generic errors and notices. Templates stay raw: the engine
+# escapes MarkdownV2 at render time.
 
 # Generic retry notice for flows whose DB write failed.
 retry = "Something went wrong on our side. Please try again in a moment."
