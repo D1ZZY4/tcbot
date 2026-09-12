@@ -40,8 +40,8 @@ _MEMBERSHIP_CHECK_TIMEOUT = 3.0
 
 __module_name__ = "Maintenance"
 __help_text__ = (
-    "Maintenance commands for managing connected groups: clean up inaccessible ones "
-    "or leave all in an emergency\\."
+    "Manage connected groups: clean up inaccessible ones, "
+    "or leave all groups at once in an emergency\\."
 )
 
 __help_sections__: list[tuple[str, str]] = [

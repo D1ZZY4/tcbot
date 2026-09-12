@@ -51,8 +51,8 @@ _RL_LIMIT: int = 5
 
 __module_name__ = "Mute"
 __help_text__ = (
-    "Federation\\-wide mute and unmute: restricts a user from sending messages "
-    f"across {bold('all connected groups')} at once\\."
+    "Restrict a user from sending messages across "
+    f"{bold('all connected groups')} at once, or lift the restriction\\."
 )
 
 __help_sections__: list[tuple[str, str]] = [
@@ -90,7 +90,8 @@ __help_sections__: list[tuple[str, str]] = [
         f"{code('/tcmute @username 3d spamming')}: 3\\-day mute, reason inline\n"
         f"{code('/tcm @username 1w')}: 1\\-week mute, bot will ask for reason\n"
         f"{code('/tcm @username')}: permanent mute, bot walks you through it\n"
-        f"{code('/tcunmute @username')}: lift mute immediately across all groups",
+        f"{code('/tcunmute @username')}: lift mute immediately across all groups\n"
+        f"Or reply to a message and run {code('/tcm')}\\.",
     ),
 ]
 

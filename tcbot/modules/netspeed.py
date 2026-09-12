@@ -38,7 +38,7 @@ _SPEEDTEST_TIMEOUT: int = 180
 
 __module_name__ = "Netspeed"
 __help_text__ = (
-    "Network diagnostics: ping for Telegram API round\\-trip latency, "
+    "Run network diagnostics: ping for Telegram API round\\-trip latency, "
     "speedtest for full upload and download bandwidth measurement\\."
 )
 __help_sections__: list[tuple[str, str]] = [

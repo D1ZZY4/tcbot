@@ -79,7 +79,7 @@ __help_sections__: list[tuple[str, str]] = [
         "to connect, so you can also just add the bot and follow that prompt\\.",
     ),
     (
-        "Example",
+        replies.SEC_EXAMPLES,
         f"Make the bot a group admin, then run {code('/tcconnect')} inside the group\\.",
     ),
 ]

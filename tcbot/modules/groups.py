@@ -57,7 +57,7 @@ __help_sections__: list[tuple[str, str]] = [
         f"The default view shows group names only\\. Tap {bold('Details')} to expand the list and show each group's chat ID alongside its name\\. Tap {bold('Simple')} to collapse back\\.",
     ),
     (
-        "Example",
+        replies.SEC_EXAMPLES,
         f"{code('/tcgroups')} or {code('/tcg')}",
     ),
 ]

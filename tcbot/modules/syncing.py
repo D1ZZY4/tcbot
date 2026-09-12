@@ -67,7 +67,7 @@ __help_sections__: list[tuple[str, str]] = [
         f"{code('/tcsync <target>')}",
     ),
     replies.who_section(
-        f"{bold('/tcsync')}: {replies.PERM_DEV_ABOVE}\n",
+        f"{bold('/tcsync')}: {replies.PERM_DEV_ABOVE}",
     ),
     replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
     replies.target_section(),

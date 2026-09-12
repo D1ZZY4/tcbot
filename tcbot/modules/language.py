@@ -53,6 +53,7 @@ __help_sections__: list[tuple[str, str]] = [
         "Anyone for their own preference\\. Group language needs the group "
         "owner or staff rank\\.",
     ),
+    replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
     (
         replies.SEC_WHAT,
         "Shows the current language with one button per available locale\\. "

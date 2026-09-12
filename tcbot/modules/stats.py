@@ -41,7 +41,7 @@ _RL_CB_LIMIT: int = 15
 
 __module_name__ = "Stats"
 __help_text__ = (
-    "Live federation overview: Founder, staff, users, active bans, and "
+    "See a live federation overview: Founder, staff, users, active bans, and "
     "connected groups, with drill\\-down menus for every section\\."
 )
 

@@ -51,7 +51,7 @@ _RL_READ_LIMIT: int = 8
 
 __module_name__ = "Warnings"
 __help_text__ = (
-    "Per\\-group warning tracking\\. At "
+    "Issue formal warnings tracked per\\-group\\. At "
     f"{bold(f'{cfg.warn_limit} warnings')} the user is automatically federation\\-banned "
     "across all connected groups and their warnings are cleared\\."
 )
@@ -65,8 +65,9 @@ __help_sections__: list[tuple[str, str]] = [
         f"{code('/resetwarns')} \\(alias: {code('/clearwarns')}\\)",
     ),
     replies.who_section(
-        f"{bold('/tcwarn')}, {bold('/tcunwarn')}, {bold('/resetwarns')}: Tester and above.\n"
-        f"{bold('/warns')}: Tester and above."
+        f"{bold('/tcwarn')}, {bold('/tcunwarn')}, {bold('/resetwarns')}: Tester and above "
+        "\\(Founder / Admin / Developer / Tester\\)\\.\n"
+        f"{bold('/warns')}: Tester and above \\(Founder / Admin / Developer / Tester\\)\\."
     ),
     replies.where_section(replies.WHERE_CONNECTED_GROUP),
     (
@@ -81,7 +82,7 @@ __help_sections__: list[tuple[str, str]] = [
         f"without triggering the ban threshold\\.",
     ),
     (
-        "Flow (/tcwarn)",
+        "Flow",
         f"1\\. Run {code('/tcwarn')} with the target \\(and optional inline reason\\)\\.\n"
         "2\\. If no reason was given, the bot asks \\- reply with text\\.\n"
         f"3\\. The bot asks for proof \\- send a photo/video or tap {bold('Skip')}\\.",
@@ -93,7 +94,8 @@ __help_sections__: list[tuple[str, str]] = [
         f"{code('/tcw 123456789')}: bot will ask for reason\n"
         f"{code('/tcunwarn @username')}\n"
         f"{code('/warns @username')}\n"
-        f"{code('/resetwarns @username')}",
+        f"{code('/resetwarns @username')}\n"
+        f"Or reply to a message and run {code('/tcw')}\\.",
     ),
 ]
 
