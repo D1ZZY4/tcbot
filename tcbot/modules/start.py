@@ -43,10 +43,10 @@ def _private_start_text(botname: str) -> str:
     """Build the PM start message for the given plain-text bot display name."""
     return (
         f"{bold(botname)}\n"
-        f"Federation management bot for {_CNAME}.\n\n"
-        "I handle federation-wide bans, mutes, kicks, and moderation across all "
-        "connected groups. Staff can run commands here or from within any connected group.\n\n"
-        "Use the buttons below to explore what I can do."
+        f"Federation management bot for {_CNAME}\\.\n\n"
+        "I handle federation\\-wide bans, mutes, kicks, and moderation across all "
+        "connected groups\\. Staff can run commands here or from within any connected group\\.\n\n"
+        "Use the buttons below to explore what I can do\\."
     )
 
 
@@ -54,9 +54,9 @@ def _group_start_text(botname: str) -> str:
     """Build the group start message for the given plain-text bot display name."""
     return (
         f"{bold(botname)}\n"
-        f"Federation management bot for {_CNAME}.\n\n"
+        f"Federation management bot for {_CNAME}\\.\n\n"
         "Run /help for the full command list, or open me in PM for all options "
-        "including privacy info and the about page."
+        "including privacy info and the about page\\."
     )
 
 
@@ -129,7 +129,7 @@ async def on_back_to_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         q.answer(),
         q.edit_message_text(
             _private_start_text(botname),
-            parse_mode="HTML",
+            parse_mode="MarkdownV2",
             reply_markup=keyboards.main_menu_kb(),
         ),
         return_exceptions=True,
@@ -172,7 +172,7 @@ async def _show_groups(q: CallbackQuery, *, detailed: bool) -> None:
     try:
         await q.edit_message_text(
             _render(groups, detailed=detailed),
-            parse_mode="HTML",
+            parse_mode="MarkdownV2",
             reply_markup=keyboards.groups_menu_kb(detailed=detailed),
         )
     except Exception as exc:

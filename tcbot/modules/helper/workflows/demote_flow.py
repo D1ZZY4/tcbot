@@ -89,7 +89,7 @@ class Demote:
         if trigger is None:
             user_msg = (
                 f"Your {bold(role_label)} role in {esc(cfg.community_name)} has been removed by "
-                f"{esc(executor_fname)}."
+                f"{esc(executor_fname)}\\."
             )
         else:
             if trigger == "ban":
@@ -99,13 +99,15 @@ class Demote:
             else:
                 verb = "kicked"
             user_msg = (
-                f"Your {bold(role_label)} role in {esc(cfg.community_name)} has been removed - "
-                f"you were {verb} from the federation."
+                f"Your {bold(role_label)} role in {esc(cfg.community_name)} has been removed \\- "
+                f"you were {verb} from the federation\\."
             )
 
         log_result, dm_result = await asyncio.gather(
-            bot.send_message(lc, log_text, parse_mode="HTML", message_thread_id=lt),
-            bot.send_message(target_id, user_msg, parse_mode="HTML"),
+            bot.send_message(
+                lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
+            ),
+            bot.send_message(target_id, user_msg, parse_mode="MarkdownV2"),
             return_exceptions=True,
         )
         if isinstance(log_result, BaseException):
@@ -234,9 +236,9 @@ class Demote:
             await safe_reply(
                 msg,
                 f"{mention(target_id, target_display)} "
-                f"holds a federation role ({target_role}) and the auto-demote "
-                f"step failed, so the {trigger} cannot proceed safely. Demote "
-                f"them manually with /tcdemote and retry the {trigger}.",
+                f"holds a federation role \\({esc(target_role)}\\) and the auto\\-demote "
+                f"step failed, so the {trigger} cannot proceed safely\\. Demote "
+                f"them manually with /tcdemote and retry the {trigger}\\.",
                 log_label="auto-demote-fail",
             )
             return False

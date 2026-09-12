@@ -38,24 +38,24 @@ _SPEEDTEST_TIMEOUT: int = 180
 
 __module_name__ = "Netspeed"
 __help_text__ = (
-    "Network diagnostics: ping for Telegram API round-trip latency, "
-    "speedtest for full upload and download bandwidth measurement."
+    "Network diagnostics: ping for Telegram API round\\-trip latency, "
+    "speedtest for full upload and download bandwidth measurement\\."
 )
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/ping')} (alias: {code('/p')})\n"
-        f"{code('/speedtest')} (alias: {code('/st')})",
+        f"{code('/ping')} \\(alias: {code('/p')}\\)\n"
+        f"{code('/speedtest')} \\(alias: {code('/st')}\\)",
     ),
     replies.who_section(replies.PERM_FOUNDER_ONLY),
     replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
     (
         replies.SEC_WHAT,
-        f"{bold('ping')}: Measures the round-trip time from the bot to "
-        "Telegram's servers.\n"
+        f"{bold('ping')}: Measures the round\\-trip time from the bot to "
+        "Telegram's servers\\.\n"
         f"{bold('speedtest')}: Runs a full network speed test and reports "
         "ping, upload, download, bytes transferred, client IP, ISP, "
-        "and best-server details.",
+        "and best\\-server details\\.",
     ),
     (
         replies.SEC_EXAMPLES,
@@ -179,8 +179,8 @@ async def cmd_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ping_ms = elapsed_ms(t0)
     try:
         await sent.edit_text(
-            f"Pong! Round-trip: {code(f'{ping_ms:.1f} ms')}",
-            parse_mode="HTML",
+            f"Pong\\! Round\\-trip: {code(f'{ping_ms:.1f} ms')}",
+            parse_mode="MarkdownV2",
         )
     except Exception as exc:
         log.debug("cmd_ping edit failed: %s", exc)
@@ -280,12 +280,12 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             # * both in parallel. This avoids deleting the notice (consistent
             # * with the edit pattern used in cmd_ping and other action modules).
             await asyncio.gather(
-                notice.edit_text(text, parse_mode="HTML"),
+                notice.edit_text(text, parse_mode="MarkdownV2"),
                 msg.reply_photo(share_url),
                 return_exceptions=True,
             )
         else:
-            await notice.edit_text(text, parse_mode="HTML")
+            await notice.edit_text(text, parse_mode="MarkdownV2")
     except Exception as exc:
         log.debug("cmd_speedtest result edit failed: %s", exc)
 

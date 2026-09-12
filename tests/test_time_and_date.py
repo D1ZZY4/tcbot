@@ -27,8 +27,8 @@ def test_to_utc_converts_aware() -> None:
 
 
 def test_fmt_dt_renders_expected_shape() -> None:
-    assert fmt_dt(datetime(2026, 1, 2, 3, 4, tzinfo=UTC)) == "02-01-2026 | 03:04"
-    assert fmt_dt(datetime(2026, 1, 2, 3, 4)) == "02-01-2026 | 03:04"
+    assert fmt_dt(datetime(2026, 1, 2, 3, 4, tzinfo=UTC)) == "02\\-01\\-2026 \\| 03:04"
+    assert fmt_dt(datetime(2026, 1, 2, 3, 4)) == "02\\-01\\-2026 \\| 03:04"
 
 
 def test_from_timestamp_epoch() -> None:

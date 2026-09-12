@@ -88,14 +88,16 @@ class BuildProof:
         extra_info: str = "",
     ) -> str:
         """Proof-step prompt after reason was collected in-conversation."""
+        # * target_mention/extra_info must already be MarkdownV2-ready
+        # * (mention/code output from the single muting.py producer).
         suffix = f" {extra_info}" if extra_info else ""
         skip_hint = (
             f", or tap {bold(self.skip_label)} to proceed" if self.skip_allowed else ""
         )
         return (
-            f"Reason noted; {action_label.lower()}ing {target_mention}{suffix}.\n"
+            f"Reason noted; {action_label.lower()}ing {target_mention}{suffix}\\.\n"
             f"Reason: {bold(reason)}\n\n"
-            f"Got any proof? Send photos, videos, GIFs, or files, then tap Done{skip_hint}."
+            f"Got any proof? Send photos, videos, GIFs, or files, then tap Done{skip_hint}\\."
         )
 
     def noted_prompt(
@@ -106,14 +108,15 @@ class BuildProof:
         extra_info: str = "",
     ) -> str:
         """Proof-step prompt when an inline reason was already provided."""
+        # * Same MarkdownV2-ready contract as step_prompt above.
         suffix = f" {extra_info}" if extra_info else ""
         skip_hint = (
             f", or tap {bold(self.skip_label)} to proceed" if self.skip_allowed else ""
         )
         return (
-            f"{action_label.capitalize()}ing {target_mention}{suffix}.\n"
+            f"{action_label.capitalize()}ing {target_mention}{suffix}\\.\n"
             f"Reason: {bold(inline_reason)}\n\n"
-            f"Got any proof? Send photos, videos, GIFs, or files, then tap Done{skip_hint}."
+            f"Got any proof? Send photos, videos, GIFs, or files, then tap Done{skip_hint}\\."
         )
 
     @staticmethod
@@ -179,7 +182,7 @@ async def upload_proof(
                 proof_chat,
                 file_id,
                 caption=cap,
-                parse_mode="HTML",
+                parse_mode="MarkdownV2",
                 message_thread_id=proof_thread,
             )
         elif kind == "video":
@@ -187,7 +190,7 @@ async def upload_proof(
                 proof_chat,
                 file_id,
                 caption=cap,
-                parse_mode="HTML",
+                parse_mode="MarkdownV2",
                 message_thread_id=proof_thread,
             )
         else:
@@ -195,7 +198,7 @@ async def upload_proof(
                 proof_chat,
                 file_id,
                 caption=cap,
-                parse_mode="HTML",
+                parse_mode="MarkdownV2",
                 message_thread_id=proof_thread,
             )
         return sent.message_id
@@ -217,13 +220,13 @@ async def upload_proof(
                     InputMediaPhoto(
                         file_id,
                         caption=caption if idx == 0 else None,
-                        parse_mode="HTML",
+                        parse_mode="MarkdownV2",
                     )
                     if kind == "photo"
                     else InputMediaVideo(
                         file_id,
                         caption=caption if idx == 0 else None,
-                        parse_mode="HTML",
+                        parse_mode="MarkdownV2",
                     )
                     for idx, (kind, file_id) in enumerate(gallery)
                 ]

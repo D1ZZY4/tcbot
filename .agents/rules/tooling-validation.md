@@ -113,7 +113,7 @@ Before editing TCF Bot code, verify:
   workflow, or domain module.
 - Handlers stay in `tcbot/modules/`, workflows stay in `*_flow.py`, and
   database access stays in `tcbot/database/`.
-- Messages are HTML-only and user content is escaped.
+- Messages are Markdown-only and user content is escaped.
 - Role checks use canonical helpers and destructive actions preserve
   auto-demotion behavior.
 - Multi-group actions use `fan_out()`.

@@ -42,7 +42,7 @@ Visible help modules expose one unified `__help__` entry (see
 ```python
 __help__: replies.HelpEntry = {
     "name": "Ban",
-    "overview": "<b>Commands & Aliases</b>\n...",
+    "overview": "Issues a federation-wide ban...",
     "sections": [...],
 }
 __handlers__ = [...]
@@ -137,4 +137,4 @@ Use role helpers from `users_roles` and `decorators.resolve_and_check`; avoid ma
 - Export `__handlers__` at the bottom.
 - Use database helper modules instead of raw MongoDB collection access.
 - Put new conversation logic in `tcbot/modules/helper/workflows/*_flow.py`.
-- Keep user-facing messages in English and `parse_mode="HTML"`.
+- Keep user-facing messages in English and `parse_mode="MarkdownV2"`.

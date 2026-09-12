@@ -57,21 +57,21 @@ async def cmd_example(update, ctx): ...
 
 Removed: formatting helpers live only in `tcbot/utils/formatter.py` (the single source of truth) and every caller imports from there directly. There is no helper-layer copy.
 
-All bot messages use Telegram HTML parse mode. Functions are documented in full
+All bot messages use Telegram MarkdownV2 parse mode. Functions are documented in full
 in [`utilities.md#formatterpy`](utilities.md).
 
 | Function | Output/use |
 |---|---|
 | `esc(text)` | Escape user-provided text. |
-| `bold(text)` | `<b>...</b>` with escaped content. |
-| `italic(text)` | `<i>...</i>` with escaped content. |
-| `code(text)` | `<code>...</code>` with escaped content. |
-| `pre(text)` | `<pre>...</pre>` monospace block with escaped content. |
-| `link(text, url)` | HTML link. Escape or validate URLs before passing untrusted values. |
+| `bold(text)` | `*...*` with escaped content. |
+| `italic(text)` | `_..._` with escaped content. |
+| `code(text)` | `` `...` `` with escaped content. |
+| `pre(text)` | ` ```...``` ` monospace block with escaped content. |
+| `link(text, url)` | MarkdownV2 link. Escape or validate URLs before passing untrusted values. |
 | `mention(user_id, name, username=None)` | ID-based mention, always a clickable `FullName` resolving via `tg://user?id=...`. Backward-compatible alias for `user_ref()`. |
 | `user_ref(user_id, name, username=None)` | Action-summary reference. Always renders a clickable `FullName` resolving via `tg://user?id=ID`; usernames are never used. Falls back to the numeric ID as link text when the name is the numeric fallback. |
 
-Use `esc()`, `code()`, `mention()`, or `user_ref()` for any user-provided value in HTML messages. Use `user_ref()` in action summaries and audit logs where the name links to the numeric user ID.
+Use `esc()`, `code()`, `mention()`, or `user_ref()` for any user-provided value in MarkdownV2 messages. Use `user_ref()` in action summaries and audit logs where the name links to the numeric user ID.
 
 ## `extraction.py`
 
@@ -200,7 +200,7 @@ Command modules import from `replies.py` instead of inlining these strings.
 
 ## `ban_info.py`
 
-`build_ban_detail(ban, target_fname=None)` returns formatted HTML ban details and an optional proof link. It is shared by checking and stats flows to avoid duplicate ban rendering.
+`build_ban_detail(ban, target_fname=None)` returns formatted MarkdownV2 ban details and an optional proof link. It is shared by checking and stats flows to avoid duplicate ban rendering.
 
 ## `parse_link.py`
 
@@ -212,7 +212,7 @@ Command modules import from `replies.py` instead of inlining these strings.
 
 ## `parse_logmsg.py`
 
-This file builds HTML audit log messages for moderation, appeals, staff roles, group connections, broadcasts, and auto-demotions.
+This file builds MarkdownV2 audit log messages for moderation, appeals, staff roles, group connections, broadcasts, and auto-demotions.
 
 Common families:
 
@@ -229,13 +229,13 @@ Use the `LogBuilder` class in this module to compose new audit-log messages; avo
 
 | Function | Purpose |
 |---|---|
-| `safe_edit(msg, text, **kwargs)` | Edit a `Message` object with `parse_mode="HTML"`; swallows harmless `BadRequest` cases such as `message is not modified`, `message to edit not found`, and `chat not found`. Unexpected failures are logged as warnings. |
+| `safe_edit(msg, text, **kwargs)` | Edit a `Message` object with `parse_mode="MarkdownV2"`; swallows harmless `BadRequest` cases such as `message is not modified`, `message to edit not found`, and `chat not found`. Unexpected failures are logged as warnings. |
 | `safe_edit_cb(q, text, **kwargs)` | Edit a `CallbackQuery` message via `q.edit_message_text`; same error-swallow policy as `safe_edit`. Use when a user can re-tap a button that lands them on the same content to avoid `BadRequest: message is not modified` noise. |
-| `safe_reply(msg, text, *, log_label="reply", parse_mode="HTML", **kwargs)` | Fire-and-forget `Message` reply with debug-only failure logging; `log_label` names the call site. The single owner for all fire-and-forget replies across commands and workflows. Defaults to `parse_mode="HTML"`; pass `parse_mode=None` for plain-text replies (error strings, constants) so Telegram performs no entity parsing. Sites whose failure drives control flow (prompt cleanup, wedged-conversation guards) stay raw. |
+| `safe_reply(msg, text, *, log_label="reply", parse_mode="MarkdownV2", **kwargs)` | Fire-and-forget `Message` reply with debug-only failure logging; `log_label` names the call site. The single owner for all fire-and-forget replies across commands and workflows. Defaults to `parse_mode="MarkdownV2"`; pass `parse_mode=None` for plain-text replies (error strings, constants) so Telegram performs no entity parsing. Sites whose failure drives control flow (prompt cleanup, wedged-conversation guards) stay raw. |
 
 ## Helper usage rules
 
-- Keep user-facing HTML escaped.
+- Keep user-facing MarkdownV2 escaped.
 - Keep keyboard callback-data stable because handlers match it with regex patterns.
 - Do not duplicate role checks that already exist in `users_cache` or `decorators.resolve_and_check`.
 - Do not create keyboard factories outside `keyboards.py` unless the workflow needs a one-off private helper for local pagination.

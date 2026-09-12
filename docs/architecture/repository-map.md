@@ -85,7 +85,7 @@ tcbot/
     ├── circuit_breaker.py  Async circuit breaker for Telegram + MongoDB
     ├── dispatch.py         Bounded concurrent fan-out (integrates Telegram circuit)
     ├── error_reporter.py   Telegram error classification and reporting
-    ├── formatter.py        HTML escaping and formatting (single source of truth)
+    ├── formatter.py        MarkdownV2 escaping and formatting (single source of truth)
     ├── logger.py           Console formatter and error log handler
     ├── pagination.py       Shared paginate(), nav_row(), date_or_unknown() helpers
     ├── prefixes.py         Prefix parsing and command filters

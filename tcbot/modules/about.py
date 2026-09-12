@@ -33,18 +33,18 @@ _CNAME = cfg.community_name
 
 __about_msg__ = (
     f"{bold(_CNAME)}\n\n"
-    f"A community-driven federation for Infinix, Tecno, and Itel device groups. "
-    f"The focus is straightforward: keep connected groups safe, well-moderated, and "
-    "free of spam, scams, and bad actors.\n\n"
+    f"A community\\-driven federation for Infinix, Tecno, and Itel device groups\\. "
+    f"The focus is straightforward: keep connected groups safe, well\\-moderated, and "
+    "free of spam, scams, and bad actors\\.\n\n"
     f"{bold('How it works')}\n"
-    f"Groups that join the federation share a single moderation layer. "
-    "A ban issued in one connected group is applied across all of them automatically. "
-    "The same goes for mutes and broadcasts from TC Staff.\n\n"
+    f"Groups that join the federation share a single moderation layer\\. "
+    "A ban issued in one connected group is applied across all of them automatically\\. "
+    "The same goes for mutes and broadcasts from TC Staff\\.\n\n"
     f"{bold('History')}\n"
     "Founded in 2024 under the name TFI, which was later disbanded following internal "
-    f"issues. {esc(_CNAME)} was formed shortly after to continue the work with a cleaner structure "
-    "and better long-term stability.\n\n"
-    f"{italic(f'{_CNAME} is not affiliated with or endorsed by Transsion Holdings. This is an independent community.')}"
+    f"issues\\. {esc(_CNAME)} was formed shortly after to continue the work with a cleaner structure "
+    "and better long\\-term stability\\.\n\n"
+    f"{italic(f'{_CNAME} is not affiliated with or endorsed by Transsion Holdings\\. This is an independent community\\.')}"
 )
 
 
@@ -64,7 +64,7 @@ async def on_about_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         q.answer(),
         q.edit_message_text(
             __about_msg__,
-            parse_mode="HTML",
+            parse_mode="MarkdownV2",
             reply_markup=keyboards.back_to_start_kb(),
         ),
         return_exceptions=True,

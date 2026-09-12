@@ -86,13 +86,15 @@ class AppealReviewMixin:
         if msg_id:
             try:
                 await bot.edit_message_text(
-                    text, chat_id=lc, message_id=msg_id, parse_mode="HTML"
+                    text, chat_id=lc, message_id=msg_id, parse_mode="MarkdownV2"
                 )
                 return
             except Exception as exc:
                 log.warning("Could not edit appeal submitted log: %s", exc)
         try:
-            await bot.send_message(lc, text, parse_mode="HTML", message_thread_id=lt)
+            await bot.send_message(
+                lc, text, parse_mode="MarkdownV2", message_thread_id=lt
+            )
         except Exception as exc:
             log.debug("Could not send appeal submitted log: %s", exc)
 
@@ -350,13 +352,13 @@ class AppealReviewMixin:
         dm_r, card_r, log_r, unban_log_r = await asyncio.gather(
             bot.send_message(
                 target_id,
-                f"Your appeal for ban {code(ban_id)} has been approved - "
-                f"you're now unbanned from {esc(self.community_name)}. Welcome back.",
-                parse_mode="HTML",
+                f"Your appeal for ban {code(ban_id)} has been approved \\- "
+                f"you're now unbanned from {esc(self.community_name)}\\. Welcome back\\.",
+                parse_mode="MarkdownV2",
             ),
             q.edit_message_text(
-                f"Appeal approved by {mention(admin.id, admin.first_name)}. Unbanned.",
-                parse_mode="HTML",
+                f"Appeal approved by {mention(admin.id, admin.first_name)}\\. Unbanned\\.",
+                parse_mode="MarkdownV2",
                 reply_markup=None,
             ),
             self._update_or_send_log(
@@ -383,7 +385,7 @@ class AppealReviewMixin:
                     admin.first_name,
                     ban_id,
                 ),
-                parse_mode="HTML",
+                parse_mode="MarkdownV2",
                 message_thread_id=lt,
             ),
             return_exceptions=True,
@@ -452,13 +454,13 @@ class AppealReviewMixin:
         results = await asyncio.gather(
             bot.send_message(
                 target_id,
-                f"Your appeal for ban {code(ban_id)} was not approved. "
-                "The ban remains in place.",
-                parse_mode="HTML",
+                f"Your appeal for ban {code(ban_id)} was not approved\\. "
+                "The ban remains in place\\.",
+                parse_mode="MarkdownV2",
             ),
             q.edit_message_text(
-                f"Appeal rejected by {mention(admin.id, admin.first_name)}.",
-                parse_mode="HTML",
+                f"Appeal rejected by {mention(admin.id, admin.first_name)}\\.",
+                parse_mode="MarkdownV2",
                 reply_markup=None,
             ),
             db.bans_db.clear_review(ban_id),

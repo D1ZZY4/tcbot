@@ -16,7 +16,7 @@ flowchart TD
     Utils --> ErrorReporter[error_reporter.py<br/>error sink]
     Utils --> TimeDate[time_and_date.py<br/>UTC + display + measure]
     Utils --> Pagination[pagination.py<br/>paginate, nav_row, date_or_unknown]
-    Utils --> Fmt[formatter.py<br/>HTML escape, bold, code, mention]
+    Utils --> Fmt[formatter.py<br/>MarkdownV2 escape, bold, code, mention]
     Dispatch --> CB
     Modules[tcbot/modules/] --> Dispatch
     Modules --> Prefixes
@@ -110,7 +110,7 @@ Third-party loggers such as `httpx`, `telegram`, `motor`, and `pymongo` are capp
 
 ## `error_reporter.py`
 
-Error reporting sends structured HTML messages to `LOGS_ERRORS`.
+Error reporting sends structured MarkdownV2 messages to `LOGS_ERRORS`.
 
 | Export | Purpose |
 |---|---|
@@ -120,7 +120,7 @@ Error reporting sends structured HTML messages to `LOGS_ERRORS`.
 | `report_exc(exc, context=None)` | Reports an exception. |
 | `report_record(record)` | Reports a logging record. |
 
-The reporter classifies expected Telegram errors, trims long tracebacks, escapes HTML, and avoids raising if the destination is not configured.
+The reporter classifies expected Telegram errors, trims long tracebacks, escapes MarkdownV2, and avoids raising if the destination is not configured.
 
 `__main__.py` wires error reporting in two places:
 
@@ -159,16 +159,16 @@ Always import these from `tcbot.utils.pagination`; do not reimplement pagination
 
 ## `formatter.py`
 
-Single source of truth for all Telegram HTML markup. Both the utils layer (e.g. `error_reporter.py`) and the modules layer import from here.
+Single source of truth for all Telegram Markdown markup. Both the utils layer (e.g. `error_reporter.py`) and the modules layer import from here.
 
 | Function | Output/use |
 |---|---|
-| `esc(text)` | Escape HTML special characters for safe inline inclusion. |
-| `bold(text)` | `<b>...</b>` with escaped content. |
-| `italic(text)` | `<i>...</i>` with escaped content. |
-| `code(text)` | `<code>...</code>` with escaped content. |
-| `pre(text)` | `<pre>...</pre>` monospace block with escaped content. |
-| `link(text, url)` | HTML anchor tag. Escape or validate untrusted URLs before passing. |
+| `esc(text)` | Escape MarkdownV2 special characters for safe inline inclusion. |
+| `bold(text)` | `*...*` with escaped content. |
+| `italic(text)` | `_..._` with escaped content. |
+| `code(text)` | `` `...` `` with escaped content. |
+| `pre(text)` | ` ```...``` ` monospace block with escaped content. |
+| `link(text, url)` | MarkdownV2 link. Escape or validate untrusted URLs before passing. |
 | `mention(user_id, name, username=None)` | ID-based mention, always a clickable `FullName` resolving via `tg://user?id=...`. Backward-compatible alias for `user_ref()`. |
 | `user_ref(user_id, name, username=None)` | Action-summary reference. Always renders a clickable `FullName` resolving via `tg://user?id=ID`; usernames are never used. Falls back to the numeric ID as link text when the name is the bare numeric fallback. |
 

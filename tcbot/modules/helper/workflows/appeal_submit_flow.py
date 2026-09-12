@@ -140,7 +140,7 @@ class AppealSubmitMixin:
     # ── Text factory ─────────────────────────────────────────────────────────
 
     def instruction_text(self) -> str:
-        """Multi-line HTML instruction prompt sent when the user opens an appeal."""
+        """Multi-line MarkdownV2 instruction prompt sent when the user opens an appeal."""
         log_handle = self.log_channel.lstrip("@")
         pre_content = (
             f"#appeal\n"
@@ -151,9 +151,9 @@ class AppealSubmitMixin:
         return (
             f"{esc(self.community_name)} Ban Appeal\n\n"
             f"To submit your appeal, reply with a message starting with {code('#appeal')}, containing:\n"
-            f"- {bold('Log link:')} (the link to your ban log from the log channel)\n"
-            f"- {bold('Clarification:')} (your honest explanation of what happened)\n"
-            f"- {bold('Agreement:')} (your commitment not to repeat the violation)\n\n"
+            f"\\- {bold('Log link:')} \\(the link to your ban log from the log channel\\)\n"
+            f"\\- {bold('Clarification:')} \\(your honest explanation of what happened\\)\n"
+            f"\\- {bold('Agreement:')} \\(your commitment not to repeat the violation\\)\n\n"
             f"{bold('Example:')}\n"
             f"{pre(pre_content)}\n\n"
             f"Log Channel: {esc(self.log_channel)}"
@@ -257,7 +257,7 @@ class AppealSubmitMixin:
         try:
             instr = await msg.reply_text(
                 self.instruction_text(),
-                parse_mode="HTML",
+                parse_mode="MarkdownV2",
                 reply_markup=appeal_cancel_kb(self.cancel_label, self.cancel_callback),
             )
             ctx.user_data["appeal_instruction_msg_id"] = instr.message_id
@@ -458,7 +458,7 @@ class AppealSubmitMixin:
             ctx.bot.send_message(
                 cfg.main_group,
                 review_text,
-                parse_mode="HTML",
+                parse_mode="MarkdownV2",
                 message_thread_id=cfg.appeal_discussion_topic or None,
                 reply_markup=appeal_review_kb(ban_id),
             ),
@@ -467,7 +467,7 @@ class AppealSubmitMixin:
                 parse_logmsg.appeal_submitted_log(
                     uid, user.first_name, ban_id, appeal_link
                 ),
-                parse_mode="HTML",
+                parse_mode="MarkdownV2",
                 message_thread_id=lt,
             ),
             return_exceptions=True,

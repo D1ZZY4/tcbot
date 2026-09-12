@@ -56,13 +56,13 @@ Commands use the project's configured prefixes; slash commands are examples.
 
 ```python
 def _render(groups, *, detailed):
-    lines = [f"{bold('Connected Groups')}\n\nCount: {len(groups)}\n"]
+    lines = [f"{bold('Connected Groups')}\n\nCount: {len(groups)}\n".rstrip("\n")]
     for g in groups:
         title = g.get("title", "Unknown")
         if detailed:
-            lines.append(f"- {esc(title)} - {code(str(g.get('chat_id', 0)))}")
+            lines.append(f"\\- {esc(title)} \\- {code(str(g.get('chat_id', 0)))}")
         else:
-            lines.append(f"- {esc(title)}")
+            lines.append(f"\\- {esc(title)}")
     return "\n".join(lines)
 ```
 
@@ -131,4 +131,4 @@ Key behaviors to keep in mind:
 13. A group with a missing title renders as `Unknown`.
 14. `/tcgroups` does not write to the database.
 15. `/tcgroups` is reply-only; there is no conversation state.
-16. The reply uses `parse_mode="HTML"` and escapes every title through `esc()`.
+16. The reply uses `parse_mode="MarkdownV2"` and escapes every title through `esc()`.

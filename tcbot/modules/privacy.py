@@ -31,31 +31,31 @@ _CNAME = esc(cfg.community_name)
 
 
 def _privacy_msg(botname: str) -> str:
-    """Build the data-collection notice for the given bot display name."""
+    """Build the data-collection notice for the given plain-text bot display name."""
     return (
         f"{bold('Privacy and Data')}\n\n"
-        f"{botname} stores a small amount of data to run the federation. "
+        f"{esc(botname)} stores a small amount of data to run the federation\\. "
         "Here is what that includes:\n\n"
-        f"- {bold('User ID and name')}: recorded when you interact with the bot or any connected group.\n"
-        f"- {bold('Ban records')}: if you receive a federation ban, the reason, proof, and issuing admin are stored.\n"
-        f"- {bold('Warn and mute records')}: logged per group for moderation tracking.\n"
-        f"- {bold('Kick logs')}: kept for staff reference.\n"
-        f"- {bold('Appeal submissions')}: your messages and any attachments you send through the appeal system.\n"
-        f"- {bold('Promotion requests')}: your request and its review outcome when you apply for a staff role.\n\n"
+        f"\\- {bold('User ID and name')}: recorded when you interact with the bot or any connected group\\.\n"
+        f"\\- {bold('Ban records')}: if you receive a federation ban, the reason, proof, and issuing admin are stored\\.\n"
+        f"\\- {bold('Warn and mute records')}: logged per group for moderation tracking\\.\n"
+        f"\\- {bold('Kick logs')}: kept for staff reference\\.\n"
+        f"\\- {bold('Appeal submissions')}: your messages and any attachments you send through the appeal system\\.\n"
+        f"\\- {bold('Promotion requests')}: your request and its review outcome when you apply for a staff role\\.\n\n"
         f"Ban, warn, mute, and kick records can be looked up by anyone with "
         f"{bold('/check')} or {bold('/checkme')}; changing anything still requires "
-        f"the proper staff rank.\n\n"
-        f"Tap {bold('Privacy Policy')} below for the full policy, broken down by section."
+        f"the proper staff rank\\.\n\n"
+        f"Tap {bold('Privacy Policy')} below for the full policy, broken down by section\\."
     )
 
 
 def _privacy_policy_index_msg(botname: str) -> str:
-    """Build the privacy policy section index page."""
+    """Build the privacy policy section index page for the plain-text bot name."""
     return (
         f"{bold('Privacy Policy')}\n"
-        f"{botname}\n\n"
-        "Select a section below to read it in full. "
-        "Use the back button to return here at any time."
+        f"{esc(botname)}\n\n"
+        "Select a section below to read it in full\\. "
+        "Use the back button to return here at any time\\."
     )
 
 
@@ -65,56 +65,56 @@ _PRIVACY_POLICY_SECTIONS: list[tuple[str, str]] = [
     (
         "What We Collect",
         f"When you interact with a connected group or this bot, the following is stored:\n\n"
-        f"- {bold('User ID')}: your numeric Telegram user ID.\n"
-        f"- {bold('Name and username')}: your first name and @username at the time of interaction.\n"
-        f"- {bold('Ban records')}: reason, proof link, issuing admin, and timestamps.\n"
-        f"- {bold('Appeal submissions')}: your appeal message and any supporting files you send.\n"
-        f"- {bold('Warn and mute records')}: logged per group for moderation purposes.\n"
-        f"- {bold('Kick logs')}: recorded for staff reference and audit.\n"
-        f"- {bold('Promotion requests')}: your application and its review outcome when you request a staff role.",
+        f"\\- {bold('User ID')}: your numeric Telegram user ID\\.\n"
+        f"\\- {bold('Name and username')}: your first name and @username at the time of interaction\\.\n"
+        f"\\- {bold('Ban records')}: reason, proof link, issuing admin, and timestamps\\.\n"
+        f"\\- {bold('Appeal submissions')}: your appeal message and any supporting files you send\\.\n"
+        f"\\- {bold('Warn and mute records')}: logged per group for moderation purposes\\.\n"
+        f"\\- {bold('Kick logs')}: recorded for staff reference and audit\\.\n"
+        f"\\- {bold('Promotion requests')}: your application and its review outcome when you request a staff role\\.",
     ),
     (
         "Why We Collect It",
         f"Everything stored is used solely for {_CNAME} federation moderation: "
         "keeping connected groups safe, enforcing bans consistently across all groups, "
-        "and maintaining an auditable record of moderation actions.\n\n"
+        "and maintaining an auditable record of moderation actions\\.\n\n"
         "We do not collect or use data for advertising, profiling, or any purpose "
-        "outside of moderation.",
+        "outside of moderation\\.",
     ),
     (
         "Who Can Access It",
-        f"Moderation records (bans, warns, mutes, kicks) can be looked up by anyone "
-        f"through {bold('/check')} and {bold('/checkme')}, so enforcement stays transparent. "
-        f"Taking action on that data (banning, muting, promoting, connecting groups) "
-        f"requires the proper {_CNAME} staff rank, checked on every command.\n\n"
-        "No data is sold, rented, or shared with third parties under any circumstances.",
+        f"Moderation records \\(bans, warns, mutes, kicks\\) can be looked up by anyone "
+        f"through {bold('/check')} and {bold('/checkme')}, so enforcement stays transparent\\. "
+        f"Taking action on that data \\(banning, muting, promoting, connecting groups\\) "
+        f"requires the proper {_CNAME} staff rank, checked on every command\\.\n\n"
+        "No data is sold, rented, or shared with third parties under any circumstances\\.",
     ),
     (
         "How Long We Keep It",
         "Ban records are kept indefinitely as part of the federation log, to support "
-        "cross-group enforcement and appeal review.\n\n"
-        "Cached identity data (name, username) refreshes on each interaction and is "
-        "pruned automatically after 90 days without activity.\n\n"
-        "Expired timed mutes are deleted automatically; permanent mutes stay until lifted. "
+        "cross\\-group enforcement and appeal review\\.\n\n"
+        "Cached identity data \\(name, username\\) refreshes on each interaction and is "
+        "pruned automatically after 90 days without activity\\.\n\n"
+        "Expired timed mutes are deleted automatically; permanent mutes stay until lifted\\. "
         "Warnings may expire automatically when the operator enables warn expiry, otherwise "
-        "they stay until cleared.\n\n"
-        "Appeal and promotion-request records are retained after resolution for reference and audit.",
+        "they stay until cleared\\.\n\n"
+        "Appeal and promotion\\-request records are retained after resolution for reference and audit\\.",
     ),
     (
         "Your Rights",
         f"You can review your own ban status at any time with {bold('/checkme')}, and you can "
         f"request a review or deletion of your personal data by reaching out to a "
-        f"{_CNAME} Admin or the Founder directly.\n\n"
-        "Requests are handled on a best-effort basis. Active ban records may be retained "
+        f"{_CNAME} Admin or the Founder directly\\.\n\n"
+        "Requests are handled on a best\\-effort basis\\. Active ban records may be retained "
         "even after a deletion request if they are required for ongoing enforcement or "
-        "federation integrity.",
+        "federation integrity\\.",
     ),
     (
         "Contact",
         f"Reach {_CNAME} staff through:\n\n"
-        f"- The main {_CNAME} discussion group.\n"
-        f"- This bot's appeal system (for ban-related matters).\n\n"
-        "For general data inquiries, contact a staff member directly in the main group.",
+        f"\\- The main {_CNAME} discussion group\\.\n"
+        f"\\- This bot's appeal system \\(for ban\\-related matters\\)\\.\n\n"
+        "For general data inquiries, contact a staff member directly in the main group\\.",
     ),
 ]
 
@@ -132,13 +132,13 @@ async def on_privacy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     if q is None:
         return
 
-    botname = esc(ctx.bot.first_name or "This bot")
+    botname = ctx.bot.first_name or "This bot"
     # * q.answer() and edit are independent; run in parallel.
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(
             _privacy_msg(botname),
-            parse_mode="HTML",
+            parse_mode="MarkdownV2",
             reply_markup=keyboards.privacy_kb(),
         ),
         return_exceptions=True,
@@ -155,13 +155,13 @@ async def on_privacy_policy_menu(
     if q is None:
         return
 
-    botname = esc(ctx.bot.first_name or "This bot")
+    botname = ctx.bot.first_name or "This bot"
     # * q.answer() and edit are independent; run in parallel.
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(
             _privacy_policy_index_msg(botname),
-            parse_mode="HTML",
+            parse_mode="MarkdownV2",
             reply_markup=keyboards.privacy_policy_sections_kb(_POLICY_SECTION_LABELS),
         ),
         return_exceptions=True,
@@ -193,7 +193,7 @@ async def on_privacy_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         q.answer(),
         q.edit_message_text(
             body,
-            parse_mode="HTML",
+            parse_mode="MarkdownV2",
             reply_markup=keyboards.back_to_privacy_policy_kb(),
         ),
         return_exceptions=True,

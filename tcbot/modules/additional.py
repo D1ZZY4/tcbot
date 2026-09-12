@@ -31,9 +31,9 @@ _RL_CB_LIMIT: int = 15
 
 __additional_msg__ = (
     f"{esc(cfg.community_name)} {bold('Official Links')}\n\n"
-    "Use the buttons below to access our channels and groups. "
+    "Use the buttons below to access our channels and groups\\. "
     "For developers interested in contributing to Transsion device development, "
-    "join TRAVEL, an independent community for collaboration and networking."
+    "join TRAVEL, an independent community for collaboration and networking\\."
 )
 
 
@@ -54,7 +54,7 @@ async def on_additional_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     try:
         await q.edit_message_text(
             __additional_msg__,
-            parse_mode="HTML",
+            parse_mode="MarkdownV2",
             reply_markup=keyboards.additional_menu_kb(),
         )
     except Exception as exc:

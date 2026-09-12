@@ -61,7 +61,7 @@ autonomously:
 4. **Design** the smallest modular change and centralize shared behavior in its
    owning helper or domain module. Do not create parallel utilities for logic
    that already has a project owner.
-5. **Implement** focused typed Python 3.14 code with HTML-safe output,
+5. **Implement** focused typed Python 3.14 code with MarkdownV2-safe output,
    intentional comments, and explicit error handling.
 6. **Validate** targeted behavior, the full relevant checks, startup logs for
    runtime changes, and stale/dead/duplicate paths.
@@ -156,7 +156,7 @@ Current stack:
 │       ├── circuit_breaker.py  Telegram/MongoDB circuit breaker
 │       ├── dispatch.py        fan_out() bounded concurrency dispatcher
 │       ├── error_reporter.py  Error reporting to LOGS_ERRORS
-│       ├── formatter.py       HTML-safe formatter (esc, code, mention, bold)
+│       ├── formatter.py       MarkdownV2 formatter (esc, code, mention, bold)
 │       ├── logger.py          Logging setup
 │       ├── pagination.py      Paginated message rendering
 │       ├── prefixes.py        Command prefix resolution

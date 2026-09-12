@@ -41,20 +41,20 @@ _CNAME = esc(cfg.community_name)
 
 __module_name__ = "Groups"
 __help_text__ = (
-    f"Lists every group currently connected to {_CNAME}, with optional details view."
+    f"Lists every group currently connected to {_CNAME}, with optional details view\\."
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tcgroups')} (alias: {code('/tcg')})",
+        f"{code('/tcgroups')} \\(alias: {code('/tcg')}\\)",
     ),
     replies.who_section(replies.CONTEXT_ANYONE),
     replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
     (
         replies.SEC_WHAT,
-        f"Lists all groups currently connected to {_CNAME}, along with the total count.\n\n"
-        f"The default view shows group names only. Tap {bold('Details')} to expand the list and show each group's chat ID alongside its name. Tap {bold('Simple')} to collapse back.",
+        f"Lists all groups currently connected to {_CNAME}, along with the total count\\.\n\n"
+        f"The default view shows group names only\\. Tap {bold('Details')} to expand the list and show each group's chat ID alongside its name\\. Tap {bold('Simple')} to collapse back\\.",
     ),
     (
         "Example",
@@ -85,11 +85,11 @@ def _render(groups: list[GroupDoc], *, detailed: bool) -> str:
     for i, g in enumerate(groups):
         title = g.get("title", "Unknown")
         if detailed:
-            line = f"- {esc(title)} - {code(str(g.get('chat_id', 0)))}"
+            line = f"\\- {esc(title)} \\- {code(str(g.get('chat_id', 0)))}"
         else:
-            line = f"- {esc(title)}"
+            line = f"\\- {esc(title)}"
         if used + len(line) + 1 > _MAX_RENDER_CHARS:
-            lines.append(f"...and {len(groups) - i} more not shown.")
+            lines.append(f"\\.\\.\\.and {len(groups) - i} more not shown\\.")
             break
         lines.append(line)
         used += len(line) + 1
@@ -121,7 +121,7 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not groups:
         await safe_reply(
             msg,
-            f"No groups are currently connected to {_CNAME}.",
+            f"No groups are currently connected to {cfg.community_name}.",
             log_label="tcgroups no-groups",
             parse_mode=None,
         )
@@ -160,7 +160,7 @@ async def _toggle(
         log.warning("tcgroups toggle groups fetch failed: %s", groups_r)
         await safe_edit(
             cbq_msg,  # type: ignore[arg-type]
-            replies.ERR_GROUPS_LOAD_FAILED,
+            esc(replies.ERR_GROUPS_LOAD_FAILED),
             reply_markup=tcgroups_kb(detailed=detailed),
         )
         return

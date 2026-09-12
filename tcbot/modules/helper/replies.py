@@ -20,7 +20,7 @@ class HelpEntry(TypedDict):
 # ──────────────────────── Target Syntax ─────────────────────────── #
 
 TARGET_SYNTAX = (
-    "Reply to a message, or provide a user ID / @username after the command."
+    "Reply to a message, or provide a user ID / @username after the command\\."
 )
 ERR_CANNOT_RESOLVE = "Cannot resolve target. Reply to a message or provide a user ID."
 
@@ -41,10 +41,10 @@ ERR_GROUPS_LOAD_FAILED = (
 
 # ──────────────────────── Context / Scope ───────────────────────── #
 
-CONTEXT_BOT_OR_GROUP = "Bot PM, exec group, or any connected group."
-CONTEXT_EXEC_OR_GROUP = "Exec group, any connected group, or bot PM."
-CONTEXT_ANYONE = "Anyone, no special permissions needed."
-WHERE_CONNECTED_GROUP = "Inside any connected group."
+CONTEXT_BOT_OR_GROUP = "Bot PM, exec group, or any connected group\\."
+CONTEXT_EXEC_OR_GROUP = "Exec group, any connected group, or bot PM\\."
+CONTEXT_ANYONE = "Anyone, no special permissions needed\\."
+WHERE_CONNECTED_GROUP = "Inside any connected group\\."
 
 # ─────────────────────── Rate-limit replies ─────────────────────── #
 
@@ -63,11 +63,11 @@ def rate_limit_text(wait_s: float) -> str:
 
 # ─────────────────────── Permission Tiers ───────────────────────── #
 
-PERM_FOUNDER_ONLY = "Founder only."
-PERM_STAFF_ONLY = "TC Staff (Admin and above)."
-PERM_ADMIN_ABOVE = "Admin and above (Founder / Admin)."
-PERM_DEV_ABOVE = "Developer and above (Founder / Admin / Developer)."
-PERM_TESTER_ABOVE = "Tester and above (Founder / Admin / Developer / Tester)."
+PERM_FOUNDER_ONLY = "Founder only\\."
+PERM_STAFF_ONLY = "TC Staff \\(Admin and above\\)\\."
+PERM_ADMIN_ABOVE = "Admin and above \\(Founder / Admin\\)\\."
+PERM_DEV_ABOVE = "Developer and above \\(Founder / Admin / Developer\\)\\."
+PERM_TESTER_ABOVE = "Tester and above \\(Founder / Admin / Developer / Tester\\)\\."
 
 # ─────────────────────── Action Defaults ────────────────────────── #
 

@@ -37,31 +37,32 @@ _RL_LIMIT: int = 3
 _CNAME = esc(cfg.community_name)
 
 __module_name__ = "Broadcast"
-__help_text__ = f"Sends a message to every group currently connected to {_CNAME}."
+__help_text__ = f"Sends a message to every group currently connected to {_CNAME}\\."
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/tcbroadcast')} (alias: {code('/bc')})",
+        f"{code('/tcbroadcast')} \\(alias: {code('/bc')}\\)",
     ),
     replies.who_section(replies.PERM_STAFF_ONLY),
     replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
     (
         replies.SEC_WHAT,
-        f"Sends a message to every group currently connected to {_CNAME}.\n\n"
+        f"Sends a message to every group currently connected to {_CNAME}\\.\n\n"
         f"You can compose the message in two ways:\n"
-        f"- Type the message directly after the command (HTML formatting is supported).\n"
-        f"- Reply to an existing message with {code('/bc')} to forward that message "
-        f"to all groups.\n\n"
+        f"\\- Type the message directly after the command \\(MarkdownV2 formatting "
+        f"is supported; markup that fails to parse is delivered as plain text\\)\\.\n"
+        f"\\- Reply to an existing message with {code('/bc')} to forward that message "
+        f"to all groups\\.\n\n"
         f"When the broadcast is complete, the bot shows a summary of how many groups "
         f"received the message and how many deliveries failed, and posts a log entry "
-        f"to the federation logs channel.",
+        f"to the federation logs channel\\.",
     ),
     (
         replies.SEC_EXAMPLES,
         f"{code('/tcbroadcast Reminder: please review the community rules.')}\n"
-        f"{code('/bc <b>Event tonight</b> (join us at 8 PM UTC).')}\n"
-        f"Or reply to any message and run {code('/bc')} to forward it to all groups.",
+        f"{code('/bc *Event tonight* (join us at 8 PM UTC).')}\n"
+        f"Or reply to any message and run {code('/bc')} to forward it to all groups\\.",
     ),
 ]
 
@@ -97,7 +98,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not broadcast_text and not has_reply:
         await safe_reply(
             msg,
-            "Please provide a message to broadcast, or reply to a message.",
+            "Please provide a message to broadcast, or reply to a message\\.",
             log_label="cmd_broadcast no-content",
         )
         return
@@ -108,13 +109,15 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.exception("active_groups failed during broadcast")
         await safe_reply(
             msg,
-            replies.ERR_GROUPS_LOAD_FAILED,
+            esc(replies.ERR_GROUPS_LOAD_FAILED),
             log_label="cmd_broadcast groups-failed",
         )
         return
     if not groups:
         await safe_reply(
-            msg, replies.ERR_NO_CONNECTED_GROUPS, log_label="cmd_broadcast no-groups"
+            msg,
+            esc(replies.ERR_NO_CONNECTED_GROUPS),
+            log_label="cmd_broadcast no-groups",
         )
         return
 
@@ -125,8 +128,9 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.debug("cmd_broadcast status reply failed: %s", exc)
 
     # * Build per-group send coroutines, then fan out with semaphore limiting.
-    # * A malformed HTML tag in staff text raises BadRequest per group; fall
-    # * back to plain text so one typo does not fail the whole broadcast.
+    # * Staff text goes out as MarkdownV2 (invalid markup raises BadRequest
+    # * per group); fall back to plain text so one typo does not fail the
+    # * whole broadcast.
     async def _send_one(grp: GroupDoc) -> None:
         chat_id = grp.get("chat_id")
         if chat_id is None:
@@ -135,16 +139,18 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             await msg.reply_to_message.forward(chat_id)
         elif broadcast_text:
             try:
-                await ctx.bot.send_message(chat_id, broadcast_text, parse_mode="HTML")
+                await ctx.bot.send_message(
+                    chat_id, broadcast_text, parse_mode="MarkdownV2"
+                )
             except BadRequest as exc:
-                # * Retry as plain text only for HTML parse failures. Any
+                # * Retry as plain text only for MarkdownV2 parse failures. Any
                 # * other BadRequest (chat gone, bot demoted) would fail the
                 # * retry identically, so re-raise to avoid doubling Telegram
                 # * calls on every dead group in the federation.
                 if "can't parse entities" not in str(exc).lower():
                     raise
                 log.info(
-                    "Broadcast HTML rejected in chat=%d; retrying as plain text",
+                    "Broadcast markup rejected in chat=%d; retrying as plain text",
                     chat_id,
                 )
                 await ctx.bot.send_message(chat_id, broadcast_text)
@@ -173,15 +179,15 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         parse_logmsg.broadcast_log(
             admin.id, admin.first_name, preview, success, failed
         ),
-        parse_mode="HTML",
+        parse_mode="MarkdownV2",
         message_thread_id=lt,
     )
     if status is not None:
         edit_r, log_r = await asyncio.gather(
             status.edit_text(
-                f"Broadcast sent to {code(str(success))} groups. "
-                f"Failed: {code(str(failed))}.",
-                parse_mode="HTML",
+                f"Broadcast sent to {code(str(success))} groups\\. "
+                f"Failed: {code(str(failed))}\\.",
+                parse_mode="MarkdownV2",
             ),
             log_coro,
             return_exceptions=True,

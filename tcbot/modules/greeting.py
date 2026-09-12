@@ -26,7 +26,7 @@ from tcbot.modules.helper import decorators
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import appeal_deep_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
-from tcbot.utils.formatter import esc, mention
+from tcbot.utils.formatter import esc, link, mention
 
 if TYPE_CHECKING:
     from telegram import Bot, Chat, Message, Update, User
@@ -161,18 +161,18 @@ async def _handle_member(
         if greet:
             notice = (
                 f"{mention(member.id, member.first_name, member.username)}"
-                " is federation-banned and was removed."
+                " is federation\\-banned and was removed\\."
             )
             ban_id = ban.get("ban_id", "")
             if ban_id:
                 notice += f" Ban ID: {esc(str(ban_id))}."
                 if bot.username:
                     appeal_url = appeal_deep_link(bot.username, str(ban_id))
-                    notice += f' <a href="{appeal_url}">Submit Appeal</a>'
+                    notice += f" {link('Submit Appeal', appeal_url)}"
             coros.append(
                 msg.reply_text(
                     notice,
-                    parse_mode="HTML",
+                    parse_mode="MarkdownV2",
                 )
             )
         results = await asyncio.gather(*coros, return_exceptions=True)
@@ -208,9 +208,9 @@ async def _handle_member(
     if greet and not _enforcement_blind:
         await safe_reply(
             msg,
-            f"Welcome, {mention(member.id, member.first_name, member.username)}. "
-            f"This is an official {esc(cfg.community_name)} group. "
-            "Please go through the group rules before participating.",
+            f"Welcome, {mention(member.id, member.first_name, member.username)}\\. "
+            f"This is an official {esc(cfg.community_name)} group\\. "
+            "Please go through the group rules before participating\\.",
             log_label=f"Welcome for uid={member.id}",
         )
 
@@ -431,7 +431,7 @@ async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     if member and not member.is_bot:
         await safe_reply(
             msg,
-            f"{mention(member.id, member.first_name, member.username)} has left.",
+            f"{mention(member.id, member.first_name, member.username)} has left\\.",
             log_label="left-member",
         )
 

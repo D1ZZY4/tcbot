@@ -101,7 +101,7 @@ Runtime starts with `uv run python -m tcbot`. The entry point loads configuratio
 - Keep conversation factories in `tcbot/modules/helper/workflows/*_flow.py`.
 - Keep MongoDB reads and writes behind `tcbot/database/*_db.py` helpers.
 - Keep runtime utilities in `tcbot/utils/`.
-- Use HTML parse mode for bot messages and escape user-provided text through formatter helpers.
+- Use MarkdownV2 parse mode for bot messages and escape user-provided text through formatter helpers.
 - Keep bot tokens, MongoDB URIs, private chat IDs, passwords, and API keys out
   of the repository.
 

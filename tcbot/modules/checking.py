@@ -53,31 +53,31 @@ _ERR_STATUS_RETRY = (
 __module_name__ = "Check"
 __help_text__ = (
     f"Look up your own ban status with {code('/checkme')}, or pull a full "
-    f"federation activity profile for any user with {code('/check')}."
+    f"federation activity profile for any user with {code('/check')}\\."
 )
 
 __help_sections__: list[tuple[str, str]] = [
     (
         replies.SEC_COMMANDS,
-        f"{code('/checkme')} (alias: {code('/cme')})\n"
-        f"{code('/check')} (alias: {code('/c')})",
+        f"{code('/checkme')} \\(alias: {code('/cme')}\\)\n"
+        f"{code('/check')} \\(alias: {code('/c')}\\)",
     ),
     replies.who_section(replies.CONTEXT_ANYONE),
     replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
     (
         "/checkme",
-        "Checks your own federation ban status.\n\n"
-        f"- If you are {bold('not banned')}: the bot confirms your account is in good standing.\n"
-        f"- If you are {bold('banned')}: the bot shows the reason, the admin who issued the ban, "
+        "Checks your own federation ban status\\.\n\n"
+        f"\\- If you are {bold('not banned')}: the bot confirms your account is in good standing\\.\n"
+        f"\\- If you are {bold('banned')}: the bot shows the reason, the admin who issued the ban, "
         f"the ban date, and gives you a {bold('Submit Appeal')} button to start the appeal "
-        "process.",
+        "process\\.",
     ),
     (
         "/check",
         "Pulls a full federation profile for any user: identity, role, active ban, "
-        "ban history, warnings (by group), kicks, mutes, and appeals.\n\n"
-        "Each section opens a drill-down inline keyboard so you can inspect every "
-        "record individually.",
+        "ban history, warnings \\(by group\\), kicks, mutes, and appeals\\.\n\n"
+        "Each section opens a drill\\-down inline keyboard so you can inspect every "
+        "record individually\\.",
     ),
     replies.target_section(),
     (
@@ -85,7 +85,7 @@ __help_sections__: list[tuple[str, str]] = [
         f"{code('/checkme')}\n"
         f"{code('/check @username')}\n"
         f"{code('/c 123456789')}\n"
-        f"Or reply to a message and run {code('/c')}.",
+        f"Or reply to a message and run {code('/c')}\\.",
     ),
 ]
 
@@ -138,13 +138,13 @@ async def _ban_summary(
     date_str = fmt_dt(ts) if ts else "Unknown"
 
     text = (
-        f"You are currently banned from {esc(cfg.community_name)}.\n\n"
+        f"You are currently banned from {esc(cfg.community_name)}\\.\n\n"
         f"User: {mention(user_id, user_fname, user_uname)}\n"
         f"User ID: {code(str(user_id))}\n"
         f"Reason: {esc(ban.get('reason', replies.NO_REASON))}\n\n"
         f"Banned by: {mention(aid, admin_fname, admin_uname)}\n\n"
         f"Commit Date: {date_str}\n"
-        "Tap a button below for more details."
+        "Tap a button below for more details\\."
     )
     return text, proof_link
 
@@ -221,8 +221,8 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await safe_reply(
             msg,
             f"Hey {mention(user.id, fname, user.username)}, checking yourself?\n\n"
-            "You're on the staff team - you handle bans, not receive them. "
-            "No active ban on your end. You're good.",
+            "You're on the staff team \\- you handle bans, not receive them\\. "
+            "No active ban on your end\\. You're good\\.",
             log_label=f"checkme admin for user {user.id}",
         )
         return
@@ -230,9 +230,9 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         role_label = db.users_roles.ROLE_LABEL.get(user_role, user_role)
         await safe_reply(
             msg,
-            f"Hey {mention(user.id, fname, user.username)}, all good.\n\n"
-            f"You're a {esc(cfg.community_name)} {esc(role_label)} - on the team, not on the ban list. "
-            "Nothing to worry about.",
+            f"Hey {mention(user.id, fname, user.username)}, all good\\.\n\n"
+            f"You're a {esc(cfg.community_name)} {esc(role_label)} \\- on the team, not on the ban list\\. "
+            "Nothing to worry about\\.",
             log_label=f"checkme subrole for user {user.id}",
         )
         return

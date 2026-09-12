@@ -11,12 +11,12 @@ import functools
 import logging
 import time
 from collections import deque
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any
 
 from telegram.ext import ApplicationHandlerStop, ContextTypes
 
 if TYPE_CHECKING:
-    from collections.abc import Coroutine
+    from collections.abc import Callable, Coroutine
 
 from tcbot import cfg
 from tcbot import database as db
@@ -27,12 +27,11 @@ from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.time_and_date import elapsed_ms, monotonic
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Coroutine
 
     from telegram import Message, Update
 
 log = logging.getLogger(__name__)
-R = TypeVar("R")
 
 
 # ────────────── Per-user sliding-window rate limiter ────────────── #
@@ -282,7 +281,7 @@ async def global_rate_limit_handler(
 # ──────────────────── Per-handler rate limiter factory ──────────────────── #
 
 
-def ratelimiter(
+def ratelimiter[R](
     limit: int = 5, period: float = 60.0
 ) -> Callable[
     [Callable[..., Coroutine[Any, Any, R]]],
@@ -343,7 +342,7 @@ def ratelimiter(
 # ──────────────────────── Execution tracer ──────────────────────── #
 
 
-def log_execution(
+def log_execution[R](
     func: Callable[..., Coroutine[Any, Any, R]],
 ) -> Callable[..., Coroutine[Any, Any, R]]:
     """Wrap a handler to emit entry / exit / exception traces at DEBUG level."""
@@ -414,7 +413,7 @@ def owner_only(func: Callable) -> Callable:
         uid = update.effective_user.id if update.effective_user else None
         if uid:
             # * Fail closed with a retry reply on DB outage instead of letting
-            # * the lookup exception escape with no user feedback. Cancellation
+            # * the lookup failure propagate with no user feedback. Cancellation
             # * still propagates.
             # * Served from the cached owner ID (300 s TTL) so repeated
             # * Founder checks cost zero MongoDB round trips on cache hits.

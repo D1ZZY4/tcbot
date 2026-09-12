@@ -17,6 +17,8 @@ from __future__ import annotations
 import time
 from datetime import UTC, datetime
 
+from tcbot.utils.formatter import esc
+
 # ──────────────────────── Datetime Helpers ──────────────────────── #
 
 
@@ -33,10 +35,15 @@ def to_utc(dt: datetime) -> datetime:
 
 
 def fmt_dt(dt: datetime) -> str:
-    """Format dt as DD-MM-YYYY | HH:MM in UTC."""
+    """Format dt as DD-MM-YYYY | HH:MM in UTC, escaped for MarkdownV2 text.
+
+    Every caller embeds the result in a MarkdownV2 message, so the
+    ``-`` and ``|`` separators come back pre-escaped from this single
+    source instead of at each call site.
+    """
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
-    return dt.strftime("%d-%m-%Y | %H:%M")
+    return esc(dt.strftime("%d-%m-%Y | %H:%M"))
 
 
 def utc_now_str() -> str:

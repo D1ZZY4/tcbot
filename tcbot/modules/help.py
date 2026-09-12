@@ -110,9 +110,9 @@ def _help_index_text(botname: str) -> str:
     """Build the help index header for the given plain-text bot display name."""
     return (
         f"{bold(f'{botname} Help')}\n"
-        f"Federation management bot for {_CNAME}.\n\n"
+        f"Federation management bot for {_CNAME}\\.\n\n"
         f"Select a module below to read its overview and commands, "
-        f"or use {code('/help <module>')} to jump straight to a topic."
+        f"or use {code('/help <module>')} to jump straight to a topic\\."
     )
 
 
@@ -141,7 +141,7 @@ def _section_buttons(
 
 
 def _module_text(name: str, overview: str) -> str:
-    """Compose the module-overview HTML body."""
+    """Compose the module-overview MarkdownV2 body."""
     return f"{bold(f'Help for {name}')}\n\n{overview}\n{_PREFIX_NOTE}"
 
 
@@ -186,7 +186,7 @@ async def _show_module(
         # * q.answer() and safe_edit_cb() are independent; run in parallel.
         await asyncio.gather(
             q.answer(),
-            safe_edit_cb(q, _ERR_TOPIC_NOT_FOUND, reply_markup=back_kb),
+            safe_edit_cb(q, esc(_ERR_TOPIC_NOT_FOUND), reply_markup=back_kb),
             return_exceptions=True,
         )
         return
@@ -230,7 +230,7 @@ async def _show_section(
             q.answer(),
             safe_edit_cb(
                 q,
-                _ERR_TOPIC_NOT_FOUND,
+                esc(_ERR_TOPIC_NOT_FOUND),
                 reply_markup=keyboards.back_to_module_kb(back_module_cb),
             ),
             return_exceptions=True,
@@ -244,7 +244,7 @@ async def _show_section(
             q.answer(),
             safe_edit_cb(
                 q,
-                _ERR_SECTION_NOT_FOUND,
+                esc(_ERR_SECTION_NOT_FOUND),
                 reply_markup=keyboards.back_to_module_kb(back_module_cb),
             ),
             return_exceptions=True,
@@ -303,7 +303,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         hint = f"\n\nDid you mean: {suggestion}?" if suggestion else ""
         await safe_reply(
             msg,
-            f"Module {bold(query)} not found.{hint}",
+            f"Module {bold(query)} not found\\.{hint}",
             log_label="cmd_help not-found",
             reply_markup=keyboards.help_topics_kb(HELP_TOPICS_CMD),
         )
