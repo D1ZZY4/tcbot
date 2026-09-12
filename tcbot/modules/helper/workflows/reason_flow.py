@@ -63,13 +63,14 @@ def parse_inline_reason(
     """Extract any inline reason text from command arguments.
 
     With an explicit target the first token names the target, so the
-    reason starts at ``args[1:]``. On the reply-wins path every arg is
+    reason starts at ``args[1:]``. On the reply-retained path every arg is
     reason text, with one exception: a leading numeric token equal to
     ``reply_target_id`` is the target restated (e.g. reply + ``/tcb
     1419172317 spamming`` aimed at 1419172317), not reason content, so it
     is dropped. A leading numeric token naming anyone else stays in the
-    reason. Pass ``None`` (the default) whenever the entry is not on the
-    reply-wins path.
+    reason, unless the entry resolved it as a verified override target
+    (then the entry passes ``has_explicit_target=True``). Pass ``None``
+    (the default) whenever the entry is not on the reply-retained path.
     """
     tokens = args[1:] if has_explicit_target else args
     if (

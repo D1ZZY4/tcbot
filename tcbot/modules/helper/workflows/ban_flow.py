@@ -526,8 +526,6 @@ async def _execute_ban_update(
     target_fname: str = meta.get("ban_target_fname", str(target_id))
     admin_id: int = meta.get("ban_admin_id") or 0
     admin_fname: str = meta.get("ban_admin_fname", "Admin")
-    # TODO: Thread render locale through flow meta so state defaults
-    # TODO: render per-locale (Batch 3); raw default is identical today.
     reason: str = meta.get(
         "ban_reason", replies.no_reason(meta.get("ban_locale"), plain=True)
     )
@@ -621,8 +619,6 @@ async def _execute_new_ban(
     target_fname: str = meta.get("ban_target_fname", str(target_id))
     admin_id: int = meta.get("ban_admin_id") or 0
     admin_fname: str = meta.get("ban_admin_fname", "Admin")
-    # TODO: Thread render locale through flow meta so state defaults
-    # TODO: render per-locale (Batch 3); raw default is identical today.
     reason: str = meta.get(
         "ban_reason", replies.no_reason(meta.get("ban_locale"), plain=True)
     )

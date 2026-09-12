@@ -65,8 +65,8 @@ def _flatten(prefix: str, node: object, out: dict[str, str], *, source: str) -> 
 def load_catalog(root: Path | None = None) -> dict[str, dict[str, str]]:
     """Load every locale under ``root`` (default: project ``i18n/``).
 
-    File name is the key prefix: ``ban.toml`` holding ``done`` registers
-    ``ban.done``. Malformed TOML raises :class:`I18nError` immediately so
+    File name is the key prefix: ``banning.toml`` holding ``done`` registers
+    ``banning.done``. Malformed TOML raises :class:`I18nError` immediately so
     a broken catalog fails fast at startup instead of mid-conversation.
     """
     base = root if root is not None else _default_root()
@@ -173,7 +173,7 @@ def _render_template(
 ) -> str:
     """Substitute ``{name}`` placeholders and resolve mini-markup.
 
-    Only two markup forms exist, both strict: ```code` `` spans and
+    Only two markup forms exist, both strict: `` `code` `` spans and
     ``*bold*`` spans must be non-empty, balanced, unnested, and free of
     braces (placeholder ambiguity). Anything else raises
     :class:`I18nError` so malformed translator markup fails tests,
@@ -207,7 +207,7 @@ def _render_template(
             check_span(inner, "code")
             flush_literal()
             if escape:
-                parts.append(f"`{inner.replace(chr(92), chr(92) * 2)}`")
+                parts.append("`" + inner.replace("\\", "\\\\") + "`")
             else:
                 parts.append(inner)
             i = j + 1
