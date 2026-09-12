@@ -84,7 +84,7 @@ def _chat_scope(chat_type: str | None) -> str:
     return "user" if chat_type == "private" else "group"
 
 
-async def _effective_locale(chat_type: str | None, user_id: int, chat_id: int) -> str:
+async def effective_locale(chat_type: str | None, user_id: int, chat_id: int) -> str:
     """Resolve the locale used to render a panel in this chat."""
     user_locale, group_locale = await asyncio.gather(
         db.settings_db.get_user_locale(user_id),
@@ -102,6 +102,21 @@ async def _effective_locale(chat_type: str | None, user_id: int, chat_id: int) -
         user_locale=user_locale if isinstance(user_locale, str) else None,
         group_locale=group_locale if isinstance(group_locale, str) else None,
     )
+
+
+async def locale_for_update(update: Update) -> str:
+    """Resolve the render locale for one incoming update.
+
+    Private chats use the sender's personal locale, groups use the group
+    locale, so a shared audience always reads one language. Missing
+    chat/user info falls back to the default locale; resolution never
+    raises.
+    """
+    chat = update.effective_chat
+    user = update.effective_user
+    if chat is None or user is None:
+        return DEFAULT_LOCALE
+    return await effective_locale(chat.type, user.id, chat.id)
 
 
 async def _can_set_group(bot: object, chat_id: int, user_id: int) -> bool:
@@ -174,7 +189,7 @@ async def cmd_language(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if msg is None or user is None or chat is None:
         return
     scope = _chat_scope(chat.type)
-    locale = await _effective_locale(chat.type, user.id, chat.id)
+    locale = await effective_locale(chat.type, user.id, chat.id)
     if scope == "group":
         permitted = await _can_set_group(ctx.bot, chat.id, user.id)
     else:
@@ -203,7 +218,7 @@ async def on_language_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             await q.answer()
         return
     await q.answer()
-    locale = await _effective_locale(chat.type, user.id, chat.id)
+    locale = await effective_locale(chat.type, user.id, chat.id)
     try:
         await q.edit_message_text(
             _panel_text("user", locale),
@@ -240,7 +255,7 @@ async def on_lang_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await q.answer()
         return
     await q.answer()
-    locale = await _effective_locale(chat.type, user.id, chat.id)
+    locale = await effective_locale(chat.type, user.id, chat.id)
     back_callback = "back_to_start" if scope == "user" else None
     try:
         await q.edit_message_text(

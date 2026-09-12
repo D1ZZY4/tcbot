@@ -16,8 +16,9 @@ from speedtest import ConfigRetrievalError, Speedtest, SpeedtestHTTPSHandler
 from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot.modules.helper import decorators, replies
-from tcbot.utils.formatter import bold, code
-from tcbot.utils.i18n import t
+from tcbot.modules.language import locale_for_update
+from tcbot.utils.formatter import code
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters
 from tcbot.utils.time_and_date import elapsed_ms, monotonic
 
@@ -164,16 +165,21 @@ async def cmd_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.effective_message
     if msg is None:
         return
+    locale = await locale_for_update(update)
     t0 = monotonic()
     try:
-        sent = await msg.reply_text("Pinging...")
+        sent = await msg.reply_text(t("netspeed.status.pinging", locale, plain=True))
     except Exception as exc:
         log.debug("cmd_ping initial reply failed: %s", exc)
         return
     ping_ms = elapsed_ms(t0)
     try:
         await sent.edit_text(
-            f"Pong\\! Round\\-trip: {code(f'{ping_ms:.1f} ms')}",
+            t(
+                "netspeed.pong.body",
+                locale,
+                latency=Safe(code(f"{ping_ms:.1f} ms")),
+            ),
             parse_mode="MarkdownV2",
         )
     except Exception as exc:
@@ -188,8 +194,9 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.effective_message
     if msg is None:
         return
+    locale = await locale_for_update(update)
     try:
-        notice = await msg.reply_text("Running speed test, please wait...")
+        notice = await msg.reply_text(t("netspeed.status.running", locale, plain=True))
     except Exception as exc:
         log.debug("cmd_speedtest initial reply failed: %s", exc)
         return
@@ -202,14 +209,14 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     except TimeoutError:
         log.warning("Speedtest timed out after %ds", _SPEEDTEST_TIMEOUT)
         try:
-            await notice.edit_text("Speed test timed out. Please try again later.")
+            await notice.edit_text(t("netspeed.status.timeout", locale, plain=True))
         except Exception as edit_exc:
             log.debug("cmd_speedtest timeout-edit failed: %s", edit_exc)
         return
     except Exception:
         log.exception("Speedtest failed")
         try:
-            await notice.edit_text("Speed test failed. Check the bot logs for details.")
+            await notice.edit_text(t("netspeed.status.failed", locale, plain=True))
         except Exception as edit_exc:
             log.debug("cmd_speedtest failure-edit failed: %s", edit_exc)
         return
@@ -222,7 +229,7 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.exception("Speedtest result parsing failed")
         try:
             await notice.edit_text(
-                "Speed test completed but result parsing failed. Check bot logs."
+                t("netspeed.status.parse_failed", locale, plain=True)
             )
         except Exception as edit_exc:
             log.debug("cmd_speedtest parse-fail edit failed: %s", edit_exc)
@@ -236,27 +243,27 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         server = result["server"]
 
         text = (
-            f"{bold('Speed Test Results')}\n\n"
-            f"{bold('Ping:')} {code(str(result['ping']) + ' ms')}\n"
-            f"{bold('Timestamp:')} {code(str(result['timestamp']))}\n"
-            f"{bold('Download:')} {code(dl + '/s')}\n"
-            f"{bold('Upload:')} {code(ul + '/s')}\n"
-            f"{bold('Sent:')} {code(sent_bytes)}\n"
-            f"{bold('Received:')} {code(recv_bytes)}\n\n"
-            f"{bold('Client Info')}\n"
-            f"{bold('IP:')} {code(str(client['ip']))}\n"
-            f"{bold('ISP:')} {code(str(client['isp']))}\n"
-            f"{bold('ISP Rating:')} {code(str(client.get('isprating', 'N/A')))}\n"
-            f"{bold('Country:')} {code(str(client['country']))}\n"
-            f"{bold('Latitude:')} {code(str(client['lat']))}\n"
-            f"{bold('Longitude:')} {code(str(client['lon']))}\n\n"
-            f"{bold('Server Info')}\n"
-            f"{bold('Name:')} {code(str(server['name']))}\n"
-            f"{bold('Sponsor:')} {code(str(server.get('sponsor', 'N/A')))}\n"
-            f"{bold('Latency:')} {code(str(server['latency']))}\n"
-            f"{bold('Country:')} {code(str(server['country']) + ', ' + str(server['cc']))}\n"
-            f"{bold('Latitude:')} {code(str(server['lat']))}\n"
-            f"{bold('Longitude:')} {code(str(server['lon']))}"
+            f"{t('netspeed.result.title', locale)}\n\n"
+            f"{t('netspeed.result.field.ping', locale, value=Safe(code(str(result['ping']) + ' ms')))}\n"
+            f"{t('netspeed.result.field.timestamp', locale, value=Safe(code(str(result['timestamp']))))}\n"
+            f"{t('netspeed.result.field.download', locale, value=Safe(code(dl + '/s')))}\n"
+            f"{t('netspeed.result.field.upload', locale, value=Safe(code(ul + '/s')))}\n"
+            f"{t('netspeed.result.field.sent', locale, value=Safe(code(sent_bytes)))}\n"
+            f"{t('netspeed.result.field.received', locale, value=Safe(code(recv_bytes)))}\n\n"
+            f"{t('netspeed.result.client', locale)}\n"
+            f"{t('netspeed.result.field.ip', locale, value=Safe(code(str(client['ip']))))}\n"
+            f"{t('netspeed.result.field.isp', locale, value=Safe(code(str(client['isp']))))}\n"
+            f"{t('netspeed.result.field.isp_rating', locale, value=Safe(code(str(client.get('isprating', 'N/A')))))}\n"
+            f"{t('netspeed.result.field.country', locale, value=Safe(code(str(client['country']))))}\n"
+            f"{t('netspeed.result.field.latitude', locale, value=Safe(code(str(client['lat']))))}\n"
+            f"{t('netspeed.result.field.longitude', locale, value=Safe(code(str(client['lon']))))}\n\n"
+            f"{t('netspeed.result.server', locale)}\n"
+            f"{t('netspeed.result.field.name', locale, value=Safe(code(str(server['name']))))}\n"
+            f"{t('netspeed.result.field.sponsor', locale, value=Safe(code(str(server.get('sponsor', 'N/A')))))}\n"
+            f"{t('netspeed.result.field.latency', locale, value=Safe(code(str(server['latency']))))}\n"
+            f"{t('netspeed.result.field.country', locale, value=Safe(code(str(server['country']) + ', ' + str(server['cc']))))}\n"
+            f"{t('netspeed.result.field.latitude', locale, value=Safe(code(str(server['lat']))))}\n"
+            f"{t('netspeed.result.field.longitude', locale, value=Safe(code(str(server['lon']))))}"
         )
     except KeyError:
         await _parse_failed()

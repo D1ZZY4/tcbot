@@ -53,6 +53,21 @@ composes them via the stable keys (`banning.help.overview`,
 `banning.help.what.body`, ...). Migrate one domain at a time; never
 leave prose duplicated between TOML and Python.
 
+## Runtime strings
+
+Command replies, prompts, and result lines migrate the same way: prose
+in TOML, structure in Python. Handlers resolve the render locale once
+via `language.locale_for_update(update)`: private chats use the
+sender's personal locale, groups use the group locale, so a shared
+audience always reads one language. Every `t()` call passes that
+locale explicitly; the default locale is only for tests and goldens.
+
+Each key documents its send path. Keys sent without `parse_mode` must
+render with `plain=True` (Telegram never parses them, so escaped text
+would show raw backslashes). Keys sent as MarkdownV2 use the default
+mode. Dynamics cross as raw data or `Safe` pre-formatted markup, never
+pre-escaped.
+
 ## Adding a locale
 
 1. Copy `en-US/` to `<locale>/` (BCP 47 shape, e.g. `id`, `pt-BR`).

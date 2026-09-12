@@ -21,3 +21,40 @@ body = """
 `/p`
 `/speedtest`
 `/st`"""
+
+# Runtime strings for /ping and /speedtest.
+# [status] entries send without parse_mode: plain=True at the call site.
+# [pong] and [result] entries render as MarkdownV2.
+# Placeholders: {latency} and {value} carry pre-formatted code markup.
+
+[status]
+pinging = "Pinging..."
+running = "Running speed test, please wait..."
+timeout = "Speed test timed out. Please try again later."
+failed = "Speed test failed. Check the bot logs for details."
+parse_failed = "Speed test completed but result parsing failed. Check bot logs."
+
+[pong]
+body = "Pong! Round-trip: {latency}"
+
+[result]
+title = "*Speed Test Results*"
+client = "*Client Info*"
+server = "*Server Info*"
+
+[result.field]
+ping = "*Ping:* {value}"
+timestamp = "*Timestamp:* {value}"
+download = "*Download:* {value}"
+upload = "*Upload:* {value}"
+sent = "*Sent:* {value}"
+received = "*Received:* {value}"
+ip = "*IP:* {value}"
+isp = "*ISP:* {value}"
+isp_rating = "*ISP Rating:* {value}"
+country = "*Country:* {value}"
+latitude = "*Latitude:* {value}"
+longitude = "*Longitude:* {value}"
+name = "*Name:* {value}"
+sponsor = "*Sponsor:* {value}"
+latency = "*Latency:* {value}"

@@ -38,7 +38,7 @@ from tcbot.modules import (
 from tcbot.modules import help as helpmod
 from tcbot.modules.helper import keyboards, replies
 from tcbot.modules.helper.workflows.appeal_flow import LOCK_HOURS
-from tcbot.utils.formatter import bold, esc, pre
+from tcbot.utils.formatter import bold, code, esc, pre
 from tcbot.utils.i18n import (
     DEFAULT_LOCALE,
     I18nError,
@@ -541,6 +541,133 @@ def test_help_index_golden() -> None:
     )
 
 
+# ─────── Runtime locale resolution ─────── #
+
+
+def _pm_update(user_id: int = 7) -> Any:
+    return SimpleNamespace(
+        effective_chat=SimpleNamespace(type="private", id=user_id),
+        effective_user=SimpleNamespace(id=user_id),
+    )
+
+
+def _group_update(chat_id: int = -100, user_id: int = 7) -> Any:
+    return SimpleNamespace(
+        effective_chat=SimpleNamespace(type="supergroup", id=chat_id),
+        effective_user=SimpleNamespace(id=user_id),
+    )
+
+
+def _stub_locales(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    user_locale: str | None = None,
+    group_locale: str | None = None,
+) -> None:
+    async def fake_user_locale(_user_id: int) -> str | None:
+        return user_locale
+
+    async def fake_group_locale(_chat_id: int) -> str | None:
+        return group_locale
+
+    monkeypatch.setattr(settings_db, "get_user_locale", fake_user_locale)
+    monkeypatch.setattr(groups_db, "get_group_locale", fake_group_locale)
+
+
+def test_locale_for_update_pm_uses_user(monkeypatch: pytest.MonkeyPatch) -> None:
+    _stub_locales(monkeypatch, user_locale="en-US", group_locale="en-US")
+
+    async def run() -> None:
+        assert await language.locale_for_update(_pm_update()) == "en-US"
+
+    asyncio.run(run())
+
+
+def test_locale_for_update_group_uses_group(monkeypatch: pytest.MonkeyPatch) -> None:
+    _stub_locales(monkeypatch, user_locale="en-US", group_locale="en-US")
+
+    async def run() -> None:
+        assert await language.locale_for_update(_group_update()) == "en-US"
+
+    asyncio.run(run())
+
+
+def test_locale_for_update_missing_info_defaults() -> None:
+    async def run() -> None:
+        empty: Any = SimpleNamespace(effective_chat=None, effective_user=None)
+        assert await language.locale_for_update(empty) == DEFAULT_LOCALE
+
+    asyncio.run(run())
+
+
+def test_locale_for_update_db_failure_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def boom(_id: int) -> str | None:
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(settings_db, "get_user_locale", boom)
+    monkeypatch.setattr(groups_db, "get_group_locale", boom)
+
+    async def run() -> None:
+        assert await language.locale_for_update(_pm_update()) == DEFAULT_LOCALE
+        assert await language.locale_for_update(_group_update()) == DEFAULT_LOCALE
+
+    asyncio.run(run())
+
+
+# ─────── Runtime goldens: netspeed ─────── #
+
+
+def test_netspeed_status_plain() -> None:
+    assert t("netspeed.status.pinging", DEFAULT_LOCALE, plain=True) == "Pinging..."
+    assert (
+        t("netspeed.status.running", DEFAULT_LOCALE, plain=True)
+        == "Running speed test, please wait..."
+    )
+    assert (
+        t("netspeed.status.timeout", DEFAULT_LOCALE, plain=True)
+        == "Speed test timed out. Please try again later."
+    )
+    assert (
+        t("netspeed.status.failed", DEFAULT_LOCALE, plain=True)
+        == "Speed test failed. Check the bot logs for details."
+    )
+    assert (
+        t("netspeed.status.parse_failed", DEFAULT_LOCALE, plain=True)
+        == "Speed test completed but result parsing failed. Check bot logs."
+    )
+
+
+def test_netspeed_pong_and_fields_v2_clean() -> None:
+    body = t(
+        "netspeed.pong.body",
+        DEFAULT_LOCALE,
+        latency=Safe(code("12.3 ms")),
+    )
+    assert body == f"Pong\\! Round\\-trip: {code('12.3 ms')}"
+    _assert_v2_render_clean(body, "netspeed.pong")
+    for key in (
+        "ping",
+        "timestamp",
+        "download",
+        "upload",
+        "sent",
+        "received",
+        "ip",
+        "isp",
+        "isp_rating",
+        "country",
+        "latitude",
+        "longitude",
+        "name",
+        "sponsor",
+        "latency",
+    ):
+        line = t(f"netspeed.result.field.{key}", DEFAULT_LOCALE, value=Safe(code("x")))
+        _assert_v2_render_clean(line, f"netspeed.field.{key}")
+
+
 def test_panel_renders_v2_clean() -> None:
     for scope in ("user", "group"):
         text = language._panel_text(scope, "en-US")
@@ -867,10 +994,10 @@ def test_effective_locale_pm_and_group(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(groups_db, "get_group_locale", fake_group)
 
     async def run() -> None:
-        assert await language._effective_locale("private", 1, 10) == "en-US"
-        assert await language._effective_locale("private", 2, 10) == "en-US"
-        assert await language._effective_locale("group", 1, 10) == "en-US"
-        assert await language._effective_locale("group", 1, 99) == "en-US"
+        assert await language.effective_locale("private", 1, 10) == "en-US"
+        assert await language.effective_locale("private", 2, 10) == "en-US"
+        assert await language.effective_locale("group", 1, 10) == "en-US"
+        assert await language.effective_locale("group", 1, 99) == "en-US"
 
     asyncio.run(run())
 

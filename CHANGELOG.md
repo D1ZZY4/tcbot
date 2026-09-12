@@ -9,6 +9,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Added
 
+- **Runtime i18n begins: per-update locale plus netspeed** (`tcbot/modules/language.py`, `netspeed.py`, `i18n/en-US/netspeed.toml`, `tests/test_i18n.py`, `i18n/README.md`): handlers resolve the render locale once via `language.locale_for_update` (private chats use the sender's locale, groups use the group locale). Ping and speedtest replies, prompts, and result lines now load from TOML; plain sends render verbatim, MarkdownV2 sends render escaped. Output identical for the default locale.
+
 - **All module help migrated to TOML** (`i18n/en-US/*.toml`, every module help block, `tests/test_i18n.py`, `i18n/README.md`): every `/help` topic now loads its prose from one catalog file per module, so translators work without touching code. Section order, labels, and shared constants stay in Python. Help output is identical for all modules.
 
 - **Per-user and per-group language preferences** (`i18n/en-US/common.toml`, `button.toml`, `language.toml`, `i18n/README.md`, `tcbot/utils/i18n.py`, `tcbot/database/settings_db.py`, `groups_db.py`, `documents.py`, `mongos.py`, `tcbot/modules/language.py`, `helper/keyboards.py`, `tests/test_i18n.py`, `docs/features/language.md`): `/language` (`/lang`, `/langs`) and a start-menu `Language` button share one selection flow for personal or group locale. Personal choices live in a dedicated `user_settings` collection; group choices live on the group row. Group changes need owner or staff rank. Translations ship as one TOML file per domain with fallback to `en-US`.
