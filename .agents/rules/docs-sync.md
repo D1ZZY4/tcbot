@@ -4,14 +4,14 @@ This file defines documentation scope, style standards, project facts to keep
 current, and the maintenance workflow for TCF Bot docs. Code conventions live
 in [`code-style.md`](code-style.md), and comment and Markdown conventions live
 in [`comment-style.md`](comment-style.md). Validation commands live in
-[`tooling-validation.md`](tooling-validation.md).
+[`tooling-skills-use.md`](tooling-skills-use.md).
 
 ---
 
 ## Read Before Work and Update After Work
 
 Before editing documentation, read this file,
-[`tooling-validation.md`](tooling-validation.md),
+[`tooling-skills-use.md`](tooling-skills-use.md),
 [`code-style.md`](code-style.md), [`comment-style.md`](comment-style.md),
 [`AGENTS.md`](../../AGENTS.md), and [`CHANGELOG.md`](../../CHANGELOG.md).
 

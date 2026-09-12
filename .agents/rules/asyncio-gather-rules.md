@@ -5,7 +5,7 @@ This file defines async patterns for TCF Bot: handler structure,
 background jobs, and async database access. Handler authorization lives in
 [`security-rules.md`](security-rules.md), Python style and module boundaries
 live in [`code-style.md`](code-style.md), and validation commands live in
-[`tooling-validation.md`](tooling-validation.md).
+[`tooling-skills-use.md`](tooling-skills-use.md).
 
 ---
 

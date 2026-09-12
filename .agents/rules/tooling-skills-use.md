@@ -4,7 +4,8 @@ This file defines the project workflow, dependency, documentation-maintenance,
 and validation requirements for TCF Bot. Code conventions live in
 [`code-style.md`](code-style.md), and comment and Markdown conventions live in
 [`comment-style.md`](comment-style.md). Documentation maintenance workflow
-lives in [`docs-rules.md`](docs-rules.md).
+lives in [`docs-sync.md`](docs-sync.md). Changelog wording rules live in
+[`changelog-style.md`](changelog-style.md).
 
 ---
 
@@ -13,7 +14,7 @@ lives in [`docs-rules.md`](docs-rules.md).
 These rules apply to every task:
 
 1. Before changing the repository, read this file, [`code-style.md`](code-style.md),
-   [`comment-style.md`](comment-style.md), [`docs-rules.md`](docs-rules.md),
+   [`comment-style.md`](comment-style.md), [`docs-sync.md`](docs-sync.md),
    [`AGENTS.md`](../../AGENTS.md), and [`CHANGELOG.md`](../../CHANGELOG.md).
 2. Read the rules file matching the scope ([`security-rules.md`](security-rules.md)
    for authorization and secrets, [`asyncio-gather-rules.md`](asyncio-gather-rules.md)
@@ -25,7 +26,7 @@ These rules apply to every task:
    content or paths became stale.
 5. Search for old paths and broken links before finalizing.
 
-The six files in this directory are the canonical engineering rules. Public
+The seven files in this directory are the canonical engineering rules. Public
 contributor guidance belongs in [`CONTRIBUTING.md`](../../CONTRIBUTING.md);
 deployment and feature documentation belongs under `docs/`.
 
@@ -59,6 +60,13 @@ Skills in `.agents/skills/` apply automatically when their trigger matches.
 Use the relevant skill before editing code, documentation, database helpers,
 workflows, diagrams, or other specialized areas. Compose skills when a task
 spans more than one area.
+
+Using a skill means loading it and then reading every instruction it
+contains, without exception. Never read only specifically-named files and
+skip the rest: a partial read is the same defect as a partial code read.
+This applies to every skill, including commit: load the commit skill,
+then read all of its instructions before staging, committing, or pushing
+anything.
 
 Remaining skill files use YAML frontmatter with `name` matching the skill
 directory and an actionable `description` explaining when to use it. Keep

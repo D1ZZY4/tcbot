@@ -40,10 +40,10 @@ concurrency, and clear failure behavior over unsafe shortcuts.
 
 Read the following before changing the project:
 
-1. `.agents/rules/tooling-validation.md`
+1. `.agents/rules/tooling-skills-use.md`
 2. `.agents/rules/code-style.md`
 3. `.agents/rules/comment-style.md`
-4. `.agents/rules/docs-rules.md`
+4. `.agents/rules/docs-sync.md`
 5. `.agents/rules/security-rules.md`
 6. `.agents/rules/asyncio-gather-rules.md`
 7. `AGENTS.md`
@@ -51,7 +51,7 @@ Read the following before changing the project:
 9. The relevant skill in `.agents/skills/`
 10. The relevant source and documentation files
 
-The six files under `.agents/rules/` are the canonical sources for engineering
+The seven files under `.agents/rules/` are the canonical sources for engineering
 constraints. Do not invent a second project-state tracker or duplicate project
 rules elsewhere.
 
@@ -66,7 +66,7 @@ half. Compose multiple skills when one task spans multiple areas
 
 ## Rules hygiene
 
-- One rule lives in exactly one file. Before adding a rule, check all six
+- One rule lives in exactly one file. Before adding a rule, check all seven
   rules files for an existing equivalent.
 - Cross-link instead of copying: a checklist may reference another file, but
   must not restate its bullets verbatim.

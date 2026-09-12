@@ -4,7 +4,7 @@ This file defines Python style, module boundaries, handler safety, database
 access, workflows, and runtime behavior for TCF Bot. Authorization and secret
 handling live in [`security-rules.md`](security-rules.md), async patterns live
 in [`asyncio-gather-rules.md`](asyncio-gather-rules.md). Validation commands
-live in [`tooling-validation.md`](tooling-validation.md), and comment and
+live in [`tooling-skills-use.md`](tooling-skills-use.md), and comment and
 Markdown conventions live in [`comment-style.md`](comment-style.md).
 
 ---

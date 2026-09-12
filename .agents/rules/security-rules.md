@@ -5,7 +5,7 @@ handling, and compatibility guarantees for TCF Bot. Moderation authorization
 is security-sensitive: a bypass can affect every connected group. Python style
 and module boundaries live in [`code-style.md`](code-style.md), async patterns
 live in [`asyncio-gather-rules.md`](asyncio-gather-rules.md), and validation
-commands live in [`tooling-validation.md`](tooling-validation.md).
+commands live in [`tooling-skills-use.md`](tooling-skills-use.md).
 
 ---
 
