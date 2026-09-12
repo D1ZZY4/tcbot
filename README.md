@@ -310,6 +310,6 @@ Contribution, issue, and pull request activity, rendered by Repobeats.
 
 ## License
 
-Copyright © 2024-2026 Transsion Core, Dizzy, Ave Labs. All rights reserved.
+Copyright © 2024-2026 Transsion Core, Dizzy, Ave Labs. Licensed under the Server Side Public License, Version 1.
 
 See `LICENSE` for details.
