@@ -114,8 +114,15 @@ def mongo_client_kwargs() -> dict[str, Any]:
     startup dies with the identical TLS error while Motor connects fine).
     """
     if "tlscafile" not in cfg.mongodb_uri.lower():
-        return {"tlsCAFile": certifi.where()}
-    return {}
+        kwargs: dict[str, Any] = {"tlsCAFile": certifi.where()}
+    else:
+        kwargs = {}
+    # * Shared by Motor and the APScheduler jobstore's own sync client: the
+    # * latter drops to pymongo's 30s server-selection default otherwise and
+    # * blocks the event loop at every boot under a degraded MongoDB.
+    kwargs.setdefault("serverSelectionTimeoutMS", _MONGO_SERVER_SELECTION_MS)
+    kwargs.setdefault("connectTimeoutMS", _MONGO_CONNECT_TIMEOUT_MS)
+    return kwargs
 
 
 async def connect() -> None:
