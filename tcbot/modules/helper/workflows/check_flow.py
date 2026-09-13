@@ -24,7 +24,7 @@ from tcbot.modules.helper.identity import Identity, classify, profile_note
 from tcbot.modules.helper.keyboards import back_to_module_kb, detail_kb, paged_drill_kb
 from tcbot.utils.formatter import bold, code, italic, user_ref
 from tcbot.utils.i18n import Safe, t
-from tcbot.utils.pagination import date_or_unknown, nav_row, paginate
+from tcbot.utils.pagination import date_or_unknown, nav_row
 from tcbot.utils.time_and_date import fmt_dt
 
 if TYPE_CHECKING:
@@ -341,6 +341,7 @@ class Check:
             page,
             locale,
             db_call=db.bans_db.user_bans,
+            count_call=db.bans_db.user_ban_count,
             key_prefix="bans",
             nav_prefix="check_bans",
             active_key="active",
@@ -451,18 +452,31 @@ class Check:
         locale: str | None = None,
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Paginated list of individual warnings inside one chat."""
-        warns, titles = await asyncio.gather(
-            db.warns_db.get_warns(target_id, chat_id),
+        count, titles = await asyncio.gather(
+            db.warns_db.warn_count(target_id, chat_id),
             db.groups_db.get_group_titles([chat_id]),
             return_exceptions=True,
         )
-        if isinstance(warns, BaseException):
-            warns = []
         if isinstance(titles, BaseException):
             titles = {}
+        if isinstance(count, BaseException) or not isinstance(count, int):
+            count = 0
+            count_failed = True
+        else:
+            count_failed = False
+        total_pages = max(1, (count + _PAGE_SIZE - 1) // _PAGE_SIZE)
+        page = max(0, min(page, total_pages - 1))
+        warns = await db.warns_db.get_warns(
+            target_id, chat_id, skip=page * _PAGE_SIZE, limit=_PAGE_SIZE
+        )
+        if isinstance(warns, BaseException):
+            warns = []
+        if count_failed:
+            # * Honest fallback when the count itself fails: show the fetched page.
+            count = len(warns)
+            total_pages = max(1, (count + _PAGE_SIZE - 1) // _PAGE_SIZE)
         # * get_warns is oldest-first; reverse to newest-first for consistency
         warns = list(reversed(warns))
-        chunk, total_pages, page = paginate(warns, page, _PAGE_SIZE)
         title = titles.get(chat_id) or str(chat_id)
 
         if not warns:
@@ -478,7 +492,7 @@ class Check:
             return text, InlineKeyboardMarkup(rows)
 
         # * Resolve admin names with batch query
-        admin_ids = [w.get("admin_id", 0) for w in chunk if w.get("admin_id")]
+        admin_ids = [w.get("admin_id", 0) for w in warns if w.get("admin_id")]
         admin_name_map = (
             await db.users_cache.get_first_names_batch(admin_ids) if admin_ids else {}
         )
@@ -488,14 +502,14 @@ class Check:
                 "checking.warns.in_header",
                 locale,
                 title=title,
-                n=len(warns),
+                n=count,
                 page=page + 1,
                 pages=total_pages,
             )
             + "\n"
         ]
         base_idx = page * _PAGE_SIZE
-        for i, w in enumerate(chunk, start=1):
+        for i, w in enumerate(warns, start=1):
             ts = date_or_unknown(w.get("timestamp"))
             stored_reason = w.get("reason", None)
             reason_short = str(
@@ -545,6 +559,7 @@ class Check:
             page,
             heading_name="Kicks",
             db_call=db.kicks_db.user_kicks,
+            count_call=db.kicks_db.user_kick_count,
             cb_prefix=f"check_kicks:{target_id}",
             locale=locale,
         )
@@ -564,6 +579,7 @@ class Check:
             page,
             heading_name="Mutes",
             db_call=db.mutes_db.user_mutes,
+            count_call=db.mutes_db.user_mute_count,
             cb_prefix=f"check_mutes:{target_id}",
             locale=locale,
         )
@@ -585,6 +601,7 @@ class Check:
             page,
             locale,
             db_call=db.bans_db.user_appealable_bans,
+            count_call=db.bans_db.user_appeal_count,
             key_prefix="appeals_list",
             nav_prefix="check_appeals",
             active_key="pending",
@@ -609,7 +626,8 @@ async def _ban_list_render(
     page: int,
     locale: str | None,
     *,
-    db_call: Callable[[int], Awaitable[list[Any]]],
+    db_call: Callable[..., Awaitable[list[Any]]],
+    count_call: Callable[[int], Awaitable[int]],
     key_prefix: str,
     nav_prefix: str,
     active_key: str,
@@ -617,19 +635,35 @@ async def _ban_list_render(
     ts: Callable[[dict[str, Any]], str],
     show_reason: bool = False,
 ) -> tuple[str, InlineKeyboardMarkup]:
-    """Shared paginated ban/appeal list renderer (index + detail buttons)."""
-    bans, display_name = await asyncio.gather(
-        db_call(target_id),
+    """Shared paginated ban/appeal list renderer (index + detail buttons).
+
+    Fetches only ``_PAGE_SIZE`` rows plus the real total per page turn,
+    and keeps the header count exact even when a page tap comes in out of
+    range (page is clamped before the slice is requested).
+    """
+    total, display_name = await asyncio.gather(
+        count_call(target_id),
         _name(target_id),
         return_exceptions=True,
     )
-    if isinstance(bans, BaseException):
-        bans = []
     if isinstance(display_name, BaseException):
         display_name = str(target_id)
-    chunk, total_pages, page = paginate(bans, page, _PAGE_SIZE)
+    if isinstance(total, BaseException) or not isinstance(total, int):
+        total = 0
+        count_failed = True
+    else:
+        count_failed = False
+    total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
+    page = max(0, min(page, total_pages - 1))
+    chunk = await db_call(target_id, skip=page * _PAGE_SIZE, limit=_PAGE_SIZE)
+    if isinstance(chunk, BaseException):
+        chunk = []
+    if count_failed:
+        # * Honest fallback when the count itself fails: show the fetched page.
+        total = len(chunk)
+        total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
 
-    if not bans:
+    if not chunk:
         text = t(
             f"checking.{key_prefix}.empty",
             locale,
@@ -641,7 +675,7 @@ async def _ban_list_render(
         t(
             f"checking.{key_prefix}.header",
             locale,
-            n=len(bans),
+            n=total,
             page=page + 1,
             pages=total_pages,
         )
@@ -689,21 +723,37 @@ async def _per_chat_event_list(
     page: int,
     *,
     heading_name: str,
-    db_call: Callable[[int], Awaitable[list[Any]]],
+    db_call: Callable[..., Awaitable[list[Any]]],
+    count_call: Callable[[int], Awaitable[int]],
     cb_prefix: str,
     locale: str | None = None,
 ) -> tuple[str, InlineKeyboardMarkup]:
-    """Shared renderer for kicks/mutes; both have the same shape."""
-    records, display_name = await asyncio.gather(
-        db_call(target_id),
+    """Shared renderer for kicks/mutes; both have the same shape.
+
+    Fetches only ``_PAGE_SIZE`` rows plus the real total per page turn,
+    so the header stays exact and only the visible slice travels.
+    """
+    total, display_name = await asyncio.gather(
+        count_call(target_id),
         _name(target_id),
         return_exceptions=True,
     )
-    if isinstance(records, BaseException):
-        records = []
     if isinstance(display_name, BaseException):
         display_name = str(target_id)
-    chunk, total_pages, page = paginate(records, page, _PAGE_SIZE)
+    if isinstance(total, BaseException) or not isinstance(total, int):
+        total = 0
+        count_failed = True
+    else:
+        count_failed = False
+    total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
+    page = max(0, min(page, total_pages - 1))
+    records = await db_call(target_id, skip=page * _PAGE_SIZE, limit=_PAGE_SIZE)
+    if isinstance(records, BaseException):
+        records = []
+    if count_failed:
+        # * Honest fallback when the count itself fails: show the fetched page.
+        total = len(records)
+        total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
 
     if not records:
         text = t(
@@ -715,8 +765,8 @@ async def _per_chat_event_list(
         )
         return text, InlineKeyboardMarkup([_back_to_check(target_id, locale)])
 
-    chat_ids = list({r["chat_id"] for r in chunk if "chat_id" in r})
-    admin_ids = [r.get("admin_id", 0) for r in chunk if r.get("admin_id")]
+    chat_ids = list({r["chat_id"] for r in records if "chat_id" in r})
+    admin_ids = [r.get("admin_id", 0) for r in records if r.get("admin_id")]
 
     # * Resolve all titles + all admin names in parallel with batch query
     titles, admin_name_map = await asyncio.gather(
@@ -736,14 +786,14 @@ async def _per_chat_event_list(
             "checking.events.header",
             locale,
             heading=Safe(bold(heading_name)),
-            n=len(records),
+            n=total,
             page=page + 1,
             pages=total_pages,
         )
         + "\n"
     ]
     base_idx = page * _PAGE_SIZE
-    for i, rec in enumerate(chunk, start=1):
+    for i, rec in enumerate(records, start=1):
         ts = date_or_unknown(rec.get("timestamp"))
         stored_reason = rec.get("reason", None)
         reason_short = str(

@@ -29,6 +29,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Streamlined target resolution** (`tcbot/modules/helper/extraction.py`): `has_reply_target()` deleted (its one caller tests `_reply_uid(...) is None`); the verified-target path folded into `_args_target(..., verified=True)`.
 
+- **/check drill-downs fetch one page at a time** (`tcbot/database/bans_db.py`, `tcbot/database/warns_db.py`, `tcbot/database/kicks_db.py`, `tcbot/database/mutes_db.py`, `tcbot/modules/helper/workflows/check_flow.py`): the bans, appeals, per-chat warns, kicks, and mutes lists now load only the visible slice plus the real total per page turn instead of re-fetching the full history, so paging deep into a long record stays fast and the header count stays exact. Full-list callers of the listing helpers are unchanged.
+
 ### Removed
 
 - **Dead optional dependencies** (`pyproject.toml`, `uv.lock`): `cbor2` (no imports anywhere; Redis serialization uses the project-local tagged-JSON encoder) and `kurigram[fast]` (speculative MTProto extra with no code touching it) are gone.
