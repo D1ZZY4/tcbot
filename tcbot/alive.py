@@ -56,8 +56,12 @@ def health() -> tuple[str, int, dict[str, str]]:
     # * so AND it with the live circuit state: after 5 consecutive DB failures
     # * the mongodb breaker opens and the field must read error, matching the
     # * overall verdict below.
-    db_state = _cb.mongodb.state
-    if db_state is CircuitState.OPEN:
+    db_state = _cb.mongodb.peek_state()
+    # * Circuit must be fully CLOSED for the DB to count healthy: HALF_OPEN
+    # * (recovery probe pending or timed out) is a degraded state, and OPEN
+    # * is a hard failure. peek_state() reads without transitioning, so an
+    # * uptime poll cannot silently move OPEN -> HALF_OPEN.
+    if db_state is not CircuitState.CLOSED:
         mongodb_ok = False
 
     rc = redis_client.client()
@@ -76,7 +80,7 @@ def health() -> tuple[str, int, dict[str, str]]:
             mongodb_ok
             and scheduler_ok
             and tg_state is not CircuitState.OPEN
-            and db_state is not CircuitState.OPEN
+            and db_state is CircuitState.CLOSED
         )
         else "degraded"
     )
