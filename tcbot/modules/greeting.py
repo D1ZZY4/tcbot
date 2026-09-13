@@ -42,6 +42,12 @@ log = logging.getLogger(__name__)
 # * Matches the fan_out Telegram cap; members beyond the bound wait.
 _MAX_CONCURRENT_JOINS: int = 10
 
+# * One global bound for ALL concurrent join updates (not per-update): with
+# * concurrent_updates(True) each new-member callback would otherwise get its
+# * own Semaphore(10), making the effective Telegram+Mongo concurrency N*10
+# * with no ceiling.
+_join_sem = asyncio.Semaphore(_MAX_CONCURRENT_JOINS)
+
 
 async def _in_federation(chat_id: int, *, action: str) -> bool | None:
     """Return True when join events in ``chat_id`` must be enforced.
@@ -256,7 +262,8 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * joins via invite links without exhausting the MongoDB pool or
     # * bursting Telegram traffic. Failures stay per-member via
     # * return_exceptions=True, as before.
-    _join_sem = asyncio.Semaphore(_MAX_CONCURRENT_JOINS)
+    # * Shared global semaphore (module-level _join_sem); do not re-create a
+    # * per-update Semaphore here.
 
     async def _bounded(m: User) -> None:
         async with _join_sem:
