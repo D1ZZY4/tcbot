@@ -9,7 +9,7 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Added
 
-- **CI runs the pytest suite** (`.github/workflows/lint.yml`): the lint workflow gains a `test` job that installs from the lockfile and runs `uv run --with pytest python -m pytest tests/ -q` with the same dummy `BOT_TOKEN` / `MONGODB_URI` / `OWNER_ID` env as the lint job, so behavior regressions stop passing silently.
+- **CI runs the behavioral checks on every change** (`.github/workflows/lint.yml`): the lint workflow gains a second job that installs from the lockfile and executes the repository's checks with the same dummy `BOT_TOKEN` / `MONGODB_URI` / `OWNER_ID` env as the lint job, so behavioral regressions can no longer merge silently.
 
 ### Changed
 
