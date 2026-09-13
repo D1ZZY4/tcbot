@@ -7,6 +7,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 <details open>
 <summary>Unreleased changes (click to collapse)</summary>
 
+### Added
+
+- **CI runs the pytest suite** (`.github/workflows/lint.yml`): the lint workflow gains a `test` job that installs from the lockfile and runs `uv run --with pytest python -m pytest tests/ -q` with the same dummy `BOT_TOKEN` / `MONGODB_URI` / `OWNER_ID` env as the lint job, so behavior regressions stop passing silently.
+
 ### Changed
 
 - **Tidier start-menu rows** (`tcbot/modules/helper/keyboards.py`): the Additional and Privacy buttons share one row, so the menu reads as two pairs plus the Language footer instead of one pair plus three stretched singletons. Labels, callbacks, and colors unchanged.
