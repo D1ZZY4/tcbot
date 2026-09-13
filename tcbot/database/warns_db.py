@@ -249,9 +249,14 @@ async def _clear_warn_docs(
     return warn_del.deleted_count
 
 
-async def get_warns(user_id: int, chat_id: int) -> list[WarnDoc]:
-    """Return all warn documents for a user in a chat, oldest first."""
-    return await db_call(
+async def get_warns(
+    user_id: int, chat_id: int, *, skip: int = 0, limit: int | None = None
+) -> list[WarnDoc]:
+    """Return warn documents for a user in a chat, oldest first.
+
+    ``limit=None`` returns the full list (backwards compatible).
+    """
+    cursor = (
         _warns()
         .find(
             {"user_id": user_id, "chat_id": chat_id},
@@ -265,8 +270,11 @@ async def get_warns(user_id: int, chat_id: int) -> list[WarnDoc]:
             },
             sort=[("timestamp", 1)],
         )
-        .to_list(length=None)
+        .skip(max(0, skip))
     )
+    if limit is not None:
+        cursor = cursor.limit(max(1, limit))
+    return await db_call(cursor.to_list(limit))
 
 
 async def remove_last_warn(user_id: int, chat_id: int) -> bool:
