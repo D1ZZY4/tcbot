@@ -156,9 +156,13 @@ def test_username_resolves_live(monkeypatch) -> None:  # type: ignore[no-untyped
     )
 
 
-def test_partial_name_searches_cache(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_partial_name_needs_prefer_explicit(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Fuzzy matching is read-only only: moderation paths never guess."""
     _stub_cache(monkeypatch, found=[{"user_id": 55, "first_name": "Daniel"}])
-    assert _run(ex.extract_target(_update(_msg()), ["dan"], None)) == (55, "Daniel")
+    assert _run(ex.extract_target(_update(_msg()), ["dan"], None)) == (None, None)
+    assert _run(
+        ex.extract_target(_update(_msg()), ["dan"], None, prefer_explicit=True)
+    ) == (55, "Daniel")
 
 
 def test_text_mention_entity_wins(monkeypatch) -> None:  # type: ignore[no-untyped-def]

@@ -123,10 +123,13 @@ async def extract_target(
        quoted sender overrides the reply. A typed ID is deliberate intent;
        a quote is often just context, and silently acting on the quoted
        user is how wrong-person moderation happens. Anything unverified
-       (a reason starting with a number, an unknown ID) or fuzzy
-       (partial-name search) keeps the reply target, as before.
+       (a reason starting with a number, an unknown ID) keeps the reply
+       target, as before.
     2. Args with full info (numeric ID or @username)
-    3. Args with partial info (search users_cache by name)
+    3. Args with partial info (search users_cache by name), only with
+       ``prefer_explicit=True``: fuzzy matching can point at the wrong
+       person (the search takes the first of up to five hits), so
+       moderation paths resolve reply, numeric ID, and ``@username`` only.
     4. Text mention entity
     5. @Mention entity
 
@@ -155,7 +158,7 @@ async def extract_target(
     ):
         return reply_hit
     if args and reply_hit is not None and prefer_explicit:
-        hit = await _args_target(args, bot)
+        hit = await _args_target(args, bot, allow_partial=True)
         return hit if hit is not None else reply_hit
     if args and reply_hit is not None:
         verified = await _verified_explicit_target(args, bot)
@@ -168,7 +171,7 @@ async def extract_target(
             return verified
         return reply_hit
     if args:
-        hit = await _args_target(args, bot)
+        hit = await _args_target(args, bot, allow_partial=prefer_explicit)
         if hit is not None:
             return hit
     elif reply_hit is not None:
@@ -226,8 +229,16 @@ async def _reply_target(msg: Message) -> tuple[int, str] | None:
     return uid, await _best_name(uid)
 
 
-async def _args_target(args: list[str], bot: Bot | None) -> tuple[int, str] | None:
-    """Priorities 2-3: numeric ID, @username, then partial name search."""
+async def _args_target(
+    args: list[str], bot: Bot | None, *, allow_partial: bool = False
+) -> tuple[int, str] | None:
+    """Priorities 2-3: numeric ID, @username, then partial name search.
+
+    The partial-name search runs only with ``allow_partial=True``
+    (read-only callers via ``prefer_explicit``): it takes the first of
+    up to five fuzzy hits, which is fine for a profile view but never
+    for a moderation target.
+    """
     arg = args[0].lstrip("@")
 
     # * Priority 2a: Numeric ID
@@ -267,10 +278,12 @@ async def _args_target(args: list[str], bot: Bot | None) -> tuple[int, str] | No
                 chat.id, chat.first_name, chat.username, arg
             )
 
-    # * Priority 3: Partial name search in users_cache
+    # * Priority 3: Partial name search in users_cache, read-only
+    # * callers only (see _args_target docstring for why moderation
+    # * paths never fuzzy-match).
     # * Uses a server-side regex query capped at 5 results; avoids loading
     # * the entire user cache into Python for a linear scan.
-    if arg:
+    if allow_partial and arg:
         matches = await db.users_cache.search_by_name(arg)
         if matches:
             user = matches[0]

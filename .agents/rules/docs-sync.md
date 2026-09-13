@@ -83,12 +83,13 @@ Recent project additions to keep accurate when editing docs:
 - Batch query helpers in `tcbot/database/users_cache.py`
   (`get_user_mention_data`, `get_mention_data_batch`,
   `get_first_names_batch`).
-- Partial-name search in `tcbot.modules.helper.extraction.extract_target`;
-  resolution order is reply → args (full ID/username) → args (partial DB
-  search) → text mention → @mention, except a typed numeric ID or
-  `@username` that verifies as a real user different from the quoted
-  sender overrides the reply (`prefer_explicit=True` on read-only
-  `/check` prefers any resolving arg).
+- Target resolution in `tcbot.modules.helper.extraction.extract_target`:
+  reply → args (full ID/username) → args (partial DB search) → text
+  mention → @mention, except a typed numeric ID or `@username` that
+  verifies as a real user different from the quoted sender overrides
+  the reply. Partial-name search runs only with `prefer_explicit=True`
+  (read-only `/check`); moderation paths resolve reply, numeric ID,
+  and `@username` only, never fuzzy-match.
 - Username field on `Identity` and `member_cache` indexes on `username` and
   `first_name`.
 - CI/CD workflows: `.github/workflows/auto-fix.yml` (auto-PR for Ruff fixes

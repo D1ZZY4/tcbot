@@ -87,7 +87,7 @@ Target resolution for moderation commands.
 **Resolution priority for `extract_target()`:**
 1. **Reply** - Most common use case, checked first (a verified typed ID/`@username` naming someone else overrides it; `/check` prefers any resolving arg)
 2. **Args with full info** - Numeric ID or @username
-3. **Args with partial info** - Searches users_cache by name (e.g., `/ban John` finds users with "John" in their name)
+3. **Args with partial info** - Searches users_cache by name (e.g., `/check John` finds users with "John" in their name); read-only callers only, moderation paths never fuzzy-match
 4. **Text mention entity** - Direct user mention in message
 5. **@Mention entity** - Username mention in message
 
