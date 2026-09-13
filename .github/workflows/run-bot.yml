@@ -223,7 +223,7 @@ jobs:
       - name: Detect crash in log
         if: always()
         run: |
-          if [[ -f bot-scrubbed.log ]] && grep -qiE "(Traceback|^\\w+Error:|CRITICAL)" bot-scrubbed.log; then
+          if [[ -f bot-scrubbed.log ]] && grep -qiE "(Traceback|^\w+Error:|CRITICAL)" bot-scrubbed.log; then
             echo "::warning::Crash signature found in bot.log (last 120 lines saved)."
             grep -n "" bot-scrubbed.log | tail -120 > crash_tail.log
           fi
