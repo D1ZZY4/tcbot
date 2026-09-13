@@ -1,0 +1,131 @@
+# Admin help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in admins.py; only prose lives here.
+# The Who section composes shared permission constants, so it stays in
+# Python; everything below is static prose. Mini-markup only: `code`
+# and *bold*, balanced and unnested.
+
+[help]
+overview = "Promote and demote staff, transfer ownership, and manage promotion requests across the federation."
+
+[help.commands]
+body = """
+`/tcpromote` (alias: `/tcp`)
+`/tcdemote` (alias: `/tcd`)
+`/transferowner` (alias: `/tfowner`)
+`/tcpromoterequests` (alias: `/tcreqs`)
+`/tcpromotelist` (alias: `/tcplist`)"""
+
+[help.who]
+body = """*/tcpromote*, */tcdemote*, */tcpromotelist*: Founder and Admin.
+*/transferowner*: {perm}
+*/tcpromoterequests*: anyone (creates a self-request to the Founder)."""""
+
+[help.roles]
+body = """
+Founder (rank 4) > Admin (rank 3) > Developer (rank 2) > Tester (rank 1)
+
+You cannot promote a user to a rank equal to or above your own. Admins promoting someone to Admin queues a request for the Founder."""
+
+[help.promote]
+body = """
+Assigns a role to a user. Omit the role argument to get an inline button menu.
+
+*Usage:* `/tcpromote <target> [admin|developer|tester]`
+- Founder can promote to any role directly.
+- Admin can promote to Developer or Tester directly; promoting to Admin sends a pending request to the Founder for approval."""
+
+[help.demote]
+body = """
+Removes a user's role. A confirmation button is shown before the action executes.
+
+*Usage:* `/tcdemote <target>`
+- Founder can demote any role.
+- Admin can demote Developer or Tester only.
+- When a user with a role is banned or kicked, their role is automatically removed and they are notified by DM."""
+
+[help.transferowner]
+body = """
+Transfers federation ownership to another user. The current Founder steps down to Admin. Founder only.
+
+*Usage:* `/transferowner <target>`"""
+
+[help.examples]
+body = """
+`/tcpromote @username developer`
+`/tcpromote 123456789`: shows the role selection menu
+`/tcdemote @username`
+`/transferowner @newowner`
+`/tcpromoterequests`: request promotion to Admin
+`/tcplist`: list pending promotion requests"""
+
+# Runtime strings for promotion (promote_flow.py).
+# Reply texts render as MarkdownV2; DMs send plain (no parse_mode).
+# Placeholders: {user} pre-formatted user reference, {role}/{label}/
+# {community} raw values.
+
+[promote]
+save_fail = "Failed to save the promotion. Please try again."
+role_fail = "Failed to save the role assignment. Please try again."
+done_admin = "Done. {user} is now a {community} Admin."
+done_role = "Done. {user} is now a {community} {role}."
+already_admin = "That user is already an Admin. Demote them before assigning {role}."
+holds_role = "That user already holds the {role} role or higher."
+pending = "There's already a pending promotion request for {user}."
+queue_fail = "Failed to queue the promotion request. Please try again."
+submitted = "Submitted - the Founder has been notified and will review it shortly."
+target_is_founder = "That's the Founder - can't assign a role over them."
+no_assign_perms = "You don't have permission to assign this role."
+
+[promote.dm]
+admin = "You've been promoted to Admin in {community} - welcome to the staff team."
+role = "You've been assigned the {role} role in {community} - welcome to the team."
+
+[request]
+anon_admin = "This command must be sent from your personal account, not as the group. Anonymous-admin commands are not accepted here."
+already_role = "You're already a {role} - no request needed."
+existing = "You already have a pending request (ID: {id})."
+
+# Shared admin error strings. All send plain (parse_mode=None replies,
+# plain edits, alerts): plain=True at call sites.
+
+[error]
+no_assign_perms = "You don't have permission to assign any roles."
+no_removable_role = "That user doesn't hold a role that can be removed."
+founder_demote_only = "Only the Founder can demote an Admin."
+no_longer_removable = "That user no longer holds a removable role."
+role_clear_failed = "Couldn't remove the role - it may have already been cleared."
+role_lookup_failed = "I couldn't verify federation roles right now. Please try again in a moment."
+request_not_found = "Request not found or already resolved."
+classify_failed = "I couldn't verify that user right now. Please try again in a moment."
+promote_needs_target = "Specify who to promote: reply to their message or give an ID/@username, e.g. /tcpromote @user developer."
+promote_cancelled = "Promotion cancelled. No changes were made."
+cancelled = "Cancelled. No changes were made."
+no_pending = "No pending promotion requests."
+
+# Promote/demote/transfer/list/decision UI. [role_picker]/[confirm]/
+# [transfer]/[list]/[card] render as MarkdownV2; [decision.dm] sends plain.
+
+[promote_ui]
+role_picker = "Choose a role to assign to {user}:"
+
+[demote]
+confirm = "{user} is currently a {role}.\nConfirm to remove their role."
+done = "Done. {user} has been removed from {role}."
+
+[transfer]
+set_owner_fail = "Couldn't transfer ownership. No changes were made; please try again."
+done = "Done. {user} is now the Founder."
+admin_warn = " WARNING: {user} could not be kept as Admin; grant the role manually with /tcpromote if needed."
+
+[list]
+header = "{title}"
+header_text = "Pending Promotion Requests ({n})"
+row = "- {user} {id} | {uname} | ID: {req}"
+
+[decision]
+approve_fail = "Couldn't approve the request. Please try again."
+reject_fail = "Couldn't reject the request. Please try again."
+approved_suffix = "\n\n- Approved by {name}"
+rejected_suffix = "\n\n- Rejected by {name}"
+approve_dm = "Your promotion request has been approved - welcome to the {community} staff team, Admin."
+reject_dm = "Your request was reviewed but wasn't approved this time. You're free to apply again later."

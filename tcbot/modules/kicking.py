@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.kicking_flow import kick_conversation, proof, reason
@@ -25,7 +26,8 @@ from tcbot.modules.helper.workflows.reason_flow import (
     reason_too_long_text,
 )
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import bold, code, mention
+from tcbot.utils.formatter import mention
+from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -41,47 +43,38 @@ _RL_LIMIT: int = 5
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Kick"
-__help_text__ = (
-    f"Removes a user from the {bold('current group only')}\\. Federation roles are auto\\-removed "
-    "if the target is staff\\."
-)
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        f"{code('/tckick')} \\(alias: {code('/tck')}\\)",
-    ),
-    replies.who_section(replies.PERM_TESTER_ABOVE),
-    replies.where_section(replies.WHERE_CONNECTED_GROUP),
-    (
-        replies.SEC_WHAT,
-        f"Removes a user from the {bold('current group only')}\\. This is not a federation\\-wide "
-        "action; the user can rejoin via an invite link unless they are separately "
-        "federation\\-banned\\.\n\n"
-        "If the target holds a federation role \\(Tester / Developer / Admin\\), that role is "
-        "automatically removed and they are notified by DM\\. A log entry is posted to the "
-        "federation logs channel\\.",
-    ),
-    (
-        "Flow",
-        f"1\\. Run {code('/tckick')} with the target \\(and optional inline reason\\)\\.\n"
-        f"2\\. If no reason was given, the bot asks: reply with text or tap {bold('Skip')}\\.\n"
-        f"3\\. The bot asks for proof: send a photo/video or tap {bold('Skip')}\\.",
-    ),
-    replies.target_section(),
-    (
-        replies.SEC_EXAMPLES,
-        f"{code('/tckick @username being disruptive')}: reason inline\n"
-        f"{code('/tck 123456789')}: bot will ask for reason\n"
-        f"Or reply to a message and run {code('/tck')}\\.",
-    ),
-]
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("kicking.help.overview", locale)
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("kicking.help.commands.body", locale),
+        ),
+        replies.who_section(replies.perm_tester_above(locale, plain=False), locale),
+        replies.where_section(replies.where_connected_group(locale), locale),
+        (
+            replies.sec_what(locale),
+            t("kicking.help.what.body", locale),
+        ),
+        (
+            "Flow",
+            t("kicking.help.flow.body", locale),
+        ),
+        replies.target_section(locale),
+        (
+            replies.sec_examples(locale),
+            t("kicking.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ───────────────────── Command Kick </tckick> ───────────────────── #
@@ -98,6 +91,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     reason) or opens the reason/proof conversation. Returns
     ``ConversationHandler.END`` on validation failure.
     """
+    locale = await locale_for_update(update)
     msg = update.effective_message
     admin = update.effective_user
     chat = update.effective_chat
@@ -111,18 +105,19 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if chat.type == "private":
         await safe_reply(
             msg,
-            replies.ERR_GROUP_ONLY,
+            replies.err_group_only(locale, plain=True),
             log_label="cmd_kick group-only",
             parse_mode=None,
         )
         return ConversationHandler.END
 
     args = parse_cmd_args(msg.text)
-    # * Single owner for the reply-wins plus shape check (see banning.py).
-    # * With a reply target every arg is reason text, so a leading
-    # * numeric/@ token stays in the reason instead of being consumed.
-    has_explicit_target = extraction.has_explicit_target(msg, args)
-    target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
+    # * Resolution plus consumption in one call (see banning.py): a
+    # * verified explicit ID/@username overrides the reply target, and the
+    # * consumed flag tells the reason parser to drop args[0] as target.
+    (target_id, target_name), has_explicit_target = await extraction.extract_mod_target(
+        update, args, ctx.bot
+    )
 
     inline_reason = parse_inline_reason(
         args,
@@ -134,7 +129,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="cmd_kick no-target",
             parse_mode=None,
         )
@@ -145,7 +140,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if inline_reason and is_reason_too_long(inline_reason):
         await safe_reply(
             msg,
-            reason_too_long_text(len(inline_reason)),
+            reason_too_long_text(len(inline_reason), locale),
             log_label="cmd_kick reason-too-long",
             parse_mode=None,
         )
@@ -172,7 +167,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if executor_role is None:
         return ConversationHandler.END
 
-    refusal = identity.refuse_message("kick", ident)
+    refusal = identity.refuse_message("kick", ident, locale)
     if refusal is not None:
         await safe_reply(msg, refusal, log_label="cmd_kick refusal")
         return ConversationHandler.END
@@ -213,9 +208,11 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         ctx.user_data["kick_reason"] = inline_reason
         try:
             prompt = await msg.reply_text(
-                proof.noted_prompt("kick", inline_reason, target_mention),
+                proof.noted_prompt(
+                    "kick", inline_reason, target_mention, locale=locale
+                ),
                 parse_mode="MarkdownV2",
-                reply_markup=proof.keyboard(),
+                reply_markup=proof.keyboard(locale),
             )
             ctx.user_data["kick_prompt_id"] = prompt.message_id
         except Exception as exc:
@@ -227,9 +224,9 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     try:
         prompt = await msg.reply_text(
-            reason.prompt(target_mention, "kick"),
+            reason.prompt(target_mention, "kick", locale=locale),
             parse_mode="MarkdownV2",
-            reply_markup=reason.keyboard(),
+            reply_markup=reason.keyboard(locale),
         )
         ctx.user_data["kick_prompt_id"] = prompt.message_id
     except Exception as exc:

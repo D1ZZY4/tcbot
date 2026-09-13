@@ -15,6 +15,7 @@ from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 from tcbot import cfg
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.muting_flow import (
@@ -34,7 +35,8 @@ from tcbot.modules.helper.workflows.reason_flow import (
     reason_too_long_text,
 )
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import bold, code, mention
+from tcbot.utils.formatter import code, mention
+from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -50,55 +52,42 @@ _RL_LIMIT: int = 5
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Mute"
-__help_text__ = (
-    "Federation\\-wide mute and unmute: restricts a user from sending messages "
-    f"across {bold('all connected groups')} at once\\."
-)
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        f"{code('/tcmute')} \\(alias: {code('/tcm')}\\)\n"
-        f"{code('/tcunmute')} \\(aliases: {code('/tcunm')}, {code('/tcum')}\\)",
-    ),
-    replies.who_section(replies.PERM_TESTER_ABOVE),
-    replies.where_section(replies.WHERE_CONNECTED_GROUP),
-    (
-        replies.SEC_WHAT,
-        f"{bold('/tcmute')}: restricts a user from sending messages, media, stickers, and GIFs "
-        f"across {bold('all connected groups')} simultaneously\\. After the command, the bot "
-        "asks for a reason and optionally proof \\- both steps can be skipped\\. If the user "
-        "is already muted, the existing restriction is replaced\\. A summary shows how many "
-        "groups the mute was applied in\\.\n\n"
-        f"{bold('/tcunmute')}: restores the user's full send permissions across all connected "
-        "groups\\. A summary shows how many groups the unmute was applied in\\.",
-    ),
-    (
-        "Time format",
-        "Place the duration before the reason\\. Omit a duration to apply a permanent mute\\.\n\n"
-        f"\\- {code('s')} Seconds: {code('30s')} \\= 30 seconds\n"
-        f"\\- {code('m')} Minutes: {code('15m')} \\= 15 minutes\n"
-        f"\\- {code('h')} Hours: {code('2h')} \\= 2 hours\n"
-        f"\\- {code('d')} Days: {code('7d')} \\= 7 days\n"
-        f"\\- {code('w')} Weeks: {code('2w')} \\= 2 weeks\n"
-        f"\\- {code('mo')} Months: {code('3mo')} \\= 3 months\n"
-        f"\\- {code('ye')} Years: {code('2ye')} \\= 2 years",
-    ),
-    replies.target_section(),
-    (
-        replies.SEC_EXAMPLES,
-        f"{code('/tcmute @username 3d spamming')}: 3\\-day mute, reason inline\n"
-        f"{code('/tcm @username 1w')}: 1\\-week mute, bot will ask for reason\n"
-        f"{code('/tcm @username')}: permanent mute, bot walks you through it\n"
-        f"{code('/tcunmute @username')}: lift mute immediately across all groups",
-    ),
-]
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("muting.help.overview", locale)
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("muting.help.commands.body", locale),
+        ),
+        replies.who_section(replies.perm_tester_above(locale, plain=False), locale),
+        replies.where_section(replies.where_connected_group(locale), locale),
+        (
+            replies.sec_what(locale),
+            t("muting.help.what.body", locale),
+        ),
+        (
+            "Flow",
+            t("muting.help.flow.body", locale),
+        ),
+        (
+            "Time format",
+            t("muting.help.time.body", locale),
+        ),
+        replies.target_section(locale),
+        (
+            replies.sec_examples(locale),
+            t("muting.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ───────────────────── Command Mute </tcmute> ───────────────────── #
@@ -116,22 +105,25 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     reason skips the reason prompt and goes straight to proof collection).
     Returns ``ConversationHandler.END`` on validation failure.
     """
+    locale = await locale_for_update(update)
     msg = update.effective_message
     admin = update.effective_user
     if msg is None or admin is None or ctx.user_data is None:
         return ConversationHandler.END
 
     raw_args = parse_cmd_args(msg.text)
-    # * Single owner for the reply-wins plus shape check (see banning.py).
-    has_explicit_target = extraction.has_explicit_target(msg, raw_args)
-    target_id, target_fname = await extraction.extract_target(update, raw_args, ctx.bot)
+    # * Resolution plus consumption in one call (see banning.py).
+    (
+        (target_id, target_fname),
+        has_explicit_target,
+    ) = await extraction.extract_mod_target(update, raw_args, ctx.bot)
 
     remaining_args = list(raw_args[1:] if has_explicit_target else raw_args)
 
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="cmd_mute no-target",
             parse_mode=None,
         )
@@ -158,7 +150,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if executor_role is None:
         return ConversationHandler.END
 
-    refusal = identity.refuse_message("mute", ident)
+    refusal = identity.refuse_message("mute", ident, locale)
     if refusal is not None:
         await safe_reply(msg, refusal, log_label="cmd_mute refusal")
         return ConversationHandler.END
@@ -204,13 +196,13 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if inline_reason and is_reason_too_long(inline_reason):
         await safe_reply(
             msg,
-            reason_too_long_text(len(inline_reason)),
+            reason_too_long_text(len(inline_reason), locale),
             log_label="cmd_mute reason-too-long",
             parse_mode=None,
         )
         return ConversationHandler.END
     target_mention = mention(target_id, target_fname or str(target_id))
-    dur_str = fmt_duration(duration)
+    dur_str = fmt_duration(duration, locale)
     extra_info = f"{code(str(target_id))}: {dur_str}"
 
     ctx.user_data.update(
@@ -242,10 +234,14 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         try:
             prompt = await msg.reply_text(
                 proof.noted_prompt(
-                    "mute", inline_reason, target_mention, extra_info=extra_info
+                    "mute",
+                    inline_reason,
+                    target_mention,
+                    extra_info=extra_info,
+                    locale=locale,
                 ),
                 parse_mode="MarkdownV2",
-                reply_markup=proof.keyboard(),
+                reply_markup=proof.keyboard(locale),
             )
             ctx.user_data["mute_prompt_id"] = prompt.message_id
         except Exception as exc:
@@ -257,9 +253,9 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     try:
         prompt = await msg.reply_text(
-            reason.prompt(target_mention, "mute", extra_info=extra_info),
+            reason.prompt(target_mention, "mute", extra_info=extra_info, locale=locale),
             parse_mode="MarkdownV2",
-            reply_markup=reason.keyboard(),
+            reply_markup=reason.keyboard(locale),
         )
         ctx.user_data["mute_prompt_id"] = prompt.message_id
     except Exception as exc:
@@ -287,12 +283,13 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
     if msg is None or admin is None:
         return
+    locale = await locale_for_update(update)
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="cmd_unmute no-target",
             parse_mode=None,
         )
@@ -320,12 +317,12 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if executor_role is None:
         return
 
-    refusal = identity.refuse_message("unmute", ident)
+    refusal = identity.refuse_message("unmute", ident, locale)
     if refusal is not None:
         await safe_reply(msg, refusal, log_label="cmd_unmute refusal")
         return
 
-    notice = identity.staff_notice("unmute", ident, cfg.community_name)
+    notice = identity.staff_notice("unmute", ident, cfg.community_name, locale)
     if notice is not None:
         await safe_reply(msg, notice, log_label="cmd_unmute notice")
 

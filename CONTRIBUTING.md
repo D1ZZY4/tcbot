@@ -67,8 +67,10 @@ than reverse-engineering the codebase.
 - **Never commit secrets.** No `config.env`, tokens, passwords, database
   URIs, webhook secrets, or private chat IDs. Not in code, not in logs,
   not in screenshots.
-- **Keep bot messages English-only** and in MarkdownV2 parse mode (never
-  HTML), with user-provided text escaped.
+- **Keep bot messages localizable** and in MarkdownV2 parse mode (never
+  HTML), with user-provided text escaped. User-facing wording belongs in
+  `i18n/<locale>/*.toml`, never hardcoded in Python; see the
+  internationalization rules in [`.agents/rules/code-style.md`](.agents/rules/code-style.md).
 
 > [!CAUTION]
 > A small bug in moderation logic can affect thousands of users across

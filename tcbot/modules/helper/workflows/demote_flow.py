@@ -15,9 +15,11 @@ from telegram.error import Forbidden
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
+from tcbot.modules.helper.locale import effective_locale, locale_for_user
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import is_benign_telegram_error
-from tcbot.utils.formatter import bold, esc, mention
+from tcbot.utils.formatter import bold, mention
+from tcbot.utils.i18n import Safe, t
 
 if TYPE_CHECKING:
     from telegram import Bot, Message
@@ -86,10 +88,14 @@ class Demote:
         role_label = db.users_roles.ROLE_LABEL.get(
             target_role, target_role.capitalize()
         )
+        target_locale = await locale_for_user(target_id)
         if trigger is None:
-            user_msg = (
-                f"Your {bold(role_label)} role in {esc(cfg.community_name)} has been removed by "
-                f"{esc(executor_fname)}\\."
+            user_msg = t(
+                "demote.dm.manual",
+                target_locale,
+                role=Safe(bold(role_label)),
+                community=cfg.community_name,
+                name=executor_fname,
             )
         else:
             if trigger == "ban":
@@ -98,9 +104,12 @@ class Demote:
                 verb = "muted"
             else:
                 verb = "kicked"
-            user_msg = (
-                f"Your {bold(role_label)} role in {esc(cfg.community_name)} has been removed \\- "
-                f"you were {verb} from the federation\\."
+            user_msg = t(
+                "demote.dm.auto",
+                target_locale,
+                role=Safe(bold(role_label)),
+                community=cfg.community_name,
+                verb=verb,
             )
 
         log_result, dm_result = await asyncio.gather(
@@ -233,12 +242,19 @@ class Demote:
                 target_id,
                 target_role,
             )
+            chat = msg.chat
+            mod_locale = await effective_locale(
+                getattr(chat, "type", None), executor_id, getattr(chat, "id", 0)
+            )
             await safe_reply(
                 msg,
-                f"{mention(target_id, target_display)} "
-                f"holds a federation role \\({esc(target_role)}\\) and the auto\\-demote "
-                f"step failed, so the {trigger} cannot proceed safely\\. Demote "
-                f"them manually with /tcdemote and retry the {trigger}\\.",
+                t(
+                    "demote.abort.body",
+                    mod_locale,
+                    user=Safe(mention(target_id, target_display)),
+                    target_role=target_role,
+                    action=trigger,
+                ),
                 log_label="auto-demote-fail",
             )
             return False

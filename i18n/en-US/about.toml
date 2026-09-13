@@ -1,0 +1,12 @@
+# About page prose (about.py). Rendered as MarkdownV2.
+# Placeholders: {title}/{disc} pre-formatted lines, {community} raw name.
+
+[page]
+title = "{title}"
+intro = "A community-driven federation for Infinix, Tecno, and Itel device groups. The focus is straightforward: keep connected groups safe, well-moderated, and free of spam, scams, and bad actors."
+how_title = "*How it works*"
+how_body = "Groups that join the federation share a single moderation layer. A ban issued in one connected group is applied across all of them automatically. The same goes for mutes and broadcasts from TC Staff."
+history_title = "*History*"
+history_body = "Founded in 2024 under the name TFI, which was later disbanded following internal issues. {community} was formed shortly after to continue the work with a cleaner structure and better long-term stability."
+disclaimer = "{disc}"
+disclaimer_text = "{community} is not affiliated with or endorsed by Transsion Holdings. This is an independent community."

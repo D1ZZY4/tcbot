@@ -13,7 +13,9 @@ from telegram.ext import CallbackQueryHandler, ContextTypes
 
 from tcbot import cfg
 from tcbot.modules.helper import decorators, keyboards
-from tcbot.utils.formatter import bold, esc, italic
+from tcbot.modules.helper.locale import locale_for_update
+from tcbot.utils.formatter import bold, italic
+from tcbot.utils.i18n import Safe, t
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -27,25 +29,27 @@ _RL_CB_LIMIT: int = 15
 
 # ────────────────────────── About Message ───────────────────────── #
 
-# * Raw community name; bold()/italic()/esc() at each use site escape it.
-# * Pre-escaping here would double-escape inside bold()/italic() (both escape).
-_CNAME = cfg.community_name
+# * Raw community name; the template escapes it at render time.
 
-__about_msg__ = (
-    f"{bold(_CNAME)}\n\n"
-    f"A community\\-driven federation for Infinix, Tecno, and Itel device groups\\. "
-    f"The focus is straightforward: keep connected groups safe, well\\-moderated, and "
-    "free of spam, scams, and bad actors\\.\n\n"
-    f"{bold('How it works')}\n"
-    f"Groups that join the federation share a single moderation layer\\. "
-    "A ban issued in one connected group is applied across all of them automatically\\. "
-    "The same goes for mutes and broadcasts from TC Staff\\.\n\n"
-    f"{bold('History')}\n"
-    "Founded in 2024 under the name TFI, which was later disbanded following internal "
-    f"issues\\. {esc(_CNAME)} was formed shortly after to continue the work with a cleaner structure "
-    "and better long\\-term stability\\.\n\n"
-    f"{italic(f'{_CNAME} is not affiliated with or endorsed by Transsion Holdings\\. This is an independent community\\.')}"
-)
+
+def about_msg(locale: str | None = None) -> str:
+    """Render the About page in the given locale."""
+    cname = cfg.community_name
+    disc = Safe(
+        italic(t("about.page.disclaimer_text", locale, community=cname, plain=True))
+    )
+    return (
+        f"{t('about.page.title', locale, title=Safe(bold(cname)))}\n\n"
+        f"{t('about.page.intro', locale)}\n\n"
+        f"{t('about.page.how_title', locale)}\n"
+        f"{t('about.page.how_body', locale)}\n\n"
+        f"{t('about.page.history_title', locale)}\n"
+        f"{t('about.page.history_body', locale, community=cname)}\n\n"
+        f"{t('about.page.disclaimer', locale, disc=disc)}"
+    )
+
+
+__about_msg__ = about_msg()
 
 
 # ──────────────────────── Callback Handler ──────────────────────── #
@@ -59,13 +63,14 @@ async def on_about_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if q is None:
         return
 
+    locale = await locale_for_update(update)
     # * q.answer() and edit are independent; run in parallel.
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(
-            __about_msg__,
+            about_msg(locale),
             parse_mode="MarkdownV2",
-            reply_markup=keyboards.back_to_start_kb(),
+            reply_markup=keyboards.back_to_start_kb(locale),
         ),
         return_exceptions=True,
     )

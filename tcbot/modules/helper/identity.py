@@ -20,7 +20,8 @@ from typing import TYPE_CHECKING, Literal
 
 from tcbot import database as db
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import esc, user_ref
+from tcbot.utils.formatter import user_ref
+from tcbot.utils.i18n import Safe, t
 
 if TYPE_CHECKING:
     from telegram import Bot
@@ -157,139 +158,76 @@ def _line(ident: Identity) -> str:
 
 
 # ────────────────── Per-action witty refusals ───────────────────── #
-# * Each map covers identities that should *not* be acted on. ``user`` and
-# * lower-rank staff are never returned here; those go through the normal
-# * moderation flow. The reply is one short professional-but-friendly line.
-
+# * Each action/kind pair lives in identity.toml [refuse.<action>].
+# * ``user`` and lower-rank staff are never returned here; those go
+# * through the normal moderation flow. The reply is one short
+# * professional-but-friendly line.
 # * Staff roles (admin/developer/tester) are intentionally absent from the
 # * ban/kick/mute tables: those entries auto-demote the target via
 # * Demote.execute before enforcing, so refusing here would make the
 # * documented auto-demote unreachable.
-_BAN_REFUSE: dict[IdentityKind, str] = {
-    "self": "Self\\-ban? Creative, but no\\. Federation needs you here\\.",
-    "this_bot": "I keep this place running\\. Banning me is a no\\-go\\.",
-    "telegram": "Telegram itself? Bold move\\. Not happening\\.",
-    "anon_admin": "Cannot ban the anonymous admin placeholder\\.",
-    "founder": "{line} runs the place, can't ban them through here\\.",
-}
 
-_KICK_REFUSE: dict[IdentityKind, str] = {
-    "self": "Kicking yourself? Just leave the group instead\\.",
-    "this_bot": "Kick me? I run this place\\.",
-    "telegram": "Pretty sure I can't kick Telegram from its own group\\.",
-    "anon_admin": "Cannot kick the anonymous admin placeholder\\.",
-    "founder": "{line} runs the place, not getting kicked here\\.",
-}
 
-_MUTE_REFUSE: dict[IdentityKind, str] = {
-    "self": "Mute yourself? That's not how this works\\.",
-    "this_bot": "Muting me won't do much \\- I don't message on my own anyway\\.",
-    "telegram": "Telegram service messages aren't muteable from here\\.",
-    "anon_admin": "Cannot mute the anonymous admin placeholder\\.",
-    "founder": "{line} runs the place, mute button doesn't apply\\.",
-}
-
-_WARN_REFUSE: dict[IdentityKind, str] = {
-    "self": "Self\\-warning is just journaling\\. Ask a mod if needed\\.",
-    "this_bot": "Warn me? I'm the one tracking warnings around here\\.",
-    "telegram": "Telegram doesn't take warnings, sorry\\.",
-    "other_bot": "{line} is a bot\\. Bots do not accumulate federation warnings\\.",
-    "anon_admin": "Cannot warn the anonymous admin placeholder\\.",
-    "founder": "{line} runs the place\\. Warnings do not apply to the Founder\\.",
-}
-
-_UNBAN_REFUSE: dict[IdentityKind, str] = {
-    "self": "Can't unban yourself\\. Use /checkme and submit an appeal instead\\.",
-    "this_bot": "{line} \\- I manage the bans, not collect them\\.",
-    "telegram": "Telegram was never on the ban list anyway\\.",
-    "anon_admin": "Anonymous admin was never on the ban list\\.",
-    "founder": "{line} \\- never been banned, nothing to undo\\.",
-    "admin": "{line} is an Admin\\. Staff aren't federation\\-bannable, nothing to undo\\.",
-    "developer": "{line} is a Developer\\. Staff aren't federation\\-bannable, nothing to undo\\.",
-    "tester": "{line} is a Tester\\. Staff aren't federation\\-bannable, nothing to undo\\.",
-}
-
-_UNMUTE_REFUSE: dict[IdentityKind, str] = {
-    "self": "Can't unmute yourself \\- ask a mod\\.",
-    "this_bot": "{line} \\- bots aren't muteable, nothing to undo\\.",
-    "telegram": "Telegram service was never muted\\.",
-    "other_bot": "{line} is a bot\\. Bots cannot be muted, so there is nothing to undo\\.",
-    "anon_admin": "Anonymous admin was never muted\\.",
-    "founder": "{line} \\- definitely not muted\\.",
-}
-
-_PROMOTE_REFUSE: dict[IdentityKind, str] = {
-    "self": "Promoting yourself? Nice try, the hierarchy doesn't bend for that\\.",
-    "this_bot": "Already running things, no role needed\\.",
-    "telegram": "Telegram doing fine without a role here\\.",
-    "other_bot": "Other bots can't hold federation roles \\- humans only\\.",
-    "anon_admin": "Anonymous admin cannot hold a federation role\\.",
-    "founder": "{line} already runs the place, promoting them is a circular move\\.",
-    "admin": "{line} is already an Admin\\. Use /tcpromote for a different role\\.",
-}
-
-_DEMOTE_REFUSE: dict[IdentityKind, str] = {
-    "self": "Demoting yourself? Bold\\. Ask a higher\\-up if you really mean it\\.",
-    "this_bot": "No role to lose here\\.",
-    "telegram": "Telegram has no role to take\\.",
-    "other_bot": "{line} is a bot\\. Bots cannot hold federation roles, nothing to demote\\.",
-    "anon_admin": "Anonymous admin has no role to take\\.",
-    "founder": "{line} is the Founder \\- try /transferowner if you really mean it\\.",
-}
-
-_TRANSFER_REFUSE: dict[IdentityKind, str] = {
-    "self": "Already the Founder, transferring to yourself is a no\\-op\\.",
-    "this_bot": "Tempting, but I'm not running the place under my own name\\.",
-    "telegram": "Telegram doesn't want my keys, sorry\\.",
-    "other_bot": "Other bots can't hold the keys \\- humans only\\.",
-    "anon_admin": "Cannot transfer ownership to the anonymous admin\\.",
-}
-
-_UNWARN_REFUSE: dict[IdentityKind, str] = {
-    "self": "Erasing your own warnings? Nice try, ask a mod\\.",
-    "this_bot": "{line} \\- zero warnings, ever\\. Nothing to undo\\.",
-    "telegram": "Telegram doesn't get warned here\\.",
-    "other_bot": "{line} \\- bots don't pile up warnings, nothing to remove\\.",
-    "anon_admin": "Anonymous admin doesn't get warned here\\.",
-    "founder": "{line} \\- clean record, nothing to undo\\.",
-}
-
-_RESETWARNS_REFUSE: dict[IdentityKind, str] = {
-    "self": "You don't get to reset your own warnings, ask a mod\\.",
-    "this_bot": "{line} \\- already at zero, always was\\.",
-    "telegram": "Nothing on Telegram to clear\\.",
-    "other_bot": "{line} \\- bots stay at zero by default\\.",
-    "anon_admin": "Nothing on anonymous admin to clear\\.",
-    "founder": "{line} \\- nothing on the record to clear\\.",
+# * Which (action, kind) pairs refuse, mirroring the old per-action tables.
+# * Structure only (the prose lives in identity.toml); ``user`` and
+# * lower-rank staff are never listed here and flow through normally.
+_REFUSE_KEYS: dict[str, frozenset[IdentityKind]] = {
+    "ban": frozenset({"self", "this_bot", "telegram", "anon_admin", "founder"}),
+    "kick": frozenset({"self", "this_bot", "telegram", "anon_admin", "founder"}),
+    "mute": frozenset({"self", "this_bot", "telegram", "anon_admin", "founder"}),
+    "warn": frozenset(
+        {"self", "this_bot", "telegram", "other_bot", "anon_admin", "founder"}
+    ),
+    "unban": frozenset(
+        {
+            "self",
+            "this_bot",
+            "telegram",
+            "anon_admin",
+            "founder",
+            "admin",
+            "developer",
+            "tester",
+        }
+    ),
+    "unmute": frozenset(
+        {"self", "this_bot", "telegram", "other_bot", "anon_admin", "founder"}
+    ),
+    "promote": frozenset(
+        {
+            "self",
+            "this_bot",
+            "telegram",
+            "other_bot",
+            "anon_admin",
+            "founder",
+            "admin",
+        }
+    ),
+    "demote": frozenset(
+        {"self", "this_bot", "telegram", "other_bot", "anon_admin", "founder"}
+    ),
+    "transfer": frozenset({"self", "this_bot", "telegram", "other_bot", "anon_admin"}),
+    "unwarn": frozenset(
+        {"self", "this_bot", "telegram", "other_bot", "anon_admin", "founder"}
+    ),
+    "resetwarns": frozenset(
+        {"self", "this_bot", "telegram", "other_bot", "anon_admin", "founder"}
+    ),
 }
 
 
-_REFUSE_TABLES: dict[str, dict[IdentityKind, str]] = {
-    "ban": _BAN_REFUSE,
-    "kick": _KICK_REFUSE,
-    "mute": _MUTE_REFUSE,
-    "warn": _WARN_REFUSE,
-    "unban": _UNBAN_REFUSE,
-    "unmute": _UNMUTE_REFUSE,
-    "promote": _PROMOTE_REFUSE,
-    "demote": _DEMOTE_REFUSE,
-    "transfer": _TRANSFER_REFUSE,
-    "unwarn": _UNWARN_REFUSE,
-    "resetwarns": _RESETWARNS_REFUSE,
-}
-
-
-def refuse_message(action: str, ident: Identity) -> str | None:
+def refuse_message(
+    action: str, ident: Identity, locale: str | None = None
+) -> str | None:
     """Return a witty refusal line for ``action`` against ``ident``, or ``None``.
 
     ``None`` means the action is allowed against this identity and the caller
     should proceed with the normal moderation flow.
     """
-    table = _REFUSE_TABLES.get(action, {})
-    template = table.get(ident.kind)
-    if template is None:
+    if ident.kind not in _REFUSE_KEYS.get(action, frozenset()):
         return None
-    return template.format(line=_line(ident))
+    return t(f"identity.refuse.{action}.{ident.kind}", locale, line=Safe(_line(ident)))
 
 
 # ─────────── Recognition notes (read-only views) ──────────────── #
@@ -297,23 +235,21 @@ def refuse_message(action: str, ident: Identity) -> str | None:
 # * /check: moderation entries use refuse_message/staff_notice instead, so
 # * no caller builds these lines inline. Staff and Founder are absent on
 # * purpose: the profile Role line already labels them.
-
-_PROFILE_NOTE: dict[IdentityKind, str] = {
-    "this_bot": "That's me \\- this bot\\. I run moderation here, not collect bans\\.",
-    "self": "That's you \\- checking your own record, good habit\\.",
-    "telegram": "That's Telegram itself \\- outside federation jurisdiction\\.",
-    "anon_admin": "That's the anonymous\\-admin placeholder, not an individual user\\.",
-}
+_PROFILE_NOTE_KINDS: frozenset[IdentityKind] = frozenset(
+    {"this_bot", "self", "telegram", "anon_admin"}
+)
 
 
-def profile_note(ident: Identity) -> str | None:
+def profile_note(ident: Identity, locale: str | None = None) -> str | None:
     """Return a recognition note for special identities, or ``None``.
 
     ``None`` means the identity needs no note (regular users, staff, and
     Founder: staff and Founder are already labeled by the profile Role
     line, so a note would only restate it).
     """
-    return _PROFILE_NOTE.get(ident.kind)
+    if ident.kind not in _PROFILE_NOTE_KINDS:
+        return None
+    return t(f"identity.note.{ident.kind}", locale)
 
 
 # ─────────────── Staff heads-up (action proceeds) ───────────────── #
@@ -322,11 +258,20 @@ def profile_note(ident: Identity) -> str | None:
 # * target is staff; useful when an Admin is cleaning up a stale record.
 
 
-def staff_notice(action: str, ident: Identity, community_name: str) -> str | None:
+def staff_notice(
+    action: str,
+    ident: Identity,
+    community_name: str,
+    locale: str | None = None,
+) -> str | None:
     """Return a heads-up line when acting on staff, or ``None`` otherwise."""
     if ident.kind not in ("admin", "developer", "tester"):
         return None
-    return (
-        f"Heads up \\- {_line(ident)} is a {esc(community_name)} {ident.role_label}\\. "
-        f"Proceeding with {action} anyway\\."
+    return t(
+        "identity.staff.notice",
+        locale,
+        line=Safe(_line(ident)),
+        community=community_name,
+        role=ident.role_label or ident.kind,
+        action=action,
     )

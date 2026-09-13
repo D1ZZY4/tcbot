@@ -14,6 +14,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, fil
 
 from tcbot import database as db
 from tcbot.modules.helper import decorators, replies
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
 from tcbot.modules.helper.workflows.stats_flow import (
     CHAT_KEY,
@@ -22,7 +23,7 @@ from tcbot.modules.helper.workflows.stats_flow import (
     SEARCH_KEY,
     Stats,
 )
-from tcbot.utils.formatter import bold, code
+from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
 
 if TYPE_CHECKING:
@@ -40,59 +41,45 @@ _RL_CMD_LIMIT: int = 8
 _RL_CB_LIMIT: int = 15
 
 __module_name__ = "Stats"
-__help_text__ = (
-    "Live federation overview: Founder, staff, users, active bans, and "
-    "connected groups, with drill\\-down menus for every section\\."
-)
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        f"{code('/tcstats')} \\(alias: {code('/tcs')}\\)",
-    ),
-    replies.who_section(replies.CONTEXT_ANYONE),
-    replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
-    (
-        replies.SEC_WHAT,
-        "Shows a live federation summary: Founder, total staff broken down by "
-        "role, the number of cached users, active federation bans, and "
-        "connected chats\\.",
-    ),
-    (
-        "Drill-downs",
-        f"{bold('Staff Roster')}: Founder, Admins, Developers, Testers, all listed "
-        "with mentions\\.\n"
-        f"{bold('Users')}: paginated list of every cached user \\(Owner/Founder "
-        "only \\- the button and the list are hidden from everyone else\\)\\. "
-        "Numbered buttons open a per\\-user detail card\\.\n"
-        f"{bold('Connected Chats')}: paginated list of every active group; "
-        "drill\\-in shows owner, ID, and connect date\\.\n"
-        f"{bold('User Bans')}: paginated list of every active ban with a "
-        f"{bold('Search')} shortcut to look up a user by name or ID\\.\n\n"
-        f"Every view ends with a {bold('Back')} button to the main summary\\.",
-    ),
-    (
-        replies.SEC_EXAMPLES,
-        f"{code('/tcstats')}\n{code('/tcs')}",
-    ),
-]
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("stats.help.overview", locale)
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("stats.help.commands.body", locale),
+        ),
+        replies.who_section(replies.context_anyone(locale), locale),
+        replies.where_section(replies.context_bot_or_group(locale), locale),
+        (
+            replies.sec_what(locale),
+            t("stats.help.what.body", locale),
+        ),
+        (
+            "Drill-downs",
+            t("stats.help.drills.body", locale),
+        ),
+        (
+            replies.sec_examples(locale),
+            t("stats.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ──────────────────── Viewer-access helpers ───────────────────── #
 
 
-_ERR_ACCESS_RETRY = (
-    "I couldn't verify your access right now. Please try again in a moment."
-)
-
-
-async def _require_founder_list(q: CallbackQuery, user_id: int | None) -> bool:
+async def _require_founder_list(
+    q: CallbackQuery, user_id: int | None, update: Update
+) -> bool:
     """Return True when the tapper may open the Users list; alert-denies otherwise.
 
     Owner-or-Founder only: the list carries every cached user ID. Both checks
@@ -100,9 +87,12 @@ async def _require_founder_list(q: CallbackQuery, user_id: int | None) -> bool:
     trip. Lookup outages fail closed with a retry alert; cancellation
     propagates via the bare gather below.
     """
+    locale = await locale_for_update(update)
     if user_id is None:
         try:
-            await q.answer(replies.PERM_FOUNDER_ONLY, show_alert=True)
+            await q.answer(
+                replies.perm_founder_only(locale, plain=True), show_alert=True
+            )
         except Exception as exc:
             log.debug("stats users deny-answer failed: %s", exc)
         return False
@@ -114,13 +104,17 @@ async def _require_founder_list(q: CallbackQuery, user_id: int | None) -> bool:
     except Exception as exc:
         log.warning("stats users access check failed for %d: %s", user_id, exc)
         try:
-            await q.answer(_ERR_ACCESS_RETRY, show_alert=True)
+            await q.answer(
+                t("stats.error.access_retry", locale, plain=True), show_alert=True
+            )
         except Exception as answer_exc:
             log.debug("stats users retry-answer failed: %s", answer_exc)
         return False
     if owner_r is not True and role_r != "founder":
         try:
-            await q.answer(replies.PERM_FOUNDER_ONLY, show_alert=True)
+            await q.answer(
+                replies.perm_founder_only(locale, plain=True), show_alert=True
+            )
         except Exception as exc:
             log.debug("stats users deny-answer failed: %s", exc)
         return False
@@ -138,7 +132,10 @@ async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if msg is None:
         return
     user = update.effective_user
-    text, kb = await Stats.main(viewer_id=user.id if user is not None else None)
+    text, kb = await Stats.main(
+        viewer_id=user.id if user is not None else None,
+        locale=await locale_for_update(update),
+    )
     await safe_reply(msg, text, log_label="cmd_stats", reply_markup=kb)
 
 
@@ -199,7 +196,10 @@ async def on_stats_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     tapper = update.effective_user
     await _ack_and_render(
         q,
-        Stats.main(viewer_id=tapper.id if tapper is not None else None),
+        Stats.main(
+            viewer_id=tapper.id if tapper is not None else None,
+            locale=await locale_for_update(update),
+        ),
     )
 
 
@@ -210,7 +210,7 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     q = update.callback_query
     if q is None:
         return
-    await _ack_and_render(q, Stats.staff_roster())
+    await _ack_and_render(q, Stats.staff_roster(await locale_for_update(update)))
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -229,9 +229,11 @@ async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         await q.answer()
         return
     tapper = update.effective_user
-    if not await _require_founder_list(q, tapper.id if tapper is not None else None):
+    if not await _require_founder_list(
+        q, tapper.id if tapper is not None else None, update
+    ):
         return
-    await _ack_and_render(q, Stats.users_list(page))
+    await _ack_and_render(q, Stats.users_list(page, await locale_for_update(update)))
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -247,9 +249,14 @@ async def on_stats_user_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         return
     page, idx, stable = parsed
     tapper = update.effective_user
-    if not await _require_founder_list(q, tapper.id if tapper is not None else None):
+    if not await _require_founder_list(
+        q, tapper.id if tapper is not None else None, update
+    ):
         return
-    await _ack_and_render(q, Stats.user_detail(ctx.bot, page, idx, stable))
+    await _ack_and_render(
+        q,
+        Stats.user_detail(ctx.bot, page, idx, stable, await locale_for_update(update)),
+    )
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -267,7 +274,7 @@ async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     except IndexError:
         await q.answer()
         return
-    await _ack_and_render(q, Stats.chats_list(page))
+    await _ack_and_render(q, Stats.chats_list(page, await locale_for_update(update)))
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -282,7 +289,10 @@ async def on_stats_chat_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         await q.answer()
         return
     page, idx, stable = parsed
-    await _ack_and_render(q, Stats.chat_detail(ctx.bot, page, idx, stable))
+    await _ack_and_render(
+        q,
+        Stats.chat_detail(ctx.bot, page, idx, stable, await locale_for_update(update)),
+    )
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -301,7 +311,7 @@ async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await q.answer()
         return
     Stats.clear_search(ctx)
-    await _ack_and_render(q, Stats.bans_list(page))
+    await _ack_and_render(q, Stats.bans_list(page, await locale_for_update(update)))
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -316,7 +326,9 @@ async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         await q.answer()
         return
     page, idx, stable = parsed
-    await _ack_and_render(q, Stats.ban_detail(page, idx, stable))
+    await _ack_and_render(
+        q, Stats.ban_detail(page, idx, stable, await locale_for_update(update))
+    )
 
 
 # ── Search panel ─────────────────────────────────────────────────────
@@ -330,7 +342,7 @@ async def on_stats_bans_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     if q is None:
         return
     # * Stats.open_search is synchronous; answer and edit run in parallel.
-    text, kb = Stats.open_search(ctx, q)
+    text, kb = Stats.open_search(ctx, q, await locale_for_update(update))
     await asyncio.gather(
         q.answer(),
         safe_edit_cb(q, text, reply_markup=kb),
@@ -367,7 +379,9 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
 
     chat_id = ctx.user_data.get(CHAT_KEY)
     msg_id = ctx.user_data.get(MSG_KEY)
-    text, kb = await Stats.search_results(query, results)
+    text, kb = await Stats.search_results(
+        query, results, await locale_for_update(update)
+    )
     if chat_id is not None and msg_id is not None:
         try:
             await ctx.bot.edit_message_text(
@@ -404,7 +418,9 @@ async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         await q.answer()
         return
     results = ctx.user_data.get(RESULTS_KEY, []) if ctx.user_data else []
-    await _ack_and_render(q, Stats.search_detail(results, idx))
+    await _ack_and_render(
+        q, Stats.search_detail(results, idx, await locale_for_update(update))
+    )
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -418,7 +434,7 @@ async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     if not results:
         # * open_search is synchronous; data is already available, so answer + edit
         # * run in parallel.
-        text, kb = Stats.open_search(ctx, q)
+        text, kb = Stats.open_search(ctx, q, await locale_for_update(update))
         await asyncio.gather(
             q.answer(),
             safe_edit_cb(q, text, reply_markup=kb),
@@ -429,7 +445,12 @@ async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         previous_query = (
             ctx.user_data.get("stats_last_query", "") if ctx.user_data else ""
         )
-        await _ack_and_render(q, Stats.search_results(previous_query, results))
+        await _ack_and_render(
+            q,
+            Stats.search_results(
+                previous_query, results, await locale_for_update(update)
+            ),
+        )
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -442,7 +463,7 @@ async def on_stats_search_cancel(
     if q is None:
         return
     Stats.clear_search(ctx)
-    await _ack_and_render(q, Stats.bans_list(0))
+    await _ack_and_render(q, Stats.bans_list(0, await locale_for_update(update)))
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

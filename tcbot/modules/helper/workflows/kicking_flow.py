@@ -13,12 +13,14 @@ from typing import TYPE_CHECKING, Any
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg, replies
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
-from tcbot.utils.formatter import esc, mention, user_ref
+from tcbot.utils.formatter import mention, user_ref
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
@@ -29,10 +31,6 @@ if TYPE_CHECKING:
     from telegram.ext.filters import BaseFilter
 
 log = logging.getLogger(__name__)
-
-# ──────────────── User-facing reply constants ──────────────────── #
-
-_MSG_REJOIN_ALLOWED = "They can rejoin via invite link\\."
 
 # * Per-action BuildReason and BuildProof instances; imported by kicking.py
 reason = BuildReason("kick")
@@ -62,6 +60,7 @@ async def execute_kick(
     chat_id = effective_chat.id
     admin_id = effective_user.id
     admin_fname = effective_user.first_name
+    locale = await locale_for_update(update)
 
     # * Upload proof concurrently with enforcement: the ban below must not wait
     # * for the proof-channel round trip. The task is awaited after the ban
@@ -92,7 +91,7 @@ async def execute_kick(
                 proof_msg_id = None
             if proof_msg_id:
                 proof_link = message_link(pc, proof_msg_id, pt)
-        proof_kb = keyboards.action_proof_kb(target_id, proof_link)
+        proof_kb = keyboards.action_proof_kb(target_id, proof_link, locale)
         chat_title = effective_chat.title or str(chat_id)
         lc, lt = cfg.logs
         log_text = parse_logmsg.kick_log(
@@ -147,16 +146,17 @@ async def execute_kick(
         if isinstance(log_send_result, BaseException):
             log.error("Kick log send failed: %s", log_send_result)
         unban_warning = (
-            " WARNING: the post\\-kick unban step failed; the user is "
-            "still banned in this chat and cannot rejoin\\. Demote them "
-            "manually if needed and unban from the chat member list\\."
+            Safe(t("kicking.warn.unban", locale))
             if isinstance(unban_result, BaseException)
-            else ""
+            else Safe("")
         )
-        summary = (
-            f"{user_ref(target_id, target_name)} has been kicked\\.\n"
-            f"Reason: {esc(reason_text)}\n"
-            f"{_MSG_REJOIN_ALLOWED}{unban_warning}"
+        summary = t(
+            "kicking.summary.body",
+            locale,
+            user=Safe(user_ref(target_id, target_name)),
+            reason=reason_text,
+            rejoin=Safe(t("kicking.rejoin.body", locale)),
+            warning=unban_warning,
         )
         # * Edit the proof prompt in place like the mute executor: a fresh
         # * reply for every kick doubles the chat noise and buries the
@@ -189,8 +189,11 @@ async def execute_kick(
         log.exception("Kick failed for %s in %s", target_id, chat_id)
         await safe_reply(
             msg,
-            f"Couldn't kick {mention(target_id, target_name)}\\. "
-            "Please check bot permissions and retry\\.",
+            t(
+                "kicking.error.body",
+                locale,
+                user=Safe(mention(target_id, target_name)),
+            ),
             log_label="Kick error",
         )
 
@@ -205,7 +208,9 @@ async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     target_id = ctx.user_data.pop("kick_target_id", 0)
     target_name = ctx.user_data.pop("kick_target_name", "")
-    reason_text = ctx.user_data.pop("kick_reason", replies.NO_REASON)
+    reason_text = ctx.user_data.pop(
+        "kick_reason", replies.no_reason(await locale_for_update(update), plain=True)
+    )
     proof_msgs = ctx.user_data.pop("kick_proof_msgs", None)
     prompt_chat = ctx.user_data.pop("kick_prompt_chat", None)
     prompt_id = ctx.user_data.pop("kick_prompt_id", None)

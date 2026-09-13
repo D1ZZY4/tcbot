@@ -8,7 +8,7 @@ Last updated: 2026-05-29
 # Feature Reviewer
 
 Before invoking this skill, confirm the read/update rules in
-[`tooling-validation.md`](../../rules/tooling-validation.md#read-before-work-and-update-after-work),
+[`tooling-skills-use.md`](../../rules/tooling-skills-use.md#read-before-work-and-update-after-work),
 [`code-style.md`](../../rules/code-style.md), and
 [`comment-style.md`](../../rules/comment-style.md). For authorization scope
 also read [`security-rules.md`](../../rules/security-rules.md); for async

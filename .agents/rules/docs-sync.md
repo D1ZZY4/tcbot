@@ -4,14 +4,14 @@ This file defines documentation scope, style standards, project facts to keep
 current, and the maintenance workflow for TCF Bot docs. Code conventions live
 in [`code-style.md`](code-style.md), and comment and Markdown conventions live
 in [`comment-style.md`](comment-style.md). Validation commands live in
-[`tooling-validation.md`](tooling-validation.md).
+[`tooling-skills-use.md`](tooling-skills-use.md).
 
 ---
 
 ## Read Before Work and Update After Work
 
 Before editing documentation, read this file,
-[`tooling-validation.md`](tooling-validation.md),
+[`tooling-skills-use.md`](tooling-skills-use.md),
 [`code-style.md`](code-style.md), [`comment-style.md`](comment-style.md),
 [`AGENTS.md`](../../AGENTS.md), and [`CHANGELOG.md`](../../CHANGELOG.md).
 
@@ -19,7 +19,8 @@ When you change *any* documentation file, update the related markdown in the
 same turn:
 
 - [`CHANGELOG.md`](../../CHANGELOG.md): entry under `[Unreleased]`
-  describing the doc change.
+  describing the doc change, worded per
+  [`changelog-style.md`](changelog-style.md).
 - [`docs/README.md`](../../docs/README.md): if a new doc was added or the
   documentation structure changed, update the category index.
 - [`docs/architecture/repository-map.md`](../../docs/architecture/repository-map.md):
@@ -34,6 +35,10 @@ Documentation normally lives in:
 - root docs: `README.md`, `AGENTS.md`, `replit.md`
 - agent/contributor rules: `.agents/rules/*.md`
 - developer docs: `docs/**/*.md`, grouped by category under `docs/`
+- translation catalog: `i18n/<locale>/*.toml` with the translator
+  contract in [`i18n/README.md`](../../i18n/README.md) (wording changes
+  go there, never in Python; see the i18n rules in
+  [`code-style.md`](code-style.md))
 
 Rules:
 
@@ -80,7 +85,10 @@ Recent project additions to keep accurate when editing docs:
   `get_first_names_batch`).
 - Partial-name search in `tcbot.modules.helper.extraction.extract_target`;
   resolution order is reply → args (full ID/username) → args (partial DB
-  search) → text mention → @mention.
+  search) → text mention → @mention, except a typed numeric ID or
+  `@username` that verifies as a real user different from the quoted
+  sender overrides the reply (`prefer_explicit=True` on read-only
+  `/check` prefers any resolving arg).
 - Username field on `Identity` and `member_cache` indexes on `username` and
   `first_name`.
 - CI/CD workflows: `.github/workflows/auto-fix.yml` (auto-PR for Ruff fixes
@@ -90,6 +98,12 @@ Recent project additions to keep accurate when editing docs:
   webhook-first transport), `.github/workflows/codeql.yml` (security
   scanning). All workflows are documented in
   [`docs/operations/ci-cd.md`](../../docs/operations/ci-cd.md).
+- i18n system: user-facing strings in `i18n/<locale>/*.toml` (`en-US`
+  source of truth, `button.toml` owns every button label once),
+  per-request locale resolution (`helper.locale`), per-locale help via
+  `get_help(locale)`, translator contract in
+  [`i18n/README.md`](../../i18n/README.md), feature guide in
+  [`docs/features/language.md`](../../docs/features/language.md).
 
 Core commands:
 
@@ -138,3 +152,7 @@ For current detailed feature docs, keep these topics accurate:
 - warnings are per-group,
 - warn-limit auto-ban clears warnings only after successful ban,
 - role checks use canonical role helpers.
+- user-facing wording lives in `i18n/<locale>/*.toml` (never hardcoded
+  in Python outside audit logs, staff operational messages, and infra
+  error reports), and every message renders in the resolved locale
+  (private chats use the sender, groups use the group).

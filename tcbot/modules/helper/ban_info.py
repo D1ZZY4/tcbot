@@ -11,9 +11,9 @@ from typing import TYPE_CHECKING
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import replies
 from tcbot.modules.helper.parse_link import message_link
-from tcbot.utils.formatter import bold, code, esc, mention
+from tcbot.utils.formatter import code, mention
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.time_and_date import fmt_dt
 
 if TYPE_CHECKING:
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 async def build_ban_detail(
-    ban: BanDoc, target_fname: str | None = None
+    ban: BanDoc, target_fname: str | None = None, locale: str | None = None
 ) -> tuple[str, str | None]:
     """Return (formatted text, proof_link or None) for a ban document."""
     # * BanDoc is total=False: every key access below uses .get() with a
@@ -61,13 +61,13 @@ async def build_ban_detail(
     date_str = fmt_dt(ts) if ts else "Unknown"
 
     text = (
-        f"{bold('Ban Information')}\n\n"
-        f"User: {mention(uid, target_fname, target_uname)}\n"
-        f"User ID: {code(str(uid))}\n\n"
-        f"Banned by: {mention(aid, admin_fname, admin_uname)}\n"
-        f"Admin ID: {code(str(aid))}\n\n"
-        f"Reason: {esc(ban.get('reason', replies.NO_REASON))}\n"
-        f"Ban ID: {code(ban.get('ban_id', ''))}\n"
-        f"Date: {date_str}"
+        f"{t('checking.ban_info.title', locale)}\n\n"
+        f"{t('checking.ban_info.user', locale, user=Safe(mention(uid, target_fname, target_uname)))}\n"
+        f"{t('checking.ban_info.user_id', locale, id=Safe(code(str(uid))))}\n\n"
+        f"{t('checking.ban_info.banned_by', locale, admin=Safe(mention(aid, admin_fname, admin_uname)))}\n"
+        f"{t('checking.ban_info.admin_id', locale, id=Safe(code(str(aid))))}\n\n"
+        f"{t('checking.ban_info.reason', locale, reason=ban.get('reason', None) or t('checking.events.no_reason', locale, plain=True))}\n"
+        f"{t('checking.ban_info.ban_id', locale, id=Safe(code(ban.get('ban_id', ''))))}\n"
+        f"{t('checking.ban_info.date', locale, date=Safe(date_str))}"
     )
     return text, proof_link

@@ -1,0 +1,60 @@
+# Netspeed help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in netspeed.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Run network diagnostics: ping for Telegram API round-trip latency, speedtest for full upload and download bandwidth measurement."
+
+[help.commands]
+body = """
+`/ping` (alias: `/p`)
+`/speedtest` (alias: `/st`)"""
+
+[help.what]
+body = """
+*/ping*: Measures the round-trip time from the bot to Telegram's servers.
+*/speedtest*: Runs a full network speed test and reports ping, upload, download, bytes transferred, client IP, ISP, and best-server details."""
+
+[help.examples]
+body = """
+`/ping`
+`/p`
+`/speedtest`
+`/st`"""
+
+# Runtime strings for /ping and /speedtest.
+# [status] entries send without parse_mode: plain=True at the call site.
+# [pong] and [result] entries render as MarkdownV2.
+# Placeholders: {latency} and {value} carry pre-formatted code markup.
+
+[status]
+pinging = "Pinging..."
+running = "Running speed test, please wait..."
+timeout = "Speed test timed out. Please try again later."
+failed = "Speed test failed. Please try again later."
+parse_failed = "Speed test finished but the results could not be read. Please try again later."
+
+[pong]
+body = "Pong! Round-trip: {latency}"
+
+[result]
+title = "*Speed Test Results*"
+client = "*Client Info*"
+server = "*Server Info*"
+
+[result.field]
+ping = "*Ping:* {value}"
+timestamp = "*Timestamp:* {value}"
+download = "*Download:* {value}"
+upload = "*Upload:* {value}"
+sent = "*Sent:* {value}"
+received = "*Received:* {value}"
+ip = "*IP:* {value}"
+isp = "*ISP:* {value}"
+isp_rating = "*ISP Rating:* {value}"
+country = "*Country:* {value}"
+latitude = "*Latitude:* {value}"
+longitude = "*Longitude:* {value}"
+name = "*Name:* {value}"
+sponsor = "*Sponsor:* {value}"
+latency = "*Latency:* {value}"

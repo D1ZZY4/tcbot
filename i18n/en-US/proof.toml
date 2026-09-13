@@ -1,0 +1,40 @@
+# Proof-step strings shared by ban/kick/mute/warn flows.
+# Structure stays in proof_flow.py; only prose lives here.
+# [empty]/[unexpected] send plain (alerts, parse_mode=None replies).
+# [prompt] entries render as MarkdownV2.
+# Placeholders: {gerund}/{Doing} localized verb forms, {target} V2-ready
+# mention, {suffix} V2-ready extra, {reason} raw reason text, {done}
+# button label, {skip_hint} prebuilt hint, {skip}/{cancel} button labels.
+
+[prompt]
+step = "Reason noted; {gerund} {target}{suffix}.\nReason: {reason}\n\nGot any proof? Send photos, videos, GIFs, or files, then tap {done}{skip_hint}."
+noted = "{Doing} {target}{suffix}.\nReason: {reason}\n\nGot any proof? Send photos, videos, GIFs, or files, then tap {done}{skip_hint}."
+
+[hint]
+skip = ", or tap {label} to proceed"
+
+[empty]
+body = "Send a photo, video, GIF, or file first, then tap {done}."
+
+[unexpected]
+body = "Please send a photo, video, GIF, or file as proof, or press {skip} / {cancel}."
+
+[action.ban]
+verb = "ban"
+doing = "banning"
+Doing = "Banning"
+
+[action.kick]
+verb = "kick"
+doing = "kicking"
+Doing = "Kicking"
+
+[action.mute]
+verb = "mute"
+doing = "muting"
+Doing = "Muting"
+
+[action.warn]
+verb = "warn"
+doing = "warning"
+Doing = "Warning"

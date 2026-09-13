@@ -1,0 +1,77 @@
+# Privacy prose (privacy.py). Messages render as MarkdownV2 except
+# alerts (plain). Placeholders: {bot} raw bot name, {community} raw name.
+
+[msg]
+body = """*Privacy and Data*
+
+{bot} stores a small amount of data to run the federation. Here is what that includes:
+
+- *User ID and name*: recorded when you interact with the bot or any connected group.
+- *Ban records*: if you receive a federation ban, the reason, proof, and issuing admin are stored.
+- *Warn and mute records*: logged per group for moderation tracking.
+- *Kick logs*: kept for staff reference.
+- *Appeal submissions*: your messages and any attachments you send through the appeal system.
+- *Promotion requests*: your request and its review outcome when you apply for a staff role.
+
+Ban, warn, mute, and kick records can be looked up by anyone with `/check` or `/checkme`; changing anything still requires the proper staff rank.
+
+Tap *Privacy Policy* below for the full policy, organized by section."""
+
+[index]
+body = """*Privacy Policy*
+{bot}
+
+Select a section below to read it in full. Use the back button to return here at any time."""
+
+[error]
+invalid_section = "Invalid section."
+not_found = "Section not found."
+
+[section.collect]
+label = "What We Collect"
+body = """When you interact with a connected group or this bot, the following is stored:
+
+- *User ID*: your numeric Telegram user ID.
+- *Name and username*: your first name and @username at the time of interaction.
+- *Ban records*: reason, proof link, issuing admin, and timestamps.
+- *Appeal submissions*: your appeal message and any supporting files you send.
+- *Warn and mute records*: logged per group for moderation purposes.
+- *Kick logs*: recorded for staff reference and audit.
+- *Promotion requests*: your application and its review outcome when you request a staff role."""
+
+[section.why]
+label = "Why We Collect It"
+body = """Everything stored is used solely for {community} federation moderation: keeping connected groups safe, enforcing bans consistently across all groups, and maintaining an auditable record of moderation actions.
+
+We do not collect or use data for advertising, profiling, or any purpose outside of moderation."""
+
+[section.access]
+label = "Who Can Access It"
+body = """Moderation records (bans, warns, mutes, kicks) can be looked up by anyone through `/check` and `/checkme`, so enforcement stays transparent. Taking action on that data (banning, muting, promoting, connecting groups) requires the proper {community} staff rank, checked on every command.
+
+No data is sold, rented, or shared with third parties under any circumstances."""
+
+[section.retention]
+label = "How Long We Keep It"
+body = """Ban records are kept indefinitely as part of the federation log, to support cross-group enforcement and appeal review.
+
+Cached identity data (name, username) refreshes on each interaction and is pruned automatically after 90 days without activity.
+
+Expired timed mutes are deleted automatically; permanent mutes stay until lifted. Warnings may expire automatically when the operator enables warn expiry, otherwise they stay until cleared.
+
+Appeal and promotion-request records are retained after resolution for reference and audit."""
+
+[section.rights]
+label = "Your Rights"
+body = """You can review your own ban status at any time with `/checkme`, and you can request a review or deletion of your personal data by reaching out to a {community} Admin or the Founder directly.
+
+Requests are handled on a best-effort basis. Active ban records may be retained even after a deletion request if they are required for ongoing enforcement or federation integrity."""
+
+[section.contact]
+label = "Contact"
+body = """Reach {community} staff through:
+
+- The main {community} discussion group.
+- This bot's appeal system (for ban-related matters).
+
+For general data inquiries, contact a staff member directly in the main group."""

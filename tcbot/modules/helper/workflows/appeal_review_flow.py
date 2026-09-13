@@ -17,8 +17,10 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import BanDoc
 from tcbot.modules.helper import parse_logmsg, replies
+from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.utils.dispatch import count_transient_errors, fan_out, throw_if_cancelled
-from tcbot.utils.formatter import code, esc, mention
+from tcbot.utils.formatter import code, mention
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.time_and_date import to_utc, utc_now
 
 log = logging.getLogger(__name__)
@@ -26,20 +28,8 @@ log = logging.getLogger(__name__)
 LOCK_HOURS: int = 12
 _LOCK_WINDOW = timedelta(hours=LOCK_HOURS)
 
-# ──────────────── User-facing reply constants ──────────────────── #
-
-_ERR_NOT_AUTHORIZED = "You are not authorized."
-_ERR_ROLE_LOOKUP = (
-    "I couldn't verify federation roles right now. Please try again in a moment."
-)
-_ERR_BAN_NOT_FOUND = "Ban record not found."
-_ERR_ALREADY_RESOLVED = "Appeal already resolved (ban is no longer active)."
-_ERR_DB_RETRY = (
-    "The database write failed. The review card is unchanged, tap again to retry."
-)
-_ERR_REVIEW_LOCKED = (
-    f"Only the admin who issued this ban can review it within the first {LOCK_HOURS}h."
-)
+# * Appeal review prose lives in appeals.toml [review]/[decision];
+# * only the lock-window tunable stays in code.
 
 
 def reviewer_locked_out(
@@ -114,6 +104,7 @@ class AppealReviewMixin:
                 log.debug("Appeal decision answer failed with no user: %s", exc)
             return
 
+        locale = await locale_for_update(update)
         data = q.data
         if not data or not data.startswith(("appeal_approve_", "appeal_reject_")):
             try:
@@ -153,7 +144,10 @@ class AppealReviewMixin:
             # * Never edit the shared review card on an unmade decision:
             # * the card must stay actionable for another staffer.
             try:
-                await q.answer(_ERR_ROLE_LOOKUP, show_alert=True)
+                await q.answer(
+                    t("appeals.review.role_lookup", locale, plain=True),
+                    show_alert=True,
+                )
             except Exception as exc:
                 log.debug("Appeal role-lookup answer failed: %s", exc)
             return
@@ -162,20 +156,29 @@ class AppealReviewMixin:
             # * staff, and editing would destroy the shared review card that
             # * staff still need to act on.
             try:
-                await q.answer(_ERR_NOT_AUTHORIZED, show_alert=True)
+                await q.answer(
+                    t("appeals.review.not_authorized", locale, plain=True),
+                    show_alert=True,
+                )
             except Exception as exc:
                 log.debug("Appeal not-authorized answer failed: %s", exc)
             return
         if isinstance(ban_result, BaseException):
             log.error("get_ban failed in appeal review for %s: %s", ban_id, ban_result)
             try:
-                await q.edit_message_text(_ERR_BAN_NOT_FOUND, reply_markup=None)
+                await q.edit_message_text(
+                    t("appeals.review.ban_not_found", locale, plain=True),
+                    reply_markup=None,
+                )
             except Exception as exc:
                 log.debug("Appeal ban-not-found edit failed: %s", exc)
             return
         if not ban_result:
             try:
-                await q.edit_message_text(_ERR_BAN_NOT_FOUND, reply_markup=None)
+                await q.edit_message_text(
+                    t("appeals.review.ban_not_found", locale, plain=True),
+                    reply_markup=None,
+                )
             except Exception as exc:
                 log.debug("Appeal ban-not-found (empty) edit failed: %s", exc)
             return
@@ -194,12 +197,18 @@ class AppealReviewMixin:
                         "Appeal stale-card clear_review failed for ban %s", ban_id
                     )
                 try:
-                    await q.edit_message_text(_ERR_ALREADY_RESOLVED, reply_markup=None)
+                    await q.edit_message_text(
+                        t("appeals.review.already_resolved", locale, plain=True),
+                        reply_markup=None,
+                    )
                 except Exception as exc:
                     log.debug("Appeal already-resolved edit failed: %s", exc)
             else:
                 try:
-                    await q.answer(_ERR_ALREADY_RESOLVED, show_alert=True)
+                    await q.answer(
+                        t("appeals.review.already_resolved", locale, plain=True),
+                        show_alert=True,
+                    )
                 except Exception as exc:
                     log.debug("Appeal already-resolved answer failed: %s", exc)
             return
@@ -211,7 +220,10 @@ class AppealReviewMixin:
         # * and overwriting it would destroy that outcome.
         if ban.get("rejected_at") is not None or not ban.get("review_message_id"):
             try:
-                await q.answer(_ERR_ALREADY_RESOLVED, show_alert=True)
+                await q.answer(
+                    t("appeals.review.already_resolved", locale, plain=True),
+                    show_alert=True,
+                )
             except Exception as exc:
                 log.debug("Appeal already-resolved answer failed: %s", exc)
             return
@@ -223,7 +235,15 @@ class AppealReviewMixin:
             # * Alert only: editing would destroy the shared card that the
             # * banning admin still needs to act on within their window.
             try:
-                await q.answer(_ERR_REVIEW_LOCKED, show_alert=True)
+                await q.answer(
+                    t(
+                        "appeals.review.review_locked",
+                        locale,
+                        hours=LOCK_HOURS,
+                        plain=True,
+                    ),
+                    show_alert=True,
+                )
             except Exception as exc:
                 log.debug("Appeal review-locked answer failed: %s", exc)
             return
@@ -233,10 +253,12 @@ class AppealReviewMixin:
 
         if action == "approve":
             await self._approve_appeal(
-                ctx.bot, q, ban, ban_id, target_id, admin, lc, lt
+                ctx.bot, q, ban, ban_id, target_id, admin, lc, lt, update
             )
         elif action == "reject":
-            await self._reject_appeal(ctx.bot, q, ban, ban_id, target_id, admin, lc, lt)
+            await self._reject_appeal(
+                ctx.bot, q, ban, ban_id, target_id, admin, lc, lt, update
+            )
 
     # ── Appeal decision helpers ────────────────────────────────────────── #
 
@@ -250,6 +272,7 @@ class AppealReviewMixin:
         admin: User,
         lc: int,
         lt: int | None,
+        update: Update,
     ) -> None:
         # * Fetch groups BEFORE deactivating, mirroring execute_unban: a
         # * groups-fetch failure with an already-deactivated record leaves
@@ -266,7 +289,11 @@ class AppealReviewMixin:
                 target_id,
             )
             try:
-                await q.answer(replies.ERR_GROUPS_LOAD_FAILED, show_alert=True)
+                locale = await locale_for_update(update)
+                await q.answer(
+                    replies.err_groups_load_failed(locale, plain=True),
+                    show_alert=True,
+                )
             except Exception as exc:
                 log.debug("approve_appeal groups-fail answer failed: %s", exc)
             return
@@ -302,7 +329,11 @@ class AppealReviewMixin:
                 deactivate_result,
             )
             try:
-                await q.answer(_ERR_DB_RETRY, show_alert=True)
+                locale = await locale_for_update(update)
+                await q.answer(
+                    t("appeals.review.db_retry", locale, plain=True),
+                    show_alert=True,
+                )
             except Exception as exc:
                 log.debug("approve_appeal DB-fail answer failed: %s", exc)
             return
@@ -352,12 +383,20 @@ class AppealReviewMixin:
         dm_r, card_r, log_r, unban_log_r = await asyncio.gather(
             bot.send_message(
                 target_id,
-                f"Your appeal for ban {code(ban_id)} has been approved \\- "
-                f"you're now unbanned from {esc(self.community_name)}\\. Welcome back\\.",
+                t(
+                    "appeals.decision.approve_dm",
+                    await locale_for_user(target_id),
+                    ban_id=Safe(code(ban_id)),
+                    community=self.community_name,
+                ),
                 parse_mode="MarkdownV2",
             ),
             q.edit_message_text(
-                f"Appeal approved by {mention(admin.id, admin.first_name)}\\. Unbanned\\.",
+                t(
+                    "appeals.decision.approve_card",
+                    await locale_for_update(update),
+                    admin=Safe(mention(admin.id, admin.first_name)),
+                ),
                 parse_mode="MarkdownV2",
                 reply_markup=None,
             ),
@@ -425,6 +464,7 @@ class AppealReviewMixin:
         admin: User,
         lc: int,
         lt: int | None,
+        update: Update,
     ) -> None:
         # * The cooldown write and the display-name read are independent, so
         # * they run in parallel to save one DB round trip. Ordering against
@@ -451,15 +491,24 @@ class AppealReviewMixin:
             name_r, asyncio.CancelledError
         ):
             log.debug("reject_appeal name fetch failed: %s", name_r)
+        target_locale = await locale_for_user(target_id)
+        staff_locale = await locale_for_update(update)
         results = await asyncio.gather(
             bot.send_message(
                 target_id,
-                f"Your appeal for ban {code(ban_id)} was not approved\\. "
-                "The ban remains in place\\.",
+                t(
+                    "appeals.decision.reject_dm",
+                    target_locale,
+                    ban_id=Safe(code(ban_id)),
+                ),
                 parse_mode="MarkdownV2",
             ),
             q.edit_message_text(
-                f"Appeal rejected by {mention(admin.id, admin.first_name)}\\.",
+                t(
+                    "appeals.decision.reject_card",
+                    staff_locale,
+                    admin=Safe(mention(admin.id, admin.first_name)),
+                ),
                 parse_mode="MarkdownV2",
                 reply_markup=None,
             ),

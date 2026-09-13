@@ -88,7 +88,7 @@ def test_kick_in_private_chat_refused(
     ctx = _FakeCtx()
     result = _run(_FakeUpdate(msg, _FakeUser(111), chat), ctx)
     assert result == ConversationHandler.END
-    assert msg.replies == [replies.ERR_GROUP_ONLY]
+    assert msg.replies == [replies.err_group_only(plain=True)]
     assert not any(key.startswith("kick_") for key in ctx.user_data)
 
 
@@ -102,4 +102,4 @@ def test_kick_in_group_passes_guard(
     result = _run(_FakeUpdate(msg, _FakeUser(111), chat), ctx)
     assert result == ConversationHandler.END
     # * No target given: the guard passed and resolution replied instead.
-    assert msg.replies == [replies.ERR_CANNOT_RESOLVE]
+    assert msg.replies == [replies.err_cannot_resolve(plain=True)]

@@ -1,0 +1,41 @@
+# Help index prose for help.py itself: the topic-list header.
+# Structure stays in help.py; only prose lives here.
+# Placeholders: {title} carries pre-formatted bold markup from code,
+# {community} is the raw community name.
+
+[index]
+body = """{title}
+Federation management bot for {community}.
+
+Select a module below to read its overview and commands, or use `/help <module>` to jump straight to a topic."""
+
+# Runtime strings (help.py). [error] sends plain; [note]/[module]/
+# [section]/[not_found] render as MarkdownV2. Placeholders: {title}/
+# {prefixes}/{query}/{hint} pre-formatted fragments, {overview}/
+# {content} pre-rendered help prose.
+
+[error]
+topic_not_found = "Topic not found."
+section_not_found = "Section not found."
+invalid_section = "Invalid section."
+
+[note]
+prefixes = "*Note:* All commands also work with {prefixes}"
+
+[module]
+body = """{title}
+
+{overview}
+{note}"""
+
+[section]
+body = """{title}
+
+{content}"""
+
+[not_found]
+body = "Module {query} not found.{hint}"
+hint = "\n\nDid you mean: {suggestions}?"
+
+[group]
+alert = "Run /help in this group to browse all modules and commands."

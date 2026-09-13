@@ -18,6 +18,7 @@ from tcbot.database.documents import BanDoc
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.keyboards import ban_update_confirm_kb
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.ban_flow import (
@@ -33,7 +34,8 @@ from tcbot.modules.helper.workflows.reason_flow import (
     reason_too_long_text,
 )
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import bold, code, esc, mention
+from tcbot.utils.formatter import code, mention
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -42,8 +44,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 # ──────────────── User-facing reply constants ──────────────────── #
-
-_ERR_REASON_REQUIRED = "A reason is required - /tcban <target> <reason>."
+# * Ban runtime prose lives in banning.toml; no constants stay here.
 
 # ─────────────────────── Rate-limiter constants ──────────────────── #
 _RL_PERIOD_S: int = 60
@@ -53,48 +54,38 @@ _RL_LIMIT: int = 3
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Ban"
-__help_text__ = (
-    f"Issues a {bold('federation-wide ban')} on a user, applied across every connected "
-    "group at once\\. Auto\\-demotes staff targets and stores proof with the ban record\\."
-)
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        f"{code('/tcban')} \\(alias: {code('/tcb')}\\)",
-    ),
-    replies.who_section(replies.PERM_DEV_ABOVE),
-    replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
-    (
-        replies.SEC_WHAT,
-        f"Issues a {bold('federation-wide ban')} on the target, applied across all connected "
-        "groups automatically\\. A reason is required \\- provide it directly after the target\\.\n\n"
-        "After the command, the bot walks you through the proof step: send photos, "
-        "videos, GIFs, or files as evidence, at once as one album or one by one, "
-        "then tap Done\\. Proof is required and is logged with the ban record "
-        "to the federation log channel\\.\n\n"
-        "If the user already has an active ban, the bot first asks for "
-        "confirmation \\(with View Log and View Proof links\\) instead of "
-        "updating silently; only Continue leads to proof collection, and "
-        "the existing record is then updated with the new reason and proof "
-        "rather than creating a duplicate\\.\n"
-        "If the target holds a federation role \\(Tester / Developer / Admin\\), that role is "
-        "automatically removed and they are notified by DM before the ban is enforced\\.",
-    ),
-    replies.target_section(),
-    (
-        replies.SEC_EXAMPLES,
-        f"{code('/tcban @username spamming in connected groups')}\n"
-        f"{code('/tcban 123456789 scamming members')}\n"
-        f"Or reply to a message and run {code('/tcb reason here')}\\.",
-    ),
-]
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("banning.help.overview", locale)
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("banning.help.commands.body", locale),
+        ),
+        replies.who_section(replies.perm_dev_above(locale, plain=False), locale),
+        replies.where_section(replies.context_exec_or_group(locale), locale),
+        (
+            replies.sec_what(locale),
+            t("banning.help.what.body", locale),
+        ),
+        (
+            "Flow",
+            t("banning.help.flow.body", locale),
+        ),
+        replies.target_section(locale),
+        (
+            replies.sec_examples(locale),
+            t("banning.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ────────────────────── Command Ban </tcban> ────────────────────── #
@@ -113,17 +104,20 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ``WAITING_UPDATE_CONFIRM``, ``WAITING_PROOF``, or
     ``ConversationHandler.END`` on any failure.
     """
+    locale = await locale_for_update(update)
     msg = update.effective_message
     admin = update.effective_user
     if msg is None or admin is None or ctx.user_data is None:
         return ConversationHandler.END
     raw_args = parse_cmd_args(msg.text)
 
-    # * Single owner for the reply-wins plus shape check: with a reply
-    # * target every arg is reason text, otherwise a leading numeric ID or
-    # * @username token is the explicit target. Sync, so no I/O cost here.
-    has_explicit_target = extraction.has_explicit_target(msg, raw_args)
-    target_id, target_fname = await extraction.extract_target(update, raw_args, ctx.bot)
+    # * Resolution plus consumption in one call: a verified explicit
+    # * ID/@username overrides the reply target, and the consumed flag
+    # * tells the reason parser to drop args[0] as the target token.
+    (
+        (target_id, target_fname),
+        has_explicit_target,
+    ) = await extraction.extract_mod_target(update, raw_args, ctx.bot)
 
     ban_reason = parse_inline_reason(
         raw_args,
@@ -137,7 +131,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="cmd_ban_start no-target",
             parse_mode=None,
         )
@@ -146,7 +140,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if not ban_reason:
         await safe_reply(
             msg,
-            _ERR_REASON_REQUIRED,
+            t("banning.error.reason_required", locale, plain=True),
             log_label="cmd_ban_start no-reason",
             parse_mode=None,
         )
@@ -157,7 +151,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if is_reason_too_long(ban_reason):
         await safe_reply(
             msg,
-            reason_too_long_text(len(ban_reason)),
+            reason_too_long_text(len(ban_reason), locale),
             log_label="cmd_ban_start reason-too-long",
             parse_mode=None,
         )
@@ -186,7 +180,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if executor_role is None:
         return ConversationHandler.END
 
-    refusal = identity.refuse_message("ban", ident)
+    refusal = identity.refuse_message("ban", ident, locale)
     if refusal is not None:
         await safe_reply(msg, refusal, log_label="cmd_ban_start refusal")
         return ConversationHandler.END
@@ -196,6 +190,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ctx.user_data["ban_reason"] = ban_reason
     ctx.user_data["ban_admin_id"] = admin.id
     ctx.user_data["ban_admin_fname"] = admin.first_name
+    ctx.user_data["ban_locale"] = locale
 
     # * Re-ban check before any side effect: demotion must not land when
     # * the admin may still cancel at the confirmation below. A lookup
@@ -212,7 +207,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if existing is not None:
         ctx.user_data["ban_target_role"] = target_role
         return await _ask_update_confirm(
-            msg, ctx, target_id, target_fname, ban_reason, existing
+            msg, ctx, target_id, target_fname, ban_reason, existing, update
         )
 
     # * Auto-demote is required before the ban to preserve the
@@ -231,7 +226,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     text, kb = proof_prompt_content(
-        target_id, target_fname or str(target_id), ban_reason
+        target_id, target_fname or str(target_id), ban_reason, locale
     )
     try:
         prompt = await msg.reply_text(text, parse_mode="MarkdownV2", reply_markup=kb)
@@ -246,6 +241,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             "ban_admin_id",
             "ban_admin_fname",
             "ban_target_role",
+            "ban_locale",
         ):
             ctx.user_data.pop(key, None)
         return ConversationHandler.END
@@ -260,6 +256,7 @@ async def _ask_update_confirm(
     target_fname: str | None,
     ban_reason: str,
     existing: BanDoc,
+    update: Update,
 ) -> int:
     """Show the re-ban confirmation card with log/proof links.
 
@@ -269,6 +266,7 @@ async def _ask_update_confirm(
     """
     if ctx.user_data is None:
         return ConversationHandler.END
+    locale = await locale_for_update(update)
     logs_chat, logs_thread = cfg.logs
     proofs_chat, proofs_thread = cfg.proofs
     log_msg_id = int(existing.get("log_message_id", 0) or 0)
@@ -278,13 +276,15 @@ async def _ask_update_confirm(
         message_link(proofs_chat, proof_msg_id, proofs_thread)
         if proof_msg_id
         else None,
+        locale,
     )
-    text = (
-        f"{mention(target_id, target_fname or str(target_id))} already has an "
-        f"active federation ban \\(Ban ID {code(str(existing.get('ban_id', '')))}\\)\\.\n"
-        f"Existing reason: {esc(str(existing.get('reason', '')))}\n"
-        f"New reason: {esc(ban_reason)}\n\n"
-        "Update the ban with the new reason and proof?"
+    text = t(
+        "banning.confirm.body",
+        locale,
+        user=Safe(mention(target_id, target_fname or str(target_id))),
+        ban_id=Safe(code(str(existing.get("ban_id", "")))),
+        old_reason=str(existing.get("reason", "")),
+        new_reason=ban_reason,
     )
     try:
         prompt = await msg.reply_text(text, parse_mode="MarkdownV2", reply_markup=kb)
@@ -299,6 +299,7 @@ async def _ask_update_confirm(
             "ban_admin_id",
             "ban_admin_fname",
             "ban_target_role",
+            "ban_locale",
         ):
             ctx.user_data.pop(key, None)
         return ConversationHandler.END

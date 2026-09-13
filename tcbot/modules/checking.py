@@ -16,10 +16,12 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, extraction, keyboards, replies
 from tcbot.modules.helper.ban_info import build_ban_detail
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.check_flow import Check
-from tcbot.utils.formatter import bold, code, esc, mention
+from tcbot.utils.formatter import code, mention
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.time_and_date import fmt_dt
 
@@ -37,63 +39,44 @@ _RL_CHECKME_CB_LIMIT: int = 15
 _RL_CHECK_CB_LIMIT: int = 20
 
 # ──────────────── User-facing reply constants ──────────────────── #
-
-_ERR_BAN_INACTIVE = "This ban is no longer active."
-_ERR_BAN_NOT_FOUND = "Ban record not found."
-_ERR_BOT_SENDER = (
-    "Bots and anonymous senders don't hold federation records, "
-    "so there is nothing to check."
-)
-_ERR_STATUS_RETRY = (
-    "I couldn't verify your ban status right now. Please try again in a moment."
-)
+# * checkme/check runtime prose lives in checking.toml [error]/[checkme];
+# * only rate-limiter tunables stay in code (none here).
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Check"
-__help_text__ = (
-    f"Look up your own ban status with {code('/checkme')}, or pull a full "
-    f"federation activity profile for any user with {code('/check')}\\."
-)
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        f"{code('/checkme')} \\(alias: {code('/cme')}\\)\n"
-        f"{code('/check')} \\(alias: {code('/c')}\\)",
-    ),
-    replies.who_section(replies.CONTEXT_ANYONE),
-    replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
-    (
-        "/checkme",
-        "Checks your own federation ban status\\.\n\n"
-        f"\\- If you are {bold('not banned')}: the bot confirms your account is in good standing\\.\n"
-        f"\\- If you are {bold('banned')}: the bot shows the reason, the admin who issued the ban, "
-        f"the ban date, and gives you a {bold('Submit Appeal')} button to start the appeal "
-        "process\\.",
-    ),
-    (
-        "/check",
-        "Pulls a full federation profile for any user: identity, role, active ban, "
-        "ban history, warnings \\(by group\\), kicks, mutes, and appeals\\.\n\n"
-        "Each section opens a drill\\-down inline keyboard so you can inspect every "
-        "record individually\\.",
-    ),
-    replies.target_section(),
-    (
-        replies.SEC_EXAMPLES,
-        f"{code('/checkme')}\n"
-        f"{code('/check @username')}\n"
-        f"{code('/c 123456789')}\n"
-        f"Or reply to a message and run {code('/c')}\\.",
-    ),
-]
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("checking.help.overview", locale)
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("checking.help.commands.body", locale),
+        ),
+        replies.who_section(replies.context_anyone(locale), locale),
+        replies.where_section(replies.context_bot_or_group(locale), locale),
+        (
+            "/checkme",
+            t("checking.help.checkme.body", locale),
+        ),
+        (
+            "/check",
+            t("checking.help.check.body", locale),
+        ),
+        replies.target_section(locale),
+        (
+            replies.sec_examples(locale),
+            t("checking.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ───────────────────────────── Helpers ──────────────────────────── #
@@ -104,6 +87,7 @@ async def _ban_summary(
     user_id: int,
     user_fname: str,
     admin_fname: str | None = None,
+    locale: str | None = None,
 ) -> tuple[str, str | None]:
     """Build the /checkme summary text and proof link."""
     aid = ban.get("admin_user_id", 0)
@@ -137,14 +121,16 @@ async def _ban_summary(
     ts = ban.get("timestamp")
     date_str = fmt_dt(ts) if ts else "Unknown"
 
-    text = (
-        f"You are currently banned from {esc(cfg.community_name)}\\.\n\n"
-        f"User: {mention(user_id, user_fname, user_uname)}\n"
-        f"User ID: {code(str(user_id))}\n"
-        f"Reason: {esc(ban.get('reason', replies.NO_REASON))}\n\n"
-        f"Banned by: {mention(aid, admin_fname, admin_uname)}\n\n"
-        f"Commit Date: {date_str}\n"
-        "Tap a button below for more details\\."
+    text = t(
+        "checking.checkme.banned",
+        locale,
+        community=cfg.community_name,
+        user=Safe(mention(user_id, user_fname, user_uname)),
+        id=Safe(code(str(user_id))),
+        reason=ban.get("reason", None)
+        or t("checking.events.no_reason", locale, plain=True),
+        admin=Safe(mention(aid, admin_fname, admin_uname)),
+        date=Safe(date_str),
     )
     return text, proof_link
 
@@ -165,12 +151,16 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.effective_message
     if user is None or msg is None:
         return
+    locale = await locale_for_update(update)
     # * Bots and the anonymous-admin placeholder hold no federation records;
     # * without this guard an anonymous-admin /checkme would get a misleading
     # * "You're clean" verdict for an ID that can never be banned or staffed.
     if user.is_bot:
         await safe_reply(
-            msg, _ERR_BOT_SENDER, log_label="checkme bot-sender", parse_mode=None
+            msg,
+            t("checking.error.bot_sender", locale, plain=True),
+            log_label="checkme bot-sender",
+            parse_mode=None,
         )
         return
     fname = user.first_name or str(user.id)
@@ -195,7 +185,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.warning("checkme ban lookup failed for user=%d: %s", user.id, ban)
         await safe_reply(
             msg,
-            _ERR_STATUS_RETRY,
+            t("checking.error.status_retry", locale, plain=True),
             log_label=f"checkme retry for user {user.id}",
             parse_mode=None,
         )
@@ -206,13 +196,13 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * needs the appeal link, and the staff-flavoured early-returns below
     # * would otherwise tell them "you're fine" while they are banned.
     if ban is not None:
-        text, proof_link = await _ban_summary(ban, user.id, fname, None)
+        text, proof_link = await _ban_summary(ban, user.id, fname, None, locale)
         await safe_reply(
             msg,
             text,
             log_label="checkme banned-staff",
             reply_markup=keyboards.checkme_ban_kb(
-                ctx.bot.username or "", str(ban.get("ban_id", "")), proof_link
+                ctx.bot.username or "", str(ban.get("ban_id", "")), proof_link, locale
             ),
         )
         return
@@ -220,9 +210,11 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if user_role == "admin":
         await safe_reply(
             msg,
-            f"Hey {mention(user.id, fname, user.username)}, checking yourself?\n\n"
-            "You're on the staff team \\- you handle bans, not receive them\\. "
-            "No active ban on your end\\. You're good\\.",
+            t(
+                "checking.checkme.staff_admin",
+                locale,
+                user=Safe(mention(user.id, fname, user.username)),
+            ),
             log_label=f"checkme admin for user {user.id}",
         )
         return
@@ -230,9 +222,13 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         role_label = db.users_roles.ROLE_LABEL.get(user_role, user_role)
         await safe_reply(
             msg,
-            f"Hey {mention(user.id, fname, user.username)}, all good\\.\n\n"
-            f"You're a {esc(cfg.community_name)} {esc(role_label)} \\- on the team, not on the ban list\\. "
-            "Nothing to worry about\\.",
+            t(
+                "checking.checkme.staff_role",
+                locale,
+                user=Safe(mention(user.id, fname, user.username)),
+                community=cfg.community_name,
+                role=role_label,
+            ),
             log_label=f"checkme subrole for user {user.id}",
         )
         return
@@ -243,7 +239,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * non-banned callers.
     await safe_reply(
         msg,
-        f"You're clean - no active ban in {cfg.community_name}.",
+        t("checking.checkme.clean", locale, community=cfg.community_name, plain=True),
         log_label=f"checkme clean for user {user.id}",
         parse_mode=None,
     )
@@ -272,6 +268,7 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     except IndexError:
         await q.answer()
         return
+    locale = await locale_for_update(update)
 
     _, ban = await asyncio.gather(
         q.answer(), db.bans_db.get_ban(ban_id), return_exceptions=True
@@ -283,20 +280,28 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         # * untouched so the appeal button stays available.
         log.warning("checkme_detail ban lookup failed for %s: %s", ban_id, ban)
         try:
-            await q.answer(_ERR_STATUS_RETRY, show_alert=True)
+            await q.answer(
+                t("checking.error.status_retry", locale, plain=True),
+                show_alert=True,
+            )
         except Exception as exc:
             log.debug("checkme_detail retry answer failed: %s", exc)
         return
     if not ban or not ban.get("is_active"):
         try:
-            await q.edit_message_text(_ERR_BAN_INACTIVE, reply_markup=None)
+            await q.edit_message_text(
+                t("checking.error.ban_inactive", locale, plain=True),
+                reply_markup=None,
+            )
         except Exception as exc:
             log.debug("checkme_detail error edit failed: %s", exc)
         return
 
-    text, proof_link = await build_ban_detail(ban)
+    text, proof_link = await build_ban_detail(ban, locale=locale)
     await safe_edit_cb(
-        q, text, reply_markup=keyboards.checkme_detail_back_kb(ban_id, proof_link)
+        q,
+        text,
+        reply_markup=keyboards.checkme_detail_back_kb(ban_id, proof_link, locale),
     )
 
 
@@ -320,6 +325,7 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     except IndexError:
         await q.answer()
         return
+    locale = await locale_for_update(update)
 
     _, ban = await asyncio.gather(
         q.answer(), db.bans_db.get_ban(ban_id), return_exceptions=True
@@ -330,13 +336,19 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         # * found" verdict, and the summary card stays actionable.
         log.warning("checkme_back ban lookup failed for %s: %s", ban_id, ban)
         try:
-            await q.answer(_ERR_STATUS_RETRY, show_alert=True)
+            await q.answer(
+                t("checking.error.status_retry", locale, plain=True),
+                show_alert=True,
+            )
         except Exception as exc:
             log.debug("checkme_back retry answer failed: %s", exc)
         return
     if not ban:
         try:
-            await q.edit_message_text(_ERR_BAN_NOT_FOUND, reply_markup=None)
+            await q.edit_message_text(
+                t("checking.error.ban_not_found", locale, plain=True),
+                reply_markup=None,
+            )
         except Exception as exc:
             log.debug("checkme_back error edit failed: %s", exc)
         return
@@ -352,12 +364,12 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         fname = str(uid)
     if isinstance(admin_fname, BaseException):
         admin_fname = "Admin"
-    text, proof_link = await _ban_summary(ban, uid, fname, admin_fname)
+    text, proof_link = await _ban_summary(ban, uid, fname, admin_fname, locale)
     await safe_edit_cb(
         q,
         text,
         reply_markup=keyboards.checkme_ban_kb(
-            ctx.bot.username or "", ban_id, proof_link
+            ctx.bot.username or "", ban_id, proof_link, locale
         ),
     )
 
@@ -372,13 +384,19 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.effective_message
     if msg is None:
         return
+    locale = await locale_for_update(update)
     user = update.effective_user
     args = parse_cmd_args(msg.text)
-    target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
+    # * Read-only view: a typed target always beats the quoted message,
+    # * so /check shows who was asked about, never who was quoted. When
+    # * the arg resolves to nobody, the reply target still stands.
+    target_id, target_fname = await extraction.extract_target(
+        update, args, ctx.bot, prefer_explicit=True
+    )
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="check resolve-fail",
             parse_mode=None,
         )
@@ -401,7 +419,10 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.debug("users_cache upsert failed for %d: %s", target_id, exc)
 
     text, kb = await Check.profile(
-        ctx.bot, target_id, executor_id=user.id if user is not None else None
+        ctx.bot,
+        target_id,
+        executor_id=user.id if user is not None else None,
+        locale=locale,
     )
     await safe_reply(
         msg, text, log_label=f"check for target={target_id}", reply_markup=kb
@@ -427,12 +448,14 @@ async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await q.answer()
         return
     tapper = update.effective_user
+    locale = await locale_for_update(update)
     _, result = await asyncio.gather(
         q.answer(),
         Check.profile(
             ctx.bot,
             target_id,
             executor_id=tapper.id if tapper is not None else None,
+            locale=locale,
         ),
         return_exceptions=True,
     )
@@ -460,8 +483,9 @@ async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     except IndexError:
         await q.answer()
         return
+    locale = await locale_for_update(update)
     _, result = await asyncio.gather(
-        q.answer(), Check.bans_list(target_id, page), return_exceptions=True
+        q.answer(), Check.bans_list(target_id, page, locale), return_exceptions=True
     )
     if isinstance(result, BaseException):
         log.debug("on_check_bans failed: %s", result)
@@ -486,8 +510,9 @@ async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     except IndexError:
         await q.answer()
         return
+    locale = await locale_for_update(update)
     _, result = await asyncio.gather(
-        q.answer(), Check.ban_detail(target_id, ban_id), return_exceptions=True
+        q.answer(), Check.ban_detail(target_id, ban_id, locale), return_exceptions=True
     )
     if isinstance(result, BaseException):
         log.debug("on_check_ban_item failed: %s", result)
@@ -511,8 +536,9 @@ async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     except IndexError:
         await q.answer()
         return
+    locale = await locale_for_update(update)
     _, result = await asyncio.gather(
-        q.answer(), Check.warns_by_group(target_id), return_exceptions=True
+        q.answer(), Check.warns_by_group(target_id, locale), return_exceptions=True
     )
     if isinstance(result, BaseException):
         log.debug("on_check_warns failed: %s", result)
@@ -539,9 +565,10 @@ async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     except IndexError:
         await q.answer()
         return
+    locale = await locale_for_update(update)
     _, result = await asyncio.gather(
         q.answer(),
-        Check.warns_in_group(target_id, chat_id, page),
+        Check.warns_in_group(target_id, chat_id, page, locale),
         return_exceptions=True,
     )
     if isinstance(result, BaseException):
@@ -568,8 +595,9 @@ async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     except IndexError:
         await q.answer()
         return
+    locale = await locale_for_update(update)
     _, result = await asyncio.gather(
-        q.answer(), Check.kicks_list(target_id, page), return_exceptions=True
+        q.answer(), Check.kicks_list(target_id, page, locale), return_exceptions=True
     )
     if isinstance(result, BaseException):
         log.debug("on_check_kicks failed: %s", result)
@@ -595,8 +623,9 @@ async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     except IndexError:
         await q.answer()
         return
+    locale = await locale_for_update(update)
     _, result = await asyncio.gather(
-        q.answer(), Check.mutes_list(target_id, page), return_exceptions=True
+        q.answer(), Check.mutes_list(target_id, page, locale), return_exceptions=True
     )
     if isinstance(result, BaseException):
         log.debug("on_check_mutes failed: %s", result)
@@ -622,8 +651,9 @@ async def on_check_appeals(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     except IndexError:
         await q.answer()
         return
+    locale = await locale_for_update(update)
     _, result = await asyncio.gather(
-        q.answer(), Check.appeals_list(target_id, page), return_exceptions=True
+        q.answer(), Check.appeals_list(target_id, page, locale), return_exceptions=True
     )
     if isinstance(result, BaseException):
         log.debug("on_check_appeals failed: %s", result)

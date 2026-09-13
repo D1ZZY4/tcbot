@@ -1,0 +1,38 @@
+# Unban help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in unbanning.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Lifts an active federation ban across *all connected groups* at once."
+
+[help.commands]
+body = "`/tcunban` (alias: `/tcunb`)"
+
+[help.what]
+body = """
+Lifts an active federation ban on the target user. The unban is applied across *all connected groups* simultaneously so they can rejoin freely. A log entry is posted to the federation logs channel.
+
+If the user has no active federation ban, the bot will let you know and take no action.
+A pending appeal review card is left untouched; resolving appeals stays on the appeal flow.
+A staff member re-promoted while banned is demoted first so the stale ban can be cleared."""
+
+[help.examples]
+body = """
+`/tcunban @username`
+`/tcunb 123456789`
+Or reply to a message and run `/tcunb`."""
+
+# Runtime strings for the unban executor (unban_flow.py).
+# All render as MarkdownV2.
+# Placeholders: {user} pre-formatted user reference, {note} prebuilt
+# result line, {done}/{total} ints, {sample} raw group names.
+
+[note]
+no_record = "{user} has no active federation ban."
+groups_fail = "{user} could not be unbanned: the group list could not be loaded from the database, so nothing was changed. Check the logs and retry."
+db_fail = "{user} could not be unbanned: the database deactivation failed, so the user is still marked as banned even if they are now unmuted in chats. Check the logs and retry."
+partial = "removed from {done}/{total} groups. WARNING: still banned in: {sample}{more}"
+full = "removed from {total}/{total} groups."
+
+[summary]
+body = "{user} has been unbanned - {note}"

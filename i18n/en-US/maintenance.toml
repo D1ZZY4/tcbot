@@ -1,0 +1,37 @@
+# Maintenance help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in maintenance.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Manage connected groups: clean up inaccessible ones, or leave all groups at once in an emergency."
+
+[help.commands]
+body = """
+`/leaveall` (aliases: `/exitall`, `/tcleave`)
+`/cleanup` (aliases: `/tcclean`, `/tcc`)"""
+
+[help.leaveall]
+body = "Makes the bot leave every connected group simultaneously, marks them all as disconnected in the database, and posts a log entry for each group. This is irreversible - each group must be manually reconnected with `/tcconnect`. Use only in emergencies."
+
+[help.cleanup]
+body = "Scans all groups in the database and attempts to verify the bot still has access. Any group where the bot was kicked, removed, or can no longer reach is marked as disconnected and removed from the active list. Run this periodically to keep the group list accurate."
+
+[help.examples]
+body = """
+`/cleanup`: remove stale or inaccessible groups.
+`/leaveall`: emergency withdrawal from all connected groups."""
+
+# Runtime strings (maintenance.py). All render as MarkdownV2.
+# Placeholders: counts as pre-formatted code, {detail} prebuilt suffix,
+# {partial}/{log_failed} ints.
+
+[status]
+sending = "Leaving {n} groups..."
+
+[leaveall]
+partial = " ({n} partial: bot left but DB deactivation failed)"
+log_failed = " ({n} log posts failed)"
+done = "Left {ok} groups. Failed: {failed}.{detail}"
+
+[cleanup]
+done = "Cleaned up {n} inaccessible group(s)."

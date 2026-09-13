@@ -1,0 +1,44 @@
+# Kick help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in kicking.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Removes a user from the *current group only*. Auto-demotes staff targets."
+
+[help.commands]
+body = "`/tckick` (alias: `/tck`)"
+
+[help.what]
+body = """
+Removes a user from the *current group only*. This is not a federation-wide action; the user can rejoin via an invite link unless they are separately federation-banned.
+
+If the target holds a federation role (Tester / Developer / Admin), that role is auto-demoted and they are notified by DM. A log entry is posted to the federation logs channel."""
+
+[help.flow]
+body = """
+1. Run `/tckick` with the target (and optional inline reason).
+2. If no reason was given, the bot asks: reply with text or tap *Skip*.
+3. The bot asks for proof: send a photo/video, then tap *Done*, or tap *Skip*."""
+
+[help.examples]
+body = """
+`/tckick @username being disruptive`: reason inline
+`/tck 123456789`: bot will ask for reason
+Or reply to a message and run `/tck`."""
+
+# Runtime strings for the kick executor (kicking_flow.py).
+# [warn]/[summary]/[error] render as MarkdownV2.
+# Placeholders: {user} pre-formatted user reference, {reason} raw reason
+# text, {rejoin}/{warning} prebuilt lines.
+
+[rejoin]
+body = "They can rejoin via invite link."
+
+[warn]
+unban = " WARNING: the post-kick unban step failed; the user is still banned in this chat and cannot rejoin. Unban them manually from the chat member list."
+
+[summary]
+body = "{user} has been kicked.\nReason: {reason}\n{rejoin}{warning}"
+
+[error]
+body = "Couldn't kick {user}. Please check bot permissions and retry."

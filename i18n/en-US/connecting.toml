@@ -1,0 +1,55 @@
+# Connect help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in connecting.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+# Placeholders: {community} = raw community name.
+
+[help]
+overview = "Connects your group to the {community} federation so federation bans, mutes, and broadcasts are applied automatically."
+
+[help.commands]
+body = "`/tcconnect` (alias: `/tccon`)"
+
+[help.who]
+body = "Group admins and creators only (checked per-group)."
+
+[help.where]
+body = "Inside the group you want to connect to {community}."
+
+[help.what]
+body = """
+Connects your group to the {community} federation. Once connected:
+- Federation bans are automatically enforced: currently banned users are removed, and newly banned users are kicked on ban.
+- Federation mutes are applied when issued.
+- Broadcast messages from TC Staff are forwarded to your group."""
+
+[help.permissions]
+body = "Before running the command, make the bot a group admin with these three permissions: *Delete Messages*, *Ban Users*, and *Invite Users via Link*."
+
+[help.notes]
+body = """
+If a connect request is already pending for your group, a second request will be rejected; wait for TC Staff to process the existing one.
+
+When the bot is first added to a group, it automatically prompts the group owner to connect, so you can also just add the bot and follow that prompt."""
+
+[help.examples]
+body = "Make the bot a group admin, then run `/tcconnect` inside the group."
+
+# Runtime strings for the connect flow (connected_flow.py).
+# All send plain (no parse_mode): plain=True at call sites.
+# Placeholders: {community} raw community name.
+
+[state]
+role_check_failed = "Could not verify your role."
+owner_only = "Only the group owner can decide."
+bot_perms_verify = "Could not verify my own permissions. Please promote me as admin and try again."
+complete_join = "Connection failed. Please try again later."
+admin_required = "Only group admins can request to connect."
+pending_request = "A connect request for this group is already pending."
+primary_group = "This is a primary group of the federation (main or exec). Primary groups are not connected via /tcconnect."
+connect_failed = "Failed to connect the group. Please try again."
+join_prompt = "Want to connect this group to {community}?"
+connected = "This group is now connected to {community}. Authorized staff can use federation commands here."
+declined = "Connection declined. I'll leave the group now."
+already_connected = "This group is already connected to {community}."
+connecting = "Connecting... applying existing federation bans and mutes. This can take a moment for large federations."
+perms_required = "Please make the bot an admin with the required permissions (delete messages, ban users, invite users) and try again."

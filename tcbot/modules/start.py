@@ -14,11 +14,13 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.about import __about_msg__
+from tcbot.modules.about import about_msg
 from tcbot.modules.groups import _render
 from tcbot.modules.helper import decorators, keyboards, replies
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
-from tcbot.utils.formatter import bold, esc
+from tcbot.utils.formatter import bold
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters
 
 if TYPE_CHECKING:
@@ -33,30 +35,26 @@ _RL_CB_LIMIT: int = 15
 
 __module_name__ = None
 
-
 # ────────────────────────── Start Message ───────────────────────── #
 
-_CNAME = esc(cfg.community_name)
 
-
-def _private_start_text(botname: str) -> str:
+def _private_start_text(botname: str, locale: str | None = None) -> str:
     """Build the PM start message for the given plain-text bot display name."""
-    return (
-        f"{bold(botname)}\n"
-        f"Federation management bot for {_CNAME}\\.\n\n"
-        "I handle federation\\-wide bans, mutes, kicks, and moderation across all "
-        "connected groups\\. Staff can run commands here or from within any connected group\\.\n\n"
-        "Use the buttons below to explore what I can do\\."
+    return t(
+        "start.private.body",
+        locale,
+        bot=Safe(bold(botname)),
+        community=cfg.community_name,
     )
 
 
-def _group_start_text(botname: str) -> str:
+def _group_start_text(botname: str, locale: str | None = None) -> str:
     """Build the group start message for the given plain-text bot display name."""
-    return (
-        f"{bold(botname)}\n"
-        f"Federation management bot for {_CNAME}\\.\n\n"
-        "Run /help for the full command list, or open me in PM for all options "
-        "including privacy info and the about page\\."
+    return t(
+        "start.group.body",
+        locale,
+        bot=Safe(bold(botname)),
+        community=cfg.community_name,
     )
 
 
@@ -81,15 +79,16 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     parts = text.split(None, 1)
     arg = parts[1].strip() if len(parts) > 1 else ""
     botname = ctx.bot.first_name or ""
+    locale = await locale_for_update(update)
 
     # * Group / supergroup context - send a minimal message with PM link
     if chat.type in ("group", "supergroup", "forum"):
         bot_username = ctx.bot.username or ""
         await safe_reply(
             msg,
-            _group_start_text(botname),
+            _group_start_text(botname, locale),
             log_label="cmd_start group",
-            reply_markup=keyboards.group_start_kb(bot_username),
+            reply_markup=keyboards.group_start_kb(bot_username, locale),
         )
         return
 
@@ -97,18 +96,18 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if arg == "about":
         await safe_reply(
             msg,
-            __about_msg__,
+            about_msg(locale),
             log_label="cmd_start about",
-            reply_markup=keyboards.back_to_start_kb(),
+            reply_markup=keyboards.back_to_start_kb(locale),
         )
         return
 
     # * appeal<ban_id> deep links are handled by the ConversationHandler in appeals.py
     await safe_reply(
         msg,
-        _private_start_text(botname),
+        _private_start_text(botname, locale),
         log_label="cmd_start PM",
-        reply_markup=keyboards.main_menu_kb(),
+        reply_markup=keyboards.main_menu_kb(locale),
     )
 
 
@@ -128,16 +127,17 @@ async def on_back_to_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     await asyncio.gather(
         q.answer(),
         q.edit_message_text(
-            _private_start_text(botname),
+            _private_start_text(botname, await locale_for_update(update)),
             parse_mode="MarkdownV2",
-            reply_markup=keyboards.main_menu_kb(),
+            reply_markup=keyboards.main_menu_kb(await locale_for_update(update)),
         ),
         return_exceptions=True,
     )
 
 
-async def _show_groups(q: CallbackQuery, *, detailed: bool) -> None:
+async def _show_groups(q: CallbackQuery, update: Update, *, detailed: bool) -> None:
     """Shared renderer for all group-menu callbacks."""
+    locale = await locale_for_update(update)
     # * q.answer() and active_groups() are independent; run in parallel.
     _, groups_r = await asyncio.gather(
         q.answer(), db.groups_db.active_groups(), return_exceptions=True
@@ -149,8 +149,8 @@ async def _show_groups(q: CallbackQuery, *, detailed: bool) -> None:
         log.warning("_show_groups groups fetch failed: %s", groups_r)
         try:
             await q.edit_message_text(
-                replies.ERR_GROUPS_LOAD_FAILED,
-                reply_markup=keyboards.back_to_start_kb(),
+                replies.err_groups_load_failed(locale, plain=False),
+                reply_markup=keyboards.back_to_start_kb(locale),
             )
         except Exception as exc:
             log.debug("_show_groups load-failed edit failed: %s", exc)
@@ -163,7 +163,12 @@ async def _show_groups(q: CallbackQuery, *, detailed: bool) -> None:
         # * so the empty state never rendered at all).
         try:
             await q.edit_message_text(
-                f"No groups are currently connected to {cfg.community_name}.",
+                t(
+                    "groups.menu.empty",
+                    locale,
+                    community=cfg.community_name,
+                    plain=True,
+                ),
                 reply_markup=keyboards.back_to_start_kb(),
             )
         except Exception as exc:
@@ -171,9 +176,9 @@ async def _show_groups(q: CallbackQuery, *, detailed: bool) -> None:
         return
     try:
         await q.edit_message_text(
-            _render(groups, detailed=detailed),
+            _render(groups, detailed=detailed, locale=locale),
             parse_mode="MarkdownV2",
-            reply_markup=keyboards.groups_menu_kb(detailed=detailed),
+            reply_markup=keyboards.groups_menu_kb(detailed=detailed, locale=locale),
         )
     except Exception as exc:
         log.debug("_show_groups list edit failed: %s", exc)
@@ -186,7 +191,7 @@ async def on_menu_groups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     q = update.callback_query
     if q is None:
         return
-    await _show_groups(q, detailed=False)
+    await _show_groups(q, update, detailed=False)
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -198,7 +203,7 @@ async def on_menu_groups_details(
     q = update.callback_query
     if q is None:
         return
-    await _show_groups(q, detailed=True)
+    await _show_groups(q, update, detailed=True)
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -208,7 +213,7 @@ async def on_menu_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) 
     q = update.callback_query
     if q is None:
         return
-    await _show_groups(q, detailed=False)
+    await _show_groups(q, update, detailed=False)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

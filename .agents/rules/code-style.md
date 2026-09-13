@@ -4,7 +4,7 @@ This file defines Python style, module boundaries, handler safety, database
 access, workflows, and runtime behavior for TCF Bot. Authorization and secret
 handling live in [`security-rules.md`](security-rules.md), async patterns live
 in [`asyncio-gather-rules.md`](asyncio-gather-rules.md). Validation commands
-live in [`tooling-validation.md`](tooling-validation.md), and comment and
+live in [`tooling-skills-use.md`](tooling-skills-use.md), and comment and
 Markdown conventions live in [`comment-style.md`](comment-style.md).
 
 ---
@@ -87,7 +87,9 @@ Rules:
 
 ## Telegram Messages and Handlers
 
-- Bot messages are English-only and use `parse_mode="MarkdownV2"`.
+- Bot messages render in the viewer's locale (`en-US` default) and use
+  `parse_mode="MarkdownV2"`. Never hardcode user-facing wording in Python;
+  see [Internationalization](#internationalization-i18n) below.
 - Never use HTML parse mode.
 - Escape user-provided text with `esc()`.
 - Use `mention()` for clickable user names, `code()` for IDs, and `bold()` for
@@ -124,6 +126,59 @@ Rules:
 10. Use `tcbot.utils.dispatch.fan_out()` for multi-group Telegram operations;
     concurrency and failure-count details live in
     [`asyncio-gather-rules.md`](asyncio-gather-rules.md).
+
+## Internationalization (i18n)
+
+User-facing strings live in `i18n/<locale>/*.toml` (`en-US` is the source
+of truth); Python code looks them up with `t()` and never embeds wording
+for localized surfaces. The translator contract lives in
+[`i18n/README.md`](../../i18n/README.md); the feature guide is
+[`docs/features/language.md`](../../docs/features/language.md).
+
+Locale resolution and threading:
+
+- Resolve once per handler via `helper.locale.locale_for_update(update)`:
+  private chats use the sender's locale, groups use the group locale.
+  Direct messages to one user use `locale_for_user`; updateless event
+  paths use `locale_for_chat`. Resolution never raises.
+- Pass the resolved locale explicitly to every `t()` call. The default
+  locale is only for tests and golden checks, never as a shortcut in
+  handlers.
+- Flows carry the moderator locale in conversation state
+  (`{action}_locale` keys) and resolve the target locale fresh for user
+  DMs. Audit-log channel posts, staff operational messages, and infra
+  error reports stay English by design.
+
+Templates and placeholders:
+
+- Write raw TOML text, never backslashes; the engine escapes MarkdownV2
+  at render time. One file per domain (`banning.toml`, `kicking.toml`,
+  ...); button labels live exactly once in `button.toml`.
+- Match the render mode to the send path: `plain=True` for alerts and
+  `parse_mode=None` replies, default mode for MarkdownV2 sends. A mode
+  mismatch shows raw backslashes or breaks parsing.
+- Dynamics cross as raw data (engine escapes them) or `Safe`
+  pre-formatted markup (`mention()`/`code()`/`bold()` output), never
+  pre-escaped. Never nest a rendered string as a plain placeholder.
+- Placeholders are bare names only (`{user}`, `{count}`); no format
+  specs or conversions. No braces inside mini-markup spans
+  (`` `code` `` and `*bold*`, balanced and unnested): markup around a
+  dynamic value is composed with `Safe` in Python instead.
+- Keep placeholder sets identical across locales; mismatches fail tests.
+
+Help and keyboards:
+
+- Every module exposes `get_help(locale)` returning its `HelpEntry`;
+  `__help__` stays as the default-locale entry for tests and fallbacks.
+  `help.py` rebuilds content per request, so topics, overviews,
+  sections, and keyboards all follow the tapper's locale.
+- Section labels and scope bodies are shared (`common.toml`
+  `[section]`, `[context]`, `[target]`): labels render raw, bodies
+  render MarkdownV2. Use `who_section` / `where_section` /
+  `target_section` with the locale.
+- Every keyboard builder in `keyboards.py` takes `locale` and reads
+  labels from `button.toml`; thread the handler locale through every
+  call site.
 
 ## Database and Cache Access
 
@@ -199,6 +254,11 @@ Concurrency, `asyncio.gather()`, fan-out, timeouts, and cancellation follow
 - Using sequential awaits for independent operations.
 - Inlining self, bot, Telegram, Founder, or staff branches instead of using
   `identity.classify`.
+- Hardcoding user-facing message text in Python instead of the `i18n/`
+  catalog (audit logs, staff operational messages, and infra error
+  reports are the only sanctioned exceptions).
+- Passing a rendered string as a plain (non-`Safe`) placeholder, or
+  placing placeholders inside mini-markup spans.
 - Hardcoding bot tokens, MongoDB URIs, passwords, API keys, webhook secrets,
   deployment chat IDs, or other credentials.
 - Using em dashes (U+2014) anywhere; see the character rule in

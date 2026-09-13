@@ -17,9 +17,11 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, parse_logmsg, replies
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import count_transient_errors, fan_out
-from tcbot.utils.formatter import code, esc
+from tcbot.utils.formatter import code
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -34,43 +36,34 @@ _RL_LIMIT: int = 3
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
-_CNAME = esc(cfg.community_name)
-
 __module_name__ = "Broadcast"
-__help_text__ = f"Sends a message to every group currently connected to {_CNAME}\\."
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        f"{code('/tcbroadcast')} \\(alias: {code('/bc')}\\)",
-    ),
-    replies.who_section(replies.PERM_STAFF_ONLY),
-    replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
-    (
-        replies.SEC_WHAT,
-        f"Sends a message to every group currently connected to {_CNAME}\\.\n\n"
-        f"You can compose the message in two ways:\n"
-        f"\\- Type the message directly after the command \\(MarkdownV2 formatting "
-        f"is supported; markup that fails to parse is delivered as plain text\\)\\.\n"
-        f"\\- Reply to an existing message with {code('/bc')} to forward that message "
-        f"to all groups\\.\n\n"
-        f"When the broadcast is complete, the bot shows a summary of how many groups "
-        f"received the message and how many deliveries failed, and posts a log entry "
-        f"to the federation logs channel\\.",
-    ),
-    (
-        replies.SEC_EXAMPLES,
-        f"{code('/tcbroadcast Reminder: please review the community rules.')}\n"
-        f"{code('/bc *Event tonight* (join us at 8 PM UTC).')}\n"
-        f"Or reply to any message and run {code('/bc')} to forward it to all groups\\.",
-    ),
-]
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("broadcasting.help.overview", locale, community=cfg.community_name)
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("broadcasting.help.commands.body", locale),
+        ),
+        replies.who_section(replies.perm_staff_only(locale, plain=False), locale),
+        replies.where_section(replies.context_exec_or_group(locale), locale),
+        (
+            replies.sec_what(locale),
+            t("broadcasting.help.what.body", locale, community=cfg.community_name),
+        ),
+        (
+            replies.sec_examples(locale),
+            t("broadcasting.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ──────────────── Command Broadcast </tcbroadcast> ──────────────── #
@@ -86,6 +79,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     every active group via ``fan_out`` with semaphore limiting. Logs the result
     and edits the status message in parallel.
     """
+    locale = await locale_for_update(update)
     msg = update.effective_message
     admin = update.effective_user
     if msg is None or admin is None:
@@ -98,7 +92,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not broadcast_text and not has_reply:
         await safe_reply(
             msg,
-            "Please provide a message to broadcast, or reply to a message\\.",
+            t("broadcasting.send.no_content", locale),
             log_label="cmd_broadcast no-content",
         )
         return
@@ -109,21 +103,23 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.exception("active_groups failed during broadcast")
         await safe_reply(
             msg,
-            esc(replies.ERR_GROUPS_LOAD_FAILED),
+            replies.err_groups_load_failed(locale, plain=False),
             log_label="cmd_broadcast groups-failed",
         )
         return
     if not groups:
         await safe_reply(
             msg,
-            esc(replies.ERR_NO_CONNECTED_GROUPS),
+            replies.err_no_connected_groups(locale, plain=False),
             log_label="cmd_broadcast no-groups",
         )
         return
 
     status = None
     try:
-        status = await msg.reply_text(f"Broadcasting to {len(groups)} group(s)...")
+        status = await msg.reply_text(
+            t("broadcasting.send.sending", locale, n=len(groups), plain=True)
+        )
     except Exception as exc:
         log.debug("cmd_broadcast status reply failed: %s", exc)
 
@@ -185,8 +181,12 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if status is not None:
         edit_r, log_r = await asyncio.gather(
             status.edit_text(
-                f"Broadcast sent to {code(str(success))} groups\\. "
-                f"Failed: {code(str(failed))}\\.",
+                t(
+                    "broadcasting.send.done",
+                    locale,
+                    ok=Safe(code(str(success))),
+                    failed=Safe(code(str(failed))),
+                ),
                 parse_mode="MarkdownV2",
             ),
             log_coro,

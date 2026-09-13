@@ -1,0 +1,130 @@
+# Check help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in checking.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Look up your own ban status with `/checkme`, or pull a full federation activity profile for any user with `/check`."
+
+[help.commands]
+body = """
+`/checkme` (alias: `/cme`)
+`/check` (alias: `/c`)"""
+
+[help.checkme]
+body = """
+Checks your own federation ban status.
+
+- If you are *not banned*: the bot confirms your account is in good standing.
+- If you are *banned*: the bot shows the reason, the admin who issued the ban, the ban date, and gives you a *Submit Appeal* button to start the appeal process."""
+
+[help.check]
+body = """
+Pulls a full federation profile for any user: identity, role, active ban, ban history, warnings (by group), kicks, mutes, and appeals.
+
+Each section opens a drill-down inline keyboard so you can inspect every record individually."""
+
+[help.examples]
+body = """
+`/checkme`
+`/check @username`
+`/c 123456789`
+Or reply to a message and run `/c`."""
+
+# Runtime strings for profile and drill-down views (check_flow.py).
+# All render as MarkdownV2.
+# Placeholders: {user} pre-formatted mention, {name} raw display name,
+# {id} pre-formatted code ID, {role}/{by} pre-formatted fragments,
+# {note} prebuilt caveat, counts as ints, {title} raw group title,
+# {reason} raw reason text, {ts} pre-formatted date.
+
+[profile]
+title = "*Profile*"
+activity = "*Federation Activity*"
+name = "Name: {user}"
+id = "ID: {id}"
+username = "Username: @{name}"
+username_none = "Username: (none)"
+yes = "Yes"
+yes_ban = "Yes ({ban})"
+no = "No"
+role = "Role: {role}"
+assigned_by = "   Assigned by: {by}"
+assigned_at = "   Assigned at: {at}"
+active_ban = "Active Ban: {state}"
+active_mute = "Active Mute: {state}"
+unknown = "Unknown - retry in a moment"
+total_bans = "Total Bans: {n}"
+warnings = "Warnings: {active} active across {groups} group(s) ({total} total historical)"
+kicks = "Kicks: {n}"
+mutes = "Mutes: {n}"
+appeals = "Appeals: {n}"
+regular = "Regular user"
+caveat = "Note: some counters could not be loaded; totals above may be incomplete."
+
+[profile.button]
+bans = "Bans ({n})"
+appeals = "Appeals ({n})"
+warnings = "Warnings ({n} active)"
+kicks = "Kicks ({n})"
+mutes = "Mutes ({n})"
+
+[bans]
+title = "*Bans*"
+empty = "*Bans*\n\nNo ban records for {user}."
+header = "*Bans*: {n} total, page {page}/{pages}"
+active = "*Active*"
+inactive = "Inactive"
+item = "{i}. {status} | {ban} | {ts}\n   {reason}"
+not_found = "Ban {ban} not found."
+
+[appeals_list]
+title = "*Appeals*"
+empty = "*Appeals*\n\nNo appeal records for {user}."
+header = "*Appeals*: {n} total, page {page}/{pages}"
+approved = "*Approved* (unbanned)"
+pending = "Pending / Rejected"
+item = "{i}. {status}\n   Ban ID: {ban} | {ts}"
+
+[warns]
+title = "*Warnings*"
+empty = "*Warnings*\n\nNo warning records for {user}."
+header = "*Warnings*: {n} total across {groups} group(s)"
+group_line = "- {title}: {n}"
+group_button = "{title} ({n})"
+in_title = "*Warnings in* {title}"
+in_empty = "*Warnings in* {title}\n\nNo warning records here."
+in_header = "*Warnings in* {title}: {n} total, page {page}/{pages}"
+in_item = "{i}. {ts}\n   {reason}\n   By {admin}"
+
+[events]
+empty = "{heading}\n\nNo {lower} records for {user}."
+header = "{heading}: {n} total, page {page}/{pages}"
+item = "{i}. {ts}\n   Group: {title}\n   {reason}\n   By {admin}"
+no_reason = "(no reason)"
+
+[ban_info]
+title = "*Ban Information*"
+user = "User: {user}"
+user_id = "User ID: {id}"
+banned_by = "Banned by: {admin}"
+admin_id = "Admin ID: {id}"
+reason = "Reason: {reason}"
+ban_id = "Ban ID: {id}"
+date = "Date: {date}"
+
+# checkme/check runtime (checking.py). [error] sends plain.
+# Placeholders: {user} pre-formatted mention, {name} raw name,
+# {id} pre-formatted code ID, {reason} raw reason text, {community}
+# and {role} raw values.
+
+[error]
+ban_inactive = "This ban is no longer active."
+ban_not_found = "Ban record not found."
+bot_sender = "Bots and anonymous senders don't hold federation records, so there is nothing to check."
+status_retry = "I couldn't verify your ban status right now. Please try again in a moment."
+
+[checkme]
+banned = "You are currently banned from {community}.\n\nUser: {user}\nUser ID: {id}\nReason: {reason}\n\nBanned by: {admin}\n\nCommit Date: {date}\nTap a button below for more details."
+staff_admin = "Hey {user}, checking yourself?\n\nYou're on the staff team - you handle bans, not receive them. No active ban on your end. You're good."
+staff_role = "Hey {user}, all good.\n\nYou're a {community} {role} - on the team, not on the ban list. Nothing to worry about."
+clean = "You're clean - no active ban in {community}."

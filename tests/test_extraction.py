@@ -59,17 +59,33 @@ def _alive_user(uid: int, name: str) -> Any:
     return SimpleNamespace(id=uid, first_name=name, username=None, type="private")
 
 
-def _stub_cache(monkeypatch, first: str = "", found: list | None = None) -> None:  # type: ignore[no-untyped-def]
+def _stub_cache(
+    monkeypatch, first: str = "", found: list | None = None, names: dict | None = None
+) -> None:  # type: ignore[no-untyped-def]
     """Stub member-cache reads so no MongoDB round trip can happen."""
 
     async def _first_name(uid: int, fallback: str = "") -> str:
+        if names is not None:
+            return names.get(uid, fallback)
         return first or fallback
 
     async def _search(needle: str, limit: int = 5) -> list:
-        return found if found is not None else []
+        items = found if found is not None else []
+        return [
+            m for m in items if needle.lower() in str(m.get("first_name", "")).lower()
+        ]
 
     monkeypatch.setattr(db.users_cache, "get_first_name", _first_name)
     monkeypatch.setattr(db.users_cache, "search_by_name", _search)
+
+
+def _reply_from(uid: int, name: str = "Reply") -> Any:
+    """Message quoting a user message (reply target ``uid``)."""
+    reply = _msg()
+    reply.reply_to_message = SimpleNamespace(
+        from_user=_user(uid, name), sender_chat=None
+    )
+    return reply
 
 
 def test_reply_user_wins_without_io(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -165,3 +181,97 @@ def test_no_match_returns_nothing(monkeypatch) -> None:  # type: ignore[no-untyp
     _stub_cache(monkeypatch)
     assert _run(ex.extract_target(_update(_msg()), [], None)) == (None, None)
     assert _run(ex.extract_target(_update(None), [], None)) == (None, None)
+
+
+def test_reply_plus_verified_numeric_overrides(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """A typed ID naming a known user beats the quoted sender."""
+    _stub_cache(monkeypatch, names={22: "Twentytwo"})
+    bot = _FakeBot()
+    assert _run(
+        ex.extract_target(_update(_reply_from(11)), ["22"], cast("Any", bot))
+    ) == (22, "Twentytwo")
+    assert bot.calls == []
+
+
+def test_reply_plus_unverified_numeric_keeps_reply(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """An unknown ID (reason text starting with a number) keeps the reply."""
+    _stub_cache(monkeypatch)
+    bot = _FakeBot()
+    assert _run(
+        ex.extract_target(_update(_reply_from(11)), ["22"], cast("Any", bot))
+    ) == (11, "Reply")
+    assert bot.calls == [22]
+
+
+def test_reply_plus_restated_id_keeps_reply(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Restating the quoted user's ID changes nothing."""
+    _stub_cache(monkeypatch, names={11: "Eleven"})
+    bot = _FakeBot()
+    assert _run(
+        ex.extract_target(_update(_reply_from(11)), ["11"], cast("Any", bot))
+    ) == (11, "Reply")
+
+
+def test_reply_plus_verified_username_overrides(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    _stub_cache(monkeypatch)
+    bot = _FakeBot()
+    bot.chats["@dude"] = _alive_user(99, "Dude")
+    assert _run(
+        ex.extract_target(_update(_reply_from(11)), ["@dude"], cast("Any", bot))
+    ) == (99, "Dude")
+
+
+def test_reply_plus_group_chat_never_overrides(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """A numeric ID resolving to a group (title, no first_name) keeps reply."""
+    _stub_cache(monkeypatch)
+    bot = _FakeBot()
+    bot.chats[22] = SimpleNamespace(id=22, first_name=None, username=None, type="group")
+    assert _run(
+        ex.extract_target(_update(_reply_from(11)), ["22"], cast("Any", bot))
+    ) == (11, "Reply")
+
+
+def test_reply_plus_partial_name_keeps_reply_by_default(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Fuzzy names never override a quote on moderation paths."""
+    _stub_cache(monkeypatch, found=[{"user_id": 55, "first_name": "Daniel"}])
+    assert _run(ex.extract_target(_update(_reply_from(11)), ["dan"], None)) == (
+        11,
+        "Reply",
+    )
+
+
+def test_prefer_explicit_wins_for_read_only_views(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """/check shows who was typed, even fuzzy; falls back to reply on miss."""
+    _stub_cache(monkeypatch, found=[{"user_id": 55, "first_name": "Daniel"}])
+    assert _run(
+        ex.extract_target(_update(_reply_from(11)), ["dan"], None, prefer_explicit=True)
+    ) == (55, "Daniel")
+    assert _run(
+        ex.extract_target(
+            _update(_reply_from(11)), ["nobody"], None, prefer_explicit=True
+        )
+    ) == (11, "Reply")
+
+
+def test_mod_target_consumed_matrix(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """extract_mod_target reports whether args[0] named the target."""
+    _stub_cache(monkeypatch, names={22: "Twentytwo", 42: "Cached"})
+    bot = _FakeBot()
+    assert _run(ex.extract_mod_target(_update(_msg()), ["42"], cast("Any", bot))) == (
+        (42, "Cached"),
+        True,
+    )
+    assert _run(
+        ex.extract_mod_target(_update(_reply_from(11)), ["22"], cast("Any", bot))
+    ) == ((22, "Twentytwo"), True)
+    assert _run(
+        ex.extract_mod_target(_update(_reply_from(11)), ["11"], cast("Any", bot))
+    ) == ((11, "Reply"), False)
+    assert _run(ex.extract_mod_target(_update(_reply_from(11)), [], None)) == (
+        (11, "Reply"),
+        False,
+    )
+    assert _run(ex.extract_mod_target(_update(None), [], None)) == (
+        (None, None),
+        False,
+    )

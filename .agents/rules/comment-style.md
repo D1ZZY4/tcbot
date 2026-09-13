@@ -3,7 +3,7 @@
 This file defines comments, docstrings, section dividers, and Markdown
 conventions for TCF Bot. Code conventions live in
 [`code-style.md`](code-style.md), and tooling and validation requirements live
-in [`tooling-validation.md`](tooling-validation.md).
+in [`tooling-skills-use.md`](tooling-skills-use.md).
 
 ---
 
@@ -84,11 +84,26 @@ Common section names include `Handlers`, `Commands`, `Retrieval`, `Mutations`,
 
 - Keep comments short and close to the code they explain.
 - Explain why, not what an obvious assignment does.
+- Write comments that sound human: plain, direct sentences. No AI
+  filler that restates the code in longer words.
 - Update or remove comments when code changes.
 - Prefer a helper with a clear name over a long inline comment.
 - Add a `# *` comment above a non-obvious module constant.
 - Do not comment obvious constants.
 - Use handler labels only when they improve readability.
+
+## Comments on Localized Code
+
+- When the locale or render mode is not obvious from the send path,
+  say why in a short comment: who reads this message, and why this
+  mode. Example: `# * Plain alert: Telegram never parses it, so an
+  escaped template would show raw backslashes.`
+- Translator guidance belongs in TOML header comments next to the
+  keys, never in Python comments. Document placeholders, send paths,
+  and audience there so translators never need to read code.
+- Do not explain the i18n engine in code comments; point at
+  [`i18n/README.md`](../../i18n/README.md) and the i18n rules in
+  [`code-style.md`](code-style.md) instead.
 
 ## Em Dashes
 

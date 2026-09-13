@@ -62,6 +62,7 @@ class GroupDoc(TypedDict, total=False):
     added_by: UserId
     added_date: datetime
     is_active: bool
+    locale: str | None
 
 
 class PendingGroupDoc(TypedDict, total=False):
@@ -98,6 +99,17 @@ class UserDoc(TypedDict, total=False):
     last_name: str | None
     commit_date: datetime
     last_updated: datetime
+
+
+class UserSettingsDoc(TypedDict, total=False):
+    """MongoDB document for per-user settings (locale preferences).
+
+    Lives in its own ``user_settings`` collection so preference-only rows
+    never inflate member_cache user counts or appear in user listings.
+    """
+
+    user_id: UserId
+    locale: str | None
 
 
 class KickDoc(TypedDict, total=False):

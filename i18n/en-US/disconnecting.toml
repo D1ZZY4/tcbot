@@ -1,0 +1,50 @@
+# Disconnect help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in disconnecting.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Removes a group from {community}. Use `/tcdisconnect` from inside the group, or `/rmtc` remotely with a chat ID."
+
+[help.commands]
+body = """
+`/tcdisconnect` (alias: `/tcdiscon`)
+`/rmtc`"""
+
+[help.who]
+body = """
+*/tcdisconnect*: the group owner or TC Staff (Admin and above).
+*/rmtc*: TC Staff only."""
+
+[help.where]
+body = """
+*/tcdisconnect*: inside the group you want to disconnect.
+*/rmtc*: exec group or Bot PM (works remotely by chat ID)."""
+
+[help.what]
+body = """
+*/tcdisconnect*: removes the current group from {community}, posts a disconnection log entry, and causes the bot to leave the group.
+
+*/rmtc*: force-removes a group from the federation by chat ID. Use this for groups the bot has already been kicked from, or to remove a group remotely without being inside it. A log entry is still posted."""
+
+[help.examples]
+body = """
+`/tcdisconnect`: disconnect the current group.
+`/rmtc -1001234567890`: force-remove a group by chat ID."""
+
+# Runtime strings (disconnecting.py). [state] sends plain (parse_mode=None
+# replies); [removed] renders as MarkdownV2. Placeholders: {community}
+# raw name, {id} pre-formatted code chat ID.
+
+[state]
+usage = "Usage: /rmtc <chat_id>"
+primary_refused = "This is a primary group of the federation (main or exec). It cannot be disconnected: primary groups host enforcement and the federation log, so the bot must stay."
+status_failed = "Could not verify the group status. Please try again."
+not_connected = "This group is not connected to {community}."
+anon_admin = "Anonymous admin mode is active. Please send this command from your personal account, or ask TC Staff to run /rmtc."
+not_authorized = "Only the group owner or TC admins can disconnect this group."
+deactivate_failed = "Failed to disconnect the group. The bot is still here; please try again."
+disconnected = "This group has been disconnected from {community}."
+rmtc_failed = "Failed to disconnect the group. Please try again."
+
+[removed]
+body = "Group {id} has been disconnected from {community}."

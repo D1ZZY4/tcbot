@@ -1,0 +1,55 @@
+# Shared generic errors and notices. Templates stay raw: the engine
+
+# escapes MarkdownV2 at render time.
+retry = "Something went wrong on our side. Please try again in a moment."
+
+# Shared moderation error and notice strings (replies.py owners).
+# Send path per key: keys rendered through MarkdownV2 sends use the
+# default mode; keys sent as plain text (alerts, parse_mode=None
+# replies) render with plain=True at the call site.
+
+[err]
+cannot_resolve = "Cannot resolve that target. Reply to their message, or pass a user ID or @username."
+role_verify = "Could not verify your group role."
+group_only = "Use this command in a group."
+no_connected_groups = "No connected groups."
+group_not_found = "Group not found or already removed."
+perm_expired = "You no longer have permission to do this."
+unknown_role = "Unknown role."
+groups_load_failed = "Could not load the group list. Please try again."
+db_retry = "I couldn't reach the database right now. Please try again in a moment."
+
+[perm]
+founder_only = "Founder only."
+staff_only = "TC Staff (Admin and above)."
+admin_above = "Admin and above (Founder / Admin)."
+dev_above = "Developer and above (Founder / Admin / Developer)."
+tester_above = "Tester and above (Founder / Admin / Developer / Tester)."
+
+[limit]
+# Placeholders: {wait} = seconds as an integer, at least 1. The unit
+# rides on the number ({wait}s) so the line stays correct at 1.
+text = "Slow down - try again in {wait}s."
+
+[action]
+no_reason = "No reason provided"
+
+# Help section labels (raw: buttons show them plain, titles escape them
+# via bold()) and scope bodies (V2-escaped prose).
+
+[section]
+commands = "Commands & Aliases"
+who = "Who can use"
+where = "Where to use"
+what = "What it does"
+examples = "Examples"
+target = "Target syntax"
+
+[context]
+bot_or_group = "Bot PM, exec group, or any connected group."
+exec_or_group = "Exec group, any connected group, or bot PM."
+anyone = "Anyone, no special permissions needed."
+connected_group = "Inside any connected group."
+
+[target]
+syntax = "Reply to a message, or provide a user ID / @username after the command."

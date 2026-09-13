@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Target extraction helpers: extract_target()."""
+"""Target extraction helpers: extract_target() and extract_mod_target()."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT, to_utc, utc_now
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from telegram import Bot, ChatFullInfo, Message, Update, User
+    from telegram import Bot, ChatFullInfo, Message, Update
 
 log = logging.getLogger(__name__)
 
@@ -61,12 +61,11 @@ async def _safe_get_chat(bot: Bot, ident: str | int) -> Chat | ChatFullInfo | No
 def has_reply_target(msg: Message) -> bool:
     """Return True when ``msg`` replies to a sender that resolves as a target.
 
-    Mirrors ``extract_target`` priority 1 (reply), including the
-    anonymous-admin skip: a GroupAnonymousBot reply carries the group
+    Mirrors the reply branch of ``extract_target`` (priority 1), including
+    the anonymous-admin skip: a GroupAnonymousBot reply carries the group
     itself as ``sender_chat``, which must never count as a reply target.
-    Command entries use this to decide whether the first arg token names
-    the target or starts the reason text: with a reply target every arg
-    is reason text, so a leading numeric/@ token must not be consumed.
+    The promote entry uses this for its role-word guard; target-vs-reason
+    splitting for ban/kick/mute/warn lives in ``extract_mod_target``.
     """
     reply = msg.reply_to_message
     if reply is None:
@@ -78,18 +77,15 @@ def has_reply_target(msg: Message) -> bool:
     return sender is not None and sender.type != Chat.CHANNEL
 
 
-def has_explicit_target(msg: Message, args: list[str]) -> bool:
-    """Return True when ``args[0]`` names an explicit moderation target.
+def _first_arg_is_explicit(args: list[str]) -> bool:
+    """Return True when ``args[0]`` is shaped like an explicit target.
 
-    Single owner of the reply-wins plus shape check used by the ban, kick,
-    mute, and warn entries: a reply target means every arg is reason text,
-    otherwise a leading numeric ID or ``@username`` token is the target.
-    Sync and allocation-free on the hot path, so entries pay no I/O here;
-    the heavier ``extract_target`` resolution runs right after.
+    Shape only (leading numeric ID or ``@username``), no I/O: whether the
+    token actually names someone is decided by the resolver. Shared by
+    :func:`extract_target` (override detection) and
+    :func:`extract_mod_target` (reason splitting) so both agree.
     """
     if not args:
-        return False
-    if has_reply_target(msg):
         return False
     first = args[0]
     return first.lstrip("-").isdigit() or first.startswith("@")
@@ -116,15 +112,27 @@ async def extract_target(
     update: Update,
     args: list[str],
     bot: Bot | None = None,
+    *,
+    prefer_explicit: bool = False,
 ) -> tuple[int, str] | tuple[None, None]:
     """Return (user_id, first_name) resolved from reply, args, entity, or mention.
 
     Priority order:
-    1. Reply (most common use case)
+    1. Reply (most common use case), with one exception: a typed numeric
+       ID or ``@username`` that verifies as a real user different from the
+       quoted sender overrides the reply. A typed ID is deliberate intent;
+       a quote is often just context, and silently acting on the quoted
+       user is how wrong-person moderation happens. Anything unverified
+       (a reason starting with a number, an unknown ID) or fuzzy
+       (partial-name search) keeps the reply target, as before.
     2. Args with full info (numeric ID or @username)
     3. Args with partial info (search users_cache by name)
     4. Text mention entity
     5. @Mention entity
+
+    With ``prefer_explicit=True`` (read-only views such as /check, where
+    showing the wrong person costs nothing), any resolving arg wins over
+    the reply; when the arg resolves to nobody, the reply still stands.
 
     The returned name is always a human-readable string. When Telegram returns
     no first_name and the member cache has no entry, falls back to the bare
@@ -135,20 +143,66 @@ async def extract_target(
     if msg is None:
         return None, None
 
-    # * Each stage returns a hit or None (fall through to the next
-    # * stage). The order below is the documented priority; stages are
-    # * split out so each is independently testable with fakes.
-    hit = await _reply_target(msg)
-    if hit is not None:
-        return hit
+    # * The reply read is sync (no I/O beyond a possible cached-name
+    # * fallback), so peek it once and branch below. Every path below
+    # * preserves the old order except the two explicit beats reply cases.
+    reply_hit = await _reply_target(msg)
+    if (
+        args
+        and reply_hit is not None
+        and not prefer_explicit
+        and not _first_arg_is_explicit(args)
+    ):
+        return reply_hit
+    if args and reply_hit is not None and prefer_explicit:
+        hit = await _args_target(args, bot)
+        return hit if hit is not None else reply_hit
+    if args and reply_hit is not None:
+        verified = await _verified_explicit_target(args, bot)
+        if verified is not None and verified[0] != reply_hit[0]:
+            log.info(
+                "explicit target %d overrides reply target %d",
+                verified[0],
+                reply_hit[0],
+            )
+            return verified
+        return reply_hit
     if args:
         hit = await _args_target(args, bot)
         if hit is not None:
             return hit
+    elif reply_hit is not None:
+        return reply_hit
     hit = await _entity_target(msg, bot)
     if hit is not None:
         return hit
     return None, None
+
+
+def _reply_uid(msg: Message) -> int | None:
+    """Return the user/channel ID quoted by ``msg``, or ``None``.
+
+    Synchronous core of the reply-target decision, shared by
+    :func:`_reply_target` and :func:`extract_mod_target` so both agree on
+    who the quoted message names. Mirrors the skip rules exactly:
+    GroupAnonymousBot and the Telegram service account never count, and a
+    channel sender is not an actionable target.
+    """
+    target_msg = msg.reply_to_message
+    if target_msg is None:
+        return None
+    from_user = target_msg.from_user
+    if from_user is not None:
+        if from_user.id not in (ANONYMOUS_BOT_ID, TELEGRAM_USER_ID):
+            return from_user.id
+        if from_user.id == ANONYMOUS_BOT_ID:
+            # * The sender_chat behind an anonymous admin is the group
+            # * itself; never hand it out as a target.
+            return None
+    sender = target_msg.sender_chat
+    if sender is not None and sender.type != Chat.CHANNEL:
+        return sender.id
+    return None
 
 
 async def _reply_target(msg: Message) -> tuple[int, str] | None:
@@ -157,30 +211,19 @@ async def _reply_target(msg: Message) -> tuple[int, str] | None:
     # * that appears as `from_user` when an anonymous admin sends a message.
     # * Targeting it would attempt to act on the placeholder, not a real user.
     # * Similarly skip the Telegram service account (777000) and channel posts.
-    if not msg.reply_to_message:
+    uid = _reply_uid(msg)
+    if uid is None:
         return None
     target_msg = msg.reply_to_message
-    _skip_sender_chat = False
-    if target_msg.from_user:
-        u: User = target_msg.from_user
-        if u.id not in (ANONYMOUS_BOT_ID, TELEGRAM_USER_ID):
-            return u.id, u.first_name or await _best_name(u.id)
-        # * When from_user is GroupAnonymousBot (1087968824), sender_chat is the
-        # * group itself (not an individual user). Returning it as the target would
-        # * cause downstream fan-out to try to ban a group ID from itself, which
-        # * always fails. Skip sender_chat so we fall through to args/entities.
-        if u.id == ANONYMOUS_BOT_ID:
-            _skip_sender_chat = True
-
-    if not _skip_sender_chat and target_msg.sender_chat:
-        c: Chat = target_msg.sender_chat
-        # * Channel senders are not actionable moderation targets:
-        # * ban/restrict expect user IDs, so a channel ID would only
-        # * create an unenforceable DB row. Fall through to args and
-        # * entities instead of returning it (mirrors has_reply_target).
-        if c.type != Chat.CHANNEL:
-            return c.id, c.title or await _best_name(c.id)
-    return None
+    if target_msg is None:  # * Unreachable: _reply_uid just saw one.
+        return None
+    from_user = target_msg.from_user
+    if from_user is not None and from_user.id == uid:
+        return uid, from_user.first_name or await _best_name(uid)
+    sender = target_msg.sender_chat
+    if sender is not None and sender.id == uid:
+        return uid, sender.title or await _best_name(uid)
+    return uid, await _best_name(uid)
 
 
 async def _args_target(args: list[str], bot: Bot | None) -> tuple[int, str] | None:
@@ -235,6 +278,79 @@ async def _args_target(args: list[str], bot: Bot | None) -> tuple[int, str] | No
             if uid:
                 return uid, user.get("first_name") or await _best_name(uid)
     return None
+
+
+async def _verified_explicit_target(
+    args: list[str], bot: Bot | None
+) -> tuple[int, str] | None:
+    """Resolve ``args[0]`` only when it verifies as a real Telegram user.
+
+    Numeric IDs consult the member cache (bare-numeric and legacy
+    ``User <id>`` fallbacks do not count) and fall back to one bounded
+    ``get_chat``; ``@usernames`` resolve live. Only chats with a
+    ``first_name`` count, so groups and channels can never hijack a reply
+    target. Partial names are too fuzzy to override a quote and always
+    return ``None`` here; so does anything unverified.
+    """
+    raw = args[0]
+    tok = raw.lstrip("@")
+    if tok.lstrip("-").isdigit():
+        uid = int(tok)
+        try:
+            cached_name = await db.users_cache.get_first_name(uid, "")
+        except Exception as exc:
+            log.debug("override cache read failed for %d: %s", uid, exc)
+            cached_name = ""
+        if (
+            cached_name
+            and not cached_name.lstrip("-").isdigit()
+            and not cached_name.startswith("User ")
+        ):
+            return uid, cached_name
+        if bot is not None:
+            chat = await _safe_get_chat(bot, uid)
+            if chat is not None and getattr(chat, "first_name", None):
+                return uid, await _best_name(uid, chat.first_name, chat.username)
+        return None
+    if raw.startswith("@") and bot is not None and tok:
+        chat = await _safe_get_chat(bot, f"@{tok}")
+        if chat is not None and getattr(chat, "first_name", None):
+            return (
+                chat.id,
+                await _best_name(chat.id, chat.first_name, chat.username, tok),
+            )
+    return None
+
+
+async def extract_mod_target(
+    update: Update,
+    args: list[str],
+    bot: Bot | None = None,
+) -> tuple[tuple[int, str] | tuple[None, None], bool]:
+    """Resolve a moderation target plus whether ``args[0]`` was consumed.
+
+    Wraps :func:`extract_target` (the verified-override rule applies) and
+    reports whether the first arg token named the target, so entries split
+    reason text without reimplementing the reply/override decision:
+
+    - no reply + explicit-shaped ``args[0]``: consumed (classic path);
+    - reply + ``args[0]`` naming the resolved target: consumed (override
+      path; the typed ID is the target, not reason text);
+    - otherwise (reply retained, restated-ID reply, unshaped first token,
+      or nothing resolved): not consumed; ``parse_inline_reason`` still
+      strips a restated ID via ``reply_target_id``.
+    """
+    msg = update.effective_message
+    reply_uid = _reply_uid(msg) if msg is not None else None
+    hit = await extract_target(update, args, bot)
+    target_id, _ = hit
+    consumed = (
+        target_id is not None
+        and bool(args)
+        and _first_arg_is_explicit(args)
+        and (reply_uid is None or target_id != reply_uid)
+    )
+    return hit, consumed
 
 
 async def _entity_target(msg: Message, bot: Bot | None) -> tuple[int, str] | None:

@@ -22,9 +22,11 @@ from telegram.ext import (
 )
 
 from tcbot.modules.helper import replies
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.proof_flow import PROOF_MEDIA_FILTER, BuildProof
 from tcbot.utils.formatter import bold, esc, mention
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 
 if TYPE_CHECKING:
@@ -61,13 +63,14 @@ def parse_inline_reason(
     """Extract any inline reason text from command arguments.
 
     With an explicit target the first token names the target, so the
-    reason starts at ``args[1:]``. On the reply-wins path every arg is
+    reason starts at ``args[1:]``. On the reply-retained path every arg is
     reason text, with one exception: a leading numeric token equal to
     ``reply_target_id`` is the target restated (e.g. reply + ``/tcb
     1419172317 spamming`` aimed at 1419172317), not reason content, so it
     is dropped. A leading numeric token naming anyone else stays in the
-    reason. Pass ``None`` (the default) whenever the entry is not on the
-    reply-wins path.
+    reason, unless the entry resolved it as a verified override target
+    (then the entry passes ``has_explicit_target=True``). Pass ``None``
+    (the default) whenever the entry is not on the reply-retained path.
     """
     tokens = args[1:] if has_explicit_target else args
     if (
@@ -86,11 +89,14 @@ def is_reason_too_long(text: str) -> bool:
     return len(text) > MAX_REASON_LEN
 
 
-def reason_too_long_text(actual_len: int) -> str:
+def reason_too_long_text(actual_len: int, locale: str | None = None) -> str:
     """Single source of truth for the overlong-reason reply text."""
-    return (
-        f"Reason is too long (max {MAX_REASON_LEN} characters, "
-        f"you sent {actual_len}). Please shorten it."
+    return t(
+        "reason.limit.text",
+        locale,
+        max=MAX_REASON_LEN,
+        actual=actual_len,
+        plain=True,
     )
 
 
@@ -106,20 +112,21 @@ class BuildReason:
     skip_label: str = field(default="Skip", kw_only=True)
     cancel_label: str = field(default="Cancel", kw_only=True)
 
-    def keyboard(self) -> InlineKeyboardMarkup:
+    def keyboard(self, locale: str | None = None) -> InlineKeyboardMarkup:
         """Reason-step keyboard. Includes Skip only when skip_allowed is True."""
         buttons: list[InlineKeyboardButton] = []
         if self.skip_allowed:
             buttons.append(
                 InlineKeyboardButton(
-                    self.skip_label,
+                    t("button.skip", locale, plain=True),
                     callback_data=f"{self.action}_skip_reason",
                     style=KeyboardButtonStyle.PRIMARY,
                 )
             )
         buttons.append(
             InlineKeyboardButton(
-                self.cancel_label, callback_data=f"{self.action}_cancel"
+                t("button.cancel", locale, plain=True),
+                callback_data=f"{self.action}_cancel",
             )
         )
         return InlineKeyboardMarkup([buttons])
@@ -129,16 +136,31 @@ class BuildReason:
         target_mention: str,
         action_label: str,
         extra_info: str = "",
+        locale: str | None = None,
     ) -> str:
         """Prompt asking the moderator to type a reason."""
         # * target_mention/extra_info must already be MarkdownV2-ready
         # * (mention/code/bold output): the single producer (muting.py
         # * code() ID plus fmt_duration) is verified, so no re-escaping here.
-        suffix = f" {extra_info}" if extra_info else ""
-        skip_hint = f", or tap {bold(self.skip_label)}" if self.skip_allowed else ""
-        return (
-            f"About to {action_label} {target_mention}{suffix}\\.\n"
-            f"What's the reason? Type it below{skip_hint}\\."
+        suffix = Safe(f" {extra_info}") if extra_info else Safe("")
+        skip_hint = (
+            Safe("")
+            if not self.skip_allowed
+            else Safe(
+                t(
+                    "reason.hint.skip",
+                    locale,
+                    label=Safe(bold(t("button.skip", locale, plain=True))),
+                )
+            )
+        )
+        return t(
+            "reason.prompt.body",
+            locale,
+            verb=t(f"proof.action.{action_label}.verb", locale, plain=True),
+            target=Safe(target_mention),
+            suffix=suffix,
+            skip_hint=skip_hint,
         )
 
 
@@ -174,13 +196,13 @@ class _ModActionFlow:
 
     # ── Helpers ───────────────────────────────────────────────────── #
 
-    def _get_target(self, ctx: ContextTypes.DEFAULT_TYPE) -> str:
+    def _get_target(self, ctx: ContextTypes.DEFAULT_TYPE, locale: str | None) -> str:
         if ctx.user_data is None:
-            return "target"
+            return t("reason.target.fallback", locale, plain=True)
         raw: str = (
             ctx.user_data.get(f"{self.action}_target_name")
             or ctx.user_data.get(f"{self.action}_target_fname")
-            or "target"
+            or t("reason.target.fallback", locale, plain=True)
         )
         tid: int | None = ctx.user_data.get(f"{self.action}_target_id")
         if tid:
@@ -210,7 +232,7 @@ class _ModActionFlow:
         if is_reason_too_long(text):
             await safe_reply(
                 msg,
-                reason_too_long_text(len(text)),
+                reason_too_long_text(len(text), await locale_for_update(update)),
                 log_label=f"{self.action} reason-too-long",
                 parse_mode=None,
             )
@@ -218,8 +240,9 @@ class _ModActionFlow:
 
         ctx.user_data[self._reason_key] = text
         extra_info = ctx.user_data.get(self._extra_info_key, "")
+        locale = await locale_for_update(update)
         prompt_txt = self.proof.step_prompt(
-            self._get_target(ctx), self.action, text, extra_info
+            self._get_target(ctx, locale), self.action, text, extra_info, locale
         )
         prompt_chat = ctx.user_data.get(self._prompt_chat_key)
         prompt_id = ctx.user_data.get(self._prompt_id_key)
@@ -231,7 +254,7 @@ class _ModActionFlow:
                     chat_id=prompt_chat,
                     message_id=prompt_id,
                     parse_mode="MarkdownV2",
-                    reply_markup=self.proof.keyboard(),
+                    reply_markup=self.proof.keyboard(locale),
                 )
                 prompt_sent = True
             except Exception:
@@ -241,7 +264,7 @@ class _ModActionFlow:
                 await msg.reply_text(
                     prompt_txt,
                     parse_mode="MarkdownV2",
-                    reply_markup=self.proof.keyboard(),
+                    reply_markup=self.proof.keyboard(locale),
                 )
                 prompt_sent = True
             except Exception as exc:
@@ -258,15 +281,22 @@ class _ModActionFlow:
         if q is None or ctx.user_data is None:
             return WAITING_REASON
 
-        ctx.user_data[self._reason_key] = replies.NO_REASON
+        locale = await locale_for_update(update)
+        ctx.user_data[self._reason_key] = replies.no_reason(locale, plain=True)
         extra_info = ctx.user_data.get(self._extra_info_key, "")
         prompt_txt = self.proof.step_prompt(
-            self._get_target(ctx), self.action, replies.NO_REASON, extra_info
+            self._get_target(ctx, locale),
+            self.action,
+            replies.no_reason(locale, plain=True),
+            extra_info,
+            locale,
         )
         results = await asyncio.gather(
             q.answer(),
             q.edit_message_text(
-                prompt_txt, parse_mode="MarkdownV2", reply_markup=self.proof.keyboard()
+                prompt_txt,
+                parse_mode="MarkdownV2",
+                reply_markup=self.proof.keyboard(locale),
             ),
             return_exceptions=True,
         )
@@ -307,13 +337,19 @@ class _ModActionFlow:
         q = update.callback_query
         if q is None or ctx.user_data is None:
             return ConversationHandler.END
+        locale = await locale_for_update(update)
         msgs: list = ctx.user_data.get(self._proof_msgs_key, [])
         if not msgs:
             # * Nothing collected: nudge instead of silently skipping
             # * (Skip exists for that) or executing an empty proof.
             try:
                 await q.answer(
-                    "Send a photo, video, GIF, or file first, then tap Done.",
+                    t(
+                        "proof.empty.body",
+                        locale,
+                        done=t("button.done", locale, plain=True),
+                        plain=True,
+                    ),
                     show_alert=True,
                 )
             except Exception as exc:
@@ -391,9 +427,17 @@ class _ModActionFlow:
     ) -> int:
         """Reject non-text messages during reason collection."""
         if update.effective_message:
+            locale = await locale_for_update(update)
             await safe_reply(
                 update.effective_message,
-                f"Please type your {self.action} reason as text, or press Skip / Cancel.",
+                t(
+                    "reason.unexpected.body",
+                    locale,
+                    action=self.action,
+                    skip=t("button.skip", locale, plain=True),
+                    cancel=t("button.cancel", locale, plain=True),
+                    plain=True,
+                ),
                 log_label=f"{self.action} reason-unexpected",
                 parse_mode=None,
             )
@@ -404,9 +448,16 @@ class _ModActionFlow:
     ) -> int:
         """Reject unexpected message types during proof collection."""
         if update.effective_message:
+            locale = await locale_for_update(update)
             await safe_reply(
                 update.effective_message,
-                "Please send a photo, video, GIF, or file as proof, or press Skip / Cancel.",
+                t(
+                    "proof.unexpected.body",
+                    locale,
+                    skip=t("button.skip", locale, plain=True),
+                    cancel=t("button.cancel", locale, plain=True),
+                    plain=True,
+                ),
                 log_label=f"{self.action} proof-unexpected",
                 parse_mode=None,
             )
@@ -418,10 +469,11 @@ class _ModActionFlow:
             return ConversationHandler.END
 
         self._clear_user_data(ctx)
+        locale = await locale_for_update(update)
         results = await asyncio.gather(
             q.answer(),
             q.edit_message_text(
-                f"Got it, {self.action} cancelled. No action was taken."
+                t("reason.cancel.body", locale, action=self.action, plain=True)
             ),
             return_exceptions=True,
         )
@@ -436,9 +488,15 @@ class _ModActionFlow:
     async def _on_end_conv(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         self._clear_user_data(ctx)
         if update.effective_message:
+            locale = await locale_for_update(update)
             await safe_reply(
                 update.effective_message,
-                f"{self.action.capitalize()} operation cancelled.",
+                t(
+                    "reason.cancel.via_command",
+                    locale,
+                    Action=self.action.capitalize(),
+                    plain=True,
+                ),
                 log_label=f"{self.action} cancel-via-command",
                 parse_mode=None,
             )

@@ -13,7 +13,8 @@ from telegram.ext import CallbackQueryHandler, ContextTypes
 
 from tcbot import cfg
 from tcbot.modules.helper import decorators, keyboards
-from tcbot.utils.formatter import bold, esc
+from tcbot.modules.helper.locale import locale_for_update
+from tcbot.utils.i18n import t
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -29,12 +30,13 @@ _RL_CB_LIMIT: int = 15
 
 # ─────────────────────── Additional Message ─────────────────────── #
 
-__additional_msg__ = (
-    f"{esc(cfg.community_name)} {bold('Official Links')}\n\n"
-    "Use the buttons below to access our channels and groups\\. "
-    "For developers interested in contributing to Transsion device development, "
-    "join TRAVEL, an independent community for collaboration and networking\\."
-)
+
+def additional_msg(locale: str | None = None) -> str:
+    """Render the additional-links menu text."""
+    return t("additional.msg.body", locale, community=cfg.community_name)
+
+
+__additional_msg__ = additional_msg()
 
 
 # ──────────────────────── Callback Handler ──────────────────────── #
@@ -51,11 +53,12 @@ async def on_additional_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         await q.answer()
     except Exception as exc:
         log.debug("additional_menu q.answer failed: %s", exc)
+    locale = await locale_for_update(update)
     try:
         await q.edit_message_text(
-            __additional_msg__,
+            additional_msg(locale),
             parse_mode="MarkdownV2",
-            reply_markup=keyboards.additional_menu_kb(),
+            reply_markup=keyboards.additional_menu_kb(locale),
         )
     except Exception as exc:
         log.debug("additional_menu edit failed: %s", exc)

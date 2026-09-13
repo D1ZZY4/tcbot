@@ -1,0 +1,44 @@
+# Sync help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in syncing.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Reconcile enforcement state: re-apply bans the fan-out missed and verify unbans actually landed."
+
+[help.commands]
+body = """
+`/tcsync` (alias: `/tcsynchronize`)
+`/tcsync <target>`"""
+
+[help.sync]
+body = "Sweeps active federation bans against connected groups (bounded, 200 membership checks per run) and re-bans users who are present but not kicked. Users already kicked, absent, or privileged are skipped, never treated as failures."
+
+[help.sync_target]
+body = "Verifies one user both directions across every connected group: re-ban when an active ban is unenforced, unban when a stale kick survived a deactivation."
+
+[help.examples]
+body = """
+`/tcsync`
+`/tcsync @username`
+`/tcsync 123456789`"""
+
+# Runtime strings (syncing.py). [status] sends plain; the rest render
+# as MarkdownV2. Placeholders: {target} raw target words, counts as
+# pre-formatted code, {sample} raw group titles.
+
+[status]
+sending = "Syncing enforcement state..."
+
+[target]
+user = "user {id}"
+sweep = "federation sweep"
+
+[summary]
+title = "*Sync complete* ({target})"
+checked = "Checked: {n}"
+rebanned = "Re-banned: {n}"
+reunbanned = "Re-unbanned: {n}"
+skipped = "Skipped: {n}"
+failed = "Failed: {n}"
+failing = "Still failing in: {sample}"
+truncated = "Note: the 200-check limit was reached; run again to continue the sweep."

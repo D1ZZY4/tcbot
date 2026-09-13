@@ -36,7 +36,7 @@ flowchart TD
 | `/checkme` | `/cme` | Anyone (for themselves) | Bot PM, exec group, any connected group |
 | `/check` | `/c` | Anyone | Bot PM, exec group, any connected group |
 
-The target is resolved by `extraction.extract_target`: reply, user ID, or resolvable `@username`. The old `/checkban` and `/cban` aliases have been removed; `/check` now covers and extends that surface.
+The target is resolved by `extraction.extract_target` with `prefer_explicit=True`: a typed user ID, `@username`, or partial-name match wins over the quoted sender, so `/check` shows who was asked about, never who was quoted. When the argument resolves to nobody, the reply target still stands. The old `/checkban` and `/cban` aliases have been removed; `/check` now covers and extends that surface.
 
 ## Top-level profile view
 

@@ -24,12 +24,14 @@ from tcbot.modules.helper import (
 )
 from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
+from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.promote_flow import ROLE_ALIASES, Promote
 from tcbot.utils import error_reporter
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, code, esc, mention, user_ref
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -39,25 +41,8 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-# ──────────────── User-facing reply constants ──────────────────── #
-
-_ERR_NO_ASSIGN_PERMS = "You don't have permission to assign any roles."
-_MSG_PROMOTE_CANCELLED = "Promotion cancelled. No changes were made."
-_ERR_NO_REMOVABLE_ROLE = "That user doesn't hold a role that can be removed."
-_ERR_FOUNDER_DEMOTE_ONLY = "Only the Founder can demote an Admin."
-_ERR_NO_LONGER_REMOVABLE = "That user no longer holds a removable role."
-_ERR_ROLE_CLEAR_FAILED = "Couldn't remove the role - it may have already been cleared."
-_ERR_ROLE_LOOKUP_FAILED = (
-    "I couldn't verify federation roles right now. Please try again in a moment."
-)
-_MSG_CANCELLED = "Cancelled. No changes were made."
-_MSG_NO_PENDING = "No pending promotion requests."
-_ERR_REQUEST_NOT_FOUND = "Request not found or already resolved."
-_ERR_CLASSIFY_FAILED = "Classification check failed - please try again."
-_ERR_PROMOTE_NEEDS_TARGET = (
-    "Specify who to promote: reply to their message or give an ID/@username, "
-    "e.g. /tcpromote @user developer."
-)
+# * Admin runtime prose lives in admins.toml [error]/[promote_ui]/
+# * [demote]/[transfer]/[list]/[decision]; no string constants stay here.
 
 # ─────────────────────── Rate-limiter constants ──────────────────── #
 _RL_PERIOD_S: int = 30
@@ -71,72 +56,53 @@ _RL_BULK_LIMIT: int = 3
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Admin"
-__help_text__ = (
-    "Promote and demote staff, transfer ownership, and manage promotion requests "
-    "across the federation\\."
-)
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        f"{code('/tcpromote')} \\(alias: {code('/tcp')}\\)\n"
-        f"{code('/tcdemote')} \\(alias: {code('/tcd')}\\)\n"
-        f"{code('/transferowner')} \\(alias: {code('/tfowner')}\\)\n"
-        f"{code('/tcpromoterequests')} \\(alias: {code('/tcreqs')}\\)\n"
-        f"{code('/tcpromotelist')} \\(alias: {code('/tcplist')}\\)",
-    ),
-    replies.who_section(
-        f"{bold('/tcpromote')}, {bold('/tcdemote')}, {bold('/tcpromotelist')}: Founder and Admin.\n"
-        f"{bold('/transferowner')}: {replies.PERM_FOUNDER_ONLY}\n"
-        f"{bold('/tcpromoterequests')}: anyone (creates a self-request to the Founder)."
-    ),
-    replies.where_section(replies.CONTEXT_BOT_OR_GROUP),
-    (
-        "Role Hierarchy",
-        "Founder \\(rank 4\\) \\> Admin \\(rank 3\\) \\> Developer \\(rank 2\\) \\> Tester \\(rank 1\\)\n\n"
-        "You cannot promote a user to a rank equal to or above your own\\. "
-        "Admins promoting someone to Admin queues a request for the Founder\\.",
-    ),
-    replies.target_section(),
-    (
-        "/tcpromote",
-        "Assigns a role to a user\\. Omit the role argument to get an inline button menu\\.\n\n"
-        f"{bold('Usage:')} {code('/tcpromote <target> [admin|developer|tester]')}\n"
-        "\\- Founder can promote to any role directly\\.\n"
-        "\\- Admin can promote to Developer or Tester directly; promoting to Admin "
-        "sends a pending request to the Founder for approval\\.",
-    ),
-    (
-        "/tcdemote",
-        "Removes a user's role\\. A confirmation button is shown before the action executes\\.\n\n"
-        f"{bold('Usage:')} {code('/tcdemote <target>')}\n"
-        "\\- Founder can demote any role\\.\n"
-        "\\- Admin can demote Developer or Tester only\\.\n"
-        "\\- When a user with a role is banned or kicked, their role is automatically removed "
-        "and they are notified by DM\\.",
-    ),
-    (
-        "/transferowner",
-        "Transfers federation ownership to another user\\. The current Founder steps down "
-        "to Admin\\. Founder only\\.\n\n"
-        f"{bold('Usage:')} {code('/transferowner <target>')}",
-    ),
-    (
-        replies.SEC_EXAMPLES,
-        f"{code('/tcpromote @username developer')}\n"
-        f"{code('/tcpromote 123456789')} \\- shows role selection menu\n"
-        f"{code('/tcdemote @username')}\n"
-        f"{code('/transferowner @newowner')}\n"
-        f"{code('/tcpromoterequests')} \\- request promotion to Admin\n"
-        f"{code('/tcplist')} \\- list pending promotion requests",
-    ),
-]
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("admins.help.overview", locale)
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("admins.help.commands.body", locale),
+        ),
+        replies.who_section(
+            t(
+                "admins.help.who.body",
+                locale,
+                perm=Safe(replies.perm_founder_only(locale, plain=False)),
+            ),
+            locale,
+        ),
+        replies.where_section(replies.context_bot_or_group(locale), locale),
+        (
+            "Role Hierarchy",
+            t("admins.help.roles.body", locale),
+        ),
+        replies.target_section(locale),
+        (
+            "/tcpromote",
+            t("admins.help.promote.body", locale),
+        ),
+        (
+            "/tcdemote",
+            t("admins.help.demote.body", locale),
+        ),
+        (
+            "/transferowner",
+            t("admins.help.transferowner.body", locale),
+        ),
+        (
+            replies.sec_examples(locale),
+            t("admins.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ─────────────── Shared resolve helpers (promote/demote) ─────────────── #
@@ -164,6 +130,7 @@ async def _resolve_executor_target(
     the caller must return (retry reply already sent, or a genuinely
     role-less executor denied silently like the decorator would).
     """
+    locale = await locale_for_update(update)
     _exec_r, _target_r = await asyncio.gather(
         db.users_roles.get_effective_role(admin_id),
         extraction.extract_target(update, args, bot),
@@ -178,7 +145,7 @@ async def _resolve_executor_target(
         log.warning("cmd_%s executor role lookup failed: %s", action, _exec_r)
         await safe_reply(
             msg,
-            _ERR_ROLE_LOOKUP_FAILED,
+            t("admins.error.role_lookup_failed", locale, plain=True),
             log_label=f"cmd_{action} lookup-fail",
             parse_mode=None,
         )
@@ -190,7 +157,7 @@ async def _resolve_executor_target(
         log.error("extract_target failed during %s: %s", action, _target_r)
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label=f"cmd_{action} no-target",
             parse_mode=None,
         )
@@ -199,7 +166,7 @@ async def _resolve_executor_target(
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label=f"cmd_{action} no-target-id",
             parse_mode=None,
         )
@@ -215,6 +182,7 @@ async def _classify_and_load_role(
     msg: Message,
     *,
     action: str,
+    locale: str | None = None,
 ) -> tuple[Identity, str | None] | None:
     """Classify the target and load its live role in parallel, fail closed.
 
@@ -236,7 +204,7 @@ async def _classify_and_load_role(
         )
         await safe_reply(
             msg,
-            _ERR_CLASSIFY_FAILED,
+            t("admins.error.classify_failed", locale, plain=True),
             log_label=f"cmd_{action} classify-failed",
             parse_mode=None,
         )
@@ -250,7 +218,7 @@ async def _classify_and_load_role(
         )
         await safe_reply(
             msg,
-            _ERR_ROLE_LOOKUP_FAILED,
+            t("admins.error.role_lookup_failed", locale, plain=True),
             log_label=f"cmd_{action} role-lookup-failed",
             parse_mode=None,
         )
@@ -258,7 +226,9 @@ async def _classify_and_load_role(
     return ident_r, role_r
 
 
-async def _check_callback_staff(admin_id: int, q: CallbackQuery) -> str | None:
+async def _check_callback_staff(
+    admin_id: int, q: CallbackQuery, update: Update
+) -> str | None:
     """Re-check Founder/Admin rank alongside ``q.answer()`` in parallel.
 
     Answers the spinner immediately regardless of DB latency. Returns the
@@ -275,7 +245,10 @@ async def _check_callback_staff(admin_id: int, q: CallbackQuery) -> str | None:
         log.debug("callback answer failed: %s", answer_r)
     if isinstance(role_r, BaseException) or role_r not in ("founder", "admin"):
         try:
-            await q.edit_message_text(replies.ERR_PERM_EXPIRED, reply_markup=None)
+            await q.edit_message_text(
+                replies.err_perm_expired(await locale_for_update(update), plain=True),
+                reply_markup=None,
+            )
         except Exception as exc:
             log.debug("callback perm-expired edit failed: %s", exc)
         return None
@@ -302,6 +275,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.effective_message
     if admin is None or msg is None:
         return
+    locale = await locale_for_update(update)
     args = parse_cmd_args(msg.text)
 
     has_explicit_target = bool(args) and (
@@ -320,7 +294,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ):
         await safe_reply(
             msg,
-            _ERR_PROMOTE_NEEDS_TARGET,
+            t("admins.error.promote_needs_target", locale, plain=True),
             log_label="cmd_promote needs-target",
             parse_mode=None,
         )
@@ -335,12 +309,18 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     role_arg = remaining_args[0].lower() if remaining_args else ""
 
     classified = await _classify_and_load_role(
-        ctx.bot, admin.id, target_id, target_fname, msg, action="promote"
+        ctx.bot,
+        admin.id,
+        target_id,
+        target_fname,
+        msg,
+        action="promote",
+        locale=locale,
     )
     if classified is None:
         return
     ident, current_role = classified
-    refusal = identity.refuse_message("promote", ident)
+    refusal = identity.refuse_message("promote", ident, locale)
     if refusal is not None:
         await safe_reply(msg, refusal, log_label="cmd_promote refusal")
         return
@@ -357,6 +337,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             target_fname or str(target_id),
             current_role,
             role,
+            locale,
         )
         await safe_reply(msg, text, log_label="cmd_promote result")
         return
@@ -365,14 +346,23 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     available = Promote.available_roles_for(executor_role)
     if not available:
         await safe_reply(
-            msg, _ERR_NO_ASSIGN_PERMS, log_label="cmd_promote no-perms", parse_mode=None
+            msg,
+            t("admins.error.no_assign_perms", locale, plain=True),
+            log_label="cmd_promote no-perms",
+            parse_mode=None,
         )
         return
     await safe_reply(
         msg,
-        f"Choose a role to assign to {mention(target_id, target_fname or str(target_id), ident.username)}:",
+        t(
+            "admins.promote_ui.role_picker",
+            locale,
+            user=Safe(
+                mention(target_id, target_fname or str(target_id), ident.username)
+            ),
+        ),
         log_label="cmd_promote role-picker",
-        reply_markup=keyboards.promote_role_kb(target_id, available),
+        reply_markup=keyboards.promote_role_kb(target_id, available, locale),
     )
 
 
@@ -409,13 +399,16 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         await q.answer()
         return
 
-    executor_role = await _check_callback_staff(admin.id, q)
+    executor_role = await _check_callback_staff(admin.id, q, update)
     if executor_role is None:
         return
 
     if role not in ("admin", "developer", "tester"):
         try:
-            await q.edit_message_text(replies.ERR_UNKNOWN_ROLE, reply_markup=None)
+            await q.edit_message_text(
+                replies.err_unknown_role(await locale_for_update(update), plain=True),
+                reply_markup=None,
+            )
         except Exception as exc:
             log.debug("admins promote unknown-role edit failed: %s", exc)
         return
@@ -437,7 +430,14 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
             current_role,
         )
         try:
-            await q.edit_message_text(_ERR_ROLE_LOOKUP_FAILED, reply_markup=None)
+            await q.edit_message_text(
+                t(
+                    "admins.error.role_lookup_failed",
+                    await locale_for_update(update),
+                    plain=True,
+                ),
+                reply_markup=None,
+            )
         except Exception as exc:
             log.debug("on_promote_role_btn role-lookup-failed edit failed: %s", exc)
         return
@@ -451,6 +451,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         target_fname,
         current_role,
         role,
+        await locale_for_update(update),
     )
     try:
         await q.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=None)
@@ -469,7 +470,14 @@ async def on_promote_role_cancel(
         return
     await asyncio.gather(
         q.answer(),
-        q.edit_message_text(_MSG_PROMOTE_CANCELLED, reply_markup=None),
+        q.edit_message_text(
+            t(
+                "admins.error.promote_cancelled",
+                await locale_for_update(update),
+                plain=True,
+            ),
+            reply_markup=None,
+        ),
         return_exceptions=True,
     )
 
@@ -493,6 +501,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.effective_message
     if admin is None or msg is None:
         return
+    locale = await locale_for_update(update)
     args = parse_cmd_args(msg.text)
 
     resolved = await _resolve_executor_target(
@@ -503,26 +512,35 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     executor_role, target_id, target_fname = resolved
 
     classified = await _classify_and_load_role(
-        ctx.bot, admin.id, target_id, target_fname, msg, action="demote"
+        ctx.bot,
+        admin.id,
+        target_id,
+        target_fname,
+        msg,
+        action="demote",
+        locale=locale,
     )
     if classified is None:
         return
     ident, target_role = classified
-    refusal = identity.refuse_message("demote", ident)
+    refusal = identity.refuse_message("demote", ident, locale)
     if refusal is not None:
         await safe_reply(msg, refusal, log_label="cmd_demote refusal")
         return
 
     if not target_role:
         await safe_reply(
-            msg, _ERR_NO_REMOVABLE_ROLE, log_label="cmd_demote no-role", parse_mode=None
+            msg,
+            t("admins.error.no_removable_role", locale, plain=True),
+            log_label="cmd_demote no-role",
+            parse_mode=None,
         )
         return
 
     if target_role == "admin" and executor_role != "founder":
         await safe_reply(
             msg,
-            _ERR_FOUNDER_DEMOTE_ONLY,
+            t("admins.error.founder_demote_only", locale, plain=True),
             log_label="cmd_demote founder-only",
             parse_mode=None,
         )
@@ -531,10 +549,16 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     role_label = db.users_roles.ROLE_LABEL.get(target_role, target_role)
     await safe_reply(
         msg,
-        f"{mention(target_id, target_fname or str(target_id), ident.username)} is currently a "
-        f"{bold(role_label)}\\.\nConfirm to remove their role\\.",
+        t(
+            "admins.demote.confirm",
+            locale,
+            user=Safe(
+                mention(target_id, target_fname or str(target_id), ident.username)
+            ),
+            role=Safe(bold(role_label)),
+        ),
         log_label="cmd_demote confirm-prompt",
-        reply_markup=keyboards.demote_confirm_kb(target_id),
+        reply_markup=keyboards.demote_confirm_kb(target_id, locale),
     )
 
 
@@ -565,7 +589,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     except IndexError:
         await q.answer()
         return
-    executor_role = await _check_callback_staff(admin.id, q)
+    executor_role = await _check_callback_staff(admin.id, q, update)
     if executor_role is None:
         return
 
@@ -582,7 +606,14 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             target_role,
         )
         try:
-            await q.edit_message_text(_ERR_ROLE_LOOKUP_FAILED, reply_markup=None)
+            await q.edit_message_text(
+                t(
+                    "admins.error.role_lookup_failed",
+                    await locale_for_update(update),
+                    plain=True,
+                ),
+                reply_markup=None,
+            )
         except Exception as exc:
             log.debug("on_demote_confirm role-lookup-failed edit failed: %s", exc)
         return
@@ -593,14 +624,28 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
     if not target_role or target_role == "founder":
         try:
-            await q.edit_message_text(_ERR_NO_LONGER_REMOVABLE, reply_markup=None)
+            await q.edit_message_text(
+                t(
+                    "admins.error.no_longer_removable",
+                    await locale_for_update(update),
+                    plain=True,
+                ),
+                reply_markup=None,
+            )
         except Exception as exc:
             log.debug("on_demote_confirm no-longer-removable edit failed: %s", exc)
         return
 
     if target_role == "admin" and executor_role != "founder":
         try:
-            await q.edit_message_text(_ERR_FOUNDER_DEMOTE_ONLY, reply_markup=None)
+            await q.edit_message_text(
+                t(
+                    "admins.error.founder_demote_only",
+                    await locale_for_update(update),
+                    plain=True,
+                ),
+                reply_markup=None,
+            )
         except Exception as exc:
             log.debug("on_demote_confirm founder-only edit failed: %s", exc)
         return
@@ -622,7 +667,14 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         removed = False
     if not removed:
         try:
-            await q.edit_message_text(_ERR_ROLE_CLEAR_FAILED, reply_markup=None)
+            await q.edit_message_text(
+                t(
+                    "admins.error.role_clear_failed",
+                    await locale_for_update(update),
+                    plain=True,
+                ),
+                reply_markup=None,
+            )
         except Exception as exc:
             log.debug("on_demote_confirm role-clear-failed edit failed: %s", exc)
         return
@@ -630,8 +682,12 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     role_label = db.users_roles.ROLE_LABEL.get(target_role, target_role)
     try:
         await q.edit_message_text(
-            f"Done\\. {user_ref(target_id, target_fname, target_uname)} "
-            f"has been removed from {esc(role_label)}\\.",
+            t(
+                "admins.demote.done",
+                await locale_for_update(update),
+                user=Safe(user_ref(target_id, target_fname, target_uname)),
+                role=esc(role_label),
+            ),
             parse_mode="MarkdownV2",
             reply_markup=None,
         )
@@ -648,7 +704,10 @@ async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         return
     await asyncio.gather(
         q.answer(),
-        q.edit_message_text(_MSG_CANCELLED, reply_markup=None),
+        q.edit_message_text(
+            t("admins.error.cancelled", await locale_for_update(update), plain=True),
+            reply_markup=None,
+        ),
         return_exceptions=True,
     )
 
@@ -669,6 +728,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     stays visible as a WARNING line in the reply. Logs and confirmation
     reply run in parallel afterward.
     """
+    locale = await locale_for_update(update)
     current_owner = update.effective_user
     msg = update.effective_message
     if current_owner is None or msg is None:
@@ -681,7 +741,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.exception("extract_target failed during transfer")
         await safe_reply(
             msg,
-            replies.ERR_ROLE_VERIFY,
+            replies.err_role_verify(locale, plain=True),
             log_label="cmd_transfer extract-failed",
             parse_mode=None,
         )
@@ -689,7 +749,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="cmd_transfer no-target",
             parse_mode=None,
         )
@@ -703,12 +763,12 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.exception("identity.classify failed during transfer")
         await safe_reply(
             msg,
-            replies.ERR_ROLE_VERIFY,
+            replies.err_role_verify(locale, plain=True),
             log_label="cmd_transfer classify-failed",
             parse_mode=None,
         )
         return
-    refusal = identity.refuse_message("transfer", ident)
+    refusal = identity.refuse_message("transfer", ident, locale)
     if refusal is not None:
         await safe_reply(msg, refusal, log_label="cmd_transfer refusal")
         return
@@ -759,8 +819,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.exception("cmd_transfer set_owner failed for target %d", target_id)
         await safe_reply(
             msg,
-            "Couldn't transfer ownership due to a server error. "
-            "No changes were made; please try again.",
+            t("admins.transfer.set_owner_fail", locale, plain=True),
             log_label="cmd_transfer set-owner-failed",
             parse_mode=None,
         )
@@ -784,15 +843,18 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         current_owner.id,
         current_owner.first_name or "unknown",
     )
-    transfer_note = (
-        f"Done\\. Ownership has been transferred to "
-        f"{user_ref(target_id, target_fname or str(target_id), target_uname)}\\."
+    transfer_note = t(
+        "admins.transfer.done",
+        locale,
+        user=Safe(user_ref(target_id, target_fname or str(target_id), target_uname)),
     )
     if not prev_owner_admin_ok:
-        transfer_note += (
-            f" WARNING: {user_ref(current_owner.id, current_owner.first_name or 'unknown')} "
-            "could not be kept as Admin due to a server error; grant the role "
-            "manually with /tcpromote if needed\\."
+        transfer_note += t(
+            "admins.transfer.admin_warn",
+            locale,
+            user=Safe(
+                user_ref(current_owner.id, current_owner.first_name or "unknown")
+            ),
         )
     # * log and reply in parallel
     transfer_log_r, transfer_reply_r = await asyncio.gather(
@@ -832,6 +894,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     msg = update.effective_message
     if user is None or msg is None:
         return
+    locale = await locale_for_update(update)
 
     # * Reject anonymous admins (the GroupAnonymousBot placeholder, id
     # * 1087968824). Without this, a real admin posting "as the group" could
@@ -841,8 +904,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     if user.id == ANONYMOUS_BOT_ID:
         await safe_reply(
             msg,
-            "This command must be sent from your personal account, not as "
-            "the group\\. Anonymous\\-admin commands are not accepted here\\.",
+            t("admins.request.anon_admin", locale),
             log_label="cmd_promote_request anon-admin",
         )
         return
@@ -866,7 +928,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         )
         await safe_reply(
             msg,
-            _ERR_ROLE_LOOKUP_FAILED,
+            t("admins.error.role_lookup_failed", locale, plain=True),
             log_label="cmd_promote_request lookup-fail",
             parse_mode=None,
         )
@@ -876,7 +938,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         label = label.capitalize()
         await safe_reply(
             msg,
-            f"You're already a {label} - no request needed.",
+            t("admins.request.already_role", locale, role=label, plain=True),
             log_label="cmd_promote_request already-role",
             parse_mode=None,
         )
@@ -885,12 +947,21 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     if existing:
         await safe_reply(
             msg,
-            f"You already have a pending request \\(ID: {code(existing.get('request_id', 'unknown'))}\\)\\.",
+            t(
+                "admins.request.existing",
+                locale,
+                id=Safe(code(existing.get("request_id", "unknown"))),
+            ),
             log_label="cmd_promote_request existing-request",
         )
         return
     _, reply = await Promote.request_admin(
-        ctx.bot, user.id, user.id, user.first_name or "unknown", user.username or ""
+        ctx.bot,
+        user.id,
+        user.id,
+        user.first_name or "unknown",
+        user.username or "",
+        locale,
     )
     await safe_reply(msg, reply, log_label="cmd_promote_request result")
 
@@ -906,13 +977,14 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     msg = update.effective_message
     if msg is None:
         return
+    locale = await locale_for_update(update)
     try:
         pending = await db.queues_db.all_pending()
     except Exception:
         log.exception("all_pending failed during promote_list")
         await safe_reply(
             msg,
-            _ERR_ROLE_LOOKUP_FAILED,
+            t("admins.error.role_lookup_failed", locale, plain=True),
             log_label="cmd_promote_list db-error",
             parse_mode=None,
         )
@@ -920,20 +992,33 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     if not pending:
         await safe_reply(
             msg,
-            _MSG_NO_PENDING,
+            t("admins.error.no_pending", locale, plain=True),
             log_label="cmd_promote_list no-pending",
             parse_mode=None,
         )
         return
-    lines = [f"{bold(f'Pending Promotion Requests ({len(pending)})')}\n"]
+    lines = [
+        t(
+            "admins.list.header",
+            locale,
+            title=Safe(bold(f"Pending Promotion Requests ({len(pending)})")),
+        )
+        + "\n"
+    ]
     for req in pending:
         target_id = req.get("target_id", 0)
         target_fname = req.get("first_name", "unknown")
         uname_val = req.get("username")
         uname = f"@{uname_val}" if uname_val else "no username"
         lines.append(
-            f"\\- {mention(target_id, target_fname, uname_val)} "
-            f"{code(str(target_id))} | {esc(uname)} | ID: {code(req.get('request_id', 'unknown'))}"
+            t(
+                "admins.list.row",
+                locale,
+                user=Safe(mention(target_id, target_fname, uname_val)),
+                id=Safe(code(str(target_id))),
+                uname=uname,
+                req=Safe(code(req.get("request_id", "unknown"))),
+            )
         )
     await safe_reply(msg, "\n".join(lines), log_label="cmd_promote_list result")
 
@@ -976,26 +1061,47 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     if isinstance(is_owner, BaseException):
         log.warning("on_promo_decision owner check failed: %s", is_owner)
         try:
-            await q.edit_message_text(_ERR_ROLE_LOOKUP_FAILED, reply_markup=None)
+            await q.edit_message_text(
+                t(
+                    "admins.error.role_lookup_failed",
+                    await locale_for_update(update),
+                    plain=True,
+                ),
+                reply_markup=None,
+            )
         except Exception as exc:
             log.debug("on_promo_decision lookup-fail edit failed: %s", exc)
         return
     if not is_owner:
         try:
-            await q.edit_message_text(replies.PERM_FOUNDER_ONLY)
+            await q.edit_message_text(
+                replies.perm_founder_only(await locale_for_update(update), plain=True)
+            )
         except Exception as exc:
             log.debug("on_promo_decision perm-denied edit failed: %s", exc)
         return
     if isinstance(req_result, BaseException):
         log.error("get_request_by_id failed for %s: %s", request_id, req_result)
         try:
-            await q.edit_message_text(_ERR_REQUEST_NOT_FOUND)
+            await q.edit_message_text(
+                t(
+                    "admins.error.request_not_found",
+                    await locale_for_update(update),
+                    plain=True,
+                )
+            )
         except Exception as exc:
             log.debug("on_promo_decision db-error edit failed: %s", exc)
         return
     if not req_result:
         try:
-            await q.edit_message_text(_ERR_REQUEST_NOT_FOUND)
+            await q.edit_message_text(
+                t(
+                    "admins.error.request_not_found",
+                    await locale_for_update(update),
+                    plain=True,
+                )
+            )
         except Exception as exc:
             log.debug("on_promo_decision not-found edit failed: %s", exc)
         return
@@ -1005,7 +1111,14 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     # * so a stale card never shows a second success message.
     if req.get("status") != "pending":
         try:
-            await q.edit_message_text(_ERR_REQUEST_NOT_FOUND, reply_markup=None)
+            await q.edit_message_text(
+                t(
+                    "admins.error.request_not_found",
+                    await locale_for_update(update),
+                    plain=True,
+                ),
+                reply_markup=None,
+            )
         except Exception as exc:
             log.debug("on_promo_decision resolved edit failed: %s", exc)
         return
@@ -1030,8 +1143,11 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             )
             try:
                 await q.edit_message_text(
-                    "Couldn't approve the request due to a server error. "
-                    "Please try again.",
+                    t(
+                        "admins.decision.approve_fail",
+                        await locale_for_update(update),
+                        plain=True,
+                    ),
                     reply_markup=None,
                 )
             except Exception as exc:
@@ -1043,8 +1159,11 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             log.exception("resolve(approved) failed for request %s", request_id)
             try:
                 await q.edit_message_text(
-                    "Couldn't approve the request due to a server error. "
-                    "Please try again.",
+                    t(
+                        "admins.decision.approve_fail",
+                        await locale_for_update(update),
+                        plain=True,
+                    ),
                     reply_markup=None,
                 )
             except Exception as exc:
@@ -1053,8 +1172,11 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         if db_resolve_r is False:
             try:
                 await q.edit_message_text(
-                    "Couldn't approve the request due to a server error. "
-                    "Please try again.",
+                    t(
+                        "admins.decision.approve_fail",
+                        await locale_for_update(update),
+                        plain=True,
+                    ),
                     reply_markup=None,
                 )
             except Exception as exc:
@@ -1091,15 +1213,27 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             # * so the display text is re-escaped here. Unavailable on
             # * MaybeInaccessibleMessage; fall back to an empty base.
             existing_text = esc(getattr(q.message, "text", "") or "")
+        locale = await locale_for_update(update)
+        target_locale = await locale_for_user(target_id)
         notify_results = await asyncio.gather(
             q.edit_message_text(
-                existing_text + f"\n\n\\- Approved by {esc(admin.first_name)}",
+                existing_text
+                + t(
+                    "admins.decision.approved_suffix",
+                    locale,
+                    name=admin.first_name,
+                ),
                 parse_mode="MarkdownV2",
                 reply_markup=None,
             ),
             ctx.bot.send_message(
                 target_id,
-                f"Your promotion request has been approved - welcome to the {cfg.community_name} staff team, Admin.",
+                t(
+                    "admins.decision.approve_dm",
+                    target_locale,
+                    community=cfg.community_name,
+                    plain=True,
+                ),
             ),
             ctx.bot.send_message(
                 lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
@@ -1122,8 +1256,11 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         if not resolved:
             try:
                 await q.edit_message_text(
-                    "Couldn't reject the request due to a server error. "
-                    "Please try again.",
+                    t(
+                        "admins.decision.reject_fail",
+                        await locale_for_update(update),
+                        plain=True,
+                    ),
                     reply_markup=None,
                 )
             except Exception as exc:
@@ -1141,15 +1278,22 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         existing_text = ""
         if q.message is not None:
             existing_text = esc(getattr(q.message, "text", "") or "")
+        locale = await locale_for_update(update)
+        target_locale = await locale_for_user(target_id)
         reject_results = await asyncio.gather(
             q.edit_message_text(
-                existing_text + f"\n\n\\- Rejected by {esc(admin.first_name)}",
+                existing_text
+                + t(
+                    "admins.decision.rejected_suffix",
+                    locale,
+                    name=admin.first_name,
+                ),
                 parse_mode="MarkdownV2",
                 reply_markup=None,
             ),
             ctx.bot.send_message(
                 target_id,
-                "Your request was reviewed but wasn't approved this time. You're free to apply again later.",
+                t("admins.decision.reject_dm", target_locale, plain=True),
             ),
             ctx.bot.send_message(
                 lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt

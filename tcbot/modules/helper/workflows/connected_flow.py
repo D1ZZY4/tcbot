@@ -25,8 +25,10 @@ from telegram.constants import ChatMemberStatus, KeyboardButtonStyle
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.utils.dispatch import count_transient_errors, fan_out
 from tcbot.utils.formatter import bold, code
+from tcbot.utils.i18n import t
 from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
@@ -89,16 +91,8 @@ async def _harvest_admin_identities(
         )
 
 
-# ──────────────── User-facing reply constants ──────────────────── #
-
-_ERR_ROLE_CHECK_FAILED = "Could not verify your role."
-_ERR_OWNER_ONLY = "Only the group owner can decide."
-_ERR_BOT_PERMS_VERIFY = (
-    "Could not verify my own permissions. Please promote me as admin and try again."
-)
-_ERR_COMPLETE_JOIN = (
-    "Connection failed due to a database error. Please try again later."
-)
+# * Connect-flow runtime prose lives in connecting.toml [state];
+# * only the permission-code tuple stays in code.
 
 _REQUIRED_PERMS: tuple[str, ...] = (
     "can_delete_messages",
@@ -120,58 +114,65 @@ class BuildConnection:
 
     # ── Text factories ─────────────────────────────────────────────────────
 
-    def join_prompt(self) -> str:
+    def join_prompt(self, locale: str | None = None) -> str:
         """Return the initial prompt to send when the bot is first added to a group."""
-        return f"Want to connect this group to {self.community_name}?"
-
-    def connected_message(self) -> str:
-        """Shown (or edited into the prompt) on a successful connection."""
-        return (
-            f"This community is now connected to {self.community_name}. "
-            "Authorized staff can use federation commands here."
+        return t(
+            "connecting.state.join_prompt",
+            locale,
+            community=self.community_name,
+            plain=True,
         )
 
-    def declined_message(self) -> str:
+    def connected_message(self, locale: str | None = None) -> str:
+        """Shown (or edited into the prompt) on a successful connection."""
+        return t(
+            "connecting.state.connected",
+            locale,
+            community=self.community_name,
+            plain=True,
+        )
+
+    def declined_message(self, locale: str | None = None) -> str:
         """Shown when the owner taps Cancel on the join prompt."""
-        return "Connection declined. I'll leave the group now."
+        return t("connecting.state.declined", locale, plain=True)
 
-    def already_connected_message(self) -> str:
+    def already_connected_message(self, locale: str | None = None) -> str:
         """Shown when the group is already part of the federation."""
-        return f"This group is already connected to {self.community_name}."
+        return t(
+            "connecting.state.already_connected",
+            locale,
+            community=self.community_name,
+            plain=True,
+        )
 
-    def connecting_message(self) -> str:
+    def connecting_message(self, locale: str | None = None) -> str:
         """Progress state edited into the prompt before the ban/mute replay.
 
         The replay fans every active ban/mute into the new group, which
         takes minutes on large federations; without this the owner stares
         at a dead prompt with live buttons for the whole duration.
         """
-        return (
-            "Connecting... applying existing federation bans and mutes. "
-            "This can take a moment for large federations."
-        )
+        return t("connecting.state.connecting", locale, plain=True)
 
-    def perms_required_message(self) -> str:
+    def perms_required_message(self, locale: str | None = None) -> str:
         """Shown when the bot lacks the required admin permissions."""
-        return (
-            "Please make the bot an admin with the required permissions "
-            "(delete messages, ban users, invite users) and try again."
-        )
+        return t("connecting.state.perms_required", locale, plain=True)
 
     # ── Keyboard factory ───────────────────────────────────────────────────
 
-    def join_keyboard(self) -> InlineKeyboardMarkup:
+    def join_keyboard(self, locale: str | None = None) -> InlineKeyboardMarkup:
         """Connect / Cancel inline keyboard attached to the join prompt."""
         return InlineKeyboardMarkup(
             [
                 [
                     InlineKeyboardButton(
-                        self.join_label,
+                        t("button.connect", locale, plain=True),
                         callback_data=self.join_callback,
                         style=KeyboardButtonStyle.PRIMARY,
                     ),
                     InlineKeyboardButton(
-                        self.cancel_label, callback_data=self.cancel_callback
+                        t("button.cancel", locale, plain=True),
+                        callback_data=self.cancel_callback,
                     ),
                 ]
             ]
@@ -324,6 +325,7 @@ class BuildConnection:
         chat = cmc.chat
         if chat.type not in ("group", "supergroup"):
             return
+        locale = await locale_for_update(update)
 
         new_status = cmc.new_chat_member.status
         old_status = cmc.old_chat_member.status if cmc.old_chat_member else None
@@ -428,7 +430,7 @@ class BuildConnection:
                     # * final edit still lands when this one fails.
                     with contextlib.suppress(Exception):
                         await ctx.bot.edit_message_text(
-                            self.connecting_message(),
+                            self.connecting_message(locale),
                             chat_id=chat.id,
                             message_id=pending.get("message_id", 0),
                             reply_markup=None,
@@ -449,7 +451,7 @@ class BuildConnection:
                         return
                     try:
                         await ctx.bot.edit_message_text(
-                            self.connected_message(),
+                            self.connected_message(locale),
                             chat_id=chat.id,
                             message_id=pending.get("message_id", 0),
                             reply_markup=None,
@@ -476,8 +478,8 @@ class BuildConnection:
             try:
                 prompt = await ctx.bot.send_message(
                     chat.id,
-                    self.join_prompt(),
-                    reply_markup=self.join_keyboard(),
+                    self.join_prompt(locale),
+                    reply_markup=self.join_keyboard(locale),
                 )
                 await db.groups_db.add_pending(
                     chat.id,
@@ -498,6 +500,7 @@ class BuildConnection:
         if q is None or chat is None or user is None:
             return
         lc, lt = cfg.logs
+        locale = await locale_for_update(update)
 
         # * Gather q.answer() + member check in parallel so the spinner
         # * disappears immediately regardless of Telegram API latency.
@@ -514,14 +517,20 @@ class BuildConnection:
             log.debug("Join decision role check failed: %s", member_res)
             coros: list = [q.edit_message_reply_markup(None)]
             if msg:
-                coros.append(msg.reply_text(_ERR_ROLE_CHECK_FAILED))
+                coros.append(
+                    msg.reply_text(
+                        t("connecting.state.role_check_failed", locale, plain=True)
+                    )
+                )
             await asyncio.gather(*coros, return_exceptions=True)
             return
 
         if member_res.status != ChatMemberStatus.OWNER:
             coros = [q.edit_message_reply_markup(None)]
             if msg:
-                coros.append(msg.reply_text(_ERR_OWNER_ONLY))
+                coros.append(
+                    msg.reply_text(t("connecting.state.owner_only", locale, plain=True))
+                )
             await asyncio.gather(*coros, return_exceptions=True)
             return
 
@@ -536,7 +545,10 @@ class BuildConnection:
             except Exception as exc:
                 log.debug("Join decision permission check failed: %s", exc)
                 try:
-                    await q.edit_message_text(_ERR_BOT_PERMS_VERIFY, reply_markup=None)
+                    await q.edit_message_text(
+                        t("connecting.state.bot_perms_verify", locale, plain=True),
+                        reply_markup=None,
+                    )
                 except Exception as exc2:
                     log.debug("Join decision perms-verify edit failed: %s", exc2)
                 return
@@ -556,13 +568,16 @@ class BuildConnection:
                 except Exception:
                     log.exception("add_pending failed for chat %d", chat.id)
                     try:
-                        await q.edit_message_text(_ERR_COMPLETE_JOIN, reply_markup=None)
+                        await q.edit_message_text(
+                            t("connecting.state.complete_join", locale, plain=True),
+                            reply_markup=None,
+                        )
                     except Exception as exc:
                         log.debug("Join decision db-error edit failed: %s", exc)
                     return
                 try:
                     await q.edit_message_text(
-                        self.perms_required_message(), reply_markup=None
+                        self.perms_required_message(locale), reply_markup=None
                     )
                 except Exception as exc:
                     log.debug("Join decision perms-required edit failed: %s", exc)
@@ -575,12 +590,15 @@ class BuildConnection:
             except Exception:
                 log.exception("is_connected failed for chat %d", chat.id)
                 with contextlib.suppress(Exception):
-                    await q.edit_message_text(_ERR_COMPLETE_JOIN, reply_markup=None)
+                    await q.edit_message_text(
+                        t("connecting.state.complete_join", locale, plain=True),
+                        reply_markup=None,
+                    )
                 return
             if already_connected:
                 try:
                     await q.edit_message_text(
-                        self.already_connected_message(), reply_markup=None
+                        self.already_connected_message(locale), reply_markup=None
                     )
                 except Exception as exc:
                     log.debug("Join decision already-connected edit failed: %s", exc)
@@ -593,7 +611,9 @@ class BuildConnection:
             # * above): the ban/mute replay can take minutes, and stripping
             # * the buttons closes the double-tap window.
             with contextlib.suppress(Exception):
-                await q.edit_message_text(self.connecting_message(), reply_markup=None)
+                await q.edit_message_text(
+                    self.connecting_message(locale), reply_markup=None
+                )
             try:
                 await self.complete_join(
                     chat.id, chat.title or "", user.id, user.first_name, ctx.bot
@@ -601,10 +621,15 @@ class BuildConnection:
             except Exception:
                 log.exception("complete_join failed for chat %d", chat.id)
                 with contextlib.suppress(Exception):
-                    await q.edit_message_text(_ERR_COMPLETE_JOIN, reply_markup=None)
+                    await q.edit_message_text(
+                        t("connecting.state.complete_join", locale, plain=True),
+                        reply_markup=None,
+                    )
                 return
             with contextlib.suppress(Exception):
-                await q.edit_message_text(self.connected_message(), reply_markup=None)
+                await q.edit_message_text(
+                    self.connected_message(locale), reply_markup=None
+                )
 
         elif action == self.cancel_callback:
             # * Remove the pending row first: if it survives while the bot
@@ -615,7 +640,7 @@ class BuildConnection:
             except Exception:
                 log.exception("remove_pending failed for chat %d on cancel", chat.id)
             await asyncio.gather(
-                q.edit_message_text(self.declined_message(), reply_markup=None),
+                q.edit_message_text(self.declined_message(locale), reply_markup=None),
                 ctx.bot.send_message(
                     lc,
                     parse_logmsg.group_connection_rejected_log(

@@ -1,0 +1,97 @@
+# Stats help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in stats.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "See a live federation overview: Founder, staff, users, active bans, and connected groups, with drill-down menus for every section."
+
+[help.commands]
+body = "`/tcstats` (alias: `/tcs`)"
+
+[help.what]
+body = "Shows a live federation summary: Founder, total staff broken down by role, the number of cached users, active federation bans, and connected chats."
+
+[help.drills]
+body = """
+*Staff Roster*: Founder, Admins, Developers, Testers, all listed with mentions.
+*Users*: paginated list of every cached user (Founder only - the button and the list are hidden from everyone else). Numbered buttons open a per-user detail card.
+*Connected Chats*: paginated list of every active group; drill-in shows owner, ID, and connect date.
+*User Bans*: paginated list of every active ban with a *Search* shortcut to look up a user by name or ID.
+
+Every view ends with a *Back* button to the main summary."""
+
+[help.examples]
+body = """
+`/tcstats`
+`/tcs`"""
+
+[error]
+user_not_found = "User not found on this page."
+group_not_found = "Group not found on this page."
+ban_not_found = "Ban record not found on this page."
+result_unavailable = "Result no longer available."
+access_retry = "I couldn't verify your access right now. Please try again in a moment."
+
+# Runtime strings for stats views (stats_flow.py). All render MarkdownV2
+# except button labels (plain). Placeholders as documented per key.
+
+[button]
+roster = "Staff Roster"
+bans = "User Bans"
+chats = "Connected Chats"
+users = "Users"
+
+[main]
+title = "{community} *Stats*"
+founder = "Founder: {owner}"
+staff = "Staff: {n} (Admins {admins}, Devs {devs}, Testers {testers})"
+users = "Users tracked: {n}"
+bans = "Active bans: {n}"
+chats = "Connected chats: {n}"
+owner_unset = "Not set"
+
+[roster]
+title = "*Staff Roster* - {community}"
+founder = "Founder"
+section = "{label}"
+member = "- {user}"
+empty = "- No staff assigned"
+
+[users]
+empty = "*Users*\n\nNo cached users yet. The bot caches users as it sees them across connected groups."
+header = "*Users* - {n} total - page {page}/{pages}"
+item = "{i}. {user}"
+
+[user_detail]
+title = "*User Details*"
+name = "Name: {user}"
+id = "ID: {id}"
+username = "Username: @{name}"
+username_none = "Username: -"
+last_name = "Last name: {name}"
+first_seen = "First seen: {date}"
+last_seen = "Last seen: {date}"
+check_hint = "Use {command} for the full profile."
+
+[chats]
+empty = "*Connected Chats*\n\nNo connected groups yet."
+header = "*Connected Chats* - {n} total - page {page}/{pages}"
+item = "{i}. {title} - {id}"
+
+[chat_detail]
+title = "*Group Details*"
+name = "Name: {name}"
+chat_id = "Chat ID: {id}"
+connected_by = "Connected by: {user}"
+date = "Date: {date}"
+
+[bans_view]
+empty = "*User Bans*\n\nNo active federation bans."
+header = "*User Bans* - {n} total - page {page}/{pages}"
+item = "{i}. {name} - {id}"
+
+[search]
+title = "*Search User Bans*\n\nSend a name or user ID in the chat."
+empty = "*Search:* \"{query}\"\n\nNo results found."
+header = "*Search:* \"{query}\" ({n} found)"
+item = "{i}. {name} - {id}"

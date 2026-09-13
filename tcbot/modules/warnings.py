@@ -15,6 +15,7 @@ from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 from tcbot import cfg
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.reason_flow import (
     WAITING_PROOF,
@@ -32,7 +33,8 @@ from tcbot.modules.helper.workflows.warning_flow import (
     warn_conversation,
 )
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import bold, code, mention
+from tcbot.utils.formatter import bold, mention
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -50,58 +52,49 @@ _RL_READ_LIMIT: int = 8
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Warnings"
-__help_text__ = (
-    "Per\\-group warning tracking\\. At "
-    f"{bold(f'{cfg.warn_limit} warnings')} the user is automatically federation\\-banned "
-    "across all connected groups and their warnings are cleared\\."
-)
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        f"{code('/tcwarn')} \\(alias: {code('/tcw')}\\)\n"
-        f"{code('/tcunwarn')} \\(alias: {code('/tcunw')}\\)\n"
-        f"{code('/warns')} \\(alias: {code('/warnlist')}\\)\n"
-        f"{code('/resetwarns')} \\(alias: {code('/clearwarns')}\\)",
-    ),
-    replies.who_section(
-        f"{bold('/tcwarn')}, {bold('/tcunwarn')}, {bold('/resetwarns')}: Tester and above.\n"
-        f"{bold('/warns')}: Tester and above."
-    ),
-    replies.where_section(replies.WHERE_CONNECTED_GROUP),
-    (
-        replies.SEC_WHAT,
-        f"{bold('/tcwarn')}: issues a formal warning\\. Warnings are tracked {bold('per-group')} and "
-        f"do not carry across connected groups\\. At {bold(f'{cfg.warn_limit} warnings')}, the user is "
-        f"automatically federation\\-banned across all connected groups and their warnings are cleared\\. "
-        f"Staff targets are demoted first and exempted from the auto\\-ban\\.\n\n"
-        f"{bold('/tcunwarn')}: removes the user's most recent warning in the current group\\.\n\n"
-        f"{bold('/warns')}: shows the current warning count and full list of reasons\\.\n\n"
-        f"{bold('/resetwarns')}: clears all warnings for a user in the current group at once, "
-        f"without triggering the ban threshold\\.",
-    ),
-    (
-        "Flow (/tcwarn)",
-        f"1\\. Run {code('/tcwarn')} with the target \\(and optional inline reason\\)\\.\n"
-        "2\\. If no reason was given, the bot asks \\- reply with text\\.\n"
-        f"3\\. The bot asks for proof \\- send a photo/video or tap {bold('Skip')}\\.",
-    ),
-    replies.target_section(),
-    (
-        replies.SEC_EXAMPLES,
-        f"{code('/tcwarn @username spamming')}: reason inline\n"
-        f"{code('/tcw 123456789')}: bot will ask for reason\n"
-        f"{code('/tcunwarn @username')}\n"
-        f"{code('/warns @username')}\n"
-        f"{code('/resetwarns @username')}",
-    ),
-]
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+def _warn_limit_label(locale: str | None = None) -> Safe:
+    """Pre-formatted warn-limit fragment for help placeholders.
+
+    Markup around a dynamic value cannot come from TOML, so it is
+    composed here per locale.
+    """
+    return Safe(
+        bold(f"{cfg.warn_limit} {t('warnings.help.limit_noun', locale, plain=True)}")
+    )
+
+
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("warnings.help.overview", locale, limit=_warn_limit_label(locale))
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("warnings.help.commands.body", locale),
+        ),
+        replies.who_section(t("warnings.help.who.body", locale), locale),
+        replies.where_section(replies.where_connected_group(locale), locale),
+        (
+            replies.sec_what(locale),
+            t("warnings.help.what.body", locale, limit=_warn_limit_label(locale)),
+        ),
+        (
+            "Flow",
+            t("warnings.help.flow.body", locale),
+        ),
+        replies.target_section(locale),
+        (
+            replies.sec_examples(locale),
+            t("warnings.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ──────────────────────── Helper Functions ──────────────────────── #
@@ -130,11 +123,13 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
     if ctx.user_data is None:
         return ConversationHandler.END
+    locale = await locale_for_update(update)
 
     args = parse_cmd_args(msg.text)
-    # * Single owner for the reply-wins plus shape check (see banning.py).
-    has_explicit_target = extraction.has_explicit_target(msg, args)
-    target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
+    # * Resolution plus consumption in one call (see banning.py).
+    (target_id, target_name), has_explicit_target = await extraction.extract_mod_target(
+        update, args, ctx.bot
+    )
 
     inline_reason = parse_inline_reason(
         args,
@@ -146,7 +141,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="cmd_warn_entry no-target",
             parse_mode=None,
         )
@@ -157,7 +152,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if inline_reason and is_reason_too_long(inline_reason):
         await safe_reply(
             msg,
-            reason_too_long_text(len(inline_reason)),
+            reason_too_long_text(len(inline_reason), locale),
             log_label="cmd_warn_entry reason-too-long",
             parse_mode=None,
         )
@@ -181,12 +176,12 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if executor_role is None:
         return ConversationHandler.END
 
-    refusal = identity.refuse_message("warn", ident)
+    refusal = identity.refuse_message("warn", ident, locale)
     if refusal is not None:
         await safe_reply(msg, refusal, log_label="cmd_warn_entry refusal")
         return ConversationHandler.END
 
-    notice = identity.staff_notice("warn", ident, cfg.community_name)
+    notice = identity.staff_notice("warn", ident, cfg.community_name, locale)
     if notice is not None:
         await safe_reply(msg, notice, log_label="cmd_warn_entry staff notice")
 
@@ -205,9 +200,11 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         ctx.user_data["warn_reason"] = inline_reason
         try:
             await msg.reply_text(
-                proof.noted_prompt("warn", inline_reason, target_mention),
+                proof.noted_prompt(
+                    "warn", inline_reason, target_mention, locale=locale
+                ),
                 parse_mode="MarkdownV2",
-                reply_markup=proof.keyboard(),
+                reply_markup=proof.keyboard(locale),
             )
         except Exception as exc:
             log.debug("cmd_warn_entry proof-prompt reply failed: %s", exc)
@@ -218,9 +215,9 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     try:
         await msg.reply_text(
-            reason.prompt(target_mention, "warn"),
+            reason.prompt(target_mention, "warn", locale=locale),
             parse_mode="MarkdownV2",
-            reply_markup=reason.keyboard(),
+            reply_markup=reason.keyboard(locale),
         )
     except Exception as exc:
         log.debug("cmd_warn_entry reason-prompt reply failed: %s", exc)
@@ -248,12 +245,13 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
     if admin is None:
         return
+    locale = await locale_for_update(update)
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="cmd_unwarn no-target",
             parse_mode=None,
         )
@@ -277,12 +275,12 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if executor_role is None:
         return
 
-    refusal = identity.refuse_message("unwarn", ident)
+    refusal = identity.refuse_message("unwarn", ident, locale)
     if refusal is not None:
         await safe_reply(msg, refusal, log_label="cmd_unwarn refusal")
         return
 
-    notice = identity.staff_notice("unwarn", ident, cfg.community_name)
+    notice = identity.staff_notice("unwarn", ident, cfg.community_name, locale)
     if notice is not None:
         await safe_reply(msg, notice, log_label="cmd_unwarn notice")
 
@@ -303,12 +301,13 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
     if admin is None:
         return
+    locale = await locale_for_update(update)
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="cmd_warnlist no-target",
             parse_mode=None,
         )
@@ -341,12 +340,13 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     admin = update.effective_user
     if admin is None:
         return
+    locale = await locale_for_update(update)
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="cmd_resetwarns no-target",
             parse_mode=None,
         )
@@ -370,12 +370,12 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     if executor_role is None:
         return
 
-    refusal = identity.refuse_message("resetwarns", ident)
+    refusal = identity.refuse_message("resetwarns", ident, locale)
     if refusal is not None:
         await safe_reply(msg, refusal, log_label="cmd_resetwarns refusal")
         return
 
-    notice = identity.staff_notice("resetwarns", ident, cfg.community_name)
+    notice = identity.staff_notice("resetwarns", ident, cfg.community_name, locale)
     if notice is not None:
         await safe_reply(msg, notice, log_label="cmd_resetwarns notice")
 

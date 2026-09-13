@@ -1,0 +1,63 @@
+# Ban help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in banning.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Issues a *federation-wide ban* on a user, applied across every connected group at once. Auto-demotes staff targets and stores proof with the ban record."
+
+[help.commands]
+body = "`/tcban` (alias: `/tcb`)"
+
+[help.what]
+body = """
+Issues a *federation-wide ban* on the target, applied across all connected groups automatically. A reason is required - provide it directly after the target.
+
+After the command, the bot walks you through the proof step: send photos, videos, GIFs, or files as evidence in one album or one by one, then tap Done. Proof is required and is logged with the ban record to the federation logs channel.
+
+If the user already has an active ban, the bot first asks for confirmation (with View Log and View Proof links) instead of updating silently; only Continue leads to proof collection, and the existing record is then updated with the new reason and proof rather than creating a duplicate.
+If the target holds a federation role (Tester / Developer / Admin), that role is auto-demoted and they are notified by DM before the ban is enforced."""
+
+[help.flow]
+body = """
+1. Run `/tcban` with the target and reason. If the user is already banned, confirm the update first.
+2. Send proof: photos, videos, GIFs, or files, then tap *Done*. Proof is required."""
+
+[help.examples]
+body = """
+`/tcban @username spamming in connected groups`
+`/tcban 123456789 scamming members`
+Or reply to a message and run `/tcb reason here`."""
+
+# Runtime strings for the ban flow (ban_flow.py, banning.py).
+# [state] entries send plain (alerts, parse_mode=None replies, plain edits).
+# [db_fail]/[applied]/[pm]/[summary] render as MarkdownV2.
+# Placeholders: {user} pre-formatted user reference, {reason} raw reason
+# text, {applied} prebuilt applied line, {sample} raw group names,
+# {total}/{failed} ints, {community} raw community name.
+
+[state]
+cancelled = "Cancelled. No ban was issued."
+timeout = "Timed out waiting for proof. No ban was issued."
+proof_expected = "Please send a photo, video, GIF, or file as proof, or press Cancel."
+empty = "Send a photo, video, GIF, or file first, then tap Done."
+
+[db_fail]
+body = "{user} could not be banned: the federation ban record could not be written to the database, so no groups were touched. Check the logs and retry with /tcban once the database recovers."
+
+[applied]
+empty = "No connected groups configured."
+none = "WARNING: ban not enforced in any group ({total}/{total} failed). Check bot admin rights in: {sample}{more}"
+partial = "Applied to {done}/{total} groups ({failed} failed: {sample}{more}"
+full = "Applied to {total}/{total} groups."
+
+[pm]
+body = "You have been federation-banned from {community}.\nReason: {reason}\n\nYou may submit an appeal using the button below."
+
+[summary]
+body = "{user} has been banned.\nReason: {reason}\n{applied}"
+
+[confirm]
+body = "{user} already has an active federation ban (Ban ID {ban_id}).\nExisting reason: {old_reason}\nNew reason: {new_reason}\n\nUpdate the ban with the new reason and proof?"
+
+[error]
+reason_required = "A reason is required - /tcban <target> <reason>."

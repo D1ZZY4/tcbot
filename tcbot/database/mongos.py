@@ -233,6 +233,8 @@ async def ensure_indexes() -> None:
         ),
         # * Serves batch username lookups and search operations
         col("member_cache").create_index([("username", 1)]),
+        # * Serves user_settings lookups by user: one preference row per user.
+        col("user_settings").create_index([("user_id", 1)], unique=True),
         # * Serves name search operations (case-insensitive search by first_name)
         col("member_cache").create_index([("first_name", 1)]),
         col("warns").create_index([("user_id", 1), ("chat_id", 1), ("timestamp", -1)]),

@@ -17,13 +17,13 @@ Every new conversation in this repository must start by reading the canonical ru
 
 **Read at the start of every conversation:**
 
-- [`.agents/rules/tooling-validation.md`](.agents/rules/tooling-validation.md):
+- [`.agents/rules/tooling-skills-use.md`](.agents/rules/tooling-skills-use.md):
   workflow, dependency, documentation, and validation rules
 - [`.agents/rules/code-style.md`](.agents/rules/code-style.md): Python style,
   architecture, handler, and database rules
 - [`.agents/rules/comment-style.md`](.agents/rules/comment-style.md): comments,
   docstrings, section dividers, and Markdown rules
-- [`.agents/rules/docs-rules.md`](.agents/rules/docs-rules.md): documentation
+- [`.agents/rules/docs-sync.md`](.agents/rules/docs-sync.md): documentation
   scope, style, maintenance workflow, and detailed-guide rules
 - [`.agents/rules/security-rules.md`](.agents/rules/security-rules.md):
   authorization boundaries, role safety, secrets, and compatibility
@@ -37,12 +37,12 @@ Every new conversation in this repository must start by reading the canonical ru
 - [`CHANGELOG.md`](CHANGELOG.md): entry under `[Unreleased]` (Added / Changed / Fixed / Removed / Documentation)
 - Every related `docs/**/*.md`, `.agents/**/*.md`, [`README.md`](README.md), [`replit.md`](replit.md) whose content is now stale
 
-See [`tooling-validation.md`](.agents/rules/tooling-validation.md#read-before-work-and-update-after-work)
+See [`tooling-skills-use.md`](.agents/rules/tooling-skills-use.md#read-before-work-and-update-after-work)
 for the complete read/update rules. Skipping either step is a serious defect.
 
 ## Skills and Sub-Agents Policy
 
-**Skills in `.agents/skills/` auto-invoke whenever their trigger matches**: no need for the user to ask. If you are about to write code in `tcbot/`, read [`code-style.md`](.agents/rules/code-style.md), plus [`security-rules.md`](.agents/rules/security-rules.md) for authorization work or [`asyncio-gather-rules.md`](.agents/rules/asyncio-gather-rules.md) for async work. If you are about to edit docs, read [`docs-rules`](.agents/rules/docs-rules.md). Same for `mongodb-query-optimizer`, `feature-reviewer`. When several skills match, load them all, prioritize by task relevance, and read every loaded skill's full instructions: never half. Compose multiple skills when one task spans multiple areas.
+**Skills in `.agents/skills/` auto-invoke whenever their trigger matches**: no need for the user to ask. If you are about to write code in `tcbot/`, read [`code-style.md`](.agents/rules/code-style.md), plus [`security-rules.md`](.agents/rules/security-rules.md) for authorization work or [`asyncio-gather-rules.md`](.agents/rules/asyncio-gather-rules.md) for async work. If you are about to edit docs, read [`docs-sync`](.agents/rules/docs-sync.md). Same for `mongodb-query-optimizer`, `feature-reviewer`. When several skills match, load them all, prioritize by task relevance, and read every loaded skill's full instructions: never half. Compose multiple skills when one task spans multiple areas.
 
 The skills directory also previously included meta-tools for the agent itself (`find-skills`, `general-sub-agent`, `skill-creator`) that have been removed: they were tooling for the agent harness, not for the bot codebase, and had no project-specific value.
 

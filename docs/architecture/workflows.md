@@ -45,7 +45,7 @@ Exports:
 
 | Export | Purpose |
 |---|---|
-| `parse_inline_reason(args, has_explicit_target)` | Returns reason text after the target token when needed. Ban, kick, mute, and warn entries all use this parser with `extraction.has_explicit_target(msg, args)` so reply-target reasons keep leading ID-like tokens, except a restated numeric ID of the replied-to user (passed as `reply_target_id` on the reply path only), which is dropped as a duplicate. |
+| `parse_inline_reason(args, has_explicit_target)` | Returns reason text after the target token when needed. Ban, kick, mute, and warn entries all use this parser with the consumed flag from `extraction.extract_mod_target(update, args, bot)`, so reply-target reasons keep leading ID-like tokens, except a restated numeric ID of the replied-to user (passed as `reply_target_id` on the reply path only), which is dropped as a duplicate. A verified typed ID naming someone else overrides the reply and is consumed as the target. |
 | `MAX_REASON_LEN` | Maximum character length accepted for a moderation reason (1000). Typed input exceeding this stays in `WAITING_REASON` with a retry notice; overlong inline reasons fail fast at the entry with the same text via `is_reason_too_long()` and `reason_too_long_text()`. `_MAX_REASON_LEN` remains as a backward-compatible alias. |
 | `is_reason_too_long(text)` | Shared length predicate used by the typed-reason handler and all four inline-reason entries. |
 | `reason_too_long_text(actual_len)` | Single source of truth for the overlong-reason reply text. |

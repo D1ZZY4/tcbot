@@ -17,6 +17,7 @@ from telegram import Bot, ChatPermissions, Update
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg, replies
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
@@ -25,9 +26,9 @@ from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modact
 from tcbot.utils.dispatch import count_transient_errors, fan_out
 from tcbot.utils.formatter import (
     bold,
-    esc,
     user_ref,
 )
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
@@ -55,8 +56,6 @@ _MAX_DURATION_DAYS: int = 36500
 # * Per-action BuildReason and BuildProof instances; imported by muting.py
 reason = BuildReason("mute")
 proof = BuildProof("mute")
-
-_ERR_DB_RETRY = "I couldn't reach the database right now. Please try again in a moment."
 
 
 # ──────────────────────── Duration helpers ──────────────────────── #
@@ -87,10 +86,10 @@ def parse_duration(raw: str) -> timedelta | None:
     return result
 
 
-def fmt_duration(td: timedelta | None) -> str:
+def fmt_duration(td: timedelta | None, locale: str | None = None) -> str:
     """Human-readable duration string for use in replies."""
     if td is None:
-        return "permanently"
+        return t("muting.duration.permanent", locale, plain=True)
     total = int(td.total_seconds())
     if total < 60:
         return f"{total}s"
@@ -122,12 +121,15 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         log.warning("_execute_mute called with incomplete mute state; aborting")
         return
     target_fname = meta.get("mute_target_fname") or str(target_id)
-    reason_text = meta.get("mute_reason") or replies.NO_REASON
+    reason_text = meta.get("mute_reason") or replies.no_reason(
+        await locale_for_update(update), plain=True
+    )
     duration = meta.get("mute_duration")
     proof_msgs = meta.get("mute_proof_msgs")
     prompt_chat = meta.get("mute_prompt_chat")
     prompt_id = meta.get("mute_prompt_id")
-    dur_str = fmt_duration(duration)
+    locale = await locale_for_update(update)
+    dur_str = fmt_duration(duration, locale)
 
     until = utc_now() + duration if duration else None
     perms = ChatPermissions(can_send_messages=False)
@@ -149,10 +151,11 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         log.exception("_execute_mute: active_groups failed for target=%d", target_id)
         try:
             await bot.edit_message_text(
-                f"{user_ref(target_id, target_fname)} could not be muted: "
-                "the group list could not be loaded from the database, so no "
-                "groups were touched\\. Check the logs and retry with /tcmute "
-                "once the database recovers\\.",
+                t(
+                    "muting.note.groups_fail",
+                    locale,
+                    user=Safe(user_ref(target_id, target_fname)),
+                ),
                 chat_id=prompt_chat,
                 message_id=prompt_id,
                 parse_mode="MarkdownV2",
@@ -189,10 +192,11 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         )
         try:
             await bot.edit_message_text(
-                f"{user_ref(target_id, target_fname)} could not be muted: "
-                "the mute record could not be written to the database, so no "
-                "groups were touched\\. Check the logs and retry with /tcmute "
-                "once the database recovers\\.",
+                t(
+                    "muting.note.db_fail",
+                    locale,
+                    user=Safe(user_ref(target_id, target_fname)),
+                ),
                 chat_id=prompt_chat,
                 message_id=prompt_id,
                 parse_mode="MarkdownV2",
@@ -258,12 +262,15 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
             target_id,
         )
 
-    proof_kb = keyboards.action_proof_kb(target_id, proof_link)
-    summary = (
-        f"{user_ref(target_id, target_fname)} "
-        f"has been muted {bold(dur_str)}\\.\n"
-        f"Reason: {esc(reason_text)}\n"
-        f"Applied to {len(groups) - failed}/{len(groups)} groups\\."
+    proof_kb = keyboards.action_proof_kb(target_id, proof_link, locale)
+    summary = t(
+        "muting.summary.body",
+        locale,
+        user=Safe(user_ref(target_id, target_fname)),
+        dur=Safe(bold(dur_str)),
+        reason=reason_text,
+        done=len(groups) - failed,
+        total=len(groups),
     )
 
     lc, lt = cfg.logs
@@ -324,6 +331,7 @@ async def execute_unmute(
     admin = update.effective_user
     if msg is None or admin is None:
         return
+    locale = await locale_for_update(update)
 
     # * Guard: only proceed if an active mute record exists.
     # * Without this check, execute_unmute would fan restrict_chat_member to all
@@ -336,13 +344,20 @@ async def execute_unmute(
     except Exception:
         log.exception("get_active_mute failed for target=%d", target_id)
         await safe_reply(
-            msg, _ERR_DB_RETRY, log_label="execute_unmute DB-fail", parse_mode=None
+            msg,
+            replies.err_db_retry(locale, plain=True),
+            log_label="execute_unmute DB-fail",
+            parse_mode=None,
         )
         return
     if active_mute is None:
         await safe_reply(
             msg,
-            f"{user_ref(target_id, target_name)} has no active federation mute\\.",
+            t(
+                "muting.note.no_mute",
+                locale,
+                user=Safe(user_ref(target_id, target_name)),
+            ),
             log_label="execute_unmute no-mute",
         )
         return
@@ -365,7 +380,10 @@ async def execute_unmute(
     except Exception:
         log.exception("active_groups failed during unmute of %d", target_id)
         await safe_reply(
-            msg, _ERR_DB_RETRY, log_label="execute_unmute groups-fail", parse_mode=None
+            msg,
+            replies.err_db_retry(locale, plain=True),
+            log_label="execute_unmute groups-fail",
+            parse_mode=None,
         )
         return
     # * Unrestrict across all connected groups + primary groups - semaphore-bounded
@@ -401,9 +419,12 @@ async def execute_unmute(
         admin.first_name,
     )
 
-    reply = (
-        f"{user_ref(target_id, target_name)} has been unmuted \\- "
-        f"restored in {len(groups) - failed}/{len(groups)} groups\\."
+    reply = t(
+        "muting.unmute.body",
+        locale,
+        user=Safe(user_ref(target_id, target_name)),
+        done=len(groups) - failed,
+        total=len(groups),
     )
 
     # * Clear active mute record, send log to channel, and reply - all in parallel

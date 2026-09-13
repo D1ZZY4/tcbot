@@ -4,7 +4,8 @@ This file defines the project workflow, dependency, documentation-maintenance,
 and validation requirements for TCF Bot. Code conventions live in
 [`code-style.md`](code-style.md), and comment and Markdown conventions live in
 [`comment-style.md`](comment-style.md). Documentation maintenance workflow
-lives in [`docs-rules.md`](docs-rules.md).
+lives in [`docs-sync.md`](docs-sync.md). Changelog wording rules live in
+[`changelog-style.md`](changelog-style.md).
 
 ---
 
@@ -13,19 +14,20 @@ lives in [`docs-rules.md`](docs-rules.md).
 These rules apply to every task:
 
 1. Before changing the repository, read this file, [`code-style.md`](code-style.md),
-   [`comment-style.md`](comment-style.md), [`docs-rules.md`](docs-rules.md),
+   [`comment-style.md`](comment-style.md), [`docs-sync.md`](docs-sync.md),
    [`AGENTS.md`](../../AGENTS.md), and [`CHANGELOG.md`](../../CHANGELOG.md).
 2. Read the rules file matching the scope ([`security-rules.md`](security-rules.md)
    for authorization and secrets, [`asyncio-gather-rules.md`](asyncio-gather-rules.md)
    for async and fan-out), the relevant skill in [`.agents/skills/`](../skills/),
    source files, configuration, and documentation for the requested scope.
 3. After a change, add an entry under `[Unreleased]` in
-   [`CHANGELOG.md`](../../CHANGELOG.md).
+   [`CHANGELOG.md`](../../CHANGELOG.md), worded per
+   [`changelog-style.md`](changelog-style.md).
 4. Update related documentation, repository maps, skills, and guidance whose
    content or paths became stale.
 5. Search for old paths and broken links before finalizing.
 
-The six files in this directory are the canonical engineering rules. Public
+The seven files in this directory are the canonical engineering rules. Public
 contributor guidance belongs in [`CONTRIBUTING.md`](../../CONTRIBUTING.md);
 deployment and feature documentation belongs under `docs/`.
 
@@ -59,6 +61,13 @@ Skills in `.agents/skills/` apply automatically when their trigger matches.
 Use the relevant skill before editing code, documentation, database helpers,
 workflows, diagrams, or other specialized areas. Compose skills when a task
 spans more than one area.
+
+Using a skill means loading it and then reading every instruction it
+contains, without exception. Never read only specifically-named files and
+skip the rest: a partial read is the same defect as a partial code read.
+This applies to every skill, including commit: load the commit skill,
+then read all of its instructions before staging, committing, or pushing
+anything.
 
 Remaining skill files use YAML frontmatter with `name` matching the skill
 directory and an actionable `description` explaining when to use it. Keep
@@ -114,6 +123,9 @@ Before editing TCF Bot code, verify:
 - Handlers stay in `tcbot/modules/`, workflows stay in `*_flow.py`, and
   database access stays in `tcbot/database/`.
 - Messages are Markdown-only and user content is escaped.
+- User-facing wording goes in `i18n/<locale>/*.toml`, never in Python;
+  the render mode matches the send path (`plain=True` for alerts and
+  `parse_mode=None` replies), and dynamics cross raw or `Safe`.
 - Role checks use canonical helpers and destructive actions preserve
   auto-demotion behavior.
 - Multi-group actions use `fan_out()`.
@@ -179,6 +191,7 @@ Recommended minimum validation by change type:
 | Documentation-only | Read changed docs, scan links and stale paths, then run `git diff --check`. |
 | Formatter or comment-only code change | `uv run ruff format --check .` and `uv run ruff check .` |
 | Command handler change | Ruff checks, then start the bot and inspect startup logs. |
+| User-facing wording or locale behavior change | Ruff checks, default-locale golden check (output byte-identical unless the change is intentional), the V2-clean template test, then the full pytest suite. |
 | Database helper change | Ruff checks and an import check of the changed module. |
 | Workflow change | Ruff checks and an import check of the changed flow. |
 | Dependency or configuration change | `uv sync --frozen` (Replit), Ruff checks, and an import check. |

@@ -1,0 +1,62 @@
+# Mute help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in muting.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Restrict a user from sending messages across *all connected groups* at once, or lift the restriction."
+
+[help.commands]
+body = """
+`/tcmute` (alias: `/tcm`)
+`/tcunmute` (aliases: `/tcunm`, `/tcum`)"""
+
+[help.what]
+body = """
+*/tcmute*: restricts a user from sending messages, media, stickers, and GIFs across *all connected groups* simultaneously. After the command, the bot asks for a reason and optionally proof - both steps can be skipped. If the user is already muted, the existing restriction is replaced. If the target holds a federation role (Tester / Developer / Admin), that role is auto-demoted and they are notified by DM. A summary shows how many groups the mute was applied in.
+
+*/tcunmute*: restores the user's full send permissions across all connected groups. A summary shows how many groups the unmute was applied in."""
+
+[help.flow]
+body = """
+1. Run `/tcmute` with the target (and optional inline reason).
+2. If no reason was given, the bot asks: reply with text or tap *Skip*.
+3. The bot asks for proof: send a photo/video, then tap *Done*, or tap *Skip*."""
+
+[help.time]
+body = """
+Place the duration before the reason. Omit a duration to apply a permanent mute.
+
+- `s` Seconds: `30s` = 30 seconds
+- `m` Minutes: `15m` = 15 minutes
+- `h` Hours: `2h` = 2 hours
+- `d` Days: `7d` = 7 days
+- `w` Weeks: `2w` = 2 weeks
+- `mo` Months: `3mo` = 3 months
+- `ye` Years: `2ye` = 2 years"""
+
+[help.examples]
+body = """
+`/tcmute @username 3d spamming`: 3-day mute, reason inline
+`/tcm @username 1w`: 1-week mute, bot will ask for reason
+`/tcm @username`: permanent mute, bot walks you through it
+`/tcunmute @username`: lift mute immediately across all groups
+Or reply to a message and run `/tcm`."""
+
+# Runtime strings for the mute/unmute executors (muting_flow.py).
+# [note] plain sends use plain=True; [summary]/[unmute] render MarkdownV2.
+# Placeholders: {user} pre-formatted user reference, {dur} pre-formatted
+# bold duration, {reason} raw reason text, {done}/{total} ints.
+
+[note]
+groups_fail = "{user} could not be muted: the group list could not be loaded from the database, so no groups were touched. Check the logs and retry with /tcmute once the database recovers."
+db_fail = "{user} could not be muted: the mute record could not be written to the database, so no groups were touched. Check the logs and retry with /tcmute once the database recovers."
+no_mute = "{user} has no active federation mute."
+
+[summary]
+body = "{user} has been muted {dur}.\nReason: {reason}\nApplied to {done}/{total} groups."
+
+[unmute]
+body = "{user} has been unmuted - restored in {done}/{total} groups."
+
+[duration]
+permanent = "permanently"

@@ -1,0 +1,43 @@
+# Language preferences: personal (/start, PM) and per-group settings.
+# Placeholders use {name} and are filled by the caller; only the listed
+# placeholders may appear. Templates stay raw: no manual backslashes.
+
+title_user = "Language settings"
+title_group = "Group language"
+
+# Placeholders: {language} = display name.
+current_user = "Your language: {language}."
+current_group = "Group language: {language}."
+
+prompt = "Tap a language below."
+
+updated_user = "Your language is now {language}."
+updated_group = "Group language is now {language}."
+
+# Group permission refusal (viewer may read but not change).
+denied = "Only the group owner or staff can change the group language."
+
+# Group must be connected before it can hold a language setting.
+not_connected = "This group is not connected to the federation."
+
+# Locale code with no catalog (should not happen via UI; defensive).
+unavailable = "That language is not available yet."
+
+# Language-module help prose: overview plus per-topic bodies.
+# Structure (order, labels) stays in language.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "View or change language preferences for yourself or the group."
+
+[help.commands]
+body = "`/language` (aliases: `/lang`, `/langs`)"
+
+[help.who]
+body = "Anyone for their own preference. Group language needs the group owner or staff rank."
+
+[help.what]
+body = "Shows the current language with one button per available locale. Tapping a language saves it immediately and edits the panel into a confirmation."
+
+[help.examples]
+body = "`/lang`"

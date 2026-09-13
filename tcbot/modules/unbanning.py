@@ -15,11 +15,13 @@ from telegram.ext import ContextTypes, MessageHandler
 from tcbot import database as db
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
+from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.unban_flow import execute_unban
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import bold, code, esc, mention
+from tcbot.utils.formatter import mention
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -37,41 +39,34 @@ _RL_LIMIT: int = 5
 # ────────────────────── Module & Help Message ───────────────────── #
 
 __module_name__ = "Unban"
-__help_text__ = (
-    f"Lifts an active federation ban across {bold('all connected groups')} at once\\."
-)
 
-__help_sections__: list[tuple[str, str]] = [
-    (
-        replies.SEC_COMMANDS,
-        f"{code('/tcunban')} \\(alias: {code('/tcunb')}\\)",
-    ),
-    replies.who_section(replies.PERM_DEV_ABOVE),
-    replies.where_section(replies.CONTEXT_EXEC_OR_GROUP),
-    (
-        replies.SEC_WHAT,
-        "Lifts an active federation ban on the target user\\. The unban is applied across "
-        f"{bold('all connected groups')} simultaneously so they can rejoin freely\\. A log entry "
-        "is posted to the federation logs channel\\.\n\n"
-        "If the user has no active federation ban, the bot will let you know and take no "
-        "action\\.\n"
-        "A pending appeal review card is left untouched; resolving appeals stays on the appeal flow\\.\n"
-        "A staff member re\\-promoted while banned is demoted first so the stale ban can be cleared\\.",
-    ),
-    replies.target_section(),
-    (
-        replies.SEC_EXAMPLES,
-        f"{code('/tcunban @username')}\n"
-        f"{code('/tcunb 123456789')}\n"
-        f"Or reply to a message and run {code('/tcunb')}\\.",
-    ),
-]
 
-__help__: replies.HelpEntry = {
-    "name": __module_name__,
-    "overview": __help_text__,
-    "sections": __help_sections__,
-}
+def get_help(locale: str | None = None) -> replies.HelpEntry:
+    """Build this module's help entry in the given locale."""
+    overview = t("unbanning.help.overview", locale)
+    sections: list[tuple[str, str]] = [
+        (
+            replies.sec_commands(locale),
+            t("unbanning.help.commands.body", locale),
+        ),
+        replies.who_section(replies.perm_dev_above(locale, plain=False), locale),
+        replies.where_section(replies.context_exec_or_group(locale), locale),
+        (
+            replies.sec_what(locale),
+            t("unbanning.help.what.body", locale),
+        ),
+        replies.target_section(locale),
+        (
+            replies.sec_examples(locale),
+            t("unbanning.help.examples.body", locale),
+        ),
+    ]
+    return {"name": __module_name__, "overview": overview, "sections": sections}
+
+
+__help__: replies.HelpEntry = get_help()
+__help_text__ = __help__["overview"]
+__help_sections__ = __help__["sections"]
 
 
 # ──────────────────── Command Unban </tcunban> ──────────────────── #
@@ -87,6 +82,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     classification so that ``execute_unban`` skips a redundant DB round-trip when
     the refusal check passes.
     """
+    locale = await locale_for_update(update)
     msg = update.effective_message
     admin = update.effective_user
     if msg is None or admin is None:
@@ -96,7 +92,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not target_id:
         await safe_reply(
             msg,
-            replies.ERR_CANNOT_RESOLVE,
+            replies.err_cannot_resolve(locale, plain=True),
             log_label="unban no-target",
             parse_mode=None,
         )
@@ -135,7 +131,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         # * or target outranks executor); end the handler.
         return
 
-    refusal = identity.refuse_message("unban", ident)
+    refusal = identity.refuse_message("unban", ident, locale)
     if refusal is not None and ident.kind not in ("admin", "developer", "tester"):
         await safe_reply(msg, refusal, log_label="unban refusal")
         return
@@ -182,10 +178,13 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 )
                 await safe_reply(
                     msg,
-                    f"{mention(target_id, target_fname or str(target_id))} "
-                    f"holds a federation role \\({esc(target_role)}\\) and the demote "
-                    "step failed, so the unban cannot proceed safely\\. Demote "
-                    "them manually with /tcdemote and retry the unban\\.",
+                    t(
+                        "demote.abort.body",
+                        locale,
+                        user=Safe(mention(target_id, target_fname or str(target_id))),
+                        target_role=target_role,
+                        action="unban",
+                    ),
                     log_label="unban demote-fail",
                 )
                 return
@@ -206,7 +205,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.exception("execute_unban failed for target=%s", target_id)
         await safe_reply(
             msg,
-            "I couldn't reach the database right now. Please try again in a moment.",
+            replies.err_db_retry(locale, plain=True),
             log_label="unban DB-fail",
             parse_mode=None,
         )

@@ -1,0 +1,92 @@
+# Warn help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in warnings.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+# Placeholders: {limit} carries pre-formatted bold markup from code.
+
+[help]
+overview = "Issue formal warnings tracked per-group. At {limit} the user is automatically federation-banned across all connected groups and their warnings are cleared."
+limit_noun = "warnings"
+
+[help.commands]
+body = """
+`/tcwarn` (alias: `/tcw`)
+`/tcunwarn` (alias: `/tcunw`)
+`/warns` (alias: `/warnlist`)
+`/resetwarns` (alias: `/clearwarns`)"""
+
+[help.who]
+body = """
+*/tcwarn*, */tcunwarn*, */resetwarns*: Tester and above (Founder / Admin / Developer / Tester).
+*/warns*: Tester and above (Founder / Admin / Developer / Tester)."""
+
+[help.what]
+body = """
+*/tcwarn*: issues a formal warning. Warnings are tracked *per-group* and do not carry across connected groups. At {limit}, the user is automatically federation-banned across all connected groups and their warnings are cleared. Staff targets are demoted first and exempted from the auto-ban.
+
+*/tcunwarn*: removes the user's most recent warning in the current group.
+
+*/warns*: shows the current warning count and full list of reasons.
+
+*/resetwarns*: clears all warnings for a user in the current group at once, without triggering the ban threshold."""
+
+[help.flow]
+body = """
+1. Run `/tcwarn` with the target (and optional inline reason).
+2. If no reason was given, the bot asks - reply with text.
+3. The bot asks for proof - send a photo/video, then tap *Done*, or tap *Skip*."""
+
+[help.examples]
+body = """
+`/tcwarn @username spamming`: reason inline
+`/tcw 123456789`: bot will ask for reason
+`/tcunwarn @username`
+`/warns @username`
+`/resetwarns @username`
+Or reply to a message and run `/tcw`."""
+
+# Runtime strings for the warn executors (warning_flow.py).
+# [none]/[removed]/[list]/[cleared]/[fed_fail]/[issued]/[exempt]/
+# [autoban] render as MarkdownV2; db_retry sends plain.
+# Placeholders: {user} pre-formatted user reference, {reason} raw reason
+# text, {role} raw role name, {count}/{limit}/{new}/{removed}/{done}/
+# {total}/{failed}/{fed}/{fedlimit} ints/strings, {sample} raw group
+# names, {applied} prebuilt applied line.
+
+[issued]
+body = "{user} has been warned ({count}/{limit}) - {reason}"
+
+[fed_fail]
+body = "{user} has been warned ({count}/{limit}) - {reason}. The federation-wide threshold check is unavailable right now; ban them manually with /tcban if needed."
+
+[none]
+body = "{user} has no warnings in this group."
+
+[none_clear]
+body = "{user} has no warnings to clear."
+
+[removed]
+body = "One warning removed from {user}. They're now at {new}/{limit}."
+
+[cleared]
+body = "All {removed} warning(s) cleared for {user}. Clean slate."
+
+[list]
+header = "{user} has {count}/{limit} warnings:\n"
+item = "  {i}. {reason}"
+no_reason = "No reason"
+
+[exempt]
+demoted = "{user} is a {role} and was demoted, but staff are not auto-banned via warnings."
+failed = "{user} is a {role}, but the auto-demote step failed; staff are not auto-banned via warnings. See logs and retry manually if needed."
+
+[autoban]
+db_fail = "{user} reached the warning threshold but the federation ban record could not be written to the database, so no groups were touched. Check the logs and ban them manually with /tcban once the database recovers."
+empty = " No connected groups configured."
+none = " WARNING: ban not enforced in any group ({total}/{total} failed). Check bot admin rights in: {sample}{more}"
+partial = " Applied to {done}/{total} groups ({failed} failed: {sample}{more}"
+full = " Applied to {total}/{total} groups."
+scope_warn = " WARNING: the group list could not be loaded, so some groups may have been skipped. Check the logs and re-ban manually with /tcban if needed."
+notice_per_group = "{user} hit {limit} warnings and has been federation-banned."
+fail_per_group = "{user} hit {limit} warnings but federation-ban failed - please ban them manually."
+notice_fed = "{user} hit {fed}/{fedlimit} warnings across the federation and has been federation-banned."
+fail_fed = "{user} hit {fed}/{fedlimit} federation-wide warnings but federation-ban failed - please ban them manually."

@@ -81,7 +81,7 @@ Reason parsing depends on whether the first argument is an explicit target:
 
 If no reason remains after parsing, the bot ends the conversation and asks for `/tcban <target> <reason>`.
 
-When the command replies to a user message, every argument is treated as reason text. A leading numeric or `@username` token in a reply (for example `/tcb 12345 spamming` as a reply) stays part of the reason instead of being mistaken for an explicit target. The one exception is a restated ID: when the first token is the numeric ID of the replied-to user themself (reply + `/tcb 1419172317 spamming` aimed at 1419172317), that duplicate token is dropped so the reason is just `spamming`. The shared `extraction.has_explicit_target(msg, args)` helper owns this check, and the reason is parsed with `reason_flow.parse_inline_reason` like the kick, mute, and warn entries.
+When the command replies to a user message, the quoted sender is the default target, with one exception: a leading numeric ID or `@username` that verifies as a real user different from the quoted sender overrides the reply, because a typed ID is deliberate intent while a quote is often just context. That override token is consumed as the target, so reply + `/tcb 1419172317 spamming` aimed at 1419172317 bans with reason `spamming`. Anything unverified (a reason starting with a number, an unknown ID) or fuzzy (partial-name search) keeps the reply target, and a restated ID naming the quoted user themself is still dropped from the reason as a duplicate. The shared `extraction.extract_mod_target(update, args, bot)` helper owns both the resolution and the consumed-or-reason decision, and the reason is parsed with `reason_flow.parse_inline_reason` like the kick, mute, and warn entries.
 
 Ban reasons share the same 1000-character cap as the other moderation flows (`reason_flow.MAX_REASON_LEN`). Overlong inline input fails fast with the shared retry notice before any role lookup or demote work.
 
@@ -277,7 +277,7 @@ If the ban is inactive when details are requested, the callback alert says the b
 
 `/check` (alias `/c`) builds a comprehensive federation profile for any target: identity (mention, ID, username), role and assignment metadata, active ban, ban history, warnings by group, kicks, mutes, and appeals. Each section opens a drill-down inline keyboard so staff can inspect every record individually.
 
-The target is resolved by reply, user ID, or resolvable username.
+The target is resolved by reply, user ID, or resolvable username. A typed numeric ID or `@username` that verifies as a real user different from the quoted sender overrides the reply; `/check` additionally prefers any resolving argument (including partial-name matches) because it is read-only.
 
 Special cases for the active-ban summary line:
 
