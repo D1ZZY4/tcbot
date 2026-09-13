@@ -35,6 +35,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Help menus standardized across modules** (`tcbot/modules/warnings.py`, `muting.py`, `groups.py`, `connecting.py`, `syncing.py`, `netspeed.py`, `maintenance.py`, `stats.py`, `language.py`, `kicking.py`, `banning.py`, `disconnecting.py`, `appeals.py`, `admins.py`): every overview is verb-led, labels and example shapes are uniform, and each `Who can use` line names the exact rank. Warn-limit wording renders from configuration.
 
+### Fixed
+
+- **Language panel Back button renders its label** (`tcbot/modules/language.py`, `tests/test_i18n.py`): the panel read a key that never existed in the catalog, so the button showed a raw key marker. It now reads the shared button label like every other surface. Behavior changes: the Back button shows Kembali/Back instead of a marker.
+
 </details>
 
 ## [6.7.0] - 2026-09-12

@@ -1195,6 +1195,33 @@ def test_cmd_language_pm_panel(monkeypatch: pytest.MonkeyPatch) -> None:
     asyncio.run(run())
 
 
+def test_language_menu_back_label_resolves(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _owner() -> int:
+        return 999
+
+    async def _no_user(uid: int) -> str | None:
+        return None
+
+    async def _no_group(cid: int) -> str | None:
+        return None
+
+    monkeypatch.setattr(users_roles, "get_owner_id", _owner)
+    monkeypatch.setattr(settings_db, "get_user_locale", _no_user)
+    monkeypatch.setattr(groups_db, "get_group_locale", _no_group)
+
+    async def run() -> None:
+        query = _FakeQuery("language_menu")
+        update, _ = _update(chat_type="private", query=query)
+        await language.on_language_menu(update, SimpleNamespace())
+        assert len(query.edits) == 1
+        _, kwargs = query.edits[0]
+        back_text = kwargs["reply_markup"].inline_keyboard[-1][0].text
+        assert back_text == t("button.back", DEFAULT_LOCALE, plain=True)
+        assert not back_text.startswith("[")
+
+    asyncio.run(run())
+
+
 def test_on_lang_set_user_saves(
     monkeypatch: pytest.MonkeyPatch, fake_user_col: _FakeCollection
 ) -> None:
