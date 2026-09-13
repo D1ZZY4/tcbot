@@ -41,6 +41,11 @@ log = logging.getLogger(__name__)
 _client: aioredis.Redis | None = None
 _pool: aioredis.ConnectionPool | None = None
 
+# * Last-known Redis health, fed by cache ops via mark_op(). None until the
+# * first op lands (the handle exists but no op has run yet). Used by the
+# * synchronous /health route, which cannot await a probe.
+_liveness: bool | None = None
+
 # ─────────────── Connection pool / socket parameters ────────────── #
 
 _SOCKET_CONNECT_TIMEOUT_S: float = 5.0
@@ -123,3 +128,20 @@ async def close() -> None:
 def client() -> aioredis.Redis | None:
     """Return the active Redis client, or ``None`` when Redis is not configured."""
     return _client
+
+
+def mark_op(*, ok: bool) -> None:
+    """Record the outcome of one Redis operation (called from cache.py).
+
+    Sets module-level liveness and logs the transition to failed, so an
+    outage is visible in the log stream exactly once instead of per-op.
+    """
+    global _liveness
+    if not ok and _liveness is not False:
+        log.warning("Redis operation failed; marking Redis unhealthy.")
+    _liveness = ok
+
+
+def liveness() -> bool | None:
+    """Last known Redis liveness (None = no operation observed yet)."""
+    return _liveness

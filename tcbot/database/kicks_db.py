@@ -44,13 +44,21 @@ async def log_kick(user_id: int, chat_id: int, reason: str, admin_id: int) -> No
 # ─────────────────────── Per-user history ───────────────────────── #
 
 
-async def user_kicks(user_id: int) -> list[KickDoc]:
-    """Return every kick record for a user, newest first."""
-    return await db_call(
+async def user_kicks(
+    user_id: int, *, skip: int = 0, limit: int | None = None
+) -> list[KickDoc]:
+    """Return every kick record for a user, newest first.
+
+    ``limit=None`` returns the full list (backwards compatible).
+    """
+    cursor = (
         _kicks()
         .find({"user_id": user_id}, {"_id": 0}, sort=[("timestamp", -1)])
-        .to_list(None)
+        .skip(max(0, skip))
     )
+    if limit is not None:
+        cursor = cursor.limit(max(1, limit))
+    return await db_call(cursor.to_list(limit))
 
 
 async def user_kick_count(user_id: int) -> int:

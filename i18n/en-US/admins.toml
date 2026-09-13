@@ -120,6 +120,7 @@ admin_warn = " WARNING: {user} could not be kept as Admin; grant the role manual
 [list]
 header = "{title}"
 header_text = "Pending Promotion Requests ({n})"
+cap_notice = "\nShowing the {shown} most recent requests. {total} pending in total."
 row = "- {user} {id} | {uname} | ID: {req}"
 
 [decision]

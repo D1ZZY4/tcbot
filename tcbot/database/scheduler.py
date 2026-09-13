@@ -330,11 +330,22 @@ async def start(
         ),
         name="tcbot.scheduler",
     )
-    await _sched_ready.wait()
+    try:
+        await asyncio.wait_for(_sched_ready.wait(), timeout=_STOP_TIMEOUT_S)
+    except TimeoutError:
+        # * The background task did not signal readiness within the grace
+        # * window (constructor raise before the try, or a hung jobstore
+        # * handshake). Treat this like a startup failure so the caller
+        # * fails fast instead of hanging at boot forever.
+        _sched_error = TimeoutError(
+            f"APScheduler did not become ready within {_STOP_TIMEOUT_S:.0f}s."
+        )
+        if _sched_task is not None and not _sched_task.done():
+            _sched_task.cancel()
     if _sched_error is not None:
         startup_error = _sched_error
         if _sched_task is not None:
-            await _sched_task
+            await asyncio.gather(_sched_task, return_exceptions=True)
         _sched_task = None
         _sched_ready = None
         _sched_stop = None
