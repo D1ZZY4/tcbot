@@ -1,0 +1,12 @@
+# About page prose (about.py). Rendered as MarkdownV2.
+# Placeholders: {title}/{disc} pre-formatted lines, {community} raw name.
+
+[page]
+title = "{title}"
+intro = "Federasi komunitas untuk grup perangkat Infinix, Tecno, dan Itel. Fokusnya jelas: menjaga grup terhubung tetap aman, termoderasi baik, dan bebas spam, penipuan, dan pelaku nakal."
+how_title = "*Cara kerja*"
+how_body = "Grup yang bergabung ke federasi berbagi satu lapisan moderasi. Ban yang dijatuhkan di satu grup terhubung berlaku otomatis di semuanya. Begitu juga mute dan broadcast dari Staf TC."
+history_title = "*Sejarah*"
+history_body = "Didirikan tahun 2024 dengan nama TFI, yang kemudian dibubarkan karena masalah internal. {community} dibentuk tak lama setelahnya untuk melanjutkan kerja dengan struktur lebih bersih dan stabilitas jangka panjang lebih baik."
+disclaimer = "{disc}"
+disclaimer_text = "{community} tidak berafiliasi dengan atau didukung oleh Transsion Holdings. Ini komunitas independen."

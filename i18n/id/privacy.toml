@@ -1,0 +1,77 @@
+# Privacy prose (privacy.py). Messages render as MarkdownV2 except
+# alerts (plain). Placeholders: {bot} raw bot name, {community} raw name.
+
+[msg]
+body = """*Privasi dan Data*
+
+{bot} menyimpan sedikit data untuk menjalankan federasi. Isinya:
+
+- *ID dan nama pengguna*: dicatat saat kamu berinteraksi dengan bot atau grup terhubung.
+- *Catatan ban*: jika kamu menerima ban federasi, alasan, bukti, dan admin pemberi disimpan.
+- *Catatan peringatan dan mute*: dicatat per grup untuk pelacakan moderasi.
+- *Log kick*: disimpan untuk referensi staf.
+- *Pengajuan banding*: pesanmu dan lampiran apa pun yang kamu kirim lewat sistem banding.
+- *Permintaan promosi*: permintaanmu dan hasil tinjauannya saat kamu melamar peran staf.
+
+Catatan ban, peringatan, mute, dan kick bisa dilihat siapa pun dengan `/check` atau `/checkme`; mengubah apa pun tetap butuh peran staf yang sesuai.
+
+Ketuk *Kebijakan Privasi* di bawah untuk kebijakan lengkap, per bagian."""
+
+[index]
+body = """*Kebijakan Privasi*
+{bot}
+
+Pilih bagian di bawah untuk membaca selengkapnya. Pakai tombol kembali untuk ke sini kapan pun."""
+
+[error]
+invalid_section = "Bagian tidak valid."
+not_found = "Bagian tidak ditemukan."
+
+[section.collect]
+label = "Yang Kami Kumpulkan"
+body = """Saat kamu berinteraksi dengan grup terhubung atau bot ini, yang disimpan:
+
+- *ID Pengguna*: ID pengguna Telegram numerikmu.
+- *Nama dan username*: nama depan dan @username saat interaksi.
+- *Catatan ban*: alasan, tautan bukti, admin pemberi, dan stempel waktu.
+- *Pengajuan banding*: pesan bandingmu dan file pendukung yang kamu kirim.
+- *Catatan peringatan dan mute*: dicatat per grup untuk keperluan moderasi.
+- *Log kick*: dicatat untuk referensi dan audit staf.
+- *Permintaan promosi*: lamaranmu dan hasil tinjauannya saat kamu meminta peran staf."""
+
+[section.why]
+label = "Kenapa Kami Mengumpulkan"
+body = """Semua yang disimpan dipakai murni untuk moderasi federasi {community}: menjaga grup terhubung tetap aman, menegakkan ban konsisten di semua grup, dan menyimpan catatan tindakan moderasi yang bisa diaudit.
+
+Kami tidak mengumpulkan atau memakai data untuk iklan, profiling, atau tujuan apa pun di luar moderasi."""
+
+[section.access]
+label = "Yang Bisa Mengakses"
+body = """Catatan moderasi (ban, peringatan, mute, kick) bisa dilihat siapa pun lewat `/check` dan `/checkme`, agar penegakan tetap transparan. Bertindak atas data itu (menge-ban, mem-mute, mempromosi, menghubungkan grup) butuh peran staf {community} yang sesuai, dicek di tiap perintah.
+
+Tidak ada data yang dijual, disewakan, atau dibagikan ke pihak ketiga dalam keadaan apa pun."""
+
+[section.retention]
+label = "Berapa Lama Kami Menyimpan"
+body = """Catatan ban disimpan tanpa batas sebagai bagian log federasi, untuk mendukung penegakan lintas grup dan tinjauan banding.
+
+Data identitas yang di-cache (nama, username) disegarkan tiap interaksi dan dipangkas otomatis setelah 90 hari tanpa aktivitas.
+
+Mute berjangka yang kedaluwarsa dihapus otomatis; mute permanen bertahan sampai dicabut. Peringatan bisa kedaluwarsa otomatis saat operator mengaktifkan kedaluwarsa peringatan, jika tidak bertahan sampai dihapus.
+
+Catatan banding dan permintaan promosi disimpan setelah diputuskan untuk referensi dan audit."""
+
+[section.rights]
+label = "Hak Kamu"
+body = """Kamu bisa meninjau status ban sendiri kapan pun dengan `/checkme`, dan bisa meminta tinjauan atau penghapusan data pribadimu dengan menghubungi Admin {community} atau Founder langsung.
+
+Permintaan ditangani sebaik mungkin. Catatan ban aktif bisa tetap disimpan walau ada permintaan hapus bila dibutuhkan untuk penegakan berjalan atau integritas federasi."""
+
+[section.contact]
+label = "Kontak"
+body = """Hubungi staf {community} lewat:
+
+- Grup diskusi utama {community}.
+- Sistem banding bot ini (untuk hal terkait ban).
+
+Untuk pertanyaan data umum, hubungi staf langsung di grup utama."""

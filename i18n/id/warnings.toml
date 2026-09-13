@@ -1,0 +1,92 @@
+# Warn help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in warnings.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+# Placeholders: {limit} carries pre-formatted bold markup from code.
+
+[help]
+overview = "Memberi peringatan resmi yang dicatat per grup. Di {limit}, pengguna otomatis di-ban se-federasi di semua grup terhubung dan peringatannya dihapus."
+limit_noun = "peringatan"
+
+[help.commands]
+body = """
+`/tcwarn` (alias: `/tcw`)
+`/tcunwarn` (alias: `/tcunw`)
+`/warns` (alias: `/warnlist`)
+`/resetwarns` (alias: `/clearwarns`)"""
+
+[help.who]
+body = """
+*/tcwarn*, */tcunwarn*, */resetwarns*: Tester ke atas (Founder / Admin / Developer / Tester).
+*/warns*: Tester ke atas (Founder / Admin / Developer / Tester)."""
+
+[help.what]
+body = """
+*/tcwarn*: memberi peringatan resmi. Peringatan dicatat *per grup* dan tidak terbawa ke grup terhubung lain. Di {limit}, pengguna otomatis di-ban se-federasi di semua grup terhubung dan peringatannya dihapus. Target staf didemosi dulu dan dikecualikan dari auto-ban.
+
+*/tcunwarn*: menghapus peringatan terbaru pengguna di grup ini.
+
+*/warns*: menampilkan jumlah peringatan dan daftar lengkap alasannya.
+
+*/resetwarns*: menghapus semua peringatan pengguna di grup ini sekaligus, tanpa memicu ambang ban."""
+
+[help.flow]
+body = """
+1. Jalankan `/tcwarn` dengan target (dan alasan inline opsional).
+2. Jika alasan belum diberikan, bot bertanya, balas dengan teks.
+3. Bot meminta bukti, kirim foto/video, lalu ketuk *Selesai*, atau ketuk *Lewati*."""
+
+[help.examples]
+body = """
+`/tcwarn @username spam`: alasan inline
+`/tcw 123456789`: bot akan menanyakan alasan
+`/tcunwarn @username`
+`/warns @username`
+`/resetwarns @username`
+Atau balas sebuah pesan lalu jalankan `/tcw`."""
+
+# Runtime strings for the warn executors (warning_flow.py).
+# [none]/[removed]/[list]/[cleared]/[fed_fail]/[issued]/[exempt]/
+# [autoban] render as MarkdownV2; db_retry sends plain.
+# Placeholders: {user} pre-formatted user reference, {reason} raw reason
+# text, {role} raw role name, {count}/{limit}/{new}/{removed}/{done}/
+# {total}/{failed}/{fed}/{fedlimit} ints/strings, {sample} raw group
+# names, {applied} prebuilt applied line.
+
+[issued]
+body = "{user} diperingatkan ({count}/{limit}) - {reason}"
+
+[fed_fail]
+body = "{user} diperingatkan ({count}/{limit}) - {reason}. Pemeriksaan ambang se-federasi sedang tidak tersedia; ban manual dengan /tcban bila perlu."
+
+[none]
+body = "{user} tidak punya peringatan di grup ini."
+
+[none_clear]
+body = "{user} tidak punya peringatan untuk dihapus."
+
+[removed]
+body = "Satu peringatan {user} dihapus. Sekarang {new}/{limit}."
+
+[cleared]
+body = "Semua {removed} peringatan untuk {user} dihapus. Mulai dari nol."
+
+[list]
+header = "{user} punya {count}/{limit} peringatan:\n"
+item = "  {i}. {reason}"
+no_reason = "Tanpa alasan"
+
+[exempt]
+demoted = "{user} adalah {role} dan telah didemosi, tetapi staf tidak ikut auto-ban via peringatan."
+failed = "{user} adalah {role}, tetapi tahap auto-demote gagal; staf tidak ikut auto-ban via peringatan. Lihat log dan coba manual bila perlu."
+
+[autoban]
+db_fail = "{user} mencapai ambang peringatan tetapi catatan ban federasi gagal ditulis ke database, jadi tidak ada grup yang disentuh. Cek log lalu ban manual dengan /tcban setelah database pulih."
+empty = " Tidak ada grup terhubung yang dikonfigurasi."
+none = " PERINGATAN: ban tidak ditegakkan di grup mana pun ({total}/{total} gagal). Cek hak admin bot di: {sample}{more}"
+partial = " Diterapkan ke {done}/{total} grup ({failed} gagal: {sample}{more}"
+full = " Diterapkan ke {total}/{total} grup."
+scope_warn = " PERINGATAN: daftar grup gagal dimuat, jadi sebagian grup mungkin terlewat. Cek log lalu ban ulang manual dengan /tcban bila perlu."
+notice_per_group = "{user} mencapai {limit} peringatan dan telah di-ban se-federasi."
+fail_per_group = "{user} mencapai {limit} peringatan tetapi ban federasi gagal, ban manual saja."
+notice_fed = "{user} mencapai {fed}/{fedlimit} peringatan se-federasi dan telah di-ban se-federasi."
+fail_fed = "{user} mencapai {fed}/{fedlimit} peringatan se-federasi tetapi ban federasi gagal, ban manual saja."

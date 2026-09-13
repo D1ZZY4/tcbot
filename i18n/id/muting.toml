@@ -1,0 +1,62 @@
+# Mute help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in muting.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Membatasi pengguna agar tidak bisa mengirim pesan di *semua grup terhubung* sekaligus, atau mencabut pembatasan itu."
+
+[help.commands]
+body = """
+`/tcmute` (alias: `/tcm`)
+`/tcunmute` (aliases: `/tcunm`, `/tcum`)"""
+
+[help.what]
+body = """
+*/tcmute*: membatasi pengguna agar tidak bisa mengirim pesan, media, stiker, dan GIF di *semua grup terhubung* secara bersamaan. Setelah perintah, bot menanyakan alasan dan bukti opsional, kedua tahap bisa dilewati. Jika pengguna sudah di-mute, pembatasan yang ada diganti. Jika target memegang peran federasi (Tester / Developer / Admin), peran itu otomatis didemosi dan mereka diberi tahu lewat DM. Ringkasan menunjukkan di berapa grup mute diterapkan.
+
+*/tcunmute*: mengembalikan penuh izin kirim pengguna di semua grup terhubung. Ringkasan menunjukkan di berapa grup unmute diterapkan."""
+
+[help.flow]
+body = """
+1. Jalankan `/tcmute` dengan target (dan alasan inline opsional).
+2. Jika alasan belum diberikan, bot bertanya: balas dengan teks atau ketuk *Lewati*.
+3. Bot meminta bukti: kirim foto/video, lalu ketuk *Selesai*, atau ketuk *Lewati*."""
+
+[help.time]
+body = """
+Tulis durasi sebelum alasan. Tanpa durasi berarti mute permanen.
+
+- `s` Detik: `30s` = 30 detik
+- `m` Menit: `15m` = 15 menit
+- `h` Jam: `2h` = 2 jam
+- `d` Hari: `7d` = 7 hari
+- `w` Minggu: `2w` = 2 minggu
+- `mo` Bulan: `3mo` = 3 bulan
+- `ye` Tahun: `2ye` = 2 tahun"""
+
+[help.examples]
+body = """
+`/tcmute @username 3d spam`: mute 3 hari, alasan inline
+`/tcm @username 1w`: mute 1 minggu, bot akan menanyakan alasan
+`/tcm @username`: mute permanen, bot memandu langkahnya
+`/tcunmute @username`: cabut mute segera di semua grup
+Atau balas sebuah pesan lalu jalankan `/tcm`."""
+
+# Runtime strings for the mute/unmute executors (muting_flow.py).
+# [note] plain sends use plain=True; [summary]/[unmute] render MarkdownV2.
+# Placeholders: {user} pre-formatted user reference, {dur} pre-formatted
+# bold duration, {reason} raw reason text, {done}/{total} ints.
+
+[note]
+groups_fail = "{user} tidak bisa di-mute: daftar grup gagal dimuat dari database, jadi tidak ada grup yang disentuh. Cek log lalu coba lagi dengan /tcmute setelah database pulih."
+db_fail = "{user} tidak bisa di-mute: catatan mute gagal ditulis ke database, jadi tidak ada grup yang disentuh. Cek log lalu coba lagi dengan /tcmute setelah database pulih."
+no_mute = "{user} tidak punya mute federasi aktif."
+
+[summary]
+body = "{user} telah di-mute {dur}.\nAlasan: {reason}\nDiterapkan ke {done}/{total} grup."
+
+[unmute]
+body = "{user} telah di-unmute, dipulihkan di {done}/{total} grup."
+
+[duration]
+permanent = "secara permanen"

@@ -1,0 +1,43 @@
+# Language preferences: personal (/start, PM) and per-group settings.
+# Placeholders use {name} and are filled by the caller; only the listed
+# placeholders may appear. Templates stay raw: no manual backslashes.
+
+title_user = "Pengaturan bahasa"
+title_group = "Bahasa grup"
+
+# Placeholders: {language} = display name.
+current_user = "Bahasa kamu: {language}."
+current_group = "Bahasa grup: {language}."
+
+prompt = "Ketuk bahasa di bawah."
+
+updated_user = "Bahasa kamu sekarang {language}."
+updated_group = "Bahasa grup sekarang {language}."
+
+# Group permission refusal (viewer may read but not change).
+denied = "Hanya pemilik grup atau staf yang bisa mengganti bahasa grup."
+
+# Group must be connected before it can hold a language setting.
+not_connected = "Grup ini belum terhubung ke federasi."
+
+# Locale code with no catalog (should not happen via UI; defensive).
+unavailable = "Bahasa itu belum tersedia."
+
+# Language-module help prose: overview plus per-topic bodies.
+# Structure (order, labels) stays in language.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Lihat atau ubah preferensi bahasa untuk dirimu atau grup."
+
+[help.commands]
+body = "`/language` (aliases: `/lang`, `/langs`)"
+
+[help.who]
+body = "Siapa pun untuk preferensi sendiri. Bahasa grup butuh pemilik grup atau peran staf."
+
+[help.what]
+body = "Menampilkan bahasa aktif dengan satu tombol per locale yang tersedia. Mengetuk bahasa langsung menyimpannya dan mengubah panel menjadi konfirmasi."
+
+[help.examples]
+body = "`/lang`"

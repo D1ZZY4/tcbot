@@ -1,0 +1,44 @@
+# Kick help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in kicking.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Mengeluarkan pengguna dari *grup ini saja*. Target staf otomatis didemosi."
+
+[help.commands]
+body = "`/tckick` (alias: `/tck`)"
+
+[help.what]
+body = """
+Mengeluarkan pengguna dari *grup ini saja*. Ini bukan tindakan se-federasi; pengguna bisa bergabung lagi lewat tautan undangan kecuali ia juga di-ban federasi.
+
+Jika target memegang peran federasi (Tester / Developer / Admin), peran itu otomatis didemosi dan mereka diberi tahu lewat DM. Satu entri log dikirim ke kanal log federasi."""
+
+[help.flow]
+body = """
+1. Jalankan `/tckick` dengan target (dan alasan inline opsional).
+2. Jika alasan belum diberikan, bot bertanya: balas dengan teks atau ketuk *Lewati*.
+3. Bot meminta bukti: kirim foto/video, lalu ketuk *Selesai*, atau ketuk *Lewati*."""
+
+[help.examples]
+body = """
+`/tckick @username bikin rusuh`: alasan inline
+`/tck 123456789`: bot akan menanyakan alasan
+Atau balas sebuah pesan lalu jalankan `/tck`."""
+
+# Runtime strings for the kick executor (kicking_flow.py).
+# [warn]/[summary]/[error] render as MarkdownV2.
+# Placeholders: {user} pre-formatted user reference, {reason} raw reason
+# text, {rejoin}/{warning} prebuilt lines.
+
+[rejoin]
+body = "Mereka bisa bergabung lagi lewat tautan undangan."
+
+[warn]
+unban = " PERINGATAN: tahap unban setelah kick gagal; pengguna masih di-ban di chat ini dan tidak bisa bergabung lagi. Unban manual dari daftar anggota chat."
+
+[summary]
+body = "{user} telah di-kick.\nAlasan: {reason}\n{rejoin}{warning}"
+
+[error]
+body = "Tidak bisa meng-kick {user}. Cek izin bot lalu coba lagi."

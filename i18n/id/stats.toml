@@ -1,0 +1,97 @@
+# Stats help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in stats.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Lihat ringkasan federasi live: Founder, staf, pengguna, ban aktif, dan grup terhubung, dengan menu drill-down untuk tiap bagian."
+
+[help.commands]
+body = "`/tcstats` (alias: `/tcs`)"
+
+[help.what]
+body = "Menampilkan ringkasan federasi live: Founder, total staf per peran, jumlah pengguna yang di-cache, ban federasi aktif, dan chat terhubung."
+
+[help.drills]
+body = """
+*Daftar Staf*: Founder, Admin, Developer, Tester, semua dengan mention.
+*Pengguna*: daftar semua pengguna yang di-cache per halaman (hanya Founder, tombol dan daftarnya disembunyikan dari yang lain). Tombol bernomor membuka kartu detail per pengguna.
+*Chat Terhubung*: daftar semua grup aktif per halaman; drill-in menampilkan pemilik, ID, dan tanggal connect.
+*Ban Pengguna*: daftar semua ban aktif per halaman dengan pintasan *Cari* untuk mencari pengguna via nama atau ID.
+
+Tiap tampilan diakhiri tombol *Kembali* ke ringkasan utama."""
+
+[help.examples]
+body = """
+`/tcstats`
+`/tcs`"""
+
+[error]
+user_not_found = "Pengguna tidak ditemukan di halaman ini."
+group_not_found = "Grup tidak ditemukan di halaman ini."
+ban_not_found = "Catatan ban tidak ditemukan di halaman ini."
+result_unavailable = "Hasil sudah tidak tersedia."
+access_retry = "Tidak bisa memverifikasi aksesmu sekarang. Coba lagi sebentar."
+
+# Runtime strings for stats views (stats_flow.py). All render MarkdownV2
+# except button labels (plain). Placeholders as documented per key.
+
+[button]
+roster = "Daftar Staf"
+bans = "Ban Pengguna"
+chats = "Chat Terhubung"
+users = "Pengguna"
+
+[main]
+title = "{community} *Statistik*"
+founder = "Founder: {owner}"
+staff = "Staf: {n} (Admin {admins}, Dev {devs}, Tester {testers})"
+users = "Pengguna terlacak: {n}"
+bans = "Ban aktif: {n}"
+chats = "Chat terhubung: {n}"
+owner_unset = "Belum diatur"
+
+[roster]
+title = "*Daftar Staf* - {community}"
+founder = "Founder"
+section = "{label}"
+member = "- {user}"
+empty = "- Belum ada staf"
+
+[users]
+empty = "*Pengguna*\n\nBelum ada pengguna yang di-cache. Bot meng-cache pengguna saat melihat mereka di grup terhubung."
+header = "*Pengguna* - {n} total - halaman {page}/{pages}"
+item = "{i}. {user}"
+
+[user_detail]
+title = "*Detail Pengguna*"
+name = "Nama: {user}"
+id = "ID: {id}"
+username = "Username: @{name}"
+username_none = "Username: -"
+last_name = "Nama belakang: {name}"
+first_seen = "Pertama terlihat: {date}"
+last_seen = "Terakhir terlihat: {date}"
+check_hint = "Pakai {command} untuk profil lengkap."
+
+[chats]
+empty = "*Chat Terhubung*\n\nBelum ada grup terhubung."
+header = "*Chat Terhubung* - {n} total - halaman {page}/{pages}"
+item = "{i}. {title} - {id}"
+
+[chat_detail]
+title = "*Detail Grup*"
+name = "Nama: {name}"
+chat_id = "ID Chat: {id}"
+connected_by = "Dihubungkan oleh: {user}"
+date = "Tanggal: {date}"
+
+[bans_view]
+empty = "*Ban Pengguna*\n\nTidak ada ban federasi aktif."
+header = "*Ban Pengguna* - {n} total - halaman {page}/{pages}"
+item = "{i}. {name} - {id}"
+
+[search]
+title = "*Cari Ban Pengguna*\n\nKirim nama atau ID pengguna di chat."
+empty = "*Cari:* \"{query}\"\n\nTidak ada hasil."
+header = "*Cari:* \"{query}\" ({n} ditemukan)"
+item = "{i}. {name} - {id}"

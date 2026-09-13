@@ -1,0 +1,63 @@
+# Ban help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in banning.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Menjatuhkan *ban se-federasi* ke pengguna, berlaku di semua grup terhubung sekaligus. Target staf otomatis didemosi dan bukti disimpan bersama catatan ban."
+
+[help.commands]
+body = "`/tcban` (alias: `/tcb`)"
+
+[help.what]
+body = """
+Menjatuhkan *ban se-federasi* ke target, berlaku otomatis di semua grup terhubung. Alasan wajib diisi, tulis langsung setelah target.
+
+Setelah perintah, bot memandumu lewat tahap bukti: kirim foto, video, GIF, atau file sebagai bukti dalam satu album atau satu per satu, lalu ketuk Selesai. Bukti wajib ada dan dicatat bersama catatan ban ke kanal log federasi.
+
+Jika pengguna sudah punya ban aktif, bot meminta konfirmasi dulu (lengkap dengan tautan Lihat Log dan Lihat Bukti) alih-alih mengubah diam-diam; hanya Lanjut yang menuju pengumpulan bukti, lalu catatan yang ada diperbarui dengan alasan dan bukti baru tanpa membuat duplikat.
+Jika target memegang peran federasi (Tester / Developer / Admin), peran itu otomatis didemosi dan mereka diberi tahu lewat DM sebelum ban ditegakkan."""
+
+[help.flow]
+body = """
+1. Jalankan `/tcban` dengan target dan alasan. Jika pengguna sudah di-ban, konfirmasi pembaruan dulu.
+2. Kirim bukti: foto, video, GIF, atau file, lalu ketuk *Selesai*. Bukti wajib ada."""
+
+[help.examples]
+body = """
+`/tcban @username spam di grup terhubung`
+`/tcban 123456789 menipu anggota`
+Atau balas sebuah pesan lalu jalankan `/tcb tulis alasan di sini`."""
+
+# Runtime strings for the ban flow (ban_flow.py, banning.py).
+# [state] entries send plain (alerts, parse_mode=None replies, plain edits).
+# [db_fail]/[applied]/[pm]/[summary] render as MarkdownV2.
+# Placeholders: {user} pre-formatted user reference, {reason} raw reason
+# text, {applied} prebuilt applied line, {sample} raw group names,
+# {total}/{failed} ints, {community} raw community name.
+
+[state]
+cancelled = "Dibatalkan. Tidak ada ban yang dijatuhkan."
+timeout = "Waktu tunggu bukti habis. Tidak ada ban yang dijatuhkan."
+proof_expected = "Kirim foto, video, GIF, atau file sebagai bukti, atau tekan Batal."
+empty = "Kirim foto, video, GIF, atau file dulu, lalu ketuk Selesai."
+
+[db_fail]
+body = "{user} tidak bisa di-ban: catatan ban federasi gagal ditulis ke database, jadi tidak ada grup yang disentuh. Cek log lalu coba lagi dengan /tcban setelah database pulih."
+
+[applied]
+empty = "Belum ada grup terhubung yang dikonfigurasi."
+none = "PERINGATAN: ban tidak ditegakkan di grup mana pun ({total}/{total} gagal). Cek hak admin bot di: {sample}{more}"
+partial = "Diterapkan ke {done}/{total} grup ({failed} gagal: {sample}{more}"
+full = "Diterapkan ke {total}/{total} grup."
+
+[pm]
+body = "Kamu di-ban dari {community} se-federasi.\nAlasan: {reason}\n\nKamu bisa mengajukan banding lewat tombol di bawah."
+
+[summary]
+body = "{user} telah di-ban.\nAlasan: {reason}\n{applied}"
+
+[confirm]
+body = "{user} sudah punya ban federasi aktif (ID Ban {ban_id}).\nAlasan lama: {old_reason}\nAlasan baru: {new_reason}\n\nPerbarui ban dengan alasan dan bukti baru?"
+
+[error]
+reason_required = "Alasan wajib diisi - /tcban <target> <alasan>."

@@ -1,0 +1,40 @@
+# Proof-step strings shared by ban/kick/mute/warn flows.
+# Structure stays in proof_flow.py; only prose lives here.
+# [empty]/[unexpected] send plain (alerts, parse_mode=None replies).
+# [prompt] entries render as MarkdownV2.
+# Placeholders: {gerund}/{Doing} localized verb forms, {target} V2-ready
+# mention, {suffix} V2-ready extra, {reason} raw reason text, {done}
+# button label, {skip_hint} prebuilt hint, {skip}/{cancel} button labels.
+
+[prompt]
+step = "Alasan dicatat; {gerund} {target}{suffix}.\nAlasan: {reason}\n\nPunya bukti? Kirim foto, video, GIF, atau file, lalu ketuk {done}{skip_hint}."
+noted = "{Doing} {target}{suffix}.\nAlasan: {reason}\n\nPunya bukti? Kirim foto, video, GIF, atau file, lalu ketuk {done}{skip_hint}."
+
+[hint]
+skip = ", atau ketuk {label} untuk lanjut"
+
+[empty]
+body = "Kirim foto, video, GIF, atau file dulu, lalu ketuk {done}."
+
+[unexpected]
+body = "Kirim foto, video, GIF, atau file sebagai bukti, atau tekan {skip} / {cancel}."
+
+[action.ban]
+verb = "ban"
+doing = "me-ban"
+Doing = "Me-ban"
+
+[action.kick]
+verb = "kick"
+doing = "me-kick"
+Doing = "Me-kick"
+
+[action.mute]
+verb = "mute"
+doing = "me-mute"
+Doing = "Me-mute"
+
+[action.warn]
+verb = "memperingatkan"
+doing = "memperingatkan"
+Doing = "Memperingatkan"

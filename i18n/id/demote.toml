@@ -1,0 +1,14 @@
+# Runtime strings for demotion (demote_flow.py).
+# [dm] sends to the demoted user (their personal locale, resolved inside
+# execute); [abort] replies in the moderator's chat (resolved at call).
+# Both render as MarkdownV2.
+# Placeholders: {role} pre-formatted bold rank, {community}/{name} raw
+# values, {verb} banned/muted/kicked, {user} pre-formatted mention,
+# {target_role} raw role, {action} trigger noun.
+
+[dm]
+manual = "Peran {role} kamu di {community} telah dicabut oleh {name}."
+auto = "Peran {role} kamu di {community} telah dicabut. Status federasi: {verb}."
+
+[abort]
+body = "{user} memegang peran federasi ({target_role}) dan tahap auto-demote gagal, sehingga {action} tidak bisa lanjut dengan aman. Demosi manual dengan /tcdemote lalu ulangi {action}."

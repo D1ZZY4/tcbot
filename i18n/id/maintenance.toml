@@ -1,0 +1,37 @@
+# Maintenance help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in maintenance.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Mengelola grup terhubung: bersihkan yang tidak bisa diakses, atau keluar dari semua grup sekaligus dalam darurat."
+
+[help.commands]
+body = """
+`/leaveall` (aliases: `/exitall`, `/tcleave`)
+`/cleanup` (aliases: `/tcclean`, `/tcc`)"""
+
+[help.leaveall]
+body = "Membuat bot keluar dari semua grup terhubung sekaligus, menandai semuanya terputus di database, dan mengirim entri log per grup. Ini tidak bisa dibatalkan, tiap grup harus dihubungkan ulang manual dengan `/tcconnect`. Pakai hanya dalam darurat."
+
+[help.cleanup]
+body = "Memindai semua grup di database dan mencoba memastikan bot masih punya akses. Grup mana pun yang botnya di-kick, dihapus, atau sudah tidak terjangkau ditandai terputus dan dikeluarkan dari daftar aktif. Jalankan berkala agar daftar grup tetap akurat."
+
+[help.examples]
+body = """
+`/cleanup`: hapus grup basi atau yang tidak bisa diakses.
+`/leaveall`: keluar darurat dari semua grup terhubung."""
+
+# Runtime strings (maintenance.py). All render as MarkdownV2.
+# Placeholders: counts as pre-formatted code, {detail} prebuilt suffix,
+# {partial}/{log_failed} ints.
+
+[status]
+sending = "Keluar dari {n} grup..."
+
+[leaveall]
+partial = " ({n} parsial: bot keluar tetapi penonaktifan DB gagal)"
+log_failed = " ({n} pengiriman log gagal)"
+done = "Keluar dari {ok} grup. Gagal: {failed}.{detail}"
+
+[cleanup]
+done = "Membersihkan {n} grup yang tidak bisa diakses."

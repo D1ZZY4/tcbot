@@ -1,0 +1,130 @@
+# Check help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in checking.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Cek status ban sendiri dengan `/checkme`, atau tarik profil aktivitas federasi lengkap pengguna mana pun dengan `/check`."
+
+[help.commands]
+body = """
+`/checkme` (alias: `/cme`)
+`/check` (alias: `/c`)"""
+
+[help.checkme]
+body = """
+Memeriksa status ban federasimu.
+
+- Jika *tidak di-ban*: bot mengonfirmasi akunmu baik-baik saja.
+- Jika *di-ban*: bot menampilkan alasan, admin pemberi ban, tanggal ban, dan tombol *Ajukan Banding* untuk memulai proses banding."""
+
+[help.check]
+body = """
+Menarik profil federasi lengkap pengguna mana pun: identitas, peran, ban aktif, riwayat ban, peringatan (per grup), kick, mute, dan banding.
+
+Tiap bagian membuka keyboard drill-down inline agar kamu bisa memeriksa tiap catatan satu per satu."""
+
+[help.examples]
+body = """
+`/checkme`
+`/check @username`
+`/c 123456789`
+Atau balas sebuah pesan lalu jalankan `/c`."""
+
+# Runtime strings for profile and drill-down views (check_flow.py).
+# All render as MarkdownV2.
+# Placeholders: {user} pre-formatted mention, {name} raw display name,
+# {id} pre-formatted code ID, {role}/{by} pre-formatted fragments,
+# {note} prebuilt caveat, counts as ints, {title} raw group title,
+# {reason} raw reason text, {ts} pre-formatted date.
+
+[profile]
+title = "*Profil*"
+activity = "*Aktivitas Federasi*"
+name = "Nama: {user}"
+id = "ID: {id}"
+username = "Username: @{name}"
+username_none = "Username: (tidak ada)"
+yes = "Ya"
+yes_ban = "Ya ({ban})"
+no = "Tidak"
+role = "Peran: {role}"
+assigned_by = "   Ditentukan oleh: {by}"
+assigned_at = "   Ditentukan pada: {at}"
+active_ban = "Ban Aktif: {state}"
+active_mute = "Mute Aktif: {state}"
+unknown = "Tidak diketahui, coba lagi sebentar"
+total_bans = "Total Ban: {n}"
+warnings = "Peringatan: {active} aktif di {groups} grup ({total} total riwayat)"
+kicks = "Kick: {n}"
+mutes = "Mute: {n}"
+appeals = "Banding: {n}"
+regular = "Pengguna biasa"
+caveat = "Catatan: sebagian penghitung gagal dimuat; total di atas mungkin tidak lengkap."
+
+[profile.button]
+bans = "Ban ({n})"
+appeals = "Banding ({n})"
+warnings = "Peringatan ({n} aktif)"
+kicks = "Kick ({n})"
+mutes = "Mute ({n})"
+
+[bans]
+title = "*Ban*"
+empty = "*Ban*\n\nTidak ada catatan ban untuk {user}."
+header = "*Ban*: {n} total, halaman {page}/{pages}"
+active = "*Aktif*"
+inactive = "Tidak aktif"
+item = "{i}. {status} | {ban} | {ts}\n   {reason}"
+not_found = "Ban {ban} tidak ditemukan."
+
+[appeals_list]
+title = "*Banding*"
+empty = "*Banding*\n\nTidak ada catatan banding untuk {user}."
+header = "*Banding*: {n} total, halaman {page}/{pages}"
+approved = "*Disetujui* (unban)"
+pending = "Tertunda / Ditolak"
+item = "{i}. {status}\n   ID Ban: {ban} | {ts}"
+
+[warns]
+title = "*Peringatan*"
+empty = "*Peringatan*\n\nTidak ada catatan peringatan untuk {user}."
+header = "*Peringatan*: {n} total di {groups} grup"
+group_line = "- {title}: {n}"
+group_button = "{title} ({n})"
+in_title = "*Peringatan di* {title}"
+in_empty = "*Peringatan di* {title}\n\nTidak ada catatan peringatan di sini."
+in_header = "*Peringatan di* {title}: {n} total, halaman {page}/{pages}"
+in_item = "{i}. {ts}\n   {reason}\n   Oleh {admin}"
+
+[events]
+empty = "{heading}\n\nTidak ada catatan {lower} untuk {user}."
+header = "{heading}: {n} total, halaman {page}/{pages}"
+item = "{i}. {ts}\n   Grup: {title}\n   {reason}\n   Oleh {admin}"
+no_reason = "(tanpa alasan)"
+
+[ban_info]
+title = "*Info Ban*"
+user = "Pengguna: {user}"
+user_id = "ID Pengguna: {id}"
+banned_by = "Di-ban oleh: {admin}"
+admin_id = "ID Admin: {id}"
+reason = "Alasan: {reason}"
+ban_id = "ID Ban: {id}"
+date = "Tanggal: {date}"
+
+# checkme/check runtime (checking.py). [error] sends plain.
+# Placeholders: {user} pre-formatted mention, {name} raw name,
+# {id} pre-formatted code ID, {reason} raw reason text, {community}
+# and {role} raw values.
+
+[error]
+ban_inactive = "Ban ini sudah tidak aktif."
+ban_not_found = "Catatan ban tidak ditemukan."
+bot_sender = "Bot dan pengirim anonim tidak punya catatan federasi, jadi tidak ada yang bisa dicek."
+status_retry = "Tidak bisa memverifikasi status ban kamu sekarang. Coba lagi sebentar."
+
+[checkme]
+banned = "Kamu sedang di-ban dari {community}.\n\nPengguna: {user}\nID Pengguna: {id}\nAlasan: {reason}\n\nDi-ban oleh: {admin}\n\nTanggal Penetapan: {date}\nKetuk tombol di bawah untuk detail."
+staff_admin = "Hey {user}, cek diri sendiri?\n\nKamu tim staf, kamu yang menangani ban, bukan yang menerima. Tidak ada ban aktif. Aman."
+staff_role = "Hey {user}, semua beres.\n\nKamu {role} {community}, bagian tim, bukan daftar ban. Tidak ada yang perlu dikhawatirkan."
+clean = "Kamu bersih, tidak ada ban aktif di {community}."

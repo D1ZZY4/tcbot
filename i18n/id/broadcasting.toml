@@ -1,0 +1,35 @@
+# Broadcast help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in broadcasting.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+# Placeholders: {community} = raw community name.
+
+[help]
+overview = "Mengirim pesan ke semua grup yang terhubung ke {community}."
+
+[help.commands]
+body = "`/tcbroadcast` (alias: `/bc`)"
+
+[help.what]
+body = """
+Mengirim pesan ke semua grup yang terhubung ke {community}.
+
+Kamu bisa menyusun pesan dengan dua cara:
+- Ketik pesan langsung setelah perintah (format MarkdownV2 didukung; markup yang gagal diurai dikirim sebagai teks biasa).
+- Balas pesan yang ada dengan `/bc` untuk meneruskan pesan itu ke semua grup.
+
+Saat broadcast selesai, bot menampilkan ringkasan berapa grup menerima pesan dan berapa yang gagal, lalu mengirim entri log ke kanal log federasi."""
+
+[help.examples]
+body = """
+`/tcbroadcast Pengingat: tolong baca aturan komunitas.`
+`/bc *Acara malam ini* (gabung jam 8 malam UTC).`
+Atau balas sebuah pesan lalu jalankan `/bc` untuk meneruskannya ke semua grup."""
+
+# Runtime strings (broadcasting.py). [no_content]/[done] render MarkdownV2;
+# [sending] sends plain (no parse_mode). Placeholders: {ok}/{failed}/
+# {n} pre-formatted code counts.
+
+[send]
+no_content = "Tulis pesan untuk broadcast, atau balas sebuah pesan."
+sending = "Mengirim broadcast ke {n} grup..."
+done = "Broadcast terkirim ke {ok} grup. Gagal: {failed}."

@@ -15,7 +15,7 @@ i18n/
 │   ├── help.toml       Help index header for help.py itself.
 │   └── <domain>.toml   One file per module (banning, kicking, appeals,
 │                       ...): each holds that module's [help] tables.
-├── id/                 Example future locale (partial is legal).
+├── id/                 Bahasa Indonesia (full translation).
 └── README.md           This file.
 ```
 

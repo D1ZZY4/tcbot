@@ -1,0 +1,86 @@
+# Appeal help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in appeals.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+# Placeholders: {window} carries pre-formatted bold markup from code.
+
+[help]
+overview = "Ajukan banding untuk ban federasi aktif. Staf meninjau dengan {window} untuk admin pemberi ban."
+
+[help.start]
+body = "Ketuk tombol *Ajukan Banding* pada notifikasi ban (dikirim bot di PM), atau pakai `/checkme` lalu ketuk tombol *Ajukan Banding* yang muncul."
+
+[help.who]
+body = "Siapa pun yang punya ban federasi aktif. Kamu hanya bisa punya satu banding aktif dalam satu waktu."
+
+[help.where]
+body = "Hanya PM bot."
+
+[help.how]
+body = """
+Setelah alur banding terbuka, kirim satu pesan diawali `#appeal` yang memuat tiga bagian berikut:
+
+- *Tautan log*: tautan ke entri log ban kamu di kanal log federasi
+- *Klarifikasi*: penjelasan jujur kenapa ban dijatuhkan atau kenapa itu kesalahan
+- *Persetujuan*: komitmenmu untuk mematuhi aturan komunitas ke depannya"""
+
+[help.format]
+body = """
+#appeal
+Tautan log: https://t.me/TranssionCoreFederationLogs/123
+Klarifikasi: Saya membagikan tautan di banyak grup tanpa membaca aturan.
+Persetujuan: Saya akan mematuhi semua panduan komunitas ke depannya."""
+
+[help.next]
+body = """
+Bandingmu diteruskan ke Staf TC untuk ditinjau. Admin yang menjatuhkan ban awal punya {window} untuk merespons; setelah itu admin mana pun bisa bertindak.
+
+Jika disetujui: ban dicabut segera di semua grup terhubung.
+Jika ditolak: ban tetap berlaku.
+Kamu akan diberi tahu bot dalam kedua kasus."""
+
+# Runtime strings for appeal submission (appeal_submit_flow.py).
+# All send plain (PM replies, alerts, plain edits): plain=True.
+# Placeholders: {hours}/{remaining}/{max} ints, {community}/{handle}/
+# {logs} raw config values.
+
+[submit]
+not_private = "Buka tautan ini di PM bot."
+invalid_link = "Tautan banding ini tidak valid atau sudah kedaluwarsa."
+wrong_account = "Tautan banding ini bukan milik akunmu."
+pending_review = "Kamu sudah punya banding yang sedang ditinjau. Jika tidak ada keputusan dalam {hours} jam, kamu boleh coba lagi."
+cooldown = "Bandingmu sebelumnya ditolak. Tunggu {hours} jam sebelum mengajukan yang baru. (tersisa {remaining} jam)"
+cancelled = "Banding dibatalkan. Tidak ada yang dikirim."
+unexpected = "Kirim pesan bandingmu, atau tekan Batal."
+session_ended = "Sesi banding berakhir."
+too_long = "Pesan bandingmu terlalu panjang (maks {max} karakter). Persingkat lalu coba lagi."
+session_expired = "Sesi kedaluwarsa, mulai lagi bandingnya."
+invalid_log = "Tautan log tidak valid. Cek lagi lalu coba lagi."
+submitted = "Bandingmu sudah dikirim. Tim akan segera meninjaunya dan mengabarimu."
+delivery_failed = "Bandingmu tidak bisa diteruskan ke tim moderasi sekarang. Coba lagi beberapa menit lagi; jika terus terjadi, hubungi staf langsung."
+
+[instruction]
+title = "Banding Ban {community}"
+intro = "Untuk mengajukan banding, balas dengan pesan diawali `#appeal`, berisi:"
+log_item = "- *Tautan log:* (tautan ke log ban dari kanal log)"
+clarify_item = "- *Klarifikasi:* (penjelasan jujur tentang yang terjadi)"
+agree_item = "- *Persetujuan:* (komitmen untuk tidak mengulangi pelanggaran)"
+example_label = "*Contoh:*"
+example_body = """#appeal
+Tautan log: https://t.me/{logs}/1
+Klarifikasi: Saya spam tanpa sengaja karena auto-clicker.
+Persetujuan: Saya tidak akan memakai alat otomatisasi apa pun di grup lagi."""
+channel = "Kanal Log: {handle}"
+
+[review]
+not_authorized = "Kamu tidak berwenang."
+role_lookup = "Tidak bisa memverifikasi peran federasi sekarang. Coba lagi sebentar."
+ban_not_found = "Catatan ban tidak ditemukan."
+already_resolved = "Banding sudah diputuskan (ban sudah tidak aktif)."
+db_retry = "Penulisan database gagal. Kartu tinjauan tidak berubah, ketuk lagi untuk mencoba ulang."
+review_locked = "Hanya admin yang menjatuhkan ban ini yang bisa meninjau dalam {hours} jam pertama."
+
+[decision]
+approve_dm = "Banding untuk ban {ban_id} disetujui. Kamu tidak lagi di-ban dari {community}. Selamat datang kembali."
+approve_card = "Banding disetujui oleh {admin}. Ban dicabut."
+reject_dm = "Banding untuk ban {ban_id} tidak disetujui. Ban tetap berlaku."
+reject_card = "Banding ditolak oleh {admin}."

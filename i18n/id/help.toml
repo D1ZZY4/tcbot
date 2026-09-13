@@ -1,0 +1,41 @@
+# Help index prose for help.py itself: the topic-list header.
+# Structure stays in help.py; only prose lives here.
+# Placeholders: {title} carries pre-formatted bold markup from code,
+# {community} is the raw community name.
+
+[index]
+body = """{title}
+Bot manajemen federasi untuk {community}.
+
+Pilih modul di bawah untuk membaca ringkasan dan perintahnya, atau pakai `/help <module>` untuk langsung ke topik."""
+
+# Runtime strings (help.py). [error] sends plain; [note]/[module]/
+# [section]/[not_found] render as MarkdownV2. Placeholders: {title}/
+# {prefixes}/{query}/{hint} pre-formatted fragments, {overview}/
+# {content} pre-rendered help prose.
+
+[error]
+topic_not_found = "Topik tidak ditemukan."
+section_not_found = "Bagian tidak ditemukan."
+invalid_section = "Bagian tidak valid."
+
+[note]
+prefixes = "*Catatan:* Semua perintah juga bisa dipakai dengan {prefixes}"
+
+[module]
+body = """{title}
+
+{overview}
+{note}"""
+
+[section]
+body = """{title}
+
+{content}"""
+
+[not_found]
+body = "Modul {query} tidak ditemukan.{hint}"
+hint = "\n\nMungkin maksudmu: {suggestions}?"
+
+[group]
+alert = "Jalankan /help di grup ini untuk menelusuri semua modul dan perintah."

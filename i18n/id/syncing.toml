@@ -1,0 +1,44 @@
+# Sync help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in syncing.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Merekonsiliasi status penegakan: menerapkan ulang ban yang terlewat fan-out dan memastikan unban benar-benar sampai."
+
+[help.commands]
+body = """
+`/tcsync` (alias: `/tcsynchronize`)
+`/tcsync <target>`"""
+
+[help.sync]
+body = "Menyapu ban federasi aktif terhadap grup terhubung (terbatas, 200 pemeriksaan anggota per jalan) dan me-ban ulang pengguna yang hadir tetapi belum di-kick. Pengguna yang sudah di-kick, tidak hadir, atau istimewa dilewati, tidak pernah dihitung gagal."
+
+[help.sync_target]
+body = "Memverifikasi satu pengguna dua arah di semua grup terhubung: ban ulang saat ban aktif belum ditegakkan, unban saat kick basi selamat dari penonaktifan."
+
+[help.examples]
+body = """
+`/tcsync`
+`/tcsync @username`
+`/tcsync 123456789`"""
+
+# Runtime strings (syncing.py). [status] sends plain; the rest render
+# as MarkdownV2. Placeholders: {target} raw target words, counts as
+# pre-formatted code, {sample} raw group titles.
+
+[status]
+sending = "Menyinkronkan status penegakan..."
+
+[target]
+user = "pengguna {id}"
+sweep = "sapuan federasi"
+
+[summary]
+title = "*Sinkron selesai* ({target})"
+checked = "Diperiksa: {n}"
+rebanned = "Di-ban ulang: {n}"
+reunbanned = "Di-unban ulang: {n}"
+skipped = "Dilewati: {n}"
+failed = "Gagal: {n}"
+failing = "Masih gagal di: {sample}"
+truncated = "Catatan: batas 200 pemeriksaan tercapai; jalan lagi untuk melanjutkan sapuan."

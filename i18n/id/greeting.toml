@@ -1,0 +1,15 @@
+# Join/leave event strings (greeting.py). All render as MarkdownV2
+# in the group audience language. Placeholders: {user} pre-formatted
+# mention, {ban} pre-formatted code ban ID, {appeal} pre-formatted link,
+# {community} raw name.
+
+[notice]
+banned = "{user} di-ban federasi dan telah dikeluarkan."
+ban_id = " ID Ban: {ban}."
+appeal = " {link}"
+
+[welcome]
+body = "Selamat datang, {user}. Ini grup resmi {community}. Baca aturan grup sebelum ikut serta."
+
+[left]
+body = "{user} telah keluar."

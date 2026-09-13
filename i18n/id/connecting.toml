@@ -1,0 +1,55 @@
+# Connect help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in connecting.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+# Placeholders: {community} = raw community name.
+
+[help]
+overview = "Menghubungkan grupmu ke federasi {community} agar ban, mute, dan broadcast federasi diterapkan otomatis."
+
+[help.commands]
+body = "`/tcconnect` (alias: `/tccon`)"
+
+[help.who]
+body = "Hanya admin dan pemilik grup (dicek per grup)."
+
+[help.where]
+body = "Di dalam grup yang ingin dihubungkan ke {community}."
+
+[help.what]
+body = """
+Menghubungkan grupmu ke federasi {community}. Setelah terhubung:
+- Ban federasi ditegakkan otomatis: pengguna yang sedang di-ban dikeluarkan, dan pengguna yang baru di-ban di-kick saat ban dijatuhkan.
+- Mute federasi diterapkan saat dikeluarkan.
+- Pesan broadcast dari Staf TC diteruskan ke grupmu."""
+
+[help.permissions]
+body = "Sebelum menjalankan perintah, jadikan bot admin grup dengan tiga izin ini: *Delete Messages*, *Ban Users*, dan *Invite Users via Link*."
+
+[help.notes]
+body = """
+Jika permintaan connect untuk grupmu sudah tertunda, permintaan kedua akan ditolak; tunggu Staf TC memproses yang sudah ada.
+
+Saat bot pertama kali ditambahkan ke grup, ia otomatis meminta pemilik grup untuk connect, jadi kamu juga bisa tinggal menambahkan bot lalu mengikuti perintah itu."""
+
+[help.examples]
+body = "Jadikan bot admin grup, lalu jalankan `/tcconnect` di dalam grup."
+
+# Runtime strings for the connect flow (connected_flow.py).
+# All send plain (no parse_mode): plain=True at call sites.
+# Placeholders: {community} raw community name.
+
+[state]
+role_check_failed = "Tidak bisa memverifikasi peranmu."
+owner_only = "Hanya pemilik grup yang bisa memutuskan."
+bot_perms_verify = "Tidak bisa memverifikasi izinku sendiri. Angkat aku jadi admin lalu coba lagi."
+complete_join = "Koneksi gagal. Coba lagi nanti."
+admin_required = "Hanya admin grup yang bisa meminta connect."
+pending_request = "Permintaan connect untuk grup ini sudah tertunda."
+primary_group = "Ini grup primer federasi (main atau exec). Grup primer tidak dihubungkan via /tcconnect."
+connect_failed = "Gagal menghubungkan grup. Coba lagi."
+join_prompt = "Mau menghubungkan grup ini ke {community}?"
+connected = "Grup ini sekarang terhubung ke {community}. Staf berwenang bisa memakai perintah federasi di sini."
+declined = "Koneksi ditolak. Aku akan keluar dari grup sekarang."
+already_connected = "Grup ini sudah terhubung ke {community}."
+connecting = "Menghubungkan... menerapkan ban dan mute federasi yang ada. Bisa perlu waktu sejenak untuk federasi besar."
+perms_required = "Jadikan bot admin dengan izin yang dibutuhkan (hapus pesan, ban pengguna, undang via tautan) lalu coba lagi."

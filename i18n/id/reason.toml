@@ -1,0 +1,26 @@
+# Reason-step strings shared by ban/kick/mute/warn flows.
+# Structure stays in reason_flow.py; only prose lives here.
+# [limit]/[unexpected] send plain (parse_mode=None): plain=True at call sites.
+# [prompt] renders as MarkdownV2.
+# Placeholders: {verb} bare action verb, {target} V2-ready mention,
+# {suffix} V2-ready extra, {skip_hint} prebuilt hint, {action}/{Action}
+# raw action stems, {skip}/{cancel} button labels, {max}/{actual} ints.
+
+[limit]
+text = "Alasan terlalu panjang (maks {max} karakter, kamu mengirim {actual}). Tolong persingkat."
+
+[prompt]
+body = "Akan {verb} {target}{suffix}.\nApa alasannya? Ketik di bawah{skip_hint}."
+
+[hint]
+skip = ", atau ketuk {label}"
+
+[unexpected]
+body = "Ketik alasan {action} sebagai teks, atau tekan {skip} / {cancel}."
+
+[cancel]
+body = "Oke, {action} dibatalkan. Tidak ada tindakan yang diambil."
+via_command = "Operasi {Action} dibatalkan."
+
+[target]
+fallback = "target"

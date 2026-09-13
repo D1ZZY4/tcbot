@@ -1,0 +1,99 @@
+# Identity refusal lines, recognition notes, and staff notices.
+# All render as MarkdownV2. Placeholders: {line} pre-formatted user
+# reference, {community}/{role}/{action} raw values.
+
+[refuse.ban]
+self = "Ban diri sendiri? Kreatif, tapi jangan. Federasi butuh kamu di sini."
+this_bot = "Aku yang menjalankan tempat ini. Menge-ban aku tidak bisa."
+telegram = "Telegram itu sendiri? Berani juga. Tidak akan terjadi."
+anon_admin = "Tidak bisa menge-ban placeholder admin anonim."
+founder = "{line} yang menjalankan tempat ini, tidak bisa di-ban dari sini."
+
+[refuse.kick]
+self = "Kick diri sendiri? Keluar grup saja langsung."
+this_bot = "Kick aku? Aku yang menjalankan tempat ini."
+telegram = "Rasanya aku tidak bisa meng-kick Telegram dari grupnya sendiri."
+anon_admin = "Tidak bisa meng-kick placeholder admin anonim."
+founder = "{line} yang menjalankan tempat ini, tidak di-kick di sini."
+
+[refuse.mute]
+self = "Mute diri sendiri? Bukan begitu cara kerjanya."
+this_bot = "Mute aku tidak ada gunanya, aku memang tidak kirim pesan sendiri."
+telegram = "Pesan layanan Telegram tidak bisa di-mute dari sini."
+anon_admin = "Tidak bisa mem-mute placeholder admin anonim."
+founder = "{line} yang menjalankan tempat ini, mute tidak berlaku di sini."
+
+[refuse.warn]
+self = "Peringatan untuk diri sendiri itu seperti jurnal. Tanya mod bila perlu."
+this_bot = "Peringatiku? Akulah yang mencatat peringatan di sini."
+telegram = "Telegram tidak terima peringatan, maaf."
+other_bot = "{line} itu bot. Bot tidak menumpuk peringatan federasi."
+anon_admin = "Tidak bisa memperingatkan placeholder admin anonim."
+founder = "{line} yang menjalankan tempat ini. Peringatan tidak berlaku untuk Founder."
+
+[refuse.unban]
+self = "Tidak bisa meng-unban diri sendiri. Pakai /checkme lalu ajukan banding."
+this_bot = "{line} - aku yang mengelola ban, bukan mengoleksinya."
+telegram = "Telegram memang tidak pernah ada di daftar ban."
+anon_admin = "Admin anonim tidak pernah ada di daftar ban."
+founder = "{line} - tidak pernah di-ban, tidak ada yang perlu dibatalkan."
+admin = "{line} itu Admin. Staf tidak bisa di-ban federasi, tidak ada yang perlu dibatalkan."
+developer = "{line} itu Developer. Staf tidak bisa di-ban federasi, tidak ada yang perlu dibatalkan."
+tester = "{line} itu Tester. Staf tidak bisa di-ban federasi, tidak ada yang perlu dibatalkan."
+
+[refuse.unmute]
+self = "Tidak bisa meng-unmute diri sendiri, tanya mod."
+this_bot = "{line} - bot tidak bisa di-mute, tidak ada yang perlu dibatalkan."
+telegram = "Layanan Telegram tidak pernah di-mute."
+other_bot = "{line} itu bot. Bot tidak bisa di-mute, jadi tidak ada yang perlu dibatalkan."
+anon_admin = "Admin anonim tidak pernah di-mute."
+founder = "{line} - jelas tidak di-mute."
+
+[refuse.promote]
+self = "Promosi diri sendiri? Boleh juga, hierarkinya tidak bisa dibengkokkan begitu."
+this_bot = "Sudah menjalankan semuanya, tidak butuh peran."
+telegram = "Telegram baik-baik saja tanpa peran di sini."
+other_bot = "Bot lain tidak bisa memegang peran federasi, khusus manusia."
+anon_admin = "Admin anonim tidak bisa memegang peran federasi."
+founder = "{line} sudah menjalankan tempat ini, mempromosikannya itu jalan di tempat."
+admin = "{line} sudah Admin. Pakai /tcpromote untuk peran lain."
+
+[refuse.demote]
+self = "Demosi diri sendiri? Berani. Tanya atasan bila serius."
+this_bot = "Tidak ada peran yang bisa hilang di sini."
+telegram = "Telegram tidak punya peran untuk diambil."
+other_bot = "{line} itu bot. Bot tidak bisa memegang peran federasi, tidak ada yang bisa didemosi."
+anon_admin = "Admin anonim tidak punya peran untuk diambil."
+founder = "{line} itu Founder, coba /transferowner bila serius."
+
+[refuse.transfer]
+self = "Sudah Founder, transfer ke diri sendiri tidak ada efeknya."
+this_bot = "Menggoda, tetapi aku tidak menjalankan tempat ini atas namaku sendiri."
+telegram = "Telegram tidak mau kunciku, maaf."
+other_bot = "Bot lain tidak bisa memegang kunci, khusus manusia."
+anon_admin = "Tidak bisa mentransfer kepemilikan ke admin anonim."
+
+[refuse.unwarn]
+self = "Menghapus peringatan sendiri? Boleh juga, tanya mod."
+this_bot = "{line} - nol peringatan, selamanya. Tidak ada yang perlu dibatalkan."
+telegram = "Telegram tidak dapat peringatan di sini."
+other_bot = "{line} - bot tidak menumpuk peringatan, tidak ada yang perlu dihapus."
+anon_admin = "Admin anonim tidak dapat peringatan di sini."
+founder = "{line} - rekam bersih, tidak ada yang perlu dibatalkan."
+
+[refuse.resetwarns]
+self = "Kamu tidak bisa me-reset peringatan sendiri, tanya mod."
+this_bot = "{line} - sudah nol dari dulu."
+telegram = "Tidak ada yang perlu dihapus dari Telegram."
+other_bot = "{line} - bot tetap nol secara default."
+anon_admin = "Tidak ada yang perlu dihapus dari admin anonim."
+founder = "{line} - tidak ada di catatan yang perlu dihapus."
+
+[note]
+this_bot = "Itu aku, bot ini. Aku menjalankan moderasi di sini, bukan mengoleksi ban."
+self = "Itu kamu, mengecek catatan sendiri, kebiasaan bagus."
+telegram = "Itu Telegram itu sendiri, di luar yurisdiksi federasi."
+anon_admin = "Itu placeholder admin-anonim, bukan pengguna individu."
+
+[staff]
+notice = "Info dulu, {line} itu {role} {community}. Tetap lanjut dengan {action}."

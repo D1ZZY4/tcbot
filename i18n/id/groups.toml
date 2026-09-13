@@ -1,0 +1,33 @@
+# Groups help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in groups.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+# Placeholders: {community} = raw community name.
+
+[help]
+overview = "Menampilkan semua grup yang terhubung ke {community}, dengan tampilan detail opsional."
+
+[help.commands]
+body = "`/tcgroups` (alias: `/tcg`)"
+
+[help.what]
+body = """
+Menampilkan semua grup yang terhubung ke {community}, beserta jumlah total.
+
+Tampilan default hanya nama grup. Ketuk *Detail* untuk memperluas daftar dan menampilkan ID chat tiap grup di samping namanya. Ketuk *Sederhana* untuk menciutkan lagi."""
+
+[help.examples]
+body = "`/tcgroups` atau `/tcg`"
+
+# Runtime strings for the group list (groups.py, start.py menu).
+# [menu] sends plain; [list] renders as MarkdownV2.
+# Placeholders: {community} raw name, {title} raw group title,
+# {id} pre-formatted code ID, {n} ints.
+
+[menu]
+empty = "Tidak ada grup yang terhubung ke {community}."
+
+[list]
+header = "*Grup Terhubung*\n\nJumlah: {n}"
+item = "- {title}"
+item_detailed = "- {title} - {id}"
+more = "...dan {n} lagi tidak ditampilkan."

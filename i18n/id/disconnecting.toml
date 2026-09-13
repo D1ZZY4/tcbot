@@ -1,0 +1,50 @@
+# Disconnect help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in disconnecting.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Menghapus grup dari {community}. Pakai `/tcdisconnect` dari dalam grup, atau `/rmtc` jarak jauh dengan ID chat."
+
+[help.commands]
+body = """
+`/tcdisconnect` (alias: `/tcdiscon`)
+`/rmtc`"""
+
+[help.who]
+body = """
+*/tcdisconnect*: pemilik grup atau Staf TC (Admin ke atas).
+*/rmtc*: hanya Staf TC."""
+
+[help.where]
+body = """
+*/tcdisconnect*: di dalam grup yang ingin diputus.
+*/rmtc*: grup exec atau PM Bot (bisa jarak jauh via ID chat)."""
+
+[help.what]
+body = """
+*/tcdisconnect*: menghapus grup ini dari {community}, mengirim entri log pemutusan, dan membuat bot keluar dari grup.
+
+*/rmtc*: menghapus paksa grup dari federasi via ID chat. Pakai ini untuk grup yang botnya sudah di-kick, atau untuk menghapus grup jarak jauh tanpa berada di dalamnya. Entri log tetap dikirim."""
+
+[help.examples]
+body = """
+`/tcdisconnect`: putus grup ini.
+`/rmtc -1001234567890`: hapus paksa grup via ID chat."""
+
+# Runtime strings (disconnecting.py). [state] sends plain (parse_mode=None
+# replies); [removed] renders as MarkdownV2. Placeholders: {community}
+# raw name, {id} pre-formatted code chat ID.
+
+[state]
+usage = "Pakai: /rmtc <chat_id>"
+primary_refused = "Ini grup primer federasi (main atau exec). Ia tidak bisa diputus: grup primer menampung penegakan dan log federasi, jadi bot harus tetap di sini."
+status_failed = "Tidak bisa memverifikasi status grup. Coba lagi."
+not_connected = "Grup ini tidak terhubung ke {community}."
+anon_admin = "Mode admin anonim aktif. Kirim perintah ini dari akun pribadimu, atau minta Staf TC menjalankan /rmtc."
+not_authorized = "Hanya pemilik grup atau admin TC yang bisa memutus grup ini."
+deactivate_failed = "Gagal memutus grup. Bot masih di sini; coba lagi."
+disconnected = "Grup ini telah diputus dari {community}."
+rmtc_failed = "Gagal memutus grup. Coba lagi."
+
+[removed]
+body = "Grup {id} telah diputus dari {community}."

@@ -1,0 +1,38 @@
+# Unban help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in unbanning.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Mencabut ban federasi aktif di *semua grup terhubung* sekaligus."
+
+[help.commands]
+body = "`/tcunban` (alias: `/tcunb`)"
+
+[help.what]
+body = """
+Mencabut ban federasi aktif pada target. Unban berlaku di *semua grup terhubung* sekaligus sehingga mereka bisa bergabung bebas. Satu entri log dikirim ke kanal log federasi.
+
+Jika pengguna tidak punya ban federasi aktif, bot akan memberi tahu dan tidak melakukan apa-apa.
+Kartu tinjauan banding yang tertunda dibiarkan apa adanya; penyelesaian banding tetap di alur banding.
+Staf yang dipromosikan lagi saat di-ban didemosi dulu agar ban lama bisa dihapus."""
+
+[help.examples]
+body = """
+`/tcunban @username`
+`/tcunb 123456789`
+Atau balas sebuah pesan lalu jalankan `/tcunb`."""
+
+# Runtime strings for the unban executor (unban_flow.py).
+# All render as MarkdownV2.
+# Placeholders: {user} pre-formatted user reference, {note} prebuilt
+# result line, {done}/{total} ints, {sample} raw group names.
+
+[note]
+no_record = "{user} tidak punya ban federasi aktif."
+groups_fail = "{user} tidak bisa di-unban: daftar grup gagal dimuat dari database, jadi tidak ada yang diubah. Cek log lalu coba lagi."
+db_fail = "{user} tidak bisa di-unban: penonaktifan database gagal, jadi pengguna masih ditandai di-ban walau ia sudah di-unmute di chat. Cek log lalu coba lagi."
+partial = "dihapus dari {done}/{total} grup. PERINGATAN: masih di-ban di: {sample}{more}"
+full = "dihapus dari {total}/{total} grup."
+
+[summary]
+body = "{user} telah di-unban. {note}"

@@ -1,0 +1,131 @@
+# Admin help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in admins.py; only prose lives here.
+# The Who section composes shared permission constants, so it stays in
+# Python; everything below is static prose. Mini-markup only: `code`
+# and *bold*, balanced and unnested.
+
+[help]
+overview = "Mempromosikan dan mendemosi staf, mentransfer kepemilikan, dan mengelola permintaan promosi se-federasi."
+
+[help.commands]
+body = """
+`/tcpromote` (alias: `/tcp`)
+`/tcdemote` (alias: `/tcd`)
+`/transferowner` (alias: `/tfowner`)
+`/tcpromoterequests` (alias: `/tcreqs`)
+`/tcpromotelist` (alias: `/tcplist`)"""
+
+[help.who]
+body = """*/tcpromote*, */tcdemote*, */tcpromotelist*: Founder dan Admin.
+*/transferowner*: {perm}
+*/tcpromoterequests*: siapa pun (membuat permintaan sendiri ke Founder)."""
+
+[help.roles]
+body = """
+Founder (peringkat 4) > Admin (peringkat 3) > Developer (peringkat 2) > Tester (peringkat 1)
+
+Kamu tidak bisa mempromosikan pengguna ke peringkat yang sama atau lebih tinggi darimu. Admin yang mempromosikan seseorang ke Admin mengantrekan permintaan ke Founder."""
+
+[help.promote]
+body = """
+Memberi peran ke pengguna. Tanpa argumen peran, menu tombol inline akan muncul.
+
+*Pemakaian:* `/tcpromote <target> [admin|developer|tester]`
+- Founder bisa promosi ke peran mana pun langsung.
+- Admin bisa promosi ke Developer atau Tester langsung; promosi ke Admin mengirim permintaan tertunda ke Founder untuk disetujui."""
+
+[help.demote]
+body = """
+Mencabut peran pengguna. Tombol konfirmasi muncul sebelum tindakan dijalankan.
+
+*Pemakaian:* `/tcdemote <target>`
+- Founder bisa mendemosi peran mana pun.
+- Admin hanya bisa mendemosi Developer atau Tester.
+- Saat pengguna berperan di-ban atau di-kick, perannya otomatis dicabut dan mereka diberi tahu lewat DM."""
+
+[help.transferowner]
+body = """
+Mentransfer kepemilikan federasi ke pengguna lain. Founder saat ini turun jadi Admin. Hanya Founder.
+
+*Pemakaian:* `/transferowner <target>`"""
+
+[help.examples]
+body = """
+`/tcpromote @username developer`
+`/tcpromote 123456789`: menampilkan menu pilihan peran
+`/tcdemote @username`
+`/transferowner @newowner`
+`/tcpromoterequests`: minta promosi ke Admin
+`/tcplist`: daftar permintaan promosi tertunda"""
+
+# Runtime strings for promotion (promote_flow.py).
+# Reply texts render as MarkdownV2; DMs send plain (no parse_mode).
+# Placeholders: {user} pre-formatted user reference, {role}/{label}/
+# {community} raw values.
+
+[promote]
+save_fail = "Gagal menyimpan promosi. Coba lagi."
+role_fail = "Gagal menyimpan penetapan peran. Coba lagi."
+done_admin = "Beres. {user} sekarang Admin {community}."
+done_role = "Beres. {user} sekarang {role} {community}."
+already_admin = "Pengguna itu sudah Admin. Demosi dulu sebelum memberi {role}."
+holds_role = "Pengguna itu sudah memegang peran {role} atau lebih tinggi."
+pending = "Sudah ada permintaan promosi tertunda untuk {user}."
+queue_fail = "Gagal mengantrekan permintaan promosi. Coba lagi."
+submitted = "Terkirim, Founder sudah diberi tahu dan akan segera meninjaunya."
+target_is_founder = "Itu Founder, tidak bisa memberi peran di atas mereka."
+no_assign_perms = "Kamu tidak punya izin untuk memberi peran ini."
+
+[promote.dm]
+admin = "Kamu dipromosikan jadi Admin di {community}, selamat datang di tim staf."
+role = "Kamu diberi peran {role} di {community}, selamat datang di tim."
+
+[request]
+anon_admin = "Perintah ini harus dikirim dari akun pribadimu, bukan sebagai grup. Perintah mode admin anonim tidak diterima di sini."
+already_role = "Kamu sudah {role}, tidak perlu minta."
+existing = "Kamu sudah punya permintaan tertunda (ID: {id})."
+
+# Shared admin error strings. All send plain (parse_mode=None replies,
+# plain edits, alerts): plain=True at call sites.
+
+[error]
+no_assign_perms = "Kamu tidak punya izin untuk memberi peran apa pun."
+no_removable_role = "Pengguna itu tidak memegang peran yang bisa dicabut."
+founder_demote_only = "Hanya Founder yang bisa mendemosi Admin."
+no_longer_removable = "Pengguna itu sudah tidak memegang peran yang bisa dicabut."
+role_clear_failed = "Tidak bisa menghapus peran, mungkin sudah dihapus."
+role_lookup_failed = "Tidak bisa memverifikasi peran federasi sekarang. Coba lagi sebentar."
+request_not_found = "Permintaan tidak ditemukan atau sudah diputuskan."
+classify_failed = "Tidak bisa memverifikasi pengguna itu sekarang. Coba lagi sebentar."
+promote_needs_target = "Sebutkan siapa yang dipromosi: balas pesannya atau beri ID/@username, mis. /tcpromote @user developer."
+promote_cancelled = "Promosi dibatalkan. Tidak ada perubahan."
+cancelled = "Dibatalkan. Tidak ada perubahan."
+no_pending = "Tidak ada permintaan promosi tertunda."
+
+# Promote/demote/transfer/list/decision UI. [role_picker]/[confirm]/
+# [transfer]/[list]/[card] render as MarkdownV2; [decision.dm] sends plain.
+
+[promote_ui]
+role_picker = "Pilih peran untuk {user}:"
+
+[demote]
+confirm = "{user} saat ini {role}.\nKonfirmasi untuk mencabut perannya."
+done = "Beres. {user} telah dihapus dari {role}."
+
+[transfer]
+set_owner_fail = "Tidak bisa mentransfer kepemilikan. Tidak ada perubahan; coba lagi."
+done = "Beres. {user} sekarang Founder."
+admin_warn = " PERINGATAN: {user} tidak bisa dipertahankan sebagai Admin; beri peran manual dengan /tcpromote bila perlu."
+
+[list]
+header = "{title}"
+header_text = "Permintaan Promosi Tertunda ({n})"
+row = "- {user} {id} | {uname} | ID: {req}"
+
+[decision]
+approve_fail = "Tidak bisa menyetujui permintaan. Coba lagi."
+reject_fail = "Tidak bisa menolak permintaan. Coba lagi."
+approved_suffix = "\n\n- Disetujui oleh {name}"
+rejected_suffix = "\n\n- Ditolak oleh {name}"
+approve_dm = "Permintaan promosimu disetujui, selamat datang di tim staf {community}, Admin."
+reject_dm = "Permintaanmu sudah ditinjau tetapi belum disetujui kali ini. Silakan ajukan lagi nanti."

@@ -1,0 +1,60 @@
+# Netspeed help prose: overview plus per-section bodies.
+# Structure (order, labels) stays in netspeed.py; only prose lives here.
+# Mini-markup only: `code` and *bold*, balanced and unnested.
+
+[help]
+overview = "Jalankan diagnostik jaringan: ping untuk latensi round-trip API Telegram, speedtest untuk ukur penuh bandwidth unduh dan unggah."
+
+[help.commands]
+body = """
+`/ping` (alias: `/p`)
+`/speedtest` (alias: `/st`)"""
+
+[help.what]
+body = """
+*/ping*: Mengukur waktu pulang-pergi dari bot ke server Telegram.
+*/speedtest*: Menjalankan tes kecepatan jaringan penuh dan melaporkan ping, unduh, unggah, byte yang ditransfer, IP klien, ISP, dan detail server terbaik."""
+
+[help.examples]
+body = """
+`/ping`
+`/p`
+`/speedtest`
+`/st`"""
+
+# Runtime strings for /ping and /speedtest.
+# [status] entries send without parse_mode: plain=True at the call site.
+# [pong] and [result] entries render as MarkdownV2.
+# Placeholders: {latency} and {value} carry pre-formatted code markup.
+
+[status]
+pinging = "Ping..."
+running = "Tes kecepatan berjalan, tunggu sebentar..."
+timeout = "Tes kecepatan habis waktu. Coba lagi nanti."
+failed = "Tes kecepatan gagal. Coba lagi nanti."
+parse_failed = "Tes kecepatan selesai tetapi hasilnya tidak bisa dibaca. Coba lagi nanti."
+
+[pong]
+body = "Pong! Latensi pulang-pergi: {latency}"
+
+[result]
+title = "*Hasil Tes Kecepatan*"
+client = "*Info Klien*"
+server = "*Info Server*"
+
+[result.field]
+ping = "*Ping:* {value}"
+timestamp = "*Stempel waktu:* {value}"
+download = "*Unduh:* {value}"
+upload = "*Unggah:* {value}"
+sent = "*Terkirim:* {value}"
+received = "*Diterima:* {value}"
+ip = "*IP:* {value}"
+isp = "*ISP:* {value}"
+isp_rating = "*Rating ISP:* {value}"
+country = "*Negara:* {value}"
+latitude = "*Lintang:* {value}"
+longitude = "*Bujur:* {value}"
+name = "*Nama:* {value}"
+sponsor = "*Sponsor:* {value}"
+latency = "*Latensi:* {value}"

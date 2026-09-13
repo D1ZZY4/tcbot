@@ -1,0 +1,55 @@
+# Shared generic errors and notices. Templates stay raw: the engine
+
+# escapes MarkdownV2 at render time.
+retry = "Terjadi masalah di sisi kami. Coba lagi sebentar."
+
+# Shared moderation error and notice strings (replies.py owners).
+# Send path per key: keys rendered through MarkdownV2 sends use the
+# default mode; keys sent as plain text (alerts, parse_mode=None
+# replies) render with plain=True at the call site.
+
+[err]
+cannot_resolve = "Target itu tidak bisa dikenali. Balas pesan mereka, atau sertakan ID pengguna atau @username."
+role_verify = "Tidak bisa memverifikasi peran grup kamu."
+group_only = "Pakai perintah ini di dalam grup."
+no_connected_groups = "Tidak ada grup yang terhubung."
+group_not_found = "Grup tidak ditemukan atau sudah dihapus."
+perm_expired = "Kamu sudah tidak punya izin untuk ini."
+unknown_role = "Peran tidak dikenal."
+groups_load_failed = "Tidak bisa memuat daftar grup. Coba lagi."
+db_retry = "Tidak bisa menjangkau database sekarang. Coba lagi sebentar."
+
+[perm]
+founder_only = "Hanya Founder."
+staff_only = "Staf TC (Admin ke atas)."
+admin_above = "Admin ke atas (Founder / Admin)."
+dev_above = "Developer ke atas (Founder / Admin / Developer)."
+tester_above = "Tester ke atas (Founder / Admin / Developer / Tester)."
+
+[limit]
+# Placeholders: {wait} = seconds as an integer, at least 1. The unit
+# rides on the number ({wait}s) so the line stays correct at 1.
+text = "Pelan-pelan, coba lagi dalam {wait}s."
+
+[action]
+no_reason = "Tanpa alasan"
+
+# Help section labels (raw: buttons show them plain, titles escape them
+# via bold()) and scope bodies (V2-escaped prose).
+
+[section]
+commands = "Perintah & Alias"
+who = "Yang bisa memakai"
+where = "Tempat memakai"
+what = "Fungsinya"
+examples = "Contoh"
+target = "Format target"
+
+[context]
+bot_or_group = "PM bot, grup exec, atau grup terhubung mana pun."
+exec_or_group = "Grup exec, grup terhubung mana pun, atau PM bot."
+anyone = "Siapa pun, tanpa izin khusus."
+connected_group = "Di dalam grup terhubung mana pun."
+
+[target]
+syntax = "Balas sebuah pesan, atau tulis ID pengguna / @username setelah perintah."
