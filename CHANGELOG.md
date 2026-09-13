@@ -13,6 +13,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Changed
 
+- **Declared test-runner dependency** (`pyproject.toml`): the dev dependency group now installs everything needed to run checks from a fresh sync, so the whole-tree type check passes cleanly without extra ad-hoc tooling.
+
 - **Tidier start-menu rows** (`tcbot/modules/helper/keyboards.py`): the Additional and Privacy buttons share one row, so the menu reads as two pairs plus the Language footer instead of one pair plus three stretched singletons. Labels, callbacks, and colors unchanged.
 
 - **One-line auth decorators** (`tcbot/modules/helper/decorators.py`): the four near-identical role gatekeepers (`owner_only`, `staff_only`, `mod_only`, `basic_mod_only`) collapse into a small `_auth_only` factory producing each decorator from its label, refusal key, and minimum role; behavior and reply text unchanged.

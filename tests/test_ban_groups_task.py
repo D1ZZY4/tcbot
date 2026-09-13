@@ -71,7 +71,7 @@ def test_propagated_error_retrieves_groups_task(
     created = _install_create_task_spy(monkeypatch)
 
     with pytest.raises(RuntimeError, match="mongo down"):
-        asyncio.run(ban_flow._execute_ban(_DummyBot(), [], _fake_meta()))
+        asyncio.run(ban_flow._execute_ban(_DummyBot(), [], _fake_meta()))  # type: ignore[arg-type]
 
     assert len(created) == 1
     assert created[0].done()
@@ -87,7 +87,7 @@ def test_cancellation_still_propagates(monkeypatch: pytest.MonkeyPatch) -> None:
     created = _install_create_task_spy(monkeypatch)
 
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(ban_flow._execute_ban(_DummyBot(), [], _fake_meta()))
+        asyncio.run(ban_flow._execute_ban(_DummyBot(), [], _fake_meta()))  # type: ignore[arg-type]
 
     assert len(created) == 1
     assert created[0].done()

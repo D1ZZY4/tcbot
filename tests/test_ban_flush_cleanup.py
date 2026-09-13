@@ -97,7 +97,7 @@ def _flush_sleep_scenario(
 
     async def _scenario() -> tuple[dict[tuple[int, int], Any], Any]:
         registry[key] = first
-        task = asyncio.create_task(ban_flow._flush_session(key, _DummyBot()))
+        task = asyncio.create_task(ban_flow._flush_session(key, _DummyBot()))  # type: ignore[arg-type]
         await asyncio.sleep(0)
         events[0].set()
         await asyncio.sleep(0)
@@ -141,7 +141,7 @@ def test_done_proof_finally_guard_regression(
 ) -> None:
     key = (_FakeChat.id, _FakeUser.id)
     first = ban_flow._ProofSession(
-        msgs=[object()],
+        msgs=[object()],  # type: ignore[list-item]
         meta={"ban_target_id": 33, "ban_admin_id": 44},
         user_data=_prefilled_user_data(),
     )
