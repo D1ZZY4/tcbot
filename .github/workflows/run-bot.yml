@@ -127,6 +127,32 @@ jobs:
             BOT_PID=$!
           }
 
+          # * Bounded graceful stop shared by the window-end path and the
+          # * TERM/INT trap below. GitHub cancels this job when a runtime
+          # * push preempts it; uv forwards the SIGTERM to the bot child
+          # * (since 0.5.x, handled by PTB), so cancellation gets the same
+          # * 60 s wait as a normal window end instead of dying mid-write.
+          stop_bot_gracefully() {
+            if [ -n "${BOT_PID:-}" ] && kill -0 "$BOT_PID" 2>/dev/null; then
+              echo "Stopping bot (PID $BOT_PID) gracefully..."
+              kill "$BOT_PID" 2>/dev/null || true
+              for _ in $(seq 1 30); do
+                kill -0 "$BOT_PID" 2>/dev/null || break
+                sleep 2
+              done
+              if kill -0 "$BOT_PID" 2>/dev/null; then
+                echo "::warning::Bot did not exit within 60s; leaving it for runner teardown."
+              fi
+            fi
+          }
+
+          on_shutdown_signal() {
+            stop_bot_gracefully
+            echo "Bot stopped."
+            exit 0
+          }
+          trap on_shutdown_signal TERM INT
+
           echo "Starting bot..."
           start_bot
           echo "Bot started with PID $BOT_PID"
@@ -193,20 +219,7 @@ jobs:
           done
 
           echo "Window elapsed. Stopping bot gracefully..."
-          kill "$BOT_PID" 2>/dev/null || true
-          # * Bounded wait for graceful exit (uv forwards SIGTERM to the bot
-          # * child since 0.5.x, and PTB handles it): without this, the
-          # * scrub/upload steps below race the dying process and the
-          # * artifact loses its final lines. 60 s sits far inside the 30 min
-          # * post-window buffer; exceeding it proceeds anyway and the runner
-          # * tears the machine down after the job.
-          for _ in $(seq 1 30); do
-            kill -0 "$BOT_PID" 2>/dev/null || break
-            sleep 2
-          done
-          if kill -0 "$BOT_PID" 2>/dev/null; then
-            echo "::warning::Bot did not exit within 60s of SIGTERM; leaving it for runner teardown."
-          fi
+          stop_bot_gracefully
           echo "Bot stopped."
 
       - name: Scrub log of credentials
