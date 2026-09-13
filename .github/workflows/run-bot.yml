@@ -15,9 +15,10 @@ on:
     branches:
       - main
     paths:
-      # * Runtime-only preempt: a push touching these files restarts the live
-      # * bot on the new commit (classify + preempt steps below). Docs-only
-      # * pushes never start a run, so the live bot is left untouched.
+      # * Runtime-only restart: a push touching these files cancels the live
+      # * run at queue time (see concurrency below) so the new commit serves
+      # * within minutes. Docs-only pushes never start a run, so the live
+      # * bot is left untouched.
       - "tcbot/**"
       - "i18n/**"
       - "pyproject.toml"
@@ -27,18 +28,17 @@ on:
 
 concurrency:
   group: tcf-bot-runner
-  # * Never cancel-in-progress at the workflow level: the */15 cron and the
-  # * handover dispatch must queue behind the live run, not kill it (a cron
-  # * tick would otherwise terminate the bot every 15 minutes). Preemption on
-  # * runtime pushes is explicit in the preempt step below, so the diff is
-  # * classified first and queued cron pileups are cleared deliberately.
-  cancel-in-progress: false
+  # * Push runs cancel the live run so the new commit serves within minutes
+  # * instead of queueing behind its 5-hour window. Schedule and handover
+  # * runs evaluate this to false, so the */15 cron and the handover
+  # * dispatch keep queueing behind the live bot (a cron tick must never
+  # * terminate the bot). Cancellation happens at queue time, before any
+  # * step runs: an in-job preempt step could never work, since the new job
+  # * itself would wait behind the gate it tries to clear.
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 permissions:
   contents: read
-  # * actions:write lets a runtime push cancel the stale live run (preempt
-  # * step) through the built-in GITHUB_TOKEN. No PAT or admin token needed.
-  actions: write
 
 jobs:
   run:
@@ -96,75 +96,6 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --frozen
-
-      - name: Classify push changes (push only)
-        id: classify
-        if: github.event_name == 'push'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PUSH_BEFORE: ${{ github.event.before }}
-          PUSH_AFTER: ${{ github.event.after }}
-        run: |
-          # * Second safety net behind the paths: filter above: list the real
-          # * filenames and restart only when a runtime path changed. A failed
-          # * comparison (for example a fresh branch with an all-zero before
-          # * SHA) fails closed to a restart so new code is never silently
-          # * skipped.
-          files="$(gh api "repos/${{ github.repository }}/compare/${PUSH_BEFORE}...${PUSH_AFTER}" --paginate -q '.files[].filename' 2>/dev/null || true)"
-          if [ -z "$files" ]; then
-            echo "runtime=true" >> "$GITHUB_OUTPUT"
-            echo "Compare unavailable; failing closed to a restart."
-            exit 0
-          fi
-          if printf '%s\n' "$files" | grep -qE '^(tcbot/|i18n/|pyproject\.toml|uv\.lock|\.python-version|\.github/workflows/run-bot\.yml)'; then
-            echo "runtime=true" >> "$GITHUB_OUTPUT"
-            echo "Runtime files changed; this run will preempt the live one."
-          else
-            echo "runtime=false" >> "$GITHUB_OUTPUT"
-            echo "Docs-only push; leaving the live run untouched."
-          fi
-
-      - name: Preempt stale runs (runtime push only)
-        if: github.event_name == 'push' && steps.classify.outputs.runtime == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # * Rolling restart without queueing: cancel every other in-progress
-          # * or queued run of this workflow (the stale live bot plus any
-          # * piled-up cron ticks), then wait bounded for them to exit so the
-          # * bot below starts with no overlap (no 409 Conflict, one webhook
-          # * owner). Schedule and handover runs never pass this gate, so they
-          # * keep queueing behind the live bot as before. Cancelled runs keep
-          # * their scrub/upload steps (if:always), so diagnostics are kept.
-          self="${{ github.run_id }}"
-          mapfile -t ids < <(gh run list --workflow run-bot.yml --limit 50 \
-            --json databaseId,status \
-            -q '.[] | select(.status == "in_progress" or .status == "queued") | .databaseId')
-          stale=()
-          for id in "${ids[@]}"; do
-            [ "$id" != "$self" ] && stale+=("$id")
-          done
-          if [ "${#stale[@]}" -eq 0 ]; then
-            echo "No stale runs; starting the bot on the new commit."
-            exit 0
-          fi
-          for id in "${stale[@]}"; do
-            echo "Cancelling stale run $id..."
-            gh run cancel "$id" || echo "::warning::Could not cancel run $id; continuing."
-          done
-          # * Bounded wait for graceful shutdown of the old run (its SIGTERM
-          # * path plus scrub/upload). On timeout this run proceeds anyway;
-          # * the concurrency group still serializes actual execution.
-          deadline=$(( $(date +%s) + 180 ))
-          while :; do
-            remaining="$(gh run list --workflow run-bot.yml --limit 50 \
-              --json databaseId,status \
-              -q "[.[] | select(.databaseId != ${self} and (.status == \"in_progress\" or .status == \"queued\")) | length]")"
-            [ "${remaining:-1}" = "0" ] && break
-            [ "$(date +%s)" -ge "$deadline" ] && break
-            sleep 10
-          done
-          echo "Preempt done (remaining stale: ${remaining:-unknown}). Starting the bot."
 
       - name: Detect self-chain capability
         id: pat
@@ -292,7 +223,7 @@ jobs:
       - name: Detect crash in log
         if: always()
         run: |
-          if [[ -f bot-scrubbed.log ]] && grep -qiE "(Traceback|^\w+Error:|CRITICAL)" bot-scrubbed.log; then
+          if [[ -f bot-scrubbed.log ]] && grep -qiE "(Traceback|^\\w+Error:|CRITICAL)" bot-scrubbed.log; then
             echo "::warning::Crash signature found in bot.log (last 120 lines saved)."
             grep -n "" bot-scrubbed.log | tail -120 > crash_tail.log
           fi
