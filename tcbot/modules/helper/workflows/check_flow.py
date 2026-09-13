@@ -358,7 +358,13 @@ class Check:
         locale: str | None = None,
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Show a single ban's full detail (text + optional Proof button)."""
-        ban = await db.bans_db.get_ban(ban_id)
+        try:
+            ban = await db.bans_db.get_ban(ban_id)
+        except Exception:
+            # * Transient DB failure: degrade to the not-found card (same
+            # * render as a genuine miss) instead of raising out of the
+            # * callback, which would leave the tap dead with no retry hint.
+            ban = None
         if not ban or ban.get("banned_user_id") != target_id:
             text = t(
                 "checking.bans.not_found",
@@ -401,7 +407,12 @@ class Check:
             )
             return text, InlineKeyboardMarkup([_back_to_check(target_id, locale)])
 
-        titles = await db.groups_db.get_group_titles([cid for cid, _ in groups])
+        try:
+            titles = await db.groups_db.get_group_titles([cid for cid, _ in groups])
+        except Exception:
+            # * Degrade to numeric chat IDs on a transient failure; the empty
+            # * row list still renders, mirroring warns_in_group's {} fallback.
+            titles = {}
         total = sum(c for _, c in groups)
 
         lines = [
