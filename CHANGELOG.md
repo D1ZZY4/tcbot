@@ -9,6 +9,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Added
 
+- **Kurigram MTProto client available** (`pyproject.toml`, `uv.lock`): the Kurigram package with the fast extra joins the dependency set for future Telegram lookups outside Bot API limits. No bot code uses it yet, so nothing user-visible changes.
+
 - **Bahasa Indonesia locale** (`i18n/id/`, `i18n/README.md`, `docs/features/language.md`, `tests/test_i18n.py`): every user-facing message, help topic, and button label now ships in Indonesian alongside English. Users pick it with `/lang` or the start-menu Language button, per user or per group. Ranks, commands, and the `#appeal` tag stay English; audit logs and staff messages stay English. Behavior changes: Indonesian users and groups now read Indonesian everywhere once selected.
 
 - **Rolling restart when runtime files reach `main`** (`.github/workflows/run-bot.yml`, `docs/operations/ci-cd.md`, `README.md`): pushes touching bot code, translations, dependencies, or the runner itself queue a successor run on the new commit, and the live run detects it within about 2 minutes, stops gracefully, and hands over the gate, so the new commit serves within minutes instead of waiting for the window handover. Docs-only pushes never start a run. Schedule and handover runs keep queueing, so a cron tick can never stop the bot. Behavior changes: code pushes restart the bot gracefully; in-flight multi-step conversations start over.
