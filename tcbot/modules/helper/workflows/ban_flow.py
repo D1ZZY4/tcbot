@@ -767,13 +767,18 @@ async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     except Exception:
         log.exception("Done-proof _execute_ban raised")
     finally:
-        _proof_sessions.pop(key, None)
-        _clear_ban_state(session.user_data)
+        # * Same-object guard: the flush task we cancelled (and any earlier
+        # * code) must not wipe a successor session that took over the same
+        # * (chat, user) key during the cancellation-unwind window.
+        if _proof_sessions.get(key) is session:
+            _proof_sessions.pop(key, None)
+            _clear_ban_state(session.user_data)
     return ConversationHandler.END
 
 
 async def _flush_session(key: tuple[int, int], bot: Bot) -> None:
     """Flush one proof session after a silence window or the hard cap."""
+    session: _ProofSession | None = None
     try:
         while True:
             await asyncio.sleep(cfg.album_debounce)
@@ -812,8 +817,11 @@ async def _flush_session(key: tuple[int, int], bot: Bot) -> None:
         # * task ends, with shared cleanup below.
         raise
     finally:
-        session = _proof_sessions.pop(key, None)
-        if session is not None:
+        # * Never pop a successor session that may have taken the key while
+        # * this task unwound: only this task's own claimed session object
+        # * may be cleared.
+        if session is not None and _proof_sessions.get(key) is session:
+            _proof_sessions.pop(key, None)
             _clear_ban_state(session.user_data)
 
 
