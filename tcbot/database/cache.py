@@ -113,6 +113,11 @@ CACHE_MISS: object = object()
 # * falls through to the DB fetch, so correctness never depends on Redis.
 _REDIS_GET_TIMEOUT_S: float = 1.0
 
+# * Per-op ceiling for fire-and-forget L2 writes. The socket timeout is 10s
+# * (redis_client) and mutations are serialized FIFO per prefix, so an
+# * unreachable Redis would otherwise stall each queued write ~10s in turn.
+_REDIS_WRITE_TIMEOUT_S: float = 2.0
+
 
 # ───────────────────────── TTL Cache Class ──────────────────────── #
 # * Core single-process in-memory implementation with TTL expiration.
@@ -333,10 +338,12 @@ class TwoLevelCache[T]:
                         if raw is not None:
                             loaded: T = json.loads(raw, object_hook=_mongo_object_hook)
                             self._mem.put(key, loaded)
+                            _redis_mod.mark_op(ok=True)
                             return loaded
                     except asyncio.CancelledError:
                         raise
                     except Exception as exc:
+                        _redis_mod.mark_op(ok=False)
                         log.debug("Redis get failed for %s: %s", rkey, exc)
 
                 # L3: DB fetch. The L2 write is fire-and-forget: the value is
@@ -400,16 +407,28 @@ class TwoLevelCache[T]:
     async def _redis_set(self, rc: Any, rkey: str, payload: str) -> None:
         """Write one Redis value and keep failures observable but non-fatal."""
         try:
-            await rc.set(rkey, payload, ex=self._redis_ttl)
+            await asyncio.wait_for(
+                rc.set(rkey, payload, ex=self._redis_ttl),
+                timeout=_REDIS_WRITE_TIMEOUT_S,
+            )
         except Exception as exc:
+            _redis_mod.mark_op(ok=False)
             log.debug("Redis set failed for %s: %s", rkey, exc)
+        else:
+            _redis_mod.mark_op(ok=True)
 
     async def _redis_delete(self, rc: Any, rkey: str) -> None:
         """Delete one Redis value and keep failures observable but non-fatal."""
         try:
-            await rc.delete(rkey)
+            await asyncio.wait_for(
+                rc.delete(rkey),
+                timeout=_REDIS_WRITE_TIMEOUT_S,
+            )
         except Exception as exc:
+            _redis_mod.mark_op(ok=False)
             log.debug("Redis delete failed for %s: %s", rkey, exc)
+        else:
+            _redis_mod.mark_op(ok=True)
 
     def _enqueue_redis_mutation(
         self, operation: Callable[[], Awaitable[None]]
