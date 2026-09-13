@@ -218,8 +218,8 @@ class Stats:
         _reads: list[Any] = [
             db.users_roles.get_owner_id(),
             db.users_roles.admin_count(),
-            db.users_roles.all_by_role("developer"),
-            db.users_roles.all_by_role("tester"),
+            db.users_roles.role_count("developer"),
+            db.users_roles.role_count("tester"),
             db.bans_db.active_ban_count(),
             db.groups_db.active_group_count(),
             db.users_cache.total_users(),
@@ -230,8 +230,8 @@ class Stats:
         (
             owner_id,
             admin_count,
-            developers,
-            testers,
+            developer_count,
+            tester_count,
             ban_count,
             group_count,
             user_count,
@@ -243,10 +243,14 @@ class Stats:
         admin_count = (
             0 if isinstance(admin_count, BaseException) else cast("int", admin_count)
         )
-        developers = (
-            [] if isinstance(developers, BaseException) else cast("list", developers)
+        developer_count = (
+            0
+            if isinstance(developer_count, BaseException)
+            else cast("int", developer_count)
         )
-        testers = [] if isinstance(testers, BaseException) else cast("list", testers)
+        tester_count = (
+            0 if isinstance(tester_count, BaseException) else cast("int", tester_count)
+        )
         if isinstance(ban_count, BaseException):
             ban_count = 0
         if isinstance(group_count, BaseException):
@@ -282,13 +286,13 @@ class Stats:
             owner_line = Safe(t("stats.main.owner_unset", locale))
 
         staff_total = (
-            (1 if owner_id else 0) + admin_count + len(developers) + len(testers)
+            (1 if owner_id else 0) + admin_count + developer_count + tester_count
         )
 
         text = (
             f"{t('stats.main.title', locale, community=Safe(bold(cfg.community_name)))}\n\n"
             f"{t('stats.main.founder', locale, owner=owner_line)}\n"
-            f"{t('stats.main.staff', locale, n=Safe(bold(str(staff_total))), admins=admin_count, devs=len(developers), testers=len(testers))}\n"
+            f"{t('stats.main.staff', locale, n=Safe(bold(str(staff_total))), admins=admin_count, devs=developer_count, testers=tester_count)}\n"
             f"{t('stats.main.users', locale, n=Safe(bold(str(user_count))))}\n"
             f"{t('stats.main.bans', locale, n=Safe(bold(str(ban_count))))}\n"
             f"{t('stats.main.chats', locale, n=Safe(bold(str(group_count))))}"

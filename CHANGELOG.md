@@ -9,6 +9,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Changed
 
+- **Stats overview counts roles instead of fetching role docs** (`tcbot/database/users_roles.py`, `tcbot/modules/helper/workflows/stats_flow.py`, `tests/test_stats_roles.py`): `/tcstats` now uses a new `count_documents`-backed `role_count()` for the Developer/Tester rows instead of loading full `tc_roles` documents just to call `len()` on them (the documented count-only pattern; `staff_roster` still needs the documents and is unchanged). Output identical.
+
 - **Tidier start-menu rows** (`tcbot/modules/helper/keyboards.py`): the Additional and Privacy buttons share one row, so the menu reads as two pairs plus the Language footer instead of one pair plus three stretched singletons. Labels, callbacks, and colors unchanged.
 
 - **One-line auth decorators** (`tcbot/modules/helper/decorators.py`): the four near-identical role gatekeepers (`owner_only`, `staff_only`, `mod_only`, `basic_mod_only`) collapse into a small `_auth_only` factory producing each decorator from its label, refusal key, and minimum role; behavior and reply text unchanged.
