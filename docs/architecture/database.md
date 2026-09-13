@@ -259,7 +259,7 @@ Write helpers must invalidate or refresh related cache entries. Role writes inva
 
 | Export | Purpose |
 |---|---|
-| `start(mongodb_uri, db_name, warn_expiry_days, *, bot=None, sync_interval_hours=0)` | Spawns the background asyncio task, waits until the scheduler is ready. `bot` plus a positive interval registers the `tcbot.enforcement_sync` sweep (`/tcsync` core on a timer, log-only); `0` removes a stale schedule. |
+| `start(mongodb_uri, db_name, warn_expiry_days, *, bot=None, sync_interval_hours=0)` | Spawns the background asyncio task and waits (bounded by the same 10 s grace window as `stop()`) until the scheduler is ready, so a constructor error or a hung jobstore handshake reports a startup failure instead of hanging boot. `bot` plus a positive interval registers the `tcbot.enforcement_sync` sweep (`/tcsync` core on a timer, log-only); `0` removes a stale schedule. |
 | `stop()` | Sets the stop event; waits up to 10 s for graceful shutdown, then cancels a stuck task so shutdown never orphans a live scheduler into the next `start()`. |
 
 Recurring jobs registered on every startup (idempotent via `replace_existing=True` on each `add_job` call):
