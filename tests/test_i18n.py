@@ -665,11 +665,11 @@ def test_netspeed_status_plain() -> None:
     )
     assert (
         t("netspeed.status.failed", DEFAULT_LOCALE, plain=True)
-        == "Speed test failed. Check the bot logs for details."
+        == "Speed test failed. Please try again later."
     )
     assert (
         t("netspeed.status.parse_failed", DEFAULT_LOCALE, plain=True)
-        == "Speed test completed but result parsing failed. Check bot logs."
+        == "Speed test finished but the results could not be read. Please try again later."
     )
 
 
@@ -709,7 +709,7 @@ def test_replies_errors_golden() -> None:
     pairs = [
         (
             replies.err_cannot_resolve(DEFAULT_LOCALE, plain=True),
-            "Cannot resolve target. Reply to a message or provide a user ID.",
+            "Cannot resolve that target. Reply to their message, or pass a user ID or @username.",
         ),
         (
             replies.err_role_verify(DEFAULT_LOCALE, plain=True),
@@ -737,7 +737,7 @@ def test_replies_errors_golden() -> None:
         ),
         (
             replies.err_groups_load_failed(DEFAULT_LOCALE, plain=True),
-            "Could not load the group list due to a server error. Please try again.",
+            "Could not load the group list. Please try again.",
         ),
     ]
     for got, want in pairs:
@@ -748,7 +748,7 @@ def test_replies_errors_golden() -> None:
     )
     assert (
         replies.err_groups_load_failed(DEFAULT_LOCALE, plain=False)
-        == "Could not load the group list due to a server error\\. Please try again\\."
+        == "Could not load the group list\\. Please try again\\."
     )
 
 
@@ -772,11 +772,11 @@ def test_replies_tiers_golden() -> None:
     )
     assert (
         replies.rate_limit_text(7, DEFAULT_LOCALE, plain=True)
-        == "Slow down - try again in 7 seconds."
+        == "Slow down - try again in 7s."
     )
     assert (
         replies.rate_limit_text(0.2, DEFAULT_LOCALE, plain=True)
-        == "Slow down - try again in 1 seconds."
+        == "Slow down - try again in 1s."
     )
     assert replies.no_reason(DEFAULT_LOCALE, plain=True) == "No reason provided"
 

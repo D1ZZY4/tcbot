@@ -31,8 +31,8 @@ body = """
 pinging = "Pinging..."
 running = "Running speed test, please wait..."
 timeout = "Speed test timed out. Please try again later."
-failed = "Speed test failed. Check the bot logs for details."
-parse_failed = "Speed test completed but result parsing failed. Check bot logs."
+failed = "Speed test failed. Please try again later."
+parse_failed = "Speed test finished but the results could not be read. Please try again later."
 
 [pong]
 body = "Pong! Round-trip: {latency}"

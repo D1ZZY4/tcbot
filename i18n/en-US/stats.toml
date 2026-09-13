@@ -26,9 +26,9 @@ body = """
 `/tcs`"""
 
 [error]
-user_not_found = "User not found in this page."
-group_not_found = "Group not found in this page."
-ban_not_found = "Ban record not found in this page."
+user_not_found = "User not found on this page."
+group_not_found = "Group not found on this page."
+ban_not_found = "Ban record not found on this page."
 result_unavailable = "Result no longer available."
 access_retry = "I couldn't verify your access right now. Please try again in a moment."
 

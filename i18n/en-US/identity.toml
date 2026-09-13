@@ -21,7 +21,7 @@ self = "Mute yourself? That's not how this works."
 this_bot = "Muting me won't do much - I don't message on my own anyway."
 telegram = "Telegram service messages aren't muteable from here."
 anon_admin = "Cannot mute the anonymous admin placeholder."
-founder = "{line} runs the place, mute button doesn't apply."
+founder = "{line} runs the place, muting doesn't apply here."
 
 [refuse.warn]
 self = "Self-warning is just journaling. Ask a mod if needed."

@@ -35,7 +35,7 @@ Or reply to a message and run `/tck`."""
 body = "They can rejoin via invite link."
 
 [warn]
-unban = " WARNING: the post-kick unban step failed; the user is still banned in this chat and cannot rejoin. Demote them manually if needed and unban from the chat member list."
+unban = " WARNING: the post-kick unban step failed; the user is still banned in this chat and cannot rejoin. Unban them manually from the chat member list."
 
 [summary]
 body = "{user} has been kicked.\nReason: {reason}\n{rejoin}{warning}"

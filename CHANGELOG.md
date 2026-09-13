@@ -21,6 +21,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Changed
 
+- **Clearer bot wording across every message** (`i18n/en-US/*.toml`, `tests/test_i18n.py`): error replies now say what happened and what to do next instead of naming server internals, the rate-limit wait renders correctly at one second, the connect confirmation names the group, and stale or clumsy lines (group-chat mute note, kick-unban hint, transfer result, empty-page notices) read plainly. Button labels and help structure unchanged; every template still renders clean.
+
 - **Cleaner engine comments and finished locale threading** (`tcbot/utils/i18n.py`, `helper/workflows/ban_flow.py`, `reason_flow.py`): the catalog loader example names the real domain file, the code-span renderer uses plain backslash literals, and two completed locale-threading reminders are gone since the ban flow already carries its locale. The reason parser docstring now describes the verified-override path. No behavior change.
 
 - **Agent rules reorganized for translation work** (`.agents/rules/`): `docs-rules.md` is now `docs-sync.md` and `tooling-validation.md` is now `tooling-skills-use.md`, with every cross-reference updated across rules, skills, guides, and the repository map. New `changelog-style.md` pins the release-note voice: short reader-first bullets, no tool names, no process narration, no implementation jargon. The task workflow, docs workflow, and boot prompt now point at it so new entries follow it from the start. Comment rules gain localized-code guidance (explain the locale choice, keep translator notes in TOML). Skill use now means loading the skill and reading all of its instructions, including commit.

@@ -15,7 +15,7 @@ body = """*Privacy and Data*
 
 Ban, warn, mute, and kick records can be looked up by anyone with `/check` or `/checkme`; changing anything still requires the proper staff rank.
 
-Tap *Privacy Policy* below for the full policy, broken down by section."""
+Tap *Privacy Policy* below for the full policy, organized by section."""
 
 [index]
 body = """*Privacy Policy*

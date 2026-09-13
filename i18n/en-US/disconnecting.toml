@@ -37,14 +37,14 @@ body = """
 
 [state]
 usage = "Usage: /rmtc <chat_id>"
-primary_refused = "This is a primary group of the federation (main or exec). It cannot be disconnected. The bot is required in primary groups for ban / unban / mute / warn fan-out and the federation log channel."
-status_failed = "Could not verify the group status due to a server error. Please try again."
+primary_refused = "This is a primary group of the federation (main or exec). It cannot be disconnected: primary groups host enforcement and the federation log, so the bot must stay."
+status_failed = "Could not verify the group status. Please try again."
 not_connected = "This group is not connected to {community}."
 anon_admin = "Anonymous admin mode is active. Please send this command from your personal account, or ask TC Staff to run /rmtc."
 not_authorized = "Only the group owner or TC admins can disconnect this group."
-deactivate_failed = "Failed to disconnect the group due to a server error. The bot is still here; please try again."
+deactivate_failed = "Failed to disconnect the group. The bot is still here; please try again."
 disconnected = "This group has been disconnected from {community}."
-rmtc_failed = "Failed to disconnect the group due to a server error. Please try again."
+rmtc_failed = "Failed to disconnect the group. Please try again."
 
 [removed]
 body = "Group {id} has been disconnected from {community}."

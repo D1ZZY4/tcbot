@@ -7,12 +7,12 @@ title_group = "Group language"
 
 # Placeholders: {language} = display name.
 current_user = "Your language: {language}."
-current_group = "This group language: {language}."
+current_group = "Group language: {language}."
 
 prompt = "Tap a language below."
 
 updated_user = "Your language is now {language}."
-updated_group = "This group language is now {language}."
+updated_group = "Group language is now {language}."
 
 # Group permission refusal (viewer may read but not change).
 denied = "Only the group owner or staff can change the group language."

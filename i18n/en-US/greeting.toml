@@ -9,7 +9,7 @@ ban_id = " Ban ID: {ban}."
 appeal = " {link}"
 
 [welcome]
-body = "Welcome, {user}. This is an official {community} group. Please go through the group rules before participating."
+body = "Welcome, {user}. This is an official {community} group. Please read the group rules before participating."
 
 [left]
 body = "{user} has left."
