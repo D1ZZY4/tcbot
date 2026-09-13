@@ -173,7 +173,7 @@ Mirror the gate locally before pushing: `uv run ruff format --check .`, `uv run 
 <details>
 <summary>GitHub Actions 24/7 runner (self-chaining)</summary>
 
-`.github/workflows/run-bot.yml` runs the bot in 5-hour windows (GitHub hard-caps a job at 6 h) with a crash watchdog, a handover dispatch about 10 minutes before the window ends, and a `*/15` cron resurrection fallback. A push to `main` touching bot code, translations, dependencies, or the runner itself preempts the live run so the new commit serves within minutes; docs-only pushes never restart the bot.
+`.github/workflows/run-bot.yml` runs the bot in 5-hour windows (GitHub hard-caps a job at 6 h) with a crash watchdog, a handover dispatch about 10 minutes before the window ends, and a `*/15` cron resurrection fallback. A push to `main` touching bot code, translations, dependencies, or the runner itself queues a successor run and the live bot hands over gracefully within minutes; docs-only pushes never restart the bot.
 
 1. Repository → Settings → Secrets and variables → Actions: set `BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID` (plus `WEBHOOK_URL`/`WEBHOOK_SECRET` for webhook mode, `REDIS_URL` optional).
 2. For gap-free chaining add `BOT_PAT`: a Personal Access Token with the `workflow` scope. Without it only the 15-minute cron restarts the bot.
