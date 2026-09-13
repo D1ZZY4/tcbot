@@ -108,6 +108,14 @@ async def all_pending() -> list[PromotionRequestDoc]:
     )
 
 
+# * Total pending count for list headers. Kept byte-identical to
+# * all_pending's status filter so "shown vs total" arithmetic in the
+# * promote-list header stays meaningful.
+async def pending_count() -> int:
+    """Count all currently pending promotion requests."""
+    return await db_call(_requests().count_documents({"status": "pending"}))
+
+
 async def resolve(request_id: str, status: str, resolved_by: int) -> bool:
     """Mark a pending promotion request as resolved.
 

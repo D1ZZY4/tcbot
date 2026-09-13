@@ -980,6 +980,7 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     locale = await locale_for_update(update)
     try:
         pending = await db.queues_db.all_pending()
+        total_pending = await db.queues_db.pending_count()
     except Exception:
         log.exception("all_pending failed during promote_list")
         await safe_reply(
@@ -1005,6 +1006,17 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         )
         + "\n"
     ]
+    # * Capped view: all_pending returns at most 200 rows, so surface the
+    # * true backlog count when the list is truncated.
+    if total_pending > len(pending):
+        lines.append(
+            t(
+                "admins.list.cap_notice",
+                locale,
+                shown=len(pending),
+                total=total_pending,
+            )
+        )
     for req in pending:
         target_id = req.get("target_id", 0)
         target_fname = req.get("first_name", "unknown")
