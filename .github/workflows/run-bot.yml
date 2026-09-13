@@ -15,10 +15,11 @@ on:
     branches:
       - main
     paths:
-      # * Runtime-only restart: a push touching these files cancels the live
-      # * run at queue time (see concurrency below) so the new commit serves
-      # * within minutes. Docs-only pushes never start a run, so the live
-      # * bot is left untouched.
+      # * Runtime-only restart: a push touching these files queues a
+      # * successor run on the new commit. The LIVE run detects it below
+      # * (self-preempt poll) and stops gracefully, freeing the gate, so
+      # * the new commit serves within minutes. Docs-only pushes never
+      # * start a run, so the live bot is left untouched.
       - "tcbot/**"
       - "i18n/**"
       - "pyproject.toml"
@@ -28,14 +29,12 @@ on:
 
 concurrency:
   group: tcf-bot-runner
-  # * Push runs cancel the live run so the new commit serves within minutes
-  # * instead of queueing behind its 5-hour window. Schedule and handover
-  # * runs evaluate this to false, so the */15 cron and the handover
-  # * dispatch keep queueing behind the live bot (a cron tick must never
-  # * terminate the bot). Cancellation happens at queue time, before any
-  # * step runs: an in-job preempt step could never work, since the new job
-  # * itself would wait behind the gate it tries to clear.
-  cancel-in-progress: ${{ github.event_name == 'push' }}
+  # * Always false: the */15 cron and the handover dispatch must queue
+  # * behind the live run, never kill it. Restart-on-push is handled by
+  # * the live run itself (self-preempt poll in the watchdog): a queued
+  # * successor could never clear this gate from inside its own job,
+  # * since its steps do not start while the live run holds it.
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -114,6 +113,7 @@ jobs:
         env:
           BOT_PAT: ${{ secrets.BOT_PAT }}
           HAS_PAT: ${{ steps.pat.outputs.has_pat }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -uo pipefail
 
@@ -127,11 +127,11 @@ jobs:
             BOT_PID=$!
           }
 
-          # * Bounded graceful stop shared by the window-end path and the
-          # * TERM/INT trap below. GitHub cancels this job when a runtime
-          # * push preempts it; uv forwards the SIGTERM to the bot child
-          # * (since 0.5.x, handled by PTB), so cancellation gets the same
-          # * 60 s wait as a normal window end instead of dying mid-write.
+          # * Bounded graceful stop shared by the window-end path, the
+          # * self-preempt break above, and the TERM/INT trap below.
+          # * uv forwards the SIGTERM to the bot child (since 0.5.x,
+          # * handled by PTB), so any cancellation gets the same 60 s wait
+          # * as a normal window end instead of dying mid-write.
           stop_bot_gracefully() {
             if [ -n "${BOT_PID:-}" ] && kill -0 "$BOT_PID" 2>/dev/null; then
               echo "Stopping bot (PID $BOT_PID) gracefully..."
@@ -162,11 +162,52 @@ jobs:
           handover_done=false
           restarts=0
           first_death=0
+          loop_count=0
+          stale_polls=0
+          stop_reason="Window elapsed"
+          # * SHA this run checked out (what is live right now) and the
+          # * branch to watch, taken from this run's own ref.
+          live_sha="$(git rev-parse HEAD 2>/dev/null || true)"
+          watch_ref="${{ github.ref_name }}"
 
           # Supervisory loop
           while :; do
             now=$(date +%s)
             [ "$now" -ge "$deadline" ] && break
+
+            # * Self-preempt on runtime pushes: the queued successor cannot
+            # * clear the concurrency gate from inside its own job (its steps
+            # * never start while this run holds the gate), so the LIVE run
+            # * watches the branch itself. About every 2 min it compares its
+            # * checkout SHA against the branch tip; on a runtime diff it
+            # * breaks out below into the shared graceful stop, freeing the
+            # * gate for the queued push run. Docs-only pushes only move the
+            # * baseline. Three straight compare failures also break out:
+            # * the queued run then starts instead of waiting out the window.
+            loop_count=$((loop_count + 1))
+            if [ $((loop_count % 4)) -eq 0 ] && [ -n "$live_sha" ] && [ -n "$watch_ref" ]; then
+              remote_sha="$(gh api "repos/${{ github.repository }}/commits/${watch_ref}" -q .sha 2>/dev/null || true)"
+              if [ -n "$remote_sha" ] && [ "$remote_sha" != "$live_sha" ]; then
+                changed="$(gh api "repos/${{ github.repository }}/compare/${live_sha}...${remote_sha}" --paginate -q '.files[].filename' 2>/dev/null || true)"
+                if [ -z "$changed" ]; then
+                  stale_polls=$((stale_polls + 1))
+                  echo "::warning::Self-preempt compare failed (${stale_polls}/3); retrying on the next poll."
+                  if [ "$stale_polls" -ge 3 ]; then
+                    stop_reason="Branch moved but the diff stayed unreadable"
+                    break
+                  fi
+                elif printf '%s\n' "$changed" | grep -qE '^(tcbot/|i18n/|pyproject\.toml|uv\.lock|\.python-version|\.github/workflows/run-bot\.yml)'; then
+                  stop_reason="Runtime changes detected upstream (${live_sha:0:7}..${remote_sha:0:7})"
+                  break
+                else
+                  stale_polls=0
+                  live_sha="$remote_sha"
+                  echo "Only docs changed upstream; staying on this run."
+                fi
+              else
+                stale_polls=0
+              fi
+            fi
 
             # Watchdog: restart the bot if the process has exited.
             if ! kill -0 "$BOT_PID" 2>/dev/null; then
@@ -218,7 +259,7 @@ jobs:
             sleep 30
           done
 
-          echo "Window elapsed. Stopping bot gracefully..."
+          echo "${stop_reason}. Stopping bot gracefully..."
           stop_bot_gracefully
           echo "Bot stopped."
 
