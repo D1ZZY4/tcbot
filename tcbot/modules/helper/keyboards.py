@@ -367,14 +367,12 @@ def main_menu_kb(locale: str | None = None) -> InlineKeyboardMarkup:
                     t("button.additional", locale, plain=True),
                     callback_data="additional_menu",
                     style=KeyboardButtonStyle.PRIMARY,
-                )
-            ],
-            [
+                ),
                 InlineKeyboardButton(
                     t("button.privacy", locale, plain=True),
                     callback_data="privacy_menu",
                     style=KeyboardButtonStyle.PRIMARY,
-                )
+                ),
             ],
             [
                 InlineKeyboardButton(

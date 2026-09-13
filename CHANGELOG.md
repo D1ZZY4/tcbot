@@ -7,7 +7,9 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 <details open>
 <summary>Unreleased changes (click to collapse)</summary>
 
-No unreleased changes yet.
+### Changed
+
+- **Tidier start-menu rows** (`tcbot/modules/helper/keyboards.py`): the Additional and Privacy buttons share one row, so the menu reads as two pairs plus the Language footer instead of one pair plus three stretched singletons. Labels, callbacks, and colors unchanged.
 
 </details>
 
