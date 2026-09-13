@@ -323,7 +323,7 @@ The conversation fallback excludes `/tcunwarn`, `/warns`, `/warnlist`, `/resetwa
 
 ## Timeouts and fallbacks
 
-The warning conversation does not have an active timeout handler. `PROOF_TIMEOUT_SECONDS` is parsed from the environment but is not currently consumed; conversations end only via the configured escape commands or an explicit cancel.
+The warning conversation does not have a timeout handler; conversations end only via the configured escape commands or an explicit cancel.
 
 A recognized command during the conversation cancels the warning operation unless it is one of the configured escape commands listed above.
 

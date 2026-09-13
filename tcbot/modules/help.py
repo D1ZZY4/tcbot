@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import importlib
 import logging
 from typing import TYPE_CHECKING
@@ -17,7 +16,7 @@ from tcbot import cfg
 from tcbot.modules import ALL_MODULES
 from tcbot.modules.helper import decorators, keyboards
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
+from tcbot.modules.helper.parse_editmsg import answer_and_edit, safe_reply
 from tcbot.utils.formatter import bold, code
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
@@ -47,46 +46,26 @@ def _builder_help(
     """Collect help content from every loaded module in the given locale.
 
     Returns a dict keyed by ``help_<module>`` mapping to
-    ``(display_name, overview_text, sections)``.
-
-    Prefers the per-locale ``get_help(locale)`` builder; falls back to the
-    default-locale ``__help__`` entry for modules that have not been
-    migrated yet, then to legacy ``__module_name__`` / ``__help_text__`` /
-    ``__help_sections__``.
+    ``(display_name, overview_text, sections)``. Modules without a
+    ``get_help(locale)`` builder (non-help modules) are simply skipped.
     """
     content: dict[str, tuple[str, str, list[tuple[str, str]]]] = {}
     for mod_name in ALL_MODULES:
         try:
             mod = importlib.import_module(f"tcbot.modules.{mod_name}")
             get_help = getattr(mod, "get_help", None)
-            if callable(get_help):
-                try:
-                    h: object = get_help(locale)
-                except Exception:
-                    h = None
-                if isinstance(h, dict):
-                    content[f"help_{mod_name}"] = (
-                        h["name"],
-                        h["overview"],
-                        list(h.get("sections", [])),
-                    )
-                    continue
-            h = getattr(mod, "__help__", None)
+            if not callable(get_help):
+                continue
+            try:
+                h: object = get_help(locale)
+            except Exception:
+                h = None
             if isinstance(h, dict):
                 content[f"help_{mod_name}"] = (
                     h["name"],
                     h["overview"],
                     list(h.get("sections", [])),
                 )
-                continue
-            # Backward-compat path for un-migrated modules.
-            name = getattr(mod, "__module_name__", None)
-            text = getattr(mod, "__help_text__", None)
-            sections: list[tuple[str, str]] = list(
-                getattr(mod, "__help_sections__", []) or []
-            )
-            if name and text:
-                content[f"help_{mod_name}"] = (name, text, sections)
         except Exception as exc:
             log.warning("Could not read help from %s: %s", mod_name, exc)
     return content
@@ -184,12 +163,8 @@ async def _render_help_index(
         if with_back_to_start
         else keyboards.help_topics_kb(HELP_TOPICS_CMD)
     )
-    # * q.answer() and safe_edit_cb() are independent; run in parallel.
-    await asyncio.gather(
-        q.answer(),
-        safe_edit_cb(q, _help_index_text(botname, locale), reply_markup=kb),
-        return_exceptions=True,
-    )
+    # * q.answer() and the edit are independent; run in parallel.
+    await answer_and_edit(q, _help_index_text(botname, locale), reply_markup=kb)
 
 
 async def _show_module(
@@ -208,15 +183,11 @@ async def _show_module(
             if is_menu_path
             else keyboards.back_to_help_cmd_kb(locale)
         )
-        # * q.answer() and safe_edit_cb() are independent; run in parallel.
-        await asyncio.gather(
-            q.answer(),
-            safe_edit_cb(
-                q,
-                t("help.error.topic_not_found", locale, plain=False),
-                reply_markup=back_kb,
-            ),
-            return_exceptions=True,
+        # * q.answer() and the edit are independent; run in parallel.
+        await answer_and_edit(
+            q,
+            t("help.error.topic_not_found", locale, plain=False),
+            reply_markup=back_kb,
         )
         return
 
@@ -236,12 +207,8 @@ async def _show_module(
             else keyboards.back_to_help_cmd_kb(locale)
         )
 
-    # * q.answer() and safe_edit_cb() are independent; run in parallel.
-    await asyncio.gather(
-        q.answer(),
-        safe_edit_cb(q, _module_text(name, overview, locale), reply_markup=kb),
-        return_exceptions=True,
-    )
+    # * q.answer() and the edit are independent; run in parallel.
+    await answer_and_edit(q, _module_text(name, overview, locale), reply_markup=kb)
 
 
 async def _show_section(
@@ -259,29 +226,21 @@ async def _show_section(
     back_module_cb = ("help_" if is_menu_path else "helpc_") + mod_slug
 
     if menu_key not in content:
-        # * q.answer() and safe_edit_cb() are independent; run in parallel.
-        await asyncio.gather(
-            q.answer(),
-            safe_edit_cb(
-                q,
-                t("help.error.topic_not_found", locale, plain=False),
-                reply_markup=keyboards.back_to_module_kb(back_module_cb, locale),
-            ),
-            return_exceptions=True,
+        # * q.answer() and the edit are independent; run in parallel.
+        await answer_and_edit(
+            q,
+            t("help.error.topic_not_found", locale, plain=False),
+            reply_markup=keyboards.back_to_module_kb(back_module_cb, locale),
         )
         return
 
     name, _, sections = content[menu_key]
     if idx < 0 or idx >= len(sections):
-        # * q.answer() and safe_edit_cb() are independent; run in parallel.
-        await asyncio.gather(
-            q.answer(),
-            safe_edit_cb(
-                q,
-                t("help.error.section_not_found", locale, plain=False),
-                reply_markup=keyboards.back_to_module_kb(back_module_cb, locale),
-            ),
-            return_exceptions=True,
+        # * q.answer() and the edit are independent; run in parallel.
+        await answer_and_edit(
+            q,
+            t("help.error.section_not_found", locale, plain=False),
+            reply_markup=keyboards.back_to_module_kb(back_module_cb, locale),
         )
         return
 
@@ -292,13 +251,9 @@ async def _show_section(
         title=Safe(bold(f"{name} > {label}")),
         content=Safe(section_content),
     )
-    # * q.answer() and safe_edit_cb() are independent; run in parallel.
-    await asyncio.gather(
-        q.answer(),
-        safe_edit_cb(
-            q, body, reply_markup=keyboards.back_to_module_kb(back_module_cb, locale)
-        ),
-        return_exceptions=True,
+    # * q.answer() and the edit are independent; run in parallel.
+    await answer_and_edit(
+        q, body, reply_markup=keyboards.back_to_module_kb(back_module_cb, locale)
     )
 
 

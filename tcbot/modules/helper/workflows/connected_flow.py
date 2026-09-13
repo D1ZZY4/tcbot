@@ -107,8 +107,6 @@ class BuildConnection:
 
     community_name: str
     required_perms: tuple[str, ...] = field(default=_REQUIRED_PERMS, kw_only=True)
-    join_label: str = field(default="Connect", kw_only=True)
-    cancel_label: str = field(default="Cancel", kw_only=True)
     join_callback: str = field(default="tc_join", kw_only=True)
     cancel_callback: str = field(default="tc_cancel", kw_only=True)
 

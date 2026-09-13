@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -32,8 +31,7 @@ from tcbot.modules.helper.workflows.warning_flow import (
     reason,
     warn_conversation,
 )
-from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import bold, mention
+from tcbot.utils.formatter import bold, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -158,23 +156,18 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         )
         return ConversationHandler.END
 
-    ident, role_result = await asyncio.gather(
-        identity.classify(ctx.bot, admin.id, target_id, target_name),
-        resolve_and_check(msg, admin.id, target_id, min_role="tester"),
-        return_exceptions=True,
+    classified = await decorators.classify_and_check(
+        ctx.bot,
+        admin.id,
+        target_id,
+        target_name,
+        msg,
+        action="warn",
+        min_role="tester",
     )
-    throw_if_cancelled((ident, role_result))
-    if isinstance(ident, BaseException):
-        log.exception("identity.classify failed in cmd_warn: %s", ident)
+    if classified is None:
         return ConversationHandler.END
-    if isinstance(role_result, BaseException):
-        log.exception("resolve_and_check failed in cmd_warn: %s", role_result)
-        return ConversationHandler.END
-    executor_role, _ = role_result
-    # * Guard first: if resolve_and_check already replied and rejected (e.g. target
-    # * outranks executor), skip the identity refusal to avoid sending two replies.
-    if executor_role is None:
-        return ConversationHandler.END
+    ident, _ = classified
 
     refusal = identity.refuse_message("warn", ident, locale)
     if refusal is not None:
@@ -192,7 +185,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         }
     )
 
-    target_mention = mention(target_id, target_name or str(target_id))
+    target_mention = user_ref(target_id, target_name or str(target_id))
 
     _WARN_KEYS = ("warn_target_id", "warn_target_name")
 
@@ -257,23 +250,18 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    ident, role_result = await asyncio.gather(
-        identity.classify(ctx.bot, admin.id, target_id, target_name),
-        resolve_and_check(msg, admin.id, target_id, min_role="tester"),
-        return_exceptions=True,
+    classified = await decorators.classify_and_check(
+        ctx.bot,
+        admin.id,
+        target_id,
+        target_name,
+        msg,
+        action="unwarn",
+        min_role="tester",
     )
-    throw_if_cancelled((ident, role_result))
-    if isinstance(ident, BaseException):
-        log.exception("identity.classify failed in cmd_unwarn: %s", ident)
+    if classified is None:
         return
-    if isinstance(role_result, BaseException):
-        log.exception("resolve_and_check failed in cmd_unwarn: %s", role_result)
-        return
-    executor_role, _ = role_result
-    # * Guard first: if resolve_and_check already replied and rejected (e.g. target
-    # * outranks executor), skip the identity refusal to avoid sending two replies.
-    if executor_role is None:
-        return
+    ident, _ = classified
 
     refusal = identity.refuse_message("unwarn", ident, locale)
     if refusal is not None:
@@ -352,23 +340,18 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         )
         return
 
-    ident, role_result = await asyncio.gather(
-        identity.classify(ctx.bot, admin.id, target_id, target_name),
-        resolve_and_check(msg, admin.id, target_id, min_role="tester"),
-        return_exceptions=True,
+    classified = await decorators.classify_and_check(
+        ctx.bot,
+        admin.id,
+        target_id,
+        target_name,
+        msg,
+        action="resetwarns",
+        min_role="tester",
     )
-    throw_if_cancelled((ident, role_result))
-    if isinstance(ident, BaseException):
-        log.exception("identity.classify failed in cmd_resetwarns: %s", ident)
+    if classified is None:
         return
-    if isinstance(role_result, BaseException):
-        log.exception("resolve_and_check failed in cmd_resetwarns: %s", role_result)
-        return
-    executor_role, _ = role_result
-    # * Guard first: if resolve_and_check already replied and rejected (e.g. target
-    # * outranks executor), skip the identity refusal to avoid sending two replies.
-    if executor_role is None:
-        return
+    ident, _ = classified
 
     refusal = identity.refuse_message("resetwarns", ident, locale)
     if refusal is not None:

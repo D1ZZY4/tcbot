@@ -58,7 +58,12 @@ def _render(groups, *, detailed, locale=None):
     for i, g in enumerate(groups):
         title = g.get("title", "Unknown")
         if detailed:
-            line = t("groups.list.item_detailed", locale, title=title, id=Safe(code(str(g.get("chat_id", 0)))))
+            line = t(
+                "groups.list.item_detailed",
+                locale,
+                title=title,
+                id=Safe(code(str(g.get("chat_id", 0)))),
+            )
         else:
             line = t("groups.list.item", locale, title=title)
         if used + len(line) + 1 > _MAX_RENDER_CHARS:

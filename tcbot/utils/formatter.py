@@ -93,15 +93,6 @@ def link(text: str, url: str) -> str:
     return f"[{esc(text)}]({str(url).translate(_MD_V2_URL_ESCAPE_TABLE)})"
 
 
-def mention(user_id: int, name: str, username: str | None = None) -> str:
-    """Create a user mention with username link and always-included user ID link.
-
-    Historical alias for :func:`user_ref`; both names format the same
-    output. New code should prefer :func:`user_ref` directly.
-    """
-    return user_ref(user_id, name, username)
-
-
 def user_ref(user_id: int, name: str, username: str | None = None) -> str:
     """Format a complete user reference for action confirmation messages.
 

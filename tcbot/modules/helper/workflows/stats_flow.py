@@ -26,9 +26,9 @@ from tcbot.modules.helper.extraction import (
     identity_needs_refresh,
     launch_identity_refresh,
 )
-from tcbot.modules.helper.keyboards import back_to_module_kb, paged_drill_kb
+from tcbot.modules.helper.keyboards import back_to_module_kb, detail_kb, paged_drill_kb
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import bold, code, esc, mention, user_ref
+from tcbot.utils.formatter import bold, code, esc, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.pagination import date_or_unknown, paginate
 from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
@@ -203,8 +203,6 @@ class Stats:
     work.
     """
 
-    PAGE_SIZE = _PAGE_SIZE
-
     # ── Main overview ────────────────────────────────────────────────────
 
     @classmethod
@@ -279,7 +277,7 @@ class Stats:
                     exc,
                 )
                 owner_fname, owner_uname = str(owner_id_int), None
-            owner_line = Safe(mention(owner_id_int, owner_fname, owner_uname))
+            owner_line = Safe(user_ref(owner_id_int, owner_fname, owner_uname))
         else:
             owner_line = Safe(t("stats.main.owner_unset", locale))
 
@@ -351,7 +349,7 @@ class Stats:
                 t(
                     "stats.roster.member",
                     locale,
-                    user=Safe(mention(owner_id_int, owner_fname, owner_uname)),
+                    user=Safe(user_ref(owner_id_int, owner_fname, owner_uname)),
                 )
                 + "\n"
             )
@@ -372,7 +370,7 @@ class Stats:
                         t(
                             "stats.roster.member",
                             locale,
-                            user=Safe(mention(uid, fname, uname)),
+                            user=Safe(user_ref(uid, fname, uname)),
                         )
                     )
             else:
@@ -478,7 +476,7 @@ class Stats:
             username_line = t("stats.user_detail.username_none", locale)
         text = (
             f"{t('stats.user_detail.title', locale)}\n\n"
-            f"{t('stats.user_detail.name', locale, user=Safe(mention(uid, fname, uname)))}\n"
+            f"{t('stats.user_detail.name', locale, user=Safe(user_ref(uid, fname, uname)))}\n"
             f"{t('stats.user_detail.id', locale, id=Safe(code(str(uid))))}\n"
             f"{username_line}\n"
             f"{t('stats.user_detail.last_name', locale, name=str(last_name))}\n\n"
@@ -569,7 +567,7 @@ class Stats:
             f"{t('stats.chat_detail.title', locale)}\n\n"
             f"{t('stats.chat_detail.name', locale, name=Safe(bold(title)))}\n"
             f"{t('stats.chat_detail.chat_id', locale, id=Safe(code(str(chat_id))))}\n\n"
-            f"{t('stats.chat_detail.connected_by', locale, user=Safe(mention(added_by, adder_fname, adder_uname)))}\n"
+            f"{t('stats.chat_detail.connected_by', locale, user=Safe(user_ref(added_by, adder_fname, adder_uname)))}\n"
             f"{t('stats.chat_detail.date', locale, date=Safe(date_str))}"
         )
         kb = back_to_module_kb(f"stats_chats:{page}", locale)
@@ -648,12 +646,10 @@ class Stats:
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Detail card for a banned user, reusing ``build_ban_detail``.
 
-        When the button carries the stable ban ID, the record is fetched
-        directly by ID (one indexed read) instead of re-reading the whole
-        active-ban list: faster and immune to list shifts between render
-        and tap. Inactive or missing records still report not-found, matching
-        the list-derived path. Buttons without the stable segment keep the
-        legacy list-index lookup.
+        The record is fetched directly by stable ban ID (one indexed read)
+        instead of re-reading the whole active-ban list: faster and immune
+        to list shifts between render and tap. Inactive or missing records
+        still report not-found.
         """
         if stable is not None:
             ban = await db.bans_db.get_ban(stable)
@@ -662,55 +658,16 @@ class Stats:
                 kb = back_to_module_kb(f"stats_bans:{page}", locale)
                 return text, kb
             text, proof_link = await build_ban_detail(ban, locale=locale)
-            rows: list[list[InlineKeyboardButton]] = []
-            if proof_link:
-                rows.append(
-                    [
-                        InlineKeyboardButton(
-                            t("button.view_proof", locale, plain=True),
-                            url=proof_link,
-                            style=KeyboardButtonStyle.PRIMARY,
-                        )
-                    ]
-                )
-            rows.append(
-                [
-                    InlineKeyboardButton(
-                        t("button.back", locale, plain=True),
-                        callback_data=f"stats_bans:{page}",
-                    )
-                ]
+            return text, detail_kb(
+                back_callback=f"stats_bans:{page}",
+                proof_link=proof_link,
+                locale=locale,
             )
-            return text, InlineKeyboardMarkup(rows)
-        # * Legacy list-index lookup: fetch only the tapped page
-        # * server-side instead of the whole active-ban list.
-        chunk = await db.bans_db.active_bans_page(page * _PAGE_SIZE, _PAGE_SIZE)
-        if idx < 0 or idx >= len(chunk):
-            text = t("stats.error.ban_not_found", locale)
-            kb = back_to_module_kb(f"stats_bans:{page}", locale)
-            return text, kb
-        ban = chunk[idx]
-        text, proof_link = await build_ban_detail(ban, locale=locale)
-        rows: list[list[InlineKeyboardButton]] = []
-        if proof_link:
-            rows.append(
-                [
-                    InlineKeyboardButton(
-                        t("button.view_proof", locale, plain=True),
-                        url=proof_link,
-                        style=KeyboardButtonStyle.PRIMARY,
-                    )
-                ]
-            )
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    t("button.back", locale, plain=True),
-                    callback_data=f"stats_bans:{page}",
-                )
-            ]
+        # Unreachable: _list_kb always provides a stable ban ID.
+        return (
+            t("stats.error.ban_not_found", locale),
+            back_to_module_kb(f"stats_bans:{page}", locale),
         )
-        return text, InlineKeyboardMarkup(rows)
 
     # ── Search panel ─────────────────────────────────────────────────────
 
@@ -752,31 +709,6 @@ class Stats:
                     t("button.cancel", locale, plain=True),
                     callback_data="stats_search_cancel",
                 ),
-            ]
-        )
-        return InlineKeyboardMarkup(rows)
-
-    @staticmethod
-    def _search_detail_kb(
-        proof_link: str | None = None, locale: str | None = None
-    ) -> InlineKeyboardMarkup:
-        rows: list[list[InlineKeyboardButton]] = []
-        if proof_link:
-            rows.append(
-                [
-                    InlineKeyboardButton(
-                        t("button.view_proof", locale, plain=True),
-                        url=proof_link,
-                        style=KeyboardButtonStyle.PRIMARY,
-                    )
-                ]
-            )
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    t("button.back", locale, plain=True),
-                    callback_data="stats_search_back",
-                )
             ]
         )
         return InlineKeyboardMarkup(rows)
@@ -874,7 +806,11 @@ class Stats:
             kb = back_to_module_kb("stats_search_back")
             return text, kb
         text, proof_link = await build_ban_detail(results[idx], locale=locale)
-        return text, cls._search_detail_kb(proof_link, locale)
+        return text, detail_kb(
+            back_callback="stats_search_back",
+            proof_link=proof_link,
+            locale=locale,
+        )
 
 
 __all__ = ("CHAT_KEY", "MSG_KEY", "RESULTS_KEY", "SEARCH_KEY", "Stats")

@@ -308,8 +308,7 @@ Flow:
 4. Founder and staff targets are treated as not federation-bannable and no unban is attempted.
 5. `bans_db.get_active_ban(target_id)` must return a record.
 6. All active bans for the target are deactivated atomically with `bans_db.deactivate_all_active_bans(target_id)`, which handles any duplicate active records in one operation.
-7. Any pending scheduled unban job is cancelled defensively with `scheduler.cancel_schedule(f"unban.{ban_id}")`. This is a no-op when no schedule exists; the current ban command does not create timed-ban schedules.
-8. The target is unbanned from all active connected groups with `only_if_banned=True`.
+7. The target is unbanned from all active connected groups with `only_if_banned=True`.
 9. An unban log is sent to `cfg.logs`.
 10. The command reply reports the success count.
 
@@ -326,7 +325,7 @@ Manual unban does not currently edit any pending appeal review card. It deactiva
 - Same-rank and higher-rank staff targets are protected.
 - Self-ban and bot-ban attempts are rejected before database writes.
 - The proof conversation is per-chat and per-user, so simultaneous ban flows are isolated by moderator/chat.
-- There is no natural-expiry timeout for the ban proof step; the bot does not use `ConversationHandler.TIMEOUT` or a job-queue. `PROOF_TIMEOUT_SECONDS` is parsed from the environment but is not consumed. `on_proof_timeout` fires as a **fallback** handler when the moderator sends any command while the proof window is open; the user receives `"Timed out waiting for proof. No ban was issued."` and the conversation ends.
+- There is no natural-expiry timeout for the ban proof step; the bot does not use `ConversationHandler.TIMEOUT` or a job-queue. `on_proof_timeout` fires as a **fallback** handler when the moderator sends any command while the proof window is open; the user receives `"Timed out waiting for proof. No ban was issued."` and the conversation ends.
 
 ## Behavior reference
 

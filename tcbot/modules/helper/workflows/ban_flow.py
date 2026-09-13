@@ -37,7 +37,7 @@ from tcbot.utils.dispatch import (
     fan_out,
     is_benign_telegram_error,
 )
-from tcbot.utils.formatter import mention, user_ref
+from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 from tcbot.utils.time_and_date import monotonic, to_utc, utc_now
@@ -186,7 +186,7 @@ def proof_prompt_content(
     """
     return (
         proof.noted_prompt(
-            "ban", reason, mention(target_id, target_fname), locale=locale
+            "ban", reason, user_ref(target_id, target_fname), locale=locale
         ),
         proof.keyboard(locale),
     )
@@ -201,13 +201,9 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     admin_fname: str = meta.get("ban_admin_fname", "Admin")
     prompt_msg_id: int = meta.get("ban_prompt_msg_id", 0)
     prompt_chat_id: int = meta.get("ban_prompt_chat_id", 0)
-    ban_duration = meta.get("ban_duration")
     target_locale = await locale_for_user(target_id)
 
     now = utc_now()
-    # * ban_duration is reserved for future timed-ban support; Telegram enforcement
-    # * via until_date is not yet wired up, so we do not compute until/dur_str here.
-    _ = ban_duration
     proof_chat, proof_thread = cfg.proofs
 
     # * Pre-fetch active groups immediately so DB round-trip overlaps with the
@@ -404,35 +400,13 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         )
 
     # * Build the applied-to line, surfacing a clear warning when no group was updated
-    total_groups = len(groups)
-    if total_groups == 0:
-        applied_line = t("banning.applied.empty", locale)
-    elif failed == total_groups:
-        sample = ", ".join(
-            grp.get("title") or str(grp["chat_id"]) for grp, _ in transient_groups[:5]
-        )
-        applied_line = t(
-            "banning.applied.none",
-            locale,
-            total=total_groups,
-            sample=sample,
-            more=" ..." if len(transient_groups) > 5 else "",
-        )
-    elif failed > 0:
-        sample = ", ".join(
-            grp.get("title") or str(grp["chat_id"]) for grp, _ in transient_groups[:3]
-        )
-        applied_line = t(
-            "banning.applied.partial",
-            locale,
-            done=total_groups - failed,
-            total=total_groups,
-            failed=failed,
-            sample=sample,
-            more=" ...)" if len(transient_groups) > 3 else ")",
-        )
-    else:
-        applied_line = t("banning.applied.full", locale, total=total_groups)
+    applied_line = replies.applied_summary(
+        locale,
+        "banning.applied",
+        total=len(groups),
+        failed=failed,
+        transient=transient_groups,
+    )
 
     # * Build PM content before the conditional so it can fire in parallel with
     # * both upsert_user and (optionally) edit_message_text.  All three operations
@@ -551,8 +525,6 @@ async def _execute_ban_update(
         reason,
         ban_id,
         to_utc(existing.get("timestamp", utc_now())),
-        proof_link,
-        prev_proof_link,
     )
     _appeal_url = appeal_deep_link(bot_username, ban_id)
     kb = (
@@ -631,7 +603,6 @@ async def _execute_new_ban(
         admin_fname,
         reason,
         ban_id,
-        proof_link,
         now,
     )
     kb = (

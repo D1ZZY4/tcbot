@@ -75,8 +75,6 @@ jobs:
       FED_WARN_LIMIT:          ${{ secrets.FED_WARN_LIMIT }}
       WEBHOOK_URL:             ${{ secrets.WEBHOOK_URL }}
       WEBHOOK_SECRET:          ${{ secrets.WEBHOOK_SECRET }}
-      PROOF_TIMEOUT_SECONDS:   ${{ secrets.PROOF_TIMEOUT_SECONDS }}
-      APPEAL_TIMEOUT_SECONDS:  ${{ secrets.APPEAL_TIMEOUT_SECONDS }}
       ALBUM_DEBOUNCE_SECONDS:  ${{ secrets.ALBUM_DEBOUNCE_SECONDS }}
       MODULES_LOAD:            ${{ secrets.MODULES_LOAD }}
       MODULES_NO_LOAD:         ${{ secrets.MODULES_NO_LOAD }}

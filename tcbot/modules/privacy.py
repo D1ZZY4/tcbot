@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING
 
 from telegram.ext import CallbackQueryHandler, ContextTypes
@@ -14,6 +13,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes
 from tcbot import cfg
 from tcbot.modules.helper import decorators, keyboards
 from tcbot.modules.helper.locale import locale_for_update
+from tcbot.modules.helper.parse_editmsg import answer_and_edit
 from tcbot.utils.formatter import bold
 from tcbot.utils.i18n import t
 
@@ -81,15 +81,11 @@ async def on_privacy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
     botname = ctx.bot.first_name or "This bot"
     locale = await locale_for_update(update)
-    # * q.answer() and edit are independent; run in parallel.
-    await asyncio.gather(
-        q.answer(),
-        q.edit_message_text(
-            _privacy_msg(botname, locale),
-            parse_mode="MarkdownV2",
-            reply_markup=keyboards.privacy_kb(locale),
-        ),
-        return_exceptions=True,
+    # * q.answer() and the edit are independent; run in parallel.
+    await answer_and_edit(
+        q,
+        _privacy_msg(botname, locale),
+        reply_markup=keyboards.privacy_kb(locale),
     )
 
 
@@ -105,17 +101,13 @@ async def on_privacy_policy_menu(
 
     botname = ctx.bot.first_name or "This bot"
     locale = await locale_for_update(update)
-    # * q.answer() and edit are independent; run in parallel.
-    await asyncio.gather(
-        q.answer(),
-        q.edit_message_text(
-            _privacy_policy_index_msg(botname, locale),
-            parse_mode="MarkdownV2",
-            reply_markup=keyboards.privacy_policy_sections_kb(
-                _section_labels(locale), locale
-            ),
+    # * q.answer() and the edit are independent; run in parallel.
+    await answer_and_edit(
+        q,
+        _privacy_policy_index_msg(botname, locale),
+        reply_markup=keyboards.privacy_policy_sections_kb(
+            _section_labels(locale), locale
         ),
-        return_exceptions=True,
     )
 
 
@@ -150,15 +142,11 @@ async def on_privacy_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     locale = await locale_for_update(update)
     label, content = _section_body(idx, locale)
     body = f"{bold(label)}\n\n{content}"
-    # * q.answer() and edit are independent; run in parallel.
-    await asyncio.gather(
-        q.answer(),
-        q.edit_message_text(
-            body,
-            parse_mode="MarkdownV2",
-            reply_markup=keyboards.back_to_privacy_policy_kb(locale),
-        ),
-        return_exceptions=True,
+    # * q.answer() and the edit are independent; run in parallel.
+    await answer_and_edit(
+        q,
+        body,
+        reply_markup=keyboards.back_to_privacy_policy_kb(locale),
     )
 
 

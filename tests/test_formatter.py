@@ -12,7 +12,6 @@ from tcbot.utils.formatter import (
     esc,
     italic,
     link,
-    mention,
     pre,
     safe_username,
     user_ref,
@@ -59,7 +58,7 @@ def test_link_escapes_text_and_parens_in_url() -> None:
 def test_user_ref_uses_id_link_and_ignores_username() -> None:
     assert user_ref(123, "A_B") == "[A\\_B](tg://user?id=123)"
     assert user_ref(123, "Ann", "ann_x") == "[Ann](tg://user?id=123)"
-    assert mention(123, "Ann") == user_ref(123, "Ann")
+    assert user_ref(123, "Ann") == user_ref(123, "Ann")
 
 
 def test_safe_username_shape() -> None:

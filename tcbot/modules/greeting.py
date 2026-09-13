@@ -27,7 +27,7 @@ from tcbot.modules.helper.locale import locale_for_chat, locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import appeal_deep_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
-from tcbot.utils.formatter import link, mention
+from tcbot.utils.formatter import link, user_ref
 from tcbot.utils.i18n import Safe, t
 
 if TYPE_CHECKING:
@@ -165,7 +165,7 @@ async def _handle_member(
             notice = t(
                 "greeting.notice.banned",
                 locale,
-                user=Safe(mention(member.id, member.first_name, member.username)),
+                user=Safe(user_ref(member.id, member.first_name, member.username)),
             )
             ban_id = ban.get("ban_id", "")
             if ban_id:
@@ -223,7 +223,7 @@ async def _handle_member(
             t(
                 "greeting.welcome.body",
                 locale,
-                user=Safe(mention(member.id, member.first_name, member.username)),
+                user=Safe(user_ref(member.id, member.first_name, member.username)),
                 community=cfg.community_name,
             ),
             log_label=f"Welcome for uid={member.id}",
@@ -449,7 +449,7 @@ async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
             t(
                 "greeting.left.body",
                 await locale_for_update(update),
-                user=Safe(mention(member.id, member.first_name, member.username)),
+                user=Safe(user_ref(member.id, member.first_name, member.username)),
             ),
             log_label="left-member",
         )

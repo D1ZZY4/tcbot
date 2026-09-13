@@ -6,13 +6,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Protocol
 
 from telegram.error import BadRequest
 
 if TYPE_CHECKING:
-    from telegram import CallbackQuery, Message
+    from collections.abc import Awaitable
+
+    from telegram import CallbackQuery, InlineKeyboardMarkup, Message
 
 log = logging.getLogger(__name__)
 
@@ -77,6 +80,41 @@ async def clear_markup_cb(q: CallbackQuery) -> None:
         if any(i in str(e).lower() for i in _IGNORED):
             return
         log.warning("clear markup failed: %s", e)
+
+
+# ────────────────── answer + edit / ack + render helpers ────────── #
+
+
+async def answer_and_edit(q: CallbackQuery, text: str, **kwargs: Any) -> None:
+    """Answer a callback query and edit its message in parallel.
+
+    ``q.answer()`` and the inline edit are independent; gathering them starts
+    both at once. The edit goes through :func:`safe_edit_cb`, so benign
+    not-modified errors are swallowed like the raw callback sites it replaces.
+    """
+    await asyncio.gather(
+        q.answer(),
+        safe_edit_cb(q, text, **kwargs),
+        return_exceptions=True,
+    )
+
+
+async def ack_and_render(
+    q: CallbackQuery, data_coro: Awaitable[tuple[str, InlineKeyboardMarkup | None]]
+) -> None:
+    """Acknowledge the callback query and run the data coroutine in parallel, then edit.
+
+    ``data_coro`` must be a coroutine that returns ``(text, kb)``. Gathering
+    ``q.answer()`` with the DB fetch starts both simultaneously, cutting latency
+    versus the old sequential pattern. On a data coroutine failure the query is
+    answered but the message is left untouched.
+    """
+    _, result = await asyncio.gather(q.answer(), data_coro, return_exceptions=True)
+    if isinstance(result, BaseException):
+        log.error("ack_and_render data fetch failed: %s", result)
+        return
+    text, kb = result
+    await safe_edit_cb(q, text, reply_markup=kb)
 
 
 # ──────────────────────── safe_reply helper ─────────────────────── #

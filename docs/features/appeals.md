@@ -237,7 +237,7 @@ If editing the existing appeal log fails, the bot attempts to send a new log mes
 
 ## Timeouts and fallbacks
 
-- `cfg.appeal_timeout` (`APPEAL_TIMEOUT_SECONDS`, default `600`) is parsed from the environment but is not applied to the `ConversationHandler`; there is no `ConversationHandler.TIMEOUT` state. Conversations end only via escape commands, cancel, or successful submission.
+- There is no `ConversationHandler.TIMEOUT` state. Conversations end only via escape commands, cancel, or successful submission.
 - Any recognized command during the waiting state ends the session with `Appeal session ended.`
 - Cancel ends the session without writing appeal metadata.
 - If the user sends `#appeal` after the session state has expired or the ban ID is missing from `ctx.user_data`, the bot asks them to start the appeal again.

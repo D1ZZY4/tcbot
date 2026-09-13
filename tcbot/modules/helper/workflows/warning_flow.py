@@ -707,34 +707,13 @@ async def _execute_warn_auto_ban(
         total_groups,
     )
 
-    if total_groups == 0:
-        applied_line = t("warnings.autoban.empty", locale)
-    elif failed == total_groups:
-        sample = ", ".join(
-            grp.get("title") or str(grp["chat_id"]) for grp, _ in transient_groups[:5]
-        )
-        applied_line = t(
-            "warnings.autoban.none",
-            locale,
-            total=total_groups,
-            sample=sample,
-            more=" ..." if len(transient_groups) > 5 else "",
-        )
-    elif failed > 0:
-        sample = ", ".join(
-            grp.get("title") or str(grp["chat_id"]) for grp, _ in transient_groups[:3]
-        )
-        applied_line = t(
-            "warnings.autoban.partial",
-            locale,
-            done=applied,
-            total=total_groups,
-            failed=failed,
-            sample=sample,
-            more=" ...)" if len(transient_groups) > 3 else ")",
-        )
-    else:
-        applied_line = t("warnings.autoban.full", locale, total=total_groups)
+    applied_line = replies.applied_summary(
+        locale,
+        "warnings.autoban",
+        total=total_groups,
+        failed=failed,
+        transient=transient_groups,
+    )
     if groups_fetch_failed:
         applied_line += t("warnings.autoban.scope_warn", locale)
 

@@ -70,10 +70,9 @@ in [`utilities.md#formatterpy`](utilities.md).
 | `code(text)` | `` `...` `` with escaped content. |
 | `pre(text)` | ` ```...``` ` monospace block with escaped content. |
 | `link(text, url)` | MarkdownV2 link. Escape or validate URLs before passing untrusted values. |
-| `mention(user_id, name, username=None)` | ID-based mention, always a clickable `FullName` resolving via `tg://user?id=...`. Backward-compatible alias for `user_ref()`. |
-| `user_ref(user_id, name, username=None)` | Action-summary reference. Always renders a clickable `FullName` resolving via `tg://user?id=ID`; usernames are never used. Falls back to the numeric ID as link text when the name is the numeric fallback. |
+| `user_ref(user_id, name, username=None)` | ID-based mention, always a clickable `FullName` resolving via `tg://user?id=...`; usernames are never used. Falls back to the numeric ID as link text when the name is the numeric fallback. Sole name in the formatter — the old `mention()` alias was removed. |
 
-Use `esc()`, `code()`, `mention()`, or `user_ref()` for any user-provided value in MarkdownV2 messages. Use `user_ref()` in action summaries and audit logs where the name links to the numeric user ID.
+Use `esc()`, `code()`, or `user_ref()` for any user-provided value in MarkdownV2 messages. Use `user_ref()` in action summaries and audit logs where the name links to the numeric user ID.
 
 ## `extraction.py`
 
@@ -82,7 +81,6 @@ Target resolution for moderation commands.
 | Export | Purpose |
 |---|---|
 | `extract_target(update, args, bot=None, *, prefer_explicit=False)` | Resolves targets; returns `tuple[int, str]` (user_id, fname) on success or `tuple[None, None]` on failure. Priority: reply to sender_chat-aware (channel senders are refused: they are not actionable user IDs, so resolution falls through to args/entities) → args (ID/username) → args (partial name search in DB) → text mentions → @mentions. One exception: a typed numeric ID or `@username` that verifies as a real user different from the quoted sender overrides the reply (deliberate intent beats quote context); anything unverified or fuzzy keeps the reply. With `prefer_explicit=True` (read-only `/check`), any resolving arg wins and only a miss falls back to the reply. Numeric IDs take a cache fast path (IDs are immutable, so a real cached name skips the live `get_chat` round trip); bare-numeric and legacy `User <id>` fallbacks fall through to the live lookup. |
-| `has_reply_target(msg)` | Reply-target predicate mirroring `extract_target` priority 1 (including the anonymous-admin skip). Used by the promote role-word guard; target-vs-reason splitting for ban/kick/mute/warn lives in `extract_mod_target`. |
 | `extract_mod_target(update, args, bot=None)` | Single owner of moderation target resolution plus the consumed-or-reason decision, used by the ban, kick, mute, and warn entries. Returns `(hit, consumed)`: `consumed` is true when `args[0]` named the target (classic no-reply path, or the verified-override path), so entries drop it from the reason; otherwise the reply stands and `parse_inline_reason` still strips a restated ID via `reply_target_id`. |
 | `sync_user_identity(bot, target_id)` | Full sync protocol for detail views: cached read, live verify, update on mismatch. The older gap-fill-only `resolve_user_identity` was removed once every consumer used `sync`; its logic lives on inside `sync_user_identity` and `_fetch_live_identity`. |
 

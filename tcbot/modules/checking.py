@@ -17,10 +17,10 @@ from tcbot import database as db
 from tcbot.modules.helper import decorators, extraction, keyboards, replies
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
+from tcbot.modules.helper.parse_editmsg import ack_and_render, safe_edit_cb, safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.check_flow import Check
-from tcbot.utils.formatter import code, mention
+from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.time_and_date import fmt_dt
@@ -125,11 +125,11 @@ async def _ban_summary(
         "checking.checkme.banned",
         locale,
         community=cfg.community_name,
-        user=Safe(mention(user_id, user_fname, user_uname)),
+        user=Safe(user_ref(user_id, user_fname, user_uname)),
         id=Safe(code(str(user_id))),
         reason=ban.get("reason", None)
         or t("checking.events.no_reason", locale, plain=True),
-        admin=Safe(mention(aid, admin_fname, admin_uname)),
+        admin=Safe(user_ref(aid, admin_fname, admin_uname)),
         date=Safe(date_str),
     )
     return text, proof_link
@@ -213,7 +213,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             t(
                 "checking.checkme.staff_admin",
                 locale,
-                user=Safe(mention(user.id, fname, user.username)),
+                user=Safe(user_ref(user.id, fname, user.username)),
             ),
             log_label=f"checkme admin for user {user.id}",
         )
@@ -225,7 +225,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             t(
                 "checking.checkme.staff_role",
                 locale,
-                user=Safe(mention(user.id, fname, user.username)),
+                user=Safe(user_ref(user.id, fname, user.username)),
                 community=cfg.community_name,
                 role=role_label,
             ),
@@ -449,21 +449,15 @@ async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     tapper = update.effective_user
     locale = await locale_for_update(update)
-    _, result = await asyncio.gather(
-        q.answer(),
+    await ack_and_render(
+        q,
         Check.profile(
             ctx.bot,
             target_id,
             executor_id=tapper.id if tapper is not None else None,
             locale=locale,
         ),
-        return_exceptions=True,
     )
-    if isinstance(result, BaseException):
-        log.debug("on_check_main failed: %s", result)
-        return
-    text, kb = result
-    await safe_edit_cb(q, text, reply_markup=kb)
 
 
 @decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
@@ -484,14 +478,7 @@ async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await q.answer()
         return
     locale = await locale_for_update(update)
-    _, result = await asyncio.gather(
-        q.answer(), Check.bans_list(target_id, page, locale), return_exceptions=True
-    )
-    if isinstance(result, BaseException):
-        log.debug("on_check_bans failed: %s", result)
-        return
-    text, kb = result
-    await safe_edit_cb(q, text, reply_markup=kb)
+    await ack_and_render(q, Check.bans_list(target_id, page, locale))
 
 
 @decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
@@ -511,14 +498,7 @@ async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         await q.answer()
         return
     locale = await locale_for_update(update)
-    _, result = await asyncio.gather(
-        q.answer(), Check.ban_detail(target_id, ban_id, locale), return_exceptions=True
-    )
-    if isinstance(result, BaseException):
-        log.debug("on_check_ban_item failed: %s", result)
-        return
-    text, kb = result
-    await safe_edit_cb(q, text, reply_markup=kb)
+    await ack_and_render(q, Check.ban_detail(target_id, ban_id, locale))
 
 
 @decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
@@ -537,14 +517,7 @@ async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         await q.answer()
         return
     locale = await locale_for_update(update)
-    _, result = await asyncio.gather(
-        q.answer(), Check.warns_by_group(target_id, locale), return_exceptions=True
-    )
-    if isinstance(result, BaseException):
-        log.debug("on_check_warns failed: %s", result)
-        return
-    text, kb = result
-    await safe_edit_cb(q, text, reply_markup=kb)
+    await ack_and_render(q, Check.warns_by_group(target_id, locale))
 
 
 @decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
@@ -566,16 +539,10 @@ async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         await q.answer()
         return
     locale = await locale_for_update(update)
-    _, result = await asyncio.gather(
-        q.answer(),
+    await ack_and_render(
+        q,
         Check.warns_in_group(target_id, chat_id, page, locale),
-        return_exceptions=True,
     )
-    if isinstance(result, BaseException):
-        log.debug("on_check_warn_chat failed: %s", result)
-        return
-    text, kb = result
-    await safe_edit_cb(q, text, reply_markup=kb)
 
 
 @decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
@@ -596,14 +563,7 @@ async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         await q.answer()
         return
     locale = await locale_for_update(update)
-    _, result = await asyncio.gather(
-        q.answer(), Check.kicks_list(target_id, page, locale), return_exceptions=True
-    )
-    if isinstance(result, BaseException):
-        log.debug("on_check_kicks failed: %s", result)
-        return
-    text, kb = result
-    await safe_edit_cb(q, text, reply_markup=kb)
+    await ack_and_render(q, Check.kicks_list(target_id, page, locale))
 
 
 @decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
@@ -624,14 +584,7 @@ async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         await q.answer()
         return
     locale = await locale_for_update(update)
-    _, result = await asyncio.gather(
-        q.answer(), Check.mutes_list(target_id, page, locale), return_exceptions=True
-    )
-    if isinstance(result, BaseException):
-        log.debug("on_check_mutes failed: %s", result)
-        return
-    text, kb = result
-    await safe_edit_cb(q, text, reply_markup=kb)
+    await ack_and_render(q, Check.mutes_list(target_id, page, locale))
 
 
 @decorators.ratelimiter(limit=_RL_CHECK_CB_LIMIT, period=_RL_PERIOD_S)
@@ -652,14 +605,7 @@ async def on_check_appeals(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         await q.answer()
         return
     locale = await locale_for_update(update)
-    _, result = await asyncio.gather(
-        q.answer(), Check.appeals_list(target_id, page, locale), return_exceptions=True
-    )
-    if isinstance(result, BaseException):
-        log.debug("on_check_appeals failed: %s", result)
-        return
-    text, kb = result
-    await safe_edit_cb(q, text, reply_markup=kb)
+    await ack_and_render(q, Check.appeals_list(target_id, page, locale))
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

@@ -11,9 +11,35 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Tidier start-menu rows** (`tcbot/modules/helper/keyboards.py`): the Additional and Privacy buttons share one row, so the menu reads as two pairs plus the Language footer instead of one pair plus three stretched singletons. Labels, callbacks, and colors unchanged.
 
+- **One-line auth decorators** (`tcbot/modules/helper/decorators.py`): the four near-identical role gatekeepers (`owner_only`, `staff_only`, `mod_only`, `basic_mod_only`) collapse into a small `_auth_only` factory producing each decorator from its label, refusal key, and minimum role; behavior and reply text unchanged.
+
+- **Shared moderation pre-flight** (`tcbot/modules/helper/decorators.py`, `banning.py`, `kicking.py`, `muting.py`, `warnings.py`): the identity-classify + role-rank-check gather block is now `classify_and_check()` and all seven command sites use it; response behavior unchanged.
+
+- **Shared answer-and-render helpers** (`tcbot/modules/helper/parse_editmsg.py`, `about.py`, `start.py`, `help.py`, `privacy.py`, `stats.py`, `checking.py`): `answer_and_edit()` (callback answer + safe edit gathered) and `ack_and_render()` (answer + data fetch + edit, moved from `stats._ack_and_render`) replace about a dozen hand-rolled gather blocks. One cosmetic side effect: `checking.py` now logs data-fetch failures at error level instead of debug.
+
+- **Shared list and keyboard builders** (`tcbot/modules/helper/keyboards.py`, `helper/check_flow.py`, `stats_flow.py`): `detail_kb()` builds the View Proof/View Appeal + Back keyboard in one place; the stats ban-detail legacy three-part-callback path is deleted as unreachable; `/check` bans and appeals lists fold into one `_ban_list_render` helper.
+
+- **Shared applied-summary renderer** (`tcbot/modules/helper/replies.py`, `ban_flow.py`, `warning_flow.py`): the empty/partial/full failure-summary line is now `applied_summary()` with per-action catalog keys.
+
+- **Merged duplicate names** (`tcbot/utils/formatter.py`): the `mention()` alias is gone; `user_ref()` is the single clickable-name formatter everywhere.
+
+- **Streamlined target resolution** (`tcbot/modules/helper/extraction.py`): `has_reply_target()` deleted (its one caller tests `_reply_uid(...) is None`); the verified-target path folded into `_args_target(..., verified=True)`.
+
+### Removed
+
+- **Dead optional dependencies** (`pyproject.toml`, `uv.lock`): `cbor2` (no imports anywhere; Redis serialization uses the project-local tagged-JSON encoder) and `kurigram[fast]` (speculative MTProto extra with no code touching it) are gone.
+
+- **Speculative timed-unban scheduler layer** (`tcbot/database/scheduler.py`, `unban_flow.py`, `appeal_review_flow.py`, `docs/operations/vercel.md`): `schedule_unban()`, `cancel_schedule()`, `_execute_scheduled_unban()`, and their defensive no-op call sites are deleted; no code ever scheduled timed bans. `expire_old_warns` and the periodic sync job are unchanged.
+
+- **Unused config surface** (`tcbot/__init__.py`, `config.env.example`, `README.md`, `docs/getting-started/setup.md`, `docs/features/*`, `.agents/rules/*`, `AGENTS.md`, `.github/workflows/run-bot.yml`): `PROOF_TIMEOUT_SECONDS` and `APPEAL_TIMEOUT_SECONDS` were parsed but never consumed; the dataclass fields, env parsing, and `cfg.proof_timeout`/`cfg.appeal_timeout` adapter properties are removed along with every reference.
+
+- **Dead code and aliases** (`tcbot/utils/i18n.py`, `tests/test_i18n.py`, `helper/parse_logmsg.py`, `helper/workflows/*_flow.py`, `appeals.py`, `about.py`, `additional.py`, `help.py`, `extraction.py`): `BuildProof.record()`, unused flow label fields (skip/cancel/done labels), the `ban_duration` reserved block, unused `proof_lnk`/`trigger` log params, `appeals.__all__`, module-level `__about_msg__`/`__additional_msg__` renders, `_MAX_REASON_LEN`, `Check.PAGE_SIZE`/`Stats.PAGE_SIZE`, the help legacy `__help__` fallback branches, `has_reply_target`, and the i18n test-only `placeholders()`/`find_unescaped()` (now local to `tests/test_i18n.py`).
+
 ### Documentation
 
 - **Documentation refreshed across all categories** (`docs/architecture/database.md`, `helpers.md`, `modules.md`, `repository-map.md`, `utilities.md`, `docs/features/moderation/groups.md`, `banning.md`, `kicking.md`, `muting.md`, `connecting.md`, `disconnecting.md`, `unbanning.md`, `check.md`, `docs/features/roles/roles.md`, `demote.md`, `docs/features/appeals.md`, `statistics.md`, `workflow-overview.md`, `docs/getting-started/setup.md`, `docs/operations/ci-cd.md`, `performance.md`, `vercel.md`, `backup-and-restore.md`, `docs/reference/keyboard-styles.md`): architecture docs now cover the localization engine, per-message locale resolution, the settings collection, and the corrected startup sequence. Feature guides reflect per-handler localization, the shared L1+L2 cache replacing per-user snapshots, and updated class names. The setup guide lists all community-link environment variables and the full startup order. Operations and reference docs catch up with transport tuning, cache guarantees, and keyboard layouts.
+
+- **Docs synced to the over-engineering cleanup** (`config.env.example`, `README.md`, `AGENTS.md`, `.github/workflows/run-bot.yml`, `docs/getting-started/setup.md`, `docs/architecture/workflows.md`, `helpers.md`, `utilities.md`, `database.md`, `docs/features/appeals.md`, `moderation/banning.md`, `moderation/warnings.md`, `moderation/unbanning.md`, `docs/operations/vercel.md`, `.agents/rules/code-style.md`, `asyncio-gather-rules.md`, `docs-sync.md`, `i18n/README.md`): removed the retired `PROOF_TIMEOUT_SECONDS`/`APPEAL_TIMEOUT_SECONDS` variables, the `schedule_unban`/`cancel_schedule` scheduler API, the `mention()` formatter alias, `has_reply_target`, and the test-only i18n helpers wherever they were referenced.
 
 </details>
 

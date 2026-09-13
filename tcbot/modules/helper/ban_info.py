@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper.parse_link import message_link
-from tcbot.utils.formatter import code, mention
+from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.time_and_date import fmt_dt
 
@@ -62,9 +62,9 @@ async def build_ban_detail(
 
     text = (
         f"{t('checking.ban_info.title', locale)}\n\n"
-        f"{t('checking.ban_info.user', locale, user=Safe(mention(uid, target_fname, target_uname)))}\n"
+        f"{t('checking.ban_info.user', locale, user=Safe(user_ref(uid, target_fname, target_uname)))}\n"
         f"{t('checking.ban_info.user_id', locale, id=Safe(code(str(uid))))}\n\n"
-        f"{t('checking.ban_info.banned_by', locale, admin=Safe(mention(aid, admin_fname, admin_uname)))}\n"
+        f"{t('checking.ban_info.banned_by', locale, admin=Safe(user_ref(aid, admin_fname, admin_uname)))}\n"
         f"{t('checking.ban_info.admin_id', locale, id=Safe(code(str(aid))))}\n\n"
         f"{t('checking.ban_info.reason', locale, reason=ban.get('reason', None) or t('checking.events.no_reason', locale, plain=True))}\n"
         f"{t('checking.ban_info.ban_id', locale, id=Safe(code(ban.get('ban_id', ''))))}\n"

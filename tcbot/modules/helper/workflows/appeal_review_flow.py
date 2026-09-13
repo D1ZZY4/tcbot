@@ -19,7 +19,7 @@ from tcbot.database.documents import BanDoc
 from tcbot.modules.helper import parse_logmsg, replies
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.utils.dispatch import count_transient_errors, fan_out, throw_if_cancelled
-from tcbot.utils.formatter import code, mention
+from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.time_and_date import to_utc, utc_now
 
@@ -298,13 +298,10 @@ class AppealReviewMixin:
                 log.debug("approve_appeal groups-fail answer failed: %s", exc)
             return
         # * Deactivate ALL active bans for the user (not only the appeal ban_id)
-        # * in parallel with fetching the target name and cancelling any
-        # * pending timed-unban APScheduler job (future-proofing: no-op when
-        # * no timed ban exists, same pattern as execute_unban in unban_flow.py).
-        deactivate_result, target_fname, _ = await asyncio.gather(
+        # * in parallel with fetching the target name.
+        deactivate_result, target_fname = await asyncio.gather(
             db.bans_db.deactivate_all_active_bans(target_id),
             db.users_cache.get_first_name(target_id, str(target_id)),
-            db.scheduler.cancel_schedule(f"unban.{ban_id}"),
             return_exceptions=True,
         )
         # ! CRITICAL: a cancelled deactivation must propagate with the card
@@ -395,7 +392,7 @@ class AppealReviewMixin:
                 t(
                     "appeals.decision.approve_card",
                     await locale_for_update(update),
-                    admin=Safe(mention(admin.id, admin.first_name)),
+                    admin=Safe(user_ref(admin.id, admin.first_name)),
                 ),
                 parse_mode="MarkdownV2",
                 reply_markup=None,
@@ -507,7 +504,7 @@ class AppealReviewMixin:
                 t(
                     "appeals.decision.reject_card",
                     staff_locale,
-                    admin=Safe(mention(admin.id, admin.first_name)),
+                    admin=Safe(user_ref(admin.id, admin.first_name)),
                 ),
                 parse_mode="MarkdownV2",
                 reply_markup=None,

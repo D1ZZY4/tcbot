@@ -15,7 +15,11 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, fil
 from tcbot import database as db
 from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
+from tcbot.modules.helper.parse_editmsg import (
+    ack_and_render,
+    answer_and_edit,
+    safe_reply,
+)
 from tcbot.modules.helper.workflows.stats_flow import (
     CHAT_KEY,
     MSG_KEY,
@@ -27,9 +31,7 @@ from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable
-
-    from telegram import CallbackQuery, InlineKeyboardMarkup, Update
+    from telegram import CallbackQuery, Update
 
 log = logging.getLogger(__name__)
 
@@ -165,23 +167,6 @@ def _parse_item_callback(
         return None
 
 
-async def _ack_and_render(
-    q: CallbackQuery, data_coro: Awaitable[tuple[str, InlineKeyboardMarkup | None]]
-) -> None:
-    """Acknowledge the callback query and run the data coroutine in parallel, then edit.
-
-    ``data_coro`` must be a coroutine that returns ``(text, kb)``. Gathering
-    ``q.answer()`` with the DB fetch starts both simultaneously, cutting latency
-    versus the old sequential pattern.
-    """
-    _, result = await asyncio.gather(q.answer(), data_coro, return_exceptions=True)
-    if isinstance(result, BaseException):
-        log.error("_ack_and_render data fetch failed: %s", result)
-        return
-    text, kb = result
-    await safe_edit_cb(q, text, reply_markup=kb)
-
-
 # ──────────────────────── Callback Handlers ─────────────────────── #
 
 
@@ -194,7 +179,7 @@ async def on_stats_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     # * q.answer() and Stats.main() are independent; run in parallel.
     tapper = update.effective_user
-    await _ack_and_render(
+    await ack_and_render(
         q,
         Stats.main(
             viewer_id=tapper.id if tapper is not None else None,
@@ -210,7 +195,7 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     q = update.callback_query
     if q is None:
         return
-    await _ack_and_render(q, Stats.staff_roster(await locale_for_update(update)))
+    await ack_and_render(q, Stats.staff_roster(await locale_for_update(update)))
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -233,7 +218,7 @@ async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         q, tapper.id if tapper is not None else None, update
     ):
         return
-    await _ack_and_render(q, Stats.users_list(page, await locale_for_update(update)))
+    await ack_and_render(q, Stats.users_list(page, await locale_for_update(update)))
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -253,7 +238,7 @@ async def on_stats_user_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         q, tapper.id if tapper is not None else None, update
     ):
         return
-    await _ack_and_render(
+    await ack_and_render(
         q,
         Stats.user_detail(ctx.bot, page, idx, stable, await locale_for_update(update)),
     )
@@ -274,7 +259,7 @@ async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     except IndexError:
         await q.answer()
         return
-    await _ack_and_render(q, Stats.chats_list(page, await locale_for_update(update)))
+    await ack_and_render(q, Stats.chats_list(page, await locale_for_update(update)))
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -289,7 +274,7 @@ async def on_stats_chat_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         await q.answer()
         return
     page, idx, stable = parsed
-    await _ack_and_render(
+    await ack_and_render(
         q,
         Stats.chat_detail(ctx.bot, page, idx, stable, await locale_for_update(update)),
     )
@@ -311,7 +296,7 @@ async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await q.answer()
         return
     Stats.clear_search(ctx)
-    await _ack_and_render(q, Stats.bans_list(page, await locale_for_update(update)))
+    await ack_and_render(q, Stats.bans_list(page, await locale_for_update(update)))
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -326,7 +311,7 @@ async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         await q.answer()
         return
     page, idx, stable = parsed
-    await _ack_and_render(
+    await ack_and_render(
         q, Stats.ban_detail(page, idx, stable, await locale_for_update(update))
     )
 
@@ -343,11 +328,7 @@ async def on_stats_bans_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         return
     # * Stats.open_search is synchronous; answer and edit run in parallel.
     text, kb = Stats.open_search(ctx, q, await locale_for_update(update))
-    await asyncio.gather(
-        q.answer(),
-        safe_edit_cb(q, text, reply_markup=kb),
-        return_exceptions=True,
-    )
+    await answer_and_edit(q, text, reply_markup=kb)
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -418,7 +399,7 @@ async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         await q.answer()
         return
     results = ctx.user_data.get(RESULTS_KEY, []) if ctx.user_data else []
-    await _ack_and_render(
+    await ack_and_render(
         q, Stats.search_detail(results, idx, await locale_for_update(update))
     )
 
@@ -435,17 +416,13 @@ async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         # * open_search is synchronous; data is already available, so answer + edit
         # * run in parallel.
         text, kb = Stats.open_search(ctx, q, await locale_for_update(update))
-        await asyncio.gather(
-            q.answer(),
-            safe_edit_cb(q, text, reply_markup=kb),
-            return_exceptions=True,
-        )
+        await answer_and_edit(q, text, reply_markup=kb)
     else:
         # * Re-render the previous results without re-running the query.
         previous_query = (
             ctx.user_data.get("stats_last_query", "") if ctx.user_data else ""
         )
-        await _ack_and_render(
+        await ack_and_render(
             q,
             Stats.search_results(
                 previous_query, results, await locale_for_update(update)
@@ -463,7 +440,7 @@ async def on_stats_search_cancel(
     if q is None:
         return
     Stats.clear_search(ctx)
-    await _ack_and_render(q, Stats.bans_list(0, await locale_for_update(update)))
+    await ack_and_render(q, Stats.bans_list(0, await locale_for_update(update)))
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

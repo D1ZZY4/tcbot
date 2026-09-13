@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING
 
 from telegram.ext import CallbackQueryHandler, ContextTypes
@@ -14,6 +13,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes
 from tcbot import cfg
 from tcbot.modules.helper import decorators, keyboards
 from tcbot.modules.helper.locale import locale_for_update
+from tcbot.modules.helper.parse_editmsg import answer_and_edit
 from tcbot.utils.formatter import bold
 from tcbot.utils.i18n import Safe, t
 
@@ -47,9 +47,6 @@ def about_msg(locale: str | None = None) -> str:
     )
 
 
-__about_msg__ = about_msg()
-
-
 # ──────────────────────── Callback Handler ──────────────────────── #
 
 
@@ -62,15 +59,11 @@ async def on_about_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     locale = await locale_for_update(update)
-    # * q.answer() and edit are independent; run in parallel.
-    await asyncio.gather(
-        q.answer(),
-        q.edit_message_text(
-            about_msg(locale),
-            parse_mode="MarkdownV2",
-            reply_markup=keyboards.back_to_start_kb(locale),
-        ),
-        return_exceptions=True,
+    # * q.answer() and the edit are independent; run in parallel.
+    await answer_and_edit(
+        q,
+        about_msg(locale),
+        reply_markup=keyboards.back_to_start_kb(locale),
     )
 
 

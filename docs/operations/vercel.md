@@ -128,8 +128,7 @@ to `0`). Re-run after every redeploy that changes the project URL.
   harvest, identity refresh, album debounce) can be frozen mid-flight when
   the invocation returns. Authoritative state (bans, warns, roles) is
   written synchronously inside handlers and is unaffected.
-- **No persistent scheduler.** One-off timed unbans (`schedule_unban`)
-  never fire on Vercel; only the daily warn-expiry cron runs.
+- **No persistent scheduler.** No bot-side scheduled jobs run on Vercel; only the daily warn-expiry cron fires.
 - **Cron frequency.** Hobby projects allow one cron run per day (the
   default `0 2 * * *` complies); per-minute schedules need Pro/Enterprise.
 

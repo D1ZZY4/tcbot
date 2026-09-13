@@ -172,8 +172,7 @@ Single source of truth for all Telegram Markdown markup. Both the utils layer (e
 | `code(text)` | `` `...` `` with escaped content. |
 | `pre(text)` | ` ```...``` ` monospace block with escaped content. |
 | `link(text, url)` | MarkdownV2 link. Escape or validate untrusted URLs before passing. |
-| `mention(user_id, name, username=None)` | ID-based mention, always a clickable `FullName` resolving via `tg://user?id=...`. Backward-compatible alias for `user_ref()`. |
-| `user_ref(user_id, name, username=None)` | Action-summary reference. Always renders a clickable `FullName` resolving via `tg://user?id=ID`; usernames are never used. Falls back to the numeric ID as link text when the name is the bare numeric fallback. |
+| `user_ref(user_id, name, username=None)` | ID-based mention, always a clickable `FullName` resolving via `tg://user?id=...`; usernames are never used. Falls back to the numeric ID as link text when the name is the bare numeric fallback. Sole name in the formatter — the old `mention()` alias was removed. |
 
 Always import from `tcbot.utils.formatter`.
 
@@ -201,7 +200,7 @@ Each TOML file name becomes a dotted key prefix: a key `done` in `banning.toml` 
 
 | Export | Purpose |
 |---|---|
-| `Safe(str)` | Pre-formatted fragment exempt from placeholder escaping. Wrap `mention()`/`code()`/`bold()` output or any already-safe markup so `t()` interpolates it verbatim instead of escaping it. |
+| `Safe(str)` | Pre-formatted fragment exempt from placeholder escaping. Wrap `user_ref()`/`code()`/`bold()` output or any already-safe markup so `t()` interpolates it verbatim instead of escaping it. |
 | `I18nError` | Programming error in translation usage: bad template or bad value. Inherits `KeyError`. |
 | `DEFAULT_LOCALE` | `"en-US"`: fallback when the user or group locale is absent, unknown, or invalid. |
 
@@ -226,8 +225,6 @@ Each TOML file name becomes a dotted key prefix: a key `done` in `banning.toml` 
 |---|---|
 | `resolve_locale(chat_type="private", user_locale=None, group_locale=None, explicit=None, catalog=None)` | Resolve the effective locale for one message. `explicit` always wins. Private chats use `user_locale`; group-like chats use `group_locale`. Absent/unknown values fall through to `DEFAULT_LOCALE`. |
 | `display_name(locale, catalog=None)` | Human-readable locale name for buttons and confirmations (reads the `button.language_name` key from the locale's catalog). |
-| `placeholders(template)` | Return the `{name}` placeholders used by a template string. |
-| `find_unescaped(text)` | Return descriptions of unescaped MarkdownV2 specials in rendered text; used to validate catalog templates after dummy interpolation. |
 
 All bot modules use `t()` rather than hard-coding user-facing strings.
 

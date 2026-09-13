@@ -17,29 +17,21 @@ Usage pattern (lifecycle managed by ``tcbot/__main__.py``)::
     await scheduler.start(mongodb_uri, db_name, warn_expiry_days)
     # ... bot runs ...
     await scheduler.stop()
-
-Scheduling a one-off action::
-
-    schedule_id = await scheduler.schedule_unban(ban_id, user_id, run_at)
-    # cancel if user manually unbanned before expiry:
-    await scheduler.cancel_schedule(schedule_id)
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from apscheduler.jobstores.mongodb import MongoDBJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 # * Direct module imports (not through tcbot.database.__init__) to avoid circular
 # * imports: tcbot.database.__init__ → scheduler → tcbot.database.__init__
-from tcbot.database.bans_db import deactivate_ban as _bans_deactivate
 from tcbot.database.mongos import col as _col
 from tcbot.database.mongos import db_call as _db_call
 from tcbot.database.mongos import mongo_client_kwargs as _mongo_client_kwargs
@@ -177,39 +169,6 @@ async def _run_scheduled_sync() -> None:
         counts.failed,
         counts.truncated,
     )
-
-
-async def _execute_scheduled_unban(ban_id: str, user_id: int) -> None:
-    """Deactivate a timed ban record in MongoDB when its scheduled expiry fires.
-
-    NOTE: This only updates the DB record (``is_active = False``). The actual
-    Telegram unban is handled by the timed ``restrict_chat_member`` call with
-    ``until_date`` at ban time, which Telegram enforces natively.
-    """
-    try:
-        deactivated = await _bans_deactivate(ban_id)
-    except Exception:
-        log.exception(
-            "Scheduled unban DB failure for ban_id=%s user_id=%d",
-            ban_id,
-            user_id,
-        )
-        return
-    if deactivated:
-        log.info(
-            "Scheduled unban: deactivated ban_id=%s for user_id=%d.", ban_id, user_id
-        )
-    else:
-        log.debug(
-            "Scheduled unban: ban_id=%s not found or already inactive (user_id=%d).",
-            ban_id,
-            user_id,
-        )
-
-
-# ══════════════════════════════════════════════════════════════════ #
-#  Background task: owns the scheduler lifecycle
-# ══════════════════════════════════════════════════════════════════ #
 
 
 async def _scheduler_background(
@@ -414,13 +373,6 @@ async def stop() -> None:
     log.info("APScheduler stopped.")
 
 
-def _get() -> AsyncIOScheduler:
-    """Return the active scheduler; raises if not started."""
-    if _scheduler is None:
-        raise RuntimeError("Scheduler not started; call start() first.")
-    return _scheduler
-
-
 def is_ready() -> bool:
     """Return True only after scheduler startup has completed successfully."""
     return (
@@ -429,56 +381,3 @@ def is_ready() -> bool:
         and _sched_ready.is_set()
         and _sched_error is None
     )
-
-
-# ══════════════════════════════════════════════════════════════════ #
-#  Public scheduling helpers
-# ══════════════════════════════════════════════════════════════════ #
-
-
-async def schedule_unban(ban_id: str, user_id: int, run_at: datetime) -> str:
-    """Schedule a persistent DB-side unban at *run_at* (UTC).
-
-    Returns the APScheduler schedule ID which can be passed to
-    :func:`cancel_schedule` if the user is manually unbanned before expiry.
-
-    The schedule is stored in MongoDB so it survives bot restarts.
-    """
-    schedule_id = f"unban.{ban_id}"
-    _get().add_job(
-        _execute_scheduled_unban,
-        trigger=DateTrigger(run_at),
-        id=schedule_id,
-        args=[ban_id, user_id],
-        replace_existing=True,
-        # * A restart straddling run_at must still deactivate the ban: the
-        # * default 1s misfire window would silently drop it. One hour
-        # * covers deploys while staying far below real ban durations.
-        # * coalesce collapses duplicate queued firings into one run.
-        misfire_grace_time=3600,
-        coalesce=True,
-    )
-    log.info(
-        "Scheduled persistent unban: ban_id=%s user_id=%d run_at=%s.",
-        ban_id,
-        user_id,
-        run_at.isoformat(),
-    )
-    return schedule_id
-
-
-async def cancel_schedule(schedule_id: str) -> bool:
-    """Cancel a persistent schedule by ID. Returns True if it existed.
-
-    Safe to call with a non-existent ID (returns False, does not raise).
-    """
-    try:
-        _get().remove_job(schedule_id)
-        log.info("Cancelled schedule: %s.", schedule_id)
-        return True
-    except Exception:
-        log.debug(
-            "cancel_schedule: %s not found (already fired or never created).",
-            schedule_id,
-        )
-        return False

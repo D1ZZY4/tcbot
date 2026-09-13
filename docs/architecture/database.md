@@ -261,8 +261,6 @@ Write helpers must invalidate or refresh related cache entries. Role writes inva
 |---|---|
 | `start(mongodb_uri, db_name, warn_expiry_days, *, bot=None, sync_interval_hours=0)` | Spawns the background asyncio task, waits until the scheduler is ready. `bot` plus a positive interval registers the `tcbot.enforcement_sync` sweep (`/tcsync` core on a timer, log-only); `0` removes a stale schedule. |
 | `stop()` | Sets the stop event; waits up to 10 s for graceful shutdown, then cancels a stuck task so shutdown never orphans a live scheduler into the next `start()`. |
-| `schedule_unban(ban_id, user_id, run_at)` | Registers a persistent one-off `DateTrigger` unban job. Returns the schedule ID. |
-| `cancel_schedule(schedule_id)` | Removes a schedule by ID. Returns `True` if found, `False` if already fired or never created. |
 
 Recurring jobs registered on every startup (idempotent via `replace_existing=True` on each `add_job` call):
 

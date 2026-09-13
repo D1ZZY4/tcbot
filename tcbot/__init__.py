@@ -217,8 +217,6 @@ class Configs:
     logs_errors: str
     appeals: str
     appeal_log_handle: str
-    proof_timeout_seconds: int
-    appeal_timeout_seconds: int
     appeal_discussion_topic: int
     extend_group: str
     album_debounce_seconds: int
@@ -332,12 +330,6 @@ class Configs:
                 "APPEAL_LOG_HANDLE", "@TranssionCoreFederationLogs"
             ).strip()
             or "@TranssionCoreFederationLogs",
-            proof_timeout_seconds=_int_from_env(
-                "PROOF_TIMEOUT_SECONDS", 100, minimum=1
-            ),
-            appeal_timeout_seconds=_int_from_env(
-                "APPEAL_TIMEOUT_SECONDS", 600, minimum=1
-            ),
             appeal_discussion_topic=_int_from_env(
                 "APPEAL_DISCUSSION_TOPIC", 0, minimum=0
             ),
@@ -474,28 +466,6 @@ class _CfgAdapter:
     def appeal_log_handle(self) -> str:
         """Public log handle shown to users in appeal instructions."""
         return self._c.appeal_log_handle
-
-    @property
-    def proof_timeout(self) -> int:
-        """Ban proof upload timeout in seconds.
-
-        Parsed from PROOF_TIMEOUT_SECONDS.  Reserved for future inactivity-timeout
-        wiring; PTB ``conversation_timeout`` requires the ``job-queue`` extra which
-        conflicts with the persistent APScheduler setup, so this value is currently
-        unused by any ConversationHandler.
-        """
-        return self._c.proof_timeout_seconds
-
-    @property
-    def appeal_timeout(self) -> int:
-        """Appeal conversation inactivity timeout in seconds.
-
-        Parsed from APPEAL_TIMEOUT_SECONDS.  Reserved for future inactivity-timeout
-        wiring; PTB ``conversation_timeout`` requires the ``job-queue`` extra which
-        conflicts with the persistent APScheduler setup, so this value is currently
-        unused by any ConversationHandler.
-        """
-        return self._c.appeal_timeout_seconds
 
     @property
     def appeal_discussion_topic(self) -> int:
