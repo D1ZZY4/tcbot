@@ -523,10 +523,13 @@ class _CfgAdapter:
     def warn_limit(self) -> int:
         """Per-group warning threshold that triggers an automatic ban.
 
-        When a user's warn count in a single group reaches exactly this value,
-        they are automatically federation-banned and their warns in that group
-        are cleared.  Uses ``==`` (not ``>=``) so that concurrent increments
-        cannot double-fire the auto-ban.  Minimum 1; defaults to 3.
+        When a user's warn count in a single group reaches or exceeds this
+        value, they are automatically federation-banned and their warns in that
+        group are cleared.  ``>=`` is deliberate: after a total enforcement
+        failure the count still equals the limit and the next warn must re-fire
+        the auto-ban (a ``==`` trigger would wedge permanently at limit+1).
+        Duplicate bans are prevented by the already-banned guard and by
+        deactivate_all_active_bans on unban.  Minimum 1; defaults to 3.
         """
         return self._c.warn_limit
 

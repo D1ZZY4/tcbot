@@ -554,11 +554,12 @@ async def _execute_warn_auto_ban(
 ) -> None:
     """Handle warn-threshold auto-ban: staff demotion, DB record, fan-out, reply."""
     fed_warn_limit = cfg.fed_warn_limit
-    # * The role lookup is guarded: the warn above is already recorded and the
-    # * per-group trigger fires on exact equality, so letting a transient
-    # * lookup failure propagate would both skip this threshold's auto-ban and
-    # * wedge the retry (count is now limit+1, which never re-fires). Entry
-    # * authorization already fail-closed; proceed as non-staff with a loud log.
+    # * The role lookup is guarded: the warn above is already recorded, and
+    # * the per-group trigger uses >= (not ==), so a retry after this failure
+    # * still re-fires once the count is at or above the limit. Letting a
+    # * transient lookup failure propagate would skip THIS warn's auto-ban
+    # * with no compensation. Entry authorization already fails closed; proceed
+    # * as non-staff with a loud log.
     try:
         target_role = await db.users_roles.get_effective_role(target_id)
     except Exception:
