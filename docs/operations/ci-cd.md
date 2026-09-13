@@ -14,7 +14,7 @@ The project uses 5 automated workflows for continuous integration, code quality,
 2. **Auto-Fix Code Quality** - Automatically fix linting issues
 3. **Dependency Updates** - Weekly dependency updates with auto-PR
 4. **CodeQL** - Security analysis
-5. **Run Bot** - Long-running bot runner with handover and cron fallback
+5. **Run Bot** - Long-running bot runner with push preempt, handover, and cron fallback
 
 ---
 
@@ -135,14 +135,16 @@ Review the dependency changes and CI results before merging.
 **Triggers:**
 - Self-dispatch (`workflow_dispatch`) from the previous run, for seamless chaining
 - Cron schedule every 15 minutes as a resurrection fallback if the chain breaks
+- Push to `main` touching runtime files (`tcbot/**`, `i18n/**`, `pyproject.toml`, `uv.lock`, `.python-version`, the workflow itself) for a rolling restart on the new commit
 
 **What it does:**
 - Runs the bot for a ~5 hour window per run (GitHub caps a job at 6h). When `WEBHOOK_URL` is set the bot uses webhook mode; otherwise it falls back to polling. `WEBHOOK_SECRET` is optional because the runtime generates one when absent
+- **Rolling restart on runtime pushes:** a push to `main` that touches bot code, translations, dependencies, or the runner itself preempts the stale live run instead of queueing behind its 5-hour window. The new run classifies the diff through the compare API (a failed comparison fails closed to a restart), cancels every other in-progress or queued run of this workflow, waits up to 3 minutes for them to exit, then starts the bot on the new commit. Docs-only pushes never start a run, so the live bot is untouched. Schedule and handover runs keep queueing as before; `cancel-in-progress` stays `false` at the workflow level so a cron tick can never terminate the live bot
 - **Self-chains:** roughly 10 minutes before the window ends (`HANDOVER_LEAD=600`), it dispatches the next run. The dispatch is retried up to 3 times (10s apart). This requires a repository secret `BOT_PAT` (a Personal Access Token with the `workflow` scope), because the built-in `GITHUB_TOKEN` cannot trigger workflows
 - The cron schedule (every 15 minutes) acts as a resurrection fallback if the chain breaks or no PAT is configured. The `concurrency` group (`cancel-in-progress: false`) serializes runs: a cron tick while a run is active queues behind it instead of being discarded, so ticks can pile up behind a long holder
 - A `concurrency` group (`tcf-bot-runner`, `cancel-in-progress: false`) prevents overlapping bot instances. This avoids duplicate update processing in polling mode and keeps webhook ownership unambiguous
 - **Graceful stop before artifacts:** at the window end the bot gets SIGTERM (`uv run` forwards it to the child) and the script waits up to 60 s for exit before the scrub/upload steps, so the artifact keeps its final lines. The bot is backgrounded directly (`$!` stays a real child job) so the wait supervises the actual process; a stubborn process is left for runner teardown inside the 30 min post-window buffer
-- Bot configuration comes from repository secrets (`BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`, `WEBHOOK_URL`, `WEBHOOK_SECRET`, etc.), plus the optional `BOT_PAT` for self-chaining
+- Bot configuration comes from repository secrets (`BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`, `WEBHOOK_URL`, `WEBHOOK_SECRET`, etc.), plus the optional `BOT_PAT` for self-chaining. Preemption needs no extra secret: it cancels stale runs through the built-in `GITHUB_TOKEN` with the workflow's own `actions: write` permission
 - **Log artifacts are scrubbed:** workflow logs and artifacts on a public repository are world-readable, so before the crash tail is printed or uploaded, token-shaped (`id:hash`) and URI-auth substrings are redacted with the same patterns as `error_reporter.py`. Message excerpts remain by design so crashes stay debuggable; artifacts are kept 7 days
 
 ---
@@ -164,11 +166,13 @@ Auto-create PR
     ↓
 Telegram Notification
 
-Run Bot
+Run Bot (schedule / handover dispatch: queues behind the live run)
     ↓
 Self-dispatch next run (~10 min before window ends)
     ↓
 Cron fallback restarts if the chain breaks
+
+Run Bot (push with runtime changes: preempts the live run, no queue)
 ```
 
 ---
@@ -244,6 +248,10 @@ View workflow
 - Verify `BOT_TOKEN`, `MONGODB_URI`, and `OWNER_ID` secrets are set
 - For seamless 24/7, set `BOT_PAT` (a PAT with the `workflow` scope) so the run can dispatch its successor; otherwise only the 15-minute cron fallback restarts it
 - A `409 Conflict` from Telegram means two instances are polling at once; the `tcf-bot-runner` concurrency group should prevent this, so check for a stray manual run
+
+### Bot restarted right after a push (Run Bot)
+- Expected when the push touched runtime files: the new run preempts the stale one on purpose so the new commit serves within minutes. Docs-only pushes never restart the bot
+- If restarts flap on rapid successive pushes, the latest commit always wins; avoid pushing runtime fixes one line at a time during an incident
 
 ---
 
