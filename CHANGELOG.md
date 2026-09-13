@@ -7,6 +7,15 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 <details open>
 <summary>Unreleased changes (click to collapse)</summary>
 
+No unreleased changes yet.
+
+</details>
+
+## [6.8.0] - 2026-09-13
+
+<details>
+<summary>6.8.0 changes (click to expand)</summary>
+
 ### Added
 
 - **Kurigram MTProto client available** (`pyproject.toml`, `uv.lock`): the Kurigram package with the fast extra joins the dependency set for future Telegram lookups outside Bot API limits. No bot code uses it yet, so nothing user-visible changes.
@@ -26,6 +35,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 - **Per-user and per-group language preferences** (`i18n/en-US/common.toml`, `button.toml`, `language.toml`, `i18n/README.md`, `tcbot/utils/i18n.py`, `tcbot/database/settings_db.py`, `groups_db.py`, `documents.py`, `mongos.py`, `tcbot/modules/language.py`, `helper/keyboards.py`, `tests/test_i18n.py`, `docs/features/language.md`): `/language` (`/lang`, `/langs`) and a start-menu `Language` button share one selection flow for personal or group locale. Personal choices live in a dedicated `user_settings` collection; group choices live on the group row. Group changes need owner or staff rank. Translations ship as one TOML file per domain with fallback to `en-US`.
 
 ### Changed
+
+- **About disclaimer renders upright** (`tcbot/modules/about.py`): the disclaimer line no longer italicizes the community name; it renders as plain text like the surrounding prose.
 
 - **Dependency refresh** (`uv.lock`): upgrades within pinned bounds (`pymongo`, `ruff`, `tzdata`). `apscheduler` stays pinned at `==3.11.3`; nothing else moved.
 
