@@ -44,6 +44,12 @@ flowchart TD
   same `expire_old_warns()` the scheduler uses. `member_cache` cleanup still
   runs through the MongoDB TTL index and needs nothing.
 - `GET /api/webhook` returns `OK` as a liveness probe.
+- Response contract, mirroring the Flask receiver in `alive.py`: `200`
+  acknowledges handled or benign updates (Telegram stops retrying), `400`
+  rejects malformed JSON, `403` rejects a bad secret, and `500`/`503` are
+  retryable - `500` for update-processing failures and `503` when the
+  instance is not ready (a cold start whose MongoDB/Redis init failed, or no
+  `WEBHOOK_SECRET` configured). Telegram retries every non-2xx delivery.
 
 ## Setup
 
@@ -132,6 +138,7 @@ to `0`). Re-run after every redeploy that changes the project URL.
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Every update → `503` | `WEBHOOK_SECRET` unset | Set explicit `WEBHOOK_SECRET`, redeploy, re-run `setWebhook` with it. |
+| Every update → `503` on a cold start | Subsystem init failed before the loop was ready (MongoDB/Redis unreachable) | Fix database access and re-verify; retries are automatic. |
 | Every update → `403` | Secret mismatch | `secret_token` in `setWebhook` must equal `WEBHOOK_SECRET`. |
 | First update slow, then fast | Cold start (Mongo connect + indexes) | Expected; warms after first invocation. |
 | `Conflict` errors in logs | Another instance still running (Replit/polling) | Stop all other transports for this token. |

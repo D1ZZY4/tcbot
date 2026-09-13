@@ -40,7 +40,7 @@ Aliases:
 
 ## Top-level overview
 
-`Stats.main(*, viewer_id=None)` returns the overview card:
+`Stats.main(*, viewer_id=None, locale=None)` returns the overview card:
 
 ```text
 <community> Stats
@@ -142,31 +142,31 @@ Date: <utc>
 - Numeric query → `bans_db.get_active_ban(int(query))`.
 - Non-numeric query → anchored prefix lookup in the member cache via `users_cache.search_by_name` (same semantics as command target resolution, capped at 30 hits), then a single `$in` fetch of their active bans via `bans_db.active_bans_for_users`. Only matching rows travel over the wire.
 
-Results are rendered with a numbered keyboard. Each hit opens `Stats.search_detail`, which reuses `build_ban_detail` and offers `View Proof` plus `Back to Results`.
+Results are rendered with a numbered keyboard whose footer carries a `New Search` button and a `Cancel` button. Each hit opens `Stats.search_detail`, which reuses `build_ban_detail` and offers `View Proof` plus a `« Back` button that returns to the results (or the search prompt when no results are stored) without re-running the query.
 
 The free-text input handler is scoped to private chats and only fires while the search panel is active; it ignores every other text message.
 
 ## Class architecture
 
-`Stats` is a stateless container. Every method is a `@classmethod` returning `(text, InlineKeyboardMarkup)`. Callbacks pair an `await q.answer()` with `safe_edit_cb()` so the same content can be re-tapped without raising `Message is not modified`.
+`Stats` is a stateless container. Every view builder is a `@classmethod` (except `clear_search`, a `@staticmethod`) returning `(text, InlineKeyboardMarkup)`. Callbacks pair an `await q.answer()` with `safe_edit_cb()` so the same content can be re-tapped without raising `Message is not modified`.
 
 ```python
 class Stats:
     PAGE_SIZE = 6
 
-    @classmethod async def main(*, viewer_id=None) -> tuple[str, InlineKeyboardMarkup]
-    @classmethod async def staff_roster() -> tuple[str, InlineKeyboardMarkup]
-    @classmethod async def users_list(page) -> tuple[str, InlineKeyboardMarkup]
-    @classmethod async def user_detail(bot, page, idx, stable=None) -> tuple[str, InlineKeyboardMarkup]
-    @classmethod async def chats_list(page) -> tuple[str, InlineKeyboardMarkup]
-    @classmethod async def chat_detail(bot, page, idx, stable=None) -> tuple[str, InlineKeyboardMarkup]
-    @classmethod async def bans_list(page) -> tuple[str, InlineKeyboardMarkup]
-    @classmethod async def ban_detail(page, idx, stable=None) -> tuple[str, InlineKeyboardMarkup]
-    @classmethod def    open_search(ctx, q) -> tuple[str, InlineKeyboardMarkup]
+    @classmethod async def main(*, viewer_id=None, locale=None) -> tuple[str, InlineKeyboardMarkup]
+    @classmethod async def staff_roster(locale=None) -> tuple[str, InlineKeyboardMarkup]
+    @classmethod async def users_list(page, locale=None) -> tuple[str, InlineKeyboardMarkup]
+    @classmethod async def user_detail(bot, page, idx, stable=None, locale=None) -> tuple[str, InlineKeyboardMarkup]
+    @classmethod async def chats_list(page, locale=None) -> tuple[str, InlineKeyboardMarkup]
+    @classmethod async def chat_detail(bot, page, idx, stable=None, locale=None) -> tuple[str, InlineKeyboardMarkup]
+    @classmethod async def bans_list(page, locale=None) -> tuple[str, InlineKeyboardMarkup]
+    @classmethod async def ban_detail(page, idx, stable=None, locale=None) -> tuple[str, InlineKeyboardMarkup]
+    @classmethod def    open_search(ctx, q, locale=None) -> tuple[str, InlineKeyboardMarkup]
     @staticmethod      clear_search(ctx) -> None
-    @classmethod async def search_run(query) -> list[dict]
-    @classmethod async def search_results(query, results) -> tuple[str, InlineKeyboardMarkup]
-    @classmethod async def search_detail(results, idx) -> tuple[str, InlineKeyboardMarkup]
+    @classmethod async def search_run(query) -> list[BanDoc]
+    @classmethod async def search_results(query, results, locale=None) -> tuple[str, InlineKeyboardMarkup]
+    @classmethod async def search_detail(results, idx, locale=None) -> tuple[str, InlineKeyboardMarkup]
 ```
 
 The previous `stats_chats_flow.py` has been removed; its responsibilities live entirely inside `Stats`.
@@ -179,13 +179,18 @@ The previous `stats_chats_flow.py` has been removed; its responsibilities live e
 | `users_roles.admin_count()` | Total Admins for the overview. |
 | `users_roles.all_admins()` | Full Admin list for the staff roster. |
 | `users_roles.all_by_role("developer" \| "tester")` | Per-role lists for the staff roster. |
+| `users_roles.is_owner(uid)` / `users_roles.get_effective_role(uid)` | Owner/Founder gate that decides whether the `Users` pane renders. |
 | `users_cache.total_users()` | Cached-user count for the overview. |
 | `users_cache.all_users_page()` | Paginated user list (server-side skip/limit, server-sorted by `first_name`). |
-| `users_cache.get_first_name(uid, fallback)` | Display-name lookups. |
+| `users_cache.get_user_mention_data(uid)` | User name/username for the Founder overview line and chat-adder row. |
+| `users_cache.get_mention_data_batch(uids)` | Parallel name resolution for the whole staff roster. |
+| `users_cache.get_first_names_batch(uids)` | Display names for the ban list and search results. |
+| `users_cache.search_by_name(needle, limit=...)` | Anchored prefix lookup for free-text search (same semantics as command target resolution). |
 | `bans_db.active_ban_count()` | Active-ban count for the overview. |
 | `bans_db.active_bans_page()` / `active_ban_count()` | Paginated ban list (server-side skip/limit). |
 | `bans_db.active_bans_for_users()` | Name-search hits (single `$in` fetch). |
 | `bans_db.get_active_ban(uid)` | Direct ID search hit. |
+| `bans_db.get_ban(ban_id)` | Stable-ID detail fetch for search details (immune to list shifts). |
 | `groups_db.active_group_count()` | Connected-group count for the overview. |
 | `groups_db.active_groups()` | Paginated chat list and detail lookup. |
 
@@ -210,6 +215,6 @@ the search and message deletion concurrently.
 - The `Users` button and both Users callbacks are Owner/Founder only; all other panes stay public.
 - `Staff Roster` page shows the Founder mention exactly once, then each role section, even when a role list is empty.
 - `Users` pagination clamps to the last page when the requested page exceeds `total_pages`.
-- `Connected Chats` detail card matches the format produced by the previous `stats_chats_flow.build_chat_detail`.
+- `Connected Chats` detail card shows the cached title, chat ID, connecting admin, and connection date; it is produced by `Stats.chat_detail` (the previous `stats_chats_flow.py` no longer exists).
 - `User Bans` Search panel handles numeric IDs and free-text queries; each hit drills into the same detail card as the regular bans list.
 - All callbacks ack the query before editing, so Telegram never marks them as unanswered.

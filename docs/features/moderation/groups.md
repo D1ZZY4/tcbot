@@ -9,29 +9,25 @@ database layer, see [`../../architecture/database.md`](../../architecture/databa
 
 ```mermaid
 flowchart TD
-    Cmd[/tcgroups command/] --> Fetch[groups_db.active_groups]
+    Cmd[/tcgroups command/] --> Fetch[groups_db.active_groups via L1+L2 cache]
     Fetch --> Empty{Any groups?}
     Empty -->|no| EmptyMsg[Reply: no groups connected]
-    Empty -->|yes| Cache[ctx.user_data groups_cache]
-    Cache --> Render[Render simple view]
-    Render --> Reply[Reply with simple keyboard]
+    Empty -->|yes| Render[Render simple view]
+    Render --> Reply[Reply with Simple/Details keyboard]
     Reply --> Tap{User taps Details / Simple}
     Tap --> Details[on_groups_details]
     Tap --> Simple[on_groups_simple]
-    Details --> CachedCheck{groups_cache in user_data?}
-    CachedCheck -->|yes| Edit[Edit message to detailed view]
-    CachedCheck -->|no| Refetch[active_groups in parallel with q.answer]
-    Refetch --> Edit
-    Simple --> CachedCheck
-    CachedCheck -->|yes| Edit
-    CachedCheck -->|no| Refetch
+    Details --> Refresh[active_groups in parallel with q.answer]
+    Refresh --> Edit[Edit message to detailed view]
+    Simple --> Refresh
+    Refresh --> Edit2[Edit message to simple view]
 ```
 
 ## Purpose
 
 `/tcgroups` lists every group currently connected to the federation, with an optional `Details` view that adds each group's chat ID alongside its title. The command is open to anyone, so the same `/tcgroups` reply in any chat shows the same global list.
 
-The list source is `groups_db.active_groups()`, which reads `federated_groups` where `is_active: True`. The result is cached per-user in `ctx.user_data["groups_cache"]` so the toggle callbacks can edit the existing message in place without re-querying the DB on every tap.
+The list source is `groups_db.active_groups()`, which reads `federated_groups` where `is_active: True`, backed by the process-wide L1+L2 cache (`active_groups_cache` in `tcbot/database/cache.py` keyed on `_ALL_GROUPS_KEY`). There is no per-user `ctx.user_data` caching: every toggle callback re-reads through the cache layer and edits the existing message in place.
 
 ## Commands and aliases
 
@@ -47,26 +43,35 @@ Commands use the project's configured prefixes; slash commands are examples.
 
 1. Fetches the active-groups list with `db.groups_db.active_groups()`. This call is backed by the L1+L2 cache defined in `tcbot/database/cache.py`, so repeat calls within the cache TTL are free.
 2. If the list is empty, replies `No groups are currently connected to <community>.` and stops.
-3. Otherwise caches the list in `ctx.user_data["groups_cache"]` and replies with the simple view rendered by `_render(groups, detailed=False)`.
-4. The reply keyboard is `tcgroups_kb(detailed=False)` from `tcbot/modules/helper/keyboards.py` and exposes a single `Details` button.
+3. Otherwise replies with the simple view rendered by `_render(groups, detailed=False)`.
+4. The reply keyboard is `tcgroups_kb(detailed=False)` from `tcbot/modules/helper/keyboards.py` and shows a single `Details` button (localized `button.details_toggle`).
 
 ## Render helpers
 
-`_render(groups, detailed)` is the local helper in `groups.py`:
+`_render(groups, *, detailed, locale)` is the local helper in `groups.py`:
 
 ```python
-def _render(groups, *, detailed):
-    lines = [f"{bold('Connected Groups')}\n\nCount: {len(groups)}\n".rstrip("\n")]
-    for g in groups:
+def _render(groups, *, detailed, locale=None):
+    header = t("groups.list.header", locale, n=len(groups))
+    lines = [header]
+    used = len(header) + 1
+    for i, g in enumerate(groups):
         title = g.get("title", "Unknown")
         if detailed:
-            lines.append(f"\\- {esc(title)} \\- {code(str(g.get('chat_id', 0)))}")
+            line = t("groups.list.item_detailed", locale, title=title, id=Safe(code(str(g.get("chat_id", 0)))))
         else:
-            lines.append(f"\\- {esc(title)}")
+            line = t("groups.list.item", locale, title=title)
+        if used + len(line) + 1 > _MAX_RENDER_CHARS:
+            lines.append(t("groups.list.more", locale, n=len(groups) - i))
+            break
+        lines.append(line)
+        used += len(line) + 1
     return "\n".join(lines)
 ```
 
-The function escapes every title with `esc()` and uses `code()` to wrap chat IDs in the detailed view. Titles default to `Unknown` when the group record has none.
+The header, item, and overflow lines all render from the localized `groups.list.header`, `groups.list.item`, `groups.list.item_detailed`, and `groups.list.more` templates. Chat IDs in the detailed view are wrapped with `code()` via `Safe()`.
+
+Rendered output is capped at `_MAX_RENDER_CHARS` (3800) with a localized `groups.list.more` suffix when the cap is hit, so a federation with a very large group count cannot produce an over-long message.
 
 ## Toggle callbacks
 
@@ -77,8 +82,11 @@ Two `CallbackQueryHandler` registrations handle the inline toggle:
 
 Both call the shared `_toggle(update, ctx, detailed=...)` helper:
 
-1. If `ctx.user_data["groups_cache"]` exists and is younger than `_GROUPS_CACHE_TTL_S` (120 s), answer first (an expired query surfaces immediately instead of hiding behind the edit result), then edit via `safe_edit(message, _render(groups, detailed=...), reply_markup=tcgroups_kb(detailed=...))`.
-2. Otherwise (stale/missing cache, e.g. after a bot restart or a connect/disconnect elsewhere), run `q.answer()` and `db.groups_db.active_groups()` in parallel. The new list is stashed in `ctx.user_data["groups_cache"]` (with `groups_cache_at`) and the message is edited through `safe_edit`.
+1. Runs `q.answer()` and `db.groups_db.active_groups()` in parallel via `asyncio.gather(..., return_exceptions=True)`.
+2. On a fetch failure, edits the prompt to the localized `replies.err_groups_load_failed(locale)` text while keeping the toggle keyboard (so the user can retry), and returns without rendering an empty list.
+3. On success, edits the existing message in place via `safe_edit(message, _render(groups, detailed=..., locale=...), reply_markup=tcgroups_kb(detailed=..., locale=...))`.
+
+There is **no** per-user `ctx.user_data["groups_cache"]` snapshot. Every toggle reads the shared L1+L2 `active_groups_cache` (30 s TTL), so connects, disconnects, and title refreshes that happened elsewhere in the federation become visible as soon as the cache layer expires.
 
 `safe_edit` swallows benign `BadRequest` errors (such as `Message is not modified`) so re-tapping a button that is already in view does not surface a Telegram error to the user.
 
@@ -106,29 +114,33 @@ The cache is invalidated whenever `add_group`, `deactivate_group`, or `migrate_g
 
 - An empty list replies `No groups are currently connected to <community>.` and does not show the toggle keyboard.
 - A group with a missing `title` renders as `Unknown`.
-- The cached list in `ctx.user_data["groups_cache"]` expires after `_GROUPS_CACHE_TTL_S` (120 s), so a `/tcconnect` or `/tcdisconnect` elsewhere in the federation becomes visible on the next toggle after the TTL lapses. Users who need a fresh list immediately should re-run `/tcgroups`.
+- A failed `active_groups()` read in the command replies the localized `replies.err_groups_load_failed(locale)` text instead of a (misleading) empty list.
+- A failed `active_groups()` read in a toggle keeps the toggle keyboard in place so re-tapping retries the fetch; it never renders `Count: 0` from a broken read.
+- Rendered output longer than `_MAX_RENDER_CHARS` (3800) is truncated with a localized `groups.list.more` suffix.
 - `safe_edit` silently swallows `Message is not modified` errors, so re-tapping a button already in view does not raise a Telegram error.
-- The L1+L2 cache backed by `active_groups_cache` short-circuits repeat reads within the TTL; the DB is only queried on cache miss.
+- The L1+L2 cache backed by `active_groups_cache` short-circuits repeat reads within the TTL (30 s); the DB is only queried on cache miss. Because the cache is process-wide and not per-user, a `/tcconnect` or `/tcdisconnect` elsewhere in the federation becomes visible on the next toggle or command after the cache expires.
 - Disconnected groups (`is_active: False`) are excluded from the list because `active_groups` filters on `is_active: True`.
 - The command is open to anyone; no decorator-level role gate.
+- Both the command and the toggle callbacks are rate-limited (command 8/30 s, callbacks 15/30 s).
 
 ## Behavior reference
 
 Key behaviors to keep in mind:
 
 1. `/tcgroups` is open to anyone.
-2. `/tcgroups` renders a title-only list by default with a `Count: N` line.
+2. `/tcgroups` renders a title-only list by default with a `Count: N` header.
 3. `/tcgroups` with no connected groups replies a friendly empty-state message.
-4. The rendered list is cached in `ctx.user_data["groups_cache"]` so toggles are cheap.
+4. A failed group fetch replies an error text, never a fake empty list.
 5. `Details` switches the view to include each group's chat ID alongside its title.
 6. `Simple` switches back to the title-only view.
-7. Toggle callbacks prefer the cached list and only re-query the DB when the cache is missing entirely.
-8. `safe_edit` swallows benign `BadRequest` errors so re-tapping a button does not raise a Telegram error.
-9. The list source is `groups_db.active_groups()` filtered on `is_active: True`.
-10. The L1+L2 cache short-circuits repeat reads within the TTL.
-11. The cache is invalidated whenever `add_group`, `deactivate_group`, or `migrate_group` runs.
-12. Disconnected groups are excluded from the list.
-13. A group with a missing title renders as `Unknown`.
-14. `/tcgroups` does not write to the database.
-15. `/tcgroups` is reply-only; there is no conversation state.
-16. The reply uses `parse_mode="MarkdownV2"` and escapes every title through `esc()`.
+7. Toggle callbacks run `q.answer()` and `active_groups()` in parallel and edit the existing message in place.
+8. There is no per-user `ctx.user_data` groups cache; all reads go through the shared L1+L2 `active_groups_cache`.
+9. `safe_edit` swallows benign `BadRequest` errors so re-tapping a button does not raise a Telegram error.
+10. The list source is `groups_db.active_groups()` filtered on `is_active: True`.
+11. The L1+L2 cache short-circuits repeat reads within the TTL.
+12. The cache is invalidated whenever `add_group`, `deactivate_group`, or `migrate_group` runs.
+13. Disconnected groups are excluded from the list.
+14. A group with a missing title renders as `Unknown`.
+15. `/tcgroups` does not write to the database.
+16. `/tcgroups` is reply-only; there is no conversation state.
+17. Rendering truncates to `_MAX_RENDER_CHARS` (3800) with a localized `... and N more` suffix.

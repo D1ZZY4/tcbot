@@ -259,7 +259,7 @@ If editing the existing appeal log fails, the bot attempts to send a new log mes
 After a staff member rejects an appeal, the banned user must wait **24 hours** before
 submitting a new one. This prevents spam-appealing immediately after every rejection.
 
-The cooldown is enforced in `BuildAppeal._start()`: when `ban.rejected_at` is present and
+The cooldown is enforced in `AppealSubmitMixin._start()` (the submission half of the `BuildAppeal` facade): when `ban.rejected_at` is present and
 `utc_now() - to_utc(rejected_at) < timedelta(hours=24)`, the user receives a message
 showing the hours remaining and `ConversationHandler.END` is returned.
 

@@ -44,7 +44,7 @@ The connection process also replays active federation bans and mutes onto the ne
 
 Commands use the project's configured prefixes; slash commands are examples.
 
-There is no `/tcconnect` alias for the auto-prompt path; the prompt uses inline `Connect` / `Cancel` buttons with callback data `tc_join` and `tc_cancel` (see `BuildConnection` defaults in `connected_flow.py:108-117`).
+There is no `/tcconnect` alias for the auto-prompt path; the prompt uses inline `Connect` / `Cancel` buttons with callback data `tc_join` and `tc_cancel` (see `BuildConnection` defaults in `connected_flow.py:104-113`).
 
 ## `/tcconnect` flow
 
@@ -100,7 +100,8 @@ The `Connect` / `Cancel` buttons are handled by `connection.on_join_decision`:
 - `db.mutes_db.active_mute_docs()` - the set of currently active mutes, filtered to exclude expired timed mutes.
 - `bot.get_chat_administrators(chat_id)` bounded with `asyncio.wait_for(timeout=3.0)`.
 - `db.groups_db.add_group(chat_id, chat_title, owner_id)` - the critical write; if this raises, `complete_join` re-raises so the caller can detect the failure.
-- `db.groups_db.remove_pending(chat_id)` - clear the pending entry if one existed.
+
+`db.groups_db.remove_pending(chat_id)` is intentionally **not** in the gather: it runs after `add_group` succeeds (a failure is logged, never raised), because running it in parallel previously wiped the pending row on an `add_group` failure and left the owner with no retry path but re-adding the bot.
 
 After the gather, `complete_join`:
 
@@ -119,7 +120,7 @@ The function returns normally only after `add_group` has succeeded. If the `add_
 - `can_restrict_members`
 - `can_invite_users`
 
-These are defined as `_REQUIRED_PERMS` in `connected_flow.py:101-105`. The same tuple is exposed via `connection.perms_required_message()` so the help text matches.
+These are defined as `_REQUIRED_PERMS` in `connected_flow.py:97-101`. The same tuple is exposed via `connection.perms_required_message()` so the help text matches.
 
 ## Database impact
 

@@ -14,7 +14,7 @@ The project uses 5 automated workflows for continuous integration, code quality,
 2. **Auto-Fix Code Quality** - Automatically fix linting issues
 3. **Dependency Updates** - Weekly dependency updates with auto-PR
 4. **CodeQL** - Security analysis
-5. **Run Bot** - Long-running bot runner with push preempt, handover, and cron fallback
+5. **Run Bot** - Long-running bot runner with push-triggered handover, self-chaining, and cron fallback
 
 ---
 
@@ -31,6 +31,9 @@ The project uses 5 automated workflows for continuous integration, code quality,
 - Runs `uv run ruff check .` to catch all lint violations
 - Runs `uv run python -c "import tcbot"` to verify all imports resolve cleanly
 - **Fails the PR** if any step exits with a non-zero code
+- The import check runs with dummy but shape-valid `BOT_TOKEN`,
+  `MONGODB_URI`, and `OWNER_ID` values (validated at import time, never
+  connecting), so fork PRs without repository secrets still pass
 
 **Why this exists:**
 `lint.yml` provides a repeatable CI result for formatting, lint, and import
@@ -84,9 +87,12 @@ Auto-applied by GitHub Actions
 
 **What it does:**
 - Runs `uv lock --upgrade` to update all dependencies
-- Installs updated dependencies
-- **Auto-creates PR** with dependency updates
-- PR includes diff of changes
+- Installs the updated lockfile and validates it (Ruff format/lint plus the
+  `import tcbot` check, with dummy shape-valid environment values like
+  `lint.yml`)
+- **Auto-creates a PR** (`deps/auto-update-YYYYMMDD`, suffixed `-runNNN` on
+  collision) labeled `dependencies` against `main`
+- PR includes a diff of the lockfile changes
 - **Sends Telegram notification** with result
 
 **Benefits:**
@@ -119,12 +125,12 @@ Review the dependency changes and CI results before merging.
 **Triggers:**
 - Push to `main`
 - Pull requests to `main`
-- Weekly schedule
+- Weekly schedule (Tuesday 15:38 UTC)
 
 **What it does:**
-- Runs GitHub's security analysis
-- Scans for vulnerabilities
-- Checks for common security issues
+- Runs GitHub's CodeQL security analysis on the `actions` and `python`
+  languages with `build-mode: none` (pure source scan, no build step)
+- Findings land under the repository Security tab
 
 ---
 
@@ -172,7 +178,7 @@ Self-dispatch next run (~10 min before window ends)
     ↓
 Cron fallback restarts if the chain breaks
 
-Run Bot (push with runtime changes: preempts the live run, no queue)
+Run Bot (push with runtime changes: queues a successor; the live run hands over within ~2 min)
 ```
 
 ---
@@ -250,7 +256,7 @@ View workflow
 - A `409 Conflict` from Telegram means two instances are polling at once; the `tcf-bot-runner` concurrency group should prevent this, so check for a stray manual run
 
 ### Bot restarted right after a push (Run Bot)
-- Expected when the push touched runtime files: the new run preempts the stale one on purpose so the new commit serves within minutes. Docs-only pushes never restart the bot
+- Expected when the push touched runtime files: the live run detects the new commit and hands over on purpose so the new commit serves within minutes. Docs-only pushes never restart the bot
 - If restarts flap on rapid successive pushes, the latest commit always wins; avoid pushing runtime fixes one line at a time during an incident
 
 ---

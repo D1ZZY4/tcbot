@@ -87,7 +87,7 @@ When the caller passes `executor_id` (both `cmd_check` and the `check_main` back
 | Founder / Admin / Developer / Tester | No note; the `Role:` line already labels them. |
 | Anyone else | No note. |
 
-`/checkme` from a bot or anonymous-admin sender is refused outright (`Bots and anonymous senders don't hold federation records, so there is nothing to check.`) instead of reporting a misleading clean verdict for a placeholder ID.
+`/checkme` from a bot sender is refused outright (localized `checking.error.bot_sender`, English default: `Bots and anonymous senders don't hold federation records, so there is nothing to check.`). The guard checks `user.is_bot` only; the anonymous-admin placeholder (ID 1087968824) is not a bot and is checked like any other sender.
 
 Previously the bot itself rendered as `Role: Regular user` with bare counts because the profile never classified the target. Counts, drill-downs, and the keyboard are identical with or without a note; a failed identity lookup degrades to no note instead of failing the card (the command is read-only, so there is nothing to fail closed).
 

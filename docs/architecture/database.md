@@ -35,7 +35,7 @@ flowchart TD
 | `ensure_indexes()` | Creates all required indexes on startup. Safe to call repeatedly. |
 | `db()` | Returns the active database or raises if `connect()` has not run. |
 | `col(name)` | Returns a collection from `db()`. Use only inside database helper modules. |
-| `db_call(coro)` | Executes a Motor coroutine through the `mongodb` circuit breaker. Raises `CircuitOpenError` when the circuit is OPEN so callers fast-fail instead of waiting the 45-second socket timeout. All eight DB helper modules (`bans_db`, `groups_db`, `users_roles`, `users_cache`, `warns_db`, `mutes_db`, `kicks_db`, `queues_db`) wrap every Motor operation with `db_call()`. Five consecutive failures open the circuit; a half-open probe re-closes it when MongoDB recovers. |
+| `db_call(coro)` | Executes a Motor coroutine through the `mongodb` circuit breaker. Raises `CircuitOpenError` when the circuit is OPEN so callers fast-fail instead of waiting the 45-second socket timeout. All nine DB helper modules (`bans_db`, `groups_db`, `users_roles`, `users_cache`, `warns_db`, `mutes_db`, `kicks_db`, `queues_db`, `settings_db`) wrap every Motor operation with `db_call()`. Five consecutive failures open the circuit; a half-open probe re-closes it when MongoDB recovers. |
 | `make_short_id(length=10)` | Generates lowercase alphanumeric IDs for records such as bans and promotion requests. |
 
 ## Collections and helpers
@@ -54,7 +54,8 @@ flowchart TD
 | `scheduler.py` | MongoDB (APScheduler) | APScheduler 3.11.3 `AsyncIOScheduler` backed by `MongoDBJobStore`. The scheduler supports persistent one-off unban jobs and the optional recurring warn-expiry job; the current ban command does not create timed-ban schedules. Member-cache cleanup is handled by a MongoDB TTL index, not a scheduler job. Background asyncio task owns the stop event and shutdown sequence (`_sched_stop` + `scheduler.shutdown(wait=False)` with a 10 s join). `start()` reports readiness only after recurring schedules are registered and background execution starts; initialization failures propagate instead of leaving a dead scheduler. `is_ready()` returns `True` when that startup sequence has completed. |
 | `documents.py` | type-only | `TypedDict` document shapes and `Literal` aliases. |
 | `types.py` | type-only | `NewType` primitives such as `UserId`, `GroupId`, `ChatId`, and `BanId`. |
-| `groups_db.py` | `federated_groups`, `pending_joins` | Connected group state, pending connection requests, group cache invalidation. |
+| `groups_db.py` | `federated_groups`, `pending_joins` | Connected group state, pending connection requests, group cache invalidation. Locale preferences ride on the `federated_groups` row itself: `get_group_locale` / `set_group_locale` read and write the `locale` field (no extra collection; rows exist only for connected groups). |
+| `settings_db.py` | `user_settings` | Per-user settings. `get_user_locale(user_id)` and `set_user_locale(user_id, locale)` store a user's locale preference in a bare `{user_id, locale}` row; `None` deletes the row. Kept out of `member_cache` so preference-only rows never inflate cached-user counts or appear in user listings. Both reads use a 300 s L1 cache; writes invalidate. |
 
 ## Member cache optimization
 
@@ -98,6 +99,7 @@ write.
 | `federated_groups` | `(chat_id, is_active)`, unique `(chat_id)`, `(is_active)` |
 | `pending_joins` | unique `(chat_id)` (one pending request per chat) |
 | `member_cache` | unique `(user_id)`, `(user_id, first_name, username)` covered-query index for batch `$in` projections, `(username)`, `(first_name)`, `(last_updated)` TTL auto-expiry |
+| `user_settings` | unique `(user_id)` (one preference row per user) |
 | `warns` | `(user_id, chat_id, timestamp desc)`, `(user_id, timestamp desc)` (per-user history), `(user_id, chat_id, timestamp asc)` (oldest-first `get_warns` sort), `(timestamp)` (warn expiry sweep) |
 | `warn_counts` | unique `(user_id, chat_id)`, `(updated_at)` (counter expiry sweep), `(user_id, count, updated_at desc)` (`user_warn_groups` / `federation_warn_count`) |
 | `kicks` | `(user_id, timestamp desc)`, `(chat_id)` |
@@ -213,6 +215,8 @@ Mutes use an append-only audit trail (`mutes`) plus a live-state store (`active_
 
 `federated_groups` stores active and inactive group records. Disconnecting marks a group inactive instead of deleting it. `pending_joins` stores temporary connection prompts until the owner accepts or cancels.
 
+The `GroupDoc` shape includes an optional `locale` field (see `documents.py`); a connected group's row carries the group-wide render locale chosen via `/language`. `get_group_locale` reads it for the shared-audience resolution path in `helper/locale.py`.
+
 ## Caches
 
 `cache.py` provides two cache types and five public singletons.
@@ -284,6 +288,7 @@ All `*_db.py` modules use a TypedDict from `documents.py` when inserting records
 | `warn_counts` | `WarnCountDoc` |
 | `member_cache` | `UserDoc` |
 | `federated_groups` | `GroupDoc` |
+| `user_settings` | `UserSettingsDoc` |
 | `pending_joins` | `PendingGroupDoc` |
 | `tc_admins` | `AdminDoc` |
 | `tc_roles` | `RoleDoc` |

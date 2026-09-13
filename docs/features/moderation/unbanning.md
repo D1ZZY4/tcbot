@@ -85,16 +85,16 @@ The Developer minimum is intentional: unbanning a higher-ranked target would sil
 1. Uses the caller-supplied `pre_ban` when present, otherwise falls back to `db.bans_db.get_active_ban(target_id)`.
 2. If no active ban is found, replies `<user> has no active federation ban.` and stops. This guard prevents a misleading "removed from N/M groups" reply for a no-op.
 3. Reads `ban_id` from the record so the log and scheduler cancel call can identify it.
-4. Runs three independent operations in parallel via `asyncio.gather(..., return_exceptions=True)`:
+4. Fetches active groups with `db.groups_db.active_groups()` **sequentially** before any mutation: a fetch outage aborts with the ban record intact, so a retry re-drives the full fan-out cleanly instead of unbanning "blind" against a stale list.
+5. Runs two independent mutations in parallel via `asyncio.gather(..., return_exceptions=True)`:
    - `db.bans_db.deactivate_all_active_bans(target_id)` - clears every active ban for the target in one write.
-   - `db.groups_db.active_groups()` - fetches the connected groups.
    - `db.scheduler.cancel_schedule(f"unban.{ban_id}")` - defensive cancel of any pending APScheduler unban job for this ban.
-5. Adds primary groups (`cfg.main_group`, `cfg.exec_group`) to the list when they are not already present.
-6. Fans `ctx.bot.unban_chat_member(grp.chat_id, target_id, only_if_banned=True)` across the resulting list with `fan_out(...)`.
-7. Builds an `unban_log` via `parse_logmsg.unban_log`.
-8. Runs two parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
-    - `bot.send_message(cfg.logs, log_text, parse_mode="MarkdownV2", message_thread_id=lt)`.
-    - `msg.reply_text("<user> has been unbanned - removed from <ok>/<total> groups.")`, plus a `WARNING: still banned in: <titles>` suffix naming up to 5 missed groups when the fan-out had transient failures (a re-run of `/tcunban` would report "no active ban" since the record is gone; only a targeted re-drive or `/tcsync` run reaches those chats).
+6. Adds primary groups (`cfg.main_group`, `cfg.exec_group`) to the list when they are not already present.
+7. Fans `ctx.bot.unban_chat_member(grp.chat_id, target_id, only_if_banned=True)` across the resulting list with `fan_out(...)`.
+8. Builds an `unban_log` via `parse_logmsg.unban_log`.
+9. Runs two parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
+   - `bot.send_message(cfg.logs, log_text, parse_mode="MarkdownV2", message_thread_id=lt)`.
+   - `msg.reply_text("<user> has been unbanned - removed from <ok>/<total> groups.")`, plus a `WARNING: still banned in: <titles>` suffix naming up to 5 missed groups when the fan-out had transient failures (a re-run of `/tcunban` would report "no active ban" since the record is gone; only a targeted re-drive or `/tcsync` run reaches those chats).
 
 The reply does not include an appeal-resolution message; the appeal-approve path handles that separately.
 

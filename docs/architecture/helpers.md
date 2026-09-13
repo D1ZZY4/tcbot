@@ -13,10 +13,12 @@ flowchart TD
     Helper --> Extraction[extraction.py<br/>extract_target]
     Helper --> Identity[identity.py<br/>role classification]
     Helper --> Keyboards[keyboards.py<br/>InlineKeyboard builders]
-    Helper --> Replies[replies.py<br/>shared reply constants]
+    Helper --> Locale[locale.py<br/>render-locale resolution]
+    Helper --> Replies[replies.py<br/>localized reply strings]
     Helper --> Workflows[workflows/<br/>conversation flows]
     Decorators --> DB[tcbot/database/]
     Identity --> DB
+    Locale --> DB
     Workflows --> DB
 ```
 
@@ -42,7 +44,7 @@ Decorators provide authorization, handler-level rate limiting, and debug tracing
 - **Redis absent or error**: transparent fallback to `_RateLimiter` (in-process `deque`-based sliding window). Rate limiting is never silently disabled; the fallback is logged at DEBUG level.
 - **Founder exemption**: `_is_exempt(uid)` compares against the cached owner ID before any bucket check, in both the global handler and every per-handler wrapper. A failed lookup means not exempt (fail-closed, throttling stays on); cancellation propagates. Per-handler quotas are graduated by cost: reads 8-10 calls / 30 s, moderation writes 3-5 calls / 60 s, bulk actions 1-3 calls / 300 s, callbacks 15-20 presses / 30 s.
 - **Staff global tier**: `_throttle_tier(uid)` resolves the flood ceiling for commands in one cached role read: Founder skips it, Tester and above share `_cmd_staff_limiter` (16 calls / 30 s), everyone else uses `_cmd_limiter` (8 calls / 30 s). A failed lookup lands on the strict bucket; cancellation propagates. Per-handler quotas still pace each destructive command, and the callback bucket (20 presses / 10 s) is unchanged for all tiers.
-- **One retry voice**: every rejection (global command, global callback, per-handler message, per-handler callback) replies with `replies.rate_limit_text(wait)`, so throttled users see identical wording regardless of which bucket stopped them. The text clamps to a minimum of 1 second so sub-second waits never render as "try again in 0 seconds".
+- **One retry voice**: every rejection (global command, global callback, per-handler message, per-handler callback) replies with `replies.rate_limit_text(wait, locale, plain=True)`, so throttled users see identical wording regardless of which bucket stopped them. The text clamps to a minimum of 1 second so sub-second waits never render as "try again in 0 seconds".
 
 Typical command decorator order:
 
@@ -93,6 +95,20 @@ Target resolution for moderation commands.
 
 This priority order makes reply-based targeting more natural while adding support for partial name searches.
 
+## `locale.py`
+
+Render-locale resolution shared by handlers, callbacks, and flows. Every entry point resolves one locale per outgoing message so a shared audience reads one language.
+
+| Export | Purpose |
+|---|---|
+| `effective_locale(chat_type, user_id, chat_id)` | Resolves the render locale for a message: private chats read the sender's `user_settings` row, group-like chats read the group's `federated_groups.locale`. The two reads run in parallel; a failed read degrades to `None` (falls through to the default) and never raises. |
+| `locale_for_update(update)` | Convenience wrapper using `update.effective_chat` / `update.effective_user`; missing chat or user falls back to `DEFAULT_LOCALE`. |
+| `locale_for_user(user_id)` | Personal locale for a DM to one user (ban notices, appeal updates), independent of any chat. |
+| `locale_for_chat(chat)` | Group locale when no `Update` is available (join/leave events carry the chat directly). Reads only the group row. |
+| `chat_scope(chat_type)` | Maps a chat type to `"user"` (private) or `"group"` (everything else); mirrors the `language.py` scope decision. |
+
+All resolution funnels through `tcbot.utils.i18n.resolve_locale`, which applies explicit precedence and never raises; see [`utilities.md#i18npy`](utilities.md).
+
 ## `keyboards.py`
 
 All inline keyboard factories live here. Command modules and workflows should import keyboard factories instead of constructing repeated keyboard layouts inline.
@@ -101,13 +117,15 @@ Main groups:
 
 | Factory group | Examples |
 |---|---|
-| Ban/checking | `ban_log_new`, `ban_log_update`, `appeal_button_kb`, `checkme_ban_kb`, `checkme_detail_back_kb` |
+| Ban/checking | `ban_log_new`, `ban_log_update`, `ban_update_confirm_kb(log_url, proof_url, locale=None)` (re-ban confirmation: View Log / View Proof URL buttons plus Cancel / Continue), `appeal_button_kb`, `checkme_ban_kb`, `checkme_detail_back_kb` |
 | Proof | `action_proof_kb(target_id, proof_link)` - single "Proof {target_id}" URL button; returns `None` when `proof_link` is falsy. Used by mute/kick/warn executors after uploading proof. |
 | Admin roles | `promote_role_kb`, `demote_confirm_kb`, `promo_decision_kb` |
 | Menus/help | `main_menu_kb`, `group_start_kb`, `help_topics_menu_kb`, `help_topics_kb`, `back_to_start_kb`, `back_to_help_kb`, `back_to_help_cmd_kb`, `module_help_kb`, `back_to_module_kb`, `additional_menu_kb` |
 | Privacy | `privacy_kb`, `privacy_policy_sections_kb`, `back_to_privacy_policy_kb` |
 | Groups | `groups_menu_kb`, `tcgroups_kb` |
 | Stats | `main_kb` (in `stats_flow`), `back_kb` (in `stats_flow`) |
+| Paginated drill-downs | `paged_drill_kb(items, *, page, total_pages, nav_prefix, back_callback, extra_rows=None, per_row=3, locale=None)` - numbered drill-in grid plus nav row, back button, and optional extra rows. Single owner for the numbered-grid look (the one place numbered buttons gain their PRIMARY style), replacing local copies in the stats and check drill-downs. |
+| Language menu | `language_list_kb(scope, items, *, back_label, back_callback=None, selected=None)` - one row per locale button from `(display_name, locale_code)` pairs, each sending `lang:set:<scope>:<locale>`. The currently selected locale is prefixed with `✓` (a plain check character, not an emoji); the optional Back row sends `back_callback` verbatim. |
 
 See [keyboard styles](../reference/keyboard-styles.md) for layout, color, and callback-data conventions (semantic `style`: `SUCCESS` for Approve, `DANGER` for Reject/destructive Confirm, `PRIMARY` for continue/select steps; everything else neutral).
 
@@ -122,7 +140,7 @@ The `Identity` dataclass now includes:
 - `username`: Optional username display metadata (mention rendering always uses the numeric ID `tg://user` link; usernames are ignored by `user_ref`)
 - `is_bot`: Boolean flag
 
-The companion helpers `identity.refuse_message(action, ident)` and `identity.staff_notice(action, ident, community_name)` produce the witty refusal lines and staff heads-up notices. `refuse_message` gates every moderation entry handler; `staff_notice` is used by the warn/unwarn/resetwarns/unmute paths, where the action proceeds on staff targets with a heads-up instead of refusing or auto-demoting.
+The companion helpers `identity.refuse_message(action, ident, locale=None)`, `identity.staff_notice(action, ident, community_name, locale=None)`, and `identity.profile_note(ident, locale=None)` produce the witty refusal lines, staff heads-up notices, and recognition notes respectively. `refuse_message` gates every moderation entry handler; `staff_notice` is used by the warn/unwarn/resetwarns/unmute paths, where the action proceeds on staff targets with a heads-up instead of refusing or auto-demoting; `profile_note` returns a short recognition note for special identities (`this_bot`, `self`, `telegram`, `anon_admin`) on read-only views such as `/check`, or `None` for identities that need no note.
 
 Every moderation command (ban, kick, mute, warn, unban, unmute, promote, demote) must call `identity.classify` once and route through `refuse_message` instead of inlining `target_id == ctx.bot.id` / `user.id == owner_id` / role-string branches. Refusal copy lives in `identity.py` so the bot's voice stays consistent across the whole project.
 
@@ -138,7 +156,9 @@ Ban, kick, and mute entry points pair this with `Demote.execute(..., trigger="ba
 
 ## `replies.py`
 
-Shared bot-reply string constants and typed help-entry interface used by multiple command modules. Import with `from tcbot.modules.helper import replies`.
+Shared bot-reply strings and the typed help-entry interface used by multiple command modules. Import with `from tcbot.modules.helper import replies`.
+
+Every reply is now a function of the render `locale`, not a module-level string constant. Functions whose output may be parsed take a required `*, plain` keyword: `plain=True` returns text for contexts Telegram never parses (callback alerts), `plain=False` returns MarkdownV2-escaped text. Section labels and scope bodies are pre-escaped internally (`plain=True` to the catalog) so buttons render them raw while titles escape them via `bold()`.
 
 ### `HelpEntry` TypedDict
 
@@ -155,46 +175,29 @@ Each help-bearing module declares exactly one `__help__: replies.HelpEntry = {..
 
 | Helper | Returns | Purpose |
 |---|---|---|
-| `who_section(perm)` | `tuple[str, str]` | Builds a `(SEC_WHO, perm)` section entry. |
-| `where_section(ctx)` | `tuple[str, str]` | Builds a `(SEC_WHERE, ctx)` section entry. |
-| `target_section()` | `tuple[str, str]` | Builds a `(SEC_TARGET, TARGET_SYNTAX)` section entry. |
-
-### Reply-text helpers
-
-| Helper | Purpose |
-|---|---|
-| `rate_limit_text(wait_s)` | Single owner for the throttled retry notice (`Slow down - try again in N seconds.`). Used by the global limiter and every per-handler `ratelimiter` rejection. |
+| `who_section(perm, locale=None)` | `tuple[str, str]` | Builds a `(sec_who(locale), perm)` section entry. |
+| `where_section(ctx, locale=None)` | `tuple[str, str]` | Builds a `(sec_where(locale), ctx)` section entry. |
+| `target_section(locale=None)` | `tuple[str, str]` | Builds a `(sec_target(locale), target_syntax(locale))` section entry. |
 
 All command modules that expose user-facing commands use these helpers rather than raw inline tuple literals.
 
-### String constants
+### Reply-text functions
 
-| Constant | Purpose |
+| Function | Purpose |
 |---|---|
-| `TARGET_SYNTAX` | Usage hint for commands that accept a target argument. |
-| `ERR_CANNOT_RESOLVE` | Error when the target cannot be resolved (covers both "no target provided" and "target provided but unresolvable"). Used by all command modules at `extract_target` return sites. |
-| `ERR_ROLE_VERIFY` | Error when executor or target role cannot be verified. |
-| `ERR_GROUP_ONLY` | Error when a command is used outside a group. |
-| `ERR_NO_CONNECTED_GROUPS` | Error when no connected groups exist for the operation. |
-| `ERR_GROUP_NOT_FOUND` | Error when the target group is not found or already removed. |
-| `CONTEXT_BOT_OR_GROUP` | Context guard: command must be used in a bot DM or group. |
-| `CONTEXT_EXEC_OR_GROUP` | Context guard: command must be used in an executor-owned group or DM. |
-| `CONTEXT_ANYONE` | Context hint shown to regular users. |
-| `PERM_FOUNDER_ONLY` | Permission hint: Founder only. |
-| `PERM_STAFF_ONLY` | Permission hint: TC Staff (Admin and above). |
-| `PERM_ADMIN_ABOVE` | Permission hint: Admin and above (Founder / Admin). |
-| `PERM_DEV_ABOVE` | Permission hint: Developer or above required. |
-| `PERM_TESTER_ABOVE` | Permission hint: Tester or above required. |
-| `ERR_PERM_EXPIRED` | Error when the caller no longer has permission (e.g. after a role change mid-flow). |
-| `ERR_UNKNOWN_ROLE` | Error for an unrecognised role string. |
-| `WHERE_CONNECTED_GROUP` | Context hint: inside any connected group. |
-| `NO_REASON` | Default fallback text when no moderation reason is supplied. |
-| `SEC_COMMANDS` | Help-text section header: `Commands & Aliases`. |
-| `SEC_WHO` | Help-text section header: `Who can use`. |
-| `SEC_WHERE` | Help-text section header: `Where to use`. |
-| `SEC_WHAT` | Help-text section header: `What it does`. |
-| `SEC_EXAMPLES` | Help-text section header: `Examples`. |
-| `SEC_TARGET` | Help-text section header: `Target syntax`. |
+| `rate_limit_text(wait_s, locale=None, *, plain)` | Single owner for the throttled retry notice. Used by the global limiter and every per-handler `ratelimiter` rejection; the wait is clamped to a minimum of 1 second. |
+| `target_syntax(locale=None)` | Usage hint for commands that accept a target argument (V2-escaped). |
+| `no_reason(locale=None, *, plain)` | Default fallback text when no moderation reason is supplied. |
+| `err_cannot_resolve(locale=None, *, plain)` | Error when the target cannot be resolved (covers "no target provided" and "unresolvable"). Used by all command modules at `extract_target` return sites. |
+| `err_role_verify` / `err_group_only` / `err_no_connected_groups` / `err_group_not_found` / `err_groups_load_failed` / `err_db_retry` / `err_perm_expired` / `err_unknown_role` (`locale=None, *, plain`) | Role-verification, group-only, empty-federation, unknown-group, group-load-failure, DB-retry, expired-permission, and unknown-role notices respectively. |
+| `perm_founder_only` / `perm_staff_only` / `perm_admin_above` / `perm_dev_above` / `perm_tester_above` (`locale=None, *, plain`) | Permission hints: Founder only, TC Staff, Admin and above, Developer or above, Tester or above. |
+| `context_bot_or_group` / `context_exec_or_group` / `context_anyone` / `where_connected_group` (`locale=None`) | Context-guard and scope bodies for help "Where" sections (V2-escaped). |
+| `sec_commands(locale=None)` | Help-text section header: `Commands & Aliases`. |
+| `sec_who(locale=None)` | Help-text section header: `Who can use`. |
+| `sec_where(locale=None)` | Help-text section header: `Where to use`. |
+| `sec_what(locale=None)` | Help-text section header: `What it does`. |
+| `sec_examples(locale=None)` | Help-text section header: `Examples`. |
+| `sec_target(locale=None)` | Help-text section header: `Target syntax`. |
 
 Command modules import from `replies.py` instead of inlining these strings.
 
@@ -231,6 +234,7 @@ Use the `LogBuilder` class in this module to compose new audit-log messages; avo
 |---|---|
 | `safe_edit(msg, text, **kwargs)` | Edit a `Message` object with `parse_mode="MarkdownV2"`; swallows harmless `BadRequest` cases such as `message is not modified`, `message to edit not found`, and `chat not found`. Unexpected failures are logged as warnings. |
 | `safe_edit_cb(q, text, **kwargs)` | Edit a `CallbackQuery` message via `q.edit_message_text`; same error-swallow policy as `safe_edit`. Use when a user can re-tap a button that lands them on the same content to avoid `BadRequest: message is not modified` noise. |
+| `clear_markup_cb(q)` | Remove the inline keyboard from a callback-query message via `q.edit_message_reply_markup(reply_markup=None)`. Editing message text without `reply_markup` keeps the old buttons (the parameter is omitted from the API call), so ending a flow with only an edit would leave dead buttons behind; call this after the edit. Treats a `message is not modified` error as already-removed. |
 | `safe_reply(msg, text, *, log_label="reply", parse_mode="MarkdownV2", **kwargs)` | Fire-and-forget `Message` reply with debug-only failure logging; `log_label` names the call site. The single owner for all fire-and-forget replies across commands and workflows. Defaults to `parse_mode="MarkdownV2"`; pass `parse_mode=None` for plain-text replies (error strings, constants) so Telegram performs no entity parsing. Sites whose failure drives control flow (prompt cleanup, wedged-conversation guards) stay raw. |
 
 ## Helper usage rules

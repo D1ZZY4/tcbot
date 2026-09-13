@@ -67,6 +67,7 @@ tcbot/
 │   ├── cache.py            L1 TTL caches with optional Redis L2
 │   ├── redis_client.py     Optional async Redis client
 │   ├── scheduler.py        APScheduler background jobs with MongoDB store
+│   ├── settings_db.py      Per-user settings (locale preferences)
 │   ├── documents.py        TypedDict document shapes
 │   └── types.py            NewType ID primitives
 ├── modules/
@@ -74,11 +75,12 @@ tcbot/
 │   ├── *.py                Command and callback modules
 │   └── helper/
 │       ├── decorators.py   Auth, per-handler rate limits, tracing, resolve_and_check
-  │       ├── extraction.py   Target resolution
-  │       ├── keyboards.py    Inline keyboard factories
+│       ├── extraction.py   Target resolution
+│       ├── keyboards.py    Inline keyboard factories
 │       ├── ban_info.py     Ban detail renderer
 │       ├── identity.py     Identity classification, refusal messages, staff notices
-│       ├── replies.py      Shared reply string constants (errors, permissions, syntax)
+│       ├── locale.py       Render-locale resolution for handlers and flows
+│       ├── replies.py      Shared localized reply strings and HelpEntry shape
 │       ├── parse_*.py      Link, log, and safe-edit helpers
 │       └── workflows/
 │           └── *_flow.py   Conversation factories, plus Promote / Demote / Check classes
@@ -87,6 +89,7 @@ tcbot/
     ├── dispatch.py         Bounded concurrent fan-out (integrates Telegram circuit)
     ├── error_reporter.py   Telegram error classification and reporting
     ├── formatter.py        MarkdownV2 escaping and formatting (single source of truth)
+    ├── i18n.py             TOML-backed localization engine (catalog, lookup, Safe)
     ├── logger.py           Console formatter and error log handler
     ├── pagination.py       Shared paginate(), nav_row(), date_or_unknown() helpers
     ├── prefixes.py         Prefix parsing and command filters
@@ -143,11 +146,15 @@ sequenceDiagram
     Mods-->>Main: handlers
     Main->>PTB: add handlers and error handler
     Main->>PTB: initialize() + post_init (explicit; not called by PTB in webhook mode)
-    Main->>DB: connect() and ensure_indexes()
-    Main->>DB: ensure_initial_owner()
-    Main->>Main: connect Redis (optional)
+    Main->>DB: connect()
+    par parallel setup
+        Main->>DB: ensure_indexes()
+        Main->>DB: ensure_initial_owner()
+        Main->>Main: connect Redis (optional)
+    end
     Main->>Main: start APScheduler
-    Main->>Main: attach error_reporter + asyncio handler
+    Main->>Main: warm hot caches (background task)
+    Main->>Main: attach error_reporter + asyncio exception handler
     Main->>PTB: set_webhook() + get_webhook_info() verify
     Main->>Alive: register_webhook() wire Flask /webhook -> PTB queue
     PTB->>PTB: await updates from Flask webhook receiver

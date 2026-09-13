@@ -42,7 +42,7 @@ depend on the Atlas plan currently in use.
    ```
     db.bans.countDocuments()
     db.federated_groups.countDocuments()
-   db.tc_roles.countDocuments()
+    db.tc_roles.countDocuments()
     db.warns.countDocuments()
     db.warn_counts.countDocuments()
    ```

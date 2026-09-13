@@ -11,6 +11,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Tidier start-menu rows** (`tcbot/modules/helper/keyboards.py`): the Additional and Privacy buttons share one row, so the menu reads as two pairs plus the Language footer instead of one pair plus three stretched singletons. Labels, callbacks, and colors unchanged.
 
+### Documentation
+
+- **Documentation refreshed across all categories** (`docs/architecture/database.md`, `helpers.md`, `modules.md`, `repository-map.md`, `utilities.md`, `docs/features/moderation/groups.md`, `banning.md`, `kicking.md`, `muting.md`, `connecting.md`, `disconnecting.md`, `unbanning.md`, `check.md`, `docs/features/roles/roles.md`, `demote.md`, `docs/features/appeals.md`, `statistics.md`, `workflow-overview.md`, `docs/getting-started/setup.md`, `docs/operations/ci-cd.md`, `performance.md`, `vercel.md`, `backup-and-restore.md`, `docs/reference/keyboard-styles.md`): architecture docs now cover the localization engine, per-message locale resolution, the settings collection, and the corrected startup sequence. Feature guides reflect per-handler localization, the shared L1+L2 cache replacing per-user snapshots, and updated class names. The setup guide lists all community-link environment variables and the full startup order. Operations and reference docs catch up with transport tuning, cache guarantees, and keyboard layouts.
+
 </details>
 
 ## [6.8.0] - 2026-09-13

@@ -90,9 +90,9 @@ Common moderation thresholds:
 | `tc_roles` | Stores custom Developer/Tester roles. | `user_id`, `role`, `assigned_by`, `assigned_at` |
 | `promotion_requests` | Stores pending/resolved Admin promotion requests. | `request_id`, `target_id`, `username`, `first_name`, `promoted_by`, `status`, `requested_date`, `resolved_date`, `resolved_by` |
 
-Indexes are ensured for unique user IDs in `tc_owners`, `tc_admins`, and `tc_roles`, plus unique `promotion_requests.request_id` and `promotion_requests.target_id + status`.
+Indexes are ensured for unique user IDs in `tc_owners`, `tc_admins`, and `tc_roles`. `promotion_requests` carries a unique `request_id`, a compound `(target_id, status)`, a compound `(status, requested_date)` that serves the pending-list sort, and a partial unique index on `target_id` restricted to `status: "pending"` so each user has at most one open request (the dedup guard both `cmd_promote_request` and the Admin request path rely on).
 
-Role and owner/admin writes invalidate relevant cache entries so permission checks see updated state.
+Role and owner/admin writes invalidate relevant cache entries so permission checks see updated state. Effective-role and owner reads are cached: the per-user effective role serves from an L1 cache with a 60 s TTL and the owner ID from one with a 300 s TTL, so repeated authorization checks (auth decorators, `is_staff`, rate-limit tiering, promotion-request guards) cost zero MongoDB round trips on a hit. `set_owner` clears the entire effective-role cache because the previous owner's key is unknown.
 
 ## `/tcpromote` behavior
 
@@ -190,13 +190,14 @@ This command lets a user submit a request for themselves to become Admin.
 
 Flow:
 
-1. If the user already has a pending request, the bot returns that request ID.
-2. Otherwise, it enqueues a new `promotion_requests` document with `target_id` equal to the user's ID.
-3. The Founder is notified by DM with approve/reject buttons when possible.
-4. The logs channel is used as a fallback notification destination.
-5. The user receives the new request ID.
-
-This command does not check that the requester already has a lower staff role.
+1. Anonymous-admin senders (GroupAnonymousBot) are rejected before any lookup.
+2. The caller's effective role and any open pending request are fetched in parallel.
+3. A caller who already holds a federation role (Founder, Admin, Developer, or Tester) is told no request is needed.
+4. A caller who already has a pending request is told the request is pending.
+5. Otherwise, the bot enqueues a new `promotion_requests` document with `target_id` equal to the user's ID and `Promote.request_admin` notifies the Founder.
+6. The Founder is notified by DM with approve/reject buttons when possible.
+7. The logs channel is used as a fallback notification destination.
+8. The user receives a confirmation that the request was submitted.
 
 ## Promotion request callbacks
 
@@ -293,12 +294,15 @@ Only the current Founder can transfer ownership.
 Flow:
 
 1. The target is resolved by reply, user ID, or username.
-2. The command rejects transferring ownership to the current owner.
-3. `users_roles.set_owner(target_id)` replaces the single owner record in `tc_owners` first, so a mid-flight failure never leaves the federation ownerless.
-4. The previous Founder is kept as Admin via `users_roles.add_admin(...)`; a failure here stays visible as a WARNING line telling the operator to grant Admin manually.
-5. The owner cache and effective-role cache are updated/cleared.
-6. An `ownership_transferred` log is sent to `cfg.logs`.
-7. The command replies with the new owner mention.
+2. Identity refusal rejects self-transfer, the bot, Telegram, other bots, and anonymous-admin targets.
+3. `resolve_and_check(..., min_role="developer")` refuses transferring to a staff target of equal or higher rank, the current Founder included.
+4. Any non-Founder role the target already holds is cleared first via `Demote.remove_role` (Admin from `tc_admins`, Developer/Tester from `tc_roles`), so the post-transfer state holds exactly one Founder with no residual Admin/Developer/Tester record.
+5. `users_roles.set_owner(target_id)` replaces the single owner record in `tc_owners` first, so a mid-flight failure never leaves the federation ownerless.
+6. The in-process error-reporter owner is refreshed to the new owner.
+7. The previous Founder is kept as Admin via `users_roles.add_admin(...)`; a failure here stays visible as a WARNING line telling the operator to grant Admin manually.
+8. The owner cache is updated and the effective-role cache is cleared entirely.
+9. An `ownership_transferred` log is sent to `cfg.logs` in parallel with the reply.
+10. The command replies with the new owner mention.
 
 After transfer, the previous Founder becomes Admin and the new target becomes Founder.
 

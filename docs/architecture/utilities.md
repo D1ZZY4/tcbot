@@ -17,13 +17,16 @@ flowchart TD
     Utils --> TimeDate[time_and_date.py<br/>UTC + display + measure]
     Utils --> Pagination[pagination.py<br/>paginate, nav_row, date_or_unknown]
     Utils --> Fmt[formatter.py<br/>MarkdownV2 escape, bold, code, mention]
+    Utils --> I18n[i18n.py<br/>TOML localization engine]
     Dispatch --> CB
     Modules[tcbot/modules/] --> Dispatch
     Modules --> Prefixes
     Modules --> TimeDate
     Modules --> Pagination
+    Modules --> I18n
     Logging --> ErrorReporter
     ErrorReporter --> Fmt
+    I18n --> Fmt
     Alive[tcbot/alive.py<br/>health endpoint] --> CB
 ```
 
@@ -173,6 +176,60 @@ Single source of truth for all Telegram Markdown markup. Both the utils layer (e
 | `user_ref(user_id, name, username=None)` | Action-summary reference. Always renders a clickable `FullName` resolving via `tg://user?id=ID`; usernames are never used. Falls back to the numeric ID as link text when the name is the bare numeric fallback. |
 
 Always import from `tcbot.utils.formatter`.
+
+## `i18n.py`
+
+TOML-backed localization engine. A catalog of per-locale TOML files under the project's `i18n/` directory is loaded once on first use and held process-wide. Both the handler layer and the helper layer import from here.
+
+The catalog layout:
+
+```
+i18n/
+├── en-US/          Default locale (required)
+│   ├── banning.toml
+│   ├── common.toml
+│   └── ...
+└── id/             Optional locale (Indonesian example)
+    ├── banning.toml
+    ├── common.toml
+    └── ...
+```
+
+Each TOML file name becomes a dotted key prefix: a key `done` in `banning.toml` registers as `banning.done`. Dotted tables in TOML (e.g. `[language.help]` + `overview = "..."`) flatten to dotted keys (`language.help.overview`).
+
+### Core types and constants
+
+| Export | Purpose |
+|---|---|
+| `Safe(str)` | Pre-formatted fragment exempt from placeholder escaping. Wrap `mention()`/`code()`/`bold()` output or any already-safe markup so `t()` interpolates it verbatim instead of escaping it. |
+| `I18nError` | Programming error in translation usage: bad template or bad value. Inherits `KeyError`. |
+| `DEFAULT_LOCALE` | `"en-US"`: fallback when the user or group locale is absent, unknown, or invalid. |
+
+### Catalog functions
+
+| Function | Purpose |
+|---|---|
+| `load_catalog(root=None)` | Load every locale under `root` (default `i18n/`). File name is the key prefix. Malformed TOML raises `I18nError` immediately so a broken catalog fails fast at startup. |
+| `reload_catalog(root=None)` | Reload the process-wide catalog, primarily for tests. |
+| `available_locales(catalog=None)` | Return sorted locale codes present in the catalog. |
+| `is_known_locale(locale, catalog=None)` | Return `True` when `locale` has a catalog (case-insensitive). |
+
+### Render function
+
+| Function | Purpose |
+|---|---|
+| `t(key, locale=None, catalog=None, *vargs, plain=False, **kwargs)` | Render `key` for `locale` with safe placeholder interpolation. Templates are stored raw (no manual backslashes): literal segments are auto-escaped in MarkdownV2 mode (`plain=False`) and left verbatim with `plain=True` (callback alerts). Templates support strict mini-markup: `` `code` `` spans and `*bold*` spans (balanced, unnested, no braces). Unknown locales fall back to `DEFAULT_LOCALE`; missing keys are logged and returned as `[key]` (never empty, never an exception into the handler). |
+
+### Resolution helpers
+
+| Function | Purpose |
+|---|---|
+| `resolve_locale(chat_type="private", user_locale=None, group_locale=None, explicit=None, catalog=None)` | Resolve the effective locale for one message. `explicit` always wins. Private chats use `user_locale`; group-like chats use `group_locale`. Absent/unknown values fall through to `DEFAULT_LOCALE`. |
+| `display_name(locale, catalog=None)` | Human-readable locale name for buttons and confirmations (reads the `button.language_name` key from the locale's catalog). |
+| `placeholders(template)` | Return the `{name}` placeholders used by a template string. |
+| `find_unescaped(text)` | Return descriptions of unescaped MarkdownV2 specials in rendered text; used to validate catalog templates after dummy interpolation. |
+
+All bot modules use `t()` rather than hard-coding user-facing strings.
 
 ## `transport.py`
 

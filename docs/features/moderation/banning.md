@@ -19,8 +19,9 @@ flowchart TD
     RoleCheck -->|no| ProofStep[WAITING_PROOF]
     AutoDemote --> ProofStep
     ProofStep --> UploadProof[Upload proof to PROOFS]
-    UploadProof --> StoreLog[Store ban + post log in parallel]
-    StoreLog --> FanOut[Fan-out to all groups]
+    UploadProof --> StoreBan[Write ban record]
+    StoreBan --> PostLog[Post ban log]
+    PostLog --> FanOut[Fan-out to all groups]
     FanOut --> Summary[Edit prompt summary + DM appeal link]
 ```
 
@@ -101,9 +102,9 @@ That means the proof keyboard provides `Done` and `Cancel`; there is no `Skip` b
 - Mixed collection: every item sent before the flush lands in one proof session (album parts and sequential sends alike). Photos and videos travel together with `send_media_group` (caption on the first item); GIFs and files are sent individually after the gallery.
 - The session flushes when the moderator taps `Done`, after `cfg.album_debounce` seconds of silence, or at the 60 s collection cap.
 
-If the moderator cancels, the bot edits the prompt to `Cancelled. No ban was issued.` and ends the conversation.
+If the moderator cancels, the bot edits the prompt to the localized `banning.state.cancelled` notice (English default: `Cancelled. No ban was issued.`) and ends the conversation.
 
-If the proof wait times out or a recognized command is sent as a fallback, the bot replies `Timed out waiting for proof. No ban was issued.` and ends the conversation.
+If the proof wait times out or a recognized command is sent as a fallback, the bot replies the localized `banning.state.timeout` notice (English default: `Timed out waiting for proof. No ban was issued.`) and ends the conversation.
 
 ## New ban behavior
 
@@ -113,10 +114,15 @@ When the target has no active ban:
 2. Proof is uploaded to `cfg.proofs` with a `proof_caption_new` caption.
 3. A new ban log is built with `parse_logmsg.ban_log`.
 4. The ban record is inserted with `bans_db.create_ban(...)`.
-5. The ban log is sent to `cfg.logs` with a keyboard containing:
+5. Only after the insert succeeds is the ban log sent to `cfg.logs` with a keyboard containing:
    - `Proof <target_id>` URL button.
    - `Submit Appeal` URL button.
-6. The sent log message ID is saved with `bans_db.set_log_message_id(...)` when available.
+
+   Steps 4 and 5 run **sequentially** (`create_ban`, then the log post): the
+   database row is authoritative and the log post is observable, so racing
+   them could leave a phantom ban card in the log channel (dead appeal link,
+   `/check` miss) when the write failed.
+6. The sent log message ID is saved with `bans_db.set_log_message_id(...)` in parallel with the pre-fetched `active_groups()` result.
 7. The target is banned in every active connected group returned by `groups_db.active_groups()`, plus the primary groups (`MAIN_GROUP`, `EXTEND_GROUP`) when they are not already in the connected-groups list.
 8. The target user is cached with `users_cache.upsert_user(...)`.
 9. The original proof prompt is edited with an applied-groups summary.
@@ -177,12 +183,14 @@ The executor must have rank >= Developer. The target check behaves as follows:
 - If the target has a role with rank greater than or equal to the executor's rank, the action is blocked.
 - If the target has a lower role, the bot automatically removes that role before continuing with the ban.
 
-Auto-demotion is handled by `Demote.execute(..., trigger="ban")` from `workflows/demote_flow.py`:
+Auto-demotion is handled by `Demote.auto_demote_or_abort(..., trigger="ban")` from `workflows/demote_flow.py` (also used by the kick and mute entries with their own trigger nouns). The helper runs `Demote.execute`, and if the demote raises it replies with a localized notice telling the executor to demote manually and signals abort by returning `False`; the ban never proceeds on a role holder:
 
 - Admin targets are removed from `tc_admins`.
 - Developer/Tester targets are removed from `tc_roles`.
 - A role auto-demotion log is sent to the federation logs channel.
 - The target is notified by DM when possible.
+
+Immediately before the enforcement fan-out, `_execute_ban` runs the best-effort `Demote.redemote_before_fanout(..., trigger="ban")` re-check to close the proof-collection TOCTOU window; enforcement proceeds regardless (the ban record is already written).
 
 ## Ban database schema impact
 

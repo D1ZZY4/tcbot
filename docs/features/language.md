@@ -5,9 +5,9 @@ translation catalog, the `utils/i18n.py` engine, locale persistence, the
 `/language` command and selection flow, the start-menu entry point, and
 how every user-facing surface renders in the resolved locale.
 
-For shared helpers, see [`../../architecture/helpers.md`](../../architecture/helpers.md).
-For runtime utilities, see [`../../architecture/utilities.md`](../../architecture/utilities.md).
-For the database layer, see [`../../architecture/database.md`](../../architecture/database.md).
+For shared helpers, see [`../architecture/helpers.md`](../architecture/helpers.md).
+For runtime utilities, see [`../architecture/utilities.md`](../architecture/utilities.md).
+For the database layer, see [`../architecture/database.md`](../architecture/database.md).
 
 ## Purpose
 
