@@ -64,13 +64,17 @@ def health() -> tuple[str, int, dict[str, str]]:
     if db_state is not CircuitState.CLOSED:
         mongodb_ok = False
 
-    rc = redis_client.client()
-    if rc is not None:
-        redis_status = "ok"
-    elif cfg.redis_url:
-        redis_status = "error"
-    else:
+    if not cfg.redis_url:
         redis_status = "disabled"
+    else:
+        redis_liveness = redis_client.liveness()
+        redis_status = (
+            "ok"
+            if redis_liveness is True
+            else "error"
+            if redis_liveness is False
+            else "unknown"
+        )
 
     tg_state = _cb.telegram.state
 

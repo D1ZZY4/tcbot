@@ -114,3 +114,41 @@ def test_health_503_when_mongodb_half_open(
     assert payload["status"] == "degraded"
     assert payload["mongodb"] == "error"
     assert code == 503
+
+
+def _patch_redis(monkeypatch: pytest.MonkeyPatch, *, liveness: object) -> None:
+    monkeypatch.setattr(alive_mod, "cfg", SimpleNamespace(redis_url="redis://local"))
+    monkeypatch.setattr(alive_mod.redis_client, "liveness", lambda: liveness)
+
+
+def test_redis_status_ok_when_liveness_true(
+    _health_no_io: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_redis(monkeypatch, liveness=True)
+    payload, code = _call_health()
+    assert payload["redis"] == "ok"
+    assert code == 200
+
+
+def test_redis_status_error_when_liveness_false(
+    _health_no_io: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_redis(monkeypatch, liveness=False)
+    payload, code = _call_health()
+    assert payload["redis"] == "error"
+    assert code == 200
+
+
+def test_redis_status_unknown_when_liveness_none(
+    _health_no_io: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_redis(monkeypatch, liveness=None)
+    payload, code = _call_health()
+    assert payload["redis"] == "unknown"
+    assert code == 200
+
+
+def test_redis_status_disabled_when_no_redis(_health_no_io: None) -> None:
+    payload, code = _call_health()
+    assert payload["redis"] == "disabled"
+    assert code == 200

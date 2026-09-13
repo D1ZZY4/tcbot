@@ -7,6 +7,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 <details open>
 <summary>Unreleased changes (click to collapse)</summary>
 
+### Added
+
+- **Redis liveness tracked from cache operations** (`tcbot/database/redis_client.py`, `tcbot/database/cache.py`): every Redis read and write reports its outcome to a last-known-health flag the health endpoint reads, so an operator sees the real picture even though the Flask health check cannot await a live probe.
+
 ### Changed
 
 - **Tidier start-menu rows** (`tcbot/modules/helper/keyboards.py`): the Additional and Privacy buttons share one row, so the menu reads as two pairs plus the Language footer instead of one pair plus three stretched singletons. Labels, callbacks, and colors unchanged.
@@ -42,6 +46,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 - **Bounded server selection for the scheduler's MongoDB client** (`tcbot/database/mongos.py`): the scheduler job store builds its own synchronous pymongo client, which fell back to pymongo's 30-second server-selection default and could freeze the event loop at boot under a degraded-but-not-down MongoDB. It now shares the same 10-second server-selection and connect timeouts as the main Motor client.
 
 - **/health reports MongoDB outages honestly** (`tcbot/alive.py`, `tcbot/utils/circuit_breaker.py`): the health check now reads circuit state without flipping it and treats HALF_OPEN as a degraded state, so an uptime poll can no longer silently reopen the circuit while MongoDB is down. The endpoint now returns 503 with `"mongodb": "error"` through a database outage instead of green.
+
+- **/health redis field reflects real liveness** (`tcbot/alive.py`): the redis status now reports ok / error / unknown from the last observed cache operation instead of the startup connection handle, so an outage that begins mid-run no longer reads green.
+
+- **L2 writes stop stalling during a Redis outage** (`tcbot/database/cache.py`): each fire-and-forget Redis write abandons after 2 seconds instead of absorbing the 10-second socket timeout serially per queued write. Redis writes stay non-fatal background work and correctness never depends on them.
 
 ### Documentation
 
