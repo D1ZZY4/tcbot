@@ -27,6 +27,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Changed
 
+- **Dependency refresh** (`uv.lock`): upgrades within pinned bounds (`pymongo`, `ruff`, `tzdata`). `apscheduler` stays pinned at `==3.11.3`; nothing else moved.
+
 - **Clearer bot wording across every message** (`i18n/en-US/*.toml`, `tests/test_i18n.py`): error replies now say what happened and what to do next instead of naming server internals, the rate-limit wait renders correctly at one second, the connect confirmation names the group, and stale or clumsy lines (group-chat mute note, kick-unban hint, transfer result, empty-page notices) read plainly. Button labels and help structure unchanged; every template still renders clean.
 
 - **Cleaner engine comments and finished locale threading** (`tcbot/utils/i18n.py`, `helper/workflows/ban_flow.py`, `reason_flow.py`): the catalog loader example names the real domain file, the code-span renderer uses plain backslash literals, and two completed locale-threading reminders are gone since the ban flow already carries its locale. The reason parser docstring now describes the verified-override path. No behavior change.
