@@ -11,6 +11,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **MTProto identity resolution beyond Bot API limits** (`tcbot/database/mtproto.py`, `tcbot/__init__.py`, `tcbot/__main__.py`, `tcbot/modules/helper/extraction.py`, `config.env.example`, `docs/getting-started/setup.md`, `tests/test_mtproto_base.py`): optional `API_ID` / `API_HASH` settings with a lazy shared client that starts at boot and stops at shutdown. Silent-user lookups now try one MTProto peer resolve before the multi-group sweep, and results flow into the existing identity cache. Unconfigured deployments behave exactly as before. Behavior changes: none when unconfigured.
 
+- **One-time MTProto session authorization** (`tcbot/database/mtproto_auth.py`, `docs/getting-started/setup.md`, `tests/test_mtproto_auth.py`): run the module with the account phone number, enter the login code (plus 2FA password when set), and the session file lands next to `config.env` ready to deploy. Wrong codes, expired codes, and bad passwords fail with a plain message and a nonzero exit. Behavior changes: none.
+
 - **CI runs the behavioral checks on every change** (`.github/workflows/lint.yml`): the lint workflow gains a second job that installs from the lockfile and executes the repository's checks with the same dummy `BOT_TOKEN` / `MONGODB_URI` / `OWNER_ID` env as the lint job, so behavioral regressions can no longer merge silently.
 
 - **Redis liveness tracked from cache operations** (`tcbot/database/redis_client.py`, `tcbot/database/cache.py`): every Redis read and write reports its outcome to a last-known-health flag the health endpoint reads, so an operator sees the real picture even though the Flask health check cannot await a live probe.

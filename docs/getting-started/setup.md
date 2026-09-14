@@ -143,6 +143,11 @@ PROOFS="-1001234567890"
 | `API_ID` | No | integer | Telegram API ID for optional MTProto identity lookups. Empty disables MTProto entirely. |
 | `API_HASH` | No | string | Telegram API hash matching `API_ID`. Required together with `API_ID`. Never commit the real value. |
 | `MTPROTO_SESSION` | No | string | Session name for the MTProto client file. Default `tcbot_mtproto`. |
+
+Authorize the session once before enabling MTProto: fill `API_ID` / `API_HASH`,
+then run `uv run python -m tcbot.database.mtproto_auth +62xxx` and enter the
+login code (plus 2FA password when set). Deploy the resulting `.session` file
+next to `config.env`; the bot only loads it and never logs in by itself.
 | `LOG_LEVEL` | No | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | Runtime logging level. Default `INFO`. |
 | `MODULES_LOAD` | No | comma-separated module names | Optional whitelist, e.g. `banning,appeals`. |
 | `MODULES_NO_LOAD` | No | comma-separated module names | Optional blacklist, e.g. `maintenance,broadcasting`. |
