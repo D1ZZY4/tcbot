@@ -13,6 +13,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Fixed
 
+- **Replit webhook port corrected to 8080** (`.replit`, `replit.md`): public traffic only reaches local port 8080, so serving the webhook on the 5000 default left every Telegram delivery dying at the proxy and the bot never replied. The port mapping is back to 8080 only and the deployment guide names the required value. Behavior changes: webhook deliveries reach the bot on Replit.
+
+- **Runner forwards the MTProto credentials** (`.github/workflows/run-bot.yml`, `docs/operations/ci-cd.md`): the merge that made `API_ID` / `API_HASH` mandatory at boot never added them to the runner env, so every run crashed on startup until the watchdog gave up after five rapid deaths. The workflow now forwards both secrets and the guide lists them as required. Behavior changes: runs boot instead of fail-looping. Repository secrets `API_ID` and `API_HASH` still need to be set once in the repo settings.
+
 ### Removed
 
 ### Documentation

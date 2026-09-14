@@ -73,6 +73,8 @@ jobs:
       WARN_EXPIRY_DAYS:        ${{ secrets.WARN_EXPIRY_DAYS }}
       WARN_LIMIT:              ${{ secrets.WARN_LIMIT }}
       FED_WARN_LIMIT:          ${{ secrets.FED_WARN_LIMIT }}
+      API_ID:                  ${{ secrets.API_ID }}
+      API_HASH:                ${{ secrets.API_HASH }}
       WEBHOOK_URL:             ${{ secrets.WEBHOOK_URL }}
       WEBHOOK_SECRET:          ${{ secrets.WEBHOOK_SECRET }}
       ALBUM_DEBOUNCE_SECONDS:  ${{ secrets.ALBUM_DEBOUNCE_SECONDS }}

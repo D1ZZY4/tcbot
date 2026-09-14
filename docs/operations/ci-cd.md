@@ -200,6 +200,8 @@ Configure these in GitHub repository settings → Secrets:
 | `OWNER_ID` | Your Telegram user ID (initial owner + notifications) | Yes |
 | `WEBHOOK_URL` | Public HTTPS URL for Telegram webhook (e.g. `https://your-domain.com`). When set, bot runs in webhook mode; absent means polling fallback | Recommended |
 | `WEBHOOK_SECRET` | Secret token for `set_webhook` and `X-Telegram-Bot-Api-Secret-Token` validation. Auto-generated when omitted | Recommended |
+| `API_ID` | Telegram API ID for mandatory MTProto lookups (get it at my.telegram.org). Without it the bot refuses to boot | Yes |
+| `API_HASH` | Telegram API hash matching `API_ID`. Required together with `API_ID` | Yes |
 | `BOT_PAT` | Personal Access Token with `workflow` scope, used by Run Bot to self-chain into the next run for seamless 24/7 coverage | Optional (recommended) |
 | `GITHUB_TOKEN` | Auto-provided by GitHub Actions | Auto |
 
@@ -210,7 +212,8 @@ secrets, so every runtime variable must be set there for the runner: `DB_NAME`,
 `COMMUNITY_NAME`, `PREFIXES`, `MAIN_GROUP`, `MAIN_CHANNEL`, `EXTEND_GROUP`,
 `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`, `LOG_LEVEL`, `PORT`, `REDIS_URL`,
 `APPEAL_LOG_HANDLE`, `APPEAL_DISCUSSION_TOPIC`, `WARN_EXPIRY_DAYS`,
-`WARN_LIMIT`, `FED_WARN_LIMIT`, `ALBUM_DEBOUNCE_SECONDS`, `MODULES_LOAD`, and
+`WARN_LIMIT`, `FED_WARN_LIMIT`, `API_ID`, `API_HASH`,
+`ALBUM_DEBOUNCE_SECONDS`, `MODULES_LOAD`, and
 `MODULES_NO_LOAD`, alongside `BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`,
 `WEBHOOK_URL`, and `WEBHOOK_SECRET`. `SYNC_INTERVAL_HOURS`, `CRON_SECRET`, and
 the `COMMUNITY_*_URL` links are **not** forwarded by the runner: the sync sweep
