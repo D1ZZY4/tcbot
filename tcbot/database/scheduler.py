@@ -95,7 +95,16 @@ async def expire_old_warns(warn_expiry_days: int) -> None:
     Called daily by APScheduler when ``WARN_EXPIRY_DAYS > 0``, or on demand by
     the serverless cron endpoint (``api/cron.py`` on Vercel) which cannot run
     a persistent scheduler.
+
+    A non-positive ``warn_expiry_days`` is a no-op: without this guard the
+    cutoff would equal now and the deletes below would wipe every warn.
     """
+    if warn_expiry_days <= 0:
+        log.info(
+            "Warn expiry skipped: WARN_EXPIRY_DAYS=%d disables expiry.",
+            warn_expiry_days,
+        )
+        return
     cutoff = utc_now() - timedelta(days=warn_expiry_days)
     counts_res, warns_res = await asyncio.gather(
         _db_call(_col("warn_counts").delete_many({"updated_at": {"$lt": cutoff}})),

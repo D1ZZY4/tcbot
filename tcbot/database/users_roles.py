@@ -107,6 +107,20 @@ async def set_owner(user_id: int) -> None:
     )
     await db_call(col("tc_owners").delete_many({"user_id": {"$ne": user_id}}))
     owner_id_cache.put(_OWNER_KEY, user_id)
+    # * The two writes above are not atomic: a crash between them can leave
+    # * zero or two owner rows. Verify the invariant and log loudly so a
+    # * split brain is noticed instead of serving nondeterministic owners.
+    try:
+        owner_rows = await db_call(col("tc_owners").estimated_document_count())
+    except Exception:
+        log.exception("set_owner verification read failed for user %d", user_id)
+    else:
+        if owner_rows != 1:
+            log.error(
+                "set_owner left %d owner rows for user %d; expected exactly 1.",
+                owner_rows,
+                user_id,
+            )
     # * Full two-layer invalidation: old owner's ID is unknown, so we cannot
     # * call invalidate(old_id).  clear_all() sweeps L1 + all Redis keys with
     # * the "role" prefix so no process reads a stale "founder" role after the
@@ -187,6 +201,11 @@ async def admin_count() -> int:
 
 async def set_role(user_id: int, role: str, assigned_by: int) -> None:
     """Assign a custom role (developer/tester) to a user."""
+    # ! CRITICAL: reject anything outside VALID_ROLES. get_effective_role
+    # ! returns the stored value verbatim, so a stored "admin" or "founder"
+    # ! would grant real privilege to a tc_roles row.
+    if role not in VALID_ROLES:
+        raise ValueError(f"Refusing to store invalid custom role: {role!r}")
     await db_call(
         col("tc_roles").update_one(
             {"user_id": user_id},

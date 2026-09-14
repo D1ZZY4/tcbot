@@ -117,6 +117,12 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Warn auto-ban stops when the role lookup fails** (`tcbot/modules/helper/workflows/warning_flow.py`, `tests/test_warn_autoban_guard.py`): a failed role read used to proceed as if the target held no role, risking an auto-ban on an exempt staffer. The run now aborts with a retry reply and the persisted warn count re-fires the threshold on the next warn. Behavior changes: outage warns skip this auto-ban instead of enforcing it.
 
+- **Role storage rejects unknown roles** (`tcbot/database/users_roles.py`): `set_role` stored any string verbatim and role resolution returned it as-is, so a crafted value like `admin` would grant real privilege. Only developer and tester are accepted now; anything else raises instead of writing.
+
+- **Warn expiry with a non-positive window deletes nothing** (`tcbot/database/scheduler.py`): the cutoff equaled now when expiry was disabled, so a direct call would have wiped every warn and counter. The run now exits early with an info line. Scheduled and cron callers already guarded; this closes the trap for any other caller.
+
+- **Ownership transfer verifies the single-owner invariant** (`tcbot/database/users_roles.py`): the two writes were described as atomic but are not, so a crash between them could leave zero or two owner rows. The row count is now checked after the writes and any deviation logs an error instead of serving silently.
+
 ### Documentation
 
 - **Warn-limit trigger documented as `>=`** (`tcbot/__init__.py`, `tcbot/modules/helper/workflows/warning_flow.py`): the `warn_limit` property docstring and the `_execute_warn_auto_ban` role-lookup comment described the trigger as `==` (exact equality), contradicting the deliberate `>=` implementation. Both texts now describe the "reaches or exceeds" semantics and why a `==` trigger would wedge the retry after a total enforcement failure. No behavior changes.
