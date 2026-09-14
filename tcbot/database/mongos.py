@@ -130,10 +130,11 @@ async def connect() -> None:
     global _db
     _patch_dns_if_needed()
     client_kwargs = mongo_client_kwargs()
+    # * serverSelection/connect timeouts live in mongo_client_kwargs() (shared
+    # * with the scheduler's sync client): passing them here as well would be
+    # * a duplicate keyword argument and crash startup with TypeError.
     client = AsyncIOMotorClient(
         cfg.mongodb_uri,
-        serverSelectionTimeoutMS=_MONGO_SERVER_SELECTION_MS,
-        connectTimeoutMS=_MONGO_CONNECT_TIMEOUT_MS,
         socketTimeoutMS=_MONGO_SOCKET_TIMEOUT_MS,
         maxPoolSize=_MONGO_MAX_POOL_SIZE,
         minPoolSize=_MONGO_MIN_POOL_SIZE,
