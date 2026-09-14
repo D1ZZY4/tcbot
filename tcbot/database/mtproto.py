@@ -53,6 +53,7 @@ async def start() -> bool:
     """Connect the shared client; return False (never raise) when unusable."""
     c = client()
     if c is None:
+        log.info("MTProto not configured; identity lookups use Bot API only.")
         return False
     if c.is_connected:
         return True
