@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from pymongo.errors import DuplicateKeyError
 
-from tcbot.database.documents import PromotionRequestDoc
+from tcbot.database.documents import PromotionRequestDoc, RequestStatus
 from tcbot.database.mongos import col, db_call, make_short_id
 from tcbot.utils.time_and_date import utc_now
 
@@ -116,12 +116,16 @@ async def pending_count() -> int:
     return await db_call(_requests().count_documents({"status": "pending"}))
 
 
-async def resolve(request_id: str, status: str, resolved_by: int) -> bool:
+async def resolve(request_id: str, status: RequestStatus, resolved_by: int) -> bool:
     """Mark a pending promotion request as resolved.
 
     The ``pending`` filter makes the claim atomic: concurrent decisions on
     the same request resolve exactly once, and late taps get ``False``.
     """
+    # ! Only terminal states may be stored: an arbitrary string here would
+    # ! break the pending filters every other helper relies on.
+    if status not in ("approved", "rejected"):
+        raise ValueError(f"Refusing to resolve promotion request to {status!r}")
     result = await db_call(
         _requests().update_one(
             {"request_id": request_id, "status": "pending"},

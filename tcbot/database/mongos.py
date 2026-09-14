@@ -235,9 +235,9 @@ async def ensure_indexes() -> None:
         col("pending_joins").create_index([("chat_id", 1)], unique=True),
         col("member_cache").create_index([("user_id", 1)], unique=True),
         # * Covered-query index: serves get_first_names_batch and get_mention_data_batch
-        # * $in on user_id with {first_name,username} projection; all fields in index
+        # * $in on user_id with {first_name,username,last_name} projection; all fields in index
         col("member_cache").create_index(
-            [("user_id", 1), ("first_name", 1), ("username", 1)]
+            [("user_id", 1), ("first_name", 1), ("username", 1), ("last_name", 1)]
         ),
         # * Serves batch username lookups and search operations
         col("member_cache").create_index([("username", 1)]),
@@ -252,6 +252,9 @@ async def ensure_indexes() -> None:
         col("warns").create_index([("user_id", 1), ("chat_id", 1), ("timestamp", 1)]),
         # * Serves warn expiry: delete_many({"timestamp": {"$lt": cutoff}}) COLLSCAN without this
         col("warns").create_index([("timestamp", 1)]),
+        # * Serves migrate_records(): update_many on chat_id alone COLLSCANs
+        # * the user_id-led indexes above on every group upgrade otherwise.
+        col("warns").create_index([("chat_id", 1)]),
         col("warn_counts").create_index([("user_id", 1), ("chat_id", 1)], unique=True),
         # * Serves warn expiry: delete_many({"updated_at": {"$lt": cutoff}}) COLLSCAN without this
         col("warn_counts").create_index([("updated_at", 1)]),
@@ -259,6 +262,8 @@ async def ensure_indexes() -> None:
         col("warn_counts").create_index(
             [("user_id", 1), ("count", 1), ("updated_at", -1)]
         ),
+        # * Serves migrate_records() on warn_counts (see warns chat_id note).
+        col("warn_counts").create_index([("chat_id", 1)]),
         # * Per-user kick / mute history for /check
         col("kicks").create_index([("user_id", 1), ("timestamp", -1)]),
         col("mutes").create_index([("user_id", 1), ("timestamp", -1)]),

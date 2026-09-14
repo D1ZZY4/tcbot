@@ -360,17 +360,12 @@ async def user_appealable_bans(
 
 
 async def active_ban_user_ids() -> list[int]:
-    """Return only the user IDs of all active bans (projection-only, fastest path)."""
-    docs = await db_call(
-        _bans()
-        .find(
-            {"is_active": True},
-            {"_id": 0, "banned_user_id": 1},
-            sort=[("timestamp", -1), ("ban_id", -1)],
-        )
-        .to_list(None)
-    )
-    return [doc["banned_user_id"] for doc in docs]
+    """Return only the user IDs of all active bans (projection-only, fastest path).
+
+    Uses ``distinct`` so the full ban documents never travel, and duplicate
+    active rows for one user collapse to a single ID for the fan-out.
+    """
+    return await db_call(_bans().distinct("banned_user_id", {"is_active": True}))
 
 
 # ─────────────────────── Per-user history ───────────────────────── #

@@ -133,6 +133,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Unban fails closed on every DB read and write** (`tcbot/modules/helper/workflows/unban_flow.py`, `i18n/en-US/unbanning.toml`, `i18n/id/unbanning.toml`, `tests/test_unban_flow.py`, `tests/test_unmute_flow.py`, `tests/test_i18n.py`): the ban-record read had no failure path and the deactivation failure reply sat behind dead exception-shape checks, so outages propagated with no actionable reply. Reads and writes now abort with retry replies, and new tests pin the unban, unmute clear-first, and locale placeholder-parity contracts.
 
+- **Cheaper hot database reads** (`tcbot/database/bans_db.py`, `users_cache.py`, `mongos.py`, `queues_db.py`): the active-ban ID list now uses `distinct` instead of shipping full documents, the first-name batch populates the full mention triple so repeat renders skip MongoDB, migration updates gain `chat_id` indexes on warns and warn counts, and promotion resolution only accepts terminal states. Behavior changes: duplicate active rows collapse to one fan-out ID.
+
 ### Documentation
 
 - **Warn-limit trigger documented as `>=`** (`tcbot/__init__.py`, `tcbot/modules/helper/workflows/warning_flow.py`): the `warn_limit` property docstring and the `_execute_warn_auto_ban` role-lookup comment described the trigger as `==` (exact equality), contradicting the deliberate `>=` implementation. Both texts now describe the "reaches or exceeds" semantics and why a `==` trigger would wedge the retry after a total enforcement failure. No behavior changes.
