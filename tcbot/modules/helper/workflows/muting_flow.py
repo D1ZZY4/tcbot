@@ -185,9 +185,13 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
     # * ordering.
     active_r: BaseException | None = None
     # * Deliberately broad: any write failure fails closed so a partially
-    # * committed mute never silently continues.
+    # * committed mute never silently continues. Cancellation is not a write
+    # * failure: it re-raises so shutdown or an operator cancel never renders
+    # * as a database outage and never triggers the rollback below.
     try:
         await db.mutes_db.set_active_mute(target_id, until=until)
+    except asyncio.CancelledError:
+        raise
     except BaseException as exc:
         active_r = exc
     log_r: BaseException | None = None
@@ -200,6 +204,8 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
                 admin_id,
                 duration_secs=duration_secs,
             )
+        except asyncio.CancelledError:
+            raise
         except BaseException as exc:
             log_r = exc
 
@@ -208,6 +214,8 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         if active_r is None:
             try:
                 await db.mutes_db.clear_active_mute(target_id)
+            except asyncio.CancelledError:
+                raise
             except BaseException:
                 log.exception("Failed to delete active mute for %d", target_id)
         log.error(

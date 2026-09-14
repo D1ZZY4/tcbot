@@ -71,6 +71,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **A failed ban run no longer leaves a background read hanging** (`tcbot/modules/helper/workflows/ban_flow.py`): the ban executor pre-fetches the connected-group list concurrently with the ban lookup and proof upload. When one of those steps raised (for example during a database outage), the in-flight read used to be abandoned un-retrieved until garbage collection. The executor now cancels and checks that background read on any propagated error, so a rare-outage failure unwinds cleanly instead of leaking a task.
 
+- **A cancelled mute stops instead of rendering as a database outage** (`tcbot/modules/helper/workflows/muting_flow.py`, `tests/test_mute_partial_failure.py`): the broad write-failure handler used to catch task cancellation and show the database-failure card with a rollback attempt. Cancellation now propagates immediately so shutdown or an operator cancel is never mistaken for an outage. Behavior changes: a cancelled mute no longer edits the prompt and never touches the rollback path.
+
 ### Documentation
 
 - **Warn-limit trigger documented as `>=`** (`tcbot/__init__.py`, `tcbot/modules/helper/workflows/warning_flow.py`): the `warn_limit` property docstring and the `_execute_warn_auto_ban` role-lookup comment described the trigger as `==` (exact equality), contradicting the deliberate `>=` implementation. Both texts now describe the "reaches or exceeds" semantics and why a `==` trigger would wedge the retry after a total enforcement failure. No behavior changes.

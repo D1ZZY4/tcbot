@@ -172,3 +172,53 @@ def test_audit_fail_undo_failure_logged_not_raised(
     assert bot.restricts == []
     assert len(bot.edits) == 1
     assert bot.edits[0]["kwargs"]["chat_id"] == 22
+
+
+def test_cancel_during_active_write_propagates(
+    _mute_no_io: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    log_calls: list[tuple[Any, ...]] = []
+
+    async def _set_active(*args: Any, **kwargs: Any) -> None:
+        raise asyncio.CancelledError()
+
+    async def _log(*args: Any, **kwargs: Any) -> None:
+        log_calls.append((args, kwargs))
+
+    monkeypatch.setattr(db.mutes_db, "set_active_mute", _set_active)
+    monkeypatch.setattr(db.mutes_db, "log_mute", _log)
+
+    bot = _FakeBot()
+    with pytest.raises(asyncio.CancelledError):
+        _run(bot)
+
+    assert log_calls == []
+    assert bot.restricts == []
+    assert bot.edits == []
+
+
+def test_cancel_during_audit_write_propagates_without_undo(
+    _mute_no_io: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cleared: list[int] = []
+
+    async def _set_active(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def _log(*args: Any, **kwargs: Any) -> None:
+        raise asyncio.CancelledError()
+
+    async def _clear_active(user_id: int) -> None:
+        cleared.append(user_id)
+
+    monkeypatch.setattr(db.mutes_db, "set_active_mute", _set_active)
+    monkeypatch.setattr(db.mutes_db, "log_mute", _log)
+    monkeypatch.setattr(db.mutes_db, "clear_active_mute", _clear_active)
+
+    bot = _FakeBot()
+    with pytest.raises(asyncio.CancelledError):
+        _run(bot)
+
+    assert cleared == []
+    assert bot.restricts == []
+    assert bot.edits == []
