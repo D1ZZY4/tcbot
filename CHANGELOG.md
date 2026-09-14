@@ -13,6 +13,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **MTProto session shared in MongoDB** (`tcbot/database/mtproto_store.py`, `tests/test_mtproto_store.py`): the login, peer hashes, and update states persist in the `mtproto_state` collection with the same semantics as Kurigram's file storage, so ephemeral runners and the beta host share one authorization. Behavior changes: none.
 
+- **Username lookups fall back to MTProto** (`tcbot/database/mtproto.py`, `tcbot/modules/helper/extraction.py`, `tests/test_mtproto_base.py`, `tests/test_extraction.py`): Bot API username lookups miss some live accounts, so arg and @mention resolution now tries one exact MTProto username resolve before giving up. Deterministic like any verified @username, safe for moderation paths. Behavior changes: previously unresolvable usernames now resolve.
+
 - **MTProto member harvest backfills silent users** (`tcbot/database/mtproto.py`, `tests/test_mtproto_base.py`): `harvest_group_members()` walks a group's membership once and caches every human identity, so later bans and checks of never-speaking members resolve by name. Stops early with a partial count on flood waits. Behavior changes: none until called.
 
 - **Boot no longer wedges on MTProto startup** (`tcbot/database/mtproto.py`, `tests/test_mtproto_base.py`): bot-token login cannot prompt, so a startup hang on stdin is structurally impossible now; any real failure aborts boot loudly instead. Behavior changes: none beyond the mandatory boot above.

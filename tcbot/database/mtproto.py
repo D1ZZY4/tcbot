@@ -136,6 +136,37 @@ async def resolve_user(target_id: int) -> tuple[str, str | None, str | None] | N
     return fname, getattr(user, "username", None), getattr(user, "last_name", None)
 
 
+async def resolve_username(username: str) -> tuple[int, str, str | None] | None:
+    """Resolve an @username to (user_id, first_name, username) via MTProto.
+
+    Catches what Bot API username lookups miss (proven live: a username
+    ``get_chat`` rejected resolved here). Exact match only, so moderation
+    paths can trust it like any verified @username. Returns None when the
+    client is down or the username is unknown/taken-down. Resolved peers
+    stay in shared storage for later direct ID lookups.
+    """
+    c = _client
+    if c is None or not c.is_connected:
+        return None
+    try:
+        from pyrogram import raw  # noqa: PLC0415 (heavy extra; import only on use)
+
+        async with asyncio.timeout(TELEGRAM_LOOKUP_TIMEOUT):
+            resolved = await c.invoke(
+                raw.functions.contacts.ResolveUsername(username=username.lstrip("@"))  # type: ignore[attr-defined]
+            )
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.debug("MTProto username resolve failed for %s: %s", username, exc)
+        return None
+    for user in resolved.users:
+        fname: str = getattr(user, "first_name", "") or ""
+        if fname:
+            return user.id, fname, getattr(user, "username", None)
+    return None
+
+
 async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
     """Cache every member of *chat_id* the session can see; return harvested count.
 

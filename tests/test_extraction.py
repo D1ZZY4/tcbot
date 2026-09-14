@@ -279,3 +279,34 @@ def test_mod_target_consumed_matrix(monkeypatch) -> None:  # type: ignore[no-unt
         (None, None),
         False,
     )
+
+
+def test_username_falls_back_to_mtproto(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Bot API misses some live usernames; exact MTProto resolve is next."""
+    _stub_cache(monkeypatch)
+    bot = _FakeBot()
+
+    async def _hit(username: str):
+        assert username == "ghost"
+        return (42, "Ghost", "ghost")
+
+    monkeypatch.setattr(ex.db.mtproto, "resolve_username", _hit)
+    assert _run(ex.extract_target(_update(_msg()), ["@ghost"], cast("Any", bot))) == (
+        42,
+        "Ghost",
+    )
+
+
+def test_username_bot_hit_skips_mtproto(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    _stub_cache(monkeypatch)
+    bot = _FakeBot()
+    bot.chats["@someone"] = _alive_user(77, "Some")
+
+    async def _boom(username: str):
+        raise AssertionError("must not run")
+
+    monkeypatch.setattr(ex.db.mtproto, "resolve_username", _boom)
+    assert _run(ex.extract_target(_update(_msg()), ["@someone"], cast("Any", bot))) == (
+        77,
+        "Some",
+    )

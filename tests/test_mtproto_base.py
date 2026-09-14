@@ -98,6 +98,7 @@ class _FakeClient:
         self.is_connected = connected
         self._error = error
         self._user = _FakeMTUser()
+        self._resolved: Any = None
         self.start_called = False
         self.stopped = False
 
@@ -114,6 +115,11 @@ class _FakeClient:
         if self._error is not None:
             raise self._error
         return self._user
+
+    async def invoke(self, _query: Any) -> Any:
+        if self._error is not None:
+            raise self._error
+        return self._resolved
 
 
 def test_stop_clears_client(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -269,3 +275,31 @@ def test_harvest_group_members_stops_early_on_flood(
 
     assert asyncio.run(mtproto.harvest_group_members(-1001)) == 1
     assert harvested == [1]
+
+
+def _resolved_peer(*users: Any) -> Any:
+    return SimpleNamespace(users=list(users))
+
+
+def test_resolve_username_maps_triple(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = _FakeClient()
+    fake._resolved = _resolved_peer(
+        SimpleNamespace(id=42, first_name="Ghost", username="ghost")
+    )
+    monkeypatch.setattr(mtproto, "_client", fake)
+
+    assert asyncio.run(mtproto.resolve_username("@ghost")) == (42, "Ghost", "ghost")
+
+
+def test_resolve_username_none_on_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(mtproto, "_client", _FakeClient(error=RuntimeError("taken")))
+
+    assert asyncio.run(mtproto.resolve_username("ghost")) is None
+
+
+def test_resolve_username_none_when_disconnected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(mtproto, "_client", _FakeClient(connected=False))
+
+    assert asyncio.run(mtproto.resolve_username("ghost")) is None

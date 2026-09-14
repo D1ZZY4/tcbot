@@ -270,6 +270,12 @@ async def _args_target(
             return chat.id, await _best_name(
                 chat.id, chat.first_name, chat.username, arg
             )
+        # * Bot API username lookups miss some existing accounts; one MTProto
+        # * exact-username resolve before giving up (deterministic, no fuzzy).
+        hit = await db.mtproto.resolve_username(arg)
+        if hit is not None:
+            uid, fname, _ = hit
+            return uid, await _best_name(uid, fname, arg)
 
     # * Priority 3: Partial name search in users_cache, read-only
     # * callers only (see _args_target docstring for why moderation
@@ -351,6 +357,10 @@ async def _entity_target(msg: Message, bot: Bot | None) -> tuple[int, str] | Non
                 chat = await _safe_get_chat(bot, f"@{uname}")
                 if chat is not None:
                     return chat.id, await _best_name(chat.id, chat.first_name, uname)
+                hit = await db.mtproto.resolve_username(uname)
+                if hit is not None:
+                    uid, fname, _ = hit
+                    return uid, await _best_name(uid, fname, uname)
 
     return None
 
