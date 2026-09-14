@@ -130,6 +130,19 @@ class BuildConnection:
             plain=True,
         )
 
+    def connected_blind_message(self, locale: str | None = None) -> str:
+        """Blind-replay warning shown instead of the success message.
+
+        Used when the enforcement replay ran without ban/mute data, so
+        the owner knows to re-sync.
+        """
+        return t(
+            "connecting.state.connected_blind",
+            locale,
+            community=self.community_name,
+            plain=True,
+        )
+
     def declined_message(self, locale: str | None = None) -> str:
         """Shown when the owner taps Cancel on the join prompt."""
         return t("connecting.state.declined", locale, plain=True)
@@ -228,8 +241,12 @@ class BuildConnection:
         owner_id: int,
         owner_fname: str,
         bot: Bot,
-    ) -> None:
-        """Connect the group, apply all active federation bans, and notify LOG_CHANNEL."""
+    ) -> bool:
+        """Connect the group, apply all active federation bans, and notify LOG_CHANNEL.
+
+        Returns True when the enforcement replay ran blind (ban/mute fetch
+        failed) so callers can warn the owner instead of confirming success.
+        """
         # * Fetch chat info + active ban IDs + active mute docs + admin list + register group + clear pending.
         # * All Telegram and DB calls fire in parallel; bounded timeouts prevent stalls.
         (
@@ -325,6 +342,7 @@ class BuildConnection:
                 "Group %d connected BLIND: enforcement replay ran without ban/mute data.",
                 chat_id,
             )
+        return replay_blind
 
     # ── PTB event handlers ─────────────────────────────────────────────────
 
@@ -450,7 +468,7 @@ class BuildConnection:
                             reply_markup=None,
                         )
                     try:
-                        await self.complete_join(
+                        blind = await self.complete_join(
                             chat.id,
                             chat.title or "",
                             pending.get("owner_id", 0),
@@ -465,7 +483,9 @@ class BuildConnection:
                         return
                     try:
                         await ctx.bot.edit_message_text(
-                            self.connected_message(locale),
+                            self.connected_blind_message(locale)
+                            if blind
+                            else self.connected_message(locale),
                             chat_id=chat.id,
                             message_id=pending.get("message_id", 0),
                             reply_markup=None,
@@ -629,7 +649,7 @@ class BuildConnection:
                     self.connecting_message(locale), reply_markup=None
                 )
             try:
-                await self.complete_join(
+                blind = await self.complete_join(
                     chat.id, chat.title or "", user.id, user.first_name, ctx.bot
                 )
             except Exception:
@@ -642,7 +662,10 @@ class BuildConnection:
                 return
             with contextlib.suppress(Exception):
                 await q.edit_message_text(
-                    self.connected_message(locale), reply_markup=None
+                    self.connected_blind_message(locale)
+                    if blind
+                    else self.connected_message(locale),
+                    reply_markup=None,
                 )
 
         elif action == self.cancel_callback:
