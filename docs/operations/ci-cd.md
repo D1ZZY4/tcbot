@@ -150,7 +150,7 @@ Review the dependency changes and CI results before merging.
 - The cron schedule (every 15 minutes) acts as a resurrection fallback if the chain breaks or no PAT is configured. The `concurrency` group (`cancel-in-progress: false`) serializes runs: a cron tick while a run is active queues behind it instead of being discarded, so ticks can pile up behind a long holder
 - A `concurrency` group (`tcf-bot-runner`, `cancel-in-progress: false`) prevents overlapping bot instances. This avoids duplicate update processing in polling mode and keeps webhook ownership unambiguous
 - **Graceful stop before artifacts:** at the window end the bot gets SIGTERM (`uv run` forwards it to the child) and the script waits up to 60 s for exit before the scrub/upload steps, so the artifact keeps its final lines. The bot is backgrounded directly (`$!` stays a real child job) so the wait supervises the actual process; a stubborn process is left for runner teardown inside the 30 min post-window buffer
-- Bot configuration comes from repository secrets (`BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`, `WEBHOOK_URL`, `WEBHOOK_SECRET`, etc.), plus the optional `BOT_PAT` for self-chaining. The push restart needs no extra secret and no extra permission: cancellation is native to the concurrency group
+- Bot configuration comes from repository secrets (`BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`, `WEBHOOK_URL`, `WEBHOOK_SECRET`, etc.), plus the optional `BOT_PAT` for self-chaining. The push restart needs no extra secret: `cancel-in-progress: false` means the successor queues behind the live run, and the live run itself detects the runtime diff (self-preempt poll) and stops, freeing the gate
 - **Log artifacts are scrubbed:** workflow logs and artifacts on a public repository are world-readable, so before the crash tail is printed or uploaded, token-shaped (`id:hash`) and URI-auth substrings are redacted with the same patterns as `error_reporter.py`. Message excerpts remain by design so crashes stay debuggable; artifacts are kept 7 days
 
 ---
@@ -198,6 +198,18 @@ Configure these in GitHub repository settings → Secrets:
 | `GITHUB_TOKEN` | Auto-provided by GitHub Actions | Auto |
 
 Without `BOT_PAT`, the Run Bot workflow cannot dispatch its own next run; it falls back to the every-15-minute cron resurrection schedule.
+
+The Run Bot workflow forwards the full federation env surface as repository
+secrets, so every runtime variable must be set there for the runner: `DB_NAME`,
+`COMMUNITY_NAME`, `PREFIXES`, `MAIN_GROUP`, `MAIN_CHANNEL`, `EXTEND_GROUP`,
+`PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`, `LOG_LEVEL`, `PORT`, `REDIS_URL`,
+`APPEAL_LOG_HANDLE`, `APPEAL_DISCUSSION_TOPIC`, `WARN_EXPIRY_DAYS`,
+`WARN_LIMIT`, `FED_WARN_LIMIT`, `PROOF_TIMEOUT_SECONDS`,
+`APPEAL_TIMEOUT_SECONDS`, `ALBUM_DEBOUNCE_SECONDS`, `MODULES_LOAD`, and
+`MODULES_NO_LOAD`, alongside `BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`,
+`WEBHOOK_URL`, and `WEBHOOK_SECRET`. `SYNC_INTERVAL_HOURS`, `CRON_SECRET`, and
+the `COMMUNITY_*_URL` links are **not** forwarded by the runner: the sync sweep
+and community URLs are not part of this transport.
 
 ---
 

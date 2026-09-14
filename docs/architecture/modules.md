@@ -61,7 +61,7 @@ help-discovery convention, not a handler-registration switch.
 | `appeals.py` | `Appeal` | `/start appeal_<ban_id>` plus appeal decision callbacks | Registers `appeal.build_handler()` and approve/reject callbacks. |
 | `banning.py` | `Ban` | `/tcban`, `/tcb` | Validates Developer+ access, auto-demotes role holders, enters `ban_flow`. |
 | `broadcasting.py` | `Broadcast` | `/tcbroadcast`, `/bc` | Sends a message to all active groups and logs results. |
-| `checking.py` | `Checking` | `/checkme`, `/cme`, `/check`, `/c` | Ban status lookup (`/checkme`) and comprehensive user profile (`/check`) with bans/warns/kicks/mutes/appeals drill-down. |
+| `checking.py` | `Check` | `/checkme`, `/cme`, `/check`, `/c` | Ban status lookup (`/checkme`) and comprehensive user profile (`/check`) with bans/warns/kicks/mutes/appeals drill-down. |
 | `connecting.py` | `Connect` | `/tcconnect`, `/tccon`, bot-added updates, connect/cancel callbacks | Group connection approval and permission checks. |
 | `disconnecting.py` | `Disconnect` | `/tcdisconnect`, `/tcdiscon`, `/rmtc` | Group-owner disconnect and staff remote disconnect. |
 | `groups.py` | `Groups` | `/tcgroups`, `/tcg` | Connected group list and details toggle. |

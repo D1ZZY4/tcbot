@@ -49,7 +49,7 @@ Commands use the project's configured prefixes; slash commands are examples.
 4. The target must resolve to a Telegram user ID.
 5. The bot rejects attempts to unban itself via `identity.refuse_message`.
 6. The bot speculatively pre-fetches the active ban record in parallel with `identity.classify` and `resolve_and_check` so that `execute_unban` skips a redundant DB round-trip when the refusal check passes.
-7. `execute_unban` fetches active groups first (aborting with the ban record intact when the list cannot be loaded, so a retry re-drives the full fan-out), then deactivates all active bans for the target, cancels any pending scheduler unban job for the ban, fans `unban_chat_member` across every connected group plus the primary groups, posts the unban log, and replies with the success count.
+7. `execute_unban` fetches active groups first (aborting with the ban record intact when the list cannot be loaded, so a retry re-drives the full fan-out), then deactivates all active bans for the target, fans `unban_chat_member` across every connected group plus the primary groups, posts the unban log, and replies with the success count.
 
 ## Target resolution
 
@@ -106,7 +106,7 @@ Unban uses three `bans_db` helpers:
 | `deactivate_all_active_bans(user_id)` | Deactivates every active ban for the user in one `update_many` write. Returns the number of bans deactivated. Used by the manual command and mirrored by the appeal-approval inline sequence so duplicate active records (from earlier race conditions) are cleared in one operation. |
 | `make_ban_id()` | Not used here; only listed because the helper file is shared. |
 
-The scheduler cancel call targets `unban.<ban_id>`. It is a no-op when no schedule exists; the current ban command does not create timed-ban schedules, so this call is defensive infrastructure for when timed bans are added.
+Unban has no scheduler interaction: neither `bans_db` nor `unban_flow` touches `scheduler.py`, and the scheduler registers only the warn-expiry and optional enforcement-sync schedules. Bans are not time-limited, so no per-ban `unban.<ban_id>` job exists.
 
 ## Logs
 

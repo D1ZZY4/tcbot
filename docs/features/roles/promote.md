@@ -178,7 +178,7 @@ All promotion paths share a single log builder for consistency:
 
 | Function | Trigger |
 |---|---|
-| `parse_logmsg.promoted(role, ...)` | Direct role assignment (Admin/Developer/Tester). Title: `New <community> Promoted`. |
+| `parse_logmsg.promoted(target_id, target_fname, role, by_id, by_fname)` | Direct role assignment (Admin/Developer/Tester). Title: `New <community> Promoted`. |
 | `parse_logmsg.promote_request_log(...)` | A new Admin promotion request is created. |
 | `parse_logmsg.promote_approved_log(...)` | The Founder approves a pending request. |
 | `parse_logmsg.promote_rejected_log(...)` | The Founder rejects a pending request. |

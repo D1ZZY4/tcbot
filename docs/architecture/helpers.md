@@ -201,7 +201,7 @@ Command modules import from `replies.py` instead of inlining these strings.
 
 ## `ban_info.py`
 
-`build_ban_detail(ban, target_fname=None)` returns formatted MarkdownV2 ban details and an optional proof link. It is shared by checking and stats flows to avoid duplicate ban rendering.
+`build_ban_detail(ban, target_fname=None, locale=None)` returns `(formatted_text, proof_link_or_none)` MarkdownV2 ban details and an optional proof link. It is shared by checking and stats flows to avoid duplicate ban rendering.
 
 ## `parse_link.py`
 

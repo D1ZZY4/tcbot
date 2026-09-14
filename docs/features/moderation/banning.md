@@ -42,7 +42,7 @@ Commands use the project's configured prefixes; slash commands are examples.
 
 ## `/tcban` flow
 
-The ban command is a `ConversationHandler` with one proof-collection state.
+The ban command is a `ConversationHandler` with two states: `WAITING_PROOF` (proof collection) and `WAITING_UPDATE_CONFIRM`, the confirmation card shown when the target already has an active ban.
 
 1. A moderator runs `/tcban <target> <reason>` or replies to a user with `/tcb <reason>`.
 2. The bot resolves the executor role and target in parallel.

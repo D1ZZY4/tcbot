@@ -79,6 +79,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Docs synced to the over-engineering cleanup** (`config.env.example`, `README.md`, `AGENTS.md`, `.github/workflows/run-bot.yml`, `docs/getting-started/setup.md`, `docs/architecture/workflows.md`, `helpers.md`, `utilities.md`, `database.md`, `docs/features/appeals.md`, `moderation/banning.md`, `moderation/warnings.md`, `moderation/unbanning.md`, `docs/operations/vercel.md`, `.agents/rules/code-style.md`, `asyncio-gather-rules.md`, `docs-sync.md`, `i18n/README.md`): removed the retired `PROOF_TIMEOUT_SECONDS`/`APPEAL_TIMEOUT_SECONDS` variables, the `schedule_unban`/`cancel_schedule` scheduler API, the `mention()` formatter alias, `has_reply_target`, and the test-only i18n helpers wherever they were referenced.
 
+- **Full coverage of the documentation tree** (`docs/README.md`): the index lists every guide under `docs/` in its category, and every cross-reference across the documentation resolves to a real page and section header, so readers never land on a missing page. Behavior changes: none.
+
 </details>
 
 ## [6.8.0] - 2026-09-13

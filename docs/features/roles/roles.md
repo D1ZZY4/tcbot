@@ -314,7 +314,7 @@ Behavior:
 
 - Admin target: remove from `tc_admins`.
 - Developer/Tester target: remove from `tc_roles`.
-- Send a `demoted` log (with the applicable trigger) to `cfg.logs`.
+- Send the same `demoted` log to `cfg.logs` as manual demotion (the log never notes the trigger).
 - DM the target that their role was removed because they were banned, kicked, or muted.
 
 Ban, kick, and mute command modules block equal/higher-ranked targets before calling auto-demotion, so auto-demotion only applies to lower-ranked staff targets.
@@ -327,8 +327,8 @@ Role and promotion logs are built in `parse_logmsg.py`:
 
 | Template | Trigger |
 |---|---|
-| `promoted(role)` | Founder/Admin promotes a user to the named role (Admin, Developer, or Tester). |
-| `demoted(role, trigger=None)` | Role removed. `trigger=None` for manual demotion; `trigger="ban"` / `"kick"` / `"mute"` for auto-demote during a ban, kick, or mute. |
+| `promoted(target_id, target_fname, role, by_id, by_fname)` | Founder/Admin promotes a user to the named role (Admin, Developer, or Tester). |
+| `demoted(target_id, target_fname, role, by_id, by_fname)` | Role removed. Identical for manual demotion and auto-demote during a ban, kick, or mute — the log template has no trigger parameter. |
 | `ownership_transferred` | Founder transfers ownership. |
 | `promote_request_log` | Admin promotion request created. |
 | `promote_approved_log` | Founder approves a promotion request. |

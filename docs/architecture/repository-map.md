@@ -16,7 +16,12 @@ This page maps the repository structure and the service boundaries between packa
 ├── tcbot/                  Main Python package
 ├── api/                    Vercel serverless endpoints (webhook, cron)
 ├── docs/                   Documentation grouped by purpose
+├── i18n/                   Translation catalogs (en-US locale source-truth)
+├── tests/                  Pytest test suite
+├── .github/                GitHub Actions workflows + dependabot config
+├── .agents/                Maintainer and agent rules and skills
 ├── pyproject.toml          Dependencies and Ruff config
+├── pyrightconfig.json      Pyright type checker configuration
 ├── uv.lock                 Locked dependency graph
 ├── vercel.json             Vercel functions, timeouts, and cron schedule
 ├── .python-version         Pinned Python for Vercel and uv (3.14)
@@ -66,7 +71,7 @@ tcbot/
 │   ├── queues_db.py        Promotion request queue
 │   ├── cache.py            L1 TTL caches with optional Redis L2
 │   ├── redis_client.py     Optional async Redis client
-│   ├── scheduler.py        APScheduler background jobs with MongoDB store
+│   ├── scheduler.py        APScheduler background jobs in the MongoDB `jobs` collection
 │   ├── settings_db.py      Per-user settings (locale preferences)
 │   ├── documents.py        TypedDict document shapes
 │   └── types.py            NewType ID primitives
@@ -74,14 +79,14 @@ tcbot/
 │   ├── __init__.py         Dynamic module discovery and handler collection
 │   ├── *.py                Command and callback modules
 │   └── helper/
+│       ├── ban_info.py     Ban detail renderer
 │       ├── decorators.py   Auth, per-handler rate limits, tracing, resolve_and_check
 │       ├── extraction.py   Target resolution
-│       ├── keyboards.py    Inline keyboard factories
-│       ├── ban_info.py     Ban detail renderer
 │       ├── identity.py     Identity classification, refusal messages, staff notices
-│       ├── locale.py       Render-locale resolution for handlers and flows
-│       ├── replies.py      Shared localized reply strings and HelpEntry shape
+│       ├── keyboards.py    Inline keyboard factories
+│       ├── locale.py       Render-locale resolution shared by handlers, callbacks, flows
 │       ├── parse_*.py      Link, log, and safe-edit helpers
+│       ├── replies.py      Shared localized reply and help-text strings, HelpEntry shape
 │       └── workflows/
 │           └── *_flow.py   Conversation factories, plus Promote / Demote / Check classes
 └── utils/
@@ -89,7 +94,7 @@ tcbot/
     ├── dispatch.py         Bounded concurrent fan-out (integrates Telegram circuit)
     ├── error_reporter.py   Telegram error classification and reporting
     ├── formatter.py        MarkdownV2 escaping and formatting (single source of truth)
-    ├── i18n.py             TOML-backed localization engine (catalog, lookup, Safe)
+    ├── i18n.py             TOML locale catalogs, lookup, and interpolation
     ├── logger.py           Console formatter and error log handler
     ├── pagination.py       Shared paginate(), nav_row(), date_or_unknown() helpers
     ├── prefixes.py         Prefix parsing and command filters

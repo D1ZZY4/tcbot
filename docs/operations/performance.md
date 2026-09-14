@@ -156,9 +156,9 @@ Outbound Telegram HTTP tuning lives in one owner, `tcbot/utils/transport.py`
 `API_POOL_SIZE` (8) and the timeouts (read 60 s, write 30 s, connect 30 s,
 pool 15 s) are applied identically by `__main__.py` and `serverless.py`.
 Polling mode adds a dedicated getUpdates connection pool of 4
-(`_UPDATES_POOL_SIZE`). On top of the pool, `fan_out()` caps in-flight
-Telegram calls at 10 via its semaphore, so the connection count stays bounded
-regardless of how many groups are connected.
+(`_UPDATES_POOL_SIZE`, defined in `tcbot/__main__.py`). On top of the pool,
+`fan_out()` caps in-flight Telegram calls at 10 via its semaphore, so the
+connection count stays bounded regardless of how many groups are connected.
 
 ## Measuring a suspected bottleneck
 

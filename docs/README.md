@@ -45,6 +45,7 @@ deployment, see [`../replit.md`](../replit.md). For contribution workflow, see
 | [Appeals](features/appeals.md) | Appeal deep links, private DM submission, review actions, and edge cases. |
 | [Language](features/language.md) | Per-user and per-group locale preferences, TOML catalog, and selection flow. |
 | [Statistics](features/statistics.md) | `/tcstats`, drill-down views, search, and asynchronous design. |
+| [Miscellaneous modules](features/misc-modules.md) | Encapsulated commands: about, additional, admins, start, help, greeting, broadcasting, maintenance, netspeed, privacy. |
 | [Banning](features/moderation/banning.md) | Federation ban flow, proof collection, updates, unban checks, logs, and appeal links. |
 | [Kicking](features/moderation/kicking.md) | `/tckick` group kick flow, auto-demote before kick, reason/proof conversation, and audit log. |
 | [Muting](features/moderation/muting.md) | Federation-wide mute, optional duration tokens, unmute, replay on group connect, and edge cases. |

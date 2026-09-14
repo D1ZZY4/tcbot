@@ -121,6 +121,14 @@ The review card contains two inline buttons:
 | `Approve` | `appeal_approve_<ban_id>` |
 | `Reject` | `appeal_reject_<ban_id>` |
 
+Both callbacks use the underscore-delimited `<action>_<ban_id>` shape that
+the handler registers and parses (`appeals.py` pattern
+`^appeal_(approve|reject)_\S+$`; `appeal_review_flow.py` slices the tail
+after `appeal_reject_`). Known defect: `keyboards.appeal_review_kb()` builds
+the Reject button with a colon separator (`appeal_reject:<ban_id>`) instead
+of the underscore form, which fails the handler pattern — the rewrite must
+emit the underscore variant above.
+
 The DM instruction message has a cancel button:
 
 | Button | Callback data |
