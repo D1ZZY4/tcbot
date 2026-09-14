@@ -53,7 +53,7 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Bounded server selection for the scheduler's MongoDB client** (`tcbot/database/mongos.py`): the scheduler job store builds its own synchronous pymongo client, which fell back to pymongo's 30-second server-selection default and could freeze the event loop at boot under a degraded-but-not-down MongoDB. It now shares the same 10-second server-selection and connect timeouts as the main Motor client.
 
-- **/health reports MongoDB outages honestly** (`tcbot/alive.py`, `tcbot/utils/circuit_breaker.py`): the health check now reads circuit state without flipping it and treats HALF_OPEN as a degraded state, so an uptime poll can no longer silently reopen the circuit while MongoDB is down. The endpoint now returns 503 with `"mongodb": "error"` through a database outage instead of green.
+- **/health reports MongoDB outages honestly** (`tcbot/alive.py`, `tcbot/utils/circuit_breaker.py`): the health check now reads circuit state without flipping it and treats HALF_OPEN as a degraded state, so an uptime poll can no longer silently reopen the circuit while MongoDB is down. The endpoint now returns 503 with `"mongodb": "error"` through a database outage instead of green. The Telegram circuit read in the same endpoint is now non-mutating as well, so a poll can no longer flip it out of OPEN (`tests/test_alive_health.py`).
 
 - **/health redis field reflects real liveness** (`tcbot/alive.py`): the redis status now reports ok / error / unknown from the last observed cache operation instead of the startup connection handle, so an outage that begins mid-run no longer reads green.
 

@@ -76,7 +76,7 @@ def health() -> tuple[str, int, dict[str, str]]:
             else "unknown"
         )
 
-    tg_state = _cb.telegram.state
+    tg_state = _cb.telegram.peek_state()
 
     overall = (
         "ok"

@@ -9,11 +9,13 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
 import tcbot.alive as alive_mod
-from tcbot.utils.circuit_breaker import CircuitState
+from tcbot.utils.circuit_breaker import CircuitBreaker, CircuitState
+from tcbot.utils.time_and_date import monotonic
 
 
 class _FakeCircuit:
@@ -152,3 +154,23 @@ def test_redis_status_disabled_when_no_redis(_health_no_io: None) -> None:
     payload, code = _call_health()
     assert payload["redis"] == "disabled"
     assert code == 200
+
+
+def test_health_never_flips_telegram_circuit(
+    _health_no_io: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overdue: Any = CircuitBreaker("telegram", recovery_timeout=60.0)
+    overdue._state = CircuitState.OPEN
+    overdue._opened_at = monotonic() - 3600.0
+
+    monkeypatch.setattr(
+        alive_mod,
+        "_cb",
+        SimpleNamespace(mongodb=_FakeCircuit(CircuitState.CLOSED), telegram=overdue),
+    )
+    payload, code = _call_health()
+
+    assert overdue.peek_state() is CircuitState.OPEN
+    assert payload["circuit_telegram"] == "open"
+    assert payload["status"] == "degraded"
+    assert code == 503
