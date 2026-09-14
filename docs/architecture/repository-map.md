@@ -72,6 +72,8 @@ tcbot/
 │   ├── cache.py            L1 TTL caches with optional Redis L2
 │   ├── redis_client.py     Optional async Redis client
 │   ├── scheduler.py        APScheduler background jobs in the MongoDB `jobs` collection
+│   ├── mtproto.py          Bot-token MTProto client: resolve + member harvest
+│   ├── mtproto_store.py    MongoDB-backed Kurigram storage engine
 │   ├── settings_db.py      Per-user settings (locale preferences)
 │   ├── documents.py        TypedDict document shapes
 │   └── types.py            NewType ID primitives

@@ -23,6 +23,7 @@ flowchart TD
     L2 --> Redis[(Redis)]
     Scheduler[scheduler.py<br/>APScheduler 3.11.3] --> MongoDB
     Scheduler --> DBHelpers
+    MTProto[mtproto.py<br/>bot-token client] --> MongoDB
 ```
 
 ## Access rules
@@ -88,6 +89,8 @@ A DNS patch (`_patch_dns_if_needed`) installs an in-process fallback resolver po
 | `cache.py` | in-process + Redis | `TTLCache[T]` (L1) and `TwoLevelCache[T]` (L1 in-process + L2 Redis) with five public singletons. |
 | `redis_client.py` | Redis (optional) | Async Redis client singleton with pool management and liveness tracking. |
 | `scheduler.py` | MongoDB (APScheduler) | APScheduler 3.11.3 `AsyncIOScheduler` backed by `MongoDBJobStore`. |
+| `mtproto.py` | Telegram MTProto | Bot-token client singleton: user-ID resolution and group member harvest. |
+| `mtproto_store.py` | `mtproto_state` | MongoDB-backed Kurigram storage engine shared by all instances. |
 | `documents.py` | type-only | `TypedDict` document shapes and `Literal` aliases. |
 | `types.py` | type-only | `NewType` primitives: `UserId`, `GroupId`, `ChatId`, `BanId`. |
 

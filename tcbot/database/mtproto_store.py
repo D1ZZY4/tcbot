@@ -5,8 +5,7 @@
 """MongoDB-backed Kurigram storage engine: the MTProto session lives in the database.
 
 One shared session for the whole fleet: ephemeral runners and the beta host
-read the same auth key, peers, and update states, so authorizing once (via
-``mtproto_auth``) lights up every instance. Semantics mirror Kurigram's
+read the same auth key, peers, and update states. Semantics mirror Kurigram's
 ``SQLiteStorage`` exactly (same KeyError misses, same 8h username TTL, same
 COALESCE-style update-state merge); only the backend differs.
 

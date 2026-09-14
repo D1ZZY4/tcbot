@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["ruff", "pytest"]
+dev = ["ruff", "pytest", "pyright"]
 
 [tool.setuptools.packages.find]
 include = ["tcbot*"]

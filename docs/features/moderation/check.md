@@ -228,7 +228,7 @@ user.
 
 ## Edge cases
 
-- A user that has never interacted with the bot and has no public profile resolves to their numeric user ID (e.g. `123456789`) as the fallback display name, not `User 123456789`. This allows callers to detect a numeric fallback via `str(name) == str(uid)` comparison.
+- A user that has never interacted with the bot and has no public profile resolves to their numeric user ID (e.g. `123456789`) as the fallback display name, not `User 123456789`. This allows callers to detect a numeric fallback via `str(name) == str(uid)` comparison. Before falling back, live identity sync tries one MTProto peer resolve ahead of the multi-group sweep.
 - The bans list shows both active and inactive bans; the active record (if any) appears at the top because of the timestamp-desc sort.
 - The appeals list filters bans by the presence of `appeal_log_msg_id`; rejected appeals stay in the list with `Pending / Rejected` status until the ban is overturned, at which point the same record shows `Approved (unbanned)`.
 - The warnings-by-group view shows only groups with a non-zero counter row; an old empty counter is cleaned by `clear_warns`.

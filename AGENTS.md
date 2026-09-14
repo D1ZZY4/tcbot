@@ -89,6 +89,7 @@ Current stack:
 - Optional Redis L2 cache (`redis[hiredis]>=8.0,<9`) with in-memory L1 fallback
 - Tagged JSON values for Redis serialization (a project-local encoder, no `cbor2`)
 - `cachetools` for L1 TTLCache
+- `kurigram[fast]` for bot-token MTProto lookups beyond Bot API enumeration
 - `uv` for dependency management and lockfile-based installs
 - Ruff for formatting and lint checks
 - pyright for static type checking

@@ -162,7 +162,9 @@ PROOFS="-1001234567890"
 
 Each community link falls back to its built-in default when empty, so all five buttons show with zero setup. A non-http(s) value is ignored with a warning and hides that button.
 
-Authorize the MTProto session before the first boot: fill `API_ID` / `API_HASH`, then run `uv run python -m tcbot.database.mtproto_auth +62xxx` and enter the login code (plus 2FA password when set). Boot connects the user session when it holds a login and always connects a bot-token session as the automatic floor, so lookups keep working even before anyone logs in. A legacy `<session>.session` file is imported once automatically when authorized.
+MTProto runs on the bot token alone: no phone number, no login code, no
+session file. Fill `API_ID` / `API_HASH` and boot connects a bot-token
+session automatically; lookups keep working with zero manual steps.
 
 ## Startup sequence
 
@@ -172,7 +174,7 @@ Authorize the MTProto session before the first boot: fill `API_ID` / `API_HASH`,
 4. PTB `ApplicationBuilder` builds the bot application.
 5. `tcbot.modules.get_handlers()` imports active modules and stops startup if an enabled module fails to import.
 6. Signal handlers (`SIGTERM`, `SIGINT`) are registered immediately before the PTB lifecycle begins.
-7. `_post_init()` connects MongoDB, ensures indexes, seeds the initial owner, connects the optional Redis cache, starts the APScheduler, connects MTProto (user session when logged in, bot session guaranteed; missing `API_ID`/`API_HASH` aborts boot), and attaches the error reporter.
+7. `_post_init()` connects MongoDB, ensures indexes, seeds the initial owner, connects the optional Redis cache, starts the APScheduler, connects MTProto (bot-token session; missing `API_ID`/`API_HASH` aborts boot), and attaches the error reporter.
 8. **Webhook mode** (when `WEBHOOK_URL` or `REPLIT_DEV_DOMAIN` resolves to a URL): `bot.set_webhook()` registers the URL, `register_webhook()` wires Flask's `POST /webhook` to PTB's update queue, and the bot waits for `SIGTERM`/`SIGINT`.
 9. **Polling mode** (when no webhook URL is available): `run_polling()` starts with `drop_pending_updates=True`. A `WARNING` log identifies this local-development fallback.
 
