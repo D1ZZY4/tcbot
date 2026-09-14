@@ -94,6 +94,9 @@ Auto-applied by GitHub Actions
   `lint.yml`)
 - **Auto-creates a PR** (`deps/auto-update-YYYYMMDD`, suffixed `-runNNN` on
   collision) labeled `dependencies` against `main`
+- If the default token cannot open PRs (repository toggle off), the step
+  retries once with `BOT_PAT` when that secret exists, then fails loud
+  pointing at the exact toggle
 - PR includes a diff of the lockfile changes
 - **Sends Telegram notification** with result
 
