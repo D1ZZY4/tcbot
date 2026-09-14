@@ -123,6 +123,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Ownership transfer verifies the single-owner invariant** (`tcbot/database/users_roles.py`): the two writes were described as atomic but are not, so a crash between them could leave zero or two owner rows. The row count is now checked after the writes and any deviation logs an error instead of serving silently.
 
+- **Kick writes the audit record before enforcing** (`tcbot/modules/helper/workflows/kicking_flow.py`): the ban ran first and the audit write shared a parallel gather, so a failed write left an enforced kick that history views could never see. The write now runs first and aborts with a retry reply on failure. Behavior changes: a failed audit write no longer enforces the kick.
+
 ### Documentation
 
 - **Warn-limit trigger documented as `>=`** (`tcbot/__init__.py`, `tcbot/modules/helper/workflows/warning_flow.py`): the `warn_limit` property docstring and the `_execute_warn_auto_ban` role-lookup comment described the trigger as `==` (exact equality), contradicting the deliberate `>=` implementation. Both texts now describe the "reaches or exceeds" semantics and why a `==` trigger would wedge the retry after a total enforcement failure. No behavior changes.
