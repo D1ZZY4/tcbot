@@ -32,6 +32,7 @@ from pyrogram.errors import (
     SessionPasswordNeeded,
 )
 
+from tcbot.database import mongos as mongos_mod
 from tcbot.database import mtproto
 
 if TYPE_CHECKING:
@@ -65,6 +66,12 @@ async def authorize(
     """
     if not mtproto.is_configured():
         raise RuntimeError("API_ID/API_HASH are not set; nothing to authorize.")
+    try:
+        await mongos_mod.connect()
+    except Exception as exc:
+        raise RuntimeError(
+            f"MongoDB unreachable, session has nowhere to land: {exc}"
+        ) from exc
     client = mtproto.client()
     await client.connect()
     try:
@@ -108,9 +115,11 @@ def main(argv: list[str] | None = None) -> int:
         "phone", nargs="?", help="Account phone number, e.g. +6281234567890"
     )
     args = parser.parse_args(argv)
-    phone = args.phone or input("Account phone number: ")
+    phone = (args.phone or input("Account phone number: ")).strip().replace(" ", "")
+    if phone and not phone.startswith("+"):
+        phone = f"+{phone}"
     try:
-        where = asyncio.run(authorize(phone.strip()))
+        where = asyncio.run(authorize(phone))
     except RuntimeError as exc:
         print(f"FAILED: {exc}", file=sys.stderr)
         return 1

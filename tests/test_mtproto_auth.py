@@ -11,7 +11,20 @@ from typing import Any
 
 import pytest
 
+from tcbot.database import mongos as mongos_mod
 from tcbot.database import mtproto, mtproto_auth
+
+
+@pytest.fixture
+def _mongo_connected(monkeypatch: pytest.MonkeyPatch) -> list[bool]:
+    """Stub the database connection authorize() now requires for shared storage."""
+    connected: list[bool] = []
+
+    async def _connect() -> None:
+        connected.append(True)
+
+    monkeypatch.setattr(mongos_mod, "connect", _connect)
+    return connected
 
 
 class _Sent:
@@ -71,7 +84,9 @@ def _run(phone: str = "+62000", code: str = "12345", password: str = "secret") -
     )
 
 
-def test_happy_path_returns_session_path(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_happy_path_returns_session_path(
+    monkeypatch: pytest.MonkeyPatch, _mongo_connected: list[bool]
+) -> None:
     fake = _FakeClient()
     monkeypatch.setattr(mtproto, "_client", fake)
 
@@ -81,7 +96,9 @@ def test_happy_path_returns_session_path(monkeypatch: pytest.MonkeyPatch) -> Non
     assert fake.calls == ["connect", "send_code", "sign_in", "disconnect"]
 
 
-def test_already_authorized_skips_code(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_already_authorized_skips_code(
+    monkeypatch: pytest.MonkeyPatch, _mongo_connected: list[bool]
+) -> None:
     fake = _FakeClient(me=_FakeMe())
     monkeypatch.setattr(mtproto, "_client", fake)
 
@@ -90,7 +107,9 @@ def test_already_authorized_skips_code(monkeypatch: pytest.MonkeyPatch) -> None:
     assert fake.calls == ["connect", "disconnect"]
 
 
-def test_two_factor_flow(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_two_factor_flow(
+    monkeypatch: pytest.MonkeyPatch, _mongo_connected: list[bool]
+) -> None:
     fake = _FakeClient(password_needed=True)
     monkeypatch.setattr(mtproto, "_client", fake)
 
@@ -105,18 +124,33 @@ def test_two_factor_flow(monkeypatch: pytest.MonkeyPatch) -> None:
     ]
 
 
-def test_wrong_code_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_wrong_code_fails(
+    monkeypatch: pytest.MonkeyPatch, _mongo_connected: list[bool]
+) -> None:
     monkeypatch.setattr(mtproto, "_client", _FakeClient())
 
     with pytest.raises(RuntimeError, match="Login code rejected"):
         _run(code="00000")
 
 
-def test_wrong_password_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_wrong_password_fails(
+    monkeypatch: pytest.MonkeyPatch, _mongo_connected: list[bool]
+) -> None:
     monkeypatch.setattr(mtproto, "_client", _FakeClient(password_needed=True))
 
     with pytest.raises(RuntimeError, match="Wrong 2FA password"):
         _run(password="nope")
+
+
+def test_authorize_connects_mongo_first(
+    monkeypatch: pytest.MonkeyPatch, _mongo_connected: list[bool]
+) -> None:
+    """Regression: shared DB storage needs connect() before any storage op."""
+    monkeypatch.setattr(mtproto, "_client", _FakeClient(me=_FakeMe()))
+
+    _run()
+
+    assert _mongo_connected == [True]
 
 
 def test_unconfigured_fails_without_network(monkeypatch: pytest.MonkeyPatch) -> None:
