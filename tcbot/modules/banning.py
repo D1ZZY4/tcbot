@@ -80,7 +80,7 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
             t("banning.help.what.body", locale),
         ),
         (
-            "Flow",
+            replies.sec_flow(locale),
             t("banning.help.flow.body", locale),
         ),
         replies.target_section(locale),

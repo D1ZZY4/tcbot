@@ -66,11 +66,11 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
             t("muting.help.what.body", locale),
         ),
         (
-            "Flow",
+            replies.sec_flow(locale),
             t("muting.help.flow.body", locale),
         ),
         (
-            "Time format",
+            t("muting.help.time.title", locale, plain=True),
             t("muting.help.time.body", locale),
         ),
         replies.target_section(locale),

@@ -226,6 +226,11 @@ def sec_what(locale: str | None = None) -> str:
     return t("common.section.what", locale, plain=True)
 
 
+def sec_flow(locale: str | None = None) -> str:
+    """Flow section label in the render locale."""
+    return t("common.section.flow", locale, plain=True)
+
+
 def sec_examples(locale: str | None = None) -> str:
     """Examples section label in the render locale."""
     return t("common.section.examples", locale, plain=True)

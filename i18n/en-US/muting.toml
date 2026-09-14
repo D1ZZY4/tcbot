@@ -23,6 +23,7 @@ body = """
 3. The bot asks for proof: send a photo/video, then tap *Done*, or tap *Skip*."""
 
 [help.time]
+title = "Time format"
 body = """
 Place the duration before the reason. Omit a duration to apply a permanent mute.
 

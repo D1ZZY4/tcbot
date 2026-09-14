@@ -134,12 +134,11 @@ async def execute_unban(
         # ! CRITICAL: a cancelled deactivation must propagate instead of being
         # ! reported as a DB failure; shutdown must not render as a verdict.
         raise
-    except Exception as exc:
-        log.error(
+    except Exception:
+        log.exception(
             "deactivate_all_active_bans failed for user=%d; aborting unban to "
-            "avoid split-brain state: %s",
+            "avoid split-brain state",
             target_id,
-            exc,
         )
         if msg is not None:
             await safe_reply(

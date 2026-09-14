@@ -42,6 +42,7 @@ commands = "Commands & Aliases"
 who = "Who can use"
 where = "Where to use"
 what = "What it does"
+flow = "Flow"
 examples = "Examples"
 target = "Target syntax"
 

@@ -57,7 +57,7 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
             t("kicking.help.what.body", locale),
         ),
         (
-            "Flow",
+            replies.sec_flow(locale),
             t("kicking.help.flow.body", locale),
         ),
         replies.target_section(locale),

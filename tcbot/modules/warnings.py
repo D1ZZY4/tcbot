@@ -78,7 +78,7 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
             t("warnings.help.what.body", locale, limit=_warn_limit_label(locale)),
         ),
         (
-            "Flow",
+            replies.sec_flow(locale),
             t("warnings.help.flow.body", locale),
         ),
         replies.target_section(locale),
