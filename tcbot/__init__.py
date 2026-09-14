@@ -236,6 +236,9 @@ class Configs:
     community_logs_url: str
     community_exec_url: str
     community_travel_url: str
+    api_id: int
+    api_hash: str
+    mtproto_session: str
 
     # * Properties below handle lazy type-casting from raw env strings.
     @property
@@ -368,6 +371,10 @@ class Configs:
                 "COMMUNITY_TRAVEL_URL", _DEFAULT_COMMUNITY_TRAVEL_URL
             ).strip()
             or _DEFAULT_COMMUNITY_TRAVEL_URL,
+            api_id=_int_from_env("API_ID", 0, minimum=0),
+            api_hash=os.getenv("API_HASH", "").strip(),
+            mtproto_session=os.getenv("MTPROTO_SESSION", "tcbot_mtproto").strip()
+            or "tcbot_mtproto",
         )
 
 
@@ -603,6 +610,26 @@ class _CfgAdapter:
     def community_travel_url(self) -> str:
         """Public URL or invite link of the TRAVEL community (built-in default when env is empty)."""
         return self._c.community_travel_url
+
+    @property
+    def mtproto_enabled(self) -> bool:
+        """True when API_ID + API_HASH are set (MTProto lookups available)."""
+        return self._c.api_id > 0 and bool(self._c.api_hash)
+
+    @property
+    def api_id(self) -> int:
+        """Telegram API ID for MTProto, or 0 when not configured."""
+        return self._c.api_id
+
+    @property
+    def api_hash(self) -> str:
+        """Telegram API hash for MTProto (empty when not configured)."""
+        return self._c.api_hash
+
+    @property
+    def mtproto_session(self) -> str:
+        """MTProto session name (file-based; ignored files, see .gitignore)."""
+        return self._c.mtproto_session
 
 
 # * This adapter instance is the single global 'cfg' used by every module.

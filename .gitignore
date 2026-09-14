@@ -7,6 +7,10 @@ __pycache__/
 config.env
 config.env.backup
 
+# MTProto session files (auth secrets, never commit)
+*.session
+*.session-journal
+
 # Exported GPG keys (private key material must never be committed)
 gpg-key-backup/
 
