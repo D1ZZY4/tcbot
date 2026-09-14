@@ -7,14 +7,11 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import pytest
 
 from tcbot.database import mtproto, mtproto_auth
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 class _Sent:
@@ -66,7 +63,7 @@ class _FakeMe:
     id = 7
 
 
-def _run(phone: str = "+62000", code: str = "12345", password: str = "secret") -> Path:
+def _run(phone: str = "+62000", code: str = "12345", password: str = "secret") -> str:
     return asyncio.run(
         mtproto_auth.authorize(
             phone, code_fn=lambda _p: code, password_fn=lambda _p: password
@@ -80,7 +77,7 @@ def test_happy_path_returns_session_path(monkeypatch: pytest.MonkeyPatch) -> Non
 
     path = _run()
 
-    assert path.name == f"{mtproto.cfg.mtproto_session}.session"
+    assert path == f"mongodb:mtproto_state:{mtproto.cfg.mtproto_session}"
     assert fake.calls == ["connect", "send_code", "sign_in", "disconnect"]
 
 
@@ -123,7 +120,7 @@ def test_wrong_password_fails(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_unconfigured_fails_without_network(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(mtproto, "client", lambda: None)
+    monkeypatch.setattr(mtproto, "is_configured", lambda: False)
 
     with pytest.raises(RuntimeError, match="not set"):
         _run()

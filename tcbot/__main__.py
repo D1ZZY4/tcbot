@@ -288,7 +288,10 @@ async def _post_init(app: Application) -> None:
         raise indexes_r
     if isinstance(owner_r, BaseException):
         log.warning("ensure_initial_owner failed (non-fatal): %s", owner_r)
-    # * MTProto start is fail-soft by contract (bool, logs internally).
+    # * MTProto is mandatory: missing credentials or a login-less session
+    # * must abort boot loudly instead of serving numeric-ID displays.
+    if isinstance(_mtproto_r, BaseException):
+        raise _mtproto_r
 
     # * APScheduler 3.11.3 with MongoDBJobStore - persistent scheduled jobs.
     # * app.bot is live here (post_init runs inside the initialised app), so

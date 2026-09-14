@@ -2,12 +2,14 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""MTProto base: unconfigured degrades to None, configured builds without connecting."""
+"""MTProto mandatory client: missing credentials or login fail fast, never degrade."""
 
 from __future__ import annotations
 
 import asyncio
 import dataclasses
+import sqlite3
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -25,11 +27,12 @@ def _with_creds(monkeypatch: pytest.MonkeyPatch, api_id: int, api_hash: str) -> 
     )
 
 
-def test_unconfigured_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_client_raises_without_creds(monkeypatch: pytest.MonkeyPatch) -> None:
     _with_creds(monkeypatch, 0, "")
 
     assert mtproto.is_configured() is False
-    assert mtproto.client() is None
+    with pytest.raises(RuntimeError, match="API_ID/API_HASH"):
+        mtproto.client()
 
 
 def test_configured_builds_singleton_without_connecting(
@@ -102,13 +105,14 @@ class _FakeClient:
         return _FakeMTUser()
 
 
-def test_start_false_when_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_start_raises_when_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
     _with_creds(monkeypatch, 0, "")
 
-    assert asyncio.run(mtproto.start()) is False
+    with pytest.raises(RuntimeError, match="API_ID/API_HASH"):
+        asyncio.run(mtproto.start())
 
 
-def test_start_false_on_fresh_session_without_prompting(
+def test_start_raises_on_fresh_session_without_prompting(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A never-authorized session must fail fast, never reach the stdin prompt."""
@@ -116,7 +120,8 @@ def test_start_false_on_fresh_session_without_prompting(
     fake = _FakeClient(connected=False, user_id=None)
     monkeypatch.setattr(mtproto, "_client", fake)
 
-    assert asyncio.run(mtproto.start()) is False
+    with pytest.raises(RuntimeError, match="not authorized"):
+        asyncio.run(mtproto.start())
     assert fake.start_called is False
 
 
@@ -129,7 +134,7 @@ def test_start_true_when_session_authorized(monkeypatch: pytest.MonkeyPatch) -> 
     assert fake.start_called is True
 
 
-def test_start_false_on_auth_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_start_raises_on_connect_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     _with_creds(monkeypatch, 12345, "hash")
     monkeypatch.setattr(
         mtproto,
@@ -137,7 +142,8 @@ def test_start_false_on_auth_failure(monkeypatch: pytest.MonkeyPatch) -> None:
         _FakeClient(connected=False, error=RuntimeError("unauthorized")),
     )
 
-    assert asyncio.run(mtproto.start()) is False
+    with pytest.raises(RuntimeError, match="MTProto start failed"):
+        asyncio.run(mtproto.start())
 
 
 def test_stop_clears_client(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -150,13 +156,21 @@ def test_stop_clears_client(monkeypatch: pytest.MonkeyPatch) -> None:
     assert mtproto._client is None
 
 
+def test_resolve_none_when_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_creds(monkeypatch, 0, "")
+
+    assert asyncio.run(mtproto.resolve_user(42)) is None
+
+
 def test_resolve_maps_triple(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_creds(monkeypatch, 12345, "hash")
     monkeypatch.setattr(mtproto, "_client", _FakeClient())
 
     assert asyncio.run(mtproto.resolve_user(42)) == ("Ghost", "ghost", None)
 
 
 def test_resolve_none_on_unknown_peer(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_creds(monkeypatch, 12345, "hash")
     monkeypatch.setattr(
         mtproto, "_client", _FakeClient(error=RuntimeError("peer invalid"))
     )
@@ -165,18 +179,21 @@ def test_resolve_none_on_unknown_peer(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_resolve_none_on_flood_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_creds(monkeypatch, 12345, "hash")
     monkeypatch.setattr(mtproto, "_client", _FakeClient(error=_FloodWait()))
 
     assert asyncio.run(mtproto.resolve_user(42)) is None
 
 
 def test_resolve_none_when_disconnected(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_creds(monkeypatch, 12345, "hash")
     monkeypatch.setattr(mtproto, "_client", _FakeClient(connected=False))
 
     assert asyncio.run(mtproto.resolve_user(42)) is None
 
 
 def test_resolve_propagates_cancel(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_creds(monkeypatch, 12345, "hash")
     monkeypatch.setattr(mtproto, "_client", _FakeClient(error=asyncio.CancelledError()))
 
     with pytest.raises(asyncio.CancelledError):
@@ -209,3 +226,93 @@ def test_fetch_live_identity_prefers_mtproto_over_sweep(
         "ghost",
         None,
     )
+
+
+class _RecordingStore:
+    """Storage double recording what the legacy import wrote."""
+
+    def __init__(self) -> None:
+        self.scalars: dict[str, object] = {}
+        self.peers: list[tuple[int, int, str, str | None]] = []
+        self.names: list[tuple[int, list[str | None]]] = []
+        self.states: list[object] = []
+
+    async def _accessor(self, name: str, value: object = object) -> object:
+        if value is object:
+            return self.scalars.get(name)
+        self.scalars[name] = value
+        return None
+
+    async def __getattr__(self, name: str) -> object:
+        async def _scalar(value: object = object) -> object:
+            return await self._accessor(name, value)
+
+        return _scalar
+
+    async def update_peers(self, peers: list[tuple[int, int, str, str | None]]) -> None:
+        self.peers.extend(peers)
+
+    async def update_usernames(
+        self, usernames: list[tuple[int, list[str | None]]]
+    ) -> None:
+        self.names.extend(usernames)
+
+    async def set_update_state(self, state: object) -> None:
+        self.states.append(state)
+
+
+def _legacy_db(path: object, *, user_id: int | None = 7) -> None:
+    db = sqlite3.connect(str(path))
+    db.execute(
+        "CREATE TABLE sessions (dc_id, server_address, port, api_id, test_mode,"
+        " auth_key, date, user_id, is_bot)"
+    )
+    db.execute(
+        "INSERT INTO sessions VALUES (2, 'x', 443, 1, 0, X'00', 0, ?, 0)", (user_id,)
+    )
+    db.execute(
+        "CREATE TABLE peers (id, access_hash, type, phone_number, last_update_on)"
+    )
+    db.execute("INSERT INTO peers VALUES (42, 99, 'user', NULL, 0)")
+    db.execute("CREATE TABLE usernames (id, username)")
+    db.execute("INSERT INTO usernames VALUES (42, 'ghost')")
+    db.execute("CREATE TABLE update_state (id, pts, qts, date, seq)")
+    db.execute("INSERT INTO update_state VALUES (0, 10, 20, 5, 1)")
+    db.commit()
+    db.close()
+
+
+def test_import_legacy_file_authorizes_store(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    session = Path(str(tmp_path)) / f"{mtproto.cfg.mtproto_session}.session"
+    _legacy_db(session)
+    monkeypatch.chdir(tmp_path)
+
+    store = _RecordingStore()
+
+    assert asyncio.run(mtproto._import_legacy_file(store)) is True  # type: ignore[arg-type]
+    assert store.scalars.get("user_id") == 7
+    assert store.peers == [(42, 99, "user", None)]
+    assert store.names == [(42, ["ghost"])]
+    assert len(store.states) == 1
+
+
+def test_import_legacy_file_skips_unauthorized(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    session = Path(str(tmp_path)) / f"{mtproto.cfg.mtproto_session}.session"
+    _legacy_db(session, user_id=None)
+    monkeypatch.chdir(tmp_path)
+
+    assert asyncio.run(mtproto._import_legacy_file(_RecordingStore())) is False  # type: ignore[arg-type]
+
+
+def test_import_legacy_file_skips_junk(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # * Wrong session name: the configured legacy path is absent.
+    Path(str(tmp_path)).joinpath("other-name.session").write_text("junk")
+    monkeypatch.chdir(tmp_path)
+
+    assert asyncio.run(mtproto._import_legacy_file(_RecordingStore())) is False  # type: ignore[arg-type]
