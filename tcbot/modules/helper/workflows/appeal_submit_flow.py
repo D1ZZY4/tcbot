@@ -59,8 +59,17 @@ _ID_RE = re.compile(r"^/start\s+appeal_([a-z0-9]{10})$")
 
 
 def starts_with_appeal_tag(text: str) -> bool:
-    """Return True when text (stripped) starts with #appeal (case-insensitive)."""
-    return text.strip().lower().startswith("#appeal")
+    """Return True when text (stripped) starts with #appeal (case-insensitive).
+
+    ``#appeals`` and ``#appealing`` share the prefix but are not appeals,
+    so require a word boundary after the tag (space, newline, or end).
+    """
+    stripped = text.strip()
+    lower = stripped.lower()
+    if not lower.startswith("#appeal"):
+        return False
+    tail = stripped[7:]
+    return tail == "" or tail[0].isspace() or tail[0] in (":", "-", ".", ",")
 
 
 def text_references_log_message(text: str, msg_id: int) -> bool:
@@ -91,7 +100,7 @@ def _is_stale_review(review_ts: datetime | None) -> bool:
 
 
 def _cooldown_remaining_h(rejected_at: datetime | None) -> int | None:
-    """Return remaining whole hours plus one inside the rejection cooldown, else None."""
+    """Return remaining whole hours rounded up inside the rejection cooldown, else None."""
     if rejected_at is None:
         return None
     elapsed = utc_now() - to_utc(rejected_at)
@@ -99,7 +108,10 @@ def _cooldown_remaining_h(rejected_at: datetime | None) -> int | None:
         elapsed = timedelta(0)
     if elapsed >= _REJECTION_COOLDOWN:
         return None
-    return int((_REJECTION_COOLDOWN - elapsed).total_seconds() / _SECONDS_PER_HOUR) + 1
+    # * Round up so a fresh rejection shows the full window (24, not 25)
+    # * and a nearly-expired one still shows 1 instead of 0.
+    total = int((_REJECTION_COOLDOWN - elapsed).total_seconds())
+    return (total + _SECONDS_PER_HOUR - 1) // _SECONDS_PER_HOUR
 
 
 # ────────────────────── Submission mixin ───────────────────── #

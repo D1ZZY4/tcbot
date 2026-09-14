@@ -196,15 +196,23 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     # * Re-ban check before any side effect: demotion must not land when
     # * the admin may still cancel at the confirmation below. A lookup
-    # * outage degrades to the old straight-to-proof path; the executor
-    # * re-checks and stays fail-closed downstream.
+    # * outage fails closed with a retry reply instead of degrading to
+    # * a fresh ban that wastes a proof round before the executor aborts.
     try:
         existing = await db.bans_db.get_active_ban(target_id)
     except asyncio.CancelledError:
         raise
     except Exception:
-        log.exception("cmd_ban_start active-ban lookup failed; proceeding as fresh ban")
-        existing = None
+        log.exception("cmd_ban_start active-ban lookup failed for target=%d", target_id)
+        await safe_reply(
+            msg,
+            replies.err_db_retry(locale, plain=True),
+            log_label="cmd_ban_start lookup-failed",
+            parse_mode=None,
+        )
+        for key in _BAN_KEYS:
+            ctx.user_data.pop(key, None)
+        return ConversationHandler.END
 
     if existing is not None:
         ctx.user_data["ban_target_role"] = target_role

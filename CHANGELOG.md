@@ -143,6 +143,22 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Loud instead of hung runtime startup** (`tcbot/database/mtproto.py`, `tcbot/alive.py`): the MTProto session connect now aborts the boot after 60 seconds on a network partition instead of hanging forever, and the keep-alive server probes its port before spawning the daemon thread so a conflict fails the startup stage instead of running headless with no health checks or webhook delivery.
 
+- **Appeal help labels follow the render locale** (`tcbot/modules/appeals.py`, `i18n/en-US/appeals.toml`, `i18n/id/appeals.toml`): the section headings and priority window text were hardcoded English while the bodies localized. They now render from the catalog. Output identical for the default locale.
+
+- **Ban entry fails closed on lookup outage** (`tcbot/modules/banning.py`): the active-ban read failure used to degrade to a fresh-ban path that collected proof before the executor aborted. The command now replies with a retry notice and clears its state instead. Behavior changes: outage bans no longer show a proof prompt.
+
+- **Rejection cooldown shows the correct remaining hours** (`tcbot/modules/helper/workflows/appeal_submit_flow.py`): a fresh rejection reported 25 hours remaining instead of 24, and mid-window values ran one hour high. The remaining time now rounds up to the next full hour. Behavior changes: fresh rejections show 24, near-expiry shows 1.
+
+- **`#appeal` tag requires a word boundary** (`tcbot/modules/helper/workflows/appeal_submit_flow.py`): `#appeals` and `#appealing` shared the prefix but were accepted as appeals. The gate now requires a boundary after the tag so only `#appeal` opens the flow. Behavior changes: `#appeals` alone is no longer an appeal.
+
+- **Check lists stay honest on database outages** (`tcbot/modules/helper/workflows/check_flow.py`): ban, appeal, warns-by-group, and per-chat drill-downs used dead `isinstance(..., BaseException)` checks over bare awaits, so outages left stale cards or empty views. Lists now trap failures, render a retry card on empty results, and append the incomplete-counters note otherwise. Behavior changes: outage lists never render as empty clean records.
+
+- **Ban entry fails closed on lookup outage** (`tcbot/modules/banning.py`): a failed active-ban read proceeded as a fresh ban, wasting a proof round before the executor aborted and risking an unnecessary demote. The entry now replies with a retry notice and ends instead. Behavior changes: outage bans no longer prompt for proof.
+
+- **Appeal tag requires a word boundary** (`tcbot/modules/helper/workflows/appeal_submit_flow.py`): `#appeals` and `#appealing` passed the gate because the check was a prefix test. The tag now requires a boundary after `#appeal`. Behavior changes: suffixed tags no longer count as appeals.
+
+- **Check lists fail honestly on database outage** (`tcbot/modules/helper/workflows/check_flow.py`): bans, appeals, per-chat and kicks/mutes lists left stale cards when the page fetch failed, and empty results looked clean even when both count and fetch were down. Fetches now catch exceptions and render the retry card instead of an empty one. Behavior changes: outage lists render the retry card, not the empty card.
+
 ### Documentation
 
 - **Warn-limit trigger documented as `>=`** (`tcbot/__init__.py`, `tcbot/modules/helper/workflows/warning_flow.py`): the `warn_limit` property docstring and the `_execute_warn_auto_ban` role-lookup comment described the trigger as `==` (exact equality), contradicting the deliberate `>=` implementation. Both texts now describe the "reaches or exceeds" semantics and why a `==` trigger would wedge the retry after a total enforcement failure. No behavior changes.

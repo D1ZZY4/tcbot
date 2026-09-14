@@ -494,14 +494,17 @@ class Check:
             count_failed = False
         total_pages = max(1, (count + _PAGE_SIZE - 1) // _PAGE_SIZE)
         page = max(0, min(page, total_pages - 1))
-        warns = await db.warns_db.get_warns(
-            target_id, chat_id, skip=page * _PAGE_SIZE, limit=_PAGE_SIZE
-        )
-        if isinstance(warns, BaseException):
+        try:
+            warns = await db.warns_db.get_warns(
+                target_id, chat_id, skip=page * _PAGE_SIZE, limit=_PAGE_SIZE
+            )
+            warns_failed = False
+        except Exception:
+            log.exception(
+                "check_flow warns_in_group fetch failed for %d/%d", target_id, chat_id
+            )
             warns = []
             warns_failed = True
-        else:
-            warns_failed = False
         if count_failed:
             # * Honest fallback when the count itself fails: show the fetched page.
             count = len(warns)
@@ -690,15 +693,22 @@ async def _ban_list_render(
         count_failed = False
     total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
     page = max(0, min(page, total_pages - 1))
-    chunk = await db_call(target_id, skip=page * _PAGE_SIZE, limit=_PAGE_SIZE)
-    if isinstance(chunk, BaseException):
+    try:
+        chunk = await db_call(target_id, skip=page * _PAGE_SIZE, limit=_PAGE_SIZE)
+        chunk_failed = False
+    except Exception:
+        log.exception("check_flow %s list fetch failed for %d", key_prefix, target_id)
         chunk = []
+        chunk_failed = True
     if count_failed:
         # * Honest fallback when the count itself fails: show the fetched page.
         total = len(chunk)
         total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
 
     if not chunk:
+        if count_failed or chunk_failed:
+            text = t("checking.warns.db_fail", locale)
+            return text, InlineKeyboardMarkup([_back_to_check(target_id, locale)])
         text = t(
             f"checking.{key_prefix}.empty",
             locale,
@@ -745,7 +755,9 @@ async def _ban_list_render(
             )
         )
 
-    return _maybe_caveat("\n".join(lines), locale, failed=count_failed), paged_drill_kb(
+    return _maybe_caveat(
+        "\n".join(lines), locale, failed=count_failed or chunk_failed
+    ), paged_drill_kb(
         items,
         page=page,
         total_pages=total_pages,
@@ -784,15 +796,22 @@ async def _per_chat_event_list(
         count_failed = False
     total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
     page = max(0, min(page, total_pages - 1))
-    records = await db_call(target_id, skip=page * _PAGE_SIZE, limit=_PAGE_SIZE)
-    if isinstance(records, BaseException):
+    try:
+        records = await db_call(target_id, skip=page * _PAGE_SIZE, limit=_PAGE_SIZE)
+        records_failed = False
+    except Exception:
+        log.exception("check_flow %s list fetch failed for %d", cb_prefix, target_id)
         records = []
+        records_failed = True
     if count_failed:
         # * Honest fallback when the count itself fails: show the fetched page.
         total = len(records)
         total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
 
     if not records:
+        if count_failed or records_failed:
+            text = t("checking.warns.db_fail", locale)
+            return text, InlineKeyboardMarkup([_back_to_check(target_id, locale)])
         text = t(
             "checking.events.empty",
             locale,
