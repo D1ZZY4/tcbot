@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 import re
+import string
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -47,16 +48,47 @@ from tcbot.utils.i18n import (
     Safe,
     available_locales,
     display_name,
-    find_unescaped,
     is_known_locale,
     load_catalog,
-    placeholders,
     resolve_locale,
     t,
 )
 from tcbot.utils.prefixes import _PrefixedCommandFilter
 
 ROOT = Path(__file__).resolve().parent.parent / "i18n"
+
+_V2_SPECIAL = "_*[]()~`>#+-=|{}.!"
+
+
+def placeholders(template: str) -> set[str]:
+    """Return the ``{name}`` placeholders used by a template."""
+    names: set[str] = set()
+    for _, name, _, _ in string.Formatter().parse(template):
+        if name:
+            names.add(name.split(".", 1)[0].split("[", 1)[0])
+    return names
+
+
+def find_unescaped(text: str) -> list[str]:
+    """Return descriptions of unescaped MarkdownV2 specials in rendered text."""
+    problems: list[str] = []
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+        if ch in _V2_SPECIAL:
+            if ch == "\\" and i + 1 < n and text[i + 1] in _V2_SPECIAL:
+                i += 1
+            else:
+                backslashes = 0
+                j = i - 1
+                while j >= 0 and text[j] == "\\":
+                    backslashes += 1
+                    j -= 1
+                if backslashes % 2 == 0:
+                    context = text[max(0, i - 14) : i + 8].replace("\n", "\\n")
+                    problems.append(f"unescaped {ch!r} near ...{context}...")
+        i += 1
+    return problems
 
 
 def _catalog() -> dict[str, dict[str, str]]:

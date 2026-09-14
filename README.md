@@ -110,8 +110,6 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 
 | Variable | Default | Description |
 |---|---|---|
-| `PROOF_TIMEOUT_SECONDS` | `100` | Parsed but not currently enforced (reserved). |
-| `APPEAL_TIMEOUT_SECONDS` | `600` | Parsed but not currently enforced (reserved). |
 | `ALBUM_DEBOUNCE_SECONDS` | `4` | Proof silence window before the ban executor runs (or tap Done to run at once). |
 | `MODULES_LOAD` | empty (all) | Whitelist of modules to load exclusively. |
 | `MODULES_NO_LOAD` | empty | Blacklist of modules to skip. |

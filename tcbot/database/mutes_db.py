@@ -138,13 +138,21 @@ async def active_mute_docs() -> list[ActiveMuteDoc]:
 # ─────────────────────── Per-user history ───────────────────────── #
 
 
-async def user_mutes(user_id: int) -> list[MuteDoc]:
-    """Return every mute record for a user, newest first."""
-    return await db_call(
+async def user_mutes(
+    user_id: int, *, skip: int = 0, limit: int | None = None
+) -> list[MuteDoc]:
+    """Return every mute record for a user, newest first.
+
+    ``limit=None`` returns the full list (backwards compatible).
+    """
+    cursor = (
         _mutes()
         .find({"user_id": user_id}, {"_id": 0}, sort=[("timestamp", -1)])
-        .to_list(None)
+        .skip(max(0, skip))
     )
+    if limit is not None:
+        cursor = cursor.limit(max(1, limit))
+    return await db_call(cursor.to_list(limit))
 
 
 async def user_mute_count(user_id: int) -> int:

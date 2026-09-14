@@ -17,7 +17,7 @@ Conversation and multi-step logic lives in `tcbot/modules/helper/workflows/`. Ne
 - Workflow files own state constants, `ConversationHandler` factories, and execution adapters.
 - Shared reason/proof logic belongs in `reason_flow.py` and `proof_flow.py`.
 - Callback handlers must call `await q.answer()` before doing further work.
-- Timeout configuration values (`cfg.proof_timeout`, `cfg.appeal_timeout`, `cfg.album_debounce`) are parsed from the environment. The bot does not use job-queue or `ConversationHandler.TIMEOUT` states; conversations end via escape commands, cancel, or explicit fallback handlers (e.g. `on_proof_timeout` in `ban_flow.py` fires when the moderator sends a command during the proof window).
+- Timeout handling (`cfg.album_debounce`) is a per-action setting; the bot does not use job-queue or `ConversationHandler.TIMEOUT` states. Conversations end via escape commands, cancel, or explicit fallback handlers (e.g. `on_proof_timeout` in `ban_flow.py` fires when the moderator sends a command during the proof window).
 
 ## Shared proof builder: `proof_flow.py`
 
@@ -25,11 +25,10 @@ Conversation and multi-step logic lives in `tcbot/modules/helper/workflows/`. Ne
 
 | Export | Purpose |
 |---|---|
-| `BuildProof(action, skip_allowed=True, skip_label="Skip", cancel_label="Cancel")` | Configures proof buttons and prompts for an action. |
+| `BuildProof(action, skip_allowed=True)` | Configures proof buttons and prompts for an action. Labels come from `button.skip`/`button.cancel` catalog keys. |
 | `BuildProof.keyboard()` | Returns `[Skip] [Cancel]` when skipping is allowed, otherwise `[Cancel]`. |
 | `BuildProof.step_prompt(...)` | Prompt after an in-conversation reason. |
 | `BuildProof.noted_prompt(...)` | Prompt when a reason was provided inline. |
-| `BuildProof.record(msg)` | Returns a short proof description for photo/video/GIF/file messages. Kept for backward compatibility; the shared reason flow no longer stores its result because no executor reads it. |
 | `upload_proof(bot, msgs, caption, proof_chat, proof_thread)` | Uploads proof media and returns the first uploaded message ID. Photos and videos travel as one media group (caption on the first item); GIFs and files are sent individually after the gallery. Returns `None` fast without Telegram I/O on empty input or a batch with no usable item; a failed document is logged and skipped. |
 
 ## Shared reason factory: `reason_flow.py`
@@ -46,13 +45,13 @@ Exports:
 | Export | Purpose |
 |---|---|
 | `parse_inline_reason(args, has_explicit_target)` | Returns reason text after the target token when needed. Ban, kick, mute, and warn entries all use this parser with the consumed flag from `extraction.extract_mod_target(update, args, bot)`, so reply-target reasons keep leading ID-like tokens, except a restated numeric ID of the replied-to user (passed as `reply_target_id` on the reply path only), which is dropped as a duplicate. A verified typed ID naming someone else overrides the reply and is consumed as the target. |
-| `MAX_REASON_LEN` | Maximum character length accepted for a moderation reason (1000). Typed input exceeding this stays in `WAITING_REASON` with a retry notice; overlong inline reasons fail fast at the entry with the same text via `is_reason_too_long()` and `reason_too_long_text()`. `_MAX_REASON_LEN` remains as a backward-compatible alias. |
+| `MAX_REASON_LEN` | Maximum character length accepted for a moderation reason (1000). Typed input exceeding this stays in `WAITING_REASON` with a retry notice; overlong inline reasons fail fast at the entry with the same text via `is_reason_too_long()` and `reason_too_long_text()`. |
 | `is_reason_too_long(text)` | Shared length predicate used by the typed-reason handler and all four inline-reason entries. |
 | `reason_too_long_text(actual_len)` | Single source of truth for the overlong-reason reply text. |
 | `BuildReason(...)` | Configures reason-step prompts and buttons. |
 | `build_modaction_conv(reason, proof, entry_fn, executor, entry_filter, escape_filter=None)` | Builds the shared kick/mute/warn conversation. |
 
-The shared factory stores action-specific values in `ctx.user_data`, then calls the supplied executor adapter. When a moderator submits proof media, `_on_proof` stores the actual `Message` objects (`{action}_proof_msgs`) in `user_data`. Executors pop `{action}_proof_msgs` and upload them to the proof channel via `upload_proof()`; the resulting URL is shown as an inline keyboard button via `keyboards.action_proof_kb()`. The short text description from `BuildProof.record()` has no reader and is intentionally kept out of `user_data` to keep conversation state lean.
+The shared factory stores action-specific values in `ctx.user_data`, then calls the supplied executor adapter. When a moderator submits proof media, `_on_proof` stores the actual `Message` objects (`{action}_proof_msgs`) in `user_data`. Executors pop `{action}_proof_msgs` and upload them to the proof channel via `upload_proof()`; the resulting URL is shown as an inline keyboard button via `keyboards.action_proof_kb()`.
 
 `_on_proof` buffers every proof item (`{action}_proof_msgs`) until the moderator taps `Done`; `_on_done_proof` runs the executor with the live tap update. Tapping `Done` with nothing collected answers with a retry alert and stays put.
 
@@ -240,9 +239,9 @@ Demotion is not a conversation. `Demote.execute(...)` in `workflows/demote_flow.
 | Call | Trigger | Path |
 |---|---|---|
 | `Demote.execute(...)` | `None` | Manual `/tcdemote`: `admins.py` sends a Confirm/Cancel prompt first; the confirm callback calls `Demote.execute(trigger=None)`, which removes the role, posts the federation log, and DMs the target. |
-| `Demote.execute(..., trigger="ban")` | `"ban"` | Auto-demote before a federation ban: silently removes the role and notes the trigger in the log. |
-| `Demote.execute(..., trigger="kick")` | `"kick"` | Auto-demote before a current-group kick: same silent path as `"ban"`. |
-| `Demote.execute(..., trigger="mute")` | `"mute"` | Auto-demote before a federation-wide mute: same silent path as `"ban"` and `"kick"`. |
+| `Demote.execute(..., trigger="ban")` | `"ban"` | Auto-demote before a federation ban: silently removes the role. The DM body names the trigger verb (banned/kicked/muted), but the federation log is identical to the manual path — it never notes the trigger. |
+| `Demote.execute(..., trigger="kick")` | `"kick"` | Auto-demote before a current-group kick: same silent role-removal path as `"ban"`. |
+| `Demote.execute(..., trigger="mute")` | `"mute"` | Auto-demote before a federation-wide mute: same silent role-removal path as `"ban"` and `"kick"`. |
 
 `Demote.remove_role(target_id, target_role)` is the shared DB write used by all four paths. It delegates to `users_roles` and returns `True` if a role was actually removed.
 

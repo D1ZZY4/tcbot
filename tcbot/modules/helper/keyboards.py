@@ -198,6 +198,46 @@ def action_proof_kb(
     )
 
 
+def detail_kb(
+    *,
+    back_callback: str,
+    proof_link: str | None = None,
+    appeal_link: str | None = None,
+    locale: str | None = None,
+) -> InlineKeyboardMarkup:
+    """Proof/appeal URL row(s) plus a tagged back button."""
+    rows: list[list[InlineKeyboardButton]] = []
+    if proof_link:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    t("button.view_proof", locale, plain=True),
+                    url=proof_link,
+                    style=KeyboardButtonStyle.PRIMARY,
+                )
+            ]
+        )
+    if appeal_link:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    t("button.view_appeal", locale, plain=True),
+                    url=appeal_link,
+                    style=KeyboardButtonStyle.PRIMARY,
+                )
+            ]
+        )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                t("button.back", locale, plain=True),
+                callback_data=back_callback,
+            )
+        ]
+    )
+    return InlineKeyboardMarkup(rows)
+
+
 # ───────────────────────── Admin promotion ──────────────────────── #
 
 

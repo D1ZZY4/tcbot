@@ -121,6 +121,15 @@ class CircuitBreaker:
             )
         return self._state
 
+    def peek_state(self) -> CircuitState:
+        """Return the current state WITHOUT triggering the OPEN→HALF_OPEN transition.
+
+        That transition is a side effect of reading ``state``; health and
+        monitoring reads must use this so an uptime poll can never flip a
+        circuit out of OPEN.
+        """
+        return self._state
+
     @property
     def is_open(self) -> bool:
         """True when the circuit is OPEN and calls should be rejected."""

@@ -36,9 +36,6 @@ def additional_msg(locale: str | None = None) -> str:
     return t("additional.msg.body", locale, community=cfg.community_name)
 
 
-__additional_msg__ = additional_msg()
-
-
 # ──────────────────────── Callback Handler ──────────────────────── #
 
 

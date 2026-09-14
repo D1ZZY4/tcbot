@@ -16,7 +16,6 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import BanDoc
 from tcbot.modules.helper import decorators, extraction, identity, replies
-from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.keyboards import ban_update_confirm_kb
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
@@ -33,8 +32,7 @@ from tcbot.modules.helper.workflows.reason_flow import (
     parse_inline_reason,
     reason_too_long_text,
 )
-from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import code, mention
+from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -45,6 +43,17 @@ log = logging.getLogger(__name__)
 
 # ──────────────── User-facing reply constants ──────────────────── #
 # * Ban runtime prose lives in banning.toml; no constants stay here.
+
+# * user_data keys written before the proof prompt; popped on prompt failure.
+_BAN_KEYS = (
+    "ban_target_id",
+    "ban_target_fname",
+    "ban_reason",
+    "ban_admin_id",
+    "ban_admin_fname",
+    "ban_target_role",
+    "ban_locale",
+)
 
 # ─────────────────────── Rate-limiter constants ──────────────────── #
 _RL_PERIOD_S: int = 60
@@ -160,25 +169,18 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     # * Identity check + role lookup happen in parallel; both depend only on
     # * already-resolved IDs so there is no need to wait for them sequentially.
     # * return_exceptions=True prevents a DB failure from leaving the ConversationHandler open.
-    ident, role_result = await asyncio.gather(
-        identity.classify(ctx.bot, admin.id, target_id, target_fname),
-        resolve_and_check(msg, admin.id, target_id, min_role="developer"),
-        return_exceptions=True,
+    classified = await decorators.classify_and_check(
+        ctx.bot,
+        admin.id,
+        target_id,
+        target_fname,
+        msg,
+        action="ban",
+        min_role="developer",
     )
-    throw_if_cancelled((ident, role_result))
-    if isinstance(ident, BaseException):
-        log.exception("identity.classify failed in cmd_ban_start: %s", ident)
+    if classified is None:
         return ConversationHandler.END
-    if isinstance(role_result, BaseException):
-        log.exception("resolve_and_check failed in cmd_ban_start: %s", role_result)
-        return ConversationHandler.END
-    # * isinstance + early return above already narrows role_result to the
-    # * success tuple; no assert needed (asserts vanish under python -O).
-    executor_role, target_role = role_result
-    # * Guard first: if resolve_and_check already replied and rejected (e.g. target
-    # * outranks executor), skip the identity refusal to avoid sending two replies.
-    if executor_role is None:
-        return ConversationHandler.END
+    ident, target_role = classified
 
     refusal = identity.refuse_message("ban", ident, locale)
     if refusal is not None:
@@ -234,15 +236,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         ctx.user_data["ban_prompt_chat_id"] = msg.chat.id
     except Exception as exc:
         log.debug("cmd_ban_start proof-prompt reply failed: %s", exc)
-        for key in (
-            "ban_target_id",
-            "ban_target_fname",
-            "ban_reason",
-            "ban_admin_id",
-            "ban_admin_fname",
-            "ban_target_role",
-            "ban_locale",
-        ):
+        for key in _BAN_KEYS:
             ctx.user_data.pop(key, None)
         return ConversationHandler.END
 
@@ -281,7 +275,7 @@ async def _ask_update_confirm(
     text = t(
         "banning.confirm.body",
         locale,
-        user=Safe(mention(target_id, target_fname or str(target_id))),
+        user=Safe(user_ref(target_id, target_fname or str(target_id))),
         ban_id=Safe(code(str(existing.get("ban_id", "")))),
         old_reason=str(existing.get("reason", "")),
         new_reason=ban_reason,
@@ -292,15 +286,7 @@ async def _ask_update_confirm(
         ctx.user_data["ban_prompt_chat_id"] = msg.chat.id
     except Exception as exc:
         log.debug("cmd_ban_start confirm-prompt reply failed: %s", exc)
-        for key in (
-            "ban_target_id",
-            "ban_target_fname",
-            "ban_reason",
-            "ban_admin_id",
-            "ban_admin_fname",
-            "ban_target_role",
-            "ban_locale",
-        ):
+        for key in _BAN_KEYS:
             ctx.user_data.pop(key, None)
         return ConversationHandler.END
     return WAITING_UPDATE_CONFIRM

@@ -332,14 +332,17 @@ async def active_bans_for_users(user_ids: list[int]) -> list[BanDoc]:
     )
 
 
-async def user_appealable_bans(user_id: int) -> list[BanDoc]:
+async def user_appealable_bans(
+    user_id: int, *, skip: int = 0, limit: int | None = None
+) -> list[BanDoc]:
     """Return the user's bans that ever had an appeal submitted, newest first.
 
     Server-side version of the ``appeal_log_msg_id is not None`` filter;
     same predicate as :func:`user_appeal_count`, served by the sparse
-    ``(banned_user_id, appeal_log_msg_id)`` index.
+    ``(banned_user_id, appeal_log_msg_id)`` index. ``limit=None`` returns
+    the full list (backwards compatible).
     """
-    return await db_call(
+    cursor = (
         _bans()
         .find(
             {
@@ -349,8 +352,11 @@ async def user_appealable_bans(user_id: int) -> list[BanDoc]:
             {"_id": 0},
             sort=[("timestamp", -1), ("ban_id", -1)],
         )
-        .to_list(None)
+        .skip(max(0, skip))
     )
+    if limit is not None:
+        cursor = cursor.limit(max(1, limit))
+    return await db_call(cursor.to_list(limit))
 
 
 async def active_ban_user_ids() -> list[int]:
@@ -370,17 +376,25 @@ async def active_ban_user_ids() -> list[int]:
 # ─────────────────────── Per-user history ───────────────────────── #
 
 
-async def user_bans(user_id: int) -> list[BanDoc]:
-    """Return every ban (active + inactive) for a user, newest first."""
-    return await db_call(
+async def user_bans(
+    user_id: int, *, skip: int = 0, limit: int | None = None
+) -> list[BanDoc]:
+    """Return every ban (active + inactive) for a user, newest first.
+
+    ``limit=None`` returns the full list (backwards compatible).
+    """
+    cursor = (
         _bans()
         .find(
             {"banned_user_id": user_id},
             {"_id": 0},
             sort=[("timestamp", -1), ("ban_id", -1)],
         )
-        .to_list(None)
+        .skip(max(0, skip))
     )
+    if limit is not None:
+        cursor = cursor.limit(max(1, limit))
+    return await db_call(cursor.to_list(limit))
 
 
 async def user_ban_count(user_id: int) -> int:

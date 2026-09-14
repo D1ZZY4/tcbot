@@ -20,7 +20,7 @@ from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.unban_flow import execute_unban
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import mention
+from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -181,7 +181,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                     t(
                         "demote.abort.body",
                         locale,
-                        user=Safe(mention(target_id, target_fname or str(target_id))),
+                        user=Safe(user_ref(target_id, target_fname or str(target_id))),
                         target_role=target_role,
                         action="unban",
                     ),

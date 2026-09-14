@@ -176,14 +176,48 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
     # * /tcunmute guards on get_active_mute and would refuse, forcing a
     # * manual per-group unrestrict. A failed write aborts with no group
     # * touched; the moderator retries once the database recovers.
-    log_r, active_r = await asyncio.gather(
-        db.mutes_db.log_mute(
-            target_id, chat_id, reason_text, admin_id, duration_secs=duration_secs
-        ),
-        db.mutes_db.set_active_mute(target_id, until=until),
-        return_exceptions=True,
-    )
-    if isinstance(log_r, BaseException) or isinstance(active_r, BaseException):
+    # * Sequential, not gather: set_active_mute is authoritative and log_mute
+    # * is the audit trail. Writing the audit first could leave a permanent
+    # * record claiming a mute that never restricted anyone; writing the
+    # * enforcement first lets us UNDO it (delete the active record) when the
+    # * audit write fails, so a retry can converge to a consistent state.
+    # * Mirrors the ban flow's "DB row is authoritative, log post observable"
+    # * ordering.
+    active_r: BaseException | None = None
+    # * Deliberately broad: any write failure fails closed so a partially
+    # * committed mute never silently continues. Cancellation is not a write
+    # * failure: it re-raises so shutdown or an operator cancel never renders
+    # * as a database outage and never triggers the rollback below.
+    try:
+        await db.mutes_db.set_active_mute(target_id, until=until)
+    except asyncio.CancelledError:
+        raise
+    except BaseException as exc:
+        active_r = exc
+    log_r: BaseException | None = None
+    if active_r is None:
+        try:
+            await db.mutes_db.log_mute(
+                target_id,
+                chat_id,
+                reason_text,
+                admin_id,
+                duration_secs=duration_secs,
+            )
+        except asyncio.CancelledError:
+            raise
+        except BaseException as exc:
+            log_r = exc
+
+    if log_r is not None or active_r is not None:
+        # * Undo the committed half so the next attempt starts clean.
+        if active_r is None:
+            try:
+                await db.mutes_db.clear_active_mute(target_id)
+            except asyncio.CancelledError:
+                raise
+            except BaseException:
+                log.exception("Failed to delete active mute for %d", target_id)
         log.error(
             "_execute_mute: mute DB write failed for target=%d (log=%s active=%s)",
             target_id,

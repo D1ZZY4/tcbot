@@ -17,7 +17,7 @@ flowchart TD
     Target --> Ident{Self / bot / Founder?}
     Ident -->|self or bot| Refuse[identity.refuse_message]
     Ident -->|allowed| RoleCheck{Target holds federation role?}
-    RoleCheck -->|yes| AutoDemote[Demote.execute trigger mute]
+    RoleCheck -->|yes| AutoDemote[Demote.auto_demote_or_abort trigger mute]
     RoleCheck -->|no| ReasonStep
     AutoDemote -->|demote failed| Abort[Abort with error reply]
     AutoDemote -->|demote ok| ReasonStep[Inline reason present?]
@@ -62,7 +62,7 @@ The mute command is a `ConversationHandler` built by `reason_flow.build_modactio
 3. The executor must have at least Tester rank.
 4. The target must resolve to a Telegram user ID.
 5. The bot rejects attempts to mute itself or the executor's own account via `identity.refuse_message`.
-6. If the target holds a federation role, `Demote.execute(..., trigger="mute")` runs first. If the demote raises, the command aborts with an error reply and the mute is not attempted.
+6. If the target holds a federation role, `Demote.auto_demote_or_abort(..., trigger="mute")` runs first. On a demote failure the helper replies with a localized notice telling the executor to demote manually and returns `False`; the command ends and the mute is not attempted.
 7. The bot parses an optional duration token from the first remaining argument.
 8. If an inline reason was supplied, the bot skips directly to proof collection (`WAITING_PROOF`). Otherwise it prompts for a reason (`WAITING_REASON`).
 9. Reason is skippable via the `Skip` button.
@@ -71,7 +71,7 @@ The mute command is a `ConversationHandler` built by `reason_flow.build_modactio
 
 ## Duration token format
 
-The duration regex is `_DURATION_RE` in `muting_flow.py:40`:
+The duration regex is `_DURATION_RE` in `muting_flow.py:42`:
 
 ```python
 _DURATION_RE = re.compile(r"^(\d+)(ye|mo|[smhdw])$", re.IGNORECASE)
@@ -89,7 +89,7 @@ _DURATION_RE = re.compile(r"^(\d+)(ye|mo|[smhdw])$", re.IGNORECASE)
 
 `parse_duration("3d")` returns `timedelta(days=3)`. A token that fails the regex never matches the duration guard and stays in the reason text. A regex-valid but unparsable token (timedelta overflow or above the 100-year `_MAX_DURATION_DAYS=36500` cap) makes `parse_duration` return `None`, and the token is kept as reason text as well: it is popped from the arg list only after a successful parse, so moderator input is never silently dropped.
 
-`fmt_duration(td)` renders:
+`fmt_duration(td, locale)` renders:
 
 - `total < 60` -> `Ns`
 - `< 1 hour` -> `Nm`
@@ -99,7 +99,7 @@ _DURATION_RE = re.compile(r"^(\d+)(ye|mo|[smhdw])$", re.IGNORECASE)
 - `< 1 year` -> `Nmo`
 - else -> `Nye`
 
-A `None` duration renders as `permanently` and is passed to `restrict_chat_member` with `until_date=None`, producing a permanent restriction.
+A `None` duration renders as the localized `muting.duration.permanent` label (English default: `permanently`) and is passed to `restrict_chat_member` with `until_date=None`, producing a permanent restriction.
 
 ## Target resolution and reason parsing
 
@@ -145,14 +145,9 @@ The `_ModActionFlow` class in `reason_flow.py` enforces the same race-safe seman
 
 ## Auto-demote before mute
 
-If the target holds a federation role, `cmd_mute` calls `Demote.execute(ctx.bot, target_id, ..., trigger="mute")` before opening the reason prompt. If `Demote.execute` raises, `cmd_mute` aborts with:
+If the target holds a federation role, `cmd_mute` calls `Demote.auto_demote_or_abort(ctx.bot, target_id, ..., trigger="mute")` before opening the reason prompt.
 
-```text
-<target> holds a federation role (<role>) and the auto-demote step failed,
-so the mute cannot proceed safely. Demote them manually with /tcdemote and retry the mute.
-```
-
-The mute is not attempted in this case; previously this exception was swallowed silently and the mute would still proceed on a role-holding target.
+`auto_demote_or_abort` runs `Demote.execute` (removing the role record, posting the federation demote log, and DMing the target). If the demote raises, it replies with the localized `demote.abort.body` notice (English default: `{user} holds a federation role ({target_role}) and the auto-demote step failed, so the {action} cannot proceed safely. Demote them manually with /tcdemote and retry the {action}.`) and returns `False`, so `cmd_mute` ends without muting; previously this exception was swallowed silently and the mute would still proceed on a role-holding target.
 
 ## `execute_mute` behavior
 
@@ -207,7 +202,7 @@ The `mutes` collection stores audit rows; `active_mutes` stores the live restric
 |---|---|
 | `user_id` | Muted Telegram user ID. |
 | `chat_id` | Group chat ID where the mute command was issued. |
-| `reason` | Moderator-provided reason or `replies.NO_REASON`. |
+| `reason` | Moderator-provided reason or localized `replies.no_reason(locale)` text. |
 | `admin_id` | Telegram user ID of the moderator. |
 | `timestamp` | UTC mute creation time. |
 | `duration_secs` | Optional; total seconds when the mute is timed. |
@@ -261,7 +256,7 @@ Key behaviors to keep in mind:
 4. Self-mute and bot-mute attempts are rejected by `identity.refuse_message`.
 5. Higher-rank or equal-rank targets are rejected by `resolve_and_check`.
 6. Role-holding targets are auto-demoted before the mute; if the demote fails the mute is aborted with an error reply.
-7. Reason is skippable; skipped reason records as `replies.NO_REASON`.
+7. Reason is skippable; skipped reason records as the localized `replies.no_reason(locale)` text.
 8. Proof is skippable; skipped proof records nothing.
 9. The `_UNMUTE_CMDS` filter is excluded from the mute conversation fallback so unmute can interrupt a pending mute conversation.
 10. `execute_mute` restricts across `active_groups()` plus `cfg.main_group`/`cfg.exec_group`, deduplicated.

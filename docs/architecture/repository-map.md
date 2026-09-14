@@ -16,7 +16,12 @@ This page maps the repository structure and the service boundaries between packa
 ├── tcbot/                  Main Python package
 ├── api/                    Vercel serverless endpoints (webhook, cron)
 ├── docs/                   Documentation grouped by purpose
+├── i18n/                   Translation catalogs (en-US locale source-truth)
+├── tests/                  Pytest test suite
+├── .github/                GitHub Actions workflows + dependabot config
+├── .agents/                Maintainer and agent rules and skills
 ├── pyproject.toml          Dependencies and Ruff config
+├── pyrightconfig.json      Pyright type checker configuration
 ├── uv.lock                 Locked dependency graph
 ├── vercel.json             Vercel functions, timeouts, and cron schedule
 ├── .python-version         Pinned Python for Vercel and uv (3.14)
@@ -66,20 +71,22 @@ tcbot/
 │   ├── queues_db.py        Promotion request queue
 │   ├── cache.py            L1 TTL caches with optional Redis L2
 │   ├── redis_client.py     Optional async Redis client
-│   ├── scheduler.py        APScheduler background jobs with MongoDB store
+│   ├── scheduler.py        APScheduler background jobs in the MongoDB `jobs` collection
+│   ├── settings_db.py      Per-user settings (locale preferences)
 │   ├── documents.py        TypedDict document shapes
 │   └── types.py            NewType ID primitives
 ├── modules/
 │   ├── __init__.py         Dynamic module discovery and handler collection
 │   ├── *.py                Command and callback modules
 │   └── helper/
-│       ├── decorators.py   Auth, per-handler rate limits, tracing, resolve_and_check
-  │       ├── extraction.py   Target resolution
-  │       ├── keyboards.py    Inline keyboard factories
 │       ├── ban_info.py     Ban detail renderer
+│       ├── decorators.py   Auth, per-handler rate limits, tracing, resolve_and_check
+│       ├── extraction.py   Target resolution
 │       ├── identity.py     Identity classification, refusal messages, staff notices
-│       ├── replies.py      Shared reply string constants (errors, permissions, syntax)
+│       ├── keyboards.py    Inline keyboard factories
+│       ├── locale.py       Render-locale resolution shared by handlers, callbacks, flows
 │       ├── parse_*.py      Link, log, and safe-edit helpers
+│       ├── replies.py      Shared localized reply and help-text strings, HelpEntry shape
 │       └── workflows/
 │           └── *_flow.py   Conversation factories, plus Promote / Demote / Check classes
 └── utils/
@@ -87,6 +94,7 @@ tcbot/
     ├── dispatch.py         Bounded concurrent fan-out (integrates Telegram circuit)
     ├── error_reporter.py   Telegram error classification and reporting
     ├── formatter.py        MarkdownV2 escaping and formatting (single source of truth)
+    ├── i18n.py             TOML locale catalogs, lookup, and interpolation
     ├── logger.py           Console formatter and error log handler
     ├── pagination.py       Shared paginate(), nav_row(), date_or_unknown() helpers
     ├── prefixes.py         Prefix parsing and command filters
@@ -143,11 +151,15 @@ sequenceDiagram
     Mods-->>Main: handlers
     Main->>PTB: add handlers and error handler
     Main->>PTB: initialize() + post_init (explicit; not called by PTB in webhook mode)
-    Main->>DB: connect() and ensure_indexes()
-    Main->>DB: ensure_initial_owner()
-    Main->>Main: connect Redis (optional)
+    Main->>DB: connect()
+    par parallel setup
+        Main->>DB: ensure_indexes()
+        Main->>DB: ensure_initial_owner()
+        Main->>Main: connect Redis (optional)
+    end
     Main->>Main: start APScheduler
-    Main->>Main: attach error_reporter + asyncio handler
+    Main->>Main: warm hot caches (background task)
+    Main->>Main: attach error_reporter + asyncio exception handler
     Main->>PTB: set_webhook() + get_webhook_info() verify
     Main->>Alive: register_webhook() wire Flask /webhook -> PTB queue
     PTB->>PTB: await updates from Flask webhook receiver

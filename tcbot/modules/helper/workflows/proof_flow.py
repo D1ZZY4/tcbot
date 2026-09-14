@@ -49,9 +49,6 @@ class BuildProof:
 
     action: str
     skip_allowed: bool = field(default=True, kw_only=True)
-    skip_label: str = field(default="Skip", kw_only=True)
-    done_label: str = field(default="Done", kw_only=True)
-    cancel_label: str = field(default="Cancel", kw_only=True)
 
     def keyboard(self, locale: str | None = None) -> InlineKeyboardMarkup:
         """Proof-step keyboard: optional Skip, Done flush, Cancel.
@@ -139,19 +136,6 @@ class BuildProof:
             done=t("button.done", locale, plain=True),
             skip_hint=self._skip_hint(locale),
         )
-
-    @staticmethod
-    def record(msg: Message) -> str | None:
-        """Return a short proof description from a media message, or None."""
-        if msg.photo:
-            return f"Photo (msg {msg.message_id})"
-        if msg.video:
-            return f"Video (msg {msg.message_id})"
-        if msg.animation:
-            return f"GIF (msg {msg.message_id})"
-        if msg.document:
-            return f"File (msg {msg.message_id})"
-        return None
 
 
 # ───────────────────────── Channel upload ───────────────────────── #

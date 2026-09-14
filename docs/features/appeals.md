@@ -121,6 +121,14 @@ The review card contains two inline buttons:
 | `Approve` | `appeal_approve_<ban_id>` |
 | `Reject` | `appeal_reject_<ban_id>` |
 
+Both callbacks use the underscore-delimited `<action>_<ban_id>` shape that
+the handler registers and parses (`appeals.py` pattern
+`^appeal_(approve|reject)_\S+$`; `appeal_review_flow.py` slices the tail
+after `appeal_reject_`). Known defect: `keyboards.appeal_review_kb()` builds
+the Reject button with a colon separator (`appeal_reject:<ban_id>`) instead
+of the underscore form, which fails the handler pattern — the rewrite must
+emit the underscore variant above.
+
 The DM instruction message has a cancel button:
 
 | Button | Callback data |
@@ -237,7 +245,7 @@ If editing the existing appeal log fails, the bot attempts to send a new log mes
 
 ## Timeouts and fallbacks
 
-- `cfg.appeal_timeout` (`APPEAL_TIMEOUT_SECONDS`, default `600`) is parsed from the environment but is not applied to the `ConversationHandler`; there is no `ConversationHandler.TIMEOUT` state. Conversations end only via escape commands, cancel, or successful submission.
+- There is no `ConversationHandler.TIMEOUT` state. Conversations end only via escape commands, cancel, or successful submission.
 - Any recognized command during the waiting state ends the session with `Appeal session ended.`
 - Cancel ends the session without writing appeal metadata.
 - If the user sends `#appeal` after the session state has expired or the ban ID is missing from `ctx.user_data`, the bot asks them to start the appeal again.
@@ -259,7 +267,7 @@ If editing the existing appeal log fails, the bot attempts to send a new log mes
 After a staff member rejects an appeal, the banned user must wait **24 hours** before
 submitting a new one. This prevents spam-appealing immediately after every rejection.
 
-The cooldown is enforced in `BuildAppeal._start()`: when `ban.rejected_at` is present and
+The cooldown is enforced in `AppealSubmitMixin._start()` (the submission half of the `BuildAppeal` facade): when `ban.rejected_at` is present and
 `utc_now() - to_utc(rejected_at) < timedelta(hours=24)`, the user receives a message
 showing the hours remaining and `ConversationHandler.END` is returned.
 

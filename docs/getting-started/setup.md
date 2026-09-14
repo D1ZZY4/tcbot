@@ -78,7 +78,7 @@ Docker, Heroku, VPS with systemd, Windows over RDP) live in the collapsible
 
 ### Community links (optional)
 
-The Additional Links menu in the bot start screen shows buttons for community channels, groups, and the TRAVEL community. Each button uses its env var when set to a non-empty URL and falls back to the built-in default otherwise, so all five buttons show with zero setup:
+The Additional Links menu in the bot start screen shows buttons for community channels, groups, and the TRAVEL community. Each button uses its env var when set to a non-empty `http(s)` URL and falls back to the built-in default otherwise, so all five buttons show with zero setup. A non-http(s) env value is rejected: it logs a warning and that button is omitted.
 
 | Variable | Button label |
 |---|---|
@@ -139,8 +139,6 @@ PROOFS="-1001234567890"
 | `APPEALS` | Yes for appeals | `chat_id` or `chat_id/thread_id` | Submitted appeal record destination. |
 | `APPEAL_LOG_HANDLE` | No | channel handle | Displayed in appeal instructions. Defaults to `@TranssionCoreFederationLogs`. |
 | `APPEAL_DISCUSSION_TOPIC` | Yes for reviews | integer thread ID | Topic inside `MAIN_GROUP` where review cards are posted. |
-| `PROOF_TIMEOUT_SECONDS` | No | integer seconds | Parsed into `cfg.proof_timeout`; **not currently enforced** (PTB `conversation_timeout` is not wired because the `[job-queue]` extra conflicts with this project's APScheduler setup). Conversations end via the command-fallback handler or the Cancel button. Default `100`; values below `1` fall back to default. |
-| `APPEAL_TIMEOUT_SECONDS` | No | integer seconds | Parsed into `cfg.appeal_timeout`; **not currently enforced** (same reason as `PROOF_TIMEOUT_SECONDS`). Default `600`; values below `1` fall back to default. |
 | `ALBUM_DEBOUNCE_SECONDS` | No | integer seconds | Proof silence window for ban proof media. Default `4`; values below `1` fall back to default. |
 | `LOG_LEVEL` | No | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | Runtime logging level. Default `INFO`. |
 | `MODULES_LOAD` | No | comma-separated module names | Optional whitelist, e.g. `banning,appeals`. |
@@ -153,6 +151,13 @@ PROOFS="-1001234567890"
 | `FED_WARN_LIMIT` | No | integer >= 0 | Federation-wide warning threshold: sum of warn counts across all groups triggers an automatic federation ban when >= this value. Default `0` (disabled). Set to a positive integer to enable cross-group warn aggregation. |
 | `WARN_EXPIRY_DAYS` | No | positive integer | Days after which `warn_counts` records are deleted by the daily scheduler job. Default `0` (disabled). Set to a positive integer to enable automatic warn expiry. |
 | `SYNC_INTERVAL_HOURS` | No | integer >= 0 | Hours between scheduled enforcement-sync sweeps (`/tcsync` core on a timer, log-only). Default `0` (disabled, manual `/tcsync` only). |
+| `COMMUNITY_CHANNEL_URL` | No | http(s) URL | Main Channel button in the Additional Links menu. |
+| `COMMUNITY_GROUP_URL` | No | http(s) URL | Discussion Group button. |
+| `COMMUNITY_LOGS_URL` | No | http(s) URL | Logs Channel button. |
+| `COMMUNITY_EXEC_URL` | No | http(s) URL | Exec Group button. |
+| `COMMUNITY_TRAVEL_URL` | No | http(s) URL | TRAVEL community button. |
+
+Each community link falls back to its built-in default when empty, so all five buttons show with zero setup. A non-http(s) value is ignored with a warning and hides that button.
 
 ## Startup sequence
 
@@ -162,7 +167,7 @@ PROOFS="-1001234567890"
 4. PTB `ApplicationBuilder` builds the bot application.
 5. `tcbot.modules.get_handlers()` imports active modules and stops startup if an enabled module fails to import.
 6. Signal handlers (`SIGTERM`, `SIGINT`) are registered immediately before the PTB lifecycle begins.
-7. `_post_init()` connects MongoDB, ensures indexes, seeds the initial owner, and attaches the error reporter.
+7. `_post_init()` connects MongoDB, ensures indexes, seeds the initial owner, connects the optional Redis cache, starts the APScheduler, and attaches the error reporter.
 8. **Webhook mode** (when `WEBHOOK_URL` or `REPLIT_DEV_DOMAIN` resolves to a URL): `bot.set_webhook()` registers the URL, `register_webhook()` wires Flask's `POST /webhook` to PTB's update queue, and the bot waits for `SIGTERM`/`SIGINT`.
 9. **Polling mode** (when no webhook URL is available): `run_polling()` starts with `drop_pending_updates=True`. A `WARNING` log identifies this local-development fallback.
 

@@ -114,8 +114,15 @@ def mongo_client_kwargs() -> dict[str, Any]:
     startup dies with the identical TLS error while Motor connects fine).
     """
     if "tlscafile" not in cfg.mongodb_uri.lower():
-        return {"tlsCAFile": certifi.where()}
-    return {}
+        kwargs: dict[str, Any] = {"tlsCAFile": certifi.where()}
+    else:
+        kwargs = {}
+    # * Shared by Motor and the APScheduler jobstore's own sync client: the
+    # * latter drops to pymongo's 30s server-selection default otherwise and
+    # * blocks the event loop at every boot under a degraded MongoDB.
+    kwargs.setdefault("serverSelectionTimeoutMS", _MONGO_SERVER_SELECTION_MS)
+    kwargs.setdefault("connectTimeoutMS", _MONGO_CONNECT_TIMEOUT_MS)
+    return kwargs
 
 
 async def connect() -> None:
@@ -123,10 +130,11 @@ async def connect() -> None:
     global _db
     _patch_dns_if_needed()
     client_kwargs = mongo_client_kwargs()
+    # * serverSelection/connect timeouts live in mongo_client_kwargs() (shared
+    # * with the scheduler's sync client): passing them here as well would be
+    # * a duplicate keyword argument and crash startup with TypeError.
     client = AsyncIOMotorClient(
         cfg.mongodb_uri,
-        serverSelectionTimeoutMS=_MONGO_SERVER_SELECTION_MS,
-        connectTimeoutMS=_MONGO_CONNECT_TIMEOUT_MS,
         socketTimeoutMS=_MONGO_SOCKET_TIMEOUT_MS,
         maxPoolSize=_MONGO_MAX_POOL_SIZE,
         minPoolSize=_MONGO_MIN_POOL_SIZE,

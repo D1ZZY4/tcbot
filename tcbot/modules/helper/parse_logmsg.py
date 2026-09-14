@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.utils.formatter import code, esc, link, mention, safe_username
+from tcbot.utils.formatter import code, esc, link, safe_username, user_ref
 from tcbot.utils.time_and_date import fmt_dt, utc_now
 
 if TYPE_CHECKING:
@@ -61,8 +61,8 @@ class LogBuilder:
     def mention_field(
         self, label: str, user_id: int, name: str, username: str | None = None
     ) -> LogBuilder:
-        """Append a `Label: mention(user_id, name, username)` line."""
-        self._lines.append(f"{label}: {mention(user_id, name, username)}")
+        """Append a `Label: user_ref(user_id, name, username)` line."""
+        self._lines.append(f"{label}: {user_ref(user_id, name, username)}")
         return self
 
     def link_field(self, label: str, text: str, url: str) -> LogBuilder:
@@ -91,7 +91,7 @@ class LogBuilder:
     ) -> LogBuilder:
         """Append the canonical `Label: mention` + `User ID: <id>` pair."""
         self._lines.append(
-            f"{user_label}: {mention(target_id, target_fname, target_username)}"
+            f"{user_label}: {user_ref(target_id, target_fname, target_username)}"
         )
         self._lines.append(f"{id_label}: {code(str(target_id))}")
         return self
@@ -106,7 +106,9 @@ class LogBuilder:
         id_label: str = "ID",
     ) -> LogBuilder:
         """Append the canonical `Label: mention` + `ID: <id>` pair for an actor."""
-        self._lines.append(f"{label}: {mention(actor_id, actor_fname, actor_username)}")
+        self._lines.append(
+            f"{label}: {user_ref(actor_id, actor_fname, actor_username)}"
+        )
         self._lines.append(f"{id_label}: {code(str(actor_id))}")
         return self
 
@@ -134,13 +136,9 @@ def ban_log(
     admin_fname: str,
     reason: str,
     ban_id: str,
-    proof_lnk: str | None = None,
     timestamp: datetime | None = None,
 ) -> str:
     """Return a new federation-ban audit-log message."""
-    # * Note: proof_lnk is passed through for the inline Proof button in the
-    # * accompanying keyboard. The text intentionally has no hyperlink; the
-    # * button avoids the visual noise of a redundant 'View Proof' link.
     return (
         LogBuilder(f"New {cfg.community_name} Ban")
         .mention_field("Admin", admin_id, admin_fname)
@@ -165,12 +163,8 @@ def ban_update_log(
     reason: str,
     ban_id: str,
     original_ts: datetime,
-    proof_lnk: str | None = None,
-    prev_proof_lnk: str | None = None,
 ) -> str:
     """Update-ban audit-log message."""
-    # * Note: proof_lnk / prev_proof_lnk are passed through for the inline
-    # * Proof / Previous-Proof buttons in the keyboard. No hyperlinks in text.
     return (
         LogBuilder(f"Update {cfg.community_name} Ban")
         .mention_field("Admin", new_admin_id, new_admin_fname)
@@ -409,7 +403,7 @@ def appeal_received_log(
 ) -> str:
     """Review card posted to APPEAL_DISCUSSION_TOPIC."""
     b = LogBuilder(f"New {cfg.community_name} Appeal Request").raw(
-        f"User: {mention(target_id, target_fname)} \\(ID: {code(str(target_id))}\\)"
+        f"User: {user_ref(target_id, target_fname)} \\(ID: {code(str(target_id))}\\)"
     )
     b.code_field("Ban ID", ban_id)
     if appeal_link:
@@ -471,7 +465,7 @@ def _appeal_decision_edit(
     return (
         b.section()
         .field("Submitted", submitted_str)
-        .raw(f"{decision_label}: {mention(admin_id, admin_fname)}")
+        .raw(f"{decision_label}: {user_ref(admin_id, admin_fname)}")
         .date(label=f"{decision_label} at")
         .build()
     )
@@ -583,8 +577,6 @@ def demoted(
     role: str,
     by_id: int,
     by_fname: str,
-    *,
-    trigger: str | None = None,  # kept for caller API compatibility
 ) -> str:
     """Unified demotion audit-log: manual demote and ban/kick auto-demote share one format."""
     role_label = _role_title(role)
@@ -730,7 +722,7 @@ def group_connection_rejected_log(
         .raw(f"Group: {esc(chat_title)} \\(ID: {chat_id}\\)")
         .section()
         .raw(
-            f"Rejected by Owner: {mention(owner_id, owner_fname)} \\(ID: {code(str(owner_id))}\\)"
+            f"Rejected by Owner: {user_ref(owner_id, owner_fname)} \\(ID: {code(str(owner_id))}\\)"
         )
         .section()
         .date()

@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -14,7 +13,6 @@ from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 
 from tcbot import cfg
 from tcbot.modules.helper import decorators, extraction, identity, replies
-from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.demote_flow import Demote
@@ -34,8 +32,7 @@ from tcbot.modules.helper.workflows.reason_flow import (
     parse_inline_reason,
     reason_too_long_text,
 )
-from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import code, mention
+from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -130,25 +127,18 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     # * return_exceptions=True prevents a DB failure from leaving the ConversationHandler open.
-    ident, role_result = await asyncio.gather(
-        identity.classify(ctx.bot, admin.id, target_id, target_fname),
-        resolve_and_check(msg, admin.id, target_id, min_role="tester"),
-        return_exceptions=True,
+    classified = await decorators.classify_and_check(
+        ctx.bot,
+        admin.id,
+        target_id,
+        target_fname,
+        msg,
+        action="mute",
+        min_role="tester",
     )
-    throw_if_cancelled((ident, role_result))
-    if isinstance(ident, BaseException):
-        log.exception("identity.classify failed in cmd_mute: %s", ident)
+    if classified is None:
         return ConversationHandler.END
-    if isinstance(role_result, BaseException):
-        log.exception("resolve_and_check failed in cmd_mute: %s", role_result)
-        return ConversationHandler.END
-    # * isinstance + early return above already narrows role_result to the
-    # * success tuple; no assert needed (asserts vanish under python -O).
-    executor_role, target_role = role_result
-    # * Guard first: if resolve_and_check already replied and rejected (e.g. target
-    # * outranks executor), skip the identity refusal to avoid sending two replies.
-    if executor_role is None:
-        return ConversationHandler.END
+    ident, target_role = classified
 
     refusal = identity.refuse_message("mute", ident, locale)
     if refusal is not None:
@@ -201,7 +191,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             parse_mode=None,
         )
         return ConversationHandler.END
-    target_mention = mention(target_id, target_fname or str(target_id))
+    target_mention = user_ref(target_id, target_fname or str(target_id))
     dur_str = fmt_duration(duration, locale)
     extra_info = f"{code(str(target_id))}: {dur_str}"
 
@@ -297,25 +287,18 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     # * Run identity classification and rank check in parallel.
     # * return_exceptions=True prevents a DB error from leaving the command silently dead.
-    ident, role_result = await asyncio.gather(
-        identity.classify(ctx.bot, admin.id, target_id, target_name),
-        resolve_and_check(msg, admin.id, target_id, min_role="tester"),
-        return_exceptions=True,
+    classified = await decorators.classify_and_check(
+        ctx.bot,
+        admin.id,
+        target_id,
+        target_name,
+        msg,
+        action="unmute",
+        min_role="tester",
     )
-    throw_if_cancelled((ident, role_result))
-    if isinstance(ident, BaseException):
-        log.exception("identity.classify failed in cmd_unmute: %s", ident)
+    if classified is None:
         return
-    if isinstance(role_result, BaseException):
-        log.exception("resolve_and_check failed in cmd_unmute: %s", role_result)
-        return
-    # * isinstance + early return above already narrows role_result to the
-    # * success tuple; no assert needed (asserts vanish under python -O).
-    executor_role, _ = role_result
-    # * Guard first: if resolve_and_check already replied and rejected (e.g. target
-    # * outranks executor), skip the identity refusal to avoid sending two replies.
-    if executor_role is None:
-        return
+    ident, _ = classified
 
     refusal = identity.refuse_message("unmute", ident, locale)
     if refusal is not None:

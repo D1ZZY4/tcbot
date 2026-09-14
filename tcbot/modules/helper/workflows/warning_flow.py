@@ -554,11 +554,12 @@ async def _execute_warn_auto_ban(
 ) -> None:
     """Handle warn-threshold auto-ban: staff demotion, DB record, fan-out, reply."""
     fed_warn_limit = cfg.fed_warn_limit
-    # * The role lookup is guarded: the warn above is already recorded and the
-    # * per-group trigger fires on exact equality, so letting a transient
-    # * lookup failure propagate would both skip this threshold's auto-ban and
-    # * wedge the retry (count is now limit+1, which never re-fires). Entry
-    # * authorization already fail-closed; proceed as non-staff with a loud log.
+    # * The role lookup is guarded: the warn above is already recorded, and
+    # * the per-group trigger uses >= (not ==), so a retry after this failure
+    # * still re-fires once the count is at or above the limit. Letting a
+    # * transient lookup failure propagate would skip THIS warn's auto-ban
+    # * with no compensation. Entry authorization already fails closed; proceed
+    # * as non-staff with a loud log.
     try:
         target_role = await db.users_roles.get_effective_role(target_id)
     except Exception:
@@ -707,34 +708,13 @@ async def _execute_warn_auto_ban(
         total_groups,
     )
 
-    if total_groups == 0:
-        applied_line = t("warnings.autoban.empty", locale)
-    elif failed == total_groups:
-        sample = ", ".join(
-            grp.get("title") or str(grp["chat_id"]) for grp, _ in transient_groups[:5]
-        )
-        applied_line = t(
-            "warnings.autoban.none",
-            locale,
-            total=total_groups,
-            sample=sample,
-            more=" ..." if len(transient_groups) > 5 else "",
-        )
-    elif failed > 0:
-        sample = ", ".join(
-            grp.get("title") or str(grp["chat_id"]) for grp, _ in transient_groups[:3]
-        )
-        applied_line = t(
-            "warnings.autoban.partial",
-            locale,
-            done=applied,
-            total=total_groups,
-            failed=failed,
-            sample=sample,
-            more=" ...)" if len(transient_groups) > 3 else ")",
-        )
-    else:
-        applied_line = t("warnings.autoban.full", locale, total=total_groups)
+    applied_line = replies.applied_summary(
+        locale,
+        "warnings.autoban",
+        total=total_groups,
+        failed=failed,
+        transient=transient_groups,
+    )
     if groups_fetch_failed:
         applied_line += t("warnings.autoban.scope_warn", locale)
 

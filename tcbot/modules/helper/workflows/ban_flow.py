@@ -37,7 +37,7 @@ from tcbot.utils.dispatch import (
     fan_out,
     is_benign_telegram_error,
 )
-from tcbot.utils.formatter import mention, user_ref
+from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 from tcbot.utils.time_and_date import monotonic, to_utc, utc_now
@@ -186,7 +186,7 @@ def proof_prompt_content(
     """
     return (
         proof.noted_prompt(
-            "ban", reason, mention(target_id, target_fname), locale=locale
+            "ban", reason, user_ref(target_id, target_fname), locale=locale
         ),
         proof.keyboard(locale),
     )
@@ -201,84 +201,97 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     admin_fname: str = meta.get("ban_admin_fname", "Admin")
     prompt_msg_id: int = meta.get("ban_prompt_msg_id", 0)
     prompt_chat_id: int = meta.get("ban_prompt_chat_id", 0)
-    ban_duration = meta.get("ban_duration")
     target_locale = await locale_for_user(target_id)
 
     now = utc_now()
-    # * ban_duration is reserved for future timed-ban support; Telegram enforcement
-    # * via until_date is not yet wired up, so we do not compute until/dur_str here.
-    _ = ban_duration
     proof_chat, proof_thread = cfg.proofs
 
     # * Pre-fetch active groups immediately so DB round-trip overlaps with the
     # * get_active_ban call and the proof-upload I/O that follows.
     _groups_task: asyncio.Task[list] = asyncio.create_task(db.groups_db.active_groups())
 
-    existing = await db.bans_db.get_active_ban(target_id)
-    is_update = existing is not None
-    bot_username = bot.username or ""
-    ban_id = str(existing.get("ban_id", "")) if is_update else db.bans_db.make_ban_id()
-
-    if is_update:
-        # * Suppress any stale duplicate active bans for this user, keeping only the
-        # * canonical record (existing) that will be updated. This is a no-op when
-        # * there are no duplicates. Duplicates can arise from race conditions or from
-        # * a re-ban that failed to find the prior active record before creating a new
-        # * one. Cleaning them here ensures a single active ban at all times.
-        extras = await db.bans_db.deactivate_extra_active_bans(
-            target_id, existing.get("ban_id", "")
+    try:
+        existing = await db.bans_db.get_active_ban(target_id)
+        is_update = existing is not None
+        bot_username = bot.username or ""
+        ban_id = (
+            str(existing.get("ban_id", "")) if is_update else db.bans_db.make_ban_id()
         )
-        if extras > 0:
-            log.warning(
-                "Suppressed %d duplicate active ban(s) for user %d before update",
-                extras,
+
+        if is_update:
+            # * Suppress any stale duplicate active bans for this user, keeping only the
+            # * canonical record (existing) that will be updated. This is a no-op when
+            # * there are no duplicates. Duplicates can arise from race conditions or from
+            # * a re-ban that failed to find the prior active record before creating a new
+            # * one. Cleaning them here ensures a single active ban at all times.
+            extras = await db.bans_db.deactivate_extra_active_bans(
+                target_id, existing.get("ban_id", "")
+            )
+            if extras > 0:
+                log.warning(
+                    "Suppressed %d duplicate active ban(s) for user %d before update",
+                    extras,
+                    target_id,
+                )
+
+        # * Build proof caption
+        if is_update:
+            prev_proof_msg_id = existing.get("proof_message_id")
+            prev_proof_link = (
+                message_link(proof_chat, prev_proof_msg_id, proof_thread)
+                if prev_proof_msg_id
+                else None
+            )
+            caption = parse_logmsg.proof_caption_update(
                 target_id,
+                admin_id,
+                admin_fname,
+                existing.get("timestamp", now),
+                prev_proof_link,
+            )
+        else:
+            prev_proof_link = None
+            caption = parse_logmsg.proof_caption_new(
+                target_id, admin_id, admin_fname, now
             )
 
-    # * Build proof caption
-    if is_update:
-        prev_proof_msg_id = existing.get("proof_message_id")
-        prev_proof_link = (
-            message_link(proof_chat, prev_proof_msg_id, proof_thread)
-            if prev_proof_msg_id
+        # * Upload proof to PROOF channel
+        proof_msg_id = await upload_proof(bot, msgs, caption, proof_chat, proof_thread)
+        proof_link = (
+            message_link(proof_chat, proof_msg_id, proof_thread)
+            if proof_msg_id
             else None
         )
-        caption = parse_logmsg.proof_caption_update(
-            target_id,
-            admin_id,
-            admin_fname,
-            existing.get("timestamp", now),
-            prev_proof_link,
-        )
-    else:
-        prev_proof_link = None
-        caption = parse_logmsg.proof_caption_new(target_id, admin_id, admin_fname, now)
 
-    # * Upload proof to PROOF channel
-    proof_msg_id = await upload_proof(bot, msgs, caption, proof_chat, proof_thread)
-    proof_link = (
-        message_link(proof_chat, proof_msg_id, proof_thread) if proof_msg_id else None
-    )
+        logs_chat, logs_thread = cfg.logs
 
-    logs_chat, logs_thread = cfg.logs
-
-    if is_update:
-        log_msg_id, db_ok = await _execute_ban_update(
-            bot,
-            existing,
-            meta,
-            proof_msg_id,
-            proof_link,
-            prev_proof_link,
-            logs_chat,
-            logs_thread,
-        )
-    else:
-        # * Single canonical ban_id: generated once above and reused for the DB
-        # * record, the PM appeal link, and set_log_message_id below.
-        log_msg_id, db_ok = await _execute_new_ban(
-            bot, meta, proof_msg_id, proof_link, now, logs_chat, logs_thread, ban_id
-        )
+        if is_update:
+            log_msg_id, db_ok = await _execute_ban_update(
+                bot,
+                existing,
+                meta,
+                proof_msg_id,
+                proof_link,
+                prev_proof_link,
+                logs_chat,
+                logs_thread,
+            )
+        else:
+            # * Single canonical ban_id: generated once above and reused for the DB
+            # * record, the PM appeal link, and set_log_message_id below.
+            log_msg_id, db_ok = await _execute_new_ban(
+                bot, meta, proof_msg_id, proof_link, now, logs_chat, logs_thread, ban_id
+            )
+    except asyncio.CancelledError:
+        if not _groups_task.done():
+            _groups_task.cancel()
+        await asyncio.gather(_groups_task, return_exceptions=True)
+        raise
+    except Exception:
+        if not _groups_task.done():
+            _groups_task.cancel()
+        await asyncio.gather(_groups_task, return_exceptions=True)
+        raise
 
     # * Fail closed like execute_unban and the warn auto-ban path: enforcing
     # * chats without a bans record leaves an un-appealable split brain
@@ -404,35 +417,13 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         )
 
     # * Build the applied-to line, surfacing a clear warning when no group was updated
-    total_groups = len(groups)
-    if total_groups == 0:
-        applied_line = t("banning.applied.empty", locale)
-    elif failed == total_groups:
-        sample = ", ".join(
-            grp.get("title") or str(grp["chat_id"]) for grp, _ in transient_groups[:5]
-        )
-        applied_line = t(
-            "banning.applied.none",
-            locale,
-            total=total_groups,
-            sample=sample,
-            more=" ..." if len(transient_groups) > 5 else "",
-        )
-    elif failed > 0:
-        sample = ", ".join(
-            grp.get("title") or str(grp["chat_id"]) for grp, _ in transient_groups[:3]
-        )
-        applied_line = t(
-            "banning.applied.partial",
-            locale,
-            done=total_groups - failed,
-            total=total_groups,
-            failed=failed,
-            sample=sample,
-            more=" ...)" if len(transient_groups) > 3 else ")",
-        )
-    else:
-        applied_line = t("banning.applied.full", locale, total=total_groups)
+    applied_line = replies.applied_summary(
+        locale,
+        "banning.applied",
+        total=len(groups),
+        failed=failed,
+        transient=transient_groups,
+    )
 
     # * Build PM content before the conditional so it can fire in parallel with
     # * both upsert_user and (optionally) edit_message_text.  All three operations
@@ -551,8 +542,6 @@ async def _execute_ban_update(
         reason,
         ban_id,
         to_utc(existing.get("timestamp", utc_now())),
-        proof_link,
-        prev_proof_link,
     )
     _appeal_url = appeal_deep_link(bot_username, ban_id)
     kb = (
@@ -631,7 +620,6 @@ async def _execute_new_ban(
         admin_fname,
         reason,
         ban_id,
-        proof_link,
         now,
     )
     kb = (
@@ -796,13 +784,18 @@ async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     except Exception:
         log.exception("Done-proof _execute_ban raised")
     finally:
-        _proof_sessions.pop(key, None)
-        _clear_ban_state(session.user_data)
+        # * Same-object guard: the flush task we cancelled (and any earlier
+        # * code) must not wipe a successor session that took over the same
+        # * (chat, user) key during the cancellation-unwind window.
+        if _proof_sessions.get(key) is session:
+            _proof_sessions.pop(key, None)
+            _clear_ban_state(session.user_data)
     return ConversationHandler.END
 
 
 async def _flush_session(key: tuple[int, int], bot: Bot) -> None:
     """Flush one proof session after a silence window or the hard cap."""
+    session: _ProofSession | None = None
     try:
         while True:
             await asyncio.sleep(cfg.album_debounce)
@@ -841,8 +834,11 @@ async def _flush_session(key: tuple[int, int], bot: Bot) -> None:
         # * task ends, with shared cleanup below.
         raise
     finally:
-        session = _proof_sessions.pop(key, None)
-        if session is not None:
+        # * Never pop a successor session that may have taken the key while
+        # * this task unwound: only this task's own claimed session object
+        # * may be cleared.
+        if session is not None and _proof_sessions.get(key) is session:
+            _proof_sessions.pop(key, None)
             _clear_ban_state(session.user_data)
 
 

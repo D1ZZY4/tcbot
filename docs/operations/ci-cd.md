@@ -14,7 +14,7 @@ The project uses 5 automated workflows for continuous integration, code quality,
 2. **Auto-Fix Code Quality** - Automatically fix linting issues
 3. **Dependency Updates** - Weekly dependency updates with auto-PR
 4. **CodeQL** - Security analysis
-5. **Run Bot** - Long-running bot runner with push preempt, handover, and cron fallback
+5. **Run Bot** - Long-running bot runner with push-triggered handover, self-chaining, and cron fallback
 
 ---
 
@@ -30,7 +30,12 @@ The project uses 5 automated workflows for continuous integration, code quality,
 - Runs `uv run ruff format --check .` to verify formatting without modifying files
 - Runs `uv run ruff check .` to catch all lint violations
 - Runs `uv run python -c "import tcbot"` to verify all imports resolve cleanly
+- Runs the behavioral checks (`python -m pytest tests/ -q`) as a second job
+  with the same dummy environment values, so regressions fail the PR too
 - **Fails the PR** if any step exits with a non-zero code
+- The import check runs with dummy but shape-valid `BOT_TOKEN`,
+  `MONGODB_URI`, and `OWNER_ID` values (validated at import time, never
+  connecting), so fork PRs without repository secrets still pass
 
 **Why this exists:**
 `lint.yml` provides a repeatable CI result for formatting, lint, and import
@@ -84,9 +89,12 @@ Auto-applied by GitHub Actions
 
 **What it does:**
 - Runs `uv lock --upgrade` to update all dependencies
-- Installs updated dependencies
-- **Auto-creates PR** with dependency updates
-- PR includes diff of changes
+- Installs the updated lockfile and validates it (Ruff format/lint plus the
+  `import tcbot` check, with dummy shape-valid environment values like
+  `lint.yml`)
+- **Auto-creates a PR** (`deps/auto-update-YYYYMMDD`, suffixed `-runNNN` on
+  collision) labeled `dependencies` against `main`
+- PR includes a diff of the lockfile changes
 - **Sends Telegram notification** with result
 
 **Benefits:**
@@ -119,12 +127,12 @@ Review the dependency changes and CI results before merging.
 **Triggers:**
 - Push to `main`
 - Pull requests to `main`
-- Weekly schedule
+- Weekly schedule (Tuesday 15:38 UTC)
 
 **What it does:**
-- Runs GitHub's security analysis
-- Scans for vulnerabilities
-- Checks for common security issues
+- Runs GitHub's CodeQL security analysis on the `actions` and `python`
+  languages with `build-mode: none` (pure source scan, no build step)
+- Findings land under the repository Security tab
 
 ---
 
@@ -144,7 +152,7 @@ Review the dependency changes and CI results before merging.
 - The cron schedule (every 15 minutes) acts as a resurrection fallback if the chain breaks or no PAT is configured. The `concurrency` group (`cancel-in-progress: false`) serializes runs: a cron tick while a run is active queues behind it instead of being discarded, so ticks can pile up behind a long holder
 - A `concurrency` group (`tcf-bot-runner`, `cancel-in-progress: false`) prevents overlapping bot instances. This avoids duplicate update processing in polling mode and keeps webhook ownership unambiguous
 - **Graceful stop before artifacts:** at the window end the bot gets SIGTERM (`uv run` forwards it to the child) and the script waits up to 60 s for exit before the scrub/upload steps, so the artifact keeps its final lines. The bot is backgrounded directly (`$!` stays a real child job) so the wait supervises the actual process; a stubborn process is left for runner teardown inside the 30 min post-window buffer
-- Bot configuration comes from repository secrets (`BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`, `WEBHOOK_URL`, `WEBHOOK_SECRET`, etc.), plus the optional `BOT_PAT` for self-chaining. The push restart needs no extra secret and no extra permission: cancellation is native to the concurrency group
+- Bot configuration comes from repository secrets (`BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`, `WEBHOOK_URL`, `WEBHOOK_SECRET`, etc.), plus the optional `BOT_PAT` for self-chaining. The push restart needs no extra secret: `cancel-in-progress: false` means the successor queues behind the live run, and the live run itself detects the runtime diff (self-preempt poll) and stops, freeing the gate
 - **Log artifacts are scrubbed:** workflow logs and artifacts on a public repository are world-readable, so before the crash tail is printed or uploaded, token-shaped (`id:hash`) and URI-auth substrings are redacted with the same patterns as `error_reporter.py`. Message excerpts remain by design so crashes stay debuggable; artifacts are kept 7 days
 
 ---
@@ -172,7 +180,7 @@ Self-dispatch next run (~10 min before window ends)
     ↓
 Cron fallback restarts if the chain breaks
 
-Run Bot (push with runtime changes: preempts the live run, no queue)
+Run Bot (push with runtime changes: queues a successor; the live run hands over within ~2 min)
 ```
 
 ---
@@ -192,6 +200,17 @@ Configure these in GitHub repository settings → Secrets:
 | `GITHUB_TOKEN` | Auto-provided by GitHub Actions | Auto |
 
 Without `BOT_PAT`, the Run Bot workflow cannot dispatch its own next run; it falls back to the every-15-minute cron resurrection schedule.
+
+The Run Bot workflow forwards the full federation env surface as repository
+secrets, so every runtime variable must be set there for the runner: `DB_NAME`,
+`COMMUNITY_NAME`, `PREFIXES`, `MAIN_GROUP`, `MAIN_CHANNEL`, `EXTEND_GROUP`,
+`PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`, `LOG_LEVEL`, `PORT`, `REDIS_URL`,
+`APPEAL_LOG_HANDLE`, `APPEAL_DISCUSSION_TOPIC`, `WARN_EXPIRY_DAYS`,
+`WARN_LIMIT`, `FED_WARN_LIMIT`, `ALBUM_DEBOUNCE_SECONDS`, `MODULES_LOAD`, and
+`MODULES_NO_LOAD`, alongside `BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`,
+`WEBHOOK_URL`, and `WEBHOOK_SECRET`. `SYNC_INTERVAL_HOURS`, `CRON_SECRET`, and
+the `COMMUNITY_*_URL` links are **not** forwarded by the runner: the sync sweep
+and community URLs are not part of this transport.
 
 ---
 
@@ -250,7 +269,7 @@ View workflow
 - A `409 Conflict` from Telegram means two instances are polling at once; the `tcf-bot-runner` concurrency group should prevent this, so check for a stray manual run
 
 ### Bot restarted right after a push (Run Bot)
-- Expected when the push touched runtime files: the new run preempts the stale one on purpose so the new commit serves within minutes. Docs-only pushes never restart the bot
+- Expected when the push touched runtime files: the live run detects the new commit and hands over on purpose so the new commit serves within minutes. Docs-only pushes never restart the bot
 - If restarts flap on rapid successive pushes, the latest commit always wins; avoid pushing runtime fixes one line at a time during an incident
 
 ---

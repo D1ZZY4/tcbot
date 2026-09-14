@@ -104,14 +104,8 @@ async def execute_unban(
         return
 
     # * Deactivate ALL active bans for this user (not only the one found by
-    # * get_active_ban) and cancel any pending APScheduler unban job in
-    # * parallel. The cancel call is a no-op when no timed-ban schedule
-    # * exists; it future-proofs the flow for when timed bans are added.
-    deactivate_r, _ = await asyncio.gather(
-        db.bans_db.deactivate_all_active_bans(target_id),
-        db.scheduler.cancel_schedule(f"unban.{ban_id}"),
-        return_exceptions=True,
-    )
+    # * get_active_ban). This is the single authoritative DB write for the unban.
+    deactivate_r = await db.bans_db.deactivate_all_active_bans(target_id)
     # ! CRITICAL: a cancelled deactivation must propagate instead of being
     # ! reported as a DB failure; shutdown must not render as a verdict.
     if isinstance(deactivate_r, asyncio.CancelledError):

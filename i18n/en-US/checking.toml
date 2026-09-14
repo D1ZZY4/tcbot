@@ -76,6 +76,7 @@ active = "*Active*"
 inactive = "Inactive"
 item = "{i}. {status} | {ban} | {ts}\n   {reason}"
 not_found = "Ban {ban} not found."
+db_fail = "Ban {ban} could not be loaded. The database is unreachable, try again in a bit."
 
 [appeals_list]
 title = "*Appeals*"

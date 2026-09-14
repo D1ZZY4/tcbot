@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import replies
+from tcbot.modules.helper import identity, replies
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
@@ -30,7 +30,7 @@ from tcbot.utils.time_and_date import elapsed_ms, monotonic
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine
 
-    from telegram import Message, Update
+    from telegram import Bot, Message, Update
 
 log = logging.getLogger(__name__)
 
@@ -404,204 +404,79 @@ def _is_anon_admin(update: Update) -> bool:
     return u is not None and u.id == _ANON_BOT_ID
 
 
-def owner_only(func: Callable) -> Callable:
-    """Restrict handler to the Founder only."""
+def _auth_only(*, label: str, refusal: str, min_role: str | None) -> Callable:
+    """Build one of the four federated-tier authorization decorators.
 
-    @functools.wraps(func)
-    async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        """Allow the call only when the invoking user is the Founder."""
-        if _is_anon_admin(update):
-            if update.effective_message:
-                await safe_reply(
-                    update.effective_message,
-                    _ERR_ANON_ADMIN,
-                    log_label="owner_only anon-admin",
-                    parse_mode=None,
-                )
-            return None
-        uid = update.effective_user.id if update.effective_user else None
-        if uid:
-            # * Fail closed with a retry reply on DB outage instead of letting
-            # * the lookup failure propagate with no user feedback. Cancellation
-            # * still propagates.
-            # * Served from the cached owner ID (300 s TTL) so repeated
-            # * Founder checks cost zero MongoDB round trips on cache hits.
-            try:
-                authorized = (await db.users_roles.get_owner_id()) == uid
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                log.warning("owner_only role lookup failed for %s: %s", uid, exc)
+    ``min_role`` names the lowest ``users_roles`` rank that passes; when it is
+    ``None`` only the Founder (owner id) is authorized.
+    """
+
+    def _decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+            """Allow the call only when the invoking user passes the tier check."""
+            if _is_anon_admin(update):
                 if update.effective_message:
                     await safe_reply(
                         update.effective_message,
-                        _ERR_ROLE_LOOKUP,
-                        log_label="owner_only lookup-fail",
+                        _ERR_ANON_ADMIN,
+                        log_label=f"{label} anon-admin",
                         parse_mode=None,
                     )
                 return None
-            if authorized:
-                return await func(update, ctx)
-        if update.effective_message:
-            await safe_reply(
-                update.effective_message,
-                _ERR_OWNER_ONLY,
-                log_label="owner_only refusal",
-                parse_mode=None,
-            )
-        return None
-
-    return _wrapper
-
-
-def staff_only(func: Callable) -> Callable:
-    """Restrict handler to Founder and Admin."""
-
-    @functools.wraps(func)
-    async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        """Allow the call only when the invoking user is Founder or Admin."""
-        if _is_anon_admin(update):
+            uid = update.effective_user.id if update.effective_user else None
+            if uid:
+                # * Fail closed with a retry reply on DB outage instead of
+                # * letting the lookup failure propagate with no user feedback.
+                # * Cancellation still propagates.
+                try:
+                    if min_role is None:
+                        # * Served from the cached owner ID (300 s TTL) so
+                        # * repeated Founder checks cost zero MongoDB round
+                        # * trips on cache hits.
+                        authorized = (await db.users_roles.get_owner_id()) == uid
+                    else:
+                        # * Served from the cached effective role (60 s TTL)
+                        # * instead of two uncached reads.
+                        authorized = db.users_roles.role_rank(
+                            await db.users_roles.get_effective_role(uid)
+                        ) >= db.users_roles.role_rank(min_role)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    log.warning("%s role lookup failed for %s: %s", label, uid, exc)
+                    if update.effective_message:
+                        await safe_reply(
+                            update.effective_message,
+                            _ERR_ROLE_LOOKUP,
+                            log_label=f"{label} lookup-fail",
+                            parse_mode=None,
+                        )
+                    return None
+                if authorized:
+                    return await func(update, ctx)
             if update.effective_message:
                 await safe_reply(
                     update.effective_message,
-                    _ERR_ANON_ADMIN,
-                    log_label="staff_only anon-admin",
+                    refusal,
+                    log_label=f"{label} refusal",
                     parse_mode=None,
                 )
             return None
-        uid = update.effective_user.id if update.effective_user else None
-        if uid:
-            # * Same fail-closed outage handling as owner_only (see above).
-            # * Served from the cached effective role (60 s TTL) instead of
-            # * two uncached reads, so repeated staff checks cost zero
-            # * MongoDB round trips on cache hits. Uses get_effective_role
-            # * (not is_staff) so an outage propagates here and gets the
-            # * retry hint instead of being coerced to a false denial; this
-            # * mirrors the appeal-review path precedent.
-            try:
-                authorized = db.users_roles.role_rank(
-                    await db.users_roles.get_effective_role(uid)
-                ) >= db.users_roles.role_rank("admin")
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                log.warning("staff_only role lookup failed for %s: %s", uid, exc)
-                if update.effective_message:
-                    await safe_reply(
-                        update.effective_message,
-                        _ERR_ROLE_LOOKUP,
-                        log_label="staff_only lookup-fail",
-                        parse_mode=None,
-                    )
-                return None
-            if authorized:
-                return await func(update, ctx)
-        if update.effective_message:
-            await safe_reply(
-                update.effective_message,
-                _ERR_STAFF_ONLY,
-                log_label="staff_only refusal",
-                parse_mode=None,
-            )
-        return None
 
-    return _wrapper
+        return _wrapper
+
+    return _decorator
 
 
-def mod_only(func: Callable) -> Callable:
-    """Restrict handler to Founder, Admin, Developer (ban/unban level)."""
-
-    @functools.wraps(func)
-    async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        """Allow the call only when the invoking user holds Developer rank or above."""
-        if _is_anon_admin(update):
-            if update.effective_message:
-                await safe_reply(
-                    update.effective_message,
-                    _ERR_ANON_ADMIN,
-                    log_label="mod_only anon-admin",
-                    parse_mode=None,
-                )
-            return None
-        uid = update.effective_user.id if update.effective_user else None
-        if uid:
-            # * Same fail-closed outage handling as owner_only (see above).
-            try:
-                authorized = db.users_roles.role_rank(
-                    await db.users_roles.get_effective_role(uid)
-                ) >= db.users_roles.role_rank("developer")
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                log.warning("mod_only role lookup failed for %s: %s", uid, exc)
-                if update.effective_message:
-                    await safe_reply(
-                        update.effective_message,
-                        _ERR_ROLE_LOOKUP,
-                        log_label="mod_only lookup-fail",
-                        parse_mode=None,
-                    )
-                return None
-            if authorized:
-                return await func(update, ctx)
-        if update.effective_message:
-            await safe_reply(
-                update.effective_message,
-                _ERR_MOD_ONLY,
-                log_label="mod_only refusal",
-                parse_mode=None,
-            )
-        return None
-
-    return _wrapper
-
-
-def basic_mod_only(func: Callable) -> Callable:
-    """Restrict handler to Founder, Admin, Developer, Tester (kick/mute/warn level)."""
-
-    @functools.wraps(func)
-    async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        """Allow the call only when the invoking user holds Tester rank or above."""
-        if _is_anon_admin(update):
-            if update.effective_message:
-                await safe_reply(
-                    update.effective_message,
-                    _ERR_ANON_ADMIN,
-                    log_label="basic_mod_only anon-admin",
-                    parse_mode=None,
-                )
-            return None
-        uid = update.effective_user.id if update.effective_user else None
-        if uid:
-            # * Same fail-closed outage handling as owner_only (see above).
-            try:
-                authorized = db.users_roles.role_rank(
-                    await db.users_roles.get_effective_role(uid)
-                ) >= db.users_roles.role_rank("tester")
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                log.warning("basic_mod_only role lookup failed for %s: %s", uid, exc)
-                if update.effective_message:
-                    await safe_reply(
-                        update.effective_message,
-                        _ERR_ROLE_LOOKUP,
-                        log_label="basic_mod_only lookup-fail",
-                        parse_mode=None,
-                    )
-                return None
-            if authorized:
-                return await func(update, ctx)
-        if update.effective_message:
-            await safe_reply(
-                update.effective_message,
-                _ERR_BASIC_MOD_ONLY,
-                log_label="basic_mod_only refusal",
-                parse_mode=None,
-            )
-        return None
-
-    return _wrapper
+owner_only = _auth_only(label="owner_only", refusal=_ERR_OWNER_ONLY, min_role=None)
+staff_only = _auth_only(label="staff_only", refusal=_ERR_STAFF_ONLY, min_role="admin")
+mod_only = _auth_only(label="mod_only", refusal=_ERR_MOD_ONLY, min_role="developer")
+basic_mod_only = _auth_only(
+    label="basic_mod_only",
+    refusal=_ERR_BASIC_MOD_ONLY,
+    min_role="tester",
+)
 
 
 # ────────────────── Shared executor-vs-target check ─────────────── #
@@ -673,3 +548,41 @@ async def resolve_and_check(
         return None, None
 
     return executor_role, target_role
+
+
+async def classify_and_check(
+    bot: Bot,
+    admin_id: int,
+    target_id: int,
+    target_name: str | None,
+    msg: Message,
+    *,
+    action: str,
+    min_role: str,
+) -> tuple[identity.Identity, str | None] | None:
+    """Classify the target and validate executor rank in parallel, fail closed.
+
+    Returns ``(ident, target_role)`` on success, or ``None`` after replying on
+    the message when a lookup failed or the executor is not allowed to act.
+    Cancellation always propagates.
+    """
+    ident, role_result = await asyncio.gather(
+        identity.classify(bot, admin_id, target_id, target_name),
+        resolve_and_check(msg, admin_id, target_id, min_role=min_role),
+        return_exceptions=True,
+    )
+    throw_if_cancelled((ident, role_result))
+    if isinstance(ident, BaseException):
+        log.exception("identity.classify failed in %s: %s", action, ident)
+        return None
+    if isinstance(role_result, BaseException):
+        log.exception("resolve_and_check failed in %s: %s", action, role_result)
+        return None
+    # * isinstance + early return above already narrows role_result to the
+    # * success tuple (asserts vanish under python -O). Guard first: when
+    # * resolve_and_check already replied and rejected (e.g. target outranks
+    # * executor), return so the caller does not send a second reply.
+    executor_role, target_role = role_result
+    if executor_role is None:
+        return None
+    return ident, target_role

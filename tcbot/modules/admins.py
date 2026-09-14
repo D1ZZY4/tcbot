@@ -30,7 +30,7 @@ from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.promote_flow import ROLE_ALIASES, Promote
 from tcbot.utils import error_reporter
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import bold, code, esc, mention, user_ref
+from tcbot.utils.formatter import bold, code, esc, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -289,7 +289,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if (
         not has_explicit_target
         and args
-        and not extraction.has_reply_target(msg)
+        and extraction._reply_uid(msg) is None
         and args[0].lstrip("@").lower() in ROLE_ALIASES
     ):
         await safe_reply(
@@ -358,7 +358,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             "admins.promote_ui.role_picker",
             locale,
             user=Safe(
-                mention(target_id, target_fname or str(target_id), ident.username)
+                user_ref(target_id, target_fname or str(target_id), ident.username)
             ),
         ),
         log_label="cmd_promote role-picker",
@@ -553,7 +553,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             "admins.demote.confirm",
             locale,
             user=Safe(
-                mention(target_id, target_fname or str(target_id), ident.username)
+                user_ref(target_id, target_fname or str(target_id), ident.username)
             ),
             role=Safe(bold(role_label)),
         ),
@@ -980,6 +980,7 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     locale = await locale_for_update(update)
     try:
         pending = await db.queues_db.all_pending()
+        total_pending = await db.queues_db.pending_count()
     except Exception:
         log.exception("all_pending failed during promote_list")
         await safe_reply(
@@ -1001,10 +1002,25 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         t(
             "admins.list.header",
             locale,
-            title=Safe(bold(f"Pending Promotion Requests ({len(pending)})")),
+            title=Safe(
+                bold(
+                    f"Pending Promotion Requests ({total_pending if total_pending > len(pending) else len(pending)})"
+                )
+            ),
         )
         + "\n"
     ]
+    # * Capped view: all_pending returns at most 200 rows, so surface the
+    # * true backlog count when the list is truncated.
+    if total_pending > len(pending):
+        lines.append(
+            t(
+                "admins.list.cap_notice",
+                locale,
+                shown=len(pending),
+                total=total_pending,
+            )
+        )
     for req in pending:
         target_id = req.get("target_id", 0)
         target_fname = req.get("first_name", "unknown")
@@ -1014,7 +1030,7 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             t(
                 "admins.list.row",
                 locale,
-                user=Safe(mention(target_id, target_fname, uname_val)),
+                user=Safe(user_ref(target_id, target_fname, uname_val)),
                 id=Safe(code(str(target_id))),
                 uname=uname,
                 req=Safe(code(req.get("request_id", "unknown"))),

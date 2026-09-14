@@ -21,11 +21,12 @@ useful without becoming a checklist of every keystroke.
 | Topic | Rule |
 |---|---|
 | Source of truth | `tcbot/modules/helper/keyboards.py` for reusable builders. Workflow-local builders are allowed when callback state is private to the workflow (`stats_flow.py`, `check_flow.py`, conversation flows). |
-| Labels | Title case, short, plain English. No pictograph emoji. `«` and `»` are allowed for navigation arrows. |
-| Colors | Semantic `style`: `SUCCESS` (green) for Approve, `DANGER` (red) for Reject and destructive Confirm, `PRIMARY` (blue) for continue/select steps (`Connect`, role options, `Skip`) and every start-menu option (main menu, help topics, module sections, privacy entries, community links, group toggles, `Open in PM`). Cancel, `« Back`, pagination, numbered drill-ins, and moderation URL buttons (Proof/Appeal) stay unstyled. Older clients render the same buttons without color, so styling never carries meaning alone. |
-| Back navigation | `« Back` always returns one step. Nested views use `back_to_module_kb` / `back_to_help_kb` / `back_to_help_cmd_kb`. |
-| Pagination | `« Prev` and `Next »` on a single nav row, then numbered drill-in buttons three per row, then optional global actions, then `« Back`. |
-| Confirmation | Positive action first, `Cancel` second on the same row: `[Confirm] [Cancel]`, `[Approve] [Reject]`, `[Connect] [Cancel]`. |
+| Labels | Short, title-case labels loaded from `i18n/<locale>/button.toml` through `t("button.*", locale, plain=True)`; rendered in the resolved locale, no pictograph emoji. `«` and `»` are allowed for navigation arrows. |
+| Colors | Semantic `style`: `SUCCESS` (green) for Approve, `DANGER` (red) for Reject and destructive Confirm, `PRIMARY` (blue) for continue/select steps (`Connect`, `Continue`, role options, `Skip`), numbered drill-in buttons, Proof/Appeal URL buttons, and every start-menu option (main menu, help topics, module sections, privacy entries, community links, group toggles, the Language rows, `Open in PM`). Cancel, `« Back`, the `« Prev` / `Next »` nav row, `Done`, and the re-ban card's View Log / View Proof links stay unstyled. Older clients render the same buttons without color, so styling never carries meaning alone. |
+| Localization | Every keyboard factory takes `locale` and reads its labels from the catalog (`button.*` keys, `plain=True`). Thread the resolved handler locale through every call site; labels render in the viewer's locale. |
+| Back navigation | `« Back` always returns one step. Nested views use `back_to_module_kb` / `back_to_help_kb` / `back_to_help_cmd_kb` / `back_to_privacy_policy_kb`. |
+| Pagination | Numbered drill-in buttons three per row, then `« Prev` and `Next »` on a single nav row (only when more than one page), then optional global actions, then `« Back`. |
+| Confirmation | Positive action first, `Cancel` second on the same row: `[Confirm] [Cancel]`, `[Approve] [Reject]`, `[Connect] [Cancel]`. The re-ban update card is the one exception, with `Cancel` first: `[Cancel] [Continue]`. |
 | External links | Use `url=` only for external navigation (proof links, appeal deep links, public usernames). All other buttons use `callback_data`. |
 | Identity-aware copy | Refusal lines and staff notices belong in `tcbot/modules/helper/identity.py`, never inlined in keyboard factories. |
 | Async edits | Callback handlers `await q.answer()` first, then `safe_edit_cb()` from `parse_editmsg.py` to swallow benign `Message is not modified` errors. |
@@ -35,27 +36,30 @@ useful without becoming a checklist of every keystroke.
 
 ## Callback-data namespaces
 
-Each feature owns a colon-separated namespace. The first segment is always the
-prefix; subsequent segments are typed positional fields.
+Each feature owns a namespaced callback prefix. The first segment is always
+the prefix; subsequent segments are typed positional fields separated by `:`
+or `_` as listed in each row below.
 
 | Namespace | Owner | Shape | Notes |
 |---|---|---|---|
 | `back_to_start` | start menu | flat | Returns to `/start` PM landing. |
-| `about_menu` / `additional_menu` / `help_menu` / `privacy_menu` / `privacy_policy_menu` | start menu | flat | Top-level menu transitions. |
+| `about_menu` / `additional_menu` / `help_menu` / `privacy_menu` / `privacy_policy_menu` / `language_menu` | start menu | flat | Top-level menu transitions. |
 | `privacy_section_<idx>` | privacy policy | integer index | Renders one of the six privacy policy sections (0-5). Produced by `privacy_policy_sections_kb()`. |
-| `back_to_privacy_policy` | privacy policy | flat | Returns from a section view back to the policy section index. Produced by `back_to_privacy_policy_kb()`. |
+| `privacy_policy_menu` | privacy policy | flat | Opens the policy section index; the section-view `« Back` from `back_to_privacy_policy_kb()` reuses this callback to return to the index. The index's own `« Back` returns to `privacy_menu`. |
 | `help_menu_group` | start in groups | flat | Alert-only: points users to `/help`. |
 | `helpc_main` | `/help` command | flat | Returns to the command-path help index. |
 | `help_<mod>` | help menu path | one segment | Module overview reached from the start menu. |
 | `helpc_<mod>` | help command path | one segment | Module overview reached from `/help`. |
 | `helps_<mod>:<idx>` | help menu path | mod, section idx | Sub-section of a module overview reached via `/start` → Help. |
 | `helpcs_<mod>:<idx>` | help command path | mod, section idx | Sub-section of a module overview reached via `/help`. |
+| `lang:list:<scope>` / `lang:set:<scope>:<locale>` | language panel | scope or scope + locale | Opens the locale option list and applies a tapped locale; `scope` is `user` (PM) or `group` and must match the chat type. The start-menu path's Back row returns to `back_to_start`; the command path omits it. Produced by `language_list_kb()`. |
 | `menu_groups` / `menu_groups_simple` / `menu_groups_details` | start menu | flat | Connected-groups list with view toggles. |
 | `groups_simple` / `groups_details` | `/tcgroups` | flat | Local toggle for the standalone groups list. |
 | `tc_join` / `tc_cancel` | group connect prompt | flat | Group owner accepts or rejects the federation join. Configurable on `BuildConnection`. |
 | `<action>_skip_reason` / `<action>_skip_proof` / `<action>_done_proof` / `<action>_cancel` | conversation flows | one segment | Generated by `BuildReason` / `BuildProof` for ban / kick / mute / warn. |
 | `ban_continue` | re-ban confirmation | flat | Proceed from the update-confirm card to proof collection (reuses the shared `ban_cancel` abort path). |
-| `appeal_approve_<ban_id>` / `appeal_reject_<ban_id>` | appeal review | underscore-delimited | Staff verdict on a submitted appeal. Underscore separator is intentional; appeal IDs cannot contain underscores. |
+| `appeal_approve_<ban_id>` / `appeal_reject_<ban_id>` | appeal review | ban ID tail | Staff verdict on a submitted appeal. Both buttons use the underscore-delimited `<action>_<ban_id>` shape that the handler registers and parses (`appeals.py` pattern `^appeal_(approve|reject)_\S+$`; `appeal_review_flow.py` parses the tail after `appeal_reject_`); appeal IDs cannot contain the separator. Known defect: `keyboards.appeal_review_kb()` currently builds the Reject button with a colon separator (`appeal_reject:<ban_id>`, keyboards.py:789), which fails the handler pattern — the rewrite must emit the underscore form. |
+| `cancel_appeal` | appeal submit | flat | Cancels an appeal submission from the instruction prompt. Produced by `appeal_cancel_kb()`. |
 | `promo_role:<role>:<target_id>` | promote menu | role, target | Inline role-selection menu shown when `/tcpromote` is run without a role argument. |
 | `promo_role_cancel:<target_id>` | promote menu | target | Cancel the role-selection menu. |
 | `promo_approve:<request_id>` / `promo_reject:<request_id>` | Founder DM | request | Founder resolves a pending Admin promotion request. |
@@ -81,8 +85,8 @@ record type.
 
 ```text
 [ About ]      [ Help ]
-[ Additional ]
-[ Privacy ]
+[ Additional ] [ Privacy ]
+[ Language ]
 ```
 
 ### Binary decision
@@ -107,9 +111,9 @@ record type.
 ### Paginated list with detail buttons
 
 ```text
-[ « Prev ] [ Next » ]
 [ 1 ] [ 2 ] [ 3 ]
 [ 4 ] [ 5 ]
+[ « Prev ] [ Next » ]
 [ Search ]              ← optional global action
 [ « Back ]
 ```
@@ -127,8 +131,14 @@ and back targets instead of rebuilding it locally.
 ```text
 [ View Proof ]          ← URL, only when proof exists
 [ View Appeal ]         ← URL, only when an appeal link exists
-[ « Back ]
 ```
+
+Proof and appeal links stack one per row so proof labels that embed the
+target ID never truncate on narrow clients (`ban_log_new()`,
+`ban_log_update()`, `appeal_button_kb()`, `action_proof_kb()`); the posted
+ban log carries no `« Back`. The `/checkme` detail view pairs an optional
+Proof URL with its own `« Back` row instead (`checkme_detail_back_kb()`),
+and the drill-down detail views end with `paged_drill_kb`'s `« Back`.
 
 ### Privacy policy section index
 
@@ -139,17 +149,23 @@ and back targets instead of rebuilding it locally.
 [ « Back ]
 ```
 
-Produced by `privacy_policy_sections_kb(section_labels)` in `keyboards.py`. Each button carries `callback_data=f"privacy_section_{idx}"`. Tapping a section renders the section text with a `back_to_privacy_policy_kb()` back button.
+Produced by `privacy_policy_sections_kb(section_labels, locale)` in
+`keyboards.py`. Each button carries `callback_data=f"privacy_section_{idx}"`.
+Tapping a section renders the section text with a
+`back_to_privacy_policy_kb()` back button.
 
 ### Conversation flow keyboards (`BuildReason`, `BuildProof`)
 
 ```text
-[ Skip ]                ← omitted when skip is disallowed (warn requires reason)
-[ Cancel ]
+[ Skip ]   [ Cancel ]                   ← reason step (BuildReason.keyboard)
+[ Skip ]   [ Done ]   [ Cancel ]        ← proof step (BuildProof.keyboard)
 ```
 
-The action prefix lives in the callback (`ban_skip_reason`, `mute_cancel`,
-etc.) so the flow factory can wire it back to its own state.
+`Skip` is omitted when skip is disallowed (warn requires reason), and `Done`
+collects everything buffered and executes; both flows put all buttons on a
+single row. The action prefix lives in the callback (`ban_skip_reason`,
+`mute_done_proof`, `warn_cancel`, etc.) so the flow factory can wire it back
+to its own state.
 
 ---
 

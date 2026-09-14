@@ -224,6 +224,11 @@ async def all_by_role(role: str) -> list[RoleRefDoc]:
     )
 
 
+async def role_count(role: str) -> int:
+    """Count role members (count-only views; avoids fetching documents)."""
+    return await db_call(col("tc_roles").count_documents({"role": role}))
+
+
 # ──────────────────── Effective role resolution ────────────────── #
 
 

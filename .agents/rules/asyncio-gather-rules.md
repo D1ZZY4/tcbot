@@ -102,8 +102,7 @@ Rules:
 ## Timeouts and Cancellation
 
 Use `asyncio.timeout()` for local async operation bounds. Use `cfg` values
-such as `cfg.proof_timeout` and `cfg.appeal_timeout` for workflow deadlines,
-never hardcoded literals.
+such as `cfg.album_debounce` for workflow deadlines, never hardcoded literals.
 
 ```python
 async def fetch_with_timeout(user_id: int) -> dict[str, object] | None:
@@ -135,8 +134,8 @@ async def worker() -> None:
 ## Background Jobs
 
 Scheduled work runs on APScheduler 3.11.3 `AsyncIOScheduler` with
-`MongoDBJobStore` via `tcbot/database/scheduler.py` (`schedule_unban()` /
-`cancel_schedule()`). This project does not use the PTB `[job-queue]` extra.
+`MongoDBJobStore` via `tcbot/database/scheduler.py`. This project does not
+use the PTB `[job-queue]` extra.
 
 Rules:
 

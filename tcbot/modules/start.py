@@ -18,7 +18,7 @@ from tcbot.modules.about import about_msg
 from tcbot.modules.groups import _render
 from tcbot.modules.helper import decorators, keyboards, replies
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.parse_editmsg import answer_and_edit, safe_reply
 from tcbot.utils.formatter import bold
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters
@@ -123,15 +123,12 @@ async def on_back_to_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     botname = ctx.bot.first_name or ""
+    locale = await locale_for_update(update)
     # * q.answer() and edit are independent; run in parallel.
-    await asyncio.gather(
-        q.answer(),
-        q.edit_message_text(
-            _private_start_text(botname, await locale_for_update(update)),
-            parse_mode="MarkdownV2",
-            reply_markup=keyboards.main_menu_kb(await locale_for_update(update)),
-        ),
-        return_exceptions=True,
+    await answer_and_edit(
+        q,
+        _private_start_text(botname, locale),
+        reply_markup=keyboards.main_menu_kb(locale),
     )
 
 
@@ -206,16 +203,6 @@ async def on_menu_groups_details(
     await _show_groups(q, update, detailed=True)
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
-@decorators.log_execution
-async def on_menu_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Return to simple view of the connected-groups list from the start menu."""
-    q = update.callback_query
-    if q is None:
-        return
-    await _show_groups(q, update, detailed=False)
-
-
 # ──────────────────────────── Handlers ──────────────────────────── #
 
 _START_CMDS = build_prefixed_filters("start")
@@ -223,7 +210,6 @@ _START_CMDS = build_prefixed_filters("start")
 __handlers__ = [
     MessageHandler(_START_CMDS, cmd_start),
     CallbackQueryHandler(on_back_to_start, pattern=r"^back_to_start$"),
-    CallbackQueryHandler(on_menu_groups, pattern=r"^menu_groups$"),
+    CallbackQueryHandler(on_menu_groups, pattern=r"^(menu_groups|menu_groups_simple)$"),
     CallbackQueryHandler(on_menu_groups_details, pattern=r"^menu_groups_details$"),
-    CallbackQueryHandler(on_menu_groups_simple, pattern=r"^menu_groups_simple$"),
 ]

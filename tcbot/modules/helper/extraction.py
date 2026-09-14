@@ -58,25 +58,6 @@ async def _safe_get_chat(bot: Bot, ident: str | int) -> Chat | ChatFullInfo | No
 # ──────────────────────── Target resolution ─────────────────────── #
 
 
-def has_reply_target(msg: Message) -> bool:
-    """Return True when ``msg`` replies to a sender that resolves as a target.
-
-    Mirrors the reply branch of ``extract_target`` (priority 1), including
-    the anonymous-admin skip: a GroupAnonymousBot reply carries the group
-    itself as ``sender_chat``, which must never count as a reply target.
-    The promote entry uses this for its role-word guard; target-vs-reason
-    splitting for ban/kick/mute/warn lives in ``extract_mod_target``.
-    """
-    reply = msg.reply_to_message
-    if reply is None:
-        return False
-    from_user = reply.from_user
-    if from_user is not None:
-        return from_user.id not in (ANONYMOUS_BOT_ID, TELEGRAM_USER_ID)
-    sender = reply.sender_chat
-    return sender is not None and sender.type != Chat.CHANNEL
-
-
 def _first_arg_is_explicit(args: list[str]) -> bool:
     """Return True when ``args[0]`` is shaped like an explicit target.
 
@@ -95,7 +76,7 @@ async def _best_name(uid: int, *primary: str | None) -> str:
     """Pick the first non-empty/non-numeric primary name; fall back to cache, then str(uid).
 
     Returns the raw numeric ID string rather than a decorated ``User <id>``
-    form so that callers using ``user_ref()`` or the ``mention() - code(id)``
+    form so that callers using ``user_ref()`` or the ``user_ref() - code(id)``
     pattern can detect a numeric fallback and avoid displaying the ID twice.
     """
     for cand in primary:
@@ -161,7 +142,7 @@ async def extract_target(
         hit = await _args_target(args, bot, allow_partial=True)
         return hit if hit is not None else reply_hit
     if args and reply_hit is not None:
-        verified = await _verified_explicit_target(args, bot)
+        verified = await _args_target(args, bot, verified=True)
         if verified is not None and verified[0] != reply_hit[0]:
             log.info(
                 "explicit target %d overrides reply target %d",
@@ -230,7 +211,11 @@ async def _reply_target(msg: Message) -> tuple[int, str] | None:
 
 
 async def _args_target(
-    args: list[str], bot: Bot | None, *, allow_partial: bool = False
+    args: list[str],
+    bot: Bot | None,
+    *,
+    allow_partial: bool = False,
+    verified: bool = False,
 ) -> tuple[int, str] | None:
     """Priorities 2-3: numeric ID, @username, then partial name search.
 
@@ -238,6 +223,10 @@ async def _args_target(
     (read-only callers via ``prefer_explicit``): it takes the first of
     up to five fuzzy hits, which is fine for a profile view but never
     for a moderation target.
+
+    With ``verified=True`` only real Telegram users count: numeric IDs and
+    ``@usernames`` that resolve to a chat with a ``first_name`` (so groups
+    and channels are rejected) and the partial-name search never runs.
     """
     arg = args[0].lstrip("@")
 
@@ -268,12 +257,16 @@ async def _args_target(
             if chat is not None:
                 chat_first = chat.first_name
                 chat_username = chat.username
+        if verified and not chat_first:
+            return None
         return uid, await _best_name(uid, chat_first, chat_username)
 
     # * Priority 2b: @username lookup
     if bot and arg:
         chat = await _safe_get_chat(bot, f"@{arg}")
         if chat is not None:
+            if verified and not getattr(chat, "first_name", None):
+                return None
             return chat.id, await _best_name(
                 chat.id, chat.first_name, chat.username, arg
             )
@@ -290,48 +283,6 @@ async def _args_target(
             uid = user.get("user_id")
             if uid:
                 return uid, user.get("first_name") or await _best_name(uid)
-    return None
-
-
-async def _verified_explicit_target(
-    args: list[str], bot: Bot | None
-) -> tuple[int, str] | None:
-    """Resolve ``args[0]`` only when it verifies as a real Telegram user.
-
-    Numeric IDs consult the member cache (bare-numeric and legacy
-    ``User <id>`` fallbacks do not count) and fall back to one bounded
-    ``get_chat``; ``@usernames`` resolve live. Only chats with a
-    ``first_name`` count, so groups and channels can never hijack a reply
-    target. Partial names are too fuzzy to override a quote and always
-    return ``None`` here; so does anything unverified.
-    """
-    raw = args[0]
-    tok = raw.lstrip("@")
-    if tok.lstrip("-").isdigit():
-        uid = int(tok)
-        try:
-            cached_name = await db.users_cache.get_first_name(uid, "")
-        except Exception as exc:
-            log.debug("override cache read failed for %d: %s", uid, exc)
-            cached_name = ""
-        if (
-            cached_name
-            and not cached_name.lstrip("-").isdigit()
-            and not cached_name.startswith("User ")
-        ):
-            return uid, cached_name
-        if bot is not None:
-            chat = await _safe_get_chat(bot, uid)
-            if chat is not None and getattr(chat, "first_name", None):
-                return uid, await _best_name(uid, chat.first_name, chat.username)
-        return None
-    if raw.startswith("@") and bot is not None and tok:
-        chat = await _safe_get_chat(bot, f"@{tok}")
-        if chat is not None and getattr(chat, "first_name", None):
-            return (
-                chat.id,
-                await _best_name(chat.id, chat.first_name, chat.username, tok),
-            )
     return None
 
 

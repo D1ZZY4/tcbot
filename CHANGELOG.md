@@ -7,9 +7,87 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 <details open>
 <summary>Unreleased changes (click to collapse)</summary>
 
+### Added
+
+- **CI runs the behavioral checks on every change** (`.github/workflows/lint.yml`): the lint workflow gains a second job that installs from the lockfile and executes the repository's checks with the same dummy `BOT_TOKEN` / `MONGODB_URI` / `OWNER_ID` env as the lint job, so behavioral regressions can no longer merge silently.
+
+- **Redis liveness tracked from cache operations** (`tcbot/database/redis_client.py`, `tcbot/database/cache.py`): every Redis read and write reports its outcome to a last-known-health flag the health endpoint reads, so an operator sees the real picture even though the Flask health check cannot await a live probe.
+
 ### Changed
 
+- **Stats overview counts roles instead of fetching role docs** (`tcbot/database/users_roles.py`, `tcbot/modules/helper/workflows/stats_flow.py`, `tests/test_stats_roles.py`): `/tcstats` now uses a new `count_documents`-backed `role_count()` for the Developer/Tester rows instead of loading full `tc_roles` documents just to call `len()` on them (the documented count-only pattern; `staff_roster` still needs the documents and is unchanged). Output identical.
+
+- **Declared test-runner dependency** (`pyproject.toml`): the dev dependency group now installs everything needed to run checks from a fresh sync, so the whole-tree type check passes cleanly without extra ad-hoc tooling.
+
 - **Tidier start-menu rows** (`tcbot/modules/helper/keyboards.py`): the Additional and Privacy buttons share one row, so the menu reads as two pairs plus the Language footer instead of one pair plus three stretched singletons. Labels, callbacks, and colors unchanged.
+
+- **One-line auth decorators** (`tcbot/modules/helper/decorators.py`): the four near-identical role gatekeepers (`owner_only`, `staff_only`, `mod_only`, `basic_mod_only`) collapse into a small `_auth_only` factory producing each decorator from its label, refusal key, and minimum role; behavior and reply text unchanged.
+
+- **Shared moderation pre-flight** (`tcbot/modules/helper/decorators.py`, `banning.py`, `kicking.py`, `muting.py`, `warnings.py`): the identity-classify + role-rank-check gather block is now `classify_and_check()` and all seven command sites use it; response behavior unchanged.
+
+- **Shared answer-and-render helpers** (`tcbot/modules/helper/parse_editmsg.py`, `about.py`, `start.py`, `help.py`, `privacy.py`, `stats.py`, `checking.py`): `answer_and_edit()` (callback answer + safe edit gathered) and `ack_and_render()` (answer + data fetch + edit, moved from `stats._ack_and_render`) replace about a dozen hand-rolled gather blocks. One cosmetic side effect: `checking.py` now logs data-fetch failures at error level instead of debug.
+
+- **Shared list and keyboard builders** (`tcbot/modules/helper/keyboards.py`, `helper/check_flow.py`, `stats_flow.py`): `detail_kb()` builds the View Proof/View Appeal + Back keyboard in one place; the stats ban-detail legacy three-part-callback path is deleted as unreachable; `/check` bans and appeals lists fold into one `_ban_list_render` helper.
+
+- **Shared applied-summary renderer** (`tcbot/modules/helper/replies.py`, `ban_flow.py`, `warning_flow.py`): the empty/partial/full failure-summary line is now `applied_summary()` with per-action catalog keys.
+
+- **Merged duplicate names** (`tcbot/utils/formatter.py`): the `mention()` alias is gone; `user_ref()` is the single clickable-name formatter everywhere.
+
+- **Streamlined target resolution** (`tcbot/modules/helper/extraction.py`): `has_reply_target()` deleted (its one caller tests `_reply_uid(...) is None`); the verified-target path folded into `_args_target(..., verified=True)`.
+
+- **/check drill-downs fetch one page at a time** (`tcbot/database/bans_db.py`, `tcbot/database/warns_db.py`, `tcbot/database/kicks_db.py`, `tcbot/database/mutes_db.py`, `tcbot/modules/helper/workflows/check_flow.py`): the bans, appeals, per-chat warns, kicks, and mutes lists now load only the visible slice plus the real total per page turn instead of re-fetching the full history, so paging deep into a long record stays fast and the header count stays exact. Full-list callers of the listing helpers are unchanged.
+
+### Removed
+
+- **Dead optional dependencies** (`pyproject.toml`, `uv.lock`): `cbor2` (no imports anywhere; Redis serialization uses the project-local tagged-JSON encoder) and `kurigram[fast]` (speculative MTProto extra with no code touching it) are gone.
+
+- **Speculative timed-unban scheduler layer** (`tcbot/database/scheduler.py`, `unban_flow.py`, `appeal_review_flow.py`, `docs/operations/vercel.md`): `schedule_unban()`, `cancel_schedule()`, `_execute_scheduled_unban()`, and their defensive no-op call sites are deleted; no code ever scheduled timed bans. `expire_old_warns` and the periodic sync job are unchanged.
+
+- **Unused config surface** (`tcbot/__init__.py`, `config.env.example`, `README.md`, `docs/getting-started/setup.md`, `docs/features/*`, `.agents/rules/*`, `AGENTS.md`, `.github/workflows/run-bot.yml`): `PROOF_TIMEOUT_SECONDS` and `APPEAL_TIMEOUT_SECONDS` were parsed but never consumed; the dataclass fields, env parsing, and `cfg.proof_timeout`/`cfg.appeal_timeout` adapter properties are removed along with every reference.
+
+- **Dead code and aliases** (`tcbot/utils/i18n.py`, `tests/test_i18n.py`, `helper/parse_logmsg.py`, `helper/workflows/*_flow.py`, `appeals.py`, `about.py`, `additional.py`, `help.py`, `extraction.py`): `BuildProof.record()`, unused flow label fields (skip/cancel/done labels), the `ban_duration` reserved block, unused `proof_lnk`/`trigger` log params, `appeals.__all__`, module-level `__about_msg__`/`__additional_msg__` renders, `_MAX_REASON_LEN`, `Check.PAGE_SIZE`/`Stats.PAGE_SIZE`, the help legacy `__help__` fallback branches, `has_reply_target`, and the i18n test-only `placeholders()`/`find_unescaped()` (now local to `tests/test_i18n.py`).
+
+### Fixed
+
+- **Scheduler startup fails fast instead of hanging the boot** (`tcbot/database/scheduler.py`): a constructor error or a hung MongoDB handshake during scheduler startup previously left the process alive but stuck with no readiness signal, and the external watchdog restarts on death, not hangs, so the bot stayed wedged. Startup now waits a bounded grace window (the same 10 seconds used at shutdown) and then reports the failure, so a bad boot restarts instead of hanging.
+
+- **Bounded server selection for the scheduler's MongoDB client** (`tcbot/database/mongos.py`): the scheduler job store builds its own synchronous pymongo client, which fell back to pymongo's 30-second server-selection default and could freeze the event loop at boot under a degraded-but-not-down MongoDB. It now shares the same 10-second server-selection and connect timeouts as the main Motor client.
+
+- **/health reports MongoDB outages honestly** (`tcbot/alive.py`, `tcbot/utils/circuit_breaker.py`): the health check now reads circuit state without flipping it and treats HALF_OPEN as a degraded state, so an uptime poll can no longer silently reopen the circuit while MongoDB is down. The endpoint now returns 503 with `"mongodb": "error"` through a database outage instead of green. The Telegram circuit read in the same endpoint is now non-mutating as well, so a poll can no longer flip it out of OPEN (`tests/test_alive_health.py`).
+
+- **/health redis field reflects real liveness** (`tcbot/alive.py`): the redis status now reports ok / error / unknown from the last observed cache operation instead of the startup connection handle, so an outage that begins mid-run no longer reads green.
+
+- **L2 writes stop stalling during a Redis outage** (`tcbot/database/cache.py`): each fire-and-forget Redis write abandons after 2 seconds instead of absorbing the 10-second socket timeout serially per queued write. Redis writes stay non-fatal background work and correctness never depends on them.
+
+- **/check drill-downs degrade instead of dying on a DB blip** (`tcbot/modules/helper/workflows/check_flow.py`): the warns-by-group list falls back to numeric chat IDs on a transient read failure instead of raising out of the callback and leaving the tap dead. The healthy-DB render is unchanged.
+
+- **Ban-detail outage shows a retry card instead of the not-found card** (`tcbot/modules/helper/workflows/check_flow.py`, `i18n/en-US/checking.toml`, `i18n/id/checking.toml`, `tests/test_check_degrade.py`): a database failure while opening one ban used to render exactly like a genuine miss, so a moderator could mistake an outage for a clean record. The failure now renders its own retry card in both catalogs. Behavior changes: the outage render differs from a real miss.
+
+- **Mute commits the enforcement record before the audit entry** (`tcbot/modules/helper/workflows/muting_flow.py`): the two mute writes now complete one after the other, and when the audit entry fails the just-created enforcement record is rolled back, so a mute can no longer be enforced without its audit trail and a retry starts clean.
+
+- **New-member enforcement shares one global concurrency bound** (`tcbot/modules/greeting.py`): simultaneous joins used to each create their own per-update cap, so a burst across many groups could exceed Telegram's per-second limits and spike database usage. One module-wide bound now caps all join processing at the same batch ceiling as before.
+
+- **Promotion-request list shows a cap notice** (`tcbot/database/queues_db.py`, `tcbot/modules/admins.py`): the pending list caps at 200 rows, so a deeper backlog used to look incomplete without saying so. The header now includes the full backlog count whenever the queue is truncated, in both catalogs. The list header itself shows the true backlog total when truncated, not just the visible row count (`tests/test_promo_queue_cap.py`).
+
+- **Cancelled proof flush never wipes a newer ban session** (`tcbot/modules/helper/workflows/ban_flow.py`): when a moderator taps Done while the proof-collection flush was already unwinding, the stale background task could clear the ban state of a brand-new collection started for the same person in the same chat during that window, cutting the new flow short. Cleanup now only ever touches the exact session object it claimed, so a newer conversation for the same key is left alone.
+
+- **A failed ban run no longer leaves a background read hanging** (`tcbot/modules/helper/workflows/ban_flow.py`): the ban executor pre-fetches the connected-group list concurrently with the ban lookup and proof upload. When one of those steps raised (for example during a database outage), the in-flight read used to be abandoned un-retrieved until garbage collection. The executor now cancels and checks that background read on any propagated error, so a rare-outage failure unwinds cleanly instead of leaking a task.
+
+- **Startup no longer crashes on a duplicated client option** (`tcbot/database/mongos.py`, `tests/test_mongos_client.py`): the shared client options grew the server-selection and connect timeouts while `connect()` still passed the same two options explicitly, so building the client raised a duplicate-argument error and the bot died at boot. The shared helper is now the single source for those two options. Behavior changes: none, the timeout values are unchanged.
+
+- **A cancelled mute stops instead of rendering as a database outage** (`tcbot/modules/helper/workflows/muting_flow.py`, `tests/test_mute_partial_failure.py`): the broad write-failure handler used to catch task cancellation and show the database-failure card with a rollback attempt. Cancellation now propagates immediately so shutdown or an operator cancel is never mistaken for an outage. Behavior changes: a cancelled mute no longer edits the prompt and never touches the rollback path.
+
+### Documentation
+
+- **Warn-limit trigger documented as `>=`** (`tcbot/__init__.py`, `tcbot/modules/helper/workflows/warning_flow.py`): the `warn_limit` property docstring and the `_execute_warn_auto_ban` role-lookup comment described the trigger as `==` (exact equality), contradicting the deliberate `>=` implementation. Both texts now describe the "reaches or exceeds" semantics and why a `==` trigger would wedge the retry after a total enforcement failure. No behavior changes.
+
+- **Documentation refreshed across all categories** (`docs/architecture/database.md`, `helpers.md`, `modules.md`, `repository-map.md`, `utilities.md`, `docs/features/moderation/groups.md`, `banning.md`, `kicking.md`, `muting.md`, `connecting.md`, `disconnecting.md`, `unbanning.md`, `check.md`, `docs/features/roles/roles.md`, `demote.md`, `docs/features/appeals.md`, `statistics.md`, `workflow-overview.md`, `docs/getting-started/setup.md`, `docs/operations/ci-cd.md`, `performance.md`, `vercel.md`, `backup-and-restore.md`, `docs/reference/keyboard-styles.md`): architecture docs now cover the localization engine, per-message locale resolution, the settings collection, and the corrected startup sequence. Feature guides reflect per-handler localization, the shared L1+L2 cache replacing per-user snapshots, and updated class names. The setup guide lists all community-link environment variables and the full startup order. Operations and reference docs catch up with transport tuning, cache guarantees, and keyboard layouts.
+
+- **Docs synced to the over-engineering cleanup** (`config.env.example`, `README.md`, `AGENTS.md`, `.github/workflows/run-bot.yml`, `docs/getting-started/setup.md`, `docs/architecture/workflows.md`, `helpers.md`, `utilities.md`, `database.md`, `docs/features/appeals.md`, `moderation/banning.md`, `moderation/warnings.md`, `moderation/unbanning.md`, `docs/operations/vercel.md`, `.agents/rules/code-style.md`, `asyncio-gather-rules.md`, `docs-sync.md`, `i18n/README.md`): removed the retired `PROOF_TIMEOUT_SECONDS`/`APPEAL_TIMEOUT_SECONDS` variables, the `schedule_unban`/`cancel_schedule` scheduler API, the `mention()` formatter alias, `has_reply_target`, and the test-only i18n helpers wherever they were referenced.
+
+- **Full coverage of the documentation tree** (`docs/README.md`): the index lists every guide under `docs/` in its category, and every cross-reference across the documentation resolves to a real page and section header, so readers never land on a missing page. Behavior changes: none.
+
+- **CI guide drops the retired timeout variables and covers the checks job** (`docs/operations/ci-cd.md`): the runner secret list no longer names the removed proof/appeal timeout settings, and the Lint section documents the second job that executes the behavioral checks, so the guide matches the workflows that actually run.
 
 </details>
 

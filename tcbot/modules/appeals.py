@@ -12,21 +12,9 @@ from tcbot.modules.helper import replies
 from tcbot.modules.helper.workflows.appeal_flow import (
     LOCK_HOURS,
     appeal,
-    reviewer_locked_out,
-    starts_with_appeal_tag,
-    text_references_log_message,
 )
 from tcbot.utils.formatter import bold, pre
 from tcbot.utils.i18n import Safe, t
-
-# * Re-exported for backward-compatible imports.
-__all__ = (
-    "appeal",
-    "reviewer_locked_out",
-    "starts_with_appeal_tag",
-    "text_references_log_message",
-)
-
 
 # ────────────────────── Module & Help Message ───────────────────── #
 

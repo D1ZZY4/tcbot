@@ -27,7 +27,7 @@ from tcbot.modules.helper.locale import locale_for_chat, locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import appeal_deep_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
-from tcbot.utils.formatter import link, mention
+from tcbot.utils.formatter import link, user_ref
 from tcbot.utils.i18n import Safe, t
 
 if TYPE_CHECKING:
@@ -41,6 +41,12 @@ log = logging.getLogger(__name__)
 # * spike MongoDB pool pressure (pool max 20) and Telegram burst traffic.
 # * Matches the fan_out Telegram cap; members beyond the bound wait.
 _MAX_CONCURRENT_JOINS: int = 10
+
+# * One global bound for ALL concurrent join updates (not per-update): with
+# * concurrent_updates(True) each new-member callback would otherwise get its
+# * own Semaphore(10), making the effective Telegram+Mongo concurrency N*10
+# * with no ceiling.
+_join_sem = asyncio.Semaphore(_MAX_CONCURRENT_JOINS)
 
 
 async def _in_federation(chat_id: int, *, action: str) -> bool | None:
@@ -165,7 +171,7 @@ async def _handle_member(
             notice = t(
                 "greeting.notice.banned",
                 locale,
-                user=Safe(mention(member.id, member.first_name, member.username)),
+                user=Safe(user_ref(member.id, member.first_name, member.username)),
             )
             ban_id = ban.get("ban_id", "")
             if ban_id:
@@ -223,7 +229,7 @@ async def _handle_member(
             t(
                 "greeting.welcome.body",
                 locale,
-                user=Safe(mention(member.id, member.first_name, member.username)),
+                user=Safe(user_ref(member.id, member.first_name, member.username)),
                 community=cfg.community_name,
             ),
             log_label=f"Welcome for uid={member.id}",
@@ -256,7 +262,8 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * joins via invite links without exhausting the MongoDB pool or
     # * bursting Telegram traffic. Failures stay per-member via
     # * return_exceptions=True, as before.
-    _join_sem = asyncio.Semaphore(_MAX_CONCURRENT_JOINS)
+    # * Shared global semaphore (module-level _join_sem); do not re-create a
+    # * per-update Semaphore here.
 
     async def _bounded(m: User) -> None:
         async with _join_sem:
@@ -449,7 +456,7 @@ async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
             t(
                 "greeting.left.body",
                 await locale_for_update(update),
-                user=Safe(mention(member.id, member.first_name, member.username)),
+                user=Safe(user_ref(member.id, member.first_name, member.username)),
             ),
             log_label="left-member",
         )

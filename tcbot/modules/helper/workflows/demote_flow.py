@@ -18,7 +18,7 @@ from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.locale import effective_locale, locale_for_user
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import is_benign_telegram_error
-from tcbot.utils.formatter import bold, mention
+from tcbot.utils.formatter import bold, user_ref
 from tcbot.utils.i18n import Safe, t
 
 if TYPE_CHECKING:
@@ -82,7 +82,6 @@ class Demote:
             target_role,
             executor_id,
             executor_fname,
-            trigger=trigger,
         )
 
         role_label = db.users_roles.ROLE_LABEL.get(
@@ -251,7 +250,7 @@ class Demote:
                 t(
                     "demote.abort.body",
                     mod_locale,
-                    user=Safe(mention(target_id, target_display)),
+                    user=Safe(user_ref(target_id, target_display)),
                     target_role=target_role,
                     action=trigger,
                 ),

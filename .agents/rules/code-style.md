@@ -92,9 +92,9 @@ Rules:
   see [Internationalization](#internationalization-i18n) below.
 - Never use HTML parse mode.
 - Escape user-provided text with `esc()`.
-- Use `mention()` for clickable user names, `code()` for IDs, and `bold()` for
+- Use `user_ref()` for clickable user names, `code()` for IDs, and `bold()` for
   static bold labels.
-- Do not combine `mention(x)` and `code(x)` for the same value.
+- Do not combine `user_ref(x)` and `code(x)` for the same value.
 - Bot replies should be professional, friendly, concise, and lightly humorous.
 - Pictograph emoji and text emoticons are forbidden in bot replies and audit
   logs.
@@ -158,7 +158,7 @@ Templates and placeholders:
   `parse_mode=None` replies, default mode for MarkdownV2 sends. A mode
   mismatch shows raw backslashes or breaks parsing.
 - Dynamics cross as raw data (engine escapes them) or `Safe`
-  pre-formatted markup (`mention()`/`code()`/`bold()` output), never
+  pre-formatted markup (`user_ref()`/`code()`/`bold()` output), never
   pre-escaped. Never nest a rendered string as a plain placeholder.
 - Placeholders are bare names only (`{user}`, `{count}`); no format
   specs or conversions. No braces inside mini-markup spans
@@ -205,8 +205,8 @@ Help and keyboards:
 - New standalone flows should model `appeal_flow.py`.
 - Every flow has a cancel fallback.
 - Use `WAITING_*` state constants.
-- Use `cfg.proof_timeout` and `cfg.appeal_timeout` instead of hardcoded
-  conversation timeouts.
+- Use `cfg.album_debounce` and other `cfg` values for workflow deadlines,
+  never hardcoded literals.
 - Define inline keyboard builders only in `tcbot/modules/helper/keyboards.py`.
 - Use formatter helpers from `tcbot/utils/formatter.py`.
 

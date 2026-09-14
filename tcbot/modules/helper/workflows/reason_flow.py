@@ -25,7 +25,7 @@ from tcbot.modules.helper import replies
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.proof_flow import PROOF_MEDIA_FILTER, BuildProof
-from tcbot.utils.formatter import bold, esc, mention
+from tcbot.utils.formatter import bold, esc, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 
@@ -47,8 +47,6 @@ WAITING_PROOF = 1
 # * Public name so command entries can fail fast on overlong inline reasons
 # * without paying for target resolution or DB work first.
 MAX_REASON_LEN: int = 1000
-
-_MAX_REASON_LEN: int = MAX_REASON_LEN
 
 
 # ───────────────────────── Reason parsing ───────────────────────── #
@@ -109,8 +107,6 @@ class BuildReason:
 
     action: str
     skip_allowed: bool = field(default=True, kw_only=True)
-    skip_label: str = field(default="Skip", kw_only=True)
-    cancel_label: str = field(default="Cancel", kw_only=True)
 
     def keyboard(self, locale: str | None = None) -> InlineKeyboardMarkup:
         """Reason-step keyboard. Includes Skip only when skip_allowed is True."""
@@ -206,7 +202,7 @@ class _ModActionFlow:
         )
         tid: int | None = ctx.user_data.get(f"{self.action}_target_id")
         if tid:
-            return mention(tid, raw)
+            return user_ref(tid, raw)
         return esc(raw)
 
     def _clear_user_data(self, ctx: ContextTypes.DEFAULT_TYPE) -> None:

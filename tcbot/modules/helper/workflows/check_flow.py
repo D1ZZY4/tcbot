@@ -21,10 +21,10 @@ from tcbot.modules.helper.extraction import (
     launch_identity_refresh,
 )
 from tcbot.modules.helper.identity import Identity, classify, profile_note
-from tcbot.modules.helper.keyboards import back_to_module_kb, paged_drill_kb
-from tcbot.utils.formatter import bold, code, italic, mention
+from tcbot.modules.helper.keyboards import back_to_module_kb, detail_kb, paged_drill_kb
+from tcbot.utils.formatter import bold, code, italic, user_ref
 from tcbot.utils.i18n import Safe, t
-from tcbot.utils.pagination import date_or_unknown, nav_row, paginate
+from tcbot.utils.pagination import date_or_unknown, nav_row
 from tcbot.utils.time_and_date import fmt_dt
 
 if TYPE_CHECKING:
@@ -91,8 +91,6 @@ async def _async_const(value: Any) -> Any:
 
 class Check:
     """All view builders for the /check user-profile command."""
-
-    PAGE_SIZE = _PAGE_SIZE
 
     # ── Main profile ──────────────────────────────────────────────────────
 
@@ -232,7 +230,7 @@ class Check:
                 t(
                     "checking.profile.assigned_by",
                     locale,
-                    by=Safe(mention(role_by_id, by_name)),
+                    by=Safe(user_ref(role_by_id, by_name)),
                 )
             )
         if role and role != "founder" and role_at:
@@ -251,7 +249,7 @@ class Check:
         text = (
             (f"{identity_note}\n\n" if identity_note else "")
             + f"{t('checking.profile.title', locale)}\n\n"
-            + f"{t('checking.profile.name', locale, user=Safe(mention(target_id, fname)))}\n"
+            + f"{t('checking.profile.name', locale, user=Safe(user_ref(target_id, fname)))}\n"
             + f"{t('checking.profile.id', locale, id=Safe(code(str(target_id))))}\n"
             + f"{uname_line}\n"
             + f"{role_block}\n\n"
@@ -338,77 +336,18 @@ class Check:
         locale: str | None = None,
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Paginated list of every ban (active+inactive) with detail buttons per item."""
-        # * Fetch ban history and resolve display name in parallel; the name is
-        # * needed for the empty-list message and the list header alike.
-        bans, display_name = await asyncio.gather(
-            db.bans_db.user_bans(target_id),
-            _name(target_id),
-            return_exceptions=True,
-        )
-        if isinstance(bans, BaseException):
-            bans = []
-        if isinstance(display_name, BaseException):
-            display_name = str(target_id)
-        chunk, total_pages, page = paginate(bans, page, _PAGE_SIZE)
-
-        if not bans:
-            text = t(
-                "checking.bans.empty",
-                locale,
-                user=Safe(mention(target_id, display_name)),
-            )
-            return text, InlineKeyboardMarkup([_back_to_check(target_id, locale)])
-
-        lines = [
-            t(
-                "checking.bans.header",
-                locale,
-                n=len(bans),
-                page=page + 1,
-                pages=total_pages,
-            )
-            + "\n"
-        ]
-        items: list[tuple[str, str]] = []
-        base_idx = page * _PAGE_SIZE
-        for i, ban in enumerate(chunk, start=1):
-            status = (
-                t("checking.bans.active", locale)
-                if ban.get("is_active")
-                else t("checking.bans.inactive", locale)
-            )
-            ts = date_or_unknown(ban.get("timestamp"))
-            stored_reason = ban.get("reason", None)
-            reason_short = str(
-                stored_reason
-                if stored_reason is not None
-                else t("checking.events.no_reason", locale, plain=True)
-            )[:_BAN_LIST_REASON_LEN]
-            lines.append(
-                t(
-                    "checking.bans.item",
-                    locale,
-                    i=base_idx + i,
-                    status=Safe(status),
-                    ban=Safe(code(ban.get("ban_id", ""))),
-                    ts=Safe(ts),
-                    reason=Safe(italic(reason_short)),
-                )
-            )
-            items.append(
-                (
-                    str(base_idx + i),
-                    f"check_ban_item:{target_id}:{ban.get('ban_id', '')}",
-                )
-            )
-
-        return "\n".join(lines), paged_drill_kb(
-            items,
-            page=page,
-            total_pages=total_pages,
-            nav_prefix=f"check_bans:{target_id}",
-            back_callback=f"check_main:{target_id}",
-            per_row=_BTNS_PER_ROW,
+        return await _ban_list_render(
+            target_id,
+            page,
+            locale,
+            db_call=db.bans_db.user_bans,
+            count_call=db.bans_db.user_ban_count,
+            key_prefix="bans",
+            nav_prefix="check_bans",
+            active_key="active",
+            inactive_key="inactive",
+            ts=_ban_ts,
+            show_reason=True,
         )
 
     @classmethod
@@ -419,7 +358,20 @@ class Check:
         locale: str | None = None,
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Show a single ban's full detail (text + optional Proof button)."""
-        ban = await db.bans_db.get_ban(ban_id)
+        try:
+            ban = await db.bans_db.get_ban(ban_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # * Transient DB failure: show a retry card that is visibly
+            # * different from the genuine not-found card, so a moderator
+            # * never mistakes an outage for a clean record.
+            text = t(
+                "checking.bans.db_fail",
+                locale,
+                ban=Safe(code(ban_id)),
+            )
+            return text, back_to_module_kb(f"check_bans:{target_id}:0", locale)
         if not ban or ban.get("banned_user_id") != target_id:
             text = t(
                 "checking.bans.not_found",
@@ -429,37 +381,12 @@ class Check:
             return text, back_to_module_kb(f"check_bans:{target_id}:0", locale)
 
         text, proof_link = await build_ban_detail(ban, locale=locale)
-        rows: list[list[InlineKeyboardButton]] = []
-        if proof_link:
-            rows.append(
-                [
-                    InlineKeyboardButton(
-                        t("button.view_proof", locale, plain=True),
-                        url=proof_link,
-                        style=KeyboardButtonStyle.PRIMARY,
-                    )
-                ]
-            )
-        appeal_link = ban.get("appeal_link")
-        if appeal_link:
-            rows.append(
-                [
-                    InlineKeyboardButton(
-                        t("button.view_appeal", locale, plain=True),
-                        url=appeal_link,
-                        style=KeyboardButtonStyle.PRIMARY,
-                    )
-                ]
-            )
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    t("button.back", locale, plain=True),
-                    callback_data=f"check_bans:{target_id}:0",
-                )
-            ]
+        return text, detail_kb(
+            back_callback=f"check_bans:{target_id}:0",
+            proof_link=proof_link,
+            appeal_link=ban.get("appeal_link"),
+            locale=locale,
         )
-        return text, InlineKeyboardMarkup(rows)
 
     # ── Warnings drill-down ───────────────────────────────────────────────
 
@@ -483,11 +410,16 @@ class Check:
             text = t(
                 "checking.warns.empty",
                 locale,
-                user=Safe(mention(target_id, display_name)),
+                user=Safe(user_ref(target_id, display_name)),
             )
             return text, InlineKeyboardMarkup([_back_to_check(target_id, locale)])
 
-        titles = await db.groups_db.get_group_titles([cid for cid, _ in groups])
+        try:
+            titles = await db.groups_db.get_group_titles([cid for cid, _ in groups])
+        except Exception:
+            # * Degrade to numeric chat IDs on a transient failure; the empty
+            # * row list still renders, mirroring warns_in_group's {} fallback.
+            titles = {}
         total = sum(c for _, c in groups)
 
         lines = [
@@ -538,18 +470,31 @@ class Check:
         locale: str | None = None,
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Paginated list of individual warnings inside one chat."""
-        warns, titles = await asyncio.gather(
-            db.warns_db.get_warns(target_id, chat_id),
+        count, titles = await asyncio.gather(
+            db.warns_db.warn_count(target_id, chat_id),
             db.groups_db.get_group_titles([chat_id]),
             return_exceptions=True,
         )
-        if isinstance(warns, BaseException):
-            warns = []
         if isinstance(titles, BaseException):
             titles = {}
+        if isinstance(count, BaseException) or not isinstance(count, int):
+            count = 0
+            count_failed = True
+        else:
+            count_failed = False
+        total_pages = max(1, (count + _PAGE_SIZE - 1) // _PAGE_SIZE)
+        page = max(0, min(page, total_pages - 1))
+        warns = await db.warns_db.get_warns(
+            target_id, chat_id, skip=page * _PAGE_SIZE, limit=_PAGE_SIZE
+        )
+        if isinstance(warns, BaseException):
+            warns = []
+        if count_failed:
+            # * Honest fallback when the count itself fails: show the fetched page.
+            count = len(warns)
+            total_pages = max(1, (count + _PAGE_SIZE - 1) // _PAGE_SIZE)
         # * get_warns is oldest-first; reverse to newest-first for consistency
         warns = list(reversed(warns))
-        chunk, total_pages, page = paginate(warns, page, _PAGE_SIZE)
         title = titles.get(chat_id) or str(chat_id)
 
         if not warns:
@@ -565,7 +510,7 @@ class Check:
             return text, InlineKeyboardMarkup(rows)
 
         # * Resolve admin names with batch query
-        admin_ids = [w.get("admin_id", 0) for w in chunk if w.get("admin_id")]
+        admin_ids = [w.get("admin_id", 0) for w in warns if w.get("admin_id")]
         admin_name_map = (
             await db.users_cache.get_first_names_batch(admin_ids) if admin_ids else {}
         )
@@ -575,14 +520,14 @@ class Check:
                 "checking.warns.in_header",
                 locale,
                 title=title,
-                n=len(warns),
+                n=count,
                 page=page + 1,
                 pages=total_pages,
             )
             + "\n"
         ]
         base_idx = page * _PAGE_SIZE
-        for i, w in enumerate(chunk, start=1):
+        for i, w in enumerate(warns, start=1):
             ts = date_or_unknown(w.get("timestamp"))
             stored_reason = w.get("reason", None)
             reason_short = str(
@@ -599,7 +544,7 @@ class Check:
                     i=base_idx + i,
                     ts=Safe(ts),
                     reason=Safe(italic(reason_short)),
-                    admin=Safe(mention(admin_id, admin_name)),
+                    admin=Safe(user_ref(admin_id, admin_name)),
                 )
             )
 
@@ -632,6 +577,7 @@ class Check:
             page,
             heading_name="Kicks",
             db_call=db.kicks_db.user_kicks,
+            count_call=db.kicks_db.user_kick_count,
             cb_prefix=f"check_kicks:{target_id}",
             locale=locale,
         )
@@ -651,6 +597,7 @@ class Check:
             page,
             heading_name="Mutes",
             db_call=db.mutes_db.user_mutes,
+            count_call=db.mutes_db.user_mute_count,
             cb_prefix=f"check_mutes:{target_id}",
             locale=locale,
         )
@@ -667,73 +614,126 @@ class Check:
         """Paginated list of every ban that ever had an appeal submitted."""
         # * Server-side appeal filter (sparse index): only appealable rows
         # * travel over the wire instead of the user's full ban history.
-        all_bans, display_name = await asyncio.gather(
-            db.bans_db.user_appealable_bans(target_id),
-            _name(target_id),
-            return_exceptions=True,
-        )
-        if isinstance(all_bans, BaseException):
-            all_bans = []
-        if isinstance(display_name, BaseException):
-            display_name = str(target_id)
-        bans = all_bans
-        chunk, total_pages, page = paginate(bans, page, _PAGE_SIZE)
-
-        if not bans:
-            text = t(
-                "checking.appeals_list.empty",
-                locale,
-                user=Safe(mention(target_id, display_name)),
-            )
-            return text, InlineKeyboardMarkup([_back_to_check(target_id, locale)])
-
-        lines = [
-            t(
-                "checking.appeals_list.header",
-                locale,
-                n=len(bans),
-                page=page + 1,
-                pages=total_pages,
-            )
-            + "\n"
-        ]
-        items: list[tuple[str, str]] = []
-        base_idx = page * _PAGE_SIZE
-        for i, ban in enumerate(chunk, start=1):
-            ts = date_or_unknown(ban.get("appeal_submitted_at") or ban.get("timestamp"))
-            status = (
-                t("checking.appeals_list.approved", locale)
-                if not ban.get("is_active")
-                else t("checking.appeals_list.pending", locale)
-            )
-            lines.append(
-                t(
-                    "checking.appeals_list.item",
-                    locale,
-                    i=base_idx + i,
-                    status=Safe(status),
-                    ban=Safe(code(ban.get("ban_id", ""))),
-                    ts=Safe(ts),
-                )
-            )
-            items.append(
-                (
-                    str(base_idx + i),
-                    f"check_ban_item:{target_id}:{ban.get('ban_id', '')}",
-                )
-            )
-
-        return "\n".join(lines), paged_drill_kb(
-            items,
-            page=page,
-            total_pages=total_pages,
-            nav_prefix=f"check_appeals:{target_id}",
-            back_callback=f"check_main:{target_id}",
-            per_row=_BTNS_PER_ROW,
+        return await _ban_list_render(
+            target_id,
+            page,
+            locale,
+            db_call=db.bans_db.user_appealable_bans,
+            count_call=db.bans_db.user_appeal_count,
+            key_prefix="appeals_list",
+            nav_prefix="check_appeals",
+            active_key="pending",
+            inactive_key="approved",
+            ts=_appeal_ts,
         )
 
 
 # ─────────────────────── Shared list helper ─────────────────────── #
+
+
+def _ban_ts(ban: dict[str, Any]) -> str:
+    return date_or_unknown(ban.get("timestamp"))
+
+
+def _appeal_ts(ban: dict[str, Any]) -> str:
+    return date_or_unknown(ban.get("appeal_submitted_at") or ban.get("timestamp"))
+
+
+async def _ban_list_render(
+    target_id: int,
+    page: int,
+    locale: str | None,
+    *,
+    db_call: Callable[..., Awaitable[list[Any]]],
+    count_call: Callable[[int], Awaitable[int]],
+    key_prefix: str,
+    nav_prefix: str,
+    active_key: str,
+    inactive_key: str,
+    ts: Callable[[dict[str, Any]], str],
+    show_reason: bool = False,
+) -> tuple[str, InlineKeyboardMarkup]:
+    """Shared paginated ban/appeal list renderer (index + detail buttons).
+
+    Fetches only ``_PAGE_SIZE`` rows plus the real total per page turn,
+    and keeps the header count exact even when a page tap comes in out of
+    range (page is clamped before the slice is requested).
+    """
+    total, display_name = await asyncio.gather(
+        count_call(target_id),
+        _name(target_id),
+        return_exceptions=True,
+    )
+    if isinstance(display_name, BaseException):
+        display_name = str(target_id)
+    if isinstance(total, BaseException) or not isinstance(total, int):
+        total = 0
+        count_failed = True
+    else:
+        count_failed = False
+    total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
+    page = max(0, min(page, total_pages - 1))
+    chunk = await db_call(target_id, skip=page * _PAGE_SIZE, limit=_PAGE_SIZE)
+    if isinstance(chunk, BaseException):
+        chunk = []
+    if count_failed:
+        # * Honest fallback when the count itself fails: show the fetched page.
+        total = len(chunk)
+        total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
+
+    if not chunk:
+        text = t(
+            f"checking.{key_prefix}.empty",
+            locale,
+            user=Safe(user_ref(target_id, display_name)),
+        )
+        return text, InlineKeyboardMarkup([_back_to_check(target_id, locale)])
+
+    lines = [
+        t(
+            f"checking.{key_prefix}.header",
+            locale,
+            n=total,
+            page=page + 1,
+            pages=total_pages,
+        )
+        + "\n"
+    ]
+    items: list[tuple[str, str]] = []
+    base_idx = page * _PAGE_SIZE
+    for i, ban in enumerate(chunk, start=1):
+        status_key = active_key if ban.get("is_active") else inactive_key
+        status = t(f"checking.{key_prefix}.{status_key}", locale)
+        item_kwargs: dict[str, Any] = {
+            "i": base_idx + i,
+            "status": Safe(status),
+            "ban": Safe(code(ban.get("ban_id", ""))),
+            "ts": Safe(ts(ban)),
+        }
+        if show_reason:
+            stored_reason = ban.get("reason", None)
+            reason_short = str(
+                stored_reason
+                if stored_reason is not None
+                else t("checking.events.no_reason", locale, plain=True)
+            )[:_BAN_LIST_REASON_LEN]
+            item_kwargs["reason"] = Safe(italic(reason_short))
+        lines.append(t(f"checking.{key_prefix}.item", locale, **item_kwargs))
+        items.append(
+            (
+                str(base_idx + i),
+                f"check_ban_item:{target_id}:{ban.get('ban_id', '')}",
+            )
+        )
+
+    return "\n".join(lines), paged_drill_kb(
+        items,
+        page=page,
+        total_pages=total_pages,
+        nav_prefix=f"{nav_prefix}:{target_id}",
+        back_callback=f"check_main:{target_id}",
+        per_row=_BTNS_PER_ROW,
+    )
 
 
 async def _per_chat_event_list(
@@ -741,21 +741,37 @@ async def _per_chat_event_list(
     page: int,
     *,
     heading_name: str,
-    db_call: Callable[[int], Awaitable[list[Any]]],
+    db_call: Callable[..., Awaitable[list[Any]]],
+    count_call: Callable[[int], Awaitable[int]],
     cb_prefix: str,
     locale: str | None = None,
 ) -> tuple[str, InlineKeyboardMarkup]:
-    """Shared renderer for kicks/mutes; both have the same shape."""
-    records, display_name = await asyncio.gather(
-        db_call(target_id),
+    """Shared renderer for kicks/mutes; both have the same shape.
+
+    Fetches only ``_PAGE_SIZE`` rows plus the real total per page turn,
+    so the header stays exact and only the visible slice travels.
+    """
+    total, display_name = await asyncio.gather(
+        count_call(target_id),
         _name(target_id),
         return_exceptions=True,
     )
-    if isinstance(records, BaseException):
-        records = []
     if isinstance(display_name, BaseException):
         display_name = str(target_id)
-    chunk, total_pages, page = paginate(records, page, _PAGE_SIZE)
+    if isinstance(total, BaseException) or not isinstance(total, int):
+        total = 0
+        count_failed = True
+    else:
+        count_failed = False
+    total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
+    page = max(0, min(page, total_pages - 1))
+    records = await db_call(target_id, skip=page * _PAGE_SIZE, limit=_PAGE_SIZE)
+    if isinstance(records, BaseException):
+        records = []
+    if count_failed:
+        # * Honest fallback when the count itself fails: show the fetched page.
+        total = len(records)
+        total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
 
     if not records:
         text = t(
@@ -763,12 +779,12 @@ async def _per_chat_event_list(
             locale,
             heading=Safe(bold(heading_name)),
             lower=heading_name.lower(),
-            user=Safe(mention(target_id, display_name)),
+            user=Safe(user_ref(target_id, display_name)),
         )
         return text, InlineKeyboardMarkup([_back_to_check(target_id, locale)])
 
-    chat_ids = list({r["chat_id"] for r in chunk if "chat_id" in r})
-    admin_ids = [r.get("admin_id", 0) for r in chunk if r.get("admin_id")]
+    chat_ids = list({r["chat_id"] for r in records if "chat_id" in r})
+    admin_ids = [r.get("admin_id", 0) for r in records if r.get("admin_id")]
 
     # * Resolve all titles + all admin names in parallel with batch query
     titles, admin_name_map = await asyncio.gather(
@@ -788,14 +804,14 @@ async def _per_chat_event_list(
             "checking.events.header",
             locale,
             heading=Safe(bold(heading_name)),
-            n=len(records),
+            n=total,
             page=page + 1,
             pages=total_pages,
         )
         + "\n"
     ]
     base_idx = page * _PAGE_SIZE
-    for i, rec in enumerate(chunk, start=1):
+    for i, rec in enumerate(records, start=1):
         ts = date_or_unknown(rec.get("timestamp"))
         stored_reason = rec.get("reason", None)
         reason_short = str(
@@ -815,7 +831,7 @@ async def _per_chat_event_list(
                 ts=Safe(ts),
                 title=title,
                 reason=Safe(italic(reason_short)),
-                admin=Safe(mention(admin_id, admin_name)),
+                admin=Safe(user_ref(admin_id, admin_name)),
             )
         )
 

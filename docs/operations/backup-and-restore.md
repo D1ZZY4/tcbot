@@ -13,7 +13,7 @@ recover that data.
 | `tc_owners` / `tc_admins` / `tc_roles` | Staff role assignments | Critical: roles must be re-granted manually |
 | `federated_groups` | Connected group registry | High: reconnecting requires each group admin to re-run `/tcconnect` |
 | `warns` / `warn_counts` | Warning records and counters | Medium: warn history lost; users get a clean slate |
-| `apscheduler_jobs` | Persistent scheduler data | Medium: scheduler state may need verification after restore |
+| `jobs` | Persistent scheduler data (APScheduler `MongoDBJobStore` default collection inside the project DB) | Medium: scheduler state may need verification after restore |
 
 ---
 
@@ -42,7 +42,7 @@ depend on the Atlas plan currently in use.
    ```
     db.bans.countDocuments()
     db.federated_groups.countDocuments()
-   db.tc_roles.countDocuments()
+    db.tc_roles.countDocuments()
     db.warns.countDocuments()
     db.warn_counts.countDocuments()
    ```

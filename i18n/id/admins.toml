@@ -120,6 +120,7 @@ admin_warn = " PERINGATAN: {user} tidak bisa dipertahankan sebagai Admin; beri p
 [list]
 header = "{title}"
 header_text = "Permintaan Promosi Tertunda ({n})"
+cap_notice = "\nMenampilkan {shown} permintaan terbaru. {total} tertunda total."
 row = "- {user} {id} | {uname} | ID: {req}"
 
 [decision]

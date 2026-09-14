@@ -56,7 +56,7 @@ Commands use the project's configured prefixes; slash commands are examples.
    - `db.groups_db.is_connected(chat.id)`.
    - `db.users_roles.is_staff(user.id)`.
    - `bot.get_chat_member(chat.id, user.id)` bounded with `asyncio.wait_for(timeout=3.0)`.
-3. If `is_connected` raised or is False, replies `This group is not connected to <community>.` and stops.
+3. If `is_connected` raised, replies the localized `disconnecting.state.status_failed` notice (`Could not verify the group status. Please try again.`) and stops. If `is_connected` is `False`, replies the localized `disconnecting.state.not_connected` notice (`This group is not connected to <community>.`) and stops.
 4. If the member lookup raised, replies `replies.ERR_ROLE_VERIFY` and stops.
 5. Determines `is_group_owner = member.status == "creator"`.
 6. If the executor is neither TC staff nor the group owner, replies:

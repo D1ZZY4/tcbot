@@ -17,8 +17,11 @@ The bot currently uses:
 - batch queries in list and detail views to avoid repeated user and group reads;
 - MongoDB projections and indexes for frequently accessed fields;
 - `asyncio.gather()` for independent database and Telegram operations;
-- `TwoLevelCache` with an in-process L1 and optional Redis L2 (L2 reads are
-  bounded so a stalled Redis falls through instead of holding the hot path);
+- `TwoLevelCache` with an in-process L1 and optional Redis L2: L2 reads are
+  bounded (1 s cap) so a stalled Redis falls through to the DB fetch instead
+  of holding the hot path, and L2 writes are fire-and-forget FIFO mutations
+  that can never fail the fetch (a payload-encode failure degrades to
+  L1-only);
 - `estimated_document_count()` for count-only views where an exact count is not
   required;
 - callback acknowledgement alongside independent callback work where safe;
@@ -53,6 +56,11 @@ Available batch helpers include:
 - `users_cache.get_first_names_batch(user_ids)`
 - `users_cache.get_mention_data_batch(user_ids)`
 - `groups_db.get_group_titles(chat_ids)`
+
+Batch helpers check the in-memory mention cache first: cached IDs are served
+without I/O and repeat IDs are dropped, so only the uncached remainder hits
+one MongoDB query. Users absent from the database get a not-found sentinel
+cached so repeat renders skip the round-trip.
 
 For partial-name target resolution, use
 `users_cache.search_by_name(needle, limit)` instead of loading every cached
@@ -135,9 +143,22 @@ Use the cache layer already associated with the database helper:
 - Redis is optional. Without `REDIS_URL`, the cache remains in-process.
 
 Do not add a second cache namespace or bypass the cache with a direct Redis
-operation. See
+operation. An L2 write can never fail the fetch it follows: after a database
+fetch succeeds the value is already serving from L1, and a payload-encode
+failure or a slow Redis write degrades to L1-only instead of raising. See
 [`../architecture/database.md`](../architecture/database.md) for TTL,
 serialization, and invalidation details.
+
+## Telegram transport pool
+
+Outbound Telegram HTTP tuning lives in one owner, `tcbot/utils/transport.py`
+(see [`../architecture/utilities.md`](../architecture/utilities.md)):
+`API_POOL_SIZE` (8) and the timeouts (read 60 s, write 30 s, connect 30 s,
+pool 15 s) are applied identically by `__main__.py` and `serverless.py`.
+Polling mode adds a dedicated getUpdates connection pool of 4
+(`_UPDATES_POOL_SIZE`, defined in `tcbot/__main__.py`). On top of the pool,
+`fan_out()` caps in-flight Telegram calls at 10 via its semaphore, so the
+connection count stays bounded regardless of how many groups are connected.
 
 ## Measuring a suspected bottleneck
 

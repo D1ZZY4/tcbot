@@ -158,6 +158,49 @@ def no_reason(locale: str | None = None, *, plain: bool) -> str:
     return t("common.action.no_reason", locale, plain=plain)
 
 
+def applied_summary(
+    locale: str | None,
+    key_prefix: str,
+    *,
+    total: int,
+    failed: int,
+    transient: list[tuple[dict, BaseException]],
+) -> str:
+    """Build the fan-out applied-to line shared by ban and warn auto-ban.
+
+    Renders the ``.empty`` / ``.none`` / ``.partial`` / ``.full`` templates
+    under ``key_prefix`` with a sample of the failing groups so operators
+    can name the missed chats.
+    """
+    if total == 0:
+        return t(f"{key_prefix}.empty", locale)
+    if failed == total:
+        sample = ", ".join(
+            grp.get("title") or str(grp["chat_id"]) for grp, _ in transient[:5]
+        )
+        return t(
+            f"{key_prefix}.none",
+            locale,
+            total=total,
+            sample=sample,
+            more=" ..." if len(transient) > 5 else "",
+        )
+    if failed > 0:
+        sample = ", ".join(
+            grp.get("title") or str(grp["chat_id"]) for grp, _ in transient[:3]
+        )
+        return t(
+            f"{key_prefix}.partial",
+            locale,
+            done=total - failed,
+            total=total,
+            failed=failed,
+            sample=sample,
+            more=" ...)" if len(transient) > 3 else ")",
+        )
+    return t(f"{key_prefix}.full", locale, total=total)
+
+
 # ────────────── Help-section header labels ───────────────────────── #
 # * Raw labels: section buttons show them plain, section titles escape
 # * them via bold().

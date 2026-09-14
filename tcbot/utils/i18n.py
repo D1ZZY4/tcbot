@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 import re
-import string
 import tomllib
 from pathlib import Path
 
@@ -19,10 +18,6 @@ log = logging.getLogger(__name__)
 # * BCP 47 shaped default; every other locale falls back to it per key.
 DEFAULT_LOCALE: str = "en-US"
 
-# * MarkdownV2 specials that must be backslash-escaped in regular text.
-# * Mirrors the formatter contract without importing its private table.
-_V2_SPECIAL: frozenset[str] = frozenset("_*[]()~`>#+-=|{}.!")
-
 # * Mini-markup field names: bare identifiers only, so format specs and
 # * conversions can never smuggle unescaped content past the renderer.
 _FIELD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
@@ -31,7 +26,7 @@ _FIELD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 class Safe(str):
     """Pre-formatted fragment exempt from placeholder escaping.
 
-    Wrap ``mention()``/``code()``/``bold()`` output (or any already-safe
+    Wrap ``user_ref()``/``code()``/``bold()`` output (or any already-safe
     markup) so :func:`t` interpolates it verbatim instead of escaping it.
     """
 
@@ -314,39 +309,3 @@ def resolve_locale(
         if canonical is not None:
             return canonical
     return DEFAULT_LOCALE
-
-
-def placeholders(template: str) -> set[str]:
-    """Return the ``{name}`` placeholders used by a template."""
-    names: set[str] = set()
-    for _, name, _, _ in string.Formatter().parse(template):
-        if name:
-            names.add(name.split(".", 1)[0].split("[", 1)[0])
-    return names
-
-
-def find_unescaped(text: str) -> list[str]:
-    """Return descriptions of unescaped MarkdownV2 specials in rendered text.
-
-    Used to validate catalog templates after dummy interpolation: a
-    shipped template must render clean, since translators cannot be
-    expected to debug entity errors.
-    """
-    problems: list[str] = []
-    i, n = 0, len(text)
-    while i < n:
-        ch = text[i]
-        if ch in _V2_SPECIAL:
-            if ch == "\\" and i + 1 < n and text[i + 1] in _V2_SPECIAL:
-                i += 1
-            else:
-                backslashes = 0
-                j = i - 1
-                while j >= 0 and text[j] == "\\":
-                    backslashes += 1
-                    j -= 1
-                if backslashes % 2 == 0:
-                    context = text[max(0, i - 14) : i + 8].replace("\n", "\\n")
-                    problems.append(f"unescaped {ch!r} near ...{context}...")
-        i += 1
-    return problems

@@ -87,7 +87,7 @@ The `trigger` parameter controls only the DM body wording:
 - `trigger="kick"`: `Your <Role> role in <community> has been removed - you were kicked from the federation.`
 - `trigger="mute"`: `Your <Role> role in <community> has been removed - you were muted from the federation.`
 
-The federation log emitted by `parse_logmsg.demoted` is identical in every case; `trigger` is accepted in the signature for caller API compatibility but ignored in the rendered output.
+The federation log emitted by `parse_logmsg.demoted(target_id, target_fname, role, by_id, by_fname)` is identical in every case — `Demote.execute`'s `trigger` keyword is not passed to the log builder and never changes the rendered output. The signature shown above is the complete one; there is no `trigger` parameter.
 
 ## Manual demotion flow (`/tcdemote`)
 
@@ -177,9 +177,10 @@ Both helpers invalidate the affected user's entry in `effective_role_cache` so t
 
 - If the target's role record was already gone by the time the callback fires, `Demote.execute` returns False and the caller surfaces a friendly message.
 - DM and log channel sends are wrapped in `asyncio.gather(..., return_exceptions=True)`; a failed DM does not roll back the role removal.
+- Log and DM failures are logged asymmetrically in `Demote.execute`: a failed federation log send logs at error level (a silent audit gap ships to `LOG_ERRORS`), a DM refused with `Forbidden` or another benign Telegram error (target never started the bot, blocked it, or deleted the account) logs at info level, and any other DM failure logs at warning level.
 - Self-demotion is rejected by `cmd_demote` via identity refusal (`Demoting yourself? Bold. Ask a higher-up if you really mean it.`).
 - Founder demotion is rejected by identity refusal before the role check (`... is the Founder - try /transferowner ...`); the no-role message only fires for genuinely role-less targets.
-- Auto-demote is best-effort: a failure inside `warning_flow.execute_warn` is logged via `log.error` but never aborts the surrounding action.
+- Auto-demote is best-effort: a failure inside `warning_flow.execute_warn` is logged via `log.exception` but never aborts the surrounding action; the executors that need to abort on demote failure use `Demote.auto_demote_or_abort` instead.
 
 ## Behavior reference
 

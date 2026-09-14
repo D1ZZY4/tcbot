@@ -61,11 +61,12 @@ help-discovery convention, not a handler-registration switch.
 | `appeals.py` | `Appeal` | `/start appeal_<ban_id>` plus appeal decision callbacks | Registers `appeal.build_handler()` and approve/reject callbacks. |
 | `banning.py` | `Ban` | `/tcban`, `/tcb` | Validates Developer+ access, auto-demotes role holders, enters `ban_flow`. |
 | `broadcasting.py` | `Broadcast` | `/tcbroadcast`, `/bc` | Sends a message to all active groups and logs results. |
-| `checking.py` | `Checking` | `/checkme`, `/cme`, `/check`, `/c` | Ban status lookup (`/checkme`) and comprehensive user profile (`/check`) with bans/warns/kicks/mutes/appeals drill-down. |
+| `checking.py` | `Check` | `/checkme`, `/cme`, `/check`, `/c` | Ban status lookup (`/checkme`) and comprehensive user profile (`/check`) with bans/warns/kicks/mutes/appeals drill-down. |
 | `connecting.py` | `Connect` | `/tcconnect`, `/tccon`, bot-added updates, connect/cancel callbacks | Group connection approval and permission checks. |
 | `disconnecting.py` | `Disconnect` | `/tcdisconnect`, `/tcdiscon`, `/rmtc` | Group-owner disconnect and staff remote disconnect. |
 | `groups.py` | `Groups` | `/tcgroups`, `/tcg` | Connected group list and details toggle. |
 | `kicking.py` | `Kick` | `/tckick`, `/tck` | Tester+ current-group kick through shared reason/proof flow. |
+| `language.py` | `Language` | `/language`, `/lang`, `/langs` plus `language_menu`, `lang:list:*`, `lang:set:*` callbacks | Per-user (PM) and per-group locale selection. Group changes require the group creator or federation staff; the selected locale drives all following replies. |
 | `maintenance.py` | `Maintenance` | `/leaveall`, `/exitall`, `/tcleave`, `/cleanup`, `/tcclean`, `/tcc` | Emergency leave-all and staff cleanup operations. |
 | `muting.py` | `Mute` | `/tcmute`, `/tcm`, `/tcunmute`, `/tcunm`, `/tcum` | Federation-wide mute conversation and direct unmute. |
 | `stats.py` | `Stats` | `/tcstats`, `/tcs` plus stats callbacks | Summary, staff list, active bans, connected chats, search/detail callbacks. |
@@ -137,4 +138,4 @@ Use role helpers from `users_roles` and `decorators.resolve_and_check`; avoid ma
 - Export `__handlers__` at the bottom.
 - Use database helper modules instead of raw MongoDB collection access.
 - Put new conversation logic in `tcbot/modules/helper/workflows/*_flow.py`.
-- Keep user-facing messages in English and `parse_mode="MarkdownV2"`.
+- Render user-facing messages through `tcbot.utils.i18n.t()` with a resolved locale so they are MarkdownV2-safe automatically; use `plain=True` for callback alerts and other contexts Telegram never parses.

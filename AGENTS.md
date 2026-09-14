@@ -87,8 +87,7 @@ Current stack:
 - Motor async MongoDB driver with connection pool configuration
 - Flask keep-alive / health-check server
 - Optional Redis L2 cache (`redis[hiredis]>=8.0,<9`) with in-memory L1 fallback
-- Tagged JSON values for Redis serialization (`cbor2` remains pinned in
-  `pyproject.toml` but no current code imports it)
+- Tagged JSON values for Redis serialization (a project-local encoder, no `cbor2`)
 - `cachetools` for L1 TTLCache
 - `uv` for dependency management and lockfile-based installs
 - Ruff for formatting and lint checks
@@ -235,7 +234,7 @@ Important non-secret/runtime variables include:
 - `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`: log/proof/appeal destinations; values may be `chat_id` or `chat_id/thread_id`.
 - `APPEAL_LOG_HANDLE`: channel handle shown in appeal instructions.
 - `APPEAL_DISCUSSION_TOPIC`: thread ID in `MAIN_GROUP` for appeal review cards.
-- `PROOF_TIMEOUT_SECONDS`, `APPEAL_TIMEOUT_SECONDS`, `ALBUM_DEBOUNCE_SECONDS`: conversation timing settings.
+- `ALBUM_DEBOUNCE_SECONDS`: proof silence window before the ban executor runs.
 - `LOG_LEVEL`: bot log level.
 - `MODULES_LOAD`, `MODULES_NO_LOAD`: optional module allowlist/denylist.
 - `WEBHOOK_URL`: explicit webhook URL for production; overrides `REPLIT_DEV_DOMAIN`.

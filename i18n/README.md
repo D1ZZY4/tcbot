@@ -33,7 +33,7 @@ inside a file and extend the prefix (`[x]` + `y` = `file.x.y`).
 3. Write raw text, never backslashes: the engine escapes MarkdownV2 at
    render time, so `Done.` stays `Done.` in TOML (use literal single
    quotes to keep it obvious; basic double quotes work too).
-4. `{placeholder}` values arrive pre-formatted from code: `mention()`
+4. `{placeholder}` values arrive pre-formatted from code: `user_ref()`
    style fragments pass through, raw text is escaped. Do not add `*`,
    `_`, `` ` ``, `[`, `]`, `(`, `)` around a placeholder unless the
    `en-US` entry does.
