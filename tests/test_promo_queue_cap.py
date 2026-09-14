@@ -105,6 +105,15 @@ def test_promote_list_appends_cap_notice_when_backlog_exceeds_cap(
     assert notice in captured[0]
 
 
+def test_promote_list_header_shows_true_total_when_truncated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = _set_up(monkeypatch, total_pending=234)
+
+    assert len(captured) == 1
+    assert "Pending Promotion Requests \\(234\\)" in captured[0]
+
+
 def test_promote_list_omits_cap_notice_within_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -1002,7 +1002,11 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         t(
             "admins.list.header",
             locale,
-            title=Safe(bold(f"Pending Promotion Requests ({len(pending)})")),
+            title=Safe(
+                bold(
+                    f"Pending Promotion Requests ({total_pending if total_pending > len(pending) else len(pending)})"
+                )
+            ),
         )
         + "\n"
     ]

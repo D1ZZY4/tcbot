@@ -67,7 +67,7 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **New-member enforcement shares one global concurrency bound** (`tcbot/modules/greeting.py`): simultaneous joins used to each create their own per-update cap, so a burst across many groups could exceed Telegram's per-second limits and spike database usage. One module-wide bound now caps all join processing at the same batch ceiling as before.
 
-- **Promotion-request list shows a cap notice** (`tcbot/database/queues_db.py`, `tcbot/modules/admins.py`): the pending list caps at 200 rows, so a deeper backlog used to look incomplete without saying so. The header now includes the full backlog count whenever the queue is truncated, in both catalogs.
+- **Promotion-request list shows a cap notice** (`tcbot/database/queues_db.py`, `tcbot/modules/admins.py`): the pending list caps at 200 rows, so a deeper backlog used to look incomplete without saying so. The header now includes the full backlog count whenever the queue is truncated, in both catalogs. The list header itself shows the true backlog total when truncated, not just the visible row count (`tests/test_promo_queue_cap.py`).
 
 - **Cancelled proof flush never wipes a newer ban session** (`tcbot/modules/helper/workflows/ban_flow.py`): when a moderator taps Done while the proof-collection flush was already unwinding, the stale background task could clear the ban state of a brand-new collection started for the same person in the same chat during that window, cutting the new flow short. Cleanup now only ever touches the exact session object it claimed, so a newer conversation for the same key is left alone.
 
