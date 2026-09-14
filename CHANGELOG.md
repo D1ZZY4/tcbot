@@ -125,6 +125,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Kick writes the audit record before enforcing** (`tcbot/modules/helper/workflows/kicking_flow.py`): the ban ran first and the audit write shared a parallel gather, so a failed write left an enforced kick that history views could never see. The write now runs first and aborts with a retry reply on failure. Behavior changes: a failed audit write no longer enforces the kick.
 
+- **Verified target resolution always checks live** (`tcbot/modules/helper/extraction.py`): the numeric-ID fast path returned cached names without a live lookup even for verified callers, so a stale cache entry could redirect a reply command. Verified resolution now requires a live Telegram resolve; the fast path stays for unverified views. A bare `@` no longer counts as an explicit target shape.
+
 ### Documentation
 
 - **Warn-limit trigger documented as `>=`** (`tcbot/__init__.py`, `tcbot/modules/helper/workflows/warning_flow.py`): the `warn_limit` property docstring and the `_execute_warn_auto_ban` role-lookup comment described the trigger as `==` (exact equality), contradicting the deliberate `>=` implementation. Both texts now describe the "reaches or exceeds" semantics and why a `==` trigger would wedge the retry after a total enforcement failure. No behavior changes.
