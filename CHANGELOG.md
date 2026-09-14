@@ -9,6 +9,23 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+### Documentation
+
+</details>
+
+## [6.9.0] - 2026-09-14
+
+<details>
+<summary>6.9.0 changes (click to expand)</summary>
+
+### Added
+
 - **MTProto identity resolution beyond Bot API limits** (`tcbot/database/mtproto.py`, `tcbot/database/mtproto_store.py`, `tcbot/__init__.py`, `tcbot/__main__.py`, `tcbot/modules/helper/extraction.py`, `config.env.example`, `docs/getting-started/setup.md`, `tests/test_mtproto_base.py`, `tests/test_mtproto_store.py`): `API_ID` / `API_HASH` are mandatory and boot connects a bot-token session that logs in fully automatically, so lookups never need a phone number, a login code, or a session file. Silent-user lookups try one MTProto peer resolve before the multi-group sweep, with results flowing into the existing identity cache. Transient runtime failures still degrade to None. Behavior changes: deployments without credentials no longer boot.
 
 - **MTProto session shared in MongoDB** (`tcbot/database/mtproto_store.py`, `tests/test_mtproto_store.py`): the login, peer hashes, and update states persist in the `mtproto_state` collection with the same semantics as Kurigram's file storage, so ephemeral runners and the beta host share one authorization. Behavior changes: none.
