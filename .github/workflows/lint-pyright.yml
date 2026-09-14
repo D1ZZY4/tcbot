@@ -1,0 +1,41 @@
+name: Lint (Pyright)
+
+on:
+  push:
+    branches: [main, "feat/**", "fix/**"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck:
+    name: Pyright type check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      # Same dummy values as the Ruff workflow: only needed so the
+      # package imports cleanly during type checking.
+      BOT_TOKEN: "000000:dummy-token-for-lint000000000000000"
+      MONGODB_URI: "mongodb://localhost:27017"
+      OWNER_ID: "1"
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Check types
+        run: uv run pyright

@@ -8,39 +8,39 @@ For the changelog of CI/CD additions, see
 
 ## Overview
 
-The project uses 5 automated workflows for continuous integration, code quality, and maintenance:
+The project uses 7 automated workflows for continuous integration, code quality, and maintenance:
 
-1. **Lint** - Lint, format, and import check
-2. **Auto-Fix Code Quality** - Automatically fix linting issues
-3. **Dependency Updates** - Weekly dependency updates with auto-PR
-4. **CodeQL** - Security analysis
-5. **Run Bot** - Long-running bot runner with push-triggered handover, self-chaining, and cron fallback
+1. **Lint (Ruff)** - Lint, format, and import check
+2. **Lint (Pyright)** - Static type check
+3. **Test (Pytest)** - Behavioral checks
+4. **Auto-Fix Code Quality** - Automatically fix linting issues
+5. **Dependency Updates** - Weekly dependency updates with auto-PR
+6. **CodeQL** - Security analysis
+7. **Run Bot** - Long-running bot runner with push-triggered handover, self-chaining, and cron fallback
 
 ---
 
-## 1. Lint (CI Gate)
+## 1. Lint and Test (CI Gate)
 
-**File:** `.github/workflows/lint.yml`
+Three workflows with identical triggers (push to `main`, `feat/**`,
+`fix/**`; pull requests to `main`), one job each:
 
-**Triggers:**
-- Push to `main`, `feat/**`, `fix/**`
-- Pull requests to `main`
+- **Lint (Ruff)** (`.github/workflows/lint-ruff.yml`): `uv run ruff format
+  --check .`, `uv run ruff check .`, and `uv run python -c "import tcbot"`.
+- **Lint (Pyright)** (`.github/workflows/lint-pyright.yml`): `uv run pyright`.
+- **Test (Pytest)** (`.github/workflows/test-pytest.yml`): `uv run pytest tests/ -q`.
 
-**What it does:**
-- Runs `uv run ruff format --check .` to verify formatting without modifying files
-- Runs `uv run ruff check .` to catch all lint violations
-- Runs `uv run python -c "import tcbot"` to verify all imports resolve cleanly
-- Runs the behavioral checks (`python -m pytest tests/ -q`) as a second job
-  with the same dummy environment values, so regressions fail the PR too
-- **Fails the PR** if any step exits with a non-zero code
-- The import check runs with dummy but shape-valid `BOT_TOKEN`,
-  `MONGODB_URI`, and `OWNER_ID` values (validated at import time, never
-  connecting), so fork PRs without repository secrets still pass
+**What they share:**
+- `uv sync --frozen` installs from the lockfile before every job.
+- **Fails the PR** if any step exits with a non-zero code.
+- Dummy but shape-valid `BOT_TOKEN`, `MONGODB_URI`, and `OWNER_ID` values
+  (validated at import time, never connecting), so fork PRs without
+  repository secrets still pass.
 
 **Why this exists:**
-`lint.yml` provides a repeatable CI result for formatting, lint, and import
-checks. Whether it blocks merging depends on the repository's branch
-protection settings.
+The three workflows provide a repeatable CI result for formatting, lint,
+types, imports, and behavioral checks. Whether they block merging depends
+on the repository's branch protection settings.
 
 ---
 
@@ -91,7 +91,7 @@ Auto-applied by GitHub Actions
 - Runs `uv lock --upgrade` to update all dependencies
 - Installs the updated lockfile and validates it (Ruff format/lint plus the
   `import tcbot` check, with dummy shape-valid environment values like
-  `lint.yml`)
+  the lint/test workflows above)
 - **Auto-creates a PR** (`deps/auto-update-YYYYMMDD`, suffixed `-runNNN` on
   collision) labeled `dependencies` against `main`
 - If the default token cannot open PRs (repository toggle off), the step
@@ -163,7 +163,7 @@ Review the dependency changes and CI results before merging.
 ## Workflow Dependencies
 
 ```
-Lint (CI Gate)
+Lint (Ruff) + Lint (Pyright) + Test (Pytest)
     ↓
 Pass: PR can merge / Fail: PR is blocked
 
