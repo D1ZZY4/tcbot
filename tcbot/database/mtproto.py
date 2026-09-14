@@ -33,6 +33,10 @@ log = logging.getLogger(__name__)
 
 _client: Client | None = None
 
+# * Ceiling for the initial session connect at boot. A network partition
+# * must fail the boot loudly instead of hanging it forever.
+_START_TIMEOUT_S: float = 60.0
+
 
 def is_configured() -> bool:
     """Return True when API_ID + API_HASH are set."""
@@ -82,7 +86,12 @@ async def start() -> bool:
     if c.is_connected:
         return True
     try:
-        await c.start()
+        async with asyncio.timeout(_START_TIMEOUT_S):
+            await c.start()
+    except TimeoutError as exc:
+        raise RuntimeError(
+            f"MTProto bot session timed out after {_START_TIMEOUT_S:.0f}s."
+        ) from exc
     except asyncio.CancelledError:
         raise
     except Exception as exc:

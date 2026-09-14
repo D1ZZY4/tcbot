@@ -139,6 +139,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Scheduler lifecycle and run bounds** (`tcbot/database/scheduler.py`): double start is refused instead of orphaning a scheduler, a cancelled start unwinds and clears state, stop retrieves a cancelled task instead of leaking it, and the expiry deletes plus the enforcement sweep run under timeouts so a hung backend cannot wedge the jobs.
 
+- **Loud instead of hung runtime startup** (`tcbot/database/mtproto.py`, `tcbot/alive.py`): the MTProto session connect now aborts the boot after 60 seconds on a network partition instead of hanging forever, and the keep-alive server probes its port before spawning the daemon thread so a conflict fails the startup stage instead of running headless with no health checks or webhook delivery.
+
 ### Documentation
 
 - **Warn-limit trigger documented as `>=`** (`tcbot/__init__.py`, `tcbot/modules/helper/workflows/warning_flow.py`): the `warn_limit` property docstring and the `_execute_warn_auto_ban` role-lookup comment described the trigger as `==` (exact equality), contradicting the deliberate `>=` implementation. Both texts now describe the "reaches or exceeds" semantics and why a `==` trigger would wedge the retry after a total enforcement failure. No behavior changes.
