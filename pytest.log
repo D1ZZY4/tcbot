@@ -1,0 +1,20 @@
+........................................................................ [ 24%]
+........................................................................ [ 48%]
+........................................................................ [ 73%]
+........................................................................ [ 97%]
+.......                                                                  [100%]
+=============================== warnings summary ===============================
+tcbot/modules/helper/workflows/appeal_submit_flow.py:663
+  /home/runner/work/tcbot/tcbot/tcbot/modules/helper/workflows/appeal_submit_flow.py:663: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+    return ConversationHandler(
+
+tcbot/modules/helper/workflows/ban_flow.py:937
+  /home/runner/work/tcbot/tcbot/tcbot/modules/helper/workflows/ban_flow.py:937: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+    return ConversationHandler(
+
+tcbot/modules/helper/workflows/reason_flow.py:548
+  /home/runner/work/tcbot/tcbot/tcbot/modules/helper/workflows/reason_flow.py:548: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+    return ConversationHandler(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+295 passed, 3 warnings in 8.01s
