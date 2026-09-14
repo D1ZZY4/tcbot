@@ -127,6 +127,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Verified target resolution always checks live** (`tcbot/modules/helper/extraction.py`): the numeric-ID fast path returned cached names without a live lookup even for verified callers, so a stale cache entry could redirect a reply command. Verified resolution now requires a live Telegram resolve; the fast path stays for unverified views. A bare `@` no longer counts as an explicit target shape.
 
+- **Failed appeal review post stays retryable** (`tcbot/modules/helper/workflows/appeal_submit_flow.py`, `tests/test_appeal_submit_degrade.py`): a failed review-card post with a landed log entry used to report success and clear the session, leaving an appeal the review workflow could never pick up. Any missing review card now renders the delivery-failed prompt and keeps the session for an in-place retry.
+
 ### Documentation
 
 - **Warn-limit trigger documented as `>=`** (`tcbot/__init__.py`, `tcbot/modules/helper/workflows/warning_flow.py`): the `warn_limit` property docstring and the `_execute_warn_auto_ban` role-lookup comment described the trigger as `==` (exact equality), contradicting the deliberate `>=` implementation. Both texts now describe the "reaches or exceeds" semantics and why a `==` trigger would wedge the retry after a total enforcement failure. No behavior changes.
