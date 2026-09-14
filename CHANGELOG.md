@@ -167,6 +167,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Docs catch up with the failure-hardening batch** (`docs/features/appeals.md`, `moderation/check.md`, `banning.md`, `warnings.md`, `muting.md`, `unbanning.md`, `connecting.md`, `docs/architecture/workflows.md`, `database.md`): appeal review keeps the card on a ban-read outage, /check warns-by-group shows its retry card plus the shared incomplete-counters note on every drill-down, ban summaries warn on an unloadable group list, warn auto-ban aborts when the role read fails, unmute clears before announcing, proof galleries fall back to documents, unban logs name anonymous admins, connect replays log blind runs, and warn expiry marks partial runs as errors. Behavior changes: none, docs only.
 
+- **Repository maps and CI count synced** (`AGENTS.md`, `CLAUDE.md`, `README.md`): the `tcbot/database` tree now lists `settings_db.py`, `mtproto.py`, and `mtproto_store.py`, `helper` lists `locale.py` and localized replies, module names use the `tc` prefix, `utils` lists `i18n.py`, and the CI overview counts seven workflows instead of four. Behavior changes: none, docs only.
+
 </details>
 
 ## [6.8.0] - 2026-09-13
