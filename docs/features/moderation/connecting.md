@@ -108,7 +108,8 @@ After the gather, `complete_join`:
 1. Schedules a fire-and-forget admin-identity harvest task that calls `db.users_cache.harvest_user_identity` for every admin so name lookups are available without extra DB or Telegram round-trips later.
 2. Fans `bot.ban_chat_member(chat_id, uid)` across every active ban user ID with `fan_out(...)` so a freshly connected group immediately enforces every existing federation ban.
 3. Fans `bot.restrict_chat_member(chat_id, uid, permissions=can_send_messages=False, until_date=...)` across every active mute doc with `fan_out(...)`.
-4. Posts `parse_logmsg.group_connected_log(chat_id, chat_title, owner_id, owner_fname, chat_username)` to `cfg.logs`.
+4. When the ban or mute fetch fails, the replay still runs on an empty list and logs a `BLIND` error naming the group, so the next `/tcsync` (or re-add) closes the gap instead of the info line reading as healthy.
+5. Posts `parse_logmsg.group_connected_log(chat_id, chat_title, owner_id, owner_fname, chat_username)` to `cfg.logs`.
 
 The function returns normally only after `add_group` has succeeded. If the `add_group` write fails, the exception propagates and neither the federation log nor the success reply is issued.
 

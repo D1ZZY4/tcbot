@@ -91,7 +91,7 @@ def _is_stale_review(review_ts: datetime | None) -> bool:
 
 
 def _cooldown_remaining_h(rejected_at: datetime | None) -> int | None:
-    """Return remaining whole hours plus one inside the rejection cooldown, else None."""
+    """Return remaining whole hours rounded up inside the rejection cooldown, else None."""
     if rejected_at is None:
         return None
     elapsed = utc_now() - to_utc(rejected_at)
@@ -99,7 +99,10 @@ def _cooldown_remaining_h(rejected_at: datetime | None) -> int | None:
         elapsed = timedelta(0)
     if elapsed >= _REJECTION_COOLDOWN:
         return None
-    return int((_REJECTION_COOLDOWN - elapsed).total_seconds() / _SECONDS_PER_HOUR) + 1
+    # * Round up so a fresh rejection shows the full window (24, not 25)
+    # * and a nearly-expired one still shows 1 instead of 0.
+    total = int((_REJECTION_COOLDOWN - elapsed).total_seconds())
+    return (total + _SECONDS_PER_HOUR - 1) // _SECONDS_PER_HOUR
 
 
 # ────────────────────── Submission mixin ───────────────────── #
@@ -611,18 +614,19 @@ class AppealSubmitMixin:
             except Exception as exc:
                 log.warning("Appeal user-cache upsert failed for user=%d: %s", uid, exc)
 
-        # * If BOTH the review post (``rv``) and the log post (``sent_log``)
-        # * failed, staff will never see the appeal and the user is left
-        # * waiting for a reply that will never come. Edit the instruction
-        # * message to a clear "we could not deliver your appeal" reply,
-        # * otherwise the user believes the appeal was received and may not
-        # * re-submit for a long time.
-        if review_msg_id is None and appeal_log_sent_id is None:
+        # * If the review post (``rv``) failed, staff has no actionable
+        # * review card and no pending-review marker was claimed, so the
+        # * normal review workflow can never pick this appeal up. Tell the
+        # * user delivery failed instead of "submitted", even when the
+        # * log-channel post landed (a retry may duplicate that log line,
+        # * which is harmless next to a lost appeal).
+        if review_msg_id is None:
             log.error(
-                "submit_appeal: BOTH review post and appeal log post failed "
-                "for user=%d ban=%s; the appeal was not delivered to staff",
+                "submit_appeal: review post failed "
+                "for user=%d ban=%s (log posted=%s); no review card exists",
                 uid,
                 ban_id,
+                appeal_log_sent_id is not None,
             )
             if instr_mid and update.effective_chat:
                 try:

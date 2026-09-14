@@ -22,6 +22,7 @@ Usage pattern (lifecycle managed by ``tcbot/__main__.py``)::
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING
@@ -58,6 +59,12 @@ _CLEANUP_SCHEDULE_ID: str = "tcbot.db_cleanup_weekly"
 # * Maximum seconds to wait for the scheduler background task to exit cleanly
 # * before declaring it stuck.  10 s matches the PTB shutdown grace window.
 _STOP_TIMEOUT_S: float = 10.0
+# * Ceiling for one warn-expiry delete batch: a hung MongoDB must fail the
+# * run loudly instead of wedging the scheduler worker forever.
+_EXPIRE_OP_TIMEOUT_S: float = 60.0
+# * Ceiling for one scheduled enforcement sweep: a hung sync must end and
+# * let the next interval re-drive instead of wedging the job.
+_SYNC_RUN_TIMEOUT_S: float = 300.0
 
 # ──────────────── Module-level scheduler state ──────────────────── #
 # * _scheduler:   live AsyncIOScheduler reference (set inside background task)
@@ -95,13 +102,32 @@ async def expire_old_warns(warn_expiry_days: int) -> None:
     Called daily by APScheduler when ``WARN_EXPIRY_DAYS > 0``, or on demand by
     the serverless cron endpoint (``api/cron.py`` on Vercel) which cannot run
     a persistent scheduler.
+
+    A non-positive ``warn_expiry_days`` is a no-op: without this guard the
+    cutoff would equal now and the deletes below would wipe every warn.
     """
+    if warn_expiry_days <= 0:
+        log.info(
+            "Warn expiry skipped: WARN_EXPIRY_DAYS=%d disables expiry.",
+            warn_expiry_days,
+        )
+        return
     cutoff = utc_now() - timedelta(days=warn_expiry_days)
-    counts_res, warns_res = await asyncio.gather(
-        _db_call(_col("warn_counts").delete_many({"updated_at": {"$lt": cutoff}})),
-        _db_call(_col("warns").delete_many({"timestamp": {"$lt": cutoff}})),
-        return_exceptions=True,
-    )
+    try:
+        async with asyncio.timeout(_EXPIRE_OP_TIMEOUT_S):
+            counts_res, warns_res = await asyncio.gather(
+                _db_call(
+                    _col("warn_counts").delete_many({"updated_at": {"$lt": cutoff}})
+                ),
+                _db_call(_col("warns").delete_many({"timestamp": {"$lt": cutoff}})),
+                return_exceptions=True,
+            )
+    except TimeoutError:
+        log.exception(
+            "Warn expiry timed out after %ds; no expiry completed.",
+            _EXPIRE_OP_TIMEOUT_S,
+        )
+        return
     # ! CRITICAL: a cancelled expiry must propagate, not report success.
     throw_if_cancelled((counts_res, warns_res))
     if isinstance(counts_res, BaseException):
@@ -114,12 +140,20 @@ async def expire_old_warns(warn_expiry_days: int) -> None:
     warns_del = (
         warns_res.deleted_count if not isinstance(warns_res, BaseException) else 0
     )
-    log.info(
-        "Warn expiry: removed %d warn_count and %d warn records older than %d days.",
-        counts_del,
-        warns_del,
-        warn_expiry_days,
-    )
+    if isinstance(counts_res, BaseException) or isinstance(warns_res, BaseException):
+        log.error(
+            "Warn expiry incomplete: removed %d warn_count and %d warn records older than %d days; see errors above.",
+            counts_del,
+            warns_del,
+            warn_expiry_days,
+        )
+    else:
+        log.info(
+            "Warn expiry: removed %d warn_count and %d warn records older than %d days.",
+            counts_del,
+            warns_del,
+            warn_expiry_days,
+        )
 
 
 async def _cleanup_old_records() -> None:
@@ -157,7 +191,14 @@ async def _run_scheduled_sync() -> None:
         log.debug("Scheduled sync skipped: no bot reference.")
         return
     try:
-        counts = await _syncing.run_ban_sync(bot)
+        async with asyncio.timeout(_SYNC_RUN_TIMEOUT_S):
+            counts = await _syncing.run_ban_sync(bot)
+    except TimeoutError:
+        log.exception(
+            "Scheduled enforcement sync timed out after %ds; next interval re-drives.",
+            _SYNC_RUN_TIMEOUT_S,
+        )
+        return
     except Exception:
         log.exception("Scheduled enforcement sync failed.")
         return
@@ -198,11 +239,13 @@ async def _scheduler_background(
     }
     scheduler = AsyncIOScheduler(jobstores=jobstores)
     _scheduler = scheduler
+    started = False
     try:
         _register_periodic_schedules(
             scheduler, warn_expiry_days, sync_interval_hours=sync_interval_hours
         )
         scheduler.start()
+        started = True
         if _sched_ready is None:
             raise RuntimeError(
                 "_sched_ready event not initialised before _scheduler_background ran"
@@ -216,12 +259,19 @@ async def _scheduler_background(
         _sched_ready.set()
         await _sched_stop.wait()
         scheduler.shutdown(wait=False)
+        started = False
     except Exception as exc:
         log.exception("APScheduler background task crashed.")
         _sched_error = exc
         if _sched_ready is not None and not _sched_ready.is_set():
             _sched_ready.set()  # unblock start() so it doesn't hang forever
     finally:
+        # * A crash or cancellation past start() must still release the
+        # * scheduler and its synchronous MongoClient; otherwise the
+        # * process leaks both while reporting itself stopped.
+        if started:
+            with contextlib.suppress(Exception):
+                scheduler.shutdown(wait=False)
         _scheduler = None
         log.info("APScheduler background task exited.")
 
@@ -320,6 +370,10 @@ async def start(
 
     """
     global _sched_task, _sched_ready, _sched_stop, _sched_error, _sync_bot
+    # * A live task means start() already ran: a second start would orphan
+    # * the first scheduler and duplicate every job. Refuse loudly.
+    if _sched_task is not None and not _sched_task.done():
+        raise RuntimeError("APScheduler already started.")
     _sched_ready = asyncio.Event()
     _sched_stop = asyncio.Event()
     _sched_error = None
@@ -332,6 +386,18 @@ async def start(
     )
     try:
         await asyncio.wait_for(_sched_ready.wait(), timeout=_STOP_TIMEOUT_S)
+    except asyncio.CancelledError:
+        # * Shutdown raced startup: cancel the background task, wait for it
+        # * to unwind, clear the globals, then propagate so the next start()
+        # * sees clean state instead of a leaked half-started scheduler.
+        if _sched_task is not None and not _sched_task.done():
+            _sched_task.cancel()
+            await asyncio.gather(_sched_task, return_exceptions=True)
+        _sched_task = None
+        _sched_ready = None
+        _sched_stop = None
+        _sched_error = None
+        raise
     except TimeoutError:
         # * The background task did not signal readiness within the grace
         # * window (constructor raise before the try, or a hung jobstore
@@ -376,6 +442,16 @@ async def stop() -> None:
             # * wait_for already gave up awaiting; cancel only signals.
             if not _sched_task.done():
                 _sched_task.cancel()
+                # * Best-effort unwind so task exceptions are retrieved and
+                # * the next start() does not race a dying task. Bounded:
+                # * a task that ignores cancellation is left to the loop.
+                try:
+                    await asyncio.wait_for(
+                        asyncio.gather(_sched_task, return_exceptions=True),
+                        timeout=2.0,
+                    )
+                except TimeoutError:
+                    log.warning("APScheduler stuck task ignored cancellation.")
     _sched_task = None
     _sched_ready = None
     _sched_stop = None

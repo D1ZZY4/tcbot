@@ -1,21 +1,25 @@
-# Appeal help prose: overview plus per-section bodies.
-# Structure (order, labels) stays in appeals.py; only prose lives here.
+# Appeal help prose: overview, section titles, and per-section bodies.
+# Order stays in appeals.py; all wording lives here.
 # Mini-markup only: `code` and *bold*, balanced and unnested.
 # Placeholders: {window} carries pre-formatted bold markup from code.
 
 [help]
 overview = "Ajukan banding untuk ban federasi aktif. Staf meninjau dengan {window} untuk admin pemberi ban."
+window = "jendela prioritas {hours} jam"
 
 [help.start]
+title = "Cara memulai"
 body = "Ketuk tombol *Ajukan Banding* pada notifikasi ban (dikirim bot di PM), atau pakai `/checkme` lalu ketuk tombol *Ajukan Banding* yang muncul."
 
 [help.who]
 body = "Siapa pun yang punya ban federasi aktif. Kamu hanya bisa punya satu banding aktif dalam satu waktu."
 
 [help.where]
+title = "Tempat memulai"
 body = "Hanya PM bot."
 
 [help.how]
+title = "Cara kerja"
 body = """
 Setelah alur banding terbuka, kirim satu pesan diawali `#appeal` yang memuat tiga bagian berikut:
 
@@ -24,6 +28,7 @@ Setelah alur banding terbuka, kirim satu pesan diawali `#appeal` yang memuat tig
 - *Persetujuan*: komitmenmu untuk mematuhi aturan komunitas ke depannya"""
 
 [help.format]
+title = "Contoh format"
 body = """
 #appeal
 Tautan log: https://t.me/TranssionCoreFederationLogs/123
@@ -31,6 +36,7 @@ Klarifikasi: Saya membagikan tautan di banyak grup tanpa membaca aturan.
 Persetujuan: Saya akan mematuhi semua panduan komunitas ke depannya."""
 
 [help.next]
+title = "Selanjutnya"
 body = """
 Bandingmu diteruskan ke Staf TC untuk ditinjau. Admin yang menjatuhkan ban awal punya {window} untuk merespons; setelah itu admin mana pun bisa bertindak.
 

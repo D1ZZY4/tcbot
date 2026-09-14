@@ -89,6 +89,7 @@ Current stack:
 - Optional Redis L2 cache (`redis[hiredis]>=8.0,<9`) with in-memory L1 fallback
 - Tagged JSON values for Redis serialization (a project-local encoder, no `cbor2`)
 - `cachetools` for L1 TTLCache
+- `kurigram[fast]` for bot-token MTProto lookups beyond Bot API enumeration
 - `uv` for dependency management and lockfile-based installs
 - Ruff for formatting and lint checks
 - pyright for static type checking
@@ -116,7 +117,10 @@ Current stack:
 │   │   ├── scheduler.py      APScheduler background task + MongoDBJobStore
 │   │   ├── mongos.py         MongoDB client/indexes
 │   │   ├── documents.py      Typed document shapes
-│   │   └── types.py          Domain primitive types
+│   │   ├── types.py          Domain primitive types
+│   │   ├── settings_db.py    Per-user locale preferences
+│   │   ├── mtproto.py        Bot-token MTProto client
+│   │   └── mtproto_store.py  MongoDB-backed Kurigram storage
 │   ├── modules/              Telegram command modules and handlers
 │   │   ├── helper/           Shared helper code and conversation workflows
 │   │   │   ├── workflows/    ConversationHandler flows (`*_flow.py` only)
@@ -124,23 +128,25 @@ Current stack:
 │   │   │   ├── decorators.py  Rate limiter, role checks, execution logging
 │   │   │   ├── extraction.py Target/user extraction helpers
 │   │   │   ├── identity.py   Self/bot/Telegram/Founder/staff classification
+│   │   │   ├── locale.py     Render-locale resolution (per-update locale)
 │   │   │   ├── parse_link.py  `t.me/c/...` deep-link builders
 │   │   │   ├── parse_logmsg.py  Federation log message renderers
 │   │   │   ├── parse_editmsg.py  Safe `edit_text` / `edit_message_text` wrappers
 │   │   │   ├── ban_info.py    Shared ban-detail builder for /check and /checkme
-│   │   │   └── replies.py     User-facing reply constants (HelpEntry, error strings)
-│   │   ├── banning.py        /ban command
-│   │   ├── kicking.py        /kick command
-│   │   ├── muting.py         /mute command
-│   │   ├── warnings.py       /warn command
-│   │   ├── appeals.py        /appeal command
-│   │   ├── admins.py         /admin command
+│   │   │   └── replies.py     Localized reply functions and HelpEntry shape
+│   │   ├── banning.py        /tcban command
+│   │   ├── kicking.py        /tckick command
+│   │   ├── muting.py         /tcmute command
+│   │   ├── warnings.py       /tcwarn command
+│   │   ├── appeals.py        /appeal flow
+│   │   ├── admins.py         /admin and /transferowner commands
+│   │   ├── language.py       /language command
 │   │   ├── connecting.py     /connect command
 │   │   ├── disconnecting.py  /disconnect command
 │   │   ├── groups.py         Group management
-│   │   ├── checking.py       /check command
-│   │   ├── unbanning.py      /unban command
-│   │   ├── broadcasting.py   /broadcast command
+│   │   ├── checking.py       /check and /checkme commands
+│   │   ├── unbanning.py      /tcunban command
+│   │   ├── broadcasting.py   /tcbroadcast command
 │   │   ├── greeting.py       Greeting messages
 │   │   ├── about.py          /about command
 │   │   ├── additional.py     Additional menu
@@ -156,6 +162,7 @@ Current stack:
 │       ├── dispatch.py        fan_out() bounded concurrency dispatcher
 │       ├── error_reporter.py  Error reporting to LOGS_ERRORS
 │       ├── formatter.py       MarkdownV2 formatter (esc, code, mention, bold)
+│       ├── i18n.py            TOML catalog, t() and locale resolution
 │       ├── logger.py          Logging setup
 │       ├── pagination.py      Paginated message rendering
 │       ├── prefixes.py        Command prefix resolution

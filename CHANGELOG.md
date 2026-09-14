@@ -9,11 +9,32 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Added
 
-- **MTProto identity resolution beyond Bot API limits** (`tcbot/database/mtproto.py`, `tcbot/__init__.py`, `tcbot/__main__.py`, `tcbot/modules/helper/extraction.py`, `config.env.example`, `docs/getting-started/setup.md`, `tests/test_mtproto_base.py`): optional `API_ID` / `API_HASH` settings with a lazy shared client that starts at boot and stops at shutdown. Silent-user lookups now try one MTProto peer resolve before the multi-group sweep, and results flow into the existing identity cache. Unconfigured deployments behave exactly as before. Behavior changes: none when unconfigured.
+### Changed
 
-- **One-time MTProto session authorization** (`tcbot/database/mtproto_auth.py`, `docs/getting-started/setup.md`, `tests/test_mtproto_auth.py`): run the module with the account phone number, enter the login code (plus 2FA password when set), and the session file lands next to `config.env` ready to deploy. Wrong codes, expired codes, and bad passwords fail with a plain message and a nonzero exit. Behavior changes: none.
+### Fixed
 
-- **Boot no longer wedges on a fresh MTProto session** (`tcbot/database/mtproto.py`, `tests/test_mtproto_base.py`): starting with an unauthorized session used to reach Kurigram's interactive stdin prompt, leaving the bot alive but never serving. Startup now reads the local session file first and fails soft with the exact authorize command when no login exists. Behavior changes: unauthorized sessions skip MTProto instead of hanging boot.
+### Removed
+
+### Documentation
+
+</details>
+
+## [6.9.0] - 2026-09-14
+
+<details>
+<summary>6.9.0 changes (click to expand)</summary>
+
+### Added
+
+- **MTProto identity resolution beyond Bot API limits** (`tcbot/database/mtproto.py`, `tcbot/database/mtproto_store.py`, `tcbot/__init__.py`, `tcbot/__main__.py`, `tcbot/modules/helper/extraction.py`, `config.env.example`, `docs/getting-started/setup.md`, `tests/test_mtproto_base.py`, `tests/test_mtproto_store.py`): `API_ID` / `API_HASH` are mandatory and boot connects a bot-token session that logs in fully automatically, so lookups never need a phone number, a login code, or a session file. Silent-user lookups try one MTProto peer resolve before the multi-group sweep, with results flowing into the existing identity cache. Transient runtime failures still degrade to None. Behavior changes: deployments without credentials no longer boot.
+
+- **MTProto session shared in MongoDB** (`tcbot/database/mtproto_store.py`, `tests/test_mtproto_store.py`): the login, peer hashes, and update states persist in the `mtproto_state` collection with the same semantics as Kurigram's file storage, so ephemeral runners and the beta host share one authorization. Behavior changes: none.
+
+- **Username lookups fall back to MTProto** (`tcbot/database/mtproto.py`, `tcbot/modules/helper/extraction.py`, `tests/test_mtproto_base.py`, `tests/test_extraction.py`): Bot API username lookups miss some live accounts, so arg and @mention resolution now tries one exact MTProto username resolve before giving up. Deterministic like any verified @username, safe for moderation paths. Behavior changes: previously unresolvable usernames now resolve.
+
+- **MTProto member harvest backfills silent users** (`tcbot/database/mtproto.py`, `tests/test_mtproto_base.py`): `harvest_group_members()` walks a group's membership once and caches every human identity, so later bans and checks of never-speaking members resolve by name. Stops early with a partial count on flood waits. Behavior changes: none until called.
+
+- **Boot no longer wedges on MTProto startup** (`tcbot/database/mtproto.py`, `tests/test_mtproto_base.py`): bot-token login cannot prompt, so a startup hang on stdin is structurally impossible now; any real failure aborts boot loudly instead. Behavior changes: none beyond the mandatory boot above.
 
 - **Startup no longer warns about valid log-channel IDs** (`tcbot/utils/error_reporter.py`, `tests/test_error_reporter_attach.py`): the attach check treated every non-positive channel ID as unset, so a correctly configured group/channel destination logged a scary but wrong "shipping disabled" warning on every boot. Only a truly unset zero ID warns now. Behavior changes: none, reports always shipped to negative IDs.
 
@@ -59,6 +80,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Dependency PR creation retries with the personal token** (`.github/workflows/dependency-update.yml`, `docs/operations/ci-cd.md`): when the repository toggle blocks the default token from opening pull requests, the step used to fail even though the update branch was already pushed. It now retries once with `BOT_PAT` when that secret exists and only then fails loud with the exact toggle to flip. Behavior changes: none when the toggle is on.
 
+- **CI gate split into one workflow per check** (`.github/workflows/lint-ruff.yml`, `.github/workflows/lint-pyright.yml`, `.github/workflows/test-pytest.yml`, `docs/operations/ci-cd.md`, `README.md`): the single lint workflow is now three files with identical triggers, adding a Pyright type-check job alongside the Ruff and pytest jobs. Behavior changes: none, same commands run.
+
 - **MTProto client available again for future lookups** (`pyproject.toml`, `uv.lock`): `kurigram[fast]` is back as a dependency for Telegram lookups outside Bot API limits. No bot code uses it yet, so nothing user-visible changes.
 
 - **Scheduler startup fails fast instead of hanging the boot** (`tcbot/database/scheduler.py`): a constructor error or a hung MongoDB handshake during scheduler startup previously left the process alive but stuck with no readiness signal, and the external watchdog restarts on death, not hangs, so the bot stayed wedged. Startup now waits a bounded grace window (the same 10 seconds used at shutdown) and then reports the failure, so a bad boot restarts instead of hanging.
@@ -89,6 +112,68 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **A cancelled mute stops instead of rendering as a database outage** (`tcbot/modules/helper/workflows/muting_flow.py`, `tests/test_mute_partial_failure.py`): the broad write-failure handler used to catch task cancellation and show the database-failure card with a rollback attempt. Cancellation now propagates immediately so shutdown or an operator cancel is never mistaken for an outage. Behavior changes: a cancelled mute no longer edits the prompt and never touches the rollback path.
 
+- **Appeal Reject button reaches the review handler** (`tcbot/modules/helper/keyboards.py`, `docs/reference/keyboard-styles.md`, `tests/test_keyboards.py`): the Reject button used a colon separator the handler never matched, so Reject taps died while Approve worked. Both buttons now use the underscore shape the handler parses. Behavior changes: Reject taps now open the review decision; keyboards sent before this fix still carry the old shape.
+
+- **Ban summary warns when the group list cannot load** (`tcbot/modules/helper/workflows/ban_flow.py`, `i18n/en-US/banning.toml`, `i18n/id/banning.toml`): a database failure while loading connected groups used to enforce on an empty list and report a clean partial summary. The summary now adds a warning line asking staff to check logs and re-ban manually. Behavior changes: the applied line gains a warning sentence only on fetch failure.
+
+- **Appeal review keeps the card on a database failure** (`tcbot/modules/helper/workflows/appeal_review_flow.py`, `tests/test_appeal_review_degrade.py`): a failed ban read used to edit the shared review card into a not-found state, destroying an undecided review. The handler now answers with a retry notice and leaves the card untouched. Behavior changes: outage taps no longer edit the card.
+
+- **/check warning groups show a retry card on outage** (`tcbot/modules/helper/workflows/check_flow.py`, `i18n/en-US/checking.toml`, `i18n/id/checking.toml`, `tests/test_check_degrade.py`): a database failure used to fall through toward the empty list. The view now renders its own retry card so an outage is never mistaken for a clean record. Behavior changes: outage render differs from a real empty list.
+
+- **/check drill-downs note incomplete counters** (`tcbot/modules/helper/workflows/check_flow.py`): bans, appeals, per-chat warns, kicks, and mutes lists now append the shared incomplete-counters note whenever the total read fails, so staff know the header total may be short. Healthy-database rendering is unchanged.
+
+- **Warn expiry logs partial runs as errors** (`tcbot/database/scheduler.py`): when one of the two expiry deletes fails, the completion line now logs at error level with an incomplete marker instead of a clean info line. Counts unchanged.
+
+- **New-group replay logs a blind run** (`tcbot/modules/helper/workflows/connected_flow.py`): when the ban or mute fetch fails during connect, the replay still runs on an empty list and now logs an error naming the blind group, so the next sync closes the gap instead of the info line reading as healthy.
+
+- **Unmute clears the record before announcing** (`tcbot/modules/helper/workflows/muting_flow.py`): the record clear used to run in parallel with the log send and reply, so a failed clear still announced a successful unmute. The clear now runs first and aborts with a retry reply on failure. Behavior changes: a failed clear no longer sends the success message.
+
+- **Proof upload falls back to documents after a gallery failure** (`tcbot/modules/helper/workflows/proof_flow.py`): a failed photo gallery upload used to discard already collected file evidence and return with no proof link. The uploader now continues to the document loop so file proof still lands. Behavior changes: gallery-outage bans keep their file proof.
+
+- **Unban log names anonymous admins honestly** (`tcbot/modules/helper/workflows/unban_flow.py`): an unban run by an anonymous admin used to attribute the action to the target, reading as a self-unban. The log now attributes it to an anonymous admin. Behavior changes: log admin line differs for anonymous-admin runs.
+
+- **Warn auto-ban stops when the role lookup fails** (`tcbot/modules/helper/workflows/warning_flow.py`, `tests/test_warn_autoban_guard.py`): a failed role read used to proceed as if the target held no role, risking an auto-ban on an exempt staffer. The run now aborts with a retry reply and the persisted warn count re-fires the threshold on the next warn. Behavior changes: outage warns skip this auto-ban instead of enforcing it.
+
+- **Role storage rejects unknown roles** (`tcbot/database/users_roles.py`): `set_role` stored any string verbatim and role resolution returned it as-is, so a crafted value like `admin` would grant real privilege. Only developer and tester are accepted now; anything else raises instead of writing.
+
+- **Warn expiry with a non-positive window deletes nothing** (`tcbot/database/scheduler.py`): the cutoff equaled now when expiry was disabled, so a direct call would have wiped every warn and counter. The run now exits early with an info line. Scheduled and cron callers already guarded; this closes the trap for any other caller.
+
+- **Ownership transfer verifies the single-owner invariant** (`tcbot/database/users_roles.py`): the two writes were described as atomic but are not, so a crash between them could leave zero or two owner rows. The row count is now checked after the writes and any deviation logs an error instead of serving silently.
+
+- **Kick writes the audit record before enforcing** (`tcbot/modules/helper/workflows/kicking_flow.py`): the ban ran first and the audit write shared a parallel gather, so a failed write left an enforced kick that history views could never see. The write now runs first and aborts with a retry reply on failure. Behavior changes: a failed audit write no longer enforces the kick.
+
+- **Verified target resolution always checks live** (`tcbot/modules/helper/extraction.py`): the numeric-ID fast path returned cached names without a live lookup even for verified callers, so a stale cache entry could redirect a reply command. Verified resolution now requires a live Telegram resolve; the fast path stays for unverified views. A bare `@` no longer counts as an explicit target shape.
+
+- **Failed appeal review post stays retryable** (`tcbot/modules/helper/workflows/appeal_submit_flow.py`, `tests/test_appeal_submit_degrade.py`): a failed review-card post with a landed log entry used to report success and clear the session, leaving an appeal the review workflow could never pick up. Any missing review card now renders the delivery-failed prompt and keeps the session for an in-place retry.
+
+- **Blind group connect warns the owner** (`tcbot/modules/helper/workflows/connected_flow.py`, `i18n/en-US/connecting.toml`, `i18n/id/connecting.toml`): the blind-replay honesty lived only in the server log while the owner prompt confirmed success. `complete_join` now reports the blind run and both entry points render a warning prompt asking for a `/tcsync` instead. Behavior changes: outage connects show the warning prompt, not the success text.
+
+- **Unban fails closed on every DB read and write** (`tcbot/modules/helper/workflows/unban_flow.py`, `i18n/en-US/unbanning.toml`, `i18n/id/unbanning.toml`, `tests/test_unban_flow.py`, `tests/test_unmute_flow.py`, `tests/test_i18n.py`): the ban-record read had no failure path and the deactivation failure reply sat behind dead exception-shape checks, so outages propagated with no actionable reply. Reads and writes now abort with retry replies, and new tests pin the unban, unmute clear-first, and locale placeholder-parity contracts.
+
+- **Help section labels follow the render locale** (`tcbot/modules/helper/replies.py`, `banning.py`, `kicking.py`, `muting.py`, `warnings.py`, `i18n/en-US/common.toml`, `i18n/id/common.toml`, `i18n/en-US/muting.toml`, `i18n/id/muting.toml`): the Flow and Time format headings were hardcoded English while every neighboring label localized. They now render from the catalog. Output identical for the default locale.
+
+- **Cheaper hot database reads** (`tcbot/database/bans_db.py`, `users_cache.py`, `mongos.py`, `queues_db.py`): the active-ban ID list now uses `distinct` instead of shipping full documents, the first-name batch populates the full mention triple so repeat renders skip MongoDB, migration updates gain `chat_id` indexes on warns and warn counts, and promotion resolution only accepts terminal states. Behavior changes: duplicate active rows collapse to one fan-out ID.
+
+- **Bounded and honest Redis background path** (`tcbot/database/cache.py`, `redis_client.py`, `tcbot/__main__.py`, `tests/test_cache_redis_outage.py`): the per-prefix mutation queue drops past 200 queued ops instead of growing without bound, writes resolve the client at run time so reconnects stop killing queued ops, health marks on any answered read with decode failures treated as misses, recovery logs when health returns, and shutdown drains the queue before the pool closes. The Redis socket timeout is now 2 seconds to match the write abandon budget.
+
+- **Scheduler lifecycle and run bounds** (`tcbot/database/scheduler.py`): double start is refused instead of orphaning a scheduler, a cancelled start unwinds and clears state, stop retrieves a cancelled task instead of leaking it, and the expiry deletes plus the enforcement sweep run under timeouts so a hung backend cannot wedge the jobs.
+
+- **Loud instead of hung runtime startup** (`tcbot/database/mtproto.py`, `tcbot/alive.py`): the MTProto session connect now aborts the boot after 60 seconds on a network partition instead of hanging forever, and the keep-alive server probes its port before spawning the daemon thread so a conflict fails the startup stage instead of running headless with no health checks or webhook delivery.
+
+- **Appeal help labels follow the render locale** (`tcbot/modules/appeals.py`, `i18n/en-US/appeals.toml`, `i18n/id/appeals.toml`): the section headings and priority window text were hardcoded English while the bodies localized. They now render from the catalog. Output identical for the default locale.
+
+- **Ban entry fails closed on lookup outage** (`tcbot/modules/banning.py`): the active-ban read failure used to degrade to a fresh-ban path that collected proof before the executor aborted. The command now replies with a retry notice and clears its state instead. Behavior changes: outage bans no longer show a proof prompt.
+
+- **Rejection cooldown shows the correct remaining hours** (`tcbot/modules/helper/workflows/appeal_submit_flow.py`): a fresh rejection reported 25 hours remaining instead of 24, and mid-window values ran one hour high. The remaining time now rounds up to the next full hour. Behavior changes: fresh rejections show 24, near-expiry shows 1.
+
+- **Check lists stay honest on database outages** (`tcbot/modules/helper/workflows/check_flow.py`): ban, appeal, warns-by-group, and per-chat drill-downs used dead `isinstance(..., BaseException)` checks over bare awaits, so outages left stale cards or empty views. Lists now trap failures, render a retry card on empty results, and append the incomplete-counters note otherwise. Behavior changes: outage lists never render as empty clean records.
+
+- **Helpers respect cancellation and render honestly** (`tcbot/modules/helper/decorators.py`, `locale.py`, `ban_info.py`, `replies.py`, `i18n/en-US/checking.toml`, `i18n/id/checking.toml`): per-handler rate-limit buckets now include the module, high-cardinality helper locks are bounded, locale and ban-detail renders preserve cancellation, and bandetail fallbacks localize with safe placeholders. Behavior changes: none.
+
+- **CI auto-fix now covers Pyright and Pytest via free AI** (`.github/workflows/auto-fix.yml`): the job waits for Lint (Ruff) and Lint (Pyright) via workflow_run, runs ruff format, ruff check --fix, pyright, and pytest, then sends remaining ruff/pyright/pytest errors to GitHub Models openai/gpt-4o-mini (free via GITHUB_TOKEN, no billing) for hints and includes the summary in the PR. Behavior changes: auto-fix PRs now include Pyright/Pytest context and free AI summary.
+
+- **Dependency PRs use free AI for title and body** (`.github/workflows/dependency-update.yml`): the PR title and body are generated by GitHub Models openai/gpt-4o-mini (free via GITHUB_TOKEN) from the lockfile diff with a professional expert prompt, falling back to the static template when the model is unavailable. Behavior changes: titles and bodies now read as professional release notes.
+
 ### Documentation
 
 - **Warn-limit trigger documented as `>=`** (`tcbot/__init__.py`, `tcbot/modules/helper/workflows/warning_flow.py`): the `warn_limit` property docstring and the `_execute_warn_auto_ban` role-lookup comment described the trigger as `==` (exact equality), contradicting the deliberate `>=` implementation. Both texts now describe the "reaches or exceeds" semantics and why a `==` trigger would wedge the retry after a total enforcement failure. No behavior changes.
@@ -100,6 +185,12 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 - **Full coverage of the documentation tree** (`docs/README.md`): the index lists every guide under `docs/` in its category, and every cross-reference across the documentation resolves to a real page and section header, so readers never land on a missing page. Behavior changes: none.
 
 - **CI guide drops the retired timeout variables and covers the checks job** (`docs/operations/ci-cd.md`): the runner secret list no longer names the removed proof/appeal timeout settings, and the Lint section documents the second job that executes the behavioral checks, so the guide matches the workflows that actually run.
+
+- **Docs catch up with the failure-hardening batch** (`docs/features/appeals.md`, `moderation/check.md`, `banning.md`, `warnings.md`, `muting.md`, `unbanning.md`, `connecting.md`, `docs/architecture/workflows.md`, `database.md`): appeal review keeps the card on a ban-read outage, /check warns-by-group shows its retry card plus the shared incomplete-counters note on every drill-down, ban summaries warn on an unloadable group list, warn auto-ban aborts when the role read fails, unmute clears before announcing, proof galleries fall back to documents, unban logs name anonymous admins, connect replays log blind runs, and warn expiry marks partial runs as errors. Behavior changes: none, docs only.
+
+- **Stale documentation refreshed** (`docs/architecture/database.md`, `repository-map.md`, `.agents/rules/code-style.md`, `CONTRIBUTING.md`, `replit.md`): removed the TypeScript rewrite claim, corrected the repository tree (i18n has en-US and id, top-level includes PROMPT, SECURITY, CLAUDE), clarified keyboard builder and appeal handler contracts, noted the three sanctioned hardcoded-message exceptions, and fixed the `.replit` TOML example and pinned Python description. Behavior changes: none, docs only.
+
+- **Repository maps and CI count synced** (`AGENTS.md`, `CLAUDE.md`, `README.md`): the `tcbot/database` tree now lists `settings_db.py`, `mtproto.py`, and `mtproto_store.py`, `helper` lists `locale.py` and localized replies, module names use the `tc` prefix, `utils` lists `i18n.py`, and the CI overview counts seven workflows instead of four. Behavior changes: none, docs only.
 
 </details>
 

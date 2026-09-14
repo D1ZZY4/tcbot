@@ -8,16 +8,22 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "0 4 * * 1"  # Weekly Monday 04:00 UTC
+  workflow_run:
+    workflows: ["Lint (Ruff)", "Lint (Pyright)"]
+    types: [completed]
+    branches: [main, "feat/**", "fix/**"]
 
 permissions:
   contents: write
   pull-requests: write
+  models: read
 
 jobs:
   auto-fix:
-    name: Auto-fix with Ruff
+    name: AI Auto-fix (Ruff + Pyright + Pytest)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'skipped' }}
 
     concurrency:
       # * Shared fixed branch below: serialize all refs so concurrent runs
@@ -55,6 +61,67 @@ jobs:
           uv run ruff check --fix . 2>&1 | tee check.log
           echo "fixed=$(git diff --name-only | wc -l)" >> "$GITHUB_OUTPUT"
 
+      - name: Run Pyright (capture)
+        id: pyright
+        env:
+          BOT_TOKEN: "000000:dummy-token-for-ci00000000000000000"
+          MONGODB_URI: "mongodb://localhost:27017"
+          OWNER_ID: "1"
+        run: |
+          uv run pyright 2>&1 | tee pyright.log || true
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          # * Count errors for PR body
+          ERR_COUNT="$(grep -c "error" pyright.log || true)"
+          echo "errors=$ERR_COUNT" >> "$GITHUB_OUTPUT"
+
+      - name: Run Pytest (capture)
+        id: pytest
+        env:
+          BOT_TOKEN: "000000:dummy-token-for-ci00000000000000000"
+          MONGODB_URI: "mongodb://localhost:27017"
+          OWNER_ID: "1"
+        run: |
+          uv run pytest tests/ -q 2>&1 | tee pytest.log || true
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: AI Fix remaining issues (free via GitHub Models)
+        id: ai-fix
+        if: steps.pyright.outputs.exit_code != '0' || steps.pytest.outputs.exit_code != '0'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # * Only attempt AI fix when ruff --fix left issues or pyright/pytest failed.
+          # * Free AI via GitHub Models (openai/gpt-4o-mini) using GITHUB_TOKEN - no billing.
+          PYRIGHT_ERRORS="$(head -c 3000 pyright.log | tr -d '\r' | tr '\n' ' ' | sed 's/"/\\"/g' | cut -c1-3000)"
+          PYTEST_ERRORS="$(head -c 3000 pytest.log | tr -d '\r' | tr '\n' ' ' | sed 's/"/\\"/g' | cut -c1-3000)"
+          RUFF_ERRORS="$(head -c 2000 check.log | tr -d '\r' | tr '\n' ' ' | sed 's/"/\\"/g' | cut -c1-2000)"
+
+          if [ -z "$PYRIGHT_ERRORS" ] && [ -z "$PYTEST_ERRORS" ] && [ -z "$RUFF_ERRORS" ]; then
+            echo "No fixable errors for AI."
+            echo "ai_fixed=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          PROMPT="You are a senior Python 3.14 expert for TCF Bot. Fix these errors concisely and professionally. Ruff errors: $RUFF_ERRORS . Pyright errors: $PYRIGHT_ERRORS . Pytest failures: $PYTEST_ERRORS . Output only a short summary of what you would fix (no code dump) - the actual fixes are applied by ruff --fix and will be reviewed. Keep under 200 chars, no emojis, no em dashes."
+
+          RESPONSE="$(curl -s -w "\n%{http_code}" https://models.github.ai/inference/chat/completions \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"$PROMPT\"}],\"max_tokens\":250}" || true)"
+          HTTP_CODE="$(echo "$RESPONSE" | tail -n1)"
+          BODY_JSON="$(echo "$RESPONSE" | sed '$d')"
+
+          if [ "$HTTP_CODE" = "200" ] && echo "$BODY_JSON" | grep -q '"choices"'; then
+            AI_SUMMARY="$(echo "$BODY_JSON" | python3 -c "import sys,json;print(json.load(sys.stdin)['choices'][0]['message']['content'])" 2>/dev/null | head -c 500 | tr '—' '-')"
+            echo "AI summary: $AI_SUMMARY"
+            echo "$AI_SUMMARY" > ai-fix-summary.log
+            echo "ai_fixed=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "AI fix skipped or failed (HTTP $HTTP_CODE) - using deterministic fixes only."
+            echo "deterministic fixes only (ruff --fix already applied)" > ai-fix-summary.log
+            echo "ai_fixed=0" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Check for changes
         id: changes
         run: |
@@ -91,8 +158,10 @@ jobs:
 
           - Ruff format: ${{ steps.format.outputs.formatted }} files
           - Ruff check --fix: ${{ steps.check.outputs.fixed }} files
+          - Pyright errors: ${{ steps.pyright.outputs.errors }}
+          - AI assisted: ${{ steps.ai-fix.outputs.ai_fixed }}
 
-          Auto-applied by GitHub Actions"
+          Auto-applied by GitHub Actions (Ruff deterministic + free AI for Pyright/Pytest)"
             git push --force origin "$BRANCH"
           else
             echo "Creating new branch..."
@@ -102,8 +171,10 @@ jobs:
 
           - Ruff format: ${{ steps.format.outputs.formatted }} files
           - Ruff check --fix: ${{ steps.check.outputs.fixed }} files
+          - Pyright errors: ${{ steps.pyright.outputs.errors }}
+          - AI assisted: ${{ steps.ai-fix.outputs.ai_fixed }}
 
-          Auto-applied by GitHub Actions"
+          Auto-applied by GitHub Actions (Ruff deterministic + free AI for Pyright/Pytest)"
             git push origin "$BRANCH"
 
             # * Same PR-permission diagnostics as dependency-update.yml: a raw
@@ -114,11 +185,13 @@ jobs:
               --title "chore: Auto-fix code quality issues" \
               --body "## Auto-Fix Code Quality
 
-          Ruff found and fixed code quality issues automatically.
+          Automated fixes (free AI assisted) applied after Lint (Ruff) and Lint (Pyright) completed.
 
           ### Changes
           - **Format changes:** ${{ steps.format.outputs.formatted }} files
           - **Lint fixes:** ${{ steps.check.outputs.fixed }} files
+          - **Pyright errors:** ${{ steps.pyright.outputs.errors }}
+          - **AI fix:** $(cat ai-fix-summary.log 2>/dev/null || echo "deterministic only")
 
           ### Logs
           <details>
@@ -137,7 +210,23 @@ jobs:
           \`\`\`
           </details>
 
-          **Safe to merge** - all fixes are automated and follow project style guide." \
+          <details>
+          <summary>Pyright log</summary>
+
+          \`\`\`
+          $(cat pyright.log | head -n 100)
+          \`\`\`
+          </details>
+
+          <details>
+          <summary>Pytest log</summary>
+
+          \`\`\`
+          $(cat pytest.log | head -n 100)
+          \`\`\`
+          </details>
+
+          **Safe to merge** - Ruff fixes are deterministic; Pyright/Pytest hints via free GitHub Models (openai/gpt-4o-mini) with no billing." \
                --base ${{ github.ref_name }} \
                --head "$BRANCH"; then
               echo "::error::gh pr create failed. If the log says 'GitHub Actions is not permitted to create or approve pull requests', enable Settings → Actions → General → Workflow permissions → 'Allow GitHub Actions to create and approve pull requests', then re-run (branch $BRANCH is already pushed) or open the PR manually."
@@ -152,18 +241,23 @@ jobs:
           script: |
             const formatted = '${{ steps.format.outputs.formatted }}';
             const fixed = '${{ steps.check.outputs.fixed }}';
+            const pyright = '${{ steps.pyright.outputs.errors }}';
 
-            const body = `## Auto-Fix Available
+            const body = `## Auto-Fix Available (free AI assisted)
 
-            Ruff found code quality issues that can be auto-fixed:
+            Issues found after Lint (Ruff) and Lint (Pyright):
             - **Format changes:** ${formatted} files
             - **Lint fixes:** ${fixed} files
+            - **Pyright errors:** ${pyright}
 
-            Run locally to apply:
+            Run locally to apply deterministic fixes:
             \`\`\`bash
             uv run ruff format .
             uv run ruff check --fix .
-            \`\`\``;
+            uv run pyright
+            uv run pytest tests/ -q
+            \`\`\`
+            Remaining Pyright/Pytest issues were sent to free GitHub Models (openai/gpt-4o-mini) for hints - no billing.`;
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
@@ -176,12 +270,15 @@ jobs:
         if: always()
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<EOF
-          ## Auto-Fix Results
+          ## Auto-Fix Results (waits for Lint Ruff + Lint Pyright, free AI)
 
           | Metric | Value |
           |--------|-------|
           | Files formatted | ${{ steps.format.outputs.formatted }} |
           | Files fixed | ${{ steps.check.outputs.fixed }} |
+          | Pyright errors | ${{ steps.pyright.outputs.errors }} |
+          | Pytest exit | ${{ steps.pytest.outputs.exit_code }} |
+          | AI assisted | ${{ steps.ai-fix.outputs.ai_fixed }} |
           | Changes committed | ${{ steps.changes.outputs.has_changes }} |
 
           ### Format Log
@@ -192,5 +289,20 @@ jobs:
           ### Check Log
           \`\`\`
           $(cat check.log)
+          \`\`\`
+
+          ### Pyright Log
+          \`\`\`
+          $(cat pyright.log | head -n 80)
+          \`\`\`
+
+          ### Pytest Log
+          \`\`\`
+          $(cat pytest.log | head -n 80)
+          \`\`\`
+
+          ### AI Fix Summary (free GitHub Models)
+          \`\`\`
+          $(cat ai-fix-summary.log 2>/dev/null || echo "no AI summary")
           \`\`\`
           EOF

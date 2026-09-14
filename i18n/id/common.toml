@@ -42,6 +42,7 @@ commands = "Perintah & Alias"
 who = "Yang bisa memakai"
 where = "Tempat memakai"
 what = "Fungsinya"
+flow = "Alur"
 examples = "Contoh"
 target = "Format target"
 

@@ -23,6 +23,7 @@ body = """
 3. Bot meminta bukti: kirim foto/video, lalu ketuk *Selesai*, atau ketuk *Lewati*."""
 
 [help.time]
+title = "Format waktu"
 body = """
 Tulis durasi sebelum alasan. Tanpa durasi berarti mute permanen.
 

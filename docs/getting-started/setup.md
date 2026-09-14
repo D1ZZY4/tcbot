@@ -140,14 +140,9 @@ PROOFS="-1001234567890"
 | `APPEAL_LOG_HANDLE` | No | channel handle | Displayed in appeal instructions. Defaults to `@TranssionCoreFederationLogs`. |
 | `APPEAL_DISCUSSION_TOPIC` | Yes for reviews | integer thread ID | Topic inside `MAIN_GROUP` where review cards are posted. |
 | `ALBUM_DEBOUNCE_SECONDS` | No | integer seconds | Proof silence window for ban proof media. Default `4`; values below `1` fall back to default. |
-| `API_ID` | No | integer | Telegram API ID for optional MTProto identity lookups. Empty disables MTProto entirely. |
-| `API_HASH` | No | string | Telegram API hash matching `API_ID`. Required together with `API_ID`. Never commit the real value. |
-| `MTPROTO_SESSION` | No | string | Session name for the MTProto client file. Default `tcbot_mtproto`. |
-
-Authorize the session once before enabling MTProto: fill `API_ID` / `API_HASH`,
-then run `uv run python -m tcbot.database.mtproto_auth +62xxx` and enter the
-login code (plus 2FA password when set). Deploy the resulting `.session` file
-next to `config.env`; the bot only loads it and never logs in by itself.
+| `API_ID` | Yes | integer | Telegram API ID for MTProto identity lookups. The bot refuses to boot without it. |
+| `API_HASH` | Yes | string | Telegram API hash matching `API_ID`. Never commit the real value. |
+| `MTPROTO_SESSION` | No | string | Namespace for the shared MTProto session in MongoDB. Default `tcbot_mtproto`. |
 | `LOG_LEVEL` | No | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | Runtime logging level. Default `INFO`. |
 | `MODULES_LOAD` | No | comma-separated module names | Optional whitelist, e.g. `banning,appeals`. |
 | `MODULES_NO_LOAD` | No | comma-separated module names | Optional blacklist, e.g. `maintenance,broadcasting`. |
@@ -167,6 +162,10 @@ next to `config.env`; the bot only loads it and never logs in by itself.
 
 Each community link falls back to its built-in default when empty, so all five buttons show with zero setup. A non-http(s) value is ignored with a warning and hides that button.
 
+MTProto runs on the bot token alone: no phone number, no login code, no
+session file. Fill `API_ID` / `API_HASH` and boot connects a bot-token
+session automatically; lookups keep working with zero manual steps.
+
 ## Startup sequence
 
 1. `tcbot.__init__` loads configuration into `cfg` and fails fast when `BOT_TOKEN`, `MONGODB_URI`, or `OWNER_ID` are missing.
@@ -175,7 +174,7 @@ Each community link falls back to its built-in default when empty, so all five b
 4. PTB `ApplicationBuilder` builds the bot application.
 5. `tcbot.modules.get_handlers()` imports active modules and stops startup if an enabled module fails to import.
 6. Signal handlers (`SIGTERM`, `SIGINT`) are registered immediately before the PTB lifecycle begins.
-7. `_post_init()` connects MongoDB, ensures indexes, seeds the initial owner, connects the optional Redis cache, starts the APScheduler, and attaches the error reporter.
+7. `_post_init()` connects MongoDB, ensures indexes, seeds the initial owner, connects the optional Redis cache, starts the APScheduler, connects MTProto (bot-token session; missing `API_ID`/`API_HASH` aborts boot), and attaches the error reporter.
 8. **Webhook mode** (when `WEBHOOK_URL` or `REPLIT_DEV_DOMAIN` resolves to a URL): `bot.set_webhook()` registers the URL, `register_webhook()` wires Flask's `POST /webhook` to PTB's update queue, and the bot waits for `SIGTERM`/`SIGINT`.
 9. **Polling mode** (when no webhook URL is available): `run_polling()` starts with `drop_pending_updates=True`. A `WARNING` log identifies this local-development fallback.
 

@@ -163,7 +163,7 @@ Reason: <reason>
 Applied to <success>/<total> groups.
 ```
 
-Failures are counted but do not roll back the database ban record.
+Failures are counted but do not roll back the database ban record. When the group-list fetch itself fails, the summary gains the `banning.applied.scope_warn` warning suffix asking staff to check logs and re-ban manually with `/tcban`.
 
 ## Role hierarchy and target protection
 
@@ -317,7 +317,7 @@ Manual unban does not currently edit any pending appeal review card. It deactiva
 ## Edge cases
 
 - When the `bans` write (`create_ban` / `update_ban`) fails, the flow aborts before any group is touched and the prompt is edited with a database-retry notice. This fail-closed path mirrors `execute_unban` and the warn auto-ban flow, and keeps a chat-enforced ban from existing without a database record.
-- Ban proof upload failures return `None`; the ban flow still continues and stores `0` as proof ID when no proof message ID is available.
+- Empty proof input returns `None` fast; a failed photo gallery upload falls through to the document loop so collected file proof still lands instead of being discarded. Only a batch with no usable item stores `0` as proof ID.
 - If the ban log send fails, the database write may still complete, but no log message ID is stored.
 - If active group enforcement partially fails, the ban record remains active and the summary reports partial success.
 - A duplicate active ban is updated rather than creating another active record through the command path.

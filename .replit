@@ -1,11 +1,11 @@
-modules = ["nix", "python-3.14", "nodejs-20"]
+modules = ["nix", "python-3.14", "nodejs-24"]
 [agent]
 expertMode = true
 stack = "FLASK_VANILLA_JS"
 
 [nix]
 channel = "stable-25_05"
-packages = ["openssl", "uv", "nano"]
+packages = ["openssl", "uv", "nano", "gnupg"]
 
 [workflows]
 runButton = "Project"
@@ -29,6 +29,10 @@ outputType = "console"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "uv run python -m tcbot"
+
+[[ports]]
+localPort = 5000
+externalPort = 5000
 
 [[ports]]
 localPort = 8080

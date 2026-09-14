@@ -47,9 +47,14 @@ _pool: aioredis.ConnectionPool | None = None
 _liveness: bool | None = None
 
 # ─────────────── Connection pool / socket parameters ────────────── #
+# * The socket timeout doubles as the ceiling for background L2 writes
+# * (cache.py issues them without an extra wait_for wrapper: cancelling a
+# * waiter would abandon a live socket op and dirty the pooled connection,
+# * while a socket-level timeout aborts cleanly). Keep it small enough
+# * that a stalled Redis cannot serialize the FIFO mutation queue.
 
 _SOCKET_CONNECT_TIMEOUT_S: float = 5.0
-_SOCKET_TIMEOUT_S: float = 10.0
+_SOCKET_TIMEOUT_S: float = 2.0
 _MAX_CONNECTIONS: int = 20
 _HEALTH_CHECK_INTERVAL_S: int = 30
 
@@ -133,12 +138,15 @@ def client() -> aioredis.Redis | None:
 def mark_op(*, ok: bool) -> None:
     """Record the outcome of one Redis operation (called from cache.py).
 
-    Sets module-level liveness and logs the transition to failed, so an
-    outage is visible in the log stream exactly once instead of per-op.
+    Sets module-level liveness and logs transitions, so an outage is
+    visible in the log stream on failure and the recovery is visible
+    when operations succeed again.
     """
     global _liveness
     if not ok and _liveness is not False:
         log.warning("Redis operation failed; marking Redis unhealthy.")
+    elif ok and _liveness is False:
+        log.info("Redis operation succeeded; marking Redis healthy again.")
     _liveness = ok
 
 

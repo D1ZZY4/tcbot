@@ -77,6 +77,20 @@ async def execute_kick(
             upload_proof(ctx.bot, proof_msgs, caption, pc, pt)
         )
 
+    # * Audit first: the DB kick record must exist before enforcement.
+    # * A failed write aborts with a retry reply instead of leaving an
+    # * enforced but unaudited kick that /check can never see.
+    try:
+        await db.kicks_db.log_kick(target_id, chat_id, reason_text, admin_id)
+    except Exception:
+        log.exception("log_kick DB write failed for target=%d", target_id)
+        await safe_reply(
+            msg,
+            replies.err_db_retry(locale, plain=True),
+            log_label="execute_kick log-failed",
+            parse_mode=None,
+        )
+        return
     try:
         await ctx.bot.ban_chat_member(chat_id, target_id)
         proof_link: str | None = None
@@ -103,10 +117,11 @@ async def execute_kick(
             chat_id,
             chat_title,
         )
-        # * Three independent side-effects run in parallel: the unban that
-        # * converts the ban into a "kick" (user can rejoin), the DB kick
-        # * log, and the federation log-channel post. The user-facing reply
-        # * runs *after* the unban completes so we can append a warning if
+        # * Two independent side-effects run in parallel: the unban that
+        # * converts the ban into a "kick" (user can rejoin) and the
+        # * federation log-channel post. The audit write already landed
+        # * above, so a failure here can never leave an unaudited kick.
+        # * The user-facing reply runs *after* the unban completes so we
         # * the unban failed -- otherwise the admin would see "kicked" while
         # * the user is still banned.
         # * The entry auto-demote ran before the proof-collection window, so
@@ -121,9 +136,8 @@ async def execute_kick(
             admin_fname,
             trigger="kick",
         )
-        unban_result, log_kick_result, log_send_result = await asyncio.gather(
+        unban_result, log_send_result = await asyncio.gather(
             ctx.bot.unban_chat_member(chat_id, target_id, only_if_banned=True),
-            db.kicks_db.log_kick(target_id, chat_id, reason_text, admin_id),
             ctx.bot.send_message(
                 lc,
                 log_text,
@@ -138,10 +152,6 @@ async def execute_kick(
                 "unban_chat_member failed after kick for target=%d: %s",
                 target_id,
                 unban_result,
-            )
-        if isinstance(log_kick_result, BaseException):
-            log.error(
-                "log_kick DB write failed for target=%d: %s", target_id, log_kick_result
             )
         if isinstance(log_send_result, BaseException):
             log.error("Kick log send failed: %s", log_send_result)

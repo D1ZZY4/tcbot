@@ -188,13 +188,24 @@ def test_no_match_returns_nothing(monkeypatch) -> None:  # type: ignore[no-untyp
 
 
 def test_reply_plus_verified_numeric_overrides(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """A typed ID naming a known user beats the quoted sender."""
+    """A typed ID naming a live-verified user beats the quoted sender."""
+    _stub_cache(monkeypatch, names={22: "Twentytwo"})
+    bot = _FakeBot()
+    bot.chats[22] = _alive_user(22, "Twentytwo")
+    assert _run(
+        ex.extract_target(_update(_reply_from(11)), ["22"], cast("Any", bot))
+    ) == (22, "Twentytwo")
+    assert bot.calls == [22]
+
+
+def test_reply_plus_stale_cache_numeric_keeps_reply(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """A cached ID that no longer resolves live never overrides the quote."""
     _stub_cache(monkeypatch, names={22: "Twentytwo"})
     bot = _FakeBot()
     assert _run(
         ex.extract_target(_update(_reply_from(11)), ["22"], cast("Any", bot))
-    ) == (22, "Twentytwo")
-    assert bot.calls == []
+    ) == (11, "Reply")
+    assert bot.calls == [22]
 
 
 def test_reply_plus_unverified_numeric_keeps_reply(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -261,6 +272,7 @@ def test_mod_target_consumed_matrix(monkeypatch) -> None:  # type: ignore[no-unt
     """extract_mod_target reports whether args[0] named the target."""
     _stub_cache(monkeypatch, names={22: "Twentytwo", 42: "Cached"})
     bot = _FakeBot()
+    bot.chats[22] = _alive_user(22, "Twentytwo")
     assert _run(ex.extract_mod_target(_update(_msg()), ["42"], cast("Any", bot))) == (
         (42, "Cached"),
         True,
@@ -278,4 +290,35 @@ def test_mod_target_consumed_matrix(monkeypatch) -> None:  # type: ignore[no-unt
     assert _run(ex.extract_mod_target(_update(None), [], None)) == (
         (None, None),
         False,
+    )
+
+
+def test_username_falls_back_to_mtproto(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Bot API misses some live usernames; exact MTProto resolve is next."""
+    _stub_cache(monkeypatch)
+    bot = _FakeBot()
+
+    async def _hit(username: str):
+        assert username == "ghost"
+        return (42, "Ghost", "ghost")
+
+    monkeypatch.setattr(ex.db.mtproto, "resolve_username", _hit)
+    assert _run(ex.extract_target(_update(_msg()), ["@ghost"], cast("Any", bot))) == (
+        42,
+        "Ghost",
+    )
+
+
+def test_username_bot_hit_skips_mtproto(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    _stub_cache(monkeypatch)
+    bot = _FakeBot()
+    bot.chats["@someone"] = _alive_user(77, "Some")
+
+    async def _boom(username: str):
+        raise AssertionError("must not run")
+
+    monkeypatch.setattr(ex.db.mtproto, "resolve_username", _boom)
+    assert _run(ex.extract_target(_update(_msg()), ["@someone"], cast("Any", bot))) == (
+        77,
+        "Some",
     )

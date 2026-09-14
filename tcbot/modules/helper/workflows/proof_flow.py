@@ -248,8 +248,10 @@ async def upload_proof(
                 elif not docs:
                     return None
     except Exception:
-        log.exception("Proof gallery upload failed")
-        return None
+        # * A gallery failure must not discard document evidence: fall
+        # * through to the docs loop below (first_id stays None, so the
+        # * first document carries the caption exactly as it would have).
+        log.exception("Proof gallery upload failed; trying documents")
     for idx, file_id in enumerate(docs):
         try:
             cap = caption if first_id is None and idx == 0 else None

@@ -786,7 +786,7 @@ def appeal_review_kb(ban_id: str, locale: str | None = None) -> InlineKeyboardMa
                 ),
                 InlineKeyboardButton(
                     t("button.reject", locale, plain=True),
-                    callback_data=f"appeal_reject:{ban_id}",
+                    callback_data=f"appeal_reject_{ban_id}",
                     style=KeyboardButtonStyle.DANGER,
                 ),
             ]

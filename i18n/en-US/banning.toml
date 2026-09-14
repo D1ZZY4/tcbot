@@ -49,6 +49,7 @@ empty = "No connected groups configured."
 none = "WARNING: ban not enforced in any group ({total}/{total} failed). Check bot admin rights in: {sample}{more}"
 partial = "Applied to {done}/{total} groups ({failed} failed: {sample}{more}"
 full = "Applied to {total}/{total} groups."
+scope_warn = " WARNING: the group list could not be loaded, so some groups may have been skipped. Check the logs and re-ban manually with /tcban if needed."
 
 [pm]
 body = "You have been federation-banned from {community}.\nReason: {reason}\n\nYou may submit an appeal using the button below."

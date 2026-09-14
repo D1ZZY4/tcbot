@@ -23,28 +23,28 @@ __module_name__ = "Appeal"
 
 def get_help(locale: str | None = None) -> replies.HelpEntry:
     """Build this module's help entry in the given locale."""
-    window = Safe(bold(f"{LOCK_HOURS}-hour priority window"))
+    window = Safe(bold(t("appeals.help.window", locale, hours=LOCK_HOURS, plain=True)))
     overview = t("appeals.help.overview", locale, window=window)
     sections: list[tuple[str, str]] = [
         (
-            "How to start",
+            t("appeals.help.start.title", locale, plain=True),
             t("appeals.help.start.body", locale),
         ),
         replies.who_section(t("appeals.help.who.body", locale), locale),
         (
-            "Where to start",
+            t("appeals.help.where.title", locale, plain=True),
             t("appeals.help.where.body", locale),
         ),
         (
-            "How it works",
+            t("appeals.help.how.title", locale, plain=True),
             t("appeals.help.how.body", locale),
         ),
         (
-            "Format example",
+            t("appeals.help.format.title", locale, plain=True),
             pre(t("appeals.help.format.body", locale, plain=True)),
         ),
         (
-            "What happens next",
+            t("appeals.help.next.title", locale, plain=True),
             t("appeals.help.next.body", locale, window=window),
         ),
     ]

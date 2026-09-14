@@ -49,6 +49,7 @@ primary_group = "Ini grup primer federasi (main atau exec). Grup primer tidak di
 connect_failed = "Gagal menghubungkan grup. Coba lagi."
 join_prompt = "Mau menghubungkan grup ini ke {community}?"
 connected = "Grup ini sekarang terhubung ke {community}. Staf berwenang bisa memakai perintah federasi di sini."
+connected_blind = "Grup ini sekarang terhubung ke {community}. PERINGATAN: daftar ban/mute gagal dimuat, jadi penegakan mungkin belum lengkap. Jalankan /tcsync setelah database pulih."
 declined = "Koneksi ditolak. Aku akan keluar dari grup sekarang."
 already_connected = "Grup ini sudah terhubung ke {community}."
 connecting = "Menghubungkan... menerapkan ban dan mute federasi yang ada. Bisa perlu waktu sejenak untuk federasi besar."

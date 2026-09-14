@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper.parse_link import message_link
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.time_and_date import fmt_dt
@@ -38,6 +39,7 @@ async def build_ban_detail(
             db.users_cache.get_user_mention_data(aid),
             return_exceptions=True,
         )
+        throw_if_cancelled((r_target, r_admin))
         target_fname, target_uname = (
             r_target if not isinstance(r_target, BaseException) else (str(uid), None)
         )
@@ -45,10 +47,13 @@ async def build_ban_detail(
             r_admin if not isinstance(r_admin, BaseException) else ("Admin", None)
         )
     else:
-        r_admin = await db.users_cache.get_user_mention_data(aid)
-        admin_fname, admin_uname = (
-            r_admin if not isinstance(r_admin, BaseException) else ("Admin", None)
-        )
+        try:
+            r_admin = await db.users_cache.get_user_mention_data(aid)
+            admin_fname, admin_uname = r_admin
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            admin_fname, admin_uname = ("Admin", None)
         target_uname = None
 
     proof_chat, proof_thread = cfg.proofs
@@ -58,7 +63,9 @@ async def build_ban_detail(
     )
 
     ts = ban.get("timestamp")
-    date_str = fmt_dt(ts) if ts else "Unknown"
+    date_str = (
+        fmt_dt(ts) if ts else t("checking.ban_info.unknown_date", locale, plain=True)
+    )
 
     text = (
         f"{t('checking.ban_info.title', locale)}\n\n"
@@ -66,7 +73,7 @@ async def build_ban_detail(
         f"{t('checking.ban_info.user_id', locale, id=Safe(code(str(uid))))}\n\n"
         f"{t('checking.ban_info.banned_by', locale, admin=Safe(user_ref(aid, admin_fname, admin_uname)))}\n"
         f"{t('checking.ban_info.admin_id', locale, id=Safe(code(str(aid))))}\n\n"
-        f"{t('checking.ban_info.reason', locale, reason=ban.get('reason', None) or t('checking.events.no_reason', locale, plain=True))}\n"
+        f"{t('checking.ban_info.reason', locale, reason=Safe(ban.get('reason', None) or t('checking.events.no_reason', locale, plain=True)))}\n"
         f"{t('checking.ban_info.ban_id', locale, id=Safe(code(ban.get('ban_id', ''))))}\n"
         f"{t('checking.ban_info.date', locale, date=Safe(date_str))}"
     )

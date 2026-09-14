@@ -12,7 +12,7 @@ import pytest
 
 from tcbot import database as db
 from tcbot.modules.helper.workflows import check_flow
-from tcbot.utils.formatter import code
+from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import Safe, t
 
 
@@ -84,3 +84,16 @@ def test_warns_by_group_normal_titles_unaffected(
 
     text, _markup = asyncio.run(check_flow.Check.warns_by_group(2, None))
     assert "A Group" in text
+
+
+def test_warns_by_group_db_failure_renders_retry_card(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _boom(user_id: int) -> object:
+        raise RuntimeError("db blip")
+
+    monkeypatch.setattr(db.warns_db, "user_warn_groups", _boom)
+
+    text, _markup = asyncio.run(check_flow.Check.warns_by_group(2, None))
+    assert text == t("checking.warns.db_fail", None)
+    assert text != t("checking.warns.empty", None, user=Safe(user_ref(2, "Alice")))

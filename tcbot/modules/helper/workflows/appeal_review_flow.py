@@ -165,13 +165,16 @@ class AppealReviewMixin:
             return
         if isinstance(ban_result, BaseException):
             log.error("get_ban failed in appeal review for %s: %s", ban_id, ban_result)
+            # * Same rule as the role lookup above: never edit the shared
+            # * review card on an unmade decision. A transient read failure
+            # * is not evidence the ban is gone.
             try:
-                await q.edit_message_text(
-                    t("appeals.review.ban_not_found", locale, plain=True),
-                    reply_markup=None,
+                await q.answer(
+                    t("appeals.review.db_retry", locale, plain=True),
+                    show_alert=True,
                 )
             except Exception as exc:
-                log.debug("Appeal ban-not-found edit failed: %s", exc)
+                log.debug("Appeal ban-retry answer failed: %s", exc)
             return
         if not ban_result:
             try:
@@ -464,12 +467,10 @@ class AppealReviewMixin:
         update: Update,
     ) -> None:
         # * The cooldown write and the display-name read are independent, so
-        # * they run in parallel to save one DB round trip. Ordering against
-        # * clear_review below is preserved: set_rejected_by still lands
-        # * before the DM/edit/clear batch, so the 24 h cooldown holds even
-        # * if the review clear fails. A cancelled cooldown write propagates
-        # * (the decision stays actionable); a cancelled name read falls
-        # * back to the numeric ID so the committed cooldown still notifies.
+        # * they run in parallel to save one DB round trip. A cancelled
+        # * cooldown write propagates (the decision stays actionable); a
+        # * cancelled name read falls back to the numeric ID so the
+        # * committed cooldown still notifies.
         set_r, name_r = await asyncio.gather(
             db.bans_db.set_rejected_by(ban_id, admin.id, admin.first_name),
             db.users_cache.get_first_name(target_id, str(target_id)),
@@ -478,9 +479,20 @@ class AppealReviewMixin:
         if isinstance(set_r, asyncio.CancelledError):
             raise set_r
         if isinstance(set_r, BaseException):
-            # * Without rejected_at the user may re-appeal immediately; the
-            # * ban itself still stands, so this fails safe toward re-review.
+            # * Without rejected_at the verdict card would show "rejected"
+            # * while the user may re-appeal immediately. Abort with the
+            # * card untouched (a re-tap retries the full sequence),
+            # * mirroring the approve DB-fail path.
             log.exception("reject_appeal set_rejected_by failed for ban %s", ban_id)
+            try:
+                staff_locale = await locale_for_update(update)
+                await q.answer(
+                    t("appeals.review.db_retry", staff_locale, plain=True),
+                    show_alert=True,
+                )
+            except Exception as exc:
+                log.debug("reject_appeal DB-fail answer failed: %s", exc)
+            return
         target_fname: str = (
             name_r if isinstance(name_r, str) and name_r else str(target_id)
         )
@@ -490,6 +502,26 @@ class AppealReviewMixin:
             log.debug("reject_appeal name fetch failed: %s", name_r)
         target_locale = await locale_for_user(target_id)
         staff_locale = await locale_for_update(update)
+        # * Edit the verdict card before clearing the review marker so a
+        # * successful edit removes live buttons before the DB slot frees.
+        # * A transient edit failure still proceeds to DM + clear below
+        # * (matching the approve path): the decision is already committed
+        # * in rejected_at, so keeping the marker would block the user past
+        # * the 24 h cooldown until the 72 h stale window. The card keeps
+        # * live buttons that answer already-resolved on re-tap, and the
+        # * failure is logged for operators.
+        try:
+            await q.edit_message_text(
+                t(
+                    "appeals.decision.reject_card",
+                    staff_locale,
+                    admin=Safe(user_ref(admin.id, admin.first_name)),
+                ),
+                parse_mode="MarkdownV2",
+                reply_markup=None,
+            )
+        except Exception as exc:
+            log.warning("reject_appeal review-card edit failed: %s", exc)
         results = await asyncio.gather(
             bot.send_message(
                 target_id,
@@ -500,23 +532,12 @@ class AppealReviewMixin:
                 ),
                 parse_mode="MarkdownV2",
             ),
-            q.edit_message_text(
-                t(
-                    "appeals.decision.reject_card",
-                    staff_locale,
-                    admin=Safe(user_ref(admin.id, admin.first_name)),
-                ),
-                parse_mode="MarkdownV2",
-                reply_markup=None,
-            ),
             db.bans_db.clear_review(ban_id),
             return_exceptions=True,
         )
         if isinstance(results[0], BaseException):
             log.warning("reject_appeal DM to %d failed: %s", target_id, results[0])
         if isinstance(results[1], BaseException):
-            log.debug("reject_appeal review-card edit failed: %s", results[1])
-        if isinstance(results[2], BaseException):
             # * ``clear_review`` failure is more serious: the user could
             # * re-submit an appeal within the 72-hour stale-review window
             # * because the DB still has the pending review. Log loudly.

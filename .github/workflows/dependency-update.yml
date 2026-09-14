@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  models: read
 
 jobs:
   update-dependencies:
@@ -72,11 +73,64 @@ jobs:
           uv run ruff check .
           uv run python -c "import tcbot; print('import OK')"
 
+      - name: Generate AI PR content (free via GitHub Models)
+        id: ai-pr
+        if: steps.update.outputs.has_updates == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DIFF_SUMMARY="$(head -c 4000 changes.md | tr -d '\r' | sed 's/"/\\"/g' | tr '\n' ' ')"
+          # * Free AI via GitHub Models (openai/gpt-4o-mini) using GITHUB_TOKEN
+          # * - no extra secrets, no billing. Falls back to static text on failure.
+          PROMPT="You are a senior Python/DevOps release expert. Write a professional Conventional Commit PR title and body for a dependency update. Title must be scoped Conventional Commit like 'chore(deps): ...' under 72 chars. Body must be 2-4 short bullets: what changed, why it matters, validation run, risk. No emojis, no em dashes, no tool names beyond the dep names. Diff summary: $DIFF_SUMMARY"
+
+          RESPONSE="$(curl -s -w "\n%{http_code}" https://models.github.ai/inference/chat/completions \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"$PROMPT\"}],\"max_tokens\":400}" || true)"
+          HTTP_CODE="$(echo "$RESPONSE" | tail -n1)"
+          BODY_JSON="$(echo "$RESPONSE" | sed '$d')"
+
+          if [ "$HTTP_CODE" = "200" ] && echo "$BODY_JSON" | grep -q '"choices"'; then
+            AI_TEXT="$(echo "$BODY_JSON" | python3 -c "import sys,json;print(json.load(sys.stdin)['choices'][0]['message']['content'])" 2>/dev/null | head -c 3000)"
+            # * Split first line as title, rest as body
+            AI_TITLE="$(echo "$AI_TEXT" | head -n1 | sed 's/^#* *//' | cut -c1-72)"
+            AI_BODY="$(echo "$AI_TEXT" | tail -n +2)"
+            [ -z "$AI_TITLE" ] && AI_TITLE="chore(deps): update dependencies"
+            [ -z "$AI_BODY" ] && AI_BODY="Automated dependency update. Diff in changes.md."
+          else
+            echo "AI generation failed or not available (HTTP $HTTP_CODE), using fallback."
+            AI_TITLE="chore(deps): update dependencies"
+            AI_BODY="Automated dependency update.
+          "
+          fi
+
+          # * Sanitize: no em dashes, keep plain hyphens
+          AI_TITLE="$(echo "$AI_TITLE" | tr '—' '-')"
+          AI_BODY="$(echo "$AI_BODY" | tr '—' '-')"
+
+          echo "title=$AI_TITLE" >> "$GITHUB_OUTPUT"
+          {
+            echo "body<<EOF"
+            echo "$AI_BODY"
+            echo ""
+            echo "### Changes"
+            cat changes.md
+            echo ""
+            echo "### Validation"
+            echo "- ruff format --check, ruff check, import tcbot passed"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "AI title: $AI_TITLE"
+
       - name: Create PR
         if: steps.update.outputs.has_updates == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           BOT_PAT: ${{ secrets.BOT_PAT }}
+          AI_TITLE: ${{ steps.ai-pr.outputs.title }}
+          AI_BODY: ${{ steps.ai-pr.outputs.body }}
         run: |
           BRANCH="deps/auto-update-$(date +%Y%m%d)"
           if git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
@@ -88,7 +142,9 @@ jobs:
 
           git checkout -b "$BRANCH"
           git add uv.lock
-          git commit -m "chore: Update dependencies
+          # * Use AI title when available, fallback to chore
+          COMMIT_TITLE="${AI_TITLE:-chore: Update dependencies}"
+          git commit -m "$COMMIT_TITLE
 
           Auto-updated by GitHub Actions
 
@@ -96,10 +152,8 @@ jobs:
 
           git push origin "$BRANCH"
 
-          create_pr() {
-            gh pr create \
-              --title "chore: Auto-update dependencies" \
-              --body "$(cat <<EOF
+          # * Prefer AI body when available
+          PR_BODY="${AI_BODY:-$(cat <<EOF
           ## Automated Dependency Update
 
           This PR updates project dependencies to their latest compatible versions.
@@ -107,7 +161,12 @@ jobs:
           ### Changes
           $(cat changes.md)
           EOF
-          )" \
+          )}"
+
+          create_pr() {
+            gh pr create \
+              --title "$COMMIT_TITLE" \
+              --body "$PR_BODY" \
               --label "dependencies" \
               --base main \
               --head "$BRANCH"

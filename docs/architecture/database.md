@@ -2,7 +2,7 @@
 
 The database layer lives in `tcbot/database/` and is the only place that should perform MongoDB reads and writes. Command modules and workflows call helper functions instead of calling `mongos.col()` directly.
 
-This document is the reference spec for the TypeScript/grammY rewrite of the database layer. Every collection, index, helper signature, cache behavior, and scheduler detail below is taken from the current `tcbot/database/` Python code and should be reproduced exactly in the new implementation.
+This document is the reference spec for the Python database layer. Every collection, index, helper signature, cache behavior, and scheduler detail below is taken from the current `tcbot/database/` Python code.
 
 For modules that consume these database helpers, see [`modules.md`](modules.md). For shared helpers, see [`helpers.md`](helpers.md). For conversation flows, see [`workflows.md`](workflows.md).
 
@@ -23,6 +23,7 @@ flowchart TD
     L2 --> Redis[(Redis)]
     Scheduler[scheduler.py<br/>APScheduler 3.11.3] --> MongoDB
     Scheduler --> DBHelpers
+    MTProto[mtproto.py<br/>bot-token client] --> MongoDB
 ```
 
 ## Access rules
@@ -88,6 +89,8 @@ A DNS patch (`_patch_dns_if_needed`) installs an in-process fallback resolver po
 | `cache.py` | in-process + Redis | `TTLCache[T]` (L1) and `TwoLevelCache[T]` (L1 in-process + L2 Redis) with five public singletons. |
 | `redis_client.py` | Redis (optional) | Async Redis client singleton with pool management and liveness tracking. |
 | `scheduler.py` | MongoDB (APScheduler) | APScheduler 3.11.3 `AsyncIOScheduler` backed by `MongoDBJobStore`. |
+| `mtproto.py` | Telegram MTProto | Bot-token client singleton: user-ID resolution and group member harvest. |
+| `mtproto_store.py` | `mtproto_state` | MongoDB-backed Kurigram storage engine shared by all instances. |
 | `documents.py` | type-only | `TypedDict` document shapes and `Literal` aliases. |
 | `types.py` | type-only | `NewType` primitives: `UserId`, `GroupId`, `ChatId`, `BanId`. |
 
@@ -624,7 +627,7 @@ Member-cache cleanup is handled by the MongoDB TTL index on `last_updated` (`exp
 
 Persistent per-ban unban jobs: there are NONE in the current code. The scheduler registers only the two periodic jobs above (plus the legacy removal). There is no `DateTrigger` usage and no per-ban unban/untimed job API in `scheduler.py`; the module docstring's mention of "timed-ban" support refers to reserved `BanDoc.until_date`/`duration_str` fields that are always `None` today. No unban-job DateTrigger scheme exists to reproduce in the rewrite.
 
-Scheduler error behavior: a background-task crash sets `_sched_error`, unblocks `start()` (so it never hangs forever), and `start()` re-raises as `RuntimeError`. `expire_old_warns` logs per-collection delete failures (a cancelled expiry propagates via `throw_if_cancelled` rather than reporting success). `_run_scheduled_sync` logs the failure and returns; the next interval re-drives, so one bad run never wedges the schedule.
+Scheduler error behavior: a background-task crash sets `_sched_error`, unblocks `start()` (so it never hangs forever), and `start()` re-raises as `RuntimeError`. `expire_old_warns` logs per-collection delete failures, and a partial run (one collection failed) logs the completion line at error level with an incomplete marker instead of a clean info line (a cancelled expiry propagates via `throw_if_cancelled` rather than reporting success). `_run_scheduled_sync` logs the failure and returns; the next interval re-drives, so one bad run never wedges the schedule.
 
 ## Startup indexes
 

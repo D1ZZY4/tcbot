@@ -210,7 +210,8 @@ If `auto_ban_trigger == "per_group"` or `auto_ban_trigger == "fed_global"`:
 
 The trigger uses `>=` for per-group (retry-safe after total enforcement failure) and `>=` for federation-wide (cross-group aggregate with no atomicity guarantee).
 
-1. Active federation groups, any existing active ban, and the audit log are fetched/sent in parallel via `asyncio.gather`.
+1. The target role is re-read for the auto-ban decision. A role-lookup failure aborts the auto-ban with a retry reply instead of proceeding as non-staff; the persisted warn count re-fires the `>=` threshold on the next warn.
+2. Active federation groups, any existing active ban, and the audit log are fetched/sent in parallel via `asyncio.gather`.
 2. If the user does not already hold an active federation ban, `bans_db.create_ban()` creates a ban document in the `bans` collection (the same document used by `/tcban`). This makes the ban appealable via the standard appeal flow. If the write fails, the auto-ban aborts before any group is touched (fail-closed, mirroring `execute_unban`): the threshold warn stays recorded and the admin is told to ban manually with `/tcban` once the database recovers.
 3. `fan_out()` propagates `ban_chat_member` to all active connected groups plus MAIN_GROUP and EXTEND_GROUP.
 4. Per-group failures are logged at WARNING level with group title, chat_id, and exception.

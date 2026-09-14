@@ -2,12 +2,13 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""MTProto base: unconfigured degrades to None, configured builds without connecting."""
+"""MTProto bot session: automatic login, fail-fast boot, graceful runtime."""
 
 from __future__ import annotations
 
 import asyncio
 import dataclasses
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -25,14 +26,15 @@ def _with_creds(monkeypatch: pytest.MonkeyPatch, api_id: int, api_hash: str) -> 
     )
 
 
-def test_unconfigured_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_client_raises_without_creds(monkeypatch: pytest.MonkeyPatch) -> None:
     _with_creds(monkeypatch, 0, "")
 
     assert mtproto.is_configured() is False
-    assert mtproto.client() is None
+    with pytest.raises(RuntimeError, match="API_ID/API_HASH"):
+        mtproto.client()
 
 
-def test_configured_builds_singleton_without_connecting(
+def test_client_builds_singleton_without_connecting(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _with_creds(monkeypatch, 12345, "hash")
@@ -41,6 +43,34 @@ def test_configured_builds_singleton_without_connecting(
 
     assert first is not None
     assert mtproto.client() is first
+
+
+def test_start_raises_when_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_creds(monkeypatch, 0, "")
+
+    with pytest.raises(RuntimeError, match="API_ID/API_HASH"):
+        asyncio.run(mtproto.start())
+
+
+def test_start_connects_bot_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_creds(monkeypatch, 12345, "hash")
+    fake = _FakeClient(connected=False)
+    monkeypatch.setattr(mtproto, "_client", fake)
+
+    assert asyncio.run(mtproto.start()) is True
+    assert fake.start_called is True
+
+
+def test_start_fatal_when_bot_session_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _with_creds(monkeypatch, 12345, "hash")
+    monkeypatch.setattr(
+        mtproto, "_client", _FakeClient(connected=False, error=RuntimeError("down"))
+    )
+
+    with pytest.raises(RuntimeError, match="bot session failed"):
+        asyncio.run(mtproto.start())
 
 
 class _FakeMTUser:
@@ -61,29 +91,14 @@ class _FloodWait(Exception):
         self.value = 5
 
 
-class _FakeStorage:
-    def __init__(self, user_id: int | None = 7) -> None:
-        self._user_id = user_id
-
-    async def open(self) -> None:
-        return None
-
-    async def close(self) -> None:
-        return None
-
-    async def user_id(self) -> int | None:
-        return self._user_id
-
-
 class _FakeClient:
     """Kurigram client double: never touches the network."""
 
-    def __init__(
-        self, *, connected: bool = True, error: Any = None, user_id: int | None = 7
-    ) -> None:
+    def __init__(self, *, connected: bool = True, error: Any = None) -> None:
         self.is_connected = connected
-        self.storage = _FakeStorage(user_id)
         self._error = error
+        self._user = _FakeMTUser()
+        self._resolved: Any = None
         self.start_called = False
         self.stopped = False
 
@@ -99,45 +114,12 @@ class _FakeClient:
     async def get_users(self, _user_id: int) -> Any:
         if self._error is not None:
             raise self._error
-        return _FakeMTUser()
+        return self._user
 
-
-def test_start_false_when_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
-    _with_creds(monkeypatch, 0, "")
-
-    assert asyncio.run(mtproto.start()) is False
-
-
-def test_start_false_on_fresh_session_without_prompting(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A never-authorized session must fail fast, never reach the stdin prompt."""
-    _with_creds(monkeypatch, 12345, "hash")
-    fake = _FakeClient(connected=False, user_id=None)
-    monkeypatch.setattr(mtproto, "_client", fake)
-
-    assert asyncio.run(mtproto.start()) is False
-    assert fake.start_called is False
-
-
-def test_start_true_when_session_authorized(monkeypatch: pytest.MonkeyPatch) -> None:
-    _with_creds(monkeypatch, 12345, "hash")
-    fake = _FakeClient(connected=False, user_id=7)
-    monkeypatch.setattr(mtproto, "_client", fake)
-
-    assert asyncio.run(mtproto.start()) is True
-    assert fake.start_called is True
-
-
-def test_start_false_on_auth_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    _with_creds(monkeypatch, 12345, "hash")
-    monkeypatch.setattr(
-        mtproto,
-        "_client",
-        _FakeClient(connected=False, error=RuntimeError("unauthorized")),
-    )
-
-    assert asyncio.run(mtproto.start()) is False
+    async def invoke(self, _query: Any) -> Any:
+        if self._error is not None:
+            raise self._error
+        return self._resolved
 
 
 def test_stop_clears_client(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -150,13 +132,21 @@ def test_stop_clears_client(monkeypatch: pytest.MonkeyPatch) -> None:
     assert mtproto._client is None
 
 
+def test_resolve_none_when_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_creds(monkeypatch, 0, "")
+
+    assert asyncio.run(mtproto.resolve_user(42)) is None
+
+
 def test_resolve_maps_triple(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_creds(monkeypatch, 12345, "hash")
     monkeypatch.setattr(mtproto, "_client", _FakeClient())
 
     assert asyncio.run(mtproto.resolve_user(42)) == ("Ghost", "ghost", None)
 
 
 def test_resolve_none_on_unknown_peer(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_creds(monkeypatch, 12345, "hash")
     monkeypatch.setattr(
         mtproto, "_client", _FakeClient(error=RuntimeError("peer invalid"))
     )
@@ -165,18 +155,21 @@ def test_resolve_none_on_unknown_peer(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_resolve_none_on_flood_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_creds(monkeypatch, 12345, "hash")
     monkeypatch.setattr(mtproto, "_client", _FakeClient(error=_FloodWait()))
 
     assert asyncio.run(mtproto.resolve_user(42)) is None
 
 
 def test_resolve_none_when_disconnected(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_creds(monkeypatch, 12345, "hash")
     monkeypatch.setattr(mtproto, "_client", _FakeClient(connected=False))
 
     assert asyncio.run(mtproto.resolve_user(42)) is None
 
 
 def test_resolve_propagates_cancel(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_creds(monkeypatch, 12345, "hash")
     monkeypatch.setattr(mtproto, "_client", _FakeClient(error=asyncio.CancelledError()))
 
     with pytest.raises(asyncio.CancelledError):
@@ -209,3 +202,104 @@ def test_fetch_live_identity_prefers_mtproto_over_sweep(
         "ghost",
         None,
     )
+
+
+class _FakeMember:
+    def __init__(
+        self,
+        uid: int,
+        fname: str | None,
+        uname: str | None = None,
+        *,
+        bot: bool = False,
+    ) -> None:
+        self.user = SimpleNamespace(
+            id=uid, first_name=fname, username=uname, last_name=None, is_bot=bot
+        )
+
+
+class _HarvestClient(_FakeClient):
+    def __init__(
+        self, members: list[_FakeMember], error: BaseException | None = None
+    ) -> None:
+        super().__init__()
+        self._members = members
+        self._harvest_error = error
+
+    async def get_chat_members(self, _chat_id: int, limit: int = 0):  # type: ignore[no-untyped-def]
+        for member in self._members[: limit or len(self._members)]:
+            yield member
+        if self._harvest_error is not None:
+            raise self._harvest_error
+
+
+def test_harvest_group_members_caches_humans(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    harvested: list[tuple[int, str | None, str, str | None]] = []
+
+    async def _harvest(
+        uid: int, uname: str | None, fname: str, lname: str | None = None
+    ) -> bool:
+        harvested.append((uid, uname, fname, lname))
+        return True
+
+    members = [
+        _FakeMember(1, "A", "a"),
+        _FakeMember(2, None),
+        _FakeMember(3, "C"),
+        _FakeMember(4, "B", bot=True),
+    ]
+    monkeypatch.setattr(mtproto, "_client", _HarvestClient(members))
+    monkeypatch.setattr("tcbot.database.users_cache.harvest_user_identity", _harvest)
+
+    assert asyncio.run(mtproto.harvest_group_members(-1001, limit=10)) == 2
+    assert harvested == [(1, "a", "A", None), (3, None, "C", None)]
+
+
+def test_harvest_group_members_stops_early_on_flood(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    harvested: list[int] = []
+
+    async def _harvest(
+        uid: int, uname: str | None, fname: str, lname: str | None = None
+    ) -> bool:
+        harvested.append(uid)
+        return True
+
+    monkeypatch.setattr(
+        mtproto, "_client", _HarvestClient([_FakeMember(1, "A")], error=_FloodWait())
+    )
+    monkeypatch.setattr("tcbot.database.users_cache.harvest_user_identity", _harvest)
+
+    assert asyncio.run(mtproto.harvest_group_members(-1001)) == 1
+    assert harvested == [1]
+
+
+def _resolved_peer(*users: Any) -> Any:
+    return SimpleNamespace(users=list(users))
+
+
+def test_resolve_username_maps_triple(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = _FakeClient()
+    fake._resolved = _resolved_peer(
+        SimpleNamespace(id=42, first_name="Ghost", username="ghost")
+    )
+    monkeypatch.setattr(mtproto, "_client", fake)
+
+    assert asyncio.run(mtproto.resolve_username("@ghost")) == (42, "Ghost", "ghost")
+
+
+def test_resolve_username_none_on_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(mtproto, "_client", _FakeClient(error=RuntimeError("taken")))
+
+    assert asyncio.run(mtproto.resolve_username("ghost")) is None
+
+
+def test_resolve_username_none_when_disconnected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(mtproto, "_client", _FakeClient(connected=False))
+
+    assert asyncio.run(mtproto.resolve_username("ghost")) is None

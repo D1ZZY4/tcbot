@@ -96,6 +96,7 @@ in_title = "*Peringatan di* {title}"
 in_empty = "*Peringatan di* {title}\n\nTidak ada catatan peringatan di sini."
 in_header = "*Peringatan di* {title}: {n} total, halaman {page}/{pages}"
 in_item = "{i}. {ts}\n   {reason}\n   Oleh {admin}"
+db_fail = "Grup peringatan gagal dimuat. Database tidak terjangkau, coba lagi sebentar."
 
 [events]
 empty = "{heading}\n\nTidak ada catatan {lower} untuk {user}."
@@ -112,6 +113,7 @@ admin_id = "ID Admin: {id}"
 reason = "Alasan: {reason}"
 ban_id = "ID Ban: {id}"
 date = "Tanggal: {date}"
+unknown_date = "Tidak diketahui"
 
 # checkme/check runtime (checking.py). [error] sends plain.
 # Placeholders: {user} pre-formatted mention, {name} raw name,

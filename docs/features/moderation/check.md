@@ -118,8 +118,10 @@ Bans: N total, page p/P
 
 Two-level drill-down because warnings are per-group:
 
-1. `Check.warns_by_group` lists groups where the user has warns, with the count and a button per group. Group titles come from `groups_db.get_group_titles`.
+1. `Check.warns_by_group` lists groups where the user has warns, with the count and a button per group. Group titles come from `groups_db.get_group_titles`. A database failure renders the `checking.warns.db_fail` retry card instead of the empty list, so an outage is never mistaken for a clean record.
 2. `Check.warns_in_group` paginates the individual warnings inside the chosen chat: timestamp, reason snippet, and the admin who issued the warning.
+
+Bans, appeals, per-chat warns, kicks, and mutes lists append the shared `checking.profile.caveat` incomplete-counters note whenever the total read fails, so staff know the header total may be short. Healthy-database rendering is unchanged.
 
 ### Kicks (`check_kicks:<target_id>:<page>`)
 
@@ -228,7 +230,7 @@ user.
 
 ## Edge cases
 
-- A user that has never interacted with the bot and has no public profile resolves to their numeric user ID (e.g. `123456789`) as the fallback display name, not `User 123456789`. This allows callers to detect a numeric fallback via `str(name) == str(uid)` comparison.
+- A user that has never interacted with the bot and has no public profile resolves to their numeric user ID (e.g. `123456789`) as the fallback display name, not `User 123456789`. This allows callers to detect a numeric fallback via `str(name) == str(uid)` comparison. Before falling back, live identity sync tries one MTProto peer resolve ahead of the multi-group sweep.
 - The bans list shows both active and inactive bans; the active record (if any) appears at the top because of the timestamp-desc sort.
 - The appeals list filters bans by the presence of `appeal_log_msg_id`; rejected appeals stay in the list with `Pending / Rejected` status until the ban is overturned, at which point the same record shows `Approved (unbanned)`.
 - The warnings-by-group view shows only groups with a non-zero counter row; an old empty counter is cleaned by `clear_warns`.

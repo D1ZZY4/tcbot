@@ -55,8 +55,9 @@ def test_redis_set_times_out_and_marks_unhealthy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(cache_mod, "_REDIS_WRITE_TIMEOUT_S", 0.05)
+    monkeypatch.setattr(cache_mod, "_redis_client", lambda: _FakeStalledRedis())
     started = time.monotonic()
-    asyncio.run(_cache()._redis_set(_FakeStalledRedis(), "k", "v"))
+    asyncio.run(_cache()._redis_set("k", "v"))
     assert time.monotonic() - started < 1.0
     assert redis_client_mod.liveness() is False
 
@@ -65,12 +66,16 @@ def test_redis_delete_times_out_and_marks_unhealthy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(cache_mod, "_REDIS_WRITE_TIMEOUT_S", 0.05)
+    monkeypatch.setattr(cache_mod, "_redis_client", lambda: _FakeStalledRedis())
     started = time.monotonic()
-    asyncio.run(_cache()._redis_delete(_FakeStalledRedis(), "k"))
+    asyncio.run(_cache()._redis_delete("k"))
     assert time.monotonic() - started < 1.0
     assert redis_client_mod.liveness() is False
 
 
-def test_redis_set_marks_healthy_on_success() -> None:
-    asyncio.run(_cache()._redis_set(_FakeOkRedis(), "k", "v"))
+def test_redis_set_marks_healthy_on_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cache_mod, "_redis_client", lambda: _FakeOkRedis())
+    asyncio.run(_cache()._redis_set("k", "v"))
     assert redis_client_mod.liveness() is True

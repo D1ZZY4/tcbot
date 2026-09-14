@@ -1,0 +1,39 @@
+name: Test (Pytest)
+
+on:
+  push:
+    branches: [main, "feat/**", "fix/**"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Pytest suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      BOT_TOKEN: "000000:dummy-token-for-lint000000000000000"
+      MONGODB_URI: "mongodb://localhost:27017"
+      OWNER_ID: "1"
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run tests
+        run: uv run pytest tests/ -q

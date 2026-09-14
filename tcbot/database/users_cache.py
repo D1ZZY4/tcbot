@@ -290,9 +290,10 @@ async def get_first_names_batch(user_ids: list[int]) -> dict[int, str]:
     IDs already in the in-memory mention cache are served without I/O; only
     uncached IDs trigger one batch MongoDB query. Users missing from the DB
     get the not-found sentinel cached so repeat renders skip the round-trip.
-    Found rows are deliberately NOT written back: the batch projection omits
-    ``last_name``, and caching a partial triple would corrupt the change
-    detection in ``upsert_user_if_changed``.
+    Found rows populate the full mention triple (the projection covers
+    first_name, username, and last_name, exactly like
+    :func:`_fetch_mention_triple`), so repeat renders by any reader skip
+    the round-trip without corrupting change detection.
     """
     if not user_ids:
         return {}
@@ -311,12 +312,19 @@ async def get_first_names_batch(user_ids: list[int]) -> dict[int, str]:
         return result
     docs = await db_call(
         _members()
-        .find({"user_id": {"$in": missing}}, {"user_id": 1, "first_name": 1})
+        .find(
+            {"user_id": {"$in": missing}},
+            {"user_id": 1, "first_name": 1, "username": 1, "last_name": 1},
+        )
         .to_list(None)
     )
     for doc in docs:
         uid = doc["user_id"]
         result[uid] = doc.get("first_name") or str(uid)
+        user_mention_cache.put(
+            uid,
+            [result[uid], doc.get("username"), doc.get("last_name")],
+        )
     # Fill in missing users with defaults
     for uid in missing:
         if uid not in result:

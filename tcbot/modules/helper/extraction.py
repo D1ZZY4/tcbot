@@ -69,7 +69,9 @@ def _first_arg_is_explicit(args: list[str]) -> bool:
     if not args:
         return False
     first = args[0]
-    return first.lstrip("-").isdigit() or first.startswith("@")
+    # * A bare "@" names nobody; treating it as explicit would only
+    # * divert the reply path into a resolution that returns None.
+    return first.lstrip("-").isdigit() or (first.startswith("@") and len(first) > 1)
 
 
 async def _best_name(uid: int, *primary: str | None) -> str:
@@ -239,13 +241,17 @@ async def _args_target(
         # * Only real cached names count: bare-numeric and legacy
         # * "User <id>" fallbacks fall through to the live lookup,
         # * exactly like the outage path below already does.
+        # * Verified callers never take the fast path: a stale cache
+        # * entry must not override the reply target without a live
+        # * check that the ID still resolves on Telegram.
         try:
             cached_name = await db.users_cache.get_first_name(uid, "")
         except Exception as exc:
             log.debug("numeric fast-path cache read failed for %d: %s", uid, exc)
             cached_name = ""
         if (
-            cached_name
+            not verified
+            and cached_name
             and not cached_name.lstrip("-").isdigit()
             and not cached_name.startswith("User ")
         ):
@@ -270,6 +276,12 @@ async def _args_target(
             return chat.id, await _best_name(
                 chat.id, chat.first_name, chat.username, arg
             )
+        # * Bot API username lookups miss some existing accounts; one MTProto
+        # * exact-username resolve before giving up (deterministic, no fuzzy).
+        hit = await db.mtproto.resolve_username(arg)
+        if hit is not None:
+            uid, fname, _ = hit
+            return uid, await _best_name(uid, fname, arg)
 
     # * Priority 3: Partial name search in users_cache, read-only
     # * callers only (see _args_target docstring for why moderation
@@ -351,6 +363,10 @@ async def _entity_target(msg: Message, bot: Bot | None) -> tuple[int, str] | Non
                 chat = await _safe_get_chat(bot, f"@{uname}")
                 if chat is not None:
                     return chat.id, await _best_name(chat.id, chat.first_name, uname)
+                hit = await db.mtproto.resolve_username(uname)
+                if hit is not None:
+                    uid, fname, _ = hit
+                    return uid, await _best_name(uid, fname, uname)
 
     return None
 

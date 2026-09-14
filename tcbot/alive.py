@@ -11,6 +11,7 @@ import concurrent.futures
 import hmac
 import json
 import logging
+import socket
 import threading
 from typing import TYPE_CHECKING
 
@@ -208,7 +209,19 @@ def _run() -> None:
 # ─────────────────────────── Public API ─────────────────────────── #
 # * Entry point to start the keep-alive server from the main bot
 def start_keepalive() -> None:
-    """Launch the Flask server in a daemon thread."""
+    """Launch the Flask server in a daemon thread.
+
+    Probes the port first: a bind failure inside the daemon thread would
+    only surface as a thread traceback while the bot runs on headless
+    (no health checks, no webhook delivery). Fail fast at startup instead.
+    """
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind(("0.0.0.0", cfg.port))
+    except OSError as exc:
+        raise RuntimeError(f"Keep-alive port {cfg.port} is unavailable: {exc}") from exc
+    finally:
+        probe.close()
     t = threading.Thread(
         target=_run,
         name="keepalive",

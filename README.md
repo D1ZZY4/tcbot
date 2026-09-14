@@ -158,12 +158,13 @@ Run exactly one live instance per token on exactly one target below. Every targe
 <details>
 <summary>GitHub Actions automation (lint, auto-fix, dependencies, CodeQL)</summary>
 
-Four CI workflows run automatically; no secrets needed (validation steps use dummy values, so fork PRs work too). All use Python 3.14 with `uv sync --frozen` and cached `uv` setup.
+Seven CI workflows run automatically; no secrets needed (validation steps use dummy values, so fork PRs work too). All use Python 3.14 with `uv sync --frozen` and cached `uv` setup.
 
-- **Lint** (`lint.yml`): on push to `main`/`feat/**`/`fix/**` and PRs to `main`. Runs `ruff format --check`, `ruff check`, and the `import tcbot` check. Fails the PR subject to branch protection.
+- **Lint (Ruff)** (`lint-ruff.yml`), **Lint (Pyright)** (`lint-pyright.yml`), **Test (Pytest)** (`test-pytest.yml`): on push to `main`/`feat/**`/`fix/**` and PRs to `main`. Run `ruff format --check` + `ruff check` + the `import tcbot` check, `pyright`, and `pytest tests/ -q` respectively. Fail the PR subject to branch protection.
 - **Auto-Fix** (`auto-fix.yml`): same push/PR triggers plus weekly Monday 04:00 UTC and manual dispatch. Runs `ruff format` + `ruff check --fix`; outside a PR it force-pushes the fixed `auto-fix/ruff` branch and opens a PR, on a PR it comments the local fix commands instead. Needs `contents: write` + `pull-requests: write`.
 - **Dependency Updates** (`dependency-update.yml`): weekly Monday 04:00 UTC and manual dispatch. Runs `uv lock --upgrade`, validates with Ruff plus the import check, then opens a `deps/auto-update-YYYYMMDD` PR labeled `dependencies` against `main` (no-op when the lockfile is unchanged). Sends the owner a Telegram status DM when `BOT_TOKEN`/`OWNER_ID` secrets exist, silently skips otherwise.
 - **CodeQL** (`codeql.yml`): on push/PR to `main` plus weekly Tuesday 15:38 UTC. Scans the `actions` and `python` languages with `build-mode: none`; findings land under the repository Security tab.
+- **Run Bot** (`run-bot.yml`): self-chaining 24/7 runner with webhook-first transport, plus daily restart checks.
 
 Mirror the gate locally before pushing: `uv run ruff format --check .`, `uv run ruff check .`, `uv run python -c "import tcbot"`. Full reference: [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md).
 </details>

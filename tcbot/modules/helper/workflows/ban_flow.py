@@ -348,12 +348,18 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         if isinstance(groups, BaseException):
             log.error("active_groups failed during ban of %d: %s", target_id, groups)
             groups = []
+            groups_fetch_failed = True
+        else:
+            groups_fetch_failed = False
     else:
         try:
             groups = await _groups_task
         except Exception:
             log.exception("active_groups failed during ban of %d", target_id)
             groups = []
+            groups_fetch_failed = True
+        else:
+            groups_fetch_failed = False
 
     # * Enforce across all connected groups + primary groups - semaphore-bounded.
     # * The entry auto-demote ran before the proof-collection window, so
@@ -424,6 +430,8 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         failed=failed,
         transient=transient_groups,
     )
+    if groups_fetch_failed:
+        applied_line += t("banning.applied.scope_warn", locale)
 
     # * Build PM content before the conditional so it can fire in parallel with
     # * both upsert_user and (optionally) edit_message_text.  All three operations

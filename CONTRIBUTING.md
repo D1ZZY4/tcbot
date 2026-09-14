@@ -69,8 +69,10 @@ than reverse-engineering the codebase.
   not in screenshots.
 - **Keep bot messages localizable** and in MarkdownV2 parse mode (never
   HTML), with user-provided text escaped. User-facing wording belongs in
-  `i18n/<locale>/*.toml`, never hardcoded in Python; see the
-  internationalization rules in [`.agents/rules/code-style.md`](.agents/rules/code-style.md).
+  `i18n/<locale>/*.toml`, never hardcoded in Python (audit logs, staff
+  operational messages, and infra error reports are the only sanctioned
+  exceptions); see the internationalization rules in
+  [`.agents/rules/code-style.md`](.agents/rules/code-style.md).
 
 > [!CAUTION]
 > A small bug in moderation logic can affect thousands of users across

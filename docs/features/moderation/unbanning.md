@@ -120,7 +120,7 @@ Unban log templates are defined in `parse_logmsg.py`:
 The unban log includes:
 
 - Community name.
-- Moderator mention.
+- Moderator mention (anonymous-admin runs attribute to id `0` / `anonymous admin` instead of the target, so the entry never reads as a self-unban).
 - Target mention and user ID.
 - The deactivated `ban_id`.
 - Date.

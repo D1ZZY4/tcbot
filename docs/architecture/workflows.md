@@ -29,7 +29,7 @@ Conversation and multi-step logic lives in `tcbot/modules/helper/workflows/`. Ne
 | `BuildProof.keyboard()` | Returns `[Skip] [Cancel]` when skipping is allowed, otherwise `[Cancel]`. |
 | `BuildProof.step_prompt(...)` | Prompt after an in-conversation reason. |
 | `BuildProof.noted_prompt(...)` | Prompt when a reason was provided inline. |
-| `upload_proof(bot, msgs, caption, proof_chat, proof_thread)` | Uploads proof media and returns the first uploaded message ID. Photos and videos travel as one media group (caption on the first item); GIFs and files are sent individually after the gallery. Returns `None` fast without Telegram I/O on empty input or a batch with no usable item; a failed document is logged and skipped. |
+| `upload_proof(bot, msgs, caption, proof_chat, proof_thread)` | Uploads proof media and returns the first uploaded message ID. Photos and videos travel as one media group (caption on the first item); GIFs and files are sent individually after the gallery. Returns `None` fast without Telegram I/O on empty input or a batch with no usable item; a failed gallery falls through to the document loop, and a failed document is logged and skipped. |
 
 ## Shared reason factory: `reason_flow.py`
 
@@ -139,7 +139,7 @@ Mute applies restrictions across all connected groups with `fan_out()`. The mute
 - A muted user joins any connected group (`greeting._handle_member` fetches `get_active_mute` in parallel with `get_active_ban` and calls `restrict_chat_member` if an active mute is found).
 - A new group connects to the federation (`connected_flow.complete_join` fetches `active_mute_docs()` and fans out `restrict_chat_member` for every active mute, mirroring the existing ban replay).
 
-`execute_unmute` clears the `active_mutes` record via `clear_active_mute` in the same gather as the log send and reply, so the re-application stops as soon as the unmute is issued.
+`execute_unmute` clears the `active_mutes` record via `clear_active_mute` before announcing, and aborts with a retry reply when the clear fails, so a failed clear never reports success.
 
 ```mermaid
 flowchart TD
@@ -197,8 +197,8 @@ Appeal flow requirements:
 - The appeal text must start with `#appeal` (case-insensitive); when the ban carries a `log_message_id`, the text must also reference that ID as a standalone number. Section labels (`Log link:`, `Clarification:`, `Agreement:`) are requested by the instructions but not parsed semantically.
 - Submit revalidates pending-review and rejection-cooldown state, then claims the review slot atomically (`set_review_if_absent`).
 - A review card is posted to `APPEAL_DISCUSSION_TOPIC` in `MAIN_GROUP`.
-- Approve runs an inline deactivate-plus-fan-out sequence mirroring `execute_unban` and notifies the user; a cancelled deactivation propagates with the card untouched instead of rendering a DB-fail edit. Reject records the rejector (display-name read in parallel), then runs the DM, card edit, and review clear in parallel.
-- Non-deciding taps answer with a popup and never edit the shared card.
+- Approve runs an inline deactivate-plus-fan-out sequence mirroring `execute_unban` and notifies the user; a cancelled deactivation propagates with the card untouched instead of rendering a DB-fail edit. A failed ban read answers the `appeals.review.db_retry` popup with the card untouched for a re-tap. Reject records the rejector (display-name read in parallel), then runs the DM, card edit, and review clear in parallel.
+- Non-deciding taps (including ban-read outages) answer with a popup and never edit the shared card.
 
 ```mermaid
 flowchart TD
