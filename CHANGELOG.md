@@ -51,6 +51,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Dependency PR creation retries with the personal token** (`.github/workflows/dependency-update.yml`, `docs/operations/ci-cd.md`): when the repository toggle blocks the default token from opening pull requests, the step used to fail even though the update branch was already pushed. It now retries once with `BOT_PAT` when that secret exists and only then fails loud with the exact toggle to flip. Behavior changes: none when the toggle is on.
 
+- **MTProto client available again for future lookups** (`pyproject.toml`, `uv.lock`): `kurigram[fast]` is back as a dependency for Telegram lookups outside Bot API limits. No bot code uses it yet, so nothing user-visible changes.
+
 - **Scheduler startup fails fast instead of hanging the boot** (`tcbot/database/scheduler.py`): a constructor error or a hung MongoDB handshake during scheduler startup previously left the process alive but stuck with no readiness signal, and the external watchdog restarts on death, not hangs, so the bot stayed wedged. Startup now waits a bounded grace window (the same 10 seconds used at shutdown) and then reports the failure, so a bad boot restarts instead of hanging.
 
 - **Bounded server selection for the scheduler's MongoDB client** (`tcbot/database/mongos.py`): the scheduler job store builds its own synchronous pymongo client, which fell back to pymongo's 30-second server-selection default and could freeze the event loop at boot under a degraded-but-not-down MongoDB. It now shares the same 10-second server-selection and connect timeouts as the main Motor client.
