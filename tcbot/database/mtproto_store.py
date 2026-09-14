@@ -121,10 +121,10 @@ class MongoStorage(Storage):
         """Get or set the server port."""
         return await self._accessor("port", value)
 
-    async def test_mode(
+    async def test_mode(  # type: ignore[override]
         self,
         value: bool | type[object] = object,  # noqa: FBT001
-    ) -> Any:  # type: ignore[override]
+    ) -> Any:
         """Get or set test-mode flag."""
         return await self._accessor("test_mode", value)
 
@@ -140,10 +140,10 @@ class MongoStorage(Storage):
         """Get or set the authorized user ID (None = fresh session)."""
         return await self._accessor("user_id", value)
 
-    async def is_bot(
+    async def is_bot(  # type: ignore[override]
         self,
         value: bool | type[object] = object,  # noqa: FBT001
-    ) -> Any:  # type: ignore[override]
+    ) -> Any:
         """Get or set the bot-session flag."""
         return await self._accessor("is_bot", value)
 
