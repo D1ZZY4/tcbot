@@ -153,11 +153,7 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Check lists stay honest on database outages** (`tcbot/modules/helper/workflows/check_flow.py`): ban, appeal, warns-by-group, and per-chat drill-downs used dead `isinstance(..., BaseException)` checks over bare awaits, so outages left stale cards or empty views. Lists now trap failures, render a retry card on empty results, and append the incomplete-counters note otherwise. Behavior changes: outage lists never render as empty clean records.
 
-- **Ban entry fails closed on lookup outage** (`tcbot/modules/banning.py`): a failed active-ban read proceeded as a fresh ban, wasting a proof round before the executor aborted and risking an unnecessary demote. The entry now replies with a retry notice and ends instead. Behavior changes: outage bans no longer prompt for proof.
-
-- **Appeal tag requires a word boundary** (`tcbot/modules/helper/workflows/appeal_submit_flow.py`): `#appeals` and `#appealing` passed the gate because the check was a prefix test. The tag now requires a boundary after `#appeal`. Behavior changes: suffixed tags no longer count as appeals.
-
-- **Check lists fail honestly on database outage** (`tcbot/modules/helper/workflows/check_flow.py`): bans, appeals, per-chat and kicks/mutes lists left stale cards when the page fetch failed, and empty results looked clean even when both count and fetch were down. Fetches now catch exceptions and render the retry card instead of an empty one. Behavior changes: outage lists render the retry card, not the empty card.
+- **Helpers respect cancellation and render honestly** (`tcbot/modules/helper/decorators.py`, `locale.py`, `ban_info.py`, `replies.py`, `i18n/en-US/checking.toml`, `i18n/id/checking.toml`): per-handler rate-limit buckets now include the module, high-cardinality helper locks are bounded, locale and ban-detail renders preserve cancellation, and bandetail fallbacks localize with safe placeholders. Behavior changes: none.
 
 ### Documentation
 

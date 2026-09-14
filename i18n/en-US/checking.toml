@@ -113,6 +113,7 @@ admin_id = "Admin ID: {id}"
 reason = "Reason: {reason}"
 ban_id = "Ban ID: {id}"
 date = "Date: {date}"
+unknown_date = "Unknown"
 
 # checkme/check runtime (checking.py). [error] sends plain.
 # Placeholders: {user} pre-formatted mention, {name} raw name,

@@ -176,7 +176,7 @@ def applied_summary(
         return t(f"{key_prefix}.empty", locale)
     if failed == total:
         sample = ", ".join(
-            grp.get("title") or str(grp["chat_id"]) for grp, _ in transient[:5]
+            grp.get("title") or str(grp.get("chat_id", "?")) for grp, _ in transient[:5]
         )
         return t(
             f"{key_prefix}.none",
@@ -187,7 +187,7 @@ def applied_summary(
         )
     if failed > 0:
         sample = ", ".join(
-            grp.get("title") or str(grp["chat_id"]) for grp, _ in transient[:3]
+            grp.get("title") or str(grp.get("chat_id", "?")) for grp, _ in transient[:3]
         )
         return t(
             f"{key_prefix}.partial",

@@ -28,8 +28,6 @@ from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.time_and_date import elapsed_ms, monotonic
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine
-
     from telegram import Bot, Message, Update
 
 log = logging.getLogger(__name__)
@@ -304,7 +302,9 @@ def ratelimiter[R](
     ) -> Callable[..., Coroutine[Any, Any, R | None]]:
         """Wrap ``func`` with a sliding-window per-user rate check."""
         _limiter = _AsyncRateLimiter(
-            max_calls=limit, window=period, prefix=f"h:{func.__name__}"
+            max_calls=limit,
+            window=period,
+            prefix=f"h:{func.__module__}.{func.__name__}",
         )
 
         @functools.wraps(func)
@@ -559,6 +559,7 @@ async def classify_and_check(
     *,
     action: str,
     min_role: str,
+    target_is_bot: bool | None = None,
 ) -> tuple[identity.Identity, str | None] | None:
     """Classify the target and validate executor rank in parallel, fail closed.
 
@@ -567,7 +568,9 @@ async def classify_and_check(
     Cancellation always propagates.
     """
     ident, role_result = await asyncio.gather(
-        identity.classify(bot, admin_id, target_id, target_name),
+        identity.classify(
+            bot, admin_id, target_id, target_name, target_is_bot=target_is_bot
+        ),
         resolve_and_check(msg, admin_id, target_id, min_role=min_role),
         return_exceptions=True,
     )

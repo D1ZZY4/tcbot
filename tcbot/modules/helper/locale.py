@@ -11,6 +11,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from tcbot import database as db
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import DEFAULT_LOCALE, resolve_locale
 
 if TYPE_CHECKING:
@@ -31,6 +32,7 @@ async def effective_locale(chat_type: str | None, user_id: int, chat_id: int) ->
         db.groups_db.get_group_locale(chat_id),
         return_exceptions=True,
     )
+    throw_if_cancelled((user_locale, group_locale))
     if isinstance(user_locale, BaseException):
         log.debug("locale user read failed for %d: %s", user_id, user_locale)
         user_locale = None
