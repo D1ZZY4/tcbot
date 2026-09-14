@@ -30,6 +30,8 @@ The project uses 5 automated workflows for continuous integration, code quality,
 - Runs `uv run ruff format --check .` to verify formatting without modifying files
 - Runs `uv run ruff check .` to catch all lint violations
 - Runs `uv run python -c "import tcbot"` to verify all imports resolve cleanly
+- Runs the behavioral checks (`python -m pytest tests/ -q`) as a second job
+  with the same dummy environment values, so regressions fail the PR too
 - **Fails the PR** if any step exits with a non-zero code
 - The import check runs with dummy but shape-valid `BOT_TOKEN`,
   `MONGODB_URI`, and `OWNER_ID` values (validated at import time, never
@@ -204,8 +206,7 @@ secrets, so every runtime variable must be set there for the runner: `DB_NAME`,
 `COMMUNITY_NAME`, `PREFIXES`, `MAIN_GROUP`, `MAIN_CHANNEL`, `EXTEND_GROUP`,
 `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`, `LOG_LEVEL`, `PORT`, `REDIS_URL`,
 `APPEAL_LOG_HANDLE`, `APPEAL_DISCUSSION_TOPIC`, `WARN_EXPIRY_DAYS`,
-`WARN_LIMIT`, `FED_WARN_LIMIT`, `PROOF_TIMEOUT_SECONDS`,
-`APPEAL_TIMEOUT_SECONDS`, `ALBUM_DEBOUNCE_SECONDS`, `MODULES_LOAD`, and
+`WARN_LIMIT`, `FED_WARN_LIMIT`, `ALBUM_DEBOUNCE_SECONDS`, `MODULES_LOAD`, and
 `MODULES_NO_LOAD`, alongside `BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`,
 `WEBHOOK_URL`, and `WEBHOOK_SECRET`. `SYNC_INTERVAL_HOURS`, `CRON_SECRET`, and
 the `COMMUNITY_*_URL` links are **not** forwarded by the runner: the sync sweep

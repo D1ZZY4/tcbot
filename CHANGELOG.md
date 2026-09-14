@@ -85,6 +85,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Full coverage of the documentation tree** (`docs/README.md`): the index lists every guide under `docs/` in its category, and every cross-reference across the documentation resolves to a real page and section header, so readers never land on a missing page. Behavior changes: none.
 
+- **CI guide drops the retired timeout variables and covers the checks job** (`docs/operations/ci-cd.md`): the runner secret list no longer names the removed proof/appeal timeout settings, and the Lint section documents the second job that executes the behavioral checks, so the guide matches the workflows that actually run.
+
 </details>
 
 ## [6.8.0] - 2026-09-13
