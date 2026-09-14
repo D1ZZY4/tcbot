@@ -66,15 +66,14 @@ Local development without a public URL falls back to polling automatically.
 
 ### Nix Configuration
 
-Ensure the `.replit` file contains:
+Ensure the `.replit` file contains (TOML array form):
 
-```ini
-run = "uv run python -m tcbot"
+```toml
+[deployment]
+run = ["uv", "run", "python", "-m", "tcbot"]
 ```
 
-For Python 3.14, the Replit Nix environment should provide a compatible
-runtime. If using a custom `pyproject.toml`, ensure the Replit Python version
-meets `requires-python = ">=3.13"`.
+For Python 3.14, the Replit Nix `modules` already pins `python-3.14` (`modules = ["nix", "python-3.14", "nodejs-20"]`). If using a custom `pyproject.toml`, ensure the Replit Python version meets `requires-python = ">=3.13"`.
 
 ---
 
