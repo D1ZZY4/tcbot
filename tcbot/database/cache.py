@@ -80,7 +80,14 @@ class _MongoJSONEncoder(json.JSONEncoder):
 
 
 def _mongo_object_hook(value: dict[str, Any]) -> Any:
-    """Restore tagged MongoDB scalar values while tolerating legacy cache data."""
+    """Restore tagged MongoDB scalar values while tolerating legacy cache data.
+
+    Only exact-shape mappings (exactly the tag key plus the value key)
+    restore: a user-controlled dict that merely contains the tag key must
+    never deserialize into a datetime or ObjectId.
+    """
+    if set(value.keys()) != {_MONGO_TYPE_KEY, "value"}:
+        return value
     value_type = value.get(_MONGO_TYPE_KEY)
     raw_value = value.get("value")
     if value_type == _MONGO_DATETIME_TYPE and isinstance(raw_value, str):
@@ -102,6 +109,17 @@ _redis_bg_tasks: set[asyncio.Task[None]] = set()
 # * Redis namespaces must be ordered across cache instances sharing a prefix.
 # * Scope by event loop because asyncio tasks cannot be awaited across loops.
 _redis_tails: dict[tuple[str, asyncio.AbstractEventLoop], asyncio.Task[None]] = {}
+# * Bound for queued mutations per (prefix, loop). Past this, new ops drop
+# * with a warning: L2 is a TTL-bounded hint layer, so a dropped write only
+# * extends cross-process staleness to the key TTL, while an unbounded
+# * queue would grow memory and stall clear_all's shielded wait for the
+# * whole serial backlog during an outage.
+_REDIS_MAX_PENDING: int = 200
+_redis_pending: dict[tuple[str, asyncio.AbstractEventLoop], int] = {}
+_redis_drop_warned: set[tuple[str, asyncio.AbstractEventLoop]] = set()
+# * Grace window for draining background mutations at shutdown before the
+# * Redis pool closes underneath them.
+_DRAIN_TIMEOUT_S: float = 5.0
 
 # * Public sentinel; compare using ``is CACHE_MISS`` to detect a cache miss.
 # * Distinct from None because None is a valid cache value (e.g. user has no role).
@@ -186,13 +204,18 @@ class TTLCache[T]:
             return cast("T", val)
 
         lock = self._locks.setdefault(key, asyncio.Lock())
-        async with lock:
-            val = self.get(key)
-            if val is not CACHE_MISS:
-                return cast("T", val)
-            val = await fetch()
-            self.put(key, val)
-            return val
+        try:
+            async with lock:
+                val = self.get(key)
+                if val is not CACHE_MISS:
+                    return cast("T", val)
+                val = await fetch()
+                self.put(key, val)
+                return val
+        finally:
+            # * Same unbounded-growth guard as TwoLevelCache.get_or_fetch:
+            # * waiters hold their own reference, so popping here is safe.
+            self._locks.pop(key, None)
 
 
 # ────────────────────── Two-Level Cache Class ───────────────────── #
@@ -267,18 +290,18 @@ class TwoLevelCache[T]:
         hot paths; it is designed for rare, high-impact invalidations only.
         """
         self._mem.clear()
-        rc = _redis_client()
-        if rc is None:
-            return
         pattern = f"tcbot:{self._redis_prefix}:v2:*"
 
         async def _clear_redis() -> None:
+            live = _redis_client()
+            if live is None:
+                return
             cursor: int = 0
             try:
                 while True:
-                    cursor, keys = await rc.scan(cursor, match=pattern, count=100)
+                    cursor, keys = await live.scan(cursor, match=pattern, count=100)
                     if keys:
-                        await rc.unlink(*keys)
+                        await live.unlink(*keys)
                     if cursor == 0:
                         break
             except Exception as exc:
@@ -335,38 +358,53 @@ class TwoLevelCache[T]:
                         raw = await asyncio.wait_for(
                             rc.get(rkey), timeout=_REDIS_GET_TIMEOUT_S
                         )
-                        if raw is not None:
-                            loaded: T = json.loads(raw, object_hook=_mongo_object_hook)
-                            self._mem.put(key, loaded)
-                            _redis_mod.mark_op(ok=True)
-                            return loaded
                     except asyncio.CancelledError:
                         raise
                     except Exception as exc:
                         _redis_mod.mark_op(ok=False)
                         log.debug("Redis get failed for %s: %s", rkey, exc)
+                    else:
+                        # * Any response (hit or miss) proves Redis is alive;
+                        # * only a transport failure marks it down.
+                        _redis_mod.mark_op(ok=True)
+                        if raw is not None:
+                            try:
+                                loaded: T = json.loads(
+                                    raw, object_hook=_mongo_object_hook
+                                )
+                            except Exception as exc:
+                                # * Corrupt payload is a miss, not an outage:
+                                # * fall through to the DB fetch without
+                                # * touching the health flag.
+                                log.debug(
+                                    "Redis payload decode failed for %s: %s",
+                                    rkey,
+                                    exc,
+                                )
+                            else:
+                                self._mem.put(key, loaded)
+                                return loaded
 
                 # L3: DB fetch. The L2 write is fire-and-forget: the value is
                 # * already in L1, and awaiting the Redis SET would add a full
-                # * Redis round-trip (up to the 10 s socket timeout) to every
-                # * L1 miss. Ordering against later invalidates is preserved
-                # * by the FIFO mutation chain; write errors still surface via
-                # * the task's done-callback log.
+                # * Redis round-trip to every L1 miss. Ordering against later
+                # * invalidates is preserved by the FIFO mutation chain; write
+                # * errors still surface via the task's done-callback log.
+                # * Enqueued unconditionally: the op resolves the client at
+                # * run time and no-ops when Redis is absent, so a reconnect
+                # * between the miss and the write still lands the value.
                 val = await fetch()
                 self._mem.put(key, val)
-                if rc is not None:
-                    rkey = self._rkey(key)
-                    try:
-                        payload = json.dumps(val, cls=_MongoJSONEncoder)
-                    except Exception as exc:
-                        # * L1 already serves this value: a serialization
-                        # * failure must degrade to L1-only, never fail the
-                        # * hot path that just fetched successfully.
-                        log.debug("Redis payload encode failed for %s: %s", rkey, exc)
-                    else:
-                        self._enqueue_redis_mutation(
-                            lambda: self._redis_set(rc, rkey, payload)
-                        )
+                rkey = self._rkey(key)
+                try:
+                    payload = json.dumps(val, cls=_MongoJSONEncoder)
+                except Exception as exc:
+                    # * L1 already serves this value: a serialization
+                    # * failure must degrade to L1-only, never fail the
+                    # * hot path that just fetched successfully.
+                    log.debug("Redis payload encode failed for %s: %s", rkey, exc)
+                else:
+                    self._enqueue_redis_mutation(lambda: self._redis_set(rkey, payload))
 
                 return cast("T", val)
         finally:
@@ -394,7 +432,7 @@ class TwoLevelCache[T]:
         except Exception as exc:
             log.debug("Redis payload encode failed for %s: %s", rkey, exc)
             return
-        self._enqueue_redis_mutation(lambda: self._redis_set(rc, rkey, payload))
+        self._enqueue_redis_mutation(lambda: self._redis_set(rkey, payload))
 
     def _redis_del_background(self, key: Any) -> None:
         """Fire-and-forget Redis key deletion without blocking the caller."""
@@ -402,10 +440,19 @@ class TwoLevelCache[T]:
         if rc is None:
             return
         rkey = self._rkey(key)
-        self._enqueue_redis_mutation(lambda: self._redis_delete(rc, rkey))
+        self._enqueue_redis_mutation(lambda: self._redis_delete(rkey))
 
-    async def _redis_set(self, rc: Any, rkey: str, payload: str) -> None:
-        """Write one Redis value and keep failures observable but non-fatal."""
+    async def _redis_set(self, rkey: str, payload: str) -> None:
+        """Write one Redis value and keep failures observable but non-fatal.
+
+        The client resolves at run time, not enqueue time: a reconnect
+        between queueing and execution must not write through a dead pool.
+        The per-op wait_for abandons a stalled write (the socket timeout
+        bounds the underlying op); abandonment only delays an L2 hint.
+        """
+        rc = _redis_client()
+        if rc is None:
+            return
         try:
             await asyncio.wait_for(
                 rc.set(rkey, payload, ex=self._redis_ttl),
@@ -417,8 +464,11 @@ class TwoLevelCache[T]:
         else:
             _redis_mod.mark_op(ok=True)
 
-    async def _redis_delete(self, rc: Any, rkey: str) -> None:
+    async def _redis_delete(self, rkey: str) -> None:
         """Delete one Redis value and keep failures observable but non-fatal."""
+        rc = _redis_client()
+        if rc is None:
+            return
         try:
             await asyncio.wait_for(
                 rc.delete(rkey),
@@ -440,13 +490,33 @@ class TwoLevelCache[T]:
         to the previous task prevents a slower Redis write from completing
         after a newer delete or prefix-wide clear, including when separate
         cache objects share the same Redis namespace.
+
+        The queue is bounded: past ``_REDIS_MAX_PENDING`` queued ops the
+        newest op drops with a warning instead of growing memory and
+        stalling ``clear_all`` behind a dead-Redis backlog.
         """
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
+            log.debug(
+                "Redis mutation skipped for prefix %s: no running loop.",
+                self._redis_prefix,
+            )
             return None
 
         tail_key = (self._redis_prefix, loop)
+        depth = _redis_pending.get(tail_key, 0)
+        if depth >= _REDIS_MAX_PENDING:
+            if tail_key not in _redis_drop_warned:
+                _redis_drop_warned.add(tail_key)
+                log.warning(
+                    "Redis mutation queue full for prefix %s (%d pending); "
+                    "dropping newest op.",
+                    self._redis_prefix,
+                    depth,
+                )
+            return None
+        _redis_pending[tail_key] = depth + 1
         previous = _redis_tails.get(tail_key)
 
         async def _run() -> None:
@@ -472,7 +542,44 @@ class TwoLevelCache[T]:
         task.add_done_callback(_redis_bg_tasks.discard)
         task.add_done_callback(_log_redis_task_error)
         task.add_done_callback(lambda completed: _clear_redis_tail(tail_key, completed))
+        task.add_done_callback(lambda _: _release_redis_slot(tail_key))
         return task
+
+
+def _release_redis_slot(tail_key: tuple[str, asyncio.AbstractEventLoop]) -> None:
+    """Decrement the queued-mutation depth and re-arm the drop warning."""
+    remaining = _redis_pending.get(tail_key, 1) - 1
+    if remaining <= 0:
+        _redis_pending.pop(tail_key, None)
+        _redis_drop_warned.discard(tail_key)
+    else:
+        _redis_pending[tail_key] = remaining
+
+
+async def drain_redis_mutations(timeout: float = _DRAIN_TIMEOUT_S) -> None:
+    """Await pending Redis background mutations, up to *timeout* seconds.
+
+    Call before closing the Redis pool at shutdown so queued writes and
+    deletes land instead of dying with the loop. Tasks that outlive the
+    window keep running in the background; nothing raises here.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    pending = [
+        t for t in list(_redis_bg_tasks) if not t.done() and t.get_loop() is loop
+    ]
+    if not pending:
+        return
+    try:
+        await asyncio.wait_for(
+            asyncio.gather(*pending, return_exceptions=True), timeout=timeout
+        )
+    except TimeoutError:
+        log.debug(
+            "Redis drain timed out with %d mutations still pending.", len(pending)
+        )
 
 
 def _clear_redis_tail(

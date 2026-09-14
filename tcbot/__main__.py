@@ -31,6 +31,7 @@ from tcbot.alive import register_webhook, start_keepalive
 from tcbot.database import mtproto as mtproto_mod
 from tcbot.database import redis_client
 from tcbot.database import scheduler as sched_mod
+from tcbot.database.cache import drain_redis_mutations
 from tcbot.database.mongos import connect, ensure_indexes
 from tcbot.modules import get_handlers
 from tcbot.modules.helper.decorators import global_rate_limit_handler
@@ -329,6 +330,9 @@ async def _post_init(app: Application) -> None:
 
 async def _post_shutdown(app: Application) -> None:
     """Stop APScheduler and close Redis after the application fully shuts down."""
+    # * Drain first: queued L2 writes must land before the pool closes
+    # * underneath them; the gather below runs concurrently otherwise.
+    await drain_redis_mutations()
     await asyncio.gather(
         sched_mod.stop(),
         redis_client.close(),
