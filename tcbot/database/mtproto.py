@@ -2,18 +2,19 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""MTProto client: required Kurigram identity resolution beyond Bot API limits.
+"""MTProto clients: user session preferred, bot session guaranteed.
 
-The Bot API only knows users the bot has seen; a user-session MTProto client
-can additionally resolve silent users by ID. The session lives in MongoDB
-(``mtproto_store``), so every instance shares one authorization. API_ID and
-API_HASH are mandatory: the bot refuses to boot without them, and a stored
-session without a login is fatal too. Only transient runtime failures
-(disconnects, unknown peers, flood waits) degrade to None so moderation
-never blocks on MTProto.
+The Bot API only knows users the bot has seen. A user-session client can
+additionally resolve silent users by ID; a bot-token session covers member
+enumeration and everything the Bot API already sees, fully automatically
+(no phone, no code, no prompt ever). Both sessions live in MongoDB
+(``mtproto_store``), so every instance shares them. API_ID and API_HASH are
+mandatory: the bot refuses to boot unless at least the bot session connects.
+Only transient runtime failures (disconnects, unknown peers, flood waits)
+degrade to None so moderation never blocks on MTProto.
 
-Serverless paths never start the client: resolve_user() simply returns None
-there (and when unconfigured, which main transports forbid at boot).
+Serverless paths never start a client: resolve_user() simply returns None
+there.
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 _client: Client | None = None
+_bot_client: Client | None = None
 
 
 def is_configured() -> bool:
@@ -40,8 +42,27 @@ def is_configured() -> bool:
     return cfg.mtproto_enabled
 
 
+def _build(namespace: str, *, bot_token: str | None = None) -> Client:
+    from pyrogram import (  # noqa: PLC0415 (heavy extra; import only when configured)
+        Client,
+    )
+
+    from tcbot.database.mtproto_store import (  # noqa: PLC0415 (same; keeps startup lean)
+        MongoStorage,
+    )
+
+    kwargs: dict[str, object] = {
+        "api_id": cfg.api_id,
+        "api_hash": cfg.api_hash,
+        "storage_engine": MongoStorage(namespace),
+    }
+    if bot_token is not None:
+        kwargs["bot_token"] = bot_token
+    return Client(cfg.mtproto_session, **kwargs)  # type: ignore[arg-type]
+
+
 def client() -> Client:
-    """Return the shared unstarted MTProto client.
+    """Return the shared unstarted user-session client.
 
     Raises RuntimeError when API_ID/API_HASH are not set: MTProto is
     mandatory, so a missing configuration must fail fast, never silently
@@ -54,60 +75,85 @@ def client() -> Client:
         raise RuntimeError(
             "API_ID/API_HASH are required for MTProto identity resolution; refusing to boot degraded."
         )
-    from pyrogram import (  # noqa: PLC0415 (optional extra; import only when configured)
-        Client,
-    )
-
-    from tcbot.database.mtproto_store import (  # noqa: PLC0415 (same; keeps startup lean)
-        MongoStorage,
-    )
-
-    _client = Client(
-        cfg.mtproto_session,
-        api_id=cfg.api_id,
-        api_hash=cfg.api_hash,
-        storage_engine=MongoStorage(cfg.mtproto_session),
-    )
+    _client = _build(cfg.mtproto_session)
     return _client
 
 
-async def start() -> bool:
-    """Connect the shared client; raise RuntimeError when unusable.
+def bot_client() -> Client:
+    """Return the shared unstarted bot-token client (fully automatic login)."""
+    global _bot_client
+    if _bot_client is not None:
+        return _bot_client
+    if not cfg.mtproto_enabled:
+        raise RuntimeError(
+            "API_ID/API_HASH are required for MTProto identity resolution; refusing to boot degraded."
+        )
+    _bot_client = _build(f"{cfg.mtproto_session}:bot", bot_token=cfg.bot_token)
+    return _bot_client
 
-    Missing credentials, an unreadable store, or a session without a login
-    are all fatal: booting degraded would silently reintroduce the numeric-ID
-    displays MTProto exists to eliminate. The authorization check reads the
-    stored session only: a fresh session must never reach start(), because
-    Kurigram answers it with an interactive stdin prompt that wedges
-    headless boot forever.
+
+def _active() -> Client | None:
+    """Return the connected client, preferring the richer user session."""
+    for candidate in (_client, _bot_client):
+        if candidate is not None and candidate.is_connected:
+            return candidate
+    return None
+
+
+async def start() -> bool:
+    """Connect MTProto; raise RuntimeError unless at least the bot session runs.
+
+    The user session is preferred and needs a prior login (checked in
+    storage only, never prompting: a fresh session must never reach
+    start(), because Kurigram answers it with an interactive stdin prompt
+    that wedges headless boot forever). Whatever happens there, the bot
+    session logs in with the bot token alone, so boot always ends with a
+    working client or a loud fatal error, never a silent downgrade.
     """
+    try:
+        user_ok = await _start_user()
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.warning("MTProto user session failed; falling back to bot session: %s", exc)
+        user_ok = False
+    try:
+        await _run(bot_client())
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        raise RuntimeError(f"MTProto bot session failed: {exc}") from exc
+    log.info("MTProto connected (%s session).", "user" if user_ok else "bot")
+    return True
+
+
+async def _start_user() -> bool:
+    """Start the user client when its stored session holds a login."""
     c = client()
     if c.is_connected:
         return True
+    store = c.storage
+    await store.open()
     try:
-        store = c.storage
-        await store.open()
         authorized = bool(await store.user_id())
         if not authorized:
             authorized = await _import_legacy_file(store)
+    finally:
         await store.close()
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        raise RuntimeError(f"MTProto session unreadable: {exc}") from exc
     if not authorized:
-        raise RuntimeError(
-            "MTProto session not authorized; run python -m tcbot.database.mtproto_auth"
-            " once to log in."
+        log.warning(
+            "MTProto user session has no login; run python -m tcbot.database.mtproto_auth"
+            " once to unlock silent-user resolution. Continuing on the bot session."
         )
-    try:
-        await c.start()
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        raise RuntimeError(f"MTProto start failed: {exc}") from exc
-    log.info("MTProto connected.")
+        return False
+    await c.start()
     return True
+
+
+async def _run(c: Client) -> None:
+    """Start *c* unless already connected."""
+    if not c.is_connected:
+        await c.start()
 
 
 async def _import_legacy_file(store) -> bool:  # type: ignore[no-untyped-def]
@@ -184,33 +230,33 @@ def _update_state(  # type: ignore[no-untyped-def]
 
 
 async def stop() -> None:
-    """Disconnect the shared client; best-effort, never raises."""
-    global _client
-    c, _client = _client, None
-    if c is None:
-        return
-    try:
-        await c.stop()
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        log.debug("MTProto stop failed (non-fatal): %s", exc)
+    """Disconnect both shared clients; best-effort, never raises."""
+    global _client, _bot_client
+    clients, _client, _bot_client = (
+        [c for c in (_client, _bot_client) if c is not None],
+        None,
+        None,
+    )
+    for c in clients:
+        try:
+            await c.stop()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.debug("MTProto stop failed (non-fatal): %s", exc)
 
 
 async def resolve_user(target_id: int) -> tuple[str, str | None, str | None] | None:
     """Resolve (first_name, username, last_name) for a user ID via MTProto.
 
-    Returns None when the client is not running (serverless paths), when it
-    drops mid-run, or when the peer is unknown, rate-limited, or nameless:
-    every case just means "fall through to the next resolution source".
-    Missing credentials also mean None here; main transports refuse to boot
-    that way, so this only fires where MTProto was never required.
-    Cancellation always propagates.
+    Uses the connected client, preferring the richer user session. Returns
+    None when no client runs (serverless paths), when both drop mid-run, or
+    when the peer is unknown, rate-limited, or nameless: every case just
+    means "fall through to the next resolution source". Cancellation always
+    propagates.
     """
-    if not cfg.mtproto_enabled:
-        return None
-    c = client()
-    if not c.is_connected:
+    c = _active()
+    if c is None:
         return None
     try:
         async with asyncio.timeout(TELEGRAM_LOOKUP_TIMEOUT):
@@ -244,8 +290,8 @@ async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
     # page with smaller limits if a mega-group harvest ever too slow.
     from tcbot.database import users_cache  # noqa: PLC0415 (avoid import cycle)
 
-    c = client()
-    if not c.is_connected:
+    c = _active()
+    if c is None:
         raise RuntimeError("MTProto client is not connected.")
     count = 0
     try:

@@ -21,6 +21,7 @@ from tcbot.modules.helper import extraction
 
 def _with_creds(monkeypatch: pytest.MonkeyPatch, api_id: int, api_hash: str) -> None:
     monkeypatch.setattr(mtproto, "_client", None)
+    monkeypatch.setattr(mtproto, "_bot_client", None)
     monkeypatch.setattr(
         mtproto.cfg,
         "_c",
@@ -45,6 +46,17 @@ def test_configured_builds_singleton_without_connecting(
 
     assert first is not None
     assert mtproto.client() is first
+
+
+def test_bot_client_builds_singleton_without_connecting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _with_creds(monkeypatch, 12345, "hash")
+
+    first = mtproto.bot_client()
+
+    assert first is not None
+    assert mtproto.bot_client() is first
 
 
 class _FakeMTUser:
@@ -88,6 +100,7 @@ class _FakeClient:
         self.is_connected = connected
         self.storage = _FakeStorage(user_id)
         self._error = error
+        self._user = _FakeMTUser()
         self.start_called = False
         self.stopped = False
 
@@ -103,7 +116,7 @@ class _FakeClient:
     async def get_users(self, _user_id: int) -> Any:
         if self._error is not None:
             raise self._error
-        return _FakeMTUser()
+        return self._user
 
 
 def test_start_raises_when_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -113,48 +126,74 @@ def test_start_raises_when_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None
         asyncio.run(mtproto.start())
 
 
-def test_start_raises_on_fresh_session_without_prompting(
+def test_start_falls_back_to_bot_on_fresh_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A never-authorized session must fail fast, never reach the stdin prompt."""
+    """A never-authorized user session must never reach the stdin prompt."""
     _with_creds(monkeypatch, 12345, "hash")
-    fake = _FakeClient(connected=False, user_id=None)
-    monkeypatch.setattr(mtproto, "_client", fake)
-
-    with pytest.raises(RuntimeError, match="not authorized"):
-        asyncio.run(mtproto.start())
-    assert fake.start_called is False
-
-
-def test_start_true_when_session_authorized(monkeypatch: pytest.MonkeyPatch) -> None:
-    _with_creds(monkeypatch, 12345, "hash")
-    fake = _FakeClient(connected=False, user_id=7)
-    monkeypatch.setattr(mtproto, "_client", fake)
+    user = _FakeClient(connected=False, user_id=None)
+    bot = _FakeClient(connected=False)
+    monkeypatch.setattr(mtproto, "_client", user)
+    monkeypatch.setattr(mtproto, "bot_client", lambda: bot)
 
     assert asyncio.run(mtproto.start()) is True
-    assert fake.start_called is True
+    assert user.start_called is False
+    assert bot.start_called is True
 
 
-def test_start_raises_on_connect_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_start_prefers_authorized_user_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _with_creds(monkeypatch, 12345, "hash")
+    user = _FakeClient(connected=False, user_id=7)
+    bot = _FakeClient(connected=False)
+    monkeypatch.setattr(mtproto, "_client", user)
+    monkeypatch.setattr(mtproto, "bot_client", lambda: bot)
+
+    assert asyncio.run(mtproto.start()) is True
+    assert user.start_called is True
+    assert bot.start_called is True
+
+
+def test_start_fatal_when_bot_session_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _with_creds(monkeypatch, 12345, "hash")
+    monkeypatch.setattr(mtproto, "_client", _FakeClient(connected=False, user_id=None))
     monkeypatch.setattr(
         mtproto,
-        "_client",
-        _FakeClient(connected=False, error=RuntimeError("unauthorized")),
+        "bot_client",
+        lambda: _FakeClient(connected=False, error=RuntimeError("no network")),
     )
 
-    with pytest.raises(RuntimeError, match="MTProto start failed"):
+    with pytest.raises(RuntimeError, match="bot session failed"):
         asyncio.run(mtproto.start())
 
 
-def test_stop_clears_client(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake = _FakeClient()
-    monkeypatch.setattr(mtproto, "_client", fake)
+def test_stop_clears_both_clients(monkeypatch: pytest.MonkeyPatch) -> None:
+    user = _FakeClient()
+    bot = _FakeClient()
+    monkeypatch.setattr(mtproto, "_client", user)
+    monkeypatch.setattr(mtproto, "_bot_client", bot)
 
     asyncio.run(mtproto.stop())
 
-    assert fake.stopped is True
+    assert user.stopped is True
+    assert bot.stopped is True
     assert mtproto._client is None
+    assert mtproto._bot_client is None
+
+
+def test_resolve_prefers_user_over_bot(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_creds(monkeypatch, 12345, "hash")
+    user = _FakeClient()
+    user._user = _FakeMTUser("User", "user")
+    bot = _FakeClient()
+    bot._user = _FakeMTUser("Bot", "bot")
+    monkeypatch.setattr(mtproto, "_client", user)
+    monkeypatch.setattr(mtproto, "_bot_client", bot)
+
+    assert asyncio.run(mtproto.resolve_user(42)) == ("User", "user", None)
 
 
 def test_resolve_none_when_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
