@@ -360,11 +360,18 @@ class Check:
         """Show a single ban's full detail (text + optional Proof button)."""
         try:
             ban = await db.bans_db.get_ban(ban_id)
+        except asyncio.CancelledError:
+            raise
         except Exception:
-            # * Transient DB failure: degrade to the not-found card (same
-            # * render as a genuine miss) instead of raising out of the
-            # * callback, which would leave the tap dead with no retry hint.
-            ban = None
+            # * Transient DB failure: show a retry card that is visibly
+            # * different from the genuine not-found card, so a moderator
+            # * never mistakes an outage for a clean record.
+            text = t(
+                "checking.bans.db_fail",
+                locale,
+                ban=Safe(code(ban_id)),
+            )
+            return text, back_to_module_kb(f"check_bans:{target_id}:0", locale)
         if not ban or ban.get("banned_user_id") != target_id:
             text = t(
                 "checking.bans.not_found",

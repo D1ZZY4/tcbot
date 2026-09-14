@@ -20,11 +20,15 @@ def _expected_not_found(ban_id: str) -> str:
     return t("checking.bans.not_found", None, ban=Safe(code(ban_id)))
 
 
+def _expected_db_fail(ban_id: str) -> str:
+    return t("checking.bans.db_fail", None, ban=Safe(code(ban_id)))
+
+
 async def _fake_name(uid: int) -> str:
     return "Alice"
 
 
-def test_ban_detail_db_failure_renders_not_found(
+def test_ban_detail_db_failure_renders_retry_card(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def _boom(ban_id: str) -> object:
@@ -33,7 +37,8 @@ def test_ban_detail_db_failure_renders_not_found(
     monkeypatch.setattr(db.bans_db, "get_ban", _boom)
 
     text, _markup = asyncio.run(check_flow.Check.ban_detail(2, "abc", None))
-    assert text == _expected_not_found("abc")
+    assert text == _expected_db_fail("abc")
+    assert text != _expected_not_found("abc")
 
 
 def test_ban_detail_genuine_miss_same_render(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -76,6 +76,7 @@ active = "*Aktif*"
 inactive = "Tidak aktif"
 item = "{i}. {status} | {ban} | {ts}\n   {reason}"
 not_found = "Ban {ban} tidak ditemukan."
+db_fail = "Ban {ban} gagal dimuat. Database tidak terjangkau, coba lagi sebentar."
 
 [appeals_list]
 title = "*Banding*"

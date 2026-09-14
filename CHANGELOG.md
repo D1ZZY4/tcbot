@@ -59,7 +59,9 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **L2 writes stop stalling during a Redis outage** (`tcbot/database/cache.py`): each fire-and-forget Redis write abandons after 2 seconds instead of absorbing the 10-second socket timeout serially per queued write. Redis writes stay non-fatal background work and correctness never depends on them.
 
-- **/check drill-downs degrade instead of dying on a DB blip** (`tcbot/modules/helper/workflows/check_flow.py`): the ban-detail card and the warns-by-group list now fall back on a transient read failure, showing the not-found card or numeric chat IDs, instead of raising out of the callback and leaving the tap dead. The healthy-DB render is unchanged.
+- **/check drill-downs degrade instead of dying on a DB blip** (`tcbot/modules/helper/workflows/check_flow.py`): the warns-by-group list falls back to numeric chat IDs on a transient read failure instead of raising out of the callback and leaving the tap dead. The healthy-DB render is unchanged.
+
+- **Ban-detail outage shows a retry card instead of the not-found card** (`tcbot/modules/helper/workflows/check_flow.py`, `i18n/en-US/checking.toml`, `i18n/id/checking.toml`, `tests/test_check_degrade.py`): a database failure while opening one ban used to render exactly like a genuine miss, so a moderator could mistake an outage for a clean record. The failure now renders its own retry card in both catalogs. Behavior changes: the outage render differs from a real miss.
 
 - **Mute commits the enforcement record before the audit entry** (`tcbot/modules/helper/workflows/muting_flow.py`): the two mute writes now complete one after the other, and when the audit entry fails the just-created enforcement record is rolled back, so a mute can no longer be enforced without its audit trail and a retry starts clean.
 
