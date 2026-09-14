@@ -149,8 +149,6 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Rejection cooldown shows the correct remaining hours** (`tcbot/modules/helper/workflows/appeal_submit_flow.py`): a fresh rejection reported 25 hours remaining instead of 24, and mid-window values ran one hour high. The remaining time now rounds up to the next full hour. Behavior changes: fresh rejections show 24, near-expiry shows 1.
 
-- **`#appeal` tag requires a word boundary** (`tcbot/modules/helper/workflows/appeal_submit_flow.py`): `#appeals` and `#appealing` shared the prefix but were accepted as appeals. The gate now requires a boundary after the tag so only `#appeal` opens the flow. Behavior changes: `#appeals` alone is no longer an appeal.
-
 - **Check lists stay honest on database outages** (`tcbot/modules/helper/workflows/check_flow.py`): ban, appeal, warns-by-group, and per-chat drill-downs used dead `isinstance(..., BaseException)` checks over bare awaits, so outages left stale cards or empty views. Lists now trap failures, render a retry card on empty results, and append the incomplete-counters note otherwise. Behavior changes: outage lists never render as empty clean records.
 
 - **Helpers respect cancellation and render honestly** (`tcbot/modules/helper/decorators.py`, `locale.py`, `ban_info.py`, `replies.py`, `i18n/en-US/checking.toml`, `i18n/id/checking.toml`): per-handler rate-limit buckets now include the module, high-cardinality helper locks are bounded, locale and ban-detail renders preserve cancellation, and bandetail fallbacks localize with safe placeholders. Behavior changes: none.

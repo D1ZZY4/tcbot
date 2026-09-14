@@ -59,17 +59,8 @@ _ID_RE = re.compile(r"^/start\s+appeal_([a-z0-9]{10})$")
 
 
 def starts_with_appeal_tag(text: str) -> bool:
-    """Return True when text (stripped) starts with #appeal (case-insensitive).
-
-    ``#appeals`` and ``#appealing`` share the prefix but are not appeals,
-    so require a word boundary after the tag (space, newline, or end).
-    """
-    stripped = text.strip()
-    lower = stripped.lower()
-    if not lower.startswith("#appeal"):
-        return False
-    tail = stripped[7:]
-    return tail == "" or tail[0].isspace() or tail[0] in (":", "-", ".", ",")
+    """Return True when text (stripped) starts with #appeal (case-insensitive)."""
+    return text.strip().lower().startswith("#appeal")
 
 
 def text_references_log_message(text: str, msg_id: int) -> bool:
