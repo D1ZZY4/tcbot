@@ -268,9 +268,17 @@ class BuildConnection:
             else None
         )
         if isinstance(ban_uids, BaseException):
+            log.error(
+                "active_ban_user_ids failed for new chat %d: %s", chat_id, ban_uids
+            )
             ban_uids = []
+            replay_blind = True
+        else:
+            replay_blind = False
         if isinstance(mute_docs, BaseException):
+            log.error("active_mute_docs failed for new chat %d: %s", chat_id, mute_docs)
             mute_docs = []
+            replay_blind = True
 
         # * Harvest admin identities into the member cache (fire-and-forget, best-effort).
         # * Strong reference kept in _harvest_tasks to prevent GC before completion.
@@ -309,6 +317,14 @@ class BuildConnection:
             applied_bans,
             applied_mutes,
         )
+        if replay_blind:
+            # * A fetch outage above means the replay ran on an empty list:
+            # * loud so the next /tcsync (or re-add) closes the gap instead
+            # * of the info line above reading as a clean bill of health.
+            log.error(
+                "Group %d connected BLIND: enforcement replay ran without ban/mute data.",
+                chat_id,
+            )
 
     # ── PTB event handlers ─────────────────────────────────────────────────
 

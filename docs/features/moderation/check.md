@@ -118,8 +118,10 @@ Bans: N total, page p/P
 
 Two-level drill-down because warnings are per-group:
 
-1. `Check.warns_by_group` lists groups where the user has warns, with the count and a button per group. Group titles come from `groups_db.get_group_titles`.
+1. `Check.warns_by_group` lists groups where the user has warns, with the count and a button per group. Group titles come from `groups_db.get_group_titles`. A database failure renders the `checking.warns.db_fail` retry card instead of the empty list, so an outage is never mistaken for a clean record.
 2. `Check.warns_in_group` paginates the individual warnings inside the chosen chat: timestamp, reason snippet, and the admin who issued the warning.
+
+Bans, appeals, per-chat warns, kicks, and mutes lists append the shared `checking.profile.caveat` incomplete-counters note whenever the total read fails, so staff know the header total may be short. Healthy-database rendering is unchanged.
 
 ### Kicks (`check_kicks:<target_id>:<page>`)
 

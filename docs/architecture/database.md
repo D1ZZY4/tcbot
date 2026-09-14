@@ -627,7 +627,7 @@ Member-cache cleanup is handled by the MongoDB TTL index on `last_updated` (`exp
 
 Persistent per-ban unban jobs: there are NONE in the current code. The scheduler registers only the two periodic jobs above (plus the legacy removal). There is no `DateTrigger` usage and no per-ban unban/untimed job API in `scheduler.py`; the module docstring's mention of "timed-ban" support refers to reserved `BanDoc.until_date`/`duration_str` fields that are always `None` today. No unban-job DateTrigger scheme exists to reproduce in the rewrite.
 
-Scheduler error behavior: a background-task crash sets `_sched_error`, unblocks `start()` (so it never hangs forever), and `start()` re-raises as `RuntimeError`. `expire_old_warns` logs per-collection delete failures (a cancelled expiry propagates via `throw_if_cancelled` rather than reporting success). `_run_scheduled_sync` logs the failure and returns; the next interval re-drives, so one bad run never wedges the schedule.
+Scheduler error behavior: a background-task crash sets `_sched_error`, unblocks `start()` (so it never hangs forever), and `start()` re-raises as `RuntimeError`. `expire_old_warns` logs per-collection delete failures, and a partial run (one collection failed) logs the completion line at error level with an incomplete marker instead of a clean info line (a cancelled expiry propagates via `throw_if_cancelled` rather than reporting success). `_run_scheduled_sync` logs the failure and returns; the next interval re-drives, so one bad run never wedges the schedule.
 
 ## Startup indexes
 

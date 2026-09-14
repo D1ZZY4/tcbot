@@ -49,6 +49,7 @@ empty = "Belum ada grup terhubung yang dikonfigurasi."
 none = "PERINGATAN: ban tidak ditegakkan di grup mana pun ({total}/{total} gagal). Cek hak admin bot di: {sample}{more}"
 partial = "Diterapkan ke {done}/{total} grup ({failed} gagal: {sample}{more}"
 full = "Diterapkan ke {total}/{total} grup."
+scope_warn = " PERINGATAN: daftar grup gagal dimuat, jadi sebagian grup mungkin terlewat. Cek log lalu ban ulang manual dengan /tcban bila perlu."
 
 [pm]
 body = "Kamu di-ban dari {community} se-federasi.\nAlasan: {reason}\n\nKamu bisa mengajukan banding lewat tombol di bawah."

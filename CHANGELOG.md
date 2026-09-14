@@ -95,6 +95,28 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **A cancelled mute stops instead of rendering as a database outage** (`tcbot/modules/helper/workflows/muting_flow.py`, `tests/test_mute_partial_failure.py`): the broad write-failure handler used to catch task cancellation and show the database-failure card with a rollback attempt. Cancellation now propagates immediately so shutdown or an operator cancel is never mistaken for an outage. Behavior changes: a cancelled mute no longer edits the prompt and never touches the rollback path.
 
+- **Appeal Reject button reaches the review handler** (`tcbot/modules/helper/keyboards.py`, `docs/reference/keyboard-styles.md`, `tests/test_keyboards.py`): the Reject button used a colon separator the handler never matched, so Reject taps died while Approve worked. Both buttons now use the underscore shape the handler parses. Behavior changes: Reject taps now open the review decision; keyboards sent before this fix still carry the old shape.
+
+- **Ban summary warns when the group list cannot load** (`tcbot/modules/helper/workflows/ban_flow.py`, `i18n/en-US/banning.toml`, `i18n/id/banning.toml`): a database failure while loading connected groups used to enforce on an empty list and report a clean partial summary. The summary now adds a warning line asking staff to check logs and re-ban manually. Behavior changes: the applied line gains a warning sentence only on fetch failure.
+
+- **Appeal review keeps the card on a database failure** (`tcbot/modules/helper/workflows/appeal_review_flow.py`, `tests/test_appeal_review_degrade.py`): a failed ban read used to edit the shared review card into a not-found state, destroying an undecided review. The handler now answers with a retry notice and leaves the card untouched. Behavior changes: outage taps no longer edit the card.
+
+- **/check warning groups show a retry card on outage** (`tcbot/modules/helper/workflows/check_flow.py`, `i18n/en-US/checking.toml`, `i18n/id/checking.toml`, `tests/test_check_degrade.py`): a database failure used to fall through toward the empty list. The view now renders its own retry card so an outage is never mistaken for a clean record. Behavior changes: outage render differs from a real empty list.
+
+- **/check drill-downs note incomplete counters** (`tcbot/modules/helper/workflows/check_flow.py`): bans, appeals, per-chat warns, kicks, and mutes lists now append the shared incomplete-counters note whenever the total read fails, so staff know the header total may be short. Healthy-database rendering is unchanged.
+
+- **Warn expiry logs partial runs as errors** (`tcbot/database/scheduler.py`): when one of the two expiry deletes fails, the completion line now logs at error level with an incomplete marker instead of a clean info line. Counts unchanged.
+
+- **New-group replay logs a blind run** (`tcbot/modules/helper/workflows/connected_flow.py`): when the ban or mute fetch fails during connect, the replay still runs on an empty list and now logs an error naming the blind group, so the next sync closes the gap instead of the info line reading as healthy.
+
+- **Unmute clears the record before announcing** (`tcbot/modules/helper/workflows/muting_flow.py`): the record clear used to run in parallel with the log send and reply, so a failed clear still announced a successful unmute. The clear now runs first and aborts with a retry reply on failure. Behavior changes: a failed clear no longer sends the success message.
+
+- **Proof upload falls back to documents after a gallery failure** (`tcbot/modules/helper/workflows/proof_flow.py`): a failed photo gallery upload used to discard already collected file evidence and return with no proof link. The uploader now continues to the document loop so file proof still lands. Behavior changes: gallery-outage bans keep their file proof.
+
+- **Unban log names anonymous admins honestly** (`tcbot/modules/helper/workflows/unban_flow.py`): an unban run by an anonymous admin used to attribute the action to the target, reading as a self-unban. The log now attributes it to an anonymous admin. Behavior changes: log admin line differs for anonymous-admin runs.
+
+- **Warn auto-ban stops when the role lookup fails** (`tcbot/modules/helper/workflows/warning_flow.py`, `tests/test_warn_autoban_guard.py`): a failed role read used to proceed as if the target held no role, risking an auto-ban on an exempt staffer. The run now aborts with a retry reply and the persisted warn count re-fires the threshold on the next warn. Behavior changes: outage warns skip this auto-ban instead of enforcing it.
+
 ### Documentation
 
 - **Warn-limit trigger documented as `>=`** (`tcbot/__init__.py`, `tcbot/modules/helper/workflows/warning_flow.py`): the `warn_limit` property docstring and the `_execute_warn_auto_ban` role-lookup comment described the trigger as `==` (exact equality), contradicting the deliberate `>=` implementation. Both texts now describe the "reaches or exceeds" semantics and why a `==` trigger would wedge the retry after a total enforcement failure. No behavior changes.
@@ -106,6 +128,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 - **Full coverage of the documentation tree** (`docs/README.md`): the index lists every guide under `docs/` in its category, and every cross-reference across the documentation resolves to a real page and section header, so readers never land on a missing page. Behavior changes: none.
 
 - **CI guide drops the retired timeout variables and covers the checks job** (`docs/operations/ci-cd.md`): the runner secret list no longer names the removed proof/appeal timeout settings, and the Lint section documents the second job that executes the behavioral checks, so the guide matches the workflows that actually run.
+
+- **Docs catch up with the failure-hardening batch** (`docs/features/appeals.md`, `moderation/check.md`, `banning.md`, `warnings.md`, `muting.md`, `unbanning.md`, `connecting.md`, `docs/architecture/workflows.md`, `database.md`): appeal review keeps the card on a ban-read outage, /check warns-by-group shows its retry card plus the shared incomplete-counters note on every drill-down, ban summaries warn on an unloadable group list, warn auto-ban aborts when the role read fails, unmute clears before announcing, proof galleries fall back to documents, unban logs name anonymous admins, connect replays log blind runs, and warn expiry marks partial runs as errors. Behavior changes: none, docs only.
 
 </details>
 

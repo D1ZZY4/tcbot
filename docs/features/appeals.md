@@ -124,10 +124,8 @@ The review card contains two inline buttons:
 Both callbacks use the underscore-delimited `<action>_<ban_id>` shape that
 the handler registers and parses (`appeals.py` pattern
 `^appeal_(approve|reject)_\S+$`; `appeal_review_flow.py` slices the tail
-after `appeal_reject_`). Known defect: `keyboards.appeal_review_kb()` builds
-the Reject button with a colon separator (`appeal_reject:<ban_id>`) instead
-of the underscore form, which fails the handler pattern — the rewrite must
-emit the underscore variant above.
+after `appeal_reject_`). Both `keyboards.appeal_review_kb()` buttons emit
+this underscore shape, so Approve and Reject taps reach the review handler.
 
 The DM instruction message has a cancel button:
 
@@ -179,6 +177,7 @@ for staff:
 - Taps inside the 12-hour banning-admin priority window by a different admin.
 - Repeat taps after the appeal was already decided (the winner's verdict edit is preserved).
 - Taps during a role-lookup outage.
+- Taps when the ban read fails (`appeals.review.db_retry` popup, card untouched for a re-tap).
 
 The only resolved tap that edits the card is a stale one: an inactive ban
 that still carries a live review marker (left behind by a manual `/tcunban`,

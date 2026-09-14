@@ -165,13 +165,16 @@ class AppealReviewMixin:
             return
         if isinstance(ban_result, BaseException):
             log.error("get_ban failed in appeal review for %s: %s", ban_id, ban_result)
+            # * Same rule as the role lookup above: never edit the shared
+            # * review card on an unmade decision. A transient read failure
+            # * is not evidence the ban is gone.
             try:
-                await q.edit_message_text(
-                    t("appeals.review.ban_not_found", locale, plain=True),
-                    reply_markup=None,
+                await q.answer(
+                    t("appeals.review.db_retry", locale, plain=True),
+                    show_alert=True,
                 )
             except Exception as exc:
-                log.debug("Appeal ban-not-found edit failed: %s", exc)
+                log.debug("Appeal ban-retry answer failed: %s", exc)
             return
         if not ban_result:
             try:

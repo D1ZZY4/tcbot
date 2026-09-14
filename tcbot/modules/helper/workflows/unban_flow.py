@@ -172,13 +172,15 @@ async def execute_unban(
     ]
 
     lc, lt = cfg.logs
-    # * effective_user can be None for anonymous admins; fall back to target info.
+    # * effective_user can be None for anonymous admins; attribute the action
+    # * to an anonymous admin rather than to the target, which would read as
+    # * a self-unban in the audit trail.
     if admin is not None:
         _log_admin_id: int = admin.id
         _log_admin_fname: str = admin.first_name
     else:
-        _log_admin_id = target_id
-        _log_admin_fname = target_fname
+        _log_admin_id = 0
+        _log_admin_fname = "anonymous admin"
     log_text = parse_logmsg.unban_log(
         target_id,
         target_fname,

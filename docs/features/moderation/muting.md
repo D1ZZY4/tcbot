@@ -183,10 +183,10 @@ The fan-out errors are counted but do not roll back the DB mute record; group co
 `execute_unmute` is the unmute executor:
 
 1. Guard: `db.mutes_db.get_active_mute(target_id)` must return a record. If `None`, reply `<user> has no active federation mute.` and stop. This guard prevents a misleading "restored N/N groups" reply for a no-op.
-2. Build the full-perms `ChatPermissions` with all messaging permissions enabled.
-3. Fan `restrict_chat_member(chat_id, target_id, permissions=full_perms)` across the same group list used by `execute_mute`.
-4. Run three parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
-   - `db.mutes_db.clear_active_mute(target_id)`.
+2. Clear the active-mute record with `db.mutes_db.clear_active_mute(target_id)` first. A clear failure aborts with a retry reply and no success message, so a failed clear never announces a restored user.
+3. Build the full-perms `ChatPermissions` with all messaging permissions enabled.
+4. Fan `restrict_chat_member(chat_id, target_id, permissions=full_perms)` across the same group list used by `execute_mute`.
+5. Run two parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
    - `bot.send_message(cfg.logs, unmute_log, ...)`.
    - `msg.reply_text(reply, ...)`.
 

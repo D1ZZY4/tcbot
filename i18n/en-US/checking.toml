@@ -96,6 +96,7 @@ in_title = "*Warnings in* {title}"
 in_empty = "*Warnings in* {title}\n\nNo warning records here."
 in_header = "*Warnings in* {title}: {n} total, page {page}/{pages}"
 in_item = "{i}. {ts}\n   {reason}\n   By {admin}"
+db_fail = "Could not load warning groups. The database is unreachable, try again in a bit."
 
 [events]
 empty = "{heading}\n\nNo {lower} records for {user}."

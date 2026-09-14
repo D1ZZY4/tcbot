@@ -114,12 +114,20 @@ async def expire_old_warns(warn_expiry_days: int) -> None:
     warns_del = (
         warns_res.deleted_count if not isinstance(warns_res, BaseException) else 0
     )
-    log.info(
-        "Warn expiry: removed %d warn_count and %d warn records older than %d days.",
-        counts_del,
-        warns_del,
-        warn_expiry_days,
-    )
+    if isinstance(counts_res, BaseException) or isinstance(warns_res, BaseException):
+        log.error(
+            "Warn expiry incomplete: removed %d warn_count and %d warn records older than %d days; see errors above.",
+            counts_del,
+            warns_del,
+            warn_expiry_days,
+        )
+    else:
+        log.info(
+            "Warn expiry: removed %d warn_count and %d warn records older than %d days.",
+            counts_del,
+            warns_del,
+            warn_expiry_days,
+        )
 
 
 async def _cleanup_old_records() -> None:

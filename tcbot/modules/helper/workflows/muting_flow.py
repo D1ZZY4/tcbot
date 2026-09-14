@@ -461,10 +461,24 @@ async def execute_unmute(
         total=len(groups),
     )
 
-    # * Clear active mute record, send log to channel, and reply - all in parallel
+    # * Clear the active mute record BEFORE announcing: the reply below
+    # * claims the user is restored, which is only true once the record is
+    # * gone (a later /tcmute or /check reads it). A failed clear aborts
+    # * with a retry reply instead of a false success; the log send and the
+    # * user reply stay parallel after that.
+    try:
+        await db.mutes_db.clear_active_mute(target_id)
+    except Exception:
+        log.exception("clear_active_mute failed for target=%d", target_id)
+        await safe_reply(
+            msg,
+            replies.err_db_retry(locale, plain=True),
+            log_label="execute_unmute clear-failed",
+            parse_mode=None,
+        )
+        return
     if lc:
         results2 = await asyncio.gather(
-            db.mutes_db.clear_active_mute(target_id),
             ctx.bot.send_message(
                 lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
             ),
@@ -472,25 +486,14 @@ async def execute_unmute(
             return_exceptions=True,
         )
         if isinstance(results2[0], BaseException):
-            log.error(
-                "clear_active_mute failed for target=%d: %s", target_id, results2[0]
-            )
+            log.error("Unmute log send failed: %s", results2[0])
         if isinstance(results2[1], BaseException):
-            log.error("Unmute log send failed: %s", results2[1])
-        if isinstance(results2[2], BaseException):
-            log.debug("execute_unmute reply failed: %s", results2[2])
+            log.debug("execute_unmute reply failed: %s", results2[1])
     else:
-        results2 = await asyncio.gather(
-            db.mutes_db.clear_active_mute(target_id),
-            msg.reply_text(reply, parse_mode="MarkdownV2"),
-            return_exceptions=True,
-        )
-        if isinstance(results2[0], BaseException):
-            log.error(
-                "clear_active_mute failed for target=%d: %s", target_id, results2[0]
-            )
-        if isinstance(results2[1], BaseException):
-            log.debug("execute_unmute no-log reply failed: %s", results2[1])
+        try:
+            await msg.reply_text(reply, parse_mode="MarkdownV2")
+        except Exception as exc:
+            log.debug("execute_unmute no-log reply failed: %s", exc)
 
 
 # ──────────────────────── Executor adapter ──────────────────────── #

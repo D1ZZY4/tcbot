@@ -141,3 +141,14 @@ def test_main_menu_options_are_primary() -> None:
     assert rows[-1] == [
         ("Language", "language_menu", None, KeyboardButtonStyle.PRIMARY)
     ]
+
+
+def test_appeal_review_kb_matches_handler_pattern() -> None:
+    """Both verdict buttons must use the underscore shape the handler parses."""
+    rows = _cells(kb.appeal_review_kb("abc123", "en-US"))
+    callbacks = [rows[0][0][1], rows[0][1][1]]
+    assert callbacks == ["appeal_approve_abc123", "appeal_reject_abc123"]
+    for callback in callbacks:
+        assert isinstance(callback, str)
+        assert callback.startswith(("appeal_approve_", "appeal_reject_"))
+        assert ":" not in callback
