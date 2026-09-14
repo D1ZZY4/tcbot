@@ -16,7 +16,7 @@ This page maps the repository structure and the service boundaries between packa
 ├── tcbot/                  Main Python package
 ├── api/                    Vercel serverless endpoints (webhook, cron)
 ├── docs/                   Documentation grouped by purpose
-├── i18n/                   Translation catalogs (en-US locale source-truth)
+├── i18n/                   Translation catalogs (en-US source, id mirror)
 ├── tests/                  Pytest test suite
 ├── .github/                GitHub Actions workflows + dependabot config
 ├── .agents/                Maintainer and agent rules and skills
@@ -29,6 +29,9 @@ This page maps the repository structure and the service boundaries between packa
 ├── README.md               Project overview
 ├── CONTRIBUTING.md         Contribution workflow and review checklist
 ├── AGENTS.md               Maintainer and agent project guide
+├── CLAUDE.md               Symlink to AGENTS.md
+├── PROMPT.md               Bootstrap prompt
+├── SECURITY.md             Security policy
 ├── replit.md               Replit deployment notes
 ├── CHANGELOG.md            Version history
 ├── docker-compose.yml      Bot + MongoDB + Redis local stack

@@ -2,7 +2,7 @@
 
 The database layer lives in `tcbot/database/` and is the only place that should perform MongoDB reads and writes. Command modules and workflows call helper functions instead of calling `mongos.col()` directly.
 
-This document is the reference spec for the TypeScript/grammY rewrite of the database layer. Every collection, index, helper signature, cache behavior, and scheduler detail below is taken from the current `tcbot/database/` Python code and should be reproduced exactly in the new implementation.
+This document is the reference spec for the Python database layer. Every collection, index, helper signature, cache behavior, and scheduler detail below is taken from the current `tcbot/database/` Python code.
 
 For modules that consume these database helpers, see [`modules.md`](modules.md). For shared helpers, see [`helpers.md`](helpers.md). For conversation flows, see [`workflows.md`](workflows.md).
 

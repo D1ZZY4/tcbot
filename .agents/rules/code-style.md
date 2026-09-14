@@ -176,9 +176,8 @@ Help and keyboards:
   `[section]`, `[context]`, `[target]`): labels render raw, bodies
   render MarkdownV2. Use `who_section` / `where_section` /
   `target_section` with the locale.
-- Every keyboard builder in `keyboards.py` takes `locale` and reads
-  labels from `button.toml`; thread the handler locale through every
-  call site.
+- Every locale-dependent keyboard builder in `keyboards.py` takes `locale` and reads
+  labels from `button.toml`; `help_topics_kb` is locale-independent. Thread the handler locale through every call site.
 
 ## Database and Cache Access
 
@@ -201,7 +200,7 @@ Help and keyboards:
 - Flow files use the `*_flow.py` suffix. Never create `*_conv.py` files.
 - Kick, mute, and warn use `reason_flow.build_modaction_conv()`.
 - Ban uses `ban_flow.ban_conversation()`.
-- Appeals use `appeal_flow.build_handler()`.
+- Appeals use `BuildAppeal(...).build_handler()`.
 - New standalone flows should model `appeal_flow.py`.
 - Every flow has a cancel fallback.
 - Use `WAITING_*` state constants.
