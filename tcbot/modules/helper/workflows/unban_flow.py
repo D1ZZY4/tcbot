@@ -59,11 +59,27 @@ async def execute_unban(
     locale = await locale_for_update(update)
 
     # * Use the caller-supplied record when available; fall back to a DB fetch.
+    # * A failed read fails closed with a retry reply: treating an outage
+    # * as "no active ban" would refuse a legitimate unban with no recourse.
     ban: docs.BanDoc | None
     if pre_ban is not None:
         ban = pre_ban
     else:
-        ban = await db.bans_db.get_active_ban(target_id)
+        try:
+            ban = await db.bans_db.get_active_ban(target_id)
+        except Exception:
+            log.exception("get_active_ban failed during unban of %d", target_id)
+            if msg is not None:
+                await safe_reply(
+                    msg,
+                    t(
+                        "unbanning.note.read_fail",
+                        locale,
+                        user=Safe(user_ref(target_id, target_fname)),
+                    ),
+                    log_label="Unban read-fail",
+                )
+            return
 
     if not ban:
         if msg is not None:
@@ -105,24 +121,25 @@ async def execute_unban(
 
     # * Deactivate ALL active bans for this user (not only the one found by
     # * get_active_ban). This is the single authoritative DB write for the unban.
-    deactivate_r = await db.bans_db.deactivate_all_active_bans(target_id)
-    # ! CRITICAL: a cancelled deactivation must propagate instead of being
-    # ! reported as a DB failure; shutdown must not render as a verdict.
-    if isinstance(deactivate_r, asyncio.CancelledError):
-        raise deactivate_r
-    if isinstance(deactivate_r, BaseException):
-        # * The DB deactivation is the only authoritative state write for the
-        # * unban. If it fails, the user is still banned in the DB even if
-        # * we proceed to unban from chats. This produces a split-brain state
-        # * that `get_active_ban` will treat as still banned, so the join-auto-
-        # * ban path in `greeting.py` will re-ban the user the next time they
-        # * join. Do not produce a false "unbanned" reply: bail out and tell
-        # * the operator that manual cleanup is needed.
+    # * The DB deactivation is the only authoritative state write for the
+    # * unban. If it fails, the user is still banned in the DB even if
+    # * we proceed to unban from chats. This produces a split-brain state
+    # * that `get_active_ban` will treat as still banned, so the join-auto-
+    # * ban path in `greeting.py` will re-ban the user the next time they
+    # * join. Do not produce a false "unbanned" reply: bail out and tell
+    # * the operator that manual cleanup is needed.
+    try:
+        await db.bans_db.deactivate_all_active_bans(target_id)
+    except asyncio.CancelledError:
+        # ! CRITICAL: a cancelled deactivation must propagate instead of being
+        # ! reported as a DB failure; shutdown must not render as a verdict.
+        raise
+    except Exception as exc:
         log.error(
             "deactivate_all_active_bans failed for user=%d; aborting unban to "
             "avoid split-brain state: %s",
             target_id,
-            deactivate_r,
+            exc,
         )
         if msg is not None:
             await safe_reply(

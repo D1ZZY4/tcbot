@@ -258,6 +258,24 @@ def test_non_default_locales_subset_default_keys() -> None:
         assert set(keys) <= default_keys, locale
 
 
+def test_non_default_locales_match_default_placeholders() -> None:
+    """Every translated template must take exactly the default placeholders.
+
+    A missing placeholder silently drops data; an extra one raises
+    I18nError at send time. Both are translator errors CI must catch,
+    since the engine falls back per key, not per placeholder.
+    """
+    catalog = _catalog()
+    default = catalog[DEFAULT_LOCALE]
+    for locale, keys in catalog.items():
+        if locale == DEFAULT_LOCALE:
+            continue
+        for key, template in keys.items():
+            assert placeholders(template) == placeholders(default[key]), (
+                f"{locale}:{key}"
+            )
+
+
 # ─────────────────────── Locale resolution ──────────────────────── #
 
 

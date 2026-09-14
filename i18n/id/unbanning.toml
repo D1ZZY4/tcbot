@@ -29,6 +29,7 @@ Atau balas sebuah pesan lalu jalankan `/tcunb`."""
 
 [note]
 no_record = "{user} tidak punya ban federasi aktif."
+read_fail = "{user} tidak bisa di-unban: catatan ban gagal dibaca dari database, jadi tidak ada yang diubah. Cek log lalu coba lagi."
 groups_fail = "{user} tidak bisa di-unban: daftar grup gagal dimuat dari database, jadi tidak ada yang diubah. Cek log lalu coba lagi."
 db_fail = "{user} tidak bisa di-unban: penonaktifan database gagal, jadi pengguna masih ditandai di-ban walau ia sudah di-unmute di chat. Cek log lalu coba lagi."
 partial = "dihapus dari {done}/{total} grup. PERINGATAN: masih di-ban di: {sample}{more}"

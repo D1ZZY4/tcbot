@@ -131,6 +131,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Blind group connect warns the owner** (`tcbot/modules/helper/workflows/connected_flow.py`, `i18n/en-US/connecting.toml`, `i18n/id/connecting.toml`): the blind-replay honesty lived only in the server log while the owner prompt confirmed success. `complete_join` now reports the blind run and both entry points render a warning prompt asking for a `/tcsync` instead. Behavior changes: outage connects show the warning prompt, not the success text.
 
+- **Unban fails closed on every DB read and write** (`tcbot/modules/helper/workflows/unban_flow.py`, `i18n/en-US/unbanning.toml`, `i18n/id/unbanning.toml`, `tests/test_unban_flow.py`, `tests/test_unmute_flow.py`, `tests/test_i18n.py`): the ban-record read had no failure path and the deactivation failure reply sat behind dead exception-shape checks, so outages propagated with no actionable reply. Reads and writes now abort with retry replies, and new tests pin the unban, unmute clear-first, and locale placeholder-parity contracts.
+
 ### Documentation
 
 - **Warn-limit trigger documented as `>=`** (`tcbot/__init__.py`, `tcbot/modules/helper/workflows/warning_flow.py`): the `warn_limit` property docstring and the `_execute_warn_auto_ban` role-lookup comment described the trigger as `==` (exact equality), contradicting the deliberate `>=` implementation. Both texts now describe the "reaches or exceeds" semantics and why a `==` trigger would wedge the retry after a total enforcement failure. No behavior changes.
