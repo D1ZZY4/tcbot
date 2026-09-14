@@ -50,13 +50,33 @@ def client() -> Client | None:
 
 
 async def start() -> bool:
-    """Connect the shared client; return False (never raise) when unusable."""
+    """Connect the shared client; return False (never raise) when unusable.
+
+    The authorization check reads the local session file only: a fresh
+    session must never reach start(), because Kurigram answers it with an
+    interactive stdin prompt that wedges headless boot forever.
+    """
     c = client()
     if c is None:
         log.info("MTProto not configured; identity lookups use Bot API only.")
         return False
     if c.is_connected:
         return True
+    try:
+        await c.storage.open()
+        authorized = bool(await c.storage.user_id())
+        await c.storage.close()
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.warning("MTProto session unreadable; continuing without it: %s", exc)
+        return False
+    if not authorized:
+        log.warning(
+            "MTProto session not authorized; run python -m tcbot.database.mtproto_auth"
+            " once and redeploy the .session file. Continuing without MTProto."
+        )
+        return False
     try:
         await c.start()
     except asyncio.CancelledError:

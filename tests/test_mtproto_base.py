@@ -61,15 +61,34 @@ class _FloodWait(Exception):
         self.value = 5
 
 
+class _FakeStorage:
+    def __init__(self, user_id: int | None = 7) -> None:
+        self._user_id = user_id
+
+    async def open(self) -> None:
+        return None
+
+    async def close(self) -> None:
+        return None
+
+    async def user_id(self) -> int | None:
+        return self._user_id
+
+
 class _FakeClient:
     """Kurigram client double: never touches the network."""
 
-    def __init__(self, *, connected: bool = True, error: Any = None) -> None:
+    def __init__(
+        self, *, connected: bool = True, error: Any = None, user_id: int | None = 7
+    ) -> None:
         self.is_connected = connected
+        self.storage = _FakeStorage(user_id)
         self._error = error
+        self.start_called = False
         self.stopped = False
 
     async def start(self) -> None:
+        self.start_called = True
         if self._error is not None:
             raise self._error
         self.is_connected = True
@@ -87,6 +106,27 @@ def test_start_false_when_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
     _with_creds(monkeypatch, 0, "")
 
     assert asyncio.run(mtproto.start()) is False
+
+
+def test_start_false_on_fresh_session_without_prompting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A never-authorized session must fail fast, never reach the stdin prompt."""
+    _with_creds(monkeypatch, 12345, "hash")
+    fake = _FakeClient(connected=False, user_id=None)
+    monkeypatch.setattr(mtproto, "_client", fake)
+
+    assert asyncio.run(mtproto.start()) is False
+    assert fake.start_called is False
+
+
+def test_start_true_when_session_authorized(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_creds(monkeypatch, 12345, "hash")
+    fake = _FakeClient(connected=False, user_id=7)
+    monkeypatch.setattr(mtproto, "_client", fake)
+
+    assert asyncio.run(mtproto.start()) is True
+    assert fake.start_called is True
 
 
 def test_start_false_on_auth_failure(monkeypatch: pytest.MonkeyPatch) -> None:

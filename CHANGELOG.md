@@ -13,6 +13,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **One-time MTProto session authorization** (`tcbot/database/mtproto_auth.py`, `docs/getting-started/setup.md`, `tests/test_mtproto_auth.py`): run the module with the account phone number, enter the login code (plus 2FA password when set), and the session file lands next to `config.env` ready to deploy. Wrong codes, expired codes, and bad passwords fail with a plain message and a nonzero exit. Behavior changes: none.
 
+- **Boot no longer wedges on a fresh MTProto session** (`tcbot/database/mtproto.py`, `tests/test_mtproto_base.py`): starting with an unauthorized session used to reach Kurigram's interactive stdin prompt, leaving the bot alive but never serving. Startup now reads the local session file first and fails soft with the exact authorize command when no login exists. Behavior changes: unauthorized sessions skip MTProto instead of hanging boot.
+
 - **CI runs the behavioral checks on every change** (`.github/workflows/lint.yml`): the lint workflow gains a second job that installs from the lockfile and executes the repository's checks with the same dummy `BOT_TOKEN` / `MONGODB_URI` / `OWNER_ID` env as the lint job, so behavioral regressions can no longer merge silently.
 
 - **Redis liveness tracked from cache operations** (`tcbot/database/redis_client.py`, `tcbot/database/cache.py`): every Redis read and write reports its outcome to a last-known-health flag the health endpoint reads, so an operator sees the real picture even though the Flask health check cannot await a live probe.
