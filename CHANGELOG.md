@@ -15,6 +15,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Boot no longer wedges on a fresh MTProto session** (`tcbot/database/mtproto.py`, `tests/test_mtproto_base.py`): starting with an unauthorized session used to reach Kurigram's interactive stdin prompt, leaving the bot alive but never serving. Startup now reads the local session file first and fails soft with the exact authorize command when no login exists. Behavior changes: unauthorized sessions skip MTProto instead of hanging boot.
 
+- **Startup no longer warns about valid log-channel IDs** (`tcbot/utils/error_reporter.py`, `tests/test_error_reporter_attach.py`): the attach check treated every non-positive channel ID as unset, so a correctly configured group/channel destination logged a scary but wrong "shipping disabled" warning on every boot. Only a truly unset zero ID warns now. Behavior changes: none, reports always shipped to negative IDs.
+
 - **CI runs the behavioral checks on every change** (`.github/workflows/lint.yml`): the lint workflow gains a second job that installs from the lockfile and executes the repository's checks with the same dummy `BOT_TOKEN` / `MONGODB_URI` / `OWNER_ID` env as the lint job, so behavioral regressions can no longer merge silently.
 
 - **Redis liveness tracked from cache operations** (`tcbot/database/redis_client.py`, `tcbot/database/cache.py`): every Redis read and write reports its outcome to a last-known-health flag the health endpoint reads, so an operator sees the real picture even though the Flask health check cannot await a live probe.
