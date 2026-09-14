@@ -9,7 +9,7 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Added
 
-- **MTProto base ready for future lookups** (`tcbot/__init__.py`, `tcbot/database/mtproto.py`, `config.env.example`, `tests/test_mtproto_base.py`): optional `API_ID` / `API_HASH` settings plus a lazy shared client that stays `None` until both are set, so the bot runs exactly as before without them. Not wired into extraction yet. Behavior changes: none.
+- **MTProto identity resolution beyond Bot API limits** (`tcbot/database/mtproto.py`, `tcbot/__init__.py`, `tcbot/__main__.py`, `tcbot/modules/helper/extraction.py`, `config.env.example`, `docs/getting-started/setup.md`, `tests/test_mtproto_base.py`): optional `API_ID` / `API_HASH` settings with a lazy shared client that starts at boot and stops at shutdown. Silent-user lookups now try one MTProto peer resolve before the multi-group sweep, and results flow into the existing identity cache. Unconfigured deployments behave exactly as before. Behavior changes: none when unconfigured.
 
 - **CI runs the behavioral checks on every change** (`.github/workflows/lint.yml`): the lint workflow gains a second job that installs from the lockfile and executes the repository's checks with the same dummy `BOT_TOKEN` / `MONGODB_URI` / `OWNER_ID` env as the lint job, so behavioral regressions can no longer merge silently.
 

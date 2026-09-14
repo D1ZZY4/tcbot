@@ -388,6 +388,14 @@ async def _fetch_live_identity(
         lname = getattr(chat, "last_name", None)
 
     if not fname:
+        # * MTProto fallback before the group sweep: one peer lookup instead
+        # * of up to N group probes. Silent None when unconfigured, so the
+        # * sweep below runs exactly as before.
+        mt_hit = await db.mtproto.resolve_user(target_id)
+        if mt_hit is not None:
+            return mt_hit
+
+    if not fname:
         groups = await db.groups_db.active_groups()
         sem = asyncio.Semaphore(_RESOLVE_SWEEP_CONCURRENCY)
 

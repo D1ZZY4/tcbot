@@ -9,6 +9,7 @@ from __future__ import annotations
 from . import bans_db as bans_db
 from . import groups_db as groups_db
 from . import kicks_db as kicks_db
+from . import mtproto as mtproto
 from . import mutes_db as mutes_db
 from . import queues_db as queues_db
 from . import redis_client as redis_client
@@ -22,6 +23,7 @@ __all__ = [
     "bans_db",
     "groups_db",
     "kicks_db",
+    "mtproto",
     "mutes_db",
     "queues_db",
     "redis_client",

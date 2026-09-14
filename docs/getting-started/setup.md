@@ -140,6 +140,9 @@ PROOFS="-1001234567890"
 | `APPEAL_LOG_HANDLE` | No | channel handle | Displayed in appeal instructions. Defaults to `@TranssionCoreFederationLogs`. |
 | `APPEAL_DISCUSSION_TOPIC` | Yes for reviews | integer thread ID | Topic inside `MAIN_GROUP` where review cards are posted. |
 | `ALBUM_DEBOUNCE_SECONDS` | No | integer seconds | Proof silence window for ban proof media. Default `4`; values below `1` fall back to default. |
+| `API_ID` | No | integer | Telegram API ID for optional MTProto identity lookups. Empty disables MTProto entirely. |
+| `API_HASH` | No | string | Telegram API hash matching `API_ID`. Required together with `API_ID`. Never commit the real value. |
+| `MTPROTO_SESSION` | No | string | Session name for the MTProto client file. Default `tcbot_mtproto`. |
 | `LOG_LEVEL` | No | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | Runtime logging level. Default `INFO`. |
 | `MODULES_LOAD` | No | comma-separated module names | Optional whitelist, e.g. `banning,appeals`. |
 | `MODULES_NO_LOAD` | No | comma-separated module names | Optional blacklist, e.g. `maintenance,broadcasting`. |
