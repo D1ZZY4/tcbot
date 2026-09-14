@@ -53,19 +53,22 @@ on the repository's branch protection settings.
 - Pull requests to `main`
 - Weekly schedule (Monday 04:00 UTC)
 - Manual dispatch
+- Workflow run after `Lint (Ruff)` and `Lint (Pyright)` complete (waits for both lints before fixing)
 
 **What it does:**
 - Runs `uv run ruff format .` to auto-format code
 - Runs `uv run ruff check --fix .` to auto-fix linting issues
+- Runs `uv run pyright` and `uv run pytest tests/ -q` to capture type and test failures
+- Sends remaining Ruff, Pyright, and Pytest errors to a free AI (GitHub Models `openai/gpt-4o-mini` via `GITHUB_TOKEN`, no billing) for a short fix summary; deterministic Ruff fixes are always applied, AI hints are advisory and included in the PR body and summary
 - Creates or updates an `auto-fix/ruff` branch and pull request when fixes are
   found outside a pull-request run
-- **Comments on PR** with fix suggestions (if PR)
-- Creates detailed summary of changes
+- **Comments on PR** with fix suggestions (if PR) including Pyright counts
+- Creates detailed summary of changes including Pyright, Pytest, and AI summary
 
 **Benefits:**
-- Reduces manual work for code style
+- Reduces manual work for code style and catches type/test issues
 - Consistent formatting across reviewed changes
-- Catches common issues automatically
+- Free AI assists with Pyright/Pytest triage without extra secrets
 
 **Example generated commit:**
 ```
@@ -73,8 +76,10 @@ chore: Auto-fix code quality issues
 
 - Ruff format: 3 files
 - Ruff check --fix: 5 files
+- Pyright errors: 2
+- AI assisted: 1
 
-Auto-applied by GitHub Actions
+Auto-applied by GitHub Actions (Ruff deterministic + free AI for Pyright/Pytest)
 ```
 
 ---
@@ -92,6 +97,7 @@ Auto-applied by GitHub Actions
 - Installs the updated lockfile and validates it (Ruff format/lint plus the
   `import tcbot` check, with dummy shape-valid environment values like
   the lint/test workflows above)
+- Generates a professional PR title and body via a free AI (GitHub Models `openai/gpt-4o-mini` via `GITHUB_TOKEN`, no billing) from the lockfile diff; falls back to the static template when the model is unavailable
 - **Auto-creates a PR** (`deps/auto-update-YYYYMMDD`, suffixed `-runNNN` on
   collision) labeled `dependencies` against `main`
 - If the default token cannot open PRs (repository toggle off), the step
@@ -101,22 +107,17 @@ Auto-applied by GitHub Actions
 - **Sends Telegram notification** with result
 
 **Benefits:**
-- Regular dependency review
+- Regular dependency review with expert-level PR descriptions
 - Less manual work for routine updates
 - Telegram status notifications when configured
 
 **Example PR:**
 ```
-Title: chore: Auto-update dependencies
+Title: chore(deps): bump ruff 0.12.1 -> 0.12.3
 
 Body:
-## Automated Dependency Update
-
-This PR updates project dependencies to their latest compatible versions.
-
-### Changes
-- python-telegram-bot: <old> → <new>
-- motor: <old> → <new>
+- Bump ruff 0.12.1 -> 0.12.3 for format speed
+- No behavior change, import tcbot still passes
 
 Review the dependency changes and CI results before merging.
 ```
