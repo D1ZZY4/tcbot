@@ -230,3 +230,44 @@ async def resolve_user(target_id: int) -> tuple[str, str | None, str | None] | N
     if not fname:
         return None
     return fname, getattr(user, "username", None), getattr(user, "last_name", None)
+
+
+async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
+    """Cache every member of *chat_id* the session can see; return harvested count.
+
+    One-shot backfill for silent members no Bot API call ever observed: each
+    seen identity lands in member_cache, so later bans and checks resolve by
+    name. Stops early on FloodWait (returns the count so far); peer hashes
+    persist in shared storage as a side effect for future direct resolves.
+    """
+    # ponytail: single sequential scan, no parallelism; shard per-group or
+    # page with smaller limits if a mega-group harvest ever too slow.
+    from tcbot.database import users_cache  # noqa: PLC0415 (avoid import cycle)
+
+    c = client()
+    if not c.is_connected:
+        raise RuntimeError("MTProto client is not connected.")
+    count = 0
+    try:
+        async for member in c.get_chat_members(chat_id, limit=limit):
+            user = getattr(member, "user", None)
+            fname = getattr(user, "first_name", None) if user is not None else None
+            if user is None or getattr(user, "is_bot", False) or not fname:
+                continue
+            try:
+                await users_cache.harvest_user_identity(
+                    user.id,
+                    getattr(user, "username", None),
+                    fname,
+                    getattr(user, "last_name", None),
+                )
+            except Exception as exc:
+                log.debug("Member harvest write failed for %d: %s", user.id, exc)
+                continue
+            count += 1
+    except Exception as exc:
+        if getattr(exc, "value", None) is not None:  # FloodWait-likes carry .value
+            log.warning("Member harvest stopped early in %d: %s", chat_id, exc)
+            return count
+        raise
+    return count

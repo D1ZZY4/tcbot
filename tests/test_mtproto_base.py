@@ -10,6 +10,7 @@ import asyncio
 import dataclasses
 import sqlite3
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -316,3 +317,76 @@ def test_import_legacy_file_skips_junk(
     monkeypatch.chdir(tmp_path)
 
     assert asyncio.run(mtproto._import_legacy_file(_RecordingStore())) is False  # type: ignore[arg-type]
+
+
+class _FakeMember:
+    def __init__(
+        self,
+        uid: int,
+        fname: str | None,
+        uname: str | None = None,
+        *,
+        bot: bool = False,
+    ) -> None:
+        self.user = SimpleNamespace(
+            id=uid, first_name=fname, username=uname, last_name=None, is_bot=bot
+        )
+
+
+class _HarvestClient(_FakeClient):
+    def __init__(
+        self, members: list[_FakeMember], error: BaseException | None = None
+    ) -> None:
+        super().__init__()
+        self._members = members
+        self._harvest_error = error
+
+    async def get_chat_members(self, _chat_id: int, limit: int = 0):  # type: ignore[no-untyped-def]
+        for member in self._members[: limit or len(self._members)]:
+            yield member
+        if self._harvest_error is not None:
+            raise self._harvest_error
+
+
+def test_harvest_group_members_caches_humans(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    harvested: list[tuple[int, str | None, str, str | None]] = []
+
+    async def _harvest(
+        uid: int, uname: str | None, fname: str, lname: str | None = None
+    ) -> bool:
+        harvested.append((uid, uname, fname, lname))
+        return True
+
+    members = [
+        _FakeMember(1, "A", "a"),
+        _FakeMember(2, None),
+        _FakeMember(3, "C"),
+        _FakeMember(4, "B", bot=True),
+    ]
+    monkeypatch.setattr(mtproto, "_client", _HarvestClient(members))
+    monkeypatch.setattr("tcbot.database.users_cache.harvest_user_identity", _harvest)
+
+    assert asyncio.run(mtproto.harvest_group_members(-1001, limit=10)) == 2
+    assert harvested == [(1, "a", "A", None), (3, None, "C", None)]
+
+
+def test_harvest_group_members_stops_early_on_flood(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    harvested: list[int] = []
+
+    async def _harvest(
+        uid: int, uname: str | None, fname: str, lname: str | None = None
+    ) -> bool:
+        harvested.append(uid)
+        return True
+
+    monkeypatch.setattr(
+        mtproto, "_client", _HarvestClient([_FakeMember(1, "A")], error=_FloodWait())
+    )
+    monkeypatch.setattr("tcbot.database.users_cache.harvest_user_identity", _harvest)
+
+    assert asyncio.run(mtproto.harvest_group_members(-1001)) == 1
+    assert harvested == [1]

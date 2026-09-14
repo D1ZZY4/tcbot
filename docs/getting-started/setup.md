@@ -142,7 +142,7 @@ PROOFS="-1001234567890"
 | `ALBUM_DEBOUNCE_SECONDS` | No | integer seconds | Proof silence window for ban proof media. Default `4`; values below `1` fall back to default. |
 | `API_ID` | Yes | integer | Telegram API ID for MTProto identity lookups. The bot refuses to boot without it. |
 | `API_HASH` | Yes | string | Telegram API hash matching `API_ID`. Never commit the real value. |
-| `MTPROTO_SESSION` | No | string | Session name for the MTProto client file. Default `tcbot_mtproto`. |
+| `MTPROTO_SESSION` | No | string | Namespace for the shared MTProto session in MongoDB. Default `tcbot_mtproto`. |
 Authorize the session before the first boot with MTProto: fill `API_ID` / `API_HASH`,
 then run `uv run python -m tcbot.database.mtproto_auth +62xxx` and enter the
 login code (plus 2FA password when set). Boot refuses to proceed until a login

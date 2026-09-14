@@ -628,7 +628,7 @@ class _CfgAdapter:
 
     @property
     def mtproto_session(self) -> str:
-        """MTProto session name (file-based; ignored files, see .gitignore)."""
+        """Namespace for the shared MTProto session in MongoDB."""
         return self._c.mtproto_session
 
 
