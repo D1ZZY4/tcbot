@@ -246,7 +246,12 @@ def promote_role_kb(
     available_roles: list[str],
     locale: str | None = None,
 ) -> InlineKeyboardMarkup:
-    """Role selection keyboard shown when /tcpromote is used without a role argument."""
+    """Role selection keyboard shown when /tcpromote is used without a role argument.
+
+    Role labels render from ROLE_LABEL verbatim (operational exception to
+    catalog localization): ranks are canonical English identifiers like
+    commands, per the translator contract.
+    """
     buttons = [
         InlineKeyboardButton(
             db.users_roles.ROLE_LABEL[r],
@@ -941,19 +946,31 @@ def stats_search_row(locale: str | None = None) -> list[InlineKeyboardButton]:
     """Single Search button row opening the bans search panel."""
     return [
         InlineKeyboardButton(
-            t("stats.button.search", locale, plain=True),
+            t("button.search", locale, plain=True),
             callback_data="stats_bans_search",
             style=KeyboardButtonStyle.PRIMARY,
         ),
     ]
 
 
-def stats_search_results_kb(n: int, locale: str | None = None) -> InlineKeyboardMarkup:
-    """Numbered search-result buttons plus New Search / Cancel row."""
+def stats_search_results_kb(
+    n: int, locale: str | None = None, *, item_ids: list[str] | None = None
+) -> InlineKeyboardMarkup:
+    """Numbered search-result buttons plus New Search / Cancel row.
+
+    ``item_ids`` carries one stable ban ID per button; the detail handler
+    verifies the resolved record still carries that ID so a list mutation
+    between render and tap cannot silently show a different ban. Older
+    buttons without the segment keep working.
+    """
     num_btns = [
         InlineKeyboardButton(
             str(i + 1),
-            callback_data=f"stats_search_item:{i}",
+            callback_data=(
+                f"stats_search_item:{i}:{item_ids[i]}"
+                if item_ids is not None and i < len(item_ids)
+                else f"stats_search_item:{i}"
+            ),
             style=KeyboardButtonStyle.PRIMARY,
         )
         for i in range(n)
@@ -964,7 +981,7 @@ def stats_search_results_kb(n: int, locale: str | None = None) -> InlineKeyboard
     rows.append(
         [
             InlineKeyboardButton(
-                t("stats.button.new_search", locale, plain=True),
+                t("button.new_search", locale, plain=True),
                 callback_data="stats_bans_search",
                 style=KeyboardButtonStyle.PRIMARY,
             ),

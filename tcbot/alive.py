@@ -79,12 +79,17 @@ def health() -> tuple[str, int, dict[str, str]]:
 
     tg_state = _cb.telegram.peek_state()
 
+    # * Both circuits must be fully CLOSED for their subsystem to count
+    # * healthy: HALF_OPEN (recovery probe pending or timed out) is degraded
+    # * on either side, and OPEN is a hard failure. Redis stays a hint-only
+    # * field by design: the bot serves fully from the in-memory layer when
+    # * Redis is down, so a Redis outage must not page the instance.
     overall = (
         "ok"
         if (
             mongodb_ok
             and scheduler_ok
-            and tg_state is not CircuitState.OPEN
+            and tg_state is CircuitState.CLOSED
             and db_state is CircuitState.CLOSED
         )
         else "degraded"

@@ -236,10 +236,12 @@ Use the `LogBuilder` class in this module to compose new audit-log messages; avo
 | `safe_edit_cb(q, text, **kwargs)` | Edit a `CallbackQuery` message via `q.edit_message_text`; same error-swallow policy as `safe_edit`. Use when a user can re-tap a button that lands them on the same content to avoid `BadRequest: message is not modified` noise. |
 | `clear_markup_cb(q)` | Remove the inline keyboard from a callback-query message via `q.edit_message_reply_markup(reply_markup=None)`. Editing message text without `reply_markup` keeps the old buttons (the parameter is omitted from the API call), so ending a flow with only an edit would leave dead buttons behind; call this after the edit. Treats a `message is not modified` error as already-removed. |
 | `safe_reply(msg, text, *, log_label="reply", parse_mode="MarkdownV2", **kwargs)` | Fire-and-forget `Message` reply with debug-only failure logging; `log_label` names the call site. The single owner for all fire-and-forget replies across commands and workflows. Defaults to `parse_mode="MarkdownV2"`; pass `parse_mode=None` for plain-text replies (error strings, constants) so Telegram performs no entity parsing. Sites whose failure drives control flow (prompt cleanup, wedged-conversation guards) stay raw. |
+| `answer_and_edit(q, text, **kwargs)` | Answer a callback query and edit its message in parallel; cancellation propagates. |
+| `ack_and_render(q, data_coro)` | Answer the query while the data coroutine runs, then edit with the rendered `(text, kb)`; data failures leave the message untouched and cancellation propagates. |
 
 ## Helper usage rules
 
 - Keep user-facing MarkdownV2 escaped.
 - Keep keyboard callback-data stable because handlers match it with regex patterns.
 - Do not duplicate role checks that already exist in `users_cache` or `decorators.resolve_and_check`.
-- Do not create keyboard factories outside `keyboards.py` unless the workflow needs a one-off private helper for local pagination.
+- Do not create keyboard factories outside `keyboards.py`. Flow step classes keep thin delegating methods over the same builders. The only markup outside is the locale-aware `nav_row()` row primitive in `tcbot/utils/pagination.py`, consumed through `paged_drill_kb()` or directly with an explicit locale.

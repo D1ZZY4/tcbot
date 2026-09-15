@@ -23,7 +23,11 @@ from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
-from tcbot.utils.dispatch import count_transient_errors, fan_out
+from tcbot.utils.dispatch import (
+    count_transient_errors,
+    fan_out,
+    throw_if_cancelled,
+)
 from tcbot.utils.formatter import (
     bold,
     user_ref,
@@ -163,13 +167,8 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         except Exception as exc:
             log.debug("_execute_mute groups-fail edit failed: %s", exc)
         return
-    _primary_ids = [cid for cid in (cfg.main_group, cfg.exec_group) if cid]
-    _existing_ids = {cid for cid in (grp.get("chat_id") for grp in groups) if cid}
-    groups = groups + [
-        {"chat_id": pid, "title": ""}
-        for pid in _primary_ids
-        if pid not in _existing_ids
-    ]
+    # * Connected groups plus primaries (single merge owner in groups_db).
+    groups = db.groups_db.with_primary_groups(groups, (cfg.main_group, cfg.exec_group))
 
     # * Persist the mute record before touching any group. Enforcing chats
     # * without an active_mutes row leaves an un-unmutable split brain:
@@ -278,6 +277,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         if isinstance(fanout_results, BaseException):
             raise fanout_results
         results = fanout_results
+        throw_if_cancelled((upload_result,))
         if isinstance(upload_result, BaseException):
             log.warning("Mute proof upload skipped for target=%d", target_id)
             proof_msg_id = None
@@ -421,11 +421,8 @@ async def execute_unmute(
         )
         return
     # * Unrestrict across all connected groups + primary groups - semaphore-bounded
-    _pri_ids = [cid for cid in (cfg.main_group, cfg.exec_group) if cid]
-    _ex_ids = {cid for cid in (grp.get("chat_id") for grp in groups) if cid}
-    groups = groups + [
-        {"chat_id": pid, "title": ""} for pid in _pri_ids if pid not in _ex_ids
-    ]
+    # * Connected groups plus primaries (single merge owner in groups_db).
+    groups = db.groups_db.with_primary_groups(groups, (cfg.main_group, cfg.exec_group))
     results = await fan_out(
         [
             ctx.bot.restrict_chat_member(
@@ -526,4 +523,5 @@ def mute_conversation(
         _exec_mute,
         entry_filter,
         escape_filter=escape_filter,
+        min_role="tester",
     )

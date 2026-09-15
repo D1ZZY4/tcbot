@@ -35,8 +35,11 @@ from tcbot.database.cache import drain_redis_mutations
 from tcbot.database.mongos import connect, ensure_indexes
 from tcbot.modules import get_handlers
 from tcbot.modules.helper.decorators import global_rate_limit_handler
+from tcbot.modules.helper.workflows.connected_flow import drain_harvest_tasks
 from tcbot.utils import error_reporter
+from tcbot.utils import logger as logger_mod
 from tcbot.utils.circuit_breaker import CircuitOpenError
+from tcbot.utils.dispatch import drain_tasks
 from tcbot.utils.logger import setup as setup_logging
 from tcbot.utils.transport import (
     API_POOL_SIZE,
@@ -259,6 +262,14 @@ async def _warm_hot_caches() -> None:
 
 async def _post_init(app: Application) -> None:
     """Connect to MongoDB, ensure indexes, seed owner, start scheduler, and attach error reporter."""
+    # * Fail fast on missing MTProto credentials before any side effect
+    # * (Mongo connect, index writes): the bot refuses to boot without them
+    # * on long-lived transports. Serverless never reaches this function,
+    # * so its documented degrade is unaffected.
+    if not cfg.mtproto_enabled:
+        raise RuntimeError(
+            "API_ID/API_HASH are required for MTProto identity resolution; refusing to boot degraded."
+        )
     log.info("post_init: connecting to MongoDB...")
     await connect()
 
@@ -330,6 +341,15 @@ async def _post_init(app: Application) -> None:
 
 async def _post_shutdown(app: Application) -> None:
     """Stop APScheduler and close Redis after the application fully shuts down."""
+    # * Drain fire-and-forget sets first (bounded): member-cache writes,
+    # * startup warm-ups, admin harvests, and log shipping may still use
+    # * the database and Telegram below. Each drain is time-boxed and the
+    # * survivors are cancelled, so a hung task cannot stall teardown.
+    await drain_tasks(_member_cache_tasks, label="member cache")
+    await drain_tasks(_startup_tasks, label="startup warm-up")
+    await drain_tasks(_asyncio_report_tasks, label="async error reports")
+    await drain_harvest_tasks()
+    await logger_mod.drain_pending()
     # * Drain first: queued L2 writes must land before the pool closes
     # * underneath them; the gather below runs concurrently otherwise.
     await drain_redis_mutations()

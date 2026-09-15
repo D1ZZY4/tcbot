@@ -139,23 +139,23 @@ Current stack:
 │   │   ├── muting.py         /tcmute command
 │   │   ├── warnings.py       /tcwarn command
 │   │   ├── appeals.py        /appeal flow
-│   │   ├── admins.py         /admin and /transferowner commands
+│   │   ├── admins.py         Role commands (/tcpromote, /tcdemote, /transferowner, …)
 │   │   ├── language.py       /language command
-│   │   ├── connecting.py     /connect command
-│   │   ├── disconnecting.py  /disconnect command
+│   │   ├── connecting.py     /tcconnect command
+│   │   ├── disconnecting.py  /tcdisconnect and /rmtc commands
 │   │   ├── groups.py         Group management
 │   │   ├── checking.py       /check and /checkme commands
 │   │   ├── unbanning.py      /tcunban command
 │   │   ├── broadcasting.py   /tcbroadcast command
 │   │   ├── greeting.py       Greeting messages
-│   │   ├── about.py          /about command
+│   │   ├── about.py          About panel (callback-only, via start menu)
 │   │   ├── additional.py     Additional menu
 │   │   ├── help.py           Help command
 │   │   ├── stats.py          Statistics
 │   │   ├── syncing.py        Enforcement reconciliation (/tcsync)
 │   │   ├── maintenance.py    Maintenance commands
 │   │   ├── netspeed.py       Network speed test
-│   │   ├── privacy.py        Privacy commands
+│   │   ├── privacy.py        Privacy panel (callback-only, via start menu)
 │   │   └── start.py          /start command
 │   └── utils/                Logging, dispatch, prefixes, datetime helpers
 │       ├── circuit_breaker.py  Telegram/MongoDB circuit breaker
@@ -170,6 +170,9 @@ Current stack:
 │       └── transport.py        Shared PTB HTTP timeouts and pool size
 ├── docs/                     Developer documentation grouped by category
 ├── .agents/                   Coding skills and style rules
+├── .github/                   CI workflows (lint, type-check, tests, runner)
+├── i18n/                      Localized message catalogs (en-US source of truth)
+├── tests/                     Automated checks (run with the dummy-env suite)
 ├── api/                       Vercel serverless endpoints (webhook, cron)
 ├── config.env.example        Environment variable template
 ├── docker-compose.yml        Local bot + MongoDB + Redis compose setup

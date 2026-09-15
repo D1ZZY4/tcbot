@@ -122,16 +122,28 @@ async def _repair_counter_delete(
     from, so the clear must not end with only a log line. Single-chat
     clears recount the pair (history is already gone, so the recount
     lands at zero and drops the stale doc); federation-wide clears retry
-    the delete. Repair failures stay error-logged but non-fatal like the
-    original delete failure. Cancellation propagates.
+    the delete. The delete retry runs a bounded number of attempts with a
+    short backoff; a persistent outage stays error-logged but non-fatal
+    like the original delete failure so a clear never reports failure
+    for a repair problem. Cancellation propagates.
     """
+    if delete_all_counts:
+        for attempt in range(3):
+            try:
+                await db_call(_warn_counts().delete_many(counts_filter))
+                return
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                if attempt == 2:
+                    log.exception("%s counter repair failed", scope)
+                else:
+                    await asyncio.sleep(0.5 * (attempt + 1))
+        return
     try:
-        if delete_all_counts:
-            await db_call(_warn_counts().delete_many(counts_filter))
-        else:
-            await _recount_and_store(
-                int(counts_filter["user_id"]), int(counts_filter["chat_id"])
-            )
+        await _recount_and_store(
+            int(counts_filter["user_id"]), int(counts_filter["chat_id"])
+        )
     except asyncio.CancelledError:
         raise
     except Exception:
@@ -281,12 +293,23 @@ async def _clear_warn_docs(
 
 
 async def get_warns(
-    user_id: int, chat_id: int, *, skip: int = 0, limit: int | None = None
+    user_id: int,
+    chat_id: int,
+    *,
+    skip: int = 0,
+    limit: int | None = None,
+    newest_first: bool = False,
 ) -> list[WarnDoc]:
-    """Return warn documents for a user in a chat, oldest first.
+    """Return warn documents for a user in a chat, oldest first by default.
 
+    Pass ``newest_first=True`` for paged newest-first views so page N
+    holds the Nth-newest slice server-side; reversing an oldest-first
+    page client-side would pin the newest records to the last pages.
     ``limit=None`` returns the full list (backwards compatible).
     """
+    order: list[tuple[str, int]] = (
+        [("timestamp", -1)] if newest_first else [("timestamp", 1)]
+    )
     cursor = (
         _warns()
         .find(
@@ -299,7 +322,7 @@ async def get_warns(
                 "chat_id": 1,
                 "timestamp": 1,
             },
-            sort=[("timestamp", 1)],
+            sort=order,
         )
         .skip(max(0, skip))
     )
@@ -391,7 +414,10 @@ async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:
     history from the legacy chat. Counter docs merge by summation: when the
     supergroup already holds warns, the counts add up instead of the blind
     ``$set`` overwriting one side or violating the per-pair unique index.
-    Returns ``True`` if any record was updated.
+    Each old counter is consumed with an atomic take (removed before its
+    count is added to the new pair), so a crash plus retry can only
+    under-count, never double-count into a false auto-ban. Returns ``True``
+    if any record was updated.
     """
     try:
         warns_r = await db_call(
@@ -434,6 +460,15 @@ async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:
         if uid is None or cnt <= 0:
             continue
         try:
+            # * Atomic take: the old doc is gone before its count lands on
+            # * the new pair, so a crash plus retry cannot add it twice.
+            taken = await db_call(
+                _warn_counts().find_one_and_delete(
+                    {"user_id": uid, "chat_id": old_chat_id}
+                )
+            )
+            if taken is None:
+                continue
             res = await db_call(
                 _warn_counts().update_one(
                     {"user_id": uid, "chat_id": new_chat_id},

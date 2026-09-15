@@ -35,7 +35,12 @@ from apscheduler.triggers.interval import IntervalTrigger
 # * imports: tcbot.database.__init__ → scheduler → tcbot.database.__init__
 from tcbot.database.mongos import col as _col
 from tcbot.database.mongos import db_call as _db_call
-from tcbot.database.mongos import mongo_client_kwargs as _mongo_client_kwargs
+from tcbot.database.mongos import (
+    mongo_client_kwargs as _mongo_client_kwargs,
+)
+from tcbot.database.mongos import (
+    mongo_jobstore_kwargs as _mongo_jobstore_kwargs,
+)
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.time_and_date import utc_now
 
@@ -235,6 +240,7 @@ async def _scheduler_background(
             database=db_name,
             host=mongodb_uri,
             **_mongo_client_kwargs(),
+            **_mongo_jobstore_kwargs(),
         )
     }
     scheduler = AsyncIOScheduler(jobstores=jobstores)

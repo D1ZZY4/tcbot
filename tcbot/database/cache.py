@@ -120,6 +120,10 @@ _redis_drop_warned: set[tuple[str, asyncio.AbstractEventLoop]] = set()
 # * Grace window for draining background mutations at shutdown before the
 # * Redis pool closes underneath them.
 _DRAIN_TIMEOUT_S: float = 5.0
+# * Ceiling for one clear_all wait: the L2 sweep keeps running past it, so
+# * a dead-Redis backlog delays the caller briefly instead of stalling a
+# * privilege revocation path for the whole serial backlog.
+_CLEAR_ALL_TIMEOUT_S: float = 10.0
 
 # * Public sentinel; compare using ``is CACHE_MISS`` to detect a cache miss.
 # * Distinct from None because None is a valid cache value (e.g. user has no role).
@@ -288,6 +292,9 @@ class TwoLevelCache[T]:
         Unlike ``invalidate(key)``, which removes one known key from both layers,
         this sweeps every key matching ``tcbot:<prefix>:v2:*``.  Do not call it in
         hot paths; it is designed for rare, high-impact invalidations only.
+        The Redis sweep is never dropped by the mutation-queue bound, and the
+        wait for it is bounded so a dead-Redis backlog cannot stall the caller
+        (the sweep keeps running in the background and L1 is already clear).
         """
         self._mem.clear()
         pattern = f"tcbot:{self._redis_prefix}:v2:*"
@@ -311,9 +318,19 @@ class TwoLevelCache[T]:
                     exc,
                 )
 
-        task = self._enqueue_redis_mutation(_clear_redis)
+        task = self._enqueue_redis_mutation(_clear_redis, droppable=False)
         if task is not None:
-            await asyncio.shield(task)
+            try:
+                await asyncio.wait_for(
+                    asyncio.shield(task), timeout=_CLEAR_ALL_TIMEOUT_S
+                )
+            except TimeoutError:
+                log.warning(
+                    "Redis clear_all for prefix %s still running after %ds; "
+                    "continuing with L1 cleared.",
+                    self._redis_prefix,
+                    _CLEAR_ALL_TIMEOUT_S,
+                )
 
     # ── Async hot-path ── #
 
@@ -481,7 +498,7 @@ class TwoLevelCache[T]:
             _redis_mod.mark_op(ok=True)
 
     def _enqueue_redis_mutation(
-        self, operation: Callable[[], Awaitable[None]]
+        self, operation: Callable[[], Awaitable[None]], *, droppable: bool = True
     ) -> asyncio.Task[None] | None:
         """Run Redis mutations FIFO for this Redis prefix and event loop.
 
@@ -491,9 +508,12 @@ class TwoLevelCache[T]:
         after a newer delete or prefix-wide clear, including when separate
         cache objects share the same Redis namespace.
 
-        The queue is bounded: past ``_REDIS_MAX_PENDING`` queued ops the
-        newest op drops with a warning instead of growing memory and
-        stalling ``clear_all`` behind a dead-Redis backlog.
+        The queue is bounded: past ``_REDIS_MAX_PENDING`` queued ops a
+        droppable op drops with a warning instead of growing memory.
+        ``clear_all()`` enqueues with ``droppable=False``: a prefix-wide
+        revocation (e.g. after an ownership transfer) must never be
+        dropped, or other processes keep serving revoked roles from L2
+        until the key TTL.
         """
         try:
             loop = asyncio.get_running_loop()
@@ -506,7 +526,7 @@ class TwoLevelCache[T]:
 
         tail_key = (self._redis_prefix, loop)
         depth = _redis_pending.get(tail_key, 0)
-        if depth >= _REDIS_MAX_PENDING:
+        if droppable and depth >= _REDIS_MAX_PENDING:
             if tail_key not in _redis_drop_warned:
                 _redis_drop_warned.add(tail_key)
                 log.warning(

@@ -26,6 +26,7 @@ from tcbot.utils.dispatch import (
 from tcbot.utils.formatter import bold, code
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
+from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
     from telegram import Bot, Update
@@ -45,8 +46,9 @@ _RL_SYNC_LIMIT: int = 2
 _SYNC_MAX_CHECKS: int = 200
 
 # * Per-call budget for membership probes, mirroring the cleanup membership
-# * check: a stalled probe must not hold its fan_out slot.
-_MEMBER_CHECK_TIMEOUT_S: float = 3.0
+# * check: a stalled probe must not hold its fan_out slot. Single owner in
+# * tcbot.utils.time_and_date.
+_MEMBER_CHECK_TIMEOUT_S: float = TELEGRAM_LOOKUP_TIMEOUT
 
 # * Sample cap for failed-group titles in operator replies: enough to act
 # * on, small enough to stay far under Telegram message limits.
@@ -287,7 +289,9 @@ async def verify_user(bot: Bot, user_id: int) -> SyncCounts:
         for c in [g.get("chat_id", 0)]
         if c
     }
-    pairs = [(user_id, cid) for cid in chat_ids]
+    # * Bound like the sweep: one targeted verify must not probe hundreds
+    # * of groups in a single command on a huge federation.
+    pairs, truncated = take_pairs([user_id], chat_ids, _SYNC_MAX_CHECKS)
     if not pairs:
         return SyncCounts()
     if ban:
@@ -298,7 +302,7 @@ async def verify_user(bot: Bot, user_id: int) -> SyncCounts:
         outcomes = await fan_out(
             [_sync_unban_pair(bot, cid, user_id) for _, cid in pairs]
         )
-    counts, _ = _summarize(pairs, outcomes, titles, truncated=False)
+    counts, _ = _summarize(pairs, outcomes, titles, truncated=truncated)
     return counts
 
 

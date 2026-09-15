@@ -242,4 +242,6 @@ async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 def kick_conversation(entry_fn: Callable[..., Any], entry_filter: BaseFilter) -> object:
     """Return the kick ConversationHandler via the central reason_flow factory."""
-    return build_modaction_conv(reason, proof, entry_fn, _exec_kick, entry_filter)
+    return build_modaction_conv(
+        reason, proof, entry_fn, _exec_kick, entry_filter, min_role="tester"
+    )

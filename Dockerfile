@@ -9,7 +9,11 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 # Copy source and install the project itself
+# * i18n/ is mandatory at runtime: the TOML catalog loads from the
+# * project root on first t() call, so an image without it fails every
+# * handler with I18nError.
 COPY tcbot/ ./tcbot/
+COPY i18n/ ./i18n/
 RUN uv sync --frozen --no-dev
 
 # Verify hiredis C extension is present

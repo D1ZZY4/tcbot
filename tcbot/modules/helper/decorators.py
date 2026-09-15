@@ -592,3 +592,45 @@ async def classify_and_check(
     if executor_role is None:
         return None
     return ident, target_role
+
+
+async def recheck_executor_rank(
+    msg: Message,
+    executor_id: int,
+    *,
+    min_role: str,
+) -> bool:
+    """Re-verify the executor still meets ``min_role`` at enforcement time.
+
+    Conversation Done/Skip/Continue taps can land long after the entry
+    command passed its decorator: a moderator demoted mid-window must not
+    enforce. Returns True when the tap may proceed, False after replying
+    on ``msg`` when the rank lapsed or the lookup failed (fail closed).
+    Cancellation always propagates.
+    """
+    chat = msg.chat
+    locale = await effective_locale(
+        getattr(chat, "type", None), executor_id, getattr(chat, "id", 0)
+    )
+    try:
+        role = await db.users_roles.get_effective_role(executor_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.warning("recheck executor role lookup failed for %d: %s", executor_id, exc)
+        await safe_reply(
+            msg,
+            replies.refuse_role_lookup(locale, plain=True),
+            log_label="recheck role-lookup",
+            parse_mode=None,
+        )
+        return False
+    if db.users_roles.role_rank(role) < db.users_roles.role_rank(min_role):
+        await safe_reply(
+            msg,
+            replies.refuse_rank_insufficient(locale, plain=True),
+            log_label="recheck rank-insufficient",
+            parse_mode=None,
+        )
+        return False
+    return True

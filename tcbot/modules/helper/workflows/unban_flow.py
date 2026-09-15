@@ -153,11 +153,8 @@ async def execute_unban(
         return
 
     # * Include primary groups not already in the connected list
-    _primary_ids = [cid for cid in (cfg.main_group, cfg.exec_group) if cid]
-    _existing_ids = {grp.get("chat_id", 0) for grp in groups}
-    for _pid in _primary_ids:
-        if _pid not in _existing_ids:
-            groups = [*groups, {"chat_id": _pid, "title": ""}]
+    # * (single merge owner in groups_db).
+    groups = db.groups_db.with_primary_groups(groups, (cfg.main_group, cfg.exec_group))
 
     # * unban from all groups - semaphore-bounded for rate safety
     results = await fan_out(

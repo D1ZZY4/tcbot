@@ -20,7 +20,7 @@ from telegram.ext import (
     filters,
 )
 
-from tcbot.modules.helper import replies
+from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.keyboards import reason_step_kb
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
@@ -170,11 +170,13 @@ class _ModActionFlow:
         reason: BuildReason,
         proof: BuildProof,
         executor: Callable[..., Any],
+        min_role: str,
     ) -> None:
         self.action = action
         self.reason = reason
         self.proof = proof
         self.executor = executor
+        self.min_role = min_role
         self._reason_key = f"{action}_reason"
         self._proof_msgs_key = f"{action}_proof_msgs"
         self._extra_info_key = f"{action}_extra_info"
@@ -204,6 +206,39 @@ class _ModActionFlow:
         prefix = f"{self.action}_"
         for key in [k for k in ctx.user_data if k.startswith(prefix)]:
             ctx.user_data.pop(key, None)
+
+    async def _recheck_tapper(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> bool:
+        """Re-verify the tapper still meets ``min_role`` (no spinner answer).
+
+        Done/Skip taps can land long after the entry command passed its
+        decorator; a moderator demoted mid-window must not enforce. The
+        success path leaves the spinner for the caller's own answer; on
+        failure the query is answered here, flow state is cleared, and
+        False is returned (the helper already replied on the prompt).
+        """
+        q = update.callback_query
+        tap_user = update.effective_user
+        tap_msg = update.effective_message
+        if tap_user is None or tap_msg is None:
+            if q is not None:
+                try:
+                    await q.answer()
+                except Exception as exc:
+                    log.debug("%s recheck q.answer failed: %s", self.action, exc)
+            return False
+        if await decorators.recheck_executor_rank(
+            tap_msg, tap_user.id, min_role=self.min_role
+        ):
+            return True
+        if q is not None:
+            try:
+                await q.answer()
+            except Exception as exc:
+                log.debug("%s recheck q.answer failed: %s", self.action, exc)
+        self._clear_user_data(ctx)
+        return False
 
     # ── WAITING_REASON handlers ──────────────────────────────────── #
 
@@ -350,6 +385,10 @@ class _ModActionFlow:
             except Exception as exc:
                 log.debug("%s done-proof dup q.answer failed: %s", self.action, exc)
             return ConversationHandler.END
+        # * Rank re-check: a moderator demoted after the entry command
+        # * passed its decorator must not enforce from a stale prompt.
+        if not await self._recheck_tapper(update, ctx):
+            return ConversationHandler.END
         # * Set the executing flag before the first await to close the race
         # * window; the update here is the live Done tap, so the executor
         # * below never touches a stale stored Update object.
@@ -383,6 +422,10 @@ class _ModActionFlow:
                 await q.answer()
             except Exception as exc:
                 log.debug("%s skip-proof dup q.answer failed: %s", self.action, exc)
+            return ConversationHandler.END
+        # * Rank re-check first: the executor below must not run for a
+        # * tapper who lost the rank since the entry command.
+        if not await self._recheck_tapper(update, ctx):
             return ConversationHandler.END
         ctx.user_data[self._exec_key] = True
 
@@ -565,8 +608,15 @@ def build_modaction_conv(
     executor: Callable[..., Any],
     entry_filter: BaseFilter,
     escape_filter: BaseFilter | None = None,
+    *,
+    min_role: str,
 ) -> ConversationHandler:
-    """Build a generic reason + proof ConversationHandler."""
-    return _ModActionFlow(reason.action, reason, proof, executor).build(
+    """Build a generic reason + proof ConversationHandler.
+
+    ``min_role`` names the lowest rank that may still enforce at Done/Skip
+    time; the entry decorator owns the same value, and Done/Skip taps
+    re-check it so a mid-window demotion cannot enforce.
+    """
+    return _ModActionFlow(reason.action, reason, proof, executor, min_role).build(
         entry_fn, entry_filter, escape_filter
     )

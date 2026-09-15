@@ -204,7 +204,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * parallel was an optimistic pattern that silently swallowed add_group
     # * failures and left the user with a false confirmation.
     try:
-        await connection.complete_join(
+        blind = await connection.complete_join(
             chat.id, chat.title or "", user.id, user.first_name, ctx.bot
         )
     except Exception:
@@ -216,9 +216,13 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             parse_mode=None,
         )
         return
+    # * A blind replay ran without ban/mute data: say so instead of
+    # * confirming success, so the owner re-syncs instead of trusting a gap.
     await safe_reply(
         msg,
-        connection.connected_message(locale),
+        connection.connected_blind_message(locale)
+        if blind
+        else connection.connected_message(locale),
         log_label=f"connected for chat {chat.id}",
         parse_mode=None,
     )

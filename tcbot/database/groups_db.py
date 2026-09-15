@@ -11,6 +11,7 @@ import logging
 from typing import TYPE_CHECKING, cast
 
 import cachetools as _cachetools
+from pymongo.errors import DuplicateKeyError
 
 from tcbot.database.cache import (
     _ALL_GROUPS_KEY,
@@ -22,6 +23,9 @@ from tcbot.database.mongos import col, db_call
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
+    from typing import Any
+
     from motor.motor_asyncio import AsyncIOMotorCollection
 
 log = logging.getLogger(__name__)
@@ -147,44 +151,98 @@ async def active_group_count() -> int:
     return await db_call(_groups().count_documents({"is_active": True}))
 
 
+def with_primary_groups(
+    groups: Sequence[GroupDoc],
+    primary_ids: Iterable[int],
+    *extra_ids: int,
+) -> list[dict[str, Any]]:
+    """Append primary/extra group entries missing from *groups*.
+
+    Single owner for the "connected plus primaries" merge every
+    federation-wide fan-out performs, so the dedup key and the
+    synthesized entry shape cannot drift between the ban, mute, warn,
+    unban, and appeal-approve paths. Falsy IDs (unset primaries) are
+    skipped; callers pass ``(cfg.main_group, cfg.exec_group)`` plus any
+    contextual chat such as the current one.
+    """
+    seen = {g.get("chat_id", 0) for g in groups}
+    merged: list[dict[str, Any]] = [dict(g) for g in groups]
+    for cid in (*primary_ids, *extra_ids):
+        if not cid or cid in seen:
+            continue
+        seen.add(cid)
+        merged.append({"chat_id": cid, "title": ""})
+    return merged
+
+
 async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
     """Update all group records from ``old_chat_id`` to ``new_chat_id`` after migration.
 
     Called when a basic group migrates to a supergroup. Updates both the
     ``federated_groups`` and ``pending_joins`` collections and invalidates
-    the relevant cache entries. Returns ``True`` if any record was updated.
+    the relevant cache entries. When the new chat already has a row (the
+    unique ``chat_id`` index would reject the repoint), the stale old row
+    is merged away instead of losing the migration. Returns ``True`` if
+    any record was updated. Cancellation propagates.
     """
-    results = await asyncio.gather(
-        db_call(
+    try:
+        group_res = await db_call(
             _groups().update_one(
                 {"chat_id": old_chat_id},
                 {"$set": {"chat_id": new_chat_id}},
             )
-        ),
-        db_call(
+        )
+    except asyncio.CancelledError:
+        raise
+    except DuplicateKeyError:
+        # * The supergroup row already exists: drop the stale old row so
+        # * the migration still converges instead of dying on the index.
+        log.warning(
+            "migrate_group (%d -> %d): target row exists, merging old row away",
+            old_chat_id,
+            new_chat_id,
+        )
+        try:
+            await db_call(_groups().delete_one({"chat_id": old_chat_id}))
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception(
+                "migrate_group (%d -> %d) stale-row cleanup failed",
+                old_chat_id,
+                new_chat_id,
+            )
+            return False
+        group_res = None
+    except Exception:
+        log.exception(
+            "migrate_group (%d -> %d) federated_groups update failed",
+            old_chat_id,
+            new_chat_id,
+        )
+        return False
+    try:
+        pending_res = await db_call(
             _pending().update_one(
                 {"chat_id": old_chat_id},
                 {"$set": {"chat_id": new_chat_id}},
             )
-        ),
-        return_exceptions=True,
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception(
+            "migrate_group (%d -> %d) pending_joins update failed",
+            old_chat_id,
+            new_chat_id,
+        )
+        pending_res = None
+    matched_any = (
+        group_res is None
+        or group_res.matched_count > 0
+        or (pending_res is not None and pending_res.matched_count > 0)
     )
-    matched_any = False
-    group_matched = False
-    for i, r in enumerate(results):
-        if isinstance(r, asyncio.CancelledError):
-            raise r
-        if isinstance(r, BaseException):
-            log.error(
-                "migrate_group (%d -> %d) DB call failed: %s",
-                old_chat_id,
-                new_chat_id,
-                r,
-            )
-        elif r.matched_count > 0:
-            matched_any = True
-            if i == 0:
-                group_matched = True
+    group_matched = group_res is None or group_res.matched_count > 0
     if matched_any:
         connected_cache.put(old_chat_id, False)  # noqa: FBT003
         # * Only mark the new chat connected when its federated_groups row

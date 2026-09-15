@@ -64,7 +64,9 @@ async def get_owner_id() -> int | None:
 
     async def _fetch() -> int | None:
         doc: AdminDoc | None = await db_call(
-            col("tc_owners").find_one({}, {"_id": 0, "user_id": 1})
+            col("tc_owners").find_one(
+                {}, {"_id": 0, "user_id": 1}, sort=[("user_id", 1)]
+            )
         )
         return doc["user_id"] if doc else None
 
@@ -96,13 +98,17 @@ async def ensure_initial_owner(initial_id: int) -> None:
 
 async def set_owner(user_id: int) -> None:
     """Replace the current owner with user_id; clears the role cache."""
-    # * Insert the new owner first so a mid-flight crash leaves the new owner present,
-    # * not zero owners. The unique index on user_id makes the upsert idempotent.
+    # * Single upsert write: find_one_and_replace on an empty filter inserts
+    # * when the collection is empty and replaces the lowest-id row
+    # * otherwise, so a mid-flight crash can never leave zero owner rows
+    # * (the old insert-then-delete pair could). A leftover second row from
+    # * an earlier split brain is still removed below for convergence.
     await db_call(
-        col("tc_owners").update_one(
+        col("tc_owners").find_one_and_replace(
+            {},
             {"user_id": user_id},
-            {"$setOnInsert": {"user_id": user_id}},
             upsert=True,
+            sort=[("user_id", 1)],
         )
     )
     await db_call(col("tc_owners").delete_many({"user_id": {"$ne": user_id}}))

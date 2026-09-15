@@ -4,6 +4,7 @@
 # {community} is the raw community name.
 
 [index]
+title = "{botname} Help"
 body = """{title}
 Federation management bot for {community}.
 
@@ -23,6 +24,7 @@ invalid_section = "Invalid section."
 prefixes = "*Note:* All commands also work with {prefixes}"
 
 [module]
+title = "Help for {name}"
 body = """{title}
 
 {overview}

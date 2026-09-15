@@ -73,6 +73,13 @@ jobs:
       WARN_EXPIRY_DAYS:        ${{ secrets.WARN_EXPIRY_DAYS }}
       WARN_LIMIT:              ${{ secrets.WARN_LIMIT }}
       FED_WARN_LIMIT:          ${{ secrets.FED_WARN_LIMIT }}
+      SYNC_INTERVAL_HOURS:     ${{ secrets.SYNC_INTERVAL_HOURS }}
+      MTPROTO_SESSION:         ${{ secrets.MTPROTO_SESSION }}
+      COMMUNITY_CHANNEL_URL:   ${{ secrets.COMMUNITY_CHANNEL_URL }}
+      COMMUNITY_GROUP_URL:     ${{ secrets.COMMUNITY_GROUP_URL }}
+      COMMUNITY_LOGS_URL:      ${{ secrets.COMMUNITY_LOGS_URL }}
+      COMMUNITY_EXEC_URL:      ${{ secrets.COMMUNITY_EXEC_URL }}
+      COMMUNITY_TRAVEL_URL:    ${{ secrets.COMMUNITY_TRAVEL_URL }}
       API_ID:                  ${{ secrets.API_ID }}
       API_HASH:                ${{ secrets.API_HASH }}
       WEBHOOK_URL:             ${{ secrets.WEBHOOK_URL }}

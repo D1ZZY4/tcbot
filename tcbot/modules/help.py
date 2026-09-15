@@ -129,10 +129,13 @@ def _module_map_for_locale(locale: str | None) -> dict[str, str]:
 
 def _help_index_text(botname: str, locale: str | None = None) -> str:
     """Build the help index header for the given plain-text bot display name."""
+    # * Title renders plain then bolds outside: the engine would double
+    # * escape the name if it escaped first, and plain alone would leave
+    # * a markup-bearing bot name unescaped. bold() escapes exactly once.
     return t(
         "help.index.body",
         locale,
-        title=Safe(bold(f"{botname} Help")),
+        title=Safe(bold(t("help.index.title", locale, botname=botname, plain=True))),
         community=cfg.community_name,
     )
 
@@ -173,7 +176,7 @@ def _module_text(name: str, overview: str, locale: str | None = None) -> str:
     return t(
         "help.module.body",
         locale,
-        title=Safe(bold(f"Help for {name}")),
+        title=Safe(bold(t("help.module.title", locale, name=name, plain=True))),
         overview=Safe(overview),
         note=Safe(_prefix_note(locale)),
     )

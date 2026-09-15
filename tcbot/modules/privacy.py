@@ -65,9 +65,6 @@ def _section_body(idx: int, locale: str | None = None) -> tuple[str, str]:
     )
 
 
-_POLICY_SECTION_LABELS: list[str] = _section_labels()
-
-
 # ──────────────────────── Callback Handlers ─────────────────────── #
 
 

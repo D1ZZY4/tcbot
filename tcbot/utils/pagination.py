@@ -54,6 +54,8 @@ def nav_row(
     return row
 
 
-def date_or_unknown(value: Any) -> str:
-    """Format a datetime field or return 'Unknown' if missing."""
-    return fmt_dt(value) if value else "Unknown"
+def date_or_unknown(value: Any, locale: str | None = None) -> str:
+    """Format a datetime field or a localized Unknown fallback if missing."""
+    return (
+        fmt_dt(value) if value else t("common.action.unknown_date", locale, plain=True)
+    )

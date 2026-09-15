@@ -43,8 +43,10 @@ async def build_ban_detail(
         target_fname, target_uname = (
             r_target if not isinstance(r_target, BaseException) else (str(uid), None)
         )
+        # * Outage fallback stays locale-neutral: the numeric ID renders
+        # * the same in every language instead of a hardcoded word.
         admin_fname, admin_uname = (
-            r_admin if not isinstance(r_admin, BaseException) else ("Admin", None)
+            r_admin if not isinstance(r_admin, BaseException) else (str(aid), None)
         )
     else:
         try:
@@ -53,7 +55,7 @@ async def build_ban_detail(
         except asyncio.CancelledError:
             raise
         except Exception:
-            admin_fname, admin_uname = ("Admin", None)
+            admin_fname, admin_uname = (str(aid), None)
         target_uname = None
 
     proof_chat, proof_thread = cfg.proofs

@@ -19,6 +19,7 @@ Collection ``mtproto_state``, one document per key, all scoped by namespace::
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import TYPE_CHECKING
 
@@ -40,6 +41,10 @@ class MongoStorage(Storage):
     def __init__(self, namespace: str) -> None:
         """Scope every key under *namespace* so sessions never collide."""
         self._ns = namespace
+        # * Pre-escaped once: the namespace feeds several anchored $regex
+        # * filters below, and an unescaped metacharacter there would widen
+        # * every peer/username/state scan past this session's keys.
+        self._ns_re = re.escape(namespace)
 
     # ── key helpers ── #
 
@@ -75,7 +80,7 @@ class MongoStorage(Storage):
 
     async def delete(self) -> None:
         """Drop every document in this namespace."""
-        await db_call(self._coll().delete_many({"_id": {"$regex": f"^{self._ns}:"}}))
+        await db_call(self._coll().delete_many({"_id": {"$regex": f"^{self._ns_re}:"}}))
 
     # ── scalar accessors (same object-sentinel contract as SQLiteStorage) ── #
 
@@ -174,12 +179,23 @@ class MongoStorage(Storage):
     async def update_usernames(
         self, usernames: Iterable[tuple[int, list[str | None]]]
     ) -> None:
-        """Replace the username list of each given peer."""
+        """Replace the username list of each given peer.
+
+        Bumps ``updated_on`` alongside the names: username freshness is
+        evaluated against that timestamp, so a names-only write must not
+        leave the previous write time behind.
+        """
+        now = time.time()
         for peer_id, names in usernames:
             await db_call(
                 self._coll().update_one(
                     {"_id": self._peer(peer_id)},
-                    {"$set": {"usernames": [n for n in names if n is not None]}},
+                    {
+                        "$set": {
+                            "usernames": [n for n in names if n is not None],
+                            "updated_on": now,
+                        }
+                    },
                     upsert=True,
                 )
             )
@@ -195,7 +211,7 @@ class MongoStorage(Storage):
         """Return the freshest InputPeer for *username*, or raise KeyError."""
         doc = await db_call(
             self._coll().find_one(
-                {"_id": {"$regex": f"^{self._ns}:peer:"}, "usernames": username},
+                {"_id": {"$regex": f"^{self._ns_re}:peer:"}, "usernames": username},
                 sort=[("updated_on", -1)],
             )
         )
@@ -210,7 +226,10 @@ class MongoStorage(Storage):
         """Return the InputPeer for *phone_number*, or raise KeyError."""
         doc = await db_call(
             self._coll().find_one(
-                {"_id": {"$regex": f"^{self._ns}:peer:"}, "phone_number": phone_number}
+                {
+                    "_id": {"$regex": f"^{self._ns_re}:peer:"},
+                    "phone_number": phone_number,
+                }
             )
         )
         if doc is None:
@@ -224,7 +243,7 @@ class MongoStorage(Storage):
         self, ids: int | Iterable[int] | None = None
     ) -> list[UpdateState]:
         """Return stored update states oldest-first, optionally filtered by ID."""
-        filt: dict[str, Any] = {"_id": {"$regex": f"^{self._ns}:ustate:"}}
+        filt: dict[str, Any] = {"_id": {"$regex": f"^{self._ns_re}:ustate:"}}
         if ids is not None:
             state_ids = (ids,) if isinstance(ids, int) else tuple(ids)
             if not state_ids:

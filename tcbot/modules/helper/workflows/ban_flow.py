@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import telegram.error
-from telegram import Update
+from telegram import Message, Update
 from telegram.ext import (
     CallbackQueryHandler,
     ContextTypes,
@@ -22,7 +22,7 @@ from telegram.ext import (
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import keyboards, parse_logmsg, replies
+from tcbot.modules.helper import decorators, keyboards, parse_logmsg, replies
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.modules.helper.parse_editmsg import clear_markup_cb, safe_edit_cb, safe_reply
 from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
@@ -36,6 +36,7 @@ from tcbot.utils.dispatch import (
     count_transient_errors,
     fan_out,
     is_benign_telegram_error,
+    throw_if_cancelled,
 )
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
@@ -338,6 +339,8 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             return_exceptions=True,
         )
         if isinstance(set_log_result, BaseException):
+            if isinstance(set_log_result, asyncio.CancelledError):
+                raise set_log_result
             log.error(
                 "set_log_message_id failed for ban_id=%s: %s", ban_id, set_log_result
             )
@@ -376,11 +379,8 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         admin_fname,
         trigger="ban",
     )
-    _primary_ids = [cid for cid in (cfg.main_group, cfg.exec_group) if cid]
-    _existing_ids = {grp["chat_id"] for grp in groups}
-    for _pid in _primary_ids:
-        if _pid not in _existing_ids:
-            groups = [*groups, {"chat_id": _pid, "title": ""}]
+    # * Connected groups plus primaries (single merge owner in groups_db).
+    groups = db.groups_db.with_primary_groups(groups, (cfg.main_group, cfg.exec_group))
     results = await fan_out(
         [bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
     )
@@ -473,6 +473,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             ),
             return_exceptions=True,
         )
+        throw_if_cancelled((edit_result, upsert_result, pm_result, markup_result))
         if isinstance(markup_result, BaseException):
             log.debug("Ban summary markup clear failed: %s", markup_result)
         if isinstance(edit_result, BaseException):
@@ -487,6 +488,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             ),
             return_exceptions=True,
         )
+        throw_if_cancelled((upsert_result, pm_result))
         if isinstance(upsert_result, BaseException):
             log.error(
                 "upsert_user (no-prompt path) failed for target=%d: %s",
@@ -673,7 +675,21 @@ async def on_ban_update_continue(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
     msg = update.effective_message
     if q is None or msg is None or ctx.user_data is None:
         return ConversationHandler.END
+    if not isinstance(msg, Message):
+        for key in _BAN_USER_DATA_KEYS:
+            ctx.user_data.pop(key, None)
+        return ConversationHandler.END
     await q.answer()
+    # * Re-check the tapper rank: the confirm card can outlive a demotion,
+    # * and the comment below about entry-point coverage no longer holds
+    # * across that window.
+    tapper = update.effective_user
+    if tapper is None or not await decorators.recheck_executor_rank(
+        msg, tapper.id, min_role="developer"
+    ):
+        for key in _BAN_USER_DATA_KEYS:
+            ctx.user_data.pop(key, None)
+        return ConversationHandler.END
     # * Entry-point authorization covers this tap like every other flow
     # * callback: the tapping admin passed resolve_and_check moments ago,
     # * and demotion below still runs before anything enforces.
@@ -784,6 +800,27 @@ async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         log.debug("Ban done-proof answer failed: %s", exc)
     if not session.meta.get("ban_target_id") or not session.meta.get("ban_admin_id"):
         log.warning("Done-proof flush aborted: meta missing target_id or admin_id")
+        _proof_sessions.pop(key, None)
+        _clear_ban_state(session.user_data)
+        return ConversationHandler.END
+    # * Rank re-check: a moderator demoted during proof collection must not
+    # * enforce from a stale prompt.
+    tap_msg = update.effective_message
+    if user is None or not isinstance(tap_msg, Message):
+        try:
+            await q.answer()
+        except Exception as exc:
+            log.debug("Ban done-proof recheck answer failed: %s", exc)
+        _proof_sessions.pop(key, None)
+        _clear_ban_state(session.user_data)
+        return ConversationHandler.END
+    if not await decorators.recheck_executor_rank(
+        tap_msg, user.id, min_role="developer"
+    ):
+        try:
+            await q.answer()
+        except Exception as exc:
+            log.debug("Ban done-proof recheck answer failed: %s", exc)
         _proof_sessions.pop(key, None)
         _clear_ban_state(session.user_data)
         return ConversationHandler.END

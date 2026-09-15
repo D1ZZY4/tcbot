@@ -161,6 +161,7 @@ sequenceDiagram
         Main->>DB: ensure_indexes()
         Main->>DB: ensure_initial_owner()
         Main->>Main: connect Redis (optional)
+        Main->>Main: start MTProto (fail fast without API_ID/API_HASH)
     end
     Main->>Main: start APScheduler
     Main->>Main: warm hot caches (background task)

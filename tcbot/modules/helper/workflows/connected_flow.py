@@ -26,7 +26,12 @@ from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.keyboards import connect_join_kb
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.utils.dispatch import count_transient_errors, fan_out, throw_if_cancelled
+from tcbot.utils.dispatch import (
+    count_transient_errors,
+    drain_tasks,
+    fan_out,
+    throw_if_cancelled,
+)
 from tcbot.utils.formatter import bold, code
 from tcbot.utils.i18n import t
 from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
@@ -47,6 +52,11 @@ log = logging.getLogger(__name__)
 # * Strong references to in-flight admin-harvest background tasks; prevents GC
 # * before the coroutine completes (RUF006 compliance).
 _harvest_tasks: set[asyncio.Task[None]] = set()
+
+
+async def drain_harvest_tasks() -> None:
+    """Await in-flight admin-harvest tasks at shutdown (bounded, never raises)."""
+    await drain_tasks(_harvest_tasks, label="admin harvest")
 
 
 async def _harvest_admin_identities(
@@ -99,6 +109,11 @@ _REQUIRED_PERMS: tuple[str, ...] = (
     "can_restrict_members",
     "can_invite_users",
 )
+
+# * Cap per-list replay rows: enforcing an unbounded backlog would hold the
+# * owner prompt for minutes on a huge federation. Truncation marks the run
+# * blind so the owner re-syncs instead of trusting a partial replay.
+_REPLAY_CAP: int = 500
 
 
 @dataclass(frozen=True)
@@ -192,7 +207,7 @@ class BuildConnection:
         """Fan out every active federation ban into the new group.
 
         Returns the applied count. Uses ``count_transient_errors`` (not
-        ``count_errors``) so a "user was not in this chat" BadRequest does
+        ``count_errors``) so a "user was not in chat" BadRequest does
         not count as a real failure: for a ban-replay, the user not being
         in the chat is the desired end state.
         """
@@ -285,6 +300,24 @@ class BuildConnection:
         if isinstance(mute_docs, BaseException):
             log.error("active_mute_docs failed for new chat %d: %s", chat_id, mute_docs)
             mute_docs = []
+            replay_blind = True
+        if len(ban_uids) > _REPLAY_CAP:
+            log.warning(
+                "Connect replay truncated to %d/%d bans for chat %d",
+                _REPLAY_CAP,
+                len(ban_uids),
+                chat_id,
+            )
+            ban_uids = ban_uids[:_REPLAY_CAP]
+            replay_blind = True
+        if len(mute_docs) > _REPLAY_CAP:
+            log.warning(
+                "Connect replay truncated to %d/%d mutes for chat %d",
+                _REPLAY_CAP,
+                len(mute_docs),
+                chat_id,
+            )
+            mute_docs = mute_docs[:_REPLAY_CAP]
             replay_blind = True
 
         # * Harvest admin identities into the member cache (fire-and-forget, best-effort).
@@ -473,6 +506,15 @@ class BuildConnection:
                             "complete_join failed in on_bot_added for chat %d",
                             chat.id,
                         )
+                        # * Mirror on_join_decision: never leave the prompt
+                        # * stuck on "connecting" with its buttons stripped.
+                        with contextlib.suppress(Exception):
+                            await ctx.bot.edit_message_text(
+                                t("connecting.state.complete_join", locale, plain=True),
+                                chat_id=chat.id,
+                                message_id=pending.get("message_id", 0),
+                                reply_markup=None,
+                            )
                         return
                     try:
                         await ctx.bot.edit_message_text(

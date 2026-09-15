@@ -153,6 +153,12 @@ async def _toggle(
 ) -> None:
     q = update.callback_query
     if q is None or q.message is None:
+        # * Answer first so the client spinner never hangs on a dead tap.
+        if q is not None:
+            try:
+                await q.answer()
+            except Exception as exc:
+                log.debug("groups toggle answer failed: %s", exc)
         return
     locale = await locale_for_update(update)
 

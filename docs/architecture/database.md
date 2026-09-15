@@ -205,7 +205,7 @@ Resolution order in `get_effective_role`:
 - `ensure_initial_owner(initial_id: int) -> None`
   Inserts the founder when `tc_owners` is empty. On a `DuplicateKeyError` (another instance won the startup race) it invalidates the owner cache instead of failing.
 - `set_owner(user_id: int) -> None`
-  Replaces the owner atomically: upserts the new owner first (a crash never leaves zero owners), deletes every other row, puts the new ID in the owner cache, and calls `effective_role_cache.clear_all()` so no process keeps a stale `"founder"` role after transfer.
+  Replaces the owner with one upsert write (a crash never leaves zero owners), removes any leftover second row from an earlier split brain, verifies the single-row invariant loudly, puts the new ID in the owner cache, and calls `effective_role_cache.clear_all()` so no process keeps a stale `"founder"` role after transfer. Owner reads use a sorted query so a transient two-row state resolves deterministically.
 
 ### Admin CRUD
 
@@ -416,9 +416,9 @@ The per-group threshold is `cfg.warn_limit` (env `WARN_LIMIT`, default 3, minimu
 - `federation_warn_count(user_id: int) -> int`
   Total active warn count across all federation chats: server-side `$group` aggregation summing `count` where `count > 0`. Returns 0 when there is nothing. Used to evaluate the `FED_WARN_LIMIT` threshold.
 - `migrate_records(old_chat_id: int, new_chat_id: int) -> bool`
-  Chat-migration repoint. Warn history moves with one update; counter docs merge by summation (per user, added into the supergroup counter via upsert) so a supergroup that already holds warns keeps the combined total instead of losing one side to the per-pair unique index. Stale old-chat counter docs are deleted after the merge. Each stage logs and skips on failure. Returns `True` if any record moved. Called by `greeting.on_chat_migration` alongside `groups_db.migrate_group` so warning history and thresholds survive a basic-group to supergroup migration.
+  Chat-migration repoint. Warn history moves with one update; counter docs merge by summation (per user, added into the supergroup counter via upsert) so a supergroup that already holds warns keeps the combined total instead of losing one side to the per-pair unique index. Each old counter is consumed with an atomic take (removed before its count lands on the new pair), so a crash plus retry can only under-count, never double-count into a false auto-ban. Each stage logs and skips on failure. Returns `True` if any record moved. Called by `greeting.on_chat_migration` alongside `groups_db.migrate_group` (plus the kick/mute history repoints) so warning history and thresholds survive a basic-group to supergroup migration.
 
-**Error behavior:** warn deletions raise when the history delete fails (empty-state misreporting is a correctness hazard); counter failures are repaired via recount or error-logged. Counter backfill is atomic so concurrent first-reads cannot double-count.
+**Error behavior:** warn deletions raise when the history delete fails (empty-state misreporting is a correctness hazard); counter-delete failures are repaired (recount for single-group clears, bounded retry for federation-wide clears) and stay non-fatal. Counter backfill is atomic so concurrent first-reads cannot double-count.
 
 ## Kicks (`kicks_db.py`, collection `kicks`)
 

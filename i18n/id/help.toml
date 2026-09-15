@@ -4,6 +4,7 @@
 # {community} is the raw community name.
 
 [index]
+title = "Bantuan {botname}"
 body = """{title}
 Bot manajemen federasi untuk {community}.
 
@@ -23,6 +24,7 @@ invalid_section = "Bagian tidak valid."
 prefixes = "*Catatan:* Semua perintah juga bisa dipakai dengan {prefixes}"
 
 [module]
+title = "Bantuan untuk {name}"
 body = """{title}
 
 {overview}

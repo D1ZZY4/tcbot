@@ -299,7 +299,7 @@ Flow:
 2. Identity refusal rejects self-transfer, the bot, Telegram, other bots, and anonymous-admin targets.
 3. `resolve_and_check(..., min_role="developer")` refuses transferring to a staff target of equal or higher rank, the current Founder included.
 4. Any non-Founder role the target already holds is cleared first via `Demote.remove_role` (Admin from `tc_admins`, Developer/Tester from `tc_roles`), so the post-transfer state holds exactly one Founder with no residual Admin/Developer/Tester record.
-5. `users_roles.set_owner(target_id)` replaces the single owner record in `tc_owners` first, so a mid-flight failure never leaves the federation ownerless.
+5. `users_roles.set_owner(target_id)` lands the new owner row in one upsert write first, so a mid-flight failure never leaves the federation ownerless; a converging cleanup removes any leftover second row.
 6. The in-process error-reporter owner is refreshed to the new owner.
 7. The previous Founder is kept as Admin via `users_roles.add_admin(...)`; a failure here stays visible as a WARNING line telling the operator to grant Admin manually.
 8. The owner cache is updated and the effective-role cache is cleared entirely.

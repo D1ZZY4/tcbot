@@ -103,4 +103,5 @@ def user_ref(user_id: int, name: str, username: str | None = None) -> str:
     backward compatibility and ignored.
     """
     _ = username
-    return f"[{esc(str(name))}](tg://user?id={user_id})"
+    label = str(name) or str(user_id)
+    return f"[{esc(label)}](tg://user?id={user_id})"

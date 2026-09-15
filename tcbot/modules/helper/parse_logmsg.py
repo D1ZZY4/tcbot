@@ -464,7 +464,9 @@ def _appeal_decision_edit(
         b.field("Appeal", "N/A")
     return (
         b.section()
-        .field("Submitted", submitted_str)
+        # * submitted_str arrives pre-escaped from fmt_dt: pass it through
+        # * instead of escaping twice like the default field() does.
+        .field("Submitted", submitted_str, escape=False)
         .raw(f"{decision_label}: {user_ref(admin_id, admin_fname)}")
         .date(label=f"{decision_label} at")
         .build()

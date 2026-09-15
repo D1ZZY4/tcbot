@@ -7,10 +7,13 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+from telegram import Chat, Message
 
+from tcbot import database as db
 from tcbot.modules.helper.workflows import ban_flow
 from tcbot.utils.time_and_date import monotonic
 
@@ -37,6 +40,13 @@ class _FakeUpdate:
     def __init__(self) -> None:
         self.effective_chat = _FakeChat()
         self.effective_user = _FakeUser()
+        # * Real Message: on_done_proof narrows to Message before the
+        # * rank re-check (inaccessible messages abort the tap).
+        self.effective_message = Message(
+            message_id=5,
+            date=datetime.now(UTC),
+            chat=Chat(id=_FakeChat.id, type=_FakeChat.type),
+        )
         self.callback_query = _FakeCallbackQuery()
 
 
@@ -157,6 +167,11 @@ def test_done_proof_finally_guard_regression(
     async def _scenario() -> object:
         registry[key] = first
         monkeypatch.setattr(ban_flow, "_execute_ban", _replace_while_executing)
+
+        async def _founder(uid: int) -> str | None:
+            return "founder"
+
+        monkeypatch.setattr(db.users_roles, "get_effective_role", _founder)
         return await ban_flow.on_done_proof(
             _FakeUpdate(),  # type: ignore[arg-type]
             _FakeCtx(first.user_data),  # type: ignore[arg-type]

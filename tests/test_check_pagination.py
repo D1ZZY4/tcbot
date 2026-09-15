@@ -118,15 +118,21 @@ def test_warns_in_group_uses_server_side_page(
         }
         for i in range(1, 9)
     ]
-    calls: list[tuple[int, int, int, int | None]] = []
+    calls: list[tuple[int, int, int, int | None, bool]] = []
 
     async def _get_warns(
-        user_id: int, chat_id: int, *, skip: int = 0, limit: int | None = None
+        user_id: int,
+        chat_id: int,
+        *,
+        skip: int = 0,
+        limit: int | None = None,
+        newest_first: bool = False,
     ) -> list[dict[str, Any]]:
-        calls.append((user_id, chat_id, skip, limit))
+        calls.append((user_id, chat_id, skip, limit, newest_first))
+        ordered = rows[::-1] if newest_first else rows
         if limit is None:
-            return rows
-        return rows[skip : skip + limit]
+            return ordered
+        return ordered[skip : skip + limit]
 
     async def _count(user_id: int, chat_id: int) -> int:
         return 8
@@ -138,7 +144,7 @@ def test_warns_in_group_uses_server_side_page(
     monkeypatch.setattr(db.users_cache, "get_first_names_batch", _no_names)
 
     text, _markup = asyncio.run(check_flow.Check.warns_in_group(42, 22, 1, None))
-    assert calls == [(42, 22, 5, 5)]
+    assert calls == [(42, 22, 5, 5, True)]
     assert "8 total" in text
     assert "page 2/2" in text
-    assert text.index("r8") < text.index("r7") < text.index("r6")
+    assert text.index("r3") < text.index("r2") < text.index("r1")

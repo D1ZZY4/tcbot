@@ -9,8 +9,10 @@ from __future__ import annotations
 import asyncio
 
 from tcbot import database as db
+from tcbot.database.types import GroupId
 from tcbot.modules import help as helpmod
-from tcbot.modules.helper import keyboards, replies
+from tcbot.modules.help import _help_index_text, _module_text
+from tcbot.modules.helper import decorators, keyboards, replies
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.workflows import check_flow, stats_flow
 from tcbot.modules.helper.workflows.connected_flow import BuildConnection
@@ -188,3 +190,92 @@ def test_help_topics_rebuild_per_locale() -> None:
     assert content_en.keys() == content_id.keys()
     assert content_en["help_banning"][1] != content_id["help_banning"][1]
     assert helpmod._module_map_for_locale("id")
+
+
+def test_stats_search_buttons_resolve_in_catalog() -> None:
+    for locale in ("en-US", "id"):
+        row = keyboards.stats_search_row(locale)
+        assert row[0].text and not row[0].text.startswith("[")
+        kb = keyboards.stats_search_results_kb(2, locale)
+        labels = [b.text for r in kb.inline_keyboard for b in r]
+        assert labels and all(not label.startswith("[") for label in labels)
+
+
+def test_stats_search_results_carry_stable_ids() -> None:
+    kb = keyboards.stats_search_results_kb(2, "en-US", item_ids=["banA", "banB"])
+    assert kb.inline_keyboard[0][0].callback_data == "stats_search_item:0:banA"
+    assert kb.inline_keyboard[0][1].callback_data == "stats_search_item:1:banB"
+    legacy = keyboards.stats_search_results_kb(1, "en-US")
+    assert legacy.inline_keyboard[0][0].callback_data == "stats_search_item:0"
+
+
+def test_with_primary_groups_merges_missing_only() -> None:
+    groups = db.groups_db.with_primary_groups(
+        [
+            {"chat_id": GroupId(1), "title": "A"},
+            {"chat_id": GroupId(-100), "title": "P"},
+        ],
+        (-100, -200, 0),
+        7,
+    )
+    assert [(g["chat_id"], g["title"]) for g in groups] == [
+        (1, "A"),
+        (-100, "P"),
+        (-200, ""),
+        (7, ""),
+    ]
+
+
+def test_help_titles_localize() -> None:
+    assert "Bantuan" in _help_index_text("TCF", "id")
+    assert "Help for" in _module_text("Ban", "Body.", "en-US")
+    assert "Bantuan untuk" in _module_text("Ban", "Body.", "id")
+
+
+def test_recheck_executor_rank() -> None:
+    class _Chat:
+        id = 11
+        type = "supergroup"
+
+    class _Msg:
+        chat = _Chat()
+
+        def __init__(self) -> None:
+            self.replies: list[str] = []
+
+        async def reply_text(self, text: str, **kwargs: object) -> object:
+            self.replies.append(text)
+            return object()
+
+    async def _tester(uid: int) -> str | None:
+        return "tester"
+
+    async def _founder(uid: int) -> str | None:
+        return "founder"
+
+    async def run() -> tuple[bool, bool, int]:
+        orig = db.users_roles.get_effective_role
+        db.users_roles.get_effective_role = _tester  # type: ignore[assignment]
+        try:
+            denied = await decorators.recheck_executor_rank(
+                _Msg(),  # type: ignore[arg-type]
+                9,
+                min_role="developer",
+            )
+        finally:
+            db.users_roles.get_effective_role = orig  # type: ignore[assignment]
+        msg = _Msg()
+        db.users_roles.get_effective_role = _founder  # type: ignore[assignment]
+        try:
+            allowed = await decorators.recheck_executor_rank(
+                msg,  # type: ignore[arg-type]
+                9,
+                min_role="developer",
+            )
+        finally:
+            db.users_roles.get_effective_role = orig  # type: ignore[assignment]
+        return denied, allowed, len(msg.replies)
+
+    denied, allowed, _ = asyncio.run(run())
+    assert denied is False
+    assert allowed is True

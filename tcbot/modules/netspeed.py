@@ -207,6 +207,8 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         loop = asyncio.get_running_loop()
         # * Ookla can hang for minutes on a bad route; bound the whole run
         # * so the handler (and its executor thread) cannot stall forever.
+        # * The timeout only abandons the wait: the executor thread itself
+        # * runs to completion in the background (documented limitation).
         async with asyncio.timeout(_SPEEDTEST_TIMEOUT):
             result: dict = await loop.run_in_executor(None, _run_speedtest)
     except TimeoutError:

@@ -301,6 +301,18 @@ class AppealSubmitMixin:
         if q is None:
             return ConversationHandler.END
 
+        # * Stale-prompt guard: a second appeal overwrites the stored
+        # * instruction id, so a tap on the previous prompt must not wipe
+        # * the live session (same pattern as the ban-flush session guard).
+        live_mid = (ctx.user_data or {}).get("appeal_instruction_msg_id")
+        tap_mid = q.message.message_id if q.message is not None else None
+        if live_mid is not None and tap_mid is not None and tap_mid != live_mid:
+            try:
+                await q.answer()
+            except Exception as exc:
+                log.debug("appeal stale-cancel answer failed: %s", exc)
+            return ConversationHandler.END
+
         _clear_appeal_state(ctx.user_data)
 
         # * Answer before the visible edit so the client spinner clears
@@ -333,12 +345,29 @@ class AppealSubmitMixin:
             )
         return ConversationHandler.END
 
+    async def _on_unexpected(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> int:
+        """Non-text message handler; nudge back to text instead of silence."""
+        msg = update.effective_message
+        if msg is not None:
+            await safe_reply(
+                msg,
+                t(
+                    "appeals.submit.unexpected",
+                    await locale_for_update(update),
+                    plain=True,
+                ),
+                log_label="Appeal unexpected-type",
+                parse_mode=None,
+            )
+        return WAITING_APPEAL
+
     async def _on_message(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Text message handler; validates and submits a #appeal message."""
         msg = update.effective_message
         if msg is None or msg.text is None:
             return WAITING_APPEAL
-
         text = msg.text.strip()
 
         locale = await locale_for_update(update)
@@ -586,6 +615,9 @@ class AppealSubmitMixin:
                 t("appeals.submit.submitted", locale, plain=True),
                 chat_id=update.effective_chat.id if update.effective_chat else None,
                 message_id=instr_mid,
+                # * Strip the Cancel keyboard: the conversation ends here and
+                # * a live button would spin forever with no handler behind it.
+                reply_markup=None,
             )
             if instr_mid and update.effective_chat
             else None
@@ -674,9 +706,18 @@ class AppealSubmitMixin:
                         & ~ALL_PREFIXES_CMD_FILTER,
                         self._on_message,
                     ),
+                    MessageHandler(
+                        filters.ChatType.PRIVATE
+                        & ~filters.TEXT
+                        & ~ALL_PREFIXES_CMD_FILTER,
+                        self._on_unexpected,
+                    ),
                 ],
             },
             fallbacks=[
+                # * A fresh deep link restarts the flow instead of falling
+                # * into the generic session-ended handler below.
+                MessageHandler(entry_filter, self._on_entry),
                 MessageHandler(ALL_PREFIXES_CMD_FILTER, self._end),
             ],
             per_chat=True,

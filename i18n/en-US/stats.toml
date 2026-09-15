@@ -31,6 +31,7 @@ group_not_found = "Group not found on this page."
 ban_not_found = "Ban record not found on this page."
 result_unavailable = "Result no longer available."
 access_retry = "I couldn't verify your access right now. Please try again in a moment."
+db_fail = "Could not load the data. The database is unreachable, try again in a bit."
 
 # Runtime strings for stats views (stats_flow.py). All render MarkdownV2
 # except button labels (plain). Placeholders as documented per key.
@@ -49,6 +50,7 @@ users = "Users tracked: {n}"
 bans = "Active bans: {n}"
 chats = "Connected chats: {n}"
 owner_unset = "Not set"
+degraded = "Note: some numbers could not be loaded; totals above may be incomplete."
 
 [roster]
 title = "*Staff Roster* - {community}"

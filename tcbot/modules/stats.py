@@ -337,12 +337,19 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     """Free-text query message handler; only reacts when the search panel is active."""
     if ctx.user_data is None or not ctx.user_data.get(SEARCH_KEY):
         return
-    ctx.user_data.pop(SEARCH_KEY, None)
-
     # * Guard instead of assert: a search-panel input without a message object
-    # * is a no-op (state was already popped above), not a crash.
+    # * is a no-op (state is kept for the right chat), not a crash.
     msg = update.effective_message
     if msg is None:
+        return
+    ctx.user_data.pop(SEARCH_KEY, None)
+    # * Origin guard: the panel card may live in another chat (stats works
+    # * in groups too). Accept input only from the stored panel chat so a
+    # * message elsewhere is neither deleted nor rendered into the wrong
+    # * card. The pending state stays for the right chat.
+    panel_chat = ctx.user_data.get(CHAT_KEY)
+    if panel_chat is not None and msg.chat_id != panel_chat:
+        ctx.user_data[SEARCH_KEY] = True
         return
     query = (msg.text or "").strip()
 
@@ -390,17 +397,16 @@ async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     q = update.callback_query
     if q is None:
         return
+    parts = (q.data or "").split(":")
     try:
-        idx = int((q.data or "").split(":")[1])
-    except ValueError:
+        idx = int(parts[1])
+    except ValueError, IndexError:
         await q.answer()
         return
-    except IndexError:
-        await q.answer()
-        return
+    stable = parts[2] if len(parts) > 2 else None
     results = ctx.user_data.get(RESULTS_KEY, []) if ctx.user_data else []
     await ack_and_render(
-        q, Stats.search_detail(results, idx, await locale_for_update(update))
+        q, Stats.search_detail(results, idx, await locale_for_update(update), stable)
     )
 
 
@@ -464,7 +470,9 @@ __handlers__ = [
         on_stats_ban_item, pattern=r"^stats_ban_item:\d+:\d+(:[^:]+)?$"
     ),
     CallbackQueryHandler(on_stats_bans_search, pattern=r"^stats_bans_search$"),
-    CallbackQueryHandler(on_stats_search_item, pattern=r"^stats_search_item:\d+$"),
+    CallbackQueryHandler(
+        on_stats_search_item, pattern=r"^stats_search_item:\d+(:[^:]+)?$"
+    ),
     CallbackQueryHandler(on_stats_search_back, pattern=r"^stats_search_back$"),
     CallbackQueryHandler(on_stats_search_cancel, pattern=r"^stats_search_cancel$"),
     # * Scoped to private chat: search input is only meaningful in PM where the

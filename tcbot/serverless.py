@@ -116,6 +116,13 @@ async def _init_subsystems(app: Application) -> None:
     APScheduler is intentionally NOT started here: a frozen serverless
     instance cannot fire persistent schedules.  Recurring maintenance
     (warn expiry) runs through the Vercel Cron endpoint instead.
+
+    MTProto is intentionally NOT started here either: a serverless
+    instance cannot hold the long-lived session the shared MongoDB store
+    assumes, so identity resolution degrades to Bot-API-only and returns
+    None for MTProto-only lookups. Long-lived transports fail closed at
+    boot without API_ID/API_HASH; serverless stays available without
+    them by design.
     """
     log.info("serverless: connecting to MongoDB...")
     await connect()

@@ -23,6 +23,7 @@ from tcbot.utils.dispatch import (
     count_transient_errors,
     fan_out,
     is_benign_telegram_error,
+    throw_if_cancelled,
 )
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
@@ -524,7 +525,7 @@ async def execute_resetwarns(
         return_exceptions=True,
     )
     if isinstance(results[0], BaseException):
-        log.error(
+        log.exception(
             "Reset-warns log send failed for target=%d: %s", target_id, results[0]
         )
 
@@ -614,23 +615,15 @@ async def _execute_warn_auto_ban(
         )
         return
 
-    groups_result, existing_ban, log_result = await asyncio.gather(
+    groups_result, existing_ban = await asyncio.gather(
         db.groups_db.active_groups(),
         db.bans_db.get_active_ban(target_id),
-        bot.send_message(
-            lc,
-            log_text,
-            parse_mode="MarkdownV2",
-            message_thread_id=lt,
-            reply_markup=proof_kb,
-        ),
         return_exceptions=True,
     )
-    if isinstance(log_result, BaseException):
-        log.error("Warn-auto-ban log send failed: %s", log_result)
-    log_msg_id: int = (
-        log_result.message_id if not isinstance(log_result, BaseException) else 0
-    )
+    # ! CRITICAL: cancelled reads must propagate before any enforcement
+    # ! decision; coercing them shrinks the fan-out scope and may create
+    # ! a ban record mid-shutdown.
+    throw_if_cancelled((groups_result, existing_ban))
     # * A groups-fetch failure must never silently shrink the enforcement
     # * scope: the reply below counts only fanned groups, so without this
     # * flag + suffix an outage would report full success while connected
@@ -638,7 +631,7 @@ async def _execute_warn_auto_ban(
     # * manual retry for anything missed.
     groups_fetch_failed = isinstance(groups_result, BaseException)
     if groups_fetch_failed:
-        log.error(
+        log.exception(
             "Warn auto-ban groups fetch failed for target=%d; enforcing reduced scope",
             target_id,
         )
@@ -647,15 +640,22 @@ async def _execute_warn_auto_ban(
         not isinstance(existing_ban, BaseException) and existing_ban is not None
     )
 
-    _all_group_ids: set[int] = {grp["chat_id"] for grp in groups}
-    for _extra in [chat_id] + [cid for cid in (cfg.main_group, cfg.exec_group) if cid]:
-        if _extra not in _all_group_ids:
-            groups = [*groups, {"chat_id": _extra}]
-            _all_group_ids.add(_extra)
+    # * Connected groups plus the current chat plus primaries (single
+    # * merge owner in groups_db).
+    groups = db.groups_db.with_primary_groups(
+        groups, (cfg.main_group, cfg.exec_group), chat_id
+    )
 
+    ban_id: str | None = None
     if not already_banned:
         try:
-            await db.bans_db.create_ban(target_id, reason_text, admin_id, 0, log_msg_id)
+            # * Record first: sending the audit log before the record exists
+            # * leaves a phantom card pointing at nothing when the write
+            # * fails. The log message id is attached afterwards.
+            ban_doc = await db.bans_db.create_ban(
+                target_id, reason_text, admin_id, 0, 0
+            )
+            ban_id = ban_doc.get("ban_id", "")
         except Exception:
             # * Fail closed like execute_unban: enforcing chats without a DB
             # * record would leave an un-appealable, un-unbannable split
@@ -678,6 +678,27 @@ async def _execute_warn_auto_ban(
                 reply_markup=proof_kb,
             )
             return
+
+    try:
+        log_msg = await bot.send_message(
+            lc,
+            log_text,
+            parse_mode="MarkdownV2",
+            message_thread_id=lt,
+            reply_markup=proof_kb,
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("Warn-auto-ban log send failed")
+        log_msg = None
+    if ban_id and log_msg is not None:
+        try:
+            await db.bans_db.set_log_message_id(ban_id, log_msg.message_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Warn-auto-ban set_log_message_id failed")
 
     ban_results = await fan_out(
         [bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
@@ -819,4 +840,5 @@ def warn_conversation(
         _exec_warn,
         entry_filter,
         escape_filter=escape_filter,
+        min_role="tester",
     )

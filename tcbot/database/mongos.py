@@ -125,6 +125,24 @@ def mongo_client_kwargs() -> dict[str, Any]:
     return kwargs
 
 
+def mongo_jobstore_kwargs() -> dict[str, Any]:
+    """Extra MongoClient kwargs for the APScheduler MongoDBJobStore client.
+
+    Kept separate from :func:`mongo_client_kwargs` (whose selection/connect
+    timeouts ``connect()`` already shares): the job store's synchronous
+    client additionally needs socket and pool bounds so a hung socket
+    cannot stall the scheduler thread's borrowed event loop, and so the
+    store never opens more connections than its single-threaded use needs.
+    """
+    return {
+        "socketTimeoutMS": _MONGO_SOCKET_TIMEOUT_MS,
+        "maxPoolSize": 2,
+        "minPoolSize": 0,
+        "maxIdleTimeMS": _MONGO_MAX_IDLE_MS,
+        "heartbeatFrequencyMS": _MONGO_HEARTBEAT_MS,
+    }
+
+
 async def connect() -> None:
     """Establish MongoDB connection and initialize the global _db instance."""
     global _db
@@ -219,6 +237,12 @@ async def ensure_indexes() -> None:
         col("bans").create_index(
             [("banned_user_id", 1), ("appeal_log_msg_id", 1)], sparse=True
         ),
+        # * Covering index for active_ban_user_ids() DISTINCT over the
+        # * active slice: answers from the index without fetching documents.
+        col("bans").create_index([("is_active", 1), ("banned_user_id", 1)]),
+        # * Serves mtproto_store peer lookups by username / phone number.
+        col("mtproto_state").create_index([("usernames", 1)], sparse=True),
+        col("mtproto_state").create_index([("phone_number", 1)], sparse=True),
         # * Serves active_ban_count()/active_bans_page() which filter on is_active only
         col("bans").create_index([("is_active", 1), ("timestamp", -1), ("ban_id", -1)]),
         # * Serves /check history: every ban (active+inactive) for a user, newest first
@@ -248,7 +272,8 @@ async def ensure_indexes() -> None:
         col("warns").create_index([("user_id", 1), ("chat_id", 1), ("timestamp", -1)]),
         # * Serves /check history: every warning for a user across groups
         col("warns").create_index([("user_id", 1), ("timestamp", -1)]),
-        # * Serves get_warns() oldest-first sort (timestamp ASC)
+        # * Serves get_warns() sorts in both directions (newest-first
+        # * paged views and oldest-first full reads).
         col("warns").create_index([("user_id", 1), ("chat_id", 1), ("timestamp", 1)]),
         # * Serves warn expiry: delete_many({"timestamp": {"$lt": cutoff}}) COLLSCAN without this
         col("warns").create_index([("timestamp", 1)]),

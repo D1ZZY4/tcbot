@@ -436,7 +436,11 @@ class Check:
         page = max(0, min(page, total_pages - 1))
         try:
             warns = await db.warns_db.get_warns(
-                target_id, chat_id, skip=page * _PAGE_SIZE, limit=_PAGE_SIZE
+                target_id,
+                chat_id,
+                skip=page * _PAGE_SIZE,
+                limit=_PAGE_SIZE,
+                newest_first=True,
             )
             warns_failed = False
         except Exception:
@@ -449,8 +453,7 @@ class Check:
             # * Honest fallback when the count itself fails: show the fetched page.
             count = len(warns)
             total_pages = max(1, (count + _PAGE_SIZE - 1) // _PAGE_SIZE)
-        # * get_warns is oldest-first; reverse to newest-first for consistency
-        warns = list(reversed(warns))
+        # * get_warns already returns newest-first for this view.
         title = titles.get(chat_id) or str(chat_id)
 
         if not warns:
@@ -479,7 +482,7 @@ class Check:
         ]
         base_idx = page * _PAGE_SIZE
         for i, w in enumerate(warns, start=1):
-            ts = date_or_unknown(w.get("timestamp"))
+            ts = date_or_unknown(w.get("timestamp"), locale)
             stored_reason = w.get("reason", None)
             reason_short = str(
                 stored_reason
@@ -579,12 +582,14 @@ class Check:
 # ─────────────────────── Shared list helper ─────────────────────── #
 
 
-def _ban_ts(ban: dict[str, Any]) -> str:
-    return date_or_unknown(ban.get("timestamp"))
+def _ban_ts(ban: dict[str, Any], locale: str | None = None) -> str:
+    return date_or_unknown(ban.get("timestamp"), locale)
 
 
-def _appeal_ts(ban: dict[str, Any]) -> str:
-    return date_or_unknown(ban.get("appeal_submitted_at") or ban.get("timestamp"))
+def _appeal_ts(ban: dict[str, Any], locale: str | None = None) -> str:
+    return date_or_unknown(
+        ban.get("appeal_submitted_at") or ban.get("timestamp"), locale
+    )
 
 
 async def _ban_list_render(
@@ -598,7 +603,7 @@ async def _ban_list_render(
     nav_prefix: str,
     active_key: str,
     inactive_key: str,
-    ts: Callable[[dict[str, Any]], str],
+    ts: Callable[..., str],
     show_reason: bool = False,
 ) -> tuple[str, InlineKeyboardMarkup]:
     """Shared paginated ban/appeal list renderer (index + detail buttons).
@@ -665,7 +670,7 @@ async def _ban_list_render(
             "i": base_idx + i,
             "status": Safe(status),
             "ban": Safe(code(ban.get("ban_id", ""))),
-            "ts": Safe(ts(ban)),
+            "ts": Safe(ts(ban, locale)),
         }
         if show_reason:
             stored_reason = ban.get("reason", None)
@@ -781,7 +786,7 @@ async def _per_chat_event_list(
     ]
     base_idx = page * _PAGE_SIZE
     for i, rec in enumerate(records, start=1):
-        ts = date_or_unknown(rec.get("timestamp"))
+        ts = date_or_unknown(rec.get("timestamp"), locale)
         stored_reason = rec.get("reason", None)
         reason_short = str(
             stored_reason

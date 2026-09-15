@@ -90,6 +90,16 @@ class BotLogFormatter(logging.Formatter):
 # * Strong references to in-flight Telegram error report tasks (prevents GC)
 _tg_tasks: set[asyncio.Task[None]] = set()
 
+
+async def drain_pending() -> None:
+    """Await in-flight Telegram log-shipping tasks at shutdown (bounded)."""
+    from tcbot.utils.dispatch import (  # noqa: PLC0415 (keeps logger import-light)
+        drain_tasks,
+    )
+
+    await drain_tasks(_tg_tasks, label="log shipping")
+
+
 _SUPPRESS_PREFIXES: tuple[str, ...] = (
     "tcbot.utils.error_reporter",
     "httpcore",

@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from typing import TYPE_CHECKING
 
 from tcbot.database.documents import KickDoc
@@ -15,6 +17,8 @@ from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
     from motor.motor_asyncio import AsyncIOMotorCollection
+
+log = logging.getLogger(__name__)
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
 # * Internal collection access utilities for the kicks database
@@ -64,3 +68,27 @@ async def user_kicks(
 async def user_kick_count(user_id: int) -> int:
     """Count every kick ever logged against the user."""
     return await db_call(_kicks().count_documents({"user_id": user_id}))
+
+
+async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:
+    """Repoint every kick record from ``old_chat_id`` to ``new_chat_id``.
+
+    Called on basic-group to supergroup migration so /check kick history
+    does not split across the legacy chat. Kick rows carry no unique
+    per-pair state, so a plain repoint is safe. Cancellation propagates.
+    """
+    try:
+        res = await db_call(
+            _kicks().update_many(
+                {"chat_id": old_chat_id},
+                {"$set": {"chat_id": new_chat_id}},
+            )
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception(
+            "kicks_db.migrate_records (%d -> %d) failed", old_chat_id, new_chat_id
+        )
+        return False
+    return res.matched_count > 0

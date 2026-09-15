@@ -147,6 +147,7 @@ async def _show_groups(q: CallbackQuery, update: Update, *, detailed: bool) -> N
         try:
             await q.edit_message_text(
                 replies.err_groups_load_failed(locale, plain=False),
+                parse_mode="MarkdownV2",
                 reply_markup=keyboards.back_to_start_kb(locale),
             )
         except Exception as exc:
@@ -166,7 +167,7 @@ async def _show_groups(q: CallbackQuery, update: Update, *, detailed: bool) -> N
                     community=cfg.community_name,
                     plain=True,
                 ),
-                reply_markup=keyboards.back_to_start_kb(),
+                reply_markup=keyboards.back_to_start_kb(locale),
             )
         except Exception as exc:
             log.debug("_show_groups no-groups edit failed: %s", exc)

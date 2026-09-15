@@ -27,6 +27,7 @@ from tcbot.modules.helper.locale import locale_for_chat, locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import appeal_deep_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import link, user_ref
 from tcbot.utils.i18n import Safe, t
 
@@ -137,6 +138,9 @@ async def _handle_member(
         db.mutes_db.get_active_mute(member.id),
         return_exceptions=True,
     )
+    # ! CRITICAL: a cancelled read must propagate, never degrade into a
+    # ! clean greet: shutdown would otherwise welcome a banned joiner.
+    throw_if_cancelled((ban, mute))
     # * When an enforcement read fails we cannot prove the joiner is
     # * clean, so the welcome below is skipped: greeting an unverified
     # * user as safe is worse than staying silent until the next event.
@@ -316,6 +320,9 @@ async def on_join_request_approved(
         db.bans_db.get_active_ban(user.id),
         return_exceptions=True,
     )
+    # ! CRITICAL: cancellation must propagate before any enforcement
+    # ! decision; coercing it into ban=None skips the ban below.
+    throw_if_cancelled((mute, ban))
     if isinstance(ban, BaseException):
         log.error(
             "get_active_ban failed for uid=%d on join_request_approved in chat=%d: %s",
@@ -410,6 +417,7 @@ async def on_join_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         db.bans_db.get_active_ban(user.id),
         return_exceptions=True,
     )
+    throw_if_cancelled((ban,))
     if isinstance(ban, BaseException):
         log.warning(
             "get_active_ban failed for uid=%d on join_request in chat=%d: %s",
@@ -480,10 +488,20 @@ async def on_chat_migration(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         old_id = msg.migrate_from_chat_id
         new_id = update.effective_chat.id if update.effective_chat else None
         if old_id and new_id and old_id != new_id:
-            migrated, _warns_migrated = await asyncio.gather(
+            (
+                migrated,
+                _warns_migrated,
+                _kicks_migrated,
+                _mutes_migrated,
+            ) = await asyncio.gather(
                 db.groups_db.migrate_group(old_id, new_id),
                 db.warns_db.migrate_records(old_id, new_id),
+                db.kicks_db.migrate_records(old_id, new_id),
+                db.mutes_db.migrate_records(old_id, new_id),
                 return_exceptions=True,
+            )
+            throw_if_cancelled(
+                (migrated, _warns_migrated, _kicks_migrated, _mutes_migrated)
             )
             if isinstance(migrated, BaseException):
                 log.error(
@@ -499,6 +517,20 @@ async def on_chat_migration(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
                     old_id,
                     new_id,
                     _warns_migrated,
+                )
+            if isinstance(_kicks_migrated, BaseException):
+                log.error(
+                    "kicks_db.migrate_records failed for %d -> %d: %s",
+                    old_id,
+                    new_id,
+                    _kicks_migrated,
+                )
+            if isinstance(_mutes_migrated, BaseException):
+                log.error(
+                    "mutes_db.migrate_records failed for %d -> %d: %s",
+                    old_id,
+                    new_id,
+                    _mutes_migrated,
                 )
             if migrated:
                 log.info(

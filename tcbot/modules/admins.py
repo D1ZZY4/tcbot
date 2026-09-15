@@ -810,9 +810,11 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 exc,
             )
 
-    # * set_owner first: it is atomic (upsert + delete_many). If it fails, the
-    # * old founder is untouched. add_admin is non-fatal and runs second so a
-    # * transient failure there does not leave the federation ownerless.
+    # * set_owner first: the owner row itself lands in one upsert write
+    # * (a crash there cannot leave zero owners), with a converging cleanup
+    # * after it. If it fails, the old founder is untouched. add_admin is
+    # * non-fatal and runs second so a transient failure there does not
+    # * leave the federation ownerless.
     try:
         await db.users_roles.set_owner(target_id)
     except Exception:

@@ -47,6 +47,7 @@ text = "Slow down - try again in {wait}s."
 
 [action]
 no_reason = "No reason provided"
+unknown_date = "Unknown"
 
 # Help section labels (raw: buttons show them plain, titles escape them
 # via bold()) and scope bodies (V2-escaped prose).

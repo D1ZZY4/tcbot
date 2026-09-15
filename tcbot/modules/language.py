@@ -18,7 +18,6 @@ from tcbot.modules.helper import decorators, keyboards, replies
 from tcbot.modules.helper.locale import effective_locale
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.i18n import (
-    DEFAULT_LOCALE,
     available_locales,
     display_name,
     is_known_locale,
@@ -262,10 +261,14 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await q.answer()
         return
     await q.answer()
+    # * Alerts below render in the tapper's current locale, not the
+    # * default: the tapped target may be unknown or denied, but the
+    # * reader's own setting is still resolvable.
+    tapper_locale = await effective_locale(chat.type, user.id, chat.id)
     if not is_known_locale(raw_locale):
         try:
             await q.answer(
-                t("language.unavailable", DEFAULT_LOCALE, plain=True), show_alert=True
+                t("language.unavailable", tapper_locale, plain=True), show_alert=True
             )
         except Exception as exc:
             log.debug("language unavailable answer failed: %s", exc)
@@ -275,7 +278,7 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not await _can_set_group(ctx.bot, chat.id, user.id):
             try:
                 await q.answer(
-                    t("language.denied", DEFAULT_LOCALE, plain=True), show_alert=True
+                    t("language.denied", tapper_locale, plain=True), show_alert=True
                 )
             except Exception as exc:
                 log.debug("language denied answer failed: %s", exc)
@@ -289,7 +292,7 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             if msg is not None:
                 await safe_reply(
                     msg,
-                    t("language.not_connected", DEFAULT_LOCALE),
+                    t("language.not_connected", tapper_locale),
                     log_label="language not-connected",
                 )
             return
@@ -300,7 +303,7 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             if msg is not None:
                 await safe_reply(
                     msg,
-                    t("common.retry", DEFAULT_LOCALE),
+                    t("common.retry", tapper_locale),
                     log_label="language group-save-fail",
                 )
             return
@@ -312,7 +315,7 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             if msg is not None:
                 await safe_reply(
                     msg,
-                    t("common.retry", DEFAULT_LOCALE),
+                    t("common.retry", tapper_locale),
                     log_label="language user-save-fail",
                 )
             return

@@ -19,10 +19,11 @@ from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
-from tcbot.utils.dispatch import fan_out
+from tcbot.utils.dispatch import fan_out, throw_if_cancelled
 from tcbot.utils.formatter import bold, code
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters
+from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
     from telegram import Bot, Update
@@ -35,7 +36,8 @@ _RL_PERIOD_BULK_S: int = 300
 _RL_CLEANUP_LIMIT: int = 3
 _RL_LEAVEALL_LIMIT: int = 1
 
-_MEMBERSHIP_CHECK_TIMEOUT = 3.0
+# * Bound for one membership probe; single owner in time_and_date.
+_MEMBERSHIP_CHECK_TIMEOUT = TELEGRAM_LOOKUP_TIMEOUT
 
 
 # ────────────────────── Module & Help Message ───────────────────── #
@@ -152,6 +154,8 @@ async def _leave_one(
         ),
         return_exceptions=True,
     )
+    # ! Cancellation must propagate instead of counting as a ghost failure.
+    throw_if_cancelled((leave_result, deactivate_result, log_result))
     if isinstance(leave_result, BaseException):
         log.debug("leave_chat failed for chat %d: %s", chat_id, leave_result)
     if isinstance(deactivate_result, BaseException):

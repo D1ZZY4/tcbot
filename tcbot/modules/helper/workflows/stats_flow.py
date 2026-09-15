@@ -208,6 +208,20 @@ class Stats:
             user_count,
             *viewer_reads,
         ) = await asyncio.gather(*_reads, return_exceptions=True)
+        # * An outage must never read as clean zeroes: flag it so the
+        # * overview below carries the degraded note.
+        degraded = any(
+            isinstance(r, BaseException)
+            for r in (
+                owner_id,
+                admin_count,
+                developer_count,
+                tester_count,
+                ban_count,
+                group_count,
+                user_count,
+            )
+        )
         owner_id = (
             0 if isinstance(owner_id, BaseException) else cast("int | None", owner_id)
         )
@@ -268,6 +282,8 @@ class Stats:
             f"{t('stats.main.bans', locale, n=Safe(bold(str(ban_count))))}\n"
             f"{t('stats.main.chats', locale, n=Safe(bold(str(group_count))))}"
         )
+        if degraded:
+            text += f"\n\n{t('stats.main.degraded', locale)}"
         return text, main_kb(show_users=show_users, locale=locale)
 
     # ── Staff roster ─────────────────────────────────────────────────────
@@ -367,12 +383,19 @@ class Stats:
         """Paginated list of every cached user."""
         # * Server-side count + page fetch: the 200-doc cap in all_users()
         # * made deeper pages unreachable; page from the full collection.
-        total = await db.users_cache.total_users()
-        total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
-        page = max(0, min(page, total_pages - 1))
-        chunk = await db.users_cache.all_users_page(
-            skip=page * _PAGE_SIZE, limit=_PAGE_SIZE
-        )
+        # * A read outage renders a retry card, never an empty clean list.
+        try:
+            total = await db.users_cache.total_users()
+            total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
+            page = max(0, min(page, total_pages - 1))
+            chunk = await db.users_cache.all_users_page(
+                skip=page * _PAGE_SIZE, limit=_PAGE_SIZE
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.warning("stats users_list read failed: %s", exc)
+            return t("stats.error.db_fail", locale), back_kb(locale)
 
         if total == 0:
             text = t("stats.users.empty", locale)
@@ -443,8 +466,8 @@ class Stats:
         # * background so the next view is current. Zero added latency.
         if identity_needs_refresh(u):
             launch_identity_refresh(bot, uid)
-        commit = date_or_unknown(u.get("commit_date"))
-        seen = date_or_unknown(u.get("last_updated"))
+        commit = date_or_unknown(u.get("commit_date"), locale)
+        seen = date_or_unknown(u.get("last_updated"), locale)
 
         if uname:
             username_line = t("stats.user_detail.username", locale, name=uname)
@@ -470,7 +493,13 @@ class Stats:
         cls, page: int, locale: str | None = None
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Paginated list of every active connected group."""
-        groups = await db.groups_db.active_groups()
+        try:
+            groups = await db.groups_db.active_groups()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.warning("stats chats_list read failed: %s", exc)
+            return t("stats.error.db_fail", locale), back_kb(locale)
         chunk, total_pages, page = paginate(groups, page, _PAGE_SIZE)
 
         if not groups:
@@ -538,7 +567,7 @@ class Stats:
         launch_group_title_refresh(bot, chat_id)
         added_by = grp.get("added_by", 0)
         adder_fname, adder_uname = await db.users_cache.get_user_mention_data(added_by)
-        date_str = date_or_unknown(grp.get("added_date"))
+        date_str = date_or_unknown(grp.get("added_date"), locale)
 
         text = (
             f"{t('stats.chat_detail.title', locale)}\n\n"
@@ -559,10 +588,17 @@ class Stats:
         """Paginated list of every active federation ban."""
         # * Server-side count + page fetch: only the visible slice travels
         # * over the wire regardless of federation size (no full-list load).
-        total = await db.bans_db.active_ban_count()
-        total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
-        page = max(0, min(page, total_pages - 1))
-        chunk = await db.bans_db.active_bans_page(page * _PAGE_SIZE, _PAGE_SIZE)
+        # * A read outage renders a retry card, never an empty clean list.
+        try:
+            total = await db.bans_db.active_ban_count()
+            total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
+            page = max(0, min(page, total_pages - 1))
+            chunk = await db.bans_db.active_bans_page(page * _PAGE_SIZE, _PAGE_SIZE)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.warning("stats bans_list read failed: %s", exc)
+            return t("stats.error.db_fail", locale), back_kb(locale)
 
         if total == 0:
             text = t("stats.bans_view.empty", locale)
@@ -649,9 +685,11 @@ class Stats:
         return stats_search_panel_kb(locale)
 
     @staticmethod
-    def _search_results_kb(n: int, locale: str | None = None) -> InlineKeyboardMarkup:
+    def _search_results_kb(
+        n: int, locale: str | None = None, *, item_ids: list[str] | None = None
+    ) -> InlineKeyboardMarkup:
         """Numbered search results (single source: keyboards)."""
-        return stats_search_results_kb(n, locale)
+        return stats_search_results_kb(n, locale, item_ids=item_ids)
 
     @classmethod
     def open_search(
@@ -717,7 +755,6 @@ class Stats:
         if not results:
             text = t("stats.search.empty", locale, query=query)
             return text, cls._search_results_kb(0, locale)
-
         # Batch query for all user names
         uids = [b.get("banned_user_id", 0) for b in results]
         fname_map = await db.users_cache.get_first_names_batch(uids)
@@ -734,18 +771,36 @@ class Stats:
                     id=Safe(code(str(uid))),
                 )
             )
-        return "\n".join(lines), cls._search_results_kb(len(results), locale)
+        return "\n".join(lines), cls._search_results_kb(
+            len(results),
+            locale,
+            item_ids=[str(ban.get("ban_id", "")) for ban in results],
+        )
 
     @classmethod
     async def search_detail(
-        cls, results: list[BanDoc], idx: int, locale: str | None = None
+        cls,
+        results: list[BanDoc],
+        idx: int,
+        locale: str | None = None,
+        stable: str | None = None,
     ) -> tuple[str, InlineKeyboardMarkup]:
-        """Detail card for a single search hit."""
+        """Detail card for a single search hit.
+
+        When ``stable`` carries the ban ID embedded in the tapped button,
+        the record at ``idx`` must still carry it; a list mutation between
+        render and tap otherwise shows the wrong ban.
+        """
         if idx < 0 or idx >= len(results):
             text = t("stats.error.result_unavailable", locale)
             kb = back_to_module_kb("stats_search_back")
             return text, kb
-        text, proof_link = await build_ban_detail(results[idx], locale=locale)
+        ban = results[idx]
+        if stable is not None and str(ban.get("ban_id", "")) != stable:
+            text = t("stats.error.result_unavailable", locale)
+            kb = back_to_module_kb("stats_search_back")
+            return text, kb
+        text, proof_link = await build_ban_detail(ban, locale=locale)
         return text, detail_kb(
             back_callback="stats_search_back",
             proof_link=proof_link,

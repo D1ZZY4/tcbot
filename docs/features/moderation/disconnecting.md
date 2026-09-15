@@ -77,7 +77,8 @@ The deactivation runs before the fan-out (not in parallel with it) precisely to 
 
 1. Parse the first arg with `parse_cmd_args(msg.text)`. If missing or not numeric after a `-` strip, replies `Usage: /rmtc <chat_id>` and stops.
 2. `chat_id = int(args[0])`.
-3. Call `db.groups_db.deactivate_group(chat_id)`. The return value indicates whether the record was matched.
+3. Primary-group guard: main/exec groups are required enforcement destinations and can never be force-disconnected; `/rmtc` refuses them with a dedicated reply and stops.
+4. Call `db.groups_db.deactivate_group(chat_id)`. The return value indicates whether the record was matched.
 4. If no record matched, replies `replies.ERR_GROUP_NOT_FOUND` and stops.
 5. Otherwise runs three parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
     - `bot.send_message(cfg.logs, group_disconnected_log(chat_id, str(chat_id), admin.id, admin.first_name), parse_mode="MarkdownV2", message_thread_id=lt)`.
