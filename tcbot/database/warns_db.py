@@ -110,6 +110,34 @@ async def _recount_and_store(user_id: int, chat_id: int) -> None:
     await _store_warn_count(user_id, chat_id, count)
 
 
+async def _repair_counter_delete(
+    counts_filter: dict[str, Any],
+    *,
+    delete_all_counts: bool,
+    scope: str,
+) -> None:
+    """Best-effort repair after a counter-delete failure in _clear_warn_docs.
+
+    A surviving counter keeps stale counts that later warns increment
+    from, so the clear must not end with only a log line. Single-chat
+    clears recount the pair (history is already gone, so the recount
+    lands at zero and drops the stale doc); federation-wide clears retry
+    the delete. Repair failures stay error-logged but non-fatal like the
+    original delete failure. Cancellation propagates.
+    """
+    try:
+        if delete_all_counts:
+            await db_call(_warn_counts().delete_many(counts_filter))
+        else:
+            await _recount_and_store(
+                int(counts_filter["user_id"]), int(counts_filter["chat_id"])
+            )
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("%s counter repair failed", scope)
+
+
 # ──────────────────────────── Mutations ─────────────────────────── #
 # * Functions that modify warning records in the database
 # * Includes adding, removing, and clearing warnings
@@ -241,8 +269,11 @@ async def _clear_warn_docs(
         raise cnt_del
     if isinstance(cnt_del, BaseException):
         # * Error-level: a surviving counter keeps stale counts that later
-        # * warns increment from, so this needs operator repair, not silence.
+        # * warns increment from, so repair it instead of only logging.
         log.error("%s counter delete failed: %s", scope, cnt_del)
+        await _repair_counter_delete(
+            counts_filter, delete_all_counts=delete_all_counts, scope=scope
+        )
     if isinstance(warn_del, BaseException):
         log.error("%s warns delete failed: %s", scope, warn_del)
         raise warn_del
@@ -357,36 +388,87 @@ async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:
     history) and ``warn_counts`` (the per-group counter documents that gate
     the auto-ban threshold) are keyed by ``chat_id``, so without this the
     supergroup would silently start with a clean slate and lose all warning
-    history from the legacy chat. Returns ``True`` if any record was updated.
+    history from the legacy chat. Counter docs merge by summation: when the
+    supergroup already holds warns, the counts add up instead of the blind
+    ``$set`` overwriting one side or violating the per-pair unique index.
+    Returns ``True`` if any record was updated.
     """
-    results = await asyncio.gather(
-        db_call(
+    try:
+        warns_r = await db_call(
             _warns().update_many(
                 {"chat_id": old_chat_id},
                 {"$set": {"chat_id": new_chat_id}},
             )
-        ),
-        db_call(
-            _warn_counts().update_many(
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception(
+            "warns_db.migrate_records (%d -> %d) warns update failed",
+            old_chat_id,
+            new_chat_id,
+        )
+        return False
+    matched_any = warns_r.matched_count > 0
+    try:
+        old_counters = await db_call(
+            _warn_counts()
+            .find(
                 {"chat_id": old_chat_id},
-                {"$set": {"chat_id": new_chat_id}},
+                {"_id": 0, "user_id": 1, "count": 1},
             )
-        ),
-        return_exceptions=True,
-    )
-    matched_any = False
-    for r in results:
-        if isinstance(r, asyncio.CancelledError):
-            raise r
-        if isinstance(r, BaseException):
-            log.error(
-                "warns_db.migrate_records (%d -> %d) DB call failed: %s",
+            .to_list(None)
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception(
+            "warns_db.migrate_records (%d -> %d) counter read failed",
+            old_chat_id,
+            new_chat_id,
+        )
+        return matched_any
+    for doc in old_counters:
+        uid = doc.get("user_id")
+        cnt = int(doc.get("count", 0))
+        if uid is None or cnt <= 0:
+            continue
+        try:
+            res = await db_call(
+                _warn_counts().update_one(
+                    {"user_id": uid, "chat_id": new_chat_id},
+                    {
+                        "$inc": {"count": cnt},
+                        "$set": {"updated_at": utc_now()},
+                        "$setOnInsert": {
+                            "user_id": uid,
+                            "chat_id": new_chat_id,
+                        },
+                    },
+                    upsert=True,
+                )
+            )
+            if res.matched_count > 0 or res.upserted_id is not None:
+                matched_any = True
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception(
+                "warns_db.migrate_records (%d -> %d) counter merge failed for user=%s",
                 old_chat_id,
                 new_chat_id,
-                r,
+                uid,
             )
-        elif r.matched_count > 0:
-            matched_any = True
+    try:
+        await db_call(_warn_counts().delete_many({"chat_id": old_chat_id}))
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception(
+            "warns_db.migrate_records (%d -> %d) stale counter cleanup failed",
+            old_chat_id,
+            new_chat_id,
+        )
     return matched_any
 
 

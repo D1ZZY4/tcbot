@@ -33,7 +33,7 @@ Format and lint after edits:
 ```bash
 uv run ruff format .
 uv run ruff check --fix .
-uv run --with pyright pyright tcbot/
+uv run pyright .
 ```
 
 ## Docker setup

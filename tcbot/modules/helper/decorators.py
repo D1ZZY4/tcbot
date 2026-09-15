@@ -22,7 +22,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import identity, replies
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
-from tcbot.modules.helper.locale import locale_for_update
+from tcbot.modules.helper.locale import effective_locale, locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.time_and_date import elapsed_ms, monotonic
@@ -382,20 +382,15 @@ def log_execution[R](
 # * stay valid; new code should import from `identity` directly.
 _ANON_BOT_ID = ANONYMOUS_BOT_ID
 
-# * User-facing refusal messages for each auth tier. Centralised here so voice
-# * changes and translations only need to happen in one place.
-_ERR_OWNER_ONLY = "This command is reserved for the Founder - you're not authorized."
-_ERR_STAFF_ONLY = "Staff and Founder only for this one - you don't have the rank."
-_ERR_MOD_ONLY = "You need Developer rank or above for this - not your call."
-_ERR_BASIC_MOD_ONLY = "You need at least a Tester role for this - not your call."
-_ERR_RANK_INSUFFICIENT = "You don't have the rank for this one."
-_ERR_ROLE_LOOKUP = (
-    "I couldn't verify federation roles right now. Please try again in a moment."
-)
-_ERR_ANON_ADMIN = (
-    "Anonymous admin mode is not supported for federation commands. "
-    "Please send this command from your personal account."
-)
+# * User-facing refusal prose lives in common.toml [refuse] (replies.py
+# * owners); each auth tier below names its replies function so refusals
+# * render in the viewer's locale instead of hardcoded English.
+_REFUSAL_BY_LABEL: dict[str, Any] = {
+    "owner_only": replies.refuse_owner_only,
+    "staff_only": replies.refuse_staff_only,
+    "mod_only": replies.refuse_mod_only,
+    "basic_mod_only": replies.refuse_basic_mod_only,
+}
 
 
 def _is_anon_admin(update: Update) -> bool:
@@ -408,18 +403,20 @@ def _auth_only(*, label: str, refusal: str, min_role: str | None) -> Callable:
     """Build one of the four federated-tier authorization decorators.
 
     ``min_role`` names the lowest ``users_roles`` rank that passes; when it is
-    ``None`` only the Founder (owner id) is authorized.
+    ``None`` only the Founder (owner id) is authorized. ``refusal`` names the
+    tier key in ``_REFUSAL_BY_LABEL`` rendered in the viewer's locale.
     """
 
     def _decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             """Allow the call only when the invoking user passes the tier check."""
+            locale = await locale_for_update(update)
             if _is_anon_admin(update):
                 if update.effective_message:
                     await safe_reply(
                         update.effective_message,
-                        _ERR_ANON_ADMIN,
+                        replies.refuse_anon_admin(locale, plain=True),
                         log_label=f"{label} anon-admin",
                         parse_mode=None,
                     )
@@ -448,7 +445,7 @@ def _auth_only(*, label: str, refusal: str, min_role: str | None) -> Callable:
                     if update.effective_message:
                         await safe_reply(
                             update.effective_message,
-                            _ERR_ROLE_LOOKUP,
+                            replies.refuse_role_lookup(locale, plain=True),
                             log_label=f"{label} lookup-fail",
                             parse_mode=None,
                         )
@@ -458,7 +455,7 @@ def _auth_only(*, label: str, refusal: str, min_role: str | None) -> Callable:
             if update.effective_message:
                 await safe_reply(
                     update.effective_message,
-                    refusal,
+                    _REFUSAL_BY_LABEL[refusal](locale, plain=True),
                     log_label=f"{label} refusal",
                     parse_mode=None,
                 )
@@ -469,12 +466,12 @@ def _auth_only(*, label: str, refusal: str, min_role: str | None) -> Callable:
     return _decorator
 
 
-owner_only = _auth_only(label="owner_only", refusal=_ERR_OWNER_ONLY, min_role=None)
-staff_only = _auth_only(label="staff_only", refusal=_ERR_STAFF_ONLY, min_role="admin")
-mod_only = _auth_only(label="mod_only", refusal=_ERR_MOD_ONLY, min_role="developer")
+owner_only = _auth_only(label="owner_only", refusal="owner_only", min_role=None)
+staff_only = _auth_only(label="staff_only", refusal="staff_only", min_role="admin")
+mod_only = _auth_only(label="mod_only", refusal="mod_only", min_role="developer")
 basic_mod_only = _auth_only(
     label="basic_mod_only",
-    refusal=_ERR_BASIC_MOD_ONLY,
+    refusal="basic_mod_only",
     min_role="tester",
 )
 
@@ -502,6 +499,12 @@ async def resolve_and_check(
         return_exceptions=True,
     )
     throw_if_cancelled((executor_role, target_role))
+    # * Moderation replies render in the group locale like every other
+    # * command reply; resolution never raises (falls back to default).
+    chat = msg.chat
+    locale = await effective_locale(
+        getattr(chat, "type", None), executor_id, getattr(chat, "id", 0)
+    )
     executor_lookup_failed = isinstance(executor_role, BaseException)
     target_lookup_failed = isinstance(target_role, BaseException)
     if isinstance(executor_role, BaseException):
@@ -521,7 +524,7 @@ async def resolve_and_check(
     if executor_lookup_failed or target_lookup_failed:
         await safe_reply(
             msg,
-            _ERR_ROLE_LOOKUP,
+            replies.refuse_role_lookup(locale, plain=True),
             log_label="resolve_and_check role-lookup",
             parse_mode=None,
         )
@@ -529,7 +532,7 @@ async def resolve_and_check(
     if db.users_roles.role_rank(executor_role) < db.users_roles.role_rank(min_role):
         await safe_reply(
             msg,
-            _ERR_RANK_INSUFFICIENT,
+            replies.refuse_rank_insufficient(locale, plain=True),
             log_label="resolve_and_check rank-insufficient",
             parse_mode=None,
         )
@@ -541,7 +544,7 @@ async def resolve_and_check(
         label = db.users_roles.ROLE_LABEL.get(target_role, target_role.capitalize())
         await safe_reply(
             msg,
-            f"That's a {label} - they outrank you here, can't take action on them.",
+            replies.refuse_outranked(label, locale, plain=True),
             log_label="resolve_and_check outrank",
             parse_mode=None,
         )

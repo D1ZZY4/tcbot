@@ -26,6 +26,21 @@ admin_above = "Admin ke atas (Founder / Admin)."
 dev_above = "Developer ke atas (Founder / Admin / Developer)."
 tester_above = "Tester ke atas (Founder / Admin / Developer / Tester)."
 
+# Penolakan otorisasi kalimat penuh (pemilik: replies.py). Semuanya
+# terkirim sebagai teks polos (balasan parse_mode=None), jadi dirender
+# dengan plain=True di lokasi pemanggilan. Placeholder: {role} = label
+# peran target.
+
+[refuse]
+owner_only = "Perintah ini khusus Founder - kamu tidak berwenang."
+staff_only = "Hanya Staf dan Founder untuk yang ini - kamu tidak punya pangkatnya."
+mod_only = "Kamu butuh pangkat Developer ke atas untuk ini - bukan wewenangmu."
+basic_mod_only = "Kamu butuh setidaknya peran Tester untuk ini - bukan wewenangmu."
+rank_insufficient = "Kamu tidak punya pangkat untuk yang ini."
+role_lookup = "Tidak bisa memverifikasi peran federasi sekarang. Coba lagi sebentar."
+anon_admin = "Mode admin anonim tidak didukung untuk perintah federasi. Kirim perintah ini dari akun pribadimu."
+outranked = "Itu seorang {role} - pangkatnya di atasmu di sini, tidak bisa bertindak terhadap mereka."
+
 [limit]
 # Placeholders: {wait} = seconds as an integer, at least 1. The unit
 # rides on the number ({wait}s) so the line stays correct at 1.

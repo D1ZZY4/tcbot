@@ -6,9 +6,16 @@ For conversation flows that consume these keyboards, see
 [`../architecture/workflows.md`](../architecture/workflows.md).
 
 Every inline keyboard the bot sends is built from a factory in
-`tcbot/modules/helper/keyboards.py` or a workflow-local helper next to the flow
-that owns the state. This document is the single source of truth for callback
-data, button labels, ownership, and the conventions the team follows.
+`tcbot/modules/helper/keyboards.py`. Flow step classes keep thin delegating
+methods (`BuildReason.keyboard()`, `BuildProof.keyboard()`,
+`BuildConnection.join_keyboard()`) and the stats/check modules keep compat
+aliases over the same builders, so call sites stay unchanged while the markup
+lives in one place. The one exception is the pagination row primitive
+`nav_row()` in `tcbot/utils/pagination.py`, which renders the locale-aware
+`« Prev` / `Next »` labels from `button.prev` / `button.next` and is consumed
+through `paged_drill_kb()` or directly with an explicit locale. This document
+is the single source of truth for callback data, button labels, ownership,
+and the conventions the team follows.
 
 It is intentionally flexible: when a new feature lands, add a row to the table
 that fits its surface, follow the conventions, and the documentation stays
@@ -20,7 +27,7 @@ useful without becoming a checklist of every keystroke.
 
 | Topic | Rule |
 |---|---|
-| Source of truth | `tcbot/modules/helper/keyboards.py` for reusable builders. Workflow-local builders are allowed when callback state is private to the workflow (`stats_flow.py`, `check_flow.py`, conversation flows). |
+| Source of truth | `tcbot/modules/helper/keyboards.py` owns every inline-keyboard factory. Flow step methods and module-level aliases only delegate to it; no flow or command module defines its own markup. |
 | Labels | Short, title-case labels loaded from `i18n/<locale>/button.toml` through `t("button.*", locale, plain=True)`; rendered in the resolved locale, no pictograph emoji. `«` and `»` are allowed for navigation arrows. |
 | Colors | Semantic `style`: `SUCCESS` (green) for Approve, `DANGER` (red) for Reject and destructive Confirm, `PRIMARY` (blue) for continue/select steps (`Connect`, `Continue`, role options, `Skip`), numbered drill-in buttons, Proof/Appeal URL buttons, and every start-menu option (main menu, help topics, module sections, privacy entries, community links, group toggles, the Language rows, `Open in PM`). Cancel, `« Back`, the `« Prev` / `Next »` nav row, `Done`, and the re-ban card's View Log / View Proof links stay unstyled. Older clients render the same buttons without color, so styling never carries meaning alone. |
 | Localization | Every keyboard factory takes `locale` and reads its labels from the catalog (`button.*` keys, `plain=True`). Thread the resolved handler locale through every call site; labels render in the viewer's locale. |
@@ -172,8 +179,8 @@ to its own state.
 ## Adding a new keyboard
 
 1. Pick a namespace prefix that is short, lowercase, and unambiguous.
-2. Add the factory to `keyboards.py` if it is reusable, or keep it next to the
-   workflow if its callback state is private.
+2. Add the factory to `keyboards.py` (the single owner for all markup; flow
+   steps delegate to it rather than building buttons locally).
 3. Register a `CallbackQueryHandler` with a precise regex pattern in the
    module's `__handlers__` list. Anchor with `^…$` and require digits where
    applicable so `helps_<mod>:<idx>` is never confused with `help_<mod>`.

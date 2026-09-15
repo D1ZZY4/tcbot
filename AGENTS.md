@@ -29,7 +29,7 @@ Every new conversation in this repository must start by reading the canonical ru
   authorization boundaries, role safety, secrets, and compatibility
 - [`.agents/rules/asyncio-gather-rules.md`](.agents/rules/asyncio-gather-rules.md):
   async handlers, `gather()` use, bounded fan-out, timeouts, and cancellation
-- [`CLAUDE.md`](CLAUDE.md) (this file), [`CHANGELOG.md`](CHANGELOG.md)
+- [`CLAUDE.md`](CLAUDE.md), [`CHANGELOG.md`](CHANGELOG.md)
 - The relevant [`.agents/skills/`](.agents/skills/), [`docs/`](docs/), and project-root docs for the task
 
 **Update in the same turn after every change:**
@@ -229,6 +229,8 @@ Never commit real credentials. Required secret values include:
 
 - `BOT_TOKEN`: Telegram bot token from BotFather.
 - `MONGODB_URI`: MongoDB connection string.
+- `API_ID`: Telegram API ID for MTProto identity lookups; boot refuses without it.
+- `API_HASH`: Telegram API hash matching `API_ID`; boot refuses without it.
 
 Important non-secret/runtime variables include:
 

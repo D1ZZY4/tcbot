@@ -17,7 +17,7 @@ uv sync --frozen
 uv run python -m tcbot
 ```
 
-Fill in at least `BOT_TOKEN`, `OWNER_ID`, and `MONGODB_URI` in `config.env` before running. Never commit that file. The full variable list is in [`config.env.example`](config.env.example) and [`docs/getting-started/setup.md`](docs/getting-started/setup.md).
+Fill in at least `BOT_TOKEN`, `OWNER_ID`, `MONGODB_URI`, `API_ID`, and `API_HASH` in `config.env` before running. Never commit that file. The full variable list is in [`config.env.example`](config.env.example) and [`docs/getting-started/setup.md`](docs/getting-started/setup.md).
 
 ## What It Does
 
@@ -47,13 +47,15 @@ Appeals are submitted by the banned user in bot DM through a deep link. Command 
 
 ## Configuration
 
-Only three values are required. Everything else has a working default.
+Only five values are required. Everything else has a working default.
 
 | Variable | Required | Description |
 |---|---:|---|
 | `BOT_TOKEN` | Yes | Bot token from BotFather. |
 | `OWNER_ID` | Yes | Telegram user ID seeded as the initial Founder. |
 | `MONGODB_URI` | Yes | MongoDB connection string. |
+| `API_ID` | Yes | Telegram API ID for MTProto identity lookups; boot refuses without it. |
+| `API_HASH` | Yes | Telegram API hash matching `API_ID`; boot refuses without it. |
 
 Common optional values: `REDIS_URL` (enables the shared cache), `WEBHOOK_URL` (enables webhook transport, otherwise the bot polls), `PORT` (health server port, default `5000`), and the `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS` log destinations, which each accept a chat ID or a `chat_id/thread_id` pair.
 
@@ -121,6 +123,9 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 | `WEBHOOK_URL` | Public HTTPS base URL for webhook transport; empty falls back to polling. Auto-detected from `REPLIT_DEV_DOMAIN` on Replit. |
 | `WEBHOOK_SECRET` | Used as-is when set, auto-generated per restart when empty; required on Vercel. |
 | `CRON_SECRET` | Bearer token for `/api/cron`; empty refuses every request (fail closed). |
+| `API_ID` | Required: Telegram API ID for MTProto identity lookups; boot refuses without it. |
+| `API_HASH` | Required: Telegram API hash matching `API_ID`; never commit the real value. |
+| `MTPROTO_SESSION` | Namespace for the shared MTProto session in MongoDB (default `tcbot_mtproto`). |
 
 ### Community links
 
@@ -198,7 +203,7 @@ Limits: multi-step conversations are best-effort (cold starts drop instance-memo
 <details>
 <summary>Docker and Docker Compose</summary>
 
-1. `cp config.env.example .env` and set at least `BOT_TOKEN`, `OWNER_ID`, `MONGODB_URI=mongodb://mongo:27017`, `REDIS_URL=redis://redis:6379/0`.
+1. `cp config.env.example .env` and set at least `BOT_TOKEN`, `OWNER_ID`, `MONGODB_URI=mongodb://mongo:27017`, `API_ID`, `API_HASH`, `REDIS_URL=redis://redis:6379/0`.
 2. `docker compose up --build` (bot plus `mongo:7` plus `redis:7-alpine`, each with health checks; the bot waits for both databases).
 3. Verify: `curl localhost:5000/health` returns subsystem JSON with HTTP 200.
 
@@ -222,7 +227,7 @@ Heroku assigns `PORT` automatically and the bot reads it from the environment. K
 <summary>VPS with systemd (Ubuntu/Debian)</summary>
 
 1. Install Python 3.14 and `uv`, then `git clone <repo-url> /opt/tcf-bot && cd /opt/tcf-bot && uv sync --frozen`.
-2. Create `/opt/tcf-bot/config.env` with `BOT_TOKEN`, `OWNER_ID`, `MONGODB_URI` (Atlas with the VPS IP allowlisted, or self-hosted MongoDB), mode `0600`.
+2. Create `/opt/tcf-bot/config.env` with `BOT_TOKEN`, `OWNER_ID`, `MONGODB_URI` (Atlas with the VPS IP allowlisted, or self-hosted MongoDB), plus `API_ID` and `API_HASH` for MTProto lookups, mode `0600`.
 3. Install this unit as `/etc/systemd/system/tcf-bot.service` (adjust the `uv` path from `which uv`):
 
 ```ini
@@ -252,7 +257,7 @@ WantedBy=multi-user.target
 <summary>Windows Server over RDP</summary>
 
 1. RDP in, install Python 3.14 (add to PATH) and `uv` (`irm https://astral.sh/uv/install.ps1 | iex`), then `git clone <repo-url> C:\tcf-bot` and `uv sync --frozen` inside it.
-2. Create `C:\tcf-bot\config.env` with `BOT_TOKEN`, `OWNER_ID`, `MONGODB_URI`; restrict it to the service account via file ACLs.
+2. Create `C:\tcf-bot\config.env` with `BOT_TOKEN`, `OWNER_ID`, `MONGODB_URI`, `API_ID`, and `API_HASH`; restrict it to the service account via file ACLs.
 3. Verify once interactively: `uv run python -m tcbot` (expect `subsystems ready`, `Ctrl+C` to stop).
 4. Persist with Task Scheduler: trigger "At startup", action `uv.exe run --frozen python -m tcbot` with start-in `C:\tcf-bot`, "Run whether user is logged on or not", "If the task fails, restart every 1 minute". Prefer a dedicated service account, never an admin's personal session.
 5. Webhook mode needs public HTTPS reaching the host `PORT` (reverse proxy or tunnel) plus `WEBHOOK_URL`; otherwise the bot polls. Monitor `GET /health` and keep exactly one running instance per token.
@@ -270,7 +275,7 @@ The Flask keep-alive server binds to `0.0.0.0:${PORT}` (defaults to `5000` on un
 
 ## Troubleshooting
 
-- `BOT_TOKEN`, `OWNER_ID`, or `MONGODB_URI` errors on startup: the bot fails fast on missing identity or database settings. Set them in `config.env` or the host secret manager.
+- `BOT_TOKEN`, `OWNER_ID`, `MONGODB_URI`, `API_ID`, or `API_HASH` errors on startup: the bot fails fast on missing identity, database, or MTProto settings. Set them in `config.env` or the host secret manager.
 - MongoDB connection failures: check the URI, network access, Atlas IP allowlists, and credentials.
 - `GET /health` returns 503: one subsystem (MongoDB, Redis, scheduler, or a circuit breaker) is degraded; read the JSON body to see which one.
 

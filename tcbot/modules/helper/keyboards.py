@@ -736,7 +736,7 @@ def paged_drill_kb(
         ]
         for i in range(0, len(items), per_row)
     ]
-    nav = nav_row(page, total_pages, nav_prefix)
+    nav = nav_row(page, total_pages, nav_prefix, locale)
     if nav:
         rows.append(nav)
     if extra_rows:
@@ -749,6 +749,358 @@ def paged_drill_kb(
         ]
     )
     return InlineKeyboardMarkup(rows)
+
+
+# ─────────────────── Flow-step keyboards ─────────────────── #
+# * Single source for every step keyboard in the moderation, proof,
+# * connect, stats, and check flows. Flow classes keep thin delegating
+# * methods so call sites stay unchanged while the markup lives here.
+
+
+def reason_step_kb(
+    action: str, *, skip_allowed: bool = True, locale: str | None = None
+) -> InlineKeyboardMarkup:
+    """Reason-step keyboard: optional Skip plus Cancel."""
+    buttons: list[InlineKeyboardButton] = []
+    if skip_allowed:
+        buttons.append(
+            InlineKeyboardButton(
+                t("button.skip", locale, plain=True),
+                callback_data=f"{action}_skip_reason",
+                style=KeyboardButtonStyle.PRIMARY,
+            )
+        )
+    buttons.append(
+        InlineKeyboardButton(
+            t("button.cancel", locale, plain=True),
+            callback_data=f"{action}_cancel",
+        )
+    )
+    return InlineKeyboardMarkup([buttons])
+
+
+def proof_step_kb(
+    action: str, *, skip_allowed: bool = True, locale: str | None = None
+) -> InlineKeyboardMarkup:
+    """Proof-step keyboard: optional Skip, Done flush, Cancel."""
+    buttons: list[InlineKeyboardButton] = []
+    if skip_allowed:
+        buttons.append(
+            InlineKeyboardButton(
+                t("button.skip", locale, plain=True),
+                callback_data=f"{action}_skip_proof",
+                style=KeyboardButtonStyle.PRIMARY,
+            )
+        )
+    buttons.append(
+        InlineKeyboardButton(
+            t("button.done", locale, plain=True),
+            callback_data=f"{action}_done_proof",
+        )
+    )
+    buttons.append(
+        InlineKeyboardButton(
+            t("button.cancel", locale, plain=True),
+            callback_data=f"{action}_cancel",
+        )
+    )
+    return InlineKeyboardMarkup([buttons])
+
+
+def connect_join_kb(
+    join_callback: str, cancel_callback: str, locale: str | None = None
+) -> InlineKeyboardMarkup:
+    """Connect / Cancel inline keyboard attached to the join prompt."""
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    t("button.connect", locale, plain=True),
+                    callback_data=join_callback,
+                    style=KeyboardButtonStyle.PRIMARY,
+                ),
+                InlineKeyboardButton(
+                    t("button.cancel", locale, plain=True),
+                    callback_data=cancel_callback,
+                ),
+            ]
+        ]
+    )
+
+
+def stats_back_row(locale: str | None = None) -> list[InlineKeyboardButton]:
+    """Single Back button row returning to the stats main menu."""
+    return [
+        InlineKeyboardButton(
+            t("button.back", locale, plain=True), callback_data="stats_main"
+        )
+    ]
+
+
+def stats_main_kb(
+    *, show_users: bool = False, locale: str | None = None
+) -> InlineKeyboardMarkup:
+    """Top-level ``/tcstats`` menu: Staff / Bans / Chats drill-downs.
+
+    The ``Users`` list carries every cached user ID, so its button is shown
+    only to the Owner/Founder (row 3); everyone else gets rows 1-2 only.
+    The ``stats_users`` callbacks enforce the same gate, so a stale or
+    crafted tap without the button still cannot open the list.
+    """
+    rows = [
+        [
+            InlineKeyboardButton(
+                t("stats.button.roster", locale, plain=True),
+                callback_data="stats_admins",
+                style=KeyboardButtonStyle.PRIMARY,
+            ),
+            InlineKeyboardButton(
+                t("stats.button.bans", locale, plain=True),
+                callback_data="stats_bans:0",
+                style=KeyboardButtonStyle.PRIMARY,
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                t("stats.button.chats", locale, plain=True),
+                callback_data="stats_chats:0",
+                style=KeyboardButtonStyle.PRIMARY,
+            ),
+        ],
+    ]
+    if show_users:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    t("stats.button.users", locale, plain=True),
+                    callback_data="stats_users:0",
+                    style=KeyboardButtonStyle.PRIMARY,
+                )
+            ]
+        )
+    return InlineKeyboardMarkup(rows)
+
+
+def stats_back_kb(locale: str | None = None) -> InlineKeyboardMarkup:
+    """Single Back button returning to the stats main menu."""
+    return InlineKeyboardMarkup([stats_back_row(locale)])
+
+
+def stats_list_kb(
+    page: int,
+    total_pages: int,
+    n_items: int,
+    cb_prefix: str,
+    item_cb_prefix: str,
+    *,
+    extra_row: list[InlineKeyboardButton] | None = None,
+    item_ids: list[str] | None = None,
+    locale: str | None = None,
+) -> InlineKeyboardMarkup:
+    """Compose nav + numbered detail buttons + optional extra row + back.
+
+    ``item_ids`` carries one stable entity ID per button (user ID, chat ID,
+    or ban ID). Detail handlers verify the resolved record still carries
+    that ID so a list mutation between render and tap cannot silently show
+    a different record. Older buttons without the segment keep working.
+    """
+
+    def _callback(i: int) -> str:
+        base = f"{item_cb_prefix}:{page}:{i}"
+        if item_ids is not None and i < len(item_ids):
+            return f"{base}:{item_ids[i]}"
+        return base
+
+    return paged_drill_kb(
+        [(str(i + 1), _callback(i)) for i in range(n_items)],
+        page=page,
+        total_pages=total_pages,
+        nav_prefix=cb_prefix,
+        back_callback="stats_main",
+        extra_rows=[extra_row] if extra_row is not None else None,
+        per_row=3,
+        locale=locale,
+    )
+
+
+def stats_search_panel_kb(locale: str | None = None) -> InlineKeyboardMarkup:
+    """Search panel keyboard: Cancel only."""
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    t("button.cancel", locale, plain=True),
+                    callback_data="stats_search_cancel",
+                )
+            ]
+        ]
+    )
+
+
+def stats_search_row(locale: str | None = None) -> list[InlineKeyboardButton]:
+    """Single Search button row opening the bans search panel."""
+    return [
+        InlineKeyboardButton(
+            t("stats.button.search", locale, plain=True),
+            callback_data="stats_bans_search",
+            style=KeyboardButtonStyle.PRIMARY,
+        ),
+    ]
+
+
+def stats_search_results_kb(n: int, locale: str | None = None) -> InlineKeyboardMarkup:
+    """Numbered search-result buttons plus New Search / Cancel row."""
+    num_btns = [
+        InlineKeyboardButton(
+            str(i + 1),
+            callback_data=f"stats_search_item:{i}",
+            style=KeyboardButtonStyle.PRIMARY,
+        )
+        for i in range(n)
+    ]
+    rows: list[list[InlineKeyboardButton]] = [
+        num_btns[i : i + 3] for i in range(0, len(num_btns), 3)
+    ]
+    rows.append(
+        [
+            InlineKeyboardButton(
+                t("stats.button.new_search", locale, plain=True),
+                callback_data="stats_bans_search",
+                style=KeyboardButtonStyle.PRIMARY,
+            ),
+            InlineKeyboardButton(
+                t("button.cancel", locale, plain=True),
+                callback_data="stats_search_cancel",
+            ),
+        ]
+    )
+    return InlineKeyboardMarkup(rows)
+
+
+def check_back_row(
+    target_id: int, locale: str | None = None
+) -> list[InlineKeyboardButton]:
+    """Single Back button row returning to the /check profile."""
+    return [
+        InlineKeyboardButton(
+            t("button.back", locale, plain=True),
+            callback_data=f"check_main:{target_id}",
+        )
+    ]
+
+
+def check_warns_back_row(
+    target_id: int, locale: str | None = None
+) -> list[InlineKeyboardButton]:
+    """Single Back button row returning to the warns-by-group list."""
+    return [
+        InlineKeyboardButton(
+            t("button.back", locale, plain=True),
+            callback_data=f"check_warns:{target_id}",
+        )
+    ]
+
+
+# * Per-group warn button titles embed the group name; truncate so a long
+# * group title cannot blow up the button layout.
+_WARN_GROUP_TITLE_MAX: int = 24
+
+
+def check_warn_groups_kb(
+    target_id: int,
+    groups: list[tuple[str, int, int]],
+    locale: str | None = None,
+) -> InlineKeyboardMarkup:
+    """Warns-by-group list: one drill-in button per group plus back row.
+
+    ``groups`` carries (title, warn_count, chat_id) per group.
+    """
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                t(
+                    "checking.warns.group_button",
+                    locale,
+                    title=title[:_WARN_GROUP_TITLE_MAX],
+                    n=count,
+                    plain=True,
+                ),
+                callback_data=f"check_warn_chat:{target_id}:{cid}:0",
+                style=KeyboardButtonStyle.PRIMARY,
+            )
+        ]
+        for title, count, cid in groups
+    ]
+    rows.append(check_back_row(target_id, locale))
+    return InlineKeyboardMarkup(rows)
+
+
+def check_profile_kb(
+    target_id: int,
+    *,
+    ban_total: int,
+    appeal_total: int,
+    fed_warn_total: int,
+    kick_total: int,
+    mute_total: int,
+    locale: str | None = None,
+) -> InlineKeyboardMarkup:
+    """Check-profile dashboard: Bans/Appeals, Warnings, Kicks/Mutes buttons."""
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    t("checking.profile.button.bans", locale, n=ban_total, plain=True),
+                    callback_data=f"check_bans:{target_id}:0",
+                    style=KeyboardButtonStyle.PRIMARY,
+                ),
+                InlineKeyboardButton(
+                    t(
+                        "checking.profile.button.appeals",
+                        locale,
+                        n=appeal_total,
+                        plain=True,
+                    ),
+                    callback_data=f"check_appeals:{target_id}:0",
+                    style=KeyboardButtonStyle.PRIMARY,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    t(
+                        "checking.profile.button.warnings",
+                        locale,
+                        n=fed_warn_total,
+                        plain=True,
+                    ),
+                    callback_data=f"check_warns:{target_id}",
+                    style=KeyboardButtonStyle.PRIMARY,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    t(
+                        "checking.profile.button.kicks",
+                        locale,
+                        n=kick_total,
+                        plain=True,
+                    ),
+                    callback_data=f"check_kicks:{target_id}:0",
+                    style=KeyboardButtonStyle.PRIMARY,
+                ),
+                InlineKeyboardButton(
+                    t(
+                        "checking.profile.button.mutes",
+                        locale,
+                        n=mute_total,
+                        plain=True,
+                    ),
+                    callback_data=f"check_mutes:{target_id}:0",
+                    style=KeyboardButtonStyle.PRIMARY,
+                ),
+            ],
+        ]
+    )
 
 
 # ───────────────────────── Appeal flow ─────────────────────────── #
@@ -837,9 +1189,10 @@ def language_list_kb(
     scope: str,
     items: list[tuple[str, str]],
     *,
-    back_label: str = "« Back",
+    back_label: str | None = None,
     back_callback: str | None = None,
     selected: str | None = None,
+    locale: str | None = None,
 ) -> InlineKeyboardMarkup:
     """Language options: one button per locale plus an optional Back row.
 
@@ -848,7 +1201,9 @@ def language_list_kb(
     setting) gets a ``✓`` text prefix, which is a plain check character,
     not an emoji. The Back row (only when ``back_callback`` is given)
     sends that callback verbatim, so the start-menu path can return to
-    ``back_to_start`` while the command path omits it.
+    ``back_to_start`` while the command path omits it. The Back label
+    renders from the button catalog in ``locale`` unless ``back_label``
+    overrides it explicitly.
     """
     rows = [
         [
@@ -861,5 +1216,10 @@ def language_list_kb(
         for name, code in items
     ]
     if back_callback is not None:
-        rows.append([InlineKeyboardButton(back_label, callback_data=back_callback)])
+        label = (
+            back_label
+            if back_label is not None
+            else t("button.back", locale, plain=True)
+        )
+        rows.append([InlineKeyboardButton(label, callback_data=back_callback)])
     return InlineKeyboardMarkup(rows)

@@ -91,11 +91,40 @@ HELP_TOPICS_CMD: list[tuple[str, str]] = [
 ]
 
 # * Module name → help key mapping for /help <module> lookup
+# * (default-locale snapshot; per-request paths rebuild for the tapper's
+# * locale via _module_map_for_locale below).
 _MODULE_NAME_MAP: dict[str, str] = {}
 for _key, _entry in HELP_CONTENT.items():
     _module_slug = _key[5:]
     _MODULE_NAME_MAP[_module_slug.lower()] = _key
     _MODULE_NAME_MAP[_entry[0].lower()] = _key
+
+
+def _topics_for_locale(locale: str | None, *, menu: bool) -> list[tuple[str, str]]:
+    """Build the help-index topic list in ``locale`` (names + callbacks).
+
+    The module-level ``HELP_TOPICS_*`` lists are default-locale snapshots
+    for import-time use; index renders call this so topic names follow the
+    tapper's locale like every other keyboard.
+    """
+    content = _builder_help(locale)
+    ordered = sorted(
+        ((entry[0], key) for key, entry in content.items()),
+        key=lambda item: item[0].lower(),
+    )
+    if menu:
+        return list(ordered)
+    return [(name, "helpc_" + key[5:]) for name, key in ordered]
+
+
+def _module_map_for_locale(locale: str | None) -> dict[str, str]:
+    """Build the module-name → help-key map in ``locale`` for /help <name>."""
+    mapping: dict[str, str] = {}
+    for key, entry in _builder_help(locale).items():
+        slug = key[5:]
+        mapping[slug.lower()] = key
+        mapping[entry[0].lower()] = key
+    return mapping
 
 
 def _help_index_text(botname: str, locale: str | None = None) -> str:
@@ -111,14 +140,19 @@ def _help_index_text(botname: str, locale: str | None = None) -> str:
 # ──────────────────────── Shared Renderers ──────────────────────── #
 
 
-# * Command prefixes come from frozen env config and never change at
-# * runtime, so render the footer once instead of re-joining it on every
-# * module view. The leading newline separates the note from the overview.
-_PREFIX_NOTE: str = "\n" + t(
-    "help.note.prefixes",
-    None,
-    prefixes=Safe(" ".join(code(p) for p in cfg.prefixes)),
-)
+def _prefix_note(locale: str | None = None) -> str:
+    """Render the command-prefix footer note in ``locale``.
+
+    Prefixes come from frozen env config and never change at runtime, but
+    the surrounding prose is translated, so this renders per request
+    instead of once at import. The leading newline separates the note
+    from the overview.
+    """
+    return "\n" + t(
+        "help.note.prefixes",
+        locale,
+        prefixes=Safe(" ".join(code(p) for p in cfg.prefixes)),
+    )
 
 
 def _section_buttons(
@@ -141,7 +175,7 @@ def _module_text(name: str, overview: str, locale: str | None = None) -> str:
         locale,
         title=Safe(bold(f"Help for {name}")),
         overview=Safe(overview),
-        note=Safe(_PREFIX_NOTE),
+        note=Safe(_prefix_note(locale)),
     )
 
 
@@ -159,9 +193,9 @@ async def _render_help_index(
     botname = ctx.bot.first_name or ""
     locale = await locale_for_update(update)
     kb = (
-        keyboards.help_topics_menu_kb(HELP_TOPICS_MENU, locale)
+        keyboards.help_topics_menu_kb(_topics_for_locale(locale, menu=True), locale)
         if with_back_to_start
-        else keyboards.help_topics_kb(HELP_TOPICS_CMD)
+        else keyboards.help_topics_kb(_topics_for_locale(locale, menu=False))
     )
     # * q.answer() and the edit are independent; run in parallel.
     await answer_and_edit(q, _help_index_text(botname, locale), reply_markup=kb)
@@ -272,10 +306,11 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
     locale = await locale_for_update(update)
     content = _builder_help(locale)
+    name_map = _module_map_for_locale(locale)
 
     if args:
         query = " ".join(args).strip().lower()
-        help_key = _MODULE_NAME_MAP.get(query)
+        help_key = name_map.get(query)
 
         if help_key and help_key in content:
             name, overview, sections = content[help_key]
@@ -296,7 +331,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             return
 
         candidates = sorted(
-            _MODULE_NAME_MAP,
+            name_map,
             key=lambda k: (query not in k, abs(len(k) - len(query))),
         )[:3]
         suggestion = ", ".join(code(f"/help {c}") for c in candidates if c)
@@ -320,7 +355,9 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 hint=hint,
             ),
             log_label="cmd_help not-found",
-            reply_markup=keyboards.help_topics_kb(HELP_TOPICS_CMD),
+            reply_markup=keyboards.help_topics_kb(
+                _topics_for_locale(locale, menu=False)
+            ),
         )
         return
 
@@ -328,7 +365,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         msg,
         _help_index_text(botname, locale),
         log_label="cmd_help index",
-        reply_markup=keyboards.help_topics_kb(HELP_TOPICS_CMD),
+        reply_markup=keyboards.help_topics_kb(_topics_for_locale(locale, menu=False)),
     )
 
 

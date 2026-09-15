@@ -294,6 +294,14 @@ async def get_effective_role(user_id: int) -> str | None:
             raise admin
         if isinstance(role, BaseException):
             raise role
+        if role is not None and role not in VALID_ROLES:
+            # ! CRITICAL: set_role rejects these on write, but a legacy or
+            # ! hand-edited tc_roles row could still carry "admin"/"founder".
+            # ! Returning it verbatim would grant real privilege, so treat
+            # ! unknown stored values as no custom role instead of trusting
+            # ! the document.
+            log.error("Ignoring invalid stored role %r for user %d", role, user_id)
+            role = None
         return "founder" if owner else "admin" if admin else role
 
     return cast("str | None", await effective_role_cache.get_or_fetch(user_id, _fetch))

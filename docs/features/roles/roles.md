@@ -46,6 +46,8 @@ Effective roles are resolved by `users_roles.get_effective_role(user_id)`:
 3. Check whether the user has a custom role in `tc_roles`.
 4. Cache the result in `effective_role_cache`.
 
+Only `developer` and `tester` are accepted as custom roles: `set_role` refuses anything else on write, and resolution ignores an unknown stored value (logged as an error, treated as no custom role) so a legacy or hand-edited row can never grant privilege.
+
 The rank table is:
 
 | Effective role | Rank | Source |
@@ -328,7 +330,7 @@ Role and promotion logs are built in `parse_logmsg.py`:
 | Template | Trigger |
 |---|---|
 | `promoted(target_id, target_fname, role, by_id, by_fname)` | Founder/Admin promotes a user to the named role (Admin, Developer, or Tester). |
-| `demoted(target_id, target_fname, role, by_id, by_fname)` | Role removed. Identical for manual demotion and auto-demote during a ban, kick, or mute — the log template has no trigger parameter. |
+| `demoted(target_id, target_fname, role, by_id, by_fname)` | Role removed. Identical for manual demotion and auto-demote during a ban, kick, or mute (the log template has no trigger parameter). |
 | `ownership_transferred` | Founder transfers ownership. |
 | `promote_request_log` | Admin promotion request created. |
 | `promote_approved_log` | Founder approves a promotion request. |

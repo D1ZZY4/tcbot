@@ -54,8 +54,8 @@ async def locale_for_update(update: Update) -> str:
     chat/user info falls back to the default locale; resolution never
     raises.
     """
-    chat = update.effective_chat
-    user = update.effective_user
+    chat = getattr(update, "effective_chat", None)
+    user = getattr(update, "effective_user", None)
     if chat is None or user is None:
         return DEFAULT_LOCALE
     return await effective_locale(

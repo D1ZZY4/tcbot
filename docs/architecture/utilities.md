@@ -172,7 +172,7 @@ Single source of truth for all Telegram Markdown markup. Both the utils layer (e
 | `code(text)` | `` `...` `` with escaped content. |
 | `pre(text)` | ` ```...``` ` monospace block with escaped content. |
 | `link(text, url)` | MarkdownV2 link. Escape or validate untrusted URLs before passing. |
-| `user_ref(user_id, name, username=None)` | ID-based mention, always a clickable `FullName` resolving via `tg://user?id=...`; usernames are never used. The `name` is used verbatim as the link text, so a bare numeric fallback from `extraction._best_name` renders as the raw ID. Sole mention helper in the formatter — the old `mention()` alias was removed. |
+| `user_ref(user_id, name, username=None)` | ID-based mention, always a clickable `FullName` resolving via `tg://user?id=...`; usernames are never used. The `name` is used verbatim as the link text, so a bare numeric fallback from `extraction._best_name` renders as the raw ID. Sole mention helper in the formatter (the old `mention()` alias was removed). |
 
 Always import from `tcbot.utils.formatter`.
 

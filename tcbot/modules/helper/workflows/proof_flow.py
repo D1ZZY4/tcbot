@@ -11,16 +11,15 @@ from dataclasses import dataclass, field
 
 from telegram import (
     Bot,
-    InlineKeyboardButton,
     InlineKeyboardMarkup,
     InputMediaPhoto,
     InputMediaVideo,
     Message,
 )
-from telegram.constants import KeyboardButtonStyle
 from telegram.ext import filters
 from telegram.ext.filters import BaseFilter
 
+from tcbot.modules.helper.keyboards import proof_step_kb
 from tcbot.utils.formatter import bold
 from tcbot.utils.i18n import Safe, t
 
@@ -55,31 +54,11 @@ class BuildProof:
 
         Done executes with everything collected so far (albums in one
         send and sequential sends alike); without it the ban path
-        auto-flushes after a silence window instead. Labels render from
-        the shared button catalog.
+        auto-flushes after a silence window instead. Markup lives in
+        :func:`keyboards.proof_step_kb`; this stays as a thin delegating
+        step so existing call sites keep working.
         """
-        buttons: list[InlineKeyboardButton] = []
-        if self.skip_allowed:
-            buttons.append(
-                InlineKeyboardButton(
-                    t("button.skip", locale, plain=True),
-                    callback_data=f"{self.action}_skip_proof",
-                    style=KeyboardButtonStyle.PRIMARY,
-                )
-            )
-        buttons.append(
-            InlineKeyboardButton(
-                t("button.done", locale, plain=True),
-                callback_data=f"{self.action}_done_proof",
-            )
-        )
-        buttons.append(
-            InlineKeyboardButton(
-                t("button.cancel", locale, plain=True),
-                callback_data=f"{self.action}_cancel",
-            )
-        )
-        return InlineKeyboardMarkup([buttons])
+        return proof_step_kb(self.action, skip_allowed=self.skip_allowed, locale=locale)
 
     def _skip_hint(self, locale: str | None) -> Safe:
         if not self.skip_allowed:

@@ -18,6 +18,8 @@ Required secrets:
 - `BOT_TOKEN`: Telegram bot token from BotFather.
 - `MONGODB_URI`: MongoDB connection string.
 - `OWNER_ID`: Telegram user ID for the initial federation founder.
+- `API_ID`: Telegram API ID for MTProto identity lookups; boot refuses without it.
+- `API_HASH`: Telegram API hash matching `API_ID`; boot refuses without it.
 
 Optional secrets:
 
@@ -80,7 +82,7 @@ Ensure the `.replit` file contains (TOML array form):
 run = ["uv", "run", "python", "-m", "tcbot"]
 ```
 
-For Python 3.14, the Replit Nix `modules` already pins `python-3.14` (`modules = ["nix", "python-3.14", "nodejs-20"]`). If using a custom `pyproject.toml`, ensure the Replit Python version meets `requires-python = ">=3.13"`.
+For Python 3.14, the Replit Nix `modules` already pins `python-3.14` (`modules = ["nix", "python-3.14", "nodejs-24"]`). If using a custom `pyproject.toml`, ensure the Replit Python version meets `requires-python = ">=3.13"`.
 
 ---
 
@@ -102,6 +104,8 @@ The `uv.lock` file ensures reproducible installs on Replit. Do not commit
 - [ ] `BOT_TOKEN` set in Replit Secrets.
 - [ ] `MONGODB_URI` set in Replit Secrets.
 - [ ] `OWNER_ID` set in Replit Secrets.
+- [ ] `API_ID` set in Replit Secrets.
+- [ ] `API_HASH` set in Replit Secrets.
 - [ ] `WEBHOOK_URL` set for production webhook mode (optional on Replit: `REPLIT_DEV_DOMAIN` is auto-detected).
 - [ ] `WEBHOOK_SECRET` set for webhook validation.
 - [ ] Run command is `uv run python -m tcbot`.

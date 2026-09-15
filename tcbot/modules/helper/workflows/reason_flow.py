@@ -11,8 +11,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.constants import KeyboardButtonStyle
+from telegram import InlineKeyboardMarkup, Update
 from telegram.ext import (
     CallbackQueryHandler,
     ContextTypes,
@@ -22,9 +21,11 @@ from telegram.ext import (
 )
 
 from tcbot.modules.helper import replies
+from tcbot.modules.helper.keyboards import reason_step_kb
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.proof_flow import PROOF_MEDIA_FILTER, BuildProof
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, esc, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
@@ -109,23 +110,14 @@ class BuildReason:
     skip_allowed: bool = field(default=True, kw_only=True)
 
     def keyboard(self, locale: str | None = None) -> InlineKeyboardMarkup:
-        """Reason-step keyboard. Includes Skip only when skip_allowed is True."""
-        buttons: list[InlineKeyboardButton] = []
-        if self.skip_allowed:
-            buttons.append(
-                InlineKeyboardButton(
-                    t("button.skip", locale, plain=True),
-                    callback_data=f"{self.action}_skip_reason",
-                    style=KeyboardButtonStyle.PRIMARY,
-                )
-            )
-        buttons.append(
-            InlineKeyboardButton(
-                t("button.cancel", locale, plain=True),
-                callback_data=f"{self.action}_cancel",
-            )
+        """Reason-step keyboard. Includes Skip only when skip_allowed is True.
+
+        Markup lives in :func:`keyboards.reason_step_kb`; this stays as a
+        thin delegating step so existing call sites keep working.
+        """
+        return reason_step_kb(
+            self.action, skip_allowed=self.skip_allowed, locale=locale
         )
-        return InlineKeyboardMarkup([buttons])
 
     def prompt(
         self,
@@ -296,6 +288,7 @@ class _ModActionFlow:
             ),
             return_exceptions=True,
         )
+        throw_if_cancelled(results)
         if isinstance(results[1], BaseException):
             log.debug(
                 "%s prompt edit failed (skip-reason step): %s", self.action, results[1]
@@ -405,6 +398,7 @@ class _ModActionFlow:
             self.executor(update, ctx),
             return_exceptions=True,
         )
+        throw_if_cancelled((qa_result, exec_result))
         if isinstance(qa_result, BaseException):
             log.debug("%s skip-proof q.answer failed: %s", self.action, qa_result)
         if isinstance(exec_result, BaseException):
@@ -473,6 +467,7 @@ class _ModActionFlow:
             ),
             return_exceptions=True,
         )
+        throw_if_cancelled(results)
         if isinstance(results[1], BaseException):
             log.debug(
                 "%s cancel edit failed (message may already be gone): %s",

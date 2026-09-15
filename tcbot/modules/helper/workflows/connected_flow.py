@@ -16,17 +16,17 @@ from telegram import (
     Bot,
     ChatMember,
     ChatPermissions,
-    InlineKeyboardButton,
     InlineKeyboardMarkup,
     Update,
 )
-from telegram.constants import ChatMemberStatus, KeyboardButtonStyle
+from telegram.constants import ChatMemberStatus
 
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
+from tcbot.modules.helper.keyboards import connect_join_kb
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.utils.dispatch import count_transient_errors, fan_out
+from tcbot.utils.dispatch import count_transient_errors, fan_out, throw_if_cancelled
 from tcbot.utils.formatter import bold, code
 from tcbot.utils.i18n import t
 from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
@@ -172,22 +172,12 @@ class BuildConnection:
     # ── Keyboard factory ───────────────────────────────────────────────────
 
     def join_keyboard(self, locale: str | None = None) -> InlineKeyboardMarkup:
-        """Connect / Cancel inline keyboard attached to the join prompt."""
-        return InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(
-                        t("button.connect", locale, plain=True),
-                        callback_data=self.join_callback,
-                        style=KeyboardButtonStyle.PRIMARY,
-                    ),
-                    InlineKeyboardButton(
-                        t("button.cancel", locale, plain=True),
-                        callback_data=self.cancel_callback,
-                    ),
-                ]
-            ]
-        )
+        """Connect / Cancel inline keyboard attached to the join prompt.
+
+        Markup lives in :func:`keyboards.connect_join_kb`; this stays as a
+        thin delegating step so existing call sites keep working.
+        """
+        return connect_join_kb(self.join_callback, self.cancel_callback, locale=locale)
 
     # ── Permission check ───────────────────────────────────────────────────
 
@@ -366,12 +356,14 @@ class BuildConnection:
 
         if new_status in (ChatMemberStatus.LEFT, ChatMemberStatus.BANNED):
             # * is_connected, deactivate, and remove_pending all run in parallel
-            was_connected, *_ = await asyncio.gather(
+            conn_results = await asyncio.gather(
                 db.groups_db.is_connected(chat.id),
                 db.groups_db.deactivate_group(chat.id),
                 db.groups_db.remove_pending(chat.id),
                 return_exceptions=True,
             )
+            throw_if_cancelled(conn_results)
+            was_connected = conn_results[0]
             if isinstance(was_connected, BaseException):
                 log.debug(
                     "is_connected check failed on bot removal from %d: %s",
@@ -439,6 +431,7 @@ class BuildConnection:
                 db.groups_db.is_connected(chat.id),
                 return_exceptions=True,
             )
+            throw_if_cancelled((pending, is_already_connected))
             if isinstance(pending, BaseException):
                 pending = None
             if isinstance(is_already_connected, BaseException):
@@ -538,7 +531,7 @@ class BuildConnection:
 
         # * Gather q.answer() + member check in parallel so the spinner
         # * disappears immediately regardless of Telegram API latency.
-        member_res, _ = await asyncio.gather(
+        member_res, ans_res = await asyncio.gather(
             asyncio.wait_for(
                 ctx.bot.get_chat_member(chat.id, user.id),
                 timeout=TELEGRAM_LOOKUP_TIMEOUT,
@@ -546,6 +539,7 @@ class BuildConnection:
             q.answer(),
             return_exceptions=True,
         )
+        throw_if_cancelled((member_res, ans_res))
         msg = update.effective_message
         if isinstance(member_res, BaseException):
             log.debug("Join decision role check failed: %s", member_res)

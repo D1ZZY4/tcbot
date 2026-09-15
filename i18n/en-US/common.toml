@@ -26,6 +26,20 @@ admin_above = "Admin and above (Founder / Admin)."
 dev_above = "Developer and above (Founder / Admin / Developer)."
 tester_above = "Tester and above (Founder / Admin / Developer / Tester)."
 
+# Full-sentence authorization refusals (replies.py owners). All send as
+# plain text (parse_mode=None replies), so they render with plain=True
+# at the call site. Placeholders: {role} = target role label.
+
+[refuse]
+owner_only = "This command is reserved for the Founder - you're not authorized."
+staff_only = "Staff and Founder only for this one - you don't have the rank."
+mod_only = "You need Developer rank or above for this - not your call."
+basic_mod_only = "You need at least a Tester role for this - not your call."
+rank_insufficient = "You don't have the rank for this one."
+role_lookup = "I couldn't verify federation roles right now. Please try again in a moment."
+anon_admin = "Anonymous admin mode is not supported for federation commands. Please send this command from your personal account."
+outranked = "That's a {role} - they outrank you here, can't take action on them."
+
 [limit]
 # Placeholders: {wait} = seconds as an integer, at least 1. The unit
 # rides on the number ({wait}s) so the line stays correct at 1.

@@ -73,7 +73,9 @@ async def build_ban_detail(
         f"{t('checking.ban_info.user_id', locale, id=Safe(code(str(uid))))}\n\n"
         f"{t('checking.ban_info.banned_by', locale, admin=Safe(user_ref(aid, admin_fname, admin_uname)))}\n"
         f"{t('checking.ban_info.admin_id', locale, id=Safe(code(str(aid))))}\n\n"
-        f"{t('checking.ban_info.reason', locale, reason=Safe(ban.get('reason', None) or t('checking.events.no_reason', locale, plain=True)))}\n"
+        # * Reason is moderator free text: pass raw so the engine escapes
+        # * MarkdownV2 at render time (Safe would inject markup/parse errors).
+        f"{t('checking.ban_info.reason', locale, reason=ban.get('reason', None) or t('checking.events.no_reason', locale, plain=True))}\n"
         f"{t('checking.ban_info.ban_id', locale, id=Safe(code(ban.get('ban_id', ''))))}\n"
         f"{t('checking.ban_info.date', locale, date=Safe(date_str))}"
     )

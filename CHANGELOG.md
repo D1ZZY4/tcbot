@@ -9,9 +9,21 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Added
 
+- **Localized Prev/Next and authorization refusals** (`i18n/en-US/button.toml`, `i18n/id/button.toml`, `i18n/en-US/common.toml`, `i18n/id/common.toml`): the paged-list navigation row reads `button.prev` / `button.next`, and every auth refusal (tier refusals, rank, role-lookup retry, anonymous admin, outrank notice) reads `common.refuse.*` in the viewer's locale. Default-locale wording is unchanged.
+
 ### Changed
 
+- **One home for every inline keyboard** (`tcbot/modules/helper/keyboards.py`, `reason_flow.py`, `proof_flow.py`, `connected_flow.py`, `stats_flow.py`, `check_flow.py`, `tcbot/utils/pagination.py`): step keyboards, stats/check lists, profile dashboard, and warn-group lists are defined once in the keyboard module, and the flow classes keep thin delegating steps so call sites and callback data are unchanged. In-flight keyboards keep working.
+- **Help index follows the tapper's locale** (`tcbot/modules/help.py`): topic lists, the `/help <module>` name map, and the prefix footer rebuild per request instead of serving the import-time default-locale snapshot. Behavior changes: Indonesian tappers now read translated index content and can look up modules by Indonesian name.
+- **Warn clears repair stale counters and migration merges them** (`tcbot/database/warns_db.py`): a failed counter delete now recounts the pair (single-group clear) or retries the delete (federation-wide clear) instead of leaving counts a later warn would increment from. Group migration sums per-user counters into the new chat instead of overwriting one side. Behavior changes: clears never leave stale auto-ban counts behind.
+- **Unknown stored roles grant nothing** (`tcbot/database/users_roles.py`): resolution ignores a `tc_roles` value outside the accepted custom set (logged as an error, treated as no custom role) instead of returning it verbatim. Behavior changes: a legacy or hand-edited row naming a privileged role no longer confers that role.
+
 ### Fixed
+
+- **Boot guides name the MTProto credentials** (`README.md`, `AGENTS.md`, `replit.md`, `config.env.example`, `docs/getting-started/setup.md`): `API_ID` / `API_HASH` are listed as required wherever the other boot values are, and the template ships them as active entries instead of comments. Behavior changes: fresh deploys following the guides boot instead of refusing to start.
+- **Ban-detail reason renders literally** (`tcbot/modules/helper/ban_info.py`): moderator free text now passes through the render engine instead of bypassing it. Behavior changes: reasons containing markup characters show as written instead of breaking or reshaping the card.
+- **Cancelled callbacks propagate instead of reading as failures** (`tcbot/modules/helper/parse_editmsg.py`, `reason_flow.py`, `connected_flow.py`, `tcbot/modules/helper/locale.py`): answer-and-render paths re-raise cancellation, and locale resolution tolerates malformed updates. Behavior changes: none during normal operation; shutdowns no longer log as data-fetch failures.
+- **Stale documentation swept** (`docs/architecture/database.md`, `helpers.md`, `workflows.md`, `utilities.md`, `docs/features/roles/roles.md`, `demote.md`, `docs/reference/keyboard-styles.md`, `.agents/rules/docs-sync.md`): keyboard ownership, warn counter repair and merge, role validation, and the ID-only mention contract match the code; forbidden characters, the Replit runtime version, and the type-check scope are corrected. Behavior changes: none, docs only.
 
 - **Replit webhook port corrected to 8080** (`.replit`, `replit.md`): public traffic only reaches local port 8080, so serving the webhook on the 5000 default left every Telegram delivery dying at the proxy and the bot never replied. The port mapping is back to 8080 only and the deployment guide names the required value. Behavior changes: webhook deliveries reach the bot on Replit.
 

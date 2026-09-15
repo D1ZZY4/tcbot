@@ -150,6 +150,50 @@ def perm_tester_above(locale: str | None = None, *, plain: bool) -> str:
     return t("common.perm.tester_above", locale, plain=plain)
 
 
+# ─────────────────────── Authorization refusals ─────────────────────── #
+# * Full-sentence refusals sent as plain text (parse_mode=None replies).
+
+
+def refuse_owner_only(locale: str | None = None, *, plain: bool) -> str:
+    """Founder-only command refusal in the render locale."""
+    return t("common.refuse.owner_only", locale, plain=plain)
+
+
+def refuse_staff_only(locale: str | None = None, *, plain: bool) -> str:
+    """Staff-only command refusal in the render locale."""
+    return t("common.refuse.staff_only", locale, plain=plain)
+
+
+def refuse_mod_only(locale: str | None = None, *, plain: bool) -> str:
+    """Developer-and-above command refusal in the render locale."""
+    return t("common.refuse.mod_only", locale, plain=plain)
+
+
+def refuse_basic_mod_only(locale: str | None = None, *, plain: bool) -> str:
+    """Tester-and-above command refusal in the render locale."""
+    return t("common.refuse.basic_mod_only", locale, plain=plain)
+
+
+def refuse_rank_insufficient(locale: str | None = None, *, plain: bool) -> str:
+    """Insufficient-rank refusal in the render locale."""
+    return t("common.refuse.rank_insufficient", locale, plain=plain)
+
+
+def refuse_role_lookup(locale: str | None = None, *, plain: bool) -> str:
+    """Role-lookup outage retry notice in the render locale."""
+    return t("common.refuse.role_lookup", locale, plain=plain)
+
+
+def refuse_anon_admin(locale: str | None = None, *, plain: bool) -> str:
+    """Anonymous-admin refusal in the render locale."""
+    return t("common.refuse.anon_admin", locale, plain=plain)
+
+
+def refuse_outranked(role: str, locale: str | None = None, *, plain: bool) -> str:
+    """Outrank refusal naming the target role in the render locale."""
+    return t("common.refuse.outranked", locale, role=role, plain=plain)
+
+
 # ─────────────────────── Action Defaults ────────────────────────── #
 
 

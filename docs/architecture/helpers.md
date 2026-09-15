@@ -70,7 +70,7 @@ in [`utilities.md#formatterpy`](utilities.md).
 | `code(text)` | `` `...` `` with escaped content. |
 | `pre(text)` | ` ```...``` ` monospace block with escaped content. |
 | `link(text, url)` | MarkdownV2 link. Escape or validate URLs before passing untrusted values. |
-| `user_ref(user_id, name, username=None)` | ID-based mention, always a clickable `FullName` resolving via `tg://user?id=...`; usernames are never used. Falls back to the numeric ID as link text when the name is the numeric fallback. Sole name in the formatter — the old `mention()` alias was removed. |
+| `user_ref(user_id, name, username=None)` | ID-based mention, always a clickable `FullName` resolving via `tg://user?id=...`; usernames are never used. Falls back to the numeric ID as link text when the name is the numeric fallback. Sole name in the formatter (the old `mention()` alias was removed). |
 
 Use `esc()`, `code()`, or `user_ref()` for any user-provided value in MarkdownV2 messages. Use `user_ref()` in action summaries and audit logs where the name links to the numeric user ID.
 
@@ -121,9 +121,11 @@ Main groups:
 | Menus/help | `main_menu_kb`, `group_start_kb`, `help_topics_menu_kb`, `help_topics_kb`, `back_to_start_kb`, `back_to_help_kb`, `back_to_help_cmd_kb`, `module_help_kb`, `back_to_module_kb`, `additional_menu_kb` |
 | Privacy | `privacy_kb`, `privacy_policy_sections_kb`, `back_to_privacy_policy_kb` |
 | Groups | `groups_menu_kb`, `tcgroups_kb` |
-| Stats | `main_kb` (in `stats_flow`), `back_kb` (in `stats_flow`) |
-| Paginated drill-downs | `paged_drill_kb(items, *, page, total_pages, nav_prefix, back_callback, extra_rows=None, per_row=3, locale=None)` - numbered drill-in grid plus nav row, back button, and optional extra rows. Single owner for the numbered-grid look (the one place numbered buttons gain their PRIMARY style), replacing local copies in the stats and check drill-downs. |
-| Language menu | `language_list_kb(scope, items, *, back_label, back_callback=None, selected=None)` - one row per locale button from `(display_name, locale_code)` pairs, each sending `lang:set:<scope>:<locale>`. The currently selected locale is prefixed with `✓` (a plain check character, not an emoji); the optional Back row sends `back_callback` verbatim. |
+| Stats | `stats_main_kb`, `stats_back_kb`, `stats_back_row`, `stats_list_kb`, `stats_search_panel_kb`, `stats_search_results_kb`, `stats_search_row` |
+| Check | `check_back_row`, `check_warns_back_row`, `check_warn_groups_kb`, `check_profile_kb` |
+| Flow steps | `reason_step_kb`, `proof_step_kb`, `connect_join_kb` - owned here; `BuildReason.keyboard()`, `BuildProof.keyboard()`, and `BuildConnection.join_keyboard()` stay as thin delegating steps so existing call sites keep working. `stats_flow.main_kb` / `back_kb` / `_list_kb` and `check_flow._back_to_check` are compat aliases over the same builders. |
+| Paginated drill-downs | `paged_drill_kb(items, *, page, total_pages, nav_prefix, back_callback, extra_rows=None, per_row=3, locale=None)` - numbered drill-in grid plus nav row, back button, and optional extra rows. Single owner for the numbered-grid look (the one place numbered buttons gain their PRIMARY style), replacing local copies in the stats and check drill-downs. The `« Prev` / `Next »` labels come from `button.prev` / `button.next` in the view locale; the row primitive itself lives in `tcbot/utils/pagination.py` (`nav_row`, also locale-aware). |
+| Language menu | `language_list_kb(scope, items, *, back_label=None, back_callback=None, selected=None, locale=None)` - one row per locale button from `(display_name, locale_code)` pairs, each sending `lang:set:<scope>:<locale>`. The currently selected locale is prefixed with `✓` (a plain check character, not an emoji); the optional Back row sends `back_callback` verbatim. The Back label renders from `button.back` in `locale` unless `back_label` overrides it. |
 
 See [keyboard styles](../reference/keyboard-styles.md) for layout, color, and callback-data conventions (semantic `style`: `SUCCESS` for Approve, `DANGER` for Reject/destructive Confirm, `PRIMARY` for continue/select steps; everything else neutral).
 

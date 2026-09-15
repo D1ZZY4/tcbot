@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from telegram.error import BadRequest
 
+from tcbot.utils.dispatch import throw_if_cancelled
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
@@ -91,12 +93,14 @@ async def answer_and_edit(q: CallbackQuery, text: str, **kwargs: Any) -> None:
     ``q.answer()`` and the inline edit are independent; gathering them starts
     both at once. The edit goes through :func:`safe_edit_cb`, so benign
     not-modified errors are swallowed like the raw callback sites it replaces.
+    Cancellation always propagates instead of reading as success.
     """
-    await asyncio.gather(
+    results = await asyncio.gather(
         q.answer(),
         safe_edit_cb(q, text, **kwargs),
         return_exceptions=True,
     )
+    throw_if_cancelled(results)
 
 
 async def ack_and_render(
@@ -107,9 +111,10 @@ async def ack_and_render(
     ``data_coro`` must be a coroutine that returns ``(text, kb)``. Gathering
     ``q.answer()`` with the DB fetch starts both simultaneously, cutting latency
     versus the old sequential pattern. On a data coroutine failure the query is
-    answered but the message is left untouched.
+    answered but the message is left untouched. Cancellation always propagates.
     """
-    _, result = await asyncio.gather(q.answer(), data_coro, return_exceptions=True)
+    ans, result = await asyncio.gather(q.answer(), data_coro, return_exceptions=True)
+    throw_if_cancelled((ans, result))
     if isinstance(result, BaseException):
         log.error("ack_and_render data fetch failed: %s", result)
         return

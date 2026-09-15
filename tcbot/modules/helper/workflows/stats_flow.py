@@ -17,7 +17,6 @@ from telegram import (
     InlineKeyboardMarkup,
     Message,
 )
-from telegram.constants import KeyboardButtonStyle
 
 from tcbot import cfg
 from tcbot import database as db
@@ -26,7 +25,17 @@ from tcbot.modules.helper.extraction import (
     identity_needs_refresh,
     launch_identity_refresh,
 )
-from tcbot.modules.helper.keyboards import back_to_module_kb, detail_kb, paged_drill_kb
+from tcbot.modules.helper.keyboards import (
+    back_to_module_kb,
+    detail_kb,
+    stats_back_kb,
+    stats_back_row,
+    stats_list_kb,
+    stats_main_kb,
+    stats_search_panel_kb,
+    stats_search_results_kb,
+    stats_search_row,
+)
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, code, esc, user_ref
 from tcbot.utils.i18n import Safe, t
@@ -41,7 +50,6 @@ if TYPE_CHECKING:
     from tcbot.database.documents import BanDoc
 
 _PAGE_SIZE = 6
-_BTNS_PER_ROW = 3
 
 # * Cap for stats name search: bounds the $in fetch and the per-user
 # * search-result state kept in user_data.
@@ -96,14 +104,13 @@ def launch_group_title_refresh(bot: Bot, chat_id: int) -> None:
 
 
 def _back_main(locale: str | None = None) -> list[InlineKeyboardButton]:
-    return [
-        InlineKeyboardButton(
-            t("button.back", locale, plain=True), callback_data="stats_main"
-        )
-    ]
+    """Back row to the stats main menu (single source: keyboards)."""
+    return stats_back_row(locale)
 
 
 # ─────────────────────── Keyboard builders ──────────────────────── #
+# * Thin aliases over keyboards.py so existing imports keep working
+# * while the markup itself lives in the single keyboard module.
 
 
 def main_kb(
@@ -116,43 +123,12 @@ def main_kb(
     The ``stats_users`` callbacks enforce the same gate, so a stale or
     crafted tap without the button still cannot open the list.
     """
-    rows = [
-        [
-            InlineKeyboardButton(
-                t("stats.button.roster", locale, plain=True),
-                callback_data="stats_admins",
-                style=KeyboardButtonStyle.PRIMARY,
-            ),
-            InlineKeyboardButton(
-                t("stats.button.bans", locale, plain=True),
-                callback_data="stats_bans:0",
-                style=KeyboardButtonStyle.PRIMARY,
-            ),
-        ],
-        [
-            InlineKeyboardButton(
-                t("stats.button.chats", locale, plain=True),
-                callback_data="stats_chats:0",
-                style=KeyboardButtonStyle.PRIMARY,
-            ),
-        ],
-    ]
-    if show_users:
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    t("stats.button.users", locale, plain=True),
-                    callback_data="stats_users:0",
-                    style=KeyboardButtonStyle.PRIMARY,
-                )
-            ]
-        )
-    return InlineKeyboardMarkup(rows)
+    return stats_main_kb(show_users=show_users, locale=locale)
 
 
 def back_kb(locale: str | None = None) -> InlineKeyboardMarkup:
-    """Single ``« Back`` returning to the stats main menu."""
-    return InlineKeyboardMarkup([_back_main(locale)])
+    """Single Back button returning to the stats main menu."""
+    return stats_back_kb(locale)
 
 
 def _list_kb(
@@ -164,6 +140,7 @@ def _list_kb(
     *,
     extra_row: list[InlineKeyboardButton] | None = None,
     item_ids: list[str] | None = None,
+    locale: str | None = None,
 ) -> InlineKeyboardMarkup:
     """Compose nav + numbered detail buttons + optional extra row + back.
 
@@ -172,21 +149,15 @@ def _list_kb(
     that ID so a list mutation between render and tap cannot silently show
     a different record. Older buttons without the segment keep working.
     """
-
-    def _callback(i: int) -> str:
-        base = f"{item_cb_prefix}:{page}:{i}"
-        if item_ids is not None and i < len(item_ids):
-            return f"{base}:{item_ids[i]}"
-        return base
-
-    return paged_drill_kb(
-        [(str(i + 1), _callback(i)) for i in range(n_items)],
-        page=page,
-        total_pages=total_pages,
-        nav_prefix=cb_prefix,
-        back_callback="stats_main",
-        extra_rows=[extra_row] if extra_row is not None else None,
-        per_row=_BTNS_PER_ROW,
+    return stats_list_kb(
+        page,
+        total_pages,
+        n_items,
+        cb_prefix,
+        item_cb_prefix,
+        extra_row=extra_row,
+        item_ids=item_ids,
+        locale=locale,
     )
 
 
@@ -438,6 +409,7 @@ class Stats:
             cb_prefix="stats_users",
             item_cb_prefix="stats_user_item",
             item_ids=[str(u.get("user_id", 0)) for u in chunk],
+            locale=locale,
         )
 
     @classmethod
@@ -534,6 +506,7 @@ class Stats:
             cb_prefix="stats_chats",
             item_cb_prefix="stats_chat_item",
             item_ids=[str(grp.get("chat_id", 0)) for grp in chunk],
+            locale=locale,
         )
 
     @classmethod
@@ -623,13 +596,7 @@ class Stats:
                 )
             )
 
-        search_row = [
-            InlineKeyboardButton(
-                t("stats.button.search", locale, plain=True),
-                callback_data="stats_bans_search",
-                style=KeyboardButtonStyle.PRIMARY,
-            ),
-        ]
+        search_row = stats_search_row(locale)
         return "\n".join(lines), _list_kb(
             page,
             total_pages,
@@ -638,6 +605,7 @@ class Stats:
             item_cb_prefix="stats_ban_item",
             extra_row=search_row,
             item_ids=[str(ban.get("ban_id", "")) for ban in chunk],
+            locale=locale,
         )
 
     @classmethod
@@ -677,45 +645,13 @@ class Stats:
 
     @staticmethod
     def _search_panel_kb(locale: str | None = None) -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(
-                        t("button.cancel", locale, plain=True),
-                        callback_data="stats_search_cancel",
-                    )
-                ]
-            ]
-        )
+        """Search panel keyboard (single source: keyboards)."""
+        return stats_search_panel_kb(locale)
 
     @staticmethod
     def _search_results_kb(n: int, locale: str | None = None) -> InlineKeyboardMarkup:
-        num_btns = [
-            InlineKeyboardButton(
-                str(i + 1),
-                callback_data=f"stats_search_item:{i}",
-                style=KeyboardButtonStyle.PRIMARY,
-            )
-            for i in range(n)
-        ]
-        rows: list[list[InlineKeyboardButton]] = [
-            num_btns[i : i + _BTNS_PER_ROW]
-            for i in range(0, len(num_btns), _BTNS_PER_ROW)
-        ]
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    t("stats.button.new_search", locale, plain=True),
-                    callback_data="stats_bans_search",
-                    style=KeyboardButtonStyle.PRIMARY,
-                ),
-                InlineKeyboardButton(
-                    t("button.cancel", locale, plain=True),
-                    callback_data="stats_search_cancel",
-                ),
-            ]
-        )
-        return InlineKeyboardMarkup(rows)
+        """Numbered search results (single source: keyboards)."""
+        return stats_search_results_kb(n, locale)
 
     @classmethod
     def open_search(

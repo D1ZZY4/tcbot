@@ -87,7 +87,7 @@ The `trigger` parameter controls only the DM body wording:
 - `trigger="kick"`: `Your <Role> role in <community> has been removed - you were kicked from the federation.`
 - `trigger="mute"`: `Your <Role> role in <community> has been removed - you were muted from the federation.`
 
-The federation log emitted by `parse_logmsg.demoted(target_id, target_fname, role, by_id, by_fname)` is identical in every case — `Demote.execute`'s `trigger` keyword is not passed to the log builder and never changes the rendered output. The signature shown above is the complete one; there is no `trigger` parameter.
+The federation log emitted by `parse_logmsg.demoted(target_id, target_fname, role, by_id, by_fname)` is identical in every case: `Demote.execute`'s `trigger` keyword is not passed to the log builder and never changes the rendered output. The signature shown above is the complete one; there is no `trigger` parameter.
 
 ## Manual demotion flow (`/tcdemote`)
 

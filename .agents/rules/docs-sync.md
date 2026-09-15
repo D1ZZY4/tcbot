@@ -78,8 +78,10 @@ As of 2026-06-02, TCF Bot uses:
 Recent project additions to keep accurate when editing docs:
 
 - Smart mention system in `tcbot/utils/formatter.py`
-  (`user_ref(user_id, name, username=None)`) with global `t.me/username`
-  link fallback to plain text + ID.
+  (`user_ref(user_id, name, username=None)`) with ID-based `tg://user?id=...`
+  links. Usernames are never used in the rendered link (the numeric ID is
+  the single source of truth); the `username` parameter is accepted for
+  backward compatibility and ignored.
 - Batch query helpers in `tcbot/database/users_cache.py`
   (`get_user_mention_data`, `get_mention_data_batch`,
   `get_first_names_batch`).

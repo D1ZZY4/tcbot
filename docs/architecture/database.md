@@ -397,9 +397,9 @@ The per-group threshold is `cfg.warn_limit` (env `WARN_LIMIT`, default 3, minimu
 - `add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> int`
   Inserts the warn event, then `find_one_and_update` with `$inc` on the counter (upsert). On insert the missing `count` is treated as zero, so `$inc` sets it to 1; `count: 0` is intentionally NOT part of `$setOnInsert` (it would raise `OperationFailure` code 40 `ConflictingUpdateOperators`). If the counter update fails, the warn insert is rolled back (deleted by `_id`) and the failure re-raised so a counter outage never leaves an uncounted warning. Returns the new warn count.
 - `clear_warns(user_id: int, chat_id: int) -> int`
-  Deletes warn history plus the counter for one group; returns the history deleted count. Raises the warns-delete failure instead of returning 0 (a 0 return means "nothing to clear"; reporting an outage as an empty state would mislead the moderator). Counter-delete failures are error-logged but non-fatal (stale counter flagged for repair).
+  Deletes warn history plus the counter for one group; returns the history deleted count. Raises the warns-delete failure instead of returning 0 (a 0 return means "nothing to clear"; reporting an outage as an empty state would mislead the moderator). A counter-delete failure is repaired right away (the pair is recounted from history, which lands at zero and drops the stale doc) and stays non-fatal.
 - `clear_all_warns(user_id: int) -> int`
-  Deletes warn history plus every counter across all groups (used on federation auto-ban so a user starts with a clean slate). Raises like `clear_warns`; callers inside `gather` inspect the captured exception.
+  Deletes warn history plus every counter across all groups (used on federation auto-ban so a user starts with a clean slate). Raises like `clear_warns`; callers inside `gather` inspect the captured exception. A counter-delete failure retries the delete once.
 
 ### Queries
 
@@ -416,7 +416,7 @@ The per-group threshold is `cfg.warn_limit` (env `WARN_LIMIT`, default 3, minimu
 - `federation_warn_count(user_id: int) -> int`
   Total active warn count across all federation chats: server-side `$group` aggregation summing `count` where `count > 0`. Returns 0 when there is nothing. Used to evaluate the `FED_WARN_LIMIT` threshold.
 - `migrate_records(old_chat_id: int, new_chat_id: int) -> bool`
-  Chat-migration repoint. Updates `warns` and `warn_counts` in parallel, logging and skipping per-collection failures. Returns `True` if any record moved. Called by `greeting.on_chat_migration` alongside `groups_db.migrate_group` so warning history and thresholds survive a basic-group to supergroup migration.
+  Chat-migration repoint. Warn history moves with one update; counter docs merge by summation (per user, added into the supergroup counter via upsert) so a supergroup that already holds warns keeps the combined total instead of losing one side to the per-pair unique index. Stale old-chat counter docs are deleted after the merge. Each stage logs and skips on failure. Returns `True` if any record moved. Called by `greeting.on_chat_migration` alongside `groups_db.migrate_group` so warning history and thresholds survive a basic-group to supergroup migration.
 
 **Error behavior:** warn deletions raise when the history delete fails (empty-state misreporting is a correctness hazard); counter failures are repaired via recount or error-logged. Counter backfill is atomic so concurrent first-reads cannot double-count.
 

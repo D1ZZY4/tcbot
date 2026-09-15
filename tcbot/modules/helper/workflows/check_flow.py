@@ -10,8 +10,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, cast
 
-from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.constants import KeyboardButtonStyle
+from telegram import Bot, InlineKeyboardMarkup
 
 from tcbot import database as db
 from tcbot.database.documents import BanDoc
@@ -21,7 +20,15 @@ from tcbot.modules.helper.extraction import (
     launch_identity_refresh,
 )
 from tcbot.modules.helper.identity import Identity, classify, profile_note
-from tcbot.modules.helper.keyboards import back_to_module_kb, detail_kb, paged_drill_kb
+from tcbot.modules.helper.keyboards import (
+    back_to_module_kb,
+    check_back_row,
+    check_profile_kb,
+    check_warn_groups_kb,
+    check_warns_back_row,
+    detail_kb,
+    paged_drill_kb,
+)
 from tcbot.utils.formatter import bold, code, italic, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.pagination import date_or_unknown, nav_row
@@ -31,12 +38,13 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
     from datetime import datetime
 
+    from telegram import InlineKeyboardButton
+
 log = logging.getLogger(__name__)
 
 _PAGE_SIZE = 5
 _REASON_PREVIEW_LEN = 80
 _BAN_LIST_REASON_LEN = 60
-_BUTTON_TITLE_MAX = 24
 _BTNS_PER_ROW = 3
 
 
@@ -68,12 +76,8 @@ async def _resolve_user_info(bot: Bot, target_id: int) -> tuple[str, str | None]
 def _back_to_check(
     target_id: int, locale: str | None = None
 ) -> list[InlineKeyboardButton]:
-    return [
-        InlineKeyboardButton(
-            t("button.back", locale, plain=True),
-            callback_data=f"check_main:{target_id}",
-        )
-    ]
+    """Back row to the /check profile (single source: keyboards)."""
+    return check_back_row(target_id, locale)
 
 
 def _maybe_caveat(text: str, locale: str | None, *, failed: bool) -> str:
@@ -272,66 +276,15 @@ class Check:
         if counts_failed:
             text += f"\n\n{t('checking.profile.caveat', locale)}"
 
-        rows: list[list[InlineKeyboardButton]] = []
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    t("checking.profile.button.bans", locale, n=ban_total, plain=True),
-                    callback_data=f"check_bans:{target_id}:0",
-                    style=KeyboardButtonStyle.PRIMARY,
-                ),
-                InlineKeyboardButton(
-                    t(
-                        "checking.profile.button.appeals",
-                        locale,
-                        n=appeal_total,
-                        plain=True,
-                    ),
-                    callback_data=f"check_appeals:{target_id}:0",
-                    style=KeyboardButtonStyle.PRIMARY,
-                ),
-            ]
+        return text, check_profile_kb(
+            target_id,
+            ban_total=ban_total,
+            appeal_total=appeal_total,
+            fed_warn_total=fed_warn_total,
+            kick_total=kick_total,
+            mute_total=mute_total,
+            locale=locale,
         )
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    t(
-                        "checking.profile.button.warnings",
-                        locale,
-                        n=fed_warn_total,
-                        plain=True,
-                    ),
-                    callback_data=f"check_warns:{target_id}",
-                    style=KeyboardButtonStyle.PRIMARY,
-                ),
-            ]
-        )
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    t(
-                        "checking.profile.button.kicks",
-                        locale,
-                        n=kick_total,
-                        plain=True,
-                    ),
-                    callback_data=f"check_kicks:{target_id}:0",
-                    style=KeyboardButtonStyle.PRIMARY,
-                ),
-                InlineKeyboardButton(
-                    t(
-                        "checking.profile.button.mutes",
-                        locale,
-                        n=mute_total,
-                        plain=True,
-                    ),
-                    callback_data=f"check_mutes:{target_id}:0",
-                    style=KeyboardButtonStyle.PRIMARY,
-                ),
-            ]
-        )
-
-        return text, InlineKeyboardMarkup(rows)
 
     # ── Bans drill-down ───────────────────────────────────────────────────
 
@@ -441,7 +394,7 @@ class Check:
             )
             + "\n"
         ]
-        rows: list[list[InlineKeyboardButton]] = []
+        warn_groups: list[tuple[str, int, int]] = []
         for cid, count in groups:
             title = titles.get(cid) or str(cid)
             lines.append(
@@ -452,24 +405,11 @@ class Check:
                     n=Safe(bold(str(count))),
                 )
             )
-            rows.append(
-                [
-                    InlineKeyboardButton(
-                        t(
-                            "checking.warns.group_button",
-                            locale,
-                            title=title[:_BUTTON_TITLE_MAX],
-                            n=count,
-                            plain=True,
-                        ),
-                        callback_data=f"check_warn_chat:{target_id}:{cid}:0",
-                        style=KeyboardButtonStyle.PRIMARY,
-                    )
-                ]
-            )
+            warn_groups.append((title, count, cid))
 
-        rows.append(_back_to_check(target_id, locale))
-        return "\n".join(lines), InlineKeyboardMarkup(rows)
+        return "\n".join(lines), check_warn_groups_kb(
+            target_id, warn_groups, locale=locale
+        )
 
     @classmethod
     async def warns_in_group(
@@ -515,14 +455,7 @@ class Check:
 
         if not warns:
             text = t("checking.warns.in_empty", locale, title=title)
-            rows = [
-                [
-                    InlineKeyboardButton(
-                        t("button.back", locale, plain=True),
-                        callback_data=f"check_warns:{target_id}",
-                    )
-                ]
-            ]
+            rows = [check_warns_back_row(target_id, locale)]
             return _maybe_caveat(
                 text, locale, failed=count_failed or warns_failed
             ), InlineKeyboardMarkup(rows)
@@ -567,17 +500,12 @@ class Check:
             )
 
         rows = []
-        nav = nav_row(page, total_pages, f"check_warn_chat:{target_id}:{chat_id}")
+        nav = nav_row(
+            page, total_pages, f"check_warn_chat:{target_id}:{chat_id}", locale
+        )
         if nav:
             rows.append(nav)
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    t("button.back", locale, plain=True),
-                    callback_data=f"check_warns:{target_id}",
-                )
-            ]
-        )
+        rows.append(check_warns_back_row(target_id, locale))
         return _maybe_caveat(
             "\n".join(lines), locale, failed=count_failed
         ), InlineKeyboardMarkup(rows)
@@ -764,6 +692,7 @@ async def _ban_list_render(
         nav_prefix=f"{nav_prefix}:{target_id}",
         back_callback=f"check_main:{target_id}",
         per_row=_BTNS_PER_ROW,
+        locale=locale,
     )
 
 
@@ -876,7 +805,7 @@ async def _per_chat_event_list(
         )
 
     rows: list[list[InlineKeyboardButton]] = []
-    nav = nav_row(page, total_pages, cb_prefix)
+    nav = nav_row(page, total_pages, cb_prefix, locale)
     if nav:
         rows.append(nav)
     rows.append(_back_to_check(target_id, locale))

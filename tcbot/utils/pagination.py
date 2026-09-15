@@ -10,6 +10,7 @@ from typing import Any
 
 from telegram import InlineKeyboardButton
 
+from tcbot.utils.i18n import t
 from tcbot.utils.time_and_date import fmt_dt
 
 
@@ -28,16 +29,27 @@ def nav_row(
     page: int,
     total_pages: int,
     cb_prefix: str,
+    locale: str | None = None,
 ) -> list[InlineKeyboardButton]:
-    """Build a prev/next navigation row when there is more than one page."""
+    """Build a prev/next navigation row when there is more than one page.
+
+    Labels render from the shared button catalog so paged lists follow
+    the viewer's locale like every other keyboard.
+    """
     row: list[InlineKeyboardButton] = []
     if page > 0:
         row.append(
-            InlineKeyboardButton("« Prev", callback_data=f"{cb_prefix}:{page - 1}")
+            InlineKeyboardButton(
+                t("button.prev", locale, plain=True),
+                callback_data=f"{cb_prefix}:{page - 1}",
+            )
         )
     if page < total_pages - 1:
         row.append(
-            InlineKeyboardButton("Next »", callback_data=f"{cb_prefix}:{page + 1}")
+            InlineKeyboardButton(
+                t("button.next", locale, plain=True),
+                callback_data=f"{cb_prefix}:{page + 1}",
+            )
         )
     return row
 
