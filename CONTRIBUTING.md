@@ -147,7 +147,7 @@ Run the checks relevant to the change. For most code changes:
 ```bash
 uv run ruff format --check .
 uv run ruff check .
-uv run --with pyright pyright .
+uv run pyright .
 uv run python -m compileall -q tcbot
 uv run python -c "import tcbot"
 git diff --check

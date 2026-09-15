@@ -114,7 +114,7 @@ uv sync --frozen
 uv run ruff format .
 uv run ruff check --fix .
 uv run python -m tcbot
-uv run --with pyright pyright tcbot/
+uv run pyright .
 ```
 
 On systems where `python3` is preferred, replace `python` with `python3`.

@@ -284,7 +284,7 @@ The Flask keep-alive server binds to `0.0.0.0:${PORT}` (defaults to `5000` on un
 ```bash
 uv run ruff format --check .
 uv run ruff check .
-uv run --with pyright pyright .
+uv run pyright .
 uv run python -m compileall -q tcbot
 uv run python -c "import tcbot"
 git diff --check

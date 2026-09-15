@@ -33,6 +33,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Documentation
 
+- **Shorter type-check command in every guide** (`README.md`, `AGENTS.md`, `PROMPT.md`, `CONTRIBUTING.md`, `docs/README.md`, `docs/getting-started/setup.md`): the documented command no longer requests anything extra since the checker already ships with the development dependencies, and all six guides now cover the whole tree. Behavior changes: none, docs only.
+
 </details>
 
 ## [6.9.0] - 2026-09-14

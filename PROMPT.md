@@ -207,7 +207,7 @@ include:
 uv sync --frozen
 uv run ruff format --check .
 uv run ruff check .
-uv run --with pyright pyright tcbot/
+uv run pyright .
 uv run python -m compileall -q tcbot
 uv run python -c "import tcbot"
 git diff --check

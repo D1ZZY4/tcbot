@@ -212,7 +212,7 @@ Format, lint, and type-check:
 ```bash
 uv run ruff format .
 uv run ruff check --fix .
-uv run --with pyright pyright .
+uv run pyright .
 ```
 
 Run with Docker Compose:
