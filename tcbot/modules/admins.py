@@ -980,11 +980,20 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     if msg is None:
         return
     locale = await locale_for_update(update)
-    try:
-        pending = await db.queues_db.all_pending()
-        total_pending = await db.queues_db.pending_count()
-    except Exception:
-        log.exception("all_pending failed during promote_list")
+    # * The list slice and its total are independent reads; one gather
+    # * instead of two serial round trips on the same request path.
+    pending_r, total_r = await asyncio.gather(
+        db.queues_db.all_pending(),
+        db.queues_db.pending_count(),
+        return_exceptions=True,
+    )
+    throw_if_cancelled((pending_r, total_r))
+    if isinstance(pending_r, BaseException) or isinstance(total_r, BaseException):
+        log.warning(
+            "all_pending/pending_count failed during promote_list: %s / %s",
+            pending_r,
+            total_r,
+        )
         await safe_reply(
             msg,
             t("admins.error.role_lookup_failed", locale, plain=True),
@@ -992,6 +1001,7 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             parse_mode=None,
         )
         return
+    pending, total_pending = pending_r, total_r
     if not pending:
         await safe_reply(
             msg,
@@ -1231,8 +1241,12 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             # * so the display text is re-escaped here. Unavailable on
             # * MaybeInaccessibleMessage; fall back to an empty base.
             existing_text = esc(getattr(q.message, "text", "") or "")
-        locale = await locale_for_update(update)
-        target_locale = await locale_for_user(target_id)
+        # * The review-card locale and the target DM locale are independent
+        # * reads; one gather instead of two serial round trips.
+        locale, target_locale = await asyncio.gather(
+            locale_for_update(update),
+            locale_for_user(target_id),
+        )
         notify_results = await asyncio.gather(
             q.edit_message_text(
                 existing_text
@@ -1296,8 +1310,11 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         existing_text = ""
         if q.message is not None:
             existing_text = esc(getattr(q.message, "text", "") or "")
-        locale = await locale_for_update(update)
-        target_locale = await locale_for_user(target_id)
+        # * Same independent-locale pair as the approve path above.
+        locale, target_locale = await asyncio.gather(
+            locale_for_update(update),
+            locale_for_user(target_id),
+        )
         reject_results = await asyncio.gather(
             q.edit_message_text(
                 existing_text

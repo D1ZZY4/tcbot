@@ -2,13 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Throttled multi-group dispatcher: runs coroutines concurrently with a semaphore cap.
-
-Wraps fan_out slots with the Telegram circuit breaker so that repeated
-network timeouts do not saturate the semaphore pool with stalled tasks.
-Only ``telegram.error.TimedOut`` and ``telegram.error.NetworkError`` are
-counted against the circuit; expected API refusals (403, 400) are not.
-"""
+"""Bounded concurrency dispatcher for multi-group Telegram and database work."""
 
 from __future__ import annotations
 
@@ -135,6 +129,45 @@ async def fan_out[T](
     # ! CRITICAL: gather(return_exceptions=True) captures per-slot
     # ! cancellation as data. A cancelled slot must propagate so shutdown
     # ! is never misreported as per-group failures by the counters below.
+    throw_if_cancelled(results)
+    return results
+
+
+async def gather_bounded[T](
+    coros: Sequence[Awaitable[T]],
+    *,
+    max_concurrent: int = _MAX_CONCURRENT,
+) -> list[T | BaseException]:
+    """Run coros with bounded concurrency, without the Telegram circuit breaker.
+
+    Same result contract as :func:`fan_out` (order preserved, regular
+    failures returned as list elements, ``asyncio.CancelledError`` always
+    propagated) but with no circuit interaction. Use it for pure database
+    bursts where tripping or reading the Telegram breaker would be wrong,
+    such as bulk deactivations during cleanup.
+    """
+    if not coros:
+        return []
+
+    if max_concurrent < 1:
+        max_concurrent = 1
+
+    sem = asyncio.Semaphore(max_concurrent)
+
+    async def _slot(coro: Awaitable[T]) -> T | BaseException:
+        async with sem:
+            try:
+                return await coro
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                return exc
+
+    results = list(
+        await asyncio.gather(*(_slot(c) for c in coros), return_exceptions=True)
+    )
+    # ! CRITICAL: same cancellation contract as fan_out: a cancelled slot
+    # ! must propagate so shutdown is never misreported as per-item failures.
     throw_if_cancelled(results)
     return results
 

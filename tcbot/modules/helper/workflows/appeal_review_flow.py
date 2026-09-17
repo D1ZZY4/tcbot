@@ -499,8 +499,12 @@ class AppealReviewMixin:
             name_r, asyncio.CancelledError
         ):
             log.debug("reject_appeal name fetch failed: %s", name_r)
-        target_locale = await locale_for_user(target_id)
-        staff_locale = await locale_for_update(update)
+        # * The target DM locale and the staff card locale are independent
+        # * reads; one gather instead of two serial round trips.
+        target_locale, staff_locale = await asyncio.gather(
+            locale_for_user(target_id),
+            locale_for_update(update),
+        )
         # * Edit the verdict card before clearing the review marker so a
         # * successful edit removes live buttons before the DB slot frees.
         # * A transient edit failure still proceeds to DM + clear below

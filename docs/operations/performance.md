@@ -27,6 +27,9 @@ The bot currently uses:
 - callback acknowledgement alongside independent callback work where safe;
 - `fan_out()` from `tcbot/utils/dispatch.py` to bound concurrent work across
   groups (batch joins use a local semaphore with the same bound);
+  `gather_bounded()` from the same module bounds pure database bursts
+  (for example bulk deactivations during cleanup) without touching the
+  Telegram circuit breaker;
 - cached auth reads (`owner_only` via the cached owner ID, `staff_only` via
   the cached effective role) so repeated permission checks cost no database
   round trip on cache hits;
@@ -107,8 +110,10 @@ user_data, role, ban = await asyncio.gather(
 
 Do not parallelize operations when ordering is part of correctness. Redis
 cache mutations sharing a prefix are deliberately serialized through their
-FIFO queue, and moderation actions should use `fan_out()` rather than an
-unbounded `gather()` across groups.
+FIFO queue, moderation actions should use `fan_out()` rather than an
+unbounded `gather()` across groups, and pure database bursts across groups
+should use `gather_bounded()` for the same reason without involving the
+Telegram circuit breaker.
 
 For callback handlers, acknowledge the callback before doing dependent work.
 When the database read is independent, existing handlers may run the
@@ -194,7 +199,8 @@ Before merging a performance-sensitive change, verify:
 - [ ] Database reads use an existing projection or add one in the helper.
 - [ ] New query patterns have a matching index or a documented reason not to
       add one.
-- [ ] Multi-group work uses bounded `fan_out()`.
+- [ ] Multi-group work uses bounded `fan_out()` (Telegram) or
+      `gather_bounded()` (pure database).
 - [ ] Cache writes invalidate the relevant key or prefix.
 - [ ] Callback queries are acknowledged and callback errors are handled.
 - [ ] The change was measured against a representative workload when a latency

@@ -19,7 +19,7 @@ from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
-from tcbot.utils.dispatch import fan_out, throw_if_cancelled
+from tcbot.utils.dispatch import fan_out, gather_bounded, throw_if_cancelled
 from tcbot.utils.formatter import bold, code
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters
@@ -344,11 +344,10 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     to_remove = [g for g, remove in zip(groups, checks, strict=False) if remove is True]
 
     if to_remove:
-        # * Pure database writes: plain gather, not fan_out. fan_out wraps
+        # * Pure database writes: bounded gather, not fan_out. fan_out wraps
         # * the Telegram circuit breaker, which must not gate DB work.
-        deact_results = await asyncio.gather(
-            *[db.groups_db.deactivate_group(g.get("chat_id", 0)) for g in to_remove],
-            return_exceptions=True,
+        deact_results = await gather_bounded(
+            [db.groups_db.deactivate_group(g.get("chat_id", 0)) for g in to_remove]
         )
         deactivated = sum(1 for r in deact_results if r is True)
         for grp, result in zip(to_remove, deact_results, strict=False):

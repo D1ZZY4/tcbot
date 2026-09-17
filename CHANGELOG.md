@@ -55,6 +55,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Health treats both circuits the same** (`tcbot/alive.py`): a half-open Telegram circuit degrades the verdict like MongoDB already did; Redis stays a hint-only field. Behavior changes: recovery probes report degraded instead of ok.
 
+- **Independent reads run in parallel on promotion and appeal paths** (`tcbot/modules/admins.py`, `appeal_review_flow.py`): the promotion-list slice and its total, plus the review-card and DM locales on approve, reject, and appeal-reject, load in one gather instead of two serial round trips. Behavior changes: none, same replies with fewer sequential waits.
+
+- **Cleanup database burst stays bounded without the Telegram breaker** (`tcbot/utils/dispatch.py`, `tcbot/modules/maintenance.py`): bulk deactivations run through a new bounded gather helper that keeps the concurrency cap and cancellation contract but never reads or trips the Telegram circuit. Behavior changes: none on the happy path; large cleanups no longer spike the database pool.
+
 - **Redis payloads encode via msgspec** (`tcbot/database/cache.py`, `pyproject.toml`, `uv.lock`, `docs/architecture/database.md`): the L2 tagged-JSON codec moves from stdlib `json` to msgspec with the identical wire shape (datetimes and ObjectIds are pre-tagged in Python because msgspec natively flattens datetimes to bare strings). Legacy payloads decode to the same runtime types, verified by an old-vs-new round-trip check. Behavior changes: none, same values with less encode overhead.
 
 - **Dependency lockfile refreshed to latest allowed versions** (`uv.lock`): `cachetools` 7.1.8 to 7.2.0, `ruff` 0.16.7 to 0.16.8, plus transitive `idna` 3.19 to 3.20 and `virtualenv` 21.7.10 to 21.7.11 via `uv lock --upgrade`. Every other pin was already latest in range, and `apscheduler` stays at the deliberate `3.11.3` pin. Full suite passes identically on the new lockfile. Behavior changes: none.
@@ -102,6 +106,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 - **Example placeholder values corrected** (`config.env.example`): the `OWNER_ID` example now uses a clearly fictitious placeholder (`123456789`) instead of a value that could be mistaken for a real user ID. Behavior changes: none, docs only.
 
 - **Stale reply-function references corrected across six feature guides** (`docs/features/moderation/muting.md`, `unbanning.md`, `kicking.md`, `connecting.md`, `disconnecting.md`, `docs/architecture/helpers.md`): every `replies.ERR_CANNOT_RESOLVE`, `replies.ERR_GROUP_ONLY`, `replies.ERR_ROLE_VERIFY`, `replies.ERR_GROUP_NOT_FOUND`, `_ERR_ROLE_CHECK_FAILED`, `_ERR_OWNER_ONLY`, `_ERR_BOT_PERMS_VERIFY`, and `_ERR_COMPLETE_JOIN` constant reference is replaced with the actual lowercase function call or descriptive prose, and the `users_cache` mention in the helper-usage rules is corrected to `users_roles`. Behavior changes: none, docs only.
+
+- **Guides match the dispatcher and the mention helper** (`AGENTS.md`, `docs/architecture/utilities.md`, `docs/operations/performance.md`): the agent guide lists `MTPROTO_SESSION` alongside the other runtime values, the formatter rows name `user_ref` instead of the removed alias, and the dispatch sections cover the bounded database gather alongside `fan_out`. Behavior changes: none, docs only.
 
 </details>
 

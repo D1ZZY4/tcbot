@@ -16,7 +16,7 @@ flowchart TD
     Utils --> ErrorReporter[error_reporter.py<br/>error sink]
     Utils --> TimeDate[time_and_date.py<br/>UTC + display + measure]
     Utils --> Pagination[pagination.py<br/>paginate, nav_row, date_or_unknown]
-    Utils --> Fmt[formatter.py<br/>MarkdownV2 escape, bold, code, mention]
+    Utils --> Fmt[formatter.py<br/>MarkdownV2 escape, bold, code, user_ref]
     Utils --> I18n[i18n.py<br/>TOML localization engine]
     Dispatch --> CB
     Modules[tcbot/modules/] --> Dispatch
@@ -62,6 +62,7 @@ The Telegram circuit state (`closed`, `open`, or `half_open`) is exposed in the 
 | Export | Purpose |
 |---|---|
 | `fan_out(coros, max_concurrent=10)` | Run awaitables concurrently up to `max_concurrent` at once; regular failures return as list elements, `asyncio.CancelledError` always propagates. |
+| `gather_bounded(coros, max_concurrent=10)` | Same result contract as `fan_out` with no circuit interaction. Use it for pure database bursts (for example bulk deactivations during cleanup) where the Telegram breaker must not gate the work. |
 | `count_errors(results)` | Count every `BaseException` item in a `fan_out` result list. Strict primitive for callers where any refusal means "not reached"; current broadcast, maintenance, and moderation fan-outs all count via `count_transient_errors` or structured results instead. |
 | `is_benign_telegram_error(exc)` | Return True for known-benign Telegram refusals (user not participant, chat gone, bot demoted). |
 | `count_transient_errors(results)` | Count only non-benign failures. Used by moderation fan-outs (ban, unban, mute, warn auto-ban) so benign refusals do not look like failed groups. |
@@ -79,6 +80,11 @@ The Telegram circuit state (`closed`, `open`, or `half_open`) is exposed in the 
 - closes an already-created coroutine when the OPEN circuit skips its slot, preventing an un-awaited coroutine warning.
 
 Use it for multi-group actions such as ban, unban, mute, broadcast, and cleanup.
+
+`gather_bounded` preserves input order, returns regular exceptions as list
+elements, re-raises `asyncio.CancelledError`, and returns an empty list for
+empty input. It never touches the Telegram circuit, so a cleanup database
+burst stays bounded without being skipped while the circuit is OPEN.
 
 ```python
 results = await fan_out(
@@ -244,4 +250,5 @@ Both `tcbot/__main__.py` (webhook and polling) and `tcbot/serverless.py` (Vercel
 - Keep generic runtime concerns in `utils/`.
 - Keep feature-specific text and keyboard policy in `modules/helper/` or workflows.
 - Use `fan_out()` rather than hand-written unbounded `asyncio.gather()` loops for Telegram API operations across groups.
+- Use `gather_bounded()` rather than unbounded `asyncio.gather()` for pure database bursts across groups.
 - Use prefix helpers for all command filters so custom prefixes remain consistent.

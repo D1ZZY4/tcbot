@@ -161,7 +161,7 @@ Current stack:
 │       ├── circuit_breaker.py  Telegram/MongoDB circuit breaker
 │       ├── dispatch.py        fan_out() bounded concurrency dispatcher
 │       ├── error_reporter.py  Error reporting to LOGS_ERRORS
-│       ├── formatter.py       MarkdownV2 formatter (esc, code, mention, bold)
+│       ├── formatter.py       MarkdownV2 formatter (esc, code, user_ref, bold)
 │       ├── i18n.py            TOML catalog, t() and locale resolution
 │       ├── logger.py          Logging setup
 │       ├── pagination.py      Paginated message rendering
@@ -239,6 +239,7 @@ Important non-secret/runtime variables include:
 
 - `OWNER_ID`: initial federation founder Telegram user ID.
 - `DB_NAME`: MongoDB database name, default `tcbot`.
+- `MTPROTO_SESSION`: namespace for the shared MTProto session in MongoDB, default `tcbot_mtproto`.
 - `COMMUNITY_NAME`: display name used in bot messages and logs.
 - `PREFIXES`: command prefix list, default `['/', '!', '.']`.
 - `PORT`: Flask keep-alive port, default `5000`; invalid or out-of-range values fall back to `5000`.
