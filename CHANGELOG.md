@@ -15,6 +15,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Modern dependency stack for structured logging, testing, and code quality** (`pyproject.toml`, `.pre-commit-config.yaml`, `tcbot/utils/logger.py`): added `structlog` for structured logging with `contextvars`-based per-request context (configured with stdlib integration), `pytest-asyncio` for proper async test execution, `pre-commit` with Ruff and pyright hooks for automated quality enforcement, and `py-spy` for production profiling. Two dependencies (`taskiq`, `pydantic-settings`) were evaluated but excluded due to Python 3.14 compatibility issues with pydantic's type evaluation internals; they will be re-added when pydantic releases a compatible version.
 
+- **Parallel test execution** (`pyproject.toml`, `uv.lock`, `.github/workflows/test-pytest.yml`, `docs/operations/ci-cd.md`): the dev group gains `pytest-xdist` (Python 3.14 support verified upstream and by a local parallel run) and CI runs the suite with `-n auto`. All checks pass identically in serial and parallel runs. Behavior changes: none, faster feedback only.
+
 ### Changed
 
 - **One home for every inline keyboard** (`tcbot/modules/helper/keyboards.py`, `reason_flow.py`, `proof_flow.py`, `connected_flow.py`, `stats_flow.py`, `check_flow.py`, `tcbot/utils/pagination.py`): step keyboards, stats/check lists, profile dashboard, and warn-group lists are defined once in the keyboard module, and the flow classes keep thin delegating steps so call sites and callback data are unchanged. In-flight keyboards keep working.
@@ -52,6 +54,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 - **Scheduler store client fully bounded** (`tcbot/database/mongos.py`, `scheduler.py`): the job-store connection shares the socket and pool bounds. Behavior changes: none on healthy runs.
 
 - **Health treats both circuits the same** (`tcbot/alive.py`): a half-open Telegram circuit degrades the verdict like MongoDB already did; Redis stays a hint-only field. Behavior changes: recovery probes report degraded instead of ok.
+
+- **Dependency lockfile refreshed to latest allowed versions** (`uv.lock`): `cachetools` 7.1.8 to 7.2.0, `ruff` 0.16.7 to 0.16.8, plus transitive `idna` 3.19 to 3.20 and `virtualenv` 21.7.10 to 21.7.11 via `uv lock --upgrade`. Every other pin was already latest in range, and `apscheduler` stays at the deliberate `3.11.3` pin. Full suite passes identically on the new lockfile. Behavior changes: none.
 
 ### Fixed
 

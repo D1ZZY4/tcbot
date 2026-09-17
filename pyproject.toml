@@ -15,6 +15,7 @@ dependencies = [
     "certifi>=2026.7.22",
     "kurigram[fast]>=2.2,<3",
     "structlog>=24.1,<26",
+    "msgspec>=0.20",
 ]
 
 [dependency-groups]
@@ -25,6 +26,7 @@ dev = [
     "pytest-asyncio>=0.24,<1",
     "pre-commit>=4.0,<5",
     "py-spy>=0.4,<1",
+    "pytest-xdist>=3.8.0",
 ]
 
 [tool.setuptools.packages.find]

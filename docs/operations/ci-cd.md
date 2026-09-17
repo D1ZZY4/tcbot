@@ -28,7 +28,7 @@ Three workflows with identical triggers (push to `main`, `feat/**`,
 - **Lint (Ruff)** (`.github/workflows/lint-ruff.yml`): `uv run ruff format
   --check .`, `uv run ruff check .`, and `uv run python -c "import tcbot"`.
 - **Lint (Pyright)** (`.github/workflows/lint-pyright.yml`): `uv run pyright`.
-- **Test (Pytest)** (`.github/workflows/test-pytest.yml`): `uv run pytest tests/ -q`.
+- **Test (Pytest)** (`.github/workflows/test-pytest.yml`): `uv run pytest tests/ -q -n auto` (parallel via `pytest-xdist`).
 
 **What they share:**
 - `uv sync --frozen` installs from the lockfile before every job.
