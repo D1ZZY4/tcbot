@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
@@ -42,12 +41,13 @@ from tcbot.database.mongos import (
     mongo_jobstore_kwargs as _mongo_jobstore_kwargs,
 )
 from tcbot.utils.dispatch import throw_if_cancelled
+from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
     from telegram import Bot
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # ──────────────── Recurring job schedule IDs ──────────────────── #
 # * Stable IDs prevent duplicate schedules across restarts.

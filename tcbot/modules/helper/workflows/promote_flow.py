@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 
 from pymongo.errors import DuplicateKeyError
@@ -19,11 +18,12 @@ from tcbot.modules.helper.locale import locale_for_user
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
+from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from telegram import Bot
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # * Promotion runtime prose lives in admins.toml [promote]; only the
 # * role alias table stays in code.

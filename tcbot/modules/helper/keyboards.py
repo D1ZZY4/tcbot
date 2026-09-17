@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -16,12 +15,13 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper.parse_link import appeal_deep_link
 from tcbot.utils.i18n import t
+from tcbot.utils.logger import get_logger
 from tcbot.utils.pagination import nav_row
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # * Semantic button colors (PTB 22.7+, Bot API style field; older clients
 # * render the same buttons without color, so styling is purely additive):

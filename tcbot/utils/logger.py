@@ -11,6 +11,7 @@ import logging
 from typing import ClassVar
 
 import structlog
+from structlog.typing import EventDict, FilteringBoundLogger
 
 from tcbot.utils.time_and_date import from_timestamp
 
@@ -49,6 +50,20 @@ class BotLogFormatter(logging.Formatter):
         """Wrap *text* in ANSI-coloured square brackets using the given *color* code."""
         return f"{self._BR}[{self._R}{color}{text}{self._R}{self._BR}]{self._R}"
 
+    def _context_segment(self) -> str:
+        """Colored request-context segment from structlog contextvars, or "" when absent."""
+        ctx = structlog.contextvars.get_contextvars()
+        parts: list[str] = []
+        if ctx.get("user_id") is not None:
+            parts.append(f"u={ctx['user_id']}")
+        if ctx.get("chat_id") is not None:
+            parts.append(f"c={ctx['chat_id']}")
+        if ctx.get("update_id") is not None:
+            parts.append(f"#{ctx['update_id']}")
+        if not parts:
+            return ""
+        return f" {self._BR}[{self._R}{self._MD}{' '.join(parts)}{self._R}{self._BR}]{self._R}"
+
     def format(self, record: logging.LogRecord) -> str:
         """Format a log record with ANSI-colored time, date, level, module, and message.
 
@@ -70,7 +85,8 @@ class BotLogFormatter(logging.Formatter):
         msg_part = f"{msg_color}{record.getMessage()}{self._R}"
 
         output = (
-            f"{time_part} {date_part} {level_part} {module_part}{arrow_part}{msg_part}"
+            f"{time_part} {date_part} {level_part} {module_part}"
+            f"{self._context_segment()}{arrow_part}{msg_part}"
         )
 
         # * Append traceback for log.exception() and explicit exc_info=... calls.
@@ -146,21 +162,35 @@ def _structlog_setup() -> None:
     """Configure structlog to output through stdlib logging."""
     structlog.configure(
         processors=[
-            structlog.contextvars.merge_contextvars,
             structlog.stdlib.filter_by_level,
-            structlog.stdlib.add_logger_name,
-            structlog.stdlib.add_log_level,
             structlog.stdlib.PositionalArgumentsFormatter(),
-            structlog.processors.TimeStamper(fmt="iso"),
-            structlog.processors.StackInfoRenderer(),
-            structlog.processors.format_exc_info,
-            structlog.processors.UnicodeDecoder(),
+            _render_event_string,
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
         logger_factory=structlog.stdlib.LoggerFactory(),
         wrapper_class=structlog.stdlib.BoundLogger,
-        cache_logger_on_first_use=True,
+        # * Never cache: tcbot.modules logs once at import time, before
+        # * setup() runs. A cached pre-setup proxy would print to stdout
+        # * forever instead of reaching the handlers installed here.
+        cache_logger_on_first_use=False,
     )
+
+
+def _render_event_string(
+    logger: logging.Logger, method_name: str, event_dict: EventDict
+) -> str:
+    """Reduce the event mapping to its message string (final structlog processor).
+
+    Our handlers render through BotLogFormatter (a plain logging.Formatter),
+    not ProcessorFormatter, and wrap_for_formatter only packs whatever it
+    receives: without this step record.msg would be the raw mapping and every
+    line would print as a dict. Context, timestamps, and tracebacks render
+    from contextvars and the record itself in BotLogFormatter, so only the
+    event text crosses here. Tracebacks still land once via record.exc_info
+    (stdlib exception() sets it; the only explicit exc_info call site stays
+    on stdlib in __main__).
+    """
+    return str(event_dict.get("event", ""))
 
 
 def setup(level: int = logging.INFO) -> None:
@@ -185,3 +215,46 @@ def setup(level: int = logging.INFO) -> None:
 
     for lib in ("httpx", "telegram", "motor", "pymongo"):
         logging.getLogger(lib).setLevel(logging.WARNING)
+
+
+# ─────────────────── Public structlog API ───────────────────── #
+# * Single owner for logger creation and request correlation. Modules
+# * call get_logger(__name__) instead of logging.getLogger: records flow
+# * through the same stdlib handlers above, so every line keeps the
+# * colored bracket format, Telegram shipping, and level discipline.
+# * Import-time loggers (tcbot/__init__, tcbot/modules/__init__) stay on
+# * stdlib: they emit before setup() installs these handlers.
+
+
+def get_logger(name: str) -> FilteringBoundLogger:
+    """Return the structlog logger for *name* (stdlib-backed, colored output)."""
+    return structlog.get_logger(name)
+
+
+def bind_request_context(
+    *,
+    update_id: int | str | None = None,
+    user_id: int | None = None,
+    chat_id: int | None = None,
+) -> None:
+    """Bind per-update tracing context rendered on every log line until cleared.
+
+    log_execution binds on handler entry and clears in a finally block, so
+    concurrent updates never leak context into each other (contextvars are
+    task-local). BotLogFormatter reads the bound values directly, which also
+    covers plain stdlib records from third-party libraries.
+    """
+    ctx: dict[str, object] = {}
+    if update_id is not None:
+        ctx["update_id"] = update_id
+    if user_id is not None:
+        ctx["user_id"] = user_id
+    if chat_id is not None:
+        ctx["chat_id"] = chat_id
+    if ctx:
+        structlog.contextvars.bind_contextvars(**ctx)
+
+
+def clear_request_context() -> None:
+    """Drop all bound request context (see bind_request_context)."""
+    structlog.contextvars.clear_contextvars()

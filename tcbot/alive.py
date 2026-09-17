@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import hmac
-import logging
 import socket
 import threading
 from typing import TYPE_CHECKING
@@ -23,12 +22,13 @@ from tcbot.database import mongos, redis_client
 from tcbot.database import scheduler as sched_mod
 from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.circuit_breaker import CircuitState
+from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
     import telegram
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 class _HealthPayload(msgspec.Struct):

@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from datetime import datetime, timedelta
 
 from telegram import Bot, CallbackQuery, Update, User
@@ -21,9 +20,10 @@ from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.utils.dispatch import count_transient_errors, fan_out, throw_if_cancelled
 from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import Safe, t
+from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import to_utc, utc_now
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 LOCK_HOURS: int = 12
 _LOCK_WINDOW = timedelta(hours=LOCK_HOURS)

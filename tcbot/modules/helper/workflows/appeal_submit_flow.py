@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 import re
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
@@ -30,6 +29,7 @@ from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.utils.formatter import pre
 from tcbot.utils.i18n import t
+from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 from tcbot.utils.time_and_date import to_utc, utc_now
 
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from telegram import Update
     from telegram.ext.filters import BaseFilter
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 WAITING_APPEAL = 0
 

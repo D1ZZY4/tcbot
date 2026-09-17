@@ -18,12 +18,13 @@ from typing import TYPE_CHECKING
 import telegram.error as _te
 
 from tcbot.utils.formatter import bold, code, esc, pre
+from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import monotonic, utc_now
 
 if TYPE_CHECKING:
     from telegram import Bot
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 # ─────────────────────── Module-Level State ─────────────────────── #

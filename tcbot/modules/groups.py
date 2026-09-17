@@ -7,13 +7,13 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
+from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -26,7 +26,7 @@ from tcbot.utils.formatter import code
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import build_prefixed_filters
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # ─────────────────────── Rate-limiter constants ──────────────────── #
 _RL_PERIOD_S: int = 30

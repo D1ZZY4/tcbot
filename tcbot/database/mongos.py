@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import secrets
 import string
 from pathlib import Path
@@ -22,6 +21,7 @@ from motor.motor_asyncio import (
 
 from tcbot import cfg
 from tcbot.utils.circuit_breaker import mongodb as _mongo_cb
+from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
@@ -45,10 +45,10 @@ def _patch_dns_if_needed() -> None:
             resolver.nameservers = ["8.8.8.8", "8.8.4.4"]
             dns.resolver.default_resolver = resolver
         except Exception as exc:
-            logging.getLogger(__name__).debug("DNS patch skipped: %s", exc)
+            log.debug("DNS patch skipped: %s", exc)
 
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 _db: AsyncIOMotorDatabase | None = None
 

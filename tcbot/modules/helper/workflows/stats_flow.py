@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any, cast
 
 from telegram import (
@@ -39,10 +38,11 @@ from tcbot.modules.helper.keyboards import (
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, code, esc, user_ref
 from tcbot.utils.i18n import Safe, t
+from tcbot.utils.logger import get_logger
 from tcbot.utils.pagination import date_or_unknown, paginate
 from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 if TYPE_CHECKING:
     from telegram.ext import ContextTypes

@@ -7,17 +7,17 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 
 from tcbot import database as db
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import DEFAULT_LOCALE, resolve_locale
+from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from telegram import Update
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 def chat_scope(chat_type: str | None) -> str:

@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, cast
 
 from telegram.ext import ContextTypes, MessageHandler
@@ -22,6 +21,7 @@ from tcbot.modules.helper.workflows.unban_flow import execute_unban
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
+from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
     from tcbot.database.documents import BanDoc
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # ─────────────────────── Rate-limiter constants ──────────────────── #
 _RL_PERIOD_S: int = 60

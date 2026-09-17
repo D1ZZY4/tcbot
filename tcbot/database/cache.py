@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, cast
 
@@ -39,11 +38,12 @@ from bson import ObjectId
 
 import tcbot.database.redis_client as _redis_mod
 from tcbot.database.documents import GroupDoc
+from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 # ──────────────────────── Redis Payload Codec ─────────────────────── #

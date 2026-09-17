@@ -11,7 +11,6 @@ Do not mix with users_cache.py which handles member_cache collection.
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, cast
 
 from pymongo.errors import DuplicateKeyError
@@ -24,12 +23,13 @@ from tcbot.database.cache import (
 from tcbot.database.documents import AdminDoc, RoleRefDoc
 from tcbot.database.mongos import col, db_call
 from tcbot.utils.dispatch import throw_if_cancelled
+from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
     from datetime import datetime
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # ────────────────────── Role hierarchy tables ───────────────────── #
 # * Numeric ranks compare executor vs target; labels render to humans.

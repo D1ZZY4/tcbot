@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -40,6 +39,7 @@ from tcbot.utils.dispatch import (
 )
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
+from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 from tcbot.utils.time_and_date import monotonic, to_utc, utc_now
 
@@ -52,7 +52,7 @@ if TYPE_CHECKING:
 
 from tcbot.database.documents import BanDoc
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # ──────────────── User-facing reply constants ──────────────────── #
 # * Ban-flow runtime prose lives in banning.toml [state]/[db_fail]/

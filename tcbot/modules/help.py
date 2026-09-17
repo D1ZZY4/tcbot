@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import importlib
-import logging
 from typing import TYPE_CHECKING
 
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
@@ -19,12 +18,13 @@ from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import answer_and_edit, safe_reply
 from tcbot.utils.formatter import bold, code
 from tcbot.utils.i18n import Safe, t
+from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
     from telegram import CallbackQuery, Update
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # * Help runtime prose lives in help.toml [error]/[note]/[module]/
 # * [section]/[not_found]/[group].

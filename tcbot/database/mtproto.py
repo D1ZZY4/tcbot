@@ -20,16 +20,16 @@ there.
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 
 from tcbot import cfg
+from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
     from pyrogram import Client
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 _client: Client | None = None
 

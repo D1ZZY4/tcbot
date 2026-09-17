@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, cast
 
 import cachetools as _cachetools
@@ -20,6 +19,7 @@ from tcbot.database.cache import (
 )
 from tcbot.database.documents import GroupDoc, PendingGroupDoc
 from tcbot.database.mongos import col, db_call
+from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
     from motor.motor_asyncio import AsyncIOMotorCollection
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
 # * Internal collection access utilities for groups database

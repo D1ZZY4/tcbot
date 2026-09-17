@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 
 from tcbot import cfg
@@ -16,9 +15,10 @@ from tcbot.modules.helper.parse_link import message_link
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import Safe, t
+from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import fmt_dt
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 if TYPE_CHECKING:
     from tcbot.database.documents import BanDoc

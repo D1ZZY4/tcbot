@@ -6,18 +6,18 @@
 
 from __future__ import annotations
 
-import logging
 import re
 from typing import TYPE_CHECKING, Any, Protocol
 
 from telegram.ext import filters
 
 from tcbot import cfg
+from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from telegram import Message
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # * Precompiled: _parse_prefixed_command runs on every incoming message, so
 # * the command/mention shapes must not recompile per call (re module cache

@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 
 from telegram.ext import ContextTypes, ConversationHandler
@@ -34,12 +33,13 @@ from tcbot.modules.helper.workflows.reason_flow import (
 )
 from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import Safe, t
+from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
     from telegram import Message, Update
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # ──────────────── User-facing reply constants ──────────────────── #
 # * Ban runtime prose lives in banning.toml; no constants stay here.

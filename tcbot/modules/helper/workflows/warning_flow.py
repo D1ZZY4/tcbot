@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any
 
 from tcbot import cfg
@@ -27,6 +26,7 @@ from tcbot.utils.dispatch import (
 )
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
+from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
 from telegram import Bot, InlineKeyboardMarkup, Message, Update
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # * Per-action BuildReason and BuildProof instances; imported by warnings.py
 # * skip_allowed=False because warn requires a reason; Skip is not offered

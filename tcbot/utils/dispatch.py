@@ -8,17 +8,17 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import logging
 from typing import TYPE_CHECKING
 
 from telegram.error import BadRequest, NetworkError, TimedOut
 
 from tcbot.utils import circuit_breaker as _cb
+from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable, Sequence
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # * Telegram allows 30 msg/s globally; 10 concurrent is safe and fast.
 _MAX_CONCURRENT: int = 10

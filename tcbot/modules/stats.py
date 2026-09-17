@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, filters
@@ -28,12 +27,13 @@ from tcbot.modules.helper.workflows.stats_flow import (
     Stats,
 )
 from tcbot.utils.i18n import t
+from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
 
 if TYPE_CHECKING:
     from telegram import CallbackQuery, Update
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # ────────────────────── Module & Help Message ───────────────────── #
 

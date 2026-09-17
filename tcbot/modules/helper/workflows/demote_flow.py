@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 
 from telegram.error import Forbidden
@@ -20,11 +19,12 @@ from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import is_benign_telegram_error
 from tcbot.utils.formatter import bold, user_ref
 from tcbot.utils.i18n import Safe, t
+from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from telegram import Bot, Message
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 # ────────────────────────── Demote class ────────────────────────── #

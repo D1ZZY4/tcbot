@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import threading
 from typing import TYPE_CHECKING, Any
 
@@ -32,6 +31,7 @@ from tcbot.database import redis_client
 from tcbot.database.mongos import connect, ensure_indexes, is_connected
 from tcbot.database.scheduler import expire_old_warns
 from tcbot.utils import error_reporter
+from tcbot.utils.logger import get_logger
 from tcbot.utils.transport import (
     API_POOL_SIZE,
     HTTP_CONNECT_TIMEOUT,
@@ -43,7 +43,7 @@ from tcbot.utils.transport import (
 if TYPE_CHECKING:
     from collections.abc import Coroutine
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # ────────────────── Transport tuning (mirrors __main__) ────────────────── #
 # * Same outbound HTTP tuning as the long-lived transports so Telegram API

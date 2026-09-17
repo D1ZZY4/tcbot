@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import functools
-import logging
 import time
 from collections import deque
 from typing import TYPE_CHECKING, Any
 
 from telegram.ext import ApplicationHandlerStop, ContextTypes
+
+from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine
@@ -25,12 +26,13 @@ from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
 from tcbot.modules.helper.locale import effective_locale, locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import throw_if_cancelled
+from tcbot.utils.logger import bind_request_context, clear_request_context
 from tcbot.utils.time_and_date import elapsed_ms, monotonic
 
 if TYPE_CHECKING:
     from telegram import Bot, Message, Update
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 # ────────────── Per-user sliding-window rate limiter ────────────── #
@@ -362,14 +364,26 @@ def log_execution[R](
         uid = update.effective_user.id if update.effective_user else "?"
         name = func.__name__
         t0 = monotonic()
+        # * Bind first so even the entry line carries request context; the
+        # * finally below clears it so pooled tasks never leak one update's
+        # * IDs into the next (contextvars are task-local per update).
+        chat = getattr(update, "effective_chat", None)
+        user = getattr(update, "effective_user", None)
+        bind_request_context(
+            update_id=getattr(update, "update_id", None),
+            user_id=getattr(user, "id", None),
+            chat_id=getattr(chat, "id", None),
+        )
         log.debug("[%s] uid=%s enter", name, uid)
         try:
             result = await func(update, ctx)
+            log.debug("[%s] uid=%s ok (%.1fms)", name, uid, elapsed_ms(t0))
+            return result
         except Exception:
             log.exception("[%s] uid=%s raised after %.1fms", name, uid, elapsed_ms(t0))
             raise
-        log.debug("[%s] uid=%s ok (%.1fms)", name, uid, elapsed_ms(t0))
-        return result
+        finally:
+            clear_request_context()
 
     return _wrapper
 

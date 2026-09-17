@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 from telegram.ext import CallbackQueryHandler, ContextTypes
@@ -15,11 +14,12 @@ from tcbot import cfg
 from tcbot.modules.helper import decorators, keyboards
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.utils.i18n import t
+from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from telegram import Update
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 __module_name__ = None
 

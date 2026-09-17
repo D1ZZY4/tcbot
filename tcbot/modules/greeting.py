@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 
 from telegram import ChatPermissions
@@ -30,11 +29,12 @@ from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import link, user_ref
 from tcbot.utils.i18n import Safe, t
+from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from telegram import Bot, Chat, Message, Update, User
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # * Upper bound for concurrent per-member join handling (batch invite-link
 # * joins). Each member costs one harvest write plus ban/mute reads and a

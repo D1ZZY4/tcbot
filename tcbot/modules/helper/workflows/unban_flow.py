@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 
 from tcbot import cfg
@@ -23,12 +22,13 @@ from tcbot.utils.dispatch import (
 )
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
+from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from telegram import Update
     from telegram.ext import ContextTypes
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 # ───────────────────────── Unban executor ───────────────────────── #

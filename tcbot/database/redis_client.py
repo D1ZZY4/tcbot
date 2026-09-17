@@ -10,9 +10,9 @@ If ``REDIS_URL`` is not set the module remains inert: :func:`client` returns
 
 from __future__ import annotations
 
-import logging
-
 import redis.asyncio as aioredis
+
+from tcbot.utils.logger import get_logger
 
 # * hiredis is optional at import time: only required when REDIS_URL is set.
 # * This allows the bot to start with in-memory caching only when Redis is
@@ -29,7 +29,7 @@ try:
 except ImportError:
     _hiredis_available = False
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # ────────────────────── Module-level state ──────────────────────── #
 # * Single shared async client; None until connect() succeeds.

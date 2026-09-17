@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any
 
 from tcbot import cfg
@@ -21,6 +20,7 @@ from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
+from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from telegram.ext import ContextTypes
     from telegram.ext.filters import BaseFilter
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # * Per-action BuildReason and BuildProof instances; imported by kicking.py
 reason = BuildReason("kick")

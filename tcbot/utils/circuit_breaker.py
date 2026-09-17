@@ -37,16 +37,16 @@ multitasking), so no explicit locking is required.
 
 from __future__ import annotations
 
-import logging
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import monotonic
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 _DEFAULT_FAILURE_THRESHOLD: int = 5
 _DEFAULT_RECOVERY_TIMEOUT: float = 60.0

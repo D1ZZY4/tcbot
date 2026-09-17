@@ -7,19 +7,19 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any
 
 from pymongo import ReturnDocument
 
 from tcbot.database.documents import WarnCountDoc, WarnDoc
 from tcbot.database.mongos import col, db_call
+from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
     from motor.motor_asyncio import AsyncIOMotorCollection
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
 # * Internal collection access utilities for the warns database

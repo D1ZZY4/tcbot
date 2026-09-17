@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -15,6 +14,7 @@ from telegram import Chat
 
 from tcbot import database as db
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID, TELEGRAM_USER_ID
+from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT, to_utc, utc_now
 
 if TYPE_CHECKING:
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
     from telegram import Bot, ChatFullInfo, Message, Update
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # * Telegram lookups are wrapped in wait_for so a stalled API call never blocks
 # * the user-facing reply. Per-call budget is the shared project-wide value.

@@ -19,7 +19,6 @@ Collection ``mtproto_state``, one document per key, all scoped by namespace::
 from __future__ import annotations
 
 import asyncio
-import logging
 import re
 import time
 from typing import TYPE_CHECKING
@@ -29,6 +28,7 @@ from pyrogram.storage import Storage, UpdateState
 from pyrogram.storage.sqlite_storage import SQLiteStorage, get_input_peer
 
 from tcbot.database.mongos import col, db_call
+from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 _MAX_WRITE_RETRIES: int = 3
 _RETRY_BASE_DELAY: float = 0.5
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 def _is_transient_write_error(exc: BaseException) -> bool:

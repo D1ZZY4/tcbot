@@ -6,14 +6,14 @@
 
 from __future__ import annotations
 
-import logging
 import re
 import tomllib
 from pathlib import Path
 
 from tcbot.utils.formatter import esc
+from tcbot.utils.logger import get_logger
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # * BCP 47 shaped default; every other locale falls back to it per key.
 DEFAULT_LOCALE: str = "en-US"

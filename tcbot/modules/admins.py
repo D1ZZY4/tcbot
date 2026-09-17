@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
@@ -32,6 +31,7 @@ from tcbot.utils import error_reporter
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, code, esc, user_ref
 from tcbot.utils.i18n import Safe, t
+from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
     from tcbot.modules.helper.identity import Identity
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # * Admin runtime prose lives in admins.toml [error]/[promote_ui]/
 # * [demote]/[transfer]/[list]/[decision]; no string constants stay here.

@@ -7,15 +7,15 @@
 from __future__ import annotations
 
 import hmac
-import logging
 from http.server import BaseHTTPRequestHandler
 
 import msgspec
 
 from tcbot import cfg
 from tcbot.serverless import handle_telegram_payload, run
+from tcbot.utils.logger import get_logger
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # * Telegram secret header; same contract as the Flask receiver in alive.py.
 _SECRET_HEADER: str = "X-Telegram-Bot-Api-Secret-Token"

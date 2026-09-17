@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -28,6 +27,7 @@ from tcbot.modules.helper.workflows.proof_flow import PROOF_MEDIA_FILTER, BuildP
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, esc, user_ref
 from tcbot.utils.i18n import Safe, t
+from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 
 if TYPE_CHECKING:
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
 from telegram.ext.filters import BaseFilter
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # * State constants used by all moderation ConversationHandlers
 WAITING_REASON = 0

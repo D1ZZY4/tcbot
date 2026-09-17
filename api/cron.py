@@ -7,13 +7,13 @@
 from __future__ import annotations
 
 import hmac
-import logging
 from http.server import BaseHTTPRequestHandler
 
 from tcbot import cfg
 from tcbot.serverless import run, run_warn_expiry
+from tcbot.utils.logger import get_logger
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 class handler(BaseHTTPRequestHandler):

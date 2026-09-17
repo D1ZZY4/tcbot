@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -34,6 +33,7 @@ from tcbot.utils.dispatch import (
 )
 from tcbot.utils.formatter import bold, code
 from tcbot.utils.i18n import t
+from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
     from tcbot.database.documents import ActiveMuteDoc
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 # ────────────────── Admin Identity Harvest ──────────────────────── #

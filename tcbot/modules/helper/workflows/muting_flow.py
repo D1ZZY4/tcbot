@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import re
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
@@ -33,6 +32,7 @@ from tcbot.utils.formatter import (
     user_ref,
 )
 from tcbot.utils.i18n import Safe, t
+from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from telegram.ext import ContextTypes
     from telegram.ext.filters import BaseFilter
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 _DURATION_RE = re.compile(r"^(\d+)(ye|mo|[smhdw])$", re.IGNORECASE)
 

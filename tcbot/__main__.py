@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 import signal
 import sys
 import traceback
@@ -40,6 +39,7 @@ from tcbot.utils import error_reporter
 from tcbot.utils import logger as logger_mod
 from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.dispatch import drain_tasks
+from tcbot.utils.logger import get_logger
 from tcbot.utils.logger import setup as setup_logging
 from tcbot.utils.transport import (
     API_POOL_SIZE,
@@ -52,7 +52,7 @@ from tcbot.utils.transport import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 # ─────────────────────── Application constants ──────────────────── #
 

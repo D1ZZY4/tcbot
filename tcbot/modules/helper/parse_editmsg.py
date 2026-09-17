@@ -7,19 +7,19 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any, Protocol
 
 from telegram.error import BadRequest
 
 from tcbot.utils.dispatch import throw_if_cancelled
+from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
     from telegram import CallbackQuery, InlineKeyboardMarkup, Message
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 _IGNORED = {
     "message is not modified",

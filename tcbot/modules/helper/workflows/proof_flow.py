@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 
 from telegram import (
@@ -22,8 +21,9 @@ from telegram.ext.filters import BaseFilter
 from tcbot.modules.helper.keyboards import proof_step_kb
 from tcbot.utils.formatter import bold
 from tcbot.utils.i18n import Safe, t
+from tcbot.utils.logger import get_logger
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 # ─────────────────────── Proof media filter ─────────────────────── #
