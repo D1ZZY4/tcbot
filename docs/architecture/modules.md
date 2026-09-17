@@ -27,8 +27,8 @@ Environment filters:
 
 | Variable | Behavior |
 |---|---|
-| `MODULES_LOAD` | Comma-separated whitelist. If set, only these module names load. Invalid names stop startup. |
-| `MODULES_NO_LOAD` | Comma-separated blacklist. Removes matching names from the discovered list. |
+| `MODULES_LOAD` | Comma-separated allowlist. If set, only these module names load. Invalid names stop startup. |
+| `MODULES_NO_LOAD` | Comma-separated denylist. Removes matching names from the discovered list. |
 
 A module name is the filename without `.py`, for example `banning` or `stats`.
 

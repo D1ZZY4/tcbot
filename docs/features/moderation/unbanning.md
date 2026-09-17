@@ -142,7 +142,7 @@ There is no appeal-resolution field on the manual unban log. When `/tcunban` is 
 Key behaviors to keep in mind:
 
 1. `/tcunban` requires Developer rank.
-2. `/tcunban` without a target is rejected with `replies.ERR_CANNOT_RESOLVE`.
+2. `/tcunban` without a target is rejected with `replies.err_cannot_resolve(locale)`.
 3. Higher-rank or equal-rank targets are rejected by `resolve_and_check`.
 4. Self-unban and bot-unban attempts are rejected by `identity.refuse_message`.
 5. Founder is always treated as not federation-bannable, so unban is a no-op for Founder targets.

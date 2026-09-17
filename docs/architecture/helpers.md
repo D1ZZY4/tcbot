@@ -243,5 +243,5 @@ Use the `LogBuilder` class in this module to compose new audit-log messages; avo
 
 - Keep user-facing MarkdownV2 escaped.
 - Keep keyboard callback-data stable because handlers match it with regex patterns.
-- Do not duplicate role checks that already exist in `users_cache` or `decorators.resolve_and_check`.
+- Do not duplicate role checks that already exist in `users_roles` or `decorators.resolve_and_check`.
 - Do not create keyboard factories outside `keyboards.py`. Flow step classes keep thin delegating methods over the same builders. The only markup outside is the locale-aware `nav_row()` row primitive in `tcbot/utils/pagination.py`, consumed through `paged_drill_kb()` or directly with an explicit locale.

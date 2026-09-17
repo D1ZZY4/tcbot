@@ -34,6 +34,8 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable
     from typing import Any
 
+    from motor.motor_asyncio import AsyncIOMotorCollection
+
 # * Maximum retries for transient write concern errors (e.g. replica set
 # * failover). Each retry waits exponentially: 0.5s, 1s, 2s.
 _MAX_WRITE_RETRIES: int = 3
@@ -99,7 +101,7 @@ class MongoStorage(Storage):
 
     # ── key helpers ── #
 
-    def _coll(self):  # type: ignore[no-untyped-def]
+    def _coll(self) -> AsyncIOMotorCollection:
         """Return the shared state collection."""
         return col("mtproto_state")
 
@@ -156,9 +158,7 @@ class MongoStorage(Storage):
 
         await _retry_write(_op)
 
-    def _accessor(  # type: ignore[no-untyped-def]
-        self, name: str, value: Any = object
-    ):
+    def _accessor(self, name: str, value: Any = object) -> Awaitable[Any]:
         """Build a dual getter/setter coroutine for scalar *name*."""
 
         async def _run() -> Any:
@@ -255,7 +255,7 @@ class MongoStorage(Storage):
         evaluated against that timestamp, so a names-only write must not
         leave the previous write time behind.
         """
-        now = time.time()
+        now = int(time.time())
         for peer_id, names in usernames:
             doc_id = self._peer(peer_id)
             filtered_names = [n for n in names if n is not None]
@@ -263,7 +263,7 @@ class MongoStorage(Storage):
             async def _op(
                 _did: str = doc_id,
                 _names: list[str] = filtered_names,
-                _now: float = now,
+                _now: int = now,
             ) -> None:
                 await db_call(
                     self._coll().update_one(

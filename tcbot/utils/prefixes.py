@@ -33,7 +33,7 @@ class _BotLike(Protocol):
 class _MessageLike(Protocol):
     text: str | None
 
-    def get_bot(self) -> _BotLike:
+    def get_bot(self) -> Any:
         """Return the bot instance associated with this message."""
         ...
 
@@ -55,7 +55,7 @@ def _never_match_filter() -> filters.BaseFilter:
     return filters.Regex(re.compile(r"a^"))
 
 
-def _bot_username_from_message(message: Any) -> str | None:
+def _bot_username_from_message(message: _MessageLike) -> str | None:
     """Return the current bot username from a PTB message when available."""
     try:
         bot = message.get_bot()

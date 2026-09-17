@@ -175,7 +175,7 @@ The fan-out errors are counted but do not roll back the DB mute record; group co
 `cmd_unmute(update, ctx)` is registered as a plain `MessageHandler` rather than a `ConversationHandler` step. The flow is:
 
 1. Resolve target.
-2. Reject unresolved target with `replies.ERR_CANNOT_RESOLVE`.
+2. Reject unresolved target with `replies.err_cannot_resolve(locale)`.
 3. Run `identity.classify` and `resolve_and_check` in parallel (Tester minimum). If the executor is outranked or the target is self/bot, `identity.refuse_message` short-circuits.
 4. Emit `identity.staff_notice("unmute", ident, cfg.community_name)` when applicable so staff-only targets see the heads-up.
 5. Delegate to `execute_unmute(update, ctx, target_id, target_name)`.
@@ -252,7 +252,7 @@ Key behaviors to keep in mind:
 
 1. `/tcmute` requires Tester rank.
 2. `/tcmute <target> <duration> <reason>` parses the duration token before the reason text.
-3. `/tcmute` without a target is rejected with `replies.ERR_CANNOT_RESOLVE`.
+3. `/tcmute` without a target is rejected with `replies.err_cannot_resolve(locale)`.
 4. Self-mute and bot-mute attempts are rejected by `identity.refuse_message`.
 5. Higher-rank or equal-rank targets are rejected by `resolve_and_check`.
 6. Role-holding targets are auto-demoted before the mute; if the demote fails the mute is aborted with an error reply.

@@ -10,6 +10,8 @@ import asyncio
 import logging
 from typing import ClassVar
 
+import structlog
+
 from tcbot.utils.time_and_date import from_timestamp
 
 # ────────────────────── Console Log Formatter ───────────────────── #
@@ -140,8 +142,31 @@ class TelegramErrorHandler(logging.Handler):
 # * Called once at bot startup; initializes all handlers and log levels
 
 
+def _structlog_setup() -> None:
+    """Configure structlog to output through stdlib logging."""
+    structlog.configure(
+        processors=[
+            structlog.contextvars.merge_contextvars,
+            structlog.stdlib.filter_by_level,
+            structlog.stdlib.add_logger_name,
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
+            structlog.processors.UnicodeDecoder(),
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
+    )
+
+
 def setup(level: int = logging.INFO) -> None:
     """Initialize and configure the bot's logging system."""
+    _structlog_setup()
+
     root = logging.getLogger()
     root.setLevel(level)
 

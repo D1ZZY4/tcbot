@@ -50,18 +50,18 @@ There is no `/tcconnect` alias for the auto-prompt path; the prompt uses inline 
 
 `/tcconnect` is registered as a plain `MessageHandler`; there is no conversation. The handler:
 
-1. Rejects private chat with `replies.ERR_GROUP_ONLY`.
+1. Rejects private chat with `replies.err_group_only(locale)`.
 2. Fetches four independent reads in parallel via `asyncio.gather(..., return_exceptions=True)`:
    - `bot.get_chat_member(chat.id, user.id)` for the executor (bounded with `asyncio.wait_for(timeout=3.0)`).
    - `db.groups_db.is_connected(chat.id)`.
    - `db.groups_db.get_pending(chat.id)`.
    - `bot.get_chat_member(chat.id, bot.id)` for the bot itself, again bounded with `asyncio.wait_for(timeout=3.0)`.
-3. If the executor's `get_chat_member` raised, replies `replies.ERR_ROLE_VERIFY` and stops.
+3. If the executor's `get_chat_member` raised, replies `replies.err_role_verify(locale)` and stops.
 4. If the executor is not `administrator` or `creator`, replies `Only group admins can request to connect.` and stops.
 5. Rejects primary groups (`cfg.main_group`, `cfg.exec_group`) via `cfg.is_primary_group`: they are required enforcement destinations, not connectable members (the bot-added path refuses them the same way before any prompt or pending row).
 6. If `is_connected` is true, replies `connection.already_connected_message()` and stops.
 7. If `pending` is set, replies `A connect request for this group is already pending.` and stops.
-8. If the bot's `get_chat_member` raised, replies `replies.ERR_ROLE_VERIFY` and stops.
+8. If the bot's `get_chat_member` raised, replies `replies.err_role_verify(locale)` and stops.
 9. If `connection.check_perms(bot_member)` returns False (bot missing one of `can_delete_messages`, `can_restrict_members`, `can_invite_users`), replies `connection.perms_required_message()` and stops.
 10. Calls `connection.complete_join(chat.id, chat.title, user.id, user.first_name, ctx.bot)`.
 11. If `complete_join` raises, replies `Failed to connect the group due to a server error. Please try again.` and stops. The reply is intentionally not sent until after `complete_join` succeeds, so a DB failure does not produce a false "connected" confirmation.
@@ -81,13 +81,13 @@ When the bot joins a group, PTB emits a `my_chat_member` update. `connection.on_
 The `Connect` / `Cancel` buttons are handled by `connection.on_join_decision`:
 
 1. Run `q.answer()` and `bot.get_chat_member(chat.id, user.id)` in parallel.
-2. If the member lookup raised, edit the prompt reply-markup off and reply `_ERR_ROLE_CHECK_FAILED`.
-3. If the member is not the group `OWNER`, edit the reply-markup off and reply `_ERR_OWNER_ONLY`.
+2. If the member lookup raised, edit the prompt reply-markup off and reply with the role-check-failed notice.
+3. If the member is not the group `OWNER`, edit the reply-markup off and reply with the owner-only refusal.
 4. For `tc_join`:
-   - Fetch `bot.get_chat_member(chat.id, bot.id)` bounded with `asyncio.wait_for(timeout=3.0)`. On failure, edit the prompt to `_ERR_BOT_PERMS_VERIFY` and stop.
-   - If `connection.check_perms(bot_member)` returns False, write `db.groups_db.add_pending(...)` first (reporting `_ERR_COMPLETE_JOIN` if the write fails, since there is nothing to approve later), then edit the prompt to `connection.perms_required_message()`; the pending entry persists so the owner can retry once the bot is promoted correctly.
+   - Fetch `bot.get_chat_member(chat.id, bot.id)` bounded with `asyncio.wait_for(timeout=3.0)`. On failure, edit the prompt to the bot-permission-verify notice and stop.
+   - If `connection.check_perms(bot_member)` returns False, write `db.groups_db.add_pending(...)` first (reporting a failure notice if the write fails, since there is nothing to approve later), then edit the prompt to `connection.perms_required_message()`; the pending entry persists so the owner can retry once the bot is promoted correctly.
     - If `db.groups_db.is_connected(chat.id)` is true, edit the prompt to `connection.already_connected_message()` and stop.
-    - Edit the prompt to a progress state (buttons removed), then call `connection.complete_join(...)`. If it raises, edit the prompt to `_ERR_COMPLETE_JOIN` and stop. The success message is intentionally not edited into the prompt until `complete_join` returns successfully, so a DB failure does not produce a false "connected" confirmation. The progress edit keeps the owner informed during the ban/mute replay and closes the double-tap window.
+    - Edit the prompt to a progress state (buttons removed), then call `connection.complete_join(...)`. If it raises, edit the prompt to a failure notice and stop. The success message is intentionally not edited into the prompt until `complete_join` returns successfully, so a DB failure does not produce a false "connected" confirmation. The progress edit keeps the owner informed during the ban/mute replay and closes the double-tap window.
     - Edit the prompt to `connection.connected_message()`.
 5. For `tc_cancel`: remove the pending row first (a surviving row would deadlock the next `on_bot_added` join), then edit the prompt to `connection.declined_message()`, post `group_connection_rejected_log` to `cfg.logs`, and `leave_chat(chat.id)` in parallel.
 
@@ -151,7 +151,7 @@ The connection flow touches two collections:
 
 ## Edge cases
 
-- `/tcconnect` in a private chat replies `replies.ERR_GROUP_ONLY` and stops.
+- `/tcconnect` in a private chat replies `replies.err_group_only(locale)` and stops.
 - A non-admin executor is rejected before any DB lookup runs (`administrator` / `creator` only).
 - An already-connected group is rejected without consuming the join prompt.
 - A group with a pending request is rejected so two requests cannot race.
@@ -168,7 +168,7 @@ The connection flow touches two collections:
 Key behaviors to keep in mind:
 
 1. `/tcconnect` requires the executor to be `administrator` or `creator` in the target group.
-2. `/tcconnect` in private chat is rejected with `replies.ERR_GROUP_ONLY`.
+2. `/tcconnect` in private chat is rejected with `replies.err_group_only(locale)`.
 3. The bot must hold `can_delete_messages`, `can_restrict_members`, and `can_invite_users` before `complete_join` fires.
 4. The four precondition checks (member, is_connected, pending, bot perms) run in parallel.
 5. `complete_join` is awaited before the success reply so DB failures cannot produce a false "connected" confirmation.
@@ -179,7 +179,7 @@ Key behaviors to keep in mind:
 10. The auto-prompt path only consumes the pending entry once the bot is promoted to administrator with the required perms.
 11. Bot removal deactivates the group, clears any pending entry, and posts a `group_bot_removed_log`.
 12. Bot demotion does not deactivate the group; only a warning is posted to `cfg.logs`.
-13. The `Connect` button is owner-only; non-owner taps reply `_ERR_OWNER_ONLY`.
+13. The `Connect` button is owner-only; non-owner taps reply with the owner-only refusal.
 14. The `Cancel` button removes the pending entry, edits the prompt to a "Connection declined" message, posts a `group_connection_rejected_log`, and `leave_chat`.
 15. The admin-identity harvest task runs in the background so name lookups stay cached for the lifetime of the connected group.
 16. Reconnecting an existing group upserts the `federated_groups` record and resets `is_active=True`.

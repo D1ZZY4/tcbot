@@ -178,7 +178,7 @@ Key behaviors to keep in mind:
 
 1. `/tckick` works in the current group only; no fan-out, no federation-wide ban.
 2. `/tckick` requires Tester rank.
-3. `/tckick` without a target is rejected with `replies.ERR_CANNOT_RESOLVE`.
+3. `/tckick` without a target is rejected with `replies.err_cannot_resolve(locale)`.
 4. Self-kick and bot-kick attempts are rejected by `identity.refuse_message`.
 5. Higher-rank or equal-rank targets are rejected by `resolve_and_check`.
 6. Role-holding targets are auto-demoted before the kick; if the demote fails the kick is aborted with an error reply.

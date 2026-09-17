@@ -400,7 +400,10 @@ async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     parts = (q.data or "").split(":")
     try:
         idx = int(parts[1])
-    except ValueError, IndexError:
+    except ValueError:
+        await q.answer()
+        return
+    except IndexError:
         await q.answer()
         return
     stable = parts[2] if len(parts) > 2 else None

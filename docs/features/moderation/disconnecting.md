@@ -51,13 +51,13 @@ Commands use the project's configured prefixes; slash commands are examples.
 
 `/tcdisconnect` is registered as a plain `MessageHandler`; there is no conversation. The handler:
 
-1. Rejects private chat with `replies.ERR_GROUP_ONLY`.
+1. Rejects private chat with `replies.err_group_only(locale)`.
 2. Fetches three independent reads in parallel via `asyncio.gather(..., return_exceptions=True)`:
    - `db.groups_db.is_connected(chat.id)`.
    - `db.users_roles.is_staff(user.id)`.
    - `bot.get_chat_member(chat.id, user.id)` bounded with `asyncio.wait_for(timeout=3.0)`.
 3. If `is_connected` raised, replies the localized `disconnecting.state.status_failed` notice (`Could not verify the group status. Please try again.`) and stops. If `is_connected` is `False`, replies the localized `disconnecting.state.not_connected` notice (`This group is not connected to <community>.`) and stops.
-4. If the member lookup raised, replies `replies.ERR_ROLE_VERIFY` and stops.
+4. If the member lookup raised, replies `replies.err_role_verify(locale)` and stops.
 5. Determines `is_group_owner = member.status == "creator"`.
 6. If the executor is neither TC staff nor the group owner, replies:
    - For anonymous admins: `Anonymous admin mode is active. Please send this command from your personal account, or ask TC Staff to run /rmtc.`
@@ -79,7 +79,7 @@ The deactivation runs before the fan-out (not in parallel with it) precisely to 
 2. `chat_id = int(args[0])`.
 3. Primary-group guard: main/exec groups are required enforcement destinations and can never be force-disconnected; `/rmtc` refuses them with a dedicated reply and stops.
 4. Call `db.groups_db.deactivate_group(chat_id)`. The return value indicates whether the record was matched.
-4. If no record matched, replies `replies.ERR_GROUP_NOT_FOUND` and stops.
+4. If no record matched, replies `replies.err_group_not_found(locale)` and stops.
 5. Otherwise runs three parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
     - `bot.send_message(cfg.logs, group_disconnected_log(chat_id, str(chat_id), admin.id, admin.first_name), parse_mode="MarkdownV2", message_thread_id=lt)`.
     - `bot.leave_chat(chat_id)`.
@@ -138,11 +138,11 @@ The log includes:
 
 ## Edge cases
 
-- `/tcdisconnect` in a private chat replies `replies.ERR_GROUP_ONLY` and stops.
+- `/tcdisconnect` in a private chat replies `replies.err_group_only(locale)` and stops.
 - An executor who is not the group creator and not TC staff is rejected with a friendly message; anonymous admins get the dedicated anonymous-mode reply.
 - A group that is not connected replies `This group is not connected to <community>.` and stops.
 - `/rmtc` without a numeric chat ID replies `Usage: /rmtc <chat_id>` and stops.
-- `/rmtc` for a chat ID that has no `federated_groups` record replies `replies.ERR_GROUP_NOT_FOUND` and stops.
+- `/rmtc` for a chat ID that has no `federated_groups` record replies `replies.err_group_not_found(locale)` and stops.
 - `/rmtc` for a chat the bot is not in still runs `leave_chat`, which raises a Telegram API error that is caught and logged at debug.
 - The DB deactivation is not gated on `leave_chat`; even if Telegram refuses to remove the bot, the group is marked disconnected.
 - Federation log send failures do not roll back the deactivation; the group is still marked inactive.
@@ -153,14 +153,14 @@ The log includes:
 
 Key behaviors to keep in mind:
 
-1. `/tcdisconnect` is group-only; private chat replies `replies.ERR_GROUP_ONLY`.
+1. `/tcdisconnect` is group-only; private chat replies `replies.err_group_only(locale)`.
 2. `/tcdisconnect` allows the group owner (creator) or any TC staff (Admin and above).
 3. `/tcdisconnect` runs the three precondition reads in parallel.
 4. The deactivation runs first; only the log post, reply, and `leave_chat` run in parallel after it succeeds.
 5. An anonymous admin cannot run `/tcdisconnect`; the reply directs them to ask TC staff to use `/rmtc`.
 6. `/rmtc` requires TC staff (`staff_only` rejects Developer/Tester/no-role).
 7. `/rmtc` requires a numeric chat ID; the arg must pass `args[0].lstrip("-").isdigit()`.
-8. `/rmtc` for an unknown chat ID replies `replies.ERR_GROUP_NOT_FOUND`.
+8. `/rmtc` for an unknown chat ID replies `replies.err_group_not_found(locale)`.
 9. `/rmtc` runs `leave_chat` even when the bot is not in the target chat; the API error is caught and logged.
 10. Both commands post `group_disconnected_log` to `cfg.logs`.
 11. The cache invalidation runs inside `deactivate_group` so subsequent `is_connected` and `active_groups` reads return up-to-date state.

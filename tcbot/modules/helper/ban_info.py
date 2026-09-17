@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import TYPE_CHECKING
 
 from tcbot import cfg
@@ -16,6 +17,8 @@ from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.time_and_date import fmt_dt
+
+log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from tcbot.database.documents import BanDoc
@@ -54,7 +57,8 @@ async def build_ban_detail(
             admin_fname, admin_uname = r_admin
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as exc:
+            log.debug("Admin mention data lookup failed for %d: %s", aid, exc)
             admin_fname, admin_uname = (str(aid), None)
         target_uname = None
 
