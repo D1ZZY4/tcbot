@@ -117,6 +117,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Allowlist/denylist terminology standardized** (`docs/getting-started/setup.md`, `docs/architecture/modules.md`): the `MODULES_LOAD` and `MODULES_NO_LOAD` descriptions now use "allowlist" and "denylist" instead of "whitelist" and "blacklist", matching the project's canonical terminology in AGENTS.md and code-style.md. Behavior changes: none, docs only.
 
+- **Comment rules gain an expert redundancy standard** (`.agents/rules/comment-style.md`): one explanation lives in exactly one place, helper contracts are never restated at call sites, branch and constant restatements go unconditionally, unique contracts relocate instead of vanishing, and repeated rationale hoists to the owning helper or docs page. Behavior changes: none, docs only.
+
 - **Example placeholder values corrected** (`config.env.example`): the `OWNER_ID` example now uses a clearly fictitious placeholder (`123456789`) instead of a value that could be mistaken for a real user ID. Behavior changes: none, docs only.
 
 - **Stale reply-function references corrected across six feature guides** (`docs/features/moderation/muting.md`, `unbanning.md`, `kicking.md`, `connecting.md`, `disconnecting.md`, `docs/architecture/helpers.md`): every `replies.ERR_CANNOT_RESOLVE`, `replies.ERR_GROUP_ONLY`, `replies.ERR_ROLE_VERIFY`, `replies.ERR_GROUP_NOT_FOUND`, `_ERR_ROLE_CHECK_FAILED`, `_ERR_OWNER_ONLY`, `_ERR_BOT_PERMS_VERIFY`, and `_ERR_COMPLETE_JOIN` constant reference is replaced with the actual lowercase function call or descriptive prose, and the `users_cache` mention in the helper-usage rules is corrected to `users_roles`. Behavior changes: none, docs only.

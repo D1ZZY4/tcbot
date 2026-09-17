@@ -13,6 +13,62 @@ Comments should explain intent, constraints, risks, or non-obvious behavior.
 They should not restate the code. Prefer clear names and small functions over
 large explanatory comments.
 
+## Expert Standard: Informative, Never Redundant
+
+Length is free; redundancy is not. A long comment carrying a non-obvious
+contract beats a short one restating the code, and a deleted restatement
+beats both. Judge every comment by one test: if deleting it loses no
+information a reader cannot get from the code, the docstring, or the
+linked docs, delete it.
+
+Restatement shapes to remove, all seen in this repository:
+
+```python
+# Bad: duplicates answer_and_edit's documented contract at every call site.
+# * q.answer() and the edit are independent; run in parallel.
+await answer_and_edit(q, text, reply_markup=kb)
+
+# Good: nothing. The helper docstring already owns this explanation.
+await answer_and_edit(q, text, reply_markup=kb)
+```
+
+```python
+# Bad: names the branch condition directly below it.
+# * Group / supergroup context.
+if chat.type in ("group", "supergroup", "forum"):
+```
+
+```python
+# Bad: section prose repeats the function docstring under it.
+# * The main function that starts the entire bot application.
+# * Configures PTB Application and registers all handlers.
+def main() -> None:
+    """Configure and start the PTB application..."""
+```
+
+Rules:
+
+- One explanation lives in exactly one place: the helper or function
+  docstring owns the contract; call sites stay silent unless the site
+  adds site-specific risk. This mirrors the one-source-of-truth rule in
+  [`code-style.md`](code-style.md).
+- A `gather()` over hand-rolled coroutines keeps a short independence
+  claim stating why parallel is safe here, because the safety
+  precondition is not visible in the call. Concurrency mechanics
+  themselves follow
+  [`asyncio-gather-rules.md`](asyncio-gather-rules.md); do not repeat
+  them.
+- Never restate a constant's name, a branch condition, or a call's
+  arguments in the comment above it.
+- When compressing, relocate a contract with no other home instead of
+  deleting it: move it to the constant, table, class docstring, or
+  `docs/` page that owns the topic.
+- When the same rationale appears at three or more sites, hoist it to
+  the helper docstring or the relevant `docs/` page and delete the
+  copies.
+- Security, ordering, failure-semantics, race, and migration notes are
+  never filler: keep them even when long.
+
 ## Better Comments Prefixes
 
 Use these prefixes in inline `#` comments and, when useful, inside docstrings:
@@ -141,5 +197,6 @@ Do not:
 - Add vague TODOs such as `# TODO: fix later`.
 - Use Sphinx-style docstring tags.
 - Explain obvious code.
+- Restate a helper's documented contract at its call sites.
 - Hand-type malformed section dividers.
 - Add comments that contradict the category rules in this directory.
