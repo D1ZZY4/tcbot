@@ -67,6 +67,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Small latency trims on mute, appeal-approve, and transport** (`tcbot/modules/helper/workflows/muting_flow.py`, `appeal_review_flow.py`, `tcbot/utils/transport.py`, `docs/operations/performance.md`): the mute executor resolves its locale once instead of twice, appeal-approve resolves both locales up front in parallel instead of inline during fan-out setup, and the Telegram HTTP pool grows 8 to 16 so one full fan-out plus concurrent traffic never queues on pool exhaustion. Behavior changes: none.
 
+- **Tests for the new dispatcher, codec, and logging helpers** (`tests/test_dispatch.py`, `tests/test_cache_codec.py`, `tests/test_logger_context.py`): the suite grows from 313 to 324 checks covering bounded-concurrency caps and cancellation, codec round-trips plus legacy payloads, and context rendering plus log routing. Behavior changes: none.
+
 - **Comment cleanup across handlers and runtime** (`tcbot/__main__.py`, `tcbot/alive.py`, `tcbot/modules/help.py`, `privacy.py`, `about.py`, `start.py`, `stats.py`, `checking.py`, `muting.py`): removed a dozen restatements of adjacent code (parallelism notes duplicated from helper docstrings, header lines duplicated from function docstrings, branch labels) and compressed two notes to their rationale. Security, ordering, and failure-semantics notes stay untouched. Behavior changes: none, comments only.
 
 - **Dependency lockfile refreshed to latest allowed versions** (`uv.lock`): `cachetools` 7.1.8 to 7.2.0, `ruff` 0.16.7 to 0.16.8, plus transitive `idna` 3.19 to 3.20 and `virtualenv` 21.7.10 to 21.7.11 via `uv lock --upgrade`. Every other pin was already latest in range, and `apscheduler` stays at the deliberate `3.11.3` pin. Full suite passes identically on the new lockfile. Behavior changes: none.
@@ -104,6 +106,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 - **Pagination helper typed for datetime** (`tcbot/utils/pagination.py`): `date_or_unknown()` parameter is now `datetime | None` instead of `Any`, catching type errors at call time. Behavior changes: none.
 
 ### Removed
+
+- **Dead locale scope helper removed** (`tcbot/modules/helper/locale.py`, `docs/architecture/helpers.md`): `chat_scope()` had no callers anywhere in code, tests, or docs examples; `language._chat_scope` remains the single mapping and keeps its test. Behavior changes: none.
 
 ### Documentation
 

@@ -15,6 +15,7 @@ from tcbot.utils.dispatch import (
     count_errors,
     count_transient_errors,
     fan_out,
+    gather_bounded,
     is_benign_telegram_error,
 )
 
@@ -68,3 +69,50 @@ def test_fan_out_propagates_cancellation() -> None:
 
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(_main())
+
+
+def test_gather_bounded_empty_input() -> None:
+    assert asyncio.run(gather_bounded([])) == []
+
+
+def test_gather_bounded_returns_errors_as_data_in_order() -> None:
+    async def _ok(v: int) -> int:
+        return v
+
+    async def _fail() -> int:
+        raise ValueError("boom")
+
+    results = asyncio.run(gather_bounded([_ok(1), _fail(), _ok(3)]))
+    assert results[0] == 1
+    assert isinstance(results[1], ValueError)
+    assert results[2] == 3
+
+
+def test_gather_bounded_propagates_cancellation() -> None:
+    async def _cancelled() -> int:
+        raise asyncio.CancelledError
+
+    async def _main() -> None:
+        await gather_bounded([_cancelled()])
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(_main())
+
+
+def test_gather_bounded_caps_concurrency() -> None:
+    in_flight = 0
+    peak = 0
+
+    async def _work() -> int:
+        nonlocal in_flight, peak
+        in_flight += 1
+        peak = max(peak, in_flight)
+        await asyncio.sleep(0.01)
+        in_flight -= 1
+        return 1
+
+    async def _main() -> list[int | BaseException]:
+        return await gather_bounded([_work() for _ in range(20)], max_concurrent=3)
+
+    assert asyncio.run(_main()) == [1] * 20
+    assert peak <= 3
