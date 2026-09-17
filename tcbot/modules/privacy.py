@@ -78,7 +78,6 @@ async def on_privacy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
     botname = ctx.bot.first_name or "This bot"
     locale = await locale_for_update(update)
-    # * q.answer() and the edit are independent; run in parallel.
     await answer_and_edit(
         q,
         _privacy_msg(botname, locale),
@@ -98,7 +97,6 @@ async def on_privacy_policy_menu(
 
     botname = ctx.bot.first_name or "This bot"
     locale = await locale_for_update(update)
-    # * q.answer() and the edit are independent; run in parallel.
     await answer_and_edit(
         q,
         _privacy_policy_index_msg(botname, locale),
@@ -139,7 +137,6 @@ async def on_privacy_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     locale = await locale_for_update(update)
     label, content = _section_body(idx, locale)
     body = f"{bold(label)}\n\n{content}"
-    # * q.answer() and the edit are independent; run in parallel.
     await answer_and_edit(
         q,
         body,

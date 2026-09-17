@@ -200,7 +200,6 @@ async def _render_help_index(
         if with_back_to_start
         else keyboards.help_topics_kb(_topics_for_locale(locale, menu=False))
     )
-    # * q.answer() and the edit are independent; run in parallel.
     await answer_and_edit(q, _help_index_text(botname, locale), reply_markup=kb)
 
 
@@ -220,7 +219,6 @@ async def _show_module(
             if is_menu_path
             else keyboards.back_to_help_cmd_kb(locale)
         )
-        # * q.answer() and the edit are independent; run in parallel.
         await answer_and_edit(
             q,
             t("help.error.topic_not_found", locale, plain=False),
@@ -244,7 +242,6 @@ async def _show_module(
             else keyboards.back_to_help_cmd_kb(locale)
         )
 
-    # * q.answer() and the edit are independent; run in parallel.
     await answer_and_edit(q, _module_text(name, overview, locale), reply_markup=kb)
 
 
@@ -263,7 +260,6 @@ async def _show_section(
     back_module_cb = ("help_" if is_menu_path else "helpc_") + mod_slug
 
     if menu_key not in content:
-        # * q.answer() and the edit are independent; run in parallel.
         await answer_and_edit(
             q,
             t("help.error.topic_not_found", locale, plain=False),
@@ -273,7 +269,6 @@ async def _show_section(
 
     name, _, sections = content[menu_key]
     if idx < 0 or idx >= len(sections):
-        # * q.answer() and the edit are independent; run in parallel.
         await answer_and_edit(
             q,
             t("help.error.section_not_found", locale, plain=False),
@@ -288,7 +283,6 @@ async def _show_section(
         title=Safe(bold(f"{name} > {label}")),
         content=Safe(section_content),
     )
-    # * q.answer() and the edit are independent; run in parallel.
     await answer_and_edit(
         q, body, reply_markup=keyboards.back_to_module_kb(back_module_cb, locale)
     )

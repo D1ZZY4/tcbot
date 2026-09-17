@@ -177,7 +177,6 @@ async def on_stats_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     if q is None:
         return
-    # * q.answer() and Stats.main() are independent; run in parallel.
     tapper = update.effective_user
     await ack_and_render(
         q,

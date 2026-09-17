@@ -90,8 +90,6 @@ warnings.filterwarnings(
 # ────────────────── Member Cache Update (layer 1) ───────────────── #
 # * Caches the effective_user from every update so log messages and mention
 # * links resolve to real names instead of falling back to numeric IDs.
-# * Only writes to MongoDB when identity data has changed (name/username differs
-# * from the L1 cache), keeping the hot-path near-zero-cost on cache hits.
 
 # * Strong references to in-flight member-cache background tasks; prevents GC.
 _member_cache_tasks: set[asyncio.Task[None]] = set()
@@ -135,8 +133,6 @@ async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
 
 
 # ─────────────────── PTB Error Handler (Layer 2) ────────────────── #
-# * Catches all unhandled exceptions from Telegram Bot API handlers
-# * Layer 2 of 3 error handling system - reports to logs_errors channel
 
 
 async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -176,7 +172,6 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
         error_reporter.scrub_text(" | ".join(context_parts)) if context_parts else None
     )
 
-    # * Log to console as well (existing behaviour), including context when available.
     # * Only the numeric update ID is logged, never the raw Update repr: message
     # * text can carry user-pasted secrets into persistent console logs, while
     # * the shipped report path is scrubbed separately by the error reporter.
@@ -188,13 +183,10 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
         exc_info=exc,
     )
 
-    # * Ship to LOG_ERRORS (non-blocking)
     await error_reporter.report_exc(exc, context=context_str)
 
 
 # ─────────────────── Asyncio Exception Handler (Layer3) ─────────────── #
-# * Catches unhandled asyncio exceptions from background tasks
-# * Layer 3 of 3 error handling system - last line of defense for errors
 
 # * Strong references to in-flight async error-report tasks. Without this, the
 # * fire-and-forget task scheduled in the handler below can be garbage collected
@@ -232,8 +224,6 @@ def _make_asyncio_exc_handler(
 
 
 # ───────────────────────── Post-Init Setup ──────────────────────── #
-# * Runs after PTB Application is built but before polling or webhook starts
-# * Initializes database connections and all core bot systems
 
 
 async def _warm_hot_caches() -> None:
@@ -517,8 +507,6 @@ async def _run_webhook_mode(app: Application) -> None:
 
 
 # ──────────────────────── Main Entry Point ──────────────────────── #
-# * The main function that starts the entire bot application
-# * Configures PTB Application and registers all handlers
 
 
 def _print_fatal(stage: str, exc: BaseException) -> None:

@@ -59,7 +59,6 @@ async def on_about_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     locale = await locale_for_update(update)
-    # * q.answer() and the edit are independent; run in parallel.
     await answer_and_edit(
         q,
         about_msg(locale),

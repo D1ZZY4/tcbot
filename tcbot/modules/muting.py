@@ -285,7 +285,6 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    # * Run identity classification and rank check in parallel.
     # * return_exceptions=True prevents a DB error from leaving the command silently dead.
     classified = await decorators.classify_and_check(
         ctx.bot,

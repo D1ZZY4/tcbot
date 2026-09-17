@@ -44,7 +44,6 @@ class _HealthPayload(msgspec.Struct):
 
 
 # ───────────────────────── Flask App Setup ──────────────────────── #
-# * Initialize the Flask application for health checks and webhook.
 _app = Flask(__name__)
 
 
@@ -215,8 +214,7 @@ def webhook_route() -> tuple[str, int]:
 
 
 # ──────────────────────── Server Execution ──────────────────────── #
-# * Internal function to run the Flask server
-# * Blocking call - must be run in a separate thread
+# * Blocking call: must run in a separate thread, never on the event loop.
 def _run() -> None:
     """Start the Flask server with production-safe settings."""
     _app.run(
@@ -228,7 +226,6 @@ def _run() -> None:
 
 
 # ─────────────────────────── Public API ─────────────────────────── #
-# * Entry point to start the keep-alive server from the main bot
 def start_keepalive() -> None:
     """Launch the Flask server in a daemon thread.
 

@@ -165,10 +165,10 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     fname = user.first_name or str(user.id)
 
-    # * Fetch user role and active ban in parallel. No identity.classify()
-    # * call: executor == target always yields kind="self", so its
-    # * founder/admin branches could never fire; user_role below covers
-    # * staff. No owner-ID fetch either: nothing below uses it.
+    # * No identity.classify() call: executor == target always yields
+    # * kind="self", so its founder/admin branches could never fire;
+    # * user_role below covers staff. No owner-ID fetch either: nothing
+    # * below uses it.
     user_role, ban = await asyncio.gather(
         db.users_roles.get_effective_role(user.id),
         db.bans_db.get_active_ban(user.id),

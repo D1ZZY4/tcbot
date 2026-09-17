@@ -81,7 +81,6 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     botname = ctx.bot.first_name or ""
     locale = await locale_for_update(update)
 
-    # * Group / supergroup context - send a minimal message with PM link
     if chat.type in ("group", "supergroup", "forum"):
         bot_username = ctx.bot.username or ""
         await safe_reply(
@@ -92,7 +91,6 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    # * PM context below
     if arg == "about":
         await safe_reply(
             msg,
@@ -124,7 +122,6 @@ async def on_back_to_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
     botname = ctx.bot.first_name or ""
     locale = await locale_for_update(update)
-    # * q.answer() and edit are independent; run in parallel.
     await answer_and_edit(
         q,
         _private_start_text(botname, locale),
