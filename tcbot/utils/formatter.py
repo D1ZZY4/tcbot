@@ -2,18 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""MarkdownV2 text formatters: the single source of truth for all Telegram markup.
-
-All modules (including tcbot.utils) import from here. Every message is
-sent with ``parse_mode="MarkdownV2"``; these helpers own both the entity
-markers and the escaping so callers never hand-roll either.
-
-Escaping contract (per the Bot API MarkdownV2 spec, verified against the
-official docs): ``_*[]()~`>#+-=|{}.!`` must be backslash-escaped in
-regular text. Inside ``pre``/``code`` spans only backticks and
-backslashes are escaped. Inside link URLs only closing parens and
-backslashes are escaped.
-"""
+"""MarkdownV2 text formatters: the single source of truth for all Telegram markup."""
 
 from __future__ import annotations
 

@@ -2,19 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""MongoDB-backed Kurigram storage engine: the MTProto session lives in the database.
-
-One shared session for the whole fleet: ephemeral runners and the beta host
-read the same auth key, peers, and update states. Semantics mirror Kurigram's
-``SQLiteStorage`` exactly (same KeyError misses, same 8h username TTL, same
-COALESCE-style update-state merge); only the backend differs.
-
-Collection ``mtproto_state``, one document per key, all scoped by namespace::
-
-    {_id: "<ns>:kv:<name>", value: ...}
-    {_id: "<ns>:peer:<peer_id>", access_hash, type, phone_number, usernames, updated_on}
-    {_id: "<ns>:ustate:<id>", pts, qts, date, seq}
-"""
+"""MongoDB-backed Kurigram storage engine for the shared MTProto session."""
 
 from __future__ import annotations
 
@@ -89,7 +77,12 @@ async def _retry_write(coro_factory: Callable[[], Awaitable[Any]]) -> Any:
 
 
 class MongoStorage(Storage):
-    """Kurigram :class:`Storage` persisted in the ``mtproto_state`` collection."""
+    """Kurigram :class:`Storage` persisted in the ``mtproto_state`` collection.
+
+    Semantics mirror Kurigram's ``SQLiteStorage`` exactly (same KeyError
+    misses, same 8h username TTL, same COALESCE-style update-state merge);
+    only the backend differs.
+    """
 
     def __init__(self, namespace: str) -> None:
         """Scope every key under *namespace* so sessions never collide."""
@@ -100,6 +93,9 @@ class MongoStorage(Storage):
         self._ns_re = re.escape(namespace)
 
     # ── key helpers ── #
+    # * Collection ``mtproto_state``, one document per key, scoped by
+    # * namespace: ``<ns>:kv:<name>`` scalars, ``<ns>:peer:<peer_id>``
+    # * peers, ``<ns>:ustate:<id>`` update states.
 
     def _coll(self) -> AsyncIOMotorCollection:
         """Return the shared state collection."""

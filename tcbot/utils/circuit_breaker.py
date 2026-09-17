@@ -2,38 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Async circuit breaker for external service calls (Telegram API, MongoDB).
-
-A circuit breaker protects the bot from wasting time on repeated timeouts when
-a downstream service is unresponsive.  It tracks consecutive failures for a
-named service and trips to OPEN after ``failure_threshold`` failures, at which
-point all further calls are rejected immediately with ``CircuitOpenError``
-rather than waiting for another timeout.
-
-After ``recovery_timeout`` seconds the circuit enters HALF_OPEN and allows one
-probe call through.  A successful probe closes the circuit; a failed probe
-resets the timer and the circuit stays OPEN.
-
-Usage::
-
-    from tcbot.utils.circuit_breaker import telegram as tg_cb, CircuitOpenError
-
-    try:
-        result = await tg_cb.call(bot.send_message(chat_id=..., text=...))
-    except CircuitOpenError:
-        log.warning("Telegram circuit is OPEN; call skipped.")
-    except Exception as exc:
-        # * The failure is already counted against the circuit; log it
-        # * with context instead of swallowing it silently.
-        log.debug("Telegram call failed after circuit accounting: %s", exc)
-
-Module-level singletons ``telegram`` and ``mongodb`` are ready to use without
-instantiation.  Import additional ``CircuitBreaker`` instances for other
-services as needed.
-
-All state mutations happen inside the asyncio event loop (cooperative
-multitasking), so no explicit locking is required.
-"""
+"""Async circuit breaker for external service calls (Telegram API, MongoDB)."""
 
 from __future__ import annotations
 

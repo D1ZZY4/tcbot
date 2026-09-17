@@ -2,11 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Federation staff role helpers: owners, admins, developer/tester roles, and effective-role resolution.
-
-This module handles all tc_owners, tc_admins, and tc_roles collection operations.
-Do not mix with users_cache.py which handles member_cache collection.
-"""
+"""Federation staff role helpers (tc_owners, tc_admins, and tc_roles)."""
 
 from __future__ import annotations
 

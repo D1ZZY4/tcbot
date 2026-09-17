@@ -2,28 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Caching layer: in-process TTL cache (L1) + optional Redis (L2).
-
-Architecture
-------------
-``TTLCache[T]``
-    Pure in-memory cache.  All reads/writes are synchronous and sub-microsecond.
-    Instances are used standalone for caches that do not need Redis.
-
-``TwoLevelCache[T]``
-    Wraps ``TTLCache[T]`` and adds an optional Redis L2 layer (via
-    ``tcbot.database.redis_client``).  Public methods are drop-in compatible
-    with ``TTLCache[T]``.
-
-    *  ``get`` / ``put`` / ``invalidate`` / ``clear`` stay synchronous, operating
-       on the in-memory layer.  ``put`` and ``invalidate`` also enqueue ordered
-       Redis writes/deletes to keep L2 eventually consistent.
-    *  ``get_or_fetch`` is the primary hot-path: L1 → L2 → DB fetch, populating
-       both layers on a miss.
-
-Redis is optional.  When ``REDIS_URL`` is not set (or Redis is unreachable),
-``TwoLevelCache`` degrades transparently to pure in-memory behaviour.
-"""
+"""In-process TTL plus optional Redis two-level cache."""
 
 from __future__ import annotations
 

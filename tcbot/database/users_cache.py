@@ -2,11 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Member profile cache helpers.
-
-This module handles all member_cache collection operations for Telegram user profiles.
-Do not mix with users_roles.py which handles tc_owners, tc_admins, and tc_roles.
-"""
+"""Member profile cache helpers (member_cache collection only)."""
 
 from __future__ import annotations
 

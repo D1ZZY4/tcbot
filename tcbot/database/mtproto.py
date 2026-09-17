@@ -2,20 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""MTProto client: bot-token session for lookups beyond Bot API enumeration.
-
-The Bot API can only fetch members it already knows one by one; the
-bot-token MTProto session additionally enumerates group membership, fully
-automatically (no phone, no code, no prompt ever: ``sign_in_bot`` cannot
-interactively block). The session lives in MongoDB (``mtproto_store``), so
-every instance shares it. API_ID and API_HASH are mandatory: the bot refuses
-to boot unless the session connects. Only transient runtime failures
-(disconnects, unknown peers, flood waits) degrade to None so moderation
-never blocks on MTProto.
-
-Serverless paths never start the client: resolve_user() simply returns None
-there.
-"""
+"""MTProto client: bot-token session for lookups beyond Bot API enumeration."""
 
 from __future__ import annotations
 

@@ -2,11 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Async Redis client - optional distributed cache and session store.
-
-If ``REDIS_URL`` is not set the module remains inert: :func:`client` returns
-``None`` and all callers must degrade gracefully to in-process caching.
-"""
+"""Async Redis client: optional distributed cache and session store."""
 
 from __future__ import annotations
 

@@ -20,11 +20,6 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 
-def chat_scope(chat_type: str | None) -> str:
-    """Map a chat type to the locale scope it reads: user in PM, group otherwise."""
-    return "user" if chat_type == "private" else "group"
-
-
 async def effective_locale(chat_type: str | None, user_id: int, chat_id: int) -> str:
     """Resolve the locale used to render a message in this chat."""
     user_locale, group_locale = await asyncio.gather(

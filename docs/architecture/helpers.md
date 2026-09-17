@@ -103,9 +103,8 @@ Render-locale resolution shared by handlers, callbacks, and flows. Every entry p
 | `locale_for_update(update)` | Convenience wrapper using `update.effective_chat` / `update.effective_user`; missing chat or user falls back to `DEFAULT_LOCALE`. |
 | `locale_for_user(user_id)` | Personal locale for a DM to one user (ban notices, appeal updates), independent of any chat. |
 | `locale_for_chat(chat)` | Group locale when no `Update` is available (join/leave events carry the chat directly). Reads only the group row. |
-| `chat_scope(chat_type)` | Maps a chat type to `"user"` (private) or `"group"` (everything else); mirrors the `language.py` scope decision. |
 
-All resolution funnels through `tcbot.utils.i18n.resolve_locale`, which applies explicit precedence and never raises; see [`utilities.md#i18npy`](utilities.md).
+All resolution funnels through `tcbot.utils.i18n.resolve_locale`, which applies explicit precedence and never raises; see [`utilities.md#i18npy`](utilities.md). Chat-type to scope mapping lives once in `language._chat_scope` (used by the language panel and its callbacks).
 
 ## `keyboards.py`
 

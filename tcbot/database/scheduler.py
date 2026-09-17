@@ -2,22 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Persistent moderation scheduler backed by APScheduler 3.x + MongoDB.
-
-All scheduled moderation actions (warn expiry) survive bot restarts
-because APScheduler stores its job state in MongoDB via MongoDBJobStore.
-Member-cache cleanup is handled by a MongoDB TTL index on ``last_updated``,
-not by a scheduler job.
-
-The scheduler runs inside a dedicated asyncio background task so that
-``scheduler.start()`` is called inside the running event loop.
-
-Usage pattern (lifecycle managed by ``tcbot/__main__.py``)::
-
-    await scheduler.start(mongodb_uri, db_name, warn_expiry_days)
-    # ... bot runs ...
-    await scheduler.stop()
-"""
+"""Persistent moderation scheduler backed by APScheduler 3.x + MongoDB."""
 
 from __future__ import annotations
 

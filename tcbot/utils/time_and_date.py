@@ -2,15 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Central time and date helpers: UTC storage, display, and measurement.
-
-Single source of truth for every clock read in the bot. Wall-clock helpers
-(``utc_now``, ``from_timestamp``, ``fmt_dt``) are for stored and displayed
-timestamps. Monotonic helpers (``monotonic``, ``elapsed_ms``) are for
-measuring durations, timeouts, and rate-limit windows; never mix them with
-wall-clock values. The one exception is Redis-backed rate limiting, which
-needs wall-clock ``time.time()`` scores shared across processes.
-"""
+"""Central time and date helpers: UTC storage, display, and measurement."""
 
 from __future__ import annotations
 
