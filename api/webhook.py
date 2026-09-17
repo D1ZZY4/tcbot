@@ -7,9 +7,10 @@
 from __future__ import annotations
 
 import hmac
-import json
 import logging
 from http.server import BaseHTTPRequestHandler
+
+import msgspec
 
 from tcbot import cfg
 from tcbot.serverless import handle_telegram_payload, run
@@ -59,13 +60,13 @@ class handler(BaseHTTPRequestHandler):
         except ValueError:
             length = 0
         raw = self.rfile.read(length) if length > 0 else b""
+        # * msgspec.DecodeError covers both malformed JSON and invalid UTF-8,
+        # * so the two stdlib except clauses below merge into one with the
+        # * same 400 outcome. Decoded objects come back as plain dicts/lists
+        # * exactly like json.loads, which Update.de_json consumes.
         try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            log.warning("webhook: received request with non-JSON body.")
-            self._reply(400, "Bad request")
-            return
-        except UnicodeDecodeError:
+            data = msgspec.json.decode(raw)
+        except msgspec.DecodeError:
             log.warning("webhook: received request with non-JSON body.")
             self._reply(400, "Bad request")
             return

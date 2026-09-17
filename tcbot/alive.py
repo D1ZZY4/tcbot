@@ -9,12 +9,12 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import hmac
-import json
 import logging
 import socket
 import threading
 from typing import TYPE_CHECKING
 
+import msgspec
 from flask import Flask, request
 from telegram import Update
 
@@ -29,6 +29,18 @@ if TYPE_CHECKING:
     import telegram
 
 log = logging.getLogger(__name__)
+
+
+class _HealthPayload(msgspec.Struct):
+    """Typed /health body: fixed string fields in a stable key order."""
+
+    status: str
+    mongodb: str
+    redis: str
+    scheduler: str
+    circuit_telegram: str
+    circuit_mongodb: str
+    ts: str
 
 
 # ───────────────────────── Flask App Setup ──────────────────────── #
@@ -94,17 +106,21 @@ def health() -> tuple[str, int, dict[str, str]]:
         )
         else "degraded"
     )
-    payload = {
-        "status": overall,
-        "mongodb": "ok" if mongodb_ok else "error",
-        "redis": redis_status,
-        "scheduler": "ok" if scheduler_ok else "error",
-        "circuit_telegram": tg_state.value,
-        "circuit_mongodb": db_state.value,
-        "ts": utc_now().isoformat(timespec="seconds"),
-    }
+    payload = _HealthPayload(
+        status=overall,
+        mongodb="ok" if mongodb_ok else "error",
+        redis=redis_status,
+        scheduler="ok" if scheduler_ok else "error",
+        circuit_telegram=tg_state.value,
+        circuit_mongodb=db_state.value,
+        ts=utc_now().isoformat(timespec="seconds"),
+    )
     code = 200 if overall == "ok" else 503
-    return json.dumps(payload), code, {"Content-Type": "application/json"}
+    return (
+        msgspec.json.encode(payload).decode("utf-8"),
+        code,
+        {"Content-Type": "application/json"},
+    )
 
 
 # ───────────────────────── Webhook Receiver ─────────────────────── #
