@@ -12,6 +12,7 @@ import time
 from typing import Any
 
 import pytest
+from pymongo.errors import WriteConcernError
 from pyrogram.storage import UpdateState
 
 from tcbot.database import mtproto_store
@@ -180,3 +181,76 @@ def test_namespaces_do_not_leak(store: tuple[MongoStorage, _FakeColl]) -> None:
     assert _run(s.user_id()) is None
     assert _run(other.user_id()) == 8
     assert len(fake.docs) == 1
+
+
+def test_retry_write_succeeds_after_transient_error() -> None:
+    """Transient WriteConcernError with RetryableWriteError label retries and succeeds."""
+
+    async def _run() -> None:
+        call_count = 0
+
+        async def _failing_coro() -> str:
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise WriteConcernError(
+                    "operation was interrupted",
+                    code=11602,
+                    details={
+                        "code": 11602,
+                        "codeName": "InterruptedDueToReplStateChange",
+                        "errmsg": "operation was interrupted",
+                        "errorLabels": ["RetryableWriteError"],
+                    },
+                )
+            return "ok"
+
+        result = await mtproto_store._retry_write(_failing_coro)
+        assert result == "ok"
+        assert call_count == 3
+
+    asyncio.run(_run())
+
+
+def test_retry_write_raises_after_max_retries() -> None:
+    """WriteConcernError exhausts retries and re-raises."""
+
+    async def _run() -> None:
+        async def _always_failing_coro() -> None:
+            raise WriteConcernError(
+                "operation was interrupted",
+                code=11602,
+                details={
+                    "code": 11602,
+                    "codeName": "InterruptedDueToReplStateChange",
+                    "errmsg": "operation was interrupted",
+                    "errorLabels": ["RetryableWriteError"],
+                },
+            )
+
+        with pytest.raises(WriteConcernError):
+            await mtproto_store._retry_write(_always_failing_coro)
+
+    asyncio.run(_run())
+
+
+def test_retry_write_does_not_retry_non_transient_error() -> None:
+    """Non-transient errors propagate immediately without retry."""
+
+    async def _run() -> None:
+        call_count = 0
+
+        async def _non_transient_coro() -> None:
+            nonlocal call_count
+            call_count += 1
+            raise WriteConcernError(
+                "write failed",
+                code=100,
+                details={"code": 100, "errmsg": "write failed", "errorLabels": []},
+            )
+
+        with pytest.raises(WriteConcernError):
+            await mtproto_store._retry_write(_non_transient_coro)
+        assert call_count == 1
+
+    asyncio.run(_run())

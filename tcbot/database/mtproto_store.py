@@ -18,21 +18,72 @@ Collection ``mtproto_state``, one document per key, all scoped by namespace::
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
 from typing import TYPE_CHECKING
 
+from pymongo.errors import WriteConcernError
 from pyrogram.storage import Storage, UpdateState
 from pyrogram.storage.sqlite_storage import SQLiteStorage, get_input_peer
 
 from tcbot.database.mongos import col, db_call
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Awaitable, Callable, Iterable
     from typing import Any
 
+# * Maximum retries for transient write concern errors (e.g. replica set
+# * failover). Each retry waits exponentially: 0.5s, 1s, 2s.
+_MAX_WRITE_RETRIES: int = 3
+_RETRY_BASE_DELAY: float = 0.5
+
 log = logging.getLogger(__name__)
+
+
+def _is_transient_write_error(exc: BaseException) -> bool:
+    """Return True when *exc* is a retryable MongoDB write concern error."""
+    return isinstance(exc, WriteConcernError) and "RetryableWriteError" in getattr(
+        exc, "details", {}
+    ).get("errorLabels", [])
+
+
+async def _retry_write(coro_factory: Callable[[], Awaitable[Any]]) -> Any:
+    """Execute a fresh coroutine from *coro_factory* with retries on transient WriteConcernError.
+
+    Pyrogram's ``handle_updates()`` background task persists update states
+    through this store.  A transient replica-set failover (code 11602 /
+    ``InterruptedDueToReplStateChange``) raises ``WriteConcernError`` with
+    the ``RetryableWriteError`` label.  Because the task is fire-and-forget,
+    the exception is never retrieved and the event loop reports it as an
+    unhandled task exception.
+
+    Retrying transparently keeps the session alive through brief replica-set
+    elections without flooding the error channel.
+
+    *coro_factory* must return a **new** coroutine on each call so retries
+    re-execute the operation instead of re-awaiting a spent coroutine.
+    """
+    last_exc: BaseException | None = None
+    for attempt in range(_MAX_WRITE_RETRIES):
+        try:
+            return await coro_factory()
+        except BaseException as exc:
+            if not _is_transient_write_error(exc) or attempt == _MAX_WRITE_RETRIES - 1:
+                raise
+            last_exc = exc
+            delay = _RETRY_BASE_DELAY * (2**attempt)
+            log.debug(
+                "MTProto write attempt %d/%d failed (transient): %s; retrying in %.1fs",
+                attempt + 1,
+                _MAX_WRITE_RETRIES,
+                exc,
+                delay,
+            )
+            await asyncio.sleep(delay)
+    # * pragma: no cover - the loop always returns or raises before reaching here.
+    raise last_exc  # type: ignore[misc]
 
 
 class MongoStorage(Storage):
@@ -79,8 +130,13 @@ class MongoStorage(Storage):
         return
 
     async def delete(self) -> None:
-        """Drop every document in this namespace."""
-        await db_call(self._coll().delete_many({"_id": {"$regex": f"^{self._ns_re}:"}}))
+        """Drop every document in this namespace with transient-error retry."""
+        ns_re = self._ns_re
+
+        async def _op() -> None:
+            await db_call(self._coll().delete_many({"_id": {"$regex": f"^{ns_re}:"}}))
+
+        await _retry_write(_op)
 
     # ── scalar accessors (same object-sentinel contract as SQLiteStorage) ── #
 
@@ -90,12 +146,15 @@ class MongoStorage(Storage):
         return doc["value"] if doc else None
 
     async def _set_scalar(self, name: str, value: Any) -> None:
-        """Upsert scalar *name*."""
-        await db_call(
-            self._coll().replace_one(
-                {"_id": self._kv(name)}, {"value": value}, upsert=True
+        """Upsert scalar *name* with transient-error retry."""
+        kv = self._kv(name)
+
+        async def _op() -> None:
+            await db_call(
+                self._coll().replace_one({"_id": kv}, {"value": value}, upsert=True)
             )
-        )
+
+        await _retry_write(_op)
 
     def _accessor(  # type: ignore[no-untyped-def]
         self, name: str, value: Any = object
@@ -160,21 +219,32 @@ class MongoStorage(Storage):
         """Upsert peers, preserving stored usernames like the usernames table does."""
         now = int(time.time())
         for peer_id, access_hash, peer_type, phone_number in peers:
-            await db_call(
-                self._coll().update_one(
-                    {"_id": self._peer(peer_id)},
-                    {
-                        "$set": {
-                            "access_hash": access_hash,
-                            "type": peer_type,
-                            "phone_number": phone_number,
-                            "updated_on": now,
+            doc_id = self._peer(peer_id)
+
+            async def _op(
+                _did: str = doc_id,
+                _ah: int = access_hash,
+                _pt: str = peer_type,
+                _pn: str | None = phone_number,
+                _now: int = now,
+            ) -> None:
+                await db_call(
+                    self._coll().update_one(
+                        {"_id": _did},
+                        {
+                            "$set": {
+                                "access_hash": _ah,
+                                "type": _pt,
+                                "phone_number": _pn,
+                                "updated_on": _now,
+                            },
+                            "$setOnInsert": {"usernames": []},
                         },
-                        "$setOnInsert": {"usernames": []},
-                    },
-                    upsert=True,
+                        upsert=True,
+                    )
                 )
-            )
+
+            await _retry_write(_op)
 
     async def update_usernames(
         self, usernames: Iterable[tuple[int, list[str | None]]]
@@ -187,18 +257,28 @@ class MongoStorage(Storage):
         """
         now = time.time()
         for peer_id, names in usernames:
-            await db_call(
-                self._coll().update_one(
-                    {"_id": self._peer(peer_id)},
-                    {
-                        "$set": {
-                            "usernames": [n for n in names if n is not None],
-                            "updated_on": now,
-                        }
-                    },
-                    upsert=True,
+            doc_id = self._peer(peer_id)
+            filtered_names = [n for n in names if n is not None]
+
+            async def _op(
+                _did: str = doc_id,
+                _names: list[str] = filtered_names,
+                _now: float = now,
+            ) -> None:
+                await db_call(
+                    self._coll().update_one(
+                        {"_id": _did},
+                        {
+                            "$set": {
+                                "usernames": _names,
+                                "updated_on": _now,
+                            }
+                        },
+                        upsert=True,
+                    )
                 )
-            )
+
+            await _retry_write(_op)
 
     async def get_peer_by_id(self, peer_id: int) -> Any:
         """Return the InputPeer for *peer_id*, or raise KeyError like SQLiteStorage."""
@@ -264,7 +344,11 @@ class MongoStorage(Storage):
     async def set_update_state(
         self, update_state: UpdateState | Iterable[UpdateState]
     ) -> None:
-        """Merge update states, leaving stored fields intact when the new ones are None."""
+        """Merge update states, leaving stored fields intact when the new ones are None.
+
+        Retries on transient ``WriteConcernError`` so Pyrogram's background
+        ``handle_updates()`` task does not crash during replica-set elections.
+        """
         states = (
             [update_state] if isinstance(update_state, UpdateState) else update_state
         )
@@ -280,17 +364,28 @@ class MongoStorage(Storage):
                 if v is not None
             }
             if patch:
-                await db_call(
-                    self._coll().update_one(
-                        {"_id": self._ustate(state.id)}, {"$set": patch}, upsert=True
+                state_id = state.id
+                state_patch = dict(patch)
+
+                async def _op(
+                    _sid: int = state_id, _patch: dict[str, Any] = state_patch
+                ) -> None:
+                    await db_call(
+                        self._coll().update_one(
+                            {"_id": self._ustate(_sid)},
+                            {"$set": _patch},
+                            upsert=True,
+                        )
                     )
-                )
+
+                await _retry_write(_op)
 
     async def delete_update_state(self, state_id: int | Iterable[int]) -> None:
-        """Delete update states by ID."""
+        """Delete update states by ID with transient-error retry."""
         state_ids = (state_id,) if isinstance(state_id, int) else tuple(state_id)
-        await db_call(
-            self._coll().delete_many(
-                {"_id": {"$in": [self._ustate(i) for i in state_ids]}}
-            )
-        )
+        ustate_ids = [self._ustate(i) for i in state_ids]
+
+        async def _op() -> None:
+            await db_call(self._coll().delete_many({"_id": {"$in": ustate_ids}}))
+
+        await _retry_write(_op)

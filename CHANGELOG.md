@@ -47,6 +47,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Runner forwards the MTProto credentials** (`.github/workflows/run-bot.yml`, `docs/operations/ci-cd.md`): the merge that made `API_ID` / `API_HASH` mandatory at boot never added them to the runner env, so every run crashed on startup until the watchdog gave up after five rapid deaths. The workflow now forwards both secrets and the guide lists them as required. Behavior changes: runs boot instead of fail-looping. Repository secrets `API_ID` and `API_HASH` still need to be set once in the repo settings.
 
+- **MTProto store retries transient write errors** (`tcbot/database/mtproto_store.py`): Pyrogram's background `handle_updates()` task persists update states through the MongoDB store. A transient replica-set failover (`WriteConcernError` code 11602 / `InterruptedDueToReplStateChange`) with the `RetryableWriteError` label now retries up to 3 times with exponential backoff instead of crashing the background task and flooding the error channel. All write operations (scalar upserts, peer updates, username writes, update-state merges, and deletes) benefit from the retry wrapper. Behavior changes: brief replica-set elections no longer produce unhandled task exceptions.
+
 ### Removed
 
 ### Documentation
