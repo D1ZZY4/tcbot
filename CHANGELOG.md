@@ -55,6 +55,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Health treats both circuits the same** (`tcbot/alive.py`): a half-open Telegram circuit degrades the verdict like MongoDB already did; Redis stays a hint-only field. Behavior changes: recovery probes report degraded instead of ok.
 
+- **Redis payloads encode via msgspec** (`tcbot/database/cache.py`, `pyproject.toml`, `uv.lock`, `docs/architecture/database.md`): the L2 tagged-JSON codec moves from stdlib `json` to msgspec with the identical wire shape (datetimes and ObjectIds are pre-tagged in Python because msgspec natively flattens datetimes to bare strings). Legacy payloads decode to the same runtime types, verified by an old-vs-new round-trip check. Behavior changes: none, same values with less encode overhead.
+
 - **Dependency lockfile refreshed to latest allowed versions** (`uv.lock`): `cachetools` 7.1.8 to 7.2.0, `ruff` 0.16.7 to 0.16.8, plus transitive `idna` 3.19 to 3.20 and `virtualenv` 21.7.10 to 21.7.11 via `uv lock --upgrade`. Every other pin was already latest in range, and `apscheduler` stays at the deliberate `3.11.3` pin. Full suite passes identically on the new lockfile. Behavior changes: none.
 
 ### Fixed

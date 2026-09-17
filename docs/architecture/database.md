@@ -565,7 +565,7 @@ A per-key `asyncio.Lock` coalesces concurrent misses so only one DB fetch runs p
 - Redis TTL: `max(1, int(redis_ttl))` seconds, applied with `ex=` on writes.
 - Redis prefixes: `role`, `conn`, `groups`, `owner`, `umention`.
 - FIFO ordering is per `(prefix, event loop)`: each mutation chains after the previous one so a slower write can never complete after a newer delete or prefix-wide clear, including across separate cache objects sharing a prefix. Background task names are `tcbot.redis.<prefix>`.
-- Serialization: tagged JSON. `_MongoJSONEncoder` tags `datetime` and `ObjectId` values with `__tcbot_type__` so a cache hit has the same runtime types as the original MongoDB document; `_mongo_object_hook` restores them and tolerates untagged legacy values. Unknown scalar types fall back to strings rather than failing the write.
+- Serialization: tagged JSON via msgspec. `_tag_scalars` tags `datetime` and `ObjectId` values with `__tcbot_type__` (msgspec would otherwise encode datetimes as bare RFC3339) so a cache hit has the same runtime types as the original MongoDB document; `_restore_tagged` restores them bottom-up and tolerates untagged legacy values, so payloads written by the retired stdlib codec read identically. Unknown scalar types fall back to strings rather than failing the write.
 
 Sentinel: `CACHE_MISS`, compare with `is CACHE_MISS`. Distinct from `None` because `None` is a valid cached value (for example, a user with no role).
 
