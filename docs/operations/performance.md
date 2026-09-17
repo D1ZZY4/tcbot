@@ -158,7 +158,7 @@ serialization, and invalidation details.
 
 Outbound Telegram HTTP tuning lives in one owner, `tcbot/utils/transport.py`
 (see [`../architecture/utilities.md`](../architecture/utilities.md)):
-`API_POOL_SIZE` (8) and the timeouts (read 60 s, write 30 s, connect 30 s,
+`API_POOL_SIZE` (16) and the timeouts (read 60 s, write 30 s, connect 30 s,
 pool 15 s) are applied identically by `__main__.py` and `serverless.py`.
 Polling mode adds a dedicated getUpdates connection pool of 4
 (`_UPDATES_POOL_SIZE`, defined in `tcbot/__main__.py`). On top of the pool,

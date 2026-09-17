@@ -379,12 +379,18 @@ class AppealReviewMixin:
         # * The four notifications are independent; capture each result so a
         # * silent DM, card-edit, or log failure is visible to operators
         # * instead of being swallowed like the reject path used to do.
+        # * Both locales resolve up front in parallel: awaiting them inline
+        # * below would serialize two reads before the fan-out even starts.
+        target_locale, staff_locale = await asyncio.gather(
+            locale_for_user(target_id),
+            locale_for_update(update),
+        )
         dm_r, card_r, log_r, unban_log_r = await asyncio.gather(
             bot.send_message(
                 target_id,
                 t(
                     "appeals.decision.approve_dm",
-                    await locale_for_user(target_id),
+                    target_locale,
                     ban_id=Safe(code(ban_id)),
                     community=self.community_name,
                 ),
@@ -393,7 +399,7 @@ class AppealReviewMixin:
             q.edit_message_text(
                 t(
                     "appeals.decision.approve_card",
-                    await locale_for_update(update),
+                    staff_locale,
                     admin=Safe(user_ref(admin.id, admin.first_name)),
                 ),
                 parse_mode="MarkdownV2",

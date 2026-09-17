@@ -125,14 +125,15 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         log.warning("_execute_mute called with incomplete mute state; aborting")
         return
     target_fname = meta.get("mute_target_fname") or str(target_id)
-    reason_text = meta.get("mute_reason") or replies.no_reason(
-        await locale_for_update(update), plain=True
-    )
+    # * Resolve once: the fallback below and every template below it render
+    # * for the same moderator, so a second resolution only repeats a cached
+    # * read (and could theoretically disagree mid-flight).
+    locale = await locale_for_update(update)
+    reason_text = meta.get("mute_reason") or replies.no_reason(locale, plain=True)
     duration = meta.get("mute_duration")
     proof_msgs = meta.get("mute_proof_msgs")
     prompt_chat = meta.get("mute_prompt_chat")
     prompt_id = meta.get("mute_prompt_id")
-    locale = await locale_for_update(update)
     dur_str = fmt_duration(duration, locale)
 
     until = utc_now() + duration if duration else None

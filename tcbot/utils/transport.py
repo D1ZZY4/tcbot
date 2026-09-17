@@ -22,4 +22,6 @@ HTTP_POOL_TIMEOUT: int = 15
 
 # * Connection pool size for the underlying httpx client (API calls).
 # * Not used for update fetching in webhook mode; still needed for send/edit/etc.
-API_POOL_SIZE: int = 8
+# * Sized above the fan_out cap (10): one full fan-out plus concurrent
+# * handler traffic must never queue on pool exhaustion.
+API_POOL_SIZE: int = 16
