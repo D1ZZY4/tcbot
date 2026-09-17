@@ -11,7 +11,8 @@ import re
 import time
 from typing import TYPE_CHECKING
 
-from pymongo.errors import WriteConcernError
+from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError, WriteConcernError
 from pyrogram.storage import Storage, UpdateState
 from pyrogram.storage.sqlite_storage import SQLiteStorage, get_input_peer
 
@@ -385,3 +386,90 @@ class MongoStorage(Storage):
             await db_call(self._coll().delete_many({"_id": {"$in": ustate_ids}}))
 
         await _retry_write(_op)
+
+    # ── single-owner lease ── #
+    # * One live MTProto connection per shared session: Telegram kills the
+    # * auth key when two clients connect with it at once
+    # * (406 AUTH_KEY_DUPLICATED), so fleet instances elect exactly one
+    # * owner before connecting. The lease row lives in this same
+    # * collection; a crashed holder fails over after at most one TTL.
+
+    def _lease_id(self) -> str:
+        """Build the document ID for the single-owner lease."""
+        return f"{self._ns}:lock:mtproto_owner"
+
+    async def claim_owner(self, owner: str, *, ttl_s: float) -> bool:
+        """Atomically claim the single-owner lease for *owner*.
+
+        Succeeds on a free lease, an expired lease (previous holder died
+        without releasing), or a first-time insert won against a
+        concurrent claimant (the loser gets DuplicateKeyError). A live
+        lease held by anyone else refuses. Only CancelledError
+        propagates; every other failure returns False so callers degrade
+        instead of sharing one auth key twice.
+        """
+        now = time.time()
+        lease_id = self._lease_id()
+
+        async def _take() -> Any:
+            return await db_call(
+                self._coll().find_one_and_update(
+                    {
+                        "_id": lease_id,
+                        "$or": [{"owner": owner}, {"expires_at": {"$lt": now}}],
+                    },
+                    {"$set": {"owner": owner, "expires_at": now + ttl_s}},
+                    return_document=ReturnDocument.AFTER,
+                )
+            )
+
+        try:
+            if await _retry_write(_take) is not None:
+                return True
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("MTProto lease claim failed")
+            return False
+
+        # * No row (first boot) or a live foreign lease: exactly one
+        # * concurrent insert wins; the loser degrades instead of sharing
+        # * the auth key.
+        async def _first() -> None:
+            await db_call(
+                self._coll().insert_one(
+                    {"_id": lease_id, "owner": owner, "expires_at": now + ttl_s}
+                )
+            )
+
+        try:
+            await _retry_write(_first)
+            return True
+        except asyncio.CancelledError:
+            raise
+        except DuplicateKeyError:
+            return False
+        except Exception:
+            log.exception("MTProto lease first-claim insert failed")
+            return False
+
+    async def refresh_owner(self, owner: str, *, ttl_s: float) -> bool:
+        """Renew the lease; False when someone else owns it (fencing)."""
+        res = await db_call(
+            self._coll().update_one(
+                {"_id": self._lease_id(), "owner": owner},
+                {"$set": {"expires_at": time.time() + ttl_s}},
+            )
+        )
+        return res.matched_count > 0
+
+    async def release_owner(self, owner: str) -> None:
+        """Best-effort lease release; expiry covers leftovers after a crash."""
+        try:
+            await db_call(
+                self._coll().delete_one({"_id": self._lease_id(), "owner": owner})
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.debug("MTProto lease release failed (expiry covers it): %s", exc)

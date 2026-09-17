@@ -7,6 +7,9 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import secrets
+import socket
 from typing import TYPE_CHECKING
 
 from tcbot import cfg
@@ -16,13 +19,31 @@ from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
 if TYPE_CHECKING:
     from pyrogram import Client
 
+    from tcbot.database.mtproto_store import MongoStorage
+
 log = get_logger(__name__)
 
 _client: Client | None = None
+_lease_owner: str | None = None
+_heartbeat_task: asyncio.Task[None] | None = None
+_auth_dead: bool = False
 
 # * Ceiling for the initial session connect at boot. A network partition
 # * must fail the boot loudly instead of hanging it forever.
 _START_TIMEOUT_S: float = 60.0
+
+# * Single-owner lease bounds: only the instance holding the lease keeps a
+# * live MTProto connection, because Telegram kills the shared auth key
+# * when two clients connect with it at once (406 AUTH_KEY_DUPLICATED).
+# * The heartbeat refreshes well inside the TTL; a crashed holder fails
+# * over to the next claimant after at most one TTL.
+_LEASE_TTL_S: float = 90.0
+_HEARTBEAT_S: float = 30.0
+
+
+def _instance_id() -> str:
+    """Owner label for lease diagnostics (host:pid:random, no secrets)."""
+    return f"{socket.gethostname()}:{os.getpid()}:{secrets.token_hex(4)}"
 
 
 def is_configured() -> bool:
@@ -63,33 +84,142 @@ def client() -> Client:
 
 
 async def start() -> bool:
-    """Connect the shared client; raise RuntimeError when unusable.
+    """Claim the single-owner lease, then connect the shared client.
 
-    Bot-token login cannot prompt, so a failure here is always real
-    (network down, revoked token, unreadable store) and boot must fail
+    Returns True when the client connected, False when another live
+    instance holds the lease or the claim failed (Bot-API-only degraded
+    mode: every resolver returns None exactly like the serverless path,
+    and moderation is unaffected). A degraded False is NOT an error.
+
+    Raises RuntimeError when unusable (unconfigured, login failure, or a
+    locally invalidated session): those are always real and boot must fail
     loudly instead of serving a silently downgraded bot.
     """
+    global _heartbeat_task, _lease_owner
+    if _auth_dead:
+        raise RuntimeError(
+            "MTProto session was invalidated (AUTH_KEY_DUPLICATED); refusing "
+            "to reconnect in-process. Stop every instance, purge the session "
+            "docs, and boot one."
+        )
     c = client()
     if c.is_connected:
         return True
+    from tcbot.database.mtproto_store import (  # noqa: PLC0415 (same as client())
+        MongoStorage,
+    )
+
+    owner = _instance_id()
+    store = MongoStorage(cfg.mtproto_session)
+    try:
+        claimed = await store.claim_owner(owner, ttl_s=_LEASE_TTL_S)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception(
+            "MTProto owner-lease claim failed; starting degraded without MTProto"
+        )
+        return False
+    if not claimed:
+        log.warning(
+            "MTProto owner lease held by another live instance; running "
+            "Bot-API-only. Stop the duplicate instance if this one should "
+            "own the session."
+        )
+        return False
+    _lease_owner = owner
     try:
         async with asyncio.timeout(_START_TIMEOUT_S):
             await c.start()
     except TimeoutError as exc:
+        await _release_lease_quietly(store, owner)
+        _lease_owner = None
         raise RuntimeError(
             f"MTProto bot session timed out after {_START_TIMEOUT_S:.0f}s."
         ) from exc
     except asyncio.CancelledError:
+        await _release_lease_quietly(store, owner)
+        _lease_owner = None
         raise
     except Exception as exc:
+        await _release_lease_quietly(store, owner)
+        _lease_owner = None
         raise RuntimeError(f"MTProto bot session failed: {exc}") from exc
     log.info("MTProto connected (bot session).")
+    _heartbeat_task = asyncio.get_running_loop().create_task(
+        _heartbeat_lease(c, store, owner)
+    )
     return True
 
 
-async def stop() -> None:
-    """Disconnect the shared client; best-effort, never raises."""
+async def _release_lease_quietly(store: MongoStorage, owner: str) -> None:
+    """Release the owner lease; expiry covers leftovers, never raises."""
+    try:
+        await store.release_owner(owner)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.debug("MTProto lease release failed (expiry covers it): %s", exc)
+
+
+async def _heartbeat_lease(c: Client, store: MongoStorage, owner: str) -> None:
+    """Renew the owner lease until cancelled; park the client when fenced out.
+
+    Owned by start()/stop(): stop() cancels this task on shutdown. A lost
+    lease means another instance took over after our heartbeat stalled past
+    expiry, so the client stops instead of sharing one auth key twice.
+    """
     global _client
+    try:
+        while True:
+            await asyncio.sleep(_HEARTBEAT_S)
+            try:
+                held = await store.refresh_owner(owner, ttl_s=_LEASE_TTL_S)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("MTProto lease heartbeat failed; retrying next beat")
+                continue
+            if held:
+                continue
+            log.error(
+                "MTProto owner lease lost; stopping the client to avoid "
+                "duplicate session use. Identity lookups degrade to Bot-API-only."
+            )
+            try:
+                await c.stop()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                log.debug("MTProto fenced-stop failed (non-fatal): %s", exc)
+            if _client is c:
+                _client = None
+            return
+    except asyncio.CancelledError:
+        raise
+
+
+async def stop() -> None:
+    """Disconnect the shared client and release the owner lease.
+
+    Best-effort, never raises (except CancelledError which propagates).
+    """
+    global _client, _heartbeat_task, _lease_owner
+    task, _heartbeat_task = _heartbeat_task, None
+    if task is not None and not task.done():
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+    owner = _lease_owner
+    _lease_owner = None
+    if owner is not None:
+        try:
+            from tcbot.database.mtproto_store import (  # noqa: PLC0415 (same as client())
+                MongoStorage,
+            )
+        except ImportError:
+            pass
+        else:
+            await _release_lease_quietly(MongoStorage(cfg.mtproto_session), owner)
     c, _client = _client, None
     if c is None:
         return
@@ -101,6 +231,51 @@ async def stop() -> None:
         log.debug("MTProto stop failed (non-fatal): %s", exc)
 
 
+def is_auth_dead() -> bool:
+    """Report whether Telegram invalidated the shared auth key (see handle_auth_failure)."""
+    return _auth_dead
+
+
+def is_auth_key_duplicated(exc: BaseException) -> bool:
+    """Check whether *exc* is Telegram's 406 AUTH_KEY_DUPLICATED."""
+    try:
+        from pyrogram.errors import (  # noqa: PLC0415 (heavy extra; import only on use)
+            AuthKeyDuplicated,
+        )
+    except ImportError:
+        return type(exc).__name__ == "AuthKeyDuplicated"
+    return isinstance(exc, AuthKeyDuplicated)
+
+
+async def handle_auth_failure() -> None:
+    """Park MTProto after Telegram invalidates the shared auth key.
+
+    Idempotent and never raises: stops the client, releases the lease, and
+    marks the session dead so every resolver degrades to Bot-API-only
+    instead of hammering a dead key. Recovery is operator-driven by design
+    (an in-process re-login would race a still-live duplicate): stop ALL
+    instances, purge the `<session>:*` docs from `mtproto_state`, then boot
+    exactly one instance and the bot-token login mints a fresh key.
+    """
+    global _auth_dead
+    if _auth_dead:
+        return
+    _auth_dead = True
+    log.error(
+        "MTProto auth key invalidated by Telegram (406 AUTH_KEY_DUPLICATED): "
+        "another instance shares this session. Parked MTProto; identity "
+        "lookups degrade to Bot-API-only. Operator action: stop every bot "
+        "instance, delete the '%s:*' docs from mtproto_state, then boot one.",
+        cfg.mtproto_session,
+    )
+    try:
+        await stop()
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.debug("MTProto park-teardown failed (non-fatal): %s", exc)
+
+
 async def resolve_user(target_id: int) -> tuple[str, str | None, str | None] | None:
     """Resolve (first_name, username, last_name) for a user ID via MTProto.
 
@@ -110,7 +285,7 @@ async def resolve_user(target_id: int) -> tuple[str, str | None, str | None] | N
     Cancellation always propagates.
     """
     c = _client
-    if c is None or not c.is_connected:
+    if _auth_dead or c is None or not c.is_connected:
         return None
     try:
         async with asyncio.timeout(TELEGRAM_LOOKUP_TIMEOUT):
@@ -142,7 +317,7 @@ async def resolve_username(username: str) -> tuple[int, str, str | None] | None:
     stay in shared storage for later direct ID lookups.
     """
     c = _client
-    if c is None or not c.is_connected:
+    if _auth_dead or c is None or not c.is_connected:
         return None
     try:
         from pyrogram import raw  # noqa: PLC0415 (heavy extra; import only on use)
@@ -176,6 +351,8 @@ async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
     from tcbot.database import users_cache  # noqa: PLC0415 (avoid import cycle)
 
     c = _client
+    if _auth_dead:
+        raise RuntimeError("MTProto session invalidated; refusing to harvest.")
     if c is None or not c.is_connected:
         raise RuntimeError("MTProto client is not connected.")
     count = 0

@@ -181,6 +181,21 @@ def _owner_suppressed(fp: tuple[object, ...]) -> bool:
 # * Maximum characters captured from an exception or log message in a fingerprint.
 _MAX_CONTEXT_LEN: int = 120
 
+_TASK_ID_RE = re.compile(r"Task-\d+")
+_HEX_ADDR_RE = re.compile(r"0x[0-9a-fA-F]+")
+
+
+def _normalize_fp_text(text: str) -> str:
+    """Stabilize volatile tokens so recurring background failures dedupe.
+
+    Asyncio task names (Task-NNNN) and object addresses differ per crash
+    while the underlying fault repeats; without this each repeat mints a
+    fresh fingerprint and the channel floods (seen live with a crashing
+    Pyrogram handle_updates loop shipping dozens of cards).
+    """
+    text = _TASK_ID_RE.sub("Task-#", text)
+    return _HEX_ADDR_RE.sub("0x#", text)
+
 
 def _fingerprint_exc(exc: BaseException) -> tuple[object, ...]:
     """Build a coarse identity for an exception that survives class+location+message."""
@@ -199,7 +214,7 @@ def _fingerprint_exc(exc: BaseException) -> tuple[object, ...]:
         type(exc).__name__,
         file_part,
         line,
-        str(exc)[:_MAX_CONTEXT_LEN],
+        _normalize_fp_text(str(exc))[:_MAX_CONTEXT_LEN],
     )
 
 
@@ -209,7 +224,7 @@ def _fingerprint_record(record: logging.LogRecord) -> tuple[object, ...]:
         "log",
         record.name,
         record.lineno,
-        record.getMessage()[:_MAX_CONTEXT_LEN],
+        _normalize_fp_text(record.getMessage())[:_MAX_CONTEXT_LEN],
     )
 
 

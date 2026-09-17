@@ -166,6 +166,19 @@ MTProto runs on the bot token alone: no phone number, no login code, no
 session file. Fill `API_ID` / `API_HASH` and boot connects a bot-token
 session automatically; lookups keep working with zero manual steps.
 
+Run exactly one live long-lived instance at a time. The MongoDB session
+is shared, but Telegram kills the auth key when two clients connect with
+it at once (`406 AUTH_KEY_DUPLICATED`): instances elect a single owner
+through a short-lived lease, and losers serve Bot-API-only until the
+lease frees up. Overlapping rolling restarts are safe (the old instance
+releases on shutdown and the newcomer takes over an expired lease), but
+a Replit deploy plus a GitHub runner side by side is not: stop one of
+them. If the key is already invalidated, stop every instance, purge the
+session docs (`db.mtproto_state.deleteMany({_id: /^<MTPROTO_SESSION>:/})`
+in `mongosh`), then boot exactly one instance and the bot-token login
+mints a fresh key automatically. The bot token itself never needs
+rotating for this incident.
+
 ## Startup sequence
 
 1. `tcbot.__init__` loads configuration into `cfg` and fails fast when `BOT_TOKEN`, `MONGODB_URI`, or `OWNER_ID` are missing.

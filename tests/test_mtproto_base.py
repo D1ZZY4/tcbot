@@ -19,10 +19,34 @@ from tcbot.modules.helper import extraction
 
 def _with_creds(monkeypatch: pytest.MonkeyPatch, api_id: int, api_hash: str) -> None:
     monkeypatch.setattr(mtproto, "_client", None)
+    # * Lease globals reset: start() success claims ownership and spawns a
+    # * heartbeat task, and handle_auth_failure parks permanently. Without
+    # * resets one test's claimed/dead state would leak into the next.
+    monkeypatch.setattr(mtproto, "_lease_owner", None)
+    monkeypatch.setattr(mtproto, "_heartbeat_task", None)
+    monkeypatch.setattr(mtproto, "_auth_dead", False)
     monkeypatch.setattr(
         mtproto.cfg,
         "_c",
         dataclasses.replace(mtproto.cfg._c, api_id=api_id, api_hash=api_hash),
+    )
+
+
+async def _claim_ok(self: object, owner: str, *, ttl_s: float) -> bool:
+    return True
+
+
+async def _release_ok(self: object, owner: str) -> None:
+    return None
+
+
+def _stub_lease(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stub the owner lease so start()/stop() never touch MongoDB."""
+    monkeypatch.setattr(
+        "tcbot.database.mtproto_store.MongoStorage.claim_owner", _claim_ok
+    )
+    monkeypatch.setattr(
+        "tcbot.database.mtproto_store.MongoStorage.release_owner", _release_ok
     )
 
 
@@ -54,6 +78,7 @@ def test_start_raises_when_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_start_connects_bot_session(monkeypatch: pytest.MonkeyPatch) -> None:
     _with_creds(monkeypatch, 12345, "hash")
+    _stub_lease(monkeypatch)
     fake = _FakeClient(connected=False)
     monkeypatch.setattr(mtproto, "_client", fake)
 
@@ -65,6 +90,7 @@ def test_start_fatal_when_bot_session_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _with_creds(monkeypatch, 12345, "hash")
+    _stub_lease(monkeypatch)
     monkeypatch.setattr(
         mtproto, "_client", _FakeClient(connected=False, error=RuntimeError("down"))
     )

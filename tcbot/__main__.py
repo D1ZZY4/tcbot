@@ -209,6 +209,24 @@ def _make_asyncio_exc_handler(
         # * Mirror to module logger so nothing is silently swallowed.
         log.error("[asyncio] %s%s", detail, f" - {exc}" if exc else "")
 
+        # * A dead shared MTProto session crashes Pyrogram's background
+        # * tasks in a tight loop (406 AUTH_KEY_DUPLICATED from a duplicate
+        # * instance). Park it once here; later repeats hit the dead-guard
+        # * and stay silent, so one incident ships one loud card instead of
+        # * a flood (each Task-NNNN used to defeat the fingerprint dedupe).
+        if exc is not None and mtproto_mod.is_auth_key_duplicated(exc):
+            if mtproto_mod.is_auth_dead():
+                log.debug("[asyncio] duplicate AuthKeyDuplicated suppressed.")
+                return
+            try:
+                park = lp.create_task(mtproto_mod.handle_auth_failure())
+                _asyncio_report_tasks.add(park)
+                park.add_done_callback(_asyncio_report_tasks.discard)
+            except Exception as err:
+                log.debug("Failed to schedule MTProto park task: %s", err)
+            # * Fall through: this first occurrence still ships loudly via
+            # * the normal report path below.
+
         # * Schedule async report on the running loop, keeping a strong reference
         # * until the task completes so it cannot be garbage collected mid-flight.
         try:
@@ -292,8 +310,16 @@ async def _post_init(app: Application) -> None:
         log.warning("ensure_initial_owner failed (non-fatal): %s", owner_r)
     # * MTProto is mandatory: missing credentials or a login-less session
     # * must abort boot loudly instead of serving numeric-ID displays.
+    # * A degraded False (lease held elsewhere) is not fatal: the bot
+    # * serves fully on the Bot API without MTProto lookups.
     if isinstance(_mtproto_r, BaseException):
         raise _mtproto_r
+    if _mtproto_r is False:
+        log.warning(
+            "MTProto degraded: another live instance owns the shared session "
+            "(or the lease claim failed). Identity lookups run Bot-API-only; "
+            "moderation is unaffected."
+        )
 
     # * APScheduler 3.11.3 with MongoDBJobStore - persistent scheduled jobs.
     # * app.bot is live here (post_init runs inside the initialised app), so
