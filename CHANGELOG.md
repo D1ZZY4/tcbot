@@ -169,6 +169,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Pagination helper typed for datetime** (`tcbot/utils/pagination.py`): `date_or_unknown()` parameter is now `datetime | None` instead of `Any`, catching type errors at call time. Behavior changes: none.
 
+- **Additional menu uses the shared answer-and-edit path** (`tcbot/modules/additional.py`): the manual acknowledge-and-edit block is replaced by the helper every other menu uses, which also removes references to an undefined logger that would have raised on the failure path. Behavior changes: tapping the menu no longer risks an unhandled error when the edit fails.
+
 ### Removed
 
 - **Dead locale scope helper removed** (`tcbot/modules/helper/locale.py`, `docs/architecture/helpers.md`): `chat_scope()` had no callers anywhere in code, tests, or docs examples; `language._chat_scope` remains the single mapping and keeps its test. Behavior changes: none.

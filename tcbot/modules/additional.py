@@ -13,13 +13,11 @@ from telegram.ext import CallbackQueryHandler, ContextTypes
 from tcbot import cfg
 from tcbot.modules.helper import decorators, keyboards
 from tcbot.modules.helper.locale import locale_for_update
+from tcbot.modules.helper.parse_editmsg import answer_and_edit
 from tcbot.utils.i18n import t
-from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from telegram import Update
-
-log = get_logger(__name__)
 
 __module_name__ = None
 
@@ -46,19 +44,13 @@ async def on_additional_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     q = update.callback_query
     if q is None:
         return
-    try:
-        await q.answer()
-    except Exception as exc:
-        log.debug("additional_menu q.answer failed: %s", exc)
+
     locale = await locale_for_update(update)
-    try:
-        await q.edit_message_text(
-            additional_msg(locale),
-            parse_mode="MarkdownV2",
-            reply_markup=keyboards.additional_menu_kb(locale),
-        )
-    except Exception as exc:
-        log.debug("additional_menu edit failed: %s", exc)
+    await answer_and_edit(
+        q,
+        additional_msg(locale),
+        reply_markup=keyboards.additional_menu_kb(locale),
+    )
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #
