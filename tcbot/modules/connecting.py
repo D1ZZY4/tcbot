@@ -62,11 +62,11 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
             t("connecting.help.what.body", locale, community=cfg.community_name),
         ),
         (
-            "Required permissions",
+            t("connecting.help.permissions.title", locale, plain=True),
             t("connecting.help.permissions.body", locale),
         ),
         (
-            "Notes",
+            t("connecting.help.notes.title", locale, plain=True),
             t("connecting.help.notes.body", locale),
         ),
         (

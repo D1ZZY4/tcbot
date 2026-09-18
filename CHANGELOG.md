@@ -101,6 +101,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Re-ban confirmation reuses the resolved locale** (`tcbot/modules/banning.py`, `tcbot/modules/admins.py`): entry commands pass their locale into the confirmation and target-resolution helpers. Behavior changes: none, the same reply with two fewer database reads per command.
 
+- **Every callback tap answers the spinner first** (`tcbot/modules/checking.py`, `tcbot/modules/admins.py`, `tcbot/modules/helper/workflows/connected_flow.py`): handlers with missing callback data acknowledge the query before returning instead of leaving the client spinner hanging. Behavior changes: malformed taps dismiss the spinner instead of timing out.
+
+- **Remaining hardcoded English strings move to the catalog** (`tcbot/modules/connecting.py`, `stats.py`, `admins.py`, `checking.py`, `i18n/en-US/connecting.toml`, `stats.toml`, `admins.toml`, `checking.toml`, `i18n/id/*`): help section titles and the unknown-date word render in the viewer's locale. Behavior changes: Indonesian viewers read translated titles where English leaked through; default-locale wording is unchanged.
+
 ### Fixed
 
 - **Container image ships the message catalog** (`Dockerfile`): the build copies `i18n/` next to the package so the first render finds its templates. Behavior changes: Docker deploys boot instead of failing every handler.

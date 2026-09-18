@@ -23,9 +23,11 @@ Menghubungkan grupmu ke federasi {community}. Setelah terhubung:
 - Pesan broadcast dari Staf TC diteruskan ke grupmu."""
 
 [help.permissions]
+title = "Izin yang Dibutuhkan"
 body = "Sebelum menjalankan perintah, jadikan bot admin grup dengan tiga izin ini: *Delete Messages*, *Ban Users*, dan *Invite Users via Link*."
 
 [help.notes]
+title = "Catatan"
 body = """
 Jika permintaan connect untuk grupmu sudah tertunda, permintaan kedua akan ditolak; tunggu Staf TC memproses yang sudah ada.
 

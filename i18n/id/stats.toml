@@ -12,6 +12,7 @@ body = "`/tcstats` (alias: `/tcs`)"
 body = "Menampilkan ringkasan federasi live: Founder, total staf per peran, jumlah pengguna yang di-cache, ban federasi aktif, dan chat terhubung."
 
 [help.drills]
+title = "Rincian"
 body = """
 *Daftar Staf*: Founder, Admin, Developer, Tester, semua dengan mention.
 *Pengguna*: daftar semua pengguna yang di-cache per halaman (hanya Founder, tombol dan daftarnya disembunyikan dari yang lain). Tombol bernomor membuka kartu detail per pengguna.

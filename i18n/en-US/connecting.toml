@@ -23,9 +23,11 @@ Connects your group to the {community} federation. Once connected:
 - Broadcast messages from TC Staff are forwarded to your group."""
 
 [help.permissions]
+title = "Required permissions"
 body = "Before running the command, make the bot a group admin with these three permissions: *Delete Messages*, *Ban Users*, and *Invite Users via Link*."
 
 [help.notes]
+title = "Notes"
 body = """
 If a connect request is already pending for your group, a second request will be rejected; wait for TC Staff to process the existing one.
 

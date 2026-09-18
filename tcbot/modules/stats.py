@@ -60,7 +60,7 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
             t("stats.help.what.body", locale),
         ),
         (
-            "Drill-downs",
+            t("stats.help.drills.title", locale, plain=True),
             t("stats.help.drills.body", locale),
         ),
         (

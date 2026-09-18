@@ -566,7 +566,13 @@ class BuildConnection:
         q = update.callback_query
         chat = update.effective_chat
         user = update.effective_user
-        if q is None or chat is None or user is None:
+        if q is None:
+            return
+        if chat is None or user is None:
+            try:
+                await q.answer()
+            except Exception as exc:
+                log.debug("Join decision answer failed with no chat/user: %s", exc)
             return
         lc, lt = cfg.logs
         locale = await locale_for_update(update)

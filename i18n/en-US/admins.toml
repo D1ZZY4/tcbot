@@ -21,6 +21,7 @@ body = """*/tcpromote*, */tcdemote*, */tcpromotelist*: Founder and Admin.
 */tcpromoterequests*: anyone (creates a self-request to the Founder)."""""
 
 [help.roles]
+title = "Role Hierarchy"
 body = """
 Founder (rank 4) > Admin (rank 3) > Developer (rank 2) > Tester (rank 1)
 
@@ -123,6 +124,7 @@ header = "{title}"
 header_text = "Pending Promotion Requests ({n})"
 cap_notice = "\nShowing the {shown} most recent requests. {total} pending in total."
 row = "- {user} {id} | {uname} | ID: {req}"
+no_username = "no username"
 
 [decision]
 approve_fail = "Couldn't approve the request. Please try again."

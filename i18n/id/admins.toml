@@ -21,6 +21,7 @@ body = """*/tcpromote*, */tcdemote*, */tcpromotelist*: Founder dan Admin.
 */tcpromoterequests*: siapa pun (membuat permintaan sendiri ke Founder)."""
 
 [help.roles]
+title = "Hierarki Peran"
 body = """
 Founder (peringkat 4) > Admin (peringkat 3) > Developer (peringkat 2) > Tester (peringkat 1)
 
@@ -123,6 +124,7 @@ header = "{title}"
 header_text = "Permintaan Promosi Tertunda ({n})"
 cap_notice = "\nMenampilkan {shown} permintaan terbaru. {total} tertunda total."
 row = "- {user} {id} | {uname} | ID: {req}"
+no_username = "tanpa username"
 
 [decision]
 approve_fail = "Tidak bisa menyetujui permintaan. Coba lagi."

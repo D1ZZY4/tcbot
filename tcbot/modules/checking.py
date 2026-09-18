@@ -119,7 +119,9 @@ async def _ban_summary(
     )
 
     ts = ban.get("timestamp")
-    date_str = fmt_dt(ts) if ts else "Unknown"
+    date_str = (
+        fmt_dt(ts) if ts else t("checking.ban_info.unknown_date", locale, plain=True)
+    )
 
     text = t(
         "checking.checkme.banned",
@@ -437,7 +439,10 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the top-level profile summary for the checked user."""
     q = update.callback_query
-    if q is None or q.data is None:
+    if q is None:
+        return
+    if q.data is None:
+        await q.answer()
         return
     try:
         target_id = int(q.data.split(":", 1)[1])
@@ -465,7 +470,10 @@ async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of federation bans for the checked user."""
     q = update.callback_query
-    if q is None or q.data is None:
+    if q is None:
+        return
+    if q.data is None:
+        await q.answer()
         return
     try:
         _, target_id_str, page_str = q.data.split(":")
@@ -486,7 +494,10 @@ async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the full detail view for a single federation ban record."""
     q = update.callback_query
-    if q is None or q.data is None:
+    if q is None:
+        return
+    if q.data is None:
+        await q.answer()
         return
     try:
         _, target_id_str, ban_id = q.data.split(":", 2)
@@ -506,7 +517,10 @@ async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the per-group warning summary for the checked user."""
     q = update.callback_query
-    if q is None or q.data is None:
+    if q is None:
+        return
+    if q.data is None:
+        await q.answer()
         return
     try:
         target_id = int(q.data.split(":", 1)[1])
@@ -525,7 +539,10 @@ async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of warnings for the checked user in a specific group."""
     q = update.callback_query
-    if q is None or q.data is None:
+    if q is None:
+        return
+    if q.data is None:
+        await q.answer()
         return
     try:
         _, target_id_str, chat_id_str, page_str = q.data.split(":")
@@ -550,7 +567,10 @@ async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
 async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of kick records for the checked user."""
     q = update.callback_query
-    if q is None or q.data is None:
+    if q is None:
+        return
+    if q.data is None:
+        await q.answer()
         return
     try:
         _, target_id_str, page_str = q.data.split(":")
@@ -571,7 +591,10 @@ async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of mute records for the checked user."""
     q = update.callback_query
-    if q is None or q.data is None:
+    if q is None:
+        return
+    if q.data is None:
+        await q.answer()
         return
     try:
         _, target_id_str, page_str = q.data.split(":")
@@ -592,7 +615,10 @@ async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 async def on_check_appeals(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of appeal records for the checked user."""
     q = update.callback_query
-    if q is None or q.data is None:
+    if q is None:
+        return
+    if q.data is None:
+        await q.answer()
         return
     try:
         _, target_id_str, page_str = q.data.split(":")
