@@ -392,17 +392,30 @@ async def start(
     except TimeoutError:
         # * The background task did not signal readiness within the grace
         # * window (constructor raise before the try, or a hung jobstore
-        # * handshake). Treat this like a startup failure so the caller
-        # * fails fast instead of hanging at boot forever.
+        # * handshake). Cancel it and unwind bounded so a task ignoring
+        # * cancellation cannot hang start beyond the outer bound.
         _sched_error = TimeoutError(
             f"APScheduler did not become ready within {_STOP_TIMEOUT_S:.0f}s."
         )
         if _sched_task is not None and not _sched_task.done():
             _sched_task.cancel()
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(_sched_task, return_exceptions=True),
+                    timeout=2.0,
+                )
+            except TimeoutError:
+                log.warning("APScheduler startup task ignored cancellation.")
     if _sched_error is not None:
         startup_error = _sched_error
         if _sched_task is not None:
-            await asyncio.gather(_sched_task, return_exceptions=True)
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(_sched_task, return_exceptions=True),
+                    timeout=2.0,
+                )
+            except TimeoutError:
+                log.warning("APScheduler startup task ignored cancellation.")
         _sched_task = None
         _sched_ready = None
         _sched_stop = None

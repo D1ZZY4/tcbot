@@ -47,6 +47,8 @@ def test_start_raises_runtime_error_on_timeout(
     with pytest.raises(RuntimeError, match="APScheduler failed to start"):
         # * Outer bound so a regression (unbounded ready wait) fails, not hangs.
         asyncio.run(asyncio.wait_for(sched_mod.start("mongodb://x", "db", 0), 1.0))
+    # * Timeout unwind reaps the stuck task so no stop() is needed.
+    assert sched_mod._sched_task is None
 
 
 def test_start_success_path_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:

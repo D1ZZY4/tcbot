@@ -28,6 +28,8 @@ if TYPE_CHECKING:
 
 _RESOLV_CONF = "/etc/resolv.conf"
 
+log = get_logger(__name__)
+
 
 # ──────────────────────────── DNS Patch ─────────────────────────── #
 # * Fixes DNS resolution issues on platforms without standard resolv.conf
@@ -47,8 +49,6 @@ def _patch_dns_if_needed() -> None:
         except Exception as exc:
             log.debug("DNS patch skipped: %s", exc)
 
-
-log = get_logger(__name__)
 
 _db: AsyncIOMotorDatabase | None = None
 _client: AsyncIOMotorClient | None = None

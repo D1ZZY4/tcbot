@@ -169,6 +169,18 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Pagination helper typed for datetime** (`tcbot/utils/pagination.py`): `date_or_unknown()` parameter is now `datetime | None` instead of `Any`, catching type errors at call time. Behavior changes: none.
 
+- **Link-preview default has one owner** (`tcbot/serverless.py`, `tcbot/__main__.py`): the serverless transport imports the constant instead of redefining it. Behavior changes: none, identical preview suppression on both transports.
+
+- **Redis hint follows the uv-only rule** (`tcbot/database/redis_client.py`): the missing-extension error points at `uv add` instead of `pip install`. Behavior changes: message text only.
+
+- **Module logger ordering hardened** (`tcbot/database/mongos.py`): the logger is defined before the DNS helper that references it. Behavior changes: none.
+
+- **Scheduler startup cannot hang on a stuck task** (`tcbot/database/scheduler.py`, `tests/test_scheduler_start.py`): the readiness-timeout path unwinds the background task with the same bounded 2-second gather as the cancellation path. Behavior changes: a task ignoring cancellation no longer stalls boot past the bound; a warning names it.
+
+- **Promotion queue names the already-pending case** (`tcbot/database/queues_db.py`, `tests/test_queues_enqueue.py`): an `AlreadyPendingError` (still a `DuplicateKeyError` for callers) is raised at once when the one-pending-per-user index rejects, using the server key pattern with a message fallback; the blind retry stays for genuine ID collisions. Behavior changes: none for callers; pending requests skip the wasted retry.
+
+- **Demote clears both collections concurrently** (`tcbot/modules/helper/workflows/demote_flow.py`): the two independent removes run in one gather with identical return semantics. Behavior changes: none, same result with one round trip.
+
 - **Additional menu uses the shared answer-and-edit path** (`tcbot/modules/additional.py`): the manual acknowledge-and-edit block is replaced by the helper every other menu uses, which also removes references to an undefined logger that would have raised on the failure path. Behavior changes: tapping the menu no longer risks an unhandled error when the edit fails.
 
 ### Removed

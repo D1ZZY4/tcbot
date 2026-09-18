@@ -72,7 +72,7 @@ async def connect(url: str) -> None:
     if not _hiredis_available:
         raise RuntimeError(
             "hiredis C extension is required when REDIS_URL is set. "
-            "Install with: pip install 'redis[hiredis]'"
+            "Install with: uv add 'redis[hiredis]'"
         )
     global _client, _pool
     # * Reconnect must not orphan the previous pool: with an explicitly

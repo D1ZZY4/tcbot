@@ -49,8 +49,10 @@ class Demote:
         next demote (effective role prefers Admin, hiding the stale row
         until ``remove_admin`` reveals it). True when any row was cleared.
         """
-        cleared_admin = await db.users_roles.remove_admin(target_id)
-        cleared_role = await db.users_roles.remove_role(target_id)
+        cleared_admin, cleared_role = await asyncio.gather(
+            db.users_roles.remove_admin(target_id),
+            db.users_roles.remove_role(target_id),
+        )
         return cleared_admin or cleared_role
 
     @classmethod

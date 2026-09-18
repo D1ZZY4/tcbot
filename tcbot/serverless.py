@@ -10,7 +10,7 @@ import asyncio
 import threading
 from typing import TYPE_CHECKING, Any
 
-from telegram import LinkPreviewOptions, Update
+from telegram import Update
 from telegram.ext import (
     AIORateLimiter,
     Application,
@@ -26,7 +26,7 @@ from tcbot import database as db
 # * Flask import chain this pulls in: Flask is already a project dependency
 # * and no server is started at import time (guarded by __main__'s
 # * ``if __name__ == "__main__"`` block).
-from tcbot.__main__ import _register_handlers
+from tcbot.__main__ import _LINK_PREVIEW_DISABLED, _register_handlers
 from tcbot.database import redis_client
 from tcbot.database.mongos import connect, ensure_indexes, is_connected
 from tcbot.database.scheduler import expire_old_warns
@@ -48,11 +48,8 @@ log = get_logger(__name__)
 # ────────────────── Transport tuning (mirrors __main__) ────────────────── #
 # * Same outbound HTTP tuning as the long-lived transports so Telegram API
 # * behaviour (pooling, timeouts, pacing) is identical on Vercel. Values
-# * live in tcbot.utils.transport (single owner); only the link-preview
-# * default stays local because __main__ keeps that constant private.
-
-# * Applied globally via Defaults so every bot message suppresses link preview cards.
-_LINK_PREVIEW_DISABLED: LinkPreviewOptions = LinkPreviewOptions(is_disabled=True)
+# * live in tcbot.utils.transport (single owner); the link-preview default
+# * is imported from __main__ (single owner) alongside _register_handlers.
 
 
 # ─────────────── Instance event loop (warm-invocation reuse) ────────────── #

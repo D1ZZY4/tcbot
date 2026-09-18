@@ -30,6 +30,37 @@ def _requests() -> AsyncIOMotorCollection:
 # * Manages the queue's state for pending and resolved requests
 
 
+class AlreadyPendingError(DuplicateKeyError):
+    """Target already has a pending promotion request.
+
+    Subclasses DuplicateKeyError so callers checking for DuplicateKeyError
+    keep working without changes.
+    """
+
+
+def _is_pending_violation(exc: DuplicateKeyError) -> bool:
+    """Return True when exc came from the one-pending-per-user partial index.
+
+    The partial unique index is on target_id (see ensure_indexes) while the
+    random-ID unique index is on request_id, so keyPattern tells them apart.
+    Falls back to the server message which names the index. Unknown shapes
+    return False to keep the legacy retry path.
+    """
+    details = exc.details or {}
+    pattern = details.get("keyPattern")
+    if isinstance(pattern, dict):
+        if "target_id" in pattern:
+            return True
+        if "request_id" in pattern:
+            return False
+    message = str(exc)
+    if "target_id" in message:
+        return True
+    if "request_id" in message:
+        return False
+    return False
+
+
 async def enqueue(
     user_id: int,
     username: str | None,
@@ -38,11 +69,9 @@ async def enqueue(
 ) -> str:
     """Add a new promotion request to the queue.
 
-    Retries once with a fresh ID on ``DuplicateKeyError``: a 10-char
-    random ID collision must not fail the request (mirrors
-    ``bans_db.create_ban``). A second failure propagates, which then
-    means the partial-unique pending index rejected a real duplicate
-    and the caller reports "already pending".
+    Retries once with a fresh ID only for genuine request_id collisions
+    (mirrors ``bans_db.create_ban``). A partial-unique pending rejection
+    raises AlreadyPendingError at once without burning the retry.
     """
 
     async def _insert(request_id: str) -> None:
@@ -65,9 +94,18 @@ async def enqueue(
     request_id = make_short_id()
     try:
         await _insert(request_id)
-    except DuplicateKeyError:
+    except DuplicateKeyError as exc:
+        if _is_pending_violation(exc):
+            raise AlreadyPendingError(str(exc), exc.code, exc.details) from exc
         request_id = make_short_id()
-        await _insert(request_id)
+        try:
+            await _insert(request_id)
+        except DuplicateKeyError as retry_exc:
+            if _is_pending_violation(retry_exc):
+                raise AlreadyPendingError(
+                    str(retry_exc), retry_exc.code, retry_exc.details
+                ) from retry_exc
+            raise
     return request_id
 
 
