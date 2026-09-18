@@ -227,6 +227,26 @@ def test_start_releases_lease_on_connect_failure(
     assert "test-ns:lock:mtproto_owner" not in fake.docs
 
 
+def test_start_degrades_on_duplicate_key(
+    monkeypatch: pytest.MonkeyPatch, lease_store: tuple[MongoStorage, _FakeLeaseColl]
+) -> None:
+    _reset_mtproto_state(monkeypatch)
+    _, fake = lease_store
+
+    class _Dup(_FakeClient):
+        async def start(self) -> None:
+            raise AuthKeyDuplicated("duplicate")
+
+    client = _Dup()
+    monkeypatch.setattr(mtproto, "_client", client)
+
+    assert asyncio.run(mtproto.start()) is False
+    assert mtproto.is_auth_dead() is True
+    assert client.is_connected is False
+    assert "test-ns:lock:mtproto_owner" not in fake.docs
+    assert asyncio.run(mtproto.resolve_user(42)) is None
+
+
 def test_handle_auth_failure_parks_once(
     monkeypatch: pytest.MonkeyPatch, lease_store: tuple[MongoStorage, _FakeLeaseColl]
 ) -> None:

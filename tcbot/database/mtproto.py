@@ -87,15 +87,18 @@ async def start() -> bool:
     """Claim the single-owner lease, then connect the shared client.
 
     Returns True when the client connected, False when another live
-    instance holds the lease or the claim failed (Bot-API-only degraded
-    mode: every resolver returns None exactly like the serverless path,
-    and moderation is unaffected). A degraded False is NOT an error.
+    instance holds the lease, the claim failed, or Telegram rejects the
+    stored key as duplicated/invalidated (Bot-API-only degraded mode:
+    every resolver returns None exactly like the serverless path, and
+    moderation is unaffected). A degraded False is NOT an error: aborting
+    boot over MTProto would take federation enforcement offline for a
+    lookup enhancement, which is the worse trade.
 
-    Raises RuntimeError when unusable (unconfigured, login failure, or a
-    locally invalidated session): those are always real and boot must fail
-    loudly instead of serving a silently downgraded bot.
+    Raises RuntimeError when unusable (unconfigured or a genuinely failed
+    login): those are always real and boot must fail loudly instead of
+    serving a silently downgraded bot.
     """
-    global _heartbeat_task, _lease_owner
+    global _heartbeat_task, _lease_owner, _auth_dead
     if _auth_dead:
         raise RuntimeError(
             "MTProto session was invalidated (AUTH_KEY_DUPLICATED); refusing "
@@ -142,6 +145,23 @@ async def start() -> bool:
         _lease_owner = None
         raise
     except Exception as exc:
+        # * A rejected stored key (duplicate live instance, or a
+        # * server-invalidated key) must degrade, never abort boot: killing
+        # * the whole process over MTProto takes federation enforcement
+        # * offline for a lookup enhancement. Park it sticky (no in-process
+        # * re-login races) and serve Bot-API-only until a restart.
+        if is_auth_key_duplicated(exc):
+            _auth_dead = True
+            await _release_lease_quietly(store, owner)
+            _lease_owner = None
+            log.exception(
+                "MTProto connect rejected (406 AUTH_KEY_DUPLICATED): another "
+                "instance shares this session or the key is dead. Serving "
+                "Bot-API-only. Operator action: stop every bot instance, "
+                "delete the '%s:*' docs from mtproto_state, then boot one.",
+                cfg.mtproto_session,
+            )
+            return False
         await _release_lease_quietly(store, owner)
         _lease_owner = None
         raise RuntimeError(f"MTProto bot session failed: {exc}") from exc
