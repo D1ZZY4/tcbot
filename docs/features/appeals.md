@@ -15,7 +15,7 @@ flowchart TD
     Validate -->|yes| DM[Open private DM]
     DM --> Reason[WAITING_APPEAL]
     Reason --> Submit[Submit to APPEALS chat]
-    Submit --> ReviewCard[Post review card<br/>in MAIN_GROUP topic]
+    Submit --> ReviewCard[Post review card<br/>in cfg.main_group topic]
     ReviewCard --> Decision{Staff decision}
     Decision -->|approve| Unban[Run /tcunban + notify]
     Decision -->|reject| Notify[Notify user rejected]

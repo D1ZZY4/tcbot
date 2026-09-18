@@ -77,14 +77,14 @@ The deactivation runs before the fan-out (not in parallel with it) precisely to 
 
 1. Parse the first arg with `parse_cmd_args(msg.text)`. If missing or not numeric after a `-` strip, replies `Usage: /rmtc <chat_id>` and stops.
 2. `chat_id = int(args[0])`.
-3. Primary-group guard: main/exec groups are required enforcement destinations and can never be force-disconnected; `/rmtc` refuses them with a dedicated reply and stops.
+3. Primary-group guard: main/exec groups (`cfg.main_group`, `cfg.exec_group`) are required enforcement destinations and can never be force-disconnected; `/rmtc` refuses them with a dedicated reply and stops.
 4. Call `db.groups_db.deactivate_group(chat_id)`. The return value indicates whether the record was matched.
-4. If no record matched, replies `replies.err_group_not_found(locale)` and stops.
-5. Otherwise runs three parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
+5. If no record matched, replies `replies.err_group_not_found(locale)` and stops.
+6. Otherwise runs three parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
     - `bot.send_message(cfg.logs, group_disconnected_log(chat_id, str(chat_id), admin.id, admin.first_name), parse_mode="MarkdownV2", message_thread_id=lt)`.
     - `bot.leave_chat(chat_id)`.
     - `msg.reply_text("Group <chat_id> has been disconnected from <community>", parse_mode="MarkdownV2")`.
-6. Each failure is logged at debug level but does not roll back the others.
+7. Each failure is logged at debug level but does not roll back the others.
 
 `leave_chat` for a chat the bot is no longer in raises a Telegram API error; the exception is caught and logged at debug level so it does not surface as a command failure.
 

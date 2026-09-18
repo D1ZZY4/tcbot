@@ -40,7 +40,7 @@ The target is resolved by `extraction.extract_target` with `prefer_explicit=True
 
 ## Top-level profile view
 
-`Check.profile(bot, target_id, *, executor_id=None)` returns `(html_text, keyboard)` shaped like:
+`Check.profile(bot, target_id, *, executor_id=None)` returns `(text, keyboard)` shaped like:
 
 ```text
 That's me - ... / That's you - ...   <- recognition note, special identities only

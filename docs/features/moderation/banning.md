@@ -123,7 +123,7 @@ When the target has no active ban:
    them could leave a phantom ban card in the log channel (dead appeal link,
    `/check` miss) when the write failed.
 6. The sent log message ID is saved with `bans_db.set_log_message_id(...)` in parallel with the pre-fetched `active_groups()` result.
-7. The target is banned in every active connected group returned by `groups_db.active_groups()`, plus the primary groups (`MAIN_GROUP`, `EXTEND_GROUP`) when they are not already in the connected-groups list.
+7. The target is banned in every active connected group returned by `groups_db.active_groups()`, plus the primary groups (`cfg.main_group`, `cfg.exec_group`) when they are not already in the connected-groups list.
 8. The target user is cached with `users_cache.upsert_user(...)`.
 9. The original proof prompt is edited with an applied-groups summary.
 
@@ -309,8 +309,8 @@ Flow:
 5. `bans_db.get_active_ban(target_id)` must return a record.
 6. All active bans for the target are deactivated atomically with `bans_db.deactivate_all_active_bans(target_id)`, which handles any duplicate active records in one operation.
 7. The target is unbanned from all active connected groups with `only_if_banned=True`.
-9. An unban log is sent to `cfg.logs`.
-10. The command reply reports the success count.
+8. An unban log is sent to `cfg.logs`.
+9. The command reply reports the success count.
 
 Manual unban does not currently edit any pending appeal review card. It deactivates the ban and posts the unban log.
 

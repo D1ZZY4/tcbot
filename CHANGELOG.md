@@ -185,6 +185,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Audit-wave behavior pinned by tests** (`tests/test_wave_regressions.py`, `tests/test_queues_enqueue.py`, `tests/test_roles_cache.py`): harvest budget cutoff, shared flood handling, verbatim secret redaction, list-or-CSV env parsing, prefix-copy semantics, sorted sync pairing, cron 405, queue collision versus pending paths, and cached-versus-outage role reads. Behavior changes: none, 18 new checks.
 
+- **Pre-commit hooks match the repo pins** (`.pre-commit-config.yaml`): the ruff hook moves to the locked version so local hooks and CI enforce identical rules; the whitespace and end-of-file fixers were applied once across 16 files. Behavior changes: none.
+
 - **Additional menu uses the shared answer-and-edit path** (`tcbot/modules/additional.py`): the manual acknowledge-and-edit block is replaced by the helper every other menu uses, which also removes references to an undefined logger that would have raised on the failure path. Behavior changes: tapping the menu no longer risks an unhandled error when the edit fails.
 
 ### Removed
@@ -208,6 +210,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 - **Stale reply-function references corrected across six feature guides** (`docs/features/moderation/muting.md`, `unbanning.md`, `kicking.md`, `connecting.md`, `disconnecting.md`, `docs/architecture/helpers.md`): every `replies.ERR_CANNOT_RESOLVE`, `replies.ERR_GROUP_ONLY`, `replies.ERR_ROLE_VERIFY`, `replies.ERR_GROUP_NOT_FOUND`, `_ERR_ROLE_CHECK_FAILED`, `_ERR_OWNER_ONLY`, `_ERR_BOT_PERMS_VERIFY`, and `_ERR_COMPLETE_JOIN` constant reference is replaced with the actual lowercase function call or descriptive prose, and the `users_cache` mention in the helper-usage rules is corrected to `users_roles`. Behavior changes: none, docs only.
 
 - **Guides match the dispatcher and the mention helper** (`AGENTS.md`, `docs/architecture/utilities.md`, `docs/operations/performance.md`): the agent guide lists `MTPROTO_SESSION` alongside the other runtime values, the formatter rows name `user_ref` instead of the removed alias, and the dispatch sections cover the bounded database gather alongside `fan_out`. Behavior changes: none, docs only.
+
+- **Feature guides renumbered and de-rotted** (`docs/features/moderation/banning.md`, `disconnecting.md`, `check.md`, `connecting.md`, `muting.md`, `appeals.md`): duplicated and skipped step numbers fixed, a stale variable name corrected to MarkdownV2 reality, rotted file-and-line references reduced to symbol names, and primary-group mentions clarified to env names versus config properties. Behavior changes: none, docs only.
 
 </details>
 
