@@ -257,14 +257,16 @@ async def run_ban_sync(bot: Bot, *, max_checks: int = _SYNC_MAX_CHECKS) -> SyncC
         db.groups_db.active_groups(),
         db.bans_db.active_ban_user_ids(),
     )
-    chat_ids = [g.get("chat_id", 0) for g in groups if g.get("chat_id", 0)]
+    # * Deterministic sweep order: Mongo returns insertion order, so without a
+    # * sort the truncation victims (and the audit log) would differ run to run.
+    chat_ids = sorted({g.get("chat_id", 0) for g in groups if g.get("chat_id", 0)})
     titles = {
         c: (g.get("title") or str(c))
         for g in groups
         for c in [g.get("chat_id", 0)]
         if c
     }
-    pairs, truncated = take_pairs(ban_uids, chat_ids, max_checks)
+    pairs, truncated = take_pairs(sorted(ban_uids), chat_ids, max_checks)
     if not pairs:
         return SyncCounts()
     # * Bounded like every other federation-wide Telegram burst: the fan_out
@@ -288,7 +290,8 @@ async def verify_user(bot: Bot, user_id: int) -> SyncCounts:
         db.groups_db.active_groups(),
         db.bans_db.get_active_ban(user_id),
     )
-    chat_ids = [g.get("chat_id", 0) for g in groups if g.get("chat_id", 0)]
+    # * Same deterministic order as the sweep above (see run_ban_sync).
+    chat_ids = sorted({g.get("chat_id", 0) for g in groups if g.get("chat_id", 0)})
     titles = {
         c: (g.get("title") or str(c))
         for g in groups

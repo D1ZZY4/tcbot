@@ -31,6 +31,7 @@ from tcbot.database import mtproto as mtproto_mod
 from tcbot.database import redis_client
 from tcbot.database import scheduler as sched_mod
 from tcbot.database.cache import drain_redis_mutations
+from tcbot.database.mongos import close as close_mongo
 from tcbot.database.mongos import connect, ensure_indexes
 from tcbot.modules import get_handlers
 from tcbot.modules.helper.decorators import global_rate_limit_handler
@@ -381,6 +382,8 @@ async def _post_shutdown(app: Application) -> None:
         mtproto_mod.stop(),
         return_exceptions=True,
     )
+    # * Close the shared Motor client last: every drain above still writes.
+    close_mongo()
 
 
 # ────────────────────── Application Builder ─────────────────────── #

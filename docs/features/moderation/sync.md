@@ -46,7 +46,7 @@ The target is resolved by `extraction.extract_target`; accepts a reply, user ID,
 ## How a run works
 
 1. The bot replies `Syncing enforcement state...` with its own status message (kept for the final edit, since the operator's command message cannot be edited by the bot).
-2. Bare run: builds the `(banned user x connected group)` cross product capped at 200 pairs (`take_pairs`, stable order, truncation flagged). Targeted run: one user against every connected group (bounded by group count).
+2. Bare run: builds the `(banned user x connected group)` cross product capped at 200 pairs (`take_pairs`, stable order, truncation flagged). Both ID lists are sorted before pairing, so the sweep order (and which pairs truncate) is identical run to run. Targeted run: one user against every connected group (bounded by group count).
 3. Each pair probes membership with a bounded `get_chat_member` (3 s), then enforces through `fan_out`:
    - Active ban + present and not kicked: `ban_chat_member` (`enforced`).
    - Already kicked, absent, or privileged (admin/owner): skipped, never counted as failure.

@@ -51,6 +51,7 @@ def _patch_dns_if_needed() -> None:
 log = get_logger(__name__)
 
 _db: AsyncIOMotorDatabase | None = None
+_client: AsyncIOMotorClient | None = None
 
 _ID_ALPHABET: str = string.ascii_lowercase + string.digits
 
@@ -145,7 +146,7 @@ def mongo_jobstore_kwargs() -> dict[str, Any]:
 
 async def connect() -> None:
     """Establish MongoDB connection and initialize the global _db instance."""
-    global _db
+    global _client, _db
     _patch_dns_if_needed()
     client_kwargs = mongo_client_kwargs()
     # * serverSelection/connect timeouts live in mongo_client_kwargs() (shared
@@ -164,8 +165,25 @@ async def connect() -> None:
         **client_kwargs,
     )
     await _mongo_cb.call(client.admin.command("ping"))
+    _client = client
     _db = client[cfg.db_name]
     log.info("MongoDB connected → %s", cfg.db_name)
+
+
+def close() -> None:
+    """Close the shared client, releasing pooled sockets (shutdown path).
+
+    Called after every drain in ``_post_shutdown`` so no in-flight write
+    outlives the pool. Safe to call without a prior connect.
+    """
+    global _client, _db
+    client, _client = _client, None
+    _db = None
+    if client is not None:
+        try:
+            client.close()
+        except Exception as exc:
+            log.debug("MongoDB client close failed (non-fatal): %s", exc)
 
 
 # ─────────────────────────── Index Setup ────────────────────────── #

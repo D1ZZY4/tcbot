@@ -164,15 +164,6 @@ async def _fetch_mention_triple(user_id: int) -> list[str | None]:
     return list(_NOT_FOUND_SENTINEL)
 
 
-def has_recent_identity_attempt(user_id: int) -> bool:
-    """Return True when L1 holds any mention entry (data or sentinel) for the user.
-
-    Identity resolvers use this to skip a repeat Telegram lookup while a
-    previous attempt is still cached; entries expire with the L1 TTL.
-    """
-    return user_mention_cache.get(user_id) is not CACHE_MISS
-
-
 def remember_identity(
     user_id: int,
     first_name: str | None,
@@ -219,39 +210,28 @@ async def get_user_mention_data(user_id: int) -> tuple[str, str | None]:
     return (name, data[1])
 
 
-async def get_mention_data_batch(
+async def _mention_triples(
     user_ids: list[int],
-) -> dict[int, tuple[str, str | None]]:
-    """Fetch (first_name, username) for multiple users, checking cache for each ID first.
+) -> dict[int, list[str | None]]:
+    """Return {uid: [first_name|None-sentinel, username, last_name]} for every ID.
 
-    Cache-aware: IDs found in L1 are returned immediately; only uncached IDs trigger
-    a batch MongoDB query.  Newly fetched data is populated into the mention cache.
+    Single owner for the batch-miss path shared by :func:`get_mention_data_batch`
+    and :func:`get_first_names_batch`: L1 hits served without I/O (repeat IDs
+    dropped via ``dict.fromkeys``), the remainder fetched in one ``$in``
+    query, full triples populated into L1, and absent users sentineled so
+    repeat renders skip the round-trip. Miss semantics cannot drift between
+    readers when only one function implements them.
     """
-    if not user_ids:
-        return {}
-
-    result: dict[int, tuple[str, str | None]] = {}
+    result: dict[int, list[str | None]] = {}
     missing: list[int] = []
-
-    # * Check L1 in-memory cache for each user_id before hitting MongoDB.
-    # * dict.fromkeys drops repeat IDs so one render pass never checks or
-    # * queries the same user twice.
     for uid in dict.fromkeys(user_ids):
         cached = user_mention_cache.get(uid)
         if cached is not CACHE_MISS:
-            data = cast("list[str | None]", cached)
-            # * data[0] may be None (not-found sentinel); fall back to str(uid).
-            fname = cast("str", data[0]) if data[0] is not None else str(uid)
-            result[uid] = (
-                fname,
-                cast("str | None", data[1] if len(data) > 1 else None),
-            )
+            result[uid] = cast("list[str | None]", cached)
         else:
             missing.append(uid)
-
     if not missing:
         return result
-
     # * Batch-fetch only uncached users from MongoDB in a single round-trip.
     docs = await db_call(
         _members()
@@ -263,20 +243,40 @@ async def get_mention_data_batch(
     )
     for doc in docs:
         uid = doc["user_id"]
-        fname = doc.get("first_name") or str(uid)
-        uname = doc.get("username")
         # * Populate L1 (and fire-and-forget L2 Redis write) for next lookup.
-        user_mention_cache.put(uid, [fname, uname, doc.get("last_name")])
-        result[uid] = (fname, uname)
-
+        triple = [
+            doc.get("first_name") or str(uid),
+            doc.get("username"),
+            doc.get("last_name"),
+        ]
+        user_mention_cache.put(uid, triple)
+        result[uid] = triple
     # * Fill fallback for users not found in DB either and cache the sentinel so
-    # * subsequent calls (get_user_mention_data, get_first_name, this function)
-    # * skip the MongoDB round-trip on the next lookup.
+    # * subsequent calls skip the MongoDB round-trip on the next lookup.
     for uid in missing:
         if uid not in result:
             user_mention_cache.put(uid, list(_NOT_FOUND_SENTINEL))
-            result[uid] = (str(uid), None)
+            result[uid] = list(_NOT_FOUND_SENTINEL)
+    return result
 
+
+async def get_mention_data_batch(
+    user_ids: list[int],
+) -> dict[int, tuple[str, str | None]]:
+    """Fetch (first_name, username) for multiple users, checking cache for each ID first.
+
+    Cache-aware: IDs found in L1 are returned immediately; only uncached IDs trigger
+    a batch MongoDB query.  Newly fetched data is populated into the mention cache.
+    """
+    triples = await _mention_triples(user_ids)
+    result: dict[int, tuple[str, str | None]] = {}
+    for uid, data in triples.items():
+        # * data[0] may be None (not-found sentinel); fall back to str(uid).
+        fname = cast("str", data[0]) if data[0] is not None else str(uid)
+        result[uid] = (
+            fname,
+            cast("str | None", data[1] if len(data) > 1 else None),
+        )
     return result
 
 
@@ -291,42 +291,11 @@ async def get_first_names_batch(user_ids: list[int]) -> dict[int, str]:
     :func:`_fetch_mention_triple`), so repeat renders by any reader skip
     the round-trip without corrupting change detection.
     """
-    if not user_ids:
-        return {}
-    result: dict[int, str] = {}
-    missing: list[int] = []
-    # * dict.fromkeys drops repeat IDs so one render pass never checks or
-    # * queries the same user twice.
-    for uid in dict.fromkeys(user_ids):
-        cached = user_mention_cache.get(uid)
-        if cached is not CACHE_MISS:
-            data = cast("list[str | None]", cached)
-            result[uid] = cast("str", data[0]) if data[0] is not None else str(uid)
-        else:
-            missing.append(uid)
-    if not missing:
-        return result
-    docs = await db_call(
-        _members()
-        .find(
-            {"user_id": {"$in": missing}},
-            {"user_id": 1, "first_name": 1, "username": 1, "last_name": 1},
-        )
-        .to_list(None)
-    )
-    for doc in docs:
-        uid = doc["user_id"]
-        result[uid] = doc.get("first_name") or str(uid)
-        user_mention_cache.put(
-            uid,
-            [result[uid], doc.get("username"), doc.get("last_name")],
-        )
-    # Fill in missing users with defaults
-    for uid in missing:
-        if uid not in result:
-            user_mention_cache.put(uid, list(_NOT_FOUND_SENTINEL))
-            result[uid] = str(uid)
-    return result
+    triples = await _mention_triples(user_ids)
+    return {
+        uid: (cast("str", data[0]) if data[0] is not None else str(uid))
+        for uid, data in triples.items()
+    }
 
 
 async def get_first_name(user_id: int, fallback: str = "") -> str:
@@ -358,10 +327,11 @@ async def total_users() -> int:
 
 
 # * Allowed sort keys for all_users_page(). Unvalidated strings would force an
-# * unindexed COLLSCAN plus an in-memory sort. Keep the set aligned with
-# * UserDoc fields and existing indexes.
+# * unindexed COLLSCAN plus an in-memory sort. Only indexed fields qualify:
+# * member_cache has indexes on user_id, username, first_name, and
+# * last_updated (TTL) — last_name and commit_date sorts are refused.
 _ALLOWED_USER_SORTS: frozenset[str] = frozenset(
-    {"user_id", "username", "first_name", "last_name", "commit_date", "last_updated"}
+    {"user_id", "username", "first_name", "last_updated"}
 )
 
 

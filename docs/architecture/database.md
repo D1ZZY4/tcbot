@@ -119,8 +119,6 @@ All fields are optional `total=False`; a real document always carries `user_id` 
   Snapshot write for data taken from a live Telegram `User` object. Unlike `upsert_user_if_changed`, `None` means "absent on Telegram": fields the object omits are cleared via `""` so removals propagate. Delegates to `upsert_user_if_changed`. Never use with partial data from ban/promote/check-by-ID paths (those must keep `None`).
 - `remember_identity(user_id: int, first_name: str | None, username: str | None, last_name: str | None) -> None`
   Mirrors a resolved identity into L1 only, no DB I/O. Used after a Telegram-side resolve because `upsert_user` invalidates rather than populates. An empty identity stores the all-`None` not-found sentinel.
-- `has_recent_identity_attempt(user_id: int) -> bool`
-  Returns `True` when L1 holds any mention entry (real data or the sentinel) for the user. Identity resolvers use this to skip a repeat Telegram lookup while a previous attempt is still cached.
 
 ### Queries
 

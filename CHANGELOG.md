@@ -105,6 +105,36 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Remaining hardcoded English strings move to the catalog** (`tcbot/modules/connecting.py`, `stats.py`, `admins.py`, `checking.py`, `i18n/en-US/connecting.toml`, `stats.toml`, `admins.toml`, `checking.toml`, `i18n/id/*`): help section titles and the unknown-date word render in the viewer's locale. Behavior changes: Indonesian viewers read translated titles where English leaked through; default-locale wording is unchanged.
 
+- **Mention batch reads share one implementation** (`tcbot/database/users_cache.py`): both batch readers funnel through a single triple-fetching helper, so miss handling and sentinel caching cannot drift between them. Behavior changes: none, same values with one code path.
+
+- **User-list sorts limited to indexed fields** (`tcbot/database/users_cache.py`): unindexed sort keys fall back to first-name order instead of forcing a collection scan plus an in-memory sort. Behavior changes: requests for removed sort keys render in first-name order.
+
+- **Sync sweep order is deterministic** (`tcbot/modules/syncing.py`, `docs/features/moderation/sync.md`): group and ban ID lists are sorted before pairing, so the checked order and the truncation victims are identical run to run. Behavior changes: repeated truncated sweeps converge instead of covering arbitrary slices.
+
+- **Webhook decode failures answer 400, enqueue failures 500** (`tcbot/alive.py`): undecodable bodies are rejected before the enqueue path, and the catch-all message names enqueueing only. Behavior changes: malformed webhook bodies return `400` instead of `500`; transient queue failures still return `503`/`500`.
+
+- **Health reports the update-queue depth** (`tcbot/alive.py`, `docs/operations/backup-and-restore.md`): the `/health` body gains an `update_queue` field showing PTB backlog (`null` before the receiver is wired). Behavior changes: one new response field for watchdog paging; the verdict logic is unchanged.
+
+- **Shutdown closes the shared MongoDB client** (`tcbot/database/mongos.py`, `tcbot/__main__.py`): the connection handle is retained at connect time and closed after every drain at teardown. Behavior changes: none on the happy path; pooled sockets release instead of lingering past shutdown.
+
+- **MTProto resolvers share one peer lookup** (`tcbot/database/mtproto.py`): name resolution and the bot-flag check funnel through a single fetch helper with identical flood handling, so the two can no longer disagree on failure semantics. Behavior changes: a flood wait during a bot-flag check now logs a warning like name resolution does.
+
+- **Member harvest stops on a time budget** (`tcbot/database/mtproto.py`): the backfill scan returns its count so far after 25 seconds instead of running unbounded. Behavior changes: huge harvests yield a partial count with a warning instead of stalling moderation traffic.
+
+- **Error reports redact exact configured secrets** (`tcbot/utils/error_reporter.py`): the scrubber replaces the configured token, URIs, hashes, and secrets verbatim before the existing pattern redaction runs. Behavior changes: none on the happy path; a report echoing a value verbatim shows a marker instead of the value.
+
+- **Module lists accept literal lists or CSV** (`tcbot/__init__.py`): the allowlist and denylist readers share the same parser as command prefixes. Behavior changes: none, comma-separated values work exactly as before.
+
+- **Plain-HTTP webhook URLs warn at startup** (`tcbot/__init__.py`): an explicit non-localhost `http://` webhook URL logs a warning that Telegram requires HTTPS. Behavior changes: warning log only, registration still attempted.
+
+- **Environment file loads once at config load** (`tcbot/__init__.py`): the import-time dotenv call is gone; loading happens inside config construction. Behavior changes: none, importing the package no longer touches the filesystem.
+
+- **Prefix list returns a copy** (`tcbot/__init__.py`): callers receive a fresh list instead of the stored one. Behavior changes: none, accidental mutation can no longer corrupt command parsing.
+
+- **Benign-match tables precomputed, circuit-open log summarized** (`tcbot/utils/dispatch.py`): the normalized refusal patterns build once at import, and an open-circuit fan-out logs one summary line with the skipped count instead of one line per slot. Behavior changes: quieter logs during circuit-open bursts; matching results are identical.
+
+- **Cron endpoint rejects POST explicitly** (`api/cron.py`): non-GET callers get `405` with a warning line instead of the default `501` silence. Behavior changes: POST now answers `405`.
+
 ### Fixed
 
 - **Container image ships the message catalog** (`Dockerfile`): the build copies `i18n/` next to the package so the first render finds its templates. Behavior changes: Docker deploys boot instead of failing every handler.
@@ -142,6 +172,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 ### Removed
 
 - **Dead locale scope helper removed** (`tcbot/modules/helper/locale.py`, `docs/architecture/helpers.md`): `chat_scope()` had no callers anywhere in code, tests, or docs examples; `language._chat_scope` remains the single mapping and keeps its test. Behavior changes: none.
+
+- **Dead role-comparison helper removed** (`tcbot/database/users_roles.py`): `can_act_on()` had no callers; executor-versus-target checks go through the decorator path. Behavior changes: none.
+
+- **Dead identity-cache probe removed** (`tcbot/database/users_cache.py`): `has_recent_identity_attempt()` had no callers; resolvers read the mention cache directly. Behavior changes: none.
 
 ### Documentation
 

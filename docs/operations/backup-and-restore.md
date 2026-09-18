@@ -156,9 +156,14 @@ Expected response shape (HTTP 200 when all core subsystems are ready):
   "scheduler": "ok",
   "circuit_telegram": "closed",
   "circuit_mongodb": "closed",
+  "update_queue": 0,
   "ts": "2026-01-01T02:00:00+00:00"
 }
 ```
+
+`update_queue` is the PTB update-queue depth (`null` before the webhook
+receiver is wired): a climbing value means the event loop is not keeping up
+with Telegram, so watchdogs should page on it.
 
 `redis` is `"disabled"` when `REDIS_URL` is not configured. A degraded response
 uses HTTP `503`; inspect the individual fields before deciding whether a

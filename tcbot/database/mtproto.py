@@ -14,10 +14,11 @@ from typing import TYPE_CHECKING
 
 from tcbot import cfg
 from tcbot.utils.logger import get_logger
-from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
+from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT, monotonic
 
 if TYPE_CHECKING:
     from pyrogram import Client
+    from pyrogram.types import User
 
     from tcbot.database.mtproto_store import MongoStorage
 
@@ -39,6 +40,11 @@ _START_TIMEOUT_S: float = 60.0
 # * over to the next claimant after at most one TTL.
 _LEASE_TTL_S: float = 90.0
 _HEARTBEAT_S: float = 30.0
+
+# * Wall-clock cap for one harvest_group_members scan: the loop is up to
+# * ``limit`` sequential DB writes on the event loop, so an unbounded scan
+# * of a mega-group would stall moderation traffic behind a backfill.
+_HARVEST_BUDGET_S: float = 25.0
 
 
 def _instance_id() -> str:
@@ -296,20 +302,18 @@ async def handle_auth_failure() -> None:
         log.debug("MTProto park-teardown failed (non-fatal): %s", exc)
 
 
-async def resolve_user(target_id: int) -> tuple[str, str | None, str | None] | None:
-    """Resolve (first_name, username, last_name) for a user ID via MTProto.
+async def _fetch_user(target_id: int) -> User | None:
+    """Single peer lookup shared by resolve_user and is_bot_user.
 
-    Returns None when the client is not running (serverless paths), when it
-    drops mid-run, or when the peer is unknown, rate-limited, or nameless:
-    every case just means "fall through to the next resolution source".
-    Cancellation always propagates.
+    Returns the raw peer, or None when the client is down, the lookup
+    times out, or the peer is unknown/rate-limited. Cancellation propagates.
     """
     c = _client
     if _auth_dead or c is None or not c.is_connected:
         return None
     try:
         async with asyncio.timeout(TELEGRAM_LOOKUP_TIMEOUT):
-            user = await c.get_users(target_id)
+            return await c.get_users(target_id)
     except asyncio.CancelledError:
         raise
     except Exception as exc:
@@ -320,6 +324,19 @@ async def resolve_user(target_id: int) -> tuple[str, str | None, str | None] | N
             log.warning("MTProto FloodWait for %d: retry in %ss.", target_id, wait)
         else:
             log.debug("MTProto resolve failed for %d: %s", target_id, exc)
+        return None
+
+
+async def resolve_user(target_id: int) -> tuple[str, str | None, str | None] | None:
+    """Resolve (first_name, username, last_name) for a user ID via MTProto.
+
+    Returns None when the client is not running (serverless paths), when it
+    drops mid-run, or when the peer is unknown, rate-limited, or nameless:
+    every case just means "fall through to the next resolution source".
+    Cancellation always propagates.
+    """
+    user = await _fetch_user(target_id)
+    if user is None:
         return None
     fname: str = getattr(user, "first_name", "") or ""
     if not fname:
@@ -358,13 +375,28 @@ async def resolve_username(username: str) -> tuple[int, str, str | None] | None:
     return None
 
 
+async def is_bot_user(target_id: int) -> bool | None:
+    """Return is_bot for a user ID via MTProto, or None when unknowable.
+
+    Uses the same peer lookup as resolve_user but surfaces the bot flag
+    instead of the name triple. Promotion and transfer guards use it to
+    refuse bot targets; client down, unknown peer, flood, and nameless
+    all map to None (unknown, never False-as-fact).
+    """
+    user = await _fetch_user(target_id)
+    if user is None:
+        return None
+    return bool(getattr(user, "is_bot", False))
+
+
 async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
     """Cache every member of *chat_id* the session can see; return harvested count.
 
     One-shot backfill for silent members no Bot API call ever observed: each
     seen identity lands in member_cache, so later bans and checks resolve by
-    name. Stops early on FloodWait (returns the count so far); peer hashes
-    persist in shared storage as a side effect for future direct resolves.
+    name. Stops early on FloodWait or when the timeslice budget runs out
+    (returns the count so far); peer hashes persist in shared storage as a
+    side effect for future direct resolves.
     """
     # * Sequential scan, no parallelism; shard per-group or page with
     # * smaller limits if a mega-group harvest ever gets too slow.
@@ -376,8 +408,18 @@ async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
     if c is None or not c.is_connected:
         raise RuntimeError("MTProto client is not connected.")
     count = 0
+    # * A 1000-member scan is up to 1000 sequential DB writes on the event
+    # * loop; cap wall time so one backfill cannot stall moderation traffic.
+    deadline = monotonic() + _HARVEST_BUDGET_S
     try:
         async for member in c.get_chat_members(chat_id, limit=limit):
+            if monotonic() >= deadline:
+                log.warning(
+                    "Member harvest stopped on timeslice in %d (%ds budget).",
+                    chat_id,
+                    int(_HARVEST_BUDGET_S),
+                )
+                return count
             user = getattr(member, "user", None)
             fname = getattr(user, "first_name", None) if user is not None else None
             if user is None or getattr(user, "is_bot", False) or not fname:

@@ -40,6 +40,7 @@ class _HealthPayload(msgspec.Struct):
     scheduler: str
     circuit_telegram: str
     circuit_mongodb: str
+    update_queue: int | None
     ts: str
 
 
@@ -55,7 +56,7 @@ def index() -> str:
 
 @_app.route("/health")
 def health() -> tuple[str, int, dict[str, str]]:
-    """Detailed health status as JSON: mongodb, redis, scheduler, and timestamp.
+    """Detailed health status as JSON: mongodb, redis, scheduler, queue, and timestamp.
 
     Returns HTTP 200 when all core subsystems are ready, 503 when degraded.
     Note: mongodb and scheduler state reflect the last-known connection status
@@ -112,6 +113,9 @@ def health() -> tuple[str, int, dict[str, str]]:
         scheduler="ok" if scheduler_ok else "error",
         circuit_telegram=tg_state.value,
         circuit_mongodb=db_state.value,
+        # * Backpressure signal: watchdogs page when this climbs, because a
+        # * growing queue means the PTB loop is not keeping up with Telegram.
+        update_queue=_wh_queue.qsize() if _wh_queue is not None else None,
         ts=utc_now().isoformat(timespec="seconds"),
     )
     code = 200 if overall == "ok" else 503
@@ -179,11 +183,17 @@ def webhook_route() -> tuple[str, int]:
 
     try:
         update = Update.de_json(data, _wh_bot)
-        if update is None:
-            # * de_json returns None for update types not recognized by this PTB version.
-            # * Silently acknowledge so Telegram does not retry.
-            log.debug("Webhook: received unrecognized update type; skipping.")
-            return "OK", 200
+    except Exception:
+        # * A payload that fails to decode can never parse on retry: 400,
+        # * not the 500/503 reserved below for transient failures.
+        log.warning("Webhook: received request that failed to decode.")
+        return "Bad request", 400
+    if update is None:
+        # * de_json returns None for update types not recognized by this PTB version.
+        # * Silently acknowledge so Telegram does not retry.
+        log.debug("Webhook: received unrecognized update type; skipping.")
+        return "OK", 200
+    try:
         # * Thread-safe: Flask runs in a sync daemon thread; PTB loop is in main thread.
         put_coro = _wh_queue.put(update)
         try:
@@ -207,7 +217,7 @@ def webhook_route() -> tuple[str, int]:
             log.exception("Webhook: PTB update queue rejected the update.")
             return "Service unavailable", 503
     except Exception:
-        log.exception("Webhook: failed to decode or enqueue update.")
+        log.exception("Webhook: failed to enqueue update.")
         return "Internal error", 500
 
     return "OK", 200

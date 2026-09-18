@@ -253,25 +253,6 @@ async def role_count(role: str) -> int:
 # ──────────────────── Effective role resolution ────────────────── #
 
 
-async def can_act_on(executor_id: int, target_id: int) -> bool:
-    """Check if an executor can perform moderation actions on a target."""
-    executor_role, target_role = await asyncio.gather(
-        get_effective_role(executor_id),
-        get_effective_role(target_id),
-        return_exceptions=True,
-    )
-    throw_if_cancelled((executor_role, target_role))
-    if isinstance(executor_role, BaseException):
-        log.warning(
-            "can_act_on executor role failed for %d: %s", executor_id, executor_role
-        )
-        return False
-    if isinstance(target_role, BaseException):
-        log.warning("can_act_on target role failed for %d: %s", target_id, target_role)
-        return False
-    return role_rank(executor_role) > role_rank(target_role)
-
-
 async def get_effective_role(user_id: int) -> str | None:
     """Resolve a user's full effective role including owner/admin status (L1->L2->DB cached)."""
 

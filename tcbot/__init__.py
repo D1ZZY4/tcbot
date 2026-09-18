@@ -15,8 +15,6 @@ from dataclasses import dataclass
 
 from dotenv import find_dotenv, load_dotenv
 
-load_dotenv(find_dotenv("config.env") or find_dotenv(".env"))
-
 log = logging.getLogger(__name__)
 
 # ─────────────────────── Module-level constants ──────────────────── #
@@ -151,11 +149,8 @@ def _int_from_env(key: str, default: int, *, minimum: int | None = None) -> int:
 
 
 def _env_list(key: str) -> list[str]:
-    """Read a comma-separated env var into a stripped name list; empty when unset."""
-    raw = os.getenv(key, "").strip()
-    if not raw:
-        return []
-    return [name.strip() for name in raw.split(",") if name.strip()]
+    """Read an env var into a stripped name list; accepts CSV or a literal list."""
+    return parse_list(os.getenv(key, "") or "")
 
 
 def _parse_log_level(raw: str) -> int:
@@ -177,6 +172,15 @@ def _auto_webhook_url() -> str:
     """
     explicit = os.getenv("WEBHOOK_URL", "").strip()
     if explicit:
+        if (
+            explicit.startswith("http://")
+            and "localhost" not in explicit
+            and "127.0.0.1" not in explicit
+        ):
+            log.warning(
+                "WEBHOOK_URL uses plain HTTP; Telegram requires HTTPS outside "
+                "localhost and will refuse the registration."
+            )
         return explicit.rstrip("/")
 
     replit_domain = os.getenv(_REPLIT_DEV_DOMAIN_VAR, "").strip()
@@ -230,6 +234,7 @@ class Configs:
     warn_limit: int
     webhook_url: str
     webhook_secret: str
+    webhook_secret_explicit: str
     cron_secret: str
     community_channel_url: str
     community_group_url: str
@@ -350,6 +355,7 @@ class Configs:
             warn_limit=_int_from_env("WARN_LIMIT", 3, minimum=1),
             webhook_url=_auto_webhook_url(),
             webhook_secret=_resolve_webhook_secret(),
+            webhook_secret_explicit=os.getenv("WEBHOOK_SECRET", "").strip(),
             cron_secret=os.getenv("CRON_SECRET", "").strip(),
             community_channel_url=os.getenv(
                 "COMMUNITY_CHANNEL_URL", _DEFAULT_COMMUNITY_CHANNEL_URL
@@ -416,7 +422,7 @@ class _CfgAdapter:
     @property
     def prefixes(self) -> list[str]:
         """List of command prefix characters (e.g. ['/', '!', '.'])."""
-        return self._c.prefixes
+        return list(self._c.prefixes)
 
     @property
     def port(self) -> int:
@@ -568,7 +574,7 @@ class _CfgAdapter:
         token, so serverless receivers (which cannot re-register the webhook
         on every cold start) can fail closed when no secret is configured.
         """
-        return os.getenv("WEBHOOK_SECRET", "").strip()
+        return self._c.webhook_secret_explicit
 
     @property
     def cron_secret(self) -> str:

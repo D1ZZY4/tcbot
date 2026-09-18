@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 import telegram.error as _te
 
+from tcbot import cfg
 from tcbot.utils.formatter import bold, code, esc, pre
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import monotonic, utc_now
@@ -396,12 +397,27 @@ _MONGO_AUTH_RE = re.compile(r"://(?:[^:@/\s]+)?:[^@/\s]+@")
 def _scrub_secrets(text: str) -> str:
     """Redact credential-shaped substrings before shipping to the log channel.
 
-    Mongo auth/network errors can echo connection strings, and any bug that
+    Exact configured values are redacted first: pattern regexes cover shapes,
+    but a truncated URI or token fragment could slip through, while the
+    configured values themselves never belong in an error report. Mongo
+    auth/network errors can echo connection strings, and any bug that
     interpolates config may leak the bot token. Redaction is pattern-based
     (bot ``id:hash`` shape, URI ``[user]:pass@`` authority with optional user,
     so ``redis://:pass@host`` is covered), so legitimate surrounding text is
     preserved.
     """
+    # * str.replace (not regex): URIs contain regex-significant characters,
+    # * and empty values are skipped so nothing is ever blanked wholesale.
+    for secret in (
+        cfg.bot_token,
+        cfg.mongodb_uri,
+        cfg.api_hash,
+        cfg.webhook_secret,
+        cfg.cron_secret,
+        cfg.redis_url,
+    ):
+        if secret and secret in text:
+            text = text.replace(secret, "[REDACTED]")
     text = _TOKEN_RE.sub("[REDACTED_TOKEN]", text)
     return _MONGO_AUTH_RE.sub("://[REDACTED]@", text)
 

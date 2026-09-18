@@ -46,6 +46,18 @@ _BENIGN_BAD_REQUEST_SUBSTRINGS: tuple[str, ...] = (
 )
 
 
+def _normalize(s: str) -> str:
+    """Strip every non-alphanumeric character for benign-match comparison."""
+    return "".join(c for c in s if c.isalnum())
+
+
+# * Precomputed once: the matcher below runs per failure, and rebuilding
+# * these strings on every error is pure waste.
+_BENIGN_NORMALIZED: tuple[str, ...] = tuple(
+    _normalize(s) for s in _BENIGN_BAD_REQUEST_SUBSTRINGS
+)
+
+
 # ──────────────── Throttled Multi-Group Dispatcher ──────────────── #
 
 
@@ -81,9 +93,6 @@ async def fan_out[T](
     async def _slot(thunk: Callable[[], Awaitable[T]]) -> T | BaseException:
         async with sem:
             if not _cb.telegram.try_acquire():
-                log.warning(
-                    "fan_out: Telegram circuit OPEN; skipping slot to avoid timeout."
-                )
                 skipped = thunk()
                 if inspect.iscoroutine(skipped):
                     skipped.close()
@@ -130,6 +139,14 @@ async def fan_out[T](
     # ! cancellation as data. A cancelled slot must propagate so shutdown
     # ! is never misreported as per-group failures by the counters below.
     throw_if_cancelled(results)
+    # * One summary line per call instead of one warning per skipped slot:
+    # * an open-circuit fan-out over N groups used to emit N identical lines.
+    skipped = sum(isinstance(r, _cb.CircuitOpenError) for r in results)
+    if skipped:
+        log.warning(
+            "fan_out: Telegram circuit OPEN; skipped %d slot(s) to avoid timeouts.",
+            skipped,
+        )
     return results
 
 
@@ -248,9 +265,8 @@ def is_benign_telegram_error(exc: BaseException) -> bool:
         raw = str(exc).upper()
         # * Normalize: replace any non-alphanumeric character with empty
         # * string, so "USER_NOT_PARTICIPANT" matches "USER NOT PARTICIPANT".
-        normalized = "".join(c for c in raw if c.isalnum())
-        for s in _BENIGN_BAD_REQUEST_SUBSTRINGS:
-            target = "".join(c for c in s if c.isalnum())
+        normalized = _normalize(raw)
+        for target in _BENIGN_NORMALIZED:
             if target in raw or target in normalized:
                 return True
     return False

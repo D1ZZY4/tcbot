@@ -52,3 +52,12 @@ class handler(BaseHTTPRequestHandler):
             self._reply(500, "Internal error")
             return
         self._reply(status, body)
+
+    def do_POST(self) -> None:
+        """Reject non-GET callers explicitly instead of the default 501.
+
+        Vercel Cron invokes this route with GET; a POST is a misconfigured
+        caller or a probe, worth one warning line rather than silence.
+        """
+        log.warning("cron: rejected non-GET request (method not allowed).")
+        self._reply(405, "Method not allowed")
