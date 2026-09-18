@@ -207,7 +207,14 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if existing is not None:
         ctx.user_data["ban_target_role"] = target_role
         return await _ask_update_confirm(
-            msg, ctx, target_id, target_fname, ban_reason, existing, update
+            msg,
+            ctx,
+            target_id,
+            target_fname,
+            ban_reason,
+            existing,
+            update,
+            locale=locale,
         )
 
     # * Auto-demote is required before the ban to preserve the
@@ -249,6 +256,7 @@ async def _ask_update_confirm(
     ban_reason: str,
     existing: BanDoc,
     update: Update,
+    locale: str | None = None,
 ) -> int:
     """Show the re-ban confirmation card with log/proof links.
 
@@ -258,7 +266,8 @@ async def _ask_update_confirm(
     """
     if ctx.user_data is None:
         return ConversationHandler.END
-    locale = await locale_for_update(update)
+    if locale is None:
+        locale = await locale_for_update(update)
     logs_chat, logs_thread = cfg.logs
     proofs_chat, proofs_thread = cfg.proofs
     log_msg_id = int(existing.get("log_message_id", 0) or 0)

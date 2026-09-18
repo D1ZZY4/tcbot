@@ -481,6 +481,17 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             log.debug("Ban summary markup clear failed: %s", markup_result)
         if isinstance(edit_result, BaseException):
             log.debug("Ban summary prompt edit failed: %s", edit_result)
+            # * Fall back to a fresh reply like the kick/mute executors: the
+            # * moderator tapped Done and deserves the outcome even when the
+            # * prompt was deleted out from under the edit.
+            try:
+                await bot.send_message(
+                    prompt_chat_id,
+                    summary,
+                    parse_mode="MarkdownV2",
+                )
+            except Exception as exc:
+                log.debug("Ban summary fallback send failed: %s", exc)
         if isinstance(upsert_result, BaseException):
             log.error("upsert_user failed for target=%d: %s", target_id, upsert_result)
     else:

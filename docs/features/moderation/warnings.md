@@ -190,7 +190,7 @@ If the counter update fails after the warning insert, the inserted warning is de
 
 Executor database reads fail closed with a retry notice instead of ending the conversation silently: a failed warn insert, count read, warn list, reset clear, or federation aggregate replies `I couldn't reach the database right now.` (the warn itself stays recorded when the insert already landed, and the threshold re-check is left to a retry).
 
-`warns_db.remove_last_warn(...)` deletes the newest warning by timestamp and `_id`, then decrements the counter. If the counter update cannot be applied, it recalculates and stores the count from remaining history.
+`warns_db.remove_last_warn(...)` deletes the newest warning by timestamp and `_id`, then decrements the counter. A warns-delete failure raises instead of returning `False`, so `/tcunwarn` replies with the database-retry notice instead of misreporting an outage as "no warnings". If the counter update cannot be applied, it recalculates and stores the count from remaining history.
 
 ## Warning auto-ban behavior
 

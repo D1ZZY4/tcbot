@@ -91,6 +91,16 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **One owner for conversation state keys and list rendering** (`tcbot/modules/helper/workflows/ban_flow.py`, `banning.py`, `kicking.py`, `muting.py`, `warnings.py`, `groups.py`, `start.py`, `tests/test_ban_flush_cleanup.py`): the ban key tuple lives once in `ban_flow` as `BAN_USER_DATA_KEYS` (the parallel entry-point list is gone, including a `ban_duration` entry nothing ever set), kick/mute/warn key tuples move to module level with the mute prompt ID completed, and the shared group-list renderer is public as `render_groups` instead of a cross-module private import. Behavior changes: none.
 
+- **Promotion and ownership transfer refuse verified bot targets** (`tcbot/modules/admins.py`, `tcbot/modules/helper/identity.py`, `i18n/en-US/admins.toml`, `i18n/id/admins.toml`): a shared verified-only check (quoted sender, one bounded membership probe, one MTProto peer lookup) refuses bot targets, while unknown targets stay allowed so off-group promotions keep working. Behavior changes: promoting a proven bot, or transferring ownership to one, now replies with a refusal instead of granting privilege.
+
+- **Demote clears both role collections** (`tcbot/modules/helper/workflows/demote_flow.py`): the removal step clears the admin row and the custom-role row together and reports success when either was present. Behavior changes: a stale row in the other collection can no longer resurrect privilege on a later demote.
+
+- **Unwarn fails closed on write outage** (`tcbot/database/warns_db.py`, `tcbot/modules/helper/workflows/warning_flow.py`, `docs/features/moderation/warnings.md`): a failed warning delete raises instead of reporting success state, and the command replies with the database-retry notice. Behavior changes: an outage during unwarn says the database is unreachable instead of claiming the user has no warnings.
+
+- **Ban summary falls back to a fresh reply** (`tcbot/modules/helper/workflows/ban_flow.py`): when the prompt message cannot be edited, the outcome is sent as a new message like the kick and mute executors already do. Behavior changes: moderators always see the ban outcome even when the prompt was deleted.
+
+- **Re-ban confirmation reuses the resolved locale** (`tcbot/modules/banning.py`, `tcbot/modules/admins.py`): entry commands pass their locale into the confirmation and target-resolution helpers. Behavior changes: none, the same reply with two fewer database reads per command.
+
 ### Fixed
 
 - **Container image ships the message catalog** (`Dockerfile`): the build copies `i18n/` next to the package so the first render finds its templates. Behavior changes: Docker deploys boot instead of failing every handler.

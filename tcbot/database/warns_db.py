@@ -363,14 +363,17 @@ async def remove_last_warn(user_id: int, chat_id: int) -> bool:
     if isinstance(del_res, asyncio.CancelledError):
         raise del_res
     if isinstance(del_res, BaseException):
-        log.warning(
+        # * Fail closed like clear_warns: callers map False to "no
+        # * warnings", so an outage must raise instead of reporting an
+        # * empty state for a user that may still hold warns.
+        log.error(
             "remove_last_warn delete failed for user=%d chat=%d: %s",
             user_id,
             chat_id,
             del_res,
         )
         await _recount_and_store(user_id, chat_id)
-        return False
+        raise del_res
     if del_res.deleted_count == 0:
         await _recount_and_store(user_id, chat_id)
         return False

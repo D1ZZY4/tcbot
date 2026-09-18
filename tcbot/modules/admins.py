@@ -76,7 +76,7 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
         ),
         replies.where_section(replies.context_bot_or_group(locale), locale),
         (
-            "Role Hierarchy",
+            t("admins.help.roles.title", locale, plain=True),
             t("admins.help.roles.body", locale),
         ),
         replies.target_section(locale),
@@ -123,14 +123,18 @@ async def _resolve_executor_target(
     bot: Bot | None,
     *,
     action: str,
+    locale: str | None = None,
 ) -> tuple[str, int, str | None] | None:
     """Fetch executor role and target in parallel, fail closed.
 
     Returns ``(executor_role, target_id, target_fname)`` or ``None`` when
     the caller must return (retry reply already sent, or a genuinely
     role-less executor denied silently like the decorator would).
+    Callers pass their already-resolved locale so the two DB reads behind
+    locale resolution do not run twice per command.
     """
-    locale = await locale_for_update(update)
+    if locale is None:
+        locale = await locale_for_update(update)
     _exec_r, _target_r = await asyncio.gather(
         db.users_roles.get_effective_role(admin_id),
         extraction.extract_target(update, args, bot),
@@ -300,7 +304,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     resolved = await _resolve_executor_target(
-        msg, admin.id, update, args, ctx.bot, action="promote"
+        msg, admin.id, update, args, ctx.bot, action="promote", locale=locale
     )
     if resolved is None:
         return
@@ -323,6 +327,18 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     refusal = identity.refuse_message("promote", ident, locale)
     if refusal is not None:
         await safe_reply(msg, refusal, log_label="cmd_promote refusal")
+        return
+
+    # * Bots hold no actionable identity: promoting one grants privilege
+    # * to a non-actor. Verified-only (reply sender, member probe, MTProto
+    # * peer); unknown stays allowed so off-group promotions keep working.
+    if await identity.is_proven_bot(update, target_id, ctx.bot):
+        await safe_reply(
+            msg,
+            t("admins.error.bot_target", locale, plain=True),
+            log_label="cmd_promote bot-target",
+            parse_mode=None,
+        )
         return
 
     role = ROLE_ALIASES.get(role_arg)
@@ -401,6 +417,20 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
 
     executor_role = await _check_callback_staff(admin.id, q, update)
     if executor_role is None:
+        return
+
+    if await identity.is_proven_bot(update, target_id, ctx.bot):
+        try:
+            await q.edit_message_text(
+                t(
+                    "admins.error.bot_target",
+                    await locale_for_update(update),
+                    plain=True,
+                ),
+                reply_markup=None,
+            )
+        except Exception as exc:
+            log.debug("on_promote_role_btn bot-target edit failed: %s", exc)
         return
 
     if role not in ("admin", "developer", "tester"):
@@ -505,7 +535,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
 
     resolved = await _resolve_executor_target(
-        msg, admin.id, update, args, ctx.bot, action="demote"
+        msg, admin.id, update, args, ctx.bot, action="demote", locale=locale
     )
     if resolved is None:
         return
@@ -575,7 +605,10 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     parallel, then executes ``Demote.execute`` and edits the prompt to the result.
     """
     q = update.callback_query
-    if q is None or q.data is None:
+    if q is None:
+        return
+    if q.data is None:
+        await q.answer()
         return
     admin = update.effective_user
     if admin is None:
@@ -773,6 +806,18 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await safe_reply(msg, refusal, log_label="cmd_transfer refusal")
         return
 
+    # * Transferring to a bot bricks federation leadership (owner-only
+    # * commands become unrunnable and owner DMs undeliverable). Same
+    # * verified-only check as promotion; unknown stays allowed.
+    if await identity.is_proven_bot(update, target_id, ctx.bot):
+        await safe_reply(
+            msg,
+            t("admins.error.bot_target", locale, plain=True),
+            log_label="cmd_transfer bot-target",
+            parse_mode=None,
+        )
+        return
+
     target_uname = ident.username
 
     # * Resolve and rank-check the target. Without this, a Developer could
@@ -906,8 +951,17 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     if user.id == ANONYMOUS_BOT_ID:
         await safe_reply(
             msg,
-            t("admins.request.anon_admin", locale),
+            t("admins.request.anon_admin", locale, plain=True),
             log_label="cmd_promote_request anon-admin",
+            parse_mode=None,
+        )
+        return
+    if user.is_bot:
+        await safe_reply(
+            msg,
+            t("admins.error.bot_target", locale, plain=True),
+            log_label="cmd_promote_request bot-target",
+            parse_mode=None,
         )
         return
 
@@ -1016,7 +1070,14 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             locale,
             title=Safe(
                 bold(
-                    f"Pending Promotion Requests ({total_pending if total_pending > len(pending) else len(pending)})"
+                    t(
+                        "admins.list.header_text",
+                        locale,
+                        n=total_pending
+                        if total_pending > len(pending)
+                        else len(pending),
+                        plain=True,
+                    )
                 )
             ),
         )
@@ -1037,7 +1098,11 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         target_id = req.get("target_id", 0)
         target_fname = req.get("first_name", "unknown")
         uname_val = req.get("username")
-        uname = f"@{uname_val}" if uname_val else "no username"
+        uname = (
+            f"@{uname_val}"
+            if uname_val
+            else t("admins.list.no_username", locale, plain=True)
+        )
         lines.append(
             t(
                 "admins.list.row",
@@ -1064,7 +1129,10 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     reject, marks the request resolved and edits the card to show the rejection.
     """
     q = update.callback_query
-    if q is None or q.data is None:
+    if q is None:
+        return
+    if q.data is None:
+        await q.answer()
         return
     admin = update.effective_user
     if admin is None:

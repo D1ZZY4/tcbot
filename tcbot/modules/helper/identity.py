@@ -14,9 +14,10 @@ from tcbot import database as db
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
+from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
-    from telegram import Bot
+    from telegram import Bot, Update
 
 # ───────────────────────────── Constants ────────────────────────────── #
 
@@ -147,6 +148,45 @@ async def classify(
 def _line(ident: Identity) -> str:
     """Build the canonical ``mention - <id>`` chunk for an identity."""
     return user_ref(ident.target_id, ident.fname, ident.username)
+
+
+async def is_proven_bot(update: Update, target_id: int, bot: Bot | None) -> bool:
+    """Return True only when the target is verified to be a bot account.
+
+    Best-effort by design and only ever positive: a quoted sender names
+    itself for free, otherwise one bounded membership probe runs in the
+    current chat, then one MTProto peer lookup. Unknown (lookup failure,
+    target absent, MTProto down) returns False so legitimate promotions
+    of off-group users keep working. Callers guard promotion and
+    ownership transfer, where a bot target would otherwise receive
+    privilege or brick the federation.
+    """
+    msg = getattr(update, "effective_message", None)
+    reply = getattr(msg, "reply_to_message", None) if msg is not None else None
+    sender = getattr(reply, "from_user", None) if reply is not None else None
+    if sender is not None and sender.id == target_id:
+        return bool(sender.is_bot)
+    chat = getattr(update, "effective_chat", None)
+    if (
+        bot is not None
+        and chat is not None
+        and getattr(chat, "type", None) != "private"
+    ):
+        try:
+            member = await asyncio.wait_for(
+                bot.get_chat_member(chat.id, target_id),
+                timeout=TELEGRAM_LOOKUP_TIMEOUT,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            pass
+        else:
+            user = getattr(member, "user", None)
+            if user is not None:
+                return bool(user.is_bot)
+    hit = await db.mtproto.is_bot_user(target_id)
+    return hit is True
 
 
 # ────────────────── Per-action witty refusals ───────────────────── #

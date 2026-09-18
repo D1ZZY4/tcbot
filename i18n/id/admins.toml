@@ -101,6 +101,7 @@ promote_needs_target = "Sebutkan siapa yang dipromosi: balas pesannya atau beri 
 promote_cancelled = "Promosi dibatalkan. Tidak ada perubahan."
 cancelled = "Dibatalkan. Tidak ada perubahan."
 no_pending = "Tidak ada permintaan promosi tertunda."
+bot_target = "Bot tidak dapat memegang peran atau kepemilikan federasi."
 
 # Promote/demote/transfer/list/decision UI. [role_picker]/[confirm]/
 # [transfer]/[list]/[card] render as MarkdownV2; [decision.dm] sends plain.

@@ -101,6 +101,7 @@ promote_needs_target = "Specify who to promote: reply to their message or give a
 promote_cancelled = "Promotion cancelled. No changes were made."
 cancelled = "Cancelled. No changes were made."
 no_pending = "No pending promotion requests."
+bot_target = "Bots cannot hold federation roles or ownership."
 
 # Promote/demote/transfer/list/decision UI. [role_picker]/[confirm]/
 # [transfer]/[list]/[card] render as MarkdownV2; [decision.dm] sends plain.

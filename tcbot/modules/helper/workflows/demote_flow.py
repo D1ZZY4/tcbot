@@ -42,10 +42,16 @@ class Demote:
 
     @staticmethod
     async def remove_role(target_id: int, target_role: str) -> bool:
-        """Remove the user's role from the correct collection."""
-        if target_role == "admin":
-            return await db.users_roles.remove_admin(target_id)
-        return await db.users_roles.remove_role(target_id)
+        """Remove the user's role from every role collection.
+
+        Always clears both ``tc_admins`` and ``tc_roles``: a stale row in
+        the other collection would otherwise resurrect privilege on the
+        next demote (effective role prefers Admin, hiding the stale row
+        until ``remove_admin`` reveals it). True when any row was cleared.
+        """
+        cleared_admin = await db.users_roles.remove_admin(target_id)
+        cleared_role = await db.users_roles.remove_role(target_id)
+        return cleared_admin or cleared_role
 
     @classmethod
     async def execute(

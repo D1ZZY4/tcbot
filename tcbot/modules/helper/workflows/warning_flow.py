@@ -329,7 +329,15 @@ async def execute_unwarn(
             target_id,
             chat_id,
         )
-        removed = False
+        # * Fail closed: remove_last_warn raises on write outage (never a
+        # * silent False), so report the outage instead of the "no warnings"
+        # * message below, which would lie about a user that may hold warns.
+        await safe_reply(
+            msg,
+            replies.err_db_retry(locale, plain=True),
+            log_label="execute_unwarn db_retry",
+        )
+        return
     if not removed:
         await safe_reply(
             msg,
