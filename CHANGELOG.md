@@ -87,6 +87,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Undecodable Vercel updates answer 400, not 500** (`tcbot/serverless.py`): a payload that fails `de_json` can never parse on retry, so it is rejected like any other malformed body instead of inviting pointless Telegram retries. Matches the documented response contract. Behavior changes: decode failures return `400` instead of `500`.
 
+- **Sync pair selection never materializes the cross product** (`tcbot/modules/syncing.py`): `take_pairs` takes from a lazy generator via `islice` instead of building the full user-by-group list before truncating, so a huge federation sweep no longer spikes memory and CPU to discard almost all of it. Same pairs, same truncation flag. Behavior changes: none.
+
 ### Fixed
 
 - **Container image ships the message catalog** (`Dockerfile`): the build copies `i18n/` next to the package so the first render finds its templates. Behavior changes: Docker deploys boot instead of failing every handler.

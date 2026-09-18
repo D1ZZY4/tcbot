@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import itertools
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -120,7 +121,12 @@ def take_pairs(
     never build an unbounded cross product. Returns the pairs plus whether
     the full cross product was truncated.
     """
-    pairs = [(uid, cid) for uid in user_ids for cid in chat_ids][: max(0, max_checks)]
+    # * Lazy islice, never a full materialization: a 10k-ban by 100-group
+    # * sweep builds two pairs, not a million-row list, before truncating.
+    limit = max(0, max_checks)
+    pairs = list(
+        itertools.islice(((uid, cid) for uid in user_ids for cid in chat_ids), limit)
+    )
     return pairs, len(user_ids) * len(chat_ids) > len(pairs)
 
 
