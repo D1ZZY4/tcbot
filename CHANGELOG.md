@@ -181,6 +181,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Demote clears both collections concurrently** (`tcbot/modules/helper/workflows/demote_flow.py`): the two independent removes run in one gather with identical return semantics. Behavior changes: none, same result with one round trip.
 
+- **Health and webhook paths gain regression cover** (`tests/test_alive_health.py`): 16 new checks pin the queue-depth field, the decode-400 versus enqueue-503/500 split, secret rejection, and scheduler/circuit degraded verdicts. Behavior changes: none, suite grows 8 to 24 in this file.
+
+- **Audit-wave behavior pinned by tests** (`tests/test_wave_regressions.py`, `tests/test_queues_enqueue.py`, `tests/test_roles_cache.py`): harvest budget cutoff, shared flood handling, verbatim secret redaction, list-or-CSV env parsing, prefix-copy semantics, sorted sync pairing, cron 405, queue collision versus pending paths, and cached-versus-outage role reads. Behavior changes: none, 18 new checks.
+
 - **Additional menu uses the shared answer-and-edit path** (`tcbot/modules/additional.py`): the manual acknowledge-and-edit block is replaced by the helper every other menu uses, which also removes references to an undefined logger that would have raised on the failure path. Behavior changes: tapping the menu no longer risks an unhandled error when the edit fails.
 
 ### Removed
