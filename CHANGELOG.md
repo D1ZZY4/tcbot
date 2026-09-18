@@ -75,6 +75,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Dependency lockfile refreshed to latest allowed versions** (`uv.lock`): `cachetools` 7.1.8 to 7.2.0, `ruff` 0.16.7 to 0.16.8, plus transitive `idna` 3.19 to 3.20 and `virtualenv` 21.7.10 to 21.7.11 via `uv lock --upgrade`. Every other pin was already latest in range, and `apscheduler` stays at the deliberate `3.11.3` pin. Full suite passes identically on the new lockfile. Behavior changes: none.
 
+- **Test stack moves to pytest 9** (`pyproject.toml`, `uv.lock`): `pytest` 8.4.2 to 9.1.1 plus `pytest-asyncio` 0.26.0 to 1.4.0, closing the medium tmpdir-handling advisory that pinned the old line (the async plugin capped `pytest<9`). The suite uses no async test functions, so the major bump changes nothing observable. Behavior changes: none.
+
 ### Fixed
 
 - **Container image ships the message catalog** (`Dockerfile`): the build copies `i18n/` next to the package so the first render finds its templates. Behavior changes: Docker deploys boot instead of failing every handler.
