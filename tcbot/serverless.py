@@ -176,7 +176,8 @@ async def handle_telegram_payload(data: dict[str, Any]) -> tuple[int, str]:
 
     Status mapping mirrors the Flask receiver in ``alive.py``: 200 for
     handled-or-benign updates (Telegram must not retry), 400 for malformed
-    payloads, 500 for transient failures (Telegram will retry).
+    payloads (a retry could never parse them either), 500 for transient
+    failures (Telegram will retry).
     """
     try:
         app = await get_app()
@@ -187,8 +188,11 @@ async def handle_telegram_payload(data: dict[str, Any]) -> tuple[int, str]:
     try:
         update = Update.de_json(data, app.bot)
     except Exception:
+        # * A payload that fails to decode will fail identically on retry,
+        # * so 400 (do not retry) is correct here, unlike the 500 below for
+        # * transient processing failures.
         log.exception("serverless: failed to decode update")
-        return 500, "Internal error"
+        return 400, "Bad request"
     if update is None:
         # * de_json returns None for update types unknown to this PTB version.
         # * Acknowledge so Telegram does not retry.
