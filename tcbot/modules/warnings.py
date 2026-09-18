@@ -46,6 +46,9 @@ _RL_CMD_PERIOD_S: int = 60
 _RL_WARN_LIMIT: int = 5
 _RL_READ_LIMIT: int = 8
 
+# * user_data keys for one warn flow; popped on prompt failure.
+_WARN_KEYS = ("warn_target_id", "warn_target_name")
+
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -186,8 +189,6 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     )
 
     target_mention = user_ref(target_id, target_name or str(target_id))
-
-    _WARN_KEYS = ("warn_target_id", "warn_target_name")
 
     if inline_reason:
         ctx.user_data["warn_reason"] = inline_reason

@@ -45,6 +45,19 @@ log = get_logger(__name__)
 _RL_PERIOD_S: int = 60
 _RL_LIMIT: int = 5
 
+# * user_data keys for one mute flow; popped on prompt failure.
+_MUTE_KEYS = (
+    "mute_target_id",
+    "mute_target_fname",
+    "mute_duration",
+    "mute_admin_id",
+    "mute_admin_fname",
+    "mute_prompt_chat",
+    "mute_prompt_id",
+    "mute_reason",
+    "mute_extra_info",
+)
+
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -206,17 +219,6 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             "mute_reason": "",
             "mute_extra_info": extra_info,
         }
-    )
-
-    _MUTE_KEYS = (
-        "mute_target_id",
-        "mute_target_fname",
-        "mute_duration",
-        "mute_admin_id",
-        "mute_admin_fname",
-        "mute_prompt_chat",
-        "mute_reason",
-        "mute_extra_info",
     )
 
     if inline_reason:

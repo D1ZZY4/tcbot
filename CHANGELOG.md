@@ -89,6 +89,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Sync pair selection never materializes the cross product** (`tcbot/modules/syncing.py`): `take_pairs` takes from a lazy generator via `islice` instead of building the full user-by-group list before truncating, so a huge federation sweep no longer spikes memory and CPU to discard almost all of it. Same pairs, same truncation flag. Behavior changes: none.
 
+- **One owner for conversation state keys and list rendering** (`tcbot/modules/helper/workflows/ban_flow.py`, `banning.py`, `kicking.py`, `muting.py`, `warnings.py`, `groups.py`, `start.py`, `tests/test_ban_flush_cleanup.py`): the ban key tuple lives once in `ban_flow` as `BAN_USER_DATA_KEYS` (the parallel entry-point list is gone, including a `ban_duration` entry nothing ever set), kick/mute/warn key tuples move to module level with the mute prompt ID completed, and the shared group-list renderer is public as `render_groups` instead of a cross-module private import. Behavior changes: none.
+
 ### Fixed
 
 - **Container image ships the message catalog** (`Dockerfile`): the build copies `i18n/` next to the package so the first render finds its templates. Behavior changes: Docker deploys boot instead of failing every handler.

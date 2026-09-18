@@ -57,7 +57,7 @@ class _FakeCtx:
 
 
 def _prefilled_user_data() -> dict[str, Any]:
-    return dict.fromkeys(ban_flow._BAN_USER_DATA_KEYS, "value")
+    return dict.fromkeys(ban_flow.BAN_USER_DATA_KEYS, "value")
 
 
 def _install_flush_sleep_spy(

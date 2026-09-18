@@ -20,6 +20,7 @@ from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.ban_flow import (
+    BAN_USER_DATA_KEYS,
     WAITING_PROOF,
     WAITING_UPDATE_CONFIRM,
     ban_conversation,
@@ -43,17 +44,6 @@ log = get_logger(__name__)
 
 # ──────────────── User-facing reply constants ──────────────────── #
 # * Ban runtime prose lives in banning.toml; no constants stay here.
-
-# * user_data keys written before the proof prompt; popped on prompt failure.
-_BAN_KEYS = (
-    "ban_target_id",
-    "ban_target_fname",
-    "ban_reason",
-    "ban_admin_id",
-    "ban_admin_fname",
-    "ban_target_role",
-    "ban_locale",
-)
 
 # ─────────────────────── Rate-limiter constants ──────────────────── #
 _RL_PERIOD_S: int = 60
@@ -210,7 +200,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             log_label="cmd_ban_start lookup-failed",
             parse_mode=None,
         )
-        for key in _BAN_KEYS:
+        for key in BAN_USER_DATA_KEYS:
             ctx.user_data.pop(key, None)
         return ConversationHandler.END
 
@@ -244,7 +234,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         ctx.user_data["ban_prompt_chat_id"] = msg.chat.id
     except Exception as exc:
         log.debug("cmd_ban_start proof-prompt reply failed: %s", exc)
-        for key in _BAN_KEYS:
+        for key in BAN_USER_DATA_KEYS:
             ctx.user_data.pop(key, None)
         return ConversationHandler.END
 
@@ -294,7 +284,7 @@ async def _ask_update_confirm(
         ctx.user_data["ban_prompt_chat_id"] = msg.chat.id
     except Exception as exc:
         log.debug("cmd_ban_start confirm-prompt reply failed: %s", exc)
-        for key in _BAN_KEYS:
+        for key in BAN_USER_DATA_KEYS:
             ctx.user_data.pop(key, None)
         return ConversationHandler.END
     return WAITING_UPDATE_CONFIRM

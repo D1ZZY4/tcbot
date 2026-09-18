@@ -14,7 +14,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.about import about_msg
-from tcbot.modules.groups import _render
+from tcbot.modules.groups import render_groups
 from tcbot.modules.helper import decorators, keyboards, replies
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import answer_and_edit, safe_reply
@@ -171,7 +171,7 @@ async def _show_groups(q: CallbackQuery, update: Update, *, detailed: bool) -> N
         return
     try:
         await q.edit_message_text(
-            _render(groups, detailed=detailed, locale=locale),
+            render_groups(groups, detailed=detailed, locale=locale),
             parse_mode="MarkdownV2",
             reply_markup=keyboards.groups_menu_kb(detailed=detailed, locale=locale),
         )

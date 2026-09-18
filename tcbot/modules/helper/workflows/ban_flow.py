@@ -58,7 +58,11 @@ log = get_logger(__name__)
 # * Ban-flow runtime prose lives in banning.toml [state]/[db_fail]/
 # * [applied]/[pm]/[summary]; only the key tuple below stays in code.
 
-_BAN_USER_DATA_KEYS = (
+# * Single owner for every ban_* user_data key in this flow and its entry
+# * point: banning.py pops this same tuple on pre-prompt failures instead
+# * of keeping a parallel list that can drift (and did: ban_duration sat
+# * here while nothing ever set it).
+BAN_USER_DATA_KEYS = (
     "ban_target_id",
     "ban_target_fname",
     "ban_reason",
@@ -67,7 +71,6 @@ _BAN_USER_DATA_KEYS = (
     "ban_prompt_msg_id",
     "ban_prompt_chat_id",
     "ban_target_role",
-    "ban_duration",
     "ban_executing",
     "ban_locale",
 )
@@ -123,7 +126,7 @@ def _clear_ban_state(user_data: dict[str, Any] | None) -> None:
     """
     if user_data is None:
         return
-    for key in _BAN_USER_DATA_KEYS:
+    for key in BAN_USER_DATA_KEYS:
         user_data.pop(key, None)
 
 
@@ -676,7 +679,7 @@ async def on_ban_update_continue(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
     if q is None or msg is None or ctx.user_data is None:
         return ConversationHandler.END
     if not isinstance(msg, Message):
-        for key in _BAN_USER_DATA_KEYS:
+        for key in BAN_USER_DATA_KEYS:
             ctx.user_data.pop(key, None)
         return ConversationHandler.END
     await q.answer()
@@ -687,7 +690,7 @@ async def on_ban_update_continue(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
     if tapper is None or not await decorators.recheck_executor_rank(
         msg, tapper.id, min_role="developer"
     ):
-        for key in _BAN_USER_DATA_KEYS:
+        for key in BAN_USER_DATA_KEYS:
             ctx.user_data.pop(key, None)
         return ConversationHandler.END
     # * Entry-point authorization covers this tap like every other flow
@@ -720,7 +723,7 @@ async def on_ban_update_continue(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
         await q.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=kb)
     except Exception as exc:
         log.debug("Ban continue prompt edit failed: %s", exc)
-        for key in _BAN_USER_DATA_KEYS:
+        for key in BAN_USER_DATA_KEYS:
             ctx.user_data.pop(key, None)
         return ConversationHandler.END
     return WAITING_PROOF

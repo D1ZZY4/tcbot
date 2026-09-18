@@ -36,6 +36,14 @@ log = get_logger(__name__)
 _RL_PERIOD_S: int = 60
 _RL_LIMIT: int = 5
 
+# * user_data keys for one kick flow; popped on prompt failure.
+_KICK_KEYS = (
+    "kick_target_id",
+    "kick_target_name",
+    "kick_prompt_chat",
+    "kick_prompt_id",
+)
+
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -186,13 +194,6 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     )
 
     target_mention = user_ref(target_id, target_name or str(target_id))
-
-    _KICK_KEYS = (
-        "kick_target_id",
-        "kick_target_name",
-        "kick_prompt_chat",
-        "kick_prompt_id",
-    )
 
     if inline_reason:
         ctx.user_data["kick_reason"] = inline_reason

@@ -33,7 +33,7 @@ _RL_PERIOD_S: int = 30
 _RL_CMD_LIMIT: int = 8
 _RL_CB_LIMIT: int = 15
 
-# * Telegram caps message text at ~4096 chars; _render() truncates to this
+# * Telegram caps message text at ~4096 chars; render_groups() truncates to this
 # * budget so large federations get a partial list instead of an error.
 _MAX_RENDER_CHARS: int = 3800
 
@@ -72,10 +72,13 @@ __help_sections__ = __help__["sections"]
 # ──────────────────────── Helper Functions ──────────────────────── #
 
 
-def _render(
+def render_groups(
     groups: list[GroupDoc], *, detailed: bool, locale: str | None = None
 ) -> str:
     """Render the group list, truncating to fit Telegram's message limit.
+
+    Shared with the start-menu groups view: one renderer so truncation
+    and item shapes cannot drift between the command and the menu.
 
     Telegram rejects messages over ~4096 chars; an unbounded render raises
     BadRequest (swallowed by callers, leaving the user with nothing) on
@@ -139,7 +142,7 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     await safe_reply(
         msg,
-        _render(groups, detailed=False, locale=locale),
+        render_groups(groups, detailed=False, locale=locale),
         log_label="tcgroups list",
         reply_markup=tcgroups_kb(detailed=False, locale=locale),
     )
@@ -184,7 +187,7 @@ async def _toggle(
     groups = groups_r
     await safe_edit(
         cbq_msg,  # type: ignore[arg-type]
-        _render(groups, detailed=detailed, locale=locale),
+        render_groups(groups, detailed=detailed, locale=locale),
         reply_markup=tcgroups_kb(detailed=detailed, locale=locale),
     )
 
