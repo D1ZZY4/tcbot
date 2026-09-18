@@ -58,7 +58,7 @@ on the repository's branch protection settings.
 **What it does:**
 - Runs `uv run ruff format .` to auto-format code
 - Runs `uv run ruff check --fix .` to auto-fix linting issues
-- Runs `uv run pyright` and `uv run pytest tests/ -q` to capture type and test failures
+- Runs `uv run pyright` and `uv run pytest tests/ -q -n auto` to capture type and test failures
 - Sends remaining Ruff, Pyright, and Pytest errors to a free AI (GitHub Models `openai/gpt-4o-mini` via `GITHUB_TOKEN`, no billing) for a short fix summary; deterministic Ruff fixes are always applied, AI hints are advisory and included in the PR body and summary
 - Creates or updates an `auto-fix/ruff` branch and pull request when fixes are
   found outside a pull-request run

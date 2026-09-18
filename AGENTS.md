@@ -218,6 +218,9 @@ uv run ruff check --fix .
 uv run pyright .
 ```
 
+Always use `uv` (`uv add`, `uv sync --frozen`, `uv run`, `uv tree`).
+Never use `pip`, `uv pip`, or manual `.venv/...` paths.
+
 Run with Docker Compose:
 
 ```bash

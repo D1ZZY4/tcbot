@@ -77,6 +77,12 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Test stack moves to pytest 9** (`pyproject.toml`, `uv.lock`): `pytest` 8.4.2 to 9.1.1 plus `pytest-asyncio` 0.26.0 to 1.4.0, closing the medium tmpdir-handling advisory that pinned the old line (the async plugin capped `pytest<9`). The suite uses no async test functions, so the major bump changes nothing observable. Behavior changes: none.
 
+- **Auto-fix runs the suite in parallel** (`.github/workflows/auto-fix.yml`, `docs/operations/ci-cd.md`): the capture and summary steps use `-n auto` like the main test workflow. Behavior changes: none, faster feedback only.
+
+- **Fatal startup banner prints in red** (`tcbot/__main__.py`): the pre-logging stderr banner uses the error red unconditionally, matching the always-colored console formatter. Behavior changes: none, same text.
+
+- **Harvest backfill comment reworded** (`tcbot/database/mtproto.py`): the sequential-scan note reads as plain English. Behavior changes: none, comments only.
+
 ### Fixed
 
 - **Container image ships the message catalog** (`Dockerfile`): the build copies `i18n/` next to the package so the first render finds its templates. Behavior changes: Docker deploys boot instead of failing every handler.

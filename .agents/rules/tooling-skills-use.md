@@ -137,6 +137,13 @@ Before editing TCF Bot code, verify:
 
 - Target Python 3.14.
 - Use `uv` for dependency installation, locking, and tool execution.
+- Never use `pip` in any form: no `pip install`, no `python -m pip`,
+  no `uv pip`, no manual `.venv/bin/...` paths. They are slow,
+  untracked, and bypass the lockfile.
+- Install, add, remove, and inspect through `uv` only: `uv add`,
+  `uv remove`, `uv sync --frozen`, `uv lock --upgrade`, `uv run`,
+  and `uv tree` (never hand-read `uv.lock` for versions when
+  `uv tree` answers it).
 - Keep `pyproject.toml` and `uv.lock` synchronized.
 - Do not add dependencies to `requirements.txt`.
 - Do not change pinned dependencies blindly, especially the accepted

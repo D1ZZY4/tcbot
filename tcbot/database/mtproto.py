@@ -366,8 +366,8 @@ async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
     name. Stops early on FloodWait (returns the count so far); peer hashes
     persist in shared storage as a side effect for future direct resolves.
     """
-    # ponytail: single sequential scan, no parallelism; shard per-group or
-    # page with smaller limits if a mega-group harvest ever too slow.
+    # * Sequential scan, no parallelism; shard per-group or page with
+    # * smaller limits if a mega-group harvest ever gets too slow.
     from tcbot.database import users_cache  # noqa: PLC0415 (avoid import cycle)
 
     c = _client

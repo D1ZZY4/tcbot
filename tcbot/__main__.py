@@ -68,6 +68,12 @@ _LINK_PREVIEW_DISABLED: LinkPreviewOptions = LinkPreviewOptions(is_disabled=True
 # * Width of the fatal-error border printed to stderr.
 _FATAL_BORDER_WIDTH: int = 70
 
+# * Fatal banner color (same red as ERROR level). Always on, like every
+# * BotLogFormatter line: startup failures must be visible on any terminal,
+# * and there is no log configuration yet to consult for a preference.
+_FATAL_RED: str = "\033[38;5;203m"
+_FATAL_RESET: str = "\033[0m"
+
 # * PTB handler group IDs: lower number = higher priority.
 _HANDLER_GROUP_RATE_LIMITER: int = -1
 _HANDLER_GROUP_CACHE: int = 10
@@ -542,12 +548,12 @@ def _print_fatal(stage: str, exc: BaseException) -> None:
     are available, so stderr is the only reliable output path.
     """
     border = "=" * _FATAL_BORDER_WIDTH
-    print(f"\n{border}", file=sys.stderr)
+    print(f"\n{_FATAL_RED}{border}", file=sys.stderr)
     print(f" FATAL STARTUP ERROR in stage: {stage}", file=sys.stderr)
     print(f" {type(exc).__name__}: {exc}", file=sys.stderr)
     print(f"{border}", file=sys.stderr)
     traceback.print_exception(type(exc), exc, exc.__traceback__, file=sys.stderr)
-    print(border, file=sys.stderr)
+    print(f"{border}{_FATAL_RESET}", file=sys.stderr)
 
 
 def main() -> None:
