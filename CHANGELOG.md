@@ -83,6 +83,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Harvest backfill comment reworded** (`tcbot/database/mtproto.py`): the sequential-scan note reads as plain English. Behavior changes: none, comments only.
 
+- **Fatal traceback prints in red with test cover** (`tcbot/__main__.py`, `tests/test_fatal_output.py`): the startup traceback renders through the banner color so every fatal line is red, pinned by a stderr-capture test. Behavior changes: none, same text.
+
 ### Fixed
 
 - **Container image ships the message catalog** (`Dockerfile`): the build copies `i18n/` next to the package so the first render finds its templates. Behavior changes: Docker deploys boot instead of failing every handler.

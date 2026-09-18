@@ -552,7 +552,10 @@ def _print_fatal(stage: str, exc: BaseException) -> None:
     print(f" FATAL STARTUP ERROR in stage: {stage}", file=sys.stderr)
     print(f" {type(exc).__name__}: {exc}", file=sys.stderr)
     print(f"{border}", file=sys.stderr)
-    traceback.print_exception(type(exc), exc, exc.__traceback__, file=sys.stderr)
+    # * Render through format_exception so the traceback inherits the banner
+    # * color instead of printing plain: every startup failure line is red.
+    tb_text = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    print(f"{_FATAL_RED}{tb_text}{_FATAL_RESET}", file=sys.stderr, end="")
     print(f"{border}{_FATAL_RESET}", file=sys.stderr)
 
 
