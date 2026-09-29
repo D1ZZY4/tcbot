@@ -6,75 +6,34 @@
 
 from __future__ import annotations
 
-import asyncio
 import re
 import time
 from typing import TYPE_CHECKING
 
-from pymongo import ReturnDocument
-from pymongo.errors import DuplicateKeyError, WriteConcernError
 from pyrogram.storage import Storage, UpdateState
-from pyrogram.storage.sqlite_storage import SQLiteStorage, get_input_peer
 
-from tcbot.database.mongos import col, db_call
+from tcbot.database import mtproto_store as _store_pkg
+from tcbot.database.mongos import db_call
 from tcbot.utils.logger import get_logger
 
+from .lease import claim_owner as _claim_owner
+from .lease import refresh_owner as _refresh_owner
+from .lease import release_owner as _release_owner
+from .peers import get_peer_by_id as _get_peer_by_id
+from .peers import get_peer_by_phone_number as _get_peer_by_phone_number
+from .peers import get_peer_by_username as _get_peer_by_username
+from .peers import update_peers as _update_peers
+from .peers import update_usernames as _update_usernames
+from .retry import _retry_write
+
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Iterable
+    from collections.abc import Awaitable, Iterable
     from typing import Any
 
     from motor.motor_asyncio import AsyncIOMotorCollection
 
-# * Maximum retries for transient write concern errors (e.g. replica set
-# * failover). Each retry waits exponentially: 0.5s, 1s, 2s.
-_MAX_WRITE_RETRIES: int = 3
-_RETRY_BASE_DELAY: float = 0.5
-
-log = get_logger(__name__)
-
-
-def _is_transient_write_error(exc: BaseException) -> bool:
-    """Return True when *exc* is a retryable MongoDB write concern error."""
-    return isinstance(exc, WriteConcernError) and "RetryableWriteError" in getattr(
-        exc, "details", {}
-    ).get("errorLabels", [])
-
-
-async def _retry_write(coro_factory: Callable[[], Awaitable[Any]]) -> Any:
-    """Execute a fresh coroutine from *coro_factory* with retries on transient WriteConcernError.
-
-    Pyrogram's ``handle_updates()`` background task persists update states
-    through this store.  A transient replica-set failover (code 11602 /
-    ``InterruptedDueToReplStateChange``) raises ``WriteConcernError`` with
-    the ``RetryableWriteError`` label.  Because the task is fire-and-forget,
-    the exception is never retrieved and the event loop reports it as an
-    unhandled task exception.
-
-    Retrying transparently keeps the session alive through brief replica-set
-    elections without flooding the error channel.
-
-    *coro_factory* must return a **new** coroutine on each call so retries
-    re-execute the operation instead of re-awaiting a spent coroutine.
-    """
-    last_exc: BaseException | None = None
-    for attempt in range(_MAX_WRITE_RETRIES):
-        try:
-            return await coro_factory()
-        except BaseException as exc:
-            if not _is_transient_write_error(exc) or attempt == _MAX_WRITE_RETRIES - 1:
-                raise
-            last_exc = exc
-            delay = _RETRY_BASE_DELAY * (2**attempt)
-            log.debug(
-                "MTProto write attempt %d/%d failed (transient): %s; retrying in %.1fs",
-                attempt + 1,
-                _MAX_WRITE_RETRIES,
-                exc,
-                delay,
-            )
-            await asyncio.sleep(delay)
-    # * pragma: no cover - the loop always returns or raises before reaching here.
-    raise last_exc  # type: ignore[misc]
+# * Logger keeps the pre-split name so log output is unchanged.
+log = get_logger("tcbot.database.mtproto_store")
 
 
 class MongoStorage(Storage):
@@ -100,7 +59,9 @@ class MongoStorage(Storage):
 
     def _coll(self) -> AsyncIOMotorCollection:
         """Return the shared state collection."""
-        return col("mtproto_state")
+        # * Resolved via the package namespace so patching
+        # * tcbot.database.mtproto_store.col keeps working as before.
+        return _store_pkg.col("mtproto_state")
 
     def _kv(self, name: str) -> str:
         """Build the document ID for scalar *name*."""
@@ -213,106 +174,26 @@ class MongoStorage(Storage):
     async def update_peers(
         self, peers: Iterable[tuple[int, int, str, str | None]]
     ) -> None:
-        """Upsert peers, preserving stored usernames like the usernames table does."""
-        now = int(time.time())
-        for peer_id, access_hash, peer_type, phone_number in peers:
-            doc_id = self._peer(peer_id)
-
-            async def _op(
-                _did: str = doc_id,
-                _ah: int = access_hash,
-                _pt: str = peer_type,
-                _pn: str | None = phone_number,
-                _now: int = now,
-            ) -> None:
-                await db_call(
-                    self._coll().update_one(
-                        {"_id": _did},
-                        {
-                            "$set": {
-                                "access_hash": _ah,
-                                "type": _pt,
-                                "phone_number": _pn,
-                                "updated_on": _now,
-                            },
-                            "$setOnInsert": {"usernames": []},
-                        },
-                        upsert=True,
-                    )
-                )
-
-            await _retry_write(_op)
+        """Upsert peers; delegates to peers.update_peers (single owner)."""
+        return await _update_peers(self, peers)
 
     async def update_usernames(
         self, usernames: Iterable[tuple[int, list[str | None]]]
     ) -> None:
-        """Replace the username list of each given peer.
-
-        Bumps ``updated_on`` alongside the names: username freshness is
-        evaluated against that timestamp, so a names-only write must not
-        leave the previous write time behind.
-        """
-        now = int(time.time())
-        for peer_id, names in usernames:
-            doc_id = self._peer(peer_id)
-            filtered_names = [n for n in names if n is not None]
-
-            async def _op(
-                _did: str = doc_id,
-                _names: list[str] = filtered_names,
-                _now: int = now,
-            ) -> None:
-                await db_call(
-                    self._coll().update_one(
-                        {"_id": _did},
-                        {
-                            "$set": {
-                                "usernames": _names,
-                                "updated_on": _now,
-                            }
-                        },
-                        upsert=True,
-                    )
-                )
-
-            await _retry_write(_op)
+        """Replace peer username lists; delegates to peers.update_usernames."""
+        return await _update_usernames(self, usernames)
 
     async def get_peer_by_id(self, peer_id: int) -> Any:
-        """Return the InputPeer for *peer_id*, or raise KeyError like SQLiteStorage."""
-        doc = await db_call(self._coll().find_one({"_id": self._peer(peer_id)}))
-        if doc is None:
-            raise KeyError(f"ID not found: {peer_id}")
-        return get_input_peer(peer_id, doc["access_hash"], doc["type"])
+        """Return the InputPeer; delegates to peers.get_peer_by_id."""
+        return await _get_peer_by_id(self, peer_id)
 
     async def get_peer_by_username(self, username: str) -> Any:
-        """Return the freshest InputPeer for *username*, or raise KeyError."""
-        doc = await db_call(
-            self._coll().find_one(
-                {"_id": {"$regex": f"^{self._ns_re}:peer:"}, "usernames": username},
-                sort=[("updated_on", -1)],
-            )
-        )
-        if doc is None:
-            raise KeyError(f"Username not found: {username}")
-        if abs(time.time() - doc.get("updated_on", 0)) > SQLiteStorage.USERNAME_TTL:
-            raise KeyError(f"Username expired: {username}")
-        peer_id = int(str(doc["_id"]).rsplit(":", 1)[1])
-        return get_input_peer(peer_id, doc["access_hash"], doc["type"])
+        """Return the freshest InputPeer; delegates to peers.get_peer_by_username."""
+        return await _get_peer_by_username(self, username)
 
     async def get_peer_by_phone_number(self, phone_number: str) -> Any:
-        """Return the InputPeer for *phone_number*, or raise KeyError."""
-        doc = await db_call(
-            self._coll().find_one(
-                {
-                    "_id": {"$regex": f"^{self._ns_re}:peer:"},
-                    "phone_number": phone_number,
-                }
-            )
-        )
-        if doc is None:
-            raise KeyError(f"Phone number not found: {phone_number}")
-        peer_id = int(str(doc["_id"]).rsplit(":", 1)[1])
-        return get_input_peer(peer_id, doc["access_hash"], doc["type"])
+        """Return the InputPeer; delegates to peers.get_peer_by_phone_number."""
+        return await _get_peer_by_phone_number(self, phone_number)
 
     # ── update states ── #
 
@@ -399,77 +280,13 @@ class MongoStorage(Storage):
         return f"{self._ns}:lock:mtproto_owner"
 
     async def claim_owner(self, owner: str, *, ttl_s: float) -> bool:
-        """Atomically claim the single-owner lease for *owner*.
-
-        Succeeds on a free lease, an expired lease (previous holder died
-        without releasing), or a first-time insert won against a
-        concurrent claimant (the loser gets DuplicateKeyError). A live
-        lease held by anyone else refuses. Only CancelledError
-        propagates; every other failure returns False so callers degrade
-        instead of sharing one auth key twice.
-        """
-        now = time.time()
-        lease_id = self._lease_id()
-
-        async def _take() -> Any:
-            return await db_call(
-                self._coll().find_one_and_update(
-                    {
-                        "_id": lease_id,
-                        "$or": [{"owner": owner}, {"expires_at": {"$lt": now}}],
-                    },
-                    {"$set": {"owner": owner, "expires_at": now + ttl_s}},
-                    return_document=ReturnDocument.AFTER,
-                )
-            )
-
-        try:
-            if await _retry_write(_take) is not None:
-                return True
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            log.exception("MTProto lease claim failed")
-            return False
-
-        # * No row (first boot) or a live foreign lease: exactly one
-        # * concurrent insert wins; the loser degrades instead of sharing
-        # * the auth key.
-        async def _first() -> None:
-            await db_call(
-                self._coll().insert_one(
-                    {"_id": lease_id, "owner": owner, "expires_at": now + ttl_s}
-                )
-            )
-
-        try:
-            await _retry_write(_first)
-            return True
-        except asyncio.CancelledError:
-            raise
-        except DuplicateKeyError:
-            return False
-        except Exception:
-            log.exception("MTProto lease first-claim insert failed")
-            return False
+        """Claim the single-owner lease; delegates to lease.claim_owner."""
+        return await _claim_owner(self, owner, ttl_s=ttl_s)
 
     async def refresh_owner(self, owner: str, *, ttl_s: float) -> bool:
-        """Renew the lease; False when someone else owns it (fencing)."""
-        res = await db_call(
-            self._coll().update_one(
-                {"_id": self._lease_id(), "owner": owner},
-                {"$set": {"expires_at": time.time() + ttl_s}},
-            )
-        )
-        return res.matched_count > 0
+        """Renew the lease; delegates to lease.refresh_owner."""
+        return await _refresh_owner(self, owner, ttl_s=ttl_s)
 
     async def release_owner(self, owner: str) -> None:
-        """Best-effort lease release; expiry covers leftovers after a crash."""
-        try:
-            await db_call(
-                self._coll().delete_one({"_id": self._lease_id(), "owner": owner})
-            )
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            log.debug("MTProto lease release failed (expiry covers it): %s", exc)
+        """Release the lease; delegates to lease.release_owner."""
+        return await _release_owner(self, owner)
