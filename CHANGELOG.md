@@ -217,6 +217,16 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Feature guides renumbered and de-rotted** (`docs/features/moderation/banning.md`, `disconnecting.md`, `check.md`, `connecting.md`, `muting.md`, `appeals.md`): duplicated and skipped step numbers fixed, a stale variable name corrected to MarkdownV2 reality, rotted file-and-line references reduced to symbol names, and primary-group mentions clarified to env names versus config properties. Behavior changes: none, docs only.
 
+- **Batch mention cache description corrected** (`docs/architecture/database.md`): the first-name batch path now states the shared triple fetch with cache population and the four-field covered index, replacing the retired no-write-back note. Behavior changes: none, docs only.
+
+- **Unmute executor order corrected** (`docs/features/moderation/muting.md`): the steps now read guard, permissions, group fetch, fan-out, record clear before announce, then log and reply, matching the implementation. Behavior changes: none, docs only.
+
+- **Kick executor order corrected** (`docs/features/moderation/kicking.md`): the steps now start with the audit write and its fail-closed retry, then ban, upload, re-demote, and the parallel unban plus log post. Behavior changes: none, docs only.
+
+- **Flow and database placement rules clarified** (`AGENTS.md`, `docs/architecture/workflows.md`, `docs/architecture/repository-map.md`, `.agents/rules/code-style.md`): flows and database helpers stay flat while they fit the file budget and split into packages after that, so the existing modules and packages both satisfy the rule. Behavior changes: none, docs only.
+
+- **Em dash rule file carries no literal** (`.agents/rules/comment-style.md`, `.github/workflows/auto-fix.yml`, `dependency-update.yml`): the rule text and the CI sanitizers use the escaped form with identical replacement output, so the forbidden-character scan reports empty. Behavior changes: none, docs and workflow text only.
+
 </details>
 
 ## [6.9.0] - 2026-09-14

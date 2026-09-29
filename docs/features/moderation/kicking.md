@@ -117,17 +117,17 @@ If the target holds a federation role, `cmd_kick` calls `Demote.auto_demote_or_a
 
 Execution order:
 
-1. When `proof_msgs` is non-empty, start the proof upload to `cfg.proofs` as a background task (caption `parse_logmsg.proof_caption_new`). If upload fails, the kick still proceeds with no proof link.
-2. Call `ctx.bot.ban_chat_member(chat_id, target_id)` to remove the user immediately, without waiting for the proof-channel round trip. On ban failure the in-flight upload is cancelled and the executor replies with a permissions/retry hint.
-3. Await the upload and build the proof keyboard from the resulting link.
-4. Re-check the target's effective role via `Demote.redemote_before_fanout(..., trigger="kick")`, closing the proof-collection TOCTOU window (best-effort; the kick proceeds even if the re-demote fails).
-5. Fan three independent side-effects in parallel with `asyncio.gather(..., return_exceptions=True)`:
+1. Write the audit row with `db.kicks_db.log_kick(target_id, chat_id, reason_text, admin_id)` first. A failed write aborts with a retry reply and no group is touched, so an enforced kick is never missing from `/check` history.
+2. When `proof_msgs` is non-empty, start the proof upload to `cfg.proofs` as a background task (caption `parse_logmsg.proof_caption_new`). If upload fails, the kick still proceeds with no proof link.
+3. Call `ctx.bot.ban_chat_member(chat_id, target_id)` to remove the user immediately, without waiting for the proof-channel round trip. On ban failure the in-flight upload is cancelled and the executor replies with a permissions/retry hint.
+4. Await the upload and build the proof keyboard from the resulting link.
+5. Re-check the target's effective role via `Demote.redemote_before_fanout(..., trigger="kick")`, closing the proof-collection TOCTOU window (best-effort; the kick proceeds even if the re-demote fails).
+6. Fan two independent side-effects in parallel with `asyncio.gather(..., return_exceptions=True)`:
    - `unban_chat_member(chat_id, target_id, only_if_banned=True)` - the "user can rejoin" step.
-   - `db.kicks_db.log_kick(target_id, chat_id, reason_text, admin_id)` - audit row.
-   - `ctx.bot.send_message(cfg.logs, kick_log, ..., reply_markup=proof_kb)` - federation log post.
-6. If the unban call raises, the reply text is appended with a `WARNING:` line so the moderator is told the user is still banned in this chat.
-7. Edit the proof prompt in place with the kick summary (same pattern as the mute executor), falling back to a fresh reply when the prompt is gone. No more double message.
-8. The reply reads `<user> has been kicked. Reason: <reason>. They can rejoin via invite link.` plus the optional `WARNING:` line. The kicked user's ID is a Telegram deep-link for quick re-ban; the text is rendered from the localized `kicking.summary.body` / `kicking.warn.unban` / `kicking.rejoin.body` blocks in the moderator's locale.
+   - `ctx.bot.send_message(cfg.logs, kick_log, ..., reply_markup=proof_kb)` - federation log post. The audit write already landed before enforcement, so a failure here can never leave an unaudited kick.
+7. If the unban call raises, the reply text is appended with a `WARNING:` line so the moderator is told the user is still banned in this chat.
+8. Edit the proof prompt in place with the kick summary (same pattern as the mute executor), falling back to a fresh reply when the prompt is gone. No more double message.
+9. The reply reads `<user> has been kicked. Reason: <reason>. They can rejoin via invite link.` plus the optional `WARNING:` line. The kicked user's ID is a Telegram deep-link for quick re-ban; the text is rendered from the localized `kicking.summary.body` / `kicking.warn.unban` / `kicking.rejoin.body` blocks in the moderator's locale.
 
 If `ban_chat_member` itself raises (the chat-level exception, not the parallelized children), `execute_kick` catches it, logs the full traceback, and replies with a generic permissions/retry hint (raw error text is never echoed to the chat).
 

@@ -192,8 +192,8 @@ Core ownership rules:
 
 - Command handlers live in `tcbot/modules/`. See [`docs/architecture/modules.md`](docs/architecture/modules.md) for module boundaries.
 - Shared handler helpers live in `tcbot/modules/helper/`. See [`docs/architecture/helpers.md`](docs/architecture/helpers.md) for helper docs.
-- Conversation flows live in `tcbot/modules/helper/workflows/` and must be one `*_flow/` package with a re-exporting `__init__.py` so dotted import paths stay stable. See [`docs/architecture/workflows.md`](docs/architecture/workflows.md) for conversation internals.
-- MongoDB access lives in `tcbot/database/`; keep new database helpers in `*_db/` packages. See [`docs/architecture/database.md`](docs/architecture/database.md) for database layer notes.
+- Conversation flows live in `tcbot/modules/helper/workflows/` as one `*_flow.py` module while it fits the file budget, or one `*_flow/` package with a re-exporting `__init__.py` once split, so dotted import paths stay stable. See [`docs/architecture/workflows.md`](docs/architecture/workflows.md) for conversation internals.
+- MongoDB access lives in `tcbot/database/`; keep new database helpers in `*_db.py` files, or `*_db/` packages once split under the file budget. See [`docs/architecture/database.md`](docs/architecture/database.md) for database layer notes.
 - Runtime utilities live in `tcbot/utils/`. See [`docs/architecture/utilities.md`](docs/architecture/utilities.md) for utility docs.
 
 ## Development Commands

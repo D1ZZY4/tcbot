@@ -106,8 +106,8 @@ jobs:
           fi
 
           # * Sanitize: no em dashes, keep plain hyphens
-          AI_TITLE="$(echo "$AI_TITLE" | tr '—' '-')"
-          AI_BODY="$(echo "$AI_BODY" | tr '—' '-')"
+          AI_TITLE="$(echo "$AI_TITLE" | tr $'\u2014' '-')"
+          AI_BODY="$(echo "$AI_BODY" | tr $'\u2014' '-')"
 
           echo "title=$AI_TITLE" >> "$GITHUB_OUTPUT"
           {

@@ -112,7 +112,7 @@ jobs:
           BODY_JSON="$(echo "$RESPONSE" | sed '$d')"
 
           if [ "$HTTP_CODE" = "200" ] && echo "$BODY_JSON" | grep -q '"choices"'; then
-            AI_SUMMARY="$(echo "$BODY_JSON" | python3 -c "import sys,json;print(json.load(sys.stdin)['choices'][0]['message']['content'])" 2>/dev/null | head -c 500 | tr '—' '-')"
+            AI_SUMMARY="$(echo "$BODY_JSON" | python3 -c "import sys,json;print(json.load(sys.stdin)['choices'][0]['message']['content'])" 2>/dev/null | head -c 500 | tr $'\u2014' '-')"
             echo "AI summary: $AI_SUMMARY"
             echo "$AI_SUMMARY" > ai-fix-summary.log
             echo "ai_fixed=1" >> "$GITHUB_OUTPUT"

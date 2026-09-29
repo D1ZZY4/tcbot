@@ -9,13 +9,13 @@ details, see [`../features/moderation/banning.md`](../features/moderation/bannin
 [`../features/roles/promote.md`](../features/roles/promote.md), and
 [`../features/roles/demote.md`](../features/roles/demote.md).
 
-Conversation and multi-step logic lives in `tcbot/modules/helper/workflows/`. Each flow is one `*_flow/` package (focused submodules plus a re-exporting `__init__.py` so dotted paths stay stable); do not create `*_conv.py` files.
+Conversation and multi-step logic lives in `tcbot/modules/helper/workflows/`. Each flow lives as one `*_flow.py` module while it fits the file budget, or one `*_flow/` package (focused submodules plus a re-exporting `__init__.py` so dotted paths stay stable) once split; do not create `*_conv.py` files.
 
 ## Package rules
 
 - Command modules own command filters and `__handlers__` registration.
 - Workflow files own state constants, `ConversationHandler` factories, and execution adapters.
-- Shared reason/proof logic belongs in `reason_flow/` and `proof_flow/`.
+- Shared reason/proof logic belongs in `reason_flow` and `proof_flow` (module or package under the same split rule).
 - Callback handlers must call `await q.answer()` before doing further work.
 - Timeout handling (`cfg.album_debounce`) is a per-action setting; the bot does not use job-queue or `ConversationHandler.TIMEOUT` states. Conversations end via escape commands, cancel, or explicit fallback handlers (e.g. `on_proof_timeout` in `ban_flow/` fires when the moderator sends a command during the proof window).
 

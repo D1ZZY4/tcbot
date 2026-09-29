@@ -131,7 +131,7 @@ All fields are optional `total=False`; a real document always carries `user_id` 
 - `get_mention_data_batch(user_ids: list[int]) -> dict[int, tuple[str, str | None]]`
   Batch `(first_name, username)` for many users in one query. IDs already in L1 are served without I/O; only uncached IDs trigger one `$in` query. Newly fetched data is populated into the mention cache; users missing from the DB get the sentinel cached and `str(user_id)` returned.
 - `get_first_names_batch(user_ids: list[int]) -> dict[int, str]`
-  Batch first names only. Uncached IDs trigger one `$in` query with a `{first_name}` projection. Found rows are deliberately NOT written back (the projection omits `last_name`, and caching a partial triple would corrupt `upsert_user_if_changed` change detection). Missing users get the sentinel cached and `str(user_id)` returned.
+  Batch first names only. IDs already in L1 are served without I/O; only uncached IDs trigger one `$in` query. Newly fetched rows populate the full mention triple through the shared batch-miss path, so repeat renders by any reader skip the round-trip. Missing users get the sentinel cached and `str(user_id)` returned.
 - `total_users() -> int`
   `estimated_document_count()` over the whole collection.
 - `all_users_page(*, skip: int = 0, limit: int = 200, sort_by: str = "first_name") -> list[UserDoc]`
@@ -139,7 +139,7 @@ All fields are optional `total=False`; a real document always carries `user_id` 
 - `search_by_name(needle: str, limit: int = 5) -> list[UserDoc]`
   Target-resolution search. Server-side regex, case-insensitive and anchored (`^<escaped needle>`), over `first_name` or `username`, capped at `limit` results. Only `user_id`, `first_name`, `username` are projected.
 
-**Performance tip:** use the batch functions whenever data for more than one user is needed in a list view or fan-out result; calling single-user functions in a loop is an N+1 anti-pattern. Both batch functions are served by the covered-query index `(user_id, first_name, username)`. For partial-name target resolution use `search_by_name`; for paginated list views use `all_users_page`.
+**Performance tip:** use the batch functions whenever data for more than one user is needed in a list view or fan-out result; calling single-user functions in a loop is an N+1 anti-pattern. Both batch functions are served by the covered-query index `(user_id, first_name, username, last_name)`. For partial-name target resolution use `search_by_name`; for paginated list views use `all_users_page`.
 
 **Hot-path harvest pattern:** on every observed Telegram update `_update_member_cache` schedules `harvest_user_identity` as a fire-and-forget background task. When the cached identity has not changed, no MongoDB write is issued; the fast path is sub-microsecond.
 

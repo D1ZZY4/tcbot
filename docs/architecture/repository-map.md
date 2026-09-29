@@ -93,7 +93,7 @@ tcbot/
 │       ├── parse_*.py      Link, log, and safe-edit helpers
 │       ├── replies.py      Shared localized reply and help-text strings, HelpEntry shape
 │       └── workflows/
-│           └── *_flow.py   Conversation factories, plus Promote / Demote / Check classes
+│           └── *_flow.py or *_flow/ packages   Conversation factories, plus Promote / Demote / Check classes
 └── utils/
     ├── circuit_breaker.py  Async circuit breaker for Telegram + MongoDB
     ├── dispatch.py         Bounded concurrent fan-out (integrates Telegram circuit)

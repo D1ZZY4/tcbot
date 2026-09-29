@@ -188,7 +188,7 @@ Help and keyboards:
 - Keep all MongoDB writes and collection access in `tcbot/database/` helpers.
 - Command modules must not call `col()` directly or perform raw
   insert/update/delete operations.
-- Put new database concerns in descriptive `*_db.py` files.
+- Put new database concerns in descriptive `*_db.py` files, or `*_db/` packages once split under the file budget (same split rule as workflows).
 - Add indexes for new collections and index-sensitive queries in
   `mongos.ensure_indexes()`.
 - Keep database helpers async and fully typed.
@@ -201,11 +201,11 @@ Help and keyboards:
 ## Conversation Flows and Keyboards
 
 - Conversation handlers live in `tcbot/modules/helper/workflows/`.
-- Flow files use the `*_flow.py` suffix. Never create `*_conv.py` files.
+- Flow files use the `*_flow.py` suffix while they fit the file budget, or `*_flow/` packages (focused submodules plus a re-exporting `__init__.py`) once split. Never create `*_conv.py` files.
 - Kick, mute, and warn use `reason_flow.build_modaction_conv()`.
 - Ban uses `ban_flow.ban_conversation()`.
 - Appeals use `BuildAppeal(...).build_handler()`.
-- New standalone flows should model `appeal_flow/`.
+- New standalone flows should model `appeal_flow.py`.
 - Every flow has a cancel fallback.
 - Use `WAITING_*` state constants.
 - Use `cfg.album_debounce` and other `cfg` values for workflow deadlines,
