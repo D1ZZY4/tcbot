@@ -25,16 +25,25 @@ log = logging.getLogger(__name__)
 
 
 def _discover_modules() -> list[str]:
-    """Return all .py module names in this directory, excluding __init__.py.
+    """Return all module names in this directory: .py files and packages.
 
     Sorted so handler registration order (and the startup log line below)
-    is deterministic across filesystems; ``Path.glob`` order is
+    is deterministic across filesystems; ``Path`` iteration order is
     OS-dependent and PTB resolves overlapping filters in registration order.
+    ``helper/`` holds shared code, never handlers, so it stays excluded.
     """
     this_dir = Path(__file__).parent
-    return sorted(
+    names = {
         p.stem for p in this_dir.glob("*.py") if p.is_file() and p.name != "__init__.py"
-    )
+    }
+    for child in this_dir.iterdir():
+        if (
+            child.is_dir()
+            and child.name not in ("helper", "__pycache__")
+            and (child / "__init__.py").is_file()
+        ):
+            names.add(child.name)
+    return sorted(names)
 
 
 def _filter_modules(modules: list[str]) -> list[str]:

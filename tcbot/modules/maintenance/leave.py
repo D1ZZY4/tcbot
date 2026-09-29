@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""leaveall and cleanup maintenance commands for managing the connected-group list."""
+"""Leave-all maintenance command for the connected-group list."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from telegram.ext import ContextTypes, MessageHandler
+from telegram.ext import ContextTypes
 
 from tcbot import cfg
 from tcbot import database as db
@@ -18,12 +18,10 @@ from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
-from tcbot.utils.dispatch import fan_out, gather_bounded, throw_if_cancelled
-from tcbot.utils.formatter import bold, code
+from tcbot.utils.dispatch import fan_out, throw_if_cancelled
+from tcbot.utils.formatter import code
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
-from tcbot.utils.prefixes import build_prefixed_filters
-from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
     from telegram import Bot, Update
@@ -31,53 +29,8 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 # ─────────────────────── Rate-limiter constants ──────────────────── #
-_RL_PERIOD_LONG_S: int = 60
 _RL_PERIOD_BULK_S: int = 300
-_RL_CLEANUP_LIMIT: int = 3
 _RL_LEAVEALL_LIMIT: int = 1
-
-# * Bound for one membership probe; single owner in time_and_date.
-_MEMBERSHIP_CHECK_TIMEOUT = TELEGRAM_LOOKUP_TIMEOUT
-
-
-# ────────────────────── Module & Help Message ───────────────────── #
-
-__module_name__ = "Maintenance"
-
-
-def get_help(locale: str | None = None) -> replies.HelpEntry:
-    """Build this module's help entry in the given locale."""
-    overview = t("maintenance.help.overview", locale)
-    sections: list[tuple[str, str]] = [
-        (
-            replies.sec_commands(locale),
-            t("maintenance.help.commands.body", locale),
-        ),
-        replies.who_section(
-            f"{bold('/leaveall')}: {replies.perm_founder_only(locale, plain=False)}\n"
-            f"{bold('/cleanup')}: {replies.perm_staff_only(locale, plain=False)}",
-            locale,
-        ),
-        replies.where_section(replies.context_exec_or_group(locale), locale),
-        (
-            "/leaveall",
-            t("maintenance.help.leaveall.body", locale),
-        ),
-        (
-            "/cleanup",
-            t("maintenance.help.cleanup.body", locale),
-        ),
-        (
-            replies.sec_examples(locale),
-            t("maintenance.help.examples.body", locale),
-        ),
-    ]
-    return {"name": __module_name__, "overview": overview, "sections": sections}
-
-
-__help__: replies.HelpEntry = get_help()
-__help_text__ = __help__["overview"]
-__help_sections__ = __help__["sections"]
 
 
 # ──────────────────────── Helper Functions ──────────────────────── #
@@ -174,34 +127,6 @@ async def _leave_one(
         deactivated=not isinstance(deactivate_result, BaseException),
         log_sent=not isinstance(log_result, BaseException),
     )
-
-
-async def _should_remove(bot: Bot, grp: GroupDoc) -> bool:
-    """Return True if the bot has left or been kicked from the group.
-
-    Primary groups are never "removable" -- they are managed separately
-    and must never be deactivated by cleanup. If ``_should_remove``
-    is called for a primary group, it short-circuits to ``False`` so
-    ``cmd_cleanup`` skips it.
-    """
-    chat_id = grp.get("chat_id")
-    if chat_id is None:
-        return True
-    if cfg.is_primary_group(chat_id):
-        return False
-    try:
-        member = await asyncio.wait_for(
-            bot.get_chat_member(chat_id, bot.id),
-            timeout=_MEMBERSHIP_CHECK_TIMEOUT,
-        )
-        return member.status in ("left", "kicked")
-    except Exception as exc:
-        # ! CRITICAL: fail closed. A transient Telegram/DB error must not look
-        # ! like "bot has left" or cleanup mass-deactivates healthy groups.
-        log.warning(
-            "Could not verify membership for %d, keeping group: %s", chat_id, exc
-        )
-        return False
 
 
 # ────────────────── Command Leave All </leaveall> ───────────────── #
@@ -308,89 +233,3 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             )
         except Exception:
             log.exception("Leaveall status edit failed")
-
-
-# ─────────────────── Command CleanUp </cleanup> ─────────────────── #
-
-
-@decorators.ratelimiter(limit=_RL_CLEANUP_LIMIT, period=_RL_PERIOD_LONG_S)
-@decorators.staff_only
-@decorators.log_execution
-async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Prune inaccessible groups from the active federation list.
-
-    Checks all groups concurrently via ``_should_remove`` (which excludes
-    primary groups), deactivates the identified stale records in parallel,
-    then replies with the count of removed groups.
-    """
-    reply_msg = update.effective_message
-    if reply_msg is None:
-        return
-    locale = await locale_for_update(update)
-    try:
-        groups = await db.groups_db.active_groups()
-    except Exception:
-        log.exception("active_groups failed during cleanup")
-        await safe_reply(
-            reply_msg,
-            replies.err_groups_load_failed(locale, plain=False),
-            log_label="cleanup groups-failed",
-        )
-        return
-
-    # * Semaphore-bounded to respect Telegram rate limits on large federations.
-    checks = await fan_out([_should_remove(ctx.bot, g) for g in groups])
-
-    to_remove = [g for g, remove in zip(groups, checks, strict=False) if remove is True]
-
-    if to_remove:
-        # * Pure database writes: bounded gather, not fan_out. fan_out wraps
-        # * the Telegram circuit breaker, which must not gate DB work.
-        deact_results = await gather_bounded(
-            [db.groups_db.deactivate_group(g.get("chat_id", 0)) for g in to_remove]
-        )
-        deactivated = sum(1 for r in deact_results if r is True)
-        for grp, result in zip(to_remove, deact_results, strict=False):
-            if isinstance(result, BaseException):
-                log.error(
-                    "cleanup deactivate failed for chat=%s: %s",
-                    grp.get("chat_id", 0),
-                    result,
-                )
-            elif result is not True:
-                log.warning(
-                    "cleanup deactivate no-op for chat=%s (record already gone?)",
-                    grp.get("chat_id", 0),
-                )
-    else:
-        deactivated = 0
-
-    await safe_reply(
-        reply_msg,
-        t(
-            "maintenance.cleanup.done",
-            locale,
-            n=Safe(code(str(deactivated))),
-        ),
-        log_label="cleanup",
-    )
-
-
-# ──────────────────────────── Handlers ──────────────────────────── #
-
-_LEAVEALL_CMDS = (
-    build_prefixed_filters("leaveall")
-    | build_prefixed_filters("exitall")
-    | build_prefixed_filters("tcleave")
-)
-_CLEANUP_CMDS = (
-    build_prefixed_filters("cleanup")
-    | build_prefixed_filters("tcclean")
-    | build_prefixed_filters("tcc")
-)
-
-
-__handlers__ = [
-    MessageHandler(_LEAVEALL_CMDS, cmd_leaveall),
-    MessageHandler(_CLEANUP_CMDS, cmd_cleanup),
-]
