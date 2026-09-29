@@ -9,7 +9,7 @@ access, see [`database.md`](database.md). For runtime utilities, see
 
 ## Dynamic discovery
 
-`tcbot/modules/__init__.py` discovers every top-level `.py` file in `tcbot/modules/` except `__init__.py`. Discovery is sorted so registration order is deterministic across filesystems (`Path.glob` order is OS-dependent and PTB resolves overlapping filters in registration order).
+`tcbot/modules/__init__.py` discovers every top-level module in `tcbot/modules/`: plain `.py` files plus packages (directories with `__init__.py`, except `helper/`), both sorted so registration order is deterministic across filesystems (`Path.glob` order is OS-dependent and PTB resolves overlapping filters in registration order). A command module may therefore grow into a package without changing its dotted path, help topic, or filter names.
 
 ```mermaid
 flowchart TD
@@ -57,22 +57,22 @@ help-discovery convention, not a handler-registration switch.
 
 | Module | Visible help topic | Main handlers/commands | Notes |
 |---|---|---|---|
-| `admins.py` | `Admins` | `/tcpromote`, `/tcp`, `/tcdemote`, `/tcd`, `/transferowner`, `/tfowner`, `/tcpromoterequests`, `/tcreqs`, `/tcpromotelist`, `/tcplist` | Role assignment, demotion confirmation, owner transfer, promotion queue callbacks. |
+| `admins/` | `Admins` | `/tcpromote`, `/tcp`, `/tcdemote`, `/tcd`, `/transferowner`, `/tfowner`, `/tcpromoterequests`, `/tcreqs`, `/tcpromotelist`, `/tcplist` | Role assignment, demotion confirmation, owner transfer, promotion queue callbacks. |
 | `appeals.py` | `Appeal` | `/start appeal_<ban_id>` plus appeal decision callbacks | Registers `appeal.build_handler()` and approve/reject callbacks. |
 | `banning.py` | `Ban` | `/tcban`, `/tcb` | Validates Developer+ access, auto-demotes role holders, enters `ban_flow`. |
 | `broadcasting.py` | `Broadcast` | `/tcbroadcast`, `/bc` | Sends a message to all active groups and logs results. |
-| `checking.py` | `Check` | `/checkme`, `/cme`, `/check`, `/c` | Ban status lookup (`/checkme`) and comprehensive user profile (`/check`) with bans/warns/kicks/mutes/appeals drill-down. |
+| `checking/` | `Check` | `/checkme`, `/cme`, `/check`, `/c` | Ban status lookup (`/checkme`) and comprehensive user profile (`/check`) with bans/warns/kicks/mutes/appeals drill-down. |
 | `connecting.py` | `Connect` | `/tcconnect`, `/tccon`, bot-added updates, connect/cancel callbacks | Group connection approval and permission checks. |
 | `disconnecting.py` | `Disconnect` | `/tcdisconnect`, `/tcdiscon`, `/rmtc` | Group-owner disconnect and staff remote disconnect. |
 | `groups.py` | `Groups` | `/tcgroups`, `/tcg` | Connected group list and details toggle. |
 | `kicking.py` | `Kick` | `/tckick`, `/tck` | Tester+ current-group kick through shared reason/proof flow. |
 | `language.py` | `Language` | `/language`, `/lang`, `/langs` plus `language_menu`, `lang:list:*`, `lang:set:*` callbacks | Per-user (PM) and per-group locale selection. Group changes require the group creator or federation staff; the selected locale drives all following replies. |
-| `maintenance.py` | `Maintenance` | `/leaveall`, `/exitall`, `/tcleave`, `/cleanup`, `/tcclean`, `/tcc` | Emergency leave-all and staff cleanup operations. |
+| `maintenance/` | `Maintenance` | `/leaveall`, `/exitall`, `/tcleave`, `/cleanup`, `/tcclean`, `/tcc` | Emergency leave-all and staff cleanup operations. |
 | `muting.py` | `Mute` | `/tcmute`, `/tcm`, `/tcunmute`, `/tcunm`, `/tcum` | Federation-wide mute conversation and direct unmute. |
-| `stats.py` | `Stats` | `/tcstats`, `/tcs` plus stats callbacks | Summary, staff list, active bans, connected chats, search/detail callbacks. |
-| `syncing.py` | `Sync` | `/tcsync`, `/tcsynchronize` | Bounded enforcement reconciliation sweep plus single-user verification; shares its core with the optional scheduled sync job. |
+| `stats/` | `Stats` | `/tcstats`, `/tcs` plus stats callbacks | Summary, staff list, active bans, connected chats, search/detail callbacks. |
+| `syncing/` | `Sync` | `/tcsync`, `/tcsynchronize` | Bounded enforcement reconciliation sweep plus single-user verification; shares its core with the optional scheduled sync job. |
 | `unbanning.py` | `Unban` | `/tcunban`, `/tcunb` | Developer+ federation unban. |
-| `warnings.py` | `Warnings` | `/tcwarn`, `/tcw`, `/tcunwarn`, `/tcunw`, `/warns`, `/warnlist`, `/resetwarns`, `/clearwarns` | Warning conversation and direct warning management commands. |
+| `warnings/` | `Warnings` | `/tcwarn`, `/tcw`, `/tcunwarn`, `/tcunw`, `/warns`, `/warnlist`, `/resetwarns`, `/clearwarns` | Warning conversation and direct warning management commands. |
 | `netspeed.py` | `Netspeed` | `/ping`, `/p`, `/speedtest`, `/st` | Founder-only network diagnostics: API round-trip latency ping and full bandwidth speed test via `speedtest-cli` in a thread executor. |
 
 ## Internal/menu modules
@@ -81,8 +81,8 @@ help-discovery convention, not a handler-registration switch.
 |---|---|
 | `about.py` | Start-menu About page callback. |
 | `additional.py` | Start-menu Additional page callback. |
-| `greeting.py` | New/left member status handlers for watched groups; also monitors bot own-membership changes (left/kicked triggers group deactivation; member/restricted demotion sends a warning to the mod log channel). |
-| `help.py` | `/help` command and help-menu callbacks generated from loaded modules. |
+| `greeting/` | New/left member status handlers for watched groups; also monitors bot own-membership changes (left/kicked triggers group deactivation; member/restricted demotion sends a warning to the mod log channel). |
+| `help/` | `/help` command and help-menu callbacks generated from loaded modules. |
 | `privacy.py` | Start-menu Privacy and Privacy Policy callbacks. Privacy Policy uses per-section navigation: an index page lists six sections (What We Collect, Why We Collect It, Who Can Access It, How Long We Keep It, Your Rights, Contact), each rendered individually via `privacy_section_<idx>` callbacks with a back button to the index. |
 | `start.py` | `/start` menu and group-PM handoff callbacks. |
 
@@ -137,5 +137,5 @@ Use role helpers from `users_roles` and `decorators.resolve_and_check`; avoid ma
 - Define command filters near the bottom.
 - Export `__handlers__` at the bottom.
 - Use database helper modules instead of raw MongoDB collection access.
-- Put new conversation logic in `tcbot/modules/helper/workflows/*_flow.py`.
+- Put new conversation logic in `tcbot/modules/helper/workflows/*_flow/` packages (one focused submodule per concern plus a re-exporting `__init__.py`).
 - Render user-facing messages through `tcbot.utils.i18n.t()` with a resolved locale so they are MarkdownV2-safe automatically; use `plain=True` for callback alerts and other contexts Telegram never parses.

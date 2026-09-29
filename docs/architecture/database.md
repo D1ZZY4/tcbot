@@ -11,8 +11,8 @@ flowchart TD
     Modules[tcbot/modules/*.py] --> DBHelpers[tcbot/database/*_db.py]
     Helpers[tcbot/modules/helper/] --> DBHelpers
     Workflows[tcbot/modules/helper/workflows/] --> DBHelpers
-    DBHelpers --> Mongos[mongos.py<br/>connection + col]
-    DBHelpers --> Cache[cache.py<br/>TwoLevelCache]
+    DBHelpers --> Mongos[mongos/<br/>connection + col]
+    DBHelpers --> Cache[cache/<br/>TwoLevelCache]
     DBHelpers --> Documents[documents.py<br/>TypedDicts]
     Mongos --> Motor[Motor AsyncIOMotorClient]
     Motor --> MongoDB[(MongoDB)]
@@ -21,9 +21,9 @@ flowchart TD
     Cache --> L1[TTLCache L1<br/>in-memory]
     Cache --> L2[Redis L2<br/>optional]
     L2 --> Redis[(Redis)]
-    Scheduler[scheduler.py<br/>APScheduler 3.11.3] --> MongoDB
+    Scheduler[scheduler/<br/>APScheduler 3.11.3] --> MongoDB
     Scheduler --> DBHelpers
-    MTProto[mtproto.py<br/>bot-token client] --> MongoDB
+    MTProto[mtproto/<br/>bot-token client] --> MongoDB
 ```
 
 ## Access rules
@@ -36,7 +36,7 @@ flowchart TD
 
 ## Connection manager
 
-`mongos.py` owns the Motor client lifecycle.
+`mongos/` owns the Motor client lifecycle.
 
 | Export | Purpose |
 |---|---|
@@ -51,7 +51,7 @@ flowchart TD
 
 ### MongoDB client parameters
 
-`connect()` builds the client with these explicit parameters (see `mongos.py`):
+`connect()` builds the client with these explicit parameters (see `mongos/`):
 
 | Parameter | Value |
 |---|---|
@@ -77,24 +77,24 @@ A DNS patch (`_patch_dns_if_needed`) installs an in-process fallback resolver po
 
 | Helper | Collection(s) | Main responsibilities |
 |---|---|---|
-| `users_cache.py` | `member_cache` | Member profile cache: upsert, change-detection upsert, harvest, get, batch queries, mention formatting, counts, paged listing, name search. |
+| `users_cache/` | `member_cache` | Member profile cache: upsert, change-detection upsert, harvest, get, batch queries, mention formatting, counts, paged listing, name search. |
 | `users_roles.py` | `tc_owners`, `tc_admins`, `tc_roles` | Owner CRUD, admin CRUD, developer/tester role CRUD, effective-role resolution, `can_act_on` checks. |
-| `bans_db.py` | `bans` | Active ban lookup, ban creation/update, unban deactivation, appeal/review metadata, active ban lists, per-user history. |
+| `bans_db/` | `bans` | Active ban lookup, ban creation/update, unban deactivation, appeal/review metadata, active ban lists, per-user history. |
 | `groups_db.py` | `federated_groups`, `pending_joins` | Connected group state, pending connection requests, group locale, cache invalidation, chat-migration repoint. |
-| `warns_db.py` | `warns`, `warn_counts` | Warning event history, per-group counters, limit checks, backfill/sync, clear, migration. |
+| `warns_db/` | `warns`, `warn_counts` | Warning event history, per-group counters, limit checks, backfill/sync, clear, migration. |
 | `kicks_db.py` | `kicks` | Append-only kick audit records. |
 | `mutes_db.py` | `mutes`, `active_mutes` | Mute audit trail plus the live active-mute store used to re-apply restrictions. |
 | `queues_db.py` | `promotion_requests` | Queued Admin promotion requests and resolution status. |
 | `settings_db.py` | `user_settings` | Per-user locale preference rows, kept apart from `member_cache`. |
-| `cache.py` | in-process + Redis | `TTLCache[T]` (L1) and `TwoLevelCache[T]` (L1 in-process + L2 Redis) with five public singletons. |
+| `cache/` | in-process + Redis | `TTLCache[T]` (L1) and `TwoLevelCache[T]` (L1 in-process + L2 Redis) with five public singletons. |
 | `redis_client.py` | Redis (optional) | Async Redis client singleton with pool management and liveness tracking. |
-| `scheduler.py` | MongoDB (APScheduler) | APScheduler 3.11.3 `AsyncIOScheduler` backed by `MongoDBJobStore`. |
-| `mtproto.py` | Telegram MTProto | Bot-token client singleton: user-ID resolution and group member harvest. Claims a single-owner lease before connecting (90 s TTL, 30 s heartbeat); losers and parked sessions degrade to Bot-API-only. |
-| `mtproto_store.py` | `mtproto_state` | MongoDB-backed Kurigram storage engine shared by all instances, plus the atomic single-owner lease (`<ns>:lock:mtproto_owner`) with expiry takeover. |
+| `scheduler/` | MongoDB (APScheduler) | APScheduler 3.11.3 `AsyncIOScheduler` backed by `MongoDBJobStore`. |
+| `mtproto/` | Telegram MTProto | Bot-token client singleton: user-ID resolution and group member harvest. Claims a single-owner lease before connecting (90 s TTL, 30 s heartbeat); losers and parked sessions degrade to Bot-API-only. |
+| `mtproto_store/` | `mtproto_state` | MongoDB-backed Kurigram storage engine shared by all instances, plus the atomic single-owner lease (`<ns>:lock:mtproto_owner`) with expiry takeover. |
 | `documents.py` | type-only | `TypedDict` document shapes and `Literal` aliases. |
 | `types.py` | type-only | `NewType` primitives: `UserId`, `GroupId`, `ChatId`, `BanId`. |
 
-## Member profiles (`users_cache.py`, collection `member_cache`)
+## Member profiles (`users_cache/`, collection `member_cache`)
 
 ### Document shape: `UserDoc`
 
@@ -224,7 +224,7 @@ Resolution order in `get_effective_role`:
 
 **Security notes:** role lookup failures reject the action where authorization is enforced (`get_effective_role` propagates, `can_act_on` returns `False`). `is_staff` is the only deliberately coerce-to-`False` path and is kept for its historical callers. Uses NewType `UserId` where the schema says so; DB values remain ints.
 
-## Bans (`bans_db.py`, collection `bans`)
+## Bans (`bans_db/`, collection `bans`)
 
 ### Document shape: `BanDoc`
 
@@ -364,7 +364,7 @@ Resolution order in `get_effective_role`:
 
 **Error behavior:** every access uses `db_call()`. `migrate_group` never aborts the whole migration because one collection failed: it logs per-collection failures, skips that side, and reports whether anything moved.
 
-## Warnings (`warns_db.py`, collections `warns`, `warn_counts`)
+## Warnings (`warns_db/`, collections `warns`, `warn_counts`)
 
 ### Document shapes
 
@@ -537,7 +537,7 @@ Preference-only rows are kept out of `member_cache` on purpose, so they never in
 - `set_user_locale(user_id: int, locale: str | None) -> None`
   Upserts the `{user_id, locale}` row, or deletes the row entirely when `locale is None` so the collection holds only users with an explicit preference. Pops the L1 entry on write.
 
-## Caching (`cache.py`, `redis_client.py`)
+## Caching (`cache/`, `redis_client.py`)
 
 ### Cache types
 
@@ -590,7 +590,7 @@ Bare `cachetools` L1 caches (no Redis, no L2): `groups_db._GROUP_LOCALE_L1` (max
 - `client() -> redis.asyncio.Redis | None`
   Active client, or `None` when Redis is not configured.
 - `mark_op(*, ok: bool) -> None`
-  Records one Redis operation outcome (called from `cache.py`); logs the transition to unhealthy exactly once.
+  Records one Redis operation outcome (called from `cache/`); logs the transition to unhealthy exactly once.
 - `liveness() -> bool | None`
   Last known Redis liveness (`None` = no operation observed yet), used by the synchronous `/health` route.
 
@@ -603,7 +603,7 @@ Pool parameters: `decode_responses=True`, `max_connections=20`, `socket_connect_
 - Redis writes/deletes are fire-and-forget, bounded to 2.0 s each, and logged at DEBUG on failure; background-task errors are surfaced via a done-callback log, never raised into callers.
 - Redis failures after the first are not re-logged per op (transition logging only), and the pool/health state is tracked via `mark_op`.
 
-## Scheduler (`scheduler.py`)
+## Scheduler (`scheduler/`)
 
 `start(mongodb_uri: str, db_name: str, warn_expiry_days: int, *, bot: Bot | None = None, sync_interval_hours: int = 0) -> None` spawns the `tcbot.scheduler` background asyncio task and waits (bounded by the same 10 s grace window as `stop()`) for the scheduler to become ready, so a constructor error or a hung jobstore handshake reports a startup failure instead of hanging boot. `bot` plus a positive interval registers the `tcbot.enforcement_sync` sweep; a zero interval or `None` bot removes a stale schedule. On readiness failure it raises `RuntimeError` (wrapped from the captured error).
 
@@ -623,7 +623,7 @@ Recurring jobs (idempotent via `replace_existing=True`):
 
 Member-cache cleanup is handled by the MongoDB TTL index on `last_updated` (`expireAfterSeconds=7776000`, 90 days), not by a scheduler job.
 
-Persistent per-ban unban jobs: there are NONE in the current code. The scheduler registers only the two periodic jobs above (plus the legacy removal). There is no `DateTrigger` usage and no per-ban unban/untimed job API in `scheduler.py`; the module docstring's mention of "timed-ban" support refers to reserved `BanDoc.until_date`/`duration_str` fields that are always `None` today. No unban-job DateTrigger scheme exists to reproduce in the rewrite.
+Persistent per-ban unban jobs: there are NONE in the current code. The scheduler registers only the two periodic jobs above (plus the legacy removal). There is no `DateTrigger` usage and no per-ban unban/untimed job API in `scheduler/`; the module docstring's mention of "timed-ban" support refers to reserved `BanDoc.until_date`/`duration_str` fields that are always `None` today. No unban-job DateTrigger scheme exists to reproduce in the rewrite.
 
 Scheduler error behavior: a background-task crash sets `_sched_error`, unblocks `start()` (so it never hangs forever), and `start()` re-raises as `RuntimeError`. `expire_old_warns` logs per-collection delete failures, and a partial run (one collection failed) logs the completion line at error level with an incomplete marker instead of a clean info line (a cancelled expiry propagates via `throw_if_cancelled` rather than reporting success). `_run_scheduled_sync` logs the failure and returns; the next interval re-drives, so one bad run never wedges the schedule.
 

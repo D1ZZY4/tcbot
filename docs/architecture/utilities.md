@@ -13,7 +13,7 @@ flowchart TD
     Utils --> Dispatch[dispatch.py<br/>fan_out concurrency]
     Utils --> Prefixes[prefixes.py<br/>command prefix builders]
     Utils --> Logging[logger.py<br/>logger config]
-    Utils --> ErrorReporter[error_reporter.py<br/>error sink]
+    Utils --> ErrorReporter[error_reporter/<br/>error sink]
     Utils --> TimeDate[time_and_date.py<br/>UTC + display + measure]
     Utils --> Pagination[pagination.py<br/>paginate, nav_row, date_or_unknown]
     Utils --> Fmt[formatter.py<br/>MarkdownV2 escape, bold, code, user_ref]
@@ -119,7 +119,7 @@ Logging setup is installed from `tcbot.__main__.main()`.
 
 Third-party loggers such as `httpx`, `telegram`, `motor`, and `pymongo` are capped to reduce noise. Import-time loggers (`tcbot/__init__.py`, `tcbot/modules/__init__.py`) stay on stdlib because they emit before `setup()` installs these handlers.
 
-## `error_reporter.py`
+## `error_reporter/`
 
 Error reporting sends structured MarkdownV2 messages to `LOGS_ERRORS`.
 
@@ -158,7 +158,7 @@ Do not call `datetime.utcnow()` or `datetime.now(timezone.utc)` outside this uti
 
 ## `pagination.py`
 
-Shared pagination helpers used by `stats_flow.py` and `check_flow.py` drill-down pages.
+Shared pagination helpers used by `stats_flow/` and `check_flow/` drill-down pages.
 
 | Export | Purpose |
 |---|---|
@@ -170,7 +170,7 @@ Always import these from `tcbot.utils.pagination`; do not reimplement pagination
 
 ## `formatter.py`
 
-Single source of truth for all Telegram Markdown markup. Both the utils layer (e.g. `error_reporter.py`) and the modules layer import from here.
+Single source of truth for all Telegram Markdown markup. Both the utils layer (e.g. `error_reporter/`) and the modules layer import from here.
 
 | Function | Output/use |
 |---|---|

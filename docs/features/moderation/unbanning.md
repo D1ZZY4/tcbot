@@ -1,6 +1,6 @@
 # Unbanning
 
-This document describes the current federation unban behavior implemented by `tcbot/modules/unbanning.py` (the `/tcunban` entry point) and `tcbot/modules/helper/workflows/unban_flow.py` (the `execute_unban` executor). Persistent ban state lives in `tcbot/database/bans_db.py`; only the unban-relevant helpers are documented here.
+This document describes the current federation unban behavior implemented by `tcbot/modules/unbanning.py` (the `/tcunban` entry point) and `tcbot/modules/helper/workflows/unban_flow/` (the `execute_unban` executor). Persistent ban state lives in `tcbot/database/bans_db/`; only the unban-relevant helpers are documented here.
 
 For the ban flow that creates the records this command clears, see
 [`banning.md`](banning.md). For the appeal flow that can also trigger an unban,
@@ -80,7 +80,7 @@ The Developer minimum is intentional: unbanning a higher-ranked target would sil
 
 ## `execute_unban` behavior
 
-`execute_unban(update, ctx, target_id, target_fname, *, pre_ban=None)` lives in `tcbot/modules/helper/workflows/unban_flow.py`. The executor:
+`execute_unban(update, ctx, target_id, target_fname, *, pre_ban=None)` lives in `tcbot/modules/helper/workflows/unban_flow/`. The executor:
 
 1. Uses the caller-supplied `pre_ban` when present, otherwise falls back to `db.bans_db.get_active_ban(target_id)`.
 2. If no active ban is found, replies `<user> has no active federation ban.` and stops. This guard prevents a misleading "removed from N/M groups" reply for a no-op.
@@ -106,11 +106,11 @@ Unban uses three `bans_db` helpers:
 | `deactivate_all_active_bans(user_id)` | Deactivates every active ban for the user in one `update_many` write. Returns the number of bans deactivated. Used by the manual command and mirrored by the appeal-approval inline sequence so duplicate active records (from earlier race conditions) are cleared in one operation. |
 | `make_ban_id()` | Not used here; only listed because the helper file is shared. |
 
-Unban has no scheduler interaction: neither `bans_db` nor `unban_flow` touches `scheduler.py`, and the scheduler registers only the warn-expiry and optional enforcement-sync schedules. Bans are not time-limited, so no per-ban `unban.<ban_id>` job exists.
+Unban has no scheduler interaction: neither `bans_db` nor `unban_flow` touches `scheduler/`, and the scheduler registers only the warn-expiry and optional enforcement-sync schedules. Bans are not time-limited, so no per-ban `unban.<ban_id>` job exists.
 
 ## Logs
 
-Unban log templates are defined in `parse_logmsg.py`:
+Unban log templates are defined in `parse_logmsg/`:
 
 | Template | Used for |
 |---|---|

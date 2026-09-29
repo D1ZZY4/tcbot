@@ -1,6 +1,6 @@
 # Disconnecting
 
-This document describes the current federation disconnect behavior implemented by `tcbot/modules/disconnecting.py` (the `/tcdisconnect` and `/rmtc` entry points). The shared connection helpers used here live in `tcbot/modules/helper/workflows/connected_flow.py`.
+This document describes the current federation disconnect behavior implemented by `tcbot/modules/disconnecting.py` (the `/tcdisconnect` and `/rmtc` entry points). The shared connection helpers used here live in `tcbot/modules/helper/workflows/connected_flow/`.
 
 For the connect flow, see [`connecting.md`](connecting.md). For the list of
 currently connected groups, see [`groups.md`](groups.md). For shared helpers,

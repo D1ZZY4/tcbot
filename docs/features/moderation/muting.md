@@ -1,6 +1,6 @@
 # Muting
 
-This document describes the current federation mute and unmute behavior implemented by `tcbot/modules/muting.py` (the `/tcmute` and `/tcunmute` entry points), `tcbot/modules/helper/workflows/muting_flow.py` (the `execute_mute` and `execute_unmute` executors plus duration helpers), `tcbot/modules/helper/workflows/reason_flow.py` (the shared proof/reason conversation), and `tcbot/database/mutes_db.py` (the persistent `mutes` and `active_mutes` collections).
+This document describes the current federation mute and unmute behavior implemented by `tcbot/modules/muting.py` (the `/tcmute` and `/tcunmute` entry points), `tcbot/modules/helper/workflows/muting_flow/` (the `execute_mute` and `execute_unmute` executors plus duration helpers), `tcbot/modules/helper/workflows/reason_flow/` (the shared proof/reason conversation), and `tcbot/database/mutes_db.py` (the persistent `mutes` and `active_mutes` collections).
 
 For the ban flow, see [`banning.md`](banning.md). For the kick flow, see
 [`kicking.md`](kicking.md). For role auto-demotion on mute, see
@@ -71,7 +71,7 @@ The mute command is a `ConversationHandler` built by `reason_flow.build_modactio
 
 ## Duration token format
 
-The duration regex is `_DURATION_RE` in `muting_flow.py`:
+The duration regex is `_DURATION_RE` in `muting_flow/`:
 
 ```python
 _DURATION_RE = re.compile(r"^(\d+)(ye|mo|[smhdw])$", re.IGNORECASE)
@@ -141,7 +141,7 @@ The mute conversation uses `BuildReason("mute")` and `BuildProof("mute")` (both 
 - Reason: text, `Skip`, `Cancel`.
 - Proof: photo, video, GIF, file, `Skip`, `Done`, `Cancel`.
 
-The `_ModActionFlow` class in `reason_flow.py` enforces the same race-safe semantics described in [`kicking.md`](kicking.md): proof buffering until `Done`, double-submit guard via `ctx.user_data[mute_executing]`, fallback cancel on any unrecognized command.
+The `_ModActionFlow` class in `reason_flow/` enforces the same race-safe semantics described in [`kicking.md`](kicking.md): proof buffering until `Done`, double-submit guard via `ctx.user_data[mute_executing]`, fallback cancel on any unrecognized command.
 
 ## Auto-demote before mute
 
@@ -151,7 +151,7 @@ If the target holds a federation role, `cmd_mute` calls `Demote.auto_demote_or_a
 
 ## `execute_mute` behavior
 
-`_execute_mute(bot, update, meta)` lives in `tcbot/modules/helper/workflows/muting_flow.py`. The executor reads target ID, name, reason, admin, duration, proof messages, and the prompt chat/ID from the `meta` dict.
+`_execute_mute(bot, update, meta)` lives in `tcbot/modules/helper/workflows/muting_flow/`. The executor reads target ID, name, reason, admin, duration, proof messages, and the prompt chat/ID from the `meta` dict.
 
 Execution order:
 
@@ -224,7 +224,7 @@ Expired timed mutes are filtered at query time by `get_active_mute` and `active_
 
 ## Logs and keyboards
 
-Mute-related templates are defined in `parse_logmsg.py`:
+Mute-related templates are defined in `parse_logmsg/`:
 
 | Template | Used for |
 |---|---|

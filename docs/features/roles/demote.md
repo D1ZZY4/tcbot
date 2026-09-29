@@ -1,6 +1,6 @@
 # Demote
 
-This document describes the current demotion behavior implemented by `tcbot/modules/admins.py` (command + callback handlers) and `tcbot/modules/helper/workflows/demote_flow.py` (the `Demote` class shared by manual demotion and auto-demote on ban/kick/mute).
+This document describes the current demotion behavior implemented by `tcbot/modules/admins/` (command + callback handlers) and `tcbot/modules/helper/workflows/demote_flow/` (the `Demote` class shared by manual demotion and auto-demote on ban/kick/mute).
 
 For role hierarchy and rules, see [`roles.md`](roles.md). For the promote flow,
 see [`promote.md`](promote.md). For a flow that triggers auto-demotion

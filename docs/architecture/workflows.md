@@ -9,17 +9,17 @@ details, see [`../features/moderation/banning.md`](../features/moderation/bannin
 [`../features/roles/promote.md`](../features/roles/promote.md), and
 [`../features/roles/demote.md`](../features/roles/demote.md).
 
-Conversation and multi-step logic lives in `tcbot/modules/helper/workflows/`. New conversation files must be named `*_flow.py`; do not create `*_conv.py` files.
+Conversation and multi-step logic lives in `tcbot/modules/helper/workflows/`. Each flow is one `*_flow/` package (focused submodules plus a re-exporting `__init__.py` so dotted paths stay stable); do not create `*_conv.py` files.
 
 ## Package rules
 
 - Command modules own command filters and `__handlers__` registration.
 - Workflow files own state constants, `ConversationHandler` factories, and execution adapters.
-- Shared reason/proof logic belongs in `reason_flow.py` and `proof_flow.py`.
+- Shared reason/proof logic belongs in `reason_flow/` and `proof_flow/`.
 - Callback handlers must call `await q.answer()` before doing further work.
-- Timeout handling (`cfg.album_debounce`) is a per-action setting; the bot does not use job-queue or `ConversationHandler.TIMEOUT` states. Conversations end via escape commands, cancel, or explicit fallback handlers (e.g. `on_proof_timeout` in `ban_flow.py` fires when the moderator sends a command during the proof window).
+- Timeout handling (`cfg.album_debounce`) is a per-action setting; the bot does not use job-queue or `ConversationHandler.TIMEOUT` states. Conversations end via escape commands, cancel, or explicit fallback handlers (e.g. `on_proof_timeout` in `ban_flow/` fires when the moderator sends a command during the proof window).
 
-## Shared proof builder: `proof_flow.py`
+## Shared proof builder: `proof_flow/`
 
 `BuildProof` builds proof-step keyboards and messages.
 
@@ -31,7 +31,7 @@ Conversation and multi-step logic lives in `tcbot/modules/helper/workflows/`. Ne
 | `BuildProof.noted_prompt(...)` | Prompt when a reason was provided inline. |
 | `upload_proof(bot, msgs, caption, proof_chat, proof_thread)` | Uploads proof media and returns the first uploaded message ID. Photos and videos travel as one media group (caption on the first item); GIFs and files are sent individually after the gallery. Returns `None` fast without Telegram I/O on empty input or a batch with no usable item; a failed gallery falls through to the document loop, and a failed document is logged and skipped. |
 
-## Shared reason factory: `reason_flow.py`
+## Shared reason factory: `reason_flow/`
 
 State constants:
 
@@ -72,7 +72,7 @@ flowchart TD
     Exec --> End
 ```
 
-## Ban: `ban_flow.py`
+## Ban: `ban_flow/`
 
 | Item | Value |
 |---|---|
@@ -102,7 +102,7 @@ flowchart TD
     Exec --> End
 ```
 
-## Kick: `kicking_flow.py`
+## Kick: `kicking_flow/`
 
 | Item | Value |
 |---|---|
@@ -112,7 +112,7 @@ flowchart TD
 
 Kick is current-group-only. It bans the user from the current chat and immediately unbans them so the action behaves as a kick rather than a permanent group ban. If `proof_msgs` is provided, the proof upload starts before enforcement and runs concurrently with `ban_chat_member`, so the kick never waits for the proof-channel round trip; the resulting link is shown as an inline keyboard button on the reply and log messages. A ban failure cancels the in-flight upload and replies with a permissions/retry hint.
 
-## Mute: `muting_flow.py`
+## Mute: `muting_flow/`
 
 | Item | Value |
 |---|---|
@@ -160,7 +160,7 @@ flowchart TD
     Exec --> End
 ```
 
-## Warn: `warning_flow.py`
+## Warn: `warning_flow/`
 
 | Item | Value |
 |---|---|
@@ -171,23 +171,23 @@ flowchart TD
 
 Warns are tracked per `(user_id, chat_id)`. At `cfg.warn_limit` (per-group) or `cfg.fed_warn_limit` (federation-wide), the flow issues a **federation-wide ban** via `fan_out()` to all active connected groups plus primary groups, creates a ban document in the `bans` collection, and then clears warnings across all groups with `clear_all_warns` (only after at least one group ban succeeds). If `proof_msgs` is provided, the proof upload starts before the warn write and runs concurrently with `warns_db.add_warn`, so the warn never waits for the proof-channel round trip; the resulting link is attached as an inline keyboard button to all outgoing messages (auto-ban log, replies, non-auto-ban log). A warn-write failure cancels the in-flight upload and replies with a retry notice.
 
-## Unban: `unban_flow.py`
+## Unban: `unban_flow/`
 
 `execute_unban(update, ctx, target_id, target_fname, *, pre_ban=None)` is a direct executor, not a `ConversationHandler`. It finds the active ban (or uses a caller-supplied `pre_ban` record to skip the DB round-trip), deactivates it, unbans the user from all active groups with `fan_out()`, and posts an audit log.
 
-## Appeal: `appeal_flow.py` + `appeal_submit_flow.py` + `appeal_review_flow.py`
+## Appeal: `appeal_flow/` + `appeal_submit_flow/` + `appeal_review_flow/`
 
 | Item | Value |
 |---|---|
-| State | `WAITING_APPEAL = 0` (in `appeal_submit_flow.py`) |
+| State | `WAITING_APPEAL = 0` (in `appeal_submit_flow/`) |
 | Factory | `BuildAppeal.build_handler(entry_filter)` (submit mixin) |
 | Decision handler | `BuildAppeal.on_decision(update, ctx)` (review mixin) |
-| Lock helper | `reviewer_locked_out(review_timestamp, ban_admin_id, reviewer_id)` (in `appeal_review_flow.py`) |
+| Lock helper | `reviewer_locked_out(review_timestamp, ban_admin_id, reviewer_id)` (in `appeal_review_flow/`) |
 
-`appeal_flow.py` is a thin facade: `BuildAppeal` combines `AppealSubmitMixin`
+`appeal_flow/` is a thin facade: `BuildAppeal` combines `AppealSubmitMixin`
 (user DM entry, gates, posting, cancel) with `AppealReviewMixin` (staff
 decisions) and re-exports the shared names, so `appeals.py` and existing
-importers keep working unchanged. Both keyboards live in `keyboards.py`
+importers keep working unchanged. Both keyboards live in `keyboards/`
 (`appeal_cancel_kb`, `appeal_review_kb`).
 
 Appeal flow requirements:
@@ -215,7 +215,7 @@ flowchart TD
     Reject --> LogChat
 ```
 
-## Connection: `connected_flow.py`
+## Connection: `connected_flow/`
 
 `BuildConnection` handles group connection prompts and bot-added events.
 
@@ -228,26 +228,26 @@ flowchart TD
 | `on_bot_added(update, ctx)` | Handles `MY_CHAT_MEMBER` updates. |
 | `on_join_decision(update, ctx)` | Handles connect/cancel callback decisions. |
 
-## Promotion: `promote_flow.py`
+## Promotion: `promote_flow/`
 
-Promotion is not a conversation. `Promote.execute(...)` in `workflows/promote_flow.py` performs direct role assignment or creates a promotion request for Founder approval when required. `admins.py` registers the command and callback handlers.
+Promotion is not a conversation. `Promote.execute(...)` in `workflows/promote_flow/` performs direct role assignment or creates a promotion request for Founder approval when required. `admins/` registers the command and callback handlers.
 
-## Demotion: `demote_flow.py`
+## Demotion: `demote_flow/`
 
-Demotion is not a conversation. `Demote.execute(...)` in `workflows/demote_flow.py` handles two distinct paths controlled by the optional `trigger` argument:
+Demotion is not a conversation. `Demote.execute(...)` in `workflows/demote_flow/` handles two distinct paths controlled by the optional `trigger` argument:
 
 | Call | Trigger | Path |
 |---|---|---|
-| `Demote.execute(...)` | `None` | Manual `/tcdemote`: `admins.py` sends a Confirm/Cancel prompt first; the confirm callback calls `Demote.execute(trigger=None)`, which removes the role, posts the federation log, and DMs the target. |
+| `Demote.execute(...)` | `None` | Manual `/tcdemote`: `admins/` sends a Confirm/Cancel prompt first; the confirm callback calls `Demote.execute(trigger=None)`, which removes the role, posts the federation log, and DMs the target. |
 | `Demote.execute(..., trigger="ban")` | `"ban"` | Auto-demote before a federation ban: silently removes the role. The DM body names the trigger verb (banned/kicked/muted), but the federation log is identical to the manual path and never notes the trigger. |
 | `Demote.execute(..., trigger="kick")` | `"kick"` | Auto-demote before a current-group kick: same silent role-removal path as `"ban"`. |
 | `Demote.execute(..., trigger="mute")` | `"mute"` | Auto-demote before a federation-wide mute: same silent role-removal path as `"ban"` and `"kick"`. |
 
 `Demote.remove_role(target_id, target_role)` is the shared DB write used by all four paths. It delegates to `users_roles` and returns `True` if a role was actually removed.
 
-## Stats: `stats_flow.py`
+## Stats: `stats_flow/`
 
-`stats_flow.py` exposes the unified `Stats` class used by `/tcstats`. Every
+`stats_flow/` exposes the unified `Stats` class used by `/tcstats`. Every
 drill-down (overview, staff roster, users, connected chats, active bans, and
 the search panel) is a classmethod on `Stats` returning
 `(text, InlineKeyboardMarkup)`. Callbacks pair `q.answer()` with `safe_edit_cb`
@@ -255,9 +255,9 @@ so the same view can be re-tapped without raising `Message is not modified`.
 See [`../features/statistics.md`](../features/statistics.md) for the full
 method list and callback namespaces.
 
-## Check: `check_flow.py`
+## Check: `check_flow/`
 
-`check_flow.py` exposes the `Check` class used by `/check`. It is not a conversation; every method is a classmethod returning `(text, InlineKeyboardMarkup)` that `checking.py` sends or edits directly.
+`check_flow/` exposes the `Check` class used by `/check`. It is not a conversation; every method is a classmethod returning `(text, InlineKeyboardMarkup)` that `checking/` sends or edits directly.
 
 | Method | Callback prefix | Purpose |
 |---|---|---|

@@ -1,6 +1,6 @@
 # Connecting
 
-This document describes the current federation group-connect behavior implemented by `tcbot/modules/connecting.py` (the `/tcconnect` entry point) and `tcbot/modules/helper/workflows/connected_flow.py` (the `connection` builder used by the manual command path and the bot-added prompt).
+This document describes the current federation group-connect behavior implemented by `tcbot/modules/connecting.py` (the `/tcconnect` entry point) and `tcbot/modules/helper/workflows/connected_flow/` (the `connection` builder used by the manual command path and the bot-added prompt).
 
 For the disconnect command, see [`disconnecting.md`](disconnecting.md). For the list of currently connected groups, see [`groups.md`](groups.md). For the ban flow applied across connected groups, see [`banning.md`](banning.md). For shared helpers, see [`../../architecture/helpers.md`](../../architecture/helpers.md). For the database layer, see [`../../architecture/database.md`](../../architecture/database.md).
 
@@ -44,7 +44,7 @@ The connection process also replays active federation bans and mutes onto the ne
 
 Commands use the project's configured prefixes; slash commands are examples.
 
-There is no `/tcconnect` alias for the auto-prompt path; the prompt uses inline `Connect` / `Cancel` buttons with callback data `tc_join` and `tc_cancel` (see `BuildConnection` defaults in `connected_flow.py`).
+There is no `/tcconnect` alias for the auto-prompt path; the prompt uses inline `Connect` / `Cancel` buttons with callback data `tc_join` and `tc_cancel` (see `BuildConnection` defaults in `connected_flow/`).
 
 ## `/tcconnect` flow
 
@@ -121,7 +121,7 @@ The function returns normally only after `add_group` has succeeded. If the `add_
 - `can_restrict_members`
 - `can_invite_users`
 
-These are defined as `_REQUIRED_PERMS` in `connected_flow.py`. The same tuple is exposed via `connection.perms_required_message()` so the help text matches.
+These are defined as `_REQUIRED_PERMS` in `connected_flow/`. The same tuple is exposed via `connection.perms_required_message()` so the help text matches.
 
 ## Database impact
 

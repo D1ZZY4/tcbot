@@ -9,10 +9,10 @@ helpers used by these helpers, see [`database.md`](database.md).
 ```mermaid
 flowchart TD
     Modules[tcbot/modules/*.py] --> Helper[tcbot/modules/helper/]
-    Helper --> Decorators[decorators.py<br/>permission guards]
-    Helper --> Extraction[extraction.py<br/>extract_target]
+    Helper --> Decorators[decorators/<br/>permission guards]
+    Helper --> Extraction[extraction/<br/>extract_target]
     Helper --> Identity[identity.py<br/>role classification]
-    Helper --> Keyboards[keyboards.py<br/>InlineKeyboard builders]
+    Helper --> Keyboards[keyboards/<br/>InlineKeyboard builders]
     Helper --> Locale[locale.py<br/>render-locale resolution]
     Helper --> Replies[replies.py<br/>localized reply strings]
     Helper --> Workflows[workflows/<br/>conversation flows]
@@ -22,7 +22,7 @@ flowchart TD
     Workflows --> DB
 ```
 
-## `decorators.py`
+## `decorators/`
 
 Decorators provide authorization, handler-level rate limiting, and debug tracing.
 
@@ -74,7 +74,7 @@ in [`utilities.md#formatterpy`](utilities.md).
 
 Use `esc()`, `code()`, or `user_ref()` for any user-provided value in MarkdownV2 messages. Use `user_ref()` in action summaries and audit logs where the name links to the numeric user ID.
 
-## `extraction.py`
+## `extraction/`
 
 Target resolution for moderation commands.
 
@@ -106,7 +106,7 @@ Render-locale resolution shared by handlers, callbacks, and flows. Every entry p
 
 All resolution funnels through `tcbot.utils.i18n.resolve_locale`, which applies explicit precedence and never raises; see [`utilities.md#i18npy`](utilities.md). Chat-type to scope mapping lives once in `language._chat_scope` (used by the language panel and its callbacks).
 
-## `keyboards.py`
+## `keyboards/`
 
 All inline keyboard factories live here. Command modules and workflows should import keyboard factories instead of constructing repeated keyboard layouts inline.
 
@@ -143,15 +143,15 @@ The companion helpers `identity.refuse_message(action, ident, locale=None)`, `id
 
 Every moderation command (ban, kick, mute, warn, unban, unmute, promote, demote) must call `identity.classify` once and route through `refuse_message` instead of inlining `target_id == ctx.bot.id` / `user.id == owner_id` / role-string branches. Refusal copy lives in `identity.py` so the bot's voice stays consistent across the whole project.
 
-## Permission helpers in `decorators.py`
+## Permission helpers in `decorators/`
 
-The `decorators.py` module centralizes both auth-guard decorators and the shared executor-vs-target permission check used by ban/kick/mute/warn entry handlers.
+The `decorators/` module centralizes both auth-guard decorators and the shared executor-vs-target permission check used by ban/kick/mute/warn entry handlers.
 
 | Export | Purpose |
 |---|---|
 | `resolve_and_check(msg, executor_id, target_id, min_role=...)` | Resolves executor and target roles, checks minimum executor rank, checks executor outranks target, and replies on failure. Role lookup errors fail closed and do not become a no-role result. |
 
-Ban, kick, and mute entry points pair this with `Demote.execute(..., trigger="ban"/"kick"/"mute")` from `workflows/demote_flow.py` to remove the target's role before the moderation action.
+Ban, kick, and mute entry points pair this with `Demote.execute(..., trigger="ban"/"kick"/"mute")` from `workflows/demote_flow/` to remove the target's role before the moderation action.
 
 ## `replies.py`
 
@@ -168,7 +168,7 @@ class HelpEntry(TypedDict):
     sections: list[tuple[str, str]]  # (section_header, section_body) pairs
 ```
 
-Each help-bearing module declares exactly one `__help__: replies.HelpEntry = {...}` instead of three separate attributes. `help.py` reads this dict via `_builder_help()` and falls back to the legacy `__module_name__` / `__help_text__` / `__help_sections__` attributes for backward compatibility during migration.
+Each help-bearing module declares exactly one `__help__: replies.HelpEntry = {...}` instead of three separate attributes. `help/` reads this dict via `_builder_help()` and falls back to the legacy `__module_name__` / `__help_text__` / `__help_sections__` attributes for backward compatibility during migration.
 
 ### Section constructor helpers
 
@@ -212,7 +212,7 @@ Command modules import from `replies.py` instead of inlining these strings.
 | `message_link(chat_id, message_id, thread_id=None)` | Builds a private-channel/group message link; pass `thread_id` for topic threads. |
 | `appeal_deep_link(bot_username, ban_id)` | Builds `https://t.me/<bot>?start=appeal_<ban_id>`. |
 
-## `parse_logmsg.py`
+## `parse_logmsg/`
 
 This file builds MarkdownV2 audit log messages for moderation, appeals, staff roles, group connections, broadcasts, and auto-demotions.
 
@@ -243,4 +243,4 @@ Use the `LogBuilder` class in this module to compose new audit-log messages; avo
 - Keep user-facing MarkdownV2 escaped.
 - Keep keyboard callback-data stable because handlers match it with regex patterns.
 - Do not duplicate role checks that already exist in `users_roles` or `decorators.resolve_and_check`.
-- Do not create keyboard factories outside `keyboards.py`. Flow step classes keep thin delegating methods over the same builders. The only markup outside is the locale-aware `nav_row()` row primitive in `tcbot/utils/pagination.py`, consumed through `paged_drill_kb()` or directly with an explicit locale.
+- Do not create keyboard factories outside `keyboards/`. Flow step classes keep thin delegating methods over the same builders. The only markup outside is the locale-aware `nav_row()` row primitive in `tcbot/utils/pagination.py`, consumed through `paged_drill_kb()` or directly with an explicit locale.

@@ -63,20 +63,20 @@ tcbot/
 ├── alive.py                Flask health endpoint and webhook receiver
 ├── serverless.py           Vercel lifecycle: shared PTB app, update dispatch, cron expiry
 ├── database/
-│   ├── mongos.py           Motor client, collection accessor, indexes
-│   ├── bans_db.py          Federation ban records (incl. per-user history)
+│   ├── mongos/             Motor client, collection accessor, indexes
+│   ├── bans_db/            Federation ban records (incl. per-user history)
 │   ├── groups_db.py        Connected groups and pending joins
-│   ├── users_cache.py      Member profile cache operations
+│   ├── users_cache/        Member profile cache operations
 │   ├── users_roles.py      Owners/admins + dev/tester roles, effective-role resolution
-│   ├── warns_db.py         Warnings and warning counters (incl. per-user aggregates)
+│   ├── warns_db/           Warnings and warning counters (incl. per-user aggregates)
 │   ├── kicks_db.py         Kick audit records (incl. per-user history)
 │   ├── mutes_db.py         Mute audit records (incl. per-user history)
 │   ├── queues_db.py        Promotion request queue
-│   ├── cache.py            L1 TTL caches with optional Redis L2
+│   ├── cache/              L1 TTL caches with optional Redis L2
 │   ├── redis_client.py     Optional async Redis client
-│   ├── scheduler.py        APScheduler background jobs in the MongoDB `jobs` collection
-│   ├── mtproto.py          Bot-token MTProto client: resolve + member harvest
-│   ├── mtproto_store.py    MongoDB-backed Kurigram storage engine
+│   ├── scheduler/          APScheduler background jobs in the MongoDB `jobs` collection
+│   ├── mtproto/            Bot-token MTProto client: resolve + member harvest
+│   ├── mtproto_store/      MongoDB-backed Kurigram storage engine
 │   ├── settings_db.py      Per-user settings (locale preferences)
 │   ├── documents.py        TypedDict document shapes
 │   └── types.py            NewType ID primitives
@@ -85,10 +85,10 @@ tcbot/
 │   ├── *.py                Command and callback modules
 │   └── helper/
 │       ├── ban_info.py     Ban detail renderer
-│       ├── decorators.py   Auth, per-handler rate limits, tracing, resolve_and_check
-│       ├── extraction.py   Target resolution
+│       ├── decorators/     Auth, per-handler rate limits, tracing, resolve_and_check
+│       ├── extraction/     Target resolution
 │       ├── identity.py     Identity classification, refusal messages, staff notices
-│       ├── keyboards.py    Inline keyboard factories
+│       ├── keyboards/      Inline keyboard factories
 │       ├── locale.py       Render-locale resolution shared by handlers, callbacks, flows
 │       ├── parse_*.py      Link, log, and safe-edit helpers
 │       ├── replies.py      Shared localized reply and help-text strings, HelpEntry shape
@@ -97,7 +97,7 @@ tcbot/
 └── utils/
     ├── circuit_breaker.py  Async circuit breaker for Telegram + MongoDB
     ├── dispatch.py         Bounded concurrent fan-out (integrates Telegram circuit)
-    ├── error_reporter.py   Telegram error classification and reporting
+    ├── error_reporter/     Telegram error classification and reporting
     ├── formatter.py        MarkdownV2 escaping and formatting (single source of truth)
     ├── i18n.py             TOML locale catalogs, lookup, and interpolation
     ├── logger.py           Console formatter and error log handler

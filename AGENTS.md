@@ -103,64 +103,64 @@ Current stack:
 │   ├── __main__.py           Runtime entry point, handler registration, webhook/polling transport
 │   ├── alive.py              Flask keep-alive and webhook receiver
 │   ├── serverless.py         Vercel lifecycle: shared PTB app, update dispatch, cron expiry
-│   ├── database/             MongoDB helpers, one file per collection/domain
-│   │   ├── users_cache.py    Member profile cache operations
+│   ├── database/             MongoDB helpers, one package per collection/domain
+│   │   ├── users_cache/      Member profile cache operations
 │   │   ├── users_roles.py    Role system: owners/admins/roles
-│   │   ├── bans_db.py        Federation bans
+│   │   ├── bans_db/          Federation bans
 │   │   ├── groups_db.py      Connected and pending groups
-│   │   ├── warns_db.py       Warnings
+│   │   ├── warns_db/         Warnings
 │   │   ├── kicks_db.py       Kicks
 │   │   ├── mutes_db.py       Mutes
 │   │   ├── queues_db.py      Promotion requests
-│   │   ├── cache.py          TwoLevelCache (L1 in-memory + L2 Redis)
+│   │   ├── cache/            TwoLevelCache (L1 in-memory + L2 Redis)
 │   │   ├── redis_client.py   Optional Redis client
-│   │   ├── scheduler.py      APScheduler background task + MongoDBJobStore
-│   │   ├── mongos.py         MongoDB client/indexes
+│   │   ├── scheduler/        APScheduler background task + MongoDBJobStore
+│   │   ├── mongos/           MongoDB client/indexes
 │   │   ├── documents.py      Typed document shapes
 │   │   ├── types.py          Domain primitive types
 │   │   ├── settings_db.py    Per-user locale preferences
-│   │   ├── mtproto.py        Bot-token MTProto client
-│   │   └── mtproto_store.py  MongoDB-backed Kurigram storage
+│   │   ├── mtproto/          Bot-token MTProto client
+│   │   └── mtproto_store/    MongoDB-backed Kurigram storage
 │   ├── modules/              Telegram command modules and handlers
 │   │   ├── helper/           Shared helper code and conversation workflows
-│   │   │   ├── workflows/    ConversationHandler flows (`*_flow.py` only)
-│   │   │   ├── keyboards.py  Inline keyboard builders
-│   │   │   ├── decorators.py  Rate limiter, role checks, execution logging
-│   │   │   ├── extraction.py Target/user extraction helpers
+│   │   │   ├── workflows/    ConversationHandler flows (one `*_flow/` package each)
+│   │   │   ├── keyboards/    Inline keyboard builders
+│   │   │   ├── decorators/    Rate limiter, role checks, execution logging
+│   │   │   ├── extraction/   Target/user extraction helpers
 │   │   │   ├── identity.py   Self/bot/Telegram/Founder/staff classification
 │   │   │   ├── locale.py     Render-locale resolution (per-update locale)
 │   │   │   ├── parse_link.py  `t.me/c/...` deep-link builders
-│   │   │   ├── parse_logmsg.py  Federation log message renderers
+│   │   │   ├── parse_logmsg/    Federation log message renderers
 │   │   │   ├── parse_editmsg.py  Safe `edit_text` / `edit_message_text` wrappers
 │   │   │   ├── ban_info.py    Shared ban-detail builder for /check and /checkme
 │   │   │   └── replies.py     Localized reply functions and HelpEntry shape
 │   │   ├── banning.py        /tcban command
 │   │   ├── kicking.py        /tckick command
 │   │   ├── muting.py         /tcmute command
-│   │   ├── warnings.py       /tcwarn command
+│   │   ├── warnings/         /tcwarn command
 │   │   ├── appeals.py        /appeal flow
-│   │   ├── admins.py         Role commands (/tcpromote, /tcdemote, /transferowner, …)
+│   │   ├── admins/           Role commands (/tcpromote, /tcdemote, /transferowner, …)
 │   │   ├── language.py       /language command
 │   │   ├── connecting.py     /tcconnect command
 │   │   ├── disconnecting.py  /tcdisconnect and /rmtc commands
 │   │   ├── groups.py         Group management
-│   │   ├── checking.py       /check and /checkme commands
+│   │   ├── checking/         /check and /checkme commands
 │   │   ├── unbanning.py      /tcunban command
 │   │   ├── broadcasting.py   /tcbroadcast command
-│   │   ├── greeting.py       Greeting messages
+│   │   ├── greeting/         Greeting messages
 │   │   ├── about.py          About panel (callback-only, via start menu)
 │   │   ├── additional.py     Additional menu
-│   │   ├── help.py           Help command
-│   │   ├── stats.py          Statistics
-│   │   ├── syncing.py        Enforcement reconciliation (/tcsync)
-│   │   ├── maintenance.py    Maintenance commands
+│   │   ├── help/             Help command
+│   │   ├── stats/            Statistics
+│   │   ├── syncing/          Enforcement reconciliation (/tcsync)
+│   │   ├── maintenance/      Maintenance commands
 │   │   ├── netspeed.py       Network speed test
 │   │   ├── privacy.py        Privacy panel (callback-only, via start menu)
 │   │   └── start.py          /start command
 │   └── utils/                Logging, dispatch, prefixes, datetime helpers
 │       ├── circuit_breaker.py  Telegram/MongoDB circuit breaker
 │       ├── dispatch.py        fan_out() bounded concurrency dispatcher
-│       ├── error_reporter.py  Error reporting to LOGS_ERRORS
+│       ├── error_reporter/    Error reporting to LOGS_ERRORS
 │       ├── formatter.py       MarkdownV2 formatter (esc, code, user_ref, bold)
 │       ├── i18n.py            TOML catalog, t() and locale resolution
 │       ├── logger.py          Logging setup
@@ -192,8 +192,8 @@ Core ownership rules:
 
 - Command handlers live in `tcbot/modules/`. See [`docs/architecture/modules.md`](docs/architecture/modules.md) for module boundaries.
 - Shared handler helpers live in `tcbot/modules/helper/`. See [`docs/architecture/helpers.md`](docs/architecture/helpers.md) for helper docs.
-- Conversation flows live in `tcbot/modules/helper/workflows/` and must be named `*_flow.py`. See [`docs/architecture/workflows.md`](docs/architecture/workflows.md) for conversation internals.
-- MongoDB access lives in `tcbot/database/`; keep new database helpers in `*_db.py` files. See [`docs/architecture/database.md`](docs/architecture/database.md) for database layer notes.
+- Conversation flows live in `tcbot/modules/helper/workflows/` and must be one `*_flow/` package with a re-exporting `__init__.py` so dotted import paths stay stable. See [`docs/architecture/workflows.md`](docs/architecture/workflows.md) for conversation internals.
+- MongoDB access lives in `tcbot/database/`; keep new database helpers in `*_db/` packages. See [`docs/architecture/database.md`](docs/architecture/database.md) for database layer notes.
 - Runtime utilities live in `tcbot/utils/`. See [`docs/architecture/utilities.md`](docs/architecture/utilities.md) for utility docs.
 
 ## Development Commands

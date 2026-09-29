@@ -211,7 +211,7 @@ Check `MONGODB_URI`, network access, Atlas IP allowlists, and database credentia
 
 ### MongoDB `CERTIFICATE_VERIFY_FAILED` (`unable to get local issuer certificate`)
 
-The host's system CA store is empty or outdated, so the Atlas TLS chain cannot be verified. The bot pins TLS trust to the `certifi` Mozilla bundle (`tlsCAFile` in `tcbot/database/mongos.py`), which fixes minimal sandboxes without one. If this error persists, the `certifi` install is stale (`uv sync --frozen` refreshes it) or `MONGODB_URI` carries a conflicting TLS option; an explicit `tlsCAFile` in the URI always wins over the bundled default. Never disable TLS verification to work around this.
+The host's system CA store is empty or outdated, so the Atlas TLS chain cannot be verified. The bot pins TLS trust to the `certifi` Mozilla bundle (`tlsCAFile` in `tcbot/database/mongos/`), which fixes minimal sandboxes without one. If this error persists, the `certifi` install is stale (`uv sync --frozen` refreshes it) or `MONGODB_URI` carries a conflicting TLS option; an explicit `tlsCAFile` in the URI always wins over the bundled default. Never disable TLS verification to work around this.
 
 ### `Module import failed for: ...`
 
@@ -228,4 +228,4 @@ Check:
 
 ### Buttons stop responding
 
-Check callback patterns in the registering module, then inspect `tcbot/modules/helper/keyboards.py` and the matching callback handler.
+Check callback patterns in the registering module, then inspect `tcbot/modules/helper/keyboards/` and the matching callback handler.

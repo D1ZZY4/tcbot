@@ -17,6 +17,10 @@ Markdown conventions live in [`comment-style.md`](comment-style.md).
   non-comment code line.
 - Use two blank lines between top-level functions and classes after formatting.
 - Prefer focused functions and early returns over deeply nested conditionals.
+- Keep every Python file at most 375 lines (target 350 or fewer). When a
+  module outgrows the budget, split it into a same-named package of focused
+  submodules plus a thin `__init__.py` that re-exports the exact public
+  surface, so dotted import paths stay stable. CI enforces the budget.
 - Keep source compatible with the Ruff configuration in `pyproject.toml`.
 
 Example module header:
@@ -170,13 +174,13 @@ Help and keyboards:
 
 - Every module exposes `get_help(locale)` returning its `HelpEntry`;
   `__help__` stays as the default-locale entry for tests and fallbacks.
-  `help.py` rebuilds content per request, so topics, overviews,
+  `help/` rebuilds content per request, so topics, overviews,
   sections, and keyboards all follow the tapper's locale.
 - Section labels and scope bodies are shared (`common.toml`
   `[section]`, `[context]`, `[target]`): labels render raw, bodies
   render MarkdownV2. Use `who_section` / `where_section` /
   `target_section` with the locale.
-- Every locale-dependent keyboard builder in `keyboards.py` takes `locale` and reads
+- Every locale-dependent keyboard builder in `keyboards/` takes `locale` and reads
   labels from `button.toml`; `help_topics_kb` is locale-independent. Thread the handler locale through every call site.
 
 ## Database and Cache Access
@@ -201,12 +205,12 @@ Help and keyboards:
 - Kick, mute, and warn use `reason_flow.build_modaction_conv()`.
 - Ban uses `ban_flow.ban_conversation()`.
 - Appeals use `BuildAppeal(...).build_handler()`.
-- New standalone flows should model `appeal_flow.py`.
+- New standalone flows should model `appeal_flow/`.
 - Every flow has a cancel fallback.
 - Use `WAITING_*` state constants.
 - Use `cfg.album_debounce` and other `cfg` values for workflow deadlines,
   never hardcoded literals.
-- Define inline keyboard builders only in `tcbot/modules/helper/keyboards.py`.
+- Define inline keyboard builders only in `tcbot/modules/helper/keyboards/`.
 - Use formatter helpers from `tcbot/utils/formatter.py`.
 
 ## Datetime Handling
@@ -241,7 +245,7 @@ Concurrency, `asyncio.gather()`, fan-out, timeouts, and cancellation follow
 
 - Creating `*_conv.py` files.
 - Writing to MongoDB from command modules.
-- Adding keyboard builders outside `keyboards.py`.
+- Adding keyboard builders outside `keyboards/`.
 - Using HTML parse mode.
 - Duplicating reason or proof workflow state handlers.
 - Calling raw `col()` from feature modules.

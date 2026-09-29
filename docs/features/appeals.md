@@ -1,6 +1,6 @@
 # Appeals
 
-This document describes the current ban appeal behavior implemented by `tcbot/modules/appeals.py`, `tcbot/modules/helper/workflows/appeal_flow.py` (facade), `appeal_submit_flow.py` (user submission), and `appeal_review_flow.py` (staff decisions).
+This document describes the current ban appeal behavior implemented by `tcbot/modules/appeals.py`, `tcbot/modules/helper/workflows/appeal_flow/` (facade), `appeal_submit_flow/` (user submission), and `appeal_review_flow/` (staff decisions).
 
 For the ban flow that triggers appeals, see
 [`moderation/banning.md`](moderation/banning.md). For the check command often
@@ -123,7 +123,7 @@ The review card contains two inline buttons:
 
 Both callbacks use the underscore-delimited `<action>_<ban_id>` shape that
 the handler registers and parses (`appeals.py` pattern
-`^appeal_(approve|reject)_\S+$`; `appeal_review_flow.py` slices the tail
+`^appeal_(approve|reject)_\S+$`; `appeal_review_flow/` slices the tail
 after `appeal_reject_`). Both `keyboards.appeal_review_kb()` buttons emit
 this underscore shape, so Approve and Reject taps reach the review handler.
 
@@ -226,7 +226,7 @@ Rejection does not deactivate the ban. The `review_message_id` and `review_times
 
 ## Logs
 
-Appeal-related logs are built in `tcbot/modules/helper/parse_logmsg.py`:
+Appeal-related logs are built in `tcbot/modules/helper/parse_logmsg/`:
 
 | Template | Destination / use |
 |---|---|

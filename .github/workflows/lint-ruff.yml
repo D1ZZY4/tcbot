@@ -44,5 +44,8 @@ jobs:
       - name: Check lint
         run: uv run ruff check .
 
+      - name: Check file-size budget
+        run: uv run python -c "import pathlib, sys; over = [(len(p.read_text().splitlines()), str(p)) for p in list(pathlib.Path('tcbot').rglob('*.py')) + list(pathlib.Path('api').rglob('*.py')) if '__pycache__' not in str(p) and len(p.read_text().splitlines()) > 375]; print('\n'.join(f'{n} {p}' for n, p in over) or 'file-size budget OK'); sys.exit(1 if over else 0)"
+
       - name: Import check
         run: uv run python -c "import tcbot; print('import OK')"

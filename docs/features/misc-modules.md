@@ -85,7 +85,7 @@ A callback with a non-numeric or out-of-range index (`idx < 0` or
 `idx >= len(_SECTION_KEYS)`) is answered with an alert and does not touch
 the message. Rate limit: 15 callbacks per 30 s. No database impact.
 
-## Help: `help.py`
+## Help: `help/`
 
 `/help` renders the in-bot help index built from every loaded module.
 
@@ -130,7 +130,7 @@ Rate limit: 3 per 60 s, `@staff_only`.
 Database impact: read-only (`groups_db.active_groups()`). A group-load
 failure replies with the generic load-failed error and aborts.
 
-## Greeting: `greeting.py`
+## Greeting: `greeting/`
 
 No commands. This module enforces federation bans and mutes on member joins
 and re-applies enforcement when join requests are approved.
@@ -169,7 +169,7 @@ the write on unchanged identity), reads `bans_db.get_active_ban` and
 `mutes_db.get_active_mute`, and on migration `groups_db.migrate_group` plus
 `warns_db.migrate_records`.
 
-## Maintenance: `maintenance.py`
+## Maintenance: `maintenance/`
 
 | Command | Aliases | Purpose | Access |
 |---|---|---|---|
@@ -213,7 +213,7 @@ Behavior:
 
 Rate limit: 3 per 60 s for both commands, `@owner_only`. No database impact.
 
-## Admin module surface: `admins.py`
+## Admin module surface: `admins/`
 
 The admin module owns the role-management command surface; the flows are
 documented in [`roles/roles.md`](roles/roles.md), [`roles/promote.md`](roles/promote.md),

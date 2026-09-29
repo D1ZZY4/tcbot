@@ -1,6 +1,6 @@
 # Promote
 
-This document describes the current promotion behavior implemented by `tcbot/modules/admins.py` (command + callback handlers) and `tcbot/modules/helper/workflows/promote_flow.py` (the `Promote` class and shared logic).
+This document describes the current promotion behavior implemented by `tcbot/modules/admins/` (command + callback handlers) and `tcbot/modules/helper/workflows/promote_flow/` (the `Promote` class and shared logic).
 
 For role hierarchy and rules, see [`roles.md`](roles.md). For the demote flow,
 see [`demote.md`](demote.md). For shared helpers, see
@@ -59,7 +59,7 @@ Omitting the role triggers the inline button menu built by `keyboards.promote_ro
 
 ## `Promote` class API
 
-`workflows/promote_flow.py` exposes a single `Promote` class with three entry points used by the command and callbacks. The module-level `ROLE_ALIASES` dict is exported for use by the command parser.
+`workflows/promote_flow/` exposes a single `Promote` class with three entry points used by the command and callbacks. The module-level `ROLE_ALIASES` dict is exported for use by the command parser.
 
 ```python
 from tcbot.modules.helper.workflows.promote_flow import ROLE_ALIASES, Promote
@@ -187,11 +187,11 @@ The unified `promoted` builder places the role as a field below the user (`Role:
 
 ## Edge cases
 
-- The effective-role cache (`effective_role_cache` in `tcbot/database/cache.py`) is invalidated by every write so subsequent reads see the new role.
+- The effective-role cache (`effective_role_cache` in `tcbot/database/cache/`) is invalidated by every write so subsequent reads see the new role.
 - A user holds at most one live role: the direct Founder path and the approval path both clear any Developer/Tester row when granting Admin, and Developer/Tester assignment is a single atomic upsert.
 - DM notification failures are tolerated through `asyncio.gather(..., return_exceptions=True)` or explicit fallback logging; promotion still completes.
 - Pending requests are not deleted after approval/rejection; they are flagged with `status`, `resolved_date`, and `resolved_by`.
-- `cmd_promote` and `cmd_demote` share `_resolve_executor_target` plus `_classify_and_load_role` in `tcbot/modules/admins.py` (executor role + target, then classify + role, both parallel and fail-closed); the role-button and demote-confirm callbacks share `_check_callback_staff` (rank re-check alongside `q.answer()` so the spinner clears in one round trip). Cancellation always propagates.
+- `cmd_promote` and `cmd_demote` share `_resolve_executor_target` plus `_classify_and_load_role` in `tcbot/modules/admins/` (executor role + target, then classify + role, both parallel and fail-closed); the role-button and demote-confirm callbacks share `_check_callback_staff` (rank re-check alongside `q.answer()` so the spinner clears in one round trip). Cancellation always propagates.
 - `Promote.request_admin` propagates `CancelledError` from the enqueue/owner fetch instead of coercing it into a queue verdict.
 
 ## Behavior reference

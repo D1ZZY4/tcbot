@@ -1,8 +1,8 @@
 # Sync
 
 This document describes the enforcement-reconciliation behavior implemented by
-`tcbot/modules/syncing.py` (the `/tcsync` command plus the shared sweep core)
-and the optional scheduled sweep in `tcbot/database/scheduler.py`.
+`tcbot/modules/syncing/` (the `/tcsync` command plus the shared sweep core)
+and the optional scheduled sweep in `tcbot/database/scheduler/`.
 
 For the ban flow that this reconciles, see [`banning.md`](banning.md). For the
 unban flow, see [`unbanning.md`](unbanning.md). For shared helpers, see
@@ -96,4 +96,4 @@ checked/enforced/skipped/failed/truncated counts.
 ## Validation hints
 
 - `tests/test_syncing.py` covers pair bounding, outcome classification per status, and summary rendering with fakes (no I/O).
-- `uv run ruff check tcbot/modules/syncing.py` plus an import check of the module.
+- `uv run ruff check tcbot/modules/syncing/` plus an import check of the module.

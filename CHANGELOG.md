@@ -19,6 +19,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Changed
 
+- **Oversized modules split into packages, every file at most 375 lines** (`tcbot/modules/admins/`, `checking/`, `stats/`, `help/`, `maintenance/`, `warnings/`, `syncing/`, `greeting/`, `helper/keyboards/`, `helper/parse_logmsg/`, `helper/decorators/`, `helper/extraction/`, `helper/workflows/*_flow/`, `database/cache/`, `scheduler/`, `warns_db/`, `bans_db/`, `users_cache/`, `mongos/`, `mtproto/`, `mtproto_store/`, `utils/error_reporter/`, `tcbot/config/`, `tcbot/runtime/`; `tcbot/modules/__init__.py` now also discovers packages): each former giant becomes focused submodules plus a thin `__init__.py` re-exporting the exact public surface, so dotted import paths, callback data, messages, and handler registration are unchanged. Mixin typing across the new packages is explicit (shared bases, member stubs, no invalid `self` annotations). Behavior changes: none; the full suite passes identically. The 375-line budget is now a code-style rule (`.agents/rules/code-style.md`) enforced by a CI step in the Ruff workflow.
+
 - **One home for every inline keyboard** (`tcbot/modules/helper/keyboards.py`, `reason_flow.py`, `proof_flow.py`, `connected_flow.py`, `stats_flow.py`, `check_flow.py`, `tcbot/utils/pagination.py`): step keyboards, stats/check lists, profile dashboard, and warn-group lists are defined once in the keyboard module, and the flow classes keep thin delegating steps so call sites and callback data are unchanged. In-flight keyboards keep working.
 
 - **Help index follows the tapper's locale** (`tcbot/modules/help.py`): topic lists, the `/help <module>` name map, and the prefix footer rebuild per request instead of serving the import-time default-locale snapshot. Behavior changes: Indonesian tappers now read translated index content and can look up modules by Indonesian name.
@@ -198,6 +200,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 - **Dead identity-cache probe removed** (`tcbot/database/users_cache.py`): `has_recent_identity_attempt()` had no callers; resolvers read the mention cache directly. Behavior changes: none.
 
 ### Documentation
+
+- **Guides follow the package layout** (`AGENTS.md`, `docs/architecture/modules.md`, `workflows.md`, `repository-map.md`, plus file-path references across the feature guides): module discovery documents packages, the workflows rule names `*_flow/` packages, and every split-module path reads in package form. Behavior changes: none, docs only.
 
 - **Shorter type-check command in every guide** (`README.md`, `AGENTS.md`, `PROMPT.md`, `CONTRIBUTING.md`, `docs/README.md`, `docs/getting-started/setup.md`): the documented command no longer requests anything extra since the checker already ships with the development dependencies, and all six guides now cover the whole tree. Behavior changes: none, docs only.
 

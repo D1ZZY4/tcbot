@@ -27,7 +27,7 @@ flowchart TD
 
 `/tcgroups` lists every group currently connected to the federation, with an optional `Details` view that adds each group's chat ID alongside its title. The command is open to anyone, so the same `/tcgroups` reply in any chat shows the same global list.
 
-The list source is `groups_db.active_groups()`, which reads `federated_groups` where `is_active: True`, backed by the process-wide L1+L2 cache (`active_groups_cache` in `tcbot/database/cache.py` keyed on `_ALL_GROUPS_KEY`). There is no per-user `ctx.user_data` caching: every toggle callback re-reads through the cache layer and edits the existing message in place.
+The list source is `groups_db.active_groups()`, which reads `federated_groups` where `is_active: True`, backed by the process-wide L1+L2 cache (`active_groups_cache` in `tcbot/database/cache/` keyed on `_ALL_GROUPS_KEY`). There is no per-user `ctx.user_data` caching: every toggle callback re-reads through the cache layer and edits the existing message in place.
 
 ## Commands and aliases
 
@@ -41,10 +41,10 @@ Commands use the project's configured prefixes; slash commands are examples.
 
 `/tcgroups` is registered as a plain `MessageHandler`; there is no conversation. The handler:
 
-1. Fetches the active-groups list with `db.groups_db.active_groups()`. This call is backed by the L1+L2 cache defined in `tcbot/database/cache.py`, so repeat calls within the cache TTL are free.
+1. Fetches the active-groups list with `db.groups_db.active_groups()`. This call is backed by the L1+L2 cache defined in `tcbot/database/cache/`, so repeat calls within the cache TTL are free.
 2. If the list is empty, replies `No groups are currently connected to <community>.` and stops.
 3. Otherwise replies with the simple view rendered by `_render(groups, detailed=False)`.
-4. The reply keyboard is `tcgroups_kb(detailed=False)` from `tcbot/modules/helper/keyboards.py` and shows a single `Details` button (localized `button.details_toggle`).
+4. The reply keyboard is `tcgroups_kb(detailed=False)` from `tcbot/modules/helper/keyboards/` and shows a single `Details` button (localized `button.details_toggle`).
 
 ## Render helpers
 

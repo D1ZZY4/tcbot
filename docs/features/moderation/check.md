@@ -1,6 +1,6 @@
 # Check
 
-This document describes the `/check` user-profile command implemented by `tcbot/modules/checking.py` (command + callback handlers) and `tcbot/modules/helper/workflows/check_flow.py` (the `Check` class that builds every view).
+This document describes the `/check` user-profile command implemented by `tcbot/modules/checking/` (command + callback handlers) and `tcbot/modules/helper/workflows/check_flow/` (the `Check` class that builds every view).
 
 For ban data shown in check, see [`banning.md`](banning.md). For warnings
 shown in check, see [`warnings.md`](warnings.md). For the stats command, see
@@ -133,7 +133,7 @@ Bans, appeals, per-chat warns, kicks, and mutes lists append the shared `checkin
 
 ## Callback routing
 
-All callbacks are registered in `checking.py` and run safely on repeated taps thanks to `safe_edit_cb` swallowing benign `BadRequest` errors (e.g. `Message is not modified`).
+All callbacks are registered in `checking/` and run safely on repeated taps thanks to `safe_edit_cb` swallowing benign `BadRequest` errors (e.g. `Message is not modified`).
 
 | Callback data | Handler |
 |---|---|

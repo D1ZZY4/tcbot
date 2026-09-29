@@ -1,6 +1,6 @@
 # Statistics
 
-This document describes the unified federation statistics command implemented by `tcbot/modules/stats.py` and `tcbot/modules/helper/workflows/stats_flow.py`.
+This document describes the unified federation statistics command implemented by `tcbot/modules/stats/` and `tcbot/modules/helper/workflows/stats_flow/`.
 
 For module structure, see [`../architecture/modules.md`](../architecture/modules.md).
 For shared helpers and decorators, see [`../architecture/helpers.md`](../architecture/helpers.md).
@@ -203,7 +203,7 @@ the search and message deletion concurrently.
 
 ## Edge cases
 
-- A user with no cached profile renders as their numeric user ID (e.g. `123456789`) in every list when no cached name is available. This is the `str(uid)` return from `_best_name()` in `extraction.py`, not the earlier `"User <id>"` pattern.
+- A user with no cached profile renders as their numeric user ID (e.g. `123456789`) in every list when no cached name is available. This is the `str(uid)` return from `_best_name()` in `extraction/`, not the earlier `"User <id>"` pattern.
 - An empty roster ("- No staff assigned") never crashes pagination because the user/chat/ban lists have their own empty-state branch.
 - Re-tapping the same drill-down does not raise; `safe_edit_cb` swallows the `Message is not modified` `BadRequest`.
 - The search input handler is private-chat only and gated by `SEARCH_KEY`; it never absorbs unrelated group messages.
