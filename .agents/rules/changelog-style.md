@@ -53,7 +53,7 @@ Never use in an entry:
 Good:
 
 ```markdown
-- **Warn auto-ban retries after total enforcement failure** (`warning_flow.py`):
+- **Warn auto-ban retries after total enforcement failure** (`warning_flow/`):
   the trigger is now `>=` so a fully-failed fan-out retries on the next
   warn instead of wedging. Docs updated.
 ```
@@ -62,7 +62,7 @@ Bad (process narration, jargon, filler):
 
 ```markdown
 - **Warn auto-ban trigger hardened with strict mini-markup plus golden
-  regression** (`warning_flow.py`, `tests/test_i18n.py`): the `>=` trigger
+  regression** (`warning_flow/`, `tests/test_i18n.py`): the `>=` trigger
   verified via 224-case old-vs-new sweep with zero mismatches; templates
   stay raw with `{window}` Safe passthrough. Verified: Ruff, Pyright,
   full suite green.

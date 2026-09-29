@@ -1,7 +1,6 @@
 modules = ["nix", "python-3.14", "nodejs-24"]
 [agent]
 expertMode = true
-stack = "FLASK_VANILLA_JS"
 
 [nix]
 channel = "stable-25_05"
@@ -13,7 +12,6 @@ runButton = "Project"
 [[workflows.workflow]]
 name = "Project"
 mode = "parallel"
-author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
@@ -21,7 +19,6 @@ args = "Start Application"
 
 [[workflows.workflow]]
 name = "Start Application"
-author = "agent"
 
 [workflows.workflow.metadata]
 outputType = "console"
@@ -37,3 +34,6 @@ externalPort = 80
 [deployment]
 deploymentTarget = "autoscale"
 run = ["uv", "run", "python", "-m", "tcbot"]
+
+[objectStorage]
+defaultBucketID = "replit-objstore-8e8d8179-ca33-440f-b356-711aeb984f5d"

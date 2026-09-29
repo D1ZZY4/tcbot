@@ -82,7 +82,7 @@ Recent project additions to keep accurate when editing docs:
   links. Usernames are never used in the rendered link (the numeric ID is
   the single source of truth); the `username` parameter is accepted for
   backward compatibility and ignored.
-- Batch query helpers in `tcbot/database/users_cache.py`
+- Batch query helpers in `tcbot/database/users_cache/`
   (`get_user_mention_data`, `get_mention_data_batch`,
   `get_first_names_batch`).
 - Target resolution in `tcbot.modules.helper.extraction.extract_target`:

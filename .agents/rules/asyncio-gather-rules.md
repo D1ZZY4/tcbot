@@ -17,7 +17,7 @@ live in [`code-style.md`](code-style.md), and validation commands live in
 | A few independent DB/API reads | `asyncio.gather()` |
 | Federation-wide Telegram actions | `tcbot.utils.dispatch.fan_out()` |
 | User-driven multi-step input | `ConversationHandler` flow in `*_flow.py` |
-| Scheduled expiration or cleanup | APScheduler via `tcbot/database/scheduler.py` |
+| Scheduled expiration or cleanup | APScheduler via `tcbot/database/scheduler/` |
 | Blocking file or CPU-heavy work | Avoid; if necessary, `asyncio.to_thread()` |
 
 ## Async Handlers
@@ -134,7 +134,7 @@ async def worker() -> None:
 ## Background Jobs
 
 Scheduled work runs on APScheduler 3.11.3 `AsyncIOScheduler` with
-`MongoDBJobStore` via `tcbot/database/scheduler.py`. This project does not
+`MongoDBJobStore` via `tcbot/database/scheduler/`. This project does not
 use the PTB `[job-queue]` extra.
 
 Rules:

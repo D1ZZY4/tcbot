@@ -25,7 +25,7 @@ Invoke this skill when the user asks about:
 - Index design, index review, index bloat, or query coverage.
 - `explain()` output, `COLLSCAN`, in-memory sort, high `docsExamined`, or poor selectivity.
 - Motor async helper performance in `tcbot/database/*_db.py`.
-- Updating or reviewing indexes in `tcbot/database/mongos.py` `ensure_indexes()`.
+- Updating or reviewing indexes in `tcbot/database/mongos/` `ensure_indexes()`.
 - Atlas Performance Advisor or slow query log analysis.
 
 Do **not** invoke this skill for routine MongoDB query writing unless the user asks for performance or indexing help.
@@ -34,14 +34,14 @@ Do **not** invoke this skill for routine MongoDB query writing unless the user a
 
 TCF Bot stores all MongoDB access behind domain helper modules:
 
-- `tcbot/database/mongos.py` owns the `AsyncIOMotorClient`, database accessor, collection accessor, connection pool settings, and `ensure_indexes()`.
+- `tcbot/database/mongos/` owns the `AsyncIOMotorClient`, database accessor, collection accessor, connection pool settings, and `ensure_indexes()`.
 - `tcbot/database/*_db.py` files contain async helper functions for each collection/domain.
 - `tcbot/modules/` and workflow modules should call database helpers instead of calling `mongos.col()` or Motor collections directly.
-- Index changes should be made in `tcbot/database/mongos.py` inside `ensure_indexes()` so startup creates required indexes consistently.
+- Index changes should be made in `tcbot/database/mongos/` inside `ensure_indexes()` so startup creates required indexes consistently.
 - Keep index creation idempotent. `ensure_indexes()` is called during application post-init after `connect()` and before handlers run.
 - Do not add direct collection calls to command modules as an optimization shortcut.
 
-Current critical indexes in `ensure_indexes()` (verify against `tcbot/database/mongos.py` before recommending):
+Current critical indexes in `ensure_indexes()` (verify against `tcbot/database/mongos/` before recommending):
 
 - `bans`: `(banned_user_id, is_active, timestamp desc, ban_id desc)`, unique `ban_id`, sparse `(banned_user_id, appeal_log_msg_id)`, `(is_active, timestamp desc, ban_id desc)`, `(banned_user_id, timestamp desc, ban_id desc)`.
 - `tc_owners`: unique `user_id`.
@@ -77,7 +77,7 @@ Prefer inspecting `tcbot/database/*_db.py` helper code before suggesting changes
 
 ### 2. Review Existing Indexes
 
-Check `tcbot/database/mongos.py` `ensure_indexes()` first. If a live database tool is available, also inspect actual collection indexes because deployed indexes may differ from the repository.
+Check `tcbot/database/mongos/` `ensure_indexes()` first. If a live database tool is available, also inspect actual collection indexes because deployed indexes may differ from the repository.
 
 Look for:
 
@@ -122,7 +122,7 @@ Prefer one focused fix:
 - Avoid adding many speculative indexes. Each index slows writes and consumes memory/storage.
 - Suggest dropping indexes only with strong evidence, such as Atlas drop-index suggestions or verified redundancy.
 
-When editing code, keep changes scoped to `tcbot/database/mongos.py` and related `tcbot/database/*_db.py` helpers unless the user explicitly asks for broader refactoring.
+When editing code, keep changes scoped to `tcbot/database/mongos/` and related `tcbot/database/*_db.py` helpers unless the user explicitly asks for broader refactoring.
 
 ## TCF Bot Index Design Guidelines
 

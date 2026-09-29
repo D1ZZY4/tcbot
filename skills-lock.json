@@ -5,25 +5,31 @@
       "source": "D1ZZY4/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/commit-expert/SKILL.md",
-      "computedHash": "d63f13ccde282363633afe10a2ff101e4f9a4c0107ba98d25376443f4da1905a"
+      "computedHash": "bb23deb9dc97e2def35d2dd37cf56c0be9546f555c2f6aa87732fdcd218e2396"
     },
     "context7-expert": {
       "source": "D1ZZY4/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/context7-expert/SKILL.md",
-      "computedHash": "52498dbe2cd2c4da254ef38d81dda159b9768edd57e2b3a72e708ec0c0d5ad57"
+      "computedHash": "ca4d842251b83359fe13dd9f69b2ec16e882bb2bd6a6e85e16cae7bb5734c7da"
     },
     "copywriting-expert": {
       "source": "D1ZZY4/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/copywriting-expert/SKILL.md",
-      "computedHash": "bfa0c9b0b5368b9cf96d224124fa7bd07a5f7a54247a5beb5b2a7de47be7dd42"
+      "computedHash": "fe60d161fb29db7fc0d401f7f3d422480ef140f921912dbfcc2389503b37842a"
     },
     "create-readme-expert": {
       "source": "D1ZZY4/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/create-readme-expert/SKILL.md",
-      "computedHash": "7eee72edeb50c301f810aa185c86b03249e7e61d2a0b9b8a985819415cc96813"
+      "computedHash": "5b8af99bc3523decc7dd46b2fad88d8dc304a7d9fd183ff1654617235a8de40f"
+    },
+    "deep-research-expert": {
+      "source": "D1ZZY4/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/deep-research-expert/SKILL.md",
+      "computedHash": "283d4c574bd5625f3200431ec6b31dbbfa91aeb36c49bb6bbfbbb924488ee4a5"
     },
     "feature-reviewer": {
       "source": "project-local",
@@ -35,7 +41,7 @@
       "source": "D1ZZY4/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/mermaid-diagrams-expert/SKILL.md",
-      "computedHash": "4c151f48a60a52966d0aff7524afaa84c84db697af1bcd7b892fbbf286981956"
+      "computedHash": "ac27749897dcac910039698e09b71ca23786d6022d50efcd81c2b08842574fc8"
     },
     "mongodb-query-optimizer": {
       "source": "mongodb/agent-skills",
@@ -47,7 +53,7 @@
       "source": "D1ZZY4/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/redis-expert/SKILL.md",
-      "computedHash": "3630569271eada5c1792bb558fe4a052c1d838c19f07b2618f5701d93599a390"
+      "computedHash": "d939358f2185a4df0b2c9d52d8f9bd22cfedc6661eb97d8e6555324b8e937a36"
     }
   }
 }
