@@ -1,0 +1,6 @@
+/home/runner/work/tcbot/tcbot/tests/test_ban_flush_cleanup.py
+  /home/runner/work/tcbot/tcbot/tests/test_ban_flush_cleanup.py:300:13 - error: Argument of type "_ZombieUpdate" cannot be assigned to parameter "update" of type "Update" in function "on_proof_unexpected"
+    "_ZombieUpdate" is not assignable to "Update" (reportArgumentType)
+  /home/runner/work/tcbot/tcbot/tests/test_ban_flush_cleanup.py:300:21 - error: Argument of type "_ZombieCtx" cannot be assigned to parameter "ctx" of type "DEFAULT_TYPE" in function "on_proof_unexpected"
+    "_ZombieCtx" is not assignable to "CallbackContext[ExtBot[None], ADict, ADict, ADict]" (reportArgumentType)
+2 errors, 0 warnings, 0 informations
