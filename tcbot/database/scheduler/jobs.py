@@ -140,9 +140,10 @@ async def _run_scheduled_sync() -> None:
         log.exception("Scheduled enforcement sync failed.")
         return
     log.info(
-        "Scheduled enforcement sync: checked=%d enforced=%d skipped=%d failed=%d truncated=%s.",
+        "Scheduled enforcement sync: checked=%d enforced=%d remuted=%d skipped=%d failed=%d truncated=%s.",
         counts.checked,
         counts.enforced_bans,
+        counts.enforced_mutes,
         counts.skipped,
         counts.failed,
         counts.truncated,

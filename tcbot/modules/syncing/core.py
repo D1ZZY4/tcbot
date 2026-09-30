@@ -11,6 +11,7 @@ import itertools
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from telegram import ChatPermissions
 from telegram.constants import ChatMemberStatus
 from telegram.error import BadRequest
 
@@ -50,6 +51,7 @@ class SyncCounts:
     checked: int = 0
     enforced_bans: int = 0
     enforced_unbans: int = 0
+    enforced_mutes: int = 0
     skipped: int = 0
     failed: int = 0
     truncated: bool = False
@@ -152,6 +154,53 @@ async def _sync_unban_pair(bot: Bot, chat_id: int, user_id: int) -> str:
     return "unenforced"
 
 
+async def _sync_mute_pair(
+    bot: Bot, chat_id: int, user_id: int, until_date: Any = None
+) -> str:
+    """Re-apply one active mute in one group; return a short outcome label.
+
+    Outcomes: ``remuted`` (restricted now), ``ok`` (already restricted,
+    banned, or absent), ``absent`` (not in chat), ``privileged``
+    (admin/owner, cannot restrict), ``error`` (unexpected failure,
+    retryable). Never unrestricts: a restricted non-muted user may hold a
+    manual admin restriction that sync must not lift.
+    """
+    probed = await _member_status(bot, chat_id, user_id)
+    if isinstance(probed, BaseException):
+        # * Same benign rule as the ban pair: never a member is the
+        # * desired end state, not a failure; anything else is retryable.
+        if isinstance(probed, BadRequest) or is_benign_telegram_error(probed):
+            return "absent"
+        log.debug(
+            "sync member check failed for uid=%d chat=%d: %s", user_id, chat_id, probed
+        )
+        return "error"
+    status = getattr(probed, "status", None)
+    if status == ChatMemberStatus.RESTRICTED:
+        return "ok"
+    if status == ChatMemberStatus.BANNED:
+        return "ok"
+    if status == ChatMemberStatus.LEFT:
+        return "absent"
+    if status in (ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER):
+        log.debug("sync skipping privileged uid=%d in chat=%d", user_id, chat_id)
+        return "privileged"
+    try:
+        await bot.restrict_chat_member(
+            chat_id,
+            user_id,
+            permissions=ChatPermissions(can_send_messages=False),
+            until_date=until_date,
+        )
+    except Exception as exc:
+        if isinstance(exc, BadRequest) or is_benign_telegram_error(exc):
+            return "absent"
+        log.warning("sync re-mute failed for uid=%d chat=%d: %s", user_id, chat_id, exc)
+        return "error"
+    log.info("sync re-muted uid=%d in chat=%d", user_id, chat_id)
+    return "remuted"
+
+
 def _summarize(
     pairs: list[tuple[int, int]],
     outcomes: list[str | BaseException],
@@ -160,7 +209,7 @@ def _summarize(
     truncated: bool,
 ) -> tuple[SyncCounts, list[str]]:
     """Fold pair outcomes into counts plus a capped failed-group title sample."""
-    counts = {"enforced": 0, "unenforced": 0, "error": 0, "skip": 0}
+    counts = {"enforced": 0, "unenforced": 0, "remuted": 0, "error": 0, "skip": 0}
     failed_titles: list[str] = []
     for (uid, cid), outcome in zip(pairs, outcomes, strict=False):
         if isinstance(outcome, BaseException):
@@ -168,7 +217,7 @@ def _summarize(
             if len(failed_titles) < _FAILED_SAMPLE_N:
                 failed_titles.append(titles.get(cid, str(cid)))
             log.warning("sync pair failed for uid=%d chat=%d: %s", uid, cid, outcome)
-        elif outcome in ("enforced", "unenforced", "error"):
+        elif outcome in ("enforced", "unenforced", "remuted", "error"):
             counts[outcome] += 1
             if outcome == "error" and len(failed_titles) < _FAILED_SAMPLE_N:
                 failed_titles.append(titles.get(cid, str(cid)))
@@ -179,6 +228,7 @@ def _summarize(
             checked=len(pairs),
             enforced_bans=counts["enforced"],
             enforced_unbans=counts["unenforced"],
+            enforced_mutes=counts["remuted"],
             skipped=counts["skip"],
             failed=counts["error"],
             truncated=truncated,

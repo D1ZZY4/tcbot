@@ -28,6 +28,7 @@ class _FakeBot:
         self._members = members
         self.banned: list[tuple[int, int]] = []
         self.unbanned: list[tuple[int, int]] = []
+        self.restricted: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
 
     async def get_chat_member(self, chat_id: int, user_id: int) -> Any:
         key = (chat_id, user_id)
@@ -40,6 +41,10 @@ class _FakeBot:
 
     async def ban_chat_member(self, chat_id: int, user_id: int) -> bool:
         self.banned.append((chat_id, user_id))
+        return True
+
+    async def restrict_chat_member(self, *args: Any, **kwargs: Any) -> bool:
+        self.restricted.append((args, kwargs))
         return True
 
     async def unban_chat_member(
@@ -121,3 +126,39 @@ def test_render_summary_names_failures() -> None:
     )
     text = sy._render_summary(counts, target="federation sweep")
     assert "Grp" in text and "2" in text
+
+
+def test_mute_pair_restricts_present_member() -> None:
+    bot = _FakeBot({(5, 9): ChatMemberStatus.MEMBER})
+    assert _run(sy._sync_mute_pair(cast("Any", bot), 5, 9)) == "remuted"
+    assert len(bot.restricted) == 1
+    assert bot.restricted[0][0][:2] == (5, 9)
+
+
+def test_mute_pair_skips_restricted_banned_absent_privileged() -> None:
+    bot = _FakeBot(
+        {
+            (5, 1): ChatMemberStatus.RESTRICTED,
+            (5, 2): ChatMemberStatus.BANNED,
+            (5, 4): ChatMemberStatus.ADMINISTRATOR,
+        }
+    )
+    assert _run(sy._sync_mute_pair(cast("Any", bot), 5, 1)) == "ok"
+    assert _run(sy._sync_mute_pair(cast("Any", bot), 5, 2)) == "ok"
+    assert _run(sy._sync_mute_pair(cast("Any", bot), 5, 3)) == "absent"
+    assert _run(sy._sync_mute_pair(cast("Any", bot), 5, 4)) == "privileged"
+    assert bot.restricted == []
+
+
+def test_mute_pair_reports_unexpected_errors() -> None:
+    bot = _FakeBot({(5, 9): ValueError("boom")})
+    assert _run(sy._sync_mute_pair(cast("Any", bot), 5, 9)) == "error"
+    assert bot.restricted == []
+
+
+def test_summarize_counts_remuted() -> None:
+    pairs = [(9, 5), (9, 6)]
+    counts, _ = sy._summarize(
+        pairs, ["remuted", "ok"], {5: "A", 6: "B"}, truncated=False
+    )
+    assert (counts.checked, counts.enforced_mutes, counts.skipped) == (2, 1, 1)

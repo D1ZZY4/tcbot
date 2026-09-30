@@ -46,10 +46,11 @@ The target is resolved by `extraction.extract_target`; accepts a reply, user ID,
 ## How a run works
 
 1. The bot replies `Syncing enforcement state...` with its own status message (kept for the final edit, since the operator's command message cannot be edited by the bot).
-2. Bare run: builds the `(banned user x connected group)` cross product capped at 200 pairs (`take_pairs`, stable order, truncation flagged). Both ID lists are sorted before pairing, so the sweep order (and which pairs truncate) is identical run to run. Targeted run: one user against every connected group (bounded by group count).
+2. Bare run: builds the `(banned user x connected group)` cross product capped at 200 pairs (`take_pairs`, stable order, truncation flagged), then the `(muted user x connected group)` pairs with the remaining budget. Ban pairs take budget first so a huge mute backlog can never starve the ban sweep. Both ID lists are sorted before pairing, so the sweep order (and which pairs truncate) is identical run to run. Targeted run: one user against every connected group (bounded by group count).
 3. Each pair probes membership with a bounded `get_chat_member` (3 s), then enforces through `fan_out`:
    - Active ban + present and not kicked: `ban_chat_member` (`enforced`).
    - Already kicked, absent, or privileged (admin/owner): skipped, never counted as failure.
+   - Active mute + present and unrestricted: `restrict_chat_member` (`remuted`). Already restricted, banned, absent, or privileged members are skipped; restricted non-muted users are never unrestriced, so manual admin restrictions survive a sweep.
    - Targeted run without an active ban + still kicked: `unban_chat_member` (`unenforced`).
    - Unexpected failures: `error` (retryable).
 4. Benign Telegram refusals (`USER_NOT_PARTICIPANT` and friends, via `is_benign_telegram_error`) count as absent, never as failures.
@@ -68,8 +69,9 @@ startup. Default `0` (disabled, manual `/tcsync` only).
 ## Database impact
 
 Read-only except enforcement side effects: `active_groups()`,
-`active_ban_user_ids()` / `get_active_ban(user_id)`, then per-miss
-`ban_chat_member` / `unban_chat_member`. No ban records are created,
+`active_ban_user_ids()` / `get_active_ban(user_id)`, `active_mute_docs()` /
+`get_active_mute(user_id)`, then per-miss `ban_chat_member` /
+`restrict_chat_member` / `unban_chat_member`. No ban or mute records are created,
 modified, or deactivated by a sync run.
 
 ## Logging behavior
@@ -88,9 +90,9 @@ checked/enforced/skipped/failed/truncated counts.
 
 ## Behavior reference
 
-- `/tcsync` never creates, modifies, or deactivates ban records.
+- `/tcsync` never creates, modifies, or deactivates ban or mute records.
 - Skipped pairs (absent, already enforced, privileged) are not failures.
-- Targeted runs cover both directions; bare runs cover the ban direction.
+- Targeted runs cover both directions plus mute re-apply; bare runs cover the ban direction plus mute re-apply.
 - The scheduled sweep is off unless `SYNC_INTERVAL_HOURS > 0`.
 
 ## Validation hints

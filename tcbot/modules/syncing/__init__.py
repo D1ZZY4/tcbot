@@ -26,6 +26,7 @@ from tcbot.modules.syncing.core import (
     _member_status,
     _summarize,
     _sync_ban_pair,
+    _sync_mute_pair,
     _sync_unban_pair,
     take_pairs,
 )
@@ -57,6 +58,7 @@ __all__ = [
     "_render_summary",
     "_summarize",
     "_sync_ban_pair",
+    "_sync_mute_pair",
     "_sync_unban_pair",
     "cmd_sync",
     "db",
@@ -110,15 +112,24 @@ __help_sections__ = __help__["sections"]
 
 
 async def run_ban_sync(bot: Bot, *, max_checks: int = _SYNC_MAX_CHECKS) -> SyncCounts:
-    """Sweep active bans against connected groups, bounded by ``max_checks``.
+    """Sweep active bans and mutes against connected groups, bounded by ``max_checks``.
 
     Shared by the ``/tcsync`` command and the optional scheduled job: no
-    Telegram replies inside, only logs plus the returned counts.
+    Telegram replies inside, only logs plus the returned counts. Ban pairs
+    take budget first so a huge mute backlog can never starve the ban sweep;
+    a mute-fetch outage skips only the mute replay with a loud log.
     """
     groups, ban_uids = await asyncio.gather(
         db.groups_db.active_groups(),
         db.bans_db.active_ban_user_ids(),
     )
+    try:
+        mute_docs = await db.mutes_db.active_mute_docs()
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("sync sweep: active_mute_docs failed; mute replay skipped")
+        mute_docs = []
     # * Deterministic sweep order: Mongo returns insertion order, so without a
     # * sort the truncation victims (and the audit log) would differ run to run.
     chat_ids = sorted({g.get("chat_id", 0) for g in groups if g.get("chat_id", 0)})
@@ -130,15 +141,33 @@ async def run_ban_sync(bot: Bot, *, max_checks: int = _SYNC_MAX_CHECKS) -> SyncC
     }
     pairs, truncated = take_pairs(sorted(ban_uids), chat_ids, max_checks)
     if not pairs:
-        return SyncCounts()
+        pairs = []
     # * Bounded like every other federation-wide Telegram burst: the fan_out
     # * semaphore plus the per-pair probe timeout cap the blast radius.
-    outcomes = await fan_out([_sync_ban_pair(bot, cid, uid) for uid, cid in pairs])
-    counts, _ = _summarize(pairs, outcomes, titles, truncated=truncated)
+    outcomes: list = []
+    if pairs:
+        outcomes = await fan_out([_sync_ban_pair(bot, cid, uid) for uid, cid in pairs])
+    mute_until = {int(d.get("user_id", 0)): d.get("until_date") for d in mute_docs}
+    mute_uids = sorted(uid for uid in mute_until if uid)
+    mute_pairs, mute_truncated = take_pairs(
+        mute_uids, chat_ids, max(0, max_checks - len(pairs))
+    )
+    if mute_pairs:
+        mute_outcomes = await fan_out(
+            [_sync_mute_pair(bot, cid, uid, mute_until[uid]) for uid, cid in mute_pairs]
+        )
+        pairs = [*pairs, *mute_pairs]
+        outcomes = [*outcomes, *mute_outcomes]
+    if not pairs:
+        return SyncCounts()
+    counts, _ = _summarize(
+        pairs, outcomes, titles, truncated=truncated or mute_truncated
+    )
     log.info(
-        "sync sweep: checked=%d enforced=%d skipped=%d failed=%d truncated=%s",
+        "sync sweep: checked=%d enforced=%d remuted=%d skipped=%d failed=%d truncated=%s",
         counts.checked,
         counts.enforced_bans,
+        counts.enforced_mutes,
         counts.skipped,
         counts.failed,
         counts.truncated,
@@ -152,6 +181,13 @@ async def verify_user(bot: Bot, user_id: int) -> SyncCounts:
         db.groups_db.active_groups(),
         db.bans_db.get_active_ban(user_id),
     )
+    try:
+        mute = await db.mutes_db.get_active_mute(user_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("verify_user: mute read failed for user=%d", user_id)
+        mute = None
     # * Same deterministic order as the sweep above (see run_ban_sync).
     chat_ids = sorted({g.get("chat_id", 0) for g in groups if g.get("chat_id", 0)})
     titles = {
@@ -173,6 +209,24 @@ async def verify_user(bot: Bot, user_id: int) -> SyncCounts:
         outcomes = await fan_out(
             [_sync_unban_pair(bot, cid, user_id) for _, cid in pairs]
         )
+    if mute is not None:
+        # * Re-apply the live mute alongside either direction: an approved
+        # * join or a demotion gap may have restored posting rights that the
+        # * active record still forbids. Never unrestricts: a restricted
+        # * non-muted user may hold a manual admin restriction.
+        mute_pairs, mute_truncated = take_pairs(
+            [user_id], chat_ids, max(0, _SYNC_MAX_CHECKS - len(pairs))
+        )
+        if mute_pairs:
+            mute_outcomes = await fan_out(
+                [
+                    _sync_mute_pair(bot, cid, user_id, mute.get("until_date"))
+                    for _, cid in mute_pairs
+                ]
+            )
+            pairs = [*pairs, *mute_pairs]
+            outcomes = [*outcomes, *mute_outcomes]
+            truncated = truncated or mute_truncated
     counts, _ = _summarize(pairs, outcomes, titles, truncated=truncated)
     return counts
 
@@ -190,6 +244,7 @@ def _render_summary(
             locale,
             n=Safe(code(str(counts.enforced_unbans))),
         ),
+        t("syncing.summary.remuted", locale, n=Safe(code(str(counts.enforced_mutes)))),
         t("syncing.summary.skipped", locale, n=Safe(code(str(counts.skipped)))),
         t("syncing.summary.failed", locale, n=Safe(code(str(counts.failed)))),
     ]
