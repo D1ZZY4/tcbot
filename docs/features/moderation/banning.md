@@ -325,7 +325,7 @@ Manual unban does not currently edit any pending appeal review card. It deactiva
 - Same-rank and higher-rank staff targets are protected.
 - Self-ban and bot-ban attempts are rejected before database writes.
 - The proof conversation is per-chat and per-user, so simultaneous ban flows are isolated by moderator/chat.
-- There is no natural-expiry timeout for the ban proof step; the bot does not use `ConversationHandler.TIMEOUT` or a job-queue. `on_proof_timeout` fires as a **fallback** handler when the moderator sends any command while the proof window is open; the user receives `"Timed out waiting for proof. No ban was issued."` and the conversation ends.
+- There is no natural-expiry timeout for the ban proof step; the bot does not use `ConversationHandler.TIMEOUT` or a job-queue. `on_proof_timeout` fires as a **fallback** handler when the moderator sends any command while the proof window is open; the user receives `"Timed out waiting for proof. No ban was issued."` and the conversation ends. That text only fires while the ban keys are still present: after a silence flush already executed the ban, later messages end the leftover conversation silently instead of nagging for proof or repeating the timeout claim.
 
 ## Behavior reference
 

@@ -150,6 +150,12 @@ async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
         return WAITING_PROOF
     if ctx.user_data is None:
         return ConversationHandler.END
+    if not ctx.user_data.get("ban_target_id"):
+        # * Post-flush zombie: the background flush already executed the
+        # * ban and cleared the ban keys, but the conversation is still
+        # * open. End silently instead of opening an orphan session whose
+        # * meta could never execute.
+        return ConversationHandler.END
 
     key = (chat.id, user.id)
     session = _flow._proof_sessions.get(key)
@@ -187,6 +193,14 @@ async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
     session = _flow._proof_sessions.get(key)
     if session is None or session.flushing or not session.msgs:
+        if not ctx.user_data.get("ban_target_id"):
+            # * Post-flush zombie tap: the ban already executed, so there
+            # * is nothing to nudge for. Answer the spinner and end.
+            try:
+                await q.answer()
+            except Exception as exc:
+                log.debug("Ban done-proof zombie answer failed: %s", exc)
+            return ConversationHandler.END
         # * Nothing to flush (or the auto-flush already claimed it):
         # * nudge instead of executing an empty proof.
         try:
@@ -255,6 +269,11 @@ async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def on_proof_unexpected(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Reject unexpected message types during proof collection."""
+    if ctx.user_data is not None and not ctx.user_data.get("ban_target_id"):
+        # * Post-flush zombie: the ban already executed and the prompt
+        # * already shows the summary. End silently instead of nagging
+        # * every later message for proof that is no longer needed.
+        return ConversationHandler.END
     if update.effective_message:
         await safe_reply(
             update.effective_message,
@@ -290,6 +309,7 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
 
 async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Notify the user that the proof window expired and end the conversation."""
+    had_state = bool((ctx.user_data or {}).get("ban_target_id"))
     prompt_chat: int | None = None
     prompt_msg_id: int | None = None
     if ctx.user_data is not None:
@@ -309,6 +329,10 @@ async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
             )
         except Exception as exc:
             log.debug("Ban proof-timeout markup clear failed: %s", exc)
+    if not had_state:
+        # * Post-flush zombie: the ban already executed, so the timeout
+        # * text would falsely claim no ban was issued. End silently.
+        return ConversationHandler.END
     if update.effective_message:
         await safe_reply(
             update.effective_message,

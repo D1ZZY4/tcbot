@@ -181,3 +181,124 @@ def test_done_proof_finally_guard_regression(
     assert outcome == ban_flow.ConversationHandler.END
     assert registry[key] is successor
     assert successor.user_data == _prefilled_user_data()
+
+
+# ─────────────────── Post-flush zombie guards ─────────────────── #
+# * After the silence flush executes the ban it clears the ban keys but
+# * cannot END the conversation (background task, no handler context).
+# * Updates arriving afterwards must end the zombie silently: no nagging,
+# * no orphan session, no false timeout text.
+
+
+class _ZombieMessage:
+    def __init__(self) -> None:
+        self.replies: list[str] = []
+
+    async def reply_text(self, text: str, *args: Any, **kwargs: Any) -> None:
+        self.replies.append(text)
+
+
+class _ZombieQuery:
+    def __init__(self) -> None:
+        self.answers: list[dict[str, Any]] = []
+
+    async def answer(self, *args: Any, **kwargs: Any) -> None:
+        self.answers.append(dict(kwargs))
+
+
+class _ZombieBot:
+    def __init__(self) -> None:
+        self.edits: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+
+    async def edit_message_reply_markup(self, *args: Any, **kwargs: Any) -> None:
+        self.edits.append((args, kwargs))
+
+
+class _ZombieUpdate:
+    def __init__(
+        self,
+        *,
+        message: Any = None,
+        query: Any = None,
+    ) -> None:
+        self.effective_message = message
+        self.effective_chat = _FakeChat()
+        self.effective_user = _FakeUser()
+        self.callback_query = query
+
+
+class _ZombieCtx:
+    def __init__(self, user_data: dict[str, Any], bot: Any = None) -> None:
+        self.user_data = user_data
+        self.bot = bot if bot is not None else _ZombieBot()
+
+
+async def _fake_locale(update: Any) -> str:
+    return "en-US"
+
+
+def test_zombie_text_ends_silently() -> None:
+    msg = _ZombieMessage()
+    update = _ZombieUpdate(message=msg)
+    outcome = asyncio.run(
+        ban_flow.on_proof_unexpected(update, _ZombieCtx({}))  # type: ignore[arg-type]
+    )
+    assert outcome == ban_flow.ConversationHandler.END
+    assert msg.replies == []
+
+
+def test_zombie_media_creates_no_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    registry: dict[tuple[int, int], Any] = {}
+    monkeypatch.setattr(ban_flow, "_proof_sessions", registry)
+    update = _ZombieUpdate(message=object())
+    outcome = asyncio.run(
+        ban_flow.on_proof_received(update, _ZombieCtx({}))  # type: ignore[arg-type]
+    )
+    assert outcome == ban_flow.ConversationHandler.END
+    assert registry == {}
+
+
+def test_zombie_done_tap_ends_silently(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(ban_flow, "_proof_sessions", {})
+    query = _ZombieQuery()
+    update = _ZombieUpdate(query=query)
+    outcome = asyncio.run(
+        ban_flow.on_done_proof(update, _ZombieCtx({}))  # type: ignore[arg-type]
+    )
+    assert outcome == ban_flow.ConversationHandler.END
+    assert len(query.answers) == 1
+
+
+def test_zombie_timeout_silent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(ban_flow, "_proof_sessions", {})
+    bot = _ZombieBot()
+    msg = _ZombieMessage()
+    update = _ZombieUpdate(message=msg)
+    outcome = asyncio.run(
+        ban_flow.on_proof_timeout(update, _ZombieCtx({}, bot))  # type: ignore[arg-type]
+    )
+    assert outcome == ban_flow.ConversationHandler.END
+    assert bot.edits == []
+    assert msg.replies == []
+
+
+def test_live_unexpected_still_nags(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "tcbot.modules.helper.workflows.ban_flow.handlers.locale_for_update",
+        _fake_locale,
+    )
+    msg = _ZombieMessage()
+    update = _ZombieUpdate(message=msg)
+    outcome = asyncio.run(
+        ban_flow.on_proof_unexpected(  # type: ignore[arg-type]
+            update, _ZombieCtx({"ban_target_id": 33})
+        )
+    )
+    assert outcome == ban_flow.WAITING_PROOF
+    assert len(msg.replies) == 1

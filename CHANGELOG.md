@@ -191,6 +191,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Additional menu uses the shared answer-and-edit path** (`tcbot/modules/additional.py`): the manual acknowledge-and-edit block is replaced by the helper every other menu uses, which also removes references to an undefined logger that would have raised on the failure path. Behavior changes: tapping the menu no longer risks an unhandled error when the edit fails.
 
+- **Proof conversation ends after a silence flush executes the ban** (`tcbot/modules/helper/workflows/ban_flow.py`, `tests/test_ban_flush_cleanup.py`, `docs/features/moderation/banning.md`): late messages, media, Done taps, and commands arriving after the background flush end the leftover conversation silently instead of nagging for proof, opening orphan sessions, or claiming no ban was issued. Behavior changes: post-ban messages no longer receive proof prompts; timed-out commands after an executed ban end quietly.
+
 ### Removed
 
 - **Dead locale scope helper removed** (`tcbot/modules/helper/locale.py`, `docs/architecture/helpers.md`): `chat_scope()` had no callers anywhere in code, tests, or docs examples; `language._chat_scope` remains the single mapping and keeps its test. Behavior changes: none.
