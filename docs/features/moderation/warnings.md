@@ -212,7 +212,7 @@ The trigger uses `>=` for per-group (retry-safe after total enforcement failure)
 
 1. The target role is re-read for the auto-ban decision. A role-lookup failure aborts the auto-ban with a retry reply instead of proceeding as non-staff; the persisted warn count re-fires the `>=` threshold on the next warn.
 2. Active federation groups, any existing active ban, and the audit log are fetched/sent in parallel via `asyncio.gather`.
-2. If the user does not already hold an active federation ban, `bans_db.create_ban()` creates a ban document in the `bans` collection (the same document used by `/tcban`). This makes the ban appealable via the standard appeal flow. If the write fails, the auto-ban aborts before any group is touched (fail-closed, mirroring `execute_unban`): the threshold warn stays recorded and the admin is told to ban manually with `/tcban` once the database recovers.
+2. If the user does not already hold an active federation ban, `bans_db.create_ban()` creates a ban document in the `bans` collection (the same document used by `/tcban`), reusing the warn proof upload as the ban `proof_message_id` when one was collected so `/check` shows View Proof. This makes the ban appealable via the standard appeal flow. If the write fails, the auto-ban aborts before any group is touched (fail-closed, mirroring `execute_unban`): the threshold warn stays recorded and the admin is told to ban manually with `/tcban` once the database recovers.
 3. `fan_out()` propagates `ban_chat_member` to all active connected groups plus MAIN_GROUP and EXTEND_GROUP.
 4. Per-group failures are logged at WARNING level with group title, chat_id, and exception.
 5. An applied-to summary is computed: "Applied to X/Y groups", "Applied to X/Y groups (Z failed: ...)", or "WARNING: ban not enforced in any group" when all fail. When the group-list fetch itself fails, the reply gains a reduced-scope WARNING suffix (and an error is logged) instead of reporting full success over the reachable subset.
@@ -332,7 +332,7 @@ Cancel edits the prompt to say no action was taken.
 
 ## Edge cases
 
-- Warning proof is optional and only stored as a text description in the user-facing reply.
+- Warning proof is optional and attached as a button on the outgoing messages; when the warn triggers an auto-ban, the uploaded proof id is stored as the ban `proof_message_id`.
 - Warning auto-ban creates a federation ban record via `bans_db.create_ban()` (same as `/tcban`), making it appealable through the standard appeal flow. If the user already holds an active federation ban, the record creation is skipped but `fan_out()` still runs.
 - If auto-ban fails at 3 warnings, warning history is deliberately kept so moderators can retry or investigate.
 - If sending the warning log fails, the warning action still completes and the error is logged.

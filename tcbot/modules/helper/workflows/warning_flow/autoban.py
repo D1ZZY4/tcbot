@@ -46,6 +46,7 @@ async def _execute_warn_auto_ban(
     lt: int | None,
     log_text: str,
     locale: str | None = None,
+    proof_msg_id: int | None = None,
 ) -> None:
     """Handle warn-threshold auto-ban: staff demotion, DB record, fan-out, reply."""
     fed_warn_limit = cfg.fed_warn_limit
@@ -142,9 +143,11 @@ async def _execute_warn_auto_ban(
         try:
             # * Record first: sending the audit log before the record exists
             # * leaves a phantom card pointing at nothing when the write
-            # * fails. The log message id is attached afterwards.
+            # * fails. The log message id is attached afterwards. The warn
+            # * proof upload (when one was collected) becomes the ban proof
+            # * so /check shows View Proof instead of an empty slot.
             ban_doc = await db.bans_db.create_ban(
-                target_id, reason_text, admin_id, 0, 0
+                target_id, reason_text, admin_id, proof_msg_id or 0, 0
             )
             ban_id = ban_doc.get("ban_id", "")
         except Exception:

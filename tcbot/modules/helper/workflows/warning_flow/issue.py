@@ -113,6 +113,7 @@ async def execute_warn(
         return
 
     proof_link: str | None = None
+    warn_proof_id: int | None = None
     if proof_task is not None:
         try:
             warn_proof_id = await proof_task
@@ -204,6 +205,7 @@ async def execute_warn(
             lt,
             log_text,
             locale,
+            warn_proof_id,
         )
     else:
         # * Log channel post and user reply are independent; run in parallel.
