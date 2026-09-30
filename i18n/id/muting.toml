@@ -52,6 +52,7 @@ Atau balas sebuah pesan lalu jalankan `/tcm`."""
 groups_fail = "{user} tidak bisa di-mute: daftar grup gagal dimuat dari database, jadi tidak ada grup yang disentuh. Cek log lalu coba lagi dengan /tcmute setelah database pulih."
 db_fail = "{user} tidak bisa di-mute: catatan mute gagal ditulis ke database, jadi tidak ada grup yang disentuh. Cek log lalu coba lagi dengan /tcmute setelah database pulih."
 no_mute = "{user} tidak punya mute federasi aktif."
+unmute_failed = "{user} tidak bisa di-unmute di grup mana pun. Catatan mute dipertahankan; cek hak admin bot lalu coba lagi dengan /tcunmute."
 
 [summary]
 body = "{user} telah di-mute {dur}.\nAlasan: {reason}\nDiterapkan ke {done}/{total} grup."

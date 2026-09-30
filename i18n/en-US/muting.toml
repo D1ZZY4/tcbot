@@ -52,6 +52,7 @@ Or reply to a message and run `/tcm`."""
 groups_fail = "{user} could not be muted: the group list could not be loaded from the database, so no groups were touched. Check the logs and retry with /tcmute once the database recovers."
 db_fail = "{user} could not be muted: the mute record could not be written to the database, so no groups were touched. Check the logs and retry with /tcmute once the database recovers."
 no_mute = "{user} has no active federation mute."
+unmute_failed = "{user} could not be unmuted in any group. The mute record was kept; check bot admin rights and retry with /tcunmute."
 
 [summary]
 body = "{user} has been muted {dur}.\nReason: {reason}\nApplied to {done}/{total} groups."

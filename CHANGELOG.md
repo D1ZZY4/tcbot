@@ -193,6 +193,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Proof conversation ends after a silence flush executes the ban** (`tcbot/modules/helper/workflows/ban_flow.py`, `tests/test_ban_flush_cleanup.py`, `docs/features/moderation/banning.md`): late messages, media, Done taps, and commands arriving after the background flush end the leftover conversation silently instead of nagging for proof, opening orphan sessions, or claiming no ban was issued. Behavior changes: post-ban messages no longer receive proof prompts; timed-out commands after an executed ban end quietly.
 
+- **Unmute keeps the record on total enforcement failure** (`tcbot/modules/helper/workflows/muting_flow/unmute.py`, `tests/test_mute_partial_failure.py`, `i18n/en-US/muting.toml`, `i18n/id/muting.toml`, `docs/features/moderation/muting.md`): when no group could be unrestriced the reply asks for a retry and the active-mute row stays, so a re-run re-drives the full fan-out instead of announcing a restore while every chat is still muted. Behavior changes: total-failure unmutes no longer clear the record.
+
 ### Removed
 
 - **Dead locale scope helper removed** (`tcbot/modules/helper/locale.py`, `docs/architecture/helpers.md`): `chat_scope()` had no callers anywhere in code, tests, or docs examples; `language._chat_scope` remains the single mapping and keeps its test. Behavior changes: none.

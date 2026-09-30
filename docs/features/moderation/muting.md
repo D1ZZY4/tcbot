@@ -186,7 +186,7 @@ The fan-out errors are counted but do not roll back the DB mute record; group co
 2. Build the full-perms `ChatPermissions` with all messaging permissions enabled.
 3. Fetch active groups with `db.groups_db.active_groups()`. A fetch outage aborts with a retry reply before anything is touched, so the active record stays and a retry works.
 4. Fan `restrict_chat_member(chat_id, target_id, permissions=full_perms)` across the connected groups plus the primary groups and count transient failures.
-5. Clear the active-mute record with `db.mutes_db.clear_active_mute(target_id)` before announcing. A clear failure aborts with a retry reply and no success message, so a failed clear never announces a restored user.
+5. Clear the active-mute record with `db.mutes_db.clear_active_mute(target_id)` before announcing. A clear failure aborts with a retry reply and no success message, so a failed clear never announces a restored user. When every group failed, the record is kept instead and the reply asks for a retry, so a re-run re-drives the full fan-out.
 6. Run two parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
    - `bot.send_message(cfg.logs, unmute_log, ...)`.
    - `msg.reply_text(reply, ...)`.

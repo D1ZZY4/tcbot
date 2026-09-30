@@ -115,6 +115,21 @@ async def execute_unmute(
             len(groups),
             target_id,
         )
+    if groups and failed >= len(groups):
+        # * Total enforcement failure: keep the record so a retry re-drives
+        # * the full fan-out (mirrors the warn auto-ban path, which keeps
+        # * warns when nothing was enforced). Clearing here would announce
+        # * a restore while every chat is still muted.
+        await safe_reply(
+            msg,
+            t(
+                "muting.note.unmute_failed",
+                locale,
+                user=Safe(user_ref(target_id, target_name)),
+            ),
+            log_label="execute_unmute total-fail",
+        )
+        return
 
     lc, lt = _flow.cfg.logs
     log_text = parse_logmsg.unmute_log(

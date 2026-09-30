@@ -15,6 +15,7 @@ import pytest
 from tcbot import database as db
 from tcbot.modules.helper.workflows import muting_flow
 from tcbot.modules.helper.workflows.demote_flow import Demote
+from tcbot.modules.helper.workflows.muting_flow.unmute import execute_unmute
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
 
@@ -222,3 +223,74 @@ def test_cancel_during_audit_write_propagates_without_undo(
     assert cleared == []
     assert bot.restricts == []
     assert bot.edits == []
+
+
+# ─────────────────── Unmute total-failure keeps record ─────────────────── #
+
+
+class _UnmuteMsg:
+    def __init__(self) -> None:
+        self.replies: list[str] = []
+
+    async def reply_text(self, text: str, *args: Any, **kwargs: Any) -> None:
+        self.replies.append(text)
+
+
+class _UnmuteUser:
+    id = 7
+    first_name = "Mod"
+
+
+class _UnmuteUpdate:
+    def __init__(self, msg: _UnmuteMsg) -> None:
+        self.effective_message = msg
+        self.effective_user = _UnmuteUser()
+        self.effective_chat = _FakeChat()
+
+
+class _UnmuteCtx:
+    def __init__(self, bot: Any) -> None:
+        self.bot = bot
+
+
+class _FailingBot(_FakeBot):
+    async def restrict_chat_member(self, *args: Any, **kwargs: Any) -> bool:
+        raise RuntimeError("telegram down")
+
+
+def test_unmute_total_failure_keeps_record(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _locale(_update: Any) -> str:
+        return "en-US"
+
+    async def _active_mute(user_id: int) -> dict[str, Any]:
+        return {"user_id": user_id, "until_date": None}
+
+    async def _groups() -> list[dict[str, Any]]:
+        return [
+            {"chat_id": 101, "title": "Group A"},
+            {"chat_id": 102, "title": "Group B"},
+        ]
+
+    cleared: list[int] = []
+
+    async def _clear(user_id: int) -> None:
+        cleared.append(user_id)
+
+    monkeypatch.setattr(muting_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(db.mutes_db, "get_active_mute", _active_mute)
+    monkeypatch.setattr(db.groups_db, "active_groups", _groups)
+    monkeypatch.setattr(db.mutes_db, "clear_active_mute", _clear)
+
+    msg = _UnmuteMsg()
+    asyncio.run(
+        execute_unmute(
+            _UnmuteUpdate(msg),  # type: ignore[arg-type]
+            _UnmuteCtx(_FailingBot()),  # type: ignore[arg-type]
+            33,
+            "Target",
+        )
+    )
+
+    assert cleared == []
+    assert len(msg.replies) == 1
+    assert "could not be unmuted" in msg.replies[0]
