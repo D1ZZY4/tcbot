@@ -140,8 +140,6 @@ async def run_ban_sync(bot: Bot, *, max_checks: int = _SYNC_MAX_CHECKS) -> SyncC
         if c
     }
     pairs, truncated = take_pairs(sorted(ban_uids), chat_ids, max_checks)
-    if not pairs:
-        pairs = []
     # * Bounded like every other federation-wide Telegram burst: the fan_out
     # * semaphore plus the per-pair probe timeout cap the blast radius.
     outcomes: list = []
@@ -149,15 +147,20 @@ async def run_ban_sync(bot: Bot, *, max_checks: int = _SYNC_MAX_CHECKS) -> SyncC
         outcomes = await fan_out([_sync_ban_pair(bot, cid, uid) for uid, cid in pairs])
     mute_until = {int(d.get("user_id", 0)): d.get("until_date") for d in mute_docs}
     mute_uids = sorted(uid for uid in mute_until if uid)
-    mute_pairs, mute_truncated = take_pairs(
-        mute_uids, chat_ids, max(0, max_checks - len(pairs))
-    )
-    if mute_pairs:
-        mute_outcomes = await fan_out(
-            [_sync_mute_pair(bot, cid, uid, mute_until[uid]) for uid, cid in mute_pairs]
+    mute_truncated = False
+    if mute_uids:
+        mute_pairs, mute_truncated = take_pairs(
+            mute_uids, chat_ids, max(0, max_checks - len(pairs))
         )
-        pairs = [*pairs, *mute_pairs]
-        outcomes = [*outcomes, *mute_outcomes]
+        if mute_pairs:
+            mute_outcomes = await fan_out(
+                [
+                    _sync_mute_pair(bot, cid, uid, mute_until[uid])
+                    for uid, cid in mute_pairs
+                ]
+            )
+            pairs = [*pairs, *mute_pairs]
+            outcomes = [*outcomes, *mute_outcomes]
     if not pairs:
         return SyncCounts()
     counts, _ = _summarize(
