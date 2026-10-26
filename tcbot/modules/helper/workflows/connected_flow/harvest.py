@@ -6,12 +6,15 @@
 
 from __future__ import annotations
 
-import asyncio
+from typing import TYPE_CHECKING
 
 from telegram import ChatMember
 
+if TYPE_CHECKING:
+    import asyncio
+
 from tcbot import database as db
-from tcbot.utils.dispatch import drain_tasks
+from tcbot.utils.dispatch import drain_tasks, gather_bounded
 from tcbot.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -57,7 +60,7 @@ async def _harvest_admin_identities(
         )
     if not coros:
         return
-    results = await asyncio.gather(*coros, return_exceptions=True)
+    results = await gather_bounded(coros)
     errors = sum(1 for r in results if isinstance(r, BaseException))
     if errors:
         log.debug(

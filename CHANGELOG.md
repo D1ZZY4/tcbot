@@ -164,6 +164,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **MTProto writes degrade instead of crashing update handling** (`tcbot/database/mtproto_store/retry.py`): non-transient store failures are logged and returned instead of propagating into Pyrogram's background task. Behavior changes: update handling continues instead of dying on a store error.
 
+- **Connection requests reject anonymous admins** (`tcbot/modules/connecting.py`): groups posting as the anonymous admin can no longer submit an unattributable connection request. Behavior changes: anonymous-admin requests are refused.
+
+- **Admin harvest is bounded** (`tcbot/modules/helper/workflows/connected_flow/harvest.py`): identity writes now run through the bounded gather helper instead of an unbounded one. Behavior changes: none.
+
 - **Container image ships the message catalog** (`Dockerfile`): the build copies `i18n/` next to the package so the first render finds its templates. Behavior changes: Docker deploys boot instead of failing every handler.
 
 - **Stats search buttons read real labels** (`tcbot/modules/helper/keyboards.py`): the Search and New Search buttons use the shared button catalog instead of missing keys. Behavior changes: the buttons show words instead of key markers.

@@ -19,6 +19,7 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, replies
+from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.connected_flow import connection
@@ -107,6 +108,18 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             msg,
             replies.err_group_only(locale, plain=True),
             log_label="cmd_tctc group-only",
+            parse_mode=None,
+        )
+        return
+
+    # * Anonymous admins (posting as the group) cannot be attributed to a
+    # * real federation account, so refuse the connection request up front
+    # * instead of submitting one under the placeholder ID.
+    if user.id == ANONYMOUS_BOT_ID:
+        await safe_reply(
+            msg,
+            t("connecting.state.admin_required", locale, plain=True),
+            log_label="cmd_tctc anon-admin",
             parse_mode=None,
         )
         return
