@@ -144,6 +144,24 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Fixed
 
+- **Unban no longer skips staff-target demote on degraded identity** (`tcbot/modules/unbanning.py`): federation staff-ness now comes from the fail-closed role read, so a transient `identity.classify` failure no longer drops the demote-before-unban cleanup. Behavior changes: none on the happy path.
+
+- **Auto-demote aborts when the role survives a no-op removal** (`tcbot/modules/helper/workflows/demote_flow.py`): a no-row removal now re-reads the live role and aborts only when the role still resolves, so a banned, kicked, or muted user cannot keep a federation role through split-brain. Behavior changes: none on the happy path.
+
+- **Group migration cleans up a stale pending row** (`tcbot/database/groups_db.py`): a `DuplicateKeyError` on the pending-joins repoint now deletes the stale old row instead of leaving a dangling pending document. Behavior changes: none on the happy path.
+
+- **MTProto writes degrade instead of crashing update handling** (`tcbot/database/mtproto_store/retry.py`): non-transient store failures are logged and returned instead of propagating into Pyrogram's background task. Behavior changes: update handling continues instead of dying on a store error.
+
+- **Sync re-applies mutes with aware datetimes** (`tcbot/modules/syncing/core.py`): mute expiry values are normalized to UTC before being sent to Telegram. Behavior changes: none on the happy path.
+
+- **Connection requests reject anonymous admins** (`tcbot/modules/connecting.py`): groups posting as the anonymous admin can no longer submit an unattributable connection request. Behavior changes: anonymous-admin requests are refused.
+
+- **Admin harvest is bounded** (`tcbot/modules/helper/workflows/connected_flow/harvest.py`): identity writes now run through the bounded gather helper instead of an unbounded one. Behavior changes: none.
+
+- **Cancellation propagates in moderation flows** (`connected_flow/connection.py`, `warning_flow/issue.py`, `muting_flow/unmute.py`): `throw_if_cancelled` now runs after the parallel log, reply, and connection gathers, so shutdown is not misreported as per-item failure. Behavior changes: none on the happy path.
+
+- **Group migration cleans up a stale pending row** (`tcbot/database/groups_db.py`): a `DuplicateKeyError` on the pending-joins repoint now deletes the stale old row instead of leaving a dangling pending document. Behavior changes: none on the happy path.
+
 - **Container image ships the message catalog** (`Dockerfile`): the build copies `i18n/` next to the package so the first render finds its templates. Behavior changes: Docker deploys boot instead of failing every handler.
 
 - **Stats search buttons read real labels** (`tcbot/modules/helper/keyboards.py`): the Search and New Search buttons use the shared button catalog instead of missing keys. Behavior changes: the buttons show words instead of key markers.

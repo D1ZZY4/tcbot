@@ -230,6 +230,28 @@ async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
         )
     except asyncio.CancelledError:
         raise
+    except DuplicateKeyError:
+        # * The new chat already has a pending row: drop the stale old row
+        # * so the migration converges instead of leaving a dangling
+        # * pending_joins document referencing the old chat id.
+        log.warning(
+            "migrate_group (%d -> %d): pending target row exists, merging old row away",
+            old_chat_id,
+            new_chat_id,
+        )
+        try:
+            await db_call(_pending().delete_one({"chat_id": old_chat_id}))
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception(
+                "migrate_group (%d -> %d) pending stale-row cleanup failed",
+                old_chat_id,
+                new_chat_id,
+            )
+            pending_res = None
+        else:
+            pending_res = None
     except Exception:
         log.exception(
             "migrate_group (%d -> %d) pending_joins update failed",
