@@ -172,6 +172,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Cancellation propagates in moderation flows** (`connected_flow/connection.py`, `warning_flow/issue.py`, `muting_flow/unmute.py`): `throw_if_cancelled` now runs after the parallel log, reply, and connection gathers, so shutdown is not misreported as per-item failure. Behavior changes: none on the happy path.
 
+- **Unban no longer skips staff-target demote on degraded identity** (`tcbot/modules/unbanning.py`): federation staff-ness now comes from the fail-closed role read, so a transient `identity.classify` failure no longer drops the demote-before-unban cleanup. Behavior changes: none on the happy path.
+
+- **Auto-demote aborts when the role survives a no-op removal** (`tcbot/modules/helper/workflows/demote_flow.py`): a no-row removal now re-reads the live role and aborts only when the role still resolves, so a banned, kicked, or muted user cannot keep a federation role through split-brain. Behavior changes: none on the happy path.
+
 - **Container image ships the message catalog** (`Dockerfile`): the build copies `i18n/` next to the package so the first render finds its templates. Behavior changes: Docker deploys boot instead of failing every handler.
 
 - **Stats search buttons read real labels** (`tcbot/modules/helper/keyboards.py`): the Search and New Search buttons use the shared button catalog instead of missing keys. Behavior changes: the buttons show words instead of key markers.

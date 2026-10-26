@@ -131,12 +131,24 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         # * or target outranks executor); end the handler.
         return
 
+    staff_roles = ("admin", "developer", "tester")
     refusal = identity.refuse_message("unban", ident, locale)
-    if refusal is not None and ident.kind not in ("admin", "developer", "tester"):
+    # * Hard identity refusals (self, bot, telegram, anon_admin, founder)
+    # * always block, regardless of federation role.
+    if refusal is not None and ident.kind not in staff_roles:
         await safe_reply(msg, refusal, log_label="unban refusal")
         return
 
-    if refusal is not None:
+    # * Federation staff-ness comes from the fail-closed role read
+    # * (resolve_and_check), not from identity.classify, which degrades to
+    # * "user" on a transient DB failure. Keying the staff branch off the
+    # * degraded kind would skip the demote-before-unban cleanup below.
+    target_role = role_result[1] if isinstance(role_result, tuple) else None
+    is_staff_target = target_role in staff_roles or (
+        refusal is not None and ident.kind in staff_roles
+    )
+
+    if is_staff_target:
         # * Staff targets are never federation-bannable, so "nothing to undo"
         # * is normally the right reply. Exception: the target was re-promoted
         # * while banned (race or manual grant); then the active ban blocks
@@ -145,7 +157,16 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         # * to execute_unban. The speculative pre-fetch above may have failed,
         # * so re-read; a failed re-read keeps the refusal rather than
         # * demoting a staff member with no proven ban.
-        target_role = role_result[1]
+        # * Reconstruct a refusal when classify degraded (refusal is None) so
+        # * the "nothing to undo" reply below stays a real message.
+        if refusal is None and target_role in staff_roles:
+            synth = identity.Identity(
+                kind=target_role,  # type: ignore[arg-type]
+                target_id=target_id,
+                fname=target_fname or str(target_id),
+                username=None,
+            )
+            refusal = identity.refuse_message("unban", synth, locale)
         ban_record = pre_ban
         if ban_record is None:
             try:
@@ -157,7 +178,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 )
                 ban_record = None
         if ban_record is None:
-            await safe_reply(msg, refusal, log_label="unban refusal")
+            await safe_reply(msg, refusal or "", log_label="unban refusal")
             return
         if target_role:
             try:

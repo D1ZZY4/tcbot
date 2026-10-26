@@ -233,7 +233,7 @@ class Demote:
         never keep a federation role.
         """
         try:
-            await cls.execute(
+            removed = await cls.execute(
                 bot,
                 target_id,
                 target_display,
@@ -249,20 +249,36 @@ class Demote:
                 target_id,
                 target_role,
             )
-            chat = msg.chat
-            mod_locale = await effective_locale(
-                getattr(chat, "type", None), executor_id, getattr(chat, "id", 0)
-            )
-            await safe_reply(
-                msg,
-                t(
-                    "demote.abort.body",
-                    mod_locale,
-                    user=Safe(user_ref(target_id, target_display)),
-                    target_role=target_role,
-                    action=trigger,
-                ),
-                log_label="auto-demote-fail",
-            )
-            return False
+            removed = False
+        if not removed:
+            # * execute() returns False when no row was cleared. Re-read the
+            # * live role (cache invalidated by remove_role) to distinguish
+            # * "already gone, safe to proceed" from a stale-cache split-brain
+            # * where the role still resolves: only the latter must abort, so
+            # * a banned/muted/kicked user never keeps a federation role.
+            try:
+                live_role = await db.users_roles.get_effective_role(target_id)
+            except Exception:
+                log.exception(
+                    "live role re-read failed after no-op demote for target=%d",
+                    target_id,
+                )
+                live_role = target_role
+            if live_role in ("admin", "developer", "tester"):
+                chat = msg.chat
+                mod_locale = await effective_locale(
+                    getattr(chat, "type", None), executor_id, getattr(chat, "id", 0)
+                )
+                await safe_reply(
+                    msg,
+                    t(
+                        "demote.abort.body",
+                        mod_locale,
+                        user=Safe(user_ref(target_id, target_display)),
+                        target_role=live_role,
+                        action=trigger,
+                    ),
+                    log_label="auto-demote-fail",
+                )
+                return False
         return True
