@@ -15,7 +15,7 @@ from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg, replies
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows import muting_flow as _flow
-from tcbot.utils.dispatch import count_transient_errors, fan_out
+from tcbot.utils.dispatch import count_transient_errors, fan_out, throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -170,6 +170,7 @@ async def execute_unmute(
             msg.reply_text(reply, parse_mode="MarkdownV2"),
             return_exceptions=True,
         )
+        throw_if_cancelled(results2)
         if isinstance(results2[0], BaseException):
             log.error("Unmute log send failed: %s", results2[0])
         if isinstance(results2[1], BaseException):

@@ -19,6 +19,7 @@ from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.proof_flow import upload_proof
 from tcbot.modules.helper.workflows.warning_flow.autoban import _execute_warn_auto_ban
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -231,5 +232,6 @@ async def execute_warn(
             ),
             return_exceptions=True,
         )
+        throw_if_cancelled(results2)
         if isinstance(results2[0], BaseException):
             log.error("Warn log send failed: %s", results2[0])

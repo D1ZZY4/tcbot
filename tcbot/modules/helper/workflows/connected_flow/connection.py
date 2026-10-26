@@ -38,6 +38,7 @@ from tcbot.modules.helper.workflows.connected_flow.shared import (
 from tcbot.utils.dispatch import (
     count_transient_errors,
     fan_out,
+    throw_if_cancelled,
 )
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
@@ -202,6 +203,9 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
             ),
             db.groups_db.add_group(chat_id, chat_title, owner_id),
             return_exceptions=True,
+        )
+        throw_if_cancelled(
+            (chat_result, ban_uids, mute_docs, admins_result, add_group_r)
         )
         admins_list = (
             list(admins_result) if not isinstance(admins_result, BaseException) else []
