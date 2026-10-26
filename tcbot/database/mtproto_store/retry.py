@@ -53,9 +53,9 @@ async def _retry_write(coro_factory: Callable[[], Awaitable[Any]]) -> Any:
     for attempt in range(_MAX_WRITE_RETRIES):
         try:
             return await coro_factory()
-        except BaseException as exc:
-            if isinstance(exc, asyncio.CancelledError):
-                raise
+        except asyncio.CancelledError:
+            raise
+        except WriteConcernError as exc:
             if not _is_transient_write_error(exc) or attempt == _MAX_WRITE_RETRIES - 1:
                 # * Non-transient (or exhausted) failure: log and degrade
                 # * instead of propagating to Pyrogram's handle_updates task,

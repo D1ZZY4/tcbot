@@ -152,6 +152,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **MTProto writes degrade instead of crashing update handling** (`tcbot/database/mtproto_store/retry.py`): non-transient store failures are logged and returned instead of propagating into Pyrogram's background task. Behavior changes: update handling continues instead of dying on a store error.
 
+- **MTProto lease claim no longer grants a live foreign lease** (`tcbot/database/mtproto_store/retry.py`): the retry helper now catches only `WriteConcernError`, so control-flow errors such as `DuplicateKeyError` propagate to `claim_owner`, which refuses a lease already held by another live owner. Behavior changes: none on the happy path.
+
 - **Sync re-applies mutes with aware datetimes** (`tcbot/modules/syncing/core.py`): mute expiry values are normalized to UTC before being sent to Telegram. Behavior changes: none on the happy path.
 
 - **Connection requests reject anonymous admins** (`tcbot/modules/connecting.py`): groups posting as the anonymous admin can no longer submit an unattributable connection request. Behavior changes: anonymous-admin requests are refused.
