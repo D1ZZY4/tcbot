@@ -54,8 +54,16 @@ async def _retry_write(coro_factory: Callable[[], Awaitable[Any]]) -> Any:
         try:
             return await coro_factory()
         except BaseException as exc:
-            if not _is_transient_write_error(exc) or attempt == _MAX_WRITE_RETRIES - 1:
+            if isinstance(exc, asyncio.CancelledError):
                 raise
+            if not _is_transient_write_error(exc) or attempt == _MAX_WRITE_RETRIES - 1:
+                # * Non-transient (or exhausted) failure: log and degrade
+                # * instead of propagating to Pyrogram's handle_updates task,
+                # * which would crash update handling for the whole session.
+                log.warning(
+                    "MTProto write failed (non-transient): %s", exc, exc_info=True
+                )
+                return None
             last_exc = exc
             delay = _RETRY_BASE_DELAY * (2**attempt)
             log.debug(
