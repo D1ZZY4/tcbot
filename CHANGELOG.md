@@ -8,7 +8,6 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 <summary>Unreleased changes (click to collapse)</summary>
 
 ### Added
-
 - **Localized Prev/Next and authorization refusals** (`i18n/en-US/button.toml`, `i18n/id/button.toml`, `i18n/en-US/common.toml`, `i18n/id/common.toml`): the paged-list navigation row reads `button.prev` / `button.next`, and every auth refusal (tier refusals, rank, role-lookup retry, anonymous admin, outrank notice) reads `common.refuse.*` in the viewer's locale. Default-locale wording is unchanged.
 
 - **Warn, stats, and help catalog coverage** (`i18n/en-US/stats.toml`, `i18n/id/stats.toml`, `i18n/en-US/help.toml`, `i18n/id/help.toml`, `i18n/en-US/common.toml`, `i18n/id/common.toml`): outage cards, degraded-overview notes, localized help titles, and a shared unknown-date word in both languages. Default-locale output is unchanged.
@@ -22,6 +21,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 - **Warn auto-ban stores the warn proof on the ban record** (`tcbot/modules/helper/workflows/warning_flow/`, `tests/test_warn_autoban_guard.py`, `docs/features/moderation/warnings.md`): the proof upload collected with the threshold warn becomes the ban `proof_message_id`, so `/check` shows View Proof instead of an empty slot. Behavior changes: auto-ban records now carry the warn proof.
 
 ### Changed
+
+- **Dependency versions bumped to latest releases** (`pyproject.toml`, `uv.lock`): lower bounds and pinned versions now track the current releases of every runtime and development dependency, including Motor, Flask, Redis, cachetools, Kurigram, structlog, msgspec, and the testing and lint tooling. Behavior changes: none.
 
 - **Oversized modules split into packages, every file at most 375 lines** (`tcbot/modules/admins/`, `checking/`, `stats/`, `help/`, `maintenance/`, `warnings/`, `syncing/`, `greeting/`, `helper/keyboards/`, `helper/parse_logmsg/`, `helper/decorators/`, `helper/extraction/`, `helper/workflows/*_flow/`, `database/cache/`, `scheduler/`, `warns_db/`, `bans_db/`, `users_cache/`, `mongos/`, `mtproto/`, `mtproto_store/`, `utils/error_reporter/`, `tcbot/config/`, `tcbot/runtime/`; `tcbot/modules/__init__.py` now also discovers packages): each former giant becomes focused submodules plus a thin `__init__.py` re-exporting the exact public surface, so dotted import paths, callback data, messages, and handler registration are unchanged. Mixin typing across the new packages is explicit (shared bases, member stubs, no invalid `self` annotations). Behavior changes: none; the full suite passes identically. The 375-line budget is now a code-style rule (`.agents/rules/code-style.md`) enforced by a CI step in the Ruff workflow.
 
