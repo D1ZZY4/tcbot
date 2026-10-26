@@ -168,6 +168,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Admin harvest is bounded** (`tcbot/modules/helper/workflows/connected_flow/harvest.py`): identity writes now run through the bounded gather helper instead of an unbounded one. Behavior changes: none.
 
+- **Sync re-applies mutes with aware datetimes** (`tcbot/modules/syncing/core.py`): mute expiry values are normalized to UTC before being sent to Telegram. Behavior changes: none on the happy path.
+
 - **Container image ships the message catalog** (`Dockerfile`): the build copies `i18n/` next to the package so the first render finds its templates. Behavior changes: Docker deploys boot instead of failing every handler.
 
 - **Stats search buttons read real labels** (`tcbot/modules/helper/keyboards.py`): the Search and New Search buttons use the shared button catalog instead of missing keys. Behavior changes: the buttons show words instead of key markers.

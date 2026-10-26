@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import itertools
 from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from telegram import ChatPermissions
@@ -17,7 +18,7 @@ from telegram.error import BadRequest
 
 from tcbot.utils.dispatch import is_benign_telegram_error
 from tcbot.utils.logger import get_logger
-from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
+from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT, to_utc
 
 if TYPE_CHECKING:
     from telegram import Bot
@@ -190,7 +191,9 @@ async def _sync_mute_pair(
             chat_id,
             user_id,
             permissions=ChatPermissions(can_send_messages=False),
-            until_date=until_date,
+            until_date=(
+                to_utc(until_date) if isinstance(until_date, datetime) else until_date
+            ),
         )
     except Exception as exc:
         if isinstance(exc, BadRequest) or is_benign_telegram_error(exc):
