@@ -55,3 +55,6 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D"]  # Test functions need no docstrings; module docs stay required
+
+[tool.pylint.format]
+max-module-lines = 375
