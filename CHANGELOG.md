@@ -158,6 +158,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Admin harvest is bounded** (`tcbot/modules/helper/workflows/connected_flow/harvest.py`): identity writes now run through the bounded gather helper instead of an unbounded one. Behavior changes: none.
 
+- **Transient Telegram errors no longer flood the error channel** (`tcbot/runtime/errors.py`): `NetworkError`, `TimedOut`, `RetryAfter`, and OS-level network errors are logged at warning/debug and skipped by both the PTB handler and the asyncio exception handler instead of being shipped as code bugs. Behavior changes: transient connectivity blips stop appearing as "Needs a code fix" reports.
+
 - **Cancellation propagates in moderation flows** (`connected_flow/connection.py`, `warning_flow/issue.py`, `muting_flow/unmute.py`): `throw_if_cancelled` now runs after the parallel log, reply, and connection gathers, so shutdown is not misreported as per-item failure. Behavior changes: none on the happy path.
 
 - **Group migration cleans up a stale pending row** (`tcbot/database/groups_db.py`): a `DuplicateKeyError` on the pending-joins repoint now deletes the stale old row instead of leaving a dangling pending document. Behavior changes: none on the happy path.

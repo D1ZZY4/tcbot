@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import telegram.error as te
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -43,6 +44,23 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
     if isinstance(exc, CircuitOpenError):
         log.warning("Handler aborted: %s", exc)
         return
+
+    # * Transient Telegram/network errors (httpx.ReadError, TimedOut, RetryAfter,
+    # * Conflict during polling) are environmental, not code bugs. Reporting each
+    # * one to the error channel floods it with noise; PTB retries on its own.
+    # * Treat them like CircuitOpenError: log at warning and stop.
+    if isinstance(exc, (te.NetworkError, te.TimedOut, te.RetryAfter)):
+        log.warning("Transient Telegram error (not reported): %s", exc)
+        return
+    if isinstance(exc, (ConnectionError, TimeoutError, OSError)):
+        log.warning("Transient network error (not reported): %s", exc)
+        return
+    # * Benign recoverable no-ops never ship.
+    try:
+        if error_reporter._benign(exc):
+            return
+    except Exception:
+        pass
 
     # * Build context string from the update for extra detail
     context_parts: list[str] = []
@@ -92,6 +110,18 @@ def _make_asyncio_exc_handler(
         msg = context.get("message", "Unhandled asyncio exception")
         future = context.get("future") or context.get("task")
         detail = f"{msg} | Task: {future!r}" if future else msg
+
+        # * Transient network/Telegram errors during polling are environmental;
+        # * PTB retries on its own. Don't flood the error channel.
+        if isinstance(exc, (te.NetworkError, te.TimedOut, te.RetryAfter)):
+            log.debug("[asyncio] transient (not reported): %s", exc)
+            return
+        if isinstance(exc, (ConnectionError, TimeoutError, OSError)):
+            log.debug("[asyncio] transient (not reported): %s", exc)
+            return
+        if exc is not None and error_reporter._benign(exc):
+            log.debug("[asyncio] benign (not reported): %s", exc)
+            return
 
         # * Mirror to module logger so nothing is silently swallowed.
         log.error("[asyncio] %s%s", detail, f" - {exc}" if exc else "")
