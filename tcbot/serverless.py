@@ -11,45 +11,27 @@ import threading
 from typing import TYPE_CHECKING, Any
 
 from telegram import Update
-from telegram.ext import (
-    AIORateLimiter,
-    Application,
-    ApplicationBuilder,
-    Defaults,
-)
+from telegram.ext import Application
 
 from tcbot import cfg
 from tcbot import database as db
-
-# * Imported from __main__ (not duplicated) so the webhook, polling, and
-# * serverless transports register exactly the same handlers.  Accept the
-# * Flask import chain this pulls in: Flask is already a project dependency
-# * and no server is started at import time (guarded by __main__'s
-# * ``if __name__ == "__main__"`` block).
-from tcbot.__main__ import _LINK_PREVIEW_DISABLED, _register_handlers
 from tcbot.database import redis_client
 from tcbot.database.mongos import connect, ensure_indexes, is_connected
 from tcbot.database.scheduler import expire_old_warns
+
+# * Imported from tcbot.runtime.lifecycle (single owner) so the webhook,
+# * polling, and serverless transports register exactly the same handlers
+# * and share the same ApplicationBuilder chain. Importing the runtime
+# * package also pulls the Flask import chain (entry -> alive): Flask is
+# * already a project dependency and no server is started at import time.
+from tcbot.runtime.lifecycle import _base_builder, _register_handlers
 from tcbot.utils import error_reporter
 from tcbot.utils.logger import get_logger
-from tcbot.utils.transport import (
-    API_POOL_SIZE,
-    HTTP_CONNECT_TIMEOUT,
-    HTTP_POOL_TIMEOUT,
-    HTTP_READ_TIMEOUT,
-    HTTP_WRITE_TIMEOUT,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Coroutine
 
 log = get_logger(__name__)
-
-# ────────────────── Transport tuning (mirrors __main__) ────────────────── #
-# * Same outbound HTTP tuning as the long-lived transports so Telegram API
-# * behaviour (pooling, timeouts, pacing) is identical on Vercel. Values
-# * live in tcbot.utils.transport (single owner); the link-preview default
-# * is imported from __main__ (single owner) alongside _register_handlers.
 
 
 # ─────────────── Instance event loop (warm-invocation reuse) ────────────── #
@@ -90,21 +72,15 @@ _app: Application | None = None
 
 
 def build_serverless_app() -> Application:
-    """Build the PTB Application for serverless use (no Updater, no scheduler)."""
-    return (
-        ApplicationBuilder()
-        .token(cfg.bot_token)
-        .updater(None)
-        .defaults(Defaults(link_preview_options=_LINK_PREVIEW_DISABLED))
-        .concurrent_updates(True)  # noqa: FBT003
-        .connection_pool_size(API_POOL_SIZE)
-        .read_timeout(HTTP_READ_TIMEOUT)
-        .write_timeout(HTTP_WRITE_TIMEOUT)
-        .connect_timeout(HTTP_CONNECT_TIMEOUT)
-        .pool_timeout(HTTP_POOL_TIMEOUT)
-        .rate_limiter(AIORateLimiter())
-        .build()
-    )
+    """Build the PTB Application for serverless use (no Updater, no scheduler).
+
+    Shares the transport-tuned builder chain (token, defaults, concurrency,
+    pool size, timeouts, rate limiter) with the long-lived transports via
+    ``tcbot.runtime.lifecycle._base_builder``, so Telegram HTTP behaviour is
+    identical on Vercel. Only the Updater lane differs: disabled here because
+    there is no long-poll loop in a serverless instance.
+    """
+    return _base_builder().updater(None).build()
 
 
 async def _init_subsystems(app: Application) -> None:
@@ -124,22 +100,10 @@ async def _init_subsystems(app: Application) -> None:
     log.info("serverless: connecting to MongoDB...")
     await connect()
 
-    async def _try_redis() -> None:
-        if cfg.redis_url:
-            try:
-                await redis_client.connect(cfg.redis_url)
-            except Exception as exc:
-                log.warning(
-                    "Redis connection failed; running with in-memory cache only: %s",
-                    exc,
-                )
-        else:
-            log.info("REDIS_URL not set; in-memory cache only.")
-
     indexes_r, owner_r, _ = await asyncio.gather(
         ensure_indexes(),
         db.users_roles.ensure_initial_owner(cfg.initial_owner_id),
-        _try_redis(),
+        redis_client.connect_if_configured(),
         return_exceptions=True,
     )
     if isinstance(indexes_r, BaseException):

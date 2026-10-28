@@ -119,22 +119,10 @@ async def _post_init(app: Application) -> None:
     # * All three are safe to run concurrently once the MongoDB client is live.
     log.info("post_init: parallel setup (indexes, owner seed, Redis)...")
 
-    async def _try_redis() -> None:
-        if cfg.redis_url:
-            try:
-                await redis_client.connect(cfg.redis_url)
-            except Exception as exc:
-                log.warning(
-                    "Redis connection failed; running with in-memory cache only: %s",
-                    exc,
-                )
-        else:
-            log.info("REDIS_URL not set; in-memory cache only.")
-
     indexes_r, owner_r, _, _mtproto_r = await asyncio.gather(
         ensure_indexes(),
         db.users_roles.ensure_initial_owner(cfg.initial_owner_id),
-        _try_redis(),
+        redis_client.connect_if_configured(),
         mtproto_mod.start(),
         return_exceptions=True,
     )
@@ -213,13 +201,18 @@ async def _post_shutdown(app: Application) -> None:
     close_mongo()
 
 
-def _build_application(*, polling: bool) -> Application:
-    """Construct the PTB Application with transport-appropriate connection pool sizes."""
-    builder = (
+def _base_builder() -> ApplicationBuilder:
+    """Return the shared PTB ApplicationBuilder chain used by every transport.
+
+    Long-lived transports add post_init/post_shutdown and, in polling mode,
+    the dedicated getUpdates pool; the serverless transport adds
+    ``updater(None)``. Transport tuning (link preview, concurrency, pool
+    size, timeouts, rate pacing) lives here as the single owner so webhook,
+    polling, and serverless applications behave identically.
+    """
+    return (
         ApplicationBuilder()
         .token(cfg.bot_token)
-        .post_init(_post_init)
-        .post_shutdown(_post_shutdown)
         # * Disable link preview on all bot messages globally.
         .defaults(Defaults(link_preview_options=_LINK_PREVIEW_DISABLED))
         # * Process independent updates in parallel (big latency win)
@@ -236,6 +229,11 @@ def _build_application(*, polling: bool) -> Application:
         # * the per-user decorator rate limiter (group -1).
         .rate_limiter(AIORateLimiter())
     )
+
+
+def _build_application(*, polling: bool) -> Application:
+    """Construct the PTB Application with transport-appropriate connection pool sizes."""
+    builder = _base_builder().post_init(_post_init).post_shutdown(_post_shutdown)
     if polling:
         # * Dedicated pool for the getUpdates long-polling lane (not used in webhook mode).
         builder = builder.get_updates_connection_pool_size(_UPDATES_POOL_SIZE)

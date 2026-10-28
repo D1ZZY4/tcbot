@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import redis.asyncio as aioredis
 
+from tcbot import cfg
 from tcbot.utils.logger import get_logger
 
 # * hiredis is optional at import time: only required when REDIS_URL is set.
@@ -101,6 +102,26 @@ async def connect(url: str) -> None:
     _client = c
     _pool = pool
     log.info("Redis connected (hiredis %s).", _HIREDIS_VERSION)
+
+
+async def connect_if_configured() -> None:
+    """Connect Redis when REDIS_URL is set; otherwise log and stay in-memory only.
+
+    Never raises: a failed Redis connection degrades to the L1 in-memory
+    cache (the TwoLevelCache contract) instead of aborting startup. This
+    is the single owner of the Redis connect/graceful-degrade decision;
+    every runtime entry point calls this instead of re-implementing it.
+    """
+    if cfg.redis_url:
+        try:
+            await connect(cfg.redis_url)
+        except Exception as exc:
+            log.warning(
+                "Redis connection failed; running with in-memory cache only: %s",
+                exc,
+            )
+    else:
+        log.info("REDIS_URL not set; in-memory cache only.")
 
 
 async def close() -> None:
