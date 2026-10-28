@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 
+from tcbot.database._migration import _repoint_chat
 from tcbot.database.mongos import db_call
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
@@ -33,23 +34,12 @@ async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:
     under-count, never double-count into a false auto-ban. Returns ``True``
     if any record was updated.
     """
-    try:
-        warns_r = await db_call(
-            _warns().update_many(
-                {"chat_id": old_chat_id},
-                {"$set": {"chat_id": new_chat_id}},
-            )
-        )
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        log.exception(
-            "warns_db.migrate_records (%d -> %d) warns update failed",
-            old_chat_id,
-            new_chat_id,
-        )
-        return False
-    matched_any = warns_r.matched_count > 0
+    matched_any = await _repoint_chat(
+        _warns(),
+        old_chat_id,
+        new_chat_id,
+        log_msg="warns_db.migrate_records (%d -> %d) warns update failed",
+    )
     try:
         old_counters = await db_call(
             _warn_counts()

@@ -6,21 +6,18 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING
 
+from tcbot.database._migration import _repoint_chat
 from tcbot.database.documents import ActiveMuteDoc, MuteDoc
 from tcbot.database.mongos import col, db_call
 from tcbot.database.types import ChatId, UserId
-from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
     from datetime import datetime
 
     from motor.motor_asyncio import AsyncIOMotorCollection
-
-log = get_logger(__name__)
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
 # * Internal collection access utilities for the mutes database
@@ -171,18 +168,9 @@ async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:
     does not split across the legacy chat. Mute rows carry no unique
     per-pair state, so a plain repoint is safe. Cancellation propagates.
     """
-    try:
-        res = await db_call(
-            _mutes().update_many(
-                {"chat_id": old_chat_id},
-                {"$set": {"chat_id": new_chat_id}},
-            )
-        )
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        log.exception(
-            "mutes_db.migrate_records (%d -> %d) failed", old_chat_id, new_chat_id
-        )
-        return False
-    return res.matched_count > 0
+    return await _repoint_chat(
+        _mutes(),
+        old_chat_id,
+        new_chat_id,
+        log_msg="mutes_db.migrate_records (%d -> %d) failed",
+    )
