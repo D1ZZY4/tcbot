@@ -144,6 +144,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Fixed
 
+- **Regression coverage restored** (`tests/`, `.github/workflows/test-pytest.yml`): 49 check modules covering health, i18n, dispatch, formatter, MTProto, and moderation flows are active again. Two retry-write checks now expect the graceful-degrade contract: an exhausted or non-transient `WriteConcernError` logs and returns instead of re-raising, preserving Pyrogram's background task. CI's test workflow now executes the checks instead of collecting zero items.
+
 - **Unban no longer skips staff-target demote on degraded identity** (`tcbot/modules/unbanning.py`): federation staff-ness now comes from the fail-closed role read, so a transient `identity.classify` failure no longer drops the demote-before-unban cleanup. Behavior changes: none on the happy path.
 
 - **Auto-demote aborts when the role survives a no-op removal** (`tcbot/modules/helper/workflows/demote_flow.py`): a no-row removal now re-reads the live role and aborts only when the role still resolves, so a banned, kicked, or muted user cannot keep a federation role through split-brain. Behavior changes: none on the happy path.
