@@ -140,10 +140,10 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
     async def _replay_bans(bot: Bot, chat_id: int, ban_uids: list[int]) -> int:
         """Fan out every active federation ban into the new group.
 
-        Returns the applied count. Uses ``count_transient_errors`` (not
-        ``count_errors``) so a "user was not in chat" BadRequest does
-        not count as a real failure: for a ban-replay, the user not being
-        in the chat is the desired end state.
+        Returns the applied count. ``count_transient_errors`` excludes
+        benign refusals, so a "user was not in chat" BadRequest does not
+        count as a real failure: for a ban-replay, the user not being in
+        the chat is the desired end state.
         """
         results = await fan_out([bot.ban_chat_member(chat_id, uid) for uid in ban_uids])
         return len(results) - count_transient_errors(results)

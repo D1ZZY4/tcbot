@@ -12,7 +12,6 @@ import pytest
 from telegram.error import BadRequest, Forbidden, TimedOut
 
 from tcbot.utils.dispatch import (
-    count_errors,
     count_transient_errors,
     fan_out,
     gather_bounded,
@@ -37,14 +36,13 @@ def test_unknown_and_non_request_errors_not_benign() -> None:
     assert is_benign_telegram_error(ValueError("x")) is False
 
 
-def test_counters_split_benign_from_transient() -> None:
+def test_count_transient_errors_excludes_benign_refusals() -> None:
     results = [
         BadRequest("USER_NOT_PARTICIPANT"),
         1,
         BadRequest("other"),
         TimedOut("t"),
     ]
-    assert count_errors(results) == 3
     assert count_transient_errors(results) == 2
 
 

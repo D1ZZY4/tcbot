@@ -241,11 +241,6 @@ async def drain_tasks(
         log.debug("%s: tasks survived cancellation; leaving them.", label)
 
 
-def count_errors(results: Sequence[object]) -> int:
-    """Return the number of BaseException items in a fan_out result list."""
-    return sum(1 for r in results if isinstance(r, BaseException))
-
-
 def is_benign_telegram_error(exc: BaseException) -> bool:
     """Return True if the exception is a known-benign Telegram API refusal.
 
@@ -276,9 +271,9 @@ def count_transient_errors(results: Sequence[object]) -> int:
     """Count fan_out results that represent real (non-benign) failures.
 
     Benign Telegram API refusals (see ``is_benign_telegram_error``) are
-    excluded from the count. Use this instead of ``count_errors`` for
-    operator-facing success/failure summaries where a "user was not in
-    this chat" response should not count as a failed group.
+    excluded from the count, so a "user was not in this chat" response
+    does not count as a failed group in operator-facing success/failure
+    summaries.
     """
     return sum(
         1
