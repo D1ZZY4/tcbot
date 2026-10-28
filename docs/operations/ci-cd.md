@@ -213,11 +213,12 @@ secrets, so every runtime variable must be set there for the runner: `DB_NAME`,
 `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`, `LOG_LEVEL`, `PORT`, `REDIS_URL`,
 `APPEAL_LOG_HANDLE`, `APPEAL_DISCUSSION_TOPIC`, `WARN_EXPIRY_DAYS`,
 `WARN_LIMIT`, `FED_WARN_LIMIT`, `API_ID`, `API_HASH`,
-`ALBUM_DEBOUNCE_SECONDS`, `MODULES_LOAD`, and
-`MODULES_NO_LOAD`, alongside `BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`,
-`WEBHOOK_URL`, and `WEBHOOK_SECRET`. `SYNC_INTERVAL_HOURS`, `CRON_SECRET`, and
-the `COMMUNITY_*_URL` links are **not** forwarded by the runner: the sync sweep
-and community URLs are not part of this transport.
+`ALBUM_DEBOUNCE_SECONDS`, `MODULES_LOAD`, `MODULES_NO_LOAD`,
+`MTPROTO_SESSION`, `SYNC_INTERVAL_HOURS`, the `COMMUNITY_*_URL` links,
+alongside `BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`, `WEBHOOK_URL`, and
+`WEBHOOK_SECRET`. Only `CRON_SECRET` is **not** forwarded by the runner: the
+cron endpoint is Vercel-only, and the long-lived transport schedules
+maintenance through APScheduler instead.
 
 ---
 

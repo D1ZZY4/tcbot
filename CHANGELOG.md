@@ -266,6 +266,12 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Documentation
 
+- **CI secrets list corrected** (`docs/operations/ci-cd.md`): the runner forwards `SYNC_INTERVAL_HOURS` and the community links; only `CRON_SECRET` is not forwarded. Behavior changes: none, docs only.
+
+- **Repository map includes the startup packages** (`docs/architecture/repository-map.md`, `AGENTS.md`): the config and runtime packages, the shared migration helper, and the thin entry module are documented. Behavior changes: none, docs only.
+
+- **Test command and dispatch docs corrected** (`README.md`, `docs/architecture/utilities.md`): the CI test command example includes the parallel flag, and the removed fan-out counting helper is gone from the dispatch table. Behavior changes: none, docs only.
+
 - **Guides follow the package layout** (`AGENTS.md`, `docs/architecture/modules.md`, `workflows.md`, `repository-map.md`, plus file-path references across the feature guides): module discovery documents packages, the workflows rule names `*_flow/` packages, and every split-module path reads in package form. Behavior changes: none, docs only.
 
 - **Shorter type-check command in every guide** (`README.md`, `AGENTS.md`, `PROMPT.md`, `CONTRIBUTING.md`, `docs/README.md`, `docs/getting-started/setup.md`): the documented command no longer requests anything extra since the checker already ships with the development dependencies, and all six guides now cover the whole tree. Behavior changes: none, docs only.

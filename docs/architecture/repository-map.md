@@ -58,12 +58,15 @@ skills live under `.agents/skills/`.
 
 ```text
 tcbot/
-├── __init__.py             Environment loader and cfg adapter
-├── __main__.py             PTB app setup, DB init, handler registration, webhook (polling fallback in local dev)
+├── __init__.py             Environment loader and cfg adapter (re-exports from config/)
+├── __main__.py             Thin entry that delegates startup to tcbot.runtime (webhook/polling)
+├── config/                 Env parsing, typed config models, cfg adapter (single config owner)
+├── runtime/                App lifecycle: build, post-init/shutdown, handler wiring, errors, entry
 ├── alive.py                Flask health endpoint and webhook receiver
 ├── serverless.py           Vercel lifecycle: shared PTB app, update dispatch, cron expiry
 ├── database/
 │   ├── mongos/             Motor client, collection accessor, indexes
+│   ├── _migration.py       Shared chat-repoint helper for basic-group to supergroup migrations
 │   ├── bans_db/            Federation ban records (incl. per-user history)
 │   ├── groups_db.py        Connected groups and pending joins
 │   ├── users_cache/        Member profile cache operations
@@ -73,7 +76,7 @@ tcbot/
 │   ├── mutes_db.py         Mute audit records (incl. per-user history)
 │   ├── queues_db.py        Promotion request queue
 │   ├── cache/              L1 TTL caches with optional Redis L2
-│   ├── redis_client.py     Optional async Redis client
+│   ├── redis_client.py     Optional async Redis client (owns the connect/degrade decision)
 │   ├── scheduler/          APScheduler background jobs in the MongoDB `jobs` collection
 │   ├── mtproto/            Bot-token MTProto client: resolve + member harvest
 │   ├── mtproto_store/      MongoDB-backed Kurigram storage engine
@@ -87,7 +90,7 @@ tcbot/
 │       ├── ban_info.py     Ban detail renderer
 │       ├── decorators/     Auth, per-handler rate limits, tracing, resolve_and_check
 │       ├── extraction/     Target resolution
-│       ├── identity.py     Identity classification, refusal messages, staff notices
+│       ├── identity.py     Identity classification, group-permission checks, refusal messages
 │       ├── keyboards/      Inline keyboard factories
 │       ├── locale.py       Render-locale resolution shared by handlers, callbacks, flows
 │       ├── parse_*.py      Link, log, and safe-edit helpers

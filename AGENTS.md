@@ -99,8 +99,10 @@ Current stack:
 ```text
 <project root>/
 ├── tcbot/                    Main bot package
-│   ├── __init__.py           Environment config loader and `cfg` adapter
-│   ├── __main__.py           Runtime entry point, handler registration, webhook/polling transport
+│   ├── __init__.py           Environment config loader and `cfg` adapter (re-exports from config/)
+│   ├── config/               Env parsing, typed config models, cfg adapter (single config owner)
+│   ├── runtime/              App lifecycle: builder, post-init/shutdown, handler wiring, entry
+│   ├── __main__.py           Thin entry that delegates startup to tcbot.runtime
 │   ├── alive.py              Flask keep-alive and webhook receiver
 │   ├── serverless.py         Vercel lifecycle: shared PTB app, update dispatch, cron expiry
 │   ├── database/             MongoDB helpers, one package per collection/domain
@@ -113,9 +115,10 @@ Current stack:
 │   │   ├── mutes_db.py       Mutes
 │   │   ├── queues_db.py      Promotion requests
 │   │   ├── cache/            TwoLevelCache (L1 in-memory + L2 Redis)
-│   │   ├── redis_client.py   Optional Redis client
+│   │   ├── redis_client.py   Optional Redis client (owns the connect/degrade decision)
 │   │   ├── scheduler/        APScheduler background task + MongoDBJobStore
 │   │   ├── mongos/           MongoDB client/indexes
+│   │   ├── _migration.py     Shared chat-repoint helper for group migrations
 │   │   ├── documents.py      Typed document shapes
 │   │   ├── types.py          Domain primitive types
 │   │   ├── settings_db.py    Per-user locale preferences
