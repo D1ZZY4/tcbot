@@ -17,6 +17,7 @@ from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 from .counters import (
+    _inc_warn_count,
     _recount_and_store,
     _repair_counter_delete,
     _sync_warn_count,
@@ -44,28 +45,7 @@ async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> in
         )
     )
     try:
-        counter = await db_call(
-            _warn_counts().find_one_and_update(
-                _warn_key(user_id, chat_id),
-                {
-                    "$inc": {"count": 1},
-                    "$set": {"updated_at": utc_now()},
-                    "$setOnInsert": {
-                        # * On insert the missing ``count`` field is treated
-                        # * as zero by MongoDB; ``$inc`` then sets it to 1.
-                        # * Do NOT add ``count: 0`` here -- it would conflict
-                        # * with the ``$inc`` modifier and raise
-                        # * ``OperationFailure: ConflictingUpdateOperators``
-                        # * (MongoDB error code 40) on every first warn.
-                        "user_id": user_id,
-                        "chat_id": chat_id,
-                    },
-                },
-                upsert=True,
-                return_document=ReturnDocument.AFTER,
-                projection={"_id": 0, "count": 1},
-            )
-        )
+        counter = await _inc_warn_count(user_id, chat_id)
     except Exception:
         log.exception("add_warn counter update failed; rolling back warn insert")
         try:
@@ -79,7 +59,7 @@ async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> in
         raise
     if counter is None:
         return await _sync_warn_count(user_id, chat_id)
-    return int(counter.get("count", 0))
+    return counter
 
 
 async def clear_warns(user_id: int, chat_id: int) -> int:

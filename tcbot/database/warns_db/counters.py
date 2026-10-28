@@ -10,6 +10,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 from tcbot.database.documents import WarnCountDoc
 from tcbot.database.mongos import col, db_call
@@ -35,11 +36,60 @@ def _warn_key(user_id: int, chat_id: int) -> dict[str, int]:
     return {"user_id": user_id, "chat_id": chat_id}
 
 
+async def _inc_warn_count(user_id: int, chat_id: int) -> int | None:
+    """Atomically increment the warn counter, retrying once on an upsert race.
+
+    The ``(user_id, chat_id)`` unique index makes two concurrent first-warns
+    race on the upsert insert: the loser raises ``DuplicateKeyError`` even
+    though only the increment was lost. The winner's doc now exists, so one
+    retry applies the same ``$inc`` to it and the count lands correctly; a
+    second attempt cannot raise ``DuplicateKeyError`` again. Any other
+    failure propagates unchanged so callers keep their own failure handling.
+    Returns the updated count, or None when the server returns no document.
+    """
+    for attempt in range(2):
+        try:
+            counter = await db_call(
+                _warn_counts().find_one_and_update(
+                    _warn_key(user_id, chat_id),
+                    {
+                        "$inc": {"count": 1},
+                        "$set": {"updated_at": utc_now()},
+                        "$setOnInsert": {
+                            # * On insert the missing ``count`` field is treated
+                            # * as zero by MongoDB; ``$inc`` then sets it to 1.
+                            # * Do NOT add ``count: 0`` here -- it would conflict
+                            # * with the ``$inc`` modifier and raise
+                            # * ``OperationFailure: ConflictingUpdateOperators``
+                            # * (MongoDB error code 40) on every first warn.
+                            "user_id": user_id,
+                            "chat_id": chat_id,
+                        },
+                    },
+                    upsert=True,
+                    return_document=ReturnDocument.AFTER,
+                    projection={"_id": 0, "count": 1},
+                )
+            )
+        except DuplicateKeyError:
+            if attempt == 0:
+                # * Lost the insert race to a concurrent first-warn: the
+                # * winner's doc now exists, so the retry increments it.
+                continue
+            raise
+        if counter is None:
+            return None
+        return int(counter.get("count", 0))
+    raise AssertionError("_inc_warn_count retry loop exhausted")  # unreachable
+
+
 async def _sync_warn_count(user_id: int, chat_id: int) -> int:
     """Read the counter doc, or backfill it from warn history when missing.
 
-    Uses an atomic ``find_one_and_update`` upsert so concurrent callers cannot
-    double-backfill the same missing counter document.
+    Uses an atomic ``find_one_and_update`` upsert so concurrent callers
+    cannot double-backfill the same missing counter document: the loser of
+    the insert race hits the unique index and raises ``DuplicateKeyError``,
+    then re-reads the winner's count instead.
     """
     doc: WarnCountDoc | None = await db_call(
         _warn_counts().find_one(
@@ -52,24 +102,32 @@ async def _sync_warn_count(user_id: int, chat_id: int) -> int:
 
     count = await db_call(_warns().count_documents(_warn_key(user_id, chat_id)))
     if count > 0:
-        # * Atomic upsert: only one concurrent caller wins the insert; others
-        # * get the newly inserted doc back and re-read its count.
-        updated = await db_call(
-            _warn_counts().find_one_and_update(
-                _warn_key(user_id, chat_id),
-                {
-                    "$setOnInsert": {
-                        "user_id": user_id,
-                        "chat_id": chat_id,
-                        "count": count,
-                        "updated_at": utc_now(),
+        try:
+            updated = await db_call(
+                _warn_counts().find_one_and_update(
+                    _warn_key(user_id, chat_id),
+                    {
+                        "$setOnInsert": {
+                            "user_id": user_id,
+                            "chat_id": chat_id,
+                            "count": count,
+                            "updated_at": utc_now(),
+                        },
                     },
-                },
-                upsert=True,
-                return_document=ReturnDocument.AFTER,
-                projection={"_id": 0, "count": 1},
+                    upsert=True,
+                    return_document=ReturnDocument.AFTER,
+                    projection={"_id": 0, "count": 1},
+                )
             )
-        )
+        except DuplicateKeyError:
+            # * A concurrent caller won the backfill insert; the doc exists
+            # * now, so re-read the winner's count instead of failing.
+            updated = await db_call(
+                _warn_counts().find_one(
+                    _warn_key(user_id, chat_id),
+                    {"_id": 0, "count": 1},
+                )
+            )
         if updated is not None:
             return int(updated.get("count", count))
     return count

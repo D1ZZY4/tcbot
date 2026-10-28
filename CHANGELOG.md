@@ -156,6 +156,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Fixed
 
+- **Concurrent first-warns no longer drop one warning** (`tcbot/database/warns_db/records.py`, `counters.py`, `tests/test_warn_counter_race.py`): when two moderators warn the same user in the same chat for the first time at once, the counter increment retries after losing the insert race, and the backfill path re-reads the winner's count instead of failing. Behavior changes: both warnings land instead of one getting a database-failure retry reply.
+
 - **Regression coverage restored** (`tests/`, `.github/workflows/test-pytest.yml`): 49 check modules covering health, i18n, dispatch, formatter, MTProto, and moderation flows are active again. Two retry-write checks now expect the graceful-degrade contract: an exhausted or non-transient `WriteConcernError` logs and returns instead of re-raising, preserving Pyrogram's background task. CI's test workflow now executes the checks instead of collecting zero items.
 
 - **Unban no longer skips staff-target demote on degraded identity** (`tcbot/modules/unbanning.py`): federation staff-ness now comes from the fail-closed role read, so a transient `identity.classify` failure no longer drops the demote-before-unban cleanup. Behavior changes: none on the happy path.
