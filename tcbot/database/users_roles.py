@@ -98,7 +98,9 @@ async def set_owner(user_id: int) -> None:
     # * when the collection is empty and replaces the lowest-id row
     # * otherwise, so a mid-flight crash can never leave zero owner rows
     # * (the old insert-then-delete pair could). A leftover second row from
-    # * an earlier split brain is still removed below for convergence.
+    # * an earlier split brain is still removed below for convergence; the
+    # * delete retries briefly so a transient failure cannot strand two
+    # * owner rows without operator guidance.
     await db_call(
         col("tc_owners").find_one_and_replace(
             {},
@@ -107,11 +109,36 @@ async def set_owner(user_id: int) -> None:
             sort=[("user_id", 1)],
         )
     )
-    await db_call(col("tc_owners").delete_many({"user_id": {"$ne": user_id}}))
+    # * Convergence delete with a bounded retry: a transient failure backs
+    # * off and retries (three attempts total), while a persistent failure
+    # * logs operator guidance and still raises so the transfer fails closed
+    # * exactly as before. Cancellation propagates immediately.
+    for attempt in range(3):
+        try:
+            await db_call(col("tc_owners").delete_many({"user_id": {"$ne": user_id}}))
+            break
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            if attempt < 2:
+                await asyncio.sleep(0.5 * (attempt + 1))
+                continue
+            log.exception(
+                "set_owner cleanup delete failed for user %d: tc_owners may "
+                "still hold two owner rows (split brain). Owner resolution "
+                "picks the lowest user_id, so the previous Founder can be "
+                "left without founder or admin role. Inspect the tc_owners "
+                "collection and delete the row whose user_id != %d manually, "
+                "then retry the transfer.",
+                user_id,
+                user_id,
+            )
+            raise
     owner_id_cache.put(_OWNER_KEY, user_id)
     # * The two writes above are not atomic: a crash between them can leave
-    # * zero or two owner rows. Verify the invariant and log loudly so a
-    # * split brain is noticed instead of serving nondeterministic owners.
+    # * one or two owner rows (never zero; the first write upserts). Verify
+    # * the invariant and log loudly so a split brain is noticed instead of
+    # * serving nondeterministic owners.
     try:
         owner_rows = await db_call(col("tc_owners").estimated_document_count())
     except Exception:
