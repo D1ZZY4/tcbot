@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any
 
 from telegram.error import BadRequest
 
@@ -17,7 +17,7 @@ from tcbot.utils.logger import get_logger
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
-    from telegram import CallbackQuery, InlineKeyboardMarkup, Message
+    from telegram import Bot, CallbackQuery, InlineKeyboardMarkup, Message
 
 log = get_logger(__name__)
 
@@ -28,43 +28,117 @@ _IGNORED = {
 }
 
 
+def _log_edit_failure(
+    level: str, label: str | None, default_msg: str, exc: BaseException
+) -> None:
+    """Emit an edit-failure line at ``level`` using the call-site ``label``.
+
+    With a label the message becomes ``"<label> edit failed: %s"`` so
+    migrated inline sites keep byte-identical output; without one the
+    helper's own default message is used. The exception is passed
+    positionally, matching the inline ``log.debug("... edit failed: %s",
+    exc)`` sites this consolidates.
+    """
+    msg = f"{label} edit failed: %s" if label is not None else default_msg
+    getattr(log, level)(msg, exc)
+
+
 # ──────────────────────── safe_edit helper ──────────────────────── #
 
 
-class _EditableMessage(Protocol):
-    """Anything that exposes the ``edit_text`` coroutine used by ``safe_edit``.
+async def safe_edit(
+    msg: Message,
+    text: str,
+    *,
+    log_level: str = "warning",
+    log_label: str | None = None,
+    catch_all: bool = False,
+    parse_mode: str | None = "MarkdownV2",
+    **kwargs: Any,
+) -> None:
+    """Edit a message via ``msg.edit_text``; swallow harmless not-modified errors.
 
-    Both :class:`telegram.Message` and the ``Message`` half of a
-    :class:`telegram.CallbackQuery` satisfy this protocol; the bot client
-    half of a callback query exposes ``edit_message_text`` instead, so
-    :func:`safe_edit_cb` uses a different code path.
+    ``log_level`` selects the failure log level and ``log_label`` replaces
+    the default message prefix, so migrated inline sites keep byte-identical
+    output (``"<label> edit failed: %s"``). ``catch_all`` additionally
+    swallows generic ``Exception`` failures at ``log_level`` instead of
+    propagating them; cancellation always propagates. ``parse_mode``
+    defaults to ``"MarkdownV2"``; pass ``None`` for plain text.
     """
-
-    async def edit_text(self, text: str, **kwargs: Any) -> object: ...
-
-
-async def safe_edit(msg: _EditableMessage, text: str, **kwargs: Any) -> None:
-    """Edit a message via ``msg.edit_text``; swallow harmless not-modified errors."""
     try:
-        await msg.edit_text(text, parse_mode="MarkdownV2", **kwargs)
+        await msg.edit_text(text, parse_mode=parse_mode, **kwargs)
     except BadRequest as e:
         if any(i in str(e).lower() for i in _IGNORED):
             return
-        log.warning("edit failed: %s", e)
+        _log_edit_failure(log_level, log_label, "edit failed: %s", e)
+    except Exception as exc:
+        if not catch_all:
+            raise
+        _log_edit_failure(log_level, log_label, "edit failed: %s", exc)
 
 
-async def safe_edit_cb(q: CallbackQuery, text: str, **kwargs: Any) -> None:
+async def safe_edit_cb(
+    q: CallbackQuery,
+    text: str,
+    *,
+    log_level: str = "warning",
+    log_label: str | None = None,
+    catch_all: bool = False,
+    parse_mode: str | None = "MarkdownV2",
+    **kwargs: Any,
+) -> None:
     """Edit a callback-query message; swallow harmless not-modified errors.
 
     Use this whenever a user can re-tap a button that lands them on the same
     content (e.g. a section sub-button while already viewing that section).
+    The failure parameters behave exactly as in :func:`safe_edit`.
     """
     try:
-        await q.edit_message_text(text, parse_mode="MarkdownV2", **kwargs)
+        await q.edit_message_text(text, parse_mode=parse_mode, **kwargs)
     except BadRequest as e:
         if any(i in str(e).lower() for i in _IGNORED):
             return
-        log.warning("callback edit failed: %s", e)
+        _log_edit_failure(log_level, log_label, "callback edit failed: %s", e)
+    except Exception as exc:
+        if not catch_all:
+            raise
+        _log_edit_failure(log_level, log_label, "callback edit failed: %s", exc)
+
+
+async def safe_edit_message(
+    bot: Bot,
+    chat_id: int | None,
+    message_id: int | None,
+    text: str,
+    *,
+    log_level: str = "warning",
+    log_label: str | None = None,
+    catch_all: bool = False,
+    parse_mode: str | None = "MarkdownV2",
+    **kwargs: Any,
+) -> None:
+    """Edit a message by chat/message ID via ``bot.edit_message_text``.
+
+    Used for prompts whose chat and message IDs were stored in conversation
+    state instead of a live ``Message``/``CallbackQuery`` handle. Failure
+    parameters behave exactly as in :func:`safe_edit`.
+    """
+    try:
+        await bot.edit_message_text(
+            text,
+            chat_id=chat_id,
+            message_id=message_id,
+            parse_mode=parse_mode,
+            **kwargs,
+        )
+    except BadRequest as e:
+        if any(i in str(e).lower() for i in _IGNORED):
+            return
+        _log_edit_failure(log_level, log_label, "message edit failed: %s", e)
+    except Exception as exc:
+        if not catch_all:
+            raise
+        _log_edit_failure(log_level, log_label, "message edit failed: %s", exc)
 
 
 async def clear_markup_cb(q: CallbackQuery) -> None:

@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from tcbot import database as db
 from tcbot.modules.helper import extraction, identity, replies
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
@@ -171,12 +171,14 @@ async def _check_callback_staff(
     if isinstance(answer_r, BaseException):
         log.debug("callback answer failed: %s", answer_r)
     if isinstance(role_r, BaseException) or role_r not in ("founder", "admin"):
-        try:
-            await q.edit_message_text(
-                replies.err_perm_expired(await locale_for_update(update), plain=True),
-                reply_markup=None,
-            )
-        except Exception as exc:
-            log.debug("callback perm-expired edit failed: %s", exc)
+        await safe_edit_cb(
+            q,
+            replies.err_perm_expired(await locale_for_update(update), plain=True),
+            parse_mode=None,
+            reply_markup=None,
+            log_level="debug",
+            log_label="callback perm-expired",
+            catch_all=True,
+        )
         return None
     return role_r

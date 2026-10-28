@@ -13,6 +13,11 @@ from telegram.ext import ContextTypes
 
 from tcbot import cfg
 from tcbot import database as db
+from tcbot.modules.checking import (
+    RL_CHECKME_CB_LIMIT,
+    RL_CMD_LIMIT,
+    RL_PERIOD_S,
+)
 from tcbot.modules.helper import decorators, keyboards
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.locale import locale_for_update
@@ -29,10 +34,6 @@ if TYPE_CHECKING:
     from tcbot.database.documents import BanDoc
 
 log = get_logger(__name__)
-
-_RL_PERIOD_S: int = 30
-_RL_CMD_LIMIT: int = 8
-_RL_CHECKME_CB_LIMIT: int = 15
 
 
 async def _ban_summary(
@@ -90,7 +91,7 @@ async def _ban_summary(
     return text, proof_link
 
 
-@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(limit=RL_CMD_LIMIT, period=RL_PERIOD_S)
 @decorators.log_execution
 async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Show the caller's federation status (ban / staff role / clean record).
@@ -198,7 +199,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     return
 
 
-@decorators.ratelimiter(limit=_RL_CHECKME_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(limit=RL_CHECKME_CB_LIMIT, period=RL_PERIOD_S)
 @decorators.log_execution
 async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Show detailed ban information from the /checkme ban card.
@@ -237,13 +238,15 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             log.debug("checkme_detail retry answer failed: %s", exc)
         return
     if not ban or not ban.get("is_active"):
-        try:
-            await q.edit_message_text(
-                t("checking.error.ban_inactive", locale, plain=True),
-                reply_markup=None,
-            )
-        except Exception as exc:
-            log.debug("checkme_detail error edit failed: %s", exc)
+        await safe_edit_cb(
+            q,
+            t("checking.error.ban_inactive", locale, plain=True),
+            parse_mode=None,
+            reply_markup=None,
+            log_level="debug",
+            log_label="checkme_detail error",
+            catch_all=True,
+        )
         return
 
     text, proof_link = await build_ban_detail(ban, locale=locale)
@@ -254,7 +257,7 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     )
 
 
-@decorators.ratelimiter(limit=_RL_CHECKME_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(limit=RL_CHECKME_CB_LIMIT, period=RL_PERIOD_S)
 @decorators.log_execution
 async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Return to the ban summary card from the detail view.
@@ -293,13 +296,15 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
             log.debug("checkme_back retry answer failed: %s", exc)
         return
     if not ban:
-        try:
-            await q.edit_message_text(
-                t("checking.error.ban_not_found", locale, plain=True),
-                reply_markup=None,
-            )
-        except Exception as exc:
-            log.debug("checkme_back error edit failed: %s", exc)
+        await safe_edit_cb(
+            q,
+            t("checking.error.ban_not_found", locale, plain=True),
+            parse_mode=None,
+            reply_markup=None,
+            log_level="debug",
+            log_label="checkme_back error",
+            catch_all=True,
+        )
         return
 
     uid = ban.get("banned_user_id", 0)

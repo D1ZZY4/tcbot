@@ -23,7 +23,7 @@ from tcbot.modules.admins.shared import (
 )
 from tcbot.modules.helper import decorators, identity, keyboards
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, esc, user_ref
@@ -157,17 +157,19 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             target_id,
             target_role,
         )
-        try:
-            await q.edit_message_text(
-                t(
-                    "admins.error.role_lookup_failed",
-                    await locale_for_update(update),
-                    plain=True,
-                ),
-                reply_markup=None,
-            )
-        except Exception as exc:
-            log.debug("on_demote_confirm role-lookup-failed edit failed: %s", exc)
+        await safe_edit_cb(
+            q,
+            t(
+                "admins.error.role_lookup_failed",
+                await locale_for_update(update),
+                plain=True,
+            ),
+            parse_mode=None,
+            reply_markup=None,
+            log_level="debug",
+            log_label="on_demote_confirm role-lookup-failed",
+            catch_all=True,
+        )
         return
     if isinstance(mention_data, BaseException):
         target_fname, target_uname = str(target_id), None
@@ -175,31 +177,35 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         target_fname, target_uname = mention_data
 
     if not target_role or target_role == "founder":
-        try:
-            await q.edit_message_text(
-                t(
-                    "admins.error.no_longer_removable",
-                    await locale_for_update(update),
-                    plain=True,
-                ),
-                reply_markup=None,
-            )
-        except Exception as exc:
-            log.debug("on_demote_confirm no-longer-removable edit failed: %s", exc)
+        await safe_edit_cb(
+            q,
+            t(
+                "admins.error.no_longer_removable",
+                await locale_for_update(update),
+                plain=True,
+            ),
+            parse_mode=None,
+            reply_markup=None,
+            log_level="debug",
+            log_label="on_demote_confirm no-longer-removable",
+            catch_all=True,
+        )
         return
 
     if target_role == "admin" and executor_role != "founder":
-        try:
-            await q.edit_message_text(
-                t(
-                    "admins.error.founder_demote_only",
-                    await locale_for_update(update),
-                    plain=True,
-                ),
-                reply_markup=None,
-            )
-        except Exception as exc:
-            log.debug("on_demote_confirm founder-only edit failed: %s", exc)
+        await safe_edit_cb(
+            q,
+            t(
+                "admins.error.founder_demote_only",
+                await locale_for_update(update),
+                plain=True,
+            ),
+            parse_mode=None,
+            reply_markup=None,
+            log_level="debug",
+            log_label="on_demote_confirm founder-only",
+            catch_all=True,
+        )
         return
 
     try:
@@ -218,33 +224,35 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         )
         removed = False
     if not removed:
-        try:
-            await q.edit_message_text(
-                t(
-                    "admins.error.role_clear_failed",
-                    await locale_for_update(update),
-                    plain=True,
-                ),
-                reply_markup=None,
-            )
-        except Exception as exc:
-            log.debug("on_demote_confirm role-clear-failed edit failed: %s", exc)
+        await safe_edit_cb(
+            q,
+            t(
+                "admins.error.role_clear_failed",
+                await locale_for_update(update),
+                plain=True,
+            ),
+            parse_mode=None,
+            reply_markup=None,
+            log_level="debug",
+            log_label="on_demote_confirm role-clear-failed",
+            catch_all=True,
+        )
         return
 
     role_label = db.users_roles.ROLE_LABEL.get(target_role, target_role)
-    try:
-        await q.edit_message_text(
-            t(
-                "admins.demote.done",
-                await locale_for_update(update),
-                user=Safe(user_ref(target_id, target_fname, target_uname)),
-                role=esc(role_label),
-            ),
-            parse_mode="MarkdownV2",
-            reply_markup=None,
-        )
-    except Exception as exc:
-        log.debug("on_demote_confirm success edit failed: %s", exc)
+    await safe_edit_cb(
+        q,
+        t(
+            "admins.demote.done",
+            await locale_for_update(update),
+            user=Safe(user_ref(target_id, target_fname, target_uname)),
+            role=esc(role_label),
+        ),
+        reply_markup=None,
+        log_level="debug",
+        log_label="on_demote_confirm success",
+        catch_all=True,
+    )
 
 
 @decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)

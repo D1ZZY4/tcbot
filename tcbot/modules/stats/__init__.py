@@ -8,20 +8,27 @@ from __future__ import annotations
 
 from telegram.ext import CallbackQueryHandler, MessageHandler, filters
 
-from tcbot.modules.helper import replies
-from tcbot.modules.stats.command import (
+# * Rate-limiter windows shared by every stats submodule; single owner here.
+# * Defined before the submodule imports below so command/search/views can
+# * read them during partial package init (import-cycle safety).
+RL_PERIOD_S: int = 30
+RL_CMD_LIMIT: int = 8
+RL_CB_LIMIT: int = 15
+
+from tcbot.modules.helper import replies  # noqa: E402 (constants above)
+from tcbot.modules.stats.command import (  # noqa: E402 (constants above)
     _parse_item_callback,
     _require_founder_list,
     cmd_stats,
 )
-from tcbot.modules.stats.search import (
+from tcbot.modules.stats.search import (  # noqa: E402 (constants above)
     on_bans_search_input,
     on_stats_bans_search,
     on_stats_search_back,
     on_stats_search_cancel,
     on_stats_search_item,
 )
-from tcbot.modules.stats.views import (
+from tcbot.modules.stats.views import (  # noqa: E402 (constants above)
     on_stats_admins,
     on_stats_ban_item,
     on_stats_bans,
@@ -31,8 +38,8 @@ from tcbot.modules.stats.views import (
     on_stats_user_item,
     on_stats_users,
 )
-from tcbot.utils.i18n import t
-from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
+from tcbot.utils.i18n import t  # noqa: E402 (constants above)
+from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters  # noqa: E402 (constants above)
 
 __module_name__ = "Stats"
 

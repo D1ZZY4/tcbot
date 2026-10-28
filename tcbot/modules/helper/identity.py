@@ -8,16 +8,19 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, Protocol
 
 from tcbot import database as db
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
+from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
     from telegram import Bot, Update
+
+log = get_logger(__name__)
 
 # ───────────────────────────── Constants ────────────────────────────── #
 
@@ -187,6 +190,39 @@ async def is_proven_bot(update: Update, target_id: int, bot: Bot | None) -> bool
                 return bool(user.is_bot)
     hit = await db.mtproto.is_bot_user(target_id)
     return hit is True
+
+
+class _MemberLookup(Protocol):
+    """Anything exposing the ``get_chat_member`` coroutine ``can_manage_group`` needs.
+
+    Structural instead of ``Bot`` so test doubles and the real client both
+    satisfy it; the bot is only used for the bounded membership probe.
+    """
+
+    async def get_chat_member(self, chat_id: int, user_id: int) -> object: ...
+
+
+async def can_manage_group(bot: _MemberLookup, chat_id: int, user_id: int) -> bool:
+    """Return True when ``user_id`` may manage federation settings for a group.
+
+    Granted to federation staff, or to the group's Telegram creator. Both
+    lookups fail closed: a staff-role or membership failure denies, so an
+    outage never grants. Cancellation always propagates.
+    """
+    if await db.users_roles.is_staff(user_id):
+        return True
+    try:
+        member = await asyncio.wait_for(
+            bot.get_chat_member(chat_id, user_id), timeout=TELEGRAM_LOOKUP_TIMEOUT
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.debug(
+            "group permission member check failed for %d/%d: %s", chat_id, user_id, exc
+        )
+        return False
+    return getattr(member, "status", None) == "creator"
 
 
 # ────────────────── Per-action witty refusals ───────────────────── #

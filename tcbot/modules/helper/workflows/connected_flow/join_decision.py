@@ -16,6 +16,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.locale import locale_for_update
+from tcbot.modules.helper.parse_editmsg import safe_edit_cb
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
@@ -141,13 +142,15 @@ class ConnectionDecisionMixin:
                 )
             except Exception as exc:
                 log.debug("Join decision permission check failed: %s", exc)
-                try:
-                    await q.edit_message_text(
-                        t("connecting.state.bot_perms_verify", locale, plain=True),
-                        reply_markup=None,
-                    )
-                except Exception as exc2:
-                    log.debug("Join decision perms-verify edit failed: %s", exc2)
+                await safe_edit_cb(
+                    q,
+                    t("connecting.state.bot_perms_verify", locale, plain=True),
+                    parse_mode=None,
+                    reply_markup=None,
+                    log_level="debug",
+                    log_label="Join decision perms-verify",
+                    catch_all=True,
+                )
                 return
 
             if not self.check_perms(bot_member):
@@ -164,20 +167,25 @@ class ConnectionDecisionMixin:
                     )
                 except Exception:
                     log.exception("add_pending failed for chat %d", chat.id)
-                    try:
-                        await q.edit_message_text(
-                            t("connecting.state.complete_join", locale, plain=True),
-                            reply_markup=None,
-                        )
-                    except Exception as exc:
-                        log.debug("Join decision db-error edit failed: %s", exc)
-                    return
-                try:
-                    await q.edit_message_text(
-                        self.perms_required_message(locale), reply_markup=None
+                    await safe_edit_cb(
+                        q,
+                        t("connecting.state.complete_join", locale, plain=True),
+                        parse_mode=None,
+                        reply_markup=None,
+                        log_level="debug",
+                        log_label="Join decision db-error",
+                        catch_all=True,
                     )
-                except Exception as exc:
-                    log.debug("Join decision perms-required edit failed: %s", exc)
+                    return
+                await safe_edit_cb(
+                    q,
+                    self.perms_required_message(locale),
+                    parse_mode=None,
+                    reply_markup=None,
+                    log_level="debug",
+                    log_label="Join decision perms-required",
+                    catch_all=True,
+                )
                 return
 
             # * Guarded like every neighbouring DB call: an outage here must
@@ -193,12 +201,15 @@ class ConnectionDecisionMixin:
                     )
                 return
             if already_connected:
-                try:
-                    await q.edit_message_text(
-                        self.already_connected_message(locale), reply_markup=None
-                    )
-                except Exception as exc:
-                    log.debug("Join decision already-connected edit failed: %s", exc)
+                await safe_edit_cb(
+                    q,
+                    self.already_connected_message(locale),
+                    parse_mode=None,
+                    reply_markup=None,
+                    log_level="debug",
+                    log_label="Join decision already-connected",
+                    catch_all=True,
+                )
                 return
 
             # * complete_join must succeed before showing the success message.

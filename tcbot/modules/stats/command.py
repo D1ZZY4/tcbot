@@ -16,6 +16,7 @@ from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.stats_flow import Stats
+from tcbot.modules.stats import RL_CMD_LIMIT, RL_PERIOD_S
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
 
@@ -23,10 +24,6 @@ if TYPE_CHECKING:
     from telegram import CallbackQuery, Update
 
 log = get_logger(__name__)
-
-_RL_PERIOD_S: int = 30
-_RL_CMD_LIMIT: int = 8
-_RL_CB_LIMIT: int = 15
 
 
 async def _require_founder_list(
@@ -73,7 +70,7 @@ async def _require_founder_list(
     return True
 
 
-@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(limit=RL_CMD_LIMIT, period=RL_PERIOD_S)
 @decorators.log_execution
 async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Send the federation overview message."""

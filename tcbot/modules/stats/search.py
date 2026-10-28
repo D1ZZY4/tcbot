@@ -16,6 +16,7 @@ from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import (
     ack_and_render,
     answer_and_edit,
+    safe_edit_message,
     safe_reply,
 )
 from tcbot.modules.helper.workflows.stats_flow import (
@@ -25,16 +26,13 @@ from tcbot.modules.helper.workflows.stats_flow import (
     SEARCH_KEY,
     Stats,
 )
-from tcbot.modules.stats.command import _RL_CB_LIMIT, _RL_PERIOD_S
-from tcbot.utils.logger import get_logger
+from tcbot.modules.stats import RL_CB_LIMIT, RL_PERIOD_S
 
 if TYPE_CHECKING:
     from telegram import Update
 
-log = get_logger(__name__)
 
-
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
 @decorators.log_execution
 async def on_stats_bans_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Open the user search prompt within the stats ban view."""
@@ -45,7 +43,7 @@ async def on_stats_bans_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     await answer_and_edit(q, text, reply_markup=kb)
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
 @decorators.log_execution
 async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Free-text query message handler; only reacts when the search panel is active."""
@@ -81,16 +79,16 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         query, results, await locale_for_update(update)
     )
     if chat_id is not None and msg_id is not None:
-        try:
-            await ctx.bot.edit_message_text(
-                text,
-                chat_id=chat_id,
-                message_id=msg_id,
-                parse_mode="MarkdownV2",
-                reply_markup=kb,
-            )
-        except Exception as exc:
-            log.debug("Stats search result edit failed: %s", exc)
+        await safe_edit_message(
+            ctx.bot,
+            chat_id,
+            msg_id,
+            text,
+            reply_markup=kb,
+            log_level="debug",
+            log_label="Stats search result",
+            catch_all=True,
+        )
     else:
         # * No result card to edit: reply with results instead of dropping them.
         await safe_reply(
@@ -98,7 +96,7 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         )
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
 @decorators.log_execution
 async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the detail view for a search result selected by the user."""
@@ -121,7 +119,7 @@ async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     )
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
 @decorators.log_execution
 async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Return to search results (or the open-search prompt) without re-running the query."""
@@ -144,7 +142,7 @@ async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         )
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
 @decorators.log_execution
 async def on_stats_search_cancel(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE

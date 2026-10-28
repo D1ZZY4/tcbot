@@ -16,6 +16,7 @@ from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.locale import locale_for_update
+from tcbot.modules.helper.parse_editmsg import safe_edit
 from tcbot.utils.formatter import code
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -176,17 +177,17 @@ async def cmd_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.debug("cmd_ping initial reply failed: %s", exc)
         return
     ping_ms = elapsed_ms(t0)
-    try:
-        await sent.edit_text(
-            t(
-                "netspeed.pong.body",
-                locale,
-                latency=Safe(code(f"{ping_ms:.1f} ms")),
-            ),
-            parse_mode="MarkdownV2",
-        )
-    except Exception as exc:
-        log.debug("cmd_ping edit failed: %s", exc)
+    await safe_edit(
+        sent,
+        t(
+            "netspeed.pong.body",
+            locale,
+            latency=Safe(code(f"{ping_ms:.1f} ms")),
+        ),
+        log_level="debug",
+        log_label="cmd_ping",
+        catch_all=True,
+    )
 
 
 @decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
@@ -213,17 +214,25 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             result: dict = await loop.run_in_executor(None, _run_speedtest)
     except TimeoutError:
         log.warning("Speedtest timed out after %ds", _SPEEDTEST_TIMEOUT)
-        try:
-            await notice.edit_text(t("netspeed.status.timeout", locale, plain=True))
-        except Exception as edit_exc:
-            log.debug("cmd_speedtest timeout-edit failed: %s", edit_exc)
+        await safe_edit(
+            notice,
+            t("netspeed.status.timeout", locale, plain=True),
+            parse_mode=None,
+            log_level="debug",
+            log_label="cmd_speedtest timeout-edit",
+            catch_all=True,
+        )
         return
     except Exception:
         log.exception("Speedtest failed")
-        try:
-            await notice.edit_text(t("netspeed.status.failed", locale, plain=True))
-        except Exception as edit_exc:
-            log.debug("cmd_speedtest failure-edit failed: %s", edit_exc)
+        await safe_edit(
+            notice,
+            t("netspeed.status.failed", locale, plain=True),
+            parse_mode=None,
+            log_level="debug",
+            log_label="cmd_speedtest failure-edit",
+            catch_all=True,
+        )
         return
 
     async def _parse_failed() -> None:
@@ -232,12 +241,14 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         # * shared responder so the two except clauses stay identical
         # * without a forbidden tuple-except.
         log.exception("Speedtest result parsing failed")
-        try:
-            await notice.edit_text(
-                t("netspeed.status.parse_failed", locale, plain=True)
-            )
-        except Exception as edit_exc:
-            log.debug("cmd_speedtest parse-fail edit failed: %s", edit_exc)
+        await safe_edit(
+            notice,
+            t("netspeed.status.parse_failed", locale, plain=True),
+            parse_mode=None,
+            log_level="debug",
+            log_label="cmd_speedtest parse-fail",
+            catch_all=True,
+        )
 
     try:
         dl = _readable_size(result["download"] / 8)
@@ -279,21 +290,29 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     share_url = _share_photo_url(result)
     if result.get("share") and not share_url:
         log.warning("Speedtest returned non-http(s) share URL; sending text only")
-    try:
-        if share_url:
-            # * Edit the "please wait" notice to the result text and send the
-            # * share photo as a separate reply to the original command message,
-            # * both in parallel. This avoids deleting the notice (consistent
-            # * with the edit pattern used in cmd_ping and other action modules).
+    if share_url:
+        # * Edit the "please wait" notice to the result text and send the
+        # * share photo as a separate reply to the original command message,
+        # * both in parallel. This avoids deleting the notice (consistent
+        # * with the edit pattern used in cmd_ping and other action modules).
+        # * The gather swallows both coroutine failures; the try below only
+        # * guards coroutine construction, matching the old outer block.
+        try:
             await asyncio.gather(
                 notice.edit_text(text, parse_mode="MarkdownV2"),
                 msg.reply_photo(share_url),
                 return_exceptions=True,
             )
-        else:
-            await notice.edit_text(text, parse_mode="MarkdownV2")
-    except Exception as exc:
-        log.debug("cmd_speedtest result edit failed: %s", exc)
+        except Exception as exc:
+            log.debug("cmd_speedtest result edit failed: %s", exc)
+    else:
+        await safe_edit(
+            notice,
+            text,
+            log_level="debug",
+            log_label="cmd_speedtest result",
+            catch_all=True,
+        )
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

@@ -39,6 +39,7 @@ from tcbot.modules import (
 )
 from tcbot.modules import help as helpmod
 from tcbot.modules.helper import keyboards, replies
+from tcbot.modules.helper.identity import can_manage_group
 from tcbot.modules.helper.locale import effective_locale, locale_for_update
 from tcbot.modules.helper.workflows.appeal_flow import LOCK_HOURS
 from tcbot.utils.formatter import bold, code, esc, pre
@@ -1199,7 +1200,7 @@ def test_effective_locale_pm_and_group(monkeypatch: pytest.MonkeyPatch) -> None:
     asyncio.run(run())
 
 
-def test_can_set_group_matrix(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_can_manage_group_matrix(monkeypatch: pytest.MonkeyPatch) -> None:
 
     async def _staff_true(uid: int) -> bool:
         return True
@@ -1209,11 +1210,11 @@ def test_can_set_group_matrix(monkeypatch: pytest.MonkeyPatch) -> None:
 
     async def run() -> None:
         monkeypatch.setattr(users_roles, "is_staff", _staff_true)
-        assert await language._can_set_group(_FakeBot("member"), 10, 7) is True
+        assert await can_manage_group(_FakeBot("member"), 10, 7) is True
         monkeypatch.setattr(users_roles, "is_staff", _staff_false)
-        assert await language._can_set_group(_FakeBot("creator"), 10, 7) is True
-        assert await language._can_set_group(_FakeBot("member"), 10, 7) is False
-        assert await language._can_set_group(_FakeBot("left"), 10, 7) is False
+        assert await can_manage_group(_FakeBot("creator"), 10, 7) is True
+        assert await can_manage_group(_FakeBot("member"), 10, 7) is False
+        assert await can_manage_group(_FakeBot("left"), 10, 7) is False
 
     asyncio.run(run())
 

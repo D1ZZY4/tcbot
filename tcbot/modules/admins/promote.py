@@ -23,7 +23,7 @@ from tcbot.modules.admins.shared import (
 )
 from tcbot.modules.helper import decorators, extraction, identity, keyboards, replies
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
 from tcbot.modules.helper.workflows.promote_flow import ROLE_ALIASES, Promote
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
@@ -189,27 +189,31 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         return
 
     if await identity.is_proven_bot(update, target_id, ctx.bot):
-        try:
-            await q.edit_message_text(
-                t(
-                    "admins.error.bot_target",
-                    await locale_for_update(update),
-                    plain=True,
-                ),
-                reply_markup=None,
-            )
-        except Exception as exc:
-            log.debug("on_promote_role_btn bot-target edit failed: %s", exc)
+        await safe_edit_cb(
+            q,
+            t(
+                "admins.error.bot_target",
+                await locale_for_update(update),
+                plain=True,
+            ),
+            parse_mode=None,
+            reply_markup=None,
+            log_level="debug",
+            log_label="on_promote_role_btn bot-target",
+            catch_all=True,
+        )
         return
 
     if role not in ("admin", "developer", "tester"):
-        try:
-            await q.edit_message_text(
-                replies.err_unknown_role(await locale_for_update(update), plain=True),
-                reply_markup=None,
-            )
-        except Exception as exc:
-            log.debug("admins promote unknown-role edit failed: %s", exc)
+        await safe_edit_cb(
+            q,
+            replies.err_unknown_role(await locale_for_update(update), plain=True),
+            parse_mode=None,
+            reply_markup=None,
+            log_level="debug",
+            log_label="admins promote unknown-role",
+            catch_all=True,
+        )
         return
     target_fname_r, current_role = await asyncio.gather(
         db.users_cache.get_first_name(target_id, str(target_id)),
@@ -228,17 +232,19 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
             target_id,
             current_role,
         )
-        try:
-            await q.edit_message_text(
-                t(
-                    "admins.error.role_lookup_failed",
-                    await locale_for_update(update),
-                    plain=True,
-                ),
-                reply_markup=None,
-            )
-        except Exception as exc:
-            log.debug("on_promote_role_btn role-lookup-failed edit failed: %s", exc)
+        await safe_edit_cb(
+            q,
+            t(
+                "admins.error.role_lookup_failed",
+                await locale_for_update(update),
+                plain=True,
+            ),
+            parse_mode=None,
+            reply_markup=None,
+            log_level="debug",
+            log_label="on_promote_role_btn role-lookup-failed",
+            catch_all=True,
+        )
         return
 
     _, text = await Promote.execute(
@@ -252,10 +258,14 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         role,
         await locale_for_update(update),
     )
-    try:
-        await q.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=None)
-    except Exception as exc:
-        log.debug("on_promote_role_btn result edit failed: %s", exc)
+    await safe_edit_cb(
+        q,
+        text,
+        reply_markup=None,
+        log_level="debug",
+        log_label="on_promote_role_btn result",
+        catch_all=True,
+    )
 
 
 @decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)

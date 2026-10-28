@@ -15,6 +15,7 @@ from telegram import Message
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg, replies
+from tcbot.modules.helper.parse_editmsg import safe_edit_message
 from tcbot.modules.helper.parse_link import message_link
 
 # * Locale and registry resolve through the package namespace, keeping one
@@ -152,16 +153,16 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             user=Safe(user_ref(target_id, target_fname)),
         )
         if prompt_msg_id and prompt_chat_id:
-            try:
-                await bot.edit_message_text(
-                    _db_fail_text,
-                    chat_id=prompt_chat_id,
-                    message_id=prompt_msg_id,
-                    parse_mode="MarkdownV2",
-                    reply_markup=None,
-                )
-            except Exception as exc:
-                log.debug("Ban DB-fail prompt edit failed: %s", exc)
+            await safe_edit_message(
+                bot,
+                prompt_chat_id,
+                prompt_msg_id,
+                _db_fail_text,
+                reply_markup=None,
+                log_level="debug",
+                log_label="Ban DB-fail prompt",
+                catch_all=True,
+            )
         else:
             log.warning(
                 "Ban DB write failed for target=%d with no prompt to update",

@@ -14,14 +14,13 @@ from telegram.ext import ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, parse_logmsg, replies
-from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
+from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID, can_manage_group
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.formatter import code
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
-from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -76,9 +75,10 @@ __help_sections__ = __help__["sections"]
 async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Request to disconnect the current group from the federation.
 
-    Group-only command. Confirms the group is connected, checks staff status
-    and group admin membership in parallel (bounded Telegram call), then
-    deactivates the group record first and leaves the chat.
+    Group-only command. Confirms the group is connected, checks that the
+    sender is federation staff or the group creator (shared helper with a
+    bounded Telegram call), then deactivates the group record first and
+    leaves the chat.
     """
     chat = update.effective_chat
     user = update.effective_user
@@ -91,7 +91,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         await safe_reply(
             msg,
             replies.err_group_only(locale, plain=True),
-            log_label="cmd_tcleave group-only",
+            log_label="cmd_tcdisconnect group-only",
             parse_mode=None,
         )
         return
@@ -104,28 +104,19 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         await safe_reply(
             msg,
             t("disconnecting.state.primary_refused", locale, plain=True),
-            log_label="cmd_tcleave primary-group",
+            log_label="cmd_tcdisconnect primary-group",
             parse_mode=None,
         )
         return
 
-    # * Pre-fetch all three in parallel: is_connected (cache-backed), staff check,
-    # * and the Telegram member lookup (dominates latency at 50-200 ms).
-    # * Front-loading the Telegram call eliminates it from the sequential path.
-    is_connected, is_tc_staff, member = await asyncio.gather(
-        db.groups_db.is_connected(chat.id),
-        db.users_roles.is_staff(user.id),
-        asyncio.wait_for(
-            ctx.bot.get_chat_member(chat.id, user.id), timeout=TELEGRAM_LOOKUP_TIMEOUT
-        ),
-        return_exceptions=True,
-    )
-    if isinstance(is_connected, BaseException):
-        log.warning("is_connected check failed for chat=%d: %s", chat.id, is_connected)
+    try:
+        is_connected = await db.groups_db.is_connected(chat.id)
+    except Exception as exc:
+        log.warning("is_connected check failed for chat=%d: %s", chat.id, exc)
         await safe_reply(
             msg,
             t("disconnecting.state.status_failed", locale, plain=True),
-            log_label="cmd_tcleave status-check-failed",
+            log_label="cmd_tcdisconnect status-check-failed",
             parse_mode=None,
         )
         return
@@ -138,30 +129,18 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
                 community=cfg.community_name,
                 plain=True,
             ),
-            log_label="cmd_tcleave not-connected",
+            log_label="cmd_tcdisconnect not-connected",
             parse_mode=None,
         )
         return
-    if isinstance(member, BaseException):
-        log.debug("Disconnect: get_chat_member failed for %d: %s", chat.id, member)
-        await safe_reply(
-            msg,
-            replies.err_role_verify(locale, plain=True),
-            log_label="cmd_tcleave role-verify",
-            parse_mode=None,
-        )
-        return
-    if isinstance(is_tc_staff, BaseException):
-        is_tc_staff = False
-    is_group_owner = member.status == "creator"
 
-    if not is_tc_staff and not is_group_owner:
+    if not await can_manage_group(ctx.bot, chat.id, user.id):
         if user.id == ANONYMOUS_BOT_ID:
             msg_text = t("disconnecting.state.anon_admin", locale, plain=True)
         else:
             msg_text = t("disconnecting.state.not_authorized", locale, plain=True)
         await safe_reply(
-            msg, msg_text, log_label="cmd_tcleave not-authorized", parse_mode=None
+            msg, msg_text, log_label="cmd_tcdisconnect not-authorized", parse_mode=None
         )
         return
 
@@ -171,13 +150,15 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     try:
         deactivated = await db.groups_db.deactivate_group(chat.id)
     except Exception:
-        log.exception("deactivate_group failed for chat %d during tcleave", chat.id)
+        log.exception(
+            "deactivate_group failed for chat %d during tcdisconnect", chat.id
+        )
         deactivated = False
     if not deactivated:
         await safe_reply(
             msg,
             t("disconnecting.state.deactivate_failed", locale, plain=True),
-            log_label="cmd_tcleave deactivate-failed",
+            log_label="cmd_tcdisconnect deactivate-failed",
             parse_mode=None,
         )
         return
@@ -202,11 +183,11 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         return_exceptions=True,
     )
     if isinstance(log_r, BaseException):
-        log.debug("tcleave log send failed for chat %d: %s", chat.id, log_r)
+        log.debug("tcdisconnect log send failed for chat %d: %s", chat.id, log_r)
     if isinstance(reply_r, BaseException):
-        log.debug("tcleave reply failed for chat %d: %s", chat.id, reply_r)
+        log.debug("tcdisconnect reply failed for chat %d: %s", chat.id, reply_r)
     if isinstance(leave_r, BaseException):
-        log.debug("tcleave leave_chat failed for chat %d: %s", chat.id, leave_r)
+        log.debug("tcdisconnect leave_chat failed for chat %d: %s", chat.id, leave_r)
 
 
 # ───────────── Command to Force-Remove a Group </rmtc> ──────────── #

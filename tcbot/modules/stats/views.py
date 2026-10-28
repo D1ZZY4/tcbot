@@ -14,9 +14,8 @@ from tcbot.modules.helper import decorators
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import ack_and_render
 from tcbot.modules.helper.workflows.stats_flow import Stats
+from tcbot.modules.stats import RL_CB_LIMIT, RL_PERIOD_S
 from tcbot.modules.stats.command import (
-    _RL_CB_LIMIT,
-    _RL_PERIOD_S,
     _parse_item_callback,
     _require_founder_list,
 )
@@ -25,7 +24,7 @@ if TYPE_CHECKING:
     from telegram import Update
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
 @decorators.log_execution
 async def on_stats_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the top-level stats menu."""
@@ -42,7 +41,7 @@ async def on_stats_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
 @decorators.log_execution
 async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the current staff roster page."""
@@ -52,7 +51,7 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     await ack_and_render(q, Stats.staff_roster(await locale_for_update(update)))
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
 @decorators.log_execution
 async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of cached users."""
@@ -75,7 +74,7 @@ async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await ack_and_render(q, Stats.users_list(page, await locale_for_update(update)))
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
 @decorators.log_execution
 async def on_stats_user_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the detail view for a single cached user entry."""
@@ -98,7 +97,7 @@ async def on_stats_user_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     )
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
 @decorators.log_execution
 async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of connected groups."""
@@ -116,7 +115,7 @@ async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await ack_and_render(q, Stats.chats_list(page, await locale_for_update(update)))
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
 @decorators.log_execution
 async def on_stats_chat_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the detail view for a single connected group entry."""
@@ -134,7 +133,7 @@ async def on_stats_chat_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     )
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
 @decorators.log_execution
 async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated ban-list page and clear any active search state."""
@@ -153,7 +152,7 @@ async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await ack_and_render(q, Stats.bans_list(page, await locale_for_update(update)))
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
 @decorators.log_execution
 async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the detail view for a single ban entry from the stats list."""

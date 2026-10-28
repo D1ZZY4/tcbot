@@ -17,7 +17,7 @@ from tcbot.modules.about import about_msg
 from tcbot.modules.groups import render_groups
 from tcbot.modules.helper import decorators, keyboards, replies
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import answer_and_edit, safe_reply
+from tcbot.modules.helper.parse_editmsg import answer_and_edit, safe_edit_cb, safe_reply
 from tcbot.utils.formatter import bold
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -141,14 +141,14 @@ async def _show_groups(q: CallbackQuery, update: Update, *, detailed: bool) -> N
         # * that would claim no groups are connected. Keep the back keyboard
         # * so re-tapping the menu retries the fetch.
         log.warning("_show_groups groups fetch failed: %s", groups_r)
-        try:
-            await q.edit_message_text(
-                replies.err_groups_load_failed(locale, plain=False),
-                parse_mode="MarkdownV2",
-                reply_markup=keyboards.back_to_start_kb(locale),
-            )
-        except Exception as exc:
-            log.debug("_show_groups load-failed edit failed: %s", exc)
+        await safe_edit_cb(
+            q,
+            replies.err_groups_load_failed(locale, plain=False),
+            reply_markup=keyboards.back_to_start_kb(locale),
+            log_level="debug",
+            log_label="_show_groups load-failed",
+            catch_all=True,
+        )
         return
     groups = groups_r
     if not groups:
@@ -156,27 +156,29 @@ async def _show_groups(q: CallbackQuery, update: Update, *, detailed: bool) -> N
         # * BadRequest (query already answered). Edit in place like the list
         # * branch below (the old msg.reply_text referenced an undefined name,
         # * so the empty state never rendered at all).
-        try:
-            await q.edit_message_text(
-                t(
-                    "groups.menu.empty",
-                    locale,
-                    community=cfg.community_name,
-                    plain=True,
-                ),
-                reply_markup=keyboards.back_to_start_kb(locale),
-            )
-        except Exception as exc:
-            log.debug("_show_groups no-groups edit failed: %s", exc)
-        return
-    try:
-        await q.edit_message_text(
-            render_groups(groups, detailed=detailed, locale=locale),
-            parse_mode="MarkdownV2",
-            reply_markup=keyboards.groups_menu_kb(detailed=detailed, locale=locale),
+        await safe_edit_cb(
+            q,
+            t(
+                "groups.menu.empty",
+                locale,
+                community=cfg.community_name,
+                plain=True,
+            ),
+            parse_mode=None,
+            reply_markup=keyboards.back_to_start_kb(locale),
+            log_level="debug",
+            log_label="_show_groups no-groups",
+            catch_all=True,
         )
-    except Exception as exc:
-        log.debug("_show_groups list edit failed: %s", exc)
+        return
+    await safe_edit_cb(
+        q,
+        render_groups(groups, detailed=detailed, locale=locale),
+        reply_markup=keyboards.groups_menu_kb(detailed=detailed, locale=locale),
+        log_level="debug",
+        log_label="_show_groups list",
+        catch_all=True,
+    )
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)

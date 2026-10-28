@@ -16,6 +16,7 @@ from tcbot import database as db
 from tcbot.modules.admins.shared import _RL_CMD_LIMIT, _RL_PERIOD_S
 from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
+from tcbot.modules.helper.parse_editmsg import safe_edit_cb
 from tcbot.modules.helper.parse_logmsg import (
     promote_approved_log,
     promote_rejected_log,
@@ -68,67 +69,77 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         log.debug("on_promo_decision answer failed: %s", answer_r)
     if isinstance(is_owner, BaseException):
         log.warning("on_promo_decision owner check failed: %s", is_owner)
-        try:
-            await q.edit_message_text(
-                t(
-                    "admins.error.role_lookup_failed",
-                    await locale_for_update(update),
-                    plain=True,
-                ),
-                reply_markup=None,
-            )
-        except Exception as exc:
-            log.debug("on_promo_decision lookup-fail edit failed: %s", exc)
+        await safe_edit_cb(
+            q,
+            t(
+                "admins.error.role_lookup_failed",
+                await locale_for_update(update),
+                plain=True,
+            ),
+            parse_mode=None,
+            reply_markup=None,
+            log_level="debug",
+            log_label="on_promo_decision lookup-fail",
+            catch_all=True,
+        )
         return
     if not is_owner:
-        try:
-            await q.edit_message_text(
-                replies.perm_founder_only(await locale_for_update(update), plain=True)
-            )
-        except Exception as exc:
-            log.debug("on_promo_decision perm-denied edit failed: %s", exc)
+        await safe_edit_cb(
+            q,
+            replies.perm_founder_only(await locale_for_update(update), plain=True),
+            parse_mode=None,
+            log_level="debug",
+            log_label="on_promo_decision perm-denied",
+            catch_all=True,
+        )
         return
     if isinstance(req_result, BaseException):
         log.error("get_request_by_id failed for %s: %s", request_id, req_result)
-        try:
-            await q.edit_message_text(
-                t(
-                    "admins.error.request_not_found",
-                    await locale_for_update(update),
-                    plain=True,
-                )
-            )
-        except Exception as exc:
-            log.debug("on_promo_decision db-error edit failed: %s", exc)
+        await safe_edit_cb(
+            q,
+            t(
+                "admins.error.request_not_found",
+                await locale_for_update(update),
+                plain=True,
+            ),
+            parse_mode=None,
+            log_level="debug",
+            log_label="on_promo_decision db-error",
+            catch_all=True,
+        )
         return
     if not req_result:
-        try:
-            await q.edit_message_text(
-                t(
-                    "admins.error.request_not_found",
-                    await locale_for_update(update),
-                    plain=True,
-                )
-            )
-        except Exception as exc:
-            log.debug("on_promo_decision not-found edit failed: %s", exc)
+        await safe_edit_cb(
+            q,
+            t(
+                "admins.error.request_not_found",
+                await locale_for_update(update),
+                plain=True,
+            ),
+            parse_mode=None,
+            log_level="debug",
+            log_label="on_promo_decision not-found",
+            catch_all=True,
+        )
         return
     req = req_result
     # * A concurrent tap may have resolved the request after our fetch.
     # * resolve() below is atomic, but refuse early so a stale card never
     # * shows a second success message.
     if req.get("status") != "pending":
-        try:
-            await q.edit_message_text(
-                t(
-                    "admins.error.request_not_found",
-                    await locale_for_update(update),
-                    plain=True,
-                ),
-                reply_markup=None,
-            )
-        except Exception as exc:
-            log.debug("on_promo_decision resolved edit failed: %s", exc)
+        await safe_edit_cb(
+            q,
+            t(
+                "admins.error.request_not_found",
+                await locale_for_update(update),
+                plain=True,
+            ),
+            parse_mode=None,
+            reply_markup=None,
+            log_level="debug",
+            log_label="on_promo_decision resolved",
+            catch_all=True,
+        )
         return
     target_id = req.get("target_id", 0)
     target_fname = req.get("first_name", str(target_id))
@@ -148,46 +159,52 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
                 target_id,
                 request_id,
             )
-            try:
-                await q.edit_message_text(
-                    t(
-                        "admins.decision.approve_fail",
-                        await locale_for_update(update),
-                        plain=True,
-                    ),
-                    reply_markup=None,
-                )
-            except Exception as exc:
-                log.debug("promo_approve db-fail edit failed: %s", exc)
+            await safe_edit_cb(
+                q,
+                t(
+                    "admins.decision.approve_fail",
+                    await locale_for_update(update),
+                    plain=True,
+                ),
+                parse_mode=None,
+                reply_markup=None,
+                log_level="debug",
+                log_label="promo_approve db-fail",
+                catch_all=True,
+            )
             return
         try:
             db_resolve_r = await db.queues_db.resolve(request_id, "approved", admin.id)
         except Exception:
             log.exception("resolve(approved) failed for request %s", request_id)
-            try:
-                await q.edit_message_text(
-                    t(
-                        "admins.decision.approve_fail",
-                        await locale_for_update(update),
-                        plain=True,
-                    ),
-                    reply_markup=None,
-                )
-            except Exception as exc:
-                log.debug("promo_approve db-fail edit failed: %s", exc)
+            await safe_edit_cb(
+                q,
+                t(
+                    "admins.decision.approve_fail",
+                    await locale_for_update(update),
+                    plain=True,
+                ),
+                parse_mode=None,
+                reply_markup=None,
+                log_level="debug",
+                log_label="promo_approve db-fail",
+                catch_all=True,
+            )
             return
         if db_resolve_r is False:
-            try:
-                await q.edit_message_text(
-                    t(
-                        "admins.decision.approve_fail",
-                        await locale_for_update(update),
-                        plain=True,
-                    ),
-                    reply_markup=None,
-                )
-            except Exception as exc:
-                log.debug("promo_approve db-fail edit failed: %s", exc)
+            await safe_edit_cb(
+                q,
+                t(
+                    "admins.decision.approve_fail",
+                    await locale_for_update(update),
+                    plain=True,
+                ),
+                parse_mode=None,
+                reply_markup=None,
+                log_level="debug",
+                log_label="promo_approve db-fail",
+                catch_all=True,
+            )
             return
         # * A Developer/Tester row left beside the new Admin record
         # * resurrects on the next demote, so clean up best-effort; the
@@ -259,17 +276,19 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             log.exception("resolve(rejected) failed for request %s", request_id)
             resolved = False
         if not resolved:
-            try:
-                await q.edit_message_text(
-                    t(
-                        "admins.decision.reject_fail",
-                        await locale_for_update(update),
-                        plain=True,
-                    ),
-                    reply_markup=None,
-                )
-            except Exception as exc:
-                log.debug("promo_reject db-fail edit failed: %s", exc)
+            await safe_edit_cb(
+                q,
+                t(
+                    "admins.decision.reject_fail",
+                    await locale_for_update(update),
+                    plain=True,
+                ),
+                parse_mode=None,
+                reply_markup=None,
+                log_level="debug",
+                log_label="promo_reject db-fail",
+                catch_all=True,
+            )
             return
         log_text = promote_rejected_log(
             target_id,

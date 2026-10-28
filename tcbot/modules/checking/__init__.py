@@ -8,17 +8,21 @@ from __future__ import annotations
 
 from telegram.ext import CallbackQueryHandler, MessageHandler
 
-from tcbot.modules.checking.checkme import (
-    _RL_CHECKME_CB_LIMIT,
-    _RL_CMD_LIMIT,
-    _RL_PERIOD_S,
+# * Rate-limiter windows shared by every checking submodule; single owner here.
+# * Defined before the submodule imports below so checkme/views can read
+# * them during partial package init (import-cycle safety).
+RL_PERIOD_S: int = 30
+RL_CMD_LIMIT: int = 8
+RL_CHECKME_CB_LIMIT: int = 15
+RL_CHECK_CB_LIMIT: int = 20
+
+from tcbot.modules.checking.checkme import (  # noqa: E402 (constants above)
     _ban_summary,
     cmd_checkme,
     on_checkme_back,
     on_checkme_detail,
 )
-from tcbot.modules.checking.views import (
-    _RL_CHECK_CB_LIMIT,
+from tcbot.modules.checking.views import (  # noqa: E402 (constants above)
     cmd_check,
     on_check_appeals,
     on_check_ban_item,
@@ -29,9 +33,9 @@ from tcbot.modules.checking.views import (
     on_check_warn_chat,
     on_check_warns,
 )
-from tcbot.modules.helper import replies
-from tcbot.utils.i18n import t
-from tcbot.utils.prefixes import build_prefixed_filters
+from tcbot.modules.helper import replies  # noqa: E402 (constants above)
+from tcbot.utils.i18n import t  # noqa: E402 (constants above)
+from tcbot.utils.prefixes import build_prefixed_filters  # noqa: E402 (constants above)
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -93,12 +97,12 @@ __handlers__ = [
 ]
 
 __all__ = [
+    "RL_CHECKME_CB_LIMIT",
+    "RL_CHECK_CB_LIMIT",
+    "RL_CMD_LIMIT",
+    "RL_PERIOD_S",
     "_CHECKME_CMDS",
     "_CHECK_CMDS",
-    "_RL_CHECKME_CB_LIMIT",
-    "_RL_CHECK_CB_LIMIT",
-    "_RL_CMD_LIMIT",
-    "_RL_PERIOD_S",
     "__handlers__",
     "__help__",
     "__help_sections__",

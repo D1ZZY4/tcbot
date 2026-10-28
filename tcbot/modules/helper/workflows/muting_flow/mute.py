@@ -13,7 +13,7 @@ from telegram import Bot, ChatPermissions, Update
 
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, parse_logmsg, replies
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.parse_editmsg import safe_edit_message, safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows import muting_flow as _flow
 from tcbot.modules.helper.workflows.demote_flow import Demote
@@ -72,19 +72,19 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         groups = await db.groups_db.active_groups()
     except Exception:
         log.exception("_execute_mute: active_groups failed for target=%d", target_id)
-        try:
-            await bot.edit_message_text(
-                t(
-                    "muting.note.groups_fail",
-                    locale,
-                    user=Safe(user_ref(target_id, target_fname)),
-                ),
-                chat_id=prompt_chat,
-                message_id=prompt_id,
-                parse_mode="MarkdownV2",
-            )
-        except Exception as exc:
-            log.debug("_execute_mute groups-fail edit failed: %s", exc)
+        await safe_edit_message(
+            bot,
+            prompt_chat,
+            prompt_id,
+            t(
+                "muting.note.groups_fail",
+                locale,
+                user=Safe(user_ref(target_id, target_fname)),
+            ),
+            log_level="debug",
+            log_label="_execute_mute groups-fail",
+            catch_all=True,
+        )
         return
     # * Connected groups plus primaries (single merge owner in groups_db).
     groups = db.groups_db.with_primary_groups(
@@ -141,19 +141,19 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
             log_r,
             active_r,
         )
-        try:
-            await bot.edit_message_text(
-                t(
-                    "muting.note.db_fail",
-                    locale,
-                    user=Safe(user_ref(target_id, target_fname)),
-                ),
-                chat_id=prompt_chat,
-                message_id=prompt_id,
-                parse_mode="MarkdownV2",
-            )
-        except Exception as exc:
-            log.debug("_execute_mute DB-fail edit failed: %s", exc)
+        await safe_edit_message(
+            bot,
+            prompt_chat,
+            prompt_id,
+            t(
+                "muting.note.db_fail",
+                locale,
+                user=Safe(user_ref(target_id, target_fname)),
+            ),
+            log_level="debug",
+            log_label="_execute_mute DB-fail",
+            catch_all=True,
+        )
         return
     # * The entry auto-demote ran before the reason/proof window, so
     # * re-demote here to close the TOCTOU gap before the restrict fan-out.

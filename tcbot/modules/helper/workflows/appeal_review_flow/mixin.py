@@ -13,6 +13,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from tcbot import database as db
+from tcbot.modules.helper.parse_editmsg import safe_edit_cb
 from tcbot.modules.helper.workflows import appeal_review_flow as flow_pkg
 from tcbot.modules.helper.workflows.appeal_review_flow.lock import (
     LOCK_HOURS,
@@ -135,13 +136,15 @@ class AppealReviewMixin(AppealVerdictsMixin):
                 log.debug("Appeal ban-retry answer failed: %s", exc)
             return
         if not ban_result:
-            try:
-                await q.edit_message_text(
-                    t("appeals.review.ban_not_found", locale, plain=True),
-                    reply_markup=None,
-                )
-            except Exception as exc:
-                log.debug("Appeal ban-not-found (empty) edit failed: %s", exc)
+            await safe_edit_cb(
+                q,
+                t("appeals.review.ban_not_found", locale, plain=True),
+                parse_mode=None,
+                reply_markup=None,
+                log_level="debug",
+                log_label="Appeal ban-not-found (empty)",
+                catch_all=True,
+            )
             return
         ban: BanDoc = ban_result
 
@@ -157,13 +160,15 @@ class AppealReviewMixin(AppealVerdictsMixin):
                     log.exception(
                         "Appeal stale-card clear_review failed for ban %s", ban_id
                     )
-                try:
-                    await q.edit_message_text(
-                        t("appeals.review.already_resolved", locale, plain=True),
-                        reply_markup=None,
-                    )
-                except Exception as exc:
-                    log.debug("Appeal already-resolved edit failed: %s", exc)
+                await safe_edit_cb(
+                    q,
+                    t("appeals.review.already_resolved", locale, plain=True),
+                    parse_mode=None,
+                    reply_markup=None,
+                    log_level="debug",
+                    log_label="Appeal already-resolved",
+                    catch_all=True,
+                )
             else:
                 try:
                     await q.answer(

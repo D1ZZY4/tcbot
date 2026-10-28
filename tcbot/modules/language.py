@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import re
 from typing import TYPE_CHECKING
 
@@ -14,8 +13,9 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import database as db
 from tcbot.modules.helper import decorators, keyboards, replies
+from tcbot.modules.helper.identity import can_manage_group
 from tcbot.modules.helper.locale import effective_locale
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
 from tcbot.utils.i18n import (
     available_locales,
     display_name,
@@ -24,7 +24,6 @@ from tcbot.utils.i18n import (
 )
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters
-from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -86,36 +85,6 @@ def _chat_scope(chat_type: str | None) -> str:
     return "user" if chat_type == "private" else "group"
 
 
-async def _can_set_group(bot: object, chat_id: int, user_id: int) -> bool:
-    """Return True when ``user_id`` may change the group language.
-
-    Group owner (creator) or federation staff, mirroring the disconnect
-    permission shape. Fail closed: any lookup failure denies.
-    """
-    try:
-        is_staff = await db.users_roles.is_staff(user_id)
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        log.debug("language staff check failed for %d: %s", user_id, exc)
-        return False
-    if is_staff:
-        return True
-    get_member = getattr(bot, "get_chat_member", None)
-    if get_member is None:
-        return False
-    try:
-        member = await asyncio.wait_for(
-            get_member(chat_id, user_id), timeout=TELEGRAM_LOOKUP_TIMEOUT
-        )
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        log.debug("language member check failed for %d/%d: %s", chat_id, user_id, exc)
-        return False
-    return getattr(member, "status", None) == "creator"
-
-
 def _options_kb(scope: str, locale: str) -> keyboards.InlineKeyboardMarkup:
     """Build the locale-option keyboard for ``scope`` in display ``locale``."""
     items = [(display_name(code_), code_) for code_ in available_locales()]
@@ -158,7 +127,7 @@ async def cmd_language(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     scope = _chat_scope(chat.type)
     locale = await effective_locale(chat.type, user.id, chat.id)
     if scope == "group":
-        permitted = await _can_set_group(ctx.bot, chat.id, user.id)
+        permitted = await can_manage_group(ctx.bot, chat.id, user.id)
     else:
         permitted = True
     if permitted:
@@ -186,20 +155,20 @@ async def on_language_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         return
     await q.answer()
     locale = await effective_locale(chat.type, user.id, chat.id)
-    try:
-        await q.edit_message_text(
-            _panel_text("user", locale),
-            parse_mode="MarkdownV2",
-            reply_markup=keyboards.language_list_kb(
-                "user",
-                [(display_name(code_), code_) for code_ in available_locales()],
-                back_label=t("button.back", locale, plain=True),
-                back_callback="back_to_start",
-                selected=locale,
-            ),
-        )
-    except Exception as exc:
-        log.debug("language menu edit failed: %s", exc)
+    await safe_edit_cb(
+        q,
+        _panel_text("user", locale),
+        reply_markup=keyboards.language_list_kb(
+            "user",
+            [(display_name(code_), code_) for code_ in available_locales()],
+            back_label=t("button.back", locale, plain=True),
+            back_callback="back_to_start",
+            selected=locale,
+        ),
+        log_level="debug",
+        log_label="language menu",
+        catch_all=True,
+    )
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -224,20 +193,20 @@ async def on_lang_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await q.answer()
     locale = await effective_locale(chat.type, user.id, chat.id)
     back_callback = "back_to_start" if scope == "user" else None
-    try:
-        await q.edit_message_text(
-            _panel_text(scope, locale),
-            parse_mode="MarkdownV2",
-            reply_markup=keyboards.language_list_kb(
-                scope,
-                [(display_name(code_), code_) for code_ in available_locales()],
-                back_label=t("button.back", locale, plain=True),
-                back_callback=back_callback,
-                selected=locale,
-            ),
-        )
-    except Exception as exc:
-        log.debug("language list edit failed: %s", exc)
+    await safe_edit_cb(
+        q,
+        _panel_text(scope, locale),
+        reply_markup=keyboards.language_list_kb(
+            scope,
+            [(display_name(code_), code_) for code_ in available_locales()],
+            back_label=t("button.back", locale, plain=True),
+            back_callback=back_callback,
+            selected=locale,
+        ),
+        log_level="debug",
+        log_label="language list",
+        catch_all=True,
+    )
 
 
 @decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
@@ -275,7 +244,7 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     locale = raw_locale
     if scope == "group":
-        if not await _can_set_group(ctx.bot, chat.id, user.id):
+        if not await can_manage_group(ctx.bot, chat.id, user.id):
             try:
                 await q.answer(
                     t("language.denied", tapper_locale, plain=True), show_alert=True
@@ -319,14 +288,14 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                     log_label="language user-save-fail",
                 )
             return
-    try:
-        await q.edit_message_text(
-            _confirmation_text(scope, locale),
-            parse_mode="MarkdownV2",
-            reply_markup=keyboards.back_to_module_kb(f"lang:list:{scope}", locale),
-        )
-    except Exception as exc:
-        log.debug("language confirm edit failed: %s", exc)
+    await safe_edit_cb(
+        q,
+        _confirmation_text(scope, locale),
+        reply_markup=keyboards.back_to_module_kb(f"lang:list:{scope}", locale),
+        log_level="debug",
+        log_label="language confirm",
+        catch_all=True,
+    )
 
 
 # ──────────────────────────── Handlers ───────────────────────────── #

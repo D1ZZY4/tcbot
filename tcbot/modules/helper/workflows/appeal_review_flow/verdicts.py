@@ -13,6 +13,7 @@ from telegram import Bot, CallbackQuery, User
 
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg, replies
+from tcbot.modules.helper.parse_editmsg import safe_edit_cb
 from tcbot.modules.helper.workflows import appeal_review_flow as flow_pkg
 from tcbot.utils.dispatch import count_transient_errors, fan_out
 from tcbot.utils.formatter import code, user_ref
@@ -313,18 +314,18 @@ class AppealVerdictsMixin:
         # * the 24 h cooldown until the 72 h stale window. The card keeps
         # * live buttons that answer already-resolved on re-tap, and the
         # * failure is logged for operators.
-        try:
-            await q.edit_message_text(
-                t(
-                    "appeals.decision.reject_card",
-                    staff_locale,
-                    admin=Safe(user_ref(admin.id, admin.first_name)),
-                ),
-                parse_mode="MarkdownV2",
-                reply_markup=None,
-            )
-        except Exception as exc:
-            log.warning("reject_appeal review-card edit failed: %s", exc)
+        await safe_edit_cb(
+            q,
+            t(
+                "appeals.decision.reject_card",
+                staff_locale,
+                admin=Safe(user_ref(admin.id, admin.first_name)),
+            ),
+            reply_markup=None,
+            log_level="warning",
+            log_label="reject_appeal review-card",
+            catch_all=True,
+        )
         results = await asyncio.gather(
             bot.send_message(
                 target_id,
