@@ -160,6 +160,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Owner transfer cleans up split-brain rows with a retry** (`tcbot/database/users_roles.py`, `tests/test_set_owner_cleanup.py`): the convergence delete backs off and retries transient failures, and a persistent failure logs explicit operator guidance (which row to remove) before the transfer still fails closed. Behavior changes: none on the happy path; a one-off database blip no longer strands two owner rows.
 
+- **Test stubs satisfy the type checker again** (`tests/test_ban_flush_cleanup.py`): the zombie update/context stubs carry their type-suppression comments on the argument lines where the checker reports them, so the CI type-check gate passes on the default branch. Behavior changes: none.
+
 - **Regression coverage restored** (`tests/`, `.github/workflows/test-pytest.yml`): 49 check modules covering health, i18n, dispatch, formatter, MTProto, and moderation flows are active again. Two retry-write checks now expect the graceful-degrade contract: an exhausted or non-transient `WriteConcernError` logs and returns instead of re-raising, preserving Pyrogram's background task. CI's test workflow now executes the checks instead of collecting zero items.
 
 - **Unban no longer skips staff-target demote on degraded identity** (`tcbot/modules/unbanning.py`): federation staff-ness now comes from the fail-closed role read, so a transient `identity.classify` failure no longer drops the demote-before-unban cleanup. Behavior changes: none on the happy path.

@@ -296,8 +296,9 @@ def test_live_unexpected_still_nags(monkeypatch: pytest.MonkeyPatch) -> None:
     msg = _ZombieMessage()
     update = _ZombieUpdate(message=msg)
     outcome = asyncio.run(
-        ban_flow.on_proof_unexpected(  # type: ignore[arg-type]
-            update, _ZombieCtx({"ban_target_id": 33})
+        ban_flow.on_proof_unexpected(
+            update,  # type: ignore[arg-type]
+            _ZombieCtx({"ban_target_id": 33}),  # type: ignore[arg-type]
         )
     )
     assert outcome == ban_flow.WAITING_PROOF
