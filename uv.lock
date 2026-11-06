@@ -875,7 +875,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "apscheduler", extras = ["mongodb"], specifier = "==3.11.3" },
-    { name = "cachetools", specifier = ">=7.2.5,<8" },
+    { name = "cachetools", specifier = ">=7.3.0,<8" },
     { name = "certifi", specifier = ">=2026.10.23" },
     { name = "flask", specifier = ">=3.1.3,<4" },
     { name = "kurigram", extras = ["fast"], specifier = ">=2.2.26,<3" },
@@ -891,7 +891,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "pre-commit", specifier = ">=4.7,<5" },
-    { name = "py-spy", specifier = ">=0.4.2,<1" },
+    { name = "py-spy", specifier = ">=0.4.3,<1" },
     { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-asyncio", specifier = ">=1.4.1,<2" },
