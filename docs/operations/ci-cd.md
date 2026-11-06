@@ -10,13 +10,15 @@ For the changelog of CI/CD additions, see
 
 The project uses 7 automated workflows for continuous integration, code quality, and maintenance:
 
-1. **Lint (Ruff)** - Lint, format, and import check
-2. **Lint (Pyright)** - Static type check
-3. **Test (Pytest)** - Behavioral checks
-4. **Auto-Fix Code Quality** - Automatically fix linting issues
-5. **Dependency Updates** - Weekly dependency updates with auto-PR
-6. **CodeQL** - Security analysis
-7. **Run Bot** - Long-running bot runner with push-triggered handover, self-chaining, and cron fallback
+| # | Workflow | Purpose |
+|---:|---|---|
+| 1 | Lint (Ruff) | Lint, format, and import check |
+| 2 | Lint (Pyright) | Static type check |
+| 3 | Test (Pytest) | Behavioral checks |
+| 4 | Auto-Fix Code Quality | Automatically fix linting issues |
+| 5 | Dependency Updates | Weekly dependency updates with auto-PR |
+| 6 | CodeQL | Security analysis |
+| 7 | Run Bot | Long-running bot runner with push-triggered handover, self-chaining, and cron fallback |
 
 ---
 
