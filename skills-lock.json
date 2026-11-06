@@ -1,59 +1,17 @@
 {
   "version": 1,
   "skills": {
-    "commit-expert": {
-      "source": "D1ZZY4/agent-skills",
-      "sourceType": "github",
-      "skillPath": "skills/commit-expert/SKILL.md",
-      "computedHash": "bb23deb9dc97e2def35d2dd37cf56c0be9546f555c2f6aa87732fdcd218e2396"
-    },
-    "context7-expert": {
-      "source": "D1ZZY4/agent-skills",
-      "sourceType": "github",
-      "skillPath": "skills/context7-expert/SKILL.md",
-      "computedHash": "ca4d842251b83359fe13dd9f69b2ec16e882bb2bd6a6e85e16cae7bb5734c7da"
-    },
-    "copywriting-expert": {
-      "source": "D1ZZY4/agent-skills",
-      "sourceType": "github",
-      "skillPath": "skills/copywriting-expert/SKILL.md",
-      "computedHash": "fe60d161fb29db7fc0d401f7f3d422480ef140f921912dbfcc2389503b37842a"
-    },
-    "create-readme-expert": {
-      "source": "D1ZZY4/agent-skills",
-      "sourceType": "github",
-      "skillPath": "skills/create-readme-expert/SKILL.md",
-      "computedHash": "5b8af99bc3523decc7dd46b2fad88d8dc304a7d9fd183ff1654617235a8de40f"
-    },
-    "deep-research-expert": {
-      "source": "D1ZZY4/agent-skills",
-      "sourceType": "github",
-      "skillPath": "skills/deep-research-expert/SKILL.md",
-      "computedHash": "283d4c574bd5625f3200431ec6b31dbbfa91aeb36c49bb6bbfbbb924488ee4a5"
-    },
     "feature-reviewer": {
       "source": "project-local",
       "sourceType": "filesystem",
       "skillPath": ".agents/skills/feature-reviewer/SKILL.md",
       "computedHash": null
     },
-    "mermaid-diagrams-expert": {
-      "source": "D1ZZY4/agent-skills",
-      "sourceType": "github",
-      "skillPath": "skills/mermaid-diagrams-expert/SKILL.md",
-      "computedHash": "ac27749897dcac910039698e09b71ca23786d6022d50efcd81c2b08842574fc8"
-    },
     "mongodb-query-optimizer": {
       "source": "mongodb/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/mongodb-query-optimizer/SKILL.md",
-      "computedHash": "dad6bb8b3b21d75b59b18e326d780b55ad849a9c3110ad44ee23d1856130a79a"
-    },
-    "redis-expert": {
-      "source": "D1ZZY4/agent-skills",
-      "sourceType": "github",
-      "skillPath": "skills/redis-expert/SKILL.md",
-      "computedHash": "d939358f2185a4df0b2c9d52d8f9bd22cfedc6661eb97d8e6555324b8e937a36"
+      "computedHash": "129464c93c61bcd2d4352afc7cc99eeb9485d109c5ae7e6ff614481b5693bd55"
     }
   }
 }
