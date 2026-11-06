@@ -260,6 +260,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Removed
 
+- **TCF Bot 24/7 runner disabled** (`.github/workflows/run-bot.yml` → `.github/workflows.disabled/`): the self-chaining GitHub Actions runner is moved out of the active workflows directory so it no longer schedules or runs. Behavior changes: the bot no longer auto-runs via GitHub Actions; host it elsewhere.
+
 - **Dead locale scope helper removed** (`tcbot/modules/helper/locale.py`, `docs/architecture/helpers.md`): `chat_scope()` had no callers anywhere in code, tests, or docs examples; `language._chat_scope` remains the single mapping and keeps its test. Behavior changes: none.
 
 - **Dead role-comparison helper removed** (`tcbot/database/users_roles.py`): `can_act_on()` had no callers; executor-versus-target checks go through the decorator path. Behavior changes: none.
