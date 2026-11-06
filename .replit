@@ -4,7 +4,7 @@ expertMode = true
 
 [nix]
 channel = "stable-25_05"
-packages = ["openssl", "uv", "nano", "gnupg"]
+packages = ["uv", "nano", "gnupg"]
 
 [workflows]
 runButton = "Project"
@@ -34,6 +34,3 @@ externalPort = 80
 [deployment]
 deploymentTarget = "autoscale"
 run = ["uv", "run", "python", "-m", "tcbot"]
-
-[objectStorage]
-defaultBucketID = "replit-objstore-8e8d8179-ca33-440f-b356-711aeb984f5d"
