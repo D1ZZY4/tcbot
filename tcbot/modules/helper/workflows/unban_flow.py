@@ -18,6 +18,7 @@ from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import (
     count_transient_errors,
     fan_out,
+    first_transient_error,
     is_benign_telegram_error,
 )
 from tcbot.utils.formatter import user_ref
@@ -173,6 +174,7 @@ async def execute_unban(
             failed,
             len(groups),
             target_id,
+            exc_info=first_transient_error(results),
         )
     # * Name the still-banned groups for the operator reply below (mirrors
     # * the ban executor's applied-line): counts alone never tell the

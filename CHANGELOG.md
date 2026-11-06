@@ -156,6 +156,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Fixed
 
+- **Fan-out partial failures no longer masquerade as code bugs** (`tcbot/utils/dispatch.py`, `tcbot/modules/helper/workflows/ban_flow/executor.py`, `unban_flow.py`, `muting_flow/mute.py`, `muting_flow/unmute.py`, `appeal_review_flow/verdicts.py`, `tcbot/utils/error_reporter/classify.py`): the error-level summary now attaches a representative transient exception as `exc_info`, so the reporter classifies it by its real Telegram type, shows a traceback, and gives a retry hint instead of "[?] Unknown / Needs a code fix". The reporter also stops claiming a traceback exists for records with no exception. Behavior changes: partial-failure reports now name the actual transient error and its recovery action.
+
 - **Concurrent first-warns no longer drop one warning** (`tcbot/database/warns_db/records.py`, `counters.py`, `tests/test_warn_counter_race.py`): when two moderators warn the same user in the same chat for the first time at once, the counter increment retries after losing the insert race, and the backfill path re-reads the winner's count instead of failing. Behavior changes: both warnings land instead of one getting a database-failure retry reply.
 
 - **Owner transfer cleans up split-brain rows with a retry** (`tcbot/database/users_roles.py`, `tests/test_set_owner_cleanup.py`): the convergence delete backs off and retries transient failures, and a persistent failure logs explicit operator guidance (which row to remove) before the transfer still fails closed. Behavior changes: none on the happy path; a one-off database blip no longer strands two owner rows.

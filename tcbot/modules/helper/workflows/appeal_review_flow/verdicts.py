@@ -15,7 +15,11 @@ from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg, replies
 from tcbot.modules.helper.parse_editmsg import safe_edit_cb
 from tcbot.modules.helper.workflows import appeal_review_flow as flow_pkg
-from tcbot.utils.dispatch import count_transient_errors, fan_out
+from tcbot.utils.dispatch import (
+    count_transient_errors,
+    fan_out,
+    first_transient_error,
+)
 from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -167,6 +171,7 @@ class AppealVerdictsMixin:
                 unban_failed,
                 len(groups),
                 target_id,
+                exc_info=first_transient_error(unban_results),
             )
 
         appeal_link = ban.get("appeal_link") or ""

@@ -79,6 +79,8 @@ _ACTION_HINTS: tuple[tuple[str, str], ...] = (
     ("Network", "Transient connectivity issue; retry the action."),
     ("Timeout", "Operation exceeded its deadline; retry the action."),
     ("Code Bug", "Needs a code fix; see the traceback below."),
+    ("[?] Unknown", "No exception attached; check the message and location above."),
+    ("Circuit Open", "Telegram circuit is open; retry after the cooldown."),
 )
 
 
@@ -87,7 +89,7 @@ def _action_hint(label: str) -> str:
     for marker, hint in _ACTION_HINTS:
         if marker in label:
             return hint
-    return "Needs a code fix; see the traceback below."
+    return "Check the message and location above."
 
 
 def _classify(exc: BaseException | None) -> str:
@@ -116,6 +118,8 @@ def _classify(exc: BaseException | None) -> str:
     mod = type(exc).__module__ or ""
     if any(x in mod for x in ("motor", "pymongo", "mongo")):
         return "[DB] Database Error"
+    if "circuit_breaker" in mod:
+        return "[~] Circuit Open"
 
     if isinstance(exc, asyncio.TimeoutError):
         return "[~] Async Timeout"

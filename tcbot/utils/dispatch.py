@@ -280,3 +280,19 @@ def count_transient_errors(results: Sequence[object]) -> int:
         for r in results
         if isinstance(r, BaseException) and not is_benign_telegram_error(r)
     )
+
+
+def first_transient_error(results: Sequence[object]) -> BaseException | None:
+    """Return the first non-benign failure in *results*, or None.
+
+    Used to attach a representative exception as ``exc_info`` to the
+    error-level fan-out summary so the error reporter classifies the
+    record by its real type and shows a traceback instead of the
+    misleading "[?] Unknown / Needs a code fix" label. Only non-benign
+    (transient) failures qualify; benign refusals are not reportable
+    failures.
+    """
+    for r in results:
+        if isinstance(r, BaseException) and not is_benign_telegram_error(r):
+            return r
+    return None

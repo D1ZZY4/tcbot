@@ -22,6 +22,7 @@ from tcbot.modules.helper.workflows.proof_flow import upload_proof
 from tcbot.utils.dispatch import (
     count_transient_errors,
     fan_out,
+    first_transient_error,
     throw_if_cancelled,
 )
 from tcbot.utils.formatter import bold, user_ref
@@ -211,6 +212,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
             failed,
             len(groups),
             target_id,
+            exc_info=first_transient_error(results),
         )
 
     proof_kb = keyboards.action_proof_kb(target_id, proof_link, locale)

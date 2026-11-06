@@ -30,6 +30,7 @@ from tcbot.modules.helper.workflows.proof_flow import upload_proof
 from tcbot.utils.dispatch import (
     count_transient_errors,
     fan_out,
+    first_transient_error,
     is_benign_telegram_error,
     throw_if_cancelled,
 )
@@ -252,14 +253,18 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         len(groups),
     )
     if failed:
-        # * Error-level so the failure ships to LOG_ERRORS automatically;
-        # * per-group warnings above stay console-only.
+        # * Attach a representative transient exception as exc_info so the
+        # * error reporter classifies the record by its real type and shows
+        # * a traceback instead of the misleading "[?] Unknown / Needs a code
+        # * fix" label. Error-level so the failure ships to LOG_ERRORS
+        # * automatically; per-group warnings above stay console-only.
         log.error(
             "Ban fan-out had %d/%d transient failures for target=%d; "
             "see warnings above and retry manually where needed",
             failed,
             len(groups),
             target_id,
+            exc_info=first_transient_error(results),
         )
 
     applied_line = replies.applied_summary(
