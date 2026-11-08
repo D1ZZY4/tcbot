@@ -13,7 +13,7 @@ from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import monotonic
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable
+    from collections.abc import Awaitable, Callable
 
 log = get_logger(__name__)
 
@@ -104,7 +104,12 @@ class CircuitBreaker:
         """True when the circuit is OPEN and calls should be rejected."""
         return self.state is CircuitState.OPEN
 
-    async def call[T](self, coro: Awaitable[T]) -> T:
+    async def call[T](
+        self,
+        coro: Awaitable[T],
+        *,
+        count_failure: Callable[[Exception], bool] | None = None,
+    ) -> T:
         """Execute *coro* through the circuit breaker.
 
         Raises:
@@ -112,6 +117,14 @@ class CircuitBreaker:
                 touching the downstream service.
             Any exception the coroutine itself raises (also recorded as a
                 failure; the exception propagates to the caller unchanged).
+
+        When *count_failure* is provided it decides whether the exception
+        counts toward opening the circuit. An exception the predicate
+        rejects releases the half-open probe without recording a failure,
+        matching the Telegram fan-out treatment of API refusals: the
+        downstream already answered, so the failure counter keeps its
+        consecutive-transient meaning. When omitted, every exception counts,
+        which preserves the historical behaviour for other callers.
 
         """
         if not self.try_acquire():
@@ -123,7 +136,10 @@ class CircuitBreaker:
         try:
             result: T = await coro
         except Exception as exc:
-            self._record_failure()
+            if count_failure is not None and not count_failure(exc):
+                self._release_probe()
+            else:
+                self._record_failure()
             raise exc from None
         except BaseException:
             # * Cancellation must not leave a HALF_OPEN probe permanently reserved.

@@ -17,6 +17,7 @@ from motor.motor_asyncio import (
     AsyncIOMotorCollection,
     AsyncIOMotorDatabase,
 )
+from pymongo.errors import ConnectionFailure, ExecutionTimeout, WriteConcernError
 
 from tcbot import cfg
 from tcbot.utils.circuit_breaker import mongodb as _mongo_cb
@@ -64,6 +65,40 @@ _MONGO_HEARTBEAT_MS: int = 30_000
 # * intent is obvious and adjustable without hunting for a raw literal.
 _MEMBER_CACHE_TTL_DAYS: int = 90
 _MEMBER_CACHE_EXPIRE_S: int = _MEMBER_CACHE_TTL_DAYS * 86_400
+
+
+def is_transient_mongo_error(exc: BaseException) -> bool:
+    """Return True when *exc* signals a connectivity or timeout failure.
+
+    Single owner for Mongo transient classification, shared by the circuit
+    breaker predicate below and the MTProto write retry. ``ConnectionFailure``
+    covers server selection, failover, and network timeouts (including
+    ``AutoReconnect`` and ``ServerSelectionTimeoutError`` subclasses).
+    ``ExecutionTimeout`` is a timeout rather than a refusal. A retryable
+    write concern matches the replica-set failover label used by the retry
+    helper. Client-side operation timeouts report through the documented
+    ``PyMongoError.timeout`` property. Application errors such as duplicate
+    keys, validation failures, and coding errors are not transient: the
+    database answered, so they must never open the circuit.
+    """
+    if isinstance(exc, (ConnectionFailure, ExecutionTimeout)):
+        return True
+    # * PyMongo client-side operation timeouts (CSOT) expose this property
+    # * so a timeout is distinguishable from a refusal without a type list.
+    if getattr(exc, "timeout", False):
+        return True
+    if isinstance(exc, WriteConcernError):
+        return "RetryableWriteError" in (getattr(exc, "details", None) or {}).get(
+            "errorLabels", []
+        )
+    # * Callers wrap Motor calls in asyncio.timeout for slow-path bounds; a
+    # * timeout there is a hang, not an application error.
+    return isinstance(exc, TimeoutError)
+
+
+def _counts_toward_circuit(exc: Exception) -> bool:
+    """Circuit predicate: only transient Mongo errors count as failures."""
+    return is_transient_mongo_error(exc)
 
 
 def make_short_id(length: int = 10) -> str:
@@ -142,7 +177,9 @@ async def connect() -> None:
         retryReads=True,
         **client_kwargs,
     )
-    await _mongo_cb.call(client.admin.command("ping"))
+    await _mongo_cb.call(
+        client.admin.command("ping"), count_failure=_counts_toward_circuit
+    )
     _client = client
     _db = client[cfg.db_name]
     log.info("MongoDB connected → %s", cfg.db_name)
@@ -180,11 +217,15 @@ async def db_call[T](coro: Awaitable[T]) -> T:
     Use this inside database helper modules for operations where a full
     socket-timeout wait is undesirable when the cluster is unreachable.
 
+    Only transient Mongo errors (see :func:`is_transient_mongo_error`)
+    count toward opening the circuit; application errors propagate without
+    recording a failure, so a bad write cannot masquerade as an outage.
+
     Raises:
         CircuitOpenError: Circuit is OPEN; the call was rejected without
             touching MongoDB.
-        Any exception the coroutine raises (also recorded as a failure;
-            the exception propagates to the caller unchanged).
+        Any exception the coroutine raises (propagates to the caller
+            unchanged).
 
     """
-    return await _mongo_cb.call(coro)
+    return await _mongo_cb.call(coro, count_failure=_counts_toward_circuit)
