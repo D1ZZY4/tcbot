@@ -46,7 +46,7 @@ flowchart TD
 | `col(name)` | Returns a collection from `db()`. Use only inside database helper modules. |
 | `is_connected()` | Returns `True` once a connection has been established via `connect()`. |
 | `mongo_client_kwargs()` | Extra `MongoClient` kwargs shared by the Motor client and the scheduler's synchronous client: pins `tlsCAFile` to the certifi Mozilla bundle unless `cfg.mongodb_uri` already carries `tlscafile`, and sets `serverSelectionTimeoutMS` (10 s) and `connectTimeoutMS` (10 s) defaults. |
-| `db_call(coro)` | Executes a Motor coroutine through the `mongodb` circuit breaker. Raises `CircuitOpenError` when the circuit is OPEN so callers fast-fail instead of waiting the 45 s socket timeout. |
+| `db_call(coro)` | Executes a Motor coroutine through the `mongodb` circuit breaker. Raises `CircuitOpenError` when the circuit is OPEN so callers fast-fail instead of waiting the 45 s socket timeout. Only transient Mongo errors count toward opening the circuit. |
 | `make_short_id(length=10)` | Generates a lowercase alphanumeric ID (`a-z0-9`) from `secrets.choice`, used for ban IDs and promotion request IDs. |
 
 ### MongoDB client parameters
@@ -71,7 +71,7 @@ A DNS patch (`_patch_dns_if_needed`) installs an in-process fallback resolver po
 
 ### Circuit breaker
 
-`mongodb` (from `tcbot/utils/circuit_breaker.py`) trips OPEN after 5 consecutive failures and allows one HALF_OPEN probe after 60 s. A successful probe closes the circuit; a failed probe reopens it. `db_call` rejects with `CircuitOpenError` while OPEN. A `CircuitOpenError` from a handler logs once at WARNING in `_error_handler` instead of flooding the logs-errors channel.
+`mongodb` (from `tcbot/utils/circuit_breaker.py`) trips OPEN after 5 consecutive transient failures and allows one HALF_OPEN probe after 60 s. A successful probe closes the circuit; a failed probe reopens it. `db_call` rejects with `CircuitOpenError` while OPEN. Only transient Mongo errors count toward opening the circuit (`ConnectionFailure` and its server-selection/failover subclasses, `ExecutionTimeout`, retryable write concerns, client-side operation timeouts reported through the `PyMongoError.timeout` property, and caller timeouts, see `mongos.is_transient_mongo_error`); application errors such as duplicate keys propagate without recording a failure, so a bad write cannot masquerade as an outage. A non-transient error releases the half-open probe without closing the circuit, so the next call probes again. A `CircuitOpenError` from a handler logs once at WARNING in `_error_handler` instead of flooding the logs-errors channel.
 
 ## Collections at a glance
 
@@ -141,7 +141,7 @@ All fields are optional `total=False`; a real document always carries `user_id` 
 
 **Performance tip:** use the batch functions whenever data for more than one user is needed in a list view or fan-out result; calling single-user functions in a loop is an N+1 anti-pattern. Both batch functions are served by the covered-query index `(user_id, first_name, username, last_name)`. For partial-name target resolution use `search_by_name`; for paginated list views use `all_users_page`.
 
-**Hot-path harvest pattern:** on every observed Telegram update `_update_member_cache` schedules `harvest_user_identity` as a fire-and-forget background task. When the cached identity has not changed, no MongoDB write is issued; the fast path is sub-microsecond.
+**Hot-path harvest pattern:** on every observed Telegram update `_update_member_cache` schedules `harvest_user_identity` as a fire-and-forget background task, bounded to 20 in-flight tasks (updates beyond the cap skip the harvest and refresh on the next event). When the cached identity has not changed, no MongoDB write is issued; the fast path is sub-microsecond.
 
 **Error behavior:** every helper uses `db_call()`; a MongoDB outage raises `CircuitOpenError` (circuit OPEN) or the underlying Motor exception, which `_update_member_cache` logs at DEBUG and swallows so a cache failure never breaks the update path.
 
@@ -549,7 +549,7 @@ Methods:
 
 - `get(key)` / `put(key, val)` / `invalidate(key)`: synchronous, operate on L1; `put` and `invalidate` additionally enqueue an ordered (FIFO) Redis write/delete through the shared mutation chain for the cache's prefix.
 - `clear()`: synchronous, clears L1 only; never touches Redis.
-- `clear_all()`: async, clears L1 and deletes every Redis key matching `tcbot:<prefix>:v2:*` via `SCAN` + `UNLINK` in batches of 100 (never blocking `KEYS`). Use when the affected key is unknown, for example after an ownership transfer. Not for hot paths.
+- `clear_all()`: async, clears L1 and deletes every Redis key matching `tcbot:<prefix>:v2:*` via `SCAN` + `UNLINK` in batches of 100 (never blocking `KEYS`). Each scan and unlink is bounded by the 2.0 s write timeout so a stalled sweep aborts instead of holding the FIFO mutation tail. Use when the affected key is unknown, for example after an ownership transfer. Not for hot paths.
 - `get_or_fetch(key, fetch)`: async hot path. Layer order:
   1. L1 in-memory (no I/O).
   2. L2 Redis, bounded by a 1.0 s timeout (`_REDIS_GET_TIMEOUT_S`) so a stalled Redis falls through to the DB fetch.
@@ -607,7 +607,7 @@ Pool parameters: `decode_responses=True`, `max_connections=20`, `socket_connect_
 
 `start(mongodb_uri: str, db_name: str, warn_expiry_days: int, *, bot: Bot | None = None, sync_interval_hours: int = 0) -> None` spawns the `tcbot.scheduler` background asyncio task and waits (bounded by the same 10 s grace window as `stop()`) for the scheduler to become ready, so a constructor error or a hung jobstore handshake reports a startup failure instead of hanging boot. `bot` plus a positive interval registers the `tcbot.enforcement_sync` sweep; a zero interval or `None` bot removes a stale schedule. On readiness failure it raises `RuntimeError` (wrapped from the captured error).
 
-`stop() -> None` sets the stop event and waits up to 10 s for graceful shutdown, then cancels a stuck task so shutdown never orphans a live scheduler into the next `start()`. Safe to call when `start()` never ran.
+`stop() -> None` sets the stop event and waits up to 10 s for graceful shutdown, then cancels a stuck task so shutdown never orphans a live scheduler into the next `start()`. A background-task exception is logged and still clears the module globals, and cancellation of `stop()` itself clears them before propagating. Safe to call when `start()` never ran.
 
 `is_ready() -> bool` returns `True` only after the full startup sequence completed successfully (scheduler object set, ready event set, no captured error).
 
@@ -625,7 +625,7 @@ Member-cache cleanup is handled by the MongoDB TTL index on `last_updated` (`exp
 
 Persistent per-ban unban jobs: there are NONE in the current code. The scheduler registers only the two periodic jobs above (plus the legacy removal). There is no `DateTrigger` usage and no per-ban unban/untimed job API in `scheduler/`; the module docstring's mention of "timed-ban" support refers to reserved `BanDoc.until_date`/`duration_str` fields that are always `None` today. No unban-job DateTrigger scheme exists to reproduce in the rewrite.
 
-Scheduler error behavior: a background-task crash sets `_sched_error`, unblocks `start()` (so it never hangs forever), and `start()` re-raises as `RuntimeError`. `expire_old_warns` logs per-collection delete failures, and a partial run (one collection failed) logs the completion line at error level with an incomplete marker instead of a clean info line (a cancelled expiry propagates via `throw_if_cancelled` rather than reporting success). `_run_scheduled_sync` logs the failure and returns; the next interval re-drives, so one bad run never wedges the schedule.
+Scheduler error behavior: a background-task crash sets `_sched_error`, unblocks `start()` (so it never hangs forever), and `start()` re-raises as `RuntimeError`. `expire_old_warns` logs per-collection delete failures, and a partial run (one collection failed) raises a job failure after the error log instead of reporting success, so the scheduler and the serverless cron endpoint surface the incomplete expiry (a cancelled expiry propagates via `throw_if_cancelled` rather than reporting success). Removing a stale schedule whose removal fails for a reason other than not present logs at warning level, so a disabled schedule that keeps firing is visible in the logs. `_run_scheduled_sync` logs the failure and returns; the next interval re-drives, so one bad run never wedges the schedule.
 
 ## Startup indexes
 

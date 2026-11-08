@@ -22,6 +22,12 @@ _member_cache_tasks: set[asyncio.Task[None]] = set()
 # * Strong reference to the one-shot startup cache warm-up task; prevents GC.
 _startup_tasks: set[asyncio.Task[None]] = set()
 
+# * Bounds background identity upserts: one task is spawned per update, so
+# * an unbounded set could pile up against the Mongo pool (20) during a
+# * burst across many groups. At the cap, new updates coalesce (skip) instead
+# * of queueing: the name is best-effort and the next update refreshes it.
+_MEMBER_CACHE_MAX_CONCURRENT: int = 20
+
 
 async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Cache the effective_user from any update; bot-issued events are skipped.
@@ -49,6 +55,8 @@ async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         except Exception as exc:
             log.debug("Member cache update failed for %d: %s", uid, exc)
 
+    if len(_member_cache_tasks) >= _MEMBER_CACHE_MAX_CONCURRENT:
+        return
     try:
         task = asyncio.get_running_loop().create_task(_do_cache())
         _member_cache_tasks.add(task)

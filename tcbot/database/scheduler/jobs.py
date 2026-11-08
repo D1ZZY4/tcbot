@@ -84,13 +84,27 @@ async def expire_old_warns(warn_expiry_days: int) -> None:
             warns_del,
             warn_expiry_days,
         )
-    else:
-        log.info(
-            "Warn expiry: removed %d warn_count and %d warn records older than %d days.",
-            counts_del,
-            warns_del,
-            warn_expiry_days,
-        )
+        # * Partial failure leaves a 24 h window where the surviving
+        # * collection can backfill the pruned one, so surface it as a job
+        # * failure instead of reporting success to the scheduler/cron caller.
+        first_exc: BaseException
+        if isinstance(counts_res, BaseException):
+            first_exc = counts_res
+        elif isinstance(warns_res, BaseException):
+            first_exc = warns_res
+        else:
+            raise RuntimeError(
+                "Warn expiry incomplete: one collection failed; see errors above."
+            )
+        raise RuntimeError(
+            "Warn expiry incomplete: one collection failed; see errors above."
+        ) from first_exc
+    log.info(
+        "Warn expiry: removed %d warn_count and %d warn records older than %d days.",
+        counts_del,
+        warns_del,
+        warn_expiry_days,
+    )
 
 
 async def _cleanup_old_records() -> None:

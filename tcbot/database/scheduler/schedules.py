@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 
+from apscheduler.jobstores.base import JobLookupError
 from apscheduler.jobstores.mongodb import MongoDBJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -128,16 +129,26 @@ def _register_periodic_schedules(
         try:
             scheduler.remove_job(_WARN_EXPIRY_SCHEDULE_ID)
             log.info("Warn expiry schedule removed (WARN_EXPIRY_DAYS=0).")
+        except JobLookupError:
+            log.debug("Warn expiry schedule not present, skipping removal.")
         except Exception as exc:
-            log.debug("Warn expiry schedule not present, skipping removal: %s", exc)
+            log.warning(
+                "Warn expiry schedule removal failed: a stale schedule may keep firing: %s",
+                exc,
+            )
 
     # * member_cache cleanup is now handled by a MongoDB TTL index on last_updated.
     # * Remove the legacy weekly schedule if it was persisted from a prior bot version.
     try:
         scheduler.remove_job(_CLEANUP_SCHEDULE_ID)
         log.info("Removed legacy weekly cleanup schedule (now handled by TTL index).")
+    except JobLookupError:
+        log.debug("Legacy cleanup schedule not present, nothing to remove.")
     except Exception as exc:
-        log.debug("Legacy cleanup schedule not present, nothing to remove: %s", exc)
+        log.warning(
+            "Legacy cleanup schedule removal failed: a stale schedule may keep firing: %s",
+            exc,
+        )
 
     if sync_interval_hours > 0 and _sched_pkg._sync_bot is not None:
         scheduler.add_job(
@@ -157,5 +168,10 @@ def _register_periodic_schedules(
         try:
             scheduler.remove_job(_SYNC_SCHEDULE_ID)
             log.info("Enforcement sync schedule removed (disabled).")
+        except JobLookupError:
+            log.debug("Sync schedule not present, skipping removal.")
         except Exception as exc:
-            log.debug("Sync schedule not present, skipping removal: %s", exc)
+            log.warning(
+                "Enforcement sync schedule removal failed: a stale schedule may keep firing: %s",
+                exc,
+            )

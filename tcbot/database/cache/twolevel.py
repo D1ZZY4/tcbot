@@ -115,11 +115,19 @@ class TwoLevelCache[T]:
             cursor: int = 0
             try:
                 while True:
-                    cursor, keys = await live.scan(cursor, match=pattern, count=100)
+                    cursor, keys = await asyncio.wait_for(
+                        live.scan(cursor, match=pattern, count=100),
+                        timeout=_cache_pkg._REDIS_WRITE_TIMEOUT_S,
+                    )
                     if keys:
-                        await live.unlink(*keys)
+                        await asyncio.wait_for(
+                            live.unlink(*keys),
+                            timeout=_cache_pkg._REDIS_WRITE_TIMEOUT_S,
+                        )
                     if cursor == 0:
                         break
+            except asyncio.CancelledError:
+                raise
             except Exception as exc:
                 log.debug(
                     "Redis clear_all failed for prefix %s: %s",
