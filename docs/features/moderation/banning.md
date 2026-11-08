@@ -100,7 +100,7 @@ That means the proof keyboard provides `Done` and `Cancel`; there is no `Skip` b
 - Single video: uploaded with `send_video` to the configured proof destination.
 - Single GIF or file: uploaded with `send_document`.
 - Mixed collection: every item sent before the flush lands in one proof session (album parts and sequential sends alike). Photos and videos travel together with `send_media_group` (caption on the first item); GIFs and files are sent individually after the gallery.
-- The session flushes when the moderator taps `Done`, after `cfg.album_debounce` seconds of silence, or at the 60 s collection cap.
+- The session flushes when the moderator taps `Done`, after `cfg.album_debounce` seconds of silence, or at the 60 s collection cap. Both enforcement paths re-check that the moderator still meets Developer rank at execution time: the `Done` tap re-checks in `on_done_proof`, and the silence-window background flush re-checks before calling the executor. A moderator demoted during proof collection, or a role-lookup outage at flush time, aborts the flush without enforcing and clears the session.
 
 If the moderator cancels, the bot edits the prompt to the localized `banning.state.cancelled` notice (English default: `Cancelled. No ban was issued.`) and ends the conversation.
 

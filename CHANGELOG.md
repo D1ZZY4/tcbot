@@ -158,6 +158,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Fixed
 
+- **Silence-window ban flush re-checks executor rank** (`tcbot/modules/helper/workflows/ban_flow/session.py`, `docs/features/moderation/banning.md`): the background flush now checks that the moderator still meets Developer rank before enforcing, so a moderator demoted during proof collection can no longer ban from a stale session. A role lookup outage aborts the flush the same way. Behavior changes: demoted moderators no longer enforce through a silence flush.
+
 - **Mongo circuit counts only transient errors** (`tcbot/utils/circuit_breaker.py`, `tcbot/database/mongos/client.py`, `docs/architecture/database.md`): the breaker now counts connectivity failures, timeouts, and retryable write concerns toward opening, while application errors propagate without recording a failure. Client-side operation timeouts are recognised through the documented timeout property. Behavior changes: a bad write no longer opens the database circuit; outages still open it.
 
 - **Dead MTProto auth key parks instead of flooding reports** (`tcbot/database/mtproto/lifecycle.py`, `tcbot/runtime/errors.py`, `tcbot/utils/error_reporter/classify.py`, `docs/getting-started/setup.md`): a missing auth key, including when it surfaces during session restart, now parks MTProto once with one operator card and keeps the bot on Bot-API-only until the session docs are purged and one instance reboots. Behavior changes: a dead key no longer repeats as code-bug reports while enforcement stays online.

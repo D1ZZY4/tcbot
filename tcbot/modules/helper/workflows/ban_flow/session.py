@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from telegram import Message
 
 from tcbot import cfg
+from tcbot import database as db
 
 # * Registry and executor resolve through the package namespace, keeping one
 # * live binding for every submodule and caller.
@@ -113,6 +114,33 @@ async def _flush_session(key: tuple[int, int], bot: Bot) -> None:
         ):
             if session.msgs:
                 log.warning("Session flush aborted: meta missing target or admin")
+            return
+        # * Rank re-check: the Done-tap path rechecks in on_done_proof, but
+        # * the silence-window flush runs in this background task long after
+        # * the entry command passed its decorator. A moderator demoted
+        # * during proof collection must not enforce from a stale session,
+        # * so gate here and fail closed on a lookup outage. Silent on
+        # * purpose: this task has no Update, so it only logs.
+        admin_id = int(session.meta.get("ban_admin_id") or 0)
+        try:
+            executor_role = await db.users_roles.get_effective_role(admin_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.warning(
+                "Session flush aborted: executor role lookup failed for %d: %s",
+                admin_id,
+                exc,
+            )
+            return
+        if db.users_roles.role_rank(executor_role) < db.users_roles.role_rank(
+            "developer"
+        ):
+            log.warning(
+                "Session flush aborted: executor %d no longer meets developer rank (role=%s)",
+                admin_id,
+                executor_role,
+            )
             return
         log.info(
             "Flushing proof session %s with %d media items", key, len(session.msgs)
