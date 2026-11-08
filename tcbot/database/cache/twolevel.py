@@ -36,6 +36,12 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
+# * Revocation prefixes: role, connection, group-list, and owner state must
+# * never be dropped by the mutation-queue bound, or other processes keep
+# * serving revoked privileges until the Redis TTL (90-360 s). Display-name
+# * hints (umention) may drop; the next update refreshes them.
+_REVOCATION_PREFIXES: frozenset[str] = frozenset({"role", "conn", "groups", "owner"})
+
 # * Client and timeouts resolve via the package namespace so patching
 # * tcbot.database.cache keeps working as with the old single module.
 
@@ -78,12 +84,19 @@ class TwoLevelCache[T]:
         self._redis_put_background(key, val)
 
     def invalidate(self, key: Any) -> None:
-        """Remove from memory and enqueue an ordered Redis delete."""
+        """Remove from memory and enqueue an ordered Redis delete.
+
+        Deletes for revocation prefixes (role, connection, group list,
+        owner) are never droppable: a dropped role revocation would leave
+        other processes serving the revoked privilege until the key TTL.
+        """
         self._mem.invalidate(key)
         # * Drop the per-key lock so high-cardinality callers do not
         # * accumulate a stale lock for every key ever fetched.
         self._locks.pop(key, None)
-        self._redis_del_background(key)
+        self._redis_del_background(
+            key, droppable=self._redis_prefix not in _REVOCATION_PREFIXES
+        )
 
     def clear(self) -> None:
         """Clear the in-memory layer (does not flush Redis keys)."""
@@ -229,7 +242,10 @@ class TwoLevelCache[T]:
                     # * L1 already serves this value: never fail the hot path here.
                     log.debug("Redis payload encode failed for %s: %s", rkey, exc)
                 else:
-                    self._enqueue_redis_mutation(lambda: self._redis_set(rkey, payload))
+                    self._enqueue_redis_mutation(
+                        lambda: self._redis_set(rkey, payload),
+                        droppable=self._redis_prefix not in _REVOCATION_PREFIXES,
+                    )
 
                 return cast("T", val)
         finally:
@@ -242,7 +258,12 @@ class TwoLevelCache[T]:
         return f"tcbot:{self._redis_prefix}:v2:{key}"
 
     def _redis_put_background(self, key: Any, val: T) -> None:
-        """Fire-and-forget Redis write without blocking the caller."""
+        """Fire-and-forget Redis write without blocking the caller.
+
+        Writes for revocation prefixes are never droppable: a dropped
+        connection-flag write (for example a disconnect) would leave other
+        processes serving the pre-write state until the key TTL.
+        """
         rc = _cache_pkg._redis_client()
         if rc is None:
             return
@@ -255,15 +276,20 @@ class TwoLevelCache[T]:
         except Exception as exc:
             log.debug("Redis payload encode failed for %s: %s", rkey, exc)
             return
-        self._enqueue_redis_mutation(lambda: self._redis_set(rkey, payload))
+        self._enqueue_redis_mutation(
+            lambda: self._redis_set(rkey, payload),
+            droppable=self._redis_prefix not in _REVOCATION_PREFIXES,
+        )
 
-    def _redis_del_background(self, key: Any) -> None:
+    def _redis_del_background(self, key: Any, *, droppable: bool = True) -> None:
         """Fire-and-forget Redis key deletion without blocking the caller."""
         rc = _cache_pkg._redis_client()
         if rc is None:
             return
         rkey = self._rkey(key)
-        self._enqueue_redis_mutation(lambda: self._redis_delete(rkey))
+        self._enqueue_redis_mutation(
+            lambda: self._redis_delete(rkey), droppable=droppable
+        )
 
     async def _redis_set(self, rkey: str, payload: str) -> None:
         """Write one Redis value and keep failures observable but non-fatal.
@@ -319,7 +345,10 @@ class TwoLevelCache[T]:
         ``clear_all()`` enqueues with ``droppable=False``: a prefix-wide
         revocation (e.g. after an ownership transfer) must never be
         dropped, or other processes keep serving revoked roles from L2
-        until the key TTL.
+        until the key TTL. Single-key deletes and writes for revocation
+        prefixes (``role``, ``conn``, ``groups``, ``owner``) take the same
+        non-droppable path for the same reason; display-name hints
+        (``umention``) remain droppable.
         """
         try:
             loop = asyncio.get_running_loop()
@@ -347,13 +376,21 @@ class TwoLevelCache[T]:
 
         async def _run() -> None:
             if previous is not None:
+                # * Each mutation has its own fault domain: a cancelled
+                # * predecessor must not drop the rest of the tail. Shielding
+                # * surfaces the predecessor's CancelledError here without
+                # * marking this task cancelled, so only a self-cancellation
+                # * (cancelling() > 0) aborts the operation.
                 try:
-                    await previous
+                    await asyncio.shield(previous)
                 except asyncio.CancelledError:
-                    # ! CRITICAL: the chain is being torn down; running the
-                    # ! queued mutation anyway would delay shutdown and risk
-                    # ! writing stale state after a newer invalidation.
-                    raise
+                    current = asyncio.current_task()
+                    if current is not None and current.cancelling() > 0:
+                        raise
+                    log.debug(
+                        "Previous Redis mutation cancelled for prefix %s; continuing",
+                        self._redis_prefix,
+                    )
                 except BaseException as exc:
                     log.debug(
                         "Previous Redis mutation failed for prefix %s: %s",
