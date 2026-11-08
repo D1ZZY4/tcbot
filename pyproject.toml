@@ -16,6 +16,7 @@ dependencies = [
     "kurigram[fast]>=2.2.26,<3",
     "structlog>=26.1,<27",
     "msgspec>=0.22",
+    "pymongo>=4.19.0,<5",
 ]
 
 [dependency-groups]

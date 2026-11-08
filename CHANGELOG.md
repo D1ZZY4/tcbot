@@ -8,6 +8,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 <summary>Unreleased changes (click to collapse)</summary>
 
 ### Added
+- **Direct pymongo dependency** (`pyproject.toml`, `uv.lock`): the code imports `pymongo.errors` and `bson` in many modules, so the dependency is now declared explicitly within the major version the project already runs. Behavior changes: none; the resolved version is unchanged.
+
 - **Localized Prev/Next and authorization refusals** (`i18n/en-US/button.toml`, `i18n/id/button.toml`, `i18n/en-US/common.toml`, `i18n/id/common.toml`): the paged-list navigation row reads `button.prev` / `button.next`, and every auth refusal (tier refusals, rank, role-lookup retry, anonymous admin, outrank notice) reads `common.refuse.*` in the viewer's locale. Default-locale wording is unchanged.
 
 - **Warn, stats, and help catalog coverage** (`i18n/en-US/stats.toml`, `i18n/id/stats.toml`, `i18n/en-US/help.toml`, `i18n/id/help.toml`, `i18n/en-US/common.toml`, `i18n/id/common.toml`): outage cards, degraded-overview notes, localized help titles, and a shared unknown-date word in both languages. Default-locale output is unchanged.
