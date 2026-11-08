@@ -86,9 +86,9 @@ async def start() -> bool:
     """
     if _mtproto_pkg._auth_dead:
         raise RuntimeError(
-            "MTProto session was invalidated (AUTH_KEY_DUPLICATED); refusing "
-            "to reconnect in-process. Stop every instance, purge the session "
-            "docs, and boot one."
+            "MTProto session was invalidated (AUTH_KEY_DUPLICATED or "
+            "AUTH_KEY_NOT_FOUND); refusing to reconnect in-process. Stop "
+            "every instance, purge the session docs, and boot one."
         )
     c = client()
     if c.is_connected:
@@ -135,15 +135,16 @@ async def start() -> bool:
         # * the whole process over MTProto takes federation enforcement
         # * offline for a lookup enhancement. Park it sticky (no in-process
         # * re-login races) and serve Bot-API-only until a restart.
-        if is_auth_key_duplicated(exc):
+        if is_auth_key_duplicated(exc) or is_auth_key_not_found(exc):
             _mtproto_pkg._auth_dead = True
             await _release_lease_quietly(store, owner)
             _mtproto_pkg._lease_owner = None
             log.exception(
-                "MTProto connect rejected (406 AUTH_KEY_DUPLICATED): another "
-                "instance shares this session or the key is dead. Serving "
-                "Bot-API-only. Operator action: stop every bot instance, "
-                "delete the '%s:*' docs from mtproto_state, then boot one.",
+                "MTProto connect rejected (406 AUTH_KEY_DUPLICATED or "
+                "transport 404 AUTH_KEY_NOT_FOUND): the shared key is dead. "
+                "Serving Bot-API-only. Operator action: stop every bot "
+                "instance, delete the '%s:*' docs from mtproto_state, then "
+                "boot one.",
                 cfg.mtproto_session,
             )
             return False
@@ -255,6 +256,22 @@ def is_auth_key_duplicated(exc: BaseException) -> bool:
     return isinstance(exc, AuthKeyDuplicated)
 
 
+def is_auth_key_not_found(exc: BaseException) -> bool:
+    """Check whether *exc* is Telegram's transport 404 AUTH_KEY_NOT_FOUND.
+
+    Kurigram raises this from the session receive worker when the server
+    reports the auth key is gone. It is a ``TransportError`` subclass, not
+    an ``RPCError``, so it is detected in its own module instead.
+    """
+    try:
+        from pyrogram.session.session import (  # noqa: PLC0415 (same reason)
+            AuthKeyNotFound,
+        )
+    except ImportError:
+        return type(exc).__name__ == "AuthKeyNotFound"
+    return isinstance(exc, AuthKeyNotFound)
+
+
 async def handle_auth_failure() -> None:
     """Park MTProto after Telegram invalidates the shared auth key.
 
@@ -269,10 +286,11 @@ async def handle_auth_failure() -> None:
         return
     _mtproto_pkg._auth_dead = True
     log.error(
-        "MTProto auth key invalidated by Telegram (406 AUTH_KEY_DUPLICATED): "
-        "another instance shares this session. Parked MTProto; identity "
-        "lookups degrade to Bot-API-only. Operator action: stop every bot "
-        "instance, delete the '%s:*' docs from mtproto_state, then boot one.",
+        "MTProto auth key invalidated by Telegram (406 AUTH_KEY_DUPLICATED "
+        "or transport 404 AUTH_KEY_NOT_FOUND): the shared key is dead. "
+        "Parked MTProto; identity lookups degrade to Bot-API-only. Operator "
+        "action: stop every bot instance, delete the '%s:*' docs from "
+        "mtproto_state, then boot one.",
         cfg.mtproto_session,
     )
     try:

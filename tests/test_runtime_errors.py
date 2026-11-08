@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from pymongo.errors import ServerSelectionTimeoutError
+from pyrogram.session.session import AuthKeyNotFound
 
 from tcbot.runtime import errors as runtime_errors
 from tcbot.utils import error_reporter
@@ -174,6 +175,51 @@ def test_asyncio_handler_cancelled_future_is_benign(monkeypatch: Any) -> None:
             "exception": None,
             "message": "Task exception was never retrieved",
             "task": _FakeFuture(None, cancelled=True),
+        },
+    )
+    assert loop.tasks_created == 0
+
+
+def test_asyncio_handler_auth_key_not_found_parks_once(monkeypatch: Any) -> None:
+    """A dead auth key parks MTProto and ships one card, then stays quiet."""
+    loop = _FakeLoop()
+    handler = runtime_errors._make_asyncio_exc_handler(loop)  # type: ignore[arg-type]
+
+    async def _fake_park() -> None:
+        return None
+
+    monkeypatch.setattr(
+        "tcbot.runtime.errors.mtproto_mod.handle_auth_failure",
+        _fake_park,
+    )
+    monkeypatch.setattr(
+        "tcbot.runtime.errors.mtproto_mod.is_auth_dead",
+        lambda: False,
+    )
+
+    exc = AuthKeyNotFound("Auth key not found in the system.")
+    handler(
+        loop,  # type: ignore[arg-type]
+        {
+            "exception": None,
+            "message": "Task exception was never retrieved",
+            "task": _FakeFuture(exc),
+        },
+    )
+    # * One park task plus one loud report task for the first sighting.
+    assert loop.tasks_created == 2
+
+    monkeypatch.setattr(
+        "tcbot.runtime.errors.mtproto_mod.is_auth_dead",
+        lambda: True,
+    )
+    loop.tasks_created = 0
+    handler(
+        loop,  # type: ignore[arg-type]
+        {
+            "exception": None,
+            "message": "Task exception was never retrieved",
+            "task": _FakeFuture(exc),
         },
     )
     assert loop.tasks_created == 0

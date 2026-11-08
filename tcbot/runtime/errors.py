@@ -164,12 +164,18 @@ def _make_asyncio_exc_handler(
 
         # * A dead shared MTProto session crashes Pyrogram's background
         # * tasks in a tight loop (406 AUTH_KEY_DUPLICATED from a duplicate
-        # * instance). Park it once here; later repeats hit the dead-guard
-        # * and stay silent, so one incident ships one loud card instead of
-        # * a flood (each Task-NNNN used to defeat the fingerprint dedupe).
-        if exc is not None and mtproto_mod.is_auth_key_duplicated(exc):
+        # * instance, or transport 404 AUTH_KEY_NOT_FOUND when Telegram
+        # * reports the key is gone, including when awaiting the receive
+        # * worker during session restart propagates it into the restart
+        # * task). Park it once here; later repeats hit the dead-guard and
+        # * stay silent, so one incident ships one loud card instead of a
+        # * flood (each Task-NNNN used to defeat the fingerprint dedupe).
+        if exc is not None and (
+            mtproto_mod.is_auth_key_duplicated(exc)
+            or mtproto_mod.is_auth_key_not_found(exc)
+        ):
             if mtproto_mod.is_auth_dead():
-                log.debug("[asyncio] duplicate AuthKeyDuplicated suppressed.")
+                log.debug("[asyncio] dead MTProto auth key suppressed.")
                 return
             try:
                 park = lp.create_task(mtproto_mod.handle_auth_failure())

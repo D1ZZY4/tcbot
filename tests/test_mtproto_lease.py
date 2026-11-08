@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 from pymongo.errors import ConnectionFailure, DuplicateKeyError
 from pyrogram.errors import AuthKeyDuplicated
+from pyrogram.session.session import AuthKeyNotFound
 
 from tcbot.database import mtproto, mtproto_store
 from tcbot.database.mtproto import lifecycle
@@ -250,6 +251,26 @@ def test_start_degrades_on_duplicate_key(
     assert asyncio.run(mtproto.resolve_user(42)) is None
 
 
+def test_start_degrades_on_not_found_key(
+    monkeypatch: pytest.MonkeyPatch, lease_store: tuple[MongoStorage, _FakeLeaseColl]
+) -> None:
+    _reset_mtproto_state(monkeypatch)
+    _, fake = lease_store
+
+    class _Gone(_FakeClient):
+        async def start(self) -> None:
+            raise AuthKeyNotFound("gone")
+
+    client = _Gone()
+    monkeypatch.setattr(mtproto, "_client", client)
+
+    assert asyncio.run(mtproto.start()) is False
+    assert mtproto.is_auth_dead() is True
+    assert client.is_connected is False
+    assert "test-ns:lock:mtproto_owner" not in fake.docs
+    assert asyncio.run(mtproto.resolve_user(42)) is None
+
+
 def test_handle_auth_failure_parks_once(
     monkeypatch: pytest.MonkeyPatch, lease_store: tuple[MongoStorage, _FakeLeaseColl]
 ) -> None:
@@ -277,6 +298,12 @@ def test_handle_auth_failure_parks_once(
 def test_is_auth_key_duplicated() -> None:
     assert mtproto.is_auth_key_duplicated(AuthKeyDuplicated("x")) is True
     assert mtproto.is_auth_key_duplicated(RuntimeError("x")) is False
+
+
+def test_is_auth_key_not_found() -> None:
+    assert mtproto.is_auth_key_not_found(AuthKeyNotFound("x")) is True
+    assert mtproto.is_auth_key_not_found(RuntimeError("x")) is False
+    assert mtproto.is_auth_key_not_found(AuthKeyDuplicated("x")) is False
 
 
 def test_claim_outage_returns_false(

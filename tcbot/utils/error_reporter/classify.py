@@ -93,6 +93,11 @@ _ACTION_HINTS: tuple[tuple[str, str], ...] = (
     ("Code Bug", "Needs a code fix; see the traceback below."),
     ("[?] Unknown", "No exception attached; check the message and location above."),
     ("Circuit Open", "Telegram circuit is open; retry after the cooldown."),
+    (
+        "MTProto Auth",
+        "MTProto auth key is dead; stop every instance, delete the session "
+        "docs from mtproto_state, then boot one.",
+    ),
 )
 
 
@@ -148,5 +153,11 @@ def _classify(exc: BaseException | None) -> str:
         x in mod for x in ("httpx", "aiohttp", "urllib3", "ssl")
     ):
         return "[~] Network / Server Error"
+
+    # * A dead MTProto auth key (406 duplicate or transport 404 not
+    # * found) is an operator incident, not a code bug. Detected by type
+    # * name so this module needs no heavy Kurigram import.
+    if type(exc).__name__ in ("AuthKeyDuplicated", "AuthKeyNotFound"):
+        return "[~] MTProto Auth Key Invalidated"
 
     return "[!] Code Bug"

@@ -173,11 +173,15 @@ through a short-lived lease, and losers serve Bot-API-only until the
 lease frees up. Overlapping rolling restarts are safe (the old instance
 releases on shutdown and the newcomer takes over an expired lease), but
 a Replit deploy plus a GitHub runner side by side is not: stop one of
-them. If the key is already invalidated, stop every instance, purge the
+them. If the key is already invalidated (either `406 AUTH_KEY_DUPLICATED`
+from a duplicate connection or transport `404 AUTH_KEY_NOT_FOUND` when
+Telegram reports the key is gone), stop every instance, purge the
 session docs (`db.mtproto_state.deleteMany({_id: /^<MTPROTO_SESSION>:/})`
 in `mongosh`), then boot exactly one instance and the bot-token login
 mints a fresh key automatically. The bot token itself never needs
-rotating for this incident.
+rotating for this incident. The bot parks MTProto and stays on
+Bot-API-only until the purge and reboot, so moderation never goes
+offline over this dead key.
 
 ## Startup sequence
 

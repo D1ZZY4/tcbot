@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import telegram.error as te
 from pymongo.errors import ConnectionFailure
+from pyrogram.errors import AuthKeyDuplicated
+from pyrogram.session.session import AuthKeyNotFound
 
 from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.error_reporter import classify
@@ -57,3 +59,10 @@ def test_owner_only_and_benign_filters_unchanged() -> None:
     assert classify._owner_only(te.Conflict("c")) is True
     assert classify._owner_only(ConnectionFailure("x")) is False
     assert classify._benign(None) is False
+
+
+def test_mtproto_auth_key_labels_operator_action() -> None:
+    for exc in (AuthKeyNotFound("gone"), AuthKeyDuplicated("dup")):
+        assert classify._classify(exc) == "[~] MTProto Auth Key Invalidated"
+        assert "mtproto_state" in classify._action_hint(classify._classify(exc))
+        assert classify._benign(exc) is False
