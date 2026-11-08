@@ -158,6 +158,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Fixed
 
+- **Connect fails closed on database outage** (`tcbot/modules/connecting.py`, `tcbot/modules/helper/workflows/connected_flow/bot_added.py`, `docs/features/moderation/connecting.md`): the manual and bot-added connect paths now reply with a retry notice, or drop the event, when the connection-state reads fail instead of treating the outage as not connected. Behavior changes: outage connects show a failure notice instead of proceeding to join.
+
+- **Join decision refuses primary groups** (`tcbot/modules/helper/workflows/connected_flow/join_decision.py`, `docs/features/moderation/connecting.md`): tapping Connect on a primary-group prompt now answers and returns without connecting, matching the command and bot-added guards. Behavior changes: none on normal prompts; primary-group taps no longer create a federation row.
+
 - **Silence-window ban flush re-checks executor rank** (`tcbot/modules/helper/workflows/ban_flow/session.py`, `docs/features/moderation/banning.md`): the background flush now checks that the moderator still meets Developer rank before enforcing, so a moderator demoted during proof collection can no longer ban from a stale session. A role lookup outage aborts the flush the same way. Behavior changes: demoted moderators no longer enforce through a silence flush.
 
 - **Mongo circuit counts only transient errors** (`tcbot/utils/circuit_breaker.py`, `tcbot/database/mongos/client.py`, `docs/architecture/database.md`): the breaker now counts connectivity failures, timeouts, and retryable write concerns toward opening, while application errors propagate without recording a failure. Client-side operation timeouts are recognised through the documented timeout property. Behavior changes: a bad write no longer opens the database circuit; outages still open it.

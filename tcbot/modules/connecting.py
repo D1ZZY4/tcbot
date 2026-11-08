@@ -23,6 +23,7 @@ from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows.connected_flow import connection
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters
@@ -139,6 +140,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         ),
         return_exceptions=True,
     )
+    throw_if_cancelled((member, is_connected, pending, bot_member))
     if isinstance(member, BaseException):
         log.debug("get_chat_member failed for %d/%d: %s", chat.id, user.id, member)
         await safe_reply(
@@ -170,10 +172,27 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
+    # * Fail closed on a DB outage: without the connection/pending facts
+    # * the handler cannot tell a fresh request from a duplicate, so it
+    # * must not coerce them to False/None and proceed to complete_join.
     if isinstance(is_connected, BaseException):
-        is_connected = False
+        log.warning("is_connected check failed for chat %d: %s", chat.id, is_connected)
+        await safe_reply(
+            msg,
+            t("connecting.state.connect_failed", locale, plain=True),
+            log_label="cmd_tctc status-failed",
+            parse_mode=None,
+        )
+        return
     if isinstance(pending, BaseException):
-        pending = None
+        log.warning("get_pending check failed for chat %d: %s", chat.id, pending)
+        await safe_reply(
+            msg,
+            t("connecting.state.connect_failed", locale, plain=True),
+            log_label="cmd_tctc pending-failed",
+            parse_mode=None,
+        )
+        return
 
     if is_connected:
         await safe_reply(

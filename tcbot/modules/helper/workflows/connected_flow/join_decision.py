@@ -96,6 +96,15 @@ class ConnectionDecisionMixin:
             except Exception as exc:
                 log.debug("Join decision answer failed with no chat/user: %s", exc)
             return
+        # * Primary groups must never enter the federation via a join
+        # * prompt: they are required enforcement destinations, not
+        # * connectable members. Defense in depth mirroring on_bot_added.
+        if cfg.is_primary_group(chat.id):
+            try:
+                await q.answer()
+            except Exception as exc:
+                log.debug("Join decision primary-group answer failed: %s", exc)
+            return
         lc, lt = cfg.logs
         locale = await locale_for_update(update)
 
@@ -250,7 +259,7 @@ class ConnectionDecisionMixin:
                 await db.groups_db.remove_pending(chat.id)
             except Exception:
                 log.exception("remove_pending failed for chat %d on cancel", chat.id)
-            await asyncio.gather(
+            cancel_results = await asyncio.gather(
                 q.edit_message_text(self.declined_message(locale), reply_markup=None),
                 ctx.bot.send_message(
                     lc,
@@ -266,3 +275,4 @@ class ConnectionDecisionMixin:
                 ctx.bot.leave_chat(chat.id),
                 return_exceptions=True,
             )
+            throw_if_cancelled(cancel_results)

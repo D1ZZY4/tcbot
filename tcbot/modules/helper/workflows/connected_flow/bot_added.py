@@ -169,10 +169,24 @@ class ConnectionAddedMixin:
                 return_exceptions=True,
             )
             throw_if_cancelled((pending, is_already_connected))
+            # * Fail closed on a DB outage: without these facts the handler
+            # * cannot distinguish a fresh join from a duplicate prompt, so
+            # * drop this event instead of coercing to None/False and
+            # * creating a duplicate prompt on the next event.
             if isinstance(pending, BaseException):
-                pending = None
+                log.warning(
+                    "get_pending check failed on bot-added for %d: %s",
+                    chat.id,
+                    pending,
+                )
+                return
             if isinstance(is_already_connected, BaseException):
-                is_already_connected = False
+                log.warning(
+                    "is_connected check failed on bot-added for %d: %s",
+                    chat.id,
+                    is_already_connected,
+                )
+                return
 
             if pending and new_status == ChatMemberStatus.ADMINISTRATOR:
                 if self.check_perms(cmc.new_chat_member):
