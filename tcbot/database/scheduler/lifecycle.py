@@ -122,6 +122,19 @@ async def stop() -> None:
             await asyncio.wait_for(
                 _sched_pkg._sched_task, timeout=_sched_pkg._STOP_TIMEOUT_S
             )
+        except asyncio.CancelledError:
+            # * Cancellation of stop() itself must still clear the globals;
+            # * gather retrieves the task exception so the next start() does
+            # * not race a dying task, then propagate.
+            if _sched_pkg._sched_task is not None and not _sched_pkg._sched_task.done():
+                _sched_pkg._sched_task.cancel()
+                await asyncio.gather(_sched_pkg._sched_task, return_exceptions=True)
+            _sched_pkg._sched_task = None
+            _sched_pkg._sched_ready = None
+            _sched_pkg._sched_stop = None
+            _sched_pkg._sched_error = None
+            _sched_pkg._sync_bot = None
+            raise
         except TimeoutError:
             log.warning(
                 "APScheduler background task did not stop within %.0fs.",
@@ -142,6 +155,8 @@ async def stop() -> None:
                     )
                 except TimeoutError:
                     log.warning("APScheduler stuck task ignored cancellation.")
+        except Exception as exc:
+            log.warning("APScheduler background task failed during stop: %s", exc)
     _sched_pkg._sched_task = None
     _sched_pkg._sched_ready = None
     _sched_pkg._sched_stop = None
