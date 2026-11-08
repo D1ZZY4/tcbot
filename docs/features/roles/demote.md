@@ -100,7 +100,7 @@ The federation log emitted by `parse_logmsg.demoted(target_id, target_fname, rol
 
 ### Confirmation callback
 
-Callback data: `demote_confirm:<target_id>` and `demote_cancel:<target_id>`.
+Callback data: `demote_confirm:<target_id>` and `demote_cancel:<target_id>:<executor_id>` for new prompts (legacy `demote_cancel:<target_id>` from in-flight keyboards keeps working).
 
 `on_demote_confirm`:
 
@@ -111,7 +111,7 @@ Callback data: `demote_confirm:<target_id>` and `demote_cancel:<target_id>`.
 5. On a successful removal, edits the confirmation message to `Done. <mention> - <code id> has been removed from <Role>.` and clears the keyboard.
 6. If `Demote.execute` returns False (nothing was removed; the record was cleared by another path), edits to `Couldn't remove the role - it may have already been cleared.`
 
-`on_demote_cancel` simply answers the callback and edits the message to say no changes were made.
+`on_demote_cancel` answers the callback and edits the message to say no changes were made. New prompts carry the opener, so only that staffer can cancel; a different tapper gets a not-owner alert and the prompt stays live.
 
 ## Auto-demote flow (ban / kick / mute)
 

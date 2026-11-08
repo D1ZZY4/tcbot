@@ -17,6 +17,7 @@ from tcbot.modules.admins.shared import (
     _RL_PERIOD_LONG_S,
     _RL_PERIOD_S,
     _RL_QUERY_LIMIT,
+    _cancel_owner_mismatch,
     _check_callback_staff,
     _classify_and_load_role,
     _resolve_executor_target,
@@ -150,7 +151,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             ),
         ),
         log_label="cmd_promote role-picker",
-        reply_markup=keyboards.promote_role_kb(target_id, available, locale),
+        reply_markup=keyboards.promote_role_kb(target_id, available, locale, admin.id),
     )
 
 
@@ -273,11 +274,19 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
 async def on_promote_role_cancel(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    """Acknowledge the cancel button and replace the role-selection prompt with a cancellation notice."""
+    """Acknowledge the cancel button and replace the role-selection prompt with a cancellation notice.
+
+    New prompts carry the opener as ``promo_role_cancel:{target}:{executor}``
+    so only that staffer can collapse the picker; a different tapper gets an
+    alert and the prompt stays live. Legacy two-part callbacks from
+    in-flight keyboards keep the old behaviour (anyone may cancel).
+    """
     q = update.callback_query
     if q is None:
         return
-    await asyncio.gather(
+    if await _cancel_owner_mismatch(q, update):
+        return
+    results = await asyncio.gather(
         q.answer(),
         q.edit_message_text(
             t(
@@ -289,3 +298,4 @@ async def on_promote_role_cancel(
         ),
         return_exceptions=True,
     )
+    throw_if_cancelled(results)

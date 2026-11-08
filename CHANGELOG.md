@@ -158,6 +158,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Fixed
 
+- **Cancel buttons honour the prompt opener** (`tcbot/modules/helper/keyboards/admin.py`, `tcbot/modules/admins/promote.py`, `tcbot/modules/admins/demote.py`, `tcbot/modules/admins/shared.py`, `i18n/en-US/admins.toml`, `i18n/id/admins.toml`, `docs/features/roles/promote.md`, `docs/features/roles/demote.md`, `docs/features/roles/roles.md`): new role-picker and demote confirmation cancels carry the staff member who opened the prompt, so a different tapper gets a not-owner alert and the prompt stays live. Legacy cancel taps keep working. Reason-flow cancels are already scoped by the conversation handler. Behavior changes: cross-staff cancel taps alert instead of collapsing the prompt.
+
 - **Connect fails closed on database outage** (`tcbot/modules/connecting.py`, `tcbot/modules/helper/workflows/connected_flow/bot_added.py`, `docs/features/moderation/connecting.md`): the manual and bot-added connect paths now reply with a retry notice, or drop the event, when the connection-state reads fail instead of treating the outage as not connected. Behavior changes: outage connects show a failure notice instead of proceeding to join.
 
 - **Join decision refuses primary groups** (`tcbot/modules/helper/workflows/connected_flow/join_decision.py`, `docs/features/moderation/connecting.md`): tapping Connect on a primary-group prompt now answers and returns without connecting, matching the command and bot-added guards. Behavior changes: none on normal prompts; primary-group taps no longer create a federation row.

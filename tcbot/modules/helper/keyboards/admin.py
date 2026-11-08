@@ -17,11 +17,16 @@ def promote_role_kb(
     target_id: int,
     available_roles: list[str],
     locale: str | None = None,
+    executor_id: int | None = None,
 ) -> InlineKeyboardMarkup:
     """Role picker for /tcpromote without a role argument.
 
     Labels render from ROLE_LABEL verbatim: ranks are canonical English
-    identifiers like commands, per the translator contract.
+    identifiers like commands, per the translator contract. When
+    *executor_id* is given the Cancel button carries it
+    (``promo_role_cancel:{target}:{executor}``) so the cancel handler can
+    refuse a different tapper; without it the legacy two-part shape is kept
+    for callers that have no owner to record.
     """
     buttons = [
         InlineKeyboardButton(
@@ -35,11 +40,16 @@ def promote_role_kb(
     rows: list[list[InlineKeyboardButton]] = [
         buttons[i : i + 2] for i in range(0, len(buttons), 2)
     ]
+    cancel_data = (
+        f"promo_role_cancel:{target_id}:{executor_id}"
+        if executor_id is not None
+        else f"promo_role_cancel:{target_id}"
+    )
     rows.append(
         [
             InlineKeyboardButton(
                 t("button.cancel", locale, plain=True),
-                callback_data=f"promo_role_cancel:{target_id}",
+                callback_data=cancel_data,
             )
         ]
     )
@@ -47,9 +57,19 @@ def promote_role_kb(
 
 
 def demote_confirm_kb(
-    target_id: int, locale: str | None = None
+    target_id: int, locale: str | None = None, executor_id: int | None = None
 ) -> InlineKeyboardMarkup:
-    """Demotion confirmation: Confirm plus Cancel."""
+    """Demotion confirmation: Confirm plus Cancel.
+
+    When *executor_id* is given the Cancel button carries it
+    (``demote_cancel:{target}:{executor}``) so the cancel handler can refuse
+    a different tapper; without it the legacy two-part shape is kept.
+    """
+    cancel_data = (
+        f"demote_cancel:{target_id}:{executor_id}"
+        if executor_id is not None
+        else f"demote_cancel:{target_id}"
+    )
     return InlineKeyboardMarkup(
         [
             [
@@ -60,7 +80,7 @@ def demote_confirm_kb(
                 ),
                 InlineKeyboardButton(
                     t("button.cancel", locale, plain=True),
-                    callback_data=f"demote_cancel:{target_id}",
+                    callback_data=cancel_data,
                 ),
             ]
         ]

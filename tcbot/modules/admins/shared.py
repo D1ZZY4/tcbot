@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from tcbot import database as db
 from tcbot.modules.helper import extraction, identity, replies
@@ -182,3 +182,36 @@ async def _check_callback_staff(
         )
         return None
     return role_r
+
+
+async def _cancel_owner_mismatch(q: Any, update: Update) -> bool:
+    """Answer an alert and return True when the tapper is not the prompt owner.
+
+    New cancel callbacks carry ``{target}:{executor}`` after the prefix;
+    only the recorded executor (or legacy taps without an executor segment)
+    may collapse the prompt. Action buttons keep acting as the tapper with
+    a fresh rank re-check, so only cancellation enforces ownership.
+    """
+    data = getattr(q, "data", "") or ""
+    parts = str(data).split(":")
+    if len(parts) != 3:
+        return False
+    try:
+        owner_id = int(parts[2])
+    except ValueError:
+        return False
+    tapper = update.effective_user
+    if tapper is None or tapper.id == owner_id:
+        return False
+    try:
+        await q.answer(
+            t(
+                "admins.error.not_prompt_owner",
+                await locale_for_update(update),
+                plain=True,
+            ),
+            show_alert=True,
+        )
+    except Exception as exc:
+        log.debug("Cancel owner answer failed: %s", exc)
+    return True

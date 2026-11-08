@@ -151,10 +151,10 @@ A user submits a request for themselves to become Admin. `cmd_promote_request` f
 | Button | Callback data | Handler |
 |---|---|---|
 | Role option | `promo_role:<role>:<target_id>` | `on_promote_role_btn` |
-| Cancel | `promo_role_cancel:<target_id>` | `on_promote_role_cancel` |
+| Cancel | `promo_role_cancel:<target_id>:<executor_id>` (legacy `:<target_id>` still works) | `on_promote_role_cancel` |
 | Approve / Reject (Founder DM) | `promo_approve:<request_id>` / `promo_reject:<request_id>` | `on_promo_decision` |
 
-All callbacks re-check the tapper's current effective role (Founder/Admin) before applying any write, so a user who lost permission between selecting and confirming is rejected with an alert. The check is rank-only: callbacks do not re-run identity refusal or bind the prompt to its originator, so any Founder/Admin who can see the picker can complete it (attributed to the tapper in logs).
+All callbacks re-check the tapper's current effective role (Founder/Admin) before applying any write, so a user who lost permission between selecting and confirming is rejected with an alert. The check is rank-only for action buttons: callbacks do not re-run identity refusal, and any Founder/Admin who can see the picker can complete it (attributed to the tapper in logs). Cancellation is the exception: new cancel buttons carry the opener, so only that staffer can collapse the picker; legacy cancels keep the old any-tapper behaviour.
 
 ### Approval path
 

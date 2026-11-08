@@ -23,6 +23,7 @@ from tcbot.modules.admins.shared import (
     _RL_PERIOD_LONG_S,
     _RL_PERIOD_S,
     _RL_QUERY_LIMIT,
+    _cancel_owner_mismatch,
     _check_callback_staff,
     _classify_and_load_role,
     _resolve_executor_target,
@@ -101,9 +102,11 @@ __handlers__ = [
     MessageHandler(_PMTLIST_CMDS, cmd_promote_list),
     CallbackQueryHandler(on_promo_decision, pattern=r"^(promo_approve|promo_reject):"),
     CallbackQueryHandler(on_promote_role_btn, pattern=r"^promo_role:[a-z]+:\d+$"),
-    CallbackQueryHandler(on_promote_role_cancel, pattern=r"^promo_role_cancel:\d+$"),
+    CallbackQueryHandler(
+        on_promote_role_cancel, pattern=r"^promo_role_cancel:\d+(:\d+)?$"
+    ),
     CallbackQueryHandler(on_demote_confirm, pattern=r"^demote_confirm:\d+$"),
-    CallbackQueryHandler(on_demote_cancel, pattern=r"^demote_cancel:\d+$"),
+    CallbackQueryHandler(on_demote_cancel, pattern=r"^demote_cancel:\d+(:\d+)?$"),
 ]
 
 __all__ = [
@@ -123,6 +126,7 @@ __all__ = [
     "__help_sections__",
     "__help_text__",
     "__module_name__",
+    "_cancel_owner_mismatch",
     "_check_callback_staff",
     "_classify_and_load_role",
     "_resolve_executor_target",

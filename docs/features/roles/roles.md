@@ -272,7 +272,7 @@ Confirmation callback data:
 | Button | Callback data |
 |---|---|
 | `Confirm` | `demote_confirm:<target_id>` |
-| `Cancel` | `demote_cancel:<target_id>` |
+| `Cancel` | `demote_cancel:<target_id>:<executor_id>` (legacy without executor still works) |
 
 The confirmation callback re-checks executor permission and target role before writing. If the target is Admin, it calls `users_roles.remove_admin(target_id)`. Otherwise, it calls `users_roles.remove_role(target_id)`.
 
@@ -282,7 +282,7 @@ On success:
 - The target is notified by DM when possible.
 - The confirmation message is edited with a success message and keyboard removed.
 
-Cancel answers the callback and edits the message to say no changes were made.
+Cancel answers the callback and edits the message to say no changes were made. New prompts carry the opener, so only that staffer can cancel; legacy callbacks keep working.
 
 ## `/transferowner` behavior
 

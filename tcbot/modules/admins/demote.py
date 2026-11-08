@@ -17,6 +17,7 @@ from tcbot.modules.admins.shared import (
     _RL_PERIOD_LONG_S,
     _RL_PERIOD_S,
     _RL_QUERY_LIMIT,
+    _cancel_owner_mismatch,
     _check_callback_staff,
     _classify_and_load_role,
     _resolve_executor_target,
@@ -110,7 +111,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             role=Safe(bold(role_label)),
         ),
         log_label="cmd_demote confirm-prompt",
-        reply_markup=keyboards.demote_confirm_kb(target_id, locale),
+        reply_markup=keyboards.demote_confirm_kb(target_id, locale, admin.id),
     )
 
 
@@ -258,11 +259,19 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 @decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
 @decorators.log_execution
 async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Acknowledge the cancel button and collapse the demotion confirmation prompt."""
+    """Acknowledge the cancel button and collapse the demotion confirmation prompt.
+
+    New prompts carry the opener as ``demote_cancel:{target}:{executor}``
+    so only that staffer can collapse the confirmation; a different tapper
+    gets an alert and the prompt stays live. Legacy two-part callbacks from
+    in-flight keyboards keep the old behaviour (anyone may cancel).
+    """
     q = update.callback_query
     if q is None:
         return
-    await asyncio.gather(
+    if await _cancel_owner_mismatch(q, update):
+        return
+    results = await asyncio.gather(
         q.answer(),
         q.edit_message_text(
             t("admins.error.cancelled", await locale_for_update(update), plain=True),
@@ -270,3 +279,4 @@ async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         ),
         return_exceptions=True,
     )
+    throw_if_cancelled(results)
