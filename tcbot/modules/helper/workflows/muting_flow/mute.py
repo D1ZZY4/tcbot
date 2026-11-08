@@ -255,6 +255,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         ),
         return_exceptions=True,
     )
+    throw_if_cancelled((log_send_r, edit_r))
     if isinstance(log_send_r, BaseException):
         log.error("Mute log send failed: %s", log_send_r)
     if isinstance(edit_r, BaseException):

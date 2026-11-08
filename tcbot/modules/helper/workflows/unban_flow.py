@@ -20,6 +20,7 @@ from tcbot.utils.dispatch import (
     fan_out,
     first_transient_error,
     is_benign_telegram_error,
+    throw_if_cancelled,
 )
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
@@ -240,6 +241,7 @@ async def execute_unban(
             ),
             return_exceptions=True,
         )
+        throw_if_cancelled((log_r, reply_r))
         if isinstance(reply_r, BaseException):
             log.debug("Unban reply failed for user %d: %s", target_id, reply_r)
     else:

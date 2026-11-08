@@ -17,6 +17,7 @@ from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID, can_manage_group
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import code
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -182,6 +183,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         ctx.bot.leave_chat(chat.id),
         return_exceptions=True,
     )
+    throw_if_cancelled((log_r, reply_r, leave_r))
     if isinstance(log_r, BaseException):
         log.debug("tcdisconnect log send failed for chat %d: %s", chat.id, log_r)
     if isinstance(reply_r, BaseException):
@@ -273,6 +275,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             ),
             return_exceptions=True,
         )
+        throw_if_cancelled((log_r, leave_r, reply_r))
         if isinstance(log_r, BaseException):
             log.debug("rmtc log send failed for chat %d: %s", chat_id, log_r)
         if isinstance(leave_r, BaseException):

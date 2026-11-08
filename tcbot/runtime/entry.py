@@ -113,7 +113,11 @@ async def _run_webhook_mode(app: Application) -> None:
             await shutdown_event.wait()
 
         except asyncio.CancelledError:
+            # * Cleanup still runs in finally, but cancellation must not
+            # * be coerced into normal completion: callers and asyncio.run()
+            # * must observe cancelled, not success.
             log.info("Webhook mode cancelled.")
+            raise
         finally:
             log.info("Webhook mode shutting down...")
             try:

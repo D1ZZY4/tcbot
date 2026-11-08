@@ -29,6 +29,7 @@ from tcbot.modules.helper.workflows.appeal_submit_flow.gates import (
     starts_with_appeal_tag,
     text_references_log_message,
 )
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
 
@@ -229,6 +230,7 @@ class SubmitMessageMixin:
             ),
             return_exceptions=True,
         )
+        throw_if_cancelled((rv, sent_log))
 
         review_msg_id: int | None = (
             rv.message_id if not isinstance(rv, BaseException) else None
@@ -314,6 +316,7 @@ class SubmitMessageMixin:
             edit_r, upsert_r = await asyncio.gather(
                 edit_coro, upsert_coro, return_exceptions=True
             )
+            throw_if_cancelled((edit_r, upsert_r))
             if isinstance(edit_r, BaseException):
                 log.debug(
                     "Appeal submitted-edit failed for ban_id=%s: %s", ban_id, edit_r

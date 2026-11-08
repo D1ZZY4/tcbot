@@ -18,6 +18,7 @@ from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import BuildProof, upload_proof
 from tcbot.modules.helper.workflows.reason_flow import BuildReason, build_modaction_conv
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -147,6 +148,7 @@ async def execute_kick(
             ),
             return_exceptions=True,
         )
+        throw_if_cancelled((unban_result, log_send_result))
         if isinstance(unban_result, BaseException):
             log.warning(
                 "unban_chat_member failed after kick for target=%d: %s",

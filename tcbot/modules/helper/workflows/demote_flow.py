@@ -16,7 +16,7 @@ from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.locale import effective_locale, locale_for_user
 from tcbot.modules.helper.parse_editmsg import safe_reply
-from tcbot.utils.dispatch import is_benign_telegram_error
+from tcbot.utils.dispatch import is_benign_telegram_error, throw_if_cancelled
 from tcbot.utils.formatter import bold, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -126,6 +126,7 @@ class Demote:
             bot.send_message(target_id, user_msg, parse_mode="MarkdownV2"),
             return_exceptions=True,
         )
+        throw_if_cancelled((log_result, dm_result))
         if isinstance(log_result, BaseException):
             # * Error-level so a silent audit gap ships to LOG_ERRORS; the
             # * role itself was already removed, so this never blocks the caller.

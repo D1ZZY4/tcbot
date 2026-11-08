@@ -26,6 +26,7 @@ from tcbot.database.scheduler import expire_old_warns
 # * already a project dependency and no server is started at import time.
 from tcbot.runtime.lifecycle import _base_builder, _register_handlers
 from tcbot.utils import error_reporter
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -106,6 +107,7 @@ async def _init_subsystems(app: Application) -> None:
         redis_client.connect_if_configured(),
         return_exceptions=True,
     )
+    throw_if_cancelled((indexes_r, owner_r))
     if isinstance(indexes_r, BaseException):
         raise indexes_r
     if isinstance(owner_r, BaseException):

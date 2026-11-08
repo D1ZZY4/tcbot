@@ -41,7 +41,7 @@ from tcbot.runtime.members import (
 )
 from tcbot.utils import error_reporter
 from tcbot.utils import logger as logger_mod
-from tcbot.utils.dispatch import drain_tasks
+from tcbot.utils.dispatch import drain_tasks, throw_if_cancelled
 from tcbot.utils.logger import get_logger
 from tcbot.utils.transport import (
     API_POOL_SIZE,
@@ -89,15 +89,20 @@ async def _warm_hot_caches() -> None:
     command from the owner resolves the role without any DB round-trip.
     """
     try:
-        owner_id_r, _ = await asyncio.gather(
+        owner_id_r, groups_r = await asyncio.gather(
             db.users_roles.get_owner_id(),
             db.groups_db.active_groups(),
             return_exceptions=True,
         )
+        throw_if_cancelled((owner_id_r, groups_r))
+        if isinstance(groups_r, BaseException):
+            log.debug("Cache warm-up: active_groups failed (non-fatal): %s", groups_r)
         log.debug("Cache warm-up: owner_id and active_groups pre-loaded into L1+L2.")
         if isinstance(owner_id_r, int):
             await db.users_roles.get_effective_role(owner_id_r)
             log.debug("Cache warm-up: owner effective_role pre-loaded into L1+L2.")
+    except asyncio.CancelledError:
+        raise
     except Exception as exc:
         log.debug("Cache warm-up failed (non-fatal): %s", exc)
 
@@ -126,6 +131,7 @@ async def _post_init(app: Application) -> None:
         mtproto_mod.start(),
         return_exceptions=True,
     )
+    throw_if_cancelled((indexes_r, owner_r, _mtproto_r))
     if isinstance(indexes_r, BaseException):
         raise indexes_r
     if isinstance(owner_r, BaseException):
@@ -191,12 +197,18 @@ async def _post_shutdown(app: Application) -> None:
     # * Drain first: queued L2 writes must land before the pool closes
     # * underneath them; the gather below runs concurrently otherwise.
     await drain_redis_mutations()
-    await asyncio.gather(
+    shutdown_results = await asyncio.gather(
         sched_mod.stop(),
         redis_client.close(),
         mtproto_mod.stop(),
         return_exceptions=True,
     )
+    for _result in shutdown_results:
+        if isinstance(_result, BaseException) and not isinstance(
+            _result, asyncio.CancelledError
+        ):
+            log.warning("Shutdown step failed (non-fatal): %s", _result)
+    throw_if_cancelled(shutdown_results)
     # * Close the shared Motor client last: every drain above still writes.
     close_mongo()
 

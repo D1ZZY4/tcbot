@@ -18,7 +18,7 @@ from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, parse_logmsg, replies
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
-from tcbot.utils.dispatch import count_transient_errors, fan_out
+from tcbot.utils.dispatch import count_transient_errors, fan_out, throw_if_cancelled
 from tcbot.utils.formatter import code
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -192,9 +192,11 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log_coro,
             return_exceptions=True,
         )
+        throw_if_cancelled((edit_r, log_r))
     else:
         edit_r = None
         (log_r,) = await asyncio.gather(log_coro, return_exceptions=True)
+        throw_if_cancelled((log_r,))
     if isinstance(edit_r, BaseException):
         log.debug("Broadcast status edit failed: %s", edit_r)
     if isinstance(log_r, BaseException):

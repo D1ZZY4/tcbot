@@ -83,7 +83,9 @@ class Promote:
         cleanup: list = [db.users_cache.upsert_user(target_id, None, target_fname)]
         if current_role in ("developer", "tester"):
             cleanup.append(db.users_roles.remove_role(target_id))
-        for _r in await asyncio.gather(*cleanup, return_exceptions=True):
+        cleanup_results = await asyncio.gather(*cleanup, return_exceptions=True)
+        throw_if_cancelled(cleanup_results)
+        for _r in cleanup_results:
             if isinstance(_r, BaseException):
                 log.warning(
                     "_assign_admin cleanup step failed for target=%d: %s", target_id, _r
@@ -93,7 +95,7 @@ class Promote:
             target_id, target_fname, "admin", admin_id, admin_fname
         )
         target_locale = await locale_for_user(target_id)
-        for result in await asyncio.gather(
+        admin_results = await asyncio.gather(
             bot.send_message(
                 lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
             ),
@@ -107,7 +109,9 @@ class Promote:
                 ),
             ),
             return_exceptions=True,
-        ):
+        )
+        throw_if_cancelled(admin_results)
+        for result in admin_results:
             if isinstance(result, BaseException):
                 log.warning(
                     "_assign_admin log/DM send failed for target=%d: %s",
@@ -168,7 +172,7 @@ class Promote:
             target_id, target_fname, role, admin_id, admin_fname
         )
         target_locale = await locale_for_user(target_id)
-        for result in await asyncio.gather(
+        subrole_results = await asyncio.gather(
             bot.send_message(
                 lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
             ),
@@ -183,7 +187,9 @@ class Promote:
                 ),
             ),
             return_exceptions=True,
-        ):
+        )
+        throw_if_cancelled(subrole_results)
+        for result in subrole_results:
             if isinstance(result, BaseException):
                 log.warning(
                     "_assign_subrole log/DM send failed for target=%d: %s",
