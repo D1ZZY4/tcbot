@@ -215,6 +215,18 @@ class AppealReviewMixin(AppealVerdictsMixin):
             return
 
         target_id = ban.get("banned_user_id", 0)
+        # * Self-review guard: a staffer added back after being banned
+        # * must not approve or reject their own appeal. Alert only so the
+        # * shared card stays actionable for another staffer.
+        if admin.id == target_id:
+            try:
+                await q.answer(
+                    t("appeals.review.not_authorized", locale, plain=True),
+                    show_alert=True,
+                )
+            except Exception as exc:
+                log.debug("Appeal self-review answer failed: %s", exc)
+            return
         lc, lt = flow_pkg.cfg.logs
 
         if action == "approve":

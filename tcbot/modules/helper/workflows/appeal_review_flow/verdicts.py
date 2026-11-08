@@ -15,10 +15,12 @@ from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg, replies
 from tcbot.modules.helper.parse_editmsg import safe_edit_cb
 from tcbot.modules.helper.workflows import appeal_review_flow as flow_pkg
+from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.utils.dispatch import (
     count_transient_errors,
     fan_out,
     first_transient_error,
+    throw_if_cancelled,
 )
 from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import Safe, t
@@ -99,6 +101,57 @@ class AppealVerdictsMixin:
             except Exception as exc:
                 log.debug("approve_appeal groups-fail answer failed: %s", exc)
             return
+        # * Staff-target cleanup mirroring /tcunban: a target re-promoted
+        # * while banned is still staff, so demote before the unban clears
+        # * it. The role read fails closed (a cancelled read propagates, an
+        # * outage alerts and returns with the card untouched), and a demote
+        # * failure aborts the same way so enforcement never leaves a stale
+        # * federation role behind.
+        try:
+            target_role = await db.users_roles.get_effective_role(target_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.warning(
+                "approve_appeal role lookup failed for user=%d: %s", target_id, exc
+            )
+            try:
+                locale = await flow_pkg.locale_for_update(update)
+                await q.answer(
+                    t("appeals.review.db_retry", locale, plain=True),
+                    show_alert=True,
+                )
+            except Exception as exc:
+                log.debug("approve_appeal role-fail answer failed: %s", exc)
+            return
+        if target_role in ("admin", "developer", "tester"):
+            try:
+                await Demote.execute(
+                    bot,
+                    target_id,
+                    str(target_id),
+                    target_role,
+                    admin.id,
+                    admin.first_name,
+                    trigger=None,
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception(
+                    "approve_appeal demote before unban failed for user=%d role=%s",
+                    target_id,
+                    target_role,
+                )
+                try:
+                    locale = await flow_pkg.locale_for_update(update)
+                    await q.answer(
+                        t("appeals.review.db_retry", locale, plain=True),
+                        show_alert=True,
+                    )
+                except Exception as exc:
+                    log.debug("approve_appeal demote-fail answer failed: %s", exc)
+                return
         # * Deactivate ALL active bans for the user (not only the appeal ban_id)
         # * in parallel with fetching the target name.
         deactivate_result, target_fname = await asyncio.gather(
@@ -234,6 +287,7 @@ class AppealVerdictsMixin:
             ),
             return_exceptions=True,
         )
+        throw_if_cancelled((dm_r, card_r, log_r, unban_log_r))
         if isinstance(dm_r, BaseException):
             log.warning(
                 "approve_appeal DM to %d failed for ban %s: %s",
@@ -344,6 +398,7 @@ class AppealVerdictsMixin:
             db.bans_db.clear_review(ban_id),
             return_exceptions=True,
         )
+        throw_if_cancelled(results)
         if isinstance(results[0], BaseException):
             log.warning("reject_appeal DM to %d failed: %s", target_id, results[0])
         if isinstance(results[1], BaseException):

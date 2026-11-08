@@ -174,6 +174,7 @@ answer the callback query with a popup alert so the card stays actionable
 for staff:
 
 - Taps from non-staff users.
+- Taps by the banned user themselves (self-review is refused with a popup and the card stays actionable).
 - Taps inside the 12-hour banning-admin priority window by a different admin.
 - Repeat taps after the appeal was already decided (the winner's verdict edit is preserved).
 - Taps during a role-lookup outage.
@@ -198,15 +199,16 @@ The callback handler always answers the callback query before continuing once it
 When a staff member approves an appeal:
 
 1. Active connected groups are fetched from `groups_db.active_groups()`, with the primary groups (`cfg.main_group`, `cfg.exec_group`) appended when absent. If the fetch fails, approval aborts before deactivation with the review card untouched (a re-tap retries the full sequence); deactivating first would leave chats unbanned-nowhere with no record to re-drive.
-2. All active bans for the user are deactivated with `bans_db.deactivate_all_active_bans(user_id)`, which clears any duplicate active records in one atomic operation. If this write fails, approval aborts before any group is touched (mirroring `execute_unban`): unbanning chats while the database still marks the user banned would split-brain and re-ban them on next join. The review card stays actionable and the tapper gets a retry alert, so a re-tap retries the full sequence.
-3. The review marker is cleared with `bans_db.clear_review(ban_id)` so a concurrent second decision sees no live review and stands down.
-4. The user is unbanned from every group with `unban_chat_member(..., only_if_banned=True)` through bounded fan-out. Partial transient failures are logged at error level.
-5. The user receives a DM telling them the appeal was approved.
-6. The review message is edited to show who approved it and the inline keyboard is removed.
-7. The submitted-appeal log message is edited to an approved version when possible.
-8. A separate `Unban (via Appeal)` log is sent to the federation logs channel.
+2. If the banned user currently holds a federation staff role, that role is demoted before deactivation, mirroring `/tcunban`. A role-lookup outage or a demote failure aborts with the review card untouched and a retry alert.
+3. All active bans for the user are deactivated with `bans_db.deactivate_all_active_bans(user_id)`, which clears any duplicate active records in one atomic operation. If this write fails, approval aborts before any group is touched (mirroring `execute_unban`): unbanning chats while the database still marks the user banned would split-brain and re-ban them on next join. The review card stays actionable and the tapper gets a retry alert, so a re-tap retries the full sequence.
+4. The review marker is cleared with `bans_db.clear_review(ban_id)` so a concurrent second decision sees no live review and stands down.
+5. The user is unbanned from every group with `unban_chat_member(..., only_if_banned=True)` through bounded fan-out. Partial transient failures are logged at error level.
+6. The user receives a DM telling them the appeal was approved.
+7. The review message is edited to show who approved it and the inline keyboard is removed.
+8. The submitted-appeal log message is edited to an approved version when possible.
+9. A separate `Unban (via Appeal)` log is sent to the federation logs channel.
 
-Each notification in steps 5-8 is inspected separately and logged (warning for the user DM, card edit, and appeal-log update; error for the unban log), so a silent Telegram failure is visible to operators.
+Each notification in steps 6-9 is inspected separately and logged (warning for the user DM, card edit, and appeal-log update; error for the unban log), so a silent Telegram failure is visible to operators.
 
 Approval is a federation unban. It removes the Telegram ban across all connected groups and deactivates the persistent ban record. It runs its own inline deactivate-plus-fan-out sequence that mirrors `execute_unban`; it does not call `execute_unban` directly.
 
