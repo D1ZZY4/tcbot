@@ -9,8 +9,9 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from pymongo.errors import WriteConcernError
+from pymongo.errors import ConnectionFailure, DuplicateKeyError, WriteConcernError
 
+from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -46,6 +47,12 @@ async def _retry_write(coro_factory: Callable[[], Awaitable[Any]]) -> Any:
     Retrying transparently keeps the session alive through brief replica-set
     elections without flooding the error channel.
 
+    Connectivity failures already burned a full server-selection timeout,
+    so they are not retried: they degrade immediately. The open MongoDB
+    circuit also degrades immediately. Only the lease-claim path needs
+    DuplicateKeyError to propagate for fencing; it calls the database
+    directly instead of using this helper.
+
     *coro_factory* must return a **new** coroutine on each call so retries
     re-execute the operation instead of re-awaiting a spent coroutine.
     """
@@ -55,6 +62,14 @@ async def _retry_write(coro_factory: Callable[[], Awaitable[Any]]) -> Any:
             return await coro_factory()
         except asyncio.CancelledError:
             raise
+        except DuplicateKeyError:
+            raise
+        except CircuitOpenError as exc:
+            log.warning("MTProto write failed (circuit open): %s", exc, exc_info=True)
+            return None
+        except ConnectionFailure as exc:
+            log.warning("MTProto write failed (connectivity): %s", exc, exc_info=True)
+            return None
         except WriteConcernError as exc:
             if not _is_transient_write_error(exc) or attempt == _MAX_WRITE_RETRIES - 1:
                 # * Non-transient (or exhausted) failure: log and degrade

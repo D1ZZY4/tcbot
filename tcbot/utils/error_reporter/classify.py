@@ -10,6 +10,9 @@ import asyncio
 from typing import TYPE_CHECKING
 
 import telegram.error as _te
+from pymongo.errors import ConnectionFailure
+
+from tcbot.utils.circuit_breaker import CircuitOpenError
 
 if TYPE_CHECKING:
     import logging
@@ -49,6 +52,10 @@ def _benign(exc: BaseException | None) -> bool:
     # * Shutdown cancellation is normal lifecycle, not a reportable error.
     if isinstance(exc, asyncio.CancelledError):
         return True
+    # * MongoDB connectivity failures and circuit-open rejections are
+    # * expected during outages; the breaker already logs transitions.
+    if isinstance(exc, (ConnectionFailure, CircuitOpenError)):
+        return True
     msg = str(exc).lower()
     return any(p in msg for p in _BENIGN_PATTERNS)
 
@@ -69,6 +76,11 @@ def _owner_only(exc: BaseException | None) -> bool:
 
 
 _ACTION_HINTS: tuple[tuple[str, str], ...] = (
+    (
+        "MongoDB Circuit Open",
+        "MongoDB is unreachable; the circuit is open and calls fail fast "
+        "until recovery. Check Atlas reachability, then retry.",
+    ),
     ("[DB]", "Check MongoDB reachability and credentials, then retry the action."),
     ("Rate Limit", "Telegram asked to slow down; no action needed unless it persists."),
     ("Timed Out", "Transient Telegram hiccup; retry the action."),
@@ -118,6 +130,12 @@ def _classify(exc: BaseException | None) -> str:
     mod = type(exc).__module__ or ""
     if any(x in mod for x in ("motor", "pymongo", "mongo")):
         return "[DB] Database Error"
+    if isinstance(exc, CircuitOpenError):
+        # * The circuit name lands in the message at the two raise sites;
+        # * match it case-insensitively so either spelling is recognised.
+        if "mongodb" in str(exc).lower():
+            return "[~] MongoDB Circuit Open"
+        return "[~] Circuit Open"
     if "circuit_breaker" in mod:
         return "[~] Circuit Open"
 

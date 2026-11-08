@@ -12,8 +12,11 @@ import secrets
 import socket
 from typing import TYPE_CHECKING
 
+from pymongo.errors import ConnectionFailure
+
 from tcbot import cfg
 from tcbot.database import mtproto as _mtproto_pkg
+from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -178,6 +181,11 @@ async def _heartbeat_lease(c: Client, store: MongoStorage, owner: str) -> None:
                 held = await store.refresh_owner(owner, ttl_s=_mtproto_pkg._LEASE_TTL_S)
             except asyncio.CancelledError:
                 raise
+            except (CircuitOpenError, ConnectionFailure) as exc:
+                # * Expected outage shape: keep the error-level shipper
+                # * quiet by logging at warning without a traceback.
+                log.warning("MTProto lease heartbeat deferred: %s", exc)
+                continue
             except Exception:
                 log.exception("MTProto lease heartbeat failed; retrying next beat")
                 continue

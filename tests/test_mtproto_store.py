@@ -12,11 +12,17 @@ import time
 from typing import Any
 
 import pytest
-from pymongo.errors import WriteConcernError
+from pymongo.errors import (
+    ConnectionFailure,
+    DuplicateKeyError,
+    ServerSelectionTimeoutError,
+    WriteConcernError,
+)
 from pyrogram.storage import UpdateState
 
 from tcbot.database import mtproto_store
 from tcbot.database.mtproto_store import MongoStorage
+from tcbot.utils.circuit_breaker import CircuitOpenError
 
 
 class _FakeCursor:
@@ -256,6 +262,78 @@ def test_retry_write_does_not_retry_non_transient_error() -> None:
         # the function returns None.
         result = await mtproto_store._retry_write(_non_transient_coro)
         assert result is None
+        assert call_count == 1
+
+    asyncio.run(_run())
+
+
+def test_retry_write_connectivity_degrades_immediately() -> None:
+    """ConnectionFailure degrades once with no retry: the timeout already elapsed."""
+
+    async def _run() -> None:
+        call_count = 0
+
+        async def _failing_coro() -> None:
+            nonlocal call_count
+            call_count += 1
+            raise ServerSelectionTimeoutError("no primary")
+
+        result = await mtproto_store._retry_write(_failing_coro)
+        assert result is None
+        assert call_count == 1
+
+    asyncio.run(_run())
+
+
+def test_retry_write_connection_failure_degrades_immediately() -> None:
+    """Plain ConnectionFailure shares the same single-attempt degrade."""
+
+    async def _run() -> None:
+        call_count = 0
+
+        async def _failing_coro() -> None:
+            nonlocal call_count
+            call_count += 1
+            raise ConnectionFailure("connection closed")
+
+        result = await mtproto_store._retry_write(_failing_coro)
+        assert result is None
+        assert call_count == 1
+
+    asyncio.run(_run())
+
+
+def test_retry_write_circuit_open_degrades_immediately() -> None:
+    """CircuitOpenError degrades once with no retry."""
+
+    async def _run() -> None:
+        call_count = 0
+
+        async def _failing_coro() -> None:
+            nonlocal call_count
+            call_count += 1
+            raise CircuitOpenError("Circuit [mongodb] is OPEN; call rejected.")
+
+        result = await mtproto_store._retry_write(_failing_coro)
+        assert result is None
+        assert call_count == 1
+
+    asyncio.run(_run())
+
+
+def test_retry_write_duplicate_key_propagates() -> None:
+    """DuplicateKeyError is fencing control flow and must never be swallowed."""
+
+    async def _run() -> None:
+        call_count = 0
+
+        async def _dup_coro() -> None:
+            nonlocal call_count
+            call_count += 1
+            raise DuplicateKeyError("duplicate")
+
+        with pytest.raises(DuplicateKeyError):
+            await mtproto_store._retry_write(_dup_coro)
         assert call_count == 1
 
     asyncio.run(_run())

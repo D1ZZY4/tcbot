@@ -16,8 +16,6 @@ from pymongo.errors import DuplicateKeyError
 from tcbot.database.mongos import db_call
 from tcbot.utils.logger import get_logger
 
-from .retry import _retry_write
-
 if TYPE_CHECKING:
     from typing import Any
 
@@ -52,8 +50,14 @@ async def claim_owner(store: MongoStorage, owner: str, *, ttl_s: float) -> bool:
             )
         )
 
+    # * The claim path calls the database directly instead of _retry_write:
+    # * _retry_write returns None on degrade, which is indistinguishable
+    # * from a legitimate no-row None here and would fall through to the
+    # * insert step and report a lease that was never held. Letting
+    # * connectivity and circuit errors propagate keeps outage claims at
+    # * False, where fencing is safe.
     try:
-        if await _retry_write(_take) is not None:
+        if await _take() is not None:
             return True
     except asyncio.CancelledError:
         raise
@@ -72,7 +76,7 @@ async def claim_owner(store: MongoStorage, owner: str, *, ttl_s: float) -> bool:
         )
 
     try:
-        await _retry_write(_first)
+        await _first()
         return True
     except asyncio.CancelledError:
         raise

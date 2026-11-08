@@ -6,9 +6,12 @@
 
 from __future__ import annotations
 
+import asyncio
+from contextlib import suppress
 from typing import TYPE_CHECKING
 
 import telegram.error as te
+from pymongo.errors import ConnectionFailure
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -18,7 +21,6 @@ from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
-    import asyncio
     from collections.abc import Callable
 
 log = get_logger(__name__)
@@ -38,10 +40,11 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
     if exc is None:
         return
 
-    # * Circuit-open errors are expected when a downstream service is temporarily
-    # * unreachable. Reporting every update's CircuitOpenError would flood the
-    # * error channel with identical messages; the breaker already logs transitions.
-    if isinstance(exc, CircuitOpenError):
+    # * Circuit-open errors and MongoDB connectivity failures are expected
+    # * when a downstream service is temporarily unreachable. Reporting
+    # * every update would flood the error channel with identical messages;
+    # * the breaker already logs transitions.
+    if isinstance(exc, (ConnectionFailure, CircuitOpenError)):
         log.warning("Handler aborted: %s", exc)
         return
 
@@ -109,11 +112,44 @@ def _make_asyncio_exc_handler(
         exc = context.get("exception")
         msg = context.get("message", "Unhandled asyncio exception")
         future = context.get("future") or context.get("task")
-        detail = f"{msg} | Task: {future!r}" if future else msg
+        # * A missing exception with a finished task means the failure was
+        # * never retrieved; surface the real type so suppression,
+        # * classification, and tracebacks use it instead of a generic
+        # * RuntimeError duplicate. Cancelled tasks are benign shutdown.
+        if exc is None and future is not None:
+            try:
+                done = future.done()
+            except Exception:
+                done = False
+            if done:
+                try:
+                    cancelled = future.cancelled()
+                except Exception:
+                    cancelled = False
+                if cancelled:
+                    log.debug("[asyncio] benign (not reported): cancelled task")
+                    return
+                extracted: BaseException | None = None
+                try:
+                    with suppress(asyncio.CancelledError, asyncio.InvalidStateError):
+                        extracted = future.exception()
+                except Exception:
+                    extracted = None
+                if extracted is not None:
+                    exc = extracted
+                    log.debug("[asyncio] recovered task exception: %s", exc)
+        detail = (
+            f"{msg} | Exception: {exc!r} | Task: {future!r}"
+            if exc is not None and future is not None
+            else (f"{msg} | Task: {future!r}" if future else msg)
+        )
 
         # * Transient network/Telegram errors during polling are environmental;
         # * PTB retries on its own. Don't flood the error channel.
         if isinstance(exc, (te.NetworkError, te.TimedOut, te.RetryAfter)):
+            log.debug("[asyncio] transient (not reported): %s", exc)
+            return
+        if isinstance(exc, (ConnectionFailure, CircuitOpenError)):
             log.debug("[asyncio] transient (not reported): %s", exc)
             return
         if isinstance(exc, (ConnectionError, TimeoutError, OSError)):

@@ -7,17 +7,20 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import dataclasses
 import time
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from pymongo.errors import DuplicateKeyError
+from pymongo.errors import ConnectionFailure, DuplicateKeyError
 from pyrogram.errors import AuthKeyDuplicated
 
 from tcbot.database import mtproto, mtproto_store
+from tcbot.database.mtproto import lifecycle
 from tcbot.database.mtproto_store import MongoStorage
+from tcbot.utils.circuit_breaker import CircuitOpenError
 
 
 class _FakeLeaseColl:
@@ -274,3 +277,113 @@ def test_handle_auth_failure_parks_once(
 def test_is_auth_key_duplicated() -> None:
     assert mtproto.is_auth_key_duplicated(AuthKeyDuplicated("x")) is True
     assert mtproto.is_auth_key_duplicated(RuntimeError("x")) is False
+
+
+def test_claim_outage_returns_false(
+    monkeypatch: pytest.MonkeyPatch, lease_store: tuple[MongoStorage, _FakeLeaseColl]
+) -> None:
+    """A MongoDB outage on claim refuses instead of reporting a held lease."""
+    store, _ = lease_store
+
+    async def _boom(_coro: object) -> Any:
+        close = getattr(_coro, "close", None)
+        if callable(close):
+            close()
+        raise ConnectionFailure("no primary")
+
+    monkeypatch.setattr(
+        "tcbot.database.mtproto_store.lease.db_call",
+        _boom,
+    )
+    assert _run(store.claim_owner("a", ttl_s=90.0)) is False
+
+
+def test_claim_circuit_open_returns_false(
+    monkeypatch: pytest.MonkeyPatch, lease_store: tuple[MongoStorage, _FakeLeaseColl]
+) -> None:
+    """An open circuit on claim also refuses instead of falling through."""
+    store, _ = lease_store
+
+    async def _boom(_coro: object) -> Any:
+        close = getattr(_coro, "close", None)
+        if callable(close):
+            close()
+        raise CircuitOpenError("Circuit [mongodb] is OPEN; call rejected.")
+
+    monkeypatch.setattr(
+        "tcbot.database.mtproto_store.lease.db_call",
+        _boom,
+    )
+    assert _run(store.claim_owner("a", ttl_s=90.0)) is False
+
+
+def test_heartbeat_defers_on_connection_failure(
+    monkeypatch: pytest.MonkeyPatch, caplog: Any
+) -> None:
+    """Expected outage beats warn without a traceback and keep the loop alive."""
+    calls = 0
+
+    class _Store:
+        async def refresh_owner(self, owner: str, *, ttl_s: float) -> bool:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise ConnectionFailure("no primary")
+            return True
+
+    monkeypatch.setattr(lifecycle._mtproto_pkg, "_HEARTBEAT_S", 0.0)
+
+    class _Client:
+        pass
+
+    with caplog.at_level(0):
+
+        async def _do() -> None:
+            task = asyncio.create_task(
+                lifecycle._heartbeat_lease(_Client(), _Store(), "owner")  # type: ignore[arg-type]
+            )
+            await asyncio.sleep(0.05)
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+        asyncio.run(_do())
+    assert calls >= 2
+    assert "MTProto lease heartbeat deferred" in caplog.text
+    assert "Traceback" not in caplog.text
+
+
+def test_heartbeat_defers_on_circuit_open(
+    monkeypatch: pytest.MonkeyPatch, caplog: Any
+) -> None:
+    """Circuit-open beats share the quiet deferral path."""
+    calls = 0
+
+    class _Store:
+        async def refresh_owner(self, owner: str, *, ttl_s: float) -> bool:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise CircuitOpenError("Circuit [mongodb] is OPEN; call rejected.")
+            return True
+
+    monkeypatch.setattr(lifecycle._mtproto_pkg, "_HEARTBEAT_S", 0.0)
+
+    class _Client:
+        pass
+
+    with caplog.at_level(0):
+
+        async def _do() -> None:
+            task = asyncio.create_task(
+                lifecycle._heartbeat_lease(_Client(), _Store(), "owner")  # type: ignore[arg-type]
+            )
+            await asyncio.sleep(0.05)
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+        asyncio.run(_do())
+    assert calls >= 2
+    assert "MTProto lease heartbeat deferred" in caplog.text
+    assert "Traceback" not in caplog.text
