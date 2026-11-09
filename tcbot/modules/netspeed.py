@@ -7,17 +7,17 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import ssl
+import urllib.request
 from typing import TYPE_CHECKING
 
 import certifi
-from speedtest import ConfigRetrievalError, Speedtest, SpeedtestHTTPSHandler
 from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import safe_edit
-from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import code
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -34,9 +34,18 @@ log = get_logger(__name__)
 _RL_PERIOD_S: int = 60
 _RL_CMD_LIMIT: int = 3
 
-# * Upper bound for one Ookla run (best-server + download + upload +
-# * share). Normal runs finish well under a minute.
+# * Upper bound for one full bandwidth run (latency probe + download +
+# * upload + trace). Slow links finish well under this; the handler bounds
+# * the whole run so a hung route cannot stall moderation traffic.
 _SPEEDTEST_TIMEOUT: int = 180
+
+# * Fixed payloads for bandwidth measurement. 10 MB lands in a few
+# * seconds on a healthy link without being unkind to the endpoints.
+_SPEEDTEST_BYTES: int = 10_000_000
+_SPEEDTEST_ENDPOINT: str = "https://speed.cloudflare.com"
+# * Per-request ceilings inside the executor: the whole-run timeout above
+# * still applies, these only bound individual stalled requests.
+_HTTP_TIMEOUT_S: int = 30
 
 # ──────────────────────── Module metadata ───────────────────────── #
 
@@ -84,89 +93,88 @@ def _readable_size(size_bytes: float) -> str:
 
 # ────────────── Blocking speedtest worker (thread executor) ─────── #
 
-# * Lazily built certifi context shared by every speedtest run in this
-# * process. Built once: reading the bundle file per connection is wasteful,
-# * and runs are rare (Founder-only, rate-limited).
-_SSL_CONTEXT: ssl.SSLContext | None = None
 
+def _get_bytes(url: str, *, data: bytes | None = None) -> tuple[bytes, dict[str, str]]:
+    """Fetch one URL synchronously, trusting the certifi bundle.
 
-def _install_certifi_context(opener: object) -> None:
-    """Point an opener's HTTPS handlers at the certifi bundle, in place.
-
-    speedtest-cli 2.1.x builds its opener with ``context=None``, so every
-    HTTPS connection falls back to the system CA store, which fails with
-    CERTIFICATE_VERIFY_FAILED on sandboxes without a usable
-    /etc/ssl/certs (same environment issue as the MongoDB clients, fixed
-    there via ``mongo_client_kwargs``). The library offers no context
-    parameter, so patch the handler objects directly; the same opener
-    instance is shared by ``Speedtest`` and its ``SpeedtestResults``,
-    covering config, servers, download, upload, and share alike.
-    Pinned assumption: the ``SpeedtestHTTPSHandler._context`` attribute
-    in ``speedtest-cli>=2.1,<3`` (the pinned range in pyproject.toml).
-    The upstream project is archived with 2.1.3 as the final release, so
-    this pin is deliberate; a handler without ``_context`` logs once and
-    leaves the default context so a layout change degrades honestly
-    instead of crashing.
+    Runs only inside the thread executor (see :func:`_run_speedtest`).
+    ``data=None`` issues a GET; bytes issue a POST. Returns the body and
+    the response headers so the trace parser can read them.
     """
-    global _SSL_CONTEXT
-    if _SSL_CONTEXT is None:
-        _SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
-    handlers: list = getattr(opener, "handlers", [])
-    for handler in handlers:
-        if isinstance(handler, SpeedtestHTTPSHandler):
-            if hasattr(handler, "_context"):
-                handler._context = _SSL_CONTEXT
-            else:
-                log.warning(
-                    "SpeedtestHTTPSHandler lost _context support; "
-                    "speedtest runs without the certifi bundle"
-                )
+    context = ssl.create_default_context(cafile=certifi.where())
+    opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=context))
+    request = urllib.request.Request(url, data=data)
+    with opener.open(request, timeout=_HTTP_TIMEOUT_S) as response:
+        return response.read(), dict(response.headers)
 
 
-class _CertifiSpeedtest(Speedtest):
-    """Speedtest trusting the certifi bundle instead of the system CA store.
-
-    Base ``__init__`` assigns ``self._opener`` before its first
-    ``get_config()`` call, so overriding ``get_config`` is the earliest
-    hook to patch the opener before any network use (the constructor
-    itself performs the failing config fetch).
-    """
-
-    def get_config(self) -> dict | None:
-        """Fetch config after pointing the opener at the certifi bundle."""
-        _install_certifi_context(self._opener)
-        return super().get_config()
+def _fetch_trace() -> dict[str, str]:
+    """Fetch Cloudflare's trace endpoint; returns its key=value fields."""
+    blob, _ = _get_bytes(f"{_SPEEDTEST_ENDPOINT}/cdn-cgi/trace")
+    kv: dict[str, str] = {}
+    for line in blob.decode("utf-8", "replace").split("\n"):
+        if "=" in line:
+            key, value = line.split("=", 1)
+            kv[key] = value
+    return kv
 
 
 def _run_speedtest() -> dict:
-    """Run a full speedtest synchronously; intended for thread-executor use only."""
-    # * Retry config fetch once; Ookla sometimes returns transient 403s.
-    for attempt in range(2):
-        try:
-            st = _CertifiSpeedtest()
-            st.get_best_server()
-            st.download()
-            st.upload()
-            st.results.share()
-            return st.results.dict()
-        except ConfigRetrievalError as exc:
-            if attempt == 0:
-                log.warning("Speedtest config retrieval failed (attempt 1/2): %s", exc)
-            else:
-                raise
-    raise AssertionError("unreachable")
+    """Run a full bandwidth test synchronously; intended for thread-executor use only.
 
+    No provider dependency remains: latency, download, upload, and the
+    client IP/country come from the Cloudflare speed endpoints, which
+    teams already allow outbound. The returned dict keeps the Ookla shape
+    the result renderer consumes (`client`/`server`/`bytes_*` fields), so
+    replies render identically. Geodata the endpoints do not provide
+    (ISP, coordinates) render as "N/A" rather than a fabricated value.
+    """
+    latency_start = monotonic()
+    _get_bytes(f"{_SPEEDTEST_ENDPOINT}/__down?bytes=1000")
+    ping_ms = elapsed_ms(latency_start)
 
-# * Ookla builds the share link as plain http
-# * (``http://www.speedtest.net/result/<id>.png`` in speedtest-cli 2.1.x),
-# * which Telegram fetches server-side for sendPhoto, so both schemes are
-# * accepted and only non-http(s) values fall back to text.
-def _share_photo_url(result: dict) -> str | None:
-    """Return the Ookla share image URL when it uses http(s), else None."""
-    share_url = result.get("share")
-    if isinstance(share_url, str) and share_url.startswith(("http://", "https://")):
-        return share_url
-    return None
+    download_start = monotonic()
+    blob, _ = _get_bytes(f"{_SPEEDTEST_ENDPOINT}/__down?bytes={_SPEEDTEST_BYTES}")
+    download_elapsed_s = max(monotonic() - download_start, 0.001)
+    download_bps = len(blob) / download_elapsed_s * 8
+
+    body = os.urandom(_SPEEDTEST_BYTES)
+    upload_start = monotonic()
+    _get_bytes(f"{_SPEEDTEST_ENDPOINT}/__up", data=body)
+    upload_elapsed_s = max(monotonic() - upload_start, 0.001)
+    upload_bps = len(body) / upload_elapsed_s * 8
+
+    trace = _fetch_trace()
+    colo = trace.get("colo", "N/A")
+    client_ip = trace.get("ip", "N/A")
+    # * Named to keep the documented rendering path ("Ookla shape") working
+    # * unchanged; the values honestly describe a Cloudflare measurement.
+    return {
+        "download": download_bps,
+        "upload": upload_bps,
+        "ping": ping_ms,
+        "timestamp": str(int(monotonic())),
+        "bytes_sent": len(body),
+        "bytes_received": len(blob),
+        "client": {
+            "ip": client_ip,
+            "isp": "N/A",
+            "isprating": "N/A",
+            "country": colo,
+            "lat": "N/A",
+            "lon": "N/A",
+        },
+        "server": {
+            "name": "Cloudflare",
+            "sponsor": "N/A",
+            "latency": ping_ms,
+            "country": colo,
+            "cc": colo,
+            "lat": "N/A",
+            "lon": "N/A",
+        },
+        "share": None,
+    }
 
 
 # ──────────────────────── Command handlers ──────────────────────── #
@@ -298,33 +306,13 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     except TypeError:
         await _parse_failed()
         return
-    share_url = _share_photo_url(result)
-    if result.get("share") and not share_url:
-        log.warning("Speedtest returned non-http(s) share URL; sending text only")
-    if share_url:
-        # * Edit the "please wait" notice to the result text and send the
-        # * share photo as a separate reply to the original command message,
-        # * both in parallel. This avoids deleting the notice (consistent
-        # * with the edit pattern used in cmd_ping and other action modules).
-        # * The gather swallows both coroutine failures; the try below only
-        # * guards coroutine construction, matching the old outer block.
-        try:
-            send_results = await asyncio.gather(
-                notice.edit_text(text, parse_mode="MarkdownV2"),
-                msg.reply_photo(share_url),
-                return_exceptions=True,
-            )
-            throw_if_cancelled(send_results)
-        except Exception as exc:
-            log.debug("cmd_speedtest result edit failed: %s", exc)
-    else:
-        await safe_edit(
-            notice,
-            text,
-            log_level="debug",
-            log_label="cmd_speedtest result",
-            catch_all=True,
-        )
+    await safe_edit(
+        notice,
+        text,
+        log_level="debug",
+        log_label="cmd_speedtest result",
+        catch_all=True,
+    )
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #
