@@ -100,6 +100,10 @@ class _ReasonStepMixin(_FlowBase):
         q = update.callback_query
         if q is None or ctx.user_data is None:
             return WAITING_REASON
+        # * Same rank re-check as the proof Done/Skip taps: a moderator
+        # * demoted after the entry command must not advance the flow.
+        if not await self._recheck_tapper(update, ctx):
+            return ConversationHandler.END
 
         locale = await locale_for_update(update)
         ctx.user_data[self._reason_key] = replies.no_reason(locale, plain=True)

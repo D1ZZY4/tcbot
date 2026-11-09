@@ -57,6 +57,21 @@ class OverviewViews:
             user_count,
             *viewer_reads,
         ) = await asyncio.gather(*_reads, return_exceptions=True)
+        # * Cancellation must propagate, not coerce into degraded zeroes:
+        # * a shutdown cancelled read is not an outage. Other failures still
+        # * degrade below.
+        throw_if_cancelled(
+            (
+                owner_id,
+                admin_count,
+                developer_count,
+                tester_count,
+                ban_count,
+                group_count,
+                user_count,
+                *viewer_reads,
+            )
+        )
         # * An outage must never read as clean zeroes: flag degraded output.
         degraded = any(
             isinstance(r, BaseException)
@@ -143,6 +158,7 @@ class OverviewViews:
             db.users_roles.all_by_role("tester"),
             return_exceptions=True,
         )
+        throw_if_cancelled((owner_id, admins, developers, testers))
         if isinstance(owner_id, BaseException):
             owner_id = None
         if isinstance(admins, BaseException):

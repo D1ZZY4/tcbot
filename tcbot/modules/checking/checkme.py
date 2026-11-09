@@ -23,17 +23,56 @@ from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
 from tcbot.modules.helper.parse_link import message_link
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import fmt_dt
 
 if TYPE_CHECKING:
-    from telegram import Update
+    from telegram import CallbackQuery, Update
 
     from tcbot.database.documents import BanDoc
 
 log = get_logger(__name__)
+
+
+async def _ban_id_from_query(q: CallbackQuery) -> str | None:
+    """Parse the ban id from checkme callback data, answering on malformed taps."""
+    if q.data is None:
+        await q.answer()
+        return None
+    try:
+        return q.data.split(":")[1]
+    except IndexError:
+        await q.answer()
+        return None
+
+
+async def _load_ban_for_callback(
+    q: CallbackQuery, ban_id: str, locale: str | None, *, log_label: str
+) -> BanDoc | None:
+    """Answer the query and fetch its ban record in parallel.
+
+    Returns the record, or ``None`` after answering with the retry alert
+    when the read failed (the live card stays untouched so the appeal
+    button remains actionable). Cancellation always propagates.
+    """
+    _, ban = await asyncio.gather(
+        q.answer(), db.bans_db.get_ban(ban_id), return_exceptions=True
+    )
+    throw_if_cancelled((_, ban))
+    if isinstance(ban, BaseException):
+        log.warning("%s ban lookup failed for %s: %s", log_label, ban_id, ban)
+        try:
+            await q.answer(
+                t("checking.error.status_retry", locale, plain=True),
+                show_alert=True,
+            )
+        except Exception as exc:
+            log.debug("%s retry answer failed: %s", log_label, exc)
+        return None
+    return ban
 
 
 async def _ban_summary(
@@ -52,6 +91,8 @@ async def _ban_summary(
         db.users_cache.get_user_mention_data(aid),
         return_exceptions=True,
     )
+    # * Shutdown cancellation propagates; only real outages degrade below.
+    throw_if_cancelled((_user_r, _admin_r))
     if isinstance(_user_r, BaseException):
         user_uname = None
     else:
@@ -127,6 +168,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         db.bans_db.get_active_ban(user.id),
         return_exceptions=True,
     )
+    throw_if_cancelled((user_role, ban))
     if isinstance(user_role, BaseException):
         user_role = None
     # * Never render a clean bill of health from a failed read: during an
@@ -210,32 +252,13 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     q = update.callback_query
     if q is None:
         return
-    if q.data is None:
-        await q.answer()
-        return
-    try:
-        ban_id = q.data.split(":")[1]
-    except IndexError:
-        await q.answer()
+    ban_id = await _ban_id_from_query(q)
+    if ban_id is None:
         return
     locale = await locale_for_update(update)
 
-    _, ban = await asyncio.gather(
-        q.answer(), db.bans_db.get_ban(ban_id), return_exceptions=True
-    )
-    if isinstance(ban, BaseException):
-        # * Never clobber the live ban card from a failed read: an outage
-        # * is not proof the ban went inactive. Answer with a retry popup
-        # * (mirroring the appeal-review outage path) and leave the card
-        # * untouched so the appeal button stays available.
-        log.warning("checkme_detail ban lookup failed for %s: %s", ban_id, ban)
-        try:
-            await q.answer(
-                t("checking.error.status_retry", locale, plain=True),
-                show_alert=True,
-            )
-        except Exception as exc:
-            log.debug("checkme_detail retry answer failed: %s", exc)
+    ban = await _load_ban_for_callback(q, ban_id, locale, log_label="checkme_detail")
+    if ban is None:
         return
     if not ban or not ban.get("is_active"):
         await safe_edit_cb(
@@ -269,31 +292,13 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     q = update.callback_query
     if q is None:
         return
-    if q.data is None:
-        await q.answer()
-        return
-    try:
-        ban_id = q.data.split(":")[1]
-    except IndexError:
-        await q.answer()
+    ban_id = await _ban_id_from_query(q)
+    if ban_id is None:
         return
     locale = await locale_for_update(update)
 
-    _, ban = await asyncio.gather(
-        q.answer(), db.bans_db.get_ban(ban_id), return_exceptions=True
-    )
-    if isinstance(ban, BaseException):
-        # * Same card-preservation rationale as on_checkme_detail above: a
-        # * failed re-read keeps the refusal-worthy unknown, not a "not
-        # * found" verdict, and the summary card stays actionable.
-        log.warning("checkme_back ban lookup failed for %s: %s", ban_id, ban)
-        try:
-            await q.answer(
-                t("checking.error.status_retry", locale, plain=True),
-                show_alert=True,
-            )
-        except Exception as exc:
-            log.debug("checkme_back retry answer failed: %s", exc)
+    ban = await _load_ban_for_callback(q, ban_id, locale, log_label="checkme_back")
+    if ban is None:
         return
     if not ban:
         await safe_edit_cb(
@@ -314,6 +319,7 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         db.users_cache.get_first_name(aid, "Admin"),
         return_exceptions=True,
     )
+    throw_if_cancelled((fname, admin_fname))
     if isinstance(fname, BaseException):
         fname = str(uid)
     if isinstance(admin_fname, BaseException):
