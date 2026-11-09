@@ -214,7 +214,8 @@ async def _execute_ban_update(
     new_proof_msg_id = proof_msg_id if proof_msg_id else old_proof_msg_id
     try:
         old_admin_fname = await db.users_cache.get_first_name(old_admin_id, "Admin")
-    except Exception:
+    except Exception as exc:
+        log.debug("Old-admin name fallback for %d: %s", old_admin_id, exc)
         old_admin_fname = "Admin"
     log_text = messages.ban_update_log(
         target_id,
@@ -332,13 +333,17 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     admin_fname: str = meta.get("ban_admin_fname", "Admin")
     prompt_msg_id: int = meta.get("ban_prompt_msg_id", 0)
     prompt_chat_id: int = meta.get("ban_prompt_chat_id", 0)
-    target_locale = await locale_for_user(target_id)
     now = utc_now()
     proof_chat, proof_thread = cfg.proofs
     # * Groups prefetch concurrently with the ban write; cancelled on any failure.
     _groups_task: asyncio.Task[list] = asyncio.create_task(db.groups_db.active_groups())
     try:
-        existing = await db.bans_db.get_active_ban(target_id)
+        # * Target locale and active-ban read are independent; gather them so
+        # * the critical ban path pays one round trip, not two.
+        target_locale, existing = await asyncio.gather(
+            locale_for_user(target_id),
+            db.bans_db.get_active_ban(target_id),
+        )
         is_update = existing is not None
         bot_username = bot.username or ""
         ban_id = (

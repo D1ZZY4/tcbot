@@ -83,8 +83,11 @@ def _flush_sleep_scenario(
     *,
     with_successor: bool,
 ) -> tuple[dict[tuple[int, int], Any], ban_flow._ProofSession | None]:
-    """Run the real ``_flush_session`` up to a bound session, cancel it while the
-    key may hold a successor, and return the registry plus the surviving session."""
+    """Run the real ``_flush_session`` up to a bound session and cancel it mid-window.
+
+    The key may hold a successor by the time the flush resolves; returning the
+    registry plus the surviving session lets tests assert the successor state.
+    """
     key = (11, 22)
     now = monotonic()
     first = ban_flow._ProofSession(

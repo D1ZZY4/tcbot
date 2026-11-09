@@ -115,17 +115,25 @@ async def _demote_for_enforcement(
 
 
 async def _handle_member(
-    member: User, msg: Message, chat: Chat, bot: Bot, *, greet: bool = True
+    member: User,
+    msg: Message,
+    chat: Chat,
+    bot: Bot,
+    locale: str,
+    *,
+    greet: bool = True,
 ) -> None:
     """Process a single new member: cache, ban-check, then enforce ban or greet.
 
     When ``greet=False`` (non-primary connected groups) the ban is still enforced
     silently but no welcome or removal-notice message is posted, avoiding noise
     in secondary groups. When ``greet=True`` both messages are sent.
+
+    ``locale`` is resolved once by the caller: batch joins share one chat, so
+    resolving it per member repeats the same read N times.
     """
     if member.is_bot:
         return
-    locale = await locale_for_chat(chat)
 
     _, ban, mute = await asyncio.gather(
         db.users_cache.harvest_user_identity(
@@ -263,6 +271,9 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _in_federation(chat.id, action="new_member"):
         return
 
+    # * One chat, one locale: resolve once for the whole batch below.
+    locale = await locale_for_chat(chat)
+
     # * Process all new members concurrently but bounded; handles batch
     # * joins via invite links without exhausting the MongoDB pool or
     # * bursting Telegram traffic. Failures stay per-member via
@@ -272,7 +283,7 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     async def _bounded(m: User) -> None:
         async with _join_sem:
-            await _handle_member(m, msg, chat, ctx.bot, greet=is_primary)
+            await _handle_member(m, msg, chat, ctx.bot, locale, greet=is_primary)
 
     join_results = await asyncio.gather(
         *[_bounded(m) for m in msg.new_chat_members],

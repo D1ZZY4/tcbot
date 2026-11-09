@@ -36,9 +36,9 @@ async def _stub_locale(*args: Any, **kwargs: Any) -> str:
 
 
 def _install_create_task_spy(monkeypatch: pytest.MonkeyPatch) -> list[asyncio.Task]:
-    """Record tasks created via the module's asyncio.create_task reference while
-    still delegating to the real scheduler.
+    """Record tasks created via the module's asyncio.create_task reference.
 
+    The spy still delegates to the real ``asyncio.create_task``.
     ``active_groups`` is stubbed to a long-running coroutine so the recorded
     task is still pending when the ban DB call raises, proving the cancel path.
     """
