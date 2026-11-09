@@ -21,6 +21,7 @@ log = get_logger(__name__)
 # ─────────────────────────────── Env parsing ─────────────────────────────── #
 
 _DEFAULT_PORT: int = 5000
+_DEFAULT_PROOFS: str = "-1003997518221"
 _ERR_OWNER_ID: str = "OWNER_ID is required and must be a positive integer."
 _REPLIT_DEV_DOMAIN_VAR: str = "REPLIT_DEV_DOMAIN"
 _DEFAULT_COMMUNITY_CHANNEL_URL: str = "https://t.me/TranssionCoreFederation"
@@ -297,7 +298,7 @@ class Configs:
             port=os.getenv("PORT", str(_DEFAULT_PORT)).strip(),
             main_group=os.getenv("MAIN_GROUP", "").strip(),
             main_channel=os.getenv("MAIN_CHANNEL", "").strip(),
-            proofs=os.getenv("PROOFS", "").strip(),
+            proofs=os.getenv("PROOFS", "").strip() or _DEFAULT_PROOFS,
             logs=os.getenv("LOGS", "").strip(),
             logs_errors=os.getenv("LOGS_ERRORS", "").strip(),
             appeals=os.getenv("APPEALS", "").strip(),
