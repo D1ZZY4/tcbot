@@ -173,7 +173,10 @@ async def on_helpc_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_help_topic_any(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle help_<mod> and helpc_<mod> module overview callbacks."""
     q = update.callback_query
-    if q is None or not q.data:
+    if q is None:
+        return
+    if not q.data:
+        await q.answer()
         return
 
     data = q.data
@@ -190,7 +193,10 @@ async def on_help_topic_any(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 async def on_help_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle helps_<mod>:<idx> and helpcs_<mod>:<idx> section callbacks."""
     q = update.callback_query
-    if q is None or not q.data:
+    if q is None:
+        return
+    if not q.data:
+        await q.answer()
         return
 
     data = q.data

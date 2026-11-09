@@ -13,6 +13,8 @@ from telegram import InlineKeyboardMarkup
 
 from tcbot import database as db
 from tcbot.modules.helper.keyboards import (
+    check_back_markup,
+    check_paged_markup,
     check_warn_groups_kb,
     check_warns_back_row,
 )
@@ -28,14 +30,13 @@ from tcbot.modules.helper.workflows.check_flow.shared import (
     _maybe_caveat,
     log,
 )
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, italic, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.pagination import date_or_unknown, nav_row
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
-
-    from telegram import InlineKeyboardButton
 
 
 class CheckEventsMixin:
@@ -53,11 +54,12 @@ class CheckEventsMixin:
             _flow._name(target_id),
             return_exceptions=True,
         )
+        throw_if_cancelled((groups, display_name))
         if isinstance(groups, BaseException):
             # * Transient DB failure: a retry card, never the empty card. An
             # * outage is not evidence the user is clean.
             text = t("checking.warns.db_fail", locale)
-            return text, InlineKeyboardMarkup([_back_to_check(target_id, locale)])
+            return text, check_back_markup(target_id, locale)
         if isinstance(display_name, BaseException):
             display_name = str(target_id)
         if not groups:
@@ -66,7 +68,7 @@ class CheckEventsMixin:
                 locale,
                 user=Safe(user_ref(target_id, display_name)),
             )
-            return text, InlineKeyboardMarkup([_back_to_check(target_id, locale)])
+            return text, check_back_markup(target_id, locale)
 
         try:
             titles = await db.groups_db.get_group_titles([cid for cid, _ in groups])
@@ -116,6 +118,7 @@ class CheckEventsMixin:
             db.groups_db.get_group_titles([chat_id]),
             return_exceptions=True,
         )
+        throw_if_cancelled((count, titles))
         if isinstance(titles, BaseException):
             titles = {}
         if isinstance(count, BaseException) or not isinstance(count, int):
@@ -149,10 +152,9 @@ class CheckEventsMixin:
 
         if not warns:
             text = t("checking.warns.in_empty", locale, title=title)
-            rows = [check_warns_back_row(target_id, locale)]
             return _maybe_caveat(
                 text, locale, failed=count_failed or warns_failed
-            ), InlineKeyboardMarkup(rows)
+            ), check_paged_markup(None, check_warns_back_row(target_id, locale))
 
         # * Resolve admin names with batch query
         admin_ids = [w.get("admin_id", 0) for w in warns if w.get("admin_id")]
@@ -193,16 +195,12 @@ class CheckEventsMixin:
                 )
             )
 
-        rows = []
         nav = nav_row(
             page, total_pages, f"check_warn_chat:{target_id}:{chat_id}", locale
         )
-        if nav:
-            rows.append(nav)
-        rows.append(check_warns_back_row(target_id, locale))
         return _maybe_caveat(
             "\n".join(lines), locale, failed=count_failed
-        ), InlineKeyboardMarkup(rows)
+        ), check_paged_markup(nav, check_warns_back_row(target_id, locale))
 
     @classmethod
     async def kicks_list(
@@ -261,6 +259,7 @@ async def _per_chat_event_list(
         _flow._name(target_id),
         return_exceptions=True,
     )
+    throw_if_cancelled((total, display_name))
     if isinstance(display_name, BaseException):
         display_name = str(target_id)
     if isinstance(total, BaseException) or not isinstance(total, int):
@@ -285,7 +284,7 @@ async def _per_chat_event_list(
     if not records:
         if count_failed or records_failed:
             text = t("checking.warns.db_fail", locale)
-            return text, InlineKeyboardMarkup([_back_to_check(target_id, locale)])
+            return text, check_back_markup(target_id, locale)
         text = t(
             "checking.events.empty",
             locale,
@@ -293,8 +292,8 @@ async def _per_chat_event_list(
             lower=heading_name.lower(),
             user=Safe(user_ref(target_id, display_name)),
         )
-        return _maybe_caveat(text, locale, failed=count_failed), InlineKeyboardMarkup(
-            [_back_to_check(target_id, locale)]
+        return _maybe_caveat(text, locale, failed=count_failed), check_back_markup(
+            target_id, locale
         )
 
     chat_ids = list({r["chat_id"] for r in records if "chat_id" in r})
@@ -308,6 +307,7 @@ async def _per_chat_event_list(
         else _async_const({}),
         return_exceptions=True,
     )
+    throw_if_cancelled((titles, admin_name_map))
     if isinstance(titles, BaseException):
         titles = {}
     if isinstance(admin_name_map, BaseException):
@@ -349,11 +349,7 @@ async def _per_chat_event_list(
             )
         )
 
-    rows: list[list[InlineKeyboardButton]] = []
     nav = nav_row(page, total_pages, cb_prefix, locale)
-    if nav:
-        rows.append(nav)
-    rows.append(_back_to_check(target_id, locale))
     return _maybe_caveat(
         "\n".join(lines), locale, failed=count_failed
-    ), InlineKeyboardMarkup(rows)
+    ), check_paged_markup(nav, _back_to_check(target_id, locale))

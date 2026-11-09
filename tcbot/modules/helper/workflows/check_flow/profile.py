@@ -18,6 +18,7 @@ from tcbot.modules.helper.workflows.check_flow.shared import (
     _resolve_user_info,
     log,
 )
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, code, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.time_and_date import fmt_dt
@@ -71,6 +72,7 @@ class CheckProfileMixin:
         if executor_id is not None:
             _reads.append(classify(bot, executor_id, target_id))
         _results = await asyncio.gather(*_reads, return_exceptions=True)
+        throw_if_cancelled(_results)
         r_user_info = _results[0]
         r_role_meta = _results[1]
         ban_failed = isinstance(_results[2], BaseException)
@@ -112,8 +114,6 @@ class CheckProfileMixin:
         identity_note: str | None = None
         if len(_results) > 11:
             r_ident = _results[11]
-            if isinstance(r_ident, asyncio.CancelledError):
-                raise r_ident
             if not isinstance(r_ident, BaseException):
                 identity_note = profile_note(cast("Identity", r_ident), locale)
 

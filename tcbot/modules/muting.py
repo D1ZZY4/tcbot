@@ -314,6 +314,7 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         msg,
         action="unmute",
         min_role="tester",
+        target_is_bot=await identity.is_proven_bot(update, target_id, ctx.bot),
     )
     if classified is None:
         return

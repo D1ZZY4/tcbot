@@ -120,6 +120,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         msg,
         action="warn",
         min_role="tester",
+        target_is_bot=await identity.is_proven_bot(update, target_id, ctx.bot),
     )
     if classified is None:
         return ConversationHandler.END

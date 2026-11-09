@@ -17,6 +17,7 @@ from telegram.ext import ContextTypes, MessageHandler
 from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_edit
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import code
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -102,6 +103,10 @@ def _install_certifi_context(opener: object) -> None:
     covering config, servers, download, upload, and share alike.
     Pinned assumption: the ``SpeedtestHTTPSHandler._context`` attribute
     in ``speedtest-cli>=2.1,<3`` (the pinned range in pyproject.toml).
+    The upstream project is archived with 2.1.3 as the final release, so
+    this pin is deliberate; a handler without ``_context`` logs once and
+    leaves the default context so a layout change degrades honestly
+    instead of crashing.
     """
     global _SSL_CONTEXT
     if _SSL_CONTEXT is None:
@@ -109,7 +114,13 @@ def _install_certifi_context(opener: object) -> None:
     handlers: list = getattr(opener, "handlers", [])
     for handler in handlers:
         if isinstance(handler, SpeedtestHTTPSHandler):
-            handler._context = _SSL_CONTEXT
+            if hasattr(handler, "_context"):
+                handler._context = _SSL_CONTEXT
+            else:
+                log.warning(
+                    "SpeedtestHTTPSHandler lost _context support; "
+                    "speedtest runs without the certifi bundle"
+                )
 
 
 class _CertifiSpeedtest(Speedtest):
@@ -143,7 +154,7 @@ def _run_speedtest() -> dict:
                 log.warning("Speedtest config retrieval failed (attempt 1/2): %s", exc)
             else:
                 raise
-    return {}
+    raise AssertionError("unreachable")
 
 
 # * Ookla builds the share link as plain http
@@ -298,11 +309,12 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         # * The gather swallows both coroutine failures; the try below only
         # * guards coroutine construction, matching the old outer block.
         try:
-            await asyncio.gather(
+            send_results = await asyncio.gather(
                 notice.edit_text(text, parse_mode="MarkdownV2"),
                 msg.reply_photo(share_url),
                 return_exceptions=True,
             )
+            throw_if_cancelled(send_results)
         except Exception as exc:
             log.debug("cmd_speedtest result edit failed: %s", exc)
     else:

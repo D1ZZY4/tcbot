@@ -41,21 +41,25 @@ def attach(
 
     Validates the inputs at attach-time so a misconfiguration is logged
     at startup rather than producing silent no-ops at error-report time.
-    A zero ``chat_id`` is accepted (the bot may legitimately be deployed
-    without a log channel) but is logged at WARNING so the operator
-    notices on first boot. Negative IDs are normal group/channel IDs and
-    need no warning.
+    When ``chat_id`` is zero the owner DM is used as the shipping
+    destination, so error reports still reach the operator instead of
+    being dropped; a dedicated LOG_ERRORS channel remains preferred.
+    Negative IDs are normal group/channel IDs and need no warning.
     """
     global _bot, _chat_id, _thread_id, _owner_id
     _bot = bot
-    _chat_id = chat_id
-    _thread_id = thread_id
     _owner_id = owner_id
-    if chat_id == 0:
+    if chat_id == 0 and owner_id > 0:
+        # * Fall back to the owner DM so no report is silently dropped.
+        _chat_id = owner_id
+        _thread_id = None
         log.warning(
-            "error_reporter.attach called without a chat_id; LOG_ERRORS "
-            "shipping is disabled until one is configured",
+            "error_reporter.attach called without a chat_id; falling back "
+            "to owner DM shipping",
         )
+    else:
+        _chat_id = chat_id
+        _thread_id = thread_id
     if owner_id <= 0:
         log.warning(
             "error_reporter.attach called with owner_id=%d; owner-DM "

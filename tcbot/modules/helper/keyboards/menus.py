@@ -118,11 +118,21 @@ def additional_menu_kb(locale: str | None = None) -> InlineKeyboardMarkup:
         if group_url
         else None
     )
-    if channel_btn or group_btn:
-        rows.append([b for b in (channel_btn, group_btn) if b is not None])
+    appeal_url = _https_url(cfg.community_appeal_url, "appeals")
+    appeal_btn = (
+        InlineKeyboardButton(
+            t("button.appeals_channel", locale, plain=True),
+            url=appeal_url,
+            style=KeyboardButtonStyle.PRIMARY,
+        )
+        if appeal_url
+        else None
+    )
+    first_row = [b for b in (channel_btn, group_btn, appeal_btn) if b is not None]
+    if first_row:
+        rows.append(first_row)
 
     logs_url = _https_url(cfg.community_logs_url, "logs")
-    exec_url = _https_url(cfg.community_exec_url, "exec")
     logs_btn = (
         InlineKeyboardButton(
             t("button.logs_channel", locale, plain=True),
@@ -132,17 +142,8 @@ def additional_menu_kb(locale: str | None = None) -> InlineKeyboardMarkup:
         if logs_url
         else None
     )
-    exec_btn = (
-        InlineKeyboardButton(
-            t("button.exec_group", locale, plain=True),
-            url=exec_url,
-            style=KeyboardButtonStyle.PRIMARY,
-        )
-        if exec_url
-        else None
-    )
-    if logs_btn or exec_btn:
-        rows.append([b for b in (logs_btn, exec_btn) if b is not None])
+    if logs_btn:
+        rows.append([logs_btn])
 
     travel_url = _https_url(cfg.community_travel_url, "travel")
     if travel_url:

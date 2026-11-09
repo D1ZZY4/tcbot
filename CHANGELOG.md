@@ -30,6 +30,16 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Warn auto-ban stores the warn proof on the ban record** (`tcbot/modules/helper/workflows/warning_flow/`, `tests/test_warn_autoban_guard.py`, `docs/features/moderation/warnings.md`): the proof upload collected with the threshold warn becomes the ban `proof_message_id`, so `/check` shows View Proof instead of an empty slot. Behavior changes: auto-ban records now carry the warn proof.
 
+- **Founder gates read fresh role state** (`tcbot/database/users_roles/`, `tcbot/modules/admins/decision.py`, `tcbot/modules/stats/command.py`): promotion approve and reject buttons plus the founder-only users list now read the owner and effective role directly instead of the cached values, so a transfer in another process takes effect at once. Behavior changes: a transferred founder loses approve, reject, and list access immediately rather than after the cache window.
+
+- **Role prompts name their opener for the action buttons** (`tcbot/modules/helper/keyboards/admin.py`, `tcbot/modules/admins/`, `i18n/en-US/admins.toml`, `i18n/id/admins.toml`): the promote role buttons and the demote confirm button carry the staff member who opened the prompt, so a different staffer tapping gets an alert and the prompt stays live. Keyboard shapes for in-flight prompts keep working. Behavior changes: cross-staff taps on a pending role prompt alert instead of acting.
+
+- **Warn family refuses verified bot targets** (`tcbot/modules/warnings/`, `tcbot/modules/muting.py`): warn, unwarn, resetwarns, and unmute verify the target is a bot before classifying, so the bot-target refusal actually fires. Ban, kick, and mute keep allowing bots, matching their refusal tables. Behavior changes: warning a proven bot now asks for a human target instead of warning the bot.
+
+- **Main-group appeals in place** (`tcbot/modules/appeals.py`, `appeal_submit_flow/`): a `#appeal` message in the main group submits through the same gates and posting as the DM deep link, including dual review cards. Behavior changes: `#appeal` in the main group opens an appeal for the sender's active ban.
+
+- **Review cards post in both surfaces** (`appeal_submit_flow/submit.py`): the staff review card with Approve/Reject buttons now lands in the main-group topic and as a copy in the appeals channel, next to the forwarded appeal text. Behavior changes: staff can decide from either surface; the main-group card stays canonical for the stored review slot.
+
 ### Changed
 
 - **24/7 runner re-enabled** (`.github/workflows/run-bot.yml`, `README.md`, `docs/operations/ci-cd.md`, `.agents/rules/docs-sync.md`, `AGENTS.md`, `docs/architecture/helpers.md`): the self-chaining runner moves from `.github/workflows.disabled/` back to `.github/workflows/` and schedules again with push-triggered handover and cron fallback. Behavior changes: the bot auto-runs via GitHub Actions again; repository secrets still need to be set once.
@@ -192,6 +202,24 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Cron endpoint rejects POST explicitly** (`api/cron.py`): non-GET callers get `405` with a warning line instead of the default `501` silence. Behavior changes: POST now answers `405`.
 
+- **Both transports share one startup path** (`tcbot/runtime/lifecycle.py`, `tcbot/serverless.py`): the connect, index, owner-seed, Redis, and error-reporter steps live in one helper both transports call, so a change lands on webhook, polling, and serverless together. Serverless still skips MTProto as before. Behavior changes: none.
+
+- **Scheduler receives its sync runner explicitly** (`tcbot/database/scheduler/`, `tcbot/runtime/lifecycle.py`): the enforcement runner is now a start argument instead of a private attribute patched after startup, so the scheduled sweep can never run before its runner exists. Behavior changes: none.
+
+- **Check keyboards have one owner** (`tcbot/modules/helper/keyboards/check.py`, `check_flow/`): the back and paged markups are built in the keyboard package, and the check flows keep only the text rendering. Button labels, callback data, and in-flight keyboards are unchanged. Behavior changes: none.
+
+- **New group issuance reads live connection state** (`tcbot/modules/greeting/`, `connecting.py`, `disconnecting.py`, `language.py`, `connected_flow/`): join enforcement, connect, disconnect, bot-added, join-decision, and group-language writes now read the connection row directly instead of the cached value, so a disconnect stops enforcement at once. Display reads keep the cached fast path. Behavior changes: a disconnect stops join enforcement immediately rather than after the cache window.
+
+- **Speedtest patch degrades honestly** (`tcbot/modules/netspeed.py`): the certifi context patch now checks the handler actually carries the expected attribute and logs a warning otherwise, so an upstream layout change fails open with a trace instead of silently losing TLS intent. Behavior changes: none on the pinned release.
+
+- **Top package exposes only the config surface** (`tcbot/__init__.py`, `tests/test_wave_regressions.py`): the package now exports `cfg`, `configs`, and `Configs` only; the parsing helpers stay in `tcbot.config`. Behavior changes: none.
+
+- **Exec group removed entirely** (`tcbot/config/`, `keyboards/menus.py`, `with_primary_groups` call sites, `i18n/`, `.github/workflows/run-bot.yml`, `config.env.example`): `EXTEND_GROUP` and the exec button are gone, so fan-outs and guards cover the main group only. Behavior changes: the exec group is now an ordinary group (previously it was always enforced and protected).
+
+- **Community discussion and exec links lose their built-in defaults** (`tcbot/config/`, `menus.py`, `config.env.example`): the discussion and exec buttons render only when set explicitly, with no preset URLs. Behavior changes: a fresh deployment no longer shows preset discussion/exec buttons.
+
+- **Error reports fall back to the owner** (`tcbot/utils/error_reporter/`): with no `LOGS_ERRORS` channel configured, reports ship to the owner DM instead of being dropped. Behavior changes: an empty `LOGS_ERRORS` now still reaches the operator.
+
 ### Fixed
 
 - **Cache fetch keeps mutual exclusion** (`tcbot/database/cache/twolevel/core.py`): a finishing fetch removes only its own lock, so concurrent misses for the same key cannot run two database fetches after a lock handoff. Behavior changes: none on single-threaded use; shared misses fetch once.
@@ -328,6 +356,12 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Unmute keeps the record on total enforcement failure** (`tcbot/modules/helper/workflows/muting_flow/unmute.py`, `tests/test_mute_partial_failure.py`, `i18n/en-US/muting.toml`, `i18n/id/muting.toml`, `docs/features/moderation/muting.md`): when no group could be unrestriced the reply asks for a retry and the active-mute row stays, so a re-run re-drives the full fan-out instead of announcing a restore while every chat is still muted. Behavior changes: total-failure unmutes no longer clear the record.
 
+- **Group management re-checks staff state fresh** (`tcbot/modules/helper/identity.py`, `tcbot/modules/disconnecting.py`, `tcbot/modules/language.py`): the disconnect and group-language write gates now read the staff role directly instead of the cached value, so a demotion takes effect at once. Behavior changes: a demoted admin can no longer disconnect a group or save its language during the old cache window.
+
+- **Empty help and privacy taps dismiss the spinner** (`tcbot/modules/help/callbacks.py`, `tcbot/modules/privacy.py`): callbacks carrying no data now answer before returning instead of leaving the client spinner hanging. Behavior changes: malformed taps dismiss the spinner instead of timing out.
+
+- **Check views propagate shutdown instead of rendering empty** (`check_flow/`, `netspeed.py`): cancelled parallel reads now propagate instead of rendering as empty states, matching every other moderation read path. Behavior changes: none during normal operation.
+
 ### Removed
 
 - **Unused log and navigation helpers removed** (`tcbot/modules/helper/parse_logmsg/core.py`, `tcbot/modules/helper/workflows/stats_flow/shared.py`): two `LogBuilder` block helpers and one stats back-row alias had no callers. The live builders and the central keyboard factories stay. Behavior changes: none.
@@ -375,6 +409,14 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 - **Flow and database placement rules clarified** (`AGENTS.md`, `docs/architecture/workflows.md`, `docs/architecture/repository-map.md`, `.agents/rules/code-style.md`): flows and database helpers stay flat while they fit the file budget and split into packages after that, so the existing modules and packages both satisfy the rule. Behavior changes: none, docs only.
 
 - **Em dash rule file carries no literal** (`.agents/rules/comment-style.md`, `.github/workflows/auto-fix.yml`, `dependency-update.yml`): the rule text and the CI sanitizers use the escaped form with identical replacement output, so the forbidden-character scan reports empty. Behavior changes: none, docs and workflow text only.
+
+- **Demotion module path corrected across the guides** (`docs/architecture/helpers.md`, `workflows.md`, `docs/features/moderation/banning.md`, `docs/features/roles/demote.md`, `roles.md`): the demote helper is a file, not a package, and the guides now name it correctly. Behavior changes: none, docs only.
+
+- **Database guide matches the current indexes and startup** (`docs/architecture/database.md`): the covered index names its fourth field, the owner, staff, and scheduler signatures carry their fresh and runner arguments, and the startup wiring describes the shared setup path both transports call. Behavior changes: none, docs only.
+
+- **Role prompt guides match the owner-bound buttons** (`docs/features/roles/promote.md`, `demote.md`, `roles.md`, `docs/features/misc-modules.md`): the callback tables show the opener-carrying shapes and the rule that only the opener can act or cancel. Behavior changes: none, docs only.
+
+- **Speedtest and greeting notes match the code** (`docs/features/misc-modules.md`): the speedtest section names the archived upstream and its pin, and the greeting section states the live connection read. Behavior changes: none, docs only.
 
 </details>
 

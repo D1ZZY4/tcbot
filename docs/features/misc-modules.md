@@ -64,7 +64,7 @@ No commands. A single callback renders the community links menu.
 
 `additional_menu_kb` includes a button row only when the matching env URL is
 non-empty (`COMMUNITY_CHANNEL_URL`, `COMMUNITY_GROUP_URL`,
-`COMMUNITY_LOGS_URL`, `COMMUNITY_EXEC_URL`, `COMMUNITY_TRAVEL_URL`); rows
+`COMMUNITY_LOGS_URL`, `COMMUNITY_TRAVEL_URL`); rows
 with no configured URL are silently omitted. Rate limit: 15 callbacks per
 30 s. No database impact.
 
@@ -146,9 +146,10 @@ and re-applies enforcement when join requests are approved.
 Key behavior:
 
 - `_in_federation`: primary groups always qualify; other chats qualify only
-  while their connected row is active (`is_connected`, L1+L2 cached). A
-  lookup outage returns `None` so the caller stays silent instead of
-  enforcing blind or greeting an unverified joiner.
+  while their connected row is active (`is_connected` with `fresh=True`, so
+  a disconnect stops join enforcement at once). A lookup outage returns
+  `None` so the caller stays silent instead of enforcing blind or greeting
+  an unverified joiner.
 - All concurrent join updates share one global `_join_sem`
   (`_MAX_CONCURRENT_JOINS = 10`) so a batch invite-link join cannot spike
   MongoDB pool pressure or Telegram traffic.
@@ -178,7 +179,7 @@ the write on unchanged identity), reads `bans_db.get_active_ban` and
 
 Behavior:
 
-- Primary groups (`main_group`, `exec_group`) are never touched by either
+- Primary groups (`main_group`) are never touched by either
   command; they are guarded at every call site by `cfg.is_primary_group`.
 - `/leaveall` is rate limited to 1 per 300 s and runs bounded per-group
   leave + deactivate. A group counts as failed when either the leave or the
@@ -209,7 +210,10 @@ Behavior:
   bounded by `_SPEEDTEST_TIMEOUT = 180` s, and edits the result. Timeouts and
   unparseable results (missing keys or `None` where a mapping was expected)
   edit a dedicated notice instead of raising. A non-http(s) share URL is
-  logged and sent without the photo.
+  logged and sent without the photo. The test uses `speedtest-cli` 2.1.3
+  (upstream archived, final release) pinned by `pyproject.toml`; the
+  certifi context patch degrades to a warning if a future layout change
+  removes the patched attribute.
 
 Rate limit: 3 per 60 s for both commands, `@owner_only`. No database impact.
 
@@ -230,9 +234,9 @@ and [`roles/demote.md`](roles/demote.md).
 | Callback | Purpose |
 |---|---|
 | `promo_approve:<request_id>` / `promo_reject:<request_id>` | Founder verdict on a pending promotion request (DM card). |
-| `promo_role:<role>:<target_id>` | Choose a role in the `/tcpromote` inline menu. |
-| `promo_role_cancel:<target_id>` | Cancel the role-selection menu. |
-| `demote_confirm:<target_id>` / `demote_cancel:<target_id>` | Confirm or cancel a demotion. |
+| `promo_role:<role>:<target_id>:<executor_id>` (legacy without executor) | Choose a role in the `/tcpromote` inline menu; only the prompt opener may act. |
+| `promo_role_cancel:<target_id>:<executor_id>` (legacy without executor) | Cancel the role-selection menu; only the prompt opener may cancel. |
+| `demote_confirm:<target_id>:<executor_id>` / `demote_cancel:<target_id>:<executor_id>` (legacy without executor) | Confirm or cancel a demotion; only the prompt opener may act. |
 
 Rate limits: promote/demote/list queries 5 per 60 s; transfer and promote
 requests 3 per 300 s; role and decision callbacks 10 per 30 s.

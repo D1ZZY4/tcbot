@@ -60,7 +60,6 @@ jobs:
       PREFIXES:                ${{ secrets.PREFIXES }}
       MAIN_GROUP:              ${{ secrets.MAIN_GROUP }}
       MAIN_CHANNEL:            ${{ secrets.MAIN_CHANNEL }}
-      EXTEND_GROUP:            ${{ secrets.EXTEND_GROUP }}
       PROOFS:                  ${{ secrets.PROOFS }}
       LOGS:                    ${{ secrets.LOGS }}
       LOGS_ERRORS:             ${{ secrets.LOGS_ERRORS }}
@@ -78,7 +77,6 @@ jobs:
       COMMUNITY_CHANNEL_URL:   ${{ secrets.COMMUNITY_CHANNEL_URL }}
       COMMUNITY_GROUP_URL:     ${{ secrets.COMMUNITY_GROUP_URL }}
       COMMUNITY_LOGS_URL:      ${{ secrets.COMMUNITY_LOGS_URL }}
-      COMMUNITY_EXEC_URL:      ${{ secrets.COMMUNITY_EXEC_URL }}
       COMMUNITY_TRAVEL_URL:    ${{ secrets.COMMUNITY_TRAVEL_URL }}
       API_ID:                  ${{ secrets.API_ID }}
       API_HASH:                ${{ secrets.API_HASH }}

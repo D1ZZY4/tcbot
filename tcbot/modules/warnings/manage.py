@@ -82,6 +82,7 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         msg,
         action="unwarn",
         min_role="tester",
+        target_is_bot=await identity.is_proven_bot(update, target_id, ctx.bot),
     )
     if classified is None:
         return
@@ -190,6 +191,7 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         msg,
         action="resetwarns",
         min_role="tester",
+        target_is_bot=await identity.is_proven_bot(update, target_id, ctx.bot),
     )
     if classified is None:
         return

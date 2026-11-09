@@ -41,6 +41,25 @@ def check_warns_back_row(
     ]
 
 
+def check_back_markup(
+    target_id: int, locale: str | None = None
+) -> InlineKeyboardMarkup:
+    """Profile card: Back-to-profile keyboard (back row only)."""
+    return InlineKeyboardMarkup([check_back_row(target_id, locale)])
+
+
+def check_paged_markup(
+    nav_row: list[InlineKeyboardButton] | None,
+    back_row: list[InlineKeyboardButton],
+) -> InlineKeyboardMarkup:
+    """Assemble a paged check list: optional nav row above the back row."""
+    rows: list[list[InlineKeyboardButton]] = []
+    if nav_row:
+        rows.append(nav_row)
+    rows.append(back_row)
+    return InlineKeyboardMarkup(rows)
+
+
 def check_warn_groups_kb(
     target_id: int,
     groups: list[tuple[str, int, int]],

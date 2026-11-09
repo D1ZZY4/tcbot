@@ -111,7 +111,10 @@ async def on_privacy_policy_menu(
 async def on_privacy_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a single privacy policy section."""
     q = update.callback_query
-    if q is None or not q.data:
+    if q is None:
+        return
+    if not q.data:
+        await q.answer()
         return
 
     try:

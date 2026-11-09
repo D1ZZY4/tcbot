@@ -152,3 +152,19 @@ def test_appeal_review_kb_matches_handler_pattern() -> None:
         assert isinstance(callback, str)
         assert callback.startswith(("appeal_approve_", "appeal_reject_"))
         assert ":" not in callback
+
+
+def test_check_back_markup_is_profile_back_row() -> None:
+    assert _cells(kb.check_back_markup(7)) == [[("« Back", "check_main:7", None, None)]]
+
+
+def test_check_paged_markup_stacks_nav_above_back() -> None:
+    nav = kb.check_back_row(7)
+    back = kb.check_warns_back_row(7)
+    assert _cells(kb.check_paged_markup(nav, back)) == [
+        [("« Back", "check_main:7", None, None)],
+        [("« Back", "check_warns:7", None, None)],
+    ]
+    assert _cells(kb.check_paged_markup(None, back)) == [
+        [("« Back", "check_warns:7", None, None)]
+    ]

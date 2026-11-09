@@ -15,6 +15,7 @@ from tcbot import database as db
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.keyboards import (
     back_to_module_kb,
+    check_back_markup,
     detail_kb,
     paged_drill_kb,
 )
@@ -27,11 +28,11 @@ from tcbot.modules.helper.workflows.check_flow.shared import (
     _BTNS_PER_ROW,
     _PAGE_SIZE,
     _appeal_ts,
-    _back_to_check,
     _ban_ts,
     _maybe_caveat,
     log,
 )
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import code, italic, user_ref
 from tcbot.utils.i18n import Safe, t
 
@@ -151,6 +152,7 @@ async def _ban_list_render(
         _flow._name(target_id),
         return_exceptions=True,
     )
+    throw_if_cancelled((total, display_name))
     if isinstance(display_name, BaseException):
         display_name = str(target_id)
     if isinstance(total, BaseException) or not isinstance(total, int):
@@ -175,14 +177,14 @@ async def _ban_list_render(
     if not chunk:
         if count_failed or chunk_failed:
             text = t("checking.warns.db_fail", locale)
-            return text, InlineKeyboardMarkup([_back_to_check(target_id, locale)])
+            return text, check_back_markup(target_id, locale)
         text = t(
             f"checking.{key_prefix}.empty",
             locale,
             user=Safe(user_ref(target_id, display_name)),
         )
-        return _maybe_caveat(text, locale, failed=count_failed), InlineKeyboardMarkup(
-            [_back_to_check(target_id, locale)]
+        return _maybe_caveat(text, locale, failed=count_failed), check_back_markup(
+            target_id, locale
         )
 
     lines = [

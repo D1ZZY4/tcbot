@@ -20,7 +20,9 @@ from .ban import (
 )
 from .check import _WARN_GROUP_TITLE_MAX as _WARN_GROUP_TITLE_MAX
 from .check import (
+    check_back_markup,
     check_back_row,
+    check_paged_markup,
     check_profile_kb,
     check_warn_groups_kb,
     check_warns_back_row,
@@ -75,7 +77,9 @@ __all__ = [
     "ban_log_new",
     "ban_log_update",
     "ban_update_confirm_kb",
+    "check_back_markup",
     "check_back_row",
+    "check_paged_markup",
     "check_profile_kb",
     "check_warn_groups_kb",
     "check_warns_back_row",
