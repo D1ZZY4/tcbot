@@ -147,7 +147,7 @@ handling plus monotonic measurement.
 | `utc_now()` | Store timestamps and compare elapsed time. |
 | `to_utc(dt)` | Normalize naive or aware datetimes before arithmetic. |
 | `fmt_dt(dt)` | Display datetimes as `DD-MM-YYYY | HH:MM`. |
-| `from_timestamp(ts)` | Convert a POSIX timestamp (e.g. log record time) to aware UTC. |
+| `from_timestamp(ts)` | Convert a POSIX timestamp to aware UTC. No production caller yet; it is pinned by a unit test as a helper for future log-time display. |
 | `monotonic()` | Monotonic clock in seconds, for measuring durations. |
 | `elapsed_ms(start)` | Milliseconds since a `monotonic()` reading. |
 | `parse_duration(raw)` | Parse a duration token (`45s`, `30m`, `2h`, `7d`, `1w`, `3mo`, `1ye`) into a `timedelta`, or `None` when invalid. |

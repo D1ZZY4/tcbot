@@ -171,13 +171,10 @@ Measure a real workload before and after a change. A lightweight development
 timing log can identify the slow section without turning a timing claim into a
 project-wide promise:
 
-```python
-import time
+py-spy profiles the running process without modifying code:
 
-started = time.perf_counter()
-result = await slow_operation()
-elapsed = time.perf_counter() - started
-log.debug("Operation took %.3f seconds", elapsed)
+```bash
+uv run py-spy record --pid <PID> --duration 60 --rate 20 --format speedscope --output profile.svg
 ```
 
 Investigate:

@@ -9,6 +9,9 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Added
 - **Production observability via optional extras** (`tcbot/alive.py`, `tcbot/__main__.py`, `tcbot/__init__.py`, `config.env.example`): a `/metrics` endpoint on the keep-alive server when prometheus-client is installed, the uvloop event loop policy on Linux when the package is present, and Sentry initialisation when `SENTRY_DSN` is set. Behavior changes: the operations surfaces appear only with their extras configured.
+
+- **Property-based invariant checks** (`tests/test_property.py`): hypothesis-backed checks that `esc()` never emits an unescaped special, `parse_list` never raises, and `message_link` stays canonical. Behavior changes: none for operators.
+
 - **Operator proof migration script** (`scripts/migrate_proofs.py`, `tests/test_proof_migration.py`, `docs/operations/proof-migration.md`): one-shot tool that copies every stored ban proof to a new channel, updates the proof ids in the bans collection, rewrites the proof buttons on the stored ban log messages, and fixes old proof links inside copied captions. Dry-run by default, resumable through a state file, album-safe. Operators point `PROOFS` at the new channel after running it.
 
 - **Group locale change and ban-log keyboard cover** (`tests/test_group_locale_cache.py`, `tests/test_ban_log_kb.py`, `tcbot/database/groups_db/locale.py`, `tcbot/modules/helper/keyboards/ban.py`): `set_group_locale` invalidating the groups-list cache and the merged ban-log keyboard rows are pinned. Behavior changes: none for operators.

@@ -36,4 +36,11 @@ jobs:
         run: uv sync --frozen
 
       - name: Run tests
-        run: uv run pytest tests/ -q -n auto
+        run: uv run pytest tests/ -q -n auto --cov=tcbot --cov-branch --cov-report=term-missing --cov-report=html
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: htmlcov/
+          if-no-files-found: ignore
